@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Nuxt / build output
+.nuxt/
+.output/
+.data/
+.cache/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Claude switcher / local agent state
+.claude/projects/

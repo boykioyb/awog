@@ -1,0 +1,14 @@
+.nuxt
+.output
+dist
+node_modules
+public
+pnpm-lock.yaml
+
+# Config files — không cần typed-linting, tránh xung đột parserOptions.project
+.eslintrc.cjs
+nuxt.config.ts
+tailwind.config.ts
+*.config.ts
+*.config.mjs
+*.config.js

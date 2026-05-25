@@ -1,0 +1,219 @@
+# Coding Guide — Nuxt Frontend
+
+Quy ước cho **Nuxt 4 + Vue 3 + TypeScript + Pinia + VueFlow + TailwindCSS**. Áp dụng cho [apps/desktop/ui/](../../apps/desktop/ui/).
+
+Quy ước cross-stack (TypeScript, đặt tên chung, Git, bảo mật): xem [general.md](./general.md). Tài liệu này **chỉ** ghi những thứ riêng cho frontend.
+
+> **Format và lint do công cụ enforce**, không nhớ bằng đầu. Xem mục [Lint & Format](#lint--format) cuối tài liệu. Chạy `pnpm lint:fix && pnpm format` trước khi commit là đủ.
+
+## Đặt tên (frontend)
+
+| Đối tượng | Convention | Ví dụ |
+|---|---|---|
+| Component `.vue` | PascalCase | `TaskListItem.vue` |
+| Page / layout `.vue` | kebab-case | `pages/tasks/index.vue`, `layouts/default.vue` |
+| Composable | `useXxx.ts` | `useTheme.ts` |
+| Pinia store | `useXxxStore` trong file `xxx.ts` ở `stores/` | `useWorkspaceStore` ← `stores/workspace.ts` |
+| Custom event | kebab-case | `@select-task`, `@phase-approve` |
+| Slot | kebab-case | `<slot name="header" />` |
+
+## Cấu trúc thư mục (`apps/desktop/ui/`)
+
+```
+ui/
+├── app.vue              # Root: <NuxtLayout><NuxtPage /></NuxtLayout>
+├── layouts/             # default.vue chứa NavRail + TopBar
+├── pages/               # File-based routing
+├── components/          # Component dùng chéo nhiều page
+├── composables/         # use*.ts — logic chia sẻ reactive
+├── stores/              # Pinia store
+├── utils/               # Hàm thuần (không reactive)
+├── types/               # TypeScript type chia sẻ
+├── assets/css/          # CSS global (main.css)
+└── public/              # Static asset
+```
+
+**Quy tắc đặt vào đâu:**
+
+- Logic reactive + có lifecycle → `composables/`
+- Hàm thuần (sort, format, calc) → `utils/`
+- State app-wide → `stores/`
+- State cục bộ một component → `ref`/`reactive` tại chỗ
+- Type dùng chéo nhiều file → `types/index.ts`
+
+## Vue 3 — Component
+
+- **Composition API + `<script setup lang="ts">` luôn luôn.** Không Options API.
+- **`defineProps` + `withDefaults` + type-only.**
+- **`defineEmits` type-only.**
+- **`defineExpose` chỉ khi parent thực sự cần.**
+
+```vue
+<script setup lang="ts">
+type Props = {
+  task: Task
+  selected?: boolean
+}
+const props = withDefaults(defineProps<Props>(), { selected: false })
+
+const emit = defineEmits<{
+  select: [taskId: string]
+  approve: [taskId: string, phaseId: string]
+}>()
+</script>
+```
+
+- **Một component fit trong ~250 dòng.** Quá dài → tách subcomponent.
+- **Thứ tự block:** `<template>` → `<script setup>` → `<style>` (hiếm khi cần).
+- **Tránh `v-html`.** Render markdown/HTML đi qua component dedicated (`MarkdownRenderer.vue`).
+- **`computed` cho derived state**, không lưu shadow ref.
+- **`watch` chỉ khi không thể dùng `computed`** (cần side effect).
+- **`ref`** cho primitive / object thay nguyên khối; **`reactive`** cho object có mutation nhiều field.
+- **Props readonly.** Đừng mutate `props.x` — emit event để parent tự update.
+
+## Pinia store
+
+- **Composition style** (`defineStore('name', () => { ... })`), không Options style.
+- **State (ref) / getters (computed) / actions (function)** rõ ràng trong return.
+- **Không gọi store ở module top-level** — gọi trong setup hoặc trong function.
+- **Một store = một bounded context.** `workspace` ≠ `settings`. Không gộp.
+- **Action async** đặt tên rõ (`fetchTasks`, `runTask`), trả `Promise<void>` hoặc `Promise<T>`.
+
+```ts
+export const useWorkspaceStore = defineStore('workspace', () => {
+  const tasks = ref<Task[]>([])
+  const selectedTaskId = ref<string | null>(null)
+
+  const selectedTask = computed(() =>
+    tasks.value.find(t => t.id === selectedTaskId.value) ?? null
+  )
+
+  function selectTask(id: string) {
+    selectedTaskId.value = id
+  }
+
+  return { tasks, selectedTaskId, selectedTask, selectTask }
+})
+```
+
+## Styling — Tailwind + theme token
+
+Hai nguồn style đan xen:
+
+- **Class Tailwind** cho layout, spacing, typography, responsive.
+- **Inline `:style`** cho **màu theme** (bind từ `useTheme()`):
+
+```vue
+<template>
+  <div
+    class="px-4 py-2 rounded-md text-sm"
+    :style="{ background: t.bg, color: t.text, border: `1px solid ${t.border}` }"
+  >
+    ...
+  </div>
+</template>
+```
+
+Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compile-time. **Không hardcode hex trong class.**
+
+- **Không tạo CSS class custom** trừ khi Tailwind/inline không xử lý được (animation phức tạp, scrollbar).
+- **`assets/css/main.css`** chỉ chứa reset, scrollbar, base — không component style.
+- **Responsive:** dùng prefix Tailwind (`md:`, `lg:`). Hiện UI tối ưu cho desktop ≥ 1280.
+
+## Routing (Nuxt pages)
+
+- File-based. Đừng tự khai báo route trừ khi thực sự cần.
+- Dynamic param: `[param].vue` (vd. `pages/edit/[taskId].vue`).
+- Trang fullscreen không layout: `definePageMeta({ layout: false })`.
+- Query string: `useRoute().query`.
+- Navigate programmatically: `navigateTo()` thay vì `router.push` trực tiếp.
+
+## Composable
+
+- File `useXxx.ts`. Trả về object có shape ổn định.
+- **Singleton state** (như `useTheme`) → giữ state ngoài hàm (module-scope ref) khi cần share giữa các caller; ghi rõ trong tài liệu của composable.
+- **Không gọi composable trong điều kiện** (cùng quy tắc như React hook nhưng Vue cho phép setup boundary).
+
+## VueFlow
+
+- Node + edge data → giữ trong store, hoặc local ref khi chỉ scope một page.
+- **Tách node component** ra file riêng khi node có > 30 dòng template.
+- Truy cập instance qua `useVueFlow()`, không pass instance qua props.
+- **Với > 500 node**: cân nhắc cluster/virtual hoặc chia canvas.
+
+## Server API (sẽ áp dụng khi wire engine)
+
+- Đặt ở `server/api/` (Nuxt 4 convention).
+- Validate input với schema (planned: zod).
+- Trả về JSON: `{ data, error? }`.
+- **Không expose API key ra UI** — luôn proxy qua server route.
+
+## Performance
+
+- **Tránh `watch` deep trên object lớn** — ưu tiên `computed` hoặc `watchEffect` dependency rõ.
+- **`shallowRef` / `shallowReactive`** cho object lớn không cần reactivity sâu (Monaco model, VueFlow graph khi tự quản lý).
+- **Lazy load route nặng** với dynamic import khi cần.
+- **`v-once` / `v-memo`** cho danh sách render nặng, ít đổi.
+
+## Lint & Format
+
+Frontend dùng **ESLint** (rule) + **Prettier** (formatter), cấu hình base là **Airbnb** điều chỉnh cho Nuxt/Vue/TS.
+
+**Stack:**
+- [eslint-config-airbnb-base](https://github.com/airbnb/javascript) + [eslint-config-airbnb-typescript](https://github.com/iamturns/eslint-config-airbnb-typescript) — rule JS/TS gốc Airbnb
+- [eslint-plugin-vue](https://eslint.vuejs.org/) (`vue3-recommended`) — rule SFC Vue 3
+- [`@typescript-eslint`](https://typescript-eslint.io/) — rule TypeScript
+- [Prettier](https://prettier.io/) + `eslint-config-prettier` + `eslint-plugin-prettier` — format và tích hợp
+
+**Lệnh:**
+
+```bash
+pnpm lint          # check
+pnpm lint:fix      # auto-fix lint + Prettier
+pnpm format        # Prettier toàn bộ .ts/.vue/.js/.json/.md
+pnpm format:check  # check format không sửa
+```
+
+**Style chính (Prettier):**
+
+| Option | Giá trị |
+|---|---|
+| `semi` | `false` — **không** dùng `;` |
+| `singleQuote` | `true` |
+| `trailingComma` | `all` |
+| `tabWidth` | `2` |
+| `printWidth` | `100` |
+| `arrowParens` | `always` |
+
+**Khác biệt với Airbnb gốc:**
+
+| Rule | Trạng thái | Lý do |
+|---|---|---|
+| `semi` | `'never'` | Style dự án — không dùng `;` (override Airbnb) |
+| `no-plusplus` | `off` | Cho phép `++`/`--` trong code thuật toán (topo sort, generator) |
+| `no-continue` | `off` | Cho phép trong loop nhiều nhánh |
+| `no-param-reassign` | `props: false` | Pinia store action mutate state ref |
+| `import/no-unresolved`, `import/extensions` | `off` | Nuxt auto-import + alias `~/` |
+| `vue/multi-word-component-names` | `off` | Cho phép `app.vue`, `index.vue` |
+| `no-console` | `warn`, allow `warn`/`error` | Chỉ chặn `console.log` |
+| `@typescript-eslint/no-explicit-any` | `error` | Áp luật chung của [general.md](./general.md) |
+
+**File config nằm ở:**
+- [`apps/desktop/ui/.eslintrc.cjs`](../../apps/desktop/ui/.eslintrc.cjs)
+- [`apps/desktop/ui/.prettierrc`](../../apps/desktop/ui/.prettierrc)
+- [`apps/desktop/ui/.eslintignore`](../../apps/desktop/ui/.eslintignore) / [`.prettierignore`](../../apps/desktop/ui/.prettierignore)
+
+> Khi muốn thêm/đổi rule: sửa `.eslintrc.cjs` + ghi nhật ký vào bảng "Khác biệt với Airbnb" ở trên + nêu lý do trong PR.
+
+**Bị ignore khỏi typed-lint:** `nuxt.config.ts`, `tailwind.config.ts`, `*.config.{ts,mjs,js}`, `.eslintrc.cjs` — vì TypeScript-ESLint typed rule yêu cầu file phải nằm trong `tsconfig.json` includes, các file config thường không.
+
+## Checklist PR (frontend)
+
+- [ ] `pnpm lint` pass (0 error)
+- [ ] `pnpm format:check` pass
+- [ ] `pnpm typecheck` pass
+- [ ] Không có `any`, `@ts-ignore` không lý do, `console.log` còn sót
+- [ ] Component mới có type cho props/emits đầy đủ
+- [ ] Cập nhật [apps/desktop/ui/README.md](../../apps/desktop/ui/README.md) khi thêm route/component đáng kể
+- [ ] Cập nhật [apps/desktop/ui/types/index.ts](../../apps/desktop/ui/types/index.ts) khi đổi entity shape
+- [ ] Theme color → đi qua `useTheme()`, không hardcode
