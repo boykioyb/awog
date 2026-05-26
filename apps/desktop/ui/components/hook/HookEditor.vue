@@ -1,28 +1,11 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
-    <div class="flex items-center justify-between mb-6">
-      <div class="text-sm font-medium" :style="{ color: t.text }">
-        {{ hook?.id ? 'Edit Hook' : 'New Hook' }}
-      </div>
-      <div class="flex gap-2">
-        <button class="px-3 py-1.5 text-xs" :style="{ color: t.textMuted }" @click="emit('cancel')">
-          Cancel
-        </button>
-        <button
-          class="px-3 py-1.5 text-xs rounded font-medium inline-flex items-center gap-1.5"
-          :disabled="!draft.name || !draft.command"
-          :style="{
-            background: !draft.name || !draft.command ? t.bgInput : t.accent,
-            color: !draft.name || !draft.command ? t.textFaint : t.accentText,
-          }"
-          @click="onSave"
-        >
-          <Save :size="11" />
-          Save
-        </button>
-      </div>
-    </div>
-
+  <EditorShell
+    :title="hook?.id ? 'Edit Hook' : 'New Hook'"
+    :dirty="dirty"
+    :can-save="!!draft.name && !!draft.command"
+    @save="onSave"
+    @cancel="emit('cancel')"
+  >
     <div class="space-y-4">
       <Field label="Name">
         <input
@@ -99,11 +82,10 @@
 
       <ToggleField v-model="draft.enabled" label="Enabled" />
     </div>
-  </div>
+  </EditorShell>
 </template>
 
 <script setup lang="ts">
-import { Save } from 'lucide-vue-next'
 import type { Hook, HookEvent, HookRunMode } from '~/types'
 import type { HookDraft } from '~/composables/useHookGenerator'
 
@@ -167,6 +149,7 @@ const initDraft = (h: Hook | null, seed: HookDraft | null | undefined): Draft =>
 }
 
 const draft = ref<Draft>(initDraft(props.hook, props.initialDraft))
+const original = ref<Draft>(initDraft(props.hook, props.initialDraft))
 
 const matcherEntries = ref<Array<{ key: string; value: string }>>(
   Object.entries(draft.value.matcher).map(([key, value]) => ({ key, value })),
@@ -198,6 +181,7 @@ watch(
   () => props.hook,
   (h) => {
     draft.value = initDraft(h, props.initialDraft)
+    original.value = initDraft(h, props.initialDraft)
     matcherEntries.value = Object.entries(draft.value.matcher).map(([key, value]) => ({
       key,
       value,
@@ -215,6 +199,8 @@ const inputStyle = computed(() => ({
   color: t.value.text,
   outline: 'none',
 }))
+
+const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 
 const onSave = () => {
   if (!draft.value.name || !draft.value.command) return

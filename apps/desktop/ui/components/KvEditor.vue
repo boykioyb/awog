@@ -1,11 +1,5 @@
 <template>
-  <div>
-    <label
-      class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-      :style="{ color: t.textDim }"
-    >
-      {{ label }}
-    </label>
+  <Field :label="label">
     <div class="space-y-1.5">
       <div v-for="(entry, i) in modelValue" :key="i" class="flex items-center gap-1.5">
         <input
@@ -35,7 +29,7 @@
         Add entry
       </button>
     </div>
-  </div>
+  </Field>
 </template>
 
 <script setup lang="ts">

@@ -85,20 +85,18 @@ const inferBody = (prompt: string, type: CommandType, args: CommandArg[]): strin
   }
   if (type === 'agent-switch') return 'ag3'
   if (type === 'workflow') return 'wf2'
-  // prompt template
-  const trimmed = prompt.trim()
   const focusPart = args.find((a) => a.name === 'focus')
     ? ' với focus vào {{arg.focus | default("toàn bộ")}}'
     : ''
   const filePart = args.find((a) => a.name === 'file')
     ? '{{arg.file | default(context.lastArtifact.path)}}'
     : '{{context.lastArtifact.path}}'
-  return `${trimmed}\n\nĐối tượng: ${filePart}${focusPart}`
+  return `${prompt}\n\nĐối tượng: ${filePart}${focusPart}`
 }
 
 const firstSentence = (prompt: string): string => {
-  const m = prompt.trim().match(/^[^.!?\n]+[.!?]?/)
-  return m ? m[0].trim() : prompt.trim().slice(0, 140)
+  const m = prompt.match(/^[^.!?\n]+[.!?]?/)
+  return m ? m[0].trim() : prompt.slice(0, 140)
 }
 
 const mockGenerate = (prompt: string): CommandDraft => {
@@ -120,27 +118,4 @@ const mockGenerate = (prompt: string): CommandDraft => {
   }
 }
 
-export const useCommandGenerator = () => {
-  const isGenerating = ref(false)
-  const error = ref<string | null>(null)
-
-  const generate = async (prompt: string): Promise<CommandDraft | null> => {
-    const trimmed = prompt.trim()
-    if (!trimmed) {
-      error.value = 'Prompt cannot be empty'
-      return null
-    }
-    isGenerating.value = true
-    error.value = null
-    try {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 400)
-      })
-      return mockGenerate(trimmed)
-    } finally {
-      isGenerating.value = false
-    }
-  }
-
-  return { generate, isGenerating, error }
-}
+export const useCommandGenerator = () => useMockGenerator<CommandDraft>({ generate: mockGenerate })

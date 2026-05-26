@@ -1,35 +1,13 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
-    <div class="flex items-center justify-between mb-6">
-      <div class="text-sm font-medium" :style="{ color: t.text }">
-        {{ project ? 'Edit Project' : 'New Project' }}
-      </div>
-      <div class="flex gap-2">
-        <button class="px-3 py-1.5 text-xs" :style="{ color: t.textMuted }" @click="emit('cancel')">
-          Cancel
-        </button>
-        <button
-          :disabled="!canSave"
-          class="px-3 py-1.5 text-xs rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
-          :style="{
-            background: !canSave ? t.bgInput : t.accent,
-            color: !canSave ? t.textFaint : t.accentText,
-          }"
-          @click="onSave"
-        >
-          <Save :size="11" />
-          {{ project ? 'Save changes' : 'Add project' }}
-        </button>
-      </div>
-    </div>
-
-    <div v-if="!project" class="mb-5">
-      <label
-        class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-        :style="{ color: t.textDim }"
-      >
-        Source
-      </label>
+  <EditorShell
+    :title="project ? 'Edit Project' : 'New Project'"
+    :dirty="dirty"
+    :can-save="canSave"
+    :save-label="project ? 'Save changes' : 'Add project'"
+    @save="onSave"
+    @cancel="emit('cancel')"
+  >
+    <Field v-if="!project" label="Source" class="mb-5">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <button
           v-for="m in importOptions"
@@ -52,47 +30,29 @@
           </div>
         </button>
       </div>
-    </div>
+    </Field>
 
     <div class="space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div class="sm:col-span-2">
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Project name
-          </label>
+        <Field label="Project name" class="sm:col-span-2">
           <input
             v-model="draft.name"
             placeholder="e.g. payment-service"
             class="w-full rounded px-2 py-1.5 text-xs"
             :style="inputStyle"
           />
-        </div>
-        <div>
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Language
-          </label>
+        </Field>
+        <Field label="Language">
           <input
             v-model="draft.language"
             placeholder="Python"
             class="w-full rounded px-2 py-1.5 text-xs"
             :style="inputStyle"
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          {{ importMode === 'clone' ? 'Clone destination' : 'Local path' }}
-        </label>
+      <Field :label="importMode === 'clone' ? 'Clone destination' : 'Local path'">
         <div class="flex gap-1">
           <input
             v-model="draft.path"
@@ -116,46 +76,28 @@
               : 'Agents will read and write files in this location'
           }}
         </div>
-      </div>
+      </Field>
 
       <div v-if="importMode === 'clone' || project" class="grid grid-cols-3 gap-3">
-        <div class="col-span-2">
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Git remote
-          </label>
+        <Field label="Git remote" class="col-span-2">
           <input
             v-model="draft.gitRemote"
             placeholder="git@github.com:org/repo.git"
             class="w-full rounded px-2 py-1.5 text-xs font-mono"
             :style="inputStyle"
           />
-        </div>
-        <div>
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Branch
-          </label>
+        </Field>
+        <Field label="Branch">
           <input
             v-model="draft.gitBranch"
             placeholder="main"
             class="w-full rounded px-2 py-1.5 text-xs font-mono"
             :style="inputStyle"
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          Description
-        </label>
+      <Field label="Description">
         <textarea
           v-model="draft.description"
           :rows="3"
@@ -163,13 +105,13 @@
           class="w-full rounded px-2 py-1.5 text-[12px] leading-relaxed resize-none"
           :style="inputStyle"
         />
-      </div>
+      </Field>
     </div>
-  </div>
+  </EditorShell>
 </template>
 
 <script setup lang="ts">
-import { FolderOpen, GitFork, Save } from 'lucide-vue-next'
+import { FolderOpen, GitFork } from 'lucide-vue-next'
 import type { Project } from '~/types'
 
 const props = defineProps<{
@@ -195,6 +137,7 @@ const makeBlankDraft = (): Project => ({
 })
 
 const draft = ref<Project>(props.project ? { ...props.project } : makeBlankDraft())
+const original = ref<Project>(props.project ? { ...props.project } : makeBlankDraft())
 const importMode = ref<'existing' | 'clone'>('existing')
 
 const importOptions = [
@@ -220,6 +163,7 @@ const inputStyle = computed(() => ({
 }))
 
 const canSave = computed(() => !!draft.value.name && !!draft.value.path)
+const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 
 const onSave = () => {
   if (!canSave.value) return

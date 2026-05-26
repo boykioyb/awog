@@ -16,13 +16,7 @@
       </div>
     </div>
 
-    <div>
-      <label
-        class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-        :style="{ color: t.textDim }"
-      >
-        Skill
-      </label>
+    <Field label="Skill">
       <select
         :value="node.skillId || ''"
         class="w-full rounded px-2 py-1.5 text-xs font-mono"
@@ -37,15 +31,9 @@
       <div v-if="skill" class="text-[10px] mt-1.5 leading-relaxed" :style="{ color: t.textDim }">
         {{ skill.description }}
       </div>
-    </div>
+    </Field>
 
-    <div>
-      <label
-        class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-        :style="{ color: t.textDim }"
-      >
-        Output artifacts
-      </label>
+    <Field label="Output artifacts">
       <div class="space-y-1">
         <div v-for="(out, i) in node.outputs" :key="i" class="flex items-center gap-1">
           <input
@@ -75,7 +63,7 @@
           Add output
         </button>
       </div>
-    </div>
+    </Field>
 
     <div>
       <label class="flex items-center gap-2 cursor-pointer">
@@ -92,13 +80,7 @@
       </div>
     </div>
 
-    <div v-if="skill">
-      <div
-        class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-        :style="{ color: t.textDim }"
-      >
-        Skill inputs (auto-resolved)
-      </div>
+    <Field v-if="skill" label="Skill inputs (auto-resolved)">
       <div class="space-y-1">
         <div
           v-for="inp in skill.inputs"
@@ -110,7 +92,7 @@
           {{ inp }}
         </div>
       </div>
-    </div>
+    </Field>
   </div>
 </template>
 

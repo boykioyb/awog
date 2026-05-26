@@ -1,5 +1,6 @@
 import type { Agent } from '~/types'
 import { MODELS } from '~/utils/models'
+import { STOP_WORDS } from '~/utils/stop-words'
 
 export type AgentDraft = Omit<Agent, 'id'>
 
@@ -12,35 +13,6 @@ const ROLE_KEYWORDS: Record<string, string[]> = {
   Developer: ['implement', 'build', 'code', 'develop', 'refactor', 'fix'],
   Writer: ['write', 'document', 'draft', 'spec', 'brief'],
 }
-
-const STOP_WORDS = new Set([
-  'a',
-  'an',
-  'and',
-  'are',
-  'as',
-  'at',
-  'be',
-  'by',
-  'for',
-  'from',
-  'has',
-  'have',
-  'in',
-  'is',
-  'it',
-  'of',
-  'on',
-  'or',
-  'that',
-  'the',
-  'this',
-  'to',
-  'was',
-  'with',
-  'will',
-  'should',
-])
 
 const slugifyName = (prompt: string): string => {
   const firstLine = prompt.split('\n')[0] ?? ''
@@ -72,37 +44,13 @@ const defaultModel = (): string => {
   return balanced?.id ?? MODELS[0]?.id ?? ''
 }
 
-// NOTE: pure UI mock for now. Replace with sidecar IPC when engine is wired.
 const mockGenerate = (prompt: string): AgentDraft => ({
   name: slugifyName(prompt),
   role: inferRole(prompt),
   model: defaultModel(),
   skillIds: [],
   context: [],
-  systemPrompt: prompt.trim(),
+  systemPrompt: prompt,
 })
 
-export const useAgentGenerator = () => {
-  const isGenerating = ref(false)
-  const error = ref<string | null>(null)
-
-  const generate = async (prompt: string): Promise<AgentDraft | null> => {
-    const trimmed = prompt.trim()
-    if (!trimmed) {
-      error.value = 'Prompt cannot be empty'
-      return null
-    }
-    isGenerating.value = true
-    error.value = null
-    try {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 400)
-      })
-      return mockGenerate(trimmed)
-    } finally {
-      isGenerating.value = false
-    }
-  }
-
-  return { generate, isGenerating, error }
-}
+export const useAgentGenerator = () => useMockGenerator<AgentDraft>({ generate: mockGenerate })

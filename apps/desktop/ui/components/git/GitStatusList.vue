@@ -28,13 +28,11 @@
     </div>
 
     <div class="flex-1 overflow-y-auto py-1">
-      <div
+      <EmptyView
         v-if="store.statusFiles.length === 0"
-        class="px-3 py-12 text-center text-xs"
-        :style="{ color: t.textDim }"
-      >
-        Working tree clean
-      </div>
+        :icon="CheckCircle2"
+        title="Working tree clean"
+      />
 
       <GitStatusSection
         v-if="store.conflictedFiles.length > 0"
@@ -97,6 +95,8 @@
 </template>
 
 <script setup lang="ts">
+import { CheckCircle2 } from 'lucide-vue-next'
+
 const { t } = useTheme()
 const store = useGitStore()
 

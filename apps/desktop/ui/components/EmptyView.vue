@@ -1,16 +1,17 @@
 <template>
-  <div class="flex-1 flex items-center justify-center">
-    <div class="text-center max-w-md">
-      <div
-        class="w-12 h-12 mx-auto mb-4 rounded-lg flex items-center justify-center"
-        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-      >
-        <component :is="icon" :size="20" :style="{ color: t.textMuted }" />
+  <div class="flex-1 flex items-center justify-center h-full">
+    <div class="text-center">
+      <component
+        :is="icon"
+        :size="28"
+        class="mx-auto mb-2"
+        :stroke-width="1.5"
+        :style="{ color: t.textFaint }"
+      />
+      <div class="text-sm" :style="{ color: t.textDim }">{{ title }}</div>
+      <div v-if="description" class="text-xs mt-1" :style="{ color: t.textFaint }">
+        {{ description }}
       </div>
-      <h2 class="text-base font-semibold mb-1" :style="{ color: t.text }">
-        {{ title }}
-      </h2>
-      <p class="text-sm" :style="{ color: t.textMuted }">{{ description }}</p>
     </div>
   </div>
 </template>
@@ -19,7 +20,7 @@
 defineProps<{
   icon: unknown
   title: string
-  description: string
+  description?: string
 }>()
 
 const { t } = useTheme()

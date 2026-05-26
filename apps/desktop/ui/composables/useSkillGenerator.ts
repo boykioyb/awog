@@ -1,4 +1,5 @@
 import type { Skill, SkillCategory } from '~/types'
+import { STOP_WORDS } from '~/utils/stop-words'
 
 export type SkillDraft = Omit<Skill, 'id'>
 
@@ -8,35 +9,6 @@ const CATEGORY_KEYWORDS: Record<SkillCategory, string[]> = {
   Development: ['implement', 'build', 'code', 'develop', 'refactor', 'fix', 'scaffold'],
   Quality: ['test', 'qa', 'verif', 'lint', 'check', 'valid'],
 }
-
-const STOP_WORDS = new Set([
-  'a',
-  'an',
-  'and',
-  'are',
-  'as',
-  'at',
-  'be',
-  'by',
-  'for',
-  'from',
-  'has',
-  'have',
-  'in',
-  'is',
-  'it',
-  'of',
-  'on',
-  'or',
-  'that',
-  'the',
-  'this',
-  'to',
-  'was',
-  'with',
-  'will',
-  'should',
-])
 
 const inferCategory = (prompt: string): SkillCategory => {
   const lower = prompt.toLowerCase()
@@ -80,43 +52,18 @@ const extractTags = (prompt: string): string[] => {
 }
 
 const firstSentence = (prompt: string): string => {
-  const m = prompt.trim().match(/^[^.!?\n]+[.!?]?/)
-  return m ? m[0].trim() : prompt.trim().slice(0, 140)
+  const m = prompt.match(/^[^.!?\n]+[.!?]?/)
+  return m ? m[0].trim() : prompt.slice(0, 140)
 }
 
-// NOTE: pure UI mock for now. When sidecar is wired, replace body with an IPC
-// call into the engine and return the generated draft.
 const mockGenerate = (prompt: string): SkillDraft => ({
   name: slugifyName(prompt),
   category: inferCategory(prompt),
   description: firstSentence(prompt),
   inputs: ['context'],
   outputs: ['output.md'],
-  promptTemplate: prompt.trim(),
+  promptTemplate: prompt,
   tags: extractTags(prompt),
 })
 
-export const useSkillGenerator = () => {
-  const isGenerating = ref(false)
-  const error = ref<string | null>(null)
-
-  const generate = async (prompt: string): Promise<SkillDraft | null> => {
-    const trimmed = prompt.trim()
-    if (!trimmed) {
-      error.value = 'Prompt cannot be empty'
-      return null
-    }
-    isGenerating.value = true
-    error.value = null
-    try {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 400)
-      })
-      return mockGenerate(trimmed)
-    } finally {
-      isGenerating.value = false
-    }
-  }
-
-  return { generate, isGenerating, error }
-}
+export const useSkillGenerator = () => useMockGenerator<SkillDraft>({ generate: mockGenerate })

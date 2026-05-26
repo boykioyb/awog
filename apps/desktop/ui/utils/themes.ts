@@ -61,6 +61,15 @@ export interface ThemeTokens {
   gitConflict: string
   diffOurs: string
   diffTheirs: string
+  // Overlay / On-accent text
+  overlay: string
+  onAccent: string
+  // Diff (markdown editor diff view)
+  diffAdd: string
+  diffDel: string
+  // Status indicator
+  statusOk: string
+  statusWarn: string
   // Misc
   shadow: string
   syntax: SyntaxTokens
@@ -109,6 +118,12 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     gitConflict: '#fb923c',
     diffOurs: '#7dd3fc',
     diffTheirs: '#c4b5fd',
+    overlay: 'rgba(0, 0, 0, 0.6)',
+    onAccent: '#ffffff',
+    diffAdd: '#86efac',
+    diffDel: '#fca5a5',
+    statusOk: '#22c55e',
+    statusWarn: '#fbbf24',
     shadow: 'rgba(0, 0, 0, 0.5)',
     syntax: {
       h1: '#f1c40f',
@@ -164,6 +179,12 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     gitConflict: '#c2410c',
     diffOurs: '#0369a1',
     diffTheirs: '#6d28d9',
+    overlay: 'rgba(0, 0, 0, 0.45)',
+    onAccent: '#ffffff',
+    diffAdd: '#16a34a',
+    diffDel: '#dc2626',
+    statusOk: '#16a34a',
+    statusWarn: '#d97706',
     shadow: 'rgba(0, 0, 0, 0.08)',
     syntax: {
       h1: '#b45309',

@@ -134,6 +134,34 @@ Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compil
 - **Singleton state** (như `useTheme`) → giữ state ngoài hàm (module-scope ref) khi cần share giữa các caller; ghi rõ trong tài liệu của composable.
 - **Không gọi composable trong điều kiện** (cùng quy tắc như React hook nhưng Vue cho phép setup boundary).
 
+## Component/composable dùng chung
+
+Sau đợt refactor [ADR 0009](../decisions/0009-ui-consolidation-refactor.md) ([clarifications 0009a](../decisions/0009a-ui-consolidation-clarifications.md)), các primitive sau là **single source of truth** cho pattern lặp ở [apps/desktop/ui/](../../apps/desktop/ui/). Trước khi tự viết modal/input/list-detail mới, kiểm tra bảng dưới.
+
+| Primitive | Loại | Khi nào dùng | Khi nào KHÔNG dùng |
+|---|---|---|---|
+| [`BaseModal.vue`](../../apps/desktop/ui/components/BaseModal.vue) | Component | Mọi modal chrome (overlay + card + header X + footer). Trao ESC + backdrop + scroll lock. | Drawer side panel, context menu, fullscreen lightbox custom (cân nhắc nhưng có thể OK). |
+| `EditorShell.vue` *(PR-3)* | Component | Full-page editor cho entity (Agent/Skill/Command/Hook/Mcp/Project). Có dirty + Save/Cancel + `request-close`. | Markdown editor `pages/edit/[taskId].vue` (top toolbar đặc thù — xem ADR 0009a §4). |
+| `MasterDetailShell.vue` *(PR-2)* | Component | List trái + detail phải + `mobilePane`. 11 page CRUD entity. | Page có 3-pane (tree + 2 pane), top toolbar đặc thù, hoặc cấu trúc không-master-detail. |
+| [`SearchInput.vue`](../../apps/desktop/ui/components/SearchInput.vue) | Component | Search box có icon `Search` + `v-model`. Inline trong toolbar list. | Form input bình thường (dùng `AppInput`). |
+| [`AppInput.vue`](../../apps/desktop/ui/components/AppInput.vue) | Component | Text/email/password/number input + theme style + `invalid` state. Thay thế `inputStyle = computed(...)`. | Textarea (chưa abstract), select, file input. |
+| [`useEscape`](../../apps/desktop/ui/composables/useEscape.ts) | Composable | Đóng modal/popover khi ESC. Tự stack: modal trên cùng đóng trước. | Global shortcut không liên quan stacking — cần listener riêng. |
+| [`useClickOutside`](../../apps/desktop/ui/composables/useClickOutside.ts) | Composable | Đóng popover/menu khi click ra ngoài. Dùng `mousedown` (race-safe với button click trong). | Modal backdrop click (đã có trong `BaseModal`). |
+| [`useMockGenerator<T>`](../../apps/desktop/ui/composables/useMockGenerator.ts) | Composable | Mock generate entity từ prompt (Agent/Skill/...). Bọc empty-prompt guard + 400ms latency + `isGenerating`/`error`. Caller chỉ truyền pure `generate(prompt) => T`. | Generator có state phức tạp ngoài `value/loading/error` (multi-step, cancellable). |
+| [`usePromptCreator<TDraft>`](../../apps/desktop/ui/composables/usePromptCreator.ts) | Composable | Boilerplate cho 6 `{Entity}PromptCreator.vue`: `draft` ref + `onSubmit` + `onRegenerate`. Phối với một generator (`useAgentGenerator`, ...). | Tạo entity không có flow "generate → preview → save" 2 bước. |
+| [`PromptCreatorPanel.vue`](../../apps/desktop/ui/components/PromptCreatorPanel.vue) | Component | Khung popover floating tạo entity từ prompt: headline / textarea / Generate button / preview slot / actions slot. Theme + anchor positioning. | Form tạo entity inline thuần (không cần prompt-to-draft); modal full-screen có yêu cầu chrome khác. |
+
+**Theme token mới** trong [`utils/themes.ts`](../../apps/desktop/ui/utils/themes.ts):
+
+| Token | Dùng cho |
+|---|---|
+| `t.overlay` | Backdrop modal/lightbox (rgba đen, khác giữa dark/light). |
+| `t.onAccent` | Text trên nền `accent`/`danger` button. |
+| `t.diffAdd` / `t.diffDel` | Markdown diff viewer line color. |
+| `t.statusOk` / `t.statusWarn` | Status indicator dot/badge. |
+
+> **Quy tắc:** thấy mình copy `fixed inset-0 backdrop-blur` lần thứ 2 → dừng, dùng `BaseModal`. Thấy copy `inputStyle = computed(...)` lần thứ 2 → dừng, dùng `AppInput`. Pattern lặp 3+ lần mà chưa có primitive → mở thảo luận extract, không tự viết bản thứ tư.
+
 ## VueFlow
 
 - Node + edge data → giữ trong store, hoặc local ref khi chỉ scope một page.

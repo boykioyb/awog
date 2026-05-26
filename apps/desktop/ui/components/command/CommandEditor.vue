@@ -1,28 +1,11 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
-    <div class="flex items-center justify-between mb-6">
-      <div class="text-sm font-medium" :style="{ color: t.text }">
-        {{ command?.id ? 'Edit Command' : 'New Command' }}
-      </div>
-      <div class="flex gap-2">
-        <button class="px-3 py-1.5 text-xs" :style="{ color: t.textMuted }" @click="emit('cancel')">
-          Cancel
-        </button>
-        <button
-          class="px-3 py-1.5 text-xs rounded font-medium inline-flex items-center gap-1.5"
-          :disabled="!draft.name || !draft.body"
-          :style="{
-            background: !draft.name || !draft.body ? t.bgInput : t.accent,
-            color: !draft.name || !draft.body ? t.textFaint : t.accentText,
-          }"
-          @click="onSave"
-        >
-          <Save :size="11" />
-          Save
-        </button>
-      </div>
-    </div>
-
+  <EditorShell
+    :title="command?.id ? 'Edit Command' : 'New Command'"
+    :dirty="dirty"
+    :can-save="!!draft.name && !!draft.body"
+    @save="onSave"
+    @cancel="emit('cancel')"
+  >
     <div class="space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Name (after /)">
@@ -97,13 +80,7 @@
       </div>
 
       <!-- Arguments -->
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          Arguments
-        </label>
+      <Field label="Arguments">
         <div class="space-y-2">
           <div
             v-for="(arg, i) in draft.args"
@@ -160,7 +137,7 @@
             Add argument
           </button>
         </div>
-      </div>
+      </Field>
 
       <Field :label="bodyLabel">
         <textarea
@@ -172,11 +149,11 @@
         />
       </Field>
     </div>
-  </div>
+  </EditorShell>
 </template>
 
 <script setup lang="ts">
-import { Save, Plus, X } from 'lucide-vue-next'
+import { Plus, X } from 'lucide-vue-next'
 import type { CommandArg, CommandScope, CommandType, SlashCommand } from '~/types'
 import type { CommandDraft } from '~/composables/useCommandGenerator'
 
@@ -220,6 +197,7 @@ const initDraft = (c: SlashCommand | null, seed: CommandDraft | null | undefined
 }
 
 const draft = ref<Draft>(initDraft(props.command, props.initialDraft))
+const original = ref<Draft>(initDraft(props.command, props.initialDraft))
 const aliasesText = ref(draft.value.aliases.join(', '))
 
 watch(aliasesText, (v) => {
@@ -233,6 +211,7 @@ watch(
   () => props.command,
   (c) => {
     draft.value = initDraft(c, props.initialDraft)
+    original.value = initDraft(c, props.initialDraft)
     aliasesText.value = draft.value.aliases.join(', ')
   },
 )
@@ -243,6 +222,8 @@ const inputStyle = computed(() => ({
   color: t.value.text,
   outline: 'none',
 }))
+
+const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 
 const bodyLabel = computed<string>(() => {
   switch (draft.value.type) {

@@ -1,5 +1,6 @@
 export default defineNuxtConfig({
   modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt'],
+  components: [{ path: '~/components', pathPrefix: false }],
   css: [
     '~/assets/css/main.css',
     '@vue-flow/core/dist/style.css',

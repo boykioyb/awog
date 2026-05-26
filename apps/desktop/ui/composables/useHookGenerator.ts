@@ -72,8 +72,8 @@ const slugify = (raw: string): string =>
     .slice(0, 40) || 'new-hook'
 
 const firstSentence = (prompt: string): string => {
-  const m = prompt.trim().match(/^[^.!?\n]+[.!?]?/)
-  return m ? m[0].trim() : prompt.trim().slice(0, 140)
+  const m = prompt.match(/^[^.!?\n]+[.!?]?/)
+  return m ? m[0].trim() : prompt.slice(0, 140)
 }
 
 const mockGenerate = (prompt: string): HookDraft => {
@@ -101,27 +101,4 @@ const mockGenerate = (prompt: string): HookDraft => {
   }
 }
 
-export const useHookGenerator = () => {
-  const isGenerating = ref(false)
-  const error = ref<string | null>(null)
-
-  const generate = async (prompt: string): Promise<HookDraft | null> => {
-    const trimmed = prompt.trim()
-    if (!trimmed) {
-      error.value = 'Prompt cannot be empty'
-      return null
-    }
-    isGenerating.value = true
-    error.value = null
-    try {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 400)
-      })
-      return mockGenerate(trimmed)
-    } finally {
-      isGenerating.value = false
-    }
-  }
-
-  return { generate, isGenerating, error }
-}
+export const useHookGenerator = () => useMockGenerator<HookDraft>({ generate: mockGenerate })

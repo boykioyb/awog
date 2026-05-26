@@ -35,7 +35,7 @@
       <button
         class="text-[11px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{ background: t.accent, color: t.accentText }"
-        @click="onSave"
+        @click="draft && emit('save', { ...draft })"
       >
         <Save :size="11" />
         Create workflow
@@ -58,21 +58,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
-const { generate, isGenerating, error } = useWorkflowGenerator()
-
-const draft = ref<WorkflowDraft | null>(null)
-
-const onSubmit = async (prompt: string) => {
-  const result = await generate(prompt)
-  if (result) draft.value = result
-}
-
-const onRegenerate = () => {
-  draft.value = null
-}
-
-const onSave = () => {
-  if (!draft.value) return
-  emit('save', { ...draft.value })
-}
+const { draft, isGenerating, error, onSubmit, onRegenerate } =
+  usePromptCreator<WorkflowDraft>(useWorkflowGenerator())
 </script>

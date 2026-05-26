@@ -55,25 +55,40 @@ ui/
 ├── layouts/
 │   └── default.vue         # Shell: NavRail + TopBar + content slot
 ├── components/
-│   ├── NavRail.vue         # 5 view + Settings + theme toggle + collapse
-│   ├── TopBar.vue          # Breadcrumb context-aware (project + branch + path khi đang /tasks)
-│   ├── EmptyView.vue       # Placeholder
-│   ├── RoleBadge.vue
-│   ├── ConfirmDeleteModal.vue
-│   ├── AppToggle.vue
-│   ├── CompactSelect.vue
-│   ├── TaskListItem.vue, TaskSourceBadge.vue, TaskDetail.vue
-│   ├── PhaseCard.vue, PhaseOutputTab.vue, PhaseTraceTab.vue, PhaseDiscussTab.vue
-│   ├── TraceNodeItem.vue   # recursive
-│   ├── RerunModal.vue, NewTaskModal.vue
-│   ├── ProjectEditor.vue, ProjectMeta.vue
-│   ├── AgentDetail.vue, AgentEditor.vue
-│   ├── SkillDetail.vue, SkillEditor.vue
-│   ├── WorkflowNodeInspector.vue
-│   ├── SettingsField.vue
-│   ├── MarkdownRenderer.vue, MermaidBlock.vue, DiffViewer.vue
+│   │
+│   │ # Primitive + layout (dùng chéo, giữ ở root) — auto-import dùng pathPrefix:false
+│   ├── NavRail.vue, TopBar.vue
+│   ├── BaseModal.vue, MasterDetailShell.vue, EditorShell.vue, PromptCreatorPanel.vue
+│   ├── AppInput.vue, AppToggle.vue, SearchInput.vue, CompactSelect.vue
+│   ├── Field.vue, Section.vue, EmptyView.vue, ToggleCard.vue, ToggleField.vue
+│   ├── ContextMenu.vue, ConfirmDeleteModal.vue, AttachmentLightbox.vue
+│   ├── KvEditor.vue, KeyRow.vue, KeyValueCard.vue
+│   │
+│   │ # Entity folders (PR-6 consolidation sweep)
+│   ├── agent/        # AgentDetail.vue, AgentEditor.vue, AgentPromptCreator.vue
+│   ├── command/      # CommandDetail.vue, CommandEditor.vue, CommandPromptCreator.vue
+│   ├── hook/         # HookDetail.vue, HookEditor.vue, HookPromptCreator.vue
+│   ├── mcp/          # McpDetail.vue, McpEditor.vue, McpPromptCreator.vue
+│   ├── skill/        # SkillDetail.vue, SkillEditor.vue, SkillPromptCreator.vue
+│   ├── project/      # ProjectEditor.vue, ProjectMeta.vue
+│   ├── task/         # TaskDetail.vue, TaskListItem.vue, TaskSourceBadge.vue, NewTaskModal.vue
+│   ├── phase/        # PhaseCard.vue + tabs, StepItem.vue, TraceNodeItem.vue, RoleBadge.vue, RerunModal.vue
+│   ├── markdown/     # MarkdownRenderer.vue, MarkdownInline.vue, MermaidBlock.vue, DiffViewer.vue, SideDiffViewer.vue
+│   │
+│   │ # Feature folders (existing)
+│   ├── session/      # SessionChat (orchestrator), Header, MessageList, Composer, ChipsPopover, Autocomplete, Drawer, StepDetail — PR-5.A
+│   ├── edit/         # EditorTopBar, EditorFileTree, EditorMonacoPane, EditorViewerPane — PR-5.G
+│   ├── settings/     # SettingsWorkspace/Defaults/Models/Connectors/AppearanceSection + SettingsField + CustomProviderForm — PR-5.B
+│   ├── git/          # GitBranchList (orchestrator), Tree, ContextMenu, NameModal, DirtyCheckoutModal, ... — PR-5.C
+│   ├── workflows/    # WorkflowPalette, Canvas, ListItem, InspectorPane, AgentNode, NodeInspector, PromptCreator — PR-5.D
 ├── composables/
-│   └── useTheme.ts         # State theme dark/light + CSS vars cho scrollbar
+│   ├── useTheme.ts         # State theme dark/light + CSS vars cho scrollbar
+│   ├── useEscape.ts        # ESC handler với module-level stack (LIFO) — primitive PR-1
+│   ├── useClickOutside.ts  # Click-outside handler (mousedown) cho popover — primitive PR-1
+│   ├── useMockGenerator.ts # Generic mock generator (T) — PR-4
+│   ├── usePromptCreator.ts # Shared prompt → entity flow state — PR-4
+│   ├── useBreakpoint.ts    # Responsive breakpoint detector
+│   └── useMentionAutocomplete.ts # @-mention autocomplete state — PR-5.A
 ├── stores/
 │   ├── workspace.ts        # Tasks, projects, agents, skills, workflows + actions
 │   └── settings.ts         # Workspace path, API keys, connectors
@@ -93,7 +108,15 @@ ui/
 │   ├── mock-output.ts      # mockOutput, mockPatch, mockArtifactContent, makeTrace, makeLiveTrace
 │   ├── graph.ts            # topoSort, calcBadgeColWidth
 │   ├── status-meta.ts      # STATUS_META
-│   └── load-mermaid.ts     # Mermaid singleton loader
+│   ├── load-mermaid.ts     # Mermaid singleton loader
+│   ├── tokenize.ts         # Pure tokenize cho composer/autocomplete — PR-5.A
+│   ├── stop-words.ts       # English stop word list (autocomplete filter)
+│   ├── branch-tree.ts      # Pure: build tree từ flat branch list, validate name — PR-5.C
+│   ├── workflow-edges.ts   # Pure: derive edge id — PR-5.D
+│   ├── diff-parse.ts       # Pure: parse unified diff (DiffViewer / SideDiffViewer)
+│   ├── file-icon.ts        # Map extension → icon (file tree)
+│   ├── initial-extensions.ts, initial-sessions.ts # Mock seeds
+│   └── markdown-parse.ts   # Pure: parse markdown AST (blocks + inline) — PR-5.E
 ├── types/
 │   └── index.ts            # Entity types
 ├── assets/css/main.css

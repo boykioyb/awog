@@ -49,7 +49,7 @@
       <button
         class="text-[11px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded"
         :style="{ color: t.textMuted }"
-        @click="onEditDetails"
+        @click="draft && emit('edit-manually', draft)"
       >
         <Sliders :size="11" />
         Edit details
@@ -57,7 +57,7 @@
       <button
         class="text-[11px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{ background: t.accent, color: t.accentText }"
-        @click="onSave"
+        @click="draft && emit('save', { ...(draft as Hook) })"
       >
         <Save :size="11" />
         Save hook
@@ -80,26 +80,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
-const { generate, isGenerating, error } = useHookGenerator()
-
-const draft = ref<HookDraft | null>(null)
-
-const onSubmit = async (prompt: string) => {
-  const result = await generate(prompt)
-  if (result) draft.value = result
-}
-
-const onRegenerate = () => {
-  draft.value = null
-}
-
-const onSave = () => {
-  if (!draft.value) return
-  emit('save', { ...(draft.value as Hook) })
-}
-
-const onEditDetails = () => {
-  if (!draft.value) return
-  emit('edit-manually', draft.value)
-}
+const { draft, isGenerating, error, onSubmit, onRegenerate } =
+  usePromptCreator<HookDraft>(useHookGenerator())
 </script>

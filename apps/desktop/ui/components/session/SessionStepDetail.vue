@@ -103,7 +103,7 @@
             class="inline-flex items-center px-1 rounded-sm font-mono text-[10px]"
             :style="{
               background: 'rgba(34, 197, 94, 0.12)',
-              color: '#22c55e',
+              color: t.statusOk,
               border: '1px solid rgba(34, 197, 94, 0.35)',
             }"
           >
@@ -202,7 +202,7 @@
               class="ml-auto text-[10px] inline-flex items-center px-1.5 rounded-sm"
               :style="{
                 background: detail.exitCode === 0 ? 'rgba(34, 197, 94, 0.12)' : t.dangerBg,
-                color: detail.exitCode === 0 ? '#22c55e' : t.danger,
+                color: detail.exitCode === 0 ? t.statusOk : t.danger,
                 border: `1px solid ${detail.exitCode === 0 ? 'rgba(34, 197, 94, 0.35)' : t.dangerBorder}`,
               }"
             >

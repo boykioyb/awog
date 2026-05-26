@@ -375,6 +375,7 @@ export type GitFileStatusCode =
   | 'conflicted'
 
 export type GitFileStatus = {
+  projectId: string
   path: string
   oldPath?: string
   index: GitFileStatusCode | 'clean'
@@ -385,6 +386,7 @@ export type GitFileStatus = {
 }
 
 export type GitCommit = {
+  projectId: string
   hash: string
   shortHash: string
   authorName: string
@@ -399,6 +401,7 @@ export type GitCommit = {
 }
 
 export type GitBranch = {
+  projectId: string
   name: string
   isCurrent: boolean
   isRemote: boolean
@@ -409,6 +412,7 @@ export type GitBranch = {
 }
 
 export type GitStashEntry = {
+  projectId: string
   index: number
   ref: string
   message: string
@@ -417,6 +421,7 @@ export type GitStashEntry = {
 }
 
 export type GitRemote = {
+  projectId: string
   name: string
   fetchUrl: string
   pushUrl: string
@@ -424,13 +429,15 @@ export type GitRemote = {
 
 export type GitDiffLineKind = 'context' | 'add' | 'del'
 
+export type GitDiffLine = { kind: GitDiffLineKind; text: string }
+
 export type GitDiffHunk = {
   oldStart: number
   oldLines: number
   newStart: number
   newLines: number
   header: string
-  lines: Array<{ kind: GitDiffLineKind; text: string }>
+  lines: GitDiffLine[]
 }
 
 export type GitFileDiff = {
@@ -452,3 +459,23 @@ export type GitMergeConflictBlock = {
 }
 
 export type GitRepoState = 'clean' | 'dirty' | 'merging' | 'rebasing' | 'detached' | 'no-repo'
+
+// Editor (pages/edit/[taskId].vue) -------------------------------------------------
+
+export type EditorFileKind = 'md' | 'diff' | 'yaml'
+
+export type EditorViewMode = 'code' | 'split' | 'preview'
+
+export type EditorTaskFile = {
+  fileName: string
+  content: string
+  phase: string
+  version: number
+  kind: EditorFileKind
+}
+
+export type EditorDiffStats = {
+  files: number
+  additions: number
+  deletions: number
+}

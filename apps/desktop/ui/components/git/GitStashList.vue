@@ -16,13 +16,7 @@
     </div>
 
     <div class="flex-1 overflow-y-auto">
-      <div
-        v-if="store.stashes.length === 0"
-        class="px-3 py-12 text-center text-xs"
-        :style="{ color: t.textDim }"
-      >
-        No stash entries
-      </div>
+      <EmptyView v-if="store.stashes.length === 0" :icon="Archive" title="No stash entries" />
       <div
         v-for="entry in store.stashes"
         :key="entry.ref"
@@ -77,62 +71,38 @@
       </div>
     </div>
 
-    <div
-      v-if="showSave"
-      class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-3"
-      style="background: rgba(0, 0, 0, 0.5)"
-      @click="showSave = false"
-    >
-      <div
-        class="w-full max-w-[400px] rounded-lg overflow-hidden flex flex-col"
-        :style="{
-          background: t.bgPanel,
-          border: `1px solid ${t.borderStrong}`,
-          boxShadow: `0 20px 60px ${t.shadow}`,
-        }"
-        @click.stop
-      >
-        <div
-          class="px-4 py-3 text-sm font-medium"
-          :style="{ borderBottom: `1px solid ${t.border}`, color: t.text }"
-        >
-          Save stash
-        </div>
-        <div class="p-4">
-          <input
-            v-model="newMessage"
-            placeholder="Stash message (optional)"
-            class="w-full rounded text-xs px-2 py-1.5"
-            :style="{
-              background: t.bgInput,
-              color: t.text,
-              border: `1px solid ${t.border}`,
-              outline: 'none',
-            }"
-            @keydown.enter="onSave"
-          />
-        </div>
-        <div
-          class="px-4 py-3 flex justify-end gap-2"
-          :style="{ borderTop: `1px solid ${t.border}` }"
-        >
-          <button
-            class="px-3 py-1.5 text-xs rounded transition"
-            :style="{ color: t.textMuted }"
-            @click="showSave = false"
-          >
-            Cancel
-          </button>
-          <button
-            class="px-3 py-1.5 text-xs rounded font-medium transition"
-            :style="{ background: t.accent, color: t.accentText }"
-            @click="onSave"
-          >
-            Save
-          </button>
-        </div>
+    <BaseModal :open="showSave" title="Save stash" size="sm" @close="showSave = false">
+      <div class="p-4">
+        <input
+          v-model="newMessage"
+          placeholder="Stash message (optional)"
+          class="w-full rounded text-xs px-2 py-1.5"
+          :style="{
+            background: t.bgInput,
+            color: t.text,
+            border: `1px solid ${t.border}`,
+            outline: 'none',
+          }"
+          @keydown.enter="onSave"
+        />
       </div>
-    </div>
+      <template #footer>
+        <button
+          class="px-3 py-1.5 text-xs rounded transition"
+          :style="{ color: t.textMuted }"
+          @click="showSave = false"
+        >
+          Cancel
+        </button>
+        <button
+          class="px-3 py-1.5 text-xs rounded font-medium transition"
+          :style="{ background: t.accent, color: t.accentText }"
+          @click="onSave"
+        >
+          Save
+        </button>
+      </template>
+    </BaseModal>
 
     <ConfirmDeleteModal
       v-if="pendingDrop !== null"
@@ -145,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { Plus } from 'lucide-vue-next'
+import { Archive, Plus } from 'lucide-vue-next'
 
 const { t } = useTheme()
 const store = useGitStore()

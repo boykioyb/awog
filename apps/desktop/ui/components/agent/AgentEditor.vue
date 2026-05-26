@@ -1,72 +1,27 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <div class="text-sm font-medium" :style="{ color: t.text }">
-          {{ agent?.id ? 'Edit Agent' : 'New Agent' }}
-        </div>
-        <div v-if="agent?.id" class="text-[10px] font-mono mt-0.5" :style="{ color: t.textDim }">
-          {{ agent.id }}
-        </div>
-      </div>
-      <div class="flex gap-2">
-        <button
-          class="px-3 py-1.5 text-xs rounded transition"
-          :style="{ color: t.textMuted }"
-          @click="emit('cancel')"
-          @mouseenter="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = t.bgHover
-              ;(e.currentTarget as HTMLElement).style.color = t.text
-            }
-          "
-          @mouseleave="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-              ;(e.currentTarget as HTMLElement).style.color = t.textMuted
-            }
-          "
-        >
-          Cancel
-        </button>
-        <button
-          class="px-3 py-1.5 text-xs rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
-          :disabled="!canSave"
-          :style="{
-            background: !canSave ? t.bgInput : t.accent,
-            color: !canSave ? t.textFaint : t.accentText,
-          }"
-          @click="onSave"
-        >
-          <Save :size="11" />
-          {{ agent?.id ? 'Save changes' : 'Create agent' }}
-        </button>
-      </div>
+  <EditorShell
+    :title="agent?.id ? 'Edit Agent' : 'New Agent'"
+    :dirty="dirty"
+    :can-save="canSave"
+    :save-label="agent?.id ? 'Save changes' : 'Create agent'"
+    @save="onSave"
+    @cancel="emit('cancel')"
+  >
+    <div v-if="agent?.id" class="text-[10px] font-mono -mt-5 mb-6" :style="{ color: t.textDim }">
+      {{ agent.id }}
     </div>
 
     <div class="space-y-5">
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div class="sm:col-span-2">
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Name
-          </label>
+        <Field label="Name" class="sm:col-span-2">
           <input
             v-model="draft.name"
             placeholder="e.g. Tax Consultant, SEO Specialist"
             class="w-full rounded px-2 py-1.5 text-xs"
             :style="inputStyle"
           />
-        </div>
-        <div>
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Role tag
-          </label>
+        </Field>
+        <Field label="Role tag">
           <input
             v-model="draft.role"
             placeholder="DevOps, BA, Security..."
@@ -76,16 +31,10 @@
           <div class="text-[10px] mt-1" :style="{ color: t.textDim }">
             Short label shown on the badge
           </div>
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          Model
-        </label>
+      <Field label="Model">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
           <button
             v-for="m in MODELS"
@@ -96,18 +45,6 @@
               border: `1px solid ${draft.model === m.id ? t.borderFocus : t.border}`,
             }"
             @click="draft.model = m.id"
-            @mouseenter="
-              (e) => {
-                if (draft.model !== m.id)
-                  (e.currentTarget as HTMLElement).style.background = t.bgHover
-              }
-            "
-            @mouseleave="
-              (e) => {
-                if (draft.model !== m.id)
-                  (e.currentTarget as HTMLElement).style.background = t.bgInput
-              }
-            "
           >
             <div class="flex items-center gap-2">
               <div
@@ -131,15 +68,9 @@
             </div>
           </button>
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          System Prompt
-        </label>
+      <Field label="System Prompt">
         <textarea
           v-model="draft.systemPrompt"
           :rows="4"
@@ -147,7 +78,7 @@
           class="w-full rounded px-2 py-1.5 text-[12px] leading-relaxed resize-none"
           :style="inputStyle"
         />
-      </div>
+      </Field>
 
       <div>
         <div class="flex items-center justify-between mb-1.5">
@@ -157,19 +88,7 @@
           >
             Skills · {{ draft.skillIds.length }} selected
           </label>
-          <div class="relative">
-            <Search
-              :size="10"
-              class="absolute left-2 top-1/2 -translate-y-1/2"
-              :style="{ color: t.textDim }"
-            />
-            <input
-              v-model="skillSearch"
-              placeholder="Filter skills..."
-              class="rounded pl-7 pr-2 py-1 text-[11px]"
-              :style="inputStyle"
-            />
-          </div>
+          <SearchInput v-model="skillSearch" placeholder="Filter skills..." class="w-44" />
         </div>
         <div
           class="rounded p-2 max-h-72 overflow-y-auto space-y-3"
@@ -190,18 +109,6 @@
                 :style="{
                   background: draft.skillIds.includes(s.id) ? t.bgActive : 'transparent',
                 }"
-                @mouseenter="
-                  (e) => {
-                    if (!draft.skillIds.includes(s.id))
-                      (e.currentTarget as HTMLElement).style.background = t.bgHover
-                  }
-                "
-                @mouseleave="
-                  (e) => {
-                    if (!draft.skillIds.includes(s.id))
-                      (e.currentTarget as HTMLElement).style.background = 'transparent'
-                  }
-                "
               >
                 <input
                   type="checkbox"
@@ -228,13 +135,7 @@
         </div>
       </div>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          Context Providers
-        </label>
+      <Field label="Context Providers">
         <div class="flex flex-wrap gap-1.5">
           <button
             v-for="p in CONTEXT_PROVIDERS"
@@ -251,13 +152,12 @@
             {{ p.label }}
           </button>
         </div>
-      </div>
+      </Field>
     </div>
-  </div>
+  </EditorShell>
 </template>
 
 <script setup lang="ts">
-import { Save, Search } from 'lucide-vue-next'
 import type { Agent, Skill, SkillCategory } from '~/types'
 import type { AgentDraft } from '~/composables/useAgentGenerator'
 import { CONTEXT_PROVIDERS } from '~/utils/initial-data'
@@ -306,6 +206,7 @@ const initDraft = (): Agent => {
 }
 
 const draft = ref<Agent>(initDraft())
+const original = ref<Agent>(initDraft())
 const skillSearch = ref('')
 
 const inputStyle = computed(() => ({
@@ -334,6 +235,8 @@ const skillsByCategory = computed<[SkillCategory, Skill[]][]>(() => {
 })
 
 const canSave = computed(() => !!(draft.value.name && draft.value.role && draft.value.model))
+
+const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 
 const toggleSkill = (id: string) => {
   draft.value.skillIds = draft.value.skillIds.includes(id)

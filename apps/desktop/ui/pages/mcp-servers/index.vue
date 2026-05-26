@@ -1,33 +1,16 @@
 <template>
-  <div class="flex flex-1 overflow-hidden">
-    <!-- Sidebar list -->
-    <div
-      class="flex flex-col flex-shrink-0 w-full md:w-72"
-      :class="{ 'hidden md:flex': mobilePane === 'detail' }"
-      :style="{ borderRight: `1px solid ${t.border}`, background: t.bgPanel }"
-    >
+  <MasterDetailShell
+    :mobile-pane="mobilePane"
+    :selected-id="mode === 'edit' && !selectedId ? '_creating' : selectedId"
+    list-width="18rem"
+    @update:mobile-pane="onBack"
+  >
+    <template #list>
       <div
         class="px-3 py-3 flex items-center gap-2"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
-        <div class="flex-1 relative">
-          <Search
-            :size="11"
-            class="absolute left-2 top-1/2 -translate-y-1/2"
-            :style="{ color: t.textDim }"
-          />
-          <input
-            v-model="searchQuery"
-            placeholder="Search servers..."
-            class="w-full rounded pl-7 pr-2 py-1.5 text-xs"
-            :style="{
-              background: t.bgInput,
-              border: `1px solid ${t.border}`,
-              color: t.text,
-              outline: 'none',
-            }"
-          />
-        </div>
+        <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search servers..." />
         <button
           ref="newButtonRef"
           class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
@@ -115,23 +98,9 @@
           </div>
         </div>
       </div>
-    </div>
+    </template>
 
-    <!-- Main pane -->
-    <div
-      class="flex-1 overflow-y-auto"
-      :class="{ 'hidden md:block': mobilePane === 'list' }"
-      :style="{ background: t.bg }"
-    >
-      <button
-        class="md:hidden flex items-center gap-1 px-3 py-2 text-xs transition"
-        :style="{ color: t.textMuted, borderBottom: `1px solid ${t.border}` }"
-        @click="onBack"
-      >
-        <ChevronLeft :size="14" />
-        Back
-      </button>
-
+    <template #detail>
       <McpEditor
         v-if="mode === 'edit'"
         :server="selected ?? null"
@@ -145,47 +114,40 @@
         @edit="mode = 'edit'"
         @delete="askDelete"
       />
-      <div v-else class="flex items-center justify-center h-full">
-        <div class="text-center">
-          <Plug
-            :size="28"
-            class="mx-auto mb-2"
-            :stroke-width="1.5"
-            :style="{ color: t.textFaint }"
-          />
-          <div class="text-sm" :style="{ color: t.textDim }">Select an MCP server</div>
-        </div>
-      </div>
-    </div>
+    </template>
 
-    <McpPromptCreator
-      v-if="showPromptModal"
-      :anchor="anchor"
-      @save="onSave"
-      @edit-manually="onEditManually"
-      @cancel="onCancelPromptModal"
-    />
+    <template #empty-detail>
+      <EmptyView :icon="Plug" title="Select an MCP server" />
+    </template>
+  </MasterDetailShell>
 
-    <ConfirmDeleteModal
-      v-if="pendingDeleteId"
-      title="Remove MCP server?"
-      :description="`Server '${pendingDeleteName}' sẽ bị xóa khỏi workspace. Agent đang dùng sẽ mất tool này.`"
-      @confirm="confirmDelete"
-      @cancel="pendingDeleteId = null"
-    />
+  <McpPromptCreator
+    v-if="showPromptModal"
+    :anchor="anchor"
+    @save="onSave"
+    @edit-manually="onEditManually"
+    @cancel="onCancelPromptModal"
+  />
 
-    <ContextMenu
-      v-if="contextMenu"
-      :x="contextMenu.x"
-      :y="contextMenu.y"
-      :items="menuItems"
-      @close="contextMenu = null"
-    />
-  </div>
+  <ConfirmDeleteModal
+    v-if="pendingDeleteId"
+    title="Remove MCP server?"
+    :description="`Server '${pendingDeleteName}' sẽ bị xóa khỏi workspace. Agent đang dùng sẽ mất tool này.`"
+    @confirm="confirmDelete"
+    @cancel="pendingDeleteId = null"
+  />
+
+  <ContextMenu
+    v-if="contextMenu"
+    :x="contextMenu.x"
+    :y="contextMenu.y"
+    :items="menuItems"
+    @close="contextMenu = null"
+  />
 </template>
 
 <script setup lang="ts">
-import { Search, Plus, Plug, ChevronLeft, Edit3, Trash2, MoreHorizontal } from 'lucide-vue-next'
+import { Plus, Plug, Edit3, Trash2, MoreHorizontal } from 'lucide-vue-next'
 import type { MCPServer, MCPStatus, MCPTransport } from '~/types'
 import type { McpDraft } from '~/composables/useMcpGenerator'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'

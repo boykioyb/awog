@@ -2,32 +2,28 @@
   <Teleport to="body">
     <div
       class="fixed inset-0 z-50 flex flex-col"
-      :style="{ background: 'rgba(0, 0, 0, 0.85)' }"
+      :style="{ background: t.overlay }"
       @click.self="emit('close')"
     >
       <div
         class="flex items-center gap-2 px-4 py-2"
         :style="{
-          background: 'rgba(0, 0, 0, 0.5)',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          background: t.bgPanel,
+          borderBottom: `1px solid ${t.border}`,
         }"
       >
-        <component :is="headerIcon" :size="13" :style="{ color: 'rgba(255,255,255,0.7)' }" />
-        <span class="text-[12px] font-mono truncate" :style="{ color: '#fff' }">
+        <component :is="headerIcon" :size="13" :style="{ color: t.textMuted }" />
+        <span class="text-[12px] font-mono truncate" :style="{ color: t.text }">
           {{ attachment.name }}
         </span>
         <span
           v-if="attachment.type === 'image' && attachment.width && attachment.height"
           class="text-[10px] font-mono"
-          :style="{ color: 'rgba(255,255,255,0.5)' }"
+          :style="{ color: t.textDim }"
         >
           {{ attachment.width }} × {{ attachment.height }}
         </span>
-        <span
-          v-if="attachment.size"
-          class="text-[10px]"
-          :style="{ color: 'rgba(255,255,255,0.5)' }"
-        >
+        <span v-if="attachment.size" class="text-[10px]" :style="{ color: t.textDim }">
           · {{ attachment.size }}
         </span>
 
@@ -91,7 +87,7 @@
           :src="attachment.url"
           :alt="attachment.name"
           class="max-w-full max-h-full object-contain rounded shadow-2xl m-6"
-          :style="{ background: '#0a0a0a' }"
+          :style="{ background: t.bgCanvas }"
           @click.stop
         />
 
@@ -133,7 +129,7 @@
           </div>
         </div>
 
-        <div v-else class="text-center text-[12px]" :style="{ color: 'rgba(255,255,255,0.5)' }">
+        <div v-else class="text-center text-[12px]" :style="{ color: t.textDim }">
           No preview available for this attachment.
         </div>
       </div>
@@ -142,9 +138,9 @@
         v-if="copyError"
         class="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded text-[11px]"
         :style="{
-          background: 'rgba(239, 68, 68, 0.15)',
-          color: '#fca5a5',
-          border: '1px solid rgba(239, 68, 68, 0.4)',
+          background: t.dangerBg,
+          color: t.danger,
+          border: `1px solid ${t.dangerBorder}`,
         }"
       >
         {{ copyError }}
@@ -203,20 +199,20 @@ const headerIcon = computed(() => {
 const lineCount = computed(() => props.attachment.preview?.split('\n').length ?? 0)
 const charCount = computed(() => props.attachment.preview?.length ?? 0)
 
-const actionBtnStyle = {
-  background: 'rgba(255,255,255,0.08)',
-  color: '#fff',
-  border: '1px solid rgba(255,255,255,0.15)',
-}
+const actionBtnStyle = computed(() => ({
+  background: t.value.bgHover,
+  color: t.value.text,
+  border: `1px solid ${t.value.border}`,
+}))
 
 const copyBtnStyle = computed(() =>
   copyState.value === 'copied'
     ? {
-        background: 'rgba(34, 197, 94, 0.18)',
-        color: '#86efac',
-        border: '1px solid rgba(34, 197, 94, 0.45)',
+        background: t.value.warningBg,
+        color: t.value.statusOk,
+        border: `1px solid ${t.value.warningBorder}`,
       }
-    : actionBtnStyle,
+    : actionBtnStyle.value,
 )
 
 const copyLabel = computed(() => {
@@ -311,10 +307,6 @@ const openInNewTab = () => {
   window.open(props.attachment.url, '_blank', 'noopener,noreferrer')
 }
 
-const onKeydown = (ev: KeyboardEvent) => {
-  if (ev.key === 'Escape') emit('close')
-}
-
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+// ESC qua composable (stack-aware, không double-bind với modal khác).
+useEscape(() => emit('close'))
 </script>

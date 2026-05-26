@@ -1,39 +1,14 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
-    <div class="flex items-center justify-between mb-6">
-      <div class="text-sm font-medium" :style="{ color: t.text }">
-        {{ skill?.id ? 'Edit Skill' : 'New Skill' }}
-      </div>
-      <div class="flex gap-2">
-        <button class="px-3 py-1.5 text-xs" :style="{ color: t.textMuted }" @click="emit('cancel')">
-          Cancel
-        </button>
-        <button
-          class="px-3 py-1.5 text-xs rounded font-medium"
-          :disabled="!draft.name"
-          :style="{
-            background: !draft.name ? t.bgInput : t.accent,
-            color: !draft.name ? t.textFaint : t.accentText,
-          }"
-          @click="onSave"
-        >
-          <span class="inline-flex items-center gap-1.5">
-            <Save :size="11" />
-            Save
-          </span>
-        </button>
-      </div>
-    </div>
-
+  <EditorShell
+    :title="skill?.id ? 'Edit Skill' : 'New Skill'"
+    :dirty="dirty"
+    :can-save="!!draft.name"
+    @save="onSave"
+    @cancel="emit('cancel')"
+  >
     <div class="space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Name
-          </label>
+        <Field label="Name">
           <input
             :value="draft.name"
             placeholder="e.g. analyze_pricing"
@@ -46,29 +21,17 @@
                   .toLowerCase())
             "
           />
-        </div>
-        <div>
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Category
-          </label>
+        </Field>
+        <Field label="Category">
           <input
             v-model="draft.category"
             class="w-full rounded px-2 py-1.5 text-xs"
             :style="inputStyle"
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          Description
-        </label>
+      <Field label="Description">
         <textarea
           v-model="draft.description"
           :rows="2"
@@ -76,16 +39,10 @@
           class="w-full rounded px-2 py-1.5 text-[12px] resize-none"
           :style="inputStyle"
         />
-      </div>
+      </Field>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Inputs
-          </label>
+        <Field label="Inputs">
           <div class="space-y-1">
             <div v-for="(inp, i) in draft.inputs" :key="i" class="flex items-center gap-1">
               <input
@@ -110,14 +67,8 @@
               Add input
             </button>
           </div>
-        </div>
-        <div>
-          <label
-            class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Outputs
-          </label>
+        </Field>
+        <Field label="Outputs">
           <div class="space-y-1">
             <div v-for="(out, i) in draft.outputs" :key="i" class="flex items-center gap-1">
               <input
@@ -142,16 +93,10 @@
               Add output
             </button>
           </div>
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          Prompt Template
-        </label>
+      <Field label="Prompt Template">
         <textarea
           v-model="draft.promptTemplate"
           :rows="8"
@@ -159,15 +104,9 @@
           class="w-full rounded px-2 py-1.5 text-[11px] font-mono leading-relaxed resize-none"
           :style="inputStyle"
         />
-      </div>
+      </Field>
 
-      <div>
-        <label
-          class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
-          :style="{ color: t.textDim }"
-        >
-          Tags
-        </label>
+      <Field label="Tags">
         <div class="flex flex-wrap gap-1 mb-1.5">
           <span
             v-for="tag in draft.tags"
@@ -195,13 +134,13 @@
           :style="inputStyle"
           @keydown.enter.prevent="addTag"
         />
-      </div>
+      </Field>
     </div>
-  </div>
+  </EditorShell>
 </template>
 
 <script setup lang="ts">
-import { Save, Plus, X } from 'lucide-vue-next'
+import { Plus, X } from 'lucide-vue-next'
 import type { Skill, SkillCategory } from '~/types'
 import type { SkillDraft as GeneratedSkillDraft } from '~/composables/useSkillGenerator'
 
@@ -249,12 +188,14 @@ const initDraft = (s: Skill | null, seed: GeneratedSkillDraft | null | undefined
 }
 
 const draft = ref<SkillDraft>(initDraft(props.skill, props.initialDraft))
+const original = ref<SkillDraft>(initDraft(props.skill, props.initialDraft))
 const tagInput = ref('')
 
 watch(
   () => props.skill,
   (s) => {
     draft.value = initDraft(s, props.initialDraft)
+    original.value = initDraft(s, props.initialDraft)
     tagInput.value = ''
   },
 )
@@ -265,6 +206,8 @@ const inputStyle = computed(() => ({
   color: t.value.text,
   outline: 'none',
 }))
+
+const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 
 const addTag = () => {
   const v = tagInput.value.trim()

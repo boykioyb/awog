@@ -1,33 +1,16 @@
 <template>
-  <div class="flex flex-1 overflow-hidden">
-    <div
-      class="flex flex-col flex-shrink-0 w-full md:w-80"
-      :class="{ 'hidden md:flex': mobilePane === 'detail' }"
-      :style="{ borderRight: `1px solid ${t.border}`, background: t.bgPanel }"
-    >
+  <MasterDetailShell
+    v-model:mobile-pane="mobilePane"
+    :selected-id="store.selectedTaskId"
+    list-width="20rem"
+  >
+    <template #list>
       <!-- Single-row toolbar -->
       <div
         class="px-3 py-3 flex items-center gap-1.5"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
-        <div class="flex-1 relative">
-          <Search
-            :size="11"
-            class="absolute left-2 top-1/2 -translate-y-1/2"
-            :style="{ color: t.textDim }"
-          />
-          <input
-            v-model="searchQuery"
-            placeholder="Search..."
-            class="w-full rounded pl-7 pr-2 py-1.5 text-xs"
-            :style="{
-              background: t.bgInput,
-              border: `1px solid ${t.border}`,
-              color: t.text,
-              outline: 'none',
-            }"
-          />
-        </div>
+        <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search..." />
         <button
           class="p-1.5 rounded transition relative"
           :style="filterBtnStyle"
@@ -98,15 +81,7 @@
 
       <!-- Task list -->
       <div class="flex-1 overflow-y-auto py-1">
-        <div v-if="filtered.length === 0" class="text-center py-12 px-4">
-          <Inbox
-            :size="22"
-            class="mx-auto mb-2"
-            :stroke-width="1.5"
-            :style="{ color: t.textFaint }"
-          />
-          <div class="text-xs" :style="{ color: t.textDim }">No tasks</div>
-        </div>
+        <EmptyView v-if="filtered.length === 0" :icon="Inbox" title="No tasks" />
         <template v-else>
           <div
             v-for="(group, gi) in grouped"
@@ -161,66 +136,45 @@
           </div>
         </template>
       </div>
-    </div>
-    <div
-      class="flex-1 overflow-hidden flex flex-col"
-      :class="{ 'hidden md:flex': mobilePane === 'list' }"
-      :style="{ background: t.bg }"
-    >
-      <button
-        class="md:hidden flex items-center gap-1 px-3 py-2 text-xs transition flex-shrink-0"
-        :style="{ color: t.textMuted, borderBottom: `1px solid ${t.border}` }"
-        @click="mobilePane = 'list'"
-      >
-        <ChevronLeft :size="14" />
-        Back
-      </button>
+    </template>
+
+    <template #detail>
       <TaskDetail
         v-if="store.selectedTask"
         :task="store.selectedTask"
         @open-file="onOpenFile"
         @delete="askDelete(store.selectedTask.id)"
       />
-      <div
-        v-else
-        class="flex-1 flex items-center justify-center text-sm"
-        :style="{ color: t.textDim }"
-      >
+    </template>
+
+    <template #empty-detail>
+      <div class="flex-1 flex items-center justify-center text-sm" :style="{ color: t.textDim }">
         Select a task
       </div>
-    </div>
+    </template>
+  </MasterDetailShell>
 
-    <NewTaskModal v-if="showNewModal" @save="onSaveTask" @cancel="showNewModal = false" />
+  <NewTaskModal v-if="showNewModal" @save="onSaveTask" @cancel="showNewModal = false" />
 
-    <ConfirmDeleteModal
-      v-if="pendingDeleteId"
-      title="Delete task?"
-      :description="`Task '${pendingDeleteName}' sẽ bị xóa vĩnh viễn.`"
-      @confirm="confirmDelete"
-      @cancel="pendingDeleteId = null"
-    />
+  <ConfirmDeleteModal
+    v-if="pendingDeleteId"
+    title="Delete task?"
+    :description="`Task '${pendingDeleteName}' sẽ bị xóa vĩnh viễn.`"
+    @confirm="confirmDelete"
+    @cancel="pendingDeleteId = null"
+  />
 
-    <ContextMenu
-      v-if="contextMenu"
-      :x="contextMenu.x"
-      :y="contextMenu.y"
-      :items="menuItems"
-      @close="contextMenu = null"
-    />
-  </div>
+  <ContextMenu
+    v-if="contextMenu"
+    :x="contextMenu.x"
+    :y="contextMenu.y"
+    :items="menuItems"
+    @close="contextMenu = null"
+  />
 </template>
 
 <script setup lang="ts">
-import {
-  Search,
-  Plus,
-  ChevronDown,
-  ChevronLeft,
-  Inbox,
-  ListFilter,
-  Edit3,
-  Trash2,
-} from 'lucide-vue-next'
+import { Plus, ChevronDown, Inbox, ListFilter, Edit3, Trash2 } from 'lucide-vue-next'
 import type { Task, TaskSource } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import { STATUS_META } from '~/utils/status-meta'

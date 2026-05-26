@@ -1,28 +1,11 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
-    <div class="flex items-center justify-between mb-6">
-      <div class="text-sm font-medium" :style="{ color: t.text }">
-        {{ server?.id ? 'Edit MCP Server' : 'New MCP Server' }}
-      </div>
-      <div class="flex gap-2">
-        <button class="px-3 py-1.5 text-xs" :style="{ color: t.textMuted }" @click="emit('cancel')">
-          Cancel
-        </button>
-        <button
-          class="px-3 py-1.5 text-xs rounded font-medium inline-flex items-center gap-1.5"
-          :disabled="!draft.id || !draft.name"
-          :style="{
-            background: !draft.id || !draft.name ? t.bgInput : t.accent,
-            color: !draft.id || !draft.name ? t.textFaint : t.accentText,
-          }"
-          @click="onSave"
-        >
-          <Save :size="11" />
-          Save
-        </button>
-      </div>
-    </div>
-
+  <EditorShell
+    :title="server?.id ? 'Edit MCP Server' : 'New MCP Server'"
+    :dirty="dirty"
+    :can-save="!!draft.id && !!draft.name"
+    @save="onSave"
+    @cancel="emit('cancel')"
+  >
     <div class="space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="ID (slug)">
@@ -132,11 +115,10 @@
         <ToggleField v-model="draft.autoStart" label="Auto-start" />
       </div>
     </div>
-  </div>
+  </EditorShell>
 </template>
 
 <script setup lang="ts">
-import { Save } from 'lucide-vue-next'
 import type { MCPServer, MCPTool, MCPTransport, MCPTrust } from '~/types'
 import type { McpDraft } from '~/composables/useMcpGenerator'
 
@@ -195,6 +177,7 @@ const initDraft = (s: MCPServer | null, seed: McpDraft | null | undefined): Draf
 }
 
 const draft = ref<Draft>(initDraft(props.server, props.initialDraft))
+const original = ref<Draft>(initDraft(props.server, props.initialDraft))
 
 const argsText = ref((draft.value.args ?? []).join('\n'))
 watch(argsText, (v) => {
@@ -231,6 +214,7 @@ watch(
   () => props.server,
   (s) => {
     draft.value = initDraft(s, props.initialDraft)
+    original.value = initDraft(s, props.initialDraft)
     argsText.value = (draft.value.args ?? []).join('\n')
     envEntries.value = Object.entries(draft.value.env ?? {}).map(([key, value]) => ({
       key,
@@ -249,6 +233,8 @@ const inputStyle = computed(() => ({
   color: t.value.text,
   outline: 'none',
 }))
+
+const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 
 const slugify = (raw: string): string =>
   raw

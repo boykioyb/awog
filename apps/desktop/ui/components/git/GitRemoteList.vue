@@ -7,13 +7,7 @@
       <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">Remotes</div>
     </div>
     <div class="flex-1 overflow-y-auto">
-      <div
-        v-if="store.remotes.length === 0"
-        class="px-3 py-12 text-center text-xs"
-        :style="{ color: t.textDim }"
-      >
-        No remotes configured
-      </div>
+      <EmptyView v-if="store.remotes.length === 0" :icon="Cloud" title="No remotes configured" />
       <div
         v-for="r in store.remotes"
         :key="r.name"
