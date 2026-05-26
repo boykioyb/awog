@@ -53,6 +53,14 @@ export interface ThemeTokens {
   edge: string
   edgeActive: string
   connectingEdge: string
+  // Git
+  gitAdded: string
+  gitModified: string
+  gitDeleted: string
+  gitUntracked: string
+  gitConflict: string
+  diffOurs: string
+  diffTheirs: string
   // Misc
   shadow: string
   syntax: SyntaxTokens
@@ -94,6 +102,13 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     edge: '#525252',
     edgeActive: '#ededed',
     connectingEdge: '#a3a3a3',
+    gitAdded: '#86efac',
+    gitModified: '#fbbf24',
+    gitDeleted: '#fca5a5',
+    gitUntracked: '#737373',
+    gitConflict: '#fb923c',
+    diffOurs: '#7dd3fc',
+    diffTheirs: '#c4b5fd',
     shadow: 'rgba(0, 0, 0, 0.5)',
     syntax: {
       h1: '#f1c40f',
@@ -142,6 +157,13 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     edge: '#a8a29e',
     edgeActive: '#1c1917',
     connectingEdge: '#57534e',
+    gitAdded: '#047857',
+    gitModified: '#b45309',
+    gitDeleted: '#b91c1c',
+    gitUntracked: '#78716c',
+    gitConflict: '#c2410c',
+    diffOurs: '#0369a1',
+    diffTheirs: '#6d28d9',
     shadow: 'rgba(0, 0, 0, 0.08)',
     syntax: {
       h1: '#b45309',

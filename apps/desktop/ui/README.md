@@ -44,6 +44,7 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Settings** — 4 section (Workspace / Models & API Keys / Connectors / Appearance).
 ✅ **Markdown editor fullscreen** — file tree sidebar, code/split/preview, mermaid diagram, diff viewer, status bar.
 ✅ **Theme system** — dark (Linear/GitHub) + light (Notion/Vercel) với 20+ token, scrollbar sync.
+✅ **Git Manager prototype** — route `/git` với 5 tab (Changes / History / Branches / Stash / Remotes), Pinia store mock 100% (chưa wire sidecar).
 ✅ **System tray + native notification** — đặc tả ở docs, chưa implement (cần Tauri shell).
 
 ## Cấu trúc
@@ -133,6 +134,7 @@ Template bind inline style:
 - `/workflows` → DAG designer
 - `/agents` → agents CRUD
 - `/skills` → skills CRUD
+- `/git` → Git Manager (Changes / History / Branches / Stash / Remotes) — prototype mock
 - `/settings` → 4-section settings
 - `/edit/:taskId?file=<filename>` → fullscreen markdown editor (no layout)
 

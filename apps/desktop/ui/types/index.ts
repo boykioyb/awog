@@ -362,3 +362,93 @@ export interface SlashCommand {
   timeoutMs?: number
   system?: boolean
 }
+
+// ─── Git Manager ───────────────────────────────────────────────────────────
+
+export type GitFileStatusCode =
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'untracked'
+  | 'conflicted'
+
+export type GitFileStatus = {
+  path: string
+  oldPath?: string
+  index: GitFileStatusCode | 'clean'
+  workTree: GitFileStatusCode | 'clean'
+  isBinary: boolean
+  isStaged: boolean
+  hasConflict: boolean
+}
+
+export type GitCommit = {
+  hash: string
+  shortHash: string
+  authorName: string
+  authorEmail: string
+  date: string
+  subject: string
+  body?: string
+  parents: string[]
+  refs: string[]
+  phaseId?: string
+  agentId?: string
+}
+
+export type GitBranch = {
+  name: string
+  isCurrent: boolean
+  isRemote: boolean
+  upstream?: string
+  ahead: number
+  behind: number
+  lastCommit: string
+}
+
+export type GitStashEntry = {
+  index: number
+  ref: string
+  message: string
+  date: string
+  branch: string
+}
+
+export type GitRemote = {
+  name: string
+  fetchUrl: string
+  pushUrl: string
+}
+
+export type GitDiffLineKind = 'context' | 'add' | 'del'
+
+export type GitDiffHunk = {
+  oldStart: number
+  oldLines: number
+  newStart: number
+  newLines: number
+  header: string
+  lines: Array<{ kind: GitDiffLineKind; text: string }>
+}
+
+export type GitFileDiff = {
+  path: string
+  oldPath?: string
+  isBinary: boolean
+  hunks: GitDiffHunk[]
+}
+
+export type GitConflictResolutionChoice = 'ours' | 'theirs' | 'manual' | 'unresolved'
+
+export type GitMergeConflictBlock = {
+  startLine: number
+  endLine: number
+  ours: string
+  theirs: string
+  base?: string
+  resolution: GitConflictResolutionChoice
+}
+
+export type GitRepoState = 'clean' | 'dirty' | 'merging' | 'rebasing' | 'detached' | 'no-repo'

@@ -54,12 +54,17 @@
         :key="item.id"
         :to="item.to"
         :title="!showLabels ? item.label : ''"
-        class="flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors group"
+        class="relative flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors group"
         :style="navItemStyle(item)"
         @click="onItemClick"
       >
         <component :is="item.icon" :size="15" class="flex-shrink-0" />
         <span v-if="showLabels" class="truncate">{{ item.label }}</span>
+        <span
+          v-if="item.id === 'git' && gitDirty"
+          class="absolute top-1 left-6 w-1.5 h-1.5 rounded-full"
+          :style="{ background: gitStore.hasConflict ? t.gitConflict : t.warning }"
+        />
       </NuxtLink>
     </div>
 
@@ -128,10 +133,13 @@ import {
   Plug,
   Zap,
   Slash,
+  GitBranch,
 } from 'lucide-vue-next'
 
 const { t, themeName, toggle } = useTheme()
 const route = useRoute()
+const gitStore = useGitStore()
+const gitDirty = computed(() => gitStore.hasUncommitted)
 
 const expanded = useState<boolean>('navRailExpanded', () => true)
 const mobileOpen = ref(false)
@@ -175,6 +183,7 @@ const items: NavItem[] = [
   { id: 'workflows', label: 'Workflows', icon: Workflow, to: '/workflows' },
   { id: 'agents', label: 'Agents', icon: Users, to: '/agents' },
   { id: 'skills', label: 'Skills', icon: Wand2, to: '/skills' },
+  { id: 'git', label: 'Git', icon: GitBranch, to: '/git' },
   { id: 'mcp-servers', label: 'MCP Servers', icon: Plug, to: '/mcp-servers' },
   { id: 'hooks', label: 'Hooks', icon: Zap, to: '/hooks' },
   { id: 'commands', label: 'Commands', icon: Slash, to: '/commands' },
