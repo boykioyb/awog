@@ -3,12 +3,28 @@
     class="flex flex-col flex-shrink-0"
     :style="{ borderTop: `1px solid ${t.border}`, background: t.bgPanel }"
   >
-    <div class="px-3 py-2 flex items-center justify-between">
+    <div class="px-3 py-2 flex items-center justify-between gap-2">
       <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">
         Commit message
       </div>
-      <div class="text-[10px]" :style="{ color: t.textFaint }">
-        {{ store.stagedFiles.length }} file(s) staged
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          class="flex items-center gap-1 text-[10px] px-2 py-1 rounded transition"
+          :style="generateBtnStyle"
+          :disabled="generateDisabled"
+          :title="
+            store.stagedFiles.length === 0 ? 'Stage file trước khi generate' : 'Tạo message bằng AI'
+          "
+          @click="doGenerate"
+        >
+          <Loader2 v-if="store.isGeneratingMessage" :size="12" class="animate-spin" />
+          <Sparkles v-else :size="12" />
+          <span>{{ store.isGeneratingMessage ? 'Generating…' : 'Generate AI' }}</span>
+        </button>
+        <div class="text-[10px]" :style="{ color: t.textFaint }">
+          {{ store.stagedFiles.length }} file(s) staged
+        </div>
       </div>
     </div>
     <div class="px-3 pb-2">
@@ -57,11 +73,28 @@
 </template>
 
 <script setup lang="ts">
+import { Loader2, Sparkles } from 'lucide-vue-next'
+
 const { t } = useTheme()
 const store = useGitStore()
 
 const focused = ref(false)
 const inlineError = ref<string | null>(null)
+
+const generateDisabled = computed(() => store.isGeneratingMessage || store.stagedFiles.length === 0)
+
+const generateBtnStyle = computed(() => ({
+  background: generateDisabled.value ? t.value.bgInput : t.value.bgPanel,
+  color: generateDisabled.value ? t.value.textDim : t.value.accent,
+  border: `1px solid ${generateDisabled.value ? t.value.border : t.value.accent}`,
+  cursor: generateDisabled.value ? 'not-allowed' : 'pointer',
+}))
+
+const doGenerate = async () => {
+  if (generateDisabled.value) return
+  await store.generateCommitMessage()
+  if (inlineError.value && store.commitMessage.trim()) inlineError.value = null
+}
 
 const onInput = (e: Event) => {
   const target = e.target as HTMLTextAreaElement

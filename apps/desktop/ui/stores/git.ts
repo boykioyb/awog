@@ -32,33 +32,56 @@ const latency = (min = 250, max = 700) => wait(Math.floor(min + Math.random() * 
 
 const cloneFiles = (files: GitFileStatus[]): GitFileStatus[] => files.map((f) => ({ ...f }))
 
+const DEFAULT_PROJECT_ID = 'prj1'
+
 export const useGitStore = defineStore('git', () => {
   // ─── State ───────────────────────────────────────────────────────────────
-  const currentBranch = ref<string>('feature/git-manager')
-  const branches = ref<GitBranch[]>([...INITIAL_BRANCHES])
-  const commits = ref<GitCommit[]>([...INITIAL_COMMITS])
-  const stashes = ref<GitStashEntry[]>([...INITIAL_STASHES])
-  const remotes = ref<GitRemote[]>([...INITIAL_REMOTES])
-  const statusFiles = ref<GitFileStatus[]>(cloneFiles(INITIAL_STATUS_FILES))
+  const selectedProjectId = ref<string>(DEFAULT_PROJECT_ID)
+  const branchesAll = ref<GitBranch[]>([...INITIAL_BRANCHES])
+  const commitsAll = ref<GitCommit[]>([...INITIAL_COMMITS])
+  const stashesAll = ref<GitStashEntry[]>([...INITIAL_STASHES])
+  const remotesAll = ref<GitRemote[]>([...INITIAL_REMOTES])
+  const statusFilesAll = ref<GitFileStatus[]>(cloneFiles(INITIAL_STATUS_FILES))
   const selectedFilePath = ref<string | null>(null)
   const selectedCommitHash = ref<string | null>(null)
   const commitMessage = ref<string>('')
-  const repoState = ref<GitRepoState>('dirty')
+  const repoStateByProject = ref<Record<string, GitRepoState>>({})
   const isFetching = ref(false)
   const isPulling = ref(false)
   const isPushing = ref(false)
+  const isGeneratingMessage = ref(false)
   const progressPct = ref<number | null>(null)
   const progressOp = ref<'fetch' | 'pull' | 'push' | null>(null)
-  const ahead = ref<number>(2)
-  const behind = ref<number>(0)
   const toasts = ref<Array<{ id: string; text: string; kind: 'info' | 'success' | 'error' }>>([])
 
-  // Mock conflict file content (chỉ 1 file để demo resolver).
   const conflictBlocksByPath = ref<Record<string, GitMergeConflictBlock[]>>({
     [INITIAL_CONFLICT_PATH]: INITIAL_CONFLICT_BLOCKS.map((b) => ({ ...b })),
   })
 
-  // ─── Getters ─────────────────────────────────────────────────────────────
+  // ─── Getters: scoped theo selectedProjectId ──────────────────────────────
+  const branches = computed(() =>
+    branchesAll.value.filter((b) => b.projectId === selectedProjectId.value),
+  )
+  const commits = computed(() =>
+    commitsAll.value.filter((c) => c.projectId === selectedProjectId.value),
+  )
+  const stashes = computed(() =>
+    stashesAll.value.filter((s) => s.projectId === selectedProjectId.value),
+  )
+  const remotes = computed(() =>
+    remotesAll.value.filter((r) => r.projectId === selectedProjectId.value),
+  )
+  const statusFiles = computed(() =>
+    statusFilesAll.value.filter((f) => f.projectId === selectedProjectId.value),
+  )
+
+  const currentBranch = computed(
+    () => branches.value.find((b) => b.isCurrent && !b.isRemote)?.name ?? 'main',
+  )
+  const currentBranchInfo = computed(() => branches.value.find((b) => b.isCurrent && !b.isRemote))
+  const ahead = computed(() => currentBranchInfo.value?.ahead ?? 0)
+  const behind = computed(() => currentBranchInfo.value?.behind ?? 0)
+
   const stagedFiles = computed(() => statusFiles.value.filter((f) => f.isStaged && !f.hasConflict))
   const unstagedFiles = computed(() =>
     statusFiles.value.filter((f) => !f.isStaged && !f.hasConflict && f.workTree !== 'untracked'),
@@ -69,6 +92,21 @@ export const useGitStore = defineStore('git', () => {
   const hasConflict = computed(() => conflictedFiles.value.length > 0)
   const isBusy = computed(() => isFetching.value || isPulling.value || isPushing.value)
 
+  const repoState = computed<GitRepoState>(() => {
+    const cached = repoStateByProject.value[selectedProjectId.value]
+    if (cached === 'no-repo') return 'no-repo'
+    if (hasConflict.value) return 'merging'
+    return hasUncommitted.value ? 'dirty' : 'clean'
+  })
+
+  // Đếm dirty file per project — dùng cho project selector badge.
+  const dirtyCountByProject = computed<Record<string, number>>(() =>
+    statusFilesAll.value.reduce<Record<string, number>>((acc, f) => {
+      acc[f.projectId] = (acc[f.projectId] ?? 0) + 1
+      return acc
+    }, {}),
+  )
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
   const pushToast = (text: string, kind: 'info' | 'success' | 'error' = 'info') => {
     const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -78,23 +116,23 @@ export const useGitStore = defineStore('git', () => {
     }, 3200)
   }
 
-  const refreshRepoState = () => {
-    if (repoState.value === 'no-repo') return
-    if (hasConflict.value) {
-      repoState.value = 'merging'
-      return
-    }
-    repoState.value = hasUncommitted.value ? 'dirty' : 'clean'
+  const setSelectedProject = (id: string) => {
+    if (id === selectedProjectId.value) return
+    selectedProjectId.value = id
+    selectedFilePath.value = null
+    selectedCommitHash.value = null
+    commitMessage.value = ''
   }
 
   // ─── Actions ─────────────────────────────────────────────────────────────
   const loadStatus = async () => {
     await latency(120, 280)
-    refreshRepoState()
   }
 
   const stageFile = async (path: string) => {
-    const file = statusFiles.value.find((f) => f.path === path)
+    const file = statusFilesAll.value.find(
+      (f) => f.path === path && f.projectId === selectedProjectId.value,
+    )
     if (!file || file.hasConflict) return
     file.isStaged = true
     if (file.workTree === 'untracked') {
@@ -104,11 +142,12 @@ export const useGitStore = defineStore('git', () => {
       file.index = file.workTree
     }
     await latency(80, 160)
-    refreshRepoState()
   }
 
   const unstageFile = async (path: string) => {
-    const file = statusFiles.value.find((f) => f.path === path)
+    const file = statusFilesAll.value.find(
+      (f) => f.path === path && f.projectId === selectedProjectId.value,
+    )
     if (!file) return
     file.isStaged = false
     if (file.index === 'added') {
@@ -119,14 +158,14 @@ export const useGitStore = defineStore('git', () => {
       file.index = 'clean'
     }
     await latency(80, 160)
-    refreshRepoState()
   }
 
   const discardFile = async (path: string) => {
     await latency(120, 220)
-    statusFiles.value = statusFiles.value.filter((f) => f.path !== path)
+    statusFilesAll.value = statusFilesAll.value.filter(
+      (f) => !(f.path === path && f.projectId === selectedProjectId.value),
+    )
     if (selectedFilePath.value === path) selectedFilePath.value = null
-    refreshRepoState()
   }
 
   const selectFile = (path: string | null) => {
@@ -152,11 +191,14 @@ export const useGitStore = defineStore('git', () => {
       return
     }
     await latency(400, 700)
+    const projectId = selectedProjectId.value
     const hash = `mock${Date.now().toString(16).slice(-7)}${Math.random().toString(16).slice(2, 6)}`
     const subject = trimmed.split('\n')[0] ?? trimmed
     const body = trimmed.includes('\n') ? trimmed.slice(subject.length + 1).trim() : undefined
     const phaseMatch = trimmed.match(/^\[([^\]]+)\]/)
+    const parentHash = commits.value[0]?.hash
     const newCommit: GitCommit = {
+      projectId,
       hash,
       shortHash: hash.slice(0, 7),
       authorName: 'Local Developer',
@@ -164,15 +206,25 @@ export const useGitStore = defineStore('git', () => {
       date: new Date().toISOString(),
       subject,
       body,
-      parents: commits.value[0] ? [commits.value[0].hash] : [],
+      parents: parentHash ? [parentHash] : [],
       refs: [currentBranch.value],
       phaseId: phaseMatch?.[1],
     }
-    commits.value = [newCommit, ...commits.value.map((c) => ({ ...c, refs: [] }))]
-    statusFiles.value = statusFiles.value.filter((f) => !f.isStaged)
+    // Strip refs khỏi các commit cũ cùng project.
+    commitsAll.value = [
+      newCommit,
+      ...commitsAll.value.map((c) => (c.projectId === projectId ? { ...c, refs: [] } : c)),
+    ]
+    statusFilesAll.value = statusFilesAll.value.filter(
+      (f) => !(f.projectId === projectId && f.isStaged),
+    )
+    // Tăng ahead của branch hiện tại.
+    branchesAll.value = branchesAll.value.map((b) =>
+      b.projectId === projectId && b.isCurrent && !b.isRemote
+        ? { ...b, ahead: b.ahead + 1, lastCommit: hash }
+        : b,
+    )
     commitMessage.value = ''
-    ahead.value += 1
-    refreshRepoState()
     pushToast(`Commit ${newCommit.shortHash} tạo thành công`, 'success')
   }
 
@@ -182,6 +234,7 @@ export const useGitStore = defineStore('git', () => {
       return
     }
     await latency(400, 700)
+    const projectId = selectedProjectId.value
     const trimmed = message.trim()
     const previous = commits.value[0]
     if (!previous) return
@@ -195,10 +248,21 @@ export const useGitStore = defineStore('git', () => {
       body: trimmed.includes('\n') ? trimmed.slice(subject.length + 1).trim() : previous.body,
       date: new Date().toISOString(),
     }
-    commits.value = [updated, ...commits.value.slice(1)]
-    statusFiles.value = statusFiles.value.filter((f) => !f.isStaged)
+    // Replace commit cũ trong commitsAll.
+    const idx = commitsAll.value.findIndex(
+      (c) => c.projectId === projectId && c.hash === previous.hash,
+    )
+    if (idx >= 0) {
+      commitsAll.value = [
+        ...commitsAll.value.slice(0, idx),
+        updated,
+        ...commitsAll.value.slice(idx + 1),
+      ]
+    }
+    statusFilesAll.value = statusFilesAll.value.filter(
+      (f) => !(f.projectId === projectId && f.isStaged),
+    )
     commitMessage.value = ''
-    refreshRepoState()
     pushToast(`Amended commit ${updated.shortHash}`, 'success')
   }
 
@@ -222,7 +286,12 @@ export const useGitStore = defineStore('git', () => {
     try {
       await runProgress('fetch', 1200)
       // Mock: pretend a remote moved forward 1 commit on main.
-      behind.value = currentBranch.value === 'main' ? 1 : behind.value
+      const projectId = selectedProjectId.value
+      branchesAll.value = branchesAll.value.map((b) =>
+        b.projectId === projectId && b.name === 'main' && !b.isRemote
+          ? { ...b, behind: b.behind + 1 }
+          : b,
+      )
       pushToast('Fetched origin (mock)', 'success')
     } finally {
       isFetching.value = false
@@ -234,7 +303,10 @@ export const useGitStore = defineStore('git', () => {
     isPulling.value = true
     try {
       await runProgress('pull', 1500)
-      behind.value = 0
+      const projectId = selectedProjectId.value
+      branchesAll.value = branchesAll.value.map((b) =>
+        b.projectId === projectId && b.isCurrent && !b.isRemote ? { ...b, behind: 0 } : b,
+      )
       pushToast(`Pulled origin/${currentBranch.value} (mock fast-forward)`, 'success')
     } finally {
       isPulling.value = false
@@ -246,13 +318,16 @@ export const useGitStore = defineStore('git', () => {
     isPushing.value = true
     try {
       await runProgress('push', 1800)
-      // Mock 10% chance of auth error to demo failure UX.
       if (Math.random() < 0.1) {
         pushToast('Push failed: authentication required (mock)', 'error')
         return
       }
-      pushToast(`Pushed ${ahead.value} commits to origin/${currentBranch.value}`, 'success')
-      ahead.value = 0
+      const projectId = selectedProjectId.value
+      const pushed = ahead.value
+      branchesAll.value = branchesAll.value.map((b) =>
+        b.projectId === projectId && b.isCurrent && !b.isRemote ? { ...b, ahead: 0 } : b,
+      )
+      pushToast(`Pushed ${pushed} commits to origin/${currentBranch.value}`, 'success')
     } finally {
       isPushing.value = false
     }
@@ -264,15 +339,19 @@ export const useGitStore = defineStore('git', () => {
       pushToast('Branch name không được rỗng', 'error')
       return
     }
-    if (branches.value.some((b) => b.name === trimmed && !b.isRemote)) {
+    const projectId = selectedProjectId.value
+    if (
+      branchesAll.value.some((b) => b.projectId === projectId && b.name === trimmed && !b.isRemote)
+    ) {
       pushToast(`Branch '${trimmed}' đã tồn tại`, 'error')
       return
     }
     await latency(200, 400)
     const baseCommit = fromRef ?? commits.value[0]?.hash ?? 'HEAD'
-    branches.value = [
-      ...branches.value,
+    branchesAll.value = [
+      ...branchesAll.value,
       {
+        projectId,
         name: trimmed,
         isCurrent: false,
         isRemote: false,
@@ -285,29 +364,52 @@ export const useGitStore = defineStore('git', () => {
   }
 
   const checkoutBranch = async (name: string) => {
-    const target = branches.value.find((b) => b.name === name && !b.isRemote)
+    const projectId = selectedProjectId.value
+    const target = branchesAll.value.find(
+      (b) => b.projectId === projectId && b.name === name && !b.isRemote,
+    )
     if (!target) {
       pushToast(`Branch '${name}' không tồn tại`, 'error')
       return
     }
     await latency(250, 500)
-    branches.value = branches.value.map((b) => ({
-      ...b,
-      isCurrent: !b.isRemote && b.name === name,
-    }))
-    currentBranch.value = name
-    ahead.value = target.ahead
-    behind.value = target.behind
+    branchesAll.value = branchesAll.value.map((b) =>
+      b.projectId === projectId ? { ...b, isCurrent: !b.isRemote && b.name === name } : b,
+    )
     pushToast(`Checked out '${name}'`, 'success')
   }
 
+  const renameBranch = async (oldName: string, newName: string) => {
+    const trimmed = newName.trim()
+    if (!trimmed) {
+      pushToast('Branch name không được rỗng', 'error')
+      return
+    }
+    if (trimmed === oldName) return
+    const projectId = selectedProjectId.value
+    if (
+      branchesAll.value.some((b) => b.projectId === projectId && b.name === trimmed && !b.isRemote)
+    ) {
+      pushToast(`Branch '${trimmed}' đã tồn tại`, 'error')
+      return
+    }
+    await latency(150, 300)
+    branchesAll.value = branchesAll.value.map((b) =>
+      b.projectId === projectId && b.name === oldName && !b.isRemote ? { ...b, name: trimmed } : b,
+    )
+    pushToast(`Renamed '${oldName}' → '${trimmed}'`, 'success')
+  }
+
   const deleteBranch = async (name: string) => {
+    const projectId = selectedProjectId.value
     if (name === currentBranch.value) {
       pushToast('Không thể xóa branch hiện tại', 'error')
       return
     }
     await latency(150, 300)
-    branches.value = branches.value.filter((b) => !(b.name === name && !b.isRemote))
+    branchesAll.value = branchesAll.value.filter(
+      (b) => !(b.projectId === projectId && b.name === name && !b.isRemote),
+    )
     pushToast(`Deleted branch '${name}'`, 'success')
   }
 
@@ -317,51 +419,69 @@ export const useGitStore = defineStore('git', () => {
       return
     }
     await latency(250, 450)
-    const index = stashes.value.length
+    const projectId = selectedProjectId.value
+    const existing = stashesAll.value.filter((s) => s.projectId === projectId)
+    const others = stashesAll.value.filter((s) => s.projectId !== projectId)
     const entry: GitStashEntry = {
-      index,
-      ref: `stash@{${index}}`,
+      projectId,
+      index: 0,
+      ref: 'stash@{0}',
       message: message?.trim() || `WIP on ${currentBranch.value}`,
       date: new Date().toISOString(),
       branch: currentBranch.value,
     }
-    stashes.value = [entry, ...stashes.value.map((s) => ({ ...s, index: s.index + 1 }))]
-    statusFiles.value = []
-    refreshRepoState()
+    const reindexed = [
+      entry,
+      ...existing.map((s, i) => ({ ...s, index: i + 1, ref: `stash@{${i + 1}}` })),
+    ]
+    stashesAll.value = [...reindexed, ...others]
+    statusFilesAll.value = statusFilesAll.value.filter((f) => f.projectId !== projectId)
     pushToast(`Stashed changes — ${entry.ref}`, 'success')
   }
 
+  const reindexProjectStashes = (projectId: string) => {
+    const list = stashesAll.value.filter((s) => s.projectId === projectId)
+    const others = stashesAll.value.filter((s) => s.projectId !== projectId)
+    const reindexed = list.map((s, i) => ({ ...s, index: i, ref: `stash@{${i}}` }))
+    stashesAll.value = [...reindexed, ...others]
+  }
+
   const stashPop = async (index: number) => {
-    const entry = stashes.value.find((s) => s.index === index)
+    const projectId = selectedProjectId.value
+    const entry = stashesAll.value.find((s) => s.projectId === projectId && s.index === index)
     if (!entry) return
     await latency(250, 450)
-    // Mock: restore vài file thay vì restore từ stash thật.
-    if (statusFiles.value.length === 0) {
-      statusFiles.value = cloneFiles(INITIAL_STATUS_FILES.slice(0, 3))
+    // Mock: restore 3 file đầu tiên của project nếu hiện đang clean.
+    if (!statusFiles.value.length) {
+      const sample = INITIAL_STATUS_FILES.filter((f) => f.projectId === projectId).slice(0, 3)
+      statusFilesAll.value = [...statusFilesAll.value, ...cloneFiles(sample)]
     }
-    stashes.value = stashes.value
-      .filter((s) => s.index !== index)
-      .map((s, i) => ({ ...s, index: i, ref: `stash@{${i}}` }))
-    refreshRepoState()
+    stashesAll.value = stashesAll.value.filter(
+      (s) => !(s.projectId === projectId && s.index === index),
+    )
+    reindexProjectStashes(projectId)
     pushToast(`Popped ${entry.ref}`, 'success')
   }
 
   const stashApply = async (index: number) => {
-    const entry = stashes.value.find((s) => s.index === index)
+    const projectId = selectedProjectId.value
+    const entry = stashesAll.value.find((s) => s.projectId === projectId && s.index === index)
     if (!entry) return
     await latency(250, 450)
-    if (statusFiles.value.length === 0) {
-      statusFiles.value = cloneFiles(INITIAL_STATUS_FILES.slice(0, 3))
+    if (!statusFiles.value.length) {
+      const sample = INITIAL_STATUS_FILES.filter((f) => f.projectId === projectId).slice(0, 3)
+      statusFilesAll.value = [...statusFilesAll.value, ...cloneFiles(sample)]
     }
-    refreshRepoState()
     pushToast(`Applied ${entry.ref}`, 'success')
   }
 
   const stashDrop = async (index: number) => {
+    const projectId = selectedProjectId.value
     await latency(150, 280)
-    stashes.value = stashes.value
-      .filter((s) => s.index !== index)
-      .map((s, i) => ({ ...s, index: i, ref: `stash@{${i}}` }))
+    stashesAll.value = stashesAll.value.filter(
+      (s) => !(s.projectId === projectId && s.index === index),
+    )
+    reindexProjectStashes(projectId)
     pushToast('Stash dropped', 'success')
   }
 
@@ -413,14 +533,15 @@ export const useGitStore = defineStore('git', () => {
     conflictBlocksByPath.value = { ...conflictBlocksByPath.value, [path]: updated }
     const allResolved = updated.every((b) => b.resolution !== 'unresolved')
     if (allResolved) {
-      const file = statusFiles.value.find((f) => f.path === path)
+      const file = statusFilesAll.value.find(
+        (f) => f.path === path && f.projectId === selectedProjectId.value,
+      )
       if (file) {
         file.hasConflict = false
         file.isStaged = true
         file.index = 'modified'
         file.workTree = 'clean'
       }
-      refreshRepoState()
       pushToast(`Resolved ${path}`, 'success')
     }
     await latency(100, 200)
@@ -428,15 +549,17 @@ export const useGitStore = defineStore('git', () => {
 
   const revertFile = async (path: string, commitHash?: string) => {
     await latency(200, 400)
-    const file = statusFiles.value.find((f) => f.path === path)
+    const projectId = selectedProjectId.value
+    const file = statusFilesAll.value.find((f) => f.path === path && f.projectId === projectId)
     if (file) {
       file.isStaged = true
       file.index = 'modified'
       file.workTree = 'clean'
     } else {
-      statusFiles.value = [
-        ...statusFiles.value,
+      statusFilesAll.value = [
+        ...statusFilesAll.value,
         {
+          projectId,
           path,
           index: 'modified',
           workTree: 'clean',
@@ -446,47 +569,107 @@ export const useGitStore = defineStore('git', () => {
         },
       ]
     }
-    refreshRepoState()
     pushToast(`Reverted ${path}${commitHash ? ` from ${commitHash.slice(0, 7)}` : ''}`, 'success')
   }
 
   const initRepo = async () => {
     await latency(400, 700)
-    repoState.value = 'clean'
-    statusFiles.value = []
+    const projectId = selectedProjectId.value
+    repoStateByProject.value = { ...repoStateByProject.value, [projectId]: 'clean' }
+    statusFilesAll.value = statusFilesAll.value.filter((f) => f.projectId !== projectId)
     pushToast('Initialized empty Git repository (mock)', 'success')
   }
 
+  const generateCommitMessage = async () => {
+    if (isGeneratingMessage.value) return
+    if (stagedFiles.value.length === 0) {
+      pushToast('Stage ít nhất 1 file trước khi generate', 'error')
+      return
+    }
+    isGeneratingMessage.value = true
+    try {
+      await latency(700, 1200)
+      const files = stagedFiles.value
+      const scope = (() => {
+        if (files.some((f) => f.path.includes('/auth/'))) return 'auth'
+        if (files.some((f) => f.path.includes('/billing/') || f.path.includes('/invoice'))) {
+          return 'billing'
+        }
+        if (files.some((f) => f.path.includes('/retry/') || f.path.includes('/race')))
+          return 'retry'
+        if (files.some((f) => f.path.includes('/loyalty/') || f.path.includes('/rewards/'))) {
+          return 'loyalty'
+        }
+        if (files.some((f) => f.path.includes('/components/'))) return 'ui'
+        if (files.some((f) => f.path.startsWith('docs/'))) return 'docs'
+        if (files.some((f) => f.path.startsWith('tests/'))) return 'test'
+        return 'core'
+      })()
+      const added = files.filter((f) => f.index === 'added').length
+      const modified = files.filter((f) => f.index === 'modified').length
+      const deleted = files.filter((f) => f.index === 'deleted').length
+      let verb = 'update'
+      if (added > modified && added > deleted) verb = 'add'
+      else if (deleted > modified) verb = 'remove'
+      const summary = files
+        .slice(0, 3)
+        .map((f) => {
+          const base = f.path.split('/').pop() ?? f.path
+          return base.replace(/\.(vue|ts|md|tsx?|py|go)$/, '')
+        })
+        .join(', ')
+      const subject = `${verb}(${scope}): ${summary}${files.length > 3 ? ` and ${files.length - 3} more` : ''}`
+      const bodyLines = [
+        '',
+        `Mock-generated for ${files.length} staged file(s):`,
+        ...files.slice(0, 5).map((f) => `- ${f.index}: ${f.path}`),
+        files.length > 5 ? `- …and ${files.length - 5} more` : '',
+      ].filter(Boolean)
+      commitMessage.value = `${subject}\n${bodyLines.join('\n')}`
+      pushToast('Generated commit message (mock)', 'success')
+    } finally {
+      isGeneratingMessage.value = false
+    }
+  }
+
   const triggerAutoCommitDemo = async () => {
-    // TODO: cross-link Agent Trace — hiện chỉ mock 1 commit có phaseId.
     await latency(200, 400)
-    const c = buildAutoCommit(commits.value[0]?.hash)
-    commits.value = [c, ...commits.value]
+    const projectId = selectedProjectId.value
+    const c = buildAutoCommit(projectId, commits.value[0]?.hash)
+    commitsAll.value = [c, ...commitsAll.value]
     pushToast(`Auto-commit ${c.shortHash} từ phase ${c.phaseId ?? '?'}`, 'info')
+  }
+
+  // ─── Mutation helper cho dirty-checkout dialog ──────────────────────────
+  const clearStatusForCurrentProject = () => {
+    statusFilesAll.value = statusFilesAll.value.filter(
+      (f) => f.projectId !== selectedProjectId.value,
+    )
   }
 
   return {
     // state
-    currentBranch,
+    selectedProjectId,
+    selectedFilePath,
+    selectedCommitHash,
+    commitMessage,
+    isFetching,
+    isPulling,
+    isPushing,
+    isGeneratingMessage,
+    progressPct,
+    progressOp,
+    toasts,
+    conflictBlocksByPath,
+    // getters
     branches,
     commits,
     stashes,
     remotes,
     statusFiles,
-    selectedFilePath,
-    selectedCommitHash,
-    commitMessage,
-    repoState,
-    isFetching,
-    isPulling,
-    isPushing,
-    progressPct,
-    progressOp,
+    currentBranch,
     ahead,
     behind,
-    toasts,
-    conflictBlocksByPath,
-    // getters
     stagedFiles,
     unstagedFiles,
     untrackedFiles,
@@ -494,7 +677,10 @@ export const useGitStore = defineStore('git', () => {
     hasUncommitted,
     hasConflict,
     isBusy,
+    repoState,
+    dirtyCountByProject,
     // actions
+    setSelectedProject,
     loadStatus,
     stageFile,
     unstageFile,
@@ -509,6 +695,7 @@ export const useGitStore = defineStore('git', () => {
     push,
     createBranch,
     checkoutBranch,
+    renameBranch,
     deleteBranch,
     stashSave,
     stashPop,
@@ -519,6 +706,8 @@ export const useGitStore = defineStore('git', () => {
     resolveConflict,
     revertFile,
     initRepo,
+    generateCommitMessage,
     triggerAutoCommitDemo,
+    clearStatusForCurrentProject,
   }
 })
