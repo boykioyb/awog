@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AWOG",
+  "version": "0.0.1",
+  "identifier": "guild.awog.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --filter awog-ui dev",
+    "beforeBuildCommand": "pnpm --filter awog-ui build",
+    "devUrl": "http://localhost:3030",
+    "frontendDist": "../ui/.output/public"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "AWOG",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/awog-sidecar"]
+  }
+}

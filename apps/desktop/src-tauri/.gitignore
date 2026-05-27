@@ -1,0 +1,18 @@
+# Tauri build artifacts
+/target
+/gen
+
+# Sidecar binaries are produced by the sidecar package; only the README is tracked here.
+/binaries/*
+!/binaries/README.md
+
+# Placeholder icons kept via .gitkeep until M8 supplies real assets.
+# Tauri's macro requires `icons/icon.png` to exist for `cargo check` / build;
+# we ship generated placeholders that any contributor can regenerate locally
+# (see binaries/README.md).
+/icons/*
+!/icons/.gitkeep
+!/icons/icon.png
+!/icons/32x32.png
+!/icons/128x128.png
+!/icons/128x128@2x.png

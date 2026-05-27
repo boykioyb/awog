@@ -1,0 +1,18 @@
+{
+  "name": "awog",
+  "version": "0.0.1",
+  "private": true,
+  "description": "AWOG — Artifact Workflow Orchestrate Guild (local-first AI team OS)",
+  "scripts": {
+    "dev": "pnpm --filter awog-ui dev",
+    "build": "pnpm -r --filter awog-ui --filter @awog/sidecar build",
+    "tauri": "cd apps/desktop && PATH=\"$HOME/.cargo/bin:$PATH\" tauri",
+    "tauri:dev": "pnpm --filter @awog/sidecar build && cd apps/desktop && PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "lint:fix": "pnpm -r lint:fix"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
