@@ -63,7 +63,9 @@ const newProjectId = (): string =>
 
 export const useWorkspaceStore = defineStore('workspace', {
   state: () => ({
-    projects: [...INITIAL_PROJECTS] as Project[],
+    // Projects hydrate from sidecar (~/.awog/projects/<id>.json). Browser dev
+    // (no sidecar) falls back to INITIAL_PROJECTS inside hydrateProjectsFromSidecar.
+    projects: [] as Project[],
     agents: [...INITIAL_AGENTS] as Agent[],
     skills: [...INITIAL_SKILLS] as Skill[],
     workflows: [...INITIAL_WORKFLOWS] as Workflow[],
@@ -287,11 +289,14 @@ export const useWorkspaceStore = defineStore('workspace', {
 
     async hydrateProjectsFromSidecar(): Promise<void> {
       const sidecar = useSidecar()
-      if (!sidecar.available) return
+      if (!sidecar.available) {
+        // Browser dev: seed mock so the UI is browsable without a Tauri shell.
+        if (this.projects.length === 0) this.projects = [...INITIAL_PROJECTS]
+        return
+      }
       try {
         const res = await sidecar.request<ProjectsListResponse>('projects.list')
-        const list = Array.isArray(res.projects) ? res.projects : []
-        this.projects = list
+        this.projects = Array.isArray(res.projects) ? res.projects : []
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[workspace] hydrateProjectsFromSidecar failed', err)

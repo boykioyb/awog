@@ -63,6 +63,7 @@
             class="flex-1 rounded px-2 py-1.5 text-xs font-mono"
             :style="inputStyle"
             :disabled="busy"
+            @blur="onPathBlur"
           />
           <button
             class="px-3 py-1.5 text-xs rounded transition inline-flex items-center gap-1.5 disabled:opacity-50"
@@ -147,20 +148,9 @@
 <script setup lang="ts">
 import { FolderOpen, GitFork } from 'lucide-vue-next'
 import type { Project } from '~/types'
+import type { ProjectEditorDraft, ProjectEditorSavePayload } from './types'
 
-interface DraftFields {
-  name: string
-  path: string
-  description: string
-  gitRemote: string
-  gitBranch: string
-  language: string
-}
-
-export type ProjectEditorSavePayload =
-  | { kind: 'link'; data: DraftFields }
-  | { kind: 'clone'; data: DraftFields }
-  | { kind: 'update'; project: Project }
+type DraftFields = ProjectEditorDraft
 
 const props = defineProps<{
   project: Project | null
@@ -237,13 +227,66 @@ const saveLabel = computed(() => {
   return 'Add project'
 })
 
+interface InspectResult {
+  name: string
+  description: string
+  language: string
+  gitRemote: string
+  gitBranch: string
+  path: string
+}
+
+// Pre-fill empty fields from sidecar inspection. We never overwrite values the
+// user already typed — typing wins over auto-detect.
+const applyInspect = (info: InspectResult) => {
+  if (!draft.value.name) draft.value.name = info.name
+  if (!draft.value.description) draft.value.description = info.description
+  if (!draft.value.language) draft.value.language = info.language
+  if (!draft.value.gitRemote) draft.value.gitRemote = info.gitRemote
+  if (!draft.value.gitBranch || draft.value.gitBranch === 'main') {
+    if (info.gitBranch) draft.value.gitBranch = info.gitBranch
+  }
+}
+
+const inspecting = ref(false)
+const inspectPath = async (path: string) => {
+  if (!sidecar.available || !path) return
+  inspecting.value = true
+  try {
+    const info = await sidecar.request<InspectResult>('projects.inspect', { path })
+    applyInspect(info)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[ProjectEditor] inspect failed', err)
+  } finally {
+    inspecting.value = false
+  }
+}
+
+// Inspect when user pastes/types a path manually, but only for the existing-
+// folder + create mode (where prefilling helps) and only if the user has not
+// yet entered a name (otherwise we would clobber their typing).
+const onPathBlur = async () => {
+  if (props.project) return
+  if (importMode.value !== 'existing') return
+  if (!draft.value.path) return
+  if (draft.value.name) return
+  await inspectPath(draft.value.path)
+}
+
 const onBrowse = async () => {
   if (!canBrowse.value) return
   try {
     const picked = await pickFolder({
       title: importMode.value === 'clone' ? 'Pick clone parent folder' : 'Pick project folder',
     })
-    if (picked) draft.value.path = picked
+    if (!picked) return
+    draft.value.path = picked
+    // Inspect is only meaningful for "existing folder" mode — for clone the
+    // destination doesn't exist yet.
+    if (importMode.value === 'existing' && !props.project) {
+      await inspectPath(picked)
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[ProjectEditor] folder picker failed', err)

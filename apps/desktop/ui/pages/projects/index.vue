@@ -150,7 +150,11 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-6">
           <ProjectMeta :icon="GitBranch" label="Branch" :value="selectedProject.gitBranch" mono />
           <ProjectMeta :icon="Code2" label="Language" :value="selectedProject.language" />
-          <ProjectMeta :icon="Clock" label="Created" :value="selectedProject.createdAt" />
+          <ProjectMeta
+            :icon="Clock"
+            label="Created"
+            :value="formatTime(selectedProject.createdAt)"
+          />
         </div>
 
         <div
@@ -281,8 +285,9 @@ import {
 } from 'lucide-vue-next'
 import type { Project, Task } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
-import type { ProjectEditorSavePayload } from '~/components/project/ProjectEditor.vue'
+import type { ProjectEditorSavePayload } from '~/components/project/types'
 import { STATUS_META } from '~/utils/status-meta'
+import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
