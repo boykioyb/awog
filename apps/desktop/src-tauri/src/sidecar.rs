@@ -120,10 +120,23 @@ type PendingMap = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, RpcError>
 ///
 /// Returns the handle (mpsc Sender) that commands use to dispatch requests.
 pub fn spawn(app: AppHandle) -> Result<SidecarHandle> {
-    let command = app
+    let mut command = app
         .shell()
         .sidecar(SIDECAR_BINARY)
         .map_err(|e| anyhow!("failed to locate sidecar binary `{SIDECAR_BINARY}`: {e}"))?;
+
+    // Dev: Tauri copies only the launcher binary into target/debug/, leaving
+    // lib/ + node_modules/ behind. Point the launcher back at the sidecar dist
+    // via env so it can resolve the entry script. Release packaging will bundle
+    // siblings via tauri resources (TODO).
+    #[cfg(debug_assertions)]
+    {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mut dist = std::path::PathBuf::from(manifest);
+        dist.pop();
+        dist.push("sidecar/dist");
+        command = command.env("AWOG_SIDECAR_DIST", dist.to_string_lossy().to_string());
+    }
 
     let (mut events, child) = command
         .spawn()
