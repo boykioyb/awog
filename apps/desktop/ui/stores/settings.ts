@@ -1,16 +1,14 @@
 import { defineStore } from 'pinia'
-import type { AgentMode, ProviderName, ThinkingLevel } from '~/types'
-import { keyFingerprintHex } from '~/utils/crypto'
+import type {
+  AgentMode,
+  AppearanceSettings,
+  ProviderAccount,
+  ProviderName,
+  ThinkingLevel,
+} from '~/types'
+import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
 
-export interface ProviderAccount {
-  id: string
-  label: string
-  apiKey: string
-  fingerprint: string
-  version: number
-}
-
-export type ProviderAccountInput = Pick<ProviderAccount, 'label' | 'apiKey'>
+export type { ProviderAccount } from '~/types'
 
 interface ProviderConfig {
   accounts: ProviderAccount[]
@@ -30,6 +28,7 @@ export interface SessionDefaults {
   modelId: string
   mode: AgentMode
   thinkingLevel: ThinkingLevel
+  timezone: string
 }
 
 export interface CustomProvider {
@@ -54,18 +53,36 @@ interface SettingsState {
     slack: ConnectorConfig
   }
   defaults: SessionDefaults
+  appearance: AppearanceSettings
 }
 
-const seedAccount = (label: string, apiKey: string): ProviderAccount => ({
-  id: `acc${Math.random().toString(36).slice(2, 10)}`,
-  label,
-  apiKey,
-  fingerprint: '',
-  version: 0,
-})
+export const DEFAULT_APPEARANCE: AppearanceSettings = {
+  sansFamily: 'system',
+  monoFamily: 'jetbrains-mono',
+  fontSize: 14,
+  fontWeight: 400,
+  accent: 'mono',
+  themeColor: 'mono',
+  surfaceDepth: 'flat',
+}
 
-const initialAnthropic = seedAccount('Default', 'sk-ant-***************')
-const initialOpenai = seedAccount('Default', 'sk-***************')
+interface AccountsListResponse {
+  providers: ProviderRecord<{
+    accounts: ProviderAccount[]
+    activeAccountId: string | null
+  }>
+}
+
+interface OAuthStartResponse {
+  state: string
+  authUrl: string
+}
+
+interface AccountTestResponse {
+  ok: boolean
+  expiresAt?: number
+  error?: { code: string; message: string }
+}
 
 export const useSettingsStore = defineStore('settings', {
   state: (): SettingsState => ({
@@ -73,8 +90,8 @@ export const useSettingsStore = defineStore('settings', {
     autoApprove: false,
     notificationsEnabled: true,
     providers: {
-      anthropic: { accounts: [initialAnthropic], activeAccountId: initialAnthropic.id },
-      openai: { accounts: [initialOpenai], activeAccountId: initialOpenai.id },
+      anthropic: { accounts: [], activeAccountId: null },
+      openai: { accounts: [], activeAccountId: null },
       google: { accounts: [], activeAccountId: null },
     },
     customProviders: [],
@@ -84,14 +101,15 @@ export const useSettingsStore = defineStore('settings', {
       slack: { connected: false },
     },
     defaults: {
-      systemPrompt:
-        'You are an AI teammate in AWOG. Be concise, propose plans before destructive edits, and respect approval gates.',
+      systemPrompt: DEFAULT_SYSTEM_PROMPT,
       instructions: '',
       provider: 'anthropic',
       modelId: 'claude-opus-4-7',
       mode: 'ask',
       thinkingLevel: 'high',
+      timezone: 'Asia/Ho_Chi_Minh',
     },
+    appearance: { ...DEFAULT_APPEARANCE },
   }),
   getters: {
     activeAccount(state): (provider: ProviderName) => ProviderAccount | null {
@@ -104,7 +122,7 @@ export const useSettingsStore = defineStore('settings', {
     isProviderConnected(): (provider: ProviderName) => boolean {
       return (provider) => {
         const account = this.activeAccount(provider)
-        return !!account && account.apiKey.length > 0
+        return !!account && account.status === 'connected'
       }
     },
     keyFingerprint(): (provider: ProviderName) => string {
@@ -112,47 +130,86 @@ export const useSettingsStore = defineStore('settings', {
     },
   },
   actions: {
-    async addProviderAccount(
-      provider: ProviderName,
-      input: ProviderAccountInput,
-    ): Promise<ProviderAccount> {
-      const account: ProviderAccount = {
-        id: `acc${Date.now()}`,
-        label: input.label.trim() || 'Untitled',
-        apiKey: input.apiKey,
-        fingerprint: input.apiKey ? await keyFingerprintHex(input.apiKey) : '',
-        version: 1,
+    async hydrateFromSidecar(): Promise<void> {
+      const sidecar = useSidecar()
+      try {
+        const res = await sidecar.request<AccountsListResponse>('accounts.list')
+        // Replace state with sidecar truth. Re-validate at boundary (L1 input).
+        const next = { ...this.providers }
+        ;(Object.keys(next) as ProviderName[]).forEach((p) => {
+          const incoming = res.providers?.[p]
+          if (!incoming) return
+          next[p] = {
+            accounts: Array.isArray(incoming.accounts) ? incoming.accounts : [],
+            activeAccountId:
+              typeof incoming.activeAccountId === 'string' ? incoming.activeAccountId : null,
+          }
+        })
+        this.providers = next
+      } catch (err) {
+        // Sidecar unavailable in dev browser, or backend error. Keep empty state.
+        // eslint-disable-next-line no-console
+        console.warn('[settings] hydrateFromSidecar failed', err)
       }
-      const config = this.providers[provider]
-      config.accounts.push(account)
+    },
+    async connectAnthropicOAuth(): Promise<OAuthStartResponse> {
+      const sidecar = useSidecar()
+      return sidecar.request<OAuthStartResponse>('auth.startOAuth', { provider: 'anthropic' })
+    },
+    async completeAnthropicOAuth(
+      state: string,
+      code: string,
+      label?: string,
+    ): Promise<ProviderAccount> {
+      const sidecar = useSidecar()
+      const account = await sidecar.request<ProviderAccount>('auth.completeOAuth', {
+        state,
+        code,
+        label,
+      })
+      const config = this.providers.anthropic
+      // Replace if exists (by id), else append.
+      const idx = config.accounts.findIndex((a) => a.id === account.id)
+      if (idx >= 0) config.accounts[idx] = account
+      else config.accounts.push(account)
       if (!config.activeAccountId) config.activeAccountId = account.id
       return account
     },
-    async updateProviderAccount(
-      provider: ProviderName,
-      accountId: string,
-      patch: Partial<ProviderAccountInput>,
-    ) {
-      const account = this.providers[provider].accounts.find((a) => a.id === accountId)
-      if (!account) return
-      if (patch.label !== undefined) account.label = patch.label
-      if (patch.apiKey !== undefined && patch.apiKey !== account.apiKey) {
-        account.apiKey = patch.apiKey
-        account.version += 1
-        account.fingerprint = patch.apiKey ? await keyFingerprintHex(patch.apiKey) : ''
-      }
-    },
-    removeProviderAccount(provider: ProviderName, accountId: string) {
+    async disconnectAccount(provider: ProviderName, accountId: string): Promise<void> {
+      const sidecar = useSidecar()
+      await sidecar.request('accounts.remove', { provider, accountId })
       const config = this.providers[provider]
       config.accounts = config.accounts.filter((a) => a.id !== accountId)
       if (config.activeAccountId === accountId) {
         config.activeAccountId = config.accounts[0]?.id ?? null
       }
     },
-    setActiveAccount(provider: ProviderName, accountId: string | null) {
+    async setActiveAccount(provider: ProviderName, accountId: string | null): Promise<void> {
+      const sidecar = useSidecar()
+      await sidecar.request('accounts.setActive', { provider, accountId })
       const config = this.providers[provider]
       if (accountId !== null && !config.accounts.some((a) => a.id === accountId)) return
       config.activeAccountId = accountId
+    },
+    async testAccount(provider: ProviderName, accountId: string): Promise<AccountTestResponse> {
+      const sidecar = useSidecar()
+      const result = await sidecar.request<AccountTestResponse>('accounts.test', {
+        provider,
+        accountId,
+      })
+      // Reflect test outcome locally so UI status dots update without extra round-trip.
+      const account = this.providers[provider].accounts.find((a) => a.id === accountId)
+      if (account) {
+        if (result.ok) {
+          account.status = 'connected'
+          if (typeof result.expiresAt === 'number') account.expiresAt = result.expiresAt
+        } else if (result.error?.code === 'TOKEN_EXPIRED') {
+          account.status = 'expired'
+        } else {
+          account.status = 'disconnected'
+        }
+      }
+      return result
     },
     addCustomProvider(input: CustomProviderInput): CustomProvider {
       const provider: CustomProvider = { ...input, id: `cp${Date.now()}` }
@@ -172,6 +229,12 @@ export const useSettingsStore = defineStore('settings', {
     },
     updateDefaults(patch: Partial<SessionDefaults>) {
       this.defaults = { ...this.defaults, ...patch }
+    },
+    updateAppearance(patch: Partial<AppearanceSettings>) {
+      this.appearance = { ...this.appearance, ...patch }
+    },
+    resetAppearance() {
+      this.appearance = { ...DEFAULT_APPEARANCE }
     },
   },
 })

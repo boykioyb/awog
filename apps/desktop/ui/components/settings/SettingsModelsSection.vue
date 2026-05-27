@@ -3,13 +3,14 @@
     <div>
       <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Models & API Keys</h2>
       <div class="text-xs" :style="{ color: t.textDim }">
-        Configure model providers. Keys are stored locally and never sent to Anthropic.
+        Sign in to your model providers. Credentials stay on this device and never leave the
+        sidecar.
       </div>
     </div>
+
     <div class="space-y-2">
+      <!-- Anthropic card (OAuth) -->
       <div
-        v-for="prov in providers"
-        :key="prov.id"
         class="rounded p-3"
         :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
       >
@@ -21,288 +22,262 @@
             <Sparkles :size="14" :style="{ color: t.textMuted }" />
           </div>
           <div class="flex-1">
-            <div class="text-[13px] font-medium" :style="{ color: t.text }">
-              {{ prov.label }}
-            </div>
-            <div class="text-[10px]" :style="{ color: t.textDim }">
-              {{ prov.models.join(' · ') }}
-            </div>
+            <div class="text-[13px] font-medium" :style="{ color: t.text }">Anthropic</div>
+            <div class="text-[10px]" :style="{ color: t.textDim }">Claude Opus · Claude Sonnet</div>
           </div>
           <div
             class="flex items-center gap-1.5 text-[11px]"
-            :style="{ color: settings.isProviderConnected(prov.id) ? t.text : t.textDim }"
+            :style="{ color: settings.isProviderConnected('anthropic') ? t.text : t.textDim }"
           >
             <div
               class="w-1.5 h-1.5 rounded-full"
               :style="{
-                background: settings.isProviderConnected(prov.id) ? t.statusOk : t.textFaint,
+                background: settings.isProviderConnected('anthropic') ? t.statusOk : t.textFaint,
               }"
             />
-            {{
-              settings.isProviderConnected(prov.id)
-                ? `Connected · ${settings.providers[prov.id].accounts.length} account${settings.providers[prov.id].accounts.length > 1 ? 's' : ''}`
-                : 'Not configured'
-            }}
+            {{ anthropicHeaderStatus }}
           </div>
         </div>
 
-        <div class="space-y-1.5">
+        <!-- Empty state: prominent CTA -->
+        <div v-if="anthropicAccounts.length === 0" class="space-y-2">
+          <button
+            type="button"
+            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded text-[12px] font-medium transition"
+            :style="{ background: t.accent, color: t.accentText, border: 'none' }"
+            @click="onOpenOAuthDialog"
+          >
+            <LogIn :size="14" />
+            Sign in with Claude
+          </button>
+          <div class="text-[11px] text-center" :style="{ color: t.textDim }">
+            Uses your Claude Pro or Max subscription. No API key required.
+          </div>
+        </div>
+
+        <!-- Account list -->
+        <div v-else class="space-y-1.5">
           <div
-            v-for="acc in settings.providers[prov.id].accounts"
+            v-for="acc in anthropicAccounts"
             :key="acc.id"
-            class="rounded p-2"
+            class="rounded p-2 space-y-1.5"
             :style="{
               background: t.bgInput,
-              border: `1px solid ${settings.providers[prov.id].activeAccountId === acc.id ? t.borderStrong : t.border}`,
+              border: `1px solid ${anthropicActiveId === acc.id ? t.borderStrong : t.border}`,
             }"
           >
-            <template v-if="!isEditingAccount(prov.id, acc.id)">
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  class="flex items-center justify-center w-4 h-4 rounded-full transition"
-                  :style="{
-                    border: `1px solid ${t.borderStrong}`,
-                    background:
-                      settings.providers[prov.id].activeAccountId === acc.id
-                        ? t.accent
-                        : 'transparent',
-                  }"
-                  :title="
-                    settings.providers[prov.id].activeAccountId === acc.id ? 'Active' : 'Set active'
-                  "
-                  @click="settings.setActiveAccount(prov.id, acc.id)"
-                >
-                  <Check
-                    v-if="settings.providers[prov.id].activeAccountId === acc.id"
-                    :size="10"
-                    :style="{ color: t.accentText }"
-                  />
-                </button>
-                <div class="flex-1 min-w-0">
-                  <div class="text-[12px] truncate" :style="{ color: t.text }">{{ acc.label }}</div>
-                  <div class="text-[10px] font-mono truncate" :style="{ color: t.textDim }">
-                    {{ maskKey(acc.apiKey) || 'No key' }}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="px-1.5 py-1 text-[11px] rounded transition flex items-center"
-                  :style="iconBtnStyle"
-                  title="Edit"
-                  @click="onStartEditAccount(prov.id, acc)"
-                >
-                  <Pencil :size="12" />
-                </button>
-                <button
-                  type="button"
-                  class="px-1.5 py-1 text-[11px] rounded transition flex items-center"
-                  :style="iconBtnStyle"
-                  title="Remove"
-                  @click="settings.removeProviderAccount(prov.id, acc.id)"
-                >
-                  <Trash2 :size="12" />
-                </button>
-              </div>
-            </template>
-            <template v-else>
-              <form class="space-y-1.5" @submit.prevent="onSaveEditAccount(prov.id, acc.id)">
-                <input
-                  v-model="accountDraft.label"
-                  class="w-full rounded px-2 py-1 text-[11px]"
-                  :style="inputStyle"
-                  placeholder="Label (e.g. Work)"
-                  required
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="flex items-center justify-center w-4 h-4 rounded-full transition shrink-0"
+                :style="{
+                  border: `1px solid ${t.borderStrong}`,
+                  background: anthropicActiveId === acc.id ? t.accent : 'transparent',
+                }"
+                :title="anthropicActiveId === acc.id ? 'Active' : 'Set active'"
+                @click="onSetActive('anthropic', acc.id)"
+              >
+                <Check
+                  v-if="anthropicActiveId === acc.id"
+                  :size="10"
+                  :style="{ color: t.accentText }"
                 />
+              </button>
+              <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5">
-                  <input
-                    v-model="accountDraft.apiKey"
-                    :type="revealDraftKey ? 'text' : 'password'"
-                    class="flex-1 min-w-0 rounded px-2 py-1 text-[11px] font-mono"
-                    :style="inputStyle"
-                    placeholder="API key"
+                  <div class="text-[12px] truncate" :style="{ color: t.text }">{{ acc.label }}</div>
+                  <span
+                    class="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                    :style="{ background: statusColor(acc.status) }"
+                    :title="acc.status"
                   />
-                  <button
-                    type="button"
-                    class="px-1.5 py-1 rounded text-[11px] flex items-center"
-                    :style="iconBtnStyle"
-                    :title="revealDraftKey ? 'Hide' : 'Show'"
-                    @click="revealDraftKey = !revealDraftKey"
-                  >
-                    <component :is="revealDraftKey ? EyeOff : Eye" :size="12" />
-                  </button>
                 </div>
-                <div class="flex items-center justify-end gap-1.5">
-                  <button
-                    type="button"
-                    class="px-2 py-1 text-[11px] rounded transition"
-                    :style="iconBtnStyle"
-                    @click="cancelAccountForm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    class="px-2 py-1 text-[11px] rounded transition"
-                    :style="{ background: t.accent, color: t.accentText, border: 'none' }"
-                    :disabled="!accountDraft.label.trim()"
-                  >
-                    Save
-                  </button>
+                <div class="text-[10px] truncate" :style="{ color: t.textDim }">
+                  {{ accountSubtitle(acc) }}
                 </div>
-              </form>
-            </template>
+              </div>
+              <button
+                type="button"
+                class="px-2 py-1 text-[11px] rounded transition inline-flex items-center gap-1"
+                :style="iconBtnStyle"
+                :disabled="isTesting(acc.id)"
+                title="Test connection"
+                @click="onTest('anthropic', acc.id)"
+              >
+                <Loader2 v-if="isTesting(acc.id)" :size="12" class="animate-spin" />
+                <Activity v-else :size="12" />
+                Test
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1 text-[11px] rounded transition flex items-center"
+                :style="iconBtnStyle"
+                title="Disconnect"
+                @click="onDisconnect('anthropic', acc.id)"
+              >
+                <LogOut :size="12" />
+              </button>
+            </div>
+            <div
+              v-if="testResults[acc.id]"
+              class="text-[11px] px-2 py-1 rounded"
+              :style="testResultStyle(testResults[acc.id]!)"
+            >
+              {{ formatTestResult(testResults[acc.id]!) }}
+            </div>
           </div>
 
-          <form
-            v-if="addingAccountFor === prov.id"
-            class="rounded p-2 space-y-1.5"
-            :style="{ background: t.bgInput, border: `1px dashed ${t.border}` }"
-            @submit.prevent="onCreateAccount(prov.id)"
-          >
-            <input
-              v-model="accountDraft.label"
-              class="w-full rounded px-2 py-1 text-[11px]"
-              :style="inputStyle"
-              placeholder="Label (e.g. Work)"
-              required
-              autofocus
-            />
-            <div class="flex items-center gap-1.5">
-              <input
-                v-model="accountDraft.apiKey"
-                :type="revealDraftKey ? 'text' : 'password'"
-                class="flex-1 min-w-0 rounded px-2 py-1 text-[11px] font-mono"
-                :style="inputStyle"
-                placeholder="API key"
-              />
-              <button
-                type="button"
-                class="px-1.5 py-1 rounded text-[11px] flex items-center"
-                :style="iconBtnStyle"
-                :title="revealDraftKey ? 'Hide' : 'Show'"
-                @click="revealDraftKey = !revealDraftKey"
-              >
-                <component :is="revealDraftKey ? EyeOff : Eye" :size="12" />
-              </button>
-            </div>
-            <div class="flex items-center justify-end gap-1.5">
-              <button
-                type="button"
-                class="px-2 py-1 text-[11px] rounded transition"
-                :style="iconBtnStyle"
-                @click="cancelAccountForm"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="px-2 py-1 text-[11px] rounded transition"
-                :style="{ background: t.accent, color: t.accentText, border: 'none' }"
-                :disabled="!accountDraft.label.trim()"
-              >
-                Add account
-              </button>
-            </div>
-          </form>
           <button
-            v-else
             type="button"
-            class="w-full rounded px-2 py-1.5 text-[11px] flex items-center gap-1.5 transition"
+            class="w-full rounded px-2 py-1.5 text-[11px] flex items-center justify-center gap-1.5 transition"
             :style="{
               color: t.textDim,
               border: `1px dashed ${t.border}`,
               background: 'transparent',
             }"
-            @click="onStartAddAccount(prov.id)"
+            @click="onOpenOAuthDialog"
           >
             <Plus :size="12" />
-            Add account
+            Add another account
+          </button>
+        </div>
+
+        <!-- Advanced (collapsed) -->
+        <div class="mt-3 pt-3" :style="{ borderTop: `1px solid ${t.border}` }">
+          <button
+            type="button"
+            class="w-full flex items-center justify-between text-[11px] transition"
+            :style="{ color: t.textDim }"
+            @click="advancedOpen = !advancedOpen"
+          >
+            <span class="inline-flex items-center gap-1.5">
+              <component :is="advancedOpen ? ChevronDown : ChevronRight" :size="12" />
+              Advanced — use API key
+            </span>
+            <span
+              class="px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider"
+              :style="{
+                background: t.bgInput,
+                border: `1px solid ${t.border}`,
+                color: t.textFaint,
+              }"
+            >
+              Coming soon
+            </span>
+          </button>
+          <div
+            v-if="advancedOpen"
+            class="mt-2 text-[11px] leading-relaxed"
+            :style="{ color: t.textDim }"
+          >
+            API key auth will be added in a later release. For now, use Sign in with Claude above.
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenAI + Google: coming soon -->
+      <div
+        v-for="prov in placeholderProviders"
+        :key="prov.id"
+        class="rounded p-3 relative"
+        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+      >
+        <span
+          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider"
+          :style="{
+            background: t.bgInput,
+            border: `1px solid ${t.border}`,
+            color: t.textFaint,
+          }"
+        >
+          Coming soon
+        </span>
+        <div class="flex items-center gap-3">
+          <div
+            class="w-8 h-8 rounded flex items-center justify-center"
+            :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
+          >
+            <Sparkles :size="14" :style="{ color: t.textMuted }" />
+          </div>
+          <div class="flex-1 min-w-0 pr-20">
+            <div class="text-[13px] font-medium" :style="{ color: t.text }">{{ prov.label }}</div>
+            <div class="text-[10px]" :style="{ color: t.textDim }">
+              {{ prov.models.join(' · ') }}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="mt-2 w-full rounded px-2 py-1.5 text-[11px] flex items-center justify-center gap-1.5"
+          :style="{
+            color: t.textDim,
+            border: `1px dashed ${t.border}`,
+            background: 'transparent',
+            opacity: 0.5,
+            cursor: 'not-allowed',
+          }"
+          disabled
+        >
+          <Plus :size="12" />
+          Add account
+        </button>
+      </div>
+
+      <!-- Custom providers (preserved, but disabled with coming-soon badge) -->
+      <div
+        v-for="cp in settings.customProviders"
+        :key="cp.id"
+        class="rounded p-3 relative"
+        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+      >
+        <span
+          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider"
+          :style="{
+            background: t.bgInput,
+            border: `1px solid ${t.border}`,
+            color: t.textFaint,
+          }"
+        >
+          Coming soon
+        </span>
+        <div class="flex items-center gap-3">
+          <div
+            class="w-8 h-8 rounded flex items-center justify-center"
+            :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
+          >
+            <Sparkles :size="14" :style="{ color: t.textMuted }" />
+          </div>
+          <div class="flex-1 min-w-0 pr-20">
+            <div class="text-[13px] font-medium truncate" :style="{ color: t.text }">
+              {{ cp.label || 'Untitled provider' }}
+            </div>
+            <div class="text-[10px] truncate" :style="{ color: t.textDim }">
+              {{ cp.baseUrl || 'No base URL' }}
+              {{ cp.models.length ? `· ${cp.models.join(' · ')}` : '' }}
+            </div>
+          </div>
+          <button
+            type="button"
+            class="px-2 py-1 text-[11px] rounded transition flex items-center"
+            :style="iconBtnStyle"
+            title="Remove"
+            @click="settings.removeCustomProvider(cp.id)"
+          >
+            <Trash2 :size="13" />
           </button>
         </div>
       </div>
 
-      <div
-        v-for="cp in settings.customProviders"
-        :key="cp.id"
-        class="rounded p-3"
-        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-      >
-        <template v-if="editingCustomId !== cp.id">
-          <div class="flex items-center gap-3 mb-2">
-            <div
-              class="w-8 h-8 rounded flex items-center justify-center"
-              :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
-            >
-              <Sparkles :size="14" :style="{ color: t.textMuted }" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-[13px] font-medium truncate" :style="{ color: t.text }">
-                {{ cp.label || 'Untitled provider' }}
-              </div>
-              <div class="text-[10px] truncate" :style="{ color: t.textDim }">
-                {{ cp.baseUrl || 'No base URL' }}
-                {{ cp.models.length ? `· ${cp.models.join(' · ')}` : '' }}
-              </div>
-            </div>
-            <div
-              class="flex items-center gap-1.5 text-[11px]"
-              :style="{ color: cp.apiKey ? t.text : t.textDim }"
-            >
-              <div
-                class="w-1.5 h-1.5 rounded-full"
-                :style="{ background: cp.apiKey ? t.statusOk : t.textFaint }"
-              />
-              {{ cp.apiKey ? 'Key set' : 'No key' }}
-            </div>
-            <button
-              type="button"
-              class="px-2 py-1 text-[11px] rounded transition flex items-center"
-              :style="iconBtnStyle"
-              title="Edit"
-              @click="onEditCustom(cp)"
-            >
-              <Pencil :size="13" />
-            </button>
-            <button
-              type="button"
-              class="px-2 py-1 text-[11px] rounded transition flex items-center"
-              :style="iconBtnStyle"
-              title="Remove"
-              @click="onRemoveCustom(cp.id)"
-            >
-              <Trash2 :size="13" />
-            </button>
-          </div>
-        </template>
-        <template v-else>
-          <CustomProviderForm
-            v-model="customDraft"
-            submit-label="Save"
-            @submit="onSaveEditCustom(cp.id)"
-            @cancel="cancelCustomForm"
-          />
-        </template>
-      </div>
-
-      <div
-        v-if="adding"
-        class="rounded p-3"
-        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-      >
-        <CustomProviderForm
-          v-model="customDraft"
-          submit-label="Add provider"
-          @submit="onCreateCustom"
-          @cancel="cancelCustomForm"
-        />
-      </div>
       <button
-        v-else
         type="button"
-        class="w-full rounded p-3 flex items-center gap-3 text-left transition"
-        :style="{ background: t.bgElevated, border: `1px dashed ${t.border}` }"
-        @click="onStartAddCustom"
+        class="w-full rounded p-3 flex items-center gap-3 text-left"
+        :style="{
+          background: t.bgElevated,
+          border: `1px dashed ${t.border}`,
+          opacity: 0.5,
+          cursor: 'not-allowed',
+        }"
+        disabled
       >
         <div
           class="w-8 h-8 rounded flex items-center justify-center"
@@ -313,40 +288,65 @@
         <div class="flex-1">
           <div class="text-[13px]" :style="{ color: t.text }">Add a custom provider</div>
           <div class="text-[10px]" :style="{ color: t.textDim }">
-            OpenRouter, Ollama, LM Studio, or any OpenAI-compatible endpoint
+            OpenRouter, Ollama, LM Studio — coming soon
           </div>
         </div>
       </button>
     </div>
+
+    <SettingsOAuthCodeDialog
+      :open="dialogOpen"
+      @close="dialogOpen = false"
+      @connected="onConnected"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { Check, Eye, EyeOff, Pencil, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
-import type {
-  CustomProvider,
-  CustomProviderInput,
-  ProviderAccount,
-  ProviderAccountInput,
-} from '~/stores/settings'
+import {
+  Activity,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  LogIn,
+  LogOut,
+  Plus,
+  Sparkles,
+  Trash2,
+} from 'lucide-vue-next'
+import type { AccountStatus, ProviderAccount, ProviderName } from '~/types'
 
-type ProviderId = 'anthropic' | 'openai' | 'google'
+type AccountTestResult = {
+  ok: boolean
+  expiresAt?: number
+  error?: { code: string; message: string }
+}
 
 const { t } = useTheme()
 const settings = useSettingsStore()
 
-const providers: { id: ProviderId; label: string; models: string[] }[] = [
-  { id: 'anthropic', label: 'Anthropic', models: ['Claude Opus', 'Claude Sonnet'] },
+const dialogOpen = ref(false)
+const advancedOpen = ref(false)
+const testingIds = ref<Set<string>>(new Set())
+const testResults = ref<Record<string, AccountTestResult>>({})
+
+const placeholderProviders: { id: 'openai' | 'google'; label: string; models: string[] }[] = [
   { id: 'openai', label: 'OpenAI', models: ['GPT-5', 'Codex'] },
   { id: 'google', label: 'Google', models: ['Gemini 2.5 Pro'] },
 ]
 
-const inputStyle = computed(() => ({
-  background: t.value.bgInput,
-  border: `1px solid ${t.value.border}`,
-  color: t.value.text,
-  outline: 'none',
-}))
+const anthropicAccounts = computed(() => settings.providers.anthropic.accounts)
+const anthropicActiveId = computed(() => settings.providers.anthropic.activeAccountId)
+
+const anthropicHeaderStatus = computed(() => {
+  const count = anthropicAccounts.value.length
+  if (count === 0) return 'Not connected'
+  if (settings.isProviderConnected('anthropic')) {
+    return `Connected · ${count} account${count > 1 ? 's' : ''}`
+  }
+  return `${count} account${count > 1 ? 's' : ''}`
+})
 
 const iconBtnStyle = computed(() => ({
   color: t.value.text,
@@ -354,99 +354,95 @@ const iconBtnStyle = computed(() => ({
   background: 'transparent',
 }))
 
-const maskKey = (key: string) => {
-  if (!key) return ''
-  if (key.length <= 12) return '•'.repeat(key.length)
-  return `${key.slice(0, 6)}…${key.slice(-4)}`
+const statusColor = (status: AccountStatus): string => {
+  if (status === 'connected') return t.value.statusOk
+  if (status === 'expired') return t.value.statusWarn
+  return t.value.textFaint
 }
 
-const emptyAccountDraft = (): ProviderAccountInput => ({ label: '', apiKey: '' })
-
-const accountDraft = ref<ProviderAccountInput>(emptyAccountDraft())
-const editingAccount = ref<{ provider: ProviderId; accountId: string } | null>(null)
-const addingAccountFor = ref<ProviderId | null>(null)
-const revealDraftKey = ref(false)
-
-const isEditingAccount = (provider: ProviderId, accountId: string) =>
-  editingAccount.value?.provider === provider && editingAccount.value.accountId === accountId
-
-const cancelAccountForm = () => {
-  editingAccount.value = null
-  addingAccountFor.value = null
-  accountDraft.value = emptyAccountDraft()
-  revealDraftKey.value = false
+const accountSubtitle = (acc: ProviderAccount): string => {
+  const parts: string[] = []
+  if (acc.account?.email) parts.push(acc.account.email)
+  if (acc.organization?.name) parts.push(acc.organization.name)
+  parts.push(`fp ${acc.fingerprint}`)
+  return parts.join(' · ')
 }
 
-const onStartAddAccount = (provider: ProviderId) => {
-  editingAccount.value = null
-  accountDraft.value = emptyAccountDraft()
-  revealDraftKey.value = false
-  addingAccountFor.value = provider
+const isTesting = (accountId: string) => testingIds.value.has(accountId)
+
+const onOpenOAuthDialog = () => {
+  dialogOpen.value = true
 }
 
-const onCreateAccount = async (provider: ProviderId) => {
-  await settings.addProviderAccount(provider, accountDraft.value)
-  cancelAccountForm()
+const onConnected = (_account: ProviderAccount) => {
+  dialogOpen.value = false
 }
 
-const onStartEditAccount = (provider: ProviderId, account: ProviderAccount) => {
-  addingAccountFor.value = null
-  editingAccount.value = { provider, accountId: account.id }
-  accountDraft.value = { label: account.label, apiKey: account.apiKey }
-  revealDraftKey.value = false
-}
-
-const onSaveEditAccount = async (provider: ProviderId, accountId: string) => {
-  await settings.updateProviderAccount(provider, accountId, accountDraft.value)
-  cancelAccountForm()
-}
-
-const emptyCustomDraft = (): CustomProviderInput => ({
-  label: '',
-  baseUrl: '',
-  apiKey: '',
-  models: [],
-})
-
-const adding = ref(false)
-const editingCustomId = ref<string | null>(null)
-const customDraft = ref<CustomProviderInput>(emptyCustomDraft())
-
-const cancelCustomForm = () => {
-  adding.value = false
-  editingCustomId.value = null
-  customDraft.value = emptyCustomDraft()
-}
-
-const onStartAddCustom = () => {
-  editingCustomId.value = null
-  customDraft.value = emptyCustomDraft()
-  adding.value = true
-}
-
-const onCreateCustom = () => {
-  settings.addCustomProvider(customDraft.value)
-  cancelCustomForm()
-}
-
-const onEditCustom = (cp: CustomProvider) => {
-  adding.value = false
-  editingCustomId.value = cp.id
-  customDraft.value = {
-    label: cp.label,
-    baseUrl: cp.baseUrl,
-    apiKey: cp.apiKey,
-    models: [...cp.models],
+const onSetActive = async (provider: ProviderName, accountId: string) => {
+  try {
+    await settings.setActiveAccount(provider, accountId)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[settings] setActiveAccount failed', err)
   }
 }
 
-const onSaveEditCustom = (id: string) => {
-  settings.updateCustomProvider(id, customDraft.value)
-  cancelCustomForm()
+const onDisconnect = async (provider: ProviderName, accountId: string) => {
+  try {
+    await settings.disconnectAccount(provider, accountId)
+    delete testResults.value[accountId]
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[settings] disconnectAccount failed', err)
+  }
 }
 
-const onRemoveCustom = (id: string) => {
-  settings.removeCustomProvider(id)
-  if (editingCustomId.value === id) cancelCustomForm()
+const onTest = async (provider: ProviderName, accountId: string) => {
+  if (testingIds.value.has(accountId)) return
+  testingIds.value.add(accountId)
+  try {
+    const result = await settings.testAccount(provider, accountId)
+    testResults.value[accountId] = result
+  } catch (err) {
+    testResults.value[accountId] = {
+      ok: false,
+      error: {
+        code: 'REQUEST_FAILED',
+        message: err instanceof Error ? err.message : 'Request failed',
+      },
+    }
+  } finally {
+    testingIds.value.delete(accountId)
+  }
 }
+
+const formatExpiry = (expiresAt: number): string => {
+  const deltaMs = expiresAt - Date.now()
+  if (deltaMs <= 0) return 'expired'
+  const minutes = Math.round(deltaMs / 60_000)
+  if (minutes < 60) return `in ${minutes}m`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return `in ${hours}h`
+  const days = Math.round(hours / 24)
+  return `in ${days}d`
+}
+
+const formatTestResult = (result: AccountTestResult): string => {
+  if (result.ok) {
+    const exp = result.expiresAt ? ` — expires ${formatExpiry(result.expiresAt)}` : ''
+    return `OK${exp}`
+  }
+  const err = result.error
+  if (!err) return 'Error'
+  return `Error: ${err.code} ${err.message}`.trim()
+}
+
+const testResultStyle = (result: AccountTestResult) =>
+  result.ok
+    ? { background: t.value.bgInput, color: t.value.text, border: `1px solid ${t.value.border}` }
+    : {
+        background: t.value.dangerBg,
+        color: t.value.danger,
+        border: `1px solid ${t.value.dangerBorder}`,
+      }
 </script>

@@ -6,7 +6,7 @@
         class="text-center text-[10px] uppercase tracking-wider"
         :style="{ color: t.textDim }"
       >
-        ── {{ msg.text }} · {{ msg.at }} ──
+        ── {{ msg.text }} · {{ fmt(msg.at) }} ──
       </div>
 
       <div v-else>
@@ -117,26 +117,73 @@
               </button>
             </template>
           </div>
-          <div v-if="msg.modeAtSend" class="text-[9px]" :style="{ color: t.textFaint }">
-            · sent in {{ msg.modeAtSend }} mode
+          <div class="text-[9px] flex items-center gap-1.5" :style="{ color: t.textFaint }">
+            <span>{{ fmt(msg.at) }}</span>
+            <span v-if="msg.modeAtSend">· sent in {{ msg.modeAtSend }} mode</span>
           </div>
         </div>
 
-        <div v-if="msg.role === 'agent'" class="text-[13px] leading-relaxed">
-          <div v-if="msg.text" class="whitespace-pre-wrap" :style="{ color: t.text }">
-            <template v-for="(seg, i) in tokenizeMessage(msg.text)" :key="i">
-              <span
-                v-if="seg.kind === 'token'"
-                :style="{ color: tokenColor(seg.tokenKind!), fontWeight: 500 }"
-              >
-                {{ seg.text }}
-              </span>
-              <template v-else>{{ seg.text }}</template>
+        <div
+          v-if="msg.role === 'agent'"
+          class="rounded-2xl px-4 py-3 text-[13px] leading-relaxed"
+          :style="{
+            background: t.bgElevated,
+            border: `1px solid ${t.border}`,
+            maxWidth: '92%',
+          }"
+        >
+          <div
+            class="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-wider"
+            :style="{ color: t.textFaint }"
+          >
+            <Sparkles :size="10" :style="{ color: t.accent }" />
+            <span :style="{ color: t.textDim }">Assistant</span>
+            <template v-if="msg.modelUsed">
+              <span>·</span>
+              <span class="font-mono normal-case tracking-normal">{{ msg.modelUsed }}</span>
             </template>
+            <template v-if="msg.at">
+              <span>·</span>
+              <span class="normal-case tracking-normal">{{ fmt(msg.at) }}</span>
+            </template>
+            <span class="flex-1" />
+            <button
+              v-if="msg.text"
+              type="button"
+              class="awog-copy-btn"
+              :style="{ color: copiedId === msg.id ? t.success : t.textDim }"
+              :title="copiedId === msg.id ? 'Copied' : 'Copy message'"
+              @click="copyMessage(msg)"
+            >
+              <Check v-if="copiedId === msg.id" :size="12" />
+              <Copy v-else :size="12" />
+            </button>
           </div>
+
+          <div
+            v-if="msg.text"
+            class="awog-md text-[13px]"
+            :style="{ color: t.text }"
+            v-html="isStreaming(msg) ? escapeText(msg.text) : renderMarkdown(msg.text)"
+          />
 
           <div v-if="msg.steps?.length" :class="msg.text ? 'mt-2 space-y-1' : 'space-y-1'">
             <StepItem v-for="step in msg.steps" :key="step.id" :step="step" />
+          </div>
+
+          <div
+            v-if="msg.startedAt"
+            class="mt-2 pt-2 text-[10px] flex items-center gap-2"
+            :style="{ color: t.textFaint, borderTop: `1px dashed ${t.border}` }"
+          >
+            <template v-if="msg.completedAt">
+              <span>{{ formatElapsed(msg.completedAt - msg.startedAt) }}</span>
+              <span v-if="msg.usage">· {{ msg.usage.outputTokens }} tok</span>
+            </template>
+            <template v-else>
+              <Activity :size="10" class="animate-pulse" />
+              <span>Streaming… {{ formatElapsed(now - msg.startedAt) }}</span>
+            </template>
           </div>
 
           <div v-if="msg.artifacts?.length" class="mt-2 space-y-1.5">
@@ -179,11 +226,47 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, FileText, Maximize2 } from 'lucide-vue-next'
-import { ref, watch, nextTick } from 'vue'
+import { Activity, Check, Copy, FileText, Maximize2, Sparkles } from 'lucide-vue-next'
+import { computed, onUnmounted, ref, watch, nextTick } from 'vue'
 import type { SessionAttachment, SessionMessage, SessionTokenKind } from '~/types'
 import { fileIconFor } from '~/utils/file-icon'
 import { tokenizeMessage } from '~/utils/tokenize'
+import { renderMarkdown } from '~/utils/markdown'
+import { formatTime } from '~/utils/time'
+
+const settingsStore = useSettingsStore()
+const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
+
+const HTML_ESCAPE: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
+const escapeText = (s: string): string => s.replace(/[&<>"']/g, (c) => HTML_ESCAPE[c] ?? c)
+
+// A message is "streaming" iff we tagged it with startedAt before sending and
+// the placeholder has not yet been reconciled (no completedAt). Anything else —
+// historical messages from JSONL, finalized turns, mock data — should render
+// as markdown.
+const isStreaming = (msg: SessionMessage): boolean =>
+  msg.startedAt !== undefined && msg.completedAt === undefined
+
+const copiedId = ref<string | null>(null)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+const copyMessage = async (msg: SessionMessage) => {
+  try {
+    await navigator.clipboard.writeText(msg.text ?? '')
+    copiedId.value = msg.id
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
+      copiedId.value = null
+    }, 1500)
+  } catch {
+    // ignore — clipboard may be denied in restricted contexts
+  }
+}
 
 const props = defineProps<{
   messages: SessionMessage[]
@@ -208,6 +291,37 @@ const tokenColor = (kind: SessionTokenKind) => {
 
 const agentName = (id: string) => workspace.agentById(id)?.name ?? 'Agent'
 
+const now = ref(Date.now())
+const hasStreaming = computed(() => props.messages.some((m) => m.startedAt && !m.completedAt))
+let nowTimer: ReturnType<typeof setInterval> | null = null
+
+watch(
+  hasStreaming,
+  (active) => {
+    if (active && !nowTimer) {
+      nowTimer = setInterval(() => {
+        now.value = Date.now()
+      }, 100)
+    } else if (!active && nowTimer) {
+      clearInterval(nowTimer)
+      nowTimer = null
+    }
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  if (nowTimer) {
+    clearInterval(nowTimer)
+    nowTimer = null
+  }
+})
+
+const formatElapsed = (ms: number): string => {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
 watch(
   () => props.messages.length,
   async () => {
@@ -216,3 +330,122 @@ watch(
   },
 )
 </script>
+
+<style>
+.awog-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.awog-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.awog-md {
+  line-height: 1.6;
+}
+.awog-md p {
+  margin: 0 0 0.6em;
+}
+.awog-md p:last-child {
+  margin-bottom: 0;
+}
+.awog-md h1,
+.awog-md h2,
+.awog-md h3,
+.awog-md h4 {
+  font-weight: 600;
+  margin: 0.9em 0 0.4em;
+  line-height: 1.3;
+}
+.awog-md h1 {
+  font-size: 1.25em;
+}
+.awog-md h2 {
+  font-size: 1.12em;
+}
+.awog-md h3 {
+  font-size: 1.04em;
+}
+.awog-md h4 {
+  font-size: 1em;
+}
+.awog-md h1:first-child,
+.awog-md h2:first-child,
+.awog-md h3:first-child {
+  margin-top: 0;
+}
+.awog-md ul,
+.awog-md ol {
+  margin: 0.4em 0 0.6em 1.2em;
+  padding: 0;
+}
+.awog-md li {
+  margin: 0.15em 0;
+}
+.awog-md ul {
+  list-style: disc;
+}
+.awog-md ol {
+  list-style: decimal;
+}
+.awog-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.awog-md pre {
+  margin: 0.6em 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.awog-md pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.awog-md blockquote {
+  margin: 0.6em 0;
+  padding: 0.2em 0.8em;
+  border-left: 3px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+}
+.awog-md hr {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.awog-md a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.awog-md table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.95em;
+}
+.awog-md th,
+.awog-md td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+}
+.awog-md th {
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+}
+.awog-md strong {
+  font-weight: 600;
+}
+</style>

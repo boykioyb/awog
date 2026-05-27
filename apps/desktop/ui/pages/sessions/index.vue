@@ -3,6 +3,10 @@
     v-model:mobile-pane="mobilePane"
     :selected-id="store.selectedSessionId"
     list-width="20rem"
+    resizable
+    storage-key="awog:sessions:list-width"
+    :min-list-width="220"
+    :max-list-width="560"
   >
     <template #list>
       <!-- Single-row toolbar -->
@@ -183,7 +187,7 @@
                     class="text-[10px] mt-0.5 flex items-center gap-1.5"
                     :style="{ color: t.textDim }"
                   >
-                    <span>{{ ses.updatedAt }}</span>
+                    <span>{{ fmt(ses.updatedAt) }}</span>
                     <span :style="{ color: t.textFaint }">·</span>
                     <span>{{ ses.messages.length }} msg</span>
                     <span v-if="ses.invitedAgentIds.length" :style="{ color: t.textFaint }">·</span>
@@ -231,6 +235,12 @@
     :items="menuItems"
     @close="contextMenu = null"
   />
+
+  <SessionNewDialog
+    :open="newDialogOpen"
+    @close="newDialogOpen = false"
+    @create="onCreateSession"
+  />
 </template>
 
 <script setup lang="ts">
@@ -247,10 +257,17 @@ import {
 import type { ProviderName, Session } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import { PROVIDER_LABEL, modelById } from '~/utils/models'
+import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
 const store = useSessionsStore()
 const workspace = useWorkspaceStore()
+const settingsStore = useSettingsStore()
+const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
+
+onMounted(() => {
+  store.hydrateFromSidecar()
+})
 
 const searchQuery = ref('')
 const hoverId = ref<string | null>(null)
@@ -426,8 +443,15 @@ const toggleGroup = (key: string) => {
   collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
 }
 
+const newDialogOpen = ref(false)
+
 const onNewSession = () => {
-  store.createSession({ title: 'Untitled session', projectId: null })
+  newDialogOpen.value = true
+}
+
+const onCreateSession = (payload: { title: string; projectId: string | null }) => {
+  store.createSession(payload)
+  newDialogOpen.value = false
   mobilePane.value = 'detail'
 }
 

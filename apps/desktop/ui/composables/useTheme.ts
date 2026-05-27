@@ -1,8 +1,20 @@
+import { storeToRefs } from 'pinia'
 import { THEMES, type ThemeName, type ThemeTokens } from '~/utils/themes'
+import { applyThemeColor, getAccentOverride, getSurfaceOverride } from '~/utils/theme-presets'
+import { useSettingsStore } from '~/stores/settings'
 
 export const useTheme = () => {
   const themeName = useState<ThemeName>('themeName', () => 'dark')
-  const t = computed<ThemeTokens>(() => THEMES[themeName.value])
+  const { appearance } = storeToRefs(useSettingsStore())
+
+  const t = computed<ThemeTokens>(() => {
+    const base = THEMES[themeName.value]
+    const surface = getSurfaceOverride(themeName.value, appearance.value.surfaceDepth)
+    const withSurface: ThemeTokens = { ...base, ...surface }
+    const withTint = applyThemeColor(withSurface, themeName.value, appearance.value.themeColor)
+    const accent = getAccentOverride(themeName.value, appearance.value.accent)
+    return { ...withTint, ...accent }
+  })
 
   const toggle = () => {
     themeName.value = themeName.value === 'dark' ? 'light' : 'dark'

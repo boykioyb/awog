@@ -20,6 +20,7 @@ import {
 } from '~/utils/initial-data'
 import { INITIAL_COMMANDS, INITIAL_HOOKS, INITIAL_MCP_SERVERS } from '~/utils/initial-extensions'
 import { makeLiveTrace, makeTrace, mockOutput } from '~/utils/mock-output'
+import { nowIso } from '~/utils/time'
 
 interface CreateTaskInput {
   title: string
@@ -28,6 +29,37 @@ interface CreateTaskInput {
   workflowId: string
   projectId: string
 }
+
+export interface LinkProjectInput {
+  name: string
+  path: string
+  description: string
+  language: string
+  gitRemote: string
+  gitBranch: string
+}
+
+export interface CloneProjectInput {
+  name: string
+  destPath: string
+  gitRemote: string
+  description: string
+  language: string
+}
+
+interface ProjectsListResponse {
+  projects: Project[]
+}
+interface ProjectUpsertResponse {
+  project: Project
+}
+interface ProjectCloneResponse {
+  project: Project
+}
+
+let projectIdCounter = 0
+const newProjectId = (): string =>
+  `prj-${Date.now().toString(36)}-${(projectIdCounter++).toString(36)}`
 
 export const useWorkspaceStore = defineStore('workspace', {
   state: () => ({
@@ -250,17 +282,109 @@ export const useWorkspaceStore = defineStore('workspace', {
       }
     },
 
-    // Project CRUD
-    saveProject(data: Project) {
-      const existing = this.projects.find((p) => p.id === data.id)
-      if (existing) {
-        Object.assign(existing, data)
-      } else {
-        this.projects.push({ ...data, id: data.id || `prj${Date.now()}`, createdAt: 'Just now' })
+    // Project CRUD — persisted via sidecar (~/.awog/projects/<id>.json).
+    // Browser dev (no sidecar): keep mock data + local-only mutations.
+
+    async hydrateProjectsFromSidecar(): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const res = await sidecar.request<ProjectsListResponse>('projects.list')
+        const list = Array.isArray(res.projects) ? res.projects : []
+        this.projects = list
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[workspace] hydrateProjectsFromSidecar failed', err)
       }
     },
-    deleteProject(id: string) {
+
+    // Register an existing local folder as a project. Sidecar validates the
+    // path exists and is a directory; throws an Error the caller surfaces.
+    async linkProject(input: LinkProjectInput): Promise<Project> {
+      const sidecar = useSidecar()
+      const draft: Project = {
+        id: newProjectId(),
+        name: input.name,
+        path: input.path,
+        description: input.description,
+        gitRemote: input.gitRemote,
+        gitBranch: input.gitBranch,
+        language: input.language,
+        createdAt: nowIso(),
+      }
+      if (sidecar.available) {
+        const res = await sidecar.request<ProjectUpsertResponse>('projects.upsert', {
+          project: draft,
+          mode: 'create',
+        })
+        this.projects.unshift(res.project)
+        return res.project
+      }
+      this.projects.unshift(draft)
+      return draft
+    },
+
+    // Clone a git remote into destPath and register the result. Sidecar runs
+    // git clone with arg-array (no shell), enforces remote scheme allowlist,
+    // and rejects if destPath already exists.
+    async cloneProject(input: CloneProjectInput): Promise<Project> {
+      const sidecar = useSidecar()
+      const id = newProjectId()
+      const createdAt = nowIso()
+      if (sidecar.available) {
+        const res = await sidecar.request<ProjectCloneResponse>('projects.clone', {
+          id,
+          name: input.name,
+          gitRemote: input.gitRemote,
+          destPath: input.destPath,
+          description: input.description,
+          language: input.language,
+          createdAt,
+        })
+        this.projects.unshift(res.project)
+        return res.project
+      }
+      // Browser dev fallback: pretend the clone succeeded.
+      const local: Project = {
+        id,
+        name: input.name,
+        path: input.destPath,
+        description: input.description,
+        gitRemote: input.gitRemote,
+        gitBranch: 'main',
+        language: input.language,
+        createdAt,
+      }
+      this.projects.unshift(local)
+      return local
+    },
+
+    async updateProject(project: Project): Promise<Project> {
+      const sidecar = useSidecar()
+      if (sidecar.available) {
+        const res = await sidecar.request<ProjectUpsertResponse>('projects.upsert', {
+          project,
+          mode: 'update',
+        })
+        const existing = this.projects.find((p) => p.id === res.project.id)
+        if (existing) Object.assign(existing, res.project)
+        return res.project
+      }
+      const existing = this.projects.find((p) => p.id === project.id)
+      if (existing) Object.assign(existing, project)
+      return project
+    },
+
+    async deleteProject(id: string): Promise<void> {
       this.projects = this.projects.filter((p) => p.id !== id)
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        await sidecar.request('projects.delete', { id })
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[workspace] projects.delete failed', err)
+      }
     },
 
     // Agent CRUD

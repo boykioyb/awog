@@ -1,7 +1,7 @@
 import type { Session } from '~/types'
 import { placeholderImage } from './placeholder-image'
 
-export const INITIAL_SESSIONS: Session[] = [
+export const MOCK_SESSIONS: Session[] = [
   {
     id: 'ses-research-cache',
     title: 'Caching strategy brainstorm',

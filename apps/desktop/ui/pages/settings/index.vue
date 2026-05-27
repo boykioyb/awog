@@ -45,9 +45,15 @@ import type { Component } from 'vue'
 type SectionId = 'workspace' | 'defaults' | 'models' | 'connectors' | 'appearance'
 
 const { t } = useTheme()
+const settings = useSettingsStore()
 
-const section = ref<SectionId>('workspace')
+const section = ref<SectionId>('appearance')
 const mobilePane = ref<'list' | 'detail'>('list')
+
+onMounted(async () => {
+  // Pull accounts truth from sidecar; safe to call even when sidecar is unavailable.
+  await settings.hydrateFromSidecar()
+})
 
 const onSelectSection = (id: SectionId) => {
   section.value = id
@@ -55,10 +61,10 @@ const onSelectSection = (id: SectionId) => {
 }
 
 const sections: { id: SectionId; label: string; icon: Component }[] = [
+  { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'workspace', label: 'Workspace', icon: FolderGit2 },
   { id: 'defaults', label: 'Defaults', icon: Sliders },
   { id: 'models', label: 'Models & API Keys', icon: Key },
   { id: 'connectors', label: 'Connectors', icon: Plug },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
 ]
 </script>

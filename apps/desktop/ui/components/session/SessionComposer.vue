@@ -29,8 +29,12 @@
       >
         <SessionChipsPopover :session="session" />
 
+        <div class="ml-auto flex items-center gap-1">
+          <SessionContextStatus :session="session" />
+        </div>
+
         <button
-          class="ml-auto inline-flex items-center justify-center w-6 h-6 rounded transition"
+          class="inline-flex items-center justify-center w-6 h-6 rounded transition"
           :style="{ color: t.textDim }"
           title="Attach file or image"
           @click="fileInputRef?.click()"
@@ -57,7 +61,7 @@
         v-model="draft"
         rows="2"
         :placeholder="placeholder"
-        class="w-full bg-transparent px-3 py-2 text-[13px] resize-none outline-none"
+        class="w-full bg-transparent px-3 py-2 text-[14px] resize-none outline-none"
         :style="{ color: t.text }"
         @focus="composerFocus = true"
         @blur="onBlur"
@@ -125,7 +129,7 @@
         @change="onFileSelected"
       />
     </div>
-    <div class="text-[9px] mt-1 px-1" :style="{ color: t.textFaint }">
+    <div class="text-[11px] mt-1 px-1" :style="{ color: t.textFaint }">
       Enter to send · @ skill / file · $ agent · / command
     </div>
   </div>
@@ -161,11 +165,7 @@ watch(
   },
 )
 
-const placeholder = computed(() =>
-  props.session.invitedAgentIds.length === 0
-    ? 'Note xuống ý nghĩ, hoặc @mention một agent để mời họ vào...'
-    : 'Type a message... (Enter to send)',
-)
+const placeholder = computed(() => 'Type a message... (Enter to send)')
 
 const canSend = computed(() => draft.value.trim().length > 0 || pendingAttachments.value.length > 0)
 

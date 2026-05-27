@@ -16,12 +16,23 @@
         <span :style="{ color: t.textFaint }">·</span>
         <span>{{ session.messages.length }} messages</span>
         <span :style="{ color: t.textFaint }">·</span>
-        <span>Updated {{ session.updatedAt }}</span>
-        <span v-if="project" :style="{ color: t.textFaint }">·</span>
-        <span v-if="project" class="inline-flex items-center gap-1">
+        <span>Updated {{ fmt(session.updatedAt) }}</span>
+        <span :style="{ color: t.textFaint }">·</span>
+        <button
+          ref="projectBtnRef"
+          type="button"
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 -my-0.5 rounded transition"
+          :style="{
+            color: project ? t.text : t.textFaint,
+            background: showProjectMenu ? t.bgSubtle : 'transparent',
+          }"
+          :title="project ? 'Change project' : 'Assign to project'"
+          @click="showProjectMenu = !showProjectMenu"
+        >
           <FolderGit2 :size="10" />
-          {{ project.name }}
-        </span>
+          {{ project ? project.name : 'No project' }}
+          <ChevronDown :size="10" />
+        </button>
       </div>
     </div>
     <button
@@ -33,12 +44,66 @@
       <Trash2 :size="14" />
     </button>
   </div>
+
+  <Teleport to="body">
+    <div v-if="showProjectMenu" class="fixed inset-0 z-40" @click="showProjectMenu = false" />
+    <div
+      v-if="showProjectMenu"
+      class="fixed z-50 rounded-md shadow-lg overflow-hidden text-[12px] min-w-[180px]"
+      :style="{
+        background: t.bgPanel,
+        border: `1px solid ${t.border}`,
+        top: `${menuPos.top}px`,
+        left: `${menuPos.left}px`,
+      }"
+    >
+      <button
+        type="button"
+        class="w-full text-left px-3 py-1.5 transition flex items-center gap-2"
+        :style="{
+          color: !session.projectId ? t.accent : t.text,
+          background: !session.projectId ? t.bgSubtle : 'transparent',
+        }"
+        @click="selectProject(null)"
+      >
+        <FolderGit2 :size="11" />
+        <span>No project</span>
+      </button>
+      <div class="h-px" :style="{ background: t.border }" />
+      <button
+        v-for="p in workspace.projects"
+        :key="p.id"
+        type="button"
+        class="w-full text-left px-3 py-1.5 transition flex items-center gap-2"
+        :style="{
+          color: session.projectId === p.id ? t.accent : t.text,
+          background: session.projectId === p.id ? t.bgSubtle : 'transparent',
+        }"
+        @click="selectProject(p.id)"
+      >
+        <FolderGit2 :size="11" />
+        <span class="truncate">{{ p.name }}</span>
+      </button>
+      <div
+        v-if="workspace.projects.length === 0"
+        class="px-3 py-2 text-center"
+        :style="{ color: t.textDim }"
+      >
+        No projects defined
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { FolderGit2, Trash2 } from 'lucide-vue-next'
-import { ref, computed, watch } from 'vue'
+import { ChevronDown, FolderGit2, Trash2 } from 'lucide-vue-next'
+import { nextTick, ref, computed, watch } from 'vue'
 import type { Session } from '~/types'
+import { formatTime } from '~/utils/time'
+
+const settingsStore = useSettingsStore()
+const sessionsStore = useSessionsStore()
+const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
 
 const props = defineProps<{
   session: Session
@@ -53,17 +118,33 @@ const { t } = useTheme()
 const workspace = useWorkspaceStore()
 
 const titleDraft = ref(props.session.title)
+const showProjectMenu = ref(false)
+const projectBtnRef = ref<HTMLElement | null>(null)
+const menuPos = ref({ top: 0, left: 0 })
 
 watch(
   () => props.session.id,
   () => {
     titleDraft.value = props.session.title
+    showProjectMenu.value = false
   },
 )
+
+watch(showProjectMenu, async (open) => {
+  if (!open) return
+  await nextTick()
+  const r = projectBtnRef.value?.getBoundingClientRect()
+  if (r) menuPos.value = { top: r.bottom + 4, left: r.left }
+})
 
 const project = computed(() =>
   props.session.projectId ? workspace.projectById(props.session.projectId) : undefined,
 )
+
+const selectProject = (projectId: string | null) => {
+  sessionsStore.setSessionProject(props.session.id, projectId)
+  showProjectMenu.value = false
+}
 
 const commitTitle = () => {
   const next = titleDraft.value.trim() || 'Untitled session'

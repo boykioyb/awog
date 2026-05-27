@@ -3,7 +3,7 @@
     <!-- Provider chip -->
     <div class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] transition"
         :style="chipStyle(openPop === 'provider')"
         @click="togglePop('provider')"
       >
@@ -53,7 +53,7 @@
     <!-- Model chip -->
     <div class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] transition"
         :style="chipStyle(openPop === 'model')"
         @click="togglePop('model')"
       >
@@ -93,7 +93,7 @@
     <!-- Level chip -->
     <div class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] transition"
         :style="chipStyle(openPop === 'level')"
         :disabled="availableLevels.length <= 1"
         @click="togglePop('level')"
@@ -131,7 +131,7 @@
     <!-- Mode chip -->
     <div class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] transition"
         :style="chipStyle(openPop === 'mode')"
         @click="togglePop('mode')"
       >

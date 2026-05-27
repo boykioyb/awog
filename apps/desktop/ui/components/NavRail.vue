@@ -30,13 +30,20 @@
     <!-- Logo / brand -->
     <div
       class="h-11 flex items-center px-3 flex-shrink-0 gap-2"
-      :style="{ borderBottom: `1px solid ${t.border}` }"
+      :style="{ borderBottom: `1px solid ${t.border}`, color: t.text }"
     >
       <div
-        class="w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0"
-        :style="{ background: t.accent, color: t.accentText }"
+        class="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+        :style="{ border: `1px solid ${t.border}`, background: t.bgElevated }"
       >
-        A
+        <svg viewBox="0 0 32 32" width="20" height="20" role="img" aria-label="AWOG">
+          <rect x="4" y="13" width="18" height="14" rx="2.5" fill="currentColor" opacity="0.4" />
+          <rect x="7" y="9" width="18" height="14" rx="2.5" fill="currentColor" opacity="0.7" />
+          <rect x="10" y="5" width="18" height="14" rx="2.5" fill="currentColor" />
+          <rect x="13" y="9.4" width="10" height="1.4" rx="0.7" fill="#60a5fa" />
+          <rect x="13" y="12.4" width="7" height="1.4" rx="0.7" fill="#60a5fa" opacity="0.65" />
+          <circle cx="25.5" cy="7.5" r="1.6" fill="#fbbf24" />
+        </svg>
       </div>
       <span
         v-if="showLabels"

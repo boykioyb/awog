@@ -86,10 +86,21 @@
     </template>
 
     <template #detail>
-      <ProjectEditor v-if="creating" :project="null" @save="handleSave" @cancel="cancelCreate" />
+      <ProjectEditor
+        v-if="creating"
+        :project="null"
+        :busy="busy"
+        :busy-label="busyLabel"
+        :last-progress-line="lastProgressLine"
+        :error="error"
+        @save="handleSave"
+        @cancel="cancelCreate"
+      />
       <ProjectEditor
         v-else-if="editing && selectedProject"
         :project="selectedProject"
+        :busy="busy"
+        :error="error"
         @save="handleSave"
         @cancel="editing = false"
       />
@@ -270,10 +281,12 @@ import {
 } from 'lucide-vue-next'
 import type { Project, Task } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
+import type { ProjectEditorSavePayload } from '~/components/project/ProjectEditor.vue'
 import { STATUS_META } from '~/utils/status-meta'
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
+const sidecar = useSidecar()
 
 const selectedId = ref<string | null>(ws.projects[0]?.id ?? null)
 const creating = ref(false)
@@ -281,6 +294,35 @@ const editing = ref(false)
 const searchQuery = ref('')
 const confirmDelete = ref<Project | null>(null)
 const mobilePane = ref<'list' | 'detail'>('list')
+
+const busy = ref(false)
+const busyLabel = ref('')
+const lastProgressLine = ref('')
+const error = ref('')
+
+void ws.hydrateProjectsFromSidecar().then(() => {
+  if (!selectedId.value && ws.projects.length > 0) {
+    selectedId.value = ws.projects[0]!.id
+  }
+})
+
+if (sidecar.available) {
+  let unlisten: (() => void) | null = null
+  sidecar
+    .onEvent((evt) => {
+      if (evt.type === 'project.clone.progress') {
+        const p = evt.payload as { line?: string } | null
+        if (p?.line) lastProgressLine.value = p.line.trim()
+      }
+    })
+    .then((fn) => {
+      unlisten = fn
+    })
+    .catch(() => {})
+  onBeforeUnmount(() => {
+    unlisten?.()
+  })
+}
 
 const selectedProject = computed<Project | null>(
   () => ws.projects.find((p) => p.id === selectedId.value) ?? null,
@@ -337,27 +379,54 @@ const selectProject = (id: string) => {
   mobilePane.value = 'detail'
 }
 
-const handleSave = (data: Project) => {
-  const isExisting = !!data.id && ws.projects.some((p) => p.id === data.id)
-  if (isExisting) {
-    ws.saveProject(data)
-    editing.value = false
-  } else {
-    const newId = `prj${Date.now()}`
-    const newProject: Project = {
-      ...data,
-      id: newId,
-      createdAt: 'Just now',
+const handleSave = async (payload: ProjectEditorSavePayload) => {
+  if (busy.value) return
+  error.value = ''
+  try {
+    if (payload.kind === 'update') {
+      busy.value = true
+      busyLabel.value = 'Saving…'
+      const saved = await ws.updateProject(payload.project)
+      selectedId.value = saved.id
+      editing.value = false
+    } else if (payload.kind === 'link') {
+      busy.value = true
+      busyLabel.value = 'Linking folder…'
+      const saved = await ws.linkProject({
+        name: payload.data.name,
+        path: payload.data.path,
+        description: payload.data.description,
+        language: payload.data.language,
+        gitRemote: payload.data.gitRemote,
+        gitBranch: payload.data.gitBranch,
+      })
+      selectedId.value = saved.id
+      creating.value = false
+    } else {
+      busy.value = true
+      busyLabel.value = 'Cloning repository…'
+      lastProgressLine.value = ''
+      const saved = await ws.cloneProject({
+        name: payload.data.name,
+        destPath: payload.data.path,
+        gitRemote: payload.data.gitRemote,
+        description: payload.data.description,
+        language: payload.data.language,
+      })
+      selectedId.value = saved.id
+      creating.value = false
     }
-    ws.saveProject(newProject)
-    selectedId.value = newId
-    creating.value = false
+    mobilePane.value = 'detail'
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    busy.value = false
+    busyLabel.value = ''
   }
-  mobilePane.value = 'detail'
 }
 
-const doDelete = (id: string) => {
-  ws.deleteProject(id)
+const doDelete = async (id: string) => {
+  await ws.deleteProject(id)
   if (selectedId.value === id) {
     selectedId.value = ws.projects[0]?.id ?? null
   }
@@ -410,7 +479,10 @@ const commitRename = () => {
   const trimmed = renameValue.value.trim()
   const item = ws.projects.find((p) => p.id === id)
   if (trimmed && item && trimmed !== item.name) {
-    ws.saveProject({ ...item, name: trimmed })
+    void ws.updateProject({ ...item, name: trimmed }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('[projects] rename failed', err)
+    })
   }
   renamingId.value = null
 }

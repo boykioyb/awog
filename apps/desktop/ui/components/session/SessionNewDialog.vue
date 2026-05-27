@@ -1,0 +1,195 @@
+<template>
+  <div
+    v-if="open"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    :style="{ background: t.overlay }"
+    @click.self="onCancel"
+  >
+    <div
+      class="w-full max-w-md rounded-lg shadow-xl"
+      :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        class="px-4 py-3 flex items-center justify-between"
+        :style="{ borderBottom: `1px solid ${t.border}` }"
+      >
+        <div class="text-[13px] font-semibold" :style="{ color: t.text }">New session</div>
+        <button
+          type="button"
+          class="p-1 rounded transition flex items-center"
+          :style="{ color: t.textDim }"
+          aria-label="Close"
+          @click="onCancel"
+        >
+          <X :size="14" />
+        </button>
+      </div>
+
+      <form class="px-4 py-4 space-y-4" @submit.prevent="onSubmit">
+        <div class="space-y-1.5">
+          <label class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">
+            Title
+          </label>
+          <input
+            ref="titleRef"
+            v-model="title"
+            type="text"
+            placeholder="Untitled session"
+            class="w-full px-3 py-2 rounded text-[13px] outline-none"
+            :style="{
+              background: t.bgSubtle,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+            }"
+            @keydown.escape="onCancel"
+          />
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">
+            Project
+          </label>
+          <div
+            class="relative"
+            tabindex="0"
+            @blur="closeProjectMenu"
+          >
+            <button
+              type="button"
+              class="w-full px-3 py-2 rounded text-[13px] flex items-center justify-between gap-2"
+              :style="{
+                background: t.bgSubtle,
+                color: t.text,
+                border: `1px solid ${t.border}`,
+              }"
+              @click="showProjectMenu = !showProjectMenu"
+            >
+              <span class="inline-flex items-center gap-2 truncate">
+                <FolderGit2 :size="12" :style="{ color: t.textDim }" />
+                {{ selectedProjectName }}
+              </span>
+              <ChevronDown :size="12" :style="{ color: t.textDim }" />
+            </button>
+
+            <div
+              v-if="showProjectMenu"
+              class="absolute left-0 right-0 top-full mt-1 rounded-md shadow-lg overflow-hidden z-10 max-h-[240px] overflow-y-auto"
+              :style="{
+                background: t.bgPanel,
+                border: `1px solid ${t.border}`,
+              }"
+            >
+              <button
+                type="button"
+                class="w-full text-left px-3 py-1.5 text-[12px] transition flex items-center gap-2"
+                :style="{
+                  color: projectId === null ? t.accent : t.text,
+                  background: projectId === null ? t.bgSubtle : 'transparent',
+                }"
+                @click="selectProject(null)"
+              >
+                <FolderGit2 :size="11" />
+                <span>No project</span>
+              </button>
+              <div v-if="workspace.projects.length" class="h-px" :style="{ background: t.border }" />
+              <button
+                v-for="p in workspace.projects"
+                :key="p.id"
+                type="button"
+                class="w-full text-left px-3 py-1.5 text-[12px] transition flex items-center gap-2"
+                :style="{
+                  color: projectId === p.id ? t.accent : t.text,
+                  background: projectId === p.id ? t.bgSubtle : 'transparent',
+                }"
+                @click="selectProject(p.id)"
+              >
+                <FolderGit2 :size="11" />
+                <span class="truncate">{{ p.name }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded text-[12px] transition"
+            :style="{ color: t.textDim, background: 'transparent' }"
+            @click="onCancel"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="px-3 py-1.5 rounded text-[12px] font-medium transition"
+            :style="{ background: t.accent, color: t.accentText }"
+          >
+            Create
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ChevronDown, FolderGit2, X } from 'lucide-vue-next'
+import { nextTick, ref, computed, watch } from 'vue'
+
+const props = defineProps<{
+  open: boolean
+}>()
+
+const emit = defineEmits<{
+  close: []
+  create: [payload: { title: string; projectId: string | null }]
+}>()
+
+const { t } = useTheme()
+const workspace = useWorkspaceStore()
+
+const title = ref('')
+const projectId = ref<string | null>(null)
+const showProjectMenu = ref(false)
+const titleRef = ref<HTMLInputElement | null>(null)
+
+const selectedProjectName = computed(() => {
+  if (!projectId.value) return 'No project'
+  return workspace.projectById(projectId.value)?.name ?? 'No project'
+})
+
+watch(
+  () => props.open,
+  async (open) => {
+    if (!open) {
+      title.value = ''
+      projectId.value = null
+      showProjectMenu.value = false
+      return
+    }
+    await nextTick()
+    titleRef.value?.focus()
+  },
+)
+
+const selectProject = (id: string | null) => {
+  projectId.value = id
+  showProjectMenu.value = false
+}
+
+const closeProjectMenu = () => {
+  // Delay so click on menu items registers first.
+  setTimeout(() => {
+    showProjectMenu.value = false
+  }, 120)
+}
+
+const onCancel = () => emit('close')
+
+const onSubmit = () => {
+  const trimmed = title.value.trim() || 'Untitled session'
+  emit('create', { title: trimmed, projectId: projectId.value })
+}
+</script>

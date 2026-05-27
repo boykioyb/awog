@@ -80,6 +80,22 @@ export type ConnectionUnavailableKind = 'quota' | 'rate_limit' | 'invalid_key'
 
 export type ProviderName = 'anthropic' | 'openai' | 'google'
 
+export type AuthMode = 'oauth' | 'apikey'
+export type AccountStatus = 'connected' | 'expired' | 'disconnected'
+
+export interface ProviderAccount {
+  id: string
+  label: string
+  authMode: AuthMode
+  fingerprint: string
+  status: AccountStatus
+  expiresAt?: number
+  organization?: { uuid: string; name: string }
+  account?: { uuid: string; email: string }
+  version: number
+  createdAt: string
+}
+
 export interface WaitingConnectionInfo {
   provider: ProviderName
   phaseNodeId: string
@@ -230,6 +246,10 @@ export interface SessionMessage {
   steps?: SessionStep[]
   attachments?: SessionAttachment[]
   modeAtSend?: AgentMode
+  startedAt?: number
+  completedAt?: number
+  modelUsed?: string
+  usage?: { inputTokens: number; outputTokens: number }
 }
 
 export type ThinkingLevel = 'standard' | 'high' | 'extra-high'
@@ -478,4 +498,34 @@ export type EditorDiffStats = {
   files: number
   additions: number
   deletions: number
+}
+
+export type SansFontFamily = 'system' | 'inter' | 'geist'
+export type MonoFontFamily = 'system' | 'jetbrains-mono' | 'fira-code'
+export type FontWeight = 300 | 400 | 500 | 600 | 700
+export type AccentPreset =
+  | 'mono'
+  | 'blue'
+  | 'violet'
+  | 'cyan'
+  | 'emerald'
+  | 'rose'
+  | 'amber'
+  | 'monokai'
+  | 'dracula'
+  | 'nord'
+  | 'tokyo'
+  | 'gruvbox'
+  | 'catppuccin'
+export type ThemeColor = AccentPreset
+export type SurfaceDepth = 'flat' | 'standard' | 'deep'
+
+export interface AppearanceSettings {
+  sansFamily: SansFontFamily
+  monoFamily: MonoFontFamily
+  fontSize: number
+  fontWeight: FontWeight
+  accent: AccentPreset
+  themeColor: ThemeColor
+  surfaceDepth: SurfaceDepth
 }
