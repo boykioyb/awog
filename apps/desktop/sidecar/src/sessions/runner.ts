@@ -128,10 +128,10 @@ function buildOptions(
   }
 
   if (systemPrompt) {
-    // SDK accepts customSystemPrompt via Options; types call it via the
-    // `agent` indirection, but flag passthrough `extraArgs` is the most direct
-    // route that does not require defining a full agent object.
-    opts.extraArgs = { 'append-system-prompt': systemPrompt }
+    // String form fully REPLACES the Claude Code preset prompt. Using `append`
+    // (or extraArgs.append-system-prompt) leaves "You are Claude Code..." in
+    // place and only appends ours — which is why AWOG identity didn't take.
+    opts.systemPrompt = systemPrompt
   }
 
   if (
