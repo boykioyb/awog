@@ -1,6 +1,6 @@
 # AWOG UI
 
-Nuxt 4 frontend cho AWOG desktop app. Sẽ chạy bên trong Tauri shell (xem [ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md)), hiện tại chạy thuần web để phát triển UI.
+Nuxt 4 frontend cho AWOG desktop app. M7: đã chạy bên trong Tauri shell + nối với Node.js sidecar qua stdio NDJSON JSON-RPC (xem [ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md), [ADR 0008](../../../docs/decisions/0008-stdio-ipc-for-sidecar.md)). Vẫn chạy được thuần web để dev UI nhanh, lúc đó các RPC engine no-op.
 
 ## Stack
 
@@ -9,11 +9,16 @@ Nuxt 4 frontend cho AWOG desktop app. Sẽ chạy bên trong Tauri shell (xem [A
 - **TailwindCSS 3** (utility cho layout, inline `:style` cho theme color)
 - **Pinia** (state)
 - **lucide-vue-next** (icons)
+- **Tauri 2** shell — IPC qua `invoke('engine_call')` + `listen('sidecar.event')`.
+- **Anthropic auth**: không dùng SDK. Sidecar gọi raw `/v1/messages` với `Authorization: Bearer <oauth_token>` + `anthropic-beta: oauth-2025-04-20` (xem [ADR 0011](../../../docs/decisions/0011-anthropic-subscription-oauth.md)).
 
 ## Chạy local
 
 ```bash
-cd apps/desktop/ui
+# Từ repo root — full desktop app (UI + sidecar + Tauri shell)
+pnpm tauri:dev
+
+# Từ thư mục này — chỉ UI web (engine RPC no-op)
 pnpm install
 pnpm dev
 ```
@@ -45,7 +50,13 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Markdown editor fullscreen** — file tree sidebar, code/split/preview, mermaid diagram, diff viewer, status bar.
 ✅ **Theme system** — dark (Linear/GitHub) + light (Notion/Vercel) với 20+ token, scrollbar sync.
 ✅ **Git Manager prototype** — route `/git` với 5 tab (Changes / History / Branches / Stash / Remotes), Pinia store mock 100% (chưa wire sidecar).
-✅ **System tray + native notification** — đặc tả ở docs, chưa implement (cần Tauri shell).
+✅ **Tauri shell** — đã wire (M6), webview load UI Nuxt, IPC stdio qua `engine_call` (xem [ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md), [ADR 0008](../../../docs/decisions/0008-stdio-ipc-for-sidecar.md)).
+✅ **Node.js sidecar wiring** — package `@awog/sidecar` chạy stdio NDJSON JSON-RPC; UI gọi qua composable `useSidecar()`.
+✅ **Anthropic OAuth Pro/Max** — sign-in 3-step dialog, token refresh, account management (xem [docs/features/models-and-accounts.md](../../../docs/features/models-and-accounts.md), [ADR 0011](../../../docs/decisions/0011-anthropic-subscription-oauth.md)).
+✅ **Sessions chat streaming** — SSE token stream, markdown render, copy button, latency + token count + model id (xem [docs/features/sessions.md](../../../docs/features/sessions.md)).
+✅ **Sessions persistence** — JSONL event-sourced tại `~/.awog/sessions/<id>.jsonl`.
+⏳ **System tray + native notification** — đặc tả ở docs, chưa implement.
+⏳ **Tasks/Workflows/Agents/Skills engine wiring** — vẫn dùng mock data, chờ engine model schema thật.
 
 ## Cấu trúc
 
@@ -78,7 +89,7 @@ ui/
 │   │ # Feature folders (existing)
 │   ├── session/      # SessionChat (orchestrator), Header, MessageList, Composer, ChipsPopover, Autocomplete, Drawer, StepDetail — PR-5.A
 │   ├── edit/         # EditorTopBar, EditorFileTree, EditorMonacoPane, EditorViewerPane — PR-5.G
-│   ├── settings/     # SettingsWorkspace/Defaults/Models/Connectors/AppearanceSection + SettingsField + CustomProviderForm — PR-5.B
+│   ├── settings/     # SettingsWorkspace/Defaults/Models/Connectors/AppearanceSection + SettingsField + CustomProviderForm + SettingsOAuthCodeDialog — PR-5.B + M7
 │   ├── git/          # GitBranchList (orchestrator), Tree, ContextMenu, NameModal, DirtyCheckoutModal, ... — PR-5.C
 │   ├── workflows/    # WorkflowPalette, Canvas, ListItem, InspectorPane, AgentNode, NodeInspector, PromptCreator — PR-5.D
 ├── composables/
@@ -88,7 +99,8 @@ ui/
 │   ├── useMockGenerator.ts # Generic mock generator (T) — PR-4
 │   ├── usePromptCreator.ts # Shared prompt → entity flow state — PR-4
 │   ├── useBreakpoint.ts    # Responsive breakpoint detector
-│   └── useMentionAutocomplete.ts # @-mention autocomplete state — PR-5.A
+│   ├── useMentionAutocomplete.ts # @-mention autocomplete state — PR-5.A
+│   └── useSidecar.ts       # Wrapper invoke('engine_call') + listen('sidecar.event') — M7
 ├── stores/
 │   ├── workspace.ts        # Tasks, projects, agents, skills, workflows + actions
 │   └── settings.ts         # Workspace path, API keys, connectors
@@ -116,7 +128,8 @@ ui/
 │   ├── diff-parse.ts       # Pure: parse unified diff (DiffViewer / SideDiffViewer)
 │   ├── file-icon.ts        # Map extension → icon (file tree)
 │   ├── initial-extensions.ts, initial-sessions.ts # Mock seeds
-│   └── markdown-parse.ts   # Pure: parse markdown AST (blocks + inline) — PR-5.E
+│   ├── markdown-parse.ts   # Pure: parse markdown AST (blocks + inline) — PR-5.E
+│   └── markdown.ts         # Render markdown bằng `marked` cho session message — M7
 ├── types/
 │   └── index.ts            # Entity types
 ├── assets/css/main.css
@@ -163,9 +176,18 @@ Template bind inline style:
 
 Click "Open in editor" trong PhaseOutputTab sẽ navigate sang `/edit/:taskId?file=...`.
 
-## Roadmap (sau khi port done)
+## Roadmap
 
-- Tauri shell integration (xem [ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md))
-- Node.js sidecar IPC (xem [ADR 0008](../../../docs/decisions/0008-stdio-ipc-for-sidecar.md))
-- Wire engine thật thay vì mock data
+Đã xong (M6 → M7):
+
+- ✅ Tauri shell integration ([ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md))
+- ✅ Node.js sidecar IPC stdio NDJSON ([ADR 0008](../../../docs/decisions/0008-stdio-ipc-for-sidecar.md))
+- ✅ Anthropic OAuth Pro/Max ([ADR 0011](../../../docs/decisions/0011-anthropic-subscription-oauth.md))
+- ✅ Sessions chat streaming + persistence JSONL ([docs/features/sessions.md](../../../docs/features/sessions.md))
+
+Còn lại:
+
+- Wire engine thật cho Tasks / Workflows / Agents / Skills (thay mock data)
 - System tray + native notification ([design/tray-and-notifications.md](../../../docs/design/tray-and-notifications.md))
+- API key auth mode + OpenAI/Google provider ([models-and-accounts.md TODO](../../../docs/features/models-and-accounts.md#todo-post-m7))
+- OS keychain migration cho credentials
