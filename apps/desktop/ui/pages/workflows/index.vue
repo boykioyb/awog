@@ -33,10 +33,10 @@
           <WorkflowListItem
             v-for="wf in store.workflows"
             :key="wf.id"
+            v-model:rename-value="renameValue"
             :workflow="wf"
             :selected="selectedWorkflowId === wf.id"
             :renaming="renamingId === wf.id"
-            v-model:rename-value="renameValue"
             @select="selectWorkflow(wf.id)"
             @context-menu="onListItemMenu($event, wf.id)"
             @start-rename="startRename(wf.id, wf.name)"

@@ -91,46 +91,37 @@
           <SearchInput v-model="skillSearch" placeholder="Filter skills..." class="w-44" />
         </div>
         <div
-          class="rounded p-2 max-h-72 overflow-y-auto space-y-3"
+          class="rounded p-2 max-h-72 overflow-y-auto space-y-0.5"
           :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
         >
-          <div v-for="[category, catSkills] in skillsByCategory" :key="category">
-            <div
-              class="text-[10px] uppercase tracking-wider font-medium mb-1.5 px-1"
-              :style="{ color: t.textDim }"
-            >
-              {{ category }}
+          <label
+            v-for="s in filteredSkills"
+            :key="s.id"
+            class="flex items-start gap-2 px-1.5 py-1.5 rounded cursor-pointer transition"
+            :style="{
+              background: draft.skillIds.includes(s.id) ? t.bgActive : 'transparent',
+            }"
+          >
+            <input
+              type="checkbox"
+              :checked="draft.skillIds.includes(s.id)"
+              :style="{ accentColor: t.accent, marginTop: '2px' }"
+              @change="toggleSkill(s.id)"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="text-[11px] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
+              <div class="text-[10px] leading-snug" :style="{ color: t.textDim }">
+                {{ s.description }}
+              </div>
             </div>
-            <div class="space-y-0.5">
-              <label
-                v-for="s in catSkills"
-                :key="s.id"
-                class="flex items-start gap-2 px-1.5 py-1.5 rounded cursor-pointer transition"
-                :style="{
-                  background: draft.skillIds.includes(s.id) ? t.bgActive : 'transparent',
-                }"
-              >
-                <input
-                  type="checkbox"
-                  :checked="draft.skillIds.includes(s.id)"
-                  :style="{ accentColor: t.accent, marginTop: '2px' }"
-                  @change="toggleSkill(s.id)"
-                />
-                <div class="flex-1 min-w-0">
-                  <div class="text-[11px] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-                  <div class="text-[10px] leading-snug" :style="{ color: t.textDim }">
-                    {{ s.description }}
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
+          </label>
           <div
             v-if="filteredSkills.length === 0"
             class="text-[11px] py-4 text-center"
             :style="{ color: t.textFaint }"
           >
-            No skills match "{{ skillSearch }}"
+            <template v-if="ws.skills.length === 0">No skills yet — create one first</template>
+            <template v-else>No skills match "{{ skillSearch }}"</template>
           </div>
         </div>
       </div>
@@ -158,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Agent, Skill, SkillCategory } from '~/types'
+import type { Agent, Skill } from '~/types'
 import type { AgentDraft } from '~/composables/useAgentGenerator'
 import { CONTEXT_PROVIDERS } from '~/utils/initial-data'
 import { MODELS } from '~/utils/models'
@@ -222,16 +213,6 @@ const filteredSkills = computed<Skill[]>(() => {
   return ws.skills.filter(
     (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
   )
-})
-
-const skillsByCategory = computed<[SkillCategory, Skill[]][]>(() => {
-  const map = new Map<SkillCategory, Skill[]>()
-  filteredSkills.value.forEach((s) => {
-    const arr = map.get(s.category) || []
-    arr.push(s)
-    map.set(s.category, arr)
-  })
-  return Array.from(map.entries())
 })
 
 const canSave = computed(() => !!(draft.value.name && draft.value.role && draft.value.model))

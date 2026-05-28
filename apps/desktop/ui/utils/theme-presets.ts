@@ -1,4 +1,4 @@
-import type { ThemeName, ThemeTokens } from './themes'
+import { THEMES, type ThemeName, type ThemeTokens } from './themes'
 
 export type AccentPreset =
   | 'mono'
@@ -367,7 +367,21 @@ export const getAccentOverride = (
 ): Partial<ThemeTokens> => {
   if (preset === 'mono') return {}
   const recipe = themeName === 'dark' ? ACCENT_RECIPES_DARK[preset] : ACCENT_RECIPES_LIGHT[preset]
-  return buildAccentTokens(recipe, themeName)
+  const baseSyntax = THEMES[themeName].syntax
+  // Headings + link follow the accent so MarkdownRenderer harmonises with the
+  // user's pick (the hardcoded h1/h2/h3 in themes.ts were a holdover from the
+  // default monochrome palette). Code / bold / italic / listMark / blockquote
+  // stay on the neutral base — they signal structure, not branding.
+  return {
+    ...buildAccentTokens(recipe, themeName),
+    syntax: {
+      ...baseSyntax,
+      h1: recipe.accent,
+      h2: recipe.accentHover,
+      h3: recipe.accentMuted,
+      link: recipe.accent,
+    },
+  }
 }
 
 export const getSurfaceOverride = (

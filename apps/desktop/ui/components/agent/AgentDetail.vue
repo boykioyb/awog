@@ -109,23 +109,18 @@
       <div v-if="agentSkills.length === 0" class="text-[11px] py-2" :style="{ color: t.textFaint }">
         No skills assigned. This agent cannot be used in workflows.
       </div>
-      <div v-else class="space-y-3">
-        <div v-for="[category, catSkills] in skillsByCategory" :key="category">
-          <div class="text-[10px] mb-1.5" :style="{ color: t.textDim }">{{ category }}</div>
-          <div class="space-y-1">
-            <div
-              v-for="s in catSkills"
-              :key="s.id"
-              class="rounded px-3 py-2 flex items-start gap-2.5"
-              :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-            >
-              <Wand2 :size="11" :style="{ color: t.textDim, marginTop: '3px' }" />
-              <div class="flex-1 min-w-0">
-                <div class="text-[12px] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-                <div class="text-[10px] mt-0.5 leading-relaxed" :style="{ color: t.textDim }">
-                  {{ s.description }}
-                </div>
-              </div>
+      <div v-else class="space-y-1">
+        <div
+          v-for="s in agentSkills"
+          :key="s.id"
+          class="rounded px-3 py-2 flex items-start gap-2.5"
+          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+        >
+          <Wand2 :size="11" :style="{ color: t.textDim, marginTop: '3px' }" />
+          <div class="flex-1 min-w-0">
+            <div class="text-[12px] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
+            <div class="text-[10px] mt-0.5 leading-relaxed" :style="{ color: t.textDim }">
+              {{ s.description }}
             </div>
           </div>
         </div>
@@ -161,7 +156,7 @@
 
 <script setup lang="ts">
 import { Copy, Edit3, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
-import type { Agent, Skill, SkillCategory } from '~/types'
+import type { Agent, Skill } from '~/types'
 import { CONTEXT_PROVIDERS } from '~/utils/initial-data'
 import { MODELS } from '~/utils/models'
 
@@ -183,16 +178,6 @@ const model = computed(() => MODELS.find((m) => m.id === props.agent.model))
 const agentSkills = computed<Skill[]>(() =>
   ws.skills.filter((s) => props.agent.skillIds.includes(s.id)),
 )
-
-const skillsByCategory = computed<[SkillCategory, Skill[]][]>(() => {
-  const map = new Map<SkillCategory, Skill[]>()
-  agentSkills.value.forEach((s) => {
-    const arr = map.get(s.category) || []
-    arr.push(s)
-    map.set(s.category, arr)
-  })
-  return Array.from(map.entries())
-})
 
 const providers = computed(() =>
   props.agent.context

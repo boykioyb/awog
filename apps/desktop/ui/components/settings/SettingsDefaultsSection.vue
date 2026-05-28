@@ -166,7 +166,7 @@ const onChangeDefaultModel = (id: string) => {
   const allowed = levelsForModel(modelById(id))
   const nextLevel = allowed.includes(defaults.value.thinkingLevel)
     ? defaults.value.thinkingLevel
-    : (allowed[0] ?? 'standard')
+    : (allowed[0] ?? 'low')
   settings.updateDefaults({ modelId: id, thinkingLevel: nextLevel })
 }
 </script>

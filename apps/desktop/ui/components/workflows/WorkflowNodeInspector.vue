@@ -79,25 +79,11 @@
         Workflow pauses for review before continuing
       </div>
     </div>
-
-    <Field v-if="skill" label="Skill inputs (auto-resolved)">
-      <div class="space-y-1">
-        <div
-          v-for="inp in skill.inputs"
-          :key="inp"
-          class="text-[11px] font-mono flex items-center gap-1.5"
-          :style="{ color: t.textMuted }"
-        >
-          <Hash :size="9" :style="{ color: t.textDim }" />
-          {{ inp }}
-        </div>
-      </div>
-    </Field>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Plus, X, Hash } from 'lucide-vue-next'
+import { Plus, X } from 'lucide-vue-next'
 import type { Agent, Skill, WorkflowNode } from '~/types'
 
 const props = defineProps<{
@@ -122,11 +108,9 @@ const inputStyle = computed(() => ({
 
 const onSkillChange = (e: Event) => {
   const { value } = e.target as HTMLSelectElement
-  const newSkill = props.availableSkills.find((s) => s.id === value)
   emit('update:node', {
     ...props.node,
     skillId: value,
-    outputs: newSkill ? [...newSkill.outputs] : props.node.outputs,
   })
 }
 

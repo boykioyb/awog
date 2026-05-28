@@ -257,7 +257,7 @@ const onCanvasDrop = (e: DragEvent) => {
     skillId: firstSkill?.id || agent.skillIds[0] || '',
     x: position.x - 100,
     y: position.y - 30,
-    outputs: firstSkill ? [...firstSkill.outputs] : ['output.md'],
+    outputs: ['output.md'],
     approval: false,
   }
   emit('update:nodes', [...props.workflow.nodes, newNode])
