@@ -62,14 +62,14 @@ const position = computed(() => {
   return { top: Math.max(MENU_PAD, top), left: Math.max(MENU_PAD, left) }
 })
 
+const itemColor = (item: ContextMenuItem, hover: boolean): string => {
+  if (item.disabled) return t.value.textFaint
+  if (item.danger) return t.value.danger
+  return hover ? t.value.text : t.value.textMuted
+}
+
 const itemStyle = (item: ContextMenuItem, hover: boolean) => {
-  const color = item.disabled
-    ? t.value.textFaint
-    : item.danger
-      ? t.value.danger
-      : hover
-        ? t.value.text
-        : t.value.textMuted
+  const color = itemColor(item, hover)
   return {
     background: hover && !item.disabled ? t.value.bgHover : 'transparent',
     color,

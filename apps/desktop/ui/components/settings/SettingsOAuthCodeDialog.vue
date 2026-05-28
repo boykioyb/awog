@@ -138,13 +138,18 @@
         </button>
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded transition"
+          class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[12px] rounded transition"
           :style="primaryBtnStyle"
           :disabled="!canConfirm"
           @click="onConfirm"
         >
-          <Loader2 v-if="phase === 'confirming'" :size="13" class="animate-spin" />
-          <span>Confirm</span>
+          <Loader2
+            v-if="phase === 'confirming'"
+            :size="13"
+            class="animate-spin shrink-0"
+            aria-hidden="true"
+          />
+          <span class="leading-none">Confirm</span>
         </button>
       </div>
     </div>

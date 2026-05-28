@@ -105,6 +105,13 @@ const workflow = computed(() =>
   task.value ? workspace.workflowById(task.value.workflowId) : undefined,
 )
 
+function resolveKind(out: string): EditorFileKind | null {
+  if (out.endsWith('.md')) return 'md'
+  if (out.endsWith('.diff') || out.endsWith('.patch')) return 'diff'
+  if (out.endsWith('.yaml') || out.endsWith('.yml')) return 'yaml'
+  return null
+}
+
 const taskFiles = computed<EditorTaskFile[]>(() => {
   const files: EditorTaskFile[] = []
   if (!task.value || !workflow.value) return files
@@ -172,13 +179,6 @@ const languageLabel = computed(() => {
 })
 
 const mobilePane = ref<'tree' | 'editor'>(fileName.value ? 'editor' : 'tree')
-
-function resolveKind(out: string): EditorFileKind | null {
-  if (out.endsWith('.md')) return 'md'
-  if (out.endsWith('.diff') || out.endsWith('.patch')) return 'diff'
-  if (out.endsWith('.yaml') || out.endsWith('.yml')) return 'yaml'
-  return null
-}
 
 function onChangeView(v: EditorViewMode) {
   activeView.value = v

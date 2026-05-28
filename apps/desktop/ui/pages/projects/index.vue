@@ -305,7 +305,7 @@ const busyLabel = ref('')
 const lastProgressLine = ref('')
 const error = ref('')
 
-void ws.hydrateProjectsFromSidecar().then(() => {
+ws.hydrateProjectsFromSidecar().then(() => {
   if (!selectedId.value && ws.projects.length > 0) {
     selectedId.value = ws.projects[0]!.id
   }
@@ -484,7 +484,7 @@ const commitRename = () => {
   const trimmed = renameValue.value.trim()
   const item = ws.projects.find((p) => p.id === id)
   if (trimmed && item && trimmed !== item.name) {
-    void ws.updateProject({ ...item, name: trimmed }).catch((err) => {
+    ws.updateProject({ ...item, name: trimmed }).catch((err) => {
       // eslint-disable-next-line no-console
       console.warn('[projects] rename failed', err)
     })
