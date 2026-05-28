@@ -21,32 +21,19 @@
         <div class="flex items-center gap-2 mb-1.5">
           <span class="text-[12px] font-mono" :style="{ color: t.text }">{{ draft.name }}</span>
           <span
-            class="text-[10px] px-1.5 py-0.5 rounded"
+            v-if="draft.id"
+            class="text-[10px] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.bgPanel,
               color: t.textMuted,
               border: `1px solid ${t.border}`,
             }"
           >
-            {{ draft.category }}
+            /{{ draft.id }}
           </span>
         </div>
-        <div class="text-[12px] mb-2" :style="{ color: t.textMuted }">
+        <div class="text-[12px]" :style="{ color: t.textMuted }">
           {{ draft.description }}
-        </div>
-        <div v-if="draft.tags.length" class="flex flex-wrap gap-1">
-          <span
-            v-for="tag in draft.tags"
-            :key="tag"
-            class="text-[10px] px-1.5 py-0.5 rounded"
-            :style="{
-              background: t.bgPanel,
-              color: t.textMuted,
-              border: `1px solid ${t.border}`,
-            }"
-          >
-            #{{ tag }}
-          </span>
         </div>
       </div>
     </template>
@@ -62,8 +49,13 @@
       </button>
       <button
         class="text-[11px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="draft && emit('save', { ...(draft as Skill) })"
+        :style="{
+          background: canSave ? t.accent : t.bgInput,
+          color: canSave ? t.accentText : t.textDim,
+          cursor: canSave ? 'pointer' : 'not-allowed',
+        }"
+        :disabled="!canSave"
+        @click="onSave"
       >
         <Save :size="11" />
         Save skill
@@ -90,4 +82,27 @@ const emit = defineEmits<{
 const { t } = useTheme()
 const { draft, isGenerating, error, onSubmit, onRegenerate } =
   usePromptCreator<SkillDraft>(useSkillGenerator())
+
+const canSave = computed(() => !!(draft.value?.id && draft.value.name && draft.value.description))
+
+const onSave = () => {
+  const d = draft.value
+  if (!d || !d.id) return
+  // Prompt-driven creation defaults to the global tier; user can change via
+  // SkillEditor (the "Edit details" path) when they want a project-scoped skill.
+  const skill: Skill = {
+    id: d.id,
+    source: 'global',
+    name: d.name,
+    description: d.description,
+    body: d.body,
+  }
+  if (d.icon) skill.icon = d.icon
+  if (d.globs && d.globs.length > 0) skill.globs = [...d.globs]
+  if (d.alwaysAllow && d.alwaysAllow.length > 0) skill.alwaysAllow = [...d.alwaysAllow]
+  if (d.requiredSources && d.requiredSources.length > 0) {
+    skill.requiredSources = [...d.requiredSources]
+  }
+  emit('save', skill)
+}
 </script>

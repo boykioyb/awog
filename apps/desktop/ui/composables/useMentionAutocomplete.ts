@@ -58,8 +58,8 @@ export const useMentionAutocomplete = (
     }
 
     if (trigger === '/') {
-      const items: AutoItem[] = COMMANDS.filter((c) => q === '' || c.name.startsWith(q))
-        .slice(0, 8)
+      const commandItems: AutoItem[] = COMMANDS.filter((c) => q === '' || c.name.startsWith(q))
+        .slice(0, 4)
         .map((c) => ({
           kind: 'command',
           id: c.id,
@@ -68,26 +68,28 @@ export const useMentionAutocomplete = (
           icon: c.icon,
           insertHandle: `/${c.name}`,
         }))
-      return { title: 'Run command', items }
+      const skillItems: AutoItem[] = workspace.skills
+        .filter(
+          (s) => q === '' || s.id.toLowerCase().startsWith(q) || s.name.toLowerCase().includes(q),
+        )
+        .slice(0, 6)
+        .map((s) => ({
+          kind: 'skill',
+          id: s.id,
+          label: `/${s.id}`,
+          hint: s.description,
+          icon: Sparkles,
+          insertHandle: `/${s.id}`,
+        }))
+      return { title: 'Run command or skill', items: [...commandItems, ...skillItems] }
     }
 
-    // trigger '@' → skills + files mixed
-    const skillItems: AutoItem[] = workspace.skills
-      .filter((s) => q === '' || s.name.toLowerCase().includes(q))
-      .slice(0, 4)
-      .map((s) => ({
-        kind: 'skill',
-        id: s.id,
-        label: s.name,
-        hint: s.category,
-        icon: Sparkles,
-        insertHandle: `@${s.name}`,
-      }))
-
+    // trigger '@' → files only (skills moved to '/' to match Claude Code SDK
+    // slash-command convention; see plan peppy-napping-crystal.md)
     const fileItems: AutoItem[] = PROJECT_FILES.filter(
       (f) => q === '' || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
     )
-      .slice(0, 6)
+      .slice(0, 10)
       .map((f) => ({
         kind: 'file',
         id: f.id,
@@ -97,7 +99,7 @@ export const useMentionAutocomplete = (
         insertHandle: `@${f.path}`,
       }))
 
-    return { title: 'Insert skill or file', items: [...skillItems, ...fileItems] }
+    return { title: 'Insert file', items: fileItems }
   })
 
   const detect = () => {

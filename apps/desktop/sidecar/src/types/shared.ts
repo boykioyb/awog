@@ -69,7 +69,7 @@ export interface OAuthState {
 // in-memory only via per-request snapshots from the UI.
 // TODO M6: persist sessions to JSONL; M4 keeps in-memory only.
 
-export type ThinkingLevel = 'standard' | 'high' | 'extra-high'
+export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
 
 export type AgentMode = 'ask' | 'accept-edits' | 'plan' | 'execute'
 
@@ -107,6 +107,43 @@ export interface Session {
   messages: SessionMessage[]
   pendingAgentIds: string[]
   settings: SessionSettings
+  disabledTools?: string[]
+}
+
+// ─── Session steps (tool use / thinking) ───────────────────────────────────
+// Mirrors apps/desktop/ui/types/index.ts SessionStep. Sidecar emits these via
+// session.step notifications when the SDK reports tool_use / tool_result.
+
+export type SessionStepTool =
+  | 'read'
+  | 'write'
+  | 'edit'
+  | 'save'
+  | 'search'
+  | 'find-files'
+  | 'terminal'
+  | 'task'
+
+export type SessionStepStatus = 'running' | 'done' | 'error'
+
+export type SessionStepDetail =
+  | { kind: 'file'; path: string; content: string; language?: string }
+  | { kind: 'list'; items: { label: string; path?: string; snippet?: string }[] }
+  | { kind: 'terminal'; command: string; output?: string; exitCode?: number }
+  | { kind: 'text'; content: string }
+
+export interface SessionStep {
+  id: string
+  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan'
+  tool?: SessionStepTool
+  label: string
+  target?: string
+  description?: string
+  additions?: number
+  deletions?: number
+  pathHint?: string
+  status?: SessionStepStatus
+  detail?: SessionStepDetail
 }
 
 // ─── Project ───────────────────────────────────────────────────────────────
@@ -123,4 +160,38 @@ export interface Project {
   language: string
   createdAt: string
   color?: string
+}
+
+// ─── Skill ─────────────────────────────────────────────────────────────────
+// Stored as a folder containing SKILL.md (YAML frontmatter + markdown body).
+// Five tiers, all using the same SKILL.md shape so files are interchangeable
+// with Claude Code SDK and craft-agents-oss:
+//
+//   global         → ~/.awog/skills/<id>/SKILL.md           (AWOG-native)
+//   user-claude    → ~/.claude/skills/<id>/SKILL.md         (Claude Code SDK)
+//   user-agents    → ~/.agents/skills/<id>/SKILL.md         (Craft Agents)
+//   project-claude → {project.path}/.claude/skills/<id>/SKILL.md
+//   project-agents → {project.path}/.agents/skills/<id>/SKILL.md
+//
+// The three user-level tiers are always scanned (no projectId required); the
+// two project-level tiers require a projectId.
+
+export type SkillSource =
+  | 'global'
+  | 'user-claude'
+  | 'user-agents'
+  | 'project-claude'
+  | 'project-agents'
+
+export interface Skill {
+  id: string
+  source: SkillSource
+  projectId?: string
+  name: string
+  description: string
+  body: string
+  globs?: string[]
+  alwaysAllow?: string[]
+  icon?: string
+  requiredSources?: string[]
 }

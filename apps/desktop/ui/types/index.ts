@@ -12,17 +12,34 @@ export interface Project {
   color?: string
 }
 
-export type SkillCategory = 'Analysis' | 'Design' | 'Development' | 'Quality'
+// Skill = a SKILL.md folder. The id IS the slug (folder name on disk).
+// Five possible source tiers:
+//   global         → ~/.awog/skills/<id>/SKILL.md           (AWOG-native)
+//   user-claude    → ~/.claude/skills/<id>/SKILL.md         (Claude Code SDK)
+//   user-agents    → ~/.agents/skills/<id>/SKILL.md         (Craft Agents)
+//   project-claude → {project.path}/.claude/skills/<id>/SKILL.md
+//   project-agents → {project.path}/.agents/skills/<id>/SKILL.md
+// User-level tiers are always scanned; project tiers require a projectId.
+// Same shape as Claude Code SDK / craft-agents-oss skills so they are
+// interchangeable on disk.
+export type SkillSource =
+  | 'global'
+  | 'user-claude'
+  | 'user-agents'
+  | 'project-claude'
+  | 'project-agents'
 
 export interface Skill {
   id: string
+  source: SkillSource
+  projectId?: string
   name: string
-  category: SkillCategory
   description: string
-  inputs: string[]
-  outputs: string[]
-  promptTemplate: string
-  tags: string[]
+  body: string
+  globs?: string[]
+  alwaysAllow?: string[]
+  icon?: string
+  requiredSources?: string[]
 }
 
 export interface Agent {
@@ -250,9 +267,10 @@ export interface SessionMessage {
   completedAt?: number
   modelUsed?: string
   usage?: { inputTokens: number; outputTokens: number }
+  canceled?: boolean
 }
 
-export type ThinkingLevel = 'standard' | 'high' | 'extra-high'
+export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
 
 export type AgentMode = 'ask' | 'accept-edits' | 'plan' | 'execute'
 
@@ -275,6 +293,10 @@ export interface Session {
   messages: SessionMessage[]
   pendingAgentIds: string[]
   settings: SessionSettings
+  // SDK tool names the user has disabled for this session. Empty / undefined
+  // means default Claude Code preset (all built-in tools available). Passed to
+  // sidecar as Options.disallowedTools per turn.
+  disabledTools?: string[]
 }
 
 // ─── MCP Server ────────────────────────────────────────────────────────────

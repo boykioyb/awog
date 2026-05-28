@@ -20,6 +20,10 @@ import './methods/projects.upsert.js'
 import './methods/projects.delete.js'
 import './methods/projects.clone.js'
 import './methods/projects.inspect.js'
+import './methods/skills.list.js'
+import './methods/skills.upsert.js'
+import './methods/skills.delete.js'
+import './methods/skills.generate.js'
 
 type JsonRpcRequest = {
   jsonrpc: '2.0'

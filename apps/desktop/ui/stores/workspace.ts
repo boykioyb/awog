@@ -5,6 +5,7 @@ import type {
   MCPServer,
   Project,
   Skill,
+  SkillSource,
   SlashCommand,
   Task,
   TaskSource,
@@ -14,7 +15,6 @@ import { topoSort } from '~/utils/graph'
 import {
   INITIAL_AGENTS,
   INITIAL_PROJECTS,
-  INITIAL_SKILLS,
   INITIAL_TASKS,
   INITIAL_WORKFLOWS,
 } from '~/utils/initial-data'
@@ -57,6 +57,13 @@ interface ProjectCloneResponse {
   project: Project
 }
 
+interface SkillsListResponse {
+  skills: Skill[]
+}
+interface SkillUpsertResponse {
+  skill: Skill
+}
+
 let projectIdCounter = 0
 const newProjectId = (): string =>
   `prj-${Date.now().toString(36)}-${(projectIdCounter++).toString(36)}`
@@ -67,7 +74,9 @@ export const useWorkspaceStore = defineStore('workspace', {
     // (no sidecar) falls back to INITIAL_PROJECTS inside hydrateProjectsFromSidecar.
     projects: [] as Project[],
     agents: [...INITIAL_AGENTS] as Agent[],
-    skills: [...INITIAL_SKILLS] as Skill[],
+    // Skills hydrate from sidecar (~/.awog/skills/<id>/SKILL.md). No mock seed —
+    // user creates skills explicitly.
+    skills: [] as Skill[],
     workflows: [...INITIAL_WORKFLOWS] as Workflow[],
     tasks: [...INITIAL_TASKS] as Task[],
     mcpServers: [...INITIAL_MCP_SERVERS] as MCPServer[],
@@ -410,17 +419,99 @@ export const useWorkspaceStore = defineStore('workspace', {
       return newAgent
     },
 
-    // Skill CRUD
-    saveSkill(data: Skill) {
-      const existing = this.skills.find((s) => s.id === data.id)
+    // Skill CRUD — persisted via sidecar. Each skill is identified by the
+    // tuple (source, projectId, id), so the same slug can live independently
+    // in global, project-claude, and project-agents tiers. Browser dev (no
+    // sidecar): keep local-only mutations so the page is browsable.
+
+    async hydrateSkillsFromSidecar(projectIds?: string[]): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      // Default: include all registered projects so a fresh /skills page reload
+      // sees both user-level dirs and every project's .claude/.agents skills.
+      const ids = projectIds ?? this.projects.map((p) => p.id)
+      try {
+        const params = ids.length > 0 ? { projectIds: ids } : undefined
+        const res = await sidecar.request<SkillsListResponse>('skills.list', params)
+        this.skills = Array.isArray(res.skills) ? res.skills : []
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[workspace] hydrateSkillsFromSidecar failed', err)
+      }
+    },
+
+    async saveSkill(data: Skill, previousId?: string): Promise<Skill> {
+      const sidecar = useSidecar()
+      const matchKey = (a: Skill, b: { source: SkillSource; projectId?: string; id: string }) =>
+        a.source === b.source &&
+        (a.projectId ?? undefined) === (b.projectId ?? undefined) &&
+        a.id === b.id
+      const slugChanged = previousId !== undefined && previousId !== data.id
+      const targetKey = { source: data.source, projectId: data.projectId, id: data.id }
+      const isUpdate = slugChanged || this.skills.some((s) => matchKey(s, targetKey))
+      if (sidecar.available) {
+        const params: Record<string, unknown> = {
+          skill: data,
+          mode: isUpdate ? 'update' : 'create',
+        }
+        if (slugChanged) params.previousId = previousId
+        const res = await sidecar.request<SkillUpsertResponse>('skills.upsert', params)
+        if (slugChanged) {
+          this.skills = this.skills.filter(
+            (s) =>
+              !matchKey(s, {
+                source: data.source,
+                projectId: data.projectId,
+                id: previousId as string,
+              }),
+          )
+        }
+        const existing = this.skills.find((s) => matchKey(s, res.skill))
+        if (existing) {
+          Object.assign(existing, res.skill)
+        } else {
+          this.skills.push(res.skill)
+        }
+        return res.skill
+      }
+      if (slugChanged) {
+        this.skills = this.skills.filter(
+          (s) =>
+            !matchKey(s, {
+              source: data.source,
+              projectId: data.projectId,
+              id: previousId as string,
+            }),
+        )
+      }
+      const existing = this.skills.find((s) => matchKey(s, targetKey))
       if (existing) {
         Object.assign(existing, data)
       } else {
-        this.skills.push({ ...data, id: `sk${Date.now()}` })
+        this.skills.push({ ...data })
       }
+      return data
     },
-    deleteSkill(id: string) {
-      this.skills = this.skills.filter((s) => s.id !== id)
+
+    async deleteSkill(id: string, source: SkillSource, projectId?: string): Promise<void> {
+      this.skills = this.skills.filter(
+        (s) =>
+          !(
+            s.id === id &&
+            s.source === source &&
+            (s.projectId ?? undefined) === (projectId ?? undefined)
+          ),
+      )
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = { id, source }
+        if (projectId) params.projectId = projectId
+        await sidecar.request('skills.delete', params)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[workspace] skills.delete failed', err)
+      }
     },
 
     // Workflow CRUD
