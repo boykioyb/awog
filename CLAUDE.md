@@ -56,16 +56,16 @@ Pipeline điển hình: **PO → BA → PM → TL → developer → QA → revie
 
 | Lớp | Công nghệ | Ghi chú |
 |---|---|---|
-| Desktop shell | Tauri (Rust) | Chưa wire, planned — [ADR 0006](docs/decisions/0006-tauri-shell-for-nuxt.md) |
-| Frontend | Nuxt 4 (SPA, `ssr: false`) + Vue 3 + TS | Đang port từ React prototype |
-| State | Pinia | Store: `workspace`, `settings` |
-| Canvas | VueFlow | Workflow DAG editor |
+| Desktop shell | Tauri 2 (Rust) | Đã wire [ADR 0006](docs/decisions/0006-tauri-shell-for-nuxt.md) — stdio IPC, system tray planned |
+| Frontend | Nuxt 4 (SPA, `ssr: false`) + Vue 3 + TS | Đã port core features. Tasks/Workflows/Agents/Skills vẫn mock data. |
+| State | Pinia | Store: `workspace` (mock), `settings` (live), `sessions` (live) |
+| Canvas | VueFlow | Workflow DAG editor (mock) |
 | Styling | TailwindCSS 3 + inline `:style` theme token | Xem `useTheme()` composable |
 | Icons | lucide-vue-next | |
 | Code editor | Monaco | Cho prompt + artifact (markdown editor full-screen) |
-| Engine | Node.js sidecar | Chưa implement; UI đang chạy với mock data |
-| LLM | Anthropic SDK, OpenAI SDK | Phía sidecar, không expose API key cho UI |
-| Storage | Filesystem JSON/YAML/MD + Git | Không database |
+| Engine (Sidecar) | Node.js `@awog/sidecar` | Wired M7: OAuth + Sessions + Skills author. Use `@anthropic-ai/claude-agent-sdk` [ADR 0008](docs/decisions/0008-stdio-ipc-for-sidecar.md) |
+| LLM client | `@anthropic-ai/claude-agent-sdk` (sidecar chỉ) | OAuth token via env, tool-use + permission prompts, thinking budgets |
+| Storage | Filesystem JSON/YAML/MD + Git + JSONL | credentials.json (chmod 600) + sessions JSONL + projects.json |
 
 ## Lệnh hay dùng
 
@@ -95,6 +95,9 @@ pnpm build
 | [apps/desktop/ui/utils/themes.ts](apps/desktop/ui/utils/themes.ts) | 20+ theme token |
 | [apps/desktop/ui/utils/initial-data.ts](apps/desktop/ui/utils/initial-data.ts) | Mock data cho store |
 | [apps/desktop/ui/types/index.ts](apps/desktop/ui/types/index.ts) | Entity types (Task, Project, Agent, Skill, Workflow) |
+| [apps/desktop/sidecar/src/skills/](apps/desktop/sidecar/src/skills/) | Skill storage: 5-tier scan + atomic SKILL.md write |
+| [apps/desktop/sidecar/src/methods/skills.*.ts](apps/desktop/sidecar/src/methods/) | RPC: list, upsert, delete, generate, author (chat) |
+| [apps/desktop/ui/components/skill/](apps/desktop/ui/components/skill/) | SkillDetail, SkillEditor, SkillPromptCreator (mini chat), SkillBodyEditModal |
 | [agentflow-prototype.tsx](agentflow-prototype.tsx) | React prototype gốc — dùng tham chiếu khi port |
 
 ## Quy tắc làm việc
@@ -108,7 +111,7 @@ pnpm build
 
 ## Trạng thái port (tham chiếu nhanh)
 
-Theo [apps/desktop/ui/README.md](apps/desktop/ui/README.md): Tasks, Projects, Workflows, Agents, Skills, Settings, Markdown editor, Theme system — đã port. System tray + native notification — chờ Tauri shell. Engine wiring — chưa.
+Theo [apps/desktop/ui/README.md](apps/desktop/ui/README.md): Tasks, Projects, Workflows, Agents, Settings, Markdown editor, Theme system — đã port. **Skills đã pivot sang SKILL.md folder format** (xem [ADR 0013](docs/decisions/0013-adopt-skill-md-format.md)) với 5-tier discovery + chat-driven creation qua claude-agent-sdk Write tool. System tray + native notification — chờ Tauri shell. Engine wiring chat sessions — đã có (claude-agent-sdk).
 
 ## Khi user yêu cầu feature mới
 

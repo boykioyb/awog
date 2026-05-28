@@ -1,12 +1,26 @@
 # Feature: MCP Servers
 
-**Trạng thái:** Draft
+**Trạng thái:** Approved (Pha 1 — stdio only)
 
 ## Overview
 
 MCP (Model Context Protocol) server là tiến trình bên ngoài AWOG cung cấp **tool**, **resource** và **prompt** cho agent qua giao thức chuẩn của Anthropic. Trong khi [context-provider](./context-providers.md) là loại nguồn tri thức **built-in** do AWOG implement, MCP server là **plugin do bên thứ ba viết** — người dùng cài thêm để mở rộng năng lực agent mà không sửa code AWOG.
 
 Ví dụ: gắn MCP server `gitnexus` để agent gọi `query_codebase`, hoặc gắn `playwright` để agent điều khiển trình duyệt khi viết test E2E.
+
+## Scope pha 1 (MVP) vs Pha 2
+
+| Khía cạnh | Pha 1 (MVP) | Pha 2 |
+|---|---|---|
+| Transport | **`stdio` only** | `http`, `sse` |
+| Built-in preset | **GitHub + Filesystem** (2 preset cứng) | Discovery qua remote registry |
+| Secret injection | `${env:VAR}` từ env user; `${secret:...}` placeholder **không expand** (báo warning) | Tích hợp OS keychain qua [settings](./settings.md) |
+| Per-agent trust override | Global trust per-server | Per-agent + per-tool trust |
+| Sandbox stdio | Không sandbox (chạy với quyền user) | macOS sandbox-exec / Linux namespace |
+| Hot reload | Restart manual sau khi sửa config | Tự reload khi tool list thay đổi |
+| Auto-restart | Max 3 lần / 60s | Configurable backoff per-server |
+
+> **Lý do chọn stdio cho pha 1:** ~80% MCP server hiện hữu (`@modelcontextprotocol/server-*`) là stdio. Không phải xử lý SSRF, allowlist host, credential storage — giảm surface tấn công đáng kể. Cấu trúc `MCPServer` type đã có sẵn field cho cả 3 transport, không phá vỡ khi mở rộng pha 2.
 
 ## User Stories
 
@@ -46,22 +60,32 @@ Ví dụ: gắn MCP server `gitnexus` để agent gọi `query_codebase`, hoặc
 
 ## MCP server editor
 
-### Wizard "+ Add MCP Server"
+### "+ Add MCP Server" — Skills-style conversational creator (pha 1)
 
-3 bước:
+Tham chiếu pattern UI của Skills ([`pages/skills/index.vue`](../../apps/desktop/ui/pages/skills/index.vue) + [`components/skill/SkillPromptCreator.vue`](../../apps/desktop/ui/components/skill/SkillPromptCreator.vue)). Khi user click "+ New":
 
-1. **Source** — chọn:
-   - **From registry** — danh sách MCP server phổ biến đã được verified (filesystem, gitnexus, sqlite, github, …). Click để auto-fill config.
-   - **Custom** — user nhập tay.
-2. **Configuration** — form theo transport:
-   - **stdio**: `command` (executable path), `args` (string[]), `env` (key-value), `cwd` (optional).
-   - **http**: `url`, `headers` (key-value, hỗ trợ `${env:VAR}` để inject secret từ keychain).
-   - **sse**: như http.
-3. **Verify** — sidecar spawn thử, gọi `initialize`, hiển thị tool/resource detect được. Nếu fail → show stderr, cho phép back.
+1. Modal mở ra ở vị trí anchor của nút "+ New" (cùng `cardPos` logic với Skills).
+2. **Chat-style log** — user mô tả MCP server muốn cài; LLM (agent ở sidecar) drive flow:
+   - Hỏi service (nếu chưa rõ).
+   - Pick preset cứng (GitHub/Filesystem) nếu match, hoặc tự suy ra `command/args/env` từ mô tả.
+   - Gọi tool `mcp.test` để verify spawn được.
+   - Gọi tool `mcp.upsert` để ghi `~/.awog/mcp-servers/<id>.json`.
+3. **Streaming steps** hiển thị realtime với icon running/done/error:
+   - `Discovering server template…`
+   - `Testing connection…` (target: `npx -y @modelcontextprotocol/server-filesystem /tmp`)
+   - `Writing config…` (target: `~/.awog/mcp-servers/fs-readonly.json`)
+4. Khi user đóng modal → page gọi `mcp.list` (`hydrateMcpFromSidecar`) để lấy disk-truth, server vừa tạo xuất hiện trong list.
+
+Lý do chọn pattern này thay vì wizard 3-step:
+- Đồng nhất UX với Skills (đã wired và validated trong M7).
+- LLM xử lý phần "research server template" — user không cần biết package name `@modelcontextprotocol/server-*`.
+- Reuse `SessionStep` UI components.
+
+> Wizard 3-step gốc bị thay thế. Manual edit vẫn dùng `McpEditor` form khi click "Edit details" trong modal hoặc Edit từ detail view.
 
 ### Edit existing
 
-Form giống wizard nhưng bỏ qua step 1.
+Click Edit trong detail → `McpEditor` form (giống skill edit), không qua LLM creator.
 
 ## Thuộc tính MCP Server
 
@@ -178,6 +202,101 @@ Secret (token, API key) **không lưu trong JSON** — chỉ lưu reference `${s
 - **Path argument** cho stdio (ví dụ filesystem MCP) phải sanitize: resolve absolute, reject path traversal nếu trỏ ngoài workspace (trừ khi user explicit allow trong setting).
 - **Tool call vào MCP** đi qua trace → log có thể bị xem; sidecar **sanitize secret** trước khi ghi (regex mask `Bearer xxx`, `sk-xxx`).
 - **Schema validation** — input/output mỗi tool validate qua zod theo schema MCP server expose. Reject call không match.
+
+## RPC methods (sidecar)
+
+Tương tự pattern `sessions.*` / `accounts.*`. UI gọi qua [`useSidecar()`](../../apps/desktop/ui/composables/useSidecar.ts).
+
+| Method | Params | Trả về | Ghi chú |
+|---|---|---|---|
+| `mcp.list` | — | `MCPServer[]` | Snapshot từ disk (đọc `~/.awog/mcp-servers/*.json`) + state runtime trộn vào (status, tools, lastError, lastStartedAt). |
+| `mcp.upsert` | `{ server: MCPServer }` | `MCPServer` | Validate qua zod. Ghi atomic `<id>.json`. Nếu `enabled && autoStart` → spawn ngay. |
+| `mcp.delete` | `{ id }` | `{ ok: true }` | Stop process nếu đang chạy. Unlink file. |
+| `mcp.toggle` | `{ id, enabled }` | `MCPServer` | Stop khi disable; start khi enable + autoStart. |
+| `mcp.restart` | `{ id }` | `MCPServer` | Kill + spawn lại; reset backoff counter. |
+| `mcp.test` | `{ server: MCPServer }` | `{ ok: boolean; tools?, resources?, error? }` | Spawn ephemeral, gọi `initialize` + `tools/list` + `resources/list`, kill. Dùng trong wizard step "Verify" trước khi save. |
+| `mcp.discoverPreset` | `{ presetId: 'github' \| 'filesystem' }` | `Partial<MCPServer>` | Trả về config template (command, args, env keys cần) cho preset cứng. Không spawn. |
+| `mcp.author` | `{ messageId, prompt, history? }` | `{ messageId, finalText }` | Streaming. LLM agent ở sidecar drive flow: research → test → upsert. Phát event `mcp.author.chunk/step/done`. Reuse pattern `skills.author`. |
+
+### Streaming events (notification, no `id`)
+
+Phát qua channel `sidecar.event` khi runtime trạng thái thay đổi hoặc LLM creator streaming:
+
+```jsonc
+{ "type": "mcp.status",
+  "payload": { "id", "status": "starting|running|error|disabled|idle",
+               "lastError?": "...", "tools?": MCPTool[], "resources?": MCPResource[] } }
+{ "type": "mcp.stderr-line",
+  "payload": { "id", "line": "...", "at": "ISO timestamp" } }
+{ "type": "mcp.author.chunk",
+  "payload": { "messageId", "delta": "..." } }
+{ "type": "mcp.author.step",
+  "payload": { "messageId", "step": { id, label, target?, status: 'running'|'done'|'error' } } }
+{ "type": "mcp.author.done",
+  "payload": { "messageId", "text": "...", "createdServerId?": "..." } }
+```
+
+UI append `stderr-line` vào ring buffer 100 dòng cho tab Logs. `mcp.status` cập nhật badge ngay không cần refetch.
+
+## Acceptance Criteria
+
+### AC-1: Tạo MCP server stdio mới (manual)
+- **Given** user mở Settings → MCP Servers, click "+ Add Server" → chọn "Custom"
+- **When** điền `command=npx`, `args=["-y","@modelcontextprotocol/server-filesystem","/tmp"]`, `transport=stdio`, click "Verify"
+- **Then** sidecar spawn ephemeral process, gọi MCP `initialize`, hiển thị danh sách tool/resource detect được trong vòng ≤ 5s
+- **And** click "Save" → file `~/.awog/mcp-servers/<id>.json` xuất hiện; nếu `enabled && autoStart` → status badge chuyển `starting → running`
+
+### AC-2: Tạo từ preset cứng
+- **Given** user click "+ Add Server" → "From registry"
+- **When** chọn "Filesystem" hoặc "GitHub"
+- **Then** form auto-fill `command/args/env keys`; user chỉ cần điền path (Filesystem) hoặc `GITHUB_PERSONAL_ACCESS_TOKEN` env (GitHub)
+- **And** quy trình save giống AC-1
+
+### AC-3: Restart-safe sau crash sidecar
+- **Given** đang có 2 MCP server `enabled=true, autoStart=true` chạy
+- **When** sidecar crash hoặc restart
+- **Then** sau khi sidecar lên lại, `mcp.list` trả về 2 server với status `idle` (chưa spawn), trong vòng ≤ 2s từ khi sidecar ready → status chuyển `running` cho từng server
+
+### AC-4: Tool list được session sử dụng
+- **Given** có 1 MCP server `gitnexus` status `running` với 5 tool
+- **When** user gửi message trong session, model trả `tool_use` block với `name=mcp__gitnexus__query`
+- **Then** sidecar dispatch tool call tới server gitnexus, await result, đưa lại model
+- **And** trace log của session ghi `tool` node với `mcpServerId=gitnexus`
+
+### AC-5: Crash backoff
+- **Given** 1 MCP server crash liên tục
+- **When** sidecar tự restart 3 lần trong 60s đều fail
+- **Then** status chuyển `error` cứng, không retry thêm; hiển thị nút "Restart" để user trigger thủ công
+
+### AC-6: Disable server runtime
+- **Given** server đang `running`
+- **When** user toggle `enabled=false`
+- **Then** sidecar gửi SIGTERM, đợi ≤ 2s, SIGKILL nếu không chết, status → `disabled`
+- **And** session đang dùng tool từ server đó nhận error `mcp-server-disabled` ở lần call tiếp theo
+
+### AC-7: Path argument an toàn (Filesystem MCP)
+- **Given** user dùng preset Filesystem với args trỏ tới path
+- **When** path chứa `..` literal hoặc symlink ra ngoài `~`
+- **Then** sidecar reject ở `mcp.upsert`, error `path-out-of-scope`, không ghi file
+- **Lưu ý:** AWOG chỉ sanitize path do user nhập trực tiếp vào args. Tool args đến từ LLM ở runtime do server filesystem tự kiểm tra (boundary của họ).
+
+### AC-8: Stderr log accessible
+- **Given** server đang chạy, ghi stderr `[error] failed to connect ...`
+- **When** UI mở tab Logs trong server detail
+- **Then** hiển thị tối đa 100 dòng gần nhất, đảo ngược (mới ở trên), realtime append khi có event `mcp.stderr-line`
+
+### AC-9: Offline-safe
+- **Given** preset cứng, không có internet
+- **When** user click "Filesystem" preset
+- **Then** form auto-fill thành công (preset là static config trong code, không gọi remote registry)
+
+## Edge cases
+
+- **Command không tồn tại** (`command=foo` không có trong PATH): `mcp.test` báo `ENOENT`, không tạo file config trừ khi user explicit save anyway.
+- **MCP server đổi tool list giữa các phiên** (server bump version, thêm tool): mỗi lần `running` mới đều call lại `tools/list` và cập nhật cache; UI hiển thị diff "+/- tools" trong tab Tools.
+- **Trùng id**: `mcp.upsert` reject nếu file đã tồn tại và mode = create. UI có nút "Duplicate" tạo id mới `<id>-copy`.
+- **stdout của server không phải JSON-RPC hợp lệ**: log dòng đó vào stderr buffer, không crash sidecar.
+- **Args/env chứa `${env:VAR}` mà VAR không tồn tại**: spawn fail với error rõ ràng `env-missing: VAR`.
 
 ## Phụ thuộc
 

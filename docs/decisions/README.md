@@ -16,6 +16,10 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0008](./0008-stdio-ipc-for-sidecar.md) | Stdio IPC giữa Tauri shell và Node.js sidecar | Accepted |
 | [0009](./0009-dev-mode-http-fallback.md) | Dev-mode HTTP fallback cho sidecar | Accepted |
 | [0010](./0010-pause-on-quota-for-connection-switch.md) | Pause-on-quota để cho phép switch connection thủ công | Accepted |
+| [0011](./0011-anthropic-subscription-oauth.md) | Anthropic subscription OAuth flow | Accepted |
+| [0012](./0012-projects-storage.md) | Lưu trữ projects bằng plain JSON per-file | Accepted |
+| [0013](./0013-adopt-skill-md-format.md) | Adopt SKILL.md format for skills (Claude Code SDK / craft-agents-oss compatible) | Accepted |
+| [0014](./0014-mcp-servers-stdio-runtime.md) | MCP servers runtime: stdio-only pha 1, per-file JSON, in-sidecar process group | Accepted |
 
 ## Template
 

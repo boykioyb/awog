@@ -45,7 +45,7 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Projects** — CRUD với link existing / clone from git, project detail với task list, 3-col meta grid.
 ✅ **Workflows** — DAG canvas drag-drop, agent palette, edge bezier, inspector pane.
 ✅ **Agents** — CRUD list/detail/editor với 12-model picker, skills picker theo category, context providers.
-✅ **Skills** — CRUD với category filter, prompt template, tags Enter-to-add, "Used by" agents.
+✅ **Skills** — **đã pivot sang SKILL.md folder format** ([ADR 0013](../../../docs/decisions/0013-adopt-skill-md-format.md)). 5-tier discovery (global `~/.awog/skills`, `~/.claude/skills`, `~/.agents/skills` + project `.claude/skills`, `.agents/skills`). Chat-driven creation: click "+ New" → mini chat với claude-agent-sdk → LLM dùng Write tool tự tạo folder + SKILL.md. Body edit via LLM prompt. Bulk delete. Toast feedback toàn diện.
 ✅ **Settings** — 4 section (Workspace / Models & API Keys / Connectors / Appearance).
 ✅ **Markdown editor fullscreen** — file tree sidebar, code/split/preview, mermaid diagram, diff viewer, status bar.
 ✅ **Theme system** — dark (Linear/GitHub) + light (Notion/Vercel) với 20+ token, scrollbar sync.
@@ -55,8 +55,9 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Anthropic OAuth Pro/Max** — sign-in 3-step dialog, token refresh, account management (xem [docs/features/models-and-accounts.md](../../../docs/features/models-and-accounts.md), [ADR 0011](../../../docs/decisions/0011-anthropic-subscription-oauth.md)).
 ✅ **Sessions chat streaming** — SSE token stream, markdown render, copy button, latency + token count + model id (xem [docs/features/sessions.md](../../../docs/features/sessions.md)).
 ✅ **Sessions persistence** — JSONL event-sourced tại `~/.awog/sessions/<id>.jsonl`.
+✅ **Composer follow-up** — bôi đen text trong agent reply → "Quote & follow up" → chip + note editor trong composer, prepend quote block khi send (xem [docs/features/sessions.md#composer-follow-up-quote--instruct](../../../docs/features/sessions.md#composer-follow-up-quote--instruct)).
 ⏳ **System tray + native notification** — đặc tả ở docs, chưa implement.
-⏳ **Tasks/Workflows/Agents/Skills engine wiring** — vẫn dùng mock data, chờ engine model schema thật.
+⏳ **Tasks/Workflows/Agents engine wiring** — vẫn dùng mock data, chờ engine model schema thật. (Skills đã có engine wiring qua sidecar `skills.*` RPCs.)
 
 ## Cấu trúc
 

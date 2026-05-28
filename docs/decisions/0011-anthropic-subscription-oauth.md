@@ -68,11 +68,24 @@ const SCOPES = 'org:create_api_key user:profile user:inference'
   - Implement API key auth mode (cùng `Account` entity, `authMode: 'api-key'`).
   - Quan sát error rate `AUTH_EXPIRED` và 401 sau refresh — nếu tăng đột biến → cảnh báo ADR cần update.
 
+## Postscript — M7 SDK Migration (2026-05)
+
+Tại M7, sidecar nâng cấp từ raw `fetch('/v1/messages')` sang `@anthropic-ai/claude-agent-sdk` `query()`. Thay đổi:
+
+- **Token delivery:** Sidecar vẫn giữ PKCE flow cũ + credentials.json ở ~/.awog. Khi `query()` gọi, sidecar pass access token via `CLAUDE_CODE_OAUTH_TOKEN` env (SDK tự read khi không có credentials file riêng).
+- **Token management:** token-manager (refresh, expiry check) không đổi. Pre-refresh 5 phút trước expiry. Mỗi refresh response overwrite cả token + refresh token (Anthropic quirk).
+- **Tool-use:** SDK nội tích 15 tools (Read/Write/Edit/Bash/Glob/…). Sidecar không cần custom tool registry.
+- **Permission flow:** SDK emit `permission_request` event khi `permissionMode: 'default'` + `canUseTool` callback. Sidecar map tới `session.permission-request` notification.
+- **Impact security invariant:** Không đổi — raw token vẫn không rời sidecar, chỉ exist trong RAM + file (chmod 600).
+- **API contract stability:** Endpoint + headers + scope không đổi (verify date 2026-05-27 vẫn hiệu lực).
+
+Legacy raw-fetch path giữ lại ở `apps/desktop/sidecar/src.legacy/` để reference/fallback.
+
 ## Tham chiếu
 
 - [0001](./0001-local-first-storage.md) — local-first storage (credentials trên filesystem).
 - [0008](./0008-stdio-ipc-for-sidecar.md) — IPC boundary, raw token không qua webview.
 - [0010](./0010-pause-on-quota-for-connection-switch.md) — handling khi subscription quota cạn.
 - [../features/models-and-accounts.md](../features/models-and-accounts.md) — feature spec đầy đủ.
-- [../features/sessions.md](../features/sessions.md) — feature consume `/v1/messages`.
+- [../features/sessions.md](../features/sessions.md) — feature consume `/v1/messages` via SDK.
 - [.claude/rules/security.md](../../.claude/rules/security.md) — invariant #1 API key isolation.

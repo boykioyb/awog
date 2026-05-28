@@ -19,7 +19,7 @@ sequenceDiagram
     participant Tauri as Tauri shell
     participant Side as Node sidecar
     participant Browser as User browser
-    participant Anth as claude.ai + platform.claude.com
+    participant Anth as claude.ai + platform.anthropic.com
 
     UI->>Side: auth.startOAuth
     Side->>Side: gen PKCE verifier + state
@@ -34,7 +34,11 @@ sequenceDiagram
     Anth-->>Side: { access_token, refresh_token, expires_in: 28800 }
     Side->>Side: ghi ~/.awog/credentials.json (chmod 600, atomic temp+rename)
     Side-->>UI: AccountSafe
+
+    Note over Side: Khi send message, token-manager<br/>refresh + SDK use token via env
 ```
+
+**OAuth endpoint detail:** Sidecar giữ PKCE flow cũ (`auth.startOAuth` / `auth.completeOAuth`) để giữ UI paste-code dialog. Khác với M0 verify date (2026-05-27), khi lúc này dùng raw fetch `/v1/messages`, hiện **SDK (@anthropic-ai/claude-agent-sdk) đã integrate** — sidecar chỉ cần inject access token qua `CLAUDE_CODE_OAUTH_TOKEN` env trên mỗi lần gọi `query()`. Token-manager refresh + cache vẫn ở sidecar (credentials.json ở `~/.awog`, không dưới `~/.claude`). Xem [ADR 0011](../decisions/0011-anthropic-subscription-oauth.md#postscript-m7-sdk-migration).
 
 3 bước user-visible:
 
@@ -167,10 +171,11 @@ UI nút **"Test connection"** trong account row → RPC `accounts.test`:
 
 ### Sidecar
 
-- [`apps/desktop/sidecar/src/auth/`](../../apps/desktop/sidecar/src/auth/) — PKCE generator, OAuth flow, state cache.
+- [`apps/desktop/sidecar/src/auth/`](../../apps/desktop/sidecar/src/auth/) — PKCE generator, OAuth flow constants, state cache.
 - [`apps/desktop/sidecar/src/credentials/`](../../apps/desktop/sidecar/src/credentials/) — `credentials.json` reader/writer (chmod, atomic).
-- [`apps/desktop/sidecar/src/providers/anthropic/`](../../apps/desktop/sidecar/src/providers/) — `model-client`, `token-manager` (refresh logic).
-- [`apps/desktop/sidecar/src/methods/`](../../apps/desktop/sidecar/src/methods/) — RPC handler `accounts.*` + `auth.*`.
+- [`apps/desktop/sidecar/src/credentials/token-manager.ts`](../../apps/desktop/sidecar/src/credentials/token-manager.ts) — refresh logic, pre-refresh window, inject via `CLAUDE_CODE_OAUTH_TOKEN` env.
+- [`apps/desktop/sidecar/src/methods/auth.*.ts`](../../apps/desktop/sidecar/src/methods/) — RPC handler `auth.startOAuth` + `auth.completeOAuth`.
+- [`apps/desktop/sidecar/src/methods/accounts.*.ts`](../../apps/desktop/sidecar/src/methods/) — RPC handler `accounts.list/remove/setActive/test`.
 
 ## Tham chiếu
 
