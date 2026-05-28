@@ -54,7 +54,8 @@ export function useSidecar() {
 
   const onEvent = async (handler: SidecarEventHandler): Promise<UnlistenFn> => {
     if (!isTauri()) throw new SidecarUnavailableError()
-    return listen<SidecarEvent>('sidecar.event', (e) => handler(e.payload))
+    // Tauri 2 rejects dots in event names; Rust side emits `sidecar-event`.
+    return listen<SidecarEvent>('sidecar-event', (e) => handler(e.payload))
   }
 
   const openExternal = async (url: string): Promise<void> => {

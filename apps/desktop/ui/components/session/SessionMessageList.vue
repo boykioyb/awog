@@ -163,13 +163,34 @@
           <div
             v-if="msg.text"
             class="awog-md text-[13px]"
-            :style="{ color: t.text }"
-            v-html="isStreaming(msg) ? escapeText(msg.text) : renderMarkdown(msg.text)"
+            :style="{ color: t.text, '--awog-accent': t.accent }"
+            v-html="renderMarkdown(msg.text)"
           />
 
-          <div v-if="msg.steps?.length" :class="msg.text ? 'mt-2 space-y-1' : 'space-y-1'">
-            <StepItem v-for="step in msg.steps" :key="step.id" :step="step" />
-          </div>
+          <button
+            v-if="msg.steps?.length"
+            type="button"
+            class="inline-flex items-center gap-1.5 text-[11px] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
+            :class="msg.text ? 'mt-2' : ''"
+            :style="{ color: t.textDim }"
+            @click="openStepsModal(msg.id)"
+          >
+            <Info :size="11" />
+            <span>{{ stepsSummary(msg.steps) }}</span>
+            <Activity
+              v-if="hasRunningStep(msg)"
+              :size="10"
+              class="animate-pulse"
+              :style="{ color: t.accent }"
+            />
+            <ChevronRight :size="10" />
+          </button>
+
+          <SessionInlinePermission
+            v-if="store.pendingPermission?.messageId === msg.id"
+            :message-id="msg.id"
+            class="mt-2"
+          />
 
           <div
             v-if="msg.startedAt"
@@ -223,35 +244,80 @@
       </span>
     </div>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="stepsModalMsg"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      :style="{ background: t.overlay }"
+      @click.self="closeStepsModal"
+    >
+      <div
+        class="w-full max-w-2xl rounded-lg shadow-xl flex flex-col"
+        :style="{
+          background: t.bgElevated,
+          border: `1px solid ${t.border}`,
+          maxHeight: '80vh',
+        }"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          class="px-4 py-3 flex items-center gap-2"
+          :style="{ borderBottom: `1px solid ${t.border}` }"
+        >
+          <Info :size="13" :style="{ color: t.textDim }" />
+          <div class="text-[13px] font-semibold" :style="{ color: t.text }">
+            {{ stepsSummary(stepsModalMsg.steps ?? []) }}
+          </div>
+          <span
+            class="ml-auto font-mono text-[10px]"
+            :style="{ color: t.textDim }"
+            :title="`${stepsModalMsg.steps?.length ?? 0} total step(s)`"
+          >
+            {{ stepsModalMsg.steps?.length ?? 0 }}
+          </span>
+          <button
+            type="button"
+            class="p-1 rounded transition flex items-center"
+            :style="{ color: t.textDim }"
+            aria-label="Close"
+            @click="closeStepsModal"
+          >
+            <X :size="14" />
+          </button>
+        </div>
+        <div class="px-4 py-3 overflow-y-auto space-y-1 flex-1">
+          <StepItem v-for="step in stepsModalMsg.steps" :key="step.id" :step="step" />
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { Activity, Check, Copy, FileText, Maximize2, Sparkles } from 'lucide-vue-next'
-import { computed, onUnmounted, ref, watch, nextTick } from 'vue'
-import type { SessionAttachment, SessionMessage, SessionTokenKind } from '~/types'
+import {
+  Activity,
+  Check,
+  ChevronRight,
+  Copy,
+  FileText,
+  Info,
+  Maximize2,
+  Sparkles,
+  X,
+} from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, provide, ref, watch, nextTick } from 'vue'
+import type { SessionAttachment, SessionMessage, SessionStep, SessionTokenKind } from '~/types'
+import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 import { fileIconFor } from '~/utils/file-icon'
 import { tokenizeMessage } from '~/utils/tokenize'
 import { renderMarkdown } from '~/utils/markdown'
+import { renderMermaidIn } from '~/utils/mermaid'
 import { formatTime } from '~/utils/time'
 
 const settingsStore = useSettingsStore()
 const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
-
-const HTML_ESCAPE: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-}
-const escapeText = (s: string): string => s.replace(/[&<>"']/g, (c) => HTML_ESCAPE[c] ?? c)
-
-// A message is "streaming" iff we tagged it with startedAt before sending and
-// the placeholder has not yet been reconciled (no completedAt). Anything else —
-// historical messages from JSONL, finalized turns, mock data — should render
-// as markdown.
-const isStreaming = (msg: SessionMessage): boolean =>
-  msg.startedAt !== undefined && msg.completedAt === undefined
 
 const copiedId = ref<string | null>(null)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
@@ -279,8 +345,28 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const workspace = useWorkspaceStore()
+const store = useSessionsStore()
 
 const scrollRef = ref<HTMLElement | null>(null)
+
+// StepItem reads SELECT_STEP_KEY via inject; provide here so clicking a Task
+// step opens the subagent drawer. Other tool kinds: no-op for now (StepItem
+// already disables click when there's no detail; we just don't handle them).
+const selectedStepId = ref<string | null>(null)
+provide(SELECTED_STEP_ID_KEY, selectedStepId)
+provide(SELECT_STEP_KEY, (step: SessionStep) => {
+  if (step.kind !== 'tool' || step.tool !== 'task') return
+  // Find which message owns this step. Sessions are short — linear scan is fine.
+  for (const msg of props.messages) {
+    if (msg.steps?.some((s) => s.id === step.id)) {
+      const session = store.selectedSession
+      if (!session) return
+      selectedStepId.value = step.id
+      store.openSubagentDrawer(session.id, msg.id, step.id)
+      return
+    }
+  }
+})
 
 const tokenColor = (kind: SessionTokenKind) => {
   if (kind === 'agent') return t.value.warning
@@ -290,6 +376,62 @@ const tokenColor = (kind: SessionTokenKind) => {
 }
 
 const agentName = (id: string) => workspace.agentById(id)?.name ?? 'Agent'
+
+const hasRunningStep = (msg: SessionMessage): boolean =>
+  (msg.steps ?? []).some((s) => s.status === 'running' || s.status === undefined)
+
+// Inline Claude-Code-style summary: "ran 9 commands · read 3 files · used 6 tools".
+// Aggregates by stepFromToolUse's StepTool. Falls back to "N steps" if nothing
+// matches a known bucket.
+const stepsSummary = (steps: SessionStep[]): string => {
+  let cmds = 0
+  let reads = 0
+  let writes = 0
+  let searches = 0
+  let subagents = 0
+  let others = 0
+  for (const s of steps) {
+    if (s.tool === 'terminal') cmds += 1
+    else if (s.tool === 'read') reads += 1
+    else if (s.tool === 'write' || s.tool === 'edit') writes += 1
+    else if (s.tool === 'search' || s.tool === 'find-files') searches += 1
+    else if (s.tool === 'task') subagents += 1
+    else others += 1
+  }
+  const parts: string[] = []
+  if (cmds) parts.push(`ran ${cmds} command${cmds === 1 ? '' : 's'}`)
+  if (reads) parts.push(`read ${reads} file${reads === 1 ? '' : 's'}`)
+  if (writes) parts.push(`edited ${writes} file${writes === 1 ? '' : 's'}`)
+  if (searches) parts.push(`${searches} search${searches === 1 ? '' : 'es'}`)
+  if (subagents) parts.push(`${subagents} subagent${subagents === 1 ? '' : 's'}`)
+  if (parts.length === 0 && others > 0) {
+    return `${others} step${others === 1 ? '' : 's'}`
+  }
+  return parts.join(' · ')
+}
+
+// Modal popup for the full step list — only one message's steps on screen at
+// a time (consistent with the mode popover's "2-level" pattern).
+const stepsModalMsgId = ref<string | null>(null)
+const openStepsModal = (id: string) => {
+  stepsModalMsgId.value = id
+}
+const closeStepsModal = () => {
+  stepsModalMsgId.value = null
+}
+const stepsModalMsg = computed<SessionMessage | null>(() => {
+  const id = stepsModalMsgId.value
+  if (!id) return null
+  return props.messages.find((m) => m.id === id) ?? null
+})
+
+const onStepsModalKey = (e: KeyboardEvent) => {
+  if (!stepsModalMsgId.value) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closeStepsModal()
+  }
+}
 
 const now = ref(Date.now())
 const hasStreaming = computed(() => props.messages.some((m) => m.startedAt && !m.completedAt))
@@ -317,6 +459,31 @@ onUnmounted(() => {
   }
 })
 
+// Global ESC closes the steps modal — captured at document level so we don't
+// need the inner panel to hold focus.
+onMounted(() => document.addEventListener('keydown', onStepsModalKey))
+onUnmounted(() => document.removeEventListener('keydown', onStepsModalKey))
+
+// Render mermaid diagrams once each assistant message stabilises (either
+// historical/no startedAt, or live with completedAt set). Skipping in-flight
+// placeholders avoids parsing incomplete diagram source on every chunk.
+const mermaidSignature = computed(() =>
+  props.messages
+    .filter((m) => m.role === 'agent' && (!m.startedAt || m.completedAt !== undefined))
+    .map((m) => `${m.id}:${m.text?.length ?? 0}`)
+    .join('|'),
+)
+
+watch(
+  mermaidSignature,
+  () => {
+    nextTick(() => {
+      renderMermaidIn(scrollRef.value)
+    })
+  },
+  { immediate: true },
+)
+
 const formatElapsed = (ms: number): string => {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
@@ -331,121 +498,5 @@ watch(
 )
 </script>
 
-<style>
-.awog-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 4px;
-  border-radius: 4px;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-}
-.awog-copy-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.awog-md {
-  line-height: 1.6;
-}
-.awog-md p {
-  margin: 0 0 0.6em;
-}
-.awog-md p:last-child {
-  margin-bottom: 0;
-}
-.awog-md h1,
-.awog-md h2,
-.awog-md h3,
-.awog-md h4 {
-  font-weight: 600;
-  margin: 0.9em 0 0.4em;
-  line-height: 1.3;
-}
-.awog-md h1 {
-  font-size: 1.25em;
-}
-.awog-md h2 {
-  font-size: 1.12em;
-}
-.awog-md h3 {
-  font-size: 1.04em;
-}
-.awog-md h4 {
-  font-size: 1em;
-}
-.awog-md h1:first-child,
-.awog-md h2:first-child,
-.awog-md h3:first-child {
-  margin-top: 0;
-}
-.awog-md ul,
-.awog-md ol {
-  margin: 0.4em 0 0.6em 1.2em;
-  padding: 0;
-}
-.awog-md li {
-  margin: 0.15em 0;
-}
-.awog-md ul {
-  list-style: disc;
-}
-.awog-md ol {
-  list-style: decimal;
-}
-.awog-md code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9em;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.07);
-}
-.awog-md pre {
-  margin: 0.6em 0;
-  padding: 10px 12px;
-  border-radius: 6px;
-  overflow-x: auto;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-.awog-md pre code {
-  background: transparent;
-  padding: 0;
-  font-size: 0.85em;
-  line-height: 1.5;
-}
-.awog-md blockquote {
-  margin: 0.6em 0;
-  padding: 0.2em 0.8em;
-  border-left: 3px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
-}
-.awog-md hr {
-  margin: 0.8em 0;
-  border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-.awog-md a {
-  color: #60a5fa;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.awog-md table {
-  border-collapse: collapse;
-  margin: 0.6em 0;
-  font-size: 0.95em;
-}
-.awog-md th,
-.awog-md td {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 4px 8px;
-}
-.awog-md th {
-  background: rgba(255, 255, 255, 0.04);
-  font-weight: 600;
-}
-.awog-md strong {
-  font-weight: 600;
-}
-</style>
+<!-- Markdown styles (.awog-md) + .awog-copy-btn moved to assets/css/main.css so
+     they apply globally — subagent drawer, permission card, etc. all need them. -->

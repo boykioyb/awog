@@ -241,6 +241,8 @@
     @close="newDialogOpen = false"
     @create="onCreateSession"
   />
+
+  <SessionSubagentDrawer />
 </template>
 
 <script setup lang="ts">
@@ -267,6 +269,9 @@ const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.t
 
 onMounted(() => {
   store.hydrateFromSidecar()
+  // Project list is needed by SessionNewDialog + group/filter chips; hydrate
+  // here so opening "New session" never shows an empty picker on cold start.
+  void workspace.hydrateProjectsFromSidecar()
 })
 
 const searchQuery = ref('')

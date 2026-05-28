@@ -42,6 +42,16 @@
           <Paperclip :size="12" />
         </button>
         <button
+          v-if="isStreaming"
+          class="inline-flex items-center justify-center w-6 h-6 rounded transition"
+          :style="{ background: t.danger, color: t.accentText, cursor: 'pointer' }"
+          title="Stop (interrupt response)"
+          @click="onStop"
+        >
+          <Square :size="10" fill="currentColor" />
+        </button>
+        <button
+          v-else
           :disabled="!canSend"
           class="inline-flex items-center justify-center w-6 h-6 rounded transition"
           :style="{
@@ -136,7 +146,7 @@
 </template>
 
 <script setup lang="ts">
-import { FileText, Paperclip, Send, X } from 'lucide-vue-next'
+import { FileText, Paperclip, Send, Square, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 
@@ -169,6 +179,8 @@ const placeholder = computed(() => 'Type a message... (Enter to send)')
 
 const canSend = computed(() => draft.value.trim().length > 0 || pendingAttachments.value.length > 0)
 
+const isStreaming = computed(() => store.isSessionStreaming(props.session.id))
+
 const onSend = () => {
   if (!canSend.value) return
   const text = draft.value
@@ -176,6 +188,10 @@ const onSend = () => {
   store.sendMessage(props.session.id, text, attachments)
   draft.value = ''
   pendingAttachments.value = []
+}
+
+const onStop = () => {
+  store.cancelMessage(props.session.id)
 }
 
 const onComposerKeydown = (ev: KeyboardEvent) => {

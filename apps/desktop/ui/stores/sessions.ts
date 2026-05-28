@@ -5,12 +5,14 @@ import type {
   SessionMention,
   SessionMessage,
   SessionSettings,
+  SessionStep,
   SessionTokenKind,
 } from '~/types'
 import { MOCK_SESSIONS } from '~/utils/initial-sessions'
 import { useWorkspaceStore } from '~/stores/workspace'
 import { useSettingsStore } from '~/stores/settings'
 import { nowIso } from '~/utils/time'
+import { notify } from '~/utils/notify'
 
 // Tag used in `pendingAgentIds` to mark a reply pending from the sidecar/provider
 // (no agent persona mapping yet — M7 will reintroduce agent personas).
@@ -52,6 +54,50 @@ const isSessionChunkPayload = (raw: unknown): raw is SessionChunkPayload => {
     typeof p.sessionId === 'string' &&
     typeof p.messageId === 'string' &&
     typeof p.delta === 'string'
+  )
+}
+
+interface SessionStepPayload {
+  sessionId: string
+  messageId: string
+  step: SessionStep
+}
+
+const isSessionStepPayload = (raw: unknown): raw is SessionStepPayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  if (typeof p.sessionId !== 'string' || typeof p.messageId !== 'string') return false
+  if (!p.step || typeof p.step !== 'object') return false
+  const s = p.step as Record<string, unknown>
+  return typeof s.id === 'string' && typeof s.label === 'string'
+}
+
+export interface PendingPermission {
+  sessionId: string
+  messageId: string
+  requestId: string
+  toolName: string
+  input: Record<string, unknown>
+  promptSentence?: string
+  displayName?: string
+  description?: string
+  decisionReason?: string
+  blockedPath?: string
+  hasSuggestions: boolean
+}
+
+const isPermissionRequestPayload = (
+  raw: unknown,
+): raw is PendingPermission & {
+  suggestions?: unknown[]
+} => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return (
+    typeof p.sessionId === 'string' &&
+    typeof p.messageId === 'string' &&
+    typeof p.requestId === 'string' &&
+    typeof p.toolName === 'string'
   )
 }
 
@@ -103,6 +149,18 @@ export const useSessionsStore = defineStore('sessions', {
   state: () => ({
     sessions: [] as Session[],
     selectedSessionId: null as string | null,
+    // Tracks the in-flight assistant messageId per session so the Stop button
+    // can target it via `sessions.cancel`. Cleared in sendMessage's finally.
+    activeMessageBySession: {} as Record<string, string>,
+    // Pending tool-use permission prompt. Singleton because canUseTool serialises
+    // per turn — at most one prompt is on screen at a time. SessionPermissionDialog
+    // watches this and renders when non-null.
+    pendingPermission: null as PendingPermission | null,
+    // Currently-open subagent (Task tool) drawer reference. Stored as
+    // {sessionId, messageId, stepId} (not the step object itself) so the
+    // drawer re-renders when the underlying step transitions running → done
+    // and its detail updates from prompt to reply.
+    subagentDrawerRef: null as { sessionId: string; messageId: string; stepId: string } | null,
   }),
 
   getters: {
@@ -113,6 +171,19 @@ export const useSessionsStore = defineStore('sessions', {
       (state) =>
       (id: string): Session | undefined =>
         state.sessions.find((s) => s.id === id),
+    isSessionStreaming:
+      (state) =>
+      (id: string): boolean => {
+        const s = state.sessions.find((x) => x.id === id)
+        return !!s && (s.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG)
+      },
+    activeSubagentStep(state): SessionStep | null {
+      const ref = state.subagentDrawerRef
+      if (!ref) return null
+      const session = state.sessions.find((s) => s.id === ref.sessionId)
+      const msg = session?.messages.find((m) => m.id === ref.messageId)
+      return msg?.steps?.find((st) => st.id === ref.stepId) ?? null
+    },
   },
 
   actions: {
@@ -164,6 +235,13 @@ export const useSessionsStore = defineStore('sessions', {
       const session = this.sessions.find((s) => s.id === sessionId)
       if (!session) return
       session.settings = { ...session.settings, ...patch }
+      pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
+    },
+
+    setDisabledTools(sessionId: string, names: string[]) {
+      const session = this.sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      session.disabledTools = names.length ? [...names] : []
       pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
     },
 
@@ -232,6 +310,15 @@ export const useSessionsStore = defineStore('sessions', {
       const trimmed = text.trim()
       if (!trimmed && !(attachments && attachments.length)) return
 
+      // Auto-title: first user message in a still-default session becomes the
+      // title. Strip newlines, cap at 60 chars with ellipsis so the sidebar
+      // chip doesn't blow up.
+      if (session.title === 'Untitled session' && session.messages.length === 0 && trimmed) {
+        const oneLine = trimmed.replace(/\s+/g, ' ').trim()
+        session.title = oneLine.length > 60 ? `${oneLine.slice(0, 57)}…` : oneLine
+        pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
+      }
+
       const workspace = useWorkspaceStore()
       const handleMap = new Map<string, string>()
       workspace.agents.forEach((a) => {
@@ -278,6 +365,7 @@ export const useSessionsStore = defineStore('sessions', {
         ...new Set([...(session.pendingAgentIds ?? []), SIDECAR_PENDING_TAG]),
       ]
       session.updatedAt = nowIso()
+      this.activeMessageBySession[sessionId] = placeholderId
 
       const sidecar = useSidecar()
       const settingsStore = useSettingsStore()
@@ -299,15 +387,69 @@ export const useSessionsStore = defineStore('sessions', {
         s.updatedAt = nowIso()
       }
 
-      // Mutate placeholder.text in-place during streaming so SessionMessageList re-renders
-      // each chunk (Vue reactivity). RPC resolve still wins as source of truth at finalize.
-      const appendDelta = (delta: string) => {
-        const s = this.sessions.find((x) => x.id === sessionId)
-        if (!s) return
+      // Smooth typewriter drain. Anthropic emits text deltas in uneven chunks
+      // (1 char ↔ 80+ chars); pushing each chunk straight to the DOM makes the
+      // render feel staccato. Buffer incoming text and drain it on
+      // requestAnimationFrame at an adaptive rate (faster when buffer is full,
+      // slower when nearly empty) so the eye sees a steady stream.
+      let pending = ''
+      let raf = 0
+      const sessionsRef = this.sessions
+      const stillOurSlot = (): SessionMessage | null => {
+        const s = sessionsRef.find((x) => x.id === sessionId)
+        if (!s) return null
         const slot = s.messages[placeholderIdx]
-        // Drop event if placeholder was removed/replaced — avoids cross-write into a later msg.
-        if (!slot || slot.id !== placeholderId) return
-        slot.text = (slot.text ?? '') + delta
+        if (!slot || slot.id !== placeholderId) return null
+        return slot
+      }
+      const drain = () => {
+        raf = 0
+        const slot = stillOurSlot()
+        if (!slot) {
+          pending = ''
+          return
+        }
+        if (!pending) return
+        // Adaptive: drain ~1/6 of buffer per frame, minimum 2 chars, so a long
+        // burst doesn't lag while short typing stays smooth.
+        const take = Math.max(2, Math.ceil(pending.length / 6))
+        slot.text = (slot.text ?? '') + pending.slice(0, take)
+        pending = pending.slice(take)
+        if (pending) raf = requestAnimationFrame(drain)
+      }
+      const appendDelta = (delta: string) => {
+        if (!stillOurSlot()) return
+        pending += delta
+        if (!raf) raf = requestAnimationFrame(drain)
+      }
+      const flushBuffer = () => {
+        if (raf) {
+          cancelAnimationFrame(raf)
+          raf = 0
+        }
+        const slot = stillOurSlot()
+        if (slot && pending) slot.text = (slot.text ?? '') + pending
+        pending = ''
+      }
+
+      // Upsert a tool step into the placeholder bubble by step.id. Running →
+      // done transitions land as a second event with the same id; we replace
+      // the slot in place so Vue's keyed v-for re-renders without resetting
+      // collapsed/selected UI state.
+      const upsertStep = (step: SessionStep) => {
+        const slot = stillOurSlot()
+        if (!slot) return
+        const existing = slot.steps ?? []
+        const idx = existing.findIndex((s) => s.id === step.id)
+        if (idx >= 0) {
+          const next = [...existing]
+          // Merge so the second event (done) can omit fields the first (running)
+          // already populated — e.g. target derived from the partial input.
+          next[idx] = { ...existing[idx], ...step }
+          slot.steps = next
+        } else {
+          slot.steps = [...existing, step]
+        }
       }
 
       // Subscribe BEFORE invoking RPC so we don't miss the first chunk emitted on flush.
@@ -316,11 +458,74 @@ export const useSessionsStore = defineStore('sessions', {
       let unlisten: (() => void) | null = null
       try {
         unlisten = await sidecar.onEvent((evt) => {
-          if (evt.type !== 'session.chunk') return
-          if (!isSessionChunkPayload(evt.payload)) return
-          if (evt.payload.sessionId !== sessionId) return
-          if (evt.payload.messageId !== placeholderId) return
-          appendDelta(evt.payload.delta)
+          if (evt.type === 'session.chunk') {
+            if (!isSessionChunkPayload(evt.payload)) return
+            if (evt.payload.sessionId !== sessionId) return
+            if (evt.payload.messageId !== placeholderId) return
+            appendDelta(evt.payload.delta)
+            return
+          }
+          if (evt.type === 'session.step') {
+            if (!isSessionStepPayload(evt.payload)) return
+            if (evt.payload.sessionId !== sessionId) return
+            if (evt.payload.messageId !== placeholderId) return
+            upsertStep(evt.payload.step)
+            // Mirror LLM-driven plan-mode toggles into the composer chip so the
+            // UI reflects what the model is doing. Labels come from the
+            // sidecar's humanLabel mapper (sessions/step-mapper.ts) — keep in
+            // sync if you rename them there.
+            const label = evt.payload.step.label
+            if (label === 'Enter plan') {
+              const s = this.sessions.find((x) => x.id === sessionId)
+              if (s && s.settings.mode !== 'plan') s.settings.mode = 'plan'
+            } else if (label === 'Exit plan') {
+              const s = this.sessions.find((x) => x.id === sessionId)
+              if (s && s.settings.mode === 'plan') s.settings.mode = 'ask'
+            }
+            return
+          }
+          if (evt.type === 'session.permission-request') {
+            if (!isPermissionRequestPayload(evt.payload)) return
+            if (evt.payload.sessionId !== sessionId) return
+            if (evt.payload.messageId !== placeholderId) return
+            // Snapshot into the singleton ref; SessionPermissionDialog renders
+            // off this. Stripping suggestions keeps the UI shape narrow — the
+            // sidecar keeps the full list and replays it on allow+alwaysAllow.
+            const p = evt.payload
+            const next: PendingPermission = {
+              sessionId: p.sessionId,
+              messageId: p.messageId,
+              requestId: p.requestId,
+              toolName: p.toolName,
+              input:
+                typeof p.input === 'object' && p.input !== null
+                  ? (p.input as Record<string, unknown>)
+                  : {},
+              hasSuggestions: Array.isArray(p.suggestions) && p.suggestions.length > 0,
+            }
+            if (p.promptSentence) next.promptSentence = p.promptSentence
+            if (p.displayName) next.displayName = p.displayName
+            if (p.description) next.description = p.description
+            if (p.decisionReason) next.decisionReason = p.decisionReason
+            if (p.blockedPath) next.blockedPath = p.blockedPath
+            this.pendingPermission = next
+            // OS notification while the user isn't looking at the app. The util
+            // suppresses itself when the window is focused so we don't spam.
+            if (settingsStore.notificationsEnabled) {
+              const target =
+                next.blockedPath ||
+                (typeof next.input.command === 'string' ? next.input.command : '') ||
+                (typeof next.input.file_path === 'string' ? next.input.file_path : '') ||
+                (typeof next.input.url === 'string' ? next.input.url : '')
+              void notify({
+                title: `AWOG · ${next.toolName} permission`,
+                body: target
+                  ? `${next.promptSentence ?? 'Allow this action?'}\n${target}`
+                  : (next.promptSentence ?? 'A tool wants permission to run.'),
+                tag: `awog-perm-${next.requestId}`,
+              })
+            }
+          }
         })
       } catch {
         // silently swallow — sidecar unavailable in browser dev
@@ -335,6 +540,14 @@ export const useSessionsStore = defineStore('sessions', {
           history,
           settings: session.settings,
           systemPrompt,
+          // Drives sidecar Options.cwd so Read/Bash/Edit operate against the
+          // user's repo. Omitted (no projectId) → SDK falls back to process.cwd().
+          ...(session.projectId ? { projectId: session.projectId } : {}),
+          // Per-session tool denylist. Forwarded to SDK Options.disallowedTools
+          // so the model can't even emit calls for these tool names.
+          ...(session.disabledTools && session.disabledTools.length
+            ? { disabledTools: session.disabledTools }
+            : {}),
         })
         // Keep placeholderId as the final id — stable key for Vue lists, no diff churn.
         finalize({
@@ -351,24 +564,123 @@ export const useSessionsStore = defineStore('sessions', {
           },
         })
       } catch (err) {
-        let message: string
-        if (err instanceof SidecarUnavailableError) {
-          message = 'Sidecar unavailable — running in browser dev'
-        } else if (err instanceof SidecarError) {
-          message = err.message
-        } else if (err instanceof Error) {
-          message = err.message
+        const isCanceled = err instanceof SidecarError && err.code === -32023
+        if (isCanceled) {
+          // User-initiated stop. Keep whatever text already streamed into the
+          // placeholder, mark the turn complete + flag it as canceled.
+          const s = this.sessions.find((x) => x.id === sessionId)
+          const slot = s?.messages[placeholderIdx]
+          const partialText = slot?.id === placeholderId ? (slot.text ?? '') : ''
+          finalize({
+            id: placeholderId,
+            role: 'agent',
+            text: partialText,
+            at: nowIso(),
+            startedAt,
+            completedAt: Date.now(),
+            canceled: true,
+          })
         } else {
-          message = 'Unknown error'
+          let message: string
+          if (err instanceof SidecarUnavailableError) {
+            message = 'Sidecar unavailable — running in browser dev'
+          } else if (err instanceof SidecarError) {
+            message = err.message
+          } else if (err instanceof Error) {
+            message = err.message
+          } else {
+            message = 'Unknown error'
+          }
+          finalize({
+            id: placeholderId,
+            role: 'system',
+            text: `[error] ${message}`,
+            at: nowIso(),
+          })
         }
-        finalize({
-          id: placeholderId,
-          role: 'system',
-          text: `[error] ${message}`,
-          at: nowIso(),
-        })
       } finally {
+        flushBuffer()
         if (unlisten) unlisten()
+        if (this.activeMessageBySession[sessionId] === placeholderId) {
+          delete this.activeMessageBySession[sessionId]
+        }
+        // Stale permission for THIS turn would block the UI forever — clear
+        // it. The sidecar already rejected any parked permission via the abort
+        // listener; we just need the local state gone.
+        if (
+          this.pendingPermission &&
+          this.pendingPermission.sessionId === sessionId &&
+          this.pendingPermission.messageId === placeholderId
+        ) {
+          this.pendingPermission = null
+        }
+      }
+    },
+
+    // Resolve the in-flight permission prompt by sending the user's choice
+    // back to the sidecar. Local state is cleared eagerly; if the sidecar
+    // reports `resolved: false` (the prompt was already torn down due to
+    // cancel / SDK abort) we treat it as a no-op.
+    async resolvePermission(
+      decision: 'allow' | 'deny',
+      opts?: { alwaysAllow?: boolean; updatedInput?: Record<string, unknown> },
+    ): Promise<void> {
+      const pending = this.pendingPermission
+      if (!pending) return
+      this.pendingPermission = null
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const payload: Record<string, unknown> = {
+          requestId: pending.requestId,
+          decision,
+        }
+        if (opts?.alwaysAllow) payload.alwaysAllow = true
+        if (opts?.updatedInput) payload.updatedInput = opts.updatedInput
+        await sidecar.request('sessions.permission', payload)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[sessions] resolvePermission failed', err)
+      }
+    },
+
+    openSubagentDrawer(sessionId: string, messageId: string, stepId: string) {
+      this.subagentDrawerRef = { sessionId, messageId, stepId }
+    },
+
+    closeSubagentDrawer() {
+      this.subagentDrawerRef = null
+    },
+
+    async cancelMessage(sessionId: string): Promise<void> {
+      const messageId = this.activeMessageBySession[sessionId]
+      if (!messageId) return
+      // Tear down any visible permission prompt for this turn so the modal
+      // disappears immediately. The sidecar's abort listener also rejects the
+      // parked promise as 'deny' for the SDK contract.
+      if (
+        this.pendingPermission &&
+        this.pendingPermission.sessionId === sessionId &&
+        this.pendingPermission.messageId === messageId
+      ) {
+        // Fire-and-forget: explicit deny RPC so the SDK unwinds without
+        // waiting for the AbortController signal to propagate. We don't await
+        // it because cancelMessage itself races with finalize.
+        const { requestId } = this.pendingPermission
+        this.pendingPermission = null
+        const sidecarHere = useSidecar()
+        if (sidecarHere.available) {
+          sidecarHere.request('sessions.permission', { requestId, decision: 'deny' }).catch(() => {
+            /* ignore — sidecar may already have rejected on abort */
+          })
+        }
+      }
+      const sidecar = useSidecar()
+      try {
+        await sidecar.request('sessions.cancel', { sessionId, messageId })
+      } catch {
+        // Race: stream may have settled between click and RPC. Either way the
+        // finalize path will clean up; ignore the error.
       }
     },
   },

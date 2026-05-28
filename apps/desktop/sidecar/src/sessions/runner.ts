@@ -29,21 +29,50 @@ import type {
   ProviderName,
   SessionMessage,
   SessionSettings,
+  SessionStep,
   ThinkingLevel,
 } from '../types/shared.js'
-import { query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { stepFromToolResult, stepFromToolUse } from './step-mapper.js'
+import {
+  query,
+  type CanUseTool,
+  type Options,
+  type SDKMessage,
+} from '@anthropic-ai/claude-agent-sdk'
 
 // Thinking budget mapping → SDK thinking config.
-// 'standard' = no extended thinking; 'high'/'extra-high' = explicit budget on
-// models that support it. SDK Options.thinking supersedes the deprecated
-// maxThinkingTokens for predictable behaviour across model versions.
+// 'low' = no extended thinking; the rest scale up. SDK Options.thinking
+// supersedes the deprecated maxThinkingTokens for predictable behaviour across
+// model versions. Levels mirror Claude Code's effort picker (Low / Medium /
+// High / Extra high / Max) so users get the same mental model.
 const THINKING_BUDGETS: Record<ThinkingLevel, number> = {
-  standard: 0,
+  low: 0,
+  medium: 4_000,
   high: 8_000,
   'extra-high': 16_000,
+  max: 32_000,
 }
 
 const PER_SESSION_LOCKS = new Map<string, Promise<unknown>>()
+
+// Registry of in-flight chat aborters keyed by messageId. sessions.cancel
+// looks up here; send-message owns the lifecycle (register → defer cleanup).
+const ACTIVE_ABORTERS = new Map<string, AbortController>()
+
+export function registerAborter(messageId: string, controller: AbortController): void {
+  ACTIVE_ABORTERS.set(messageId, controller)
+}
+
+export function unregisterAborter(messageId: string): void {
+  ACTIVE_ABORTERS.delete(messageId)
+}
+
+export function abortMessage(messageId: string): boolean {
+  const controller = ACTIVE_ABORTERS.get(messageId)
+  if (!controller) return false
+  controller.abort()
+  return true
+}
 
 async function withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
   const prev = PER_SESSION_LOCKS.get(sessionId) ?? Promise.resolve()
@@ -99,6 +128,10 @@ function buildOptions(
   settings: SessionSettings,
   accessToken: string,
   systemPrompt: string | undefined,
+  abortController: AbortController | undefined,
+  cwd: string | undefined,
+  canUseTool: CanUseTool | undefined,
+  disabledTools: string[] | undefined,
 ): Options {
   // Replace subprocess env entirely (SDK does NOT merge). Inherit PATH/HOME
   // explicitly so child can find git/node, then inject the OAuth token.
@@ -117,15 +150,21 @@ function buildOptions(
     model: settings.modelId,
     env,
     persistSession: false,
-    // Pure chat surface: no built-in Claude Code tools yet (no file edits,
-    // no Bash). Tool wiring is a follow-up milestone.
-    tools: [],
+    // Inherit the full Claude Code tool surface (Read/Write/Edit/Bash/Glob/
+    // Grep/WebSearch/...). The UI's permission flow (via canUseTool) is the
+    // single gate for write/exec; leaving `tools` undefined yields the default
+    // preset.
     // Streaming partial text events so we can forward chunks to the UI.
     includePartialMessages: true,
-    // No CLI permission prompts; UI is in charge.
-    permissionMode: 'bypassPermissions',
-    allowDangerouslySkipPermissions: true,
+    // 'default' lets canUseTool drive the prompt path. We never call into
+    // Claude Code's interactive CLI permission UI; canUseTool is required.
+    permissionMode: 'default',
   }
+
+  if (abortController) opts.abortController = abortController
+  if (cwd) opts.cwd = cwd
+  if (canUseTool) opts.canUseTool = canUseTool
+  if (disabledTools && disabledTools.length) opts.disallowedTools = disabledTools
 
   if (systemPrompt) {
     // String form fully REPLACES the Claude Code preset prompt. Using `append`
@@ -135,7 +174,7 @@ function buildOptions(
   }
 
   if (
-    settings.level !== 'standard' &&
+    settings.level !== 'low' &&
     isAnthropicModel(settings.modelId) &&
     SUPPORTS_THINKING[settings.modelId as AnthropicModelId]
   ) {
@@ -154,10 +193,27 @@ export interface RunNonStreamArgs {
   history: SessionMessage[]
   settings: SessionSettings
   systemPrompt?: string
+  abortController?: AbortController
+  // Project workspace root, when the session is linked to a project. Passed
+  // straight to Options.cwd so the SDK's Read/Write/Bash tools operate against
+  // the user's repo instead of `process.cwd()` (which is wherever Tauri
+  // launches the sidecar from).
+  cwd?: string
+  // Permission gate. When undefined the SDK falls back to its built-in
+  // interactive prompt path, which is wrong for our UI surface — callers
+  // (sessions.send-message) must always supply this.
+  canUseTool?: CanUseTool
+  // Per-session tool denylist. Maps to Options.disallowedTools so the model
+  // never even sees these tool names in its tool definitions.
+  disabledTools?: string[]
 }
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
+  // Fires when a tool_use starts (status: 'running') or a tool_result lands
+  // (status: 'done' | 'error'). UI upserts by step.id so the same row updates
+  // in place from running → done.
+  onStep?: (step: SessionStep) => void
 }
 
 export interface RunStreamResult {
@@ -182,8 +238,12 @@ function isTextBlock(block: unknown): block is AssistantTextBlock {
 }
 
 function mapSdkErrorToRpc(err: unknown): RpcError {
+  const name = err instanceof Error ? err.name : ''
   const message = err instanceof Error ? err.message : String(err)
   const lower = message.toLowerCase()
+  if (name === 'AbortError' || lower.includes('aborted') || lower.includes('cancelled')) {
+    return new RpcError(-32023, 'CANCELED')
+  }
   if (lower.includes('unauthor') || lower.includes('401') || lower.includes('authentication')) {
     return new RpcError(-32020, 'AUTH_EXPIRED: re-authenticate via Settings')
   }
@@ -209,7 +269,15 @@ export async function runStream(
 
     const tokens = await ensureFreshAccessToken(args.settings.provider, account.id)
     const prompt = renderTranscript(args.history, args.pendingText)
-    const options = buildOptions(args.settings, tokens.accessToken, args.systemPrompt)
+    const options = buildOptions(
+      args.settings,
+      tokens.accessToken,
+      args.systemPrompt,
+      args.abortController,
+      args.cwd,
+      args.canUseTool,
+      args.disabledTools,
+    )
 
     log.info('chat stream request', {
       sessionId: args.sessionId,
@@ -224,6 +292,14 @@ export async function runStream(
     let outputTokens = 0
     let stopReason: string | null = null
 
+    // Track tool_use blocks we've already announced via onStep so the same id
+    // doesn't fire the 'running' event twice (the SDK may emit the same
+    // assistant turn snapshot more than once). Also remembers each tool's
+    // original name/input so the corresponding tool_result step can re-derive
+    // pathHint / additions / detail without parsing the result payload alone.
+    const announcedUses = new Map<string, { name: string; input: Record<string, unknown> }>()
+    const reportedResults = new Set<string>()
+
     try {
       const q = query({ prompt, options })
       for await (const evt of q as AsyncIterable<SDKMessage>) {
@@ -231,7 +307,11 @@ export async function runStream(
           // Partial assistant message — drill into the underlying
           // BetaRawMessageStreamEvent for text deltas. The SDK forwards the
           // raw provider SSE events here when includePartialMessages = true.
-          const inner = evt.event as { type?: string; delta?: { type?: string; text?: string } }
+          const inner = evt.event as {
+            type?: string
+            delta?: { type?: string; text?: string }
+            content_block?: { type?: string; id?: string; name?: string; input?: unknown }
+          }
           if (
             inner.type === 'content_block_delta' &&
             inner.delta?.type === 'text_delta' &&
@@ -240,6 +320,26 @@ export async function runStream(
           ) {
             fullText += inner.delta.text
             cb.onChunk(inner.delta.text)
+            continue
+          }
+          // Early "tool_use is starting" signal. Input is usually empty at this
+          // point (the SDK fills it as input_json deltas arrive); we still emit
+          // a placeholder step so the UI can show the spinner immediately.
+          // The richer step (with full input → target / stats) is re-emitted
+          // when the `assistant` snapshot arrives below.
+          if (
+            inner.type === 'content_block_start' &&
+            inner.content_block?.type === 'tool_use' &&
+            typeof inner.content_block.id === 'string' &&
+            typeof inner.content_block.name === 'string'
+          ) {
+            const id = inner.content_block.id
+            if (cb.onStep && !announcedUses.has(id)) {
+              const name = inner.content_block.name
+              announcedUses.set(id, { name, input: {} })
+              cb.onStep(stepFromToolUse({ id, name, input: {} }))
+            }
+            continue
           }
           continue
         }
@@ -260,6 +360,50 @@ export async function runStream(
           if (!fullText && Array.isArray(msg.content)) {
             const text = msg.content.filter(isTextBlock).map((b) => b.text).join('')
             if (text) fullText = text
+          }
+          // Emit / refresh tool_use steps from the now-complete content blocks
+          // (input is fully populated here). Upsert by id — the UI store does
+          // the same merge on its side.
+          if (cb.onStep && Array.isArray(msg.content)) {
+            for (const block of msg.content) {
+              if (typeof block !== 'object' || block === null) continue
+              const b = block as Record<string, unknown>
+              if (b.type !== 'tool_use') continue
+              if (typeof b.id !== 'string' || typeof b.name !== 'string') continue
+              const input =
+                typeof b.input === 'object' && b.input !== null
+                  ? (b.input as Record<string, unknown>)
+                  : {}
+              announcedUses.set(b.id, { name: b.name, input })
+              cb.onStep(stepFromToolUse({ id: b.id, name: b.name, input }))
+            }
+          }
+          continue
+        }
+        if (evt.type === 'user') {
+          // The SDK echoes tool_result blocks back as a user-role message so
+          // the assistant turn can re-consume them. Each tool_result references
+          // the original tool_use_id; pair it with our remembered name/input.
+          const msg = evt.message as { content?: unknown }
+          if (cb.onStep && Array.isArray(msg.content)) {
+            for (const block of msg.content) {
+              if (typeof block !== 'object' || block === null) continue
+              const b = block as Record<string, unknown>
+              if (b.type !== 'tool_result') continue
+              if (typeof b.tool_use_id !== 'string') continue
+              if (reportedResults.has(b.tool_use_id)) continue
+              reportedResults.add(b.tool_use_id)
+              const meta = announcedUses.get(b.tool_use_id) ?? { name: 'Unknown', input: {} }
+              cb.onStep(
+                stepFromToolResult({
+                  toolUseId: b.tool_use_id,
+                  toolName: meta.name,
+                  toolInput: meta.input,
+                  content: b.content,
+                  isError: b.is_error === true,
+                }),
+              )
+            }
           }
           continue
         }

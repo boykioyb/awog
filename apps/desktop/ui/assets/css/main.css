@@ -15,6 +15,12 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
+  /* Desktop shell — no page-level scroll. Internal scroll lives inside
+     layout panels (`overflow-hidden` on the layout root, `overflow-y-auto`
+     inside specific containers). Teleported modals/drawers use position: fixed
+     so they can't push the body; clamping overflow here makes that contract
+     explicit. */
+  overflow: hidden;
 }
 
 body {
@@ -70,4 +76,119 @@ body,
 [data-theme-transition] {
   transition: background-color 200ms ease, color 200ms ease,
     border-color 200ms ease;
+}
+
+/* ─── Shared utilities ────────────────────────────────────────────────────── */
+
+.awog-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.awog-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Markdown rendering (.awog-md) ───────────────────────────────────────── */
+/* Applied to any v-html container that renders marked output (chat messages,
+   subagent drawer, etc). Color is provided via --awog-accent CSS var bound
+   per-instance so headings react to the theme accent. */
+
+.awog-md {
+  line-height: 1.6;
+}
+.awog-md p {
+  margin: 0 0 0.6em;
+}
+.awog-md p:last-child {
+  margin-bottom: 0;
+}
+.awog-md h1,
+.awog-md h2,
+.awog-md h3,
+.awog-md h4,
+.awog-md h5,
+.awog-md h6 {
+  font-weight: 600;
+  margin: 0.9em 0 0.4em;
+  line-height: 1.3;
+  color: var(--awog-accent, inherit);
+}
+.awog-md h1 { font-size: 1.25em; }
+.awog-md h2 { font-size: 1.12em; }
+.awog-md h3 { font-size: 1.04em; }
+.awog-md h4 { font-size: 1em; }
+.awog-md h1:first-child,
+.awog-md h2:first-child,
+.awog-md h3:first-child {
+  margin-top: 0;
+}
+.awog-md ul,
+.awog-md ol {
+  margin: 0.4em 0 0.6em 1.2em;
+  padding: 0;
+}
+.awog-md li {
+  margin: 0.15em 0;
+}
+.awog-md ul { list-style: disc; }
+.awog-md ol { list-style: decimal; }
+.awog-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.awog-md pre {
+  margin: 0.6em 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.awog-md pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.awog-md blockquote {
+  margin: 0.6em 0;
+  padding: 0.2em 0.8em;
+  border-left: 3px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+}
+.awog-md hr {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.awog-md a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.awog-md table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.95em;
+}
+.awog-md th,
+.awog-md td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+}
+.awog-md th {
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+}
+.awog-md strong {
+  font-weight: 600;
 }

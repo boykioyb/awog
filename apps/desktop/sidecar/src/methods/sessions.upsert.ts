@@ -3,10 +3,16 @@ import { register } from '../transport/rpc.js'
 import { createSession, updateSessionMetadata } from '../sessions/store.js'
 import type { Session, SessionSettings } from '../types/shared.js'
 
+// Legacy migration: 'standard' → 'low' so JSONL persisted pre-rename still parses.
+const ThinkingLevelSchema = z.preprocess(
+  (v) => (v === 'standard' ? 'low' : v),
+  z.enum(['low', 'medium', 'high', 'extra-high', 'max']),
+)
+
 const SessionSettingsSchema = z.object({
   provider: z.enum(['anthropic', 'openai', 'google']),
   modelId: z.string(),
-  level: z.enum(['standard', 'high', 'extra-high']),
+  level: ThinkingLevelSchema,
   mode: z.enum(['ask', 'accept-edits', 'plan', 'execute']),
   accountId: z.string().optional(),
 })

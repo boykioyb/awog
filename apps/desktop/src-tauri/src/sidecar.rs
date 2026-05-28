@@ -10,7 +10,7 @@
 //!   `oneshot::Sender` in the pending-requests map.
 //! - Reader task: re-frame stdout chunks on `\n`, parse JSON; dispatch responses
 //!   by id, forward notifications (`method == "event"`) to the webview via
-//!   `app.emit("sidecar.event", payload)`.
+//!   `app.emit("sidecar-event", payload)`.
 //! - Stderr task: log every line at `info` (sidecar's structured log channel).
 //! - Termination: log exit code; restart policy deferred to a later milestone.
 
@@ -20,7 +20,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -31,15 +30,16 @@ use tauri_plugin_shell::{
     process::{CommandEvent, CommandChild},
     ShellExt,
 };
-use tokio::{
-    sync::{mpsc, oneshot, Mutex},
-    time::timeout,
-};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+// Tool-use turns (Bash, multi-step agent runs) can take arbitrarily long; the
+// user can cancel via the Stop button which fires sessions.cancel and tears
+// down the SDK query via AbortController. No client-side timeout — if the
+// sidecar genuinely hangs, killing the Tauri process is the recovery.
 const REQUEST_CHANNEL_CAPACITY: usize = 64;
 const SIDECAR_BINARY: &str = "awog-sidecar";
-const EVENT_NAME: &str = "sidecar.event";
+// Tauri 2 restricts event names to [A-Za-z0-9-/:_], so dots are out — use hyphen.
+const EVENT_NAME: &str = "sidecar-event";
 
 /// Serializable JSON-RPC error returned to the webview.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,10 +51,11 @@ pub struct RpcError {
 }
 
 impl RpcError {
+    #[allow(dead_code)]
     pub fn timeout() -> Self {
         Self {
             code: -32001,
-            message: format!("sidecar request timed out after {:?}", REQUEST_TIMEOUT),
+            message: "sidecar request timed out".to_string(),
             data: None,
         }
     }
@@ -105,10 +106,9 @@ impl SidecarHandle {
             return Err(RpcError::transport("sidecar writer channel closed"));
         }
 
-        match timeout(REQUEST_TIMEOUT, rx).await {
-            Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(RpcError::transport("response channel dropped")),
-            Err(_) => Err(RpcError::timeout()),
+        match rx.await {
+            Ok(result) => result,
+            Err(_) => Err(RpcError::transport("response channel dropped")),
         }
     }
 }
