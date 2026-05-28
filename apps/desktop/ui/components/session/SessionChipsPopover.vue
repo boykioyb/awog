@@ -446,7 +446,7 @@ const enabledToolCount = computed(() => TOOLS_CATALOG.length - disabledSet.value
 
 const hasAnyDisabled = computed(() => disabledSet.value.size > 0)
 
-const toolsByGroup = (group: ToolGroup) => TOOLS_CATALOG.filter((t) => t.group === group)
+const toolsByGroup = (group: ToolGroup) => TOOLS_CATALOG.filter((tool) => tool.group === group)
 
 const isToolEnabled = (name: string) => !disabledSet.value.has(name)
 

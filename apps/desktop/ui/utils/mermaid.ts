@@ -44,23 +44,25 @@ export async function renderMermaidIn(root: HTMLElement | null | undefined): Pro
   )
   if (!blocks.length) return
   const mermaid = await getMermaid()
-  for (const el of blocks) {
-    const encoded = el.dataset.source ?? ''
-    let source: string
-    try {
-      source = decodeSource(encoded).trim()
-    } catch {
-      continue
-    }
-    if (!source) continue
-    try {
-      const { svg, bindFunctions } = await mermaid.render(nextId(), source)
-      el.innerHTML = svg
-      el.dataset.rendered = 'true'
-      if (bindFunctions) bindFunctions(el)
-    } catch {
-      // Parse failed (likely truncated mid-stream). Leave the <pre><code> fallback;
-      // we'll retry on the next call once the source stabilises.
-    }
-  }
+  await Promise.all(
+    blocks.map(async (el) => {
+      const encoded = el.dataset.source ?? ''
+      let source: string
+      try {
+        source = decodeSource(encoded).trim()
+      } catch {
+        return
+      }
+      if (!source) return
+      try {
+        const { svg, bindFunctions } = await mermaid.render(nextId(), source)
+        el.innerHTML = svg
+        el.dataset.rendered = 'true'
+        if (bindFunctions) bindFunctions(el)
+      } catch {
+        // Parse failed (likely truncated mid-stream). Leave the <pre><code> fallback;
+        // we'll retry on the next call once the source stabilises.
+      }
+    }),
+  )
 }

@@ -271,7 +271,7 @@ onMounted(() => {
   store.hydrateFromSidecar()
   // Project list is needed by SessionNewDialog + group/filter chips; hydrate
   // here so opening "New session" never shows an empty picker on cold start.
-  void workspace.hydrateProjectsFromSidecar()
+  workspace.hydrateProjectsFromSidecar()
 })
 
 const searchQuery = ref('')

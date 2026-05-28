@@ -213,7 +213,7 @@ watch(
     }
     // Refresh projects whenever the dialog opens — first visit to /sessions
     // may have raced the dialog open before hydrate finished.
-    void workspace.hydrateProjectsFromSidecar()
+    workspace.hydrateProjectsFromSidecar()
     await nextTick()
     titleRef.value?.focus()
   },

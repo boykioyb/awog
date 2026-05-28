@@ -130,6 +130,64 @@
         </template>
       </div>
 
+      <div
+        v-if="pendingFollowUps.length > 0"
+        class="px-2 py-1.5 flex flex-col gap-1.5"
+        :style="{ borderTop: `1px solid ${t.border}` }"
+      >
+        <div v-for="fu in pendingFollowUps" :key="fu.id" class="flex flex-col gap-1">
+          <div
+            class="inline-flex items-start gap-1.5 px-2 py-1 rounded text-[11px] w-full"
+            :style="{
+              background: t.bgSubtle,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+            }"
+          >
+            <Quote :size="11" :style="{ color: t.accent, marginTop: '2px', flexShrink: 0 }" />
+            <div class="flex-1 min-w-0">
+              <div class="truncate italic" :style="{ color: t.textDim }">
+                {{ truncateForChip(fu.selectedText) }}
+              </div>
+              <div v-if="fu.note" class="truncate" :style="{ color: t.text }">
+                {{ fu.note }}
+              </div>
+            </div>
+            <button
+              type="button"
+              class="text-[10px] inline-flex items-center px-1 rounded"
+              :style="{ color: t.textDim }"
+              :title="editingFollowUpId === fu.id ? 'Close note editor' : 'Edit note'"
+              @click="toggleEditFollowUp(fu.id)"
+            >
+              {{ editingFollowUpId === fu.id ? 'Done' : 'Note' }}
+            </button>
+            <button
+              type="button"
+              class="text-[10px] inline-flex items-center"
+              :style="{ color: t.textDim }"
+              title="Remove follow-up"
+              @click="removeFollowUp(fu.id)"
+            >
+              <X :size="10" />
+            </button>
+          </div>
+          <textarea
+            v-if="editingFollowUpId === fu.id"
+            rows="2"
+            :value="fu.note"
+            placeholder="Instruction for this quote (e.g. rewrite, expand, keep only this)"
+            class="w-full rounded px-2 py-1 text-[12px] resize-none outline-none"
+            :style="{
+              background: t.bgInput,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+            }"
+            @input="updateFollowUpNote(fu.id, ($event.target as HTMLTextAreaElement).value)"
+          />
+        </div>
+      </div>
+
       <input
         ref="fileInputRef"
         type="file"
@@ -140,15 +198,17 @@
       />
     </div>
     <div class="text-[11px] mt-1 px-1" :style="{ color: t.textFaint }">
-      Enter to send · @ skill / file · $ agent · / command
+      Enter to send · @ skill / file · $ agent · / command · select text in a reply to quote it
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { FileText, Paperclip, Send, Square, X } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { FileText, Paperclip, Quote, Send, Square, X } from 'lucide-vue-next'
+import { computed, inject, ref, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
+import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
+import { composeOutgoingMessage, truncateForChip } from '~/utils/follow-up'
 
 const props = defineProps<{
   session: Session
@@ -162,6 +222,13 @@ const composerFocus = ref(false)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingAttachments = ref<SessionAttachment[]>([])
+
+// Follow-ups are owned by SessionChat (parent) so the same state is shared
+// with SessionMessageList. inject is safe to call without a default — if a
+// caller mounts the composer outside SessionChat we treat follow-ups as off.
+const followUpController = inject(FOLLOW_UP_KEY, null)
+const pendingFollowUps = computed(() => followUpController?.pending.value ?? [])
+const editingFollowUpId = ref<string | null>(null)
 
 const mention = useMentionAutocomplete(draft, textareaRef)
 const { autocomplete, activeIndex } = mention
@@ -177,17 +244,27 @@ watch(
 
 const placeholder = computed(() => 'Type a message... (Enter to send)')
 
-const canSend = computed(() => draft.value.trim().length > 0 || pendingAttachments.value.length > 0)
+const canSend = computed(
+  () =>
+    draft.value.trim().length > 0 ||
+    pendingAttachments.value.length > 0 ||
+    pendingFollowUps.value.length > 0,
+)
 
 const isStreaming = computed(() => store.isSessionStreaming(props.session.id))
 
 const onSend = () => {
   if (!canSend.value) return
-  const text = draft.value
+  const followUps = pendingFollowUps.value
+  // Full quote is preserved here — chip truncation is purely visual.
+  // See lukilabs/craft-agents-oss#580 for the rationale.
+  const text = composeOutgoingMessage(draft.value, followUps)
   const attachments = pendingAttachments.value.length ? [...pendingAttachments.value] : undefined
   store.sendMessage(props.session.id, text, attachments)
   draft.value = ''
   pendingAttachments.value = []
+  editingFollowUpId.value = null
+  followUpController?.clear()
 }
 
 const onStop = () => {
@@ -250,6 +327,19 @@ const onFileSelected = (ev: Event) => {
     })
   })
   input.value = ''
+}
+
+const toggleEditFollowUp = (id: string) => {
+  editingFollowUpId.value = editingFollowUpId.value === id ? null : id
+}
+
+const updateFollowUpNote = (id: string, note: string) => {
+  followUpController?.update(id, { note })
+}
+
+const removeFollowUp = (id: string) => {
+  if (editingFollowUpId.value === id) editingFollowUpId.value = null
+  followUpController?.remove(id)
 }
 
 const removeAttachment = (id: string) => {

@@ -160,12 +160,15 @@
             </button>
           </div>
 
+          <!-- eslint-disable vue/no-v-html — renderMarkdown qua marked html:false, escape HTML thô (an toàn XSS) -->
           <div
             v-if="msg.text"
             class="awog-md text-[13px]"
             :style="{ color: t.text, '--awog-accent': t.accent }"
+            :data-agent-message-id="msg.id"
             v-html="renderMarkdown(msg.text)"
           />
+          <!-- eslint-enable vue/no-v-html -->
 
           <button
             v-if="msg.steps?.length"
@@ -246,6 +249,26 @@
   </div>
 
   <Teleport to="body">
+    <button
+      v-if="quotePopup"
+      type="button"
+      class="fixed z-50 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] shadow-lg transition"
+      :style="{
+        top: `${quotePopup.top}px`,
+        left: `${quotePopup.left}px`,
+        background: t.bgElevated,
+        color: t.text,
+        border: `1px solid ${t.border}`,
+      }"
+      @mousedown.prevent
+      @click="addQuoteFollowUp"
+    >
+      <Quote :size="11" :style="{ color: t.accent }" />
+      Quote &amp; follow up
+    </button>
+  </Teleport>
+
+  <Teleport to="body">
     <div
       v-if="stepsModalMsg"
       class="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -304,12 +327,14 @@ import {
   FileText,
   Info,
   Maximize2,
+  Quote,
   Sparkles,
   X,
 } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, provide, ref, watch, nextTick } from 'vue'
+import { computed, inject, onMounted, onUnmounted, provide, ref, watch, nextTick } from 'vue'
 import type { SessionAttachment, SessionMessage, SessionStep, SessionTokenKind } from '~/types'
 import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
+import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { fileIconFor } from '~/utils/file-icon'
 import { tokenizeMessage } from '~/utils/tokenize'
 import { renderMarkdown } from '~/utils/markdown'
@@ -349,6 +374,68 @@ const store = useSessionsStore()
 
 const scrollRef = ref<HTMLElement | null>(null)
 
+// Selection-driven "Quote & follow up" popup. We watch document selectionchange
+// and only surface the button when the entire range sits inside a single agent
+// message body (data-agent-message-id). Position is anchored to the end of the
+// selection — viewport coords, since the popup is teleported to body.
+const followUpController = inject(FOLLOW_UP_KEY, null)
+const quotePopup = ref<{ messageId: string; text: string; top: number; left: number } | null>(null)
+
+const closestAgentMessageId = (node: Node | null): string | null => {
+  let el: HTMLElement | null = node instanceof HTMLElement ? node : (node?.parentElement ?? null)
+  while (el) {
+    const id = el.dataset?.agentMessageId
+    if (id) return id
+    el = el.parentElement
+  }
+  return null
+}
+
+const onSelectionChange = () => {
+  if (!followUpController) {
+    quotePopup.value = null
+    return
+  }
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+    quotePopup.value = null
+    return
+  }
+  const range = sel.getRangeAt(0)
+  const startMsg = closestAgentMessageId(range.startContainer)
+  const endMsg = closestAgentMessageId(range.endContainer)
+  if (!startMsg || startMsg !== endMsg) {
+    quotePopup.value = null
+    return
+  }
+  const text = sel.toString().trim()
+  if (!text) {
+    quotePopup.value = null
+    return
+  }
+  const rect = range.getBoundingClientRect()
+  if (rect.width === 0 && rect.height === 0) return
+  quotePopup.value = {
+    messageId: startMsg,
+    text,
+    // 6px gap below the selection; clamp left into viewport.
+    top: rect.bottom + 6,
+    left: Math.max(8, Math.min(window.innerWidth - 160, rect.left)),
+  }
+}
+
+const addQuoteFollowUp = () => {
+  const popup = quotePopup.value
+  if (!popup || !followUpController) return
+  followUpController.add({
+    messageId: popup.messageId,
+    selectedText: popup.text,
+    note: '',
+  })
+  quotePopup.value = null
+  window.getSelection()?.removeAllRanges()
+}
+
 // StepItem reads SELECT_STEP_KEY via inject; provide here so clicking a Task
 // step opens the subagent drawer. Other tool kinds: no-op for now (StepItem
 // already disables click when there's no detail; we just don't handle them).
@@ -357,15 +444,12 @@ provide(SELECTED_STEP_ID_KEY, selectedStepId)
 provide(SELECT_STEP_KEY, (step: SessionStep) => {
   if (step.kind !== 'tool' || step.tool !== 'task') return
   // Find which message owns this step. Sessions are short — linear scan is fine.
-  for (const msg of props.messages) {
-    if (msg.steps?.some((s) => s.id === step.id)) {
-      const session = store.selectedSession
-      if (!session) return
-      selectedStepId.value = step.id
-      store.openSubagentDrawer(session.id, msg.id, step.id)
-      return
-    }
-  }
+  const owner = props.messages.find((msg) => msg.steps?.some((s) => s.id === step.id))
+  if (!owner) return
+  const session = store.selectedSession
+  if (!session) return
+  selectedStepId.value = step.id
+  store.openSubagentDrawer(session.id, owner.id, step.id)
 })
 
 const tokenColor = (kind: SessionTokenKind) => {
@@ -390,14 +474,14 @@ const stepsSummary = (steps: SessionStep[]): string => {
   let searches = 0
   let subagents = 0
   let others = 0
-  for (const s of steps) {
+  steps.forEach((s) => {
     if (s.tool === 'terminal') cmds += 1
     else if (s.tool === 'read') reads += 1
     else if (s.tool === 'write' || s.tool === 'edit') writes += 1
     else if (s.tool === 'search' || s.tool === 'find-files') searches += 1
     else if (s.tool === 'task') subagents += 1
     else others += 1
-  }
+  })
   const parts: string[] = []
   if (cmds) parts.push(`ran ${cmds} command${cmds === 1 ? '' : 's'}`)
   if (reads) parts.push(`read ${reads} file${reads === 1 ? '' : 's'}`)
@@ -463,6 +547,11 @@ onUnmounted(() => {
 // need the inner panel to hold focus.
 onMounted(() => document.addEventListener('keydown', onStepsModalKey))
 onUnmounted(() => document.removeEventListener('keydown', onStepsModalKey))
+
+// selectionchange fires globally — we filter inside the handler to only act
+// on selections rooted in an agent message body.
+onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
+onUnmounted(() => document.removeEventListener('selectionchange', onSelectionChange))
 
 // Render mermaid diagrams once each assistant message stabilises (either
 // historical/no startedAt, or live with completedAt set). Skipping in-flight

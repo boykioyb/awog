@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <transition name="drawer-slide">
+    <Transition name="drawer-slide">
       <div
         v-if="step"
         class="fixed inset-y-0 right-0 z-40 flex"
@@ -69,6 +69,7 @@
               <div class="text-[10px] uppercase tracking-wider" :style="{ color: t.textDim }">
                 Reply
               </div>
+              <!-- eslint-disable vue/no-v-html — renderedReply qua renderMarkdown (marked html:false, escape HTML thô) -->
               <div
                 class="awog-md text-[13px] rounded px-3 py-2.5"
                 :style="{
@@ -79,6 +80,7 @@
                 }"
                 v-html="renderedReply"
               />
+              <!-- eslint-enable vue/no-v-html -->
             </div>
 
             <div
@@ -100,7 +102,7 @@
           </div>
         </div>
       </div>
-    </transition>
+    </Transition>
   </Teleport>
 </template>
 

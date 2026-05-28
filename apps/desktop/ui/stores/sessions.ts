@@ -474,7 +474,7 @@ export const useSessionsStore = defineStore('sessions', {
             // UI reflects what the model is doing. Labels come from the
             // sidecar's humanLabel mapper (sessions/step-mapper.ts) — keep in
             // sync if you rename them there.
-            const label = evt.payload.step.label
+            const { label } = evt.payload.step
             if (label === 'Enter plan') {
               const s = this.sessions.find((x) => x.id === sessionId)
               if (s && s.settings.mode !== 'plan') s.settings.mode = 'plan'
@@ -517,7 +517,7 @@ export const useSessionsStore = defineStore('sessions', {
                 (typeof next.input.command === 'string' ? next.input.command : '') ||
                 (typeof next.input.file_path === 'string' ? next.input.file_path : '') ||
                 (typeof next.input.url === 'string' ? next.input.url : '')
-              void notify({
+              notify({
                 title: `AWOG · ${next.toolName} permission`,
                 body: target
                   ? `${next.promptSentence ?? 'Allow this action?'}\n${target}`
