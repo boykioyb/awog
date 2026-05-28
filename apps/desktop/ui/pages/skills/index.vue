@@ -34,6 +34,34 @@
           New
         </button>
       </div>
+      <div
+        v-if="filtered.length > 0"
+        class="px-3 py-1.5 flex items-center gap-2 text-[11px]"
+        :style="{ borderBottom: `1px solid ${t.border}`, color: t.textDim }"
+      >
+        <input
+          type="checkbox"
+          :checked="allFilteredSelected"
+          :indeterminate.prop="someFilteredSelected && !allFilteredSelected"
+          class="cursor-pointer"
+          :style="{ accentColor: t.accent }"
+          :title="allFilteredSelected ? 'Deselect all visible' : 'Select all visible'"
+          @click="toggleSelectAllFiltered"
+        />
+        <span v-if="bulkSelection.size > 0" :style="{ color: t.text }">
+          {{ bulkSelection.size }} selected
+        </span>
+        <span v-else>Select to bulk-delete</span>
+        <span class="flex-1" />
+        <button
+          v-if="bulkSelection.size > 0"
+          class="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
+          :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
+          @click="clearBulk"
+        >
+          Clear
+        </button>
+      </div>
       <div class="flex-1 overflow-y-auto">
         <div
           v-for="skill in filtered"
@@ -60,6 +88,16 @@
           "
         >
           <div class="flex items-center gap-2 mb-0.5">
+            <input
+              type="checkbox"
+              :checked="bulkSelection.has(skillKey(skill))"
+              class="cursor-pointer flex-shrink-0"
+              :style="{ accentColor: t.accent }"
+              :title="
+                bulkSelection.has(skillKey(skill)) ? 'Remove from selection' : 'Add to selection'
+              "
+              @click.stop="toggleBulk(skill)"
+            />
             <span v-if="skill.icon" class="text-[12px]">{{ skill.icon }}</span>
             <Wand2 v-else :size="11" :style="{ color: t.textDim }" />
             <input
@@ -117,7 +155,6 @@
       <SkillEditor
         v-if="editing"
         :skill="selectedSkill ?? null"
-        :initial-draft="manualSeed"
         @save="onSave"
         @cancel="onCancel"
       />
@@ -135,13 +172,7 @@
     </template>
   </MasterDetailShell>
 
-  <SkillPromptCreator
-    v-if="showPromptModal"
-    :anchor="anchor"
-    @save="onSave"
-    @edit-manually="onEditManually"
-    @cancel="onCancelPromptModal"
-  />
+  <SkillPromptCreator v-if="showPromptModal" :anchor="anchor" @close="onClosePromptModal" />
 
   <SkillBodyEditModal
     v-if="bodyEditing && selectedSkill"
@@ -158,6 +189,50 @@
     @confirm="confirmDelete"
     @cancel="pendingDelete = null"
   />
+
+  <ConfirmDeleteModal
+    v-if="bulkPendingDelete"
+    :title="`Delete ${bulkPendingDelete.length} skills?`"
+    :description="bulkDeleteDescription"
+    @confirm="confirmBulkDelete"
+    @cancel="bulkPendingDelete = null"
+  />
+
+  <div
+    v-if="bulkSelection.size > 0"
+    class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 rounded-full shadow-lg flex items-center gap-3 px-4 py-2"
+    :style="{
+      background: t.bgPanel,
+      border: `1px solid ${t.borderStrong}`,
+      boxShadow: `0 12px 32px ${t.shadow}`,
+    }"
+  >
+    <span class="text-[12px]" :style="{ color: t.text }">
+      {{ bulkSelection.size }} skill{{ bulkSelection.size === 1 ? '' : 's' }} selected
+    </span>
+    <button
+      class="text-[11px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded transition"
+      :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
+      :disabled="bulkDeleting"
+      @click="clearBulk"
+    >
+      Cancel
+    </button>
+    <button
+      class="text-[11px] inline-flex items-center gap-1.5 px-3 py-1 rounded font-medium transition"
+      :style="{
+        background: t.dangerBg,
+        color: t.danger,
+        border: `1px solid ${t.dangerBorder}`,
+      }"
+      :disabled="bulkDeleting"
+      @click="askBulkDelete"
+    >
+      <Loader2 v-if="bulkDeleting" :size="11" class="animate-spin" />
+      <Trash2 v-else :size="11" />
+      Delete {{ bulkSelection.size }}
+    </button>
+  </div>
 
   <ContextMenu
     v-if="contextMenu"
@@ -184,9 +259,8 @@
 
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import { Plus, RefreshCw, Wand2, Edit3, Trash2, MoreHorizontal } from 'lucide-vue-next'
+import { Loader2, Plus, RefreshCw, Wand2, Edit3, Trash2, MoreHorizontal } from 'lucide-vue-next'
 import type { Skill, SkillSource } from '~/types'
-import type { SkillDraft } from '~/composables/useSkillGenerator'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
@@ -212,10 +286,29 @@ const searchQuery = ref('')
 const editing = ref(false)
 const bodyEditing = ref(false)
 const bodyEditAnchor = ref<{ top: number; left: number } | null>(null)
+
+// Bulk selection state — Set of composite skillKey() strings. Independent of
+// `selectedKey` (single-item navigation) so a user can keep their detail-pane
+// selection while ticking other rows.
+const bulkSelection = ref<Set<string>>(new Set())
+const bulkPendingDelete = ref<Skill[] | null>(null)
+const bulkDeleting = ref(false)
+
+const toggleBulk = (s: Skill) => {
+  const key = skillKey(s)
+  const next = new Set(bulkSelection.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  bulkSelection.value = next
+}
+
+const clearBulk = () => {
+  bulkSelection.value = new Set()
+}
+
 const selectedKey = ref<string | null>(ws.skills[0] ? skillKey(ws.skills[0]) : null)
 const mobilePane = ref<'list' | 'detail'>('list')
 const pendingDelete = ref<Skill | null>(null)
-const manualSeed = ref<SkillDraft | null>(null)
 const showPromptModal = ref(false)
 const newButtonRef = ref<HTMLButtonElement | null>(null)
 const anchor = ref<{ top: number; left: number } | null>(null)
@@ -234,6 +327,31 @@ const filtered = computed<Skill[]>(() =>
       s.description.toLowerCase().includes(q)
     )
   }),
+)
+
+const allFilteredSelected = computed(() => {
+  if (filtered.value.length === 0) return false
+  return filtered.value.every((s) => bulkSelection.value.has(skillKey(s)))
+})
+
+const someFilteredSelected = computed(() =>
+  filtered.value.some((s) => bulkSelection.value.has(skillKey(s))),
+)
+
+const toggleSelectAllFiltered = () => {
+  const next = new Set(bulkSelection.value)
+  if (allFilteredSelected.value) {
+    // Drop only the visible/filtered keys; preserve any selection on hidden
+    // rows so search-filter doesn't silently lose ticks.
+    filtered.value.forEach((s) => next.delete(skillKey(s)))
+  } else {
+    filtered.value.forEach((s) => next.add(skillKey(s)))
+  }
+  bulkSelection.value = next
+}
+
+const bulkSelectedSkills = computed<Skill[]>(() =>
+  ws.skills.filter((s) => bulkSelection.value.has(skillKey(s))),
 )
 
 const sourceBadgeStyle = (s: Skill): CSSProperties => {
@@ -285,7 +403,10 @@ const refreshTitle = computed(() => {
   return `Refresh skills from filesystem (${scope})`
 })
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+const sleep = (ms: number) =>
+  new Promise<void>((r) => {
+    setTimeout(r, ms)
+  })
 
 const refresh = async (opts: { silent?: boolean } = {}) => {
   if (refreshing.value) return
@@ -304,14 +425,25 @@ const refresh = async (opts: { silent?: boolean } = {}) => {
       const after = ws.skills.length
       const delta = after - before
       const sidecar = useSidecar()
+      // Use the resolved paths the sidecar actually scanned (lets us diagnose
+      // homedir mismatch — what the UI THINKS the path is vs what node sees).
+      const reportText =
+        ws.skillScanReports.length > 0
+          ? ws.skillScanReports.map((r) => `${r.dir} (${r.found})`).join(' · ')
+          : 'no scan report'
       if (!sidecar.available) {
         pushToast('Sidecar offline — showing cached skills only', 'info')
       } else if (delta > 0) {
-        pushToast(`Loaded ${after} skills (+${delta} new)`, 'success')
+        pushToast(`Loaded ${after} skills (+${delta} new) · ${reportText}`, 'success')
       } else if (delta < 0) {
-        pushToast(`Loaded ${after} skills (${delta} removed)`, 'info')
+        pushToast(`Loaded ${after} skills (${delta} removed) · ${reportText}`, 'info')
+      } else if (after === 0) {
+        pushToast(
+          `No skills found. Sidecar scanned: ${reportText}. If a path is wrong, check sidecar HOME.`,
+          'info',
+        )
       } else {
-        pushToast(`No changes · ${after} skills`, 'info')
+        pushToast(`No changes · ${after} skills · ${reportText}`, 'info')
       }
     }
   } catch (err) {
@@ -324,11 +456,15 @@ const refresh = async (opts: { silent?: boolean } = {}) => {
 }
 
 const onRefresh = () => {
-  void refresh()
+  refresh()
 }
 
 onMounted(() => {
-  void refresh({ silent: true })
+  // Initial load is NON-silent so the toast confirms which tiers got scanned
+  // and how many skills came back — surfaces "sidecar still on old code" and
+  // "user dirs are empty" cases that would otherwise look like a silent blank
+  // list.
+  refresh()
 })
 
 const agentCountFor = (skillId: string): number =>
@@ -349,31 +485,41 @@ const deleteDescription = computed(() => {
   return `This will permanently delete the skill "${s.name}" from ${where}${s.id}/. Agents using it will lose this skill.`
 })
 
+const bulkDeleteDescription = computed(() => {
+  const list = bulkPendingDelete.value
+  if (!list || list.length === 0) return ''
+  const sample = list
+    .slice(0, 5)
+    .map((s) => `${WHERE_BY_SOURCE[s.source]}${s.id}`)
+    .join('\n')
+  const more = list.length > 5 ? `\n…and ${list.length - 5} more` : ''
+  return `This will permanently delete ${list.length} skill folder(s):\n\n${sample}${more}\n\nAgents using any of these will lose them.`
+})
+
 const onSelect = (s: Skill) => {
   selectedKey.value = skillKey(s)
   editing.value = false
-  manualSeed.value = null
   mobilePane.value = 'detail'
 }
 
 const onNew = () => {
-  manualSeed.value = null
   editing.value = false
   const rect = newButtonRef.value?.getBoundingClientRect()
   anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
   showPromptModal.value = true
 }
 
-const onEditManually = (draft: SkillDraft) => {
-  manualSeed.value = draft
-  selectedKey.value = null
+const onClosePromptModal = async () => {
   showPromptModal.value = false
-  editing.value = true
-  mobilePane.value = 'detail'
+  // The LLM may have written a SKILL.md to disk during the conversation. Pull
+  // fresh state so any newly-created skill shows up + becomes selectable.
+  // refresh() already toasts on its own (success/no-changes/etc) — no extra
+  // notification needed here.
+  await refresh()
 }
 
-const onEditBody = (anchor: { top: number; left: number } | null) => {
-  bodyEditAnchor.value = anchor
+const onEditBody = (at: { top: number; left: number } | null) => {
+  bodyEditAnchor.value = at
   bodyEditing.value = true
 }
 
@@ -396,23 +542,24 @@ const onSave = async (payload: { skill: Skill; previousId?: string } | Skill) =>
   // with the optional previousId for slug renames.
   const data = 'skill' in payload ? payload.skill : payload
   const previousId = 'skill' in payload ? payload.previousId : undefined
+  const isRename = previousId && previousId !== data.id
   try {
     const saved = await ws.saveSkill(data, previousId)
     selectedKey.value = skillKey(saved)
+    pushToast(isRename ? `Renamed to /${saved.id}` : `Saved /${saved.id}`, 'success')
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[skills] save failed', err)
+    pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
     return
   }
   editing.value = false
-  manualSeed.value = null
   showPromptModal.value = false
   mobilePane.value = 'detail'
 }
 
 const onCancel = () => {
   editing.value = false
-  manualSeed.value = null
   if (!selectedSkill.value && ws.skills[0]) {
     selectedKey.value = skillKey(ws.skills[0])
   }
@@ -423,10 +570,6 @@ const onBack = () => {
   editing.value = false
 }
 
-const onCancelPromptModal = () => {
-  showPromptModal.value = false
-}
-
 const askDelete = () => {
   if (selectedSkill.value) pendingDelete.value = selectedSkill.value
 }
@@ -435,11 +578,62 @@ const confirmDelete = async () => {
   const s = pendingDelete.value
   if (!s) return
   const wasSelectedKey = selectedKey.value
-  await ws.deleteSkill(s.id, s.source, s.projectId)
-  if (wasSelectedKey === skillKey(s)) {
+  pendingDelete.value = null
+  try {
+    await ws.deleteSkill(s.id, s.source, s.projectId)
+    if (wasSelectedKey === skillKey(s)) {
+      selectedKey.value = ws.skills[0] ? skillKey(ws.skills[0]) : null
+    }
+    pushToast(`Deleted /${s.id}`, 'success')
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[skills] delete failed', err)
+    pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+  }
+}
+
+const askBulkDelete = () => {
+  if (bulkSelection.value.size === 0) return
+  bulkPendingDelete.value = [...bulkSelectedSkills.value]
+}
+
+const confirmBulkDelete = async () => {
+  const list = bulkPendingDelete.value
+  if (!list || list.length === 0) return
+  bulkPendingDelete.value = null
+  bulkDeleting.value = true
+  const wasSelectedKey = selectedKey.value
+  let ok = 0
+  const failures: { skill: Skill; err: unknown }[] = []
+  // Sequential delete — sidecar RPC is single-threaded per request anyway and
+  // it makes the per-skill failure attribution clean.
+  await list.reduce(async (prev, s) => {
+    await prev
+    try {
+      await ws.deleteSkill(s.id, s.source, s.projectId)
+      ok += 1
+      bulkSelection.value.delete(skillKey(s))
+    } catch (err) {
+      failures.push({ skill: s, err })
+    }
+  }, Promise.resolve())
+  // Reassign to trigger reactivity (Set mutation isn't reactive in Pinia ref).
+  bulkSelection.value = new Set(bulkSelection.value)
+  if (wasSelectedKey && !ws.skills.some((s) => skillKey(s) === wasSelectedKey)) {
     selectedKey.value = ws.skills[0] ? skillKey(ws.skills[0]) : null
   }
-  pendingDelete.value = null
+  bulkDeleting.value = false
+  if (failures.length === 0) {
+    pushToast(`Deleted ${ok} skill${ok === 1 ? '' : 's'}`, 'success')
+  } else if (ok === 0) {
+    pushToast(`Bulk delete failed for ${failures.length} skill(s) — see console`, 'error')
+  } else {
+    pushToast(`Deleted ${ok}, failed ${failures.length} — see console for failed items`, 'info')
+  }
+  if (failures.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error('[skills] bulk delete failures', failures)
+  }
 }
 
 const contextMenu = ref<{ x: number; y: number; skill: Skill } | null>(null)
@@ -472,15 +666,21 @@ const startRename = (s: Skill) => {
   renameValue.value = s.name
 }
 
-const commitRename = () => {
+const commitRename = async () => {
   const target = renamingSkill.value
   if (!target) return
   const trimmed = renameValue.value.trim()
-  if (trimmed && trimmed !== target.name) {
-    void ws.saveSkill({ ...target, name: trimmed })
-  }
   renamingKey.value = null
   renamingSkill.value = null
+  if (!trimmed || trimmed === target.name) return
+  try {
+    await ws.saveSkill({ ...target, name: trimmed })
+    pushToast(`Renamed /${target.id} → "${trimmed}"`, 'success')
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[skills] rename failed', err)
+    pushToast(`Rename failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+  }
 }
 
 const cancelRename = () => {

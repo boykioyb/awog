@@ -212,6 +212,17 @@ export interface SessionAttachment {
   height?: number
 }
 
+// Composer-level annotation: user quotes an excerpt from a prior agent message
+// and attaches a short instruction. Inlined into the next outgoing message as
+// a quote block — see formatFollowUp in utils/follow-up.ts.
+export interface SessionFollowUp {
+  id: string
+  // Anchor: which message the quote came from (for highlight/scroll-back).
+  messageId: string
+  selectedText: string
+  note: string
+}
+
 export type StepTool =
   | 'read'
   | 'write'
@@ -262,6 +273,7 @@ export interface SessionMessage {
   suggestedSkillIds?: string[]
   steps?: SessionStep[]
   attachments?: SessionAttachment[]
+  followUps?: SessionFollowUp[]
   modeAtSend?: AgentMode
   startedAt?: number
   completedAt?: number

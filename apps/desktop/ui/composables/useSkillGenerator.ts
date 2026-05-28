@@ -79,7 +79,9 @@ export const useSkillGenerator = (): SkillGenerator => {
       const account = settings.activeAccount('anthropic')
       if (!sidecar.available || !account) {
         // Add a small delay so the UI's "generating" state is visible.
-        await new Promise<void>((r) => setTimeout(r, 350))
+        await new Promise<void>((r) => {
+          setTimeout(r, 350)
+        })
         return mockDraft(trimmed)
       }
       try {
@@ -132,7 +134,9 @@ export const useSkillGenerator = (): SkillGenerator => {
     try {
       const account = settings.activeAccount('anthropic')
       if (!sidecar.available || !account) {
-        await new Promise<void>((r) => setTimeout(r, 350))
+        await new Promise<void>((r) => {
+          setTimeout(r, 350)
+        })
         // Mock fallback: append the edit instruction as a "Revision note" line
         // so the user can at least see SOMETHING change without LLM access.
         return {

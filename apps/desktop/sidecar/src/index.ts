@@ -26,6 +26,7 @@ import './methods/skills.list.js'
 import './methods/skills.upsert.js'
 import './methods/skills.delete.js'
 import './methods/skills.generate.js'
+import './methods/skills.author.js'
 
 type JsonRpcRequest = {
   jsonrpc: '2.0'

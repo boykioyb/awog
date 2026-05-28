@@ -57,8 +57,14 @@ interface ProjectCloneResponse {
   project: Project
 }
 
+export interface SkillScanReport {
+  dir: string
+  source: SkillSource
+  found: number
+}
 interface SkillsListResponse {
   skills: Skill[]
+  reports?: SkillScanReport[]
 }
 interface SkillUpsertResponse {
   skill: Skill
@@ -77,6 +83,9 @@ export const useWorkspaceStore = defineStore('workspace', {
     // Skills hydrate from sidecar (~/.awog/skills/<id>/SKILL.md). No mock seed —
     // user creates skills explicitly.
     skills: [] as Skill[],
+    // Latest scan report (1 entry per scanned dir + count). Surfaces resolved
+    // paths to the UI so misconfigured HOME / missing dirs are diagnosable.
+    skillScanReports: [] as SkillScanReport[],
     workflows: [...INITIAL_WORKFLOWS] as Workflow[],
     tasks: [...INITIAL_TASKS] as Task[],
     mcpServers: [...INITIAL_MCP_SERVERS] as MCPServer[],
@@ -256,7 +265,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const order = topoSort(wf.nodes, wf.edges)
       const idx = order.indexOf(nodeId)
       const isLast = idx === order.length - 1
-      const nextNodeId = isLast ? null : order[idx + 1]
+      const nextNodeId: string | null = isLast ? null : (order[idx + 1] ?? null)
 
       const phase = task.phases[nodeId]
       if (!phase) return
@@ -426,6 +435,11 @@ export const useWorkspaceStore = defineStore('workspace', {
 
     async hydrateSkillsFromSidecar(projectIds?: string[]): Promise<void> {
       const sidecar = useSidecar()
+      // eslint-disable-next-line no-console
+      console.log('%c[skills] hydrate begin', 'color: #10b981; font-weight: bold', {
+        sidecarAvailable: sidecar.available,
+        projectsInStore: this.projects.length,
+      })
       if (!sidecar.available) return
       // Default: include all registered projects so a fresh /skills page reload
       // sees both user-level dirs and every project's .claude/.agents skills.
@@ -433,10 +447,19 @@ export const useWorkspaceStore = defineStore('workspace', {
       try {
         const params = ids.length > 0 ? { projectIds: ids } : undefined
         const res = await sidecar.request<SkillsListResponse>('skills.list', params)
+        // eslint-disable-next-line no-console
+        console.log('%c[skills] hydrate response', 'color: #10b981; font-weight: bold', {
+          rawKeys: Object.keys(res ?? {}),
+          skillsCount: Array.isArray(res.skills) ? res.skills.length : 'not-an-array',
+          reportsCount: Array.isArray(res.reports) ? res.reports.length : 'missing',
+          reports: res.reports,
+          firstSkill: res.skills?.[0] ?? null,
+        })
         this.skills = Array.isArray(res.skills) ? res.skills : []
+        this.skillScanReports = Array.isArray(res.reports) ? res.reports : []
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn('[workspace] hydrateSkillsFromSidecar failed', err)
+        console.error('[skills] hydrate failed', err)
       }
     },
 

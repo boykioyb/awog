@@ -103,9 +103,20 @@ async function listFromDir(
   try {
     entries = await readdir(dir)
   } catch (err) {
-    if (isMissing(err)) return []
-    throw err
+    // Any read failure — missing, no permission, dangling symlink, etc. — is
+    // treated as "this tier yields no skills" rather than throwing. Otherwise a
+    // single misbehaving directory would reject Promise.all and zero out the
+    // whole list (including the user-level dirs that DO have content).
+    if (!isMissing(err)) {
+      log.warn('skills: listFromDir failed', {
+        dir,
+        source,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+    return []
   }
+  log.info('skills: scanning', { dir, source, entries: entries.length })
   const skills: Skill[] = []
   for (const name of entries) {
     const folder = join(dir, name)
@@ -118,6 +129,7 @@ async function listFromDir(
       const raw = await readFile(file, 'utf8')
       const skill = buildSkill(name, raw, source, projectId)
       if (skill) skills.push(skill)
+      else log.warn('skills: SKILL.md missing required name/description', { file })
     } catch (err) {
       if (!isMissing(err)) {
         log.warn('skills: failed to read', {
@@ -127,43 +139,66 @@ async function listFromDir(
       }
     }
   }
+  log.info('skills: scan result', { dir, source, found: skills.length })
   return skills
 }
 
-export async function listUserSkills(): Promise<Skill[]> {
+export interface ScanReport {
+  dir: string
+  source: SkillSource
+  found: number
+}
+
+export async function listUserSkills(): Promise<{ skills: Skill[]; reports: ScanReport[] }> {
   // All three user-level tiers are auto-scanned. Missing dirs return [] —
   // perfectly fine for users who do not have ~/.claude/skills or ~/.agents/skills.
-  const [awog, claude, agents] = await Promise.all([
-    listFromDir(userSkillsDir('global'), 'global', undefined),
-    listFromDir(userSkillsDir('user-claude'), 'user-claude', undefined),
-    listFromDir(userSkillsDir('user-agents'), 'user-agents', undefined),
-  ])
-  return [...awog, ...claude, ...agents]
+  const tiers: { source: SkillSource; dir: string }[] = [
+    { source: 'global', dir: userSkillsDir('global') },
+    { source: 'user-claude', dir: userSkillsDir('user-claude') },
+    { source: 'user-agents', dir: userSkillsDir('user-agents') },
+  ]
+  const results = await Promise.all(
+    tiers.map(({ source, dir }) => listFromDir(dir, source, undefined)),
+  )
+  const skills = results.flat()
+  const reports: ScanReport[] = tiers.map((tier, i) => ({
+    dir: tier.dir,
+    source: tier.source,
+    found: results[i]?.length ?? 0,
+  }))
+  return { skills, reports }
 }
 
-export async function listProjectSkills(projectId: string): Promise<Skill[]> {
+export async function listProjectSkills(
+  projectId: string,
+): Promise<{ skills: Skill[]; reports: ScanReport[] }> {
   const project = await loadProject(projectId)
-  if (!project) return []
-  const [fromClaude, fromAgents] = await Promise.all([
-    listFromDir(
-      projectSkillsDir(project.path, 'project-claude'),
-      'project-claude',
-      projectId,
-    ),
-    listFromDir(
-      projectSkillsDir(project.path, 'project-agents'),
-      'project-agents',
-      projectId,
-    ),
-  ])
-  return [...fromClaude, ...fromAgents]
+  if (!project) return { skills: [], reports: [] }
+  const tiers: { source: SkillSource; dir: string }[] = [
+    { source: 'project-claude', dir: projectSkillsDir(project.path, 'project-claude') },
+    { source: 'project-agents', dir: projectSkillsDir(project.path, 'project-agents') },
+  ]
+  const results = await Promise.all(
+    tiers.map(({ source, dir }) => listFromDir(dir, source, projectId)),
+  )
+  const skills = results.flat()
+  const reports: ScanReport[] = tiers.map((tier, i) => ({
+    dir: tier.dir,
+    source: tier.source,
+    found: results[i]?.length ?? 0,
+  }))
+  return { skills, reports }
 }
 
-export async function listSkills(projectIds: string[] = []): Promise<Skill[]> {
+export async function listSkills(
+  projectIds: string[] = [],
+): Promise<{ skills: Skill[]; reports: ScanReport[] }> {
   const user = await listUserSkills()
-  const projectLists = await Promise.all(projectIds.map((id) => listProjectSkills(id)))
-  const project = projectLists.flat()
-  return [...user, ...project].sort((a, b) => a.name.localeCompare(b.name))
+  const projectResults = await Promise.all(projectIds.map((id) => listProjectSkills(id)))
+  const projectSkills = projectResults.flatMap((r) => r.skills)
+  const projectReports = projectResults.flatMap((r) => r.reports)
+  const skills = [...user.skills, ...projectSkills].sort((a, b) => a.name.localeCompare(b.name))
+  return { skills, reports: [...user.reports, ...projectReports] }
 }
 
 export async function loadSkill(
