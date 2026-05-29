@@ -30,7 +30,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[12px] resize-none"
+          class="w-full rounded px-2 py-1.5 text-[0.86em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -82,7 +82,7 @@
           <textarea
             v-model="argsText"
             :rows="3"
-            class="w-full rounded px-2 py-1.5 text-[11px] font-mono resize-none"
+            class="w-full rounded px-2 py-1.5 text-[0.79em] font-mono resize-y min-h-[4rem]"
             :style="inputStyle"
           />
         </Field>
@@ -94,7 +94,11 @@
             :style="inputStyle"
           />
         </Field>
-        <KvEditor v-model="envEntries" label="Env vars" />
+        <KvEditor
+          v-model="envEntries"
+          label="Env vars"
+          :secret-mode="draft.id ? { serverId: draft.id } : undefined"
+        />
       </div>
 
       <!-- http config -->
@@ -107,25 +111,126 @@
             :style="inputStyle"
           />
         </Field>
-        <KvEditor v-model="headerEntries" label="Headers" />
+        <KvEditor
+          v-model="headerEntries"
+          label="Headers"
+          :secret-mode="draft.id ? { serverId: draft.id } : undefined"
+        />
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <ToggleField v-model="draft.enabled" label="Enabled" />
         <ToggleField v-model="draft.autoStart" label="Auto-start" />
       </div>
+
+      <div class="flex items-center gap-2 pt-2" :style="{ borderTop: `1px solid ${t.border}` }">
+        <button
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[0.79em] rounded font-medium transition disabled:opacity-50"
+          :style="{
+            background: t.bgInput,
+            color: t.text,
+            border: `1px solid ${t.border}`,
+          }"
+          :disabled="!canVerify || verifying"
+          @click="onVerify"
+        >
+          <Loader2 v-if="verifying" :size="11" class="animate-spin" />
+          <CheckCircle2 v-else :size="11" />
+          {{ verifying ? 'Testing…' : 'Verify connection' }}
+        </button>
+        <span v-if="verifyResult" class="text-[0.79em]" :style="{ color: verifyTextColor }">
+          {{ verifyResult.summary }}
+        </span>
+      </div>
+      <pre
+        v-if="verifyResult && verifyResult.stderr && verifyResult.stderr.length > 0"
+        class="text-[0.71em] font-mono p-2 rounded max-h-32 overflow-y-auto"
+        :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+        >{{ verifyResult.stderr.join('\n') }}</pre
+      >
     </div>
   </EditorShell>
 </template>
 
 <script setup lang="ts">
-import type { MCPServer, MCPTool, MCPTransport, MCPTrust } from '~/types'
+import { Loader2, CheckCircle2 } from 'lucide-vue-next'
+import type { MCPServer, MCPTool, MCPTransport, MCPTrust, MCPResource } from '~/types'
 import type { McpDraft } from '~/composables/useMcpGenerator'
 
 const props = defineProps<{ server: MCPServer | null; initialDraft?: McpDraft | null }>()
 const emit = defineEmits<{ save: [server: MCPServer]; cancel: [] }>()
 
 const { t } = useTheme()
+
+interface VerifyState {
+  ok: boolean
+  summary: string
+  stderr?: string[]
+}
+
+interface VerifyResponse {
+  ok: boolean
+  tools?: MCPTool[]
+  resources?: MCPResource[]
+  error?: string
+  stderr?: string[]
+}
+
+const verifying = ref(false)
+const verifyResult = ref<VerifyState | null>(null)
+
+const canVerify = computed(
+  () => draft.value.transport === 'stdio' && !!draft.value.command && !!draft.value.id,
+)
+
+const verifyTextColor = computed(() => (verifyResult.value?.ok ? t.value.success : t.value.danger))
+
+const onVerify = async () => {
+  if (!canVerify.value) return
+  verifying.value = true
+  verifyResult.value = null
+  try {
+    const sidecar = useSidecar()
+    if (!sidecar.available) {
+      verifyResult.value = { ok: false, summary: 'Sidecar offline — cannot verify' }
+      return
+    }
+    const res = await sidecar.request<VerifyResponse>('mcp.test', {
+      server: stripRuntime(draft.value),
+    })
+    if (res.ok) {
+      const toolCount = res.tools?.length ?? 0
+      const resCount = res.resources?.length ?? 0
+      verifyResult.value = {
+        ok: true,
+        summary: `Connected — ${toolCount} tool${toolCount === 1 ? '' : 's'}, ${resCount} resource${resCount === 1 ? '' : 's'}`,
+        stderr: res.stderr,
+      }
+      if (res.tools) draft.value.tools = res.tools
+      if (res.resources) draft.value.resources = res.resources
+    } else {
+      verifyResult.value = {
+        ok: false,
+        summary: `Failed — ${res.error ?? 'unknown error'}`,
+        stderr: res.stderr,
+      }
+    }
+  } catch (err) {
+    verifyResult.value = {
+      ok: false,
+      summary: err instanceof Error ? err.message : 'verify failed',
+    }
+  } finally {
+    verifying.value = false
+  }
+}
+
+// Mirror of stripRuntimeFields in stores/workspace.ts — keep config-only shape
+// for `mcp.test` (sidecar zod schema rejects runtime fields).
+function stripRuntime(d: Draft): Omit<MCPServer, 'status' | 'tools' | 'resources' | 'lastError'> {
+  const { status: _s, tools: _t, resources: _r, lastError: _e, ...config } = d as MCPServer
+  return config
+}
 
 type Draft = Omit<MCPServer, 'tools' | 'resources' | 'status'> & {
   tools: MCPTool[]

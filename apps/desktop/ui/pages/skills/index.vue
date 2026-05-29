@@ -6,149 +6,37 @@
     @update:mobile-pane="onBack"
   >
     <template #list>
-      <div
-        class="px-3 py-3 flex items-center gap-2"
-        :style="{ borderBottom: `1px solid ${t.border}` }"
-      >
-        <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search skills..." />
-        <button
-          class="flex items-center gap-1 px-2 py-1.5 text-xs rounded transition"
-          :style="{
-            background: 'transparent',
-            color: t.textMuted,
-            border: `1px solid ${t.border}`,
-          }"
-          :title="refreshTitle"
-          :disabled="refreshing"
-          @click="onRefresh"
-        >
-          <RefreshCw :size="12" :class="refreshing ? 'animate-spin' : ''" />
-        </button>
-        <button
-          ref="newButtonRef"
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
-          :style="{ background: t.accent, color: t.accentText }"
-          @click="onNew"
-        >
-          <Plus :size="12" />
-          New
-        </button>
-      </div>
-      <div
-        v-if="filtered.length > 0"
-        class="px-3 py-1.5 flex items-center gap-2 text-[11px]"
-        :style="{ borderBottom: `1px solid ${t.border}`, color: t.textDim }"
-      >
-        <input
-          type="checkbox"
-          :checked="allFilteredSelected"
-          :indeterminate.prop="someFilteredSelected && !allFilteredSelected"
-          class="cursor-pointer"
-          :style="{ accentColor: t.accent }"
-          :title="allFilteredSelected ? 'Deselect all visible' : 'Select all visible'"
-          @click="toggleSelectAllFiltered"
-        />
-        <span v-if="bulkSelection.size > 0" :style="{ color: t.text }">
-          {{ bulkSelection.size }} selected
-        </span>
-        <span v-else>Select to bulk-delete</span>
-        <span class="flex-1" />
-        <button
-          v-if="bulkSelection.size > 0"
-          class="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
-          :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
-          @click="clearBulk"
-        >
-          Clear
-        </button>
-      </div>
-      <div class="flex-1 overflow-y-auto">
-        <div
-          v-for="skill in filtered"
-          :key="skillKey(skill)"
-          class="w-full px-3 py-2 cursor-pointer transition"
-          :style="{
-            background: selectedKey === skillKey(skill) ? t.bgActive : 'transparent',
-            borderBottom: `1px solid ${t.border}`,
-            borderLeft: `2px solid ${selectedKey === skillKey(skill) ? t.accent : 'transparent'}`,
-          }"
-          @click="onSelect(skill)"
-          @contextmenu="onContextMenu($event, skill)"
-          @mouseenter="
-            (e: MouseEvent) => {
-              if (selectedKey !== skillKey(skill))
-                (e.currentTarget as HTMLElement).style.background = t.bgHover
-            }
-          "
-          @mouseleave="
-            (e: MouseEvent) => {
-              if (selectedKey !== skillKey(skill))
-                (e.currentTarget as HTMLElement).style.background = 'transparent'
-            }
-          "
-        >
-          <div class="flex items-center gap-2 mb-0.5">
-            <input
-              type="checkbox"
-              :checked="bulkSelection.has(skillKey(skill))"
-              class="cursor-pointer flex-shrink-0"
-              :style="{ accentColor: t.accent }"
-              :title="
-                bulkSelection.has(skillKey(skill)) ? 'Remove from selection' : 'Add to selection'
-              "
-              @click.stop="toggleBulk(skill)"
-            />
-            <span v-if="skill.icon" class="text-[12px]">{{ skill.icon }}</span>
-            <Wand2 v-else :size="11" :style="{ color: t.textDim }" />
-            <input
-              v-if="renamingKey === skillKey(skill)"
-              :ref="setRenameInputRef"
-              v-model="renameValue"
-              class="text-[12px] font-mono flex-1 rounded px-1 py-0.5"
-              :style="{
-                background: t.bgInput,
-                border: `1px solid ${t.borderStrong}`,
-                color: t.text,
-                outline: 'none',
-              }"
-              @click.stop
-              @keydown.enter="commitRename"
-              @keydown.escape="cancelRename"
-              @blur="commitRename"
-            />
-            <span
-              v-else
-              class="text-[12px] font-mono flex-1 truncate"
-              :style="{ color: t.text }"
-              @dblclick.stop="startRename(skill)"
-            >
-              {{ skill.name }}
-            </span>
-            <span class="text-[10px]" :style="{ color: t.textFaint }">
-              {{ agentCountFor(skill.id) }}
-            </span>
-            <button
-              class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
-              :style="{ color: t.textMuted }"
-              title="Actions"
-              @click.stop="openMenuFromButton($event, skill)"
-            >
-              <MoreHorizontal :size="13" />
-            </button>
-          </div>
-          <div class="flex items-center gap-1.5 pl-5">
-            <span class="text-[10px] font-mono truncate" :style="{ color: t.textDim }">
-              /{{ skill.id }}
-            </span>
-            <span
-              class="text-[9px] px-1 py-0.5 rounded font-mono uppercase tracking-wider"
-              :style="sourceBadgeStyle(skill)"
-            >
-              {{ sourceLabel(skill) }}
-            </span>
-          </div>
-        </div>
-      </div>
+      <SkillsListSidebar
+        ref="sidebarRef"
+        :skills="filtered"
+        :selected-key="selectedKey"
+        :bulk-selection="bulkSelection"
+        :renaming-key="renamingKey"
+        :rename-value="renameValue"
+        :refreshing="refreshing"
+        :refresh-title="refreshTitle"
+        :search-query="searchQuery"
+        :all-filtered-selected="allFilteredSelected"
+        :some-filtered-selected="someFilteredSelected"
+        :skill-key="skillKey"
+        :agent-count-for="agentCountFor"
+        :source-label="sourceLabel"
+        :source-badge-style="sourceBadgeStyle"
+        @update:search-query="(v: string) => (searchQuery = v)"
+        @refresh="onRefresh"
+        @new="onNew"
+        @toggle-select-all="toggleSelectAllFiltered"
+        @clear-bulk="clearBulk"
+        @select="onSelect"
+        @context-menu="onContextMenu"
+        @toggle-bulk="toggleBulk"
+        @start-rename="startRename"
+        @update:rename-value="(v: string) => (renameValue = v)"
+        @commit-rename="commitRename"
+        @cancel-rename="cancelRename"
+        @open-menu="openMenuFromButton"
+        @rename-input-mounted="setRenameInputRef"
+      />
     </template>
 
     <template #detail>
@@ -198,41 +86,13 @@
     @cancel="bulkPendingDelete = null"
   />
 
-  <div
+  <SkillsBulkActionBar
     v-if="bulkSelection.size > 0"
-    class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 rounded-full shadow-lg flex items-center gap-3 px-4 py-2"
-    :style="{
-      background: t.bgPanel,
-      border: `1px solid ${t.borderStrong}`,
-      boxShadow: `0 12px 32px ${t.shadow}`,
-    }"
-  >
-    <span class="text-[12px]" :style="{ color: t.text }">
-      {{ bulkSelection.size }} skill{{ bulkSelection.size === 1 ? '' : 's' }} selected
-    </span>
-    <button
-      class="text-[11px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded transition"
-      :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
-      :disabled="bulkDeleting"
-      @click="clearBulk"
-    >
-      Cancel
-    </button>
-    <button
-      class="text-[11px] inline-flex items-center gap-1.5 px-3 py-1 rounded font-medium transition"
-      :style="{
-        background: t.dangerBg,
-        color: t.danger,
-        border: `1px solid ${t.dangerBorder}`,
-      }"
-      :disabled="bulkDeleting"
-      @click="askBulkDelete"
-    >
-      <Loader2 v-if="bulkDeleting" :size="11" class="animate-spin" />
-      <Trash2 v-else :size="11" />
-      Delete {{ bulkSelection.size }}
-    </button>
-  </div>
+    :count="bulkSelection.size"
+    :deleting="bulkDeleting"
+    @cancel="clearBulk"
+    @delete="askBulkDelete"
+  />
 
   <ContextMenu
     v-if="contextMenu"
@@ -259,8 +119,9 @@
 
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import { Loader2, Plus, RefreshCw, Wand2, Edit3, Trash2, MoreHorizontal } from 'lucide-vue-next'
-import type { Skill, SkillSource } from '~/types'
+import { Wand2, Edit3, Trash2 } from 'lucide-vue-next'
+import type { Agent, Skill, SkillSource } from '~/types'
+import type { SkillScanReport } from '~/stores/workspace'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
@@ -310,15 +171,15 @@ const selectedKey = ref<string | null>(ws.skills[0] ? skillKey(ws.skills[0]) : n
 const mobilePane = ref<'list' | 'detail'>('list')
 const pendingDelete = ref<Skill | null>(null)
 const showPromptModal = ref(false)
-const newButtonRef = ref<HTMLButtonElement | null>(null)
+const sidebarRef = ref<{ newButtonRef: HTMLButtonElement | null } | null>(null)
 const anchor = ref<{ top: number; left: number } | null>(null)
 
 const selectedSkill = computed<Skill | undefined>(() =>
-  ws.skills.find((s) => skillKey(s) === selectedKey.value),
+  ws.skills.find((s: Skill) => skillKey(s) === selectedKey.value),
 )
 
 const filtered = computed<Skill[]>(() =>
-  ws.skills.filter((s) => {
+  ws.skills.filter((s: Skill) => {
     if (!searchQuery.value) return true
     const q = searchQuery.value.toLowerCase()
     return (
@@ -331,11 +192,11 @@ const filtered = computed<Skill[]>(() =>
 
 const allFilteredSelected = computed(() => {
   if (filtered.value.length === 0) return false
-  return filtered.value.every((s) => bulkSelection.value.has(skillKey(s)))
+  return filtered.value.every((s: Skill) => bulkSelection.value.has(skillKey(s)))
 })
 
 const someFilteredSelected = computed(() =>
-  filtered.value.some((s) => bulkSelection.value.has(skillKey(s))),
+  filtered.value.some((s: Skill) => bulkSelection.value.has(skillKey(s))),
 )
 
 const toggleSelectAllFiltered = () => {
@@ -343,15 +204,15 @@ const toggleSelectAllFiltered = () => {
   if (allFilteredSelected.value) {
     // Drop only the visible/filtered keys; preserve any selection on hidden
     // rows so search-filter doesn't silently lose ticks.
-    filtered.value.forEach((s) => next.delete(skillKey(s)))
+    filtered.value.forEach((s: Skill) => next.delete(skillKey(s)))
   } else {
-    filtered.value.forEach((s) => next.add(skillKey(s)))
+    filtered.value.forEach((s: Skill) => next.add(skillKey(s)))
   }
   bulkSelection.value = next
 }
 
 const bulkSelectedSkills = computed<Skill[]>(() =>
-  ws.skills.filter((s) => bulkSelection.value.has(skillKey(s))),
+  ws.skills.filter((s: Skill) => bulkSelection.value.has(skillKey(s))),
 )
 
 const sourceBadgeStyle = (s: Skill): CSSProperties => {
@@ -371,7 +232,7 @@ const pushToast = (text: string, kind: ToastKind = 'info') => {
   const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   toasts.value = [...toasts.value, { id, text, kind }]
   setTimeout(() => {
-    toasts.value = toasts.value.filter((tt) => tt.id !== id)
+    toasts.value = toasts.value.filter((tt: { id: string }) => tt.id !== id)
   }, 3200)
 }
 
@@ -429,7 +290,7 @@ const refresh = async (opts: { silent?: boolean } = {}) => {
       // homedir mismatch — what the UI THINKS the path is vs what node sees).
       const reportText =
         ws.skillScanReports.length > 0
-          ? ws.skillScanReports.map((r) => `${r.dir} (${r.found})`).join(' · ')
+          ? ws.skillScanReports.map((r: SkillScanReport) => `${r.dir} (${r.found})`).join(' · ')
           : 'no scan report'
       if (!sidecar.available) {
         pushToast('Sidecar offline — showing cached skills only', 'info')
@@ -468,7 +329,7 @@ onMounted(() => {
 })
 
 const agentCountFor = (skillId: string): number =>
-  ws.agents.filter((a) => a.skillIds.includes(skillId)).length
+  ws.agents.filter((a: Agent) => a.skillIds.includes(skillId)).length
 
 const WHERE_BY_SOURCE: Record<SkillSource, string> = {
   global: '~/.awog/skills/',
@@ -478,10 +339,12 @@ const WHERE_BY_SOURCE: Record<SkillSource, string> = {
   'project-agents': '.agents/skills/',
 }
 
+const whereFor = (source: SkillSource): string => WHERE_BY_SOURCE[source]
+
 const deleteDescription = computed(() => {
   const s = pendingDelete.value
   if (!s) return ''
-  const where = WHERE_BY_SOURCE[s.source]
+  const where = whereFor(s.source)
   return `This will permanently delete the skill "${s.name}" from ${where}${s.id}/. Agents using it will lose this skill.`
 })
 
@@ -490,7 +353,7 @@ const bulkDeleteDescription = computed(() => {
   if (!list || list.length === 0) return ''
   const sample = list
     .slice(0, 5)
-    .map((s) => `${WHERE_BY_SOURCE[s.source]}${s.id}`)
+    .map((s: Skill) => `${whereFor(s.source)}${s.id}`)
     .join('\n')
   const more = list.length > 5 ? `\n…and ${list.length - 5} more` : ''
   return `This will permanently delete ${list.length} skill folder(s):\n\n${sample}${more}\n\nAgents using any of these will lose them.`
@@ -504,7 +367,7 @@ const onSelect = (s: Skill) => {
 
 const onNew = () => {
   editing.value = false
-  const rect = newButtonRef.value?.getBoundingClientRect()
+  const rect = sidebarRef.value?.newButtonRef?.getBoundingClientRect()
   anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
   showPromptModal.value = true
 }
@@ -607,7 +470,7 @@ const confirmBulkDelete = async () => {
   const failures: { skill: Skill; err: unknown }[] = []
   // Sequential delete — sidecar RPC is single-threaded per request anyway and
   // it makes the per-skill failure attribution clean.
-  await list.reduce(async (prev, s) => {
+  await list.reduce<Promise<void>>(async (prev: Promise<void>, s: Skill) => {
     await prev
     try {
       await ws.deleteSkill(s.id, s.source, s.projectId)
@@ -619,7 +482,7 @@ const confirmBulkDelete = async () => {
   }, Promise.resolve())
   // Reassign to trigger reactivity (Set mutation isn't reactive in Pinia ref).
   bulkSelection.value = new Set(bulkSelection.value)
-  if (wasSelectedKey && !ws.skills.some((s) => skillKey(s) === wasSelectedKey)) {
+  if (wasSelectedKey && !ws.skills.some((s: Skill) => skillKey(s) === wasSelectedKey)) {
     selectedKey.value = ws.skills[0] ? skillKey(ws.skills[0]) : null
   }
   bulkDeleting.value = false
@@ -641,8 +504,8 @@ const renamingKey = ref<string | null>(null)
 const renamingSkill = ref<Skill | null>(null)
 const renameValue = ref('')
 
-const setRenameInputRef = (el: unknown) => {
-  if (el instanceof HTMLInputElement) {
+const setRenameInputRef = (el: HTMLInputElement | null) => {
+  if (el) {
     nextTick(() => {
       el.focus()
       el.select()

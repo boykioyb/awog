@@ -1,11 +1,11 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
+  <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl w-full">
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-2 min-w-0">
         <div class="text-sm font-medium truncate" :style="{ color: t.text }">{{ title }}</div>
         <span
           v-if="dirty"
-          class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
+          class="text-[0.71em] uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
           :style="{
             color: t.statusWarn,
             background: t.warningBg,
@@ -15,11 +15,16 @@
           Modified
         </span>
       </div>
-      <div class="flex gap-2 flex-shrink-0">
+      <div class="flex gap-2 flex-shrink-0 items-center">
+        <!-- Extra editor-specific actions go BEFORE the standard Cancel/Save.
+             Used by AgentEditor for "Edit agent with LLM" — keeps the LLM
+             trigger on the same row as primary actions without each editor
+             having to re-implement Cancel + Save itself. -->
+        <slot name="header-actions-extra" />
         <slot name="header-actions">
           <button
             class="px-3 py-1.5 text-xs rounded transition"
-            :style="{ color: t.textMuted }"
+            :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
             @click="requestClose"
           >
             Cancel
@@ -30,6 +35,7 @@
             :style="{
               background: saveDisabled ? t.bgInput : t.accent,
               color: saveDisabled ? t.textFaint : t.accentText,
+              border: `1px solid ${saveDisabled ? t.border : t.accent}`,
             }"
             @click="onSave"
           >
@@ -52,7 +58,7 @@
       size="sm"
       @close="showDiscardConfirm = false"
     >
-      <div class="p-4 text-[12px] leading-relaxed" :style="{ color: t.textMuted }">
+      <div class="p-4 text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
         You have unsaved changes. Discard them and close the editor?
       </div>
       <template #footer>

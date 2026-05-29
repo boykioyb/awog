@@ -236,12 +236,33 @@ export const useSessionsStore = defineStore('sessions', {
       if (!session) return
       session.settings = { ...session.settings, ...patch }
       pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
+      // Mode is a global preference per user request: when the user flips
+      // mode on the active session, mirror it onto every other session so the
+      // composer chip reads consistently across the app.
+      if (patch.mode !== undefined) {
+        const nextMode = patch.mode
+        this.sessions.forEach((other) => {
+          if (other.id === sessionId) return
+          if (other.settings.mode === nextMode) return
+          other.settings.mode = nextMode
+          pushToSidecar('sessions.upsert', { session: other, mode: 'update-metadata' })
+        })
+      }
     },
 
     setDisabledTools(sessionId: string, names: string[]) {
       const session = this.sessions.find((s) => s.id === sessionId)
       if (!session) return
       session.disabledTools = names.length ? [...names] : []
+      pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
+    },
+
+    setMcpServerIds(sessionId: string, ids: string[] | undefined) {
+      const session = this.sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      // undefined = reset to legacy default (all enabled). [] = explicit none.
+      if (ids === undefined) delete session.mcpServerIds
+      else session.mcpServerIds = [...ids]
       pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
     },
 
@@ -371,18 +392,44 @@ export const useSessionsStore = defineStore('sessions', {
       const settingsStore = useSettingsStore()
       const systemPrompt = settingsStore.defaults?.systemPrompt || undefined
 
-      // Replace placeholder by direct index (captured at push time) to avoid any
-      // chance of finalize() touching an earlier message with a colliding id.
+      // Update placeholder in-place so the reactive proxy keeps tracking the
+      // same object identity (replacing s.messages[i] is also reactive, but
+      // mutating proven-existing fields avoids a class of subtle bugs where a
+      // late session.step event lands on the old reference). Preserve `steps`
+      // streamed via upsertStep — they were the live UI signal during the turn
+      // and would otherwise be dropped, killing the "ran N commands…" button.
       const finalize = (next: SessionMessage) => {
         const s = this.sessions.find((x) => x.id === sessionId)
         if (!s) return
-        const slot = s.messages[placeholderIdx]
-        if (slot && slot.id === placeholderId) {
-          s.messages[placeholderIdx] = next
-        } else {
-          const idx = s.messages.findIndex((m) => m.id === placeholderId)
-          if (idx >= 0) s.messages[idx] = next
+        const slotAt = (idx: number): SessionMessage | undefined => {
+          const direct = s.messages[idx]
+          return direct && direct.id === placeholderId ? direct : undefined
         }
+        let slot = slotAt(placeholderIdx)
+        if (!slot) {
+          const idx = s.messages.findIndex((m) => m.id === placeholderId)
+          if (idx < 0) return
+          slot = s.messages[idx]
+        }
+        if (!slot) return
+
+        // Snapshot existing streamed steps before any mutation so we can
+        // re-attach them if next omits steps (success/cancel paths do).
+        const streamedSteps = slot.steps && slot.steps.length ? [...slot.steps] : undefined
+
+        // Carry over all fields from next. role/id/text/at always change.
+        slot.role = next.role
+        slot.text = next.text
+        slot.at = next.at
+        if (next.startedAt !== undefined) slot.startedAt = next.startedAt
+        if (next.completedAt !== undefined) slot.completedAt = next.completedAt
+        if (next.modelUsed !== undefined) slot.modelUsed = next.modelUsed
+        if (next.usage !== undefined) slot.usage = next.usage
+        if (next.canceled !== undefined) slot.canceled = next.canceled
+        // Steps: prefer caller-supplied; otherwise re-attach streamed ones.
+        if (next.steps !== undefined) slot.steps = next.steps
+        else if (streamedSteps !== undefined) slot.steps = streamedSteps
+
         s.pendingAgentIds = (s.pendingAgentIds ?? []).filter((a) => a !== SIDECAR_PENDING_TAG)
         s.updatedAt = nowIso()
       }
@@ -432,14 +479,48 @@ export const useSessionsStore = defineStore('sessions', {
         pending = ''
       }
 
-      // Upsert a tool step into the placeholder bubble by step.id. Running →
-      // done transitions land as a second event with the same id; we replace
-      // the slot in place so Vue's keyed v-for re-renders without resetting
-      // collapsed/selected UI state.
+      // Upsert a tool step. Running → done transitions land as a second event
+      // with the same id; we merge in place so the keyed v-for re-renders
+      // without resetting collapsed/selected UI state. Steps with `parentId`
+      // are nested under the parent Task step's children (subagent grouping).
+      const findStepById = (arr: SessionStep[], id: string): SessionStep | null => {
+        for (let i = 0; i < arr.length; i += 1) {
+          const s = arr[i]
+          if (!s) continue
+          if (s.id === id) return s
+          if (s.children?.length) {
+            const inner = findStepById(s.children, id)
+            if (inner) return inner
+          }
+        }
+        return null
+      }
       const upsertStep = (step: SessionStep) => {
         const slot = stillOurSlot()
         if (!slot) return
         const existing = slot.steps ?? []
+
+        // Subagent step → attach under parent's children. If parent isn't
+        // tracked yet (race: child event arriving before parent's tool_use
+        // snapshot), fall back to top-level so it isn't lost.
+        if (step.parentId) {
+          const parent = findStepById(existing, step.parentId)
+          if (parent) {
+            const kids = parent.children ?? []
+            const cidx = kids.findIndex((c) => c.id === step.id)
+            if (cidx >= 0) {
+              parent.children = [
+                ...kids.slice(0, cidx),
+                { ...kids[cidx], ...step },
+                ...kids.slice(cidx + 1),
+              ]
+            } else {
+              parent.children = [...kids, step]
+            }
+            return
+          }
+        }
+
         const idx = existing.findIndex((s) => s.id === step.id)
         if (idx >= 0) {
           const next = [...existing]
@@ -548,6 +629,29 @@ export const useSessionsStore = defineStore('sessions', {
           ...(session.disabledTools && session.disabledTools.length
             ? { disabledTools: session.disabledTools }
             : {}),
+          // Per-session MCP whitelist. Omitted (undefined) → sidecar uses all
+          // globally-enabled servers (legacy). Empty array sent intentionally
+          // so user can opt out of every MCP for this session.
+          ...(session.mcpServerIds !== undefined ? { mcpServerIds: session.mcpServerIds } : {}),
+          // Active agent for this turn. Pha 1 (ADR 0015): we only pass an
+          // agent tuple when exactly one agent is invited — sidecar then uses
+          // that agent's systemPrompt for the turn. Multi-agent collab deferred.
+          // We look the agent up by id in workspace store to fill in source +
+          // projectId (first-match if the same slug exists in multiple tiers,
+          // which is rare for pha 1).
+          ...(() => {
+            if (session.invitedAgentIds.length !== 1) return {}
+            const id = session.invitedAgentIds[0]
+            if (!id) return {}
+            const agent = workspace.agentById(id)
+            if (!agent) return {}
+            const ref: { id: string; source: string; projectId?: string } = {
+              id: agent.id,
+              source: agent.source,
+            }
+            if (agent.projectId) ref.projectId = agent.projectId
+            return { agent: ref }
+          })(),
         })
         // Keep placeholderId as the final id — stable key for Vue lists, no diff churn.
         finalize({

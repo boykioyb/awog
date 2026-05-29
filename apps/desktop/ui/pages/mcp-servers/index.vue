@@ -29,7 +29,7 @@
         <button
           v-for="f in transportFilters"
           :key="f"
-          class="px-2 py-0.5 text-[11px] rounded transition flex-shrink-0 capitalize"
+          class="px-2 py-0.5 text-[0.79em] rounded transition flex-shrink-0 capitalize"
           :style="{
             background: transportFilter === f ? t.bgActive : 'transparent',
             color: transportFilter === f ? t.text : t.textDim,
@@ -60,7 +60,7 @@
               v-if="renamingId === srv.id"
               :ref="setRenameInputRef"
               v-model="renameValue"
-              class="text-[12px] flex-1 rounded px-1 py-0.5"
+              class="text-[0.86em] flex-1 rounded px-1 py-0.5"
               :style="{
                 background: t.bgInput,
                 border: `1px solid ${t.borderStrong}`,
@@ -74,7 +74,7 @@
             />
             <span
               v-else
-              class="text-[12px] flex-1 truncate"
+              class="text-[0.86em] flex-1 truncate"
               :style="{ color: t.text }"
               @dblclick.stop="startRename(srv.id, srv.name)"
             >
@@ -93,7 +93,7 @@
               <MoreHorizontal :size="13" />
             </button>
           </div>
-          <div class="text-[10px] truncate pl-5 font-mono" :style="{ color: t.textDim }">
+          <div class="text-[0.71em] truncate pl-5 font-mono" :style="{ color: t.textDim }">
             {{ srv.id }} · {{ srv.transport }} · {{ srv.tools.length }} tools
           </div>
         </div>
@@ -104,7 +104,6 @@
       <McpEditor
         v-if="mode === 'edit'"
         :server="selected ?? null"
-        :initial-draft="manualSeed"
         @save="onSave"
         @cancel="onCancel"
       />
@@ -121,13 +120,7 @@
     </template>
   </MasterDetailShell>
 
-  <McpPromptCreator
-    v-if="showPromptModal"
-    :anchor="anchor"
-    @save="onSave"
-    @edit-manually="onEditManually"
-    @cancel="onCancelPromptModal"
-  />
+  <McpPromptCreator v-if="showPromptModal" :anchor="anchor" @close="onClosePromptModal" />
 
   <ConfirmDeleteModal
     v-if="pendingDeleteId"
@@ -149,7 +142,6 @@
 <script setup lang="ts">
 import { Plus, Plug, Edit3, Trash2, MoreHorizontal } from 'lucide-vue-next'
 import type { MCPServer, MCPStatus, MCPTransport } from '~/types'
-import type { McpDraft } from '~/composables/useMcpGenerator'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
@@ -164,7 +156,6 @@ const pendingDeleteId = ref<string | null>(null)
 const showPromptModal = ref(false)
 const newButtonRef = ref<HTMLButtonElement | null>(null)
 const anchor = ref<{ top: number; left: number } | null>(null)
-const manualSeed = ref<McpDraft | null>(null)
 
 const transportFilters: Array<'all' | MCPTransport> = ['all', 'stdio', 'http', 'sse']
 
@@ -197,45 +188,31 @@ const statusDot = (status: MCPStatus): string => {
 const onSelect = (id: string) => {
   selectedId.value = id
   mode.value = 'view'
-  manualSeed.value = null
   mobilePane.value = 'detail'
 }
 
 const onNew = () => {
-  manualSeed.value = null
   mode.value = 'view'
   const rect = newButtonRef.value?.getBoundingClientRect()
   anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
   showPromptModal.value = true
 }
 
-const onEditManually = (draft: McpDraft) => {
-  manualSeed.value = draft
-  selectedId.value = null
-  showPromptModal.value = false
-  mode.value = 'edit'
-  mobilePane.value = 'detail'
-}
-
-const onSave = (data: MCPServer) => {
-  const isNew = !ws.mcpServers.some((s) => s.id === data.id)
-  if (isNew) {
-    const finalId = data.id || `mcp${Date.now()}`
-    ws.saveMCPServer({ ...data, id: finalId })
-    selectedId.value = finalId
-  } else {
-    ws.saveMCPServer(data)
-    selectedId.value = data.id
+const onSave = async (data: MCPServer) => {
+  const finalId = data.id || `mcp${Date.now()}`
+  try {
+    const saved = await ws.saveMCPServer({ ...data, id: finalId })
+    selectedId.value = saved.id
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[mcp] save failed', err)
   }
   mode.value = 'view'
-  manualSeed.value = null
-  showPromptModal.value = false
   mobilePane.value = 'detail'
 }
 
 const onCancel = () => {
   mode.value = 'view'
-  manualSeed.value = null
   if (!selected.value) selectedId.value = ws.mcpServers[0]?.id ?? null
 }
 
@@ -244,8 +221,17 @@ const onBack = () => {
   mode.value = 'view'
 }
 
-const onCancelPromptModal = () => {
+const onClosePromptModal = async () => {
   showPromptModal.value = false
+  // LLM may have written a new config.json to disk — pull fresh state so the
+  // server appears in the list and gets auto-selected.
+  const beforeIds = new Set(ws.mcpServers.map((s) => s.id))
+  await ws.hydrateMcpFromSidecar()
+  const fresh = ws.mcpServers.find((s) => !beforeIds.has(s.id))
+  if (fresh) {
+    selectedId.value = fresh.id
+    mobilePane.value = 'detail'
+  }
 }
 
 const askDelete = () => {
@@ -256,13 +242,20 @@ const pendingDeleteName = computed(
   () => ws.mcpServers.find((s) => s.id === pendingDeleteId.value)?.name ?? '',
 )
 
-const confirmDelete = () => {
-  if (!pendingDeleteId.value) return
-  ws.deleteMCPServer(pendingDeleteId.value)
-  if (selectedId.value === pendingDeleteId.value) {
+const confirmDelete = async () => {
+  const id = pendingDeleteId.value
+  if (!id) return
+  pendingDeleteId.value = null
+  try {
+    await ws.deleteMCPServer(id)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[mcp] delete failed', err)
+    return
+  }
+  if (selectedId.value === id) {
     selectedId.value = ws.mcpServers[0]?.id ?? null
   }
-  pendingDeleteId.value = null
 }
 
 const contextMenu = ref<{ x: number; y: number; id: string } | null>(null)
@@ -293,20 +286,37 @@ const startRename = (id: string, current: string) => {
   renameValue.value = current
 }
 
-const commitRename = () => {
+const commitRename = async () => {
   const id = renamingId.value
   if (!id) return
   const trimmed = renameValue.value.trim()
   const item = ws.mcpServers.find((s) => s.id === id)
-  if (trimmed && item && trimmed !== item.name) {
-    ws.saveMCPServer({ ...item, name: trimmed })
-  }
   renamingId.value = null
+  if (trimmed && item && trimmed !== item.name) {
+    try {
+      await ws.saveMCPServer({ ...item, name: trimmed })
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[mcp] rename failed', err)
+    }
+  }
 }
 
 const cancelRename = () => {
   renamingId.value = null
 }
+
+let unsubscribeEvents: (() => void) | null = null
+
+onMounted(async () => {
+  unsubscribeEvents = await ws.subscribeMcpEvents()
+  await ws.hydrateMcpFromSidecar()
+  if (!selectedId.value && ws.mcpServers[0]) selectedId.value = ws.mcpServers[0].id
+})
+
+onBeforeUnmount(() => {
+  if (unsubscribeEvents) unsubscribeEvents()
+})
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   const ctx = contextMenu.value

@@ -42,14 +42,36 @@ export interface Skill {
   requiredSources?: string[]
 }
 
+// Mirror of sidecar Agent (apps/desktop/sidecar/src/types/shared.ts). Five
+// tiers like Skills. systemPrompt = body of the AGENT.md file; description +
+// model + role + skillIds + context live in YAML frontmatter. See ADR 0015.
+
+export type AgentSource =
+  | 'global'
+  | 'user-claude'
+  | 'user-agents'
+  | 'project-claude'
+  | 'project-agents'
+
 export interface Agent {
   id: string
+  source: AgentSource
+  projectId?: string
   name: string
-  role: string
+  description: string
   model: string
-  skillIds: string[]
-  context: string[]
   systemPrompt: string
+  role: string
+  skillIds: string[]
+  // Claude Code subagent `tools` field — SDK toolset whitelist. When set,
+  // session sidecar forwards as Options.allowedTools so the agent only sees
+  // these tools (Read/Write/Edit/Bash/Grep/…). Empty/undefined = full toolset.
+  tools?: string[]
+  // Per-agent MCP server whitelist (ADR 0016 — replaces Context Providers).
+  // Empty/undefined = inherit session's MCP set. When set, session sidecar
+  // intersects with the global enabled set + session-level whitelist before
+  // forwarding to the SDK.
+  mcpServerIds?: string[]
 }
 
 export interface WorkflowNode {
@@ -260,6 +282,10 @@ export interface SessionStep {
   planItems?: string[]
   planStatus?: PlanStatus
   planRationale?: string
+  // tool_use_id of the parent Task step when this step ran inside a subagent.
+  // Sidecar fills this from the SDK's parent_tool_use_id; UI store uses it to
+  // attach the step under the parent's `children` array instead of top-level.
+  parentId?: string
 }
 
 export interface SessionMessage {
@@ -309,6 +335,10 @@ export interface Session {
   // means default Claude Code preset (all built-in tools available). Passed to
   // sidecar as Options.disallowedTools per turn.
   disabledTools?: string[]
+  // MCP server ids the user has explicitly opted into for this session.
+  // `undefined` = use all currently enabled servers (legacy/new session default).
+  // `[]` = explicitly no MCP servers attached. `[id1, id2]` = only these.
+  mcpServerIds?: string[]
 }
 
 // ─── MCP Server ────────────────────────────────────────────────────────────
@@ -342,6 +372,7 @@ export interface MCPServer {
   autoStart: boolean
   timeoutMs: number
   trust: MCPTrust
+  deniedTools?: string[]
   status: MCPStatus
   tools: MCPTool[]
   resources: MCPResource[]
@@ -503,13 +534,25 @@ export type GitFileDiff = {
 
 export type GitConflictResolutionChoice = 'ours' | 'theirs' | 'manual' | 'unresolved'
 
+// Mirrors sidecar shape from `git.readConflictFile` so the resolver UI works
+// against live filesystem data without an adapter layer.
 export type GitMergeConflictBlock = {
+  index: number
   startLine: number
+  separatorLine: number
   endLine: number
-  ours: string
-  theirs: string
-  base?: string
-  resolution: GitConflictResolutionChoice
+  ours: string[]
+  theirs: string[]
+  oursLabel: string
+  theirsLabel: string
+}
+
+// Loaded sidecar response for the currently focused conflicted file. Binary
+// files have no blocks (file-level pick only).
+export type GitConflictFile = {
+  path: string
+  isBinary: boolean
+  blocks: GitMergeConflictBlock[]
 }
 
 export type GitRepoState = 'clean' | 'dirty' | 'merging' | 'rebasing' | 'detached' | 'no-repo'
@@ -551,7 +594,7 @@ export type AccentPreset =
   | 'tokyo'
   | 'gruvbox'
   | 'catppuccin'
-export type ThemeColor = AccentPreset
+export type ThemeColor = AccentPreset | 'custom'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 
 export interface AppearanceSettings {
@@ -561,5 +604,6 @@ export interface AppearanceSettings {
   fontWeight: FontWeight
   accent: AccentPreset
   themeColor: ThemeColor
+  themeColorCustom: string
   surfaceDepth: SurfaceDepth
 }

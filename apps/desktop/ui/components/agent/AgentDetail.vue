@@ -1,5 +1,5 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
+  <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
         class="rounded flex items-center justify-center text-sm font-bold flex-shrink-0"
@@ -16,7 +16,7 @@
       </div>
       <div class="flex-1 min-w-0">
         <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">{{ agent.name }}</h1>
-        <div class="text-[12px] inline-flex items-center gap-1.5" :style="{ color: t.textDim }">
+        <div class="text-[0.86em] inline-flex items-center gap-1.5" :style="{ color: t.textDim }">
           <Sparkles :size="11" />
           {{ model?.label }}
           <span :style="{ color: t.textFaint }">·</span>
@@ -47,14 +47,24 @@
           <Copy :size="13" />
         </button>
         <button
-          class="px-3 py-1.5 text-xs rounded inline-flex items-center gap-1.5 transition"
-          :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          title="Edit"
           @click="emit('edit')"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.background = t.bgHover)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.background = 'transparent')"
+          @mouseenter="
+            (e) => {
+              ;(e.currentTarget as HTMLElement).style.background = t.bgHover
+              ;(e.currentTarget as HTMLElement).style.color = t.text
+            }
+          "
+          @mouseleave="
+            (e) => {
+              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
+              ;(e.currentTarget as HTMLElement).style.color = t.textDim
+            }
+          "
         >
-          <Edit3 :size="11" />
-          Edit
+          <Edit3 :size="13" />
         </button>
         <button
           class="p-1.5 rounded transition"
@@ -80,33 +90,74 @@
     </div>
 
     <div class="mb-6">
+      <MarkdownBodyView
+        title="System Prompt"
+        :content="agent.systemPrompt ?? ''"
+        empty-text="(no system prompt — click Edit to draft one)"
+        allow-edit
+        edit-title="Revise system prompt via LLM"
+        @edit-body="(anchor) => emit('edit-body', anchor)"
+      />
+    </div>
+
+    <div v-if="agent.mcpServerIds && agent.mcpServerIds.length > 0" class="mb-6">
       <div
-        class="text-[10px] uppercase tracking-wider font-medium mb-2"
+        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
-        System Prompt
+        MCP Servers · {{ agent.mcpServerIds.length }} allowed
       </div>
+      <div class="flex flex-wrap gap-1.5">
+        <span
+          v-for="id in agent.mcpServerIds"
+          :key="id"
+          class="inline-flex items-center gap-1.5 text-[0.79em] px-2 py-1 rounded font-mono"
+          :style="mcpPillStyle(id)"
+        >
+          <Plug :size="10" />
+          {{ mcpLabel(id) }}
+        </span>
+      </div>
+      <div class="text-[0.71em] mt-1.5" :style="{ color: t.textDim }">
+        Session sees only these MCP servers when this agent is active (intersected with
+        session-level whitelist if any).
+      </div>
+    </div>
+
+    <div v-if="agent.tools && agent.tools.length > 0" class="mb-6">
       <div
-        class="text-[12px] leading-relaxed p-3 rounded"
-        :style="{
-          color: t.textMuted,
-          background: t.bgInput,
-          border: `1px solid ${t.border}`,
-        }"
+        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
+        :style="{ color: t.textDim }"
       >
-        <template v-if="agent.systemPrompt">{{ agent.systemPrompt }}</template>
-        <span v-else :style="{ color: t.textFaint }">No system prompt set</span>
+        Tools · {{ agent.tools.length }}
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        <span
+          v-for="tool in agent.tools"
+          :key="tool"
+          class="text-[0.79em] px-2 py-1 rounded font-mono"
+          :style="{
+            background: t.bgInput,
+            color: t.textMuted,
+            border: `1px solid ${t.border}`,
+          }"
+        >
+          {{ tool }}
+        </span>
+      </div>
+      <div class="text-[0.71em] mt-1.5" :style="{ color: t.textDim }">
+        SDK toolset restricted to this whitelist (Options.allowedTools).
       </div>
     </div>
 
     <div class="mb-6">
       <div
-        class="text-[10px] uppercase tracking-wider font-medium mb-2"
+        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
         Skills · {{ agentSkills.length }}
       </div>
-      <div v-if="agentSkills.length === 0" class="text-[11px] py-2" :style="{ color: t.textFaint }">
+      <div v-if="agentSkills.length === 0" class="text-[0.79em] py-2" :style="{ color: t.textFaint }">
         No skills assigned. This agent cannot be used in workflows.
       </div>
       <div v-else class="space-y-1">
@@ -118,46 +169,21 @@
         >
           <Wand2 :size="11" :style="{ color: t.textDim, marginTop: '3px' }" />
           <div class="flex-1 min-w-0">
-            <div class="text-[12px] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-            <div class="text-[10px] mt-0.5 leading-relaxed" :style="{ color: t.textDim }">
+            <div class="text-[0.86em] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
+            <div class="text-[0.71em] mt-0.5 leading-relaxed" :style="{ color: t.textDim }">
               {{ s.description }}
             </div>
           </div>
         </div>
       </div>
     </div>
-
-    <div>
-      <div
-        class="text-[10px] uppercase tracking-wider font-medium mb-2"
-        :style="{ color: t.textDim }"
-      >
-        Context Providers
-      </div>
-      <div class="flex flex-wrap gap-1.5">
-        <div v-if="agent.context.length === 0" class="text-[11px]" :style="{ color: t.textFaint }">
-          No context providers configured
-        </div>
-        <template v-else>
-          <div
-            v-for="p in providers"
-            :key="p.id"
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11px]"
-            :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
-          >
-            <component :is="p.icon" :size="10" :style="{ color: t.textDim }" />
-            {{ p.label }}
-          </div>
-        </template>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Copy, Edit3, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
+import type { CSSProperties } from 'vue'
+import { Copy, Edit3, Plug, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
 import type { Agent, Skill } from '~/types'
-import { CONTEXT_PROVIDERS } from '~/utils/initial-data'
 import { MODELS } from '~/utils/models'
 
 const props = defineProps<{
@@ -166,6 +192,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   edit: []
+  'edit-body': [anchor: { top: number; left: number } | null]
   duplicate: []
   delete: []
 }>()
@@ -179,9 +206,32 @@ const agentSkills = computed<Skill[]>(() =>
   ws.skills.filter((s) => props.agent.skillIds.includes(s.id)),
 )
 
-const providers = computed(() =>
-  props.agent.context
-    .map((c) => CONTEXT_PROVIDERS.find((p) => p.id === c))
-    .filter((p): p is (typeof CONTEXT_PROVIDERS)[number] => !!p),
-)
+// MCP pill rendering. Resolve display name from store; gray out + warn style
+// if the referenced server is missing (deleted) or disabled.
+const mcpLabel = (id: string): string => ws.mcpServers.find((s) => s.id === id)?.name ?? id
+
+const mcpPillStyle = (id: string): CSSProperties => {
+  const server = ws.mcpServers.find((s) => s.id === id)
+  const missing = !server
+  const disabled = server && !server.enabled
+  if (missing) {
+    return {
+      background: t.value.dangerBg,
+      color: t.value.danger,
+      border: `1px solid ${t.value.dangerBorder}`,
+    }
+  }
+  if (disabled) {
+    return {
+      background: t.value.bgInput,
+      color: t.value.textFaint,
+      border: `1px solid ${t.value.border}`,
+    }
+  }
+  return {
+    background: t.value.bgInput,
+    color: t.value.text,
+    border: `1px solid ${t.value.border}`,
+  }
+}
 </script>

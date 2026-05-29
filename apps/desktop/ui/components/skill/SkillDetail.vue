@@ -14,7 +14,7 @@
             {{ skill.name }}
           </h1>
           <span
-            class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.bgInput,
               color: t.textDim,
@@ -24,7 +24,7 @@
             /{{ skill.id }}
           </span>
           <span
-            class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
+            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
             :style="{
               background: isProjectScoped ? t.accent : t.bgInput,
               color: isProjectScoped ? t.accentText : t.textDim,
@@ -35,24 +35,32 @@
             {{ sourceLabel }}
           </span>
         </div>
-        <div class="text-[13px] leading-relaxed" :style="{ color: t.textMuted }">
+        <div class="text-[0.93em] leading-relaxed" :style="{ color: t.textMuted }">
           {{ skill.description }}
         </div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
         <button
-          class="px-3 py-1.5 text-xs rounded inline-flex items-center gap-1.5 transition"
-          :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          title="Edit"
+          @click="emit('edit')"
           @mouseenter="
-            (e: MouseEvent) => ((e.currentTarget as HTMLElement).style.background = t.bgHover)
+            (e: MouseEvent) => {
+              const el = e.currentTarget as HTMLElement
+              el.style.background = t.bgHover
+              el.style.color = t.text
+            }
           "
           @mouseleave="
-            (e: MouseEvent) => ((e.currentTarget as HTMLElement).style.background = 'transparent')
+            (e: MouseEvent) => {
+              const el = e.currentTarget as HTMLElement
+              el.style.background = 'transparent'
+              el.style.color = t.textDim
+            }
           "
-          @click="emit('edit')"
         >
-          <Edit3 :size="11" />
-          Edit
+          <Edit3 :size="13" />
         </button>
         <button
           class="p-1.5 rounded transition"
@@ -82,7 +90,7 @@
       <span
         v-for="g in skill.globs ?? []"
         :key="`g-${g}`"
-        class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+        class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         glob: {{ g }}
@@ -90,7 +98,7 @@
       <span
         v-for="tool in skill.alwaysAllow ?? []"
         :key="`a-${tool}`"
-        class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+        class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         allow: {{ tool }}
@@ -98,7 +106,7 @@
       <span
         v-for="src in skill.requiredSources ?? []"
         :key="`s-${src}`"
-        class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+        class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         source: {{ src }}
@@ -106,90 +114,24 @@
     </div>
 
     <div class="mb-6">
-      <div class="flex items-center justify-between mb-2">
-        <div class="text-[10px] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
-          Instructions
-        </div>
-        <div class="flex items-center gap-1">
-          <div
-            class="flex items-center rounded overflow-hidden"
-            :style="{ border: `1px solid ${t.border}` }"
-          >
-            <button
-              v-for="mode in ['preview', 'raw'] as const"
-              :key="mode"
-              class="px-2 py-1 text-[10px] inline-flex items-center gap-1 transition"
-              :style="viewModeStyle(mode)"
-              @click="viewMode = mode"
-            >
-              <component :is="mode === 'preview' ? Eye : FileCode" :size="10" />
-              {{ mode }}
-            </button>
-          </div>
-          <button
-            class="px-2 py-1 text-[10px] rounded inline-flex items-center gap-1 transition"
-            :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
-            :title="copied ? 'Copied!' : 'Copy markdown to clipboard'"
-            @click="onCopy"
-          >
-            <component :is="copied ? Check : Copy" :size="10" />
-            {{ copied ? 'Copied' : 'Copy' }}
-          </button>
-          <button
-            class="px-2 py-1 text-[10px] rounded inline-flex items-center gap-1 transition"
-            :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
-            title="Edit body via LLM prompt"
-            @click="onEditBody"
-          >
-            <Sparkles :size="10" />
-            Edit
-          </button>
-        </div>
-      </div>
-
-      <div
-        v-if="!skill.body"
-        class="text-[11px] italic p-3 rounded"
-        :style="{
-          color: t.textFaint,
-          background: t.bgInput,
-          border: `1px solid ${t.border}`,
-        }"
-      >
-        (empty body — click Edit to draft instructions)
-      </div>
-      <div
-        v-else-if="viewMode === 'preview'"
-        class="p-3 rounded text-[13px] leading-relaxed"
-        :style="{
-          color: t.textMuted,
-          background: t.bgInput,
-          border: `1px solid ${t.border}`,
-        }"
-      >
-        <MarkdownRenderer :content="skill.body" />
-      </div>
-      <pre
-        v-else
-        class="text-[12px] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
-        :style="{
-          color: t.textMuted,
-          background: t.bgInput,
-          border: `1px solid ${t.border}`,
-          margin: 0,
-        }"
-        >{{ skill.body }}</pre
-      >
+      <MarkdownBodyView
+        title="Instructions"
+        :content="skill.body ?? ''"
+        empty-text="(empty body — click Edit to draft instructions)"
+        allow-edit
+        edit-title="Edit body via LLM prompt"
+        @edit-body="(anchor) => emit('edit-body', anchor)"
+      />
     </div>
 
     <div>
       <div
-        class="text-[10px] uppercase tracking-wider font-medium mb-2"
+        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
         Used by · {{ agentsUsing.length }} agents
       </div>
-      <div v-if="agentsUsing.length === 0" class="text-[11px]" :style="{ color: t.textFaint }">
+      <div v-if="agentsUsing.length === 0" class="text-[0.79em]" :style="{ color: t.textFaint }">
         Not assigned to any agent yet
       </div>
       <div v-else class="space-y-1.5">
@@ -203,10 +145,10 @@
             <RoleBadge :role="agent.role" />
           </div>
           <div class="flex-1">
-            <div class="text-[12px] font-medium" :style="{ color: t.text }">
+            <div class="text-[0.86em] font-medium" :style="{ color: t.text }">
               {{ agent.name }}
             </div>
-            <div class="text-[10px]" :style="{ color: t.textDim }">
+            <div class="text-[0.71em]" :style="{ color: t.textDim }">
               {{ MODELS.find((m) => m.id === agent.model)?.label }}
             </div>
           </div>
@@ -217,8 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import type { CSSProperties } from 'vue'
-import { Wand2, Edit3, Trash2, Eye, FileCode, Copy, Check, Sparkles } from 'lucide-vue-next'
+import { Wand2, Edit3, Trash2 } from 'lucide-vue-next'
 import type { Agent, Skill } from '~/types'
 import { MODELS } from '~/utils/models'
 import { calcBadgeColWidth } from '~/utils/graph'
@@ -233,52 +174,8 @@ const emit = defineEmits<{
   delete: []
 }>()
 
-const onEditBody = (e: MouseEvent) => {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  emit('edit-body', { top: rect.bottom + 8, left: rect.left })
-}
-
 const { t } = useTheme()
 const ws = useWorkspaceStore()
-
-type ViewMode = 'preview' | 'raw'
-const viewMode = ref<ViewMode>('preview')
-const copied = ref(false)
-
-const viewModeStyle = (mode: ViewMode): CSSProperties => {
-  const active = viewMode.value === mode
-  return {
-    background: active ? t.value.bgActive : 'transparent',
-    color: active ? t.value.text : t.value.textDim,
-    borderRight: mode === 'preview' ? `1px solid ${t.value.border}` : 'none',
-  }
-}
-
-const onCopy = async () => {
-  try {
-    await navigator.clipboard.writeText(props.skill.body ?? '')
-    copied.value = true
-    setTimeout(() => {
-      copied.value = false
-    }, 1500)
-  } catch {
-    // Clipboard API can fail under non-secure contexts (e.g. file://). Fall
-    // back to legacy execCommand which Tauri webview tolerates.
-    const textarea = document.createElement('textarea')
-    textarea.value = props.skill.body ?? ''
-    document.body.appendChild(textarea)
-    textarea.select()
-    try {
-      document.execCommand('copy')
-      copied.value = true
-      setTimeout(() => {
-        copied.value = false
-      }, 1500)
-    } finally {
-      document.body.removeChild(textarea)
-    }
-  }
-}
 
 const agentsUsing = computed<Agent[]>(() =>
   ws.agents.filter((a) => a.skillIds.includes(props.skill.id)),

@@ -3,7 +3,7 @@
     <template #list>
       <div class="py-4">
         <div
-          class="px-3 mb-3 text-[11px] uppercase tracking-wider font-medium"
+          class="px-3 mb-3 text-[0.79em] uppercase tracking-wider font-medium"
           :style="{ color: t.textDim }"
         >
           Settings
@@ -12,7 +12,7 @@
           <button
             v-for="s in sections"
             :key="s.id"
-            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded text-[12px] transition"
+            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded text-[0.86em] transition"
             :style="{
               background: section === s.id ? t.bgActive : 'transparent',
               color: section === s.id ? t.text : t.textDim,
@@ -31,7 +31,6 @@
         <SettingsWorkspaceSection v-if="section === 'workspace'" />
         <SettingsDefaultsSection v-else-if="section === 'defaults'" />
         <SettingsModelsSection v-else-if="section === 'models'" />
-        <SettingsConnectorsSection v-else-if="section === 'connectors'" />
         <SettingsAppearanceSection v-else-if="section === 'appearance'" />
       </div>
     </template>
@@ -39,10 +38,10 @@
 </template>
 
 <script setup lang="ts">
-import { FolderGit2, Key, Palette, Plug, Sliders } from 'lucide-vue-next'
+import { FolderGit2, Key, Palette, Sliders } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
-type SectionId = 'workspace' | 'defaults' | 'models' | 'connectors' | 'appearance'
+type SectionId = 'workspace' | 'defaults' | 'models' | 'appearance'
 
 const { t } = useTheme()
 const settings = useSettingsStore()
@@ -65,6 +64,5 @@ const sections: { id: SectionId; label: string; icon: Component }[] = [
   { id: 'workspace', label: 'Workspace', icon: FolderGit2 },
   { id: 'defaults', label: 'Defaults', icon: Sliders },
   { id: 'models', label: 'Models & API Keys', icon: Key },
-  { id: 'connectors', label: 'Connectors', icon: Plug },
 ]
 </script>
