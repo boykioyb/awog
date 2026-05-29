@@ -10,8 +10,13 @@ import {
 } from '../sessions/permissions.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
-import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
-import type { SessionMessage, SessionSettings } from '../types/shared.js'
+import { listServers as listMcpServers } from '../mcp/store.js'
+import { loadAgent } from '../agents/store.js'
+import { loadSkillByIdAnyTier } from '../skills/store.js'
+import { listProjects } from '../projects/store.js'
+import { expandSecrets } from '../mcp/secrets.js'
+import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
+import type { SessionMessage, SessionSettings, Skill } from '../types/shared.js'
 
 const SessionMessageSchema = z
   .object({
@@ -51,6 +56,27 @@ const Params = z.object({
   // Session-scoped tool denylist (SDK tool names). Forwarded to
   // Options.disallowedTools so the model never even sees the tool exists.
   disabledTools: z.array(z.string()).optional(),
+  // Session-scoped MCP server whitelist. `undefined` = legacy behaviour: use
+  // all globally-enabled servers. `[]` = explicitly none. `[ids]` = only these
+  // (intersected with the globally-enabled set).
+  mcpServerIds: z.array(z.string()).optional(),
+  // Active agent for this turn. Identifies the AGENT.md by (id, source,
+  // projectId?) tuple because the same slug can exist in multiple tiers.
+  // When present + resolves to an agent with non-empty systemPrompt, that
+  // prompt replaces `params.systemPrompt` for this turn. ADR 0015.
+  agent: z
+    .object({
+      id: z.string().min(1).max(64),
+      source: z.enum([
+        'global',
+        'user-claude',
+        'user-agents',
+        'project-claude',
+        'project-agents',
+      ]),
+      projectId: z.string().min(1).max(64).optional(),
+    })
+    .optional(),
 })
 
 // exactOptionalPropertyTypes: zod's .optional() yields `T | undefined`, but
@@ -88,6 +114,155 @@ register('sessions.sendMessage', async (raw) => {
         err: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+
+  // Resolve the active agent (if any). When found:
+  //   - `agent.systemPrompt` REPLACES `params.systemPrompt` (ADR 0015)
+  //   - `agent.skillIds` resolve via first-match across 5 tiers; each SKILL.md
+  //     body is appended under "# Available Skills" so the model can invoke
+  //     them. Missing skills are logged and skipped (non-fatal).
+  //   - `agent.tools` (Claude Code subagent whitelist) → Options.allowedTools
+  // Missing / unparseable agent → fall back to the caller's prompt + full toolset.
+  let resolvedSystemPrompt = params.systemPrompt
+  let resolvedAllowedTools: string[] | undefined
+  let resolvedAgentMcpIds: string[] | undefined
+  if (params.agent) {
+    try {
+      const agent = await loadAgent(
+        params.agent.id,
+        params.agent.source,
+        params.agent.projectId,
+      )
+      if (agent?.systemPrompt) resolvedSystemPrompt = agent.systemPrompt
+      if (agent?.tools && agent.tools.length > 0) resolvedAllowedTools = agent.tools
+      if (agent?.mcpServerIds && agent.mcpServerIds.length > 0) {
+        resolvedAgentMcpIds = agent.mcpServerIds
+      }
+
+      // Skills injection. We pass all registered project ids so a project-tier
+      // skill referenced by id also resolves. Skills not found → log + skip.
+      if (agent && agent.skillIds.length > 0) {
+        let allProjectIds: string[] = []
+        try {
+          const projects = await listProjects()
+          allProjectIds = projects.map((p) => p.id)
+        } catch {
+          // listProjects failed — skip project-tier skills, still attempt user tiers
+        }
+        const loaded = await Promise.all(
+          agent.skillIds.map(async (id) => {
+            const skill = await loadSkillByIdAnyTier(id, allProjectIds)
+            if (!skill) {
+              log.warn('agent references unknown skill', {
+                agentId: agent.id,
+                skillId: id,
+              })
+            }
+            return skill
+          }),
+        )
+        const skillSections = loaded
+          .filter((s): s is Skill => s !== null)
+          .map((s) => `## Skill: ${s.name}\n\n${s.body}`)
+        if (skillSections.length > 0) {
+          const base = resolvedSystemPrompt ?? ''
+          resolvedSystemPrompt = base
+            ? `${base}\n\n---\n\n# Available Skills\n\n${skillSections.join('\n\n')}`
+            : `# Available Skills\n\n${skillSections.join('\n\n')}`
+        }
+      }
+    } catch (err) {
+      log.warn('failed to load agent for runtime injection', {
+        agent: params.agent,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Build the MCP server map for the SDK. ADR 0014 Q4: SDK spawns its own
+  // process per query. We only forward enabled stdio servers — disabled
+  // entries shouldn't surface tools to the model.
+  // Per-session whitelist (params.mcpServerIds) further narrows the set:
+  //   undefined → all enabled (legacy)
+  //   []        → none
+  //   [ids]     → only those (∩ enabled)
+  let mcpServersForSdk: Options['mcpServers'] | undefined
+  // Track which servers actually made it into the SDK so we can build a
+  // matching system-prompt nudge (only when user explicitly whitelisted).
+  const attachedMcpServers: { id: string; name: string }[] = []
+  try {
+    const all = await listMcpServers()
+    // Two whitelist layers (ADR 0016): session-level (params.mcpServerIds) and
+    // agent-level (resolvedAgentMcpIds). Intersect both when present so the
+    // narrower scope wins. undefined = "no restriction at this layer".
+    const sessionWhitelist =
+      params.mcpServerIds !== undefined ? new Set(params.mcpServerIds) : null
+    const agentWhitelist = resolvedAgentMcpIds ? new Set(resolvedAgentMcpIds) : null
+    const entries: [string, Options['mcpServers'] extends Record<string, infer V> | undefined
+      ? V
+      : never][] = []
+    for (const s of all) {
+      if (!s.enabled) continue
+      if (sessionWhitelist && !sessionWhitelist.has(s.id)) continue
+      if (agentWhitelist && !agentWhitelist.has(s.id)) continue
+      let cfg
+      if (s.transport === 'stdio') {
+        if (!s.command) continue
+        // Expand `secret:KEY` placeholders in env against OS keychain — ADR 0018.
+        // The SDK spawns the child itself; we pass plaintext env here. The
+        // expansion happens fresh per turn so a re-saved keychain value
+        // takes effect on the next message.
+        // eslint-disable-next-line no-await-in-loop
+        const expandedEnv = await expandSecrets(s.id, s.env)
+        cfg = {
+          type: 'stdio' as const,
+          command: s.command,
+          ...(s.args ? { args: s.args } : {}),
+          ...(Object.keys(expandedEnv).length > 0 ? { env: expandedEnv } : {}),
+        }
+      } else if (s.transport === 'http') {
+        if (!s.url) continue
+        // eslint-disable-next-line no-await-in-loop
+        const expandedHeaders = await expandSecrets(s.id, s.headers)
+        cfg = {
+          type: 'http' as const,
+          url: s.url,
+          ...(Object.keys(expandedHeaders).length > 0 ? { headers: expandedHeaders } : {}),
+        }
+      } else {
+        // sse not supported pha 2
+        continue
+      }
+      entries.push([s.id, cfg])
+      attachedMcpServers.push({ id: s.id, name: s.name })
+    }
+    if (entries.length > 0) {
+      mcpServersForSdk = Object.fromEntries(entries) as Options['mcpServers']
+    }
+  } catch (err) {
+    log.warn('failed to list mcp servers for session', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // System-prompt nudge — only when user EXPLICITLY attached MCP servers
+  // (params.mcpServerIds set OR agent has mcpServerIds) AND at least one
+  // server is reachable. Without this, Claude often falls back to CLI tools
+  // (`gh`, `gcloud`, `kubectl`) because they're heavily represented in
+  // training data. Forwarded to subagents so Task-spawned children honour it.
+  let systemPromptAppend: string | undefined
+  const hasExplicitWhitelist =
+    params.mcpServerIds !== undefined || resolvedAgentMcpIds !== undefined
+  if (hasExplicitWhitelist && attachedMcpServers.length > 0) {
+    const lines = attachedMcpServers.map((s) => `- mcp__${s.id}__* (${s.name})`).join('\n')
+    systemPromptAppend = `<mcp-preference>
+The user explicitly attached the following MCP servers to this session:
+${lines}
+
+When you need to interact with these services, **prefer the corresponding \`mcp__<serverId>__<toolName>\` tools** over CLI equivalents (\`gh\`, \`gcloud\`, \`kubectl\`, \`aws\`, raw HTTP) or shell scripting. The MCP tools were explicitly enabled for this purpose.
+
+When delegating work via the Task tool, instruct the subagent in the prompt to use these MCP tools rather than CLI alternatives — subagents do not inherit MCP servers automatically, but they can be steered through your instruction.
+</mcp-preference>`
   }
 
   // Track which permission requestIds belong to this turn so we can reject
@@ -150,11 +325,14 @@ register('sessions.sendMessage', async (raw) => {
         // treats history as read-only SessionMessage[].
         history: params.history as unknown as SessionMessage[],
         settings: toSessionSettings(params.settings),
-        ...(params.systemPrompt ? { systemPrompt: params.systemPrompt } : {}),
+        ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(cwd ? { cwd } : {}),
         ...(params.disabledTools && params.disabledTools.length
           ? { disabledTools: params.disabledTools }
           : {}),
+        ...(mcpServersForSdk ? { mcpServers: mcpServersForSdk } : {}),
+        ...(systemPromptAppend ? { systemPromptAppend } : {}),
+        ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
         canUseTool,
         abortController,
       },

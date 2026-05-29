@@ -27,6 +27,54 @@ import './methods/skills.upsert.js'
 import './methods/skills.delete.js'
 import './methods/skills.generate.js'
 import './methods/skills.author.js'
+import './methods/mcp.list.js'
+import './methods/mcp.upsert.js'
+import './methods/mcp.delete.js'
+import './methods/mcp.toggle.js'
+import './methods/mcp.toggle-tool.js'
+import './methods/mcp.restart.js'
+import './methods/mcp.test.js'
+import './methods/mcp.discover-preset.js'
+import './methods/mcp.author.js'
+import './methods/mcp.set-secret.js'
+import './methods/agents.list.js'
+import './methods/agents.upsert.js'
+import './methods/agents.delete.js'
+import './methods/agents.author.js'
+import './methods/agents.generate.js'
+import './methods/git.check-installed.js'
+import './methods/git.init.js'
+import './methods/git.status.js'
+import './methods/git.log.js'
+import './methods/git.diff.js'
+import './methods/git.branch-list.js'
+import './methods/git.stash-list.js'
+import './methods/git.remote-list.js'
+import './methods/git.stage-file.js'
+import './methods/git.stage-hunk.js'
+import './methods/git.unstage-file.js'
+import './methods/git.discard-file.js'
+import './methods/git.commit.js'
+import './methods/git.branch-create.js'
+import './methods/git.branch-checkout.js'
+import './methods/git.branch-delete.js'
+import './methods/git.checkout-file-at-commit.js'
+import './methods/git.stash-save.js'
+import './methods/git.stash-pop.js'
+import './methods/git.stash-apply.js'
+import './methods/git.stash-drop.js'
+import './methods/git.read-conflict-file.js'
+import './methods/git.resolve-file.js'
+import './methods/git.resolve-file-binary.js'
+import './methods/git.merge-abort.js'
+import './methods/git.complete-merge.js'
+import './methods/git.fetch.js'
+import './methods/git.pull.js'
+import './methods/git.push.js'
+import './methods/git.cancel.js'
+import './methods/git.generate-commit-message.js'
+import { mcpManager } from './mcp/manager.js'
+import { awogWatcher } from './watcher.js'
 
 type JsonRpcRequest = {
   jsonrpc: '2.0'
@@ -89,3 +137,10 @@ if (stdoutHandle?.setBlocking) stdoutHandle.setBlocking(true)
 
 log.info('sidecar starting', { pid: process.pid, node: process.version })
 startStdioLoop(handleLine)
+
+// Auto-start enabled+autoStart MCP servers on sidecar boot (AC-3 restart-safe).
+void mcpManager.hydrateAutoStart()
+
+// Start filesystem watcher (Sprint 3 C1) — emits *.fs-changed events to the UI
+// when AGENT.md / SKILL.md / mcp-servers/*.json are touched outside the app.
+void awogWatcher.start()

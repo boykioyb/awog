@@ -132,6 +132,9 @@ function buildOptions(
   cwd: string | undefined,
   canUseTool: CanUseTool | undefined,
   disabledTools: string[] | undefined,
+  mcpServers: Options['mcpServers'] | undefined,
+  systemPromptAppend: string | undefined,
+  allowedTools: string[] | undefined,
 ): Options {
   // Replace subprocess env entirely (SDK does NOT merge). Inherit PATH/HOME
   // explicitly so child can find git/node, then inject the OAuth token.
@@ -165,12 +168,24 @@ function buildOptions(
   if (cwd) opts.cwd = cwd
   if (canUseTool) opts.canUseTool = canUseTool
   if (disabledTools && disabledTools.length) opts.disallowedTools = disabledTools
+  if (mcpServers && Object.keys(mcpServers).length > 0) opts.mcpServers = mcpServers
+  if (allowedTools && allowedTools.length > 0) opts.allowedTools = allowedTools
 
   if (systemPrompt) {
     // String form fully REPLACES the Claude Code preset prompt. Using `append`
     // (or extraArgs.append-system-prompt) leaves "You are Claude Code..." in
     // place and only appends ours — which is why AWOG identity didn't take.
-    opts.systemPrompt = systemPrompt
+    // If we ALSO have an append nudge, concatenate it onto the custom prompt.
+    opts.systemPrompt = systemPromptAppend
+      ? `${systemPrompt}\n\n${systemPromptAppend}`
+      : systemPrompt
+  } else if (systemPromptAppend) {
+    // No custom systemPrompt → keep Claude Code preset, append our nudge.
+    opts.systemPrompt = {
+      type: 'preset',
+      preset: 'claude_code',
+      append: systemPromptAppend,
+    }
   }
 
   if (
@@ -206,6 +221,16 @@ export interface RunNonStreamArgs {
   // Per-session tool denylist. Maps to Options.disallowedTools so the model
   // never even sees these tool names in its tool definitions.
   disabledTools?: string[]
+  // Enabled stdio MCP servers from `mcp.list`. Forwarded to Options.mcpServers
+  // so the Claude Agent SDK spawns its own process per query (ADR 0014 Q4).
+  mcpServers?: Options['mcpServers']
+  // Extra system prompt appended to (not replacing) the Claude Code preset.
+  // Used to nudge the model toward MCP tools when the user explicitly attached
+  // MCP servers to this session.
+  systemPromptAppend?: string
+  // Claude Code subagent `tools` field from the active agent. When set,
+  // restricts the SDK toolset to this whitelist (Options.allowedTools).
+  allowedTools?: string[]
 }
 
 export interface StreamCallbacks {
@@ -277,6 +302,9 @@ export async function runStream(
       args.cwd,
       args.canUseTool,
       args.disabledTools,
+      args.mcpServers,
+      args.systemPromptAppend,
+      args.allowedTools,
     )
 
     log.info('chat stream request', {
@@ -312,14 +340,23 @@ export async function runStream(
             delta?: { type?: string; text?: string }
             content_block?: { type?: string; id?: string; name?: string; input?: unknown }
           }
+          // parent_tool_use_id is non-null when this event came from a
+          // subagent spawned by the Task tool — used to nest the step under
+          // its parent in the UI.
+          const parentId =
+            (evt as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? null
           if (
             inner.type === 'content_block_delta' &&
             inner.delta?.type === 'text_delta' &&
             typeof inner.delta.text === 'string' &&
             inner.delta.text.length > 0
           ) {
-            fullText += inner.delta.text
-            cb.onChunk(inner.delta.text)
+            // Only forward text from the MAIN agent to the chat bubble. Subagent
+            // internal narration would otherwise leak into the parent's reply.
+            if (!parentId) {
+              fullText += inner.delta.text
+              cb.onChunk(inner.delta.text)
+            }
             continue
           }
           // Early "tool_use is starting" signal. Input is usually empty at this
@@ -337,7 +374,9 @@ export async function runStream(
             if (cb.onStep && !announcedUses.has(id)) {
               const name = inner.content_block.name
               announcedUses.set(id, { name, input: {} })
-              cb.onStep(stepFromToolUse({ id, name, input: {} }))
+              const step = stepFromToolUse({ id, name, input: {} })
+              if (parentId) step.parentId = parentId
+              cb.onStep(step)
             }
             continue
           }
@@ -352,14 +391,20 @@ export async function runStream(
             usage?: { input_tokens?: number; output_tokens?: number }
             content?: unknown[]
           }
-          if (msg.model) modelUsed = msg.model
-          if (msg.usage?.input_tokens) inputTokens = msg.usage.input_tokens
-          if (msg.usage?.output_tokens) outputTokens = msg.usage.output_tokens
-          // If we somehow received no stream_event deltas (e.g. SDK omitted
-          // partials for this run), reconstruct text from the snapshot.
-          if (!fullText && Array.isArray(msg.content)) {
-            const text = msg.content.filter(isTextBlock).map((b) => b.text).join('')
-            if (text) fullText = text
+          const assistantParentId =
+            (evt as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? null
+          // Only the MAIN agent's usage and model rolls up to the user-facing
+          // turn metadata. Subagent usage is tracked internally by the SDK.
+          if (!assistantParentId) {
+            if (msg.model) modelUsed = msg.model
+            if (msg.usage?.input_tokens) inputTokens = msg.usage.input_tokens
+            if (msg.usage?.output_tokens) outputTokens = msg.usage.output_tokens
+            // If we somehow received no stream_event deltas (e.g. SDK omitted
+            // partials for this run), reconstruct text from the snapshot.
+            if (!fullText && Array.isArray(msg.content)) {
+              const text = msg.content.filter(isTextBlock).map((b) => b.text).join('')
+              if (text) fullText = text
+            }
           }
           // Emit / refresh tool_use steps from the now-complete content blocks
           // (input is fully populated here). Upsert by id — the UI store does
@@ -375,7 +420,9 @@ export async function runStream(
                   ? (b.input as Record<string, unknown>)
                   : {}
               announcedUses.set(b.id, { name: b.name, input })
-              cb.onStep(stepFromToolUse({ id: b.id, name: b.name, input }))
+              const step = stepFromToolUse({ id: b.id, name: b.name, input })
+              if (assistantParentId) step.parentId = assistantParentId
+              cb.onStep(step)
             }
           }
           continue
@@ -385,6 +432,8 @@ export async function runStream(
           // the assistant turn can re-consume them. Each tool_result references
           // the original tool_use_id; pair it with our remembered name/input.
           const msg = evt.message as { content?: unknown }
+          const userParentId =
+            (evt as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? null
           if (cb.onStep && Array.isArray(msg.content)) {
             for (const block of msg.content) {
               if (typeof block !== 'object' || block === null) continue
@@ -394,15 +443,15 @@ export async function runStream(
               if (reportedResults.has(b.tool_use_id)) continue
               reportedResults.add(b.tool_use_id)
               const meta = announcedUses.get(b.tool_use_id) ?? { name: 'Unknown', input: {} }
-              cb.onStep(
-                stepFromToolResult({
-                  toolUseId: b.tool_use_id,
-                  toolName: meta.name,
-                  toolInput: meta.input,
-                  content: b.content,
-                  isError: b.is_error === true,
-                }),
-              )
+              const resultStep = stepFromToolResult({
+                toolUseId: b.tool_use_id,
+                toolName: meta.name,
+                toolInput: meta.input,
+                content: b.content,
+                isError: b.is_error === true,
+              })
+              if (userParentId) resultStep.parentId = userParentId
+              cb.onStep(resultStep)
             }
           }
           continue
