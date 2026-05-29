@@ -1,6 +1,17 @@
 # Feature: MCP Servers
 
-**Trạng thái:** Approved (Pha 1 — stdio only)
+**Trạng thái:** Implemented (Pha 1 stdio + Pha 2A http/secret keychain/per-agent whitelist/idle stop/fs watcher)
+
+> **Note (2026-05-29):** Feature này hấp thụ luôn vai trò của Context Providers cũ (đã deprecated — xem [ADR 0016](../decisions/0016-deprecate-context-providers-fold-into-mcp.md)). Mọi data source ngoài (Notion, Jira, Slack, GitHub, filesystem, gitnexus…) đều đi qua MCP.
+>
+> **Pha 2A đã implement:**
+> - **Per-agent whitelist** qua `agent.mcpServerIds` (B1 — [ADR 0015](../decisions/0015-agents-persisted-runtime-systemprompt.md) update). Session intersect 2-layer (session + agent).
+> - **Transport `http`** qua `mcp/http-client.ts` với SSRF guard (B3 — [ADR 0014](../decisions/0014-mcp-servers-stdio-runtime.md) update). Streamable HTTP support.
+> - **Secret keychain** — env/header value `secret:KEY` được expand từ OS keychain qua `@napi-rs/keyring`, plaintext không chạm JSON config (B2 — [ADR 0018](../decisions/0018-mcp-secret-keychain.md)). UI: 🔒 toggle per row trong McpEditor.
+> - **Idle stop** — autoStart=false servers tự stop sau 5 phút idle, free RAM (C2).
+> - **Filesystem watcher** — chokidar emit `mcp-servers.fs-changed` khi `*.json` thay đổi ngoài app → UI auto re-hydrate (C1).
+>
+> **Còn defer pha 2B**: `sse` transport (spec MCP chuyển sang Streamable HTTP đã handle), B4 sandbox stdio, B5 hot reload schema, B7 persistent McpManager process bridging, B8 remote registry discovery.
 
 ## Overview
 
@@ -12,7 +23,7 @@ Ví dụ: gắn MCP server `gitnexus` để agent gọi `query_codebase`, hoặc
 
 | Khía cạnh | Pha 1 (MVP) | Pha 2 |
 |---|---|---|
-| Transport | **`stdio` only** | `http`, `sse` |
+| Transport | **`stdio` only** | `stdio` + **`http` ✓ (pha 2A B3)**; `sse` defer (spec đang chuyển sang Streamable HTTP — `http` đã handle SSE response payload) |
 | Built-in preset | **GitHub + Filesystem** (2 preset cứng) | Discovery qua remote registry |
 | Secret injection | `${env:VAR}` từ env user; `${secret:...}` placeholder **không expand** (báo warning) | Tích hợp OS keychain qua [settings](./settings.md) |
 | Per-agent trust override | Global trust per-server | Per-agent + per-tool trust |

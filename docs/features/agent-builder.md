@@ -1,6 +1,6 @@
 # Feature: Agent Builder
 
-**Trạng thái:** Draft
+**Trạng thái:** Implemented (Pha 1 + Pha 2A — persisted + systemPrompt/skillIds/tools/mcpServerIds runtime, source picker, bulk delete, toast, fs watcher; xem [ADR 0015](../decisions/0015-agents-persisted-runtime-systemprompt.md))
 
 ## Overview
 
@@ -48,8 +48,9 @@ Agent Builder cho phép người dùng tạo và cấu hình các AI agent tùy 
 | `role` | string | Tag ngắn: BA / SA / DEV / REVIEW / QA / DevOps / Security |
 | `model` | enum | ID model (xem list ở trên) |
 | `systemPrompt` | string | System prompt |
-| `skillIds` | string[] | Tham chiếu tới skill |
-| `context` | string[] | Whitelist provider: artifacts, gitnexus, filesystem, notion, jira, slack |
+| `skillIds` | string[] | Tham chiếu tới skill (Pha 2A — runtime injection: SKILL.md body append vào systemPrompt) |
+| `tools` | string[]? | Pha 2A — Claude Code subagent allowed-tools whitelist (forward `Options.allowedTools`) |
+| `mcpServerIds` | string[]? | Pha 2A — Whitelist MCP server agent được dùng (xem [ADR 0016](../decisions/0016-deprecate-context-providers-fold-into-mcp.md)) |
 
 ## Agent mẫu
 
@@ -69,7 +70,7 @@ Agent Builder cho phép người dùng tạo và cấu hình các AI agent tùy 
 ## Phụ thuộc
 
 - [skill-builder](./skill-builder.md) — cung cấp skill có thể chọn.
-- [context-providers](./context-providers.md) — provider có thể whitelist.
+- [mcp-servers](./mcp-servers.md) — pha 2: per-agent MCP server whitelist (thay thế context-providers, xem [ADR 0016](../decisions/0016-deprecate-context-providers-fold-into-mcp.md)).
 - [settings](./settings.md) — model API key.
 
 ## Câu hỏi mở

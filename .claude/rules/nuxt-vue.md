@@ -45,6 +45,13 @@
 - **Không hardcode hex** trong class. Theme color **phải** đi qua `useTheme()`.
 - `assets/css/main.css` chỉ chứa reset/scrollbar/base.
 
+## UI patterns
+
+- **Detail header buttons:** mọi action button trong `*Detail.vue` header row (Edit/Delete/Duplicate/Test/Restart…) dùng cùng icon-only style. Class `p-1.5 rounded transition`, icon size `13`, color mặc định `t.textDim`, hover bgHover+text (hoặc dangerBg+danger cho destructive). `title` attribute bắt buộc thay text label. **Không** mix text+border (`px-3 py-1.5`) với icon-only trong cùng row.
+- **Editor textareas:** `<textarea>` trong `*Editor.vue` cho content dài (description, body, systemPrompt, command, args) dùng `resize-y min-h-[<rem>]` — không `resize-none`. Chat composer / single-purpose modal input giữ `resize-none` (ghi comment lý do).
+
+Chi tiết + bảng `rows → min-h`: [docs/coding/nuxt-frontend.md#ui-patterns](../../docs/coding/nuxt-frontend.md#ui-patterns).
+
 ## Routing
 
 - File-based. Dynamic: `[param].vue`.

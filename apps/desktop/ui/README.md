@@ -49,7 +49,7 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Settings** — 4 section (Workspace / Models & API Keys / Connectors / Appearance).
 ✅ **Markdown editor fullscreen** — file tree sidebar, code/split/preview, mermaid diagram, diff viewer, status bar.
 ✅ **Theme system** — dark (Linear/GitHub) + light (Notion/Vercel) với 20+ token, scrollbar sync.
-✅ **Git Manager prototype** — route `/git` với 5 tab (Changes / History / Branches / Stash / Remotes), Pinia store mock 100% (chưa wire sidecar).
+✅ **Git Manager wired (M0..M7)** — route `/git` với 5 tab (Changes / History / Branches / Stash / Remotes) đã wire qua **23 sidecar `git.*` IPC method** (xem [ADR 0017](../../../docs/decisions/0017-git-manager-ipc-contract.md), [docs/features/git-manager.md](../../../docs/features/git-manager.md)). Bootstrap probe `git.checkInstalled` block page nếu thiếu Git ≥ 2.20. Empty-state `git.init` cho workspace chưa init. Stage-hunk per hunk (`git apply --cached`), detached HEAD warn + `temp/<sha7>` flow, virtual-scroll khi section > 200 file, branches/remotes cache 5s, debounced 200ms status refresh từ chokidar watcher. Pinia store `git` giữ fallback mock cho browser dev (sidecar unavailable).
 ✅ **Tauri shell** — đã wire (M6), webview load UI Nuxt, IPC stdio qua `engine_call` (xem [ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md), [ADR 0008](../../../docs/decisions/0008-stdio-ipc-for-sidecar.md)).
 ✅ **Node.js sidecar wiring** — package `@awog/sidecar` chạy stdio NDJSON JSON-RPC; UI gọi qua composable `useSidecar()`.
 ✅ **Anthropic OAuth Pro/Max** — sign-in 3-step dialog, token refresh, account management (xem [docs/features/models-and-accounts.md](../../../docs/features/models-and-accounts.md), [ADR 0011](../../../docs/decisions/0011-anthropic-subscription-oauth.md)).
@@ -110,8 +110,9 @@ ui/
 │   ├── tasks/index.vue
 │   ├── projects/index.vue
 │   ├── workflows/index.vue
-│   ├── agents/index.vue
+│   ├── agents/index.vue      # Agents (wired M8 + Pha 2A — AGENT.md 5-tier, runtime systemPrompt/tools/skillIds/mcpServerIds injection, bulk delete, toast, source picker)
 │   ├── skills/index.vue
+│   ├── mcp-servers/index.vue # MCP servers (wired M8 + Pha 2A — stdio + http + secret keychain + idle stop)
 │   ├── settings/index.vue
 │   └── edit/[taskId].vue   # Fullscreen markdown editor (layout: false)
 ├── utils/

@@ -1,8 +1,18 @@
 # 0014 — MCP Servers runtime: stdio-only pha 1, per-file JSON, in-sidecar process group
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted (pha 2 extension 2026-05-29 — http transport thêm vào, xem update bên dưới)
 - **Ngày:** 2026-05-28
 - **Người quyết định:** Tech Lead
+
+> **Update 2026-05-29 (pha 2A B1/B2/B3/C2):** Nhiều backlog đã wire:
+>
+> - **B1 — Per-agent MCP whitelist**: `agent.mcpServerIds` field ([ADR 0015](./0015-agents-persisted-runtime-systemprompt.md) update). `sessions.send-message` intersect session whitelist ∩ agent whitelist trước khi build `mcpServersForSdk`. UI: MCP picker section trong AgentEditor render từ `ws.mcpServers`.
+> - **B2 — Secret keychain**: env/header value `secret:KEY` được expand từ OS keychain trước spawn/fetch — xem [ADR 0018](./0018-mcp-secret-keychain.md). Dep `@napi-rs/keyring`, dynamic import + graceful fallback. `mcp.setSecret` RPC mới + `mcp.delete` purge keychain entries.
+> - **B3 — Transport `http`**: [`mcp/http-client.ts`](../../apps/desktop/sidecar/src/mcp/http-client.ts) + [`McpManager.startHttp/testHttp`](../../apps/desktop/sidecar/src/mcp/manager.ts). SSRF guard: reject loopback / private / link-local IPs. SDK option `{ type: 'http', url, headers }`. Streamable HTTP response handled (cả `application/json` lẫn `text/event-stream`). `sse` separate vẫn từ chối.
+> - **C2 — Idle stop**: `RuntimeState.lastActivityAt` track. `startIdleSweep` chạy mỗi 30s, stop autoStart=false servers idle > 5 phút (Q3 trade-off "Pha 1 không implement idle stop" đã được resolve).
+> - **C1 — Filesystem watcher** (cross-cutting, không riêng MCP): [`sidecar/watcher.ts`](../../apps/desktop/sidecar/src/watcher.ts) với chokidar; emit `mcp-servers.fs-changed` → UI auto re-hydrate.
+>
+> Q1 (transport scope pha 1 stdio-only) dưới đây vẫn giữ làm lịch sử quyết định. Pha 2B còn: B4 sandbox, B5 hot reload, B7 persistent process bridging, B8 remote registry.
 
 ## Bối cảnh
 
