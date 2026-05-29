@@ -20,6 +20,10 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0012](./0012-projects-storage.md) | Lưu trữ projects bằng plain JSON per-file | Accepted |
 | [0013](./0013-adopt-skill-md-format.md) | Adopt SKILL.md format for skills (Claude Code SDK / craft-agents-oss compatible) | Accepted |
 | [0014](./0014-mcp-servers-stdio-runtime.md) | MCP servers runtime: stdio-only pha 1, per-file JSON, in-sidecar process group | Accepted |
+| [0015](./0015-agents-persisted-runtime-systemprompt.md) | Agents: per-file JSON persistence + systemPrompt runtime override | Accepted |
+| [0016](./0016-deprecate-context-providers-fold-into-mcp.md) | Deprecate Context Providers, fold into MCP Servers | Accepted |
+| [0017](./0017-git-manager-ipc-contract.md) | Git Manager IPC contract — chốt 12 open question cho sidecar wiring | Accepted |
+| [0018](./0018-mcp-secret-keychain.md) | MCP secret storage: OS keychain via `@napi-rs/keyring` | Accepted |
 
 ## Template
 
