@@ -201,6 +201,22 @@ export async function listSkills(
   return { skills, reports: [...user.reports, ...projectReports] }
 }
 
+// First-match lookup across all 5 tiers, given a skill id (no source). Used by
+// agent.skillIds runtime injection where the agent only references skill by
+// slug. Search order: global → user-claude → user-agents → project-claude →
+// project-agents (per-project iterated in input order). Returns null if no
+// matching skill found.
+export async function loadSkillByIdAnyTier(
+  id: string,
+  projectIds: string[] = [],
+): Promise<Skill | null> {
+  // Reuse listSkills (already handles missing dirs gracefully). For small N
+  // (typical user has <100 skills) the find-after-flatten cost is negligible
+  // vs adding 5 separate readFile probes.
+  const { skills } = await listSkills(projectIds)
+  return skills.find((s) => s.id === id) ?? null
+}
+
 export async function loadSkill(
   id: string,
   source: SkillSource,
