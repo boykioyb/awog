@@ -23,9 +23,15 @@ body,
   overflow: hidden;
 }
 
+/* `font-size` lives on `html` so Tailwind rem-based utilities (text-xs, p-2…)
+   scale together with the user-controlled `--font-size-base` setting. Custom
+   `text-[Npx]` was migrated to em across components for the same reason. */
+html {
+  font-size: var(--font-size-base);
+}
+
 body {
   font-family: var(--font-sans);
-  font-size: var(--font-size-base);
   font-weight: var(--font-weight-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

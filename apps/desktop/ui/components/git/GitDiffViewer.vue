@@ -11,7 +11,7 @@
       </span>
       <span
         v-if="diff.oldPath && diff.oldPath !== diff.path"
-        class="text-[10px]"
+        class="text-[0.71em]"
         :style="{ color: t.textDim }"
       >
         (renamed from {{ diff.oldPath }})
@@ -19,7 +19,7 @@
       <div class="ml-auto flex items-center gap-1">
         <span
           v-if="diff.isBinary"
-          class="text-[10px] px-1.5 py-0.5 rounded"
+          class="text-[0.71em] px-1.5 py-0.5 rounded"
           :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
         >
           binary
@@ -31,7 +31,7 @@
         >
           <button
             type="button"
-            class="flex items-center gap-1 px-2 py-0.5 text-[10px] transition"
+            class="flex items-center gap-1 px-2 py-0.5 text-[0.71em] transition"
             :style="toggleStyle('unified')"
             title="Unified view"
             @click="viewMode = 'unified'"
@@ -41,7 +41,7 @@
           </button>
           <button
             type="button"
-            class="flex items-center gap-1 px-2 py-0.5 text-[10px] transition"
+            class="flex items-center gap-1 px-2 py-0.5 text-[0.71em] transition"
             :style="toggleStyle('split')"
             title="Side-by-side view"
             @click="viewMode = 'split'"
@@ -79,11 +79,11 @@
     <!-- Unified view -->
     <div
       v-else-if="viewMode === 'unified'"
-      class="flex-1 overflow-auto font-mono text-[12px] leading-[1.55]"
+      class="flex-1 overflow-auto font-mono text-[0.86em] leading-[1.55]"
     >
       <div v-for="(hunk, hi) in diff.hunks" :key="hi">
         <div
-          class="px-3 py-1 sticky top-0 z-10"
+          class="px-3 py-1 sticky top-0 z-10 flex items-center gap-2"
           :style="{
             background: t.infoBg,
             color: t.info,
@@ -91,7 +91,21 @@
             borderBottom: `1px solid ${t.border}`,
           }"
         >
-          {{ hunk.header }}
+          <span class="flex-1 truncate">{{ hunk.header }}</span>
+          <button
+            v-if="canStageHunk"
+            type="button"
+            class="text-[0.71em] px-2 py-0.5 rounded transition flex items-center gap-1"
+            :style="{
+              background: t.bgInput,
+              color: t.accent,
+              border: `1px solid ${t.accent}`,
+            }"
+            title="Stage chỉ hunk này"
+            @click="emit('stageHunk', hi)"
+          >
+            Stage hunk
+          </button>
         </div>
         <div
           v-for="(line, li) in hunk.lines"
@@ -138,7 +152,7 @@
     </div>
 
     <!-- Split (side-by-side) view -->
-    <div v-else class="flex-1 overflow-auto font-mono text-[12px] leading-[1.55]">
+    <div v-else class="flex-1 overflow-auto font-mono text-[0.86em] leading-[1.55]">
       <div v-for="(hunk, hi) in diff.hunks" :key="hi">
         <div
           class="px-3 py-1 sticky top-0 z-10"
@@ -235,7 +249,15 @@
 import { AlignJustify, Columns2, FileImage, FileText } from 'lucide-vue-next'
 import type { GitDiffHunk, GitDiffLine, GitDiffLineKind, GitFileDiff } from '~/types'
 
-defineProps<{ diff: GitFileDiff | null }>()
+const props = defineProps<{
+  diff: GitFileDiff | null
+  // When true the file shown is unstaged (or partially staged) — render
+  // per-hunk Stage buttons. Caller decides; component just emits.
+  canStageHunk?: boolean
+}>()
+const emit = defineEmits<{ stageHunk: [hunkIndex: number] }>()
+// Keep `props` referenced for vue-tsc — Vue compiler reads template-only usage.
+void props
 
 const { t } = useTheme()
 const viewMode = ref<'unified' | 'split'>('unified')

@@ -38,7 +38,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[12px] resize-none"
+          class="w-full rounded px-2 py-1.5 text-[0.86em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -90,13 +90,13 @@
             <input
               :value="arg.name"
               placeholder="name"
-              class="col-span-3 rounded px-2 py-1 text-[11px] font-mono"
+              class="col-span-3 rounded px-2 py-1 text-[0.79em] font-mono"
               :style="inputStyle"
               @input="(e: Event) => (arg.name = (e.target as HTMLInputElement).value)"
             />
             <select
               v-model="arg.type"
-              class="col-span-2 rounded px-2 py-1 text-[11px]"
+              class="col-span-2 rounded px-2 py-1 text-[0.79em]"
               :style="inputStyle"
             >
               <option value="string">string</option>
@@ -109,12 +109,12 @@
             <input
               :value="arg.description"
               placeholder="description"
-              class="col-span-5 rounded px-2 py-1 text-[11px]"
+              class="col-span-5 rounded px-2 py-1 text-[0.79em]"
               :style="inputStyle"
               @input="(e: Event) => (arg.description = (e.target as HTMLInputElement).value)"
             />
             <label
-              class="col-span-1 flex items-center gap-1 text-[10px] cursor-pointer"
+              class="col-span-1 flex items-center gap-1 text-[0.71em] cursor-pointer"
               :style="{ color: t.textDim }"
             >
               <input v-model="arg.required" type="checkbox" />
@@ -129,7 +129,7 @@
             </button>
           </div>
           <button
-            class="text-[11px] flex items-center gap-1"
+            class="text-[0.79em] flex items-center gap-1"
             :style="{ color: t.textDim }"
             @click="addArg"
           >
@@ -144,7 +144,7 @@
           v-model="draft.body"
           :rows="draft.type === 'prompt' ? 6 : 3"
           :placeholder="bodyPlaceholder"
-          class="w-full rounded px-2 py-1.5 text-[11px] font-mono leading-relaxed resize-none"
+          class="w-full rounded px-2 py-1.5 text-[0.79em] font-mono leading-relaxed resize-y min-h-[5rem]"
           :style="inputStyle"
         />
       </Field>

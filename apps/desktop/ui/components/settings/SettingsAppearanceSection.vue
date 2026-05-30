@@ -9,7 +9,7 @@
 
     <div :style="{ borderTop: `1px solid ${t.border}` }">
       <SettingsField label="Theme" hint="Toggle via moon/sun icon in the sidebar">
-        <div class="text-[12px]" :style="{ color: t.textMuted }">
+        <div class="text-[0.86em]" :style="{ color: t.textMuted }">
           {{ themeName === 'dark' ? 'Dark' : 'Light' }}
         </div>
       </SettingsField>
@@ -17,7 +17,7 @@
       <SettingsField label="Sans font" hint="Body and UI typography">
         <select
           v-model="appearance.sansFamily"
-          class="w-full px-2 py-1.5 rounded text-[12px] outline-none"
+          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
           :style="selectStyle"
           @change="onUpdate({ sansFamily: appearance.sansFamily })"
         >
@@ -30,7 +30,7 @@
       <SettingsField label="Mono font" hint="Code blocks, terminals, debug output">
         <select
           v-model="appearance.monoFamily"
-          class="w-full px-2 py-1.5 rounded text-[12px] outline-none"
+          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
           :style="selectStyle"
           @change="onUpdate({ monoFamily: appearance.monoFamily })"
         >
@@ -55,7 +55,7 @@
       <SettingsField label="Font weight" hint="Applies to body text">
         <select
           v-model.number="appearance.fontWeight"
-          class="w-full px-2 py-1.5 rounded text-[12px] outline-none"
+          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
           :style="selectStyle"
           @change="onUpdate({ fontWeight: appearance.fontWeight })"
         >
@@ -66,7 +66,7 @@
       </SettingsField>
 
       <SettingsField label="Theme color" hint="Subtle hue tint applied across all surfaces">
-        <div class="flex flex-wrap gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
           <button
             v-for="p in THEME_COLOR_PRESETS"
             :key="p.value"
@@ -75,6 +75,18 @@
             :style="themeColorSwatchStyle(p.value, p.swatch)"
             @click="onUpdate({ themeColor: p.value })"
           />
+          <label
+            class="relative w-6 h-6 rounded-full transition-transform hover:scale-110 cursor-pointer overflow-hidden"
+            :title="`Custom (${appearance.themeColorCustom})`"
+            :style="customSwatchStyle"
+          >
+            <input
+              type="color"
+              class="absolute inset-0 opacity-0 cursor-pointer"
+              :value="appearance.themeColorCustom"
+              @input="onCustomColorInput"
+            />
+          </label>
         </div>
       </SettingsField>
 
@@ -96,7 +108,7 @@
           <button
             v-for="o in SURFACE_DEPTH_OPTIONS"
             :key="o.value"
-            class="flex-1 px-3 py-1.5 text-[12px] transition-colors"
+            class="flex-1 px-3 py-1.5 text-[0.86em] transition-colors"
             :style="depthStyle(o.value)"
             :title="o.hint"
             @click="onUpdate({ surfaceDepth: o.value })"
@@ -108,7 +120,7 @@
     </div>
 
     <div>
-      <div class="text-[11px] mb-2 uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[0.79em] mb-2 uppercase tracking-wider" :style="{ color: t.textDim }">
         Preview
       </div>
       <div
@@ -123,7 +135,7 @@
           </div>
           <div :style="{ color: t.text }">
             Body text — 0123456789. Layer panel uses
-            <code class="font-mono text-[12px]" :style="{ color: t.accent }">bgPanel</code>
+            <code class="font-mono text-[0.86em]" :style="{ color: t.accent }">bgPanel</code>
             .
           </div>
           <div
@@ -135,21 +147,21 @@
           </div>
           <div class="flex gap-2 items-center">
             <button
-              class="px-3 py-1.5 rounded text-[12px] font-medium"
+              class="px-3 py-1.5 rounded text-[0.86em] font-medium"
               :style="{ background: t.accent, color: t.accentText }"
             >
               Primary action
             </button>
             <button
-              class="px-3 py-1.5 rounded text-[12px]"
+              class="px-3 py-1.5 rounded text-[0.86em]"
               :style="{ background: t.bgHover, color: t.text, border: `1px solid ${t.border}` }"
             >
               Secondary
             </button>
-            <a class="text-[12px]" :style="{ color: t.accent }">Link</a>
+            <a class="text-[0.86em]" :style="{ color: t.accent }">Link</a>
           </div>
           <pre
-            class="font-mono text-[12px] p-2 rounded"
+            class="font-mono text-[0.86em] p-2 rounded"
             :style="{ background: t.bgElevated, border: `1px solid ${t.border}`, color: t.textDim }"
           >
 const sum = (a: number, b: number) =&gt; a + b</pre
@@ -160,7 +172,7 @@ const sum = (a: number, b: number) =&gt; a + b</pre
 
     <div class="flex justify-end">
       <button
-        class="px-3 py-1.5 rounded text-[12px]"
+        class="px-3 py-1.5 rounded text-[0.86em]"
         :style="{ border: `1px solid ${t.border}`, color: t.textDim }"
         @click="reset"
       >
@@ -207,6 +219,16 @@ const accentSwatchStyle = (value: AccentPreset, swatch: string) =>
 
 const themeColorSwatchStyle = (value: ThemeColor, swatch: string) =>
   buildSwatchStyle(swatch, appearance.value.themeColor === value)
+
+const customSwatchStyle = computed(() =>
+  buildSwatchStyle(appearance.value.themeColorCustom, appearance.value.themeColor === 'custom'),
+)
+
+const onCustomColorInput = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const hex = target.value.toLowerCase()
+  onUpdate({ themeColor: 'custom', themeColorCustom: hex })
+}
 
 const depthStyle = (value: SurfaceDepth) => {
   const active = appearance.value.surfaceDepth === value

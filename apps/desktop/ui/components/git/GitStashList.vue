@@ -4,9 +4,9 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">Stashes</div>
+      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">Stashes</div>
       <button
-        class="flex items-center gap-1 px-2 py-1 text-[10px] rounded transition"
+        class="flex items-center gap-1 px-2 py-1 text-[0.71em] rounded transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="showSave = true"
       >
@@ -25,8 +25,8 @@
       >
         <div class="flex items-center gap-2">
           <span class="text-xs font-mono" :style="{ color: t.accent }">{{ entry.ref }}</span>
-          <span class="text-[10px]" :style="{ color: t.textDim }">on {{ entry.branch }}</span>
-          <span class="ml-auto text-[10px]" :style="{ color: t.textFaint }">
+          <span class="text-[0.71em]" :style="{ color: t.textDim }">on {{ entry.branch }}</span>
+          <span class="ml-auto text-[0.71em]" :style="{ color: t.textFaint }">
             {{ formatDate(entry.date) }}
           </span>
         </div>
@@ -35,7 +35,7 @@
         </div>
         <div class="flex items-center gap-1 mt-2">
           <button
-            class="text-[10px] px-2 py-1 rounded transition"
+            class="text-[0.71em] px-2 py-1 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.text,
@@ -46,7 +46,7 @@
             Pop
           </button>
           <button
-            class="text-[10px] px-2 py-1 rounded transition"
+            class="text-[0.71em] px-2 py-1 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -57,7 +57,7 @@
             Apply
           </button>
           <button
-            class="text-[10px] px-2 py-1 rounded transition ml-auto"
+            class="text-[0.71em] px-2 py-1 rounded transition ml-auto"
             :style="{
               background: t.dangerBg,
               color: t.danger,

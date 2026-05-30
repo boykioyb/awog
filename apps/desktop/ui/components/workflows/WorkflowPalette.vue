@@ -15,7 +15,7 @@
       class="px-3 py-2 sticky top-0"
       :style="{ background: t.bgPanel, borderBottom: `1px solid ${t.border}` }"
     >
-      <div class="text-[11px] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
+      <div class="text-[0.79em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
         Drag agents to canvas
       </div>
     </div>
@@ -30,11 +30,11 @@
         @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.background = 'transparent')"
       >
         <div class="flex items-center gap-1.5 min-w-0">
-          <div class="text-[11px] truncate" :style="{ color: t.text }">
+          <div class="text-[0.79em] truncate" :style="{ color: t.text }">
             {{ agent.name }}
           </div>
           <span
-            class="text-[8px] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
+            class="text-[0.57em] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
             :style="{
               color: t.textMuted,
               background: t.bgInput,
@@ -44,7 +44,7 @@
             {{ agent.role }}
           </span>
         </div>
-        <div class="text-[9px]" :style="{ color: t.textDim }">
+        <div class="text-[0.64em]" :style="{ color: t.textDim }">
           {{ agent.skillIds.length }} skills
         </div>
       </div>

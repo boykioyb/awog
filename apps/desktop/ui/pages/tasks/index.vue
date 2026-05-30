@@ -22,7 +22,7 @@
           <ListFilter :size="12" />
           <div
             v-if="activeFilterCount > 0"
-            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-semibold"
+            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[0.57em] font-semibold"
             :style="{ background: t.accent, color: t.accentText }"
           >
             {{ activeFilterCount }}
@@ -69,7 +69,7 @@
         />
         <button
           v-if="activeFilterCount > 0"
-          class="text-[10px] transition"
+          class="text-[0.71em] transition"
           :style="{ color: clearHover ? t.text : t.textDim }"
           @click="clearFilters"
           @mouseenter="clearHover = true"
@@ -107,11 +107,11 @@
                 }"
               />
               <span
-                class="text-[10px] uppercase tracking-wider font-medium flex-1 text-left truncate"
+                class="text-[0.71em] uppercase tracking-wider font-medium flex-1 text-left truncate"
               >
                 {{ group.label }}
               </span>
-              <span class="text-[10px]" :style="{ color: t.textFaint }">
+              <span class="text-[0.71em]" :style="{ color: t.textFaint }">
                 {{ group.tasks.length }}
               </span>
             </button>

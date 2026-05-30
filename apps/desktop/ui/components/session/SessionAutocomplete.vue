@@ -11,7 +11,7 @@
     }"
   >
     <div
-      class="px-2.5 py-1 text-[10px] uppercase tracking-wider flex items-center justify-between"
+      class="px-2.5 py-1 text-[0.71em] uppercase tracking-wider flex items-center justify-between"
       :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
     >
       <span>{{ title }}</span>
@@ -22,7 +22,7 @@
     <button
       v-for="(item, i) in items"
       :key="`${item.kind}-${item.id}`"
-      class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[12px] transition"
+      class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[0.86em] transition"
       :style="{
         background: i === activeIndex ? t.bgActive : 'transparent',
         color: t.text,
@@ -39,7 +39,7 @@
       <span class="flex-1 min-w-0 truncate">{{ item.label }}</span>
       <span
         v-if="item.hint"
-        class="font-mono text-[10px] truncate"
+        class="font-mono text-[0.71em] truncate"
         :style="{ color: t.textDim, maxWidth: '50%' }"
       >
         {{ item.hint }}

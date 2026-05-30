@@ -11,7 +11,12 @@ export const useTheme = () => {
     const base = THEMES[themeName.value]
     const surface = getSurfaceOverride(themeName.value, appearance.value.surfaceDepth)
     const withSurface: ThemeTokens = { ...base, ...surface }
-    const withTint = applyThemeColor(withSurface, themeName.value, appearance.value.themeColor)
+    const withTint = applyThemeColor(
+      withSurface,
+      themeName.value,
+      appearance.value.themeColor,
+      appearance.value.themeColorCustom,
+    )
     const accent = getAccentOverride(themeName.value, appearance.value.accent)
     return { ...withTint, ...accent }
   })

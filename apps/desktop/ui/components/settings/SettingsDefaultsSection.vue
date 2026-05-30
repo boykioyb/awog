@@ -10,15 +10,15 @@
     <div class="space-y-4">
       <div class="py-3 space-y-2" :style="{ borderBottom: `1px solid ${t.border}` }">
         <div>
-          <div class="text-[13px] font-medium" :style="{ color: t.text }">System prompt</div>
-          <div class="text-[11px] mt-0.5" :style="{ color: t.textDim }">
+          <div class="text-[0.93em] font-medium" :style="{ color: t.text }">System prompt</div>
+          <div class="text-[0.79em] mt-0.5" :style="{ color: t.textDim }">
             Applied as the base persona for new sessions and agents that don't define their own
           </div>
         </div>
         <textarea
           :value="defaults.systemPrompt"
           rows="5"
-          class="w-full rounded px-2 py-1.5 text-[12px] font-mono leading-relaxed"
+          class="w-full rounded px-2 py-1.5 text-[0.86em] font-mono leading-relaxed"
           :style="inputStyle"
           placeholder="You are an AI teammate in AWOG…"
           @input="
@@ -30,8 +30,8 @@
       </div>
       <div class="py-3 space-y-2" :style="{ borderBottom: `1px solid ${t.border}` }">
         <div>
-          <div class="text-[13px] font-medium" :style="{ color: t.text }">Instructions</div>
-          <div class="text-[11px] mt-0.5" :style="{ color: t.textDim }">
+          <div class="text-[0.93em] font-medium" :style="{ color: t.text }">Instructions</div>
+          <div class="text-[0.79em] mt-0.5" :style="{ color: t.textDim }">
             Always-on user instructions prepended to every request (style guides, project
             conventions)
           </div>
@@ -39,11 +39,11 @@
         <textarea
           :value="defaults.instructions"
           rows="6"
-          class="w-full rounded px-2 py-1.5 text-[12px] font-mono leading-relaxed"
+          class="w-full rounded px-2 py-1.5 text-[0.86em] font-mono leading-relaxed"
           :style="inputStyle"
-          placeholder="- Trả lời tiếng Việt
-- Ưu tiên KISS / YAGNI
-- Không thêm dependency mới khi chưa có ADR"
+          placeholder="- Reply in English
+- Prefer KISS / YAGNI
+- Do not add new dependencies without an ADR"
           @input="
             settings.updateDefaults({
               instructions: ($event.target as HTMLTextAreaElement).value,
@@ -54,7 +54,7 @@
       <SettingsField label="Default provider" hint="Which connection a new session starts with">
         <select
           :value="defaults.provider"
-          class="w-full rounded px-2 py-1.5 text-[12px]"
+          class="w-full rounded px-2 py-1.5 text-[0.86em]"
           :style="inputStyle"
           @change="
             onChangeDefaultProvider(($event.target as HTMLSelectElement).value as ProviderName)
@@ -68,7 +68,7 @@
       <SettingsField label="Default model" hint="Models filtered by the selected provider">
         <select
           :value="defaults.modelId"
-          class="w-full rounded px-2 py-1.5 text-[12px]"
+          class="w-full rounded px-2 py-1.5 text-[0.86em]"
           :style="inputStyle"
           @change="onChangeDefaultModel(($event.target as HTMLSelectElement).value)"
         >
@@ -83,7 +83,7 @@
       >
         <select
           :value="defaults.mode"
-          class="w-full rounded px-2 py-1.5 text-[12px]"
+          class="w-full rounded px-2 py-1.5 text-[0.86em]"
           :style="inputStyle"
           @change="
             settings.updateDefaults({
@@ -102,7 +102,7 @@
       >
         <select
           :value="defaults.thinkingLevel"
-          class="w-full rounded px-2 py-1.5 text-[12px]"
+          class="w-full rounded px-2 py-1.5 text-[0.86em]"
           :style="inputStyle"
           @change="
             settings.updateDefaults({

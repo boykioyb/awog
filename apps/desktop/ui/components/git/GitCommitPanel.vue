@@ -3,14 +3,77 @@
     class="flex flex-col flex-shrink-0"
     :style="{ borderTop: `1px solid ${t.border}`, background: t.bgPanel }"
   >
+    <!-- Detached HEAD commit warning (AC-42) -->
+    <div
+      v-if="pendingDetachedCommit"
+      class="fixed inset-0 z-50 flex items-center justify-center px-4"
+      :style="{ background: 'rgba(0,0,0,0.55)' }"
+      @click.self="pendingDetachedCommit = false"
+    >
+      <div
+        class="w-full max-w-md rounded p-4 flex flex-col gap-3"
+        :style="{
+          background: t.bgPanel,
+          border: `1px solid ${t.borderStrong}`,
+          color: t.text,
+        }"
+      >
+        <div class="flex items-center gap-2">
+          <AlertTriangle :size="16" :style="{ color: t.warning }" />
+          <div class="text-sm font-medium">Commit ở detached HEAD?</div>
+        </div>
+        <div class="text-xs leading-relaxed" :style="{ color: t.textDim }">
+          Bạn đang ở detached HEAD
+          <span class="font-mono" :style="{ color: t.text }">{{ store.detachedAt }}</span>
+          . Commit ở đây sẽ mất nếu không tạo branch trước. Tạo branch
+          <span class="font-mono" :style="{ color: t.text }">temp/{{ store.detachedAt }}</span>
+          để giữ commit, hoặc commit anyway.
+        </div>
+        <div class="flex items-center gap-2 justify-end pt-1">
+          <button
+            class="text-xs px-3 py-1.5 rounded transition"
+            :style="{
+              background: t.bgInput,
+              color: t.textMuted,
+              border: `1px solid ${t.border}`,
+            }"
+            @click="pendingDetachedCommit = false"
+          >
+            Cancel
+          </button>
+          <button
+            class="text-xs px-3 py-1.5 rounded transition"
+            :style="{
+              background: t.bgInput,
+              color: t.accent,
+              border: `1px solid ${t.accent}`,
+            }"
+            @click="onCreateBranchThenCommit"
+          >
+            Create branch + commit
+          </button>
+          <button
+            class="text-xs px-3 py-1.5 rounded transition font-medium"
+            :style="{
+              background: t.warning,
+              color: t.accentText,
+              border: `1px solid ${t.warning}`,
+            }"
+            @click="onCommitAnyway"
+          >
+            Commit anyway
+          </button>
+        </div>
+      </div>
+    </div>
     <div class="px-3 py-2 flex items-center justify-between gap-2">
-      <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
         Commit message
       </div>
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="flex items-center gap-1 text-[10px] px-2 py-1 rounded transition"
+          class="flex items-center gap-1 text-[0.71em] px-2 py-1 rounded transition"
           :style="generateBtnStyle"
           :disabled="generateDisabled"
           :title="
@@ -22,7 +85,7 @@
           <Sparkles v-else :size="12" />
           <span>{{ store.isGeneratingMessage ? 'Generating…' : 'Generate AI' }}</span>
         </button>
-        <div class="text-[10px]" :style="{ color: t.textFaint }">
+        <div class="text-[0.71em]" :style="{ color: t.textFaint }">
           {{ store.stagedFiles.length }} file(s) staged
         </div>
       </div>
@@ -32,7 +95,7 @@
         :value="store.commitMessage"
         rows="3"
         placeholder="Summary (required)&#10;&#10;Optional longer description"
-        class="w-full rounded text-xs px-2 py-1.5 font-mono resize-none"
+        class="w-full rounded text-xs px-2 py-1.5 font-mono resize-y min-h-[5rem]"
         :style="{
           background: t.bgInput,
           color: t.text,
@@ -43,7 +106,7 @@
         @focus="focused = true"
         @blur="focused = false"
       />
-      <div v-if="inlineError" class="text-[10px] mt-1" :style="{ color: t.danger }">
+      <div v-if="inlineError" class="text-[0.71em] mt-1" :style="{ color: t.danger }">
         {{ inlineError }}
       </div>
     </div>
@@ -73,13 +136,15 @@
 </template>
 
 <script setup lang="ts">
-import { Loader2, Sparkles } from 'lucide-vue-next'
+import { AlertTriangle, Loader2, Sparkles } from 'lucide-vue-next'
 
 const { t } = useTheme()
 const store = useGitStore()
 
 const focused = ref(false)
 const inlineError = ref<string | null>(null)
+// Detached HEAD interception (AC-42). When set, render the confirm modal.
+const pendingDetachedCommit = ref<false | { mode: 'commit' | 'amend' }>(false)
 
 const generateDisabled = computed(() => store.isGeneratingMessage || store.stagedFiles.length === 0)
 
@@ -117,11 +182,49 @@ const doCommit = async () => {
     inlineError.value = 'Commit message không được rỗng'
     return
   }
+  if (store.isDetached) {
+    pendingDetachedCommit.value = { mode: 'commit' }
+    return
+  }
   await store.commit(store.commitMessage)
 }
 
 const doAmend = async () => {
   if (store.commits.length === 0) return
+  if (store.isDetached) {
+    pendingDetachedCommit.value = { mode: 'amend' }
+    return
+  }
   await store.amendCommit(store.commitMessage)
+}
+
+const executePendingCommit = async () => {
+  const pending = pendingDetachedCommit.value
+  if (!pending) return
+  pendingDetachedCommit.value = false
+  if (pending.mode === 'amend') {
+    await store.amendCommit(store.commitMessage)
+  } else {
+    await store.commit(store.commitMessage)
+  }
+}
+
+const onCommitAnyway = () => {
+  void executePendingCommit()
+}
+
+const onCreateBranchThenCommit = async () => {
+  const pending = pendingDetachedCommit.value
+  if (!pending) return
+  const sha7 = store.detachedAt ?? 'detached'
+  const branchName = `temp/${sha7}`
+  pendingDetachedCommit.value = false
+  // Create + checkout the temp branch so the upcoming commit lands on it.
+  await store.createBranch(branchName, undefined, true)
+  if (pending.mode === 'amend') {
+    await store.amendCommit(store.commitMessage)
+  } else {
+    await store.commit(store.commitMessage)
+  }
 }
 </script>

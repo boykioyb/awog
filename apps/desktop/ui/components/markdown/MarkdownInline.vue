@@ -6,7 +6,7 @@
     <em v-else-if="p.type === 'italic'" :style="{ color: t.syntax.italic }">{{ p.text }}</em>
     <code
       v-else-if="p.type === 'code'"
-      class="px-1 py-0.5 rounded font-mono text-[12px]"
+      class="px-1 py-0.5 rounded font-mono text-[0.86em]"
       :style="{ background: t.bgInput, color: t.syntax.code, border: `1px solid ${t.border}` }"
     >
       {{ p.text }}

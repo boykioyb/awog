@@ -26,10 +26,10 @@
               <ChevronRight :size="14" />
             </button>
             <div class="flex-1 min-w-0">
-              <div class="text-[13px] font-semibold truncate" :style="{ color: t.text }">
+              <div class="text-[0.93em] font-semibold truncate" :style="{ color: t.text }">
                 {{ step.label }}
               </div>
-              <div v-if="step.target" class="text-[11px] truncate" :style="{ color: t.textDim }">
+              <div v-if="step.target" class="text-[0.79em] truncate" :style="{ color: t.textDim }">
                 {{ step.target }}
               </div>
             </div>
@@ -43,11 +43,11 @@
 
           <div class="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             <div v-if="promptText" class="space-y-1">
-              <div class="text-[10px] uppercase tracking-wider" :style="{ color: t.textDim }">
+              <div class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textDim }">
                 Prompt
               </div>
               <details
-                class="rounded text-[12px]"
+                class="rounded text-[0.86em]"
                 :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
               >
                 <summary
@@ -66,12 +66,12 @@
             </div>
 
             <div v-if="replyText" class="space-y-1">
-              <div class="text-[10px] uppercase tracking-wider" :style="{ color: t.textDim }">
+              <div class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textDim }">
                 Reply
               </div>
               <!-- eslint-disable vue/no-v-html — renderedReply qua renderMarkdown (marked html:false, escape HTML thô) -->
               <div
-                class="awog-md text-[13px] rounded px-3 py-2.5"
+                class="awog-md text-[0.93em] rounded px-3 py-2.5"
                 :style="{
                   color: t.text,
                   background: t.bgSubtle,
@@ -83,9 +83,25 @@
               <!-- eslint-enable vue/no-v-html -->
             </div>
 
+            <!-- Steps the subagent ran. `step.children` is populated when the
+                 sidecar groups nested tool_use events under the parent Task
+                 (TODO). Today this section is empty until that wiring lands —
+                 keeping the UI ready avoids a follow-up component change. -->
+            <div v-if="childSteps.length > 0" class="space-y-1">
+              <div class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textDim }">
+                Steps · {{ childSteps.length }}
+              </div>
+              <div
+                class="rounded px-3 py-2 space-y-1"
+                :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
+              >
+                <StepItem v-for="child in childSteps" :key="child.id" :step="child" />
+              </div>
+            </div>
+
             <div
               v-else-if="step.status === 'running'"
-              class="text-[11px] flex items-center gap-1.5"
+              class="text-[0.79em] flex items-center gap-1.5"
               :style="{ color: t.textDim }"
             >
               <Activity :size="11" class="animate-pulse" />
@@ -94,7 +110,7 @@
 
             <div
               v-if="!promptText && !replyText && step.status !== 'running'"
-              class="text-[11px]"
+              class="text-[0.79em]"
               :style="{ color: t.textFaint }"
             >
               No payload captured for this step.
@@ -151,6 +167,8 @@ const promptSnippet = computed(() => {
 })
 
 const renderedReply = computed(() => renderMarkdown(replyText.value))
+
+const childSteps = computed(() => step.value?.children ?? [])
 
 const statusIcon = computed(() => {
   if (step.value?.status === 'error') return AlertCircle

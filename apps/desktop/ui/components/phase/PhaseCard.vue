@@ -21,7 +21,7 @@
       @mouseleave="headerHover = false"
     >
       <div class="flex items-center gap-2 flex-shrink-0" :style="{ minWidth: '32px' }">
-        <span class="text-[10px] font-mono" :style="{ color: t.textFaint }">
+        <span class="text-[0.71em] font-mono" :style="{ color: t.textFaint }">
           {{ String(index).padStart(2, '0') }}
         </span>
         <component
@@ -36,11 +36,11 @@
       </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 min-w-0">
-          <span class="text-[13px] font-medium truncate" :style="{ color: t.text }">
+          <span class="text-[0.93em] font-medium truncate" :style="{ color: t.text }">
             {{ agent.name }}
           </span>
           <span
-            class="text-[8px] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
+            class="text-[0.57em] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
             :style="{
               color: t.textMuted,
               background: t.bgInput,
@@ -50,13 +50,13 @@
             {{ agent.role }}
           </span>
         </div>
-        <div class="text-[10px] font-mono" :style="{ color: t.textDim }">
+        <div class="text-[0.71em] font-mono" :style="{ color: t.textDim }">
           {{ phase.skillName }}
         </div>
       </div>
       <span
         v-if="phase.runs.length > 1"
-        class="text-[10px] px-1.5 py-0.5 rounded"
+        class="text-[0.71em] px-1.5 py-0.5 rounded"
         :style="{
           background: t.bgInput,
           color: t.textDim,
@@ -67,7 +67,7 @@
       </span>
       <span
         v-if="phase.status === 'waiting_approval'"
-        class="text-[10px] px-1.5 py-0.5 rounded"
+        class="text-[0.71em] px-1.5 py-0.5 rounded"
         :style="{
           background: t.warningBg,
           color: t.warning,
@@ -78,13 +78,13 @@
       </span>
       <span
         v-if="phase.status === 'running' && currentRun"
-        class="text-[10px] inline-flex items-center gap-1"
+        class="text-[0.71em] inline-flex items-center gap-1"
         :style="{ color: t.textDim }"
       >
         <Activity :size="10" class="animate-pulse" />
         Live
       </span>
-      <span v-if="currentRun?.duration" class="text-[10px] font-mono" :style="{ color: t.textDim }">
+      <span v-if="currentRun?.duration" class="text-[0.71em] font-mono" :style="{ color: t.textDim }">
         {{ currentRun.duration }}
       </span>
       <ChevronDown
@@ -109,7 +109,7 @@
       >
         <History :size="11" :style="{ color: t.textDim }" />
         <span
-          class="text-[10px] uppercase tracking-wider font-medium flex-shrink-0"
+          class="text-[0.71em] uppercase tracking-wider font-medium flex-shrink-0"
           :style="{ color: t.textDim }"
         >
           History
@@ -117,7 +117,7 @@
         <button
           v-for="r in phase.runs"
           :key="r.version"
-          class="text-[10px] px-2 py-0.5 rounded transition flex items-center gap-1 flex-shrink-0"
+          class="text-[0.71em] px-2 py-0.5 rounded transition flex items-center gap-1 flex-shrink-0"
           :style="{
             background:
               (selectedRunVersion || latestRun!.version) === r.version ? t.bgActive : 'transparent',
@@ -146,7 +146,7 @@
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          class="py-2 flex items-center gap-1.5 text-[11px] transition"
+          class="py-2 flex items-center gap-1.5 text-[0.79em] transition"
           :style="{
             color: activeTab === tab.id ? t.text : t.textDim,
             borderBottom: `1.5px solid ${activeTab === tab.id ? t.text : 'transparent'}`,
@@ -158,7 +158,7 @@
           {{ tab.label }}
           <span
             v-if="tab.badge != null"
-            class="px-1 py-0 text-[9px] rounded"
+            class="px-1 py-0 text-[0.64em] rounded"
             :style="{
               background: t.bgInput,
               color: t.textDim,
@@ -171,7 +171,7 @@
         <div class="ml-auto flex items-center gap-1">
           <button
             v-if="phase.status === 'waiting_approval'"
-            class="px-2 py-1 text-[11px] rounded font-medium transition"
+            class="px-2 py-1 text-[0.79em] rounded font-medium transition"
             :style="{ background: t.accent, color: t.accentText }"
             @click.stop="emit('approve')"
           >
@@ -179,7 +179,7 @@
           </button>
           <button
             v-if="canRerun"
-            class="px-2 py-1 text-[11px] rounded transition inline-flex items-center gap-1"
+            class="px-2 py-1 text-[0.79em] rounded transition inline-flex items-center gap-1"
             :style="{
               color: t.text,
               border: `1px solid ${t.borderStrong}`,

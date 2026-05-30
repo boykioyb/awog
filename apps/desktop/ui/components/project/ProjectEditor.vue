@@ -22,11 +22,11 @@
         >
           <div class="flex items-center gap-2 mb-1">
             <component :is="m.icon" :size="13" :style="{ color: t.text }" />
-            <div class="text-[12px] font-medium" :style="{ color: t.text }">
+            <div class="text-[0.86em] font-medium" :style="{ color: t.text }">
               {{ m.label }}
             </div>
           </div>
-          <div class="text-[10px]" :style="{ color: t.textDim }">
+          <div class="text-[0.71em]" :style="{ color: t.textDim }">
             {{ m.hint }}
           </div>
         </button>
@@ -76,7 +76,7 @@
             Browse
           </button>
         </div>
-        <div class="text-[10px] mt-1" :style="{ color: t.textDim }">
+        <div class="text-[0.71em] mt-1" :style="{ color: t.textDim }">
           {{
             importMode === 'clone'
               ? 'New folder will be created here'
@@ -111,7 +111,7 @@
           v-model="draft.description"
           :rows="3"
           placeholder="What does this project do?"
-          class="w-full rounded px-2 py-1.5 text-[12px] leading-relaxed resize-none"
+          class="w-full rounded px-2 py-1.5 text-[0.86em] leading-relaxed resize-y min-h-[4rem]"
           :style="inputStyle"
           :disabled="busy"
         />
@@ -119,7 +119,7 @@
 
       <div
         v-if="busy || error"
-        class="rounded p-3 text-[11px]"
+        class="rounded p-3 text-[0.79em]"
         :style="{
           background: t.bgElevated,
           border: `1px solid ${error ? t.danger : t.border}`,
@@ -136,7 +136,7 @@
         <div v-if="error" class="font-mono leading-relaxed">{{ error }}</div>
         <pre
           v-if="busy && lastProgressLine"
-          class="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap font-mono text-[10px]"
+          class="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap font-mono text-[0.71em]"
           :style="{ color: t.textDim }"
           >{{ lastProgressLine }}</pre
         >

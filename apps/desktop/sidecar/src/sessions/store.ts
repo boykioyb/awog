@@ -14,7 +14,16 @@ import { log } from '../util/logger.js'
 import type { Session, SessionMessage } from '../types/shared.js'
 
 type SessionMetadataPatch = Partial<
-  Pick<Session, 'title' | 'pinned' | 'projectId' | 'settings' | 'invitedAgentIds'>
+  Pick<
+    Session,
+    | 'title'
+    | 'pinned'
+    | 'projectId'
+    | 'settings'
+    | 'invitedAgentIds'
+    | 'disabledTools'
+    | 'mcpServerIds'
+  >
 >
 
 export type SessionEvent =

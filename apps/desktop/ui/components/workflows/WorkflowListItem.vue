@@ -35,7 +35,7 @@
         v-if="renaming"
         :ref="setInputRef"
         :value="renameValue"
-        class="text-[12px] flex-1 rounded px-1 py-0.5"
+        class="text-[0.86em] flex-1 rounded px-1 py-0.5"
         :style="{
           background: t.bgInput,
           border: `1px solid ${t.borderStrong}`,
@@ -50,7 +50,7 @@
       />
       <div
         v-else
-        class="text-[12px] truncate flex-1"
+        class="text-[0.86em] truncate flex-1"
         :style="{ color: t.text }"
         @dblclick.stop="emit('start-rename')"
       >
@@ -65,7 +65,7 @@
         <MoreHorizontal :size="13" />
       </button>
     </div>
-    <div class="text-[10px] mt-0.5 ml-5" :style="{ color: t.textDim }">
+    <div class="text-[0.71em] mt-0.5 ml-5" :style="{ color: t.textDim }">
       {{ workflow.nodes.length }} steps · {{ workflow.edges.length }} edges
     </div>
   </div>

@@ -26,7 +26,7 @@
           v-if="renaming"
           :ref="setRenameInputRef"
           :value="renameValue"
-          class="text-[13px] leading-tight w-full rounded px-1 py-0.5"
+          class="text-[0.93em] leading-tight w-full rounded px-1 py-0.5"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.borderStrong}`,
@@ -41,19 +41,19 @@
         />
         <div
           v-else
-          class="text-[13px] leading-tight truncate"
+          class="text-[0.93em] leading-tight truncate"
           :style="{ color: t.text }"
           @dblclick.stop="emit('start-rename')"
         >
           {{ task.title }}
         </div>
-        <div v-if="metaText" class="text-[10px] mt-1 truncate" :style="{ color: t.textDim }">
+        <div v-if="metaText" class="text-[0.71em] mt-1 truncate" :style="{ color: t.textDim }">
           {{ metaText }}
         </div>
       </div>
       <div
         v-if="isActive && totalCount > 0"
-        class="text-[10px] font-mono flex-shrink-0"
+        class="text-[0.71em] font-mono flex-shrink-0"
         :style="{ color: t.textDim }"
       >
         {{ completedCount }}/{{ totalCount }}

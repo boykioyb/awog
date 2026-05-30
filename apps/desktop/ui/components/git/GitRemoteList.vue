@@ -4,7 +4,7 @@
       class="px-3 py-2 flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">Remotes</div>
+      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">Remotes</div>
     </div>
     <div class="flex-1 overflow-y-auto">
       <EmptyView v-if="store.remotes.length === 0" :icon="Cloud" title="No remotes configured" />
@@ -18,7 +18,7 @@
           <Cloud :size="14" :style="{ color: t.accent }" />
           <span class="text-sm font-medium" :style="{ color: t.text }">{{ r.name }}</span>
         </div>
-        <div class="mt-2 grid gap-1 text-[11px]" style="grid-template-columns: 60px 1fr">
+        <div class="mt-2 grid gap-1 text-[0.79em]" style="grid-template-columns: 60px 1fr">
           <span :style="{ color: t.textDim }">fetch</span>
           <span class="font-mono truncate" :style="{ color: t.textMuted }">{{ r.fetchUrl }}</span>
           <span :style="{ color: t.textDim }">push</span>
@@ -26,7 +26,7 @@
         </div>
         <div class="flex items-center gap-1 mt-3">
           <button
-            class="text-[10px] px-2 py-1 rounded transition"
+            class="text-[0.71em] px-2 py-1 rounded transition"
             :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
             :disabled="store.isFetching"
             @click="store.fetchRemote()"
@@ -35,7 +35,7 @@
             Fetch
           </button>
           <button
-            class="text-[10px] px-2 py-1 rounded transition"
+            class="text-[0.71em] px-2 py-1 rounded transition"
             :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
             :disabled="store.isPulling"
             @click="store.pull()"
@@ -43,7 +43,7 @@
             Pull
           </button>
           <button
-            class="text-[10px] px-2 py-1 rounded transition"
+            class="text-[0.71em] px-2 py-1 rounded transition"
             :style="{ background: t.accent, color: t.accentText }"
             :disabled="store.isPushing"
             @click="store.push()"

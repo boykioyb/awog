@@ -1,0 +1,565 @@
+<template>
+  <div class="flex flex-col h-full overflow-hidden">
+    <div
+      class="flex items-center justify-between px-3 py-2 flex-shrink-0"
+      :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
+    >
+      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+        History
+      </div>
+      <div class="text-[0.71em]" :style="{ color: t.textFaint }">{{ commits.length }} commits</div>
+    </div>
+
+    <div
+      v-if="commits.length === 0"
+      class="flex-1 flex items-center justify-center text-xs"
+      :style="{ color: t.textDim }"
+    >
+      No commits yet
+    </div>
+
+    <div v-else class="flex-1 overflow-y-auto">
+      <div class="relative" :style="{ minWidth: '720px' }">
+        <!-- DAG column pinned to the left, aligned by rowHeight. Width tracks
+             actual lane count from computeDagLayout so dots/edges never clip
+             into invisibility — wide histories scroll horizontally instead. -->
+        <div
+          class="absolute top-0 left-0 z-0"
+          :style="{ width: `${graphPadding}px`, paddingLeft: '8px' }"
+        >
+          <GitHistoryGraph
+            :commits="commits"
+            :selected-hash="selectedHash"
+            :row-height="ROW_HEIGHT"
+            :lane-width="LANE_WIDTH"
+            :layout="dagLayout"
+            @select="(h: string) => emit('select', h)"
+          />
+        </div>
+        <!-- Commit rows. Left padding leaves room for the graph SVG. -->
+        <div :style="{ paddingLeft: `${graphPadding}px` }">
+          <div
+            v-for="c in commits"
+            :key="c.hash"
+            class="flex items-center gap-2 px-3 cursor-pointer transition select-none"
+            :style="{
+              height: `${ROW_HEIGHT}px`,
+              background:
+                selectedHash === c.hash
+                  ? t.bgActive
+                  : hovered === c.hash
+                    ? t.bgHover
+                    : 'transparent',
+              borderLeft:
+                selectedHash === c.hash ? `2px solid ${t.accent}` : '2px solid transparent',
+            }"
+            @mouseenter="hovered = c.hash"
+            @mouseleave="hovered = null"
+            @click="emit('select', c.hash)"
+            @contextmenu.prevent="onRowContext($event, c)"
+          >
+            <!-- Subject + refs -->
+            <div class="flex-1 flex items-center gap-1.5 min-w-0">
+              <GitRefBadge v-for="r in visibleRefs(c)" :key="`${c.hash}-${r.name}`" :ref-item="r" />
+              <span
+                v-if="overflowCount(c) > 0"
+                class="text-[0.64em] px-1 py-0.5 rounded"
+                :style="{
+                  color: t.textDim,
+                  background: t.bgInput,
+                  border: `1px solid ${t.border}`,
+                }"
+                :title="overflowTitle(c)"
+              >
+                +{{ overflowCount(c) }} more
+              </span>
+              <span
+                v-if="c.phaseId"
+                class="text-[0.64em] px-1 py-0.5 rounded font-mono"
+                :style="{
+                  background: t.infoBg,
+                  color: t.info,
+                  border: `1px solid ${t.infoBorder}`,
+                }"
+                :title="`Linked phase ${c.phaseId}`"
+              >
+                <Link :size="9" class="inline-block mr-0.5" />
+                {{ c.phaseId }}
+              </span>
+              <span class="text-xs truncate" :style="{ color: t.text }">{{ c.subject }}</span>
+            </div>
+
+            <!-- Author -->
+            <div class="flex items-center gap-1.5 flex-shrink-0 w-[140px]">
+              <span
+                class="inline-flex items-center justify-center text-[0.64em] rounded-full"
+                :style="{
+                  width: '18px',
+                  height: '18px',
+                  background: t.bgInput,
+                  color: t.textMuted,
+                  border: `1px solid ${t.border}`,
+                }"
+                :title="`${c.authorName} <${c.authorEmail}>`"
+              >
+                {{ initials(c.authorName) }}
+              </span>
+              <span class="text-[0.71em] truncate" :style="{ color: t.textMuted }">
+                {{ c.authorName }}
+              </span>
+            </div>
+
+            <!-- Hash -->
+            <button
+              type="button"
+              class="font-mono text-[0.71em] flex-shrink-0 w-[70px] text-left transition"
+              :style="{ color: t.accent }"
+              :title="`Click để copy ${c.hash}`"
+              @click.stop="onCopyHash(c.hash)"
+            >
+              {{ c.shortHash }}
+            </button>
+
+            <!-- Date -->
+            <span
+              class="text-[0.71em] flex-shrink-0 w-[140px] text-right"
+              :style="{ color: t.textDim }"
+              :title="new Date(c.date).toLocaleString()"
+            >
+              {{ formatRelative(c.date) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-if="hasMore"
+        class="px-3 py-2 flex justify-center"
+        :style="{ borderTop: `1px solid ${t.border}` }"
+      >
+        <button
+          type="button"
+          class="px-3 py-1 text-[0.71em] rounded transition"
+          :style="{
+            background: t.bgInput,
+            color: t.textMuted,
+            border: `1px solid ${t.border}`,
+            opacity: loading ? 0.6 : 1,
+          }"
+          :disabled="loading"
+          @click="emit('load-more')"
+        >
+          {{ loading ? 'Loading…' : 'Load more' }}
+        </button>
+      </div>
+    </div>
+
+    <ContextMenu
+      v-if="contextMenu"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :items="contextMenuItems"
+      @close="contextMenu = null"
+    />
+
+    <GitBranchNameModal
+      :open="branchModalOpen"
+      title="New branch from this commit"
+      submit-label="Create"
+      placeholder="branch-name"
+      :from-label="contextMenu ? contextMenu.commit.shortHash : ''"
+      :model-value="newBranchName"
+      @update:model-value="newBranchName = $event"
+      @close="branchModalOpen = false"
+      @submit="onCreateBranchSubmit"
+    />
+
+    <GitTagCreateModal
+      :open="tagModalOpen"
+      :target-sha="actionSha"
+      :target-short-hash="actionSha7"
+      @close="tagModalOpen = false"
+      @submit="onTagSubmit"
+    />
+
+    <GitResetConfirmModal
+      :open="resetModalOpen"
+      :target-sha7="actionSha7"
+      :current-branch="store.currentBranch"
+      @close="resetModalOpen = false"
+      @submit="onResetSubmit"
+    />
+
+    <ConfirmDeleteModal
+      v-if="checkoutCommitConfirm"
+      title="Checkout commit (detached HEAD)?"
+      :description="`HEAD sẽ trỏ thẳng tới commit ${actionSha7} thay vì một branch. Mọi commit mới sẽ không thuộc branch nào cho tới khi bạn tạo branch hoặc checkout lại.`"
+      @confirm="onCheckoutCommitConfirm"
+      @cancel="checkoutCommitConfirm = false"
+    />
+
+    <ConfirmDeleteModal
+      v-if="cherryPickConfirm"
+      title="Cherry-pick commit?"
+      :description="`Áp dụng commit ${actionSha7} lên top của ${store.currentBranch}. Conflict sẽ mở Conflict Resolver.`"
+      @confirm="onCherryPickConfirm"
+      @cancel="cherryPickConfirm = false"
+    />
+
+    <ConfirmDeleteModal
+      v-if="revertConfirm"
+      title="Revert commit?"
+      :description="`Tạo một commit nghịch đảo của ${actionSha7} trên ${store.currentBranch}. Conflict sẽ mở Conflict Resolver.`"
+      @confirm="onRevertConfirm"
+      @cancel="revertConfirm = false"
+    />
+
+    <ConfirmDeleteModal
+      v-if="savePatchConfirm"
+      title="Save commit as patch?"
+      :description="`Sẽ mở save dialog để chọn nơi ghi file ${actionSha7}.patch.`"
+      @confirm="onSavePatchConfirm"
+      @cancel="savePatchConfirm = false"
+    />
+
+    <GitCompareCommitModal
+      :open="compareOpen"
+      :target-short-hash="actionSha7"
+      :files="compareFiles"
+      :loading="compareLoading"
+      @close="compareOpen = false"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import {
+  Copy,
+  Edit3,
+  FileDown,
+  GitBranchPlus,
+  GitCompare,
+  GitFork,
+  Link,
+  Pencil,
+  RotateCcw,
+  Scissors,
+  SquareStack,
+  Tag,
+  Trash2,
+  Undo2,
+} from 'lucide-vue-next'
+import type { ContextMenuItem } from '~/components/ContextMenu.vue'
+import type { GitCommit, GitFileDiff, GitRefDecoration } from '~/types'
+import { computeDagLayout } from '~/utils/dag-layout'
+
+type Props = {
+  commits: GitCommit[]
+  selectedHash: string | null
+  hasMore: boolean
+  loading?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), { loading: false })
+const emit = defineEmits<{ select: [hash: string]; 'load-more': [] }>()
+
+const { t } = useTheme()
+const hovered = ref<string | null>(null)
+
+const ROW_HEIGHT = 28
+const LANE_WIDTH = 16
+const MAX_VISIBLE_REFS = 3
+const GRAPH_LEFT_PAD = 8
+const GRAPH_RIGHT_PAD = 12
+
+// Compute the DAG layout once here and pass it down to GitHistoryGraph so both
+// sides agree on lane count. Padding grows with the actual lane count — wide
+// histories scroll horizontally rather than clipping dots/edges (which made
+// edges look detached when one endpoint was hidden).
+const dagLayout = computed(() => computeDagLayout(props.commits))
+const graphPadding = computed(() => {
+  const lanes = Math.max(2, dagLayout.value.laneCount)
+  return lanes * LANE_WIDTH + GRAPH_LEFT_PAD + GRAPH_RIGHT_PAD
+})
+
+const visibleRefs = (c: GitCommit): GitRefDecoration[] => c.refs.slice(0, MAX_VISIBLE_REFS)
+const overflowCount = (c: GitCommit) => Math.max(0, c.refs.length - MAX_VISIBLE_REFS)
+const overflowTitle = (c: GitCommit) =>
+  c.refs
+    .slice(MAX_VISIBLE_REFS)
+    .map((r) => r.name)
+    .join(', ')
+
+const initials = (name: string): string => {
+  const trimmed = name.trim()
+  if (!trimmed) return '?'
+  const parts = trimmed.split(/\s+/)
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
+  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase()
+}
+
+// Sublime/GitKraken-style relative format. "Today at HH:MM", "Yesterday at
+// HH:MM", "DayOfWeek at HH:MM" within a week, else "MMM DD" / "MMM DD, YYYY".
+const formatRelative = (iso: string): string => {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const now = new Date()
+  const isSameDay = d.toDateString() === now.toDateString()
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  if (isSameDay) return `Today at ${time}`
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
+  if (diffDays >= 0 && diffDays < 7) {
+    const day = d.toLocaleDateString(undefined, { weekday: 'short' })
+    return `${day} at ${time}`
+  }
+  const sameYear = d.getFullYear() === now.getFullYear()
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
+
+const onCopyHash = (hash: string) => {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) return
+  // Best-effort: ignore rejection (permissions, insecure context).
+  navigator.clipboard.writeText(hash).catch(() => undefined)
+}
+
+// ─── Right-click context menu ────────────────────────────────────────────
+const store = useGitStore()
+
+const contextMenu = ref<{ x: number; y: number; commit: GitCommit } | null>(null)
+const onRowContext = (e: MouseEvent, commit: GitCommit) => {
+  contextMenu.value = { x: e.clientX, y: e.clientY, commit }
+}
+
+// Modal state — keyed off the commit that was right-clicked. Captured into
+// `actionSha`/`actionSha7` when an action opens so the user can dismiss the
+// menu without losing the target.
+const actionSha = ref<string>('')
+const actionSha7 = ref<string>('')
+
+const branchModalOpen = ref(false)
+const newBranchName = ref('')
+const tagModalOpen = ref(false)
+const resetModalOpen = ref(false)
+const checkoutCommitConfirm = ref(false)
+const cherryPickConfirm = ref(false)
+const revertConfirm = ref(false)
+const savePatchConfirm = ref(false)
+const compareOpen = ref(false)
+const compareFiles = ref<GitFileDiff[]>([])
+const compareLoading = ref(false)
+
+const captureTarget = (commit: GitCommit) => {
+  actionSha.value = commit.hash
+  actionSha7.value = commit.shortHash
+}
+
+// Interactive Rebase submenu — entirely placeholder, every child disabled
+// with a tooltip explaining the deferral. UI plumbing for nesting still ships
+// so we can light these up in v2 without changing the menu layout.
+const rebaseChildren: ContextMenuItem[] = [
+  {
+    label: "Interactively Rebase 'HEAD' to Here…",
+    disabled: true,
+    tooltip: 'Coming v2',
+  },
+  { separator: true },
+  {
+    label: 'Reword Message…',
+    icon: Pencil,
+    disabled: true,
+    tooltip: 'Coming v2',
+  },
+  {
+    label: 'Edit…',
+    icon: Edit3,
+    disabled: true,
+    tooltip: 'Coming v2',
+  },
+  {
+    label: 'Squash into Parent…',
+    icon: SquareStack,
+    disabled: true,
+    tooltip: 'Coming v2',
+  },
+  {
+    label: 'Fixup into Parent…',
+    icon: Scissors,
+    disabled: true,
+    tooltip: 'Coming v2',
+  },
+  {
+    label: 'Drop…',
+    icon: Trash2,
+    danger: true,
+    disabled: true,
+    tooltip: 'Coming v2',
+  },
+]
+
+const contextMenuItems = computed<ContextMenuItem[]>(() => {
+  const ctx = contextMenu.value
+  if (!ctx) return []
+  const c = ctx.commit
+  return [
+    {
+      label: 'New Branch from this commit…',
+      icon: GitBranchPlus,
+      action: () => {
+        captureTarget(c)
+        newBranchName.value = ''
+        branchModalOpen.value = true
+      },
+    },
+    {
+      label: 'New Tag…',
+      icon: Tag,
+      action: () => {
+        captureTarget(c)
+        tagModalOpen.value = true
+      },
+    },
+    {
+      label: 'Interactive Rebase',
+      icon: GitFork,
+      children: rebaseChildren,
+    },
+    {
+      label: `Reset '${store.currentBranch}' to Here…`,
+      icon: RotateCcw,
+      action: () => {
+        captureTarget(c)
+        resetModalOpen.value = true
+      },
+    },
+    { separator: true },
+    {
+      label: 'Checkout Commit…',
+      icon: GitBranchPlus,
+      action: () => {
+        captureTarget(c)
+        checkoutCommitConfirm.value = true
+      },
+    },
+    {
+      label: 'Cherry-pick Commit…',
+      icon: Copy,
+      action: () => {
+        captureTarget(c)
+        cherryPickConfirm.value = true
+      },
+    },
+    {
+      label: 'Revert Commit…',
+      icon: Undo2,
+      action: () => {
+        captureTarget(c)
+        revertConfirm.value = true
+      },
+    },
+    {
+      label: 'Save as Patch…',
+      icon: FileDown,
+      action: () => {
+        captureTarget(c)
+        savePatchConfirm.value = true
+      },
+    },
+    { separator: true },
+    {
+      label: 'Compare to Local Changes',
+      icon: GitCompare,
+      action: () => {
+        captureTarget(c)
+        openCompare(c.hash)
+      },
+    },
+    { separator: true },
+    {
+      label: 'Copy Commit SHA',
+      icon: Copy,
+      shortcut: '⌘C',
+      action: () => onCopyHash(c.hash),
+    },
+  ]
+})
+
+// ─── Action handlers ─────────────────────────────────────────────────────
+const onCreateBranchSubmit = async (value: string) => {
+  const name = value.trim()
+  if (!name) return
+  branchModalOpen.value = false
+  await store.createBranch(name, actionSha.value)
+}
+
+const onTagSubmit = async (payload: { name: string; message: string; annotated: boolean }) => {
+  tagModalOpen.value = false
+  const opts: { message?: string; annotated?: boolean } = {}
+  if (payload.message) opts.message = payload.message
+  if (payload.annotated) opts.annotated = true
+  await store.createTag(payload.name, actionSha.value, opts)
+}
+
+const onResetSubmit = async (mode: 'soft' | 'mixed' | 'hard') => {
+  resetModalOpen.value = false
+  await store.resetTo(actionSha.value, mode)
+}
+
+const onCheckoutCommitConfirm = async () => {
+  checkoutCommitConfirm.value = false
+  await store.checkoutCommit(actionSha.value)
+}
+
+const onCherryPickConfirm = async () => {
+  cherryPickConfirm.value = false
+  await store.cherryPick(actionSha.value)
+}
+
+const onRevertConfirm = async () => {
+  revertConfirm.value = false
+  await store.revertCommit(actionSha.value)
+}
+
+const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
+const onSavePatchConfirm = async () => {
+  savePatchConfirm.value = false
+  const sha = actionSha.value
+  const sha7 = actionSha7.value
+  const defaultName = `${sha7}.patch`
+  let savePath: string | null = null
+  if (isTauri()) {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const picked = await save({
+      title: 'Save commit as patch',
+      defaultPath: defaultName,
+      filters: [{ name: 'Patch', extensions: ['patch'] }],
+    })
+    if (typeof picked === 'string') savePath = picked
+  } else {
+    // Browser fallback — no native dialog, so prompt for an absolute path so
+    // the user can still smoke-test the feature.
+    const fallback = window.prompt('Save patch to (absolute path):', `/tmp/${defaultName}`)
+    savePath = fallback?.trim() || null
+  }
+  if (!savePath) return
+  await store.savePatch(sha, savePath)
+}
+
+const openCompare = async (sha: string) => {
+  compareOpen.value = true
+  compareLoading.value = true
+  compareFiles.value = []
+  try {
+    compareFiles.value = await store.loadDiffCommitVsWorkingTree(sha)
+  } finally {
+    compareLoading.value = false
+  }
+}
+</script>

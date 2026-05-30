@@ -65,11 +65,16 @@ const ACCENT_VALUES: readonly AccentPreset[] = [
   'gruvbox',
   'catppuccin',
 ]
-const THEME_COLOR_VALUES: readonly ThemeColor[] = ACCENT_VALUES
+const THEME_COLOR_VALUES: readonly ThemeColor[] = [...ACCENT_VALUES, 'custom']
 const DEPTH_VALUES: readonly SurfaceDepth[] = ['flat', 'standard', 'deep']
+
+const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/
 
 const pick = <T>(value: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value as T) ? (value as T) : fallback
+
+const pickHex = (value: unknown, fallback: string): string =>
+  typeof value === 'string' && HEX_COLOR_RE.test(value) ? value.toLowerCase() : fallback
 
 const coerceAppearance = (raw: unknown): AppearanceSettings => {
   const v = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
@@ -84,6 +89,7 @@ const coerceAppearance = (raw: unknown): AppearanceSettings => {
     fontWeight: pick(v.fontWeight, WEIGHT_VALUES, DEFAULT_APPEARANCE.fontWeight),
     accent: pick(v.accent, ACCENT_VALUES, DEFAULT_APPEARANCE.accent),
     themeColor: pick(v.themeColor, THEME_COLOR_VALUES, DEFAULT_APPEARANCE.themeColor),
+    themeColorCustom: pickHex(v.themeColorCustom, DEFAULT_APPEARANCE.themeColorCustom),
     surfaceDepth: pick(v.surfaceDepth, DEPTH_VALUES, DEFAULT_APPEARANCE.surfaceDepth),
   }
 }

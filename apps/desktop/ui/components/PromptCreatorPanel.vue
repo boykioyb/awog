@@ -20,18 +20,18 @@
         <div class="text-base font-medium mb-1.5" :style="{ color: t.text }">
           {{ headline }}
         </div>
-        <div class="text-[12px]" :style="{ color: t.textDim }">
+        <div class="text-[0.86em]" :style="{ color: t.textDim }">
           {{ subheadline }}
         </div>
       </div>
 
       <div v-else class="px-5 pt-3 pb-3 space-y-3">
         <div class="flex items-center justify-between">
-          <div class="text-[10px] uppercase tracking-wider" :style="{ color: t.textDim }">
+          <div class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textDim }">
             {{ generatedLabel }}
           </div>
           <button
-            class="text-[11px] inline-flex items-center gap-1 transition"
+            class="text-[0.79em] inline-flex items-center gap-1 transition"
             :style="{ color: t.textDim }"
             @click="emit('regenerate')"
           >
@@ -52,7 +52,7 @@
             :rows="2"
             :disabled="isGenerating || hasDraft"
             :placeholder="placeholder"
-            class="w-full bg-transparent text-[12px] leading-relaxed resize-none focus:outline-none"
+            class="w-full bg-transparent text-[0.86em] leading-relaxed resize-none focus:outline-none"
             :style="{ color: t.text }"
             @keydown.enter.exact.prevent="onSubmit"
           />
@@ -67,7 +67,7 @@
             </button>
 
             <div v-if="!hasDraft" class="flex items-center gap-2">
-              <span v-if="error" class="text-[11px]" :style="{ color: t.danger }">
+              <span v-if="error" class="text-[0.79em]" :style="{ color: t.danger }">
                 {{ error }}
               </span>
               <button

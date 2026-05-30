@@ -470,6 +470,15 @@ export type GitFileStatus = {
   hasConflict: boolean
 }
 
+// Decoration ref attached to a commit — mirrors sidecar `GitRef` so the UI can
+// render each ref as a styled chip (branch / remote / tag / HEAD / stash).
+export type GitRefKind = 'branch' | 'remote-branch' | 'tag' | 'HEAD' | 'stash'
+
+export type GitRefDecoration = {
+  kind: GitRefKind
+  name: string
+}
+
 export type GitCommit = {
   projectId: string
   hash: string
@@ -480,7 +489,7 @@ export type GitCommit = {
   subject: string
   body?: string
   parents: string[]
-  refs: string[]
+  refs: GitRefDecoration[]
   phaseId?: string
   agentId?: string
 }

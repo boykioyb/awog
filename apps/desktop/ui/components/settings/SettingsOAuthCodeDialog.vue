@@ -15,7 +15,7 @@
         class="px-4 py-3 flex items-center justify-between"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
-        <div class="text-[13px] font-semibold" :style="{ color: t.text }">
+        <div class="text-[0.93em] font-semibold" :style="{ color: t.text }">
           Connect Claude Pro/Max
         </div>
         <button
@@ -34,18 +34,18 @@
         <section class="space-y-2">
           <div class="flex items-center gap-2">
             <span
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold"
+              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[0.71em] font-semibold"
               :style="{ background: t.accent, color: t.accentText }"
             >
               1
             </span>
-            <div class="text-[12px]" :style="{ color: t.text }">
+            <div class="text-[0.86em]" :style="{ color: t.text }">
               Open the Anthropic login page in your browser.
             </div>
           </div>
           <button
             type="button"
-            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded text-[12px] font-medium transition"
+            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded text-[0.86em] font-medium transition"
             :style="openButtonStyle"
             :disabled="phase === 'opening' || phase === 'waiting-code' || phase === 'confirming'"
             @click="onOpenLogin"
@@ -60,12 +60,12 @@
         <section class="space-y-1">
           <div class="flex items-center gap-2">
             <span
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold"
+              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[0.71em] font-semibold"
               :style="stepBadgeStyle(phase !== 'idle' && phase !== 'opening')"
             >
               2
             </span>
-            <div class="text-[12px]" :style="{ color: t.text }">
+            <div class="text-[0.86em]" :style="{ color: t.text }">
               After signing in, Anthropic will show a one-time code. Copy it.
             </div>
           </div>
@@ -75,7 +75,7 @@
         <section class="space-y-2">
           <div class="flex items-center gap-2">
             <span
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold"
+              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[0.71em] font-semibold"
               :style="
                 stepBadgeStyle(
                   phase === 'waiting-code' || phase === 'confirming' || phase === 'error',
@@ -84,7 +84,7 @@
             >
               3
             </span>
-            <div class="text-[12px]" :style="{ color: t.text }">
+            <div class="text-[0.86em]" :style="{ color: t.text }">
               Paste the code below, then click Confirm.
             </div>
           </div>
@@ -93,7 +93,7 @@
             ref="codeInput"
             v-model="code"
             rows="3"
-            class="w-full rounded px-2 py-1.5 text-[12px] font-mono resize-none"
+            class="w-full rounded px-2 py-1.5 text-[0.86em] font-mono resize-none"
             :style="inputStyle"
             placeholder="Paste the one-time code here"
             spellcheck="false"
@@ -103,7 +103,7 @@
           <input
             v-model="label"
             type="text"
-            class="w-full rounded px-2 py-1.5 text-[12px]"
+            class="w-full rounded px-2 py-1.5 text-[0.86em]"
             :style="inputStyle"
             placeholder="Optional label (e.g. Personal Pro)"
             :disabled="phase === 'confirming'"
@@ -112,7 +112,7 @@
 
         <div
           v-if="error"
-          class="rounded px-3 py-2 text-[11px]"
+          class="rounded px-3 py-2 text-[0.79em]"
           :style="{
             background: t.dangerBg,
             border: `1px solid ${t.dangerBorder}`,
@@ -129,7 +129,7 @@
       >
         <button
           type="button"
-          class="px-3 py-1.5 text-[12px] rounded transition"
+          class="px-3 py-1.5 text-[0.86em] rounded transition"
           :style="secondaryBtnStyle"
           :disabled="phase === 'confirming'"
           @click="onCancel"
@@ -138,7 +138,7 @@
         </button>
         <button
           type="button"
-          class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[12px] rounded transition"
+          class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[0.86em] rounded transition"
           :style="primaryBtnStyle"
           :disabled="!canConfirm"
           @click="onConfirm"

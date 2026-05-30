@@ -1,375 +1,257 @@
 <template>
   <div class="flex flex-1 overflow-hidden flex-col">
-    <!-- Header: branch picker + ops toolbar -->
-    <div
-      class="px-3 py-2 flex items-center gap-3 flex-shrink-0"
-      :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
-    >
-      <!-- Project selector -->
-      <div class="relative">
-        <button
-          class="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition"
-          :style="{
-            background: projectOpen ? t.bgActive : t.bgInput,
-            color: t.text,
-            border: `1px solid ${t.border}`,
-          }"
-          @click="projectOpen = !projectOpen"
-        >
-          <FolderGit2 :size="12" :style="{ color: currentProject?.color || t.textDim }" />
-          <span class="font-medium">{{ currentProject?.name ?? 'No project' }}</span>
-          <span
-            v-if="currentDirtyCount > 0"
-            class="text-[9px] px-1 rounded"
-            :style="{ background: t.warning, color: t.accentText, minWidth: '14px' }"
-          >
-            {{ currentDirtyCount }}
-          </span>
-          <ChevronDown :size="10" />
-        </button>
-        <div
-          v-if="projectOpen"
-          class="absolute left-0 top-full mt-1 z-30 min-w-[260px] rounded shadow-lg overflow-hidden"
-          :style="{
-            background: t.bgPanel,
-            border: `1px solid ${t.borderStrong}`,
-            boxShadow: `0 10px 30px ${t.shadow}`,
-          }"
-        >
-          <div
-            v-for="p in projects"
-            :key="p.id"
-            class="flex items-center gap-2 px-3 py-2 cursor-pointer transition"
-            :style="{
-              background: projectHover === p.id ? t.bgHover : 'transparent',
-              borderLeft:
-                p.id === store.selectedProjectId
-                  ? `2px solid ${t.accent}`
-                  : '2px solid transparent',
-            }"
-            @mouseenter="projectHover = p.id"
-            @mouseleave="projectHover = null"
-            @click="selectProject(p.id)"
-          >
-            <FolderGit2 :size="12" :style="{ color: p.color || t.textDim }" />
-            <div class="flex-1 min-w-0">
-              <div class="text-xs font-medium truncate" :style="{ color: t.text }">
-                {{ p.name }}
-              </div>
-              <div class="text-[10px] font-mono truncate" :style="{ color: t.textFaint }">
-                {{ p.path }}
-              </div>
-            </div>
-            <span
-              v-if="(store.dirtyCountByProject[p.id] ?? 0) > 0"
-              class="text-[10px] px-1.5 py-0.5 rounded font-mono"
-              :style="{ background: t.warning, color: t.accentText }"
-            >
-              {{ store.dirtyCountByProject[p.id] }}
-            </span>
-            <Check
-              v-if="p.id === store.selectedProjectId"
-              :size="11"
-              :style="{ color: t.accent }"
-            />
-          </div>
-        </div>
-      </div>
+    <!-- Git not installed / unsupported version banner (M7) -->
+    <GitNotInstalledBanner
+      v-if="gitInstallStatus && (!gitInstallStatus.installed || !gitInstallStatus.supported)"
+      :installed="gitInstallStatus.installed"
+      :version="gitInstallStatus.version"
+      :required="gitInstallStatus.required"
+    />
+    <template v-else>
+      <GitPageHeader
+        :projects="projects"
+        :current-project="currentProject"
+        :current-dirty-count="currentDirtyCount"
+        :dirty-count-by-project="store.dirtyCountByProject"
+        :selected-project-id="store.selectedProjectId"
+        :local-branches="localBranches"
+        :current-branch="store.currentBranch"
+        :ahead="store.ahead"
+        :behind="store.behind"
+        :has-conflict="store.hasConflict"
+        :has-uncommitted="store.hasUncommitted"
+        :is-merging="store.isMerging"
+        @select-project="(id: string) => store.setSelectedProject(id)"
+        @switch-branch="switchBranch"
+        @complete-merge="onCompleteMerge"
+        @request-abort-merge="pendingAbort = true"
+      />
 
-      <span :style="{ color: t.textFaint }">/</span>
+      <ConfirmDeleteModal
+        v-if="pendingAbort"
+        title="Abort merge?"
+        description="Working tree sẽ về state trước merge. Tất cả thay đổi chưa commit của merge này sẽ mất. Tiếp tục?"
+        @confirm="onConfirmAbort"
+        @cancel="pendingAbort = false"
+      />
 
-      <div class="relative">
-        <button
-          class="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition"
-          :style="{
-            background: branchOpen ? t.bgActive : t.bgInput,
-            color: t.text,
-            border: `1px solid ${t.border}`,
-          }"
-          @click="branchOpen = !branchOpen"
-        >
-          <GitBranchIcon :size="12" />
-          <span class="font-mono">{{ store.currentBranch }}</span>
-          <ChevronDown :size="10" />
-        </button>
-        <div
-          v-if="branchOpen"
-          class="absolute left-0 top-full mt-1 z-30 min-w-[220px] rounded shadow-lg"
-          :style="{
-            background: t.bgPanel,
-            border: `1px solid ${t.borderStrong}`,
-            boxShadow: `0 10px 30px ${t.shadow}`,
-          }"
-        >
-          <div
-            v-for="b in localBranches"
-            :key="b.name"
-            class="flex items-center gap-2 px-3 py-2 cursor-pointer transition"
-            :style="{
-              background: branchHover === b.name ? t.bgHover : 'transparent',
-            }"
-            @mouseenter="branchHover = b.name"
-            @mouseleave="branchHover = null"
-            @click="switchBranch(b.name, b.isCurrent)"
-          >
-            <Check
-              :size="11"
-              :style="{
-                color: b.isCurrent ? t.accent : 'transparent',
-              }"
-            />
-            <span class="text-xs font-mono flex-1 truncate" :style="{ color: t.text }">
-              {{ b.name }}
-            </span>
-            <span
-              v-if="b.ahead > 0 || b.behind > 0"
-              class="text-[10px] font-mono"
-              :style="{ color: t.textDim }"
-            >
-              {{ b.ahead > 0 ? `↑${b.ahead}` : '' }}{{ b.behind > 0 ? ` ↓${b.behind}` : '' }}
-            </span>
-          </div>
-        </div>
-      </div>
+      <GitTabBar
+        :active-tab="activeTab"
+        :has-uncommitted="store.hasUncommitted"
+        :has-conflict="store.hasConflict"
+        @update:active-tab="(tab: GitTab) => (activeTab = tab)"
+      />
 
-      <div class="flex items-center gap-2 text-[11px]" :style="{ color: t.textDim }">
-        <span v-if="store.ahead > 0" class="font-mono">
-          ↑{{ store.ahead }}
-          <span :style="{ color: t.textFaint }">ahead</span>
-        </span>
-        <span v-if="store.behind > 0" class="font-mono">
-          ↓{{ store.behind }}
-          <span :style="{ color: t.textFaint }">behind</span>
-        </span>
-        <span v-if="store.hasConflict" :style="{ color: t.gitConflict }">· conflict</span>
-        <span v-else-if="store.hasUncommitted" :style="{ color: t.warning }">· dirty</span>
-        <span v-else :style="{ color: t.textDim }">· clean</span>
-      </div>
+      <!-- Detached HEAD warning banner (AC-42) -->
+      <GitDetachedHeadBanner v-if="store.isDetached" :detached-at="store.detachedAt" />
 
-      <div class="ml-auto">
-        <GitOpsToolbar />
-      </div>
-    </div>
+      <!-- Empty state for no-repo -->
+      <GitNoRepoEmpty v-if="store.repoState === 'no-repo'" @init="store.initRepo()" />
 
-    <!-- Tab bar -->
-    <div
-      class="flex items-center px-3 gap-1 flex-shrink-0"
-      :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
-    >
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        class="relative flex items-center gap-1.5 px-3 py-2 text-xs transition"
-        :style="tabStyle(tab.id)"
-        @click="activeTab = tab.id"
+      <!-- Changes tab -->
+      <GitChangesTab
+        v-else-if="activeTab === 'changes'"
+        :current-diff="currentDiff"
+        :selected-conflict-path="selectedConflictPath"
+        :can-stage-selected-hunk="canStageSelectedHunk"
+        @stage-hunk="onStageHunk"
+      />
+
+      <!-- History tab -->
+      <GitHistoryTab v-else-if="activeTab === 'history'" :detail="commitDetail" />
+
+      <!-- Branches tab -->
+      <MasterDetailShell
+        v-else-if="activeTab === 'branches'"
+        selected-id="_tab"
+        list-width="24rem"
+        disable-mobile
+        resizable
+        storage-key="awog.git.list-width.branches"
       >
-        <component :is="tab.icon" :size="11" />
-        <span>{{ tab.label }}</span>
-        <span
-          v-if="tab.id === 'changes' && store.hasUncommitted"
-          class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-          :style="{ background: store.hasConflict ? t.gitConflict : t.warning }"
-        />
-      </button>
-    </div>
+        <template #list>
+          <GitBranchList />
+        </template>
+        <template #detail>
+          <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
+            <div class="text-xs">Click branch để checkout. Right-click cho thêm action.</div>
+          </div>
+        </template>
+      </MasterDetailShell>
 
-    <!-- Empty state for no-repo -->
-    <div
-      v-if="store.repoState === 'no-repo'"
-      class="flex-1 flex flex-col items-center justify-center gap-3"
-    >
-      <FolderGit2 :size="40" :stroke-width="1.5" :style="{ color: t.textFaint }" />
-      <div class="text-sm" :style="{ color: t.textDim }">Workspace chưa init Git</div>
-      <button
-        class="text-xs px-3 py-1.5 rounded font-medium transition"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="store.initRepo()"
+      <!-- Stash tab -->
+      <MasterDetailShell
+        v-else-if="activeTab === 'stash'"
+        selected-id="_tab"
+        list-width="24rem"
+        disable-mobile
+        resizable
+        storage-key="awog.git.list-width.stash"
       >
-        Initialize Git repository
-      </button>
-    </div>
+        <template #list>
+          <GitStashList />
+        </template>
+        <template #detail>
+          <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
+            <div class="text-xs">Stash sẽ apply file vào working tree khi pop / apply.</div>
+          </div>
+        </template>
+      </MasterDetailShell>
 
-    <!-- Changes tab -->
-    <MasterDetailShell
-      v-else-if="activeTab === 'changes'"
-      selected-id="_tab"
-      list-width="20rem"
-      disable-mobile
-    >
-      <template #list>
-        <GitStatusList />
-      </template>
-      <template #detail>
-        <div class="flex-1 overflow-hidden">
-          <GitConflictResolver v-if="selectedConflictPath" :path="selectedConflictPath" />
-          <GitDiffViewer v-else :diff="currentDiff" />
-        </div>
-        <GitCommitPanel />
-      </template>
-    </MasterDetailShell>
+      <!-- Remotes tab -->
+      <MasterDetailShell
+        v-else-if="activeTab === 'remotes'"
+        selected-id="_tab"
+        list-width="24rem"
+        disable-mobile
+        resizable
+        storage-key="awog.git.list-width.remotes"
+      >
+        <template #list>
+          <GitRemoteList />
+        </template>
+        <template #detail>
+          <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
+            <div class="text-xs">Cấu hình add/remove remote chưa có trong v1.</div>
+          </div>
+        </template>
+      </MasterDetailShell>
 
-    <!-- History tab -->
-    <MasterDetailShell
-      v-else-if="activeTab === 'history'"
-      selected-id="_tab"
-      list-width="24rem"
-      disable-mobile
-    >
-      <template #list>
-        <GitHistoryList />
-      </template>
-      <template #detail>
-        <GitCommitDetail :detail="commitDetail" />
-      </template>
-    </MasterDetailShell>
+      <!-- Dirty-tree checkout modal — lifted from GitBranchList so the branch
+           picker dropdown in the header also triggers the same flow. -->
+      <GitDirtyCheckoutModal
+        :open="store.pendingCheckoutError !== null"
+        :target-branch="store.pendingCheckoutError?.branch ?? ''"
+        :files="store.pendingCheckoutError?.files ?? []"
+        @close="store.clearPendingCheckoutError()"
+        @force="onForceCheckout"
+        @stash-and-checkout="onStashAndCheckout"
+      />
 
-    <!-- Branches tab -->
-    <MasterDetailShell
-      v-else-if="activeTab === 'branches'"
-      selected-id="_tab"
-      list-width="24rem"
-      disable-mobile
-    >
-      <template #list>
-        <GitBranchList />
-      </template>
-      <template #detail>
-        <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
-          <div class="text-xs">Click branch để checkout. Right-click cho thêm action.</div>
-        </div>
-      </template>
-    </MasterDetailShell>
+      <!-- Remote ops modals (M4) -->
+      <GitAuthErrorModal :error="store.pendingAuthError" @close="store.clearPendingAuthError" />
+      <GitPullDivergenceModal
+        :open="store.pendingPullDivergence"
+        @close="store.clearPendingPullDivergence"
+        @choose-merge="onChooseMerge"
+        @choose-rebase="onChooseRebase"
+      />
+      <GitPushNonFfModal
+        :open="store.pendingPushNonFf"
+        @close="store.clearPendingPushNonFf"
+        @pull-then-push="onPullThenPush"
+      />
 
-    <!-- Stash tab -->
-    <MasterDetailShell
-      v-else-if="activeTab === 'stash'"
-      selected-id="_tab"
-      list-width="24rem"
-      disable-mobile
-    >
-      <template #list>
-        <GitStashList />
-      </template>
-      <template #detail>
-        <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
-          <div class="text-xs">Stash sẽ apply file vào working tree khi pop / apply.</div>
-        </div>
-      </template>
-    </MasterDetailShell>
-
-    <!-- Remotes tab -->
-    <MasterDetailShell
-      v-else-if="activeTab === 'remotes'"
-      selected-id="_tab"
-      list-width="24rem"
-      disable-mobile
-    >
-      <template #list>
-        <GitRemoteList />
-      </template>
-      <template #detail>
-        <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
-          <div class="text-xs">Cấu hình add/remove remote chưa có trong v1.</div>
-        </div>
-      </template>
-    </MasterDetailShell>
-
-    <!-- Toast container -->
-    <div
-      v-if="store.toasts.length > 0"
-      class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-[360px]"
-    >
+      <!-- Toast container -->
       <div
-        v-for="toast in store.toasts"
-        :key="toast.id"
-        class="px-3 py-2 rounded text-xs shadow-lg"
-        :style="toastStyle(toast.kind)"
+        v-if="store.toasts.length > 0"
+        class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-[360px]"
       >
-        {{ toast.text }}
+        <div
+          v-for="toast in store.toasts"
+          :key="toast.id"
+          class="px-3 py-2 rounded text-xs shadow-lg"
+          :style="toastStyle(toast.kind)"
+        >
+          {{ toast.text }}
+        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import {
-  Check,
-  ChevronDown,
-  FolderGit2,
-  GitBranch as GitBranchIcon,
-  GitCommit as GitCommitIcon,
-  History,
-  Cloud,
-  Archive,
-} from 'lucide-vue-next'
-import type { GitCommit, GitFileDiff } from '~/types'
+import type { GitBranch, GitCommit, GitFileDiff, GitFileStatus, Project } from '~/types'
+import type { CheckInstalledResult } from '~/composables/useGitApi'
+import type { GitTab } from '~/components/git/git-tabs'
 
 const { t } = useTheme()
 const store = useGitStore()
 const workspace = useWorkspaceStore()
 
-type GitTab = 'changes' | 'history' | 'branches' | 'stash' | 'remotes'
+// Bootstrap: probe sidecar for `git --version`. Blocks `/git` page if missing
+// or unsupported (< 2.20). Other pages still usable.
+const gitInstallStatus = ref<CheckInstalledResult | null>(null)
 
 const activeTab = ref<GitTab>('changes')
-const branchOpen = ref(false)
-const branchHover = ref<string | null>(null)
-const projectOpen = ref(false)
-const projectHover = ref<string | null>(null)
 const currentDiff = ref<GitFileDiff | null>(null)
 const commitDetail = ref<{ commit: GitCommit; files: GitFileDiff[] } | null>(null)
+const pendingAbort = ref(false)
 
 const projects = computed(() => workspace.projects)
-const currentProject = computed(() => projects.value.find((p) => p.id === store.selectedProjectId))
+const currentProject = computed(() =>
+  projects.value.find((p: Project) => p.id === store.selectedProjectId),
+)
 const currentDirtyCount = computed(() => store.dirtyCountByProject[store.selectedProjectId] ?? 0)
-
-const selectProject = (id: string) => {
-  projectOpen.value = false
-  store.setSelectedProject(id)
-}
-
-const tabs = [
-  { id: 'changes' as const, label: 'Changes', icon: GitCommitIcon },
-  { id: 'history' as const, label: 'History', icon: History },
-  { id: 'branches' as const, label: 'Branches', icon: GitBranchIcon },
-  { id: 'stash' as const, label: 'Stash', icon: Archive },
-  { id: 'remotes' as const, label: 'Remotes', icon: Cloud },
-]
-
-const localBranches = computed(() => store.branches.filter((b) => !b.isRemote))
+const localBranches = computed(() => store.branches.filter((b: GitBranch) => !b.isRemote))
 
 const selectedConflictPath = computed(() => {
   const path = store.selectedFilePath
   if (!path) return null
-  const file = store.statusFiles.find((f) => f.path === path)
+  const file = store.statusFiles.find((f: GitFileStatus) => f.path === path)
   return file?.hasConflict ? path : null
 })
 
-const tabStyle = (id: GitTab) => {
-  const active = activeTab.value === id
-  return {
-    background: 'transparent',
-    color: active ? t.value.text : t.value.textDim,
-    borderBottom: `2px solid ${active ? t.value.accent : 'transparent'}`,
-    marginBottom: '-1px',
-  }
+// Allow Stage-hunk only when the currently selected file is in the unstaged
+// section (working-tree diff). Staged files show a different diff source so
+// hunk indices wouldn't match the unstaged patch the sidecar rebuilds.
+const canStageSelectedHunk = computed(() => {
+  const path = store.selectedFilePath
+  if (!path) return false
+  const file = store.statusFiles.find((f: GitFileStatus) => f.path === path)
+  return !!file && !file.isStaged && !file.hasConflict
+})
+
+const onStageHunk = async (hunkIndex: number) => {
+  const path = store.selectedFilePath
+  if (!path) return
+  await store.stageHunk(path, hunkIndex)
+  // Re-fetch the diff so the staged lines disappear from the working-tree view.
+  currentDiff.value = await store.loadDiff(path)
 }
 
+const onChooseMerge = async () => {
+  store.clearPendingPullDivergence()
+  await store.pull('merge')
+}
+const onChooseRebase = async () => {
+  store.clearPendingPullDivergence()
+  await store.pull('rebase')
+}
+const onPullThenPush = async () => {
+  await store.pullThenPush('merge')
+}
+
+const onCompleteMerge = async () => {
+  await store.completeMerge()
+}
+const onConfirmAbort = async () => {
+  pendingAbort.value = false
+  await store.mergeAbort()
+}
+
+// Always try the checkout. The store catches a DIRTY_TREE error from the
+// sidecar and sets `pendingCheckoutError`, which opens GitDirtyCheckoutModal
+// (mounted at page level so this works from both the header dropdown and the
+// Branches tab).
 const switchBranch = async (name: string, isCurrent: boolean) => {
-  branchOpen.value = false
   if (isCurrent) return
-  if (store.hasUncommitted) {
-    store.toasts = [
-      ...store.toasts,
-      {
-        id: `t-${Date.now()}`,
-        text: 'Workspace dirty — chuyển sang tab Branches để chọn Stash & checkout',
-        kind: 'info',
-      },
-    ]
-    activeTab.value = 'branches'
-    return
-  }
   await store.checkoutBranch(name)
+}
+
+const onForceCheckout = async () => {
+  const pending = store.pendingCheckoutError
+  if (!pending) return
+  store.clearPendingCheckoutError()
+  await store.checkoutBranch(pending.branch, { force: true })
+}
+
+const onStashAndCheckout = async () => {
+  const pending = store.pendingCheckoutError
+  if (!pending) return
+  store.clearPendingCheckoutError()
+  await store.stashSave(`auto-stash before checkout to ${pending.branch}`, true)
+  await store.checkoutBranch(pending.branch)
 }
 
 const toastStyle = (kind: 'info' | 'success' | 'error') => {
@@ -397,7 +279,7 @@ const toastStyle = (kind: 'info' | 'success' | 'error') => {
 // Reactively load diff for selected file in Changes tab.
 watch(
   () => store.selectedFilePath,
-  async (path) => {
+  async (path: string | null) => {
     if (!path) {
       currentDiff.value = null
       return
@@ -410,7 +292,7 @@ watch(
 // Reactively load commit detail in History tab.
 watch(
   () => store.selectedCommitHash,
-  async (hash) => {
+  async (hash: string | null) => {
     if (!hash) {
       commitDetail.value = null
       return
@@ -431,13 +313,47 @@ watch(
   },
 )
 
-// Bootstrap status on mount.
-onMounted(() => {
-  store.loadStatus()
+// Bootstrap status on mount + subscribe to external git events from sidecar.
+let unsubscribe: (() => void) | null = null
+onMounted(async () => {
+  // Probe Git CLI first — short-circuit page if missing/unsupported.
+  try {
+    gitInstallStatus.value = await useGitApi().checkInstalled()
+  } catch {
+    // Sidecar unavailable (browser dev) — pretend installed so dev UX stays
+    // functional with mock data.
+    gitInstallStatus.value = { installed: true, version: 'mock', supported: true, required: '2.20' }
+  }
+  if (!gitInstallStatus.value.installed || !gitInstallStatus.value.supported) return
+
+  // Hydrate projects first — store defaults to mock id `'prj1'`, so without a
+  // real project selected `resolveWorkspaceRoot()` returns null and every read
+  // falls back to mock data. Auto-select first real project when current
+  // selection isn't in the hydrated list.
+  if (workspace.projects.length === 0) {
+    await workspace.hydrateProjectsFromSidecar()
+  }
+  const hasSelected = workspace.projects.some((p: Project) => p.id === store.selectedProjectId)
+  if (!hasSelected && workspace.projects.length > 0) {
+    store.setSelectedProject(workspace.projects[0]!.id)
+  }
+
+  await Promise.all([
+    store.loadStatus(),
+    store.loadHistory(),
+    store.loadBranches(),
+    store.loadStashes(),
+    store.loadRemotes(),
+  ])
   const first = store.commits[0]
   if (!store.selectedCommitHash && first) {
     store.selectCommit(first.hash)
   }
+  unsubscribe = await store.subscribe()
+})
+onUnmounted(() => {
+  if (unsubscribe) unsubscribe()
+  unsubscribe = null
 })
 
 definePageMeta({ title: 'Git' })

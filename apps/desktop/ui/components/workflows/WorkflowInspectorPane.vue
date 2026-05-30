@@ -17,7 +17,7 @@
     :style="{ borderLeft: `1px solid ${t.border}`, background: t.bgPanel }"
   >
     <div class="px-3 py-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">
-      <div class="text-[11px] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
+      <div class="text-[0.79em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
         Inspector
       </div>
     </div>

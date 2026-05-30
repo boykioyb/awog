@@ -5,11 +5,11 @@
 
       <pre
         v-else-if="block.type === 'code'"
-        class="rounded p-3 my-3 overflow-x-auto text-[12px] font-mono"
+        class="rounded p-3 my-3 overflow-x-auto text-[0.86em] font-mono"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}`, color: t.syntax.code }"
       ><div
           v-if="block.lang"
-          class="text-[10px] mb-2 pb-1"
+          class="text-[0.71em] mb-2 pb-1"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
         >{{ block.lang }}</div>{{ block.code }}</pre>
 
@@ -41,7 +41,7 @@
         <li
           v-for="(item, ii) in block.items"
           :key="ii"
-          class="flex gap-2 text-[13px] leading-relaxed"
+          class="flex gap-2 text-[0.93em] leading-relaxed"
         >
           <span :style="{ color: t.syntax.listMark }">•</span>
           <span :style="{ color: t.text }">
@@ -54,7 +54,7 @@
         <li
           v-for="(item, ii) in block.items"
           :key="ii"
-          class="flex gap-2 text-[13px] leading-relaxed"
+          class="flex gap-2 text-[0.93em] leading-relaxed"
         >
           <span class="font-mono" :style="{ color: t.syntax.listMark }">{{ ii + 1 }}.</span>
           <span :style="{ color: t.text }">
@@ -65,7 +65,7 @@
 
       <blockquote
         v-else-if="block.type === 'blockquote'"
-        class="border-l-2 pl-3 my-2 italic text-[13px]"
+        class="border-l-2 pl-3 my-2 italic text-[0.93em]"
         :style="{ borderColor: t.syntax.blockquote, color: t.syntax.blockquote }"
       >
         <MarkdownInline :parts="block.parts" />
@@ -75,7 +75,7 @@
 
       <p
         v-else-if="block.type === 'p'"
-        class="text-[13px] leading-relaxed my-1"
+        class="text-[0.93em] leading-relaxed my-1"
         :style="{ color: t.text }"
       >
         <MarkdownInline :parts="block.parts" />

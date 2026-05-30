@@ -64,7 +64,7 @@
     </div>
 
     <div
-      class="h-6 flex items-center px-3 gap-4 text-[10px] font-mono flex-shrink-0"
+      class="h-6 flex items-center px-3 gap-4 text-[0.71em] font-mono flex-shrink-0"
       :style="{ borderTop: `1px solid ${t.border}`, background: t.bgPanel, color: t.textDim }"
     >
       <span>{{ languageLabel }}</span>

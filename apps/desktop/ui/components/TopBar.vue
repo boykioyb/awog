@@ -14,7 +14,7 @@
       <GitBranch :size="11" />
       <span class="font-mono">{{ selectedProject.gitBranch }}</span>
       <span :style="{ color: t.textFaint }">·</span>
-      <span class="font-mono text-[10px]">{{ selectedProject.path }}</span>
+      <span class="font-mono text-[0.71em]">{{ selectedProject.path }}</span>
     </div>
     <div v-else class="flex items-center gap-1.5 text-xs" :style="{ color: t.textDim }">
       <FolderGit2 :size="12" />

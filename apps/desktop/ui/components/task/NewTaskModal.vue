@@ -1,5 +1,5 @@
 <template>
-  <BaseModal :open="true" title="New task" @close="emit('cancel')">
+  <BaseModal :open="!dirtyWarnOpen" title="New task" @close="emit('cancel')">
     <div class="p-4 space-y-4">
       <Field label="Project">
         <select v-model="projectId" class="w-full rounded px-2 py-1.5 text-xs" :style="inputStyle">
@@ -8,7 +8,7 @@
             {{ p.name }} — {{ p.path }}
           </option>
         </select>
-        <div class="text-[10px] mt-1" :style="{ color: t.textDim }">
+        <div class="text-[0.71em] mt-1" :style="{ color: t.textDim }">
           Code changes will happen in this local repository
         </div>
       </Field>
@@ -17,7 +17,7 @@
           <button
             v-for="s in sourceOptions"
             :key="s.id"
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] transition"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[0.79em] transition"
             :style="{
               background: sourceType === s.id ? t.accent : t.bgInput,
               color: sourceType === s.id ? t.accentText : t.textMuted,
@@ -55,7 +55,7 @@
         <textarea
           v-model="description"
           :rows="4"
-          class="w-full rounded px-2 py-1.5 text-[11px] resize-none"
+          class="w-full rounded px-2 py-1.5 text-[0.79em] resize-y min-h-[5rem]"
           :style="inputStyle"
         />
       </Field>
@@ -84,10 +84,10 @@
               />
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-[12px] font-medium" :style="{ color: t.text }">
+              <div class="text-[0.86em] font-medium" :style="{ color: t.text }">
                 {{ wf.name }}
               </div>
-              <div class="text-[10px]" :style="{ color: t.textDim }">
+              <div class="text-[0.71em]" :style="{ color: t.textDim }">
                 {{ wf.description }}
               </div>
             </div>
@@ -113,6 +113,14 @@
       </button>
     </template>
   </BaseModal>
+
+  <DirtyWorkspaceWarnModal
+    :open="dirtyWarnOpen"
+    @close="dirtyWarnOpen = false"
+    @commit-now="onDirtyCommitNow"
+    @stash-and-continue="onDirtyStashAndContinue"
+    @continue-anyway="onDirtyContinueAnyway"
+  />
 </template>
 
 <script setup lang="ts">
@@ -134,9 +142,36 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const store = useWorkspaceStore()
+const gitStore = useGitStore()
+const { git } = useGitSettings()
 
 const projects = computed(() => store.projects)
 const workflows = computed(() => store.workflows)
+
+// Suppress the dirty-workspace warn modal for the rest of the browser session.
+// `sessionStorage` resets on app reload — matches the spec "Đừng hỏi lại trong
+// session này" toggle semantics.
+const SUPPRESS_KEY = 'awog.dirty-warn.suppress'
+const isSuppressed = (): boolean => {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.sessionStorage.getItem(SUPPRESS_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const setSuppressed = (v: boolean) => {
+  if (typeof window === 'undefined') return
+  try {
+    if (v) window.sessionStorage.setItem(SUPPRESS_KEY, '1')
+    else window.sessionStorage.removeItem(SUPPRESS_KEY)
+  } catch {
+    // Storage disabled — non-fatal, user just sees the modal again next time.
+  }
+}
+
+const dirtyWarnOpen = ref(false)
+const pendingPayload = ref<CreateTaskInput | null>(null)
 
 const sourceType = ref<'github' | 'jira' | 'manual'>('github')
 const githubUrl = ref('')
@@ -161,7 +196,9 @@ const inputStyle = computed(() => ({
 
 const parseGithubUrl = (url: string) => {
   const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/)
-  if (m) return { repo: `${m[1]}/${m[2]}`, issueNumber: parseInt(m[3], 10), url }
+  if (m && m[1] && m[2] && m[3]) {
+    return { repo: `${m[1]}/${m[2]}`, issueNumber: parseInt(m[3], 10), url }
+  }
   return null
 }
 
@@ -182,8 +219,7 @@ const canSubmit = computed(
       (sourceType.value === 'jira' && !!jiraKey.value)),
 )
 
-const handleSubmit = () => {
-  if (!canSubmit.value) return
+const buildPayload = (): CreateTaskInput => {
   let source: TaskSource
   if (sourceType.value === 'github') {
     const parsed = parseGithubUrl(githubUrl.value)
@@ -195,12 +231,89 @@ const handleSubmit = () => {
   } else {
     source = { type: 'manual' }
   }
-  emit('save', {
+  return {
     title: title.value,
     description: description.value,
     source,
     workflowId: workflowId.value,
     projectId: projectId.value,
-  })
+  }
+}
+
+const handleSubmit = async () => {
+  if (!canSubmit.value) return
+  const payload = buildPayload()
+
+  // Select the right project in the git store first so `hasUncommitted`
+  // reflects the project the user is actually about to run a task against.
+  if (gitStore.selectedProjectId !== payload.projectId) {
+    gitStore.setSelectedProject(payload.projectId)
+    try {
+      await gitStore.loadStatus()
+    } catch {
+      // Silent: sidecar unavailable means we fall back to whatever mock seed
+      // the store carries — that's fine for the dirty warn decision.
+    }
+  }
+
+  // Auto-stash short-circuit: skip the modal entirely.
+  if (gitStore.hasUncommitted && git.value.dirtyTaskPolicy === 'auto-stash') {
+    try {
+      await gitStore.stashSave(`awog-auto-stash before task ${payload.title}`, true)
+    } catch {
+      // Stash failed — proceed anyway. The git store already surfaced a toast.
+    }
+    emit('save', payload)
+    return
+  }
+
+  // Warn policy: open dialog only when actually dirty and not suppressed.
+  if (gitStore.hasUncommitted && git.value.dirtyTaskPolicy === 'warn' && !isSuppressed()) {
+    pendingPayload.value = payload
+    dirtyWarnOpen.value = true
+    return
+  }
+
+  emit('save', payload)
+}
+
+const closeDirtyModal = () => {
+  dirtyWarnOpen.value = false
+  pendingPayload.value = null
+}
+
+const onDirtyCommitNow = (suppress: boolean) => {
+  setSuppressed(suppress)
+  closeDirtyModal()
+  // Abort task start — user is going to /git to commit first.
+  emit('cancel')
+  navigateTo('/git')
+}
+
+const onDirtyStashAndContinue = async (suppress: boolean) => {
+  setSuppressed(suppress)
+  const payload = pendingPayload.value
+  closeDirtyModal()
+  if (!payload) return
+  try {
+    await gitStore.stashSave(`awog-auto-stash before task ${payload.title}`, true)
+  } catch {
+    // Stash failed — surface via existing toast, continue anyway so the user
+    // can decide what to do.
+  }
+  emit('save', payload)
+}
+
+const onDirtyContinueAnyway = (suppress: boolean) => {
+  setSuppressed(suppress)
+  const payload = pendingPayload.value
+  closeDirtyModal()
+  if (!payload) return
+  // Spec calls for a trace event `task.started_dirty: true` here. The engine
+  // doesn't yet emit task lifecycle traces, so we log a warning instead and
+  // wire the trace event once the engine layer lands (deferred).
+  // eslint-disable-next-line no-console
+  console.warn('[task] started with dirty workspace', { taskTitle: payload.title })
+  emit('save', payload)
 }
 </script>

@@ -26,7 +26,7 @@
         >
           {{ row.displayName }}
         </span>
-        <span class="text-[10px]" :style="{ color: t.textFaint }">({{ row.leafCount }})</span>
+        <span class="text-[0.71em]" :style="{ color: t.textFaint }">({{ row.leafCount }})</span>
       </div>
       <div
         v-else
@@ -59,14 +59,14 @@
         </span>
         <span
           v-if="!isRemote && row.branch.isCurrent"
-          class="text-[10px]"
+          class="text-[0.71em]"
           :style="{ color: t.textDim }"
         >
           current
         </span>
         <span
           v-if="!isRemote && (row.branch.ahead > 0 || row.branch.behind > 0)"
-          class="text-[10px] font-mono"
+          class="text-[0.71em] font-mono"
           :style="{ color: t.textDim }"
         >
           {{ row.branch.ahead > 0 ? `↑${row.branch.ahead}` : ''

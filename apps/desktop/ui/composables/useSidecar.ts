@@ -67,10 +67,35 @@ export function useSidecar() {
     }
   }
 
+  // Reveal a workspace-relative file/dir in the OS file manager (Finder /
+  // Explorer / xdg-open parent). Validated server-side against `workspaceRoot`
+  // — passing a path outside the workspace rejects with an error.
+  const revealPath = async (workspaceRoot: string, path: string): Promise<void> => {
+    if (!isTauri()) throw new SidecarUnavailableError()
+    try {
+      await invoke<void>('reveal_path', { workspaceRoot, path })
+    } catch (err) {
+      throw new Error(typeof err === 'string' ? err : 'reveal_path failed')
+    }
+  }
+
+  // Open a workspace-relative file with the OS default handler (or directory
+  // in the file manager). Same workspace-validation as revealPath.
+  const openPath = async (workspaceRoot: string, path: string): Promise<void> => {
+    if (!isTauri()) throw new SidecarUnavailableError()
+    try {
+      await invoke<void>('open_path', { workspaceRoot, path })
+    } catch (err) {
+      throw new Error(typeof err === 'string' ? err : 'open_path failed')
+    }
+  }
+
   return {
     available: isTauri(),
     request,
     onEvent,
     openExternal,
+    revealPath,
+    openPath,
   }
 }

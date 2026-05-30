@@ -1,7 +1,7 @@
 <template>
   <BaseModal :open="open" :title="title" size="sm" @close="emit('close')">
     <div class="p-4 flex flex-col gap-2">
-      <div v-if="fromLabel" class="text-[10px]" :style="{ color: t.textDim }">
+      <div v-if="fromLabel" class="text-[0.71em]" :style="{ color: t.textDim }">
         From:
         <span class="font-mono">{{ fromLabel }}</span>
       </div>

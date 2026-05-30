@@ -2,20 +2,20 @@
   <form class="space-y-3" @submit.prevent="onSubmit">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
       <label class="block">
-        <span class="text-[11px]" :style="{ color: t.textDim }">Label</span>
+        <span class="text-[0.79em]" :style="{ color: t.textDim }">Label</span>
         <input
           v-model="draft.label"
-          class="mt-1 w-full rounded px-2 py-1.5 text-[12px]"
+          class="mt-1 w-full rounded px-2 py-1.5 text-[0.86em]"
           :style="inputStyle"
           placeholder="OpenRouter"
           required
         />
       </label>
       <label class="block">
-        <span class="text-[11px]" :style="{ color: t.textDim }">Base URL</span>
+        <span class="text-[0.79em]" :style="{ color: t.textDim }">Base URL</span>
         <input
           v-model="draft.baseUrl"
-          class="mt-1 w-full rounded px-2 py-1.5 text-[12px] font-mono"
+          class="mt-1 w-full rounded px-2 py-1.5 text-[0.86em] font-mono"
           :style="inputStyle"
           placeholder="https://openrouter.ai/api/v1"
           required
@@ -24,18 +24,18 @@
     </div>
 
     <label class="block">
-      <span class="text-[11px]" :style="{ color: t.textDim }">API key (optional for local)</span>
+      <span class="text-[0.79em]" :style="{ color: t.textDim }">API key (optional for local)</span>
       <div class="mt-1 flex items-center gap-2">
         <input
           v-model="draft.apiKey"
           :type="reveal ? 'text' : 'password'"
-          class="flex-1 rounded px-2 py-1.5 text-[12px] font-mono"
+          class="flex-1 rounded px-2 py-1.5 text-[0.86em] font-mono"
           :style="inputStyle"
           placeholder="sk-…"
         />
         <button
           type="button"
-          class="px-2 py-1.5 rounded text-[11px] flex items-center"
+          class="px-2 py-1.5 rounded text-[0.79em] flex items-center"
           :style="iconBtnStyle"
           :title="reveal ? 'Hide' : 'Show'"
           @click="reveal = !reveal"
@@ -46,13 +46,13 @@
     </label>
 
     <label class="block">
-      <span class="text-[11px]" :style="{ color: t.textDim }">
+      <span class="text-[0.79em]" :style="{ color: t.textDim }">
         Model IDs — one per line or comma-separated
       </span>
       <textarea
         :value="modelsText"
         rows="3"
-        class="mt-1 w-full rounded px-2 py-1.5 text-[12px] font-mono"
+        class="mt-1 w-full rounded px-2 py-1.5 text-[0.86em] font-mono"
         :style="inputStyle"
         placeholder="openrouter/auto&#10;anthropic/claude-sonnet-4.5&#10;openai/gpt-5"
         @input="onModelsInput(($event.target as HTMLTextAreaElement).value)"
@@ -62,7 +62,7 @@
     <div class="flex items-center justify-end gap-2 pt-1">
       <button
         type="button"
-        class="px-3 py-1.5 text-[11px] rounded transition"
+        class="px-3 py-1.5 text-[0.79em] rounded transition"
         :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
         @click="emit('cancel')"
       >
@@ -70,7 +70,7 @@
       </button>
       <button
         type="submit"
-        class="px-3 py-1.5 text-[11px] rounded transition"
+        class="px-3 py-1.5 text-[0.79em] rounded transition"
         :style="{ background: t.accent, color: t.accentText, border: 'none' }"
         :disabled="!canSubmit"
       >

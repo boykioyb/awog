@@ -20,7 +20,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[12px] resize-none"
+          class="w-full rounded px-2 py-1.5 text-[0.86em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -54,7 +54,7 @@
           v-model="draft.command"
           :rows="3"
           placeholder="pnpm exec prettier --write {{event.payload.path}}"
-          class="w-full rounded px-2 py-1.5 text-[11px] font-mono leading-relaxed resize-none"
+          class="w-full rounded px-2 py-1.5 text-[0.79em] font-mono leading-relaxed resize-y min-h-[4rem]"
           :style="inputStyle"
         />
       </Field>

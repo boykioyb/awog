@@ -37,6 +37,8 @@ const SessionSchema = z.object({
   messages: z.array(SessionMessageSchema),
   pendingAgentIds: z.array(z.string()),
   settings: SessionSettingsSchema,
+  disabledTools: z.array(z.string()).optional(),
+  mcpServerIds: z.array(z.string()).optional(),
 })
 
 const Params = z.object({
@@ -72,6 +74,8 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
     settings: toSessionSettings(parsed.settings),
   }
   if (parsed.pinned !== undefined) base.pinned = parsed.pinned
+  if (parsed.disabledTools !== undefined) base.disabledTools = parsed.disabledTools
+  if (parsed.mcpServerIds !== undefined) base.mcpServerIds = parsed.mcpServerIds
   return base
 }
 
@@ -93,6 +97,8 @@ register('sessions.upsert', async (raw) => {
     invitedAgentIds: session.invitedAgentIds,
   }
   if (session.pinned !== undefined) patch.pinned = session.pinned
+  if (session.disabledTools !== undefined) patch.disabledTools = session.disabledTools
+  if (session.mcpServerIds !== undefined) patch.mcpServerIds = session.mcpServerIds
   await updateSessionMetadata(session.id, patch)
   return { session }
 })

@@ -71,7 +71,7 @@
         v-model="draft"
         rows="2"
         :placeholder="placeholder"
-        class="w-full bg-transparent px-3 py-2 text-[14px] resize-none outline-none"
+        class="w-full bg-transparent px-3 py-2 text-[1em] resize-none outline-none"
         :style="{ color: t.text }"
         @focus="composerFocus = true"
         @blur="onBlur"
@@ -109,7 +109,7 @@
           </div>
           <div
             v-else
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px]"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[0.71em]"
             :style="{
               background: t.bgSubtle,
               color: t.text,
@@ -120,7 +120,7 @@
             <span class="font-mono truncate" :style="{ maxWidth: '180px' }">{{ att.name }}</span>
             <span v-if="att.size" :style="{ color: t.textFaint }">{{ att.size }}</span>
             <button
-              class="text-[10px] inline-flex items-center"
+              class="text-[0.71em] inline-flex items-center"
               :style="{ color: t.textDim }"
               @click="removeAttachment(att.id)"
             >
@@ -137,7 +137,7 @@
       >
         <div v-for="fu in pendingFollowUps" :key="fu.id" class="flex flex-col gap-1">
           <div
-            class="inline-flex items-start gap-1.5 px-2 py-1 rounded text-[11px] w-full"
+            class="inline-flex items-start gap-1.5 px-2 py-1 rounded text-[0.79em] w-full"
             :style="{
               background: t.bgSubtle,
               color: t.text,
@@ -155,7 +155,7 @@
             </div>
             <button
               type="button"
-              class="text-[10px] inline-flex items-center px-1 rounded"
+              class="text-[0.71em] inline-flex items-center px-1 rounded"
               :style="{ color: t.textDim }"
               :title="editingFollowUpId === fu.id ? 'Close note editor' : 'Edit note'"
               @click="toggleEditFollowUp(fu.id)"
@@ -164,7 +164,7 @@
             </button>
             <button
               type="button"
-              class="text-[10px] inline-flex items-center"
+              class="text-[0.71em] inline-flex items-center"
               :style="{ color: t.textDim }"
               title="Remove follow-up"
               @click="removeFollowUp(fu.id)"
@@ -177,7 +177,7 @@
             rows="2"
             :value="fu.note"
             placeholder="Instruction for this quote (e.g. rewrite, expand, keep only this)"
-            class="w-full rounded px-2 py-1 text-[12px] resize-none outline-none"
+            class="w-full rounded px-2 py-1 text-[0.86em] resize-none outline-none"
             :style="{
               background: t.bgInput,
               color: t.text,
@@ -197,7 +197,7 @@
         @change="onFileSelected"
       />
     </div>
-    <div class="text-[11px] mt-1 px-1" :style="{ color: t.textFaint }">
+    <div class="text-[0.79em] mt-1 px-1" :style="{ color: t.textFaint }">
       Enter to send · @ skill / file · $ agent · / command · select text in a reply to quote it
     </div>
   </div>

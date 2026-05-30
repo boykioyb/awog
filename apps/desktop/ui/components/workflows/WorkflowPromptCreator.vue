@@ -20,12 +20,12 @@
       >
         <div class="flex items-center gap-2 mb-1.5">
           <Workflow :size="12" :style="{ color: t.textDim }" />
-          <span class="text-[12px] font-medium" :style="{ color: t.text }">{{ draft.name }}</span>
+          <span class="text-[0.86em] font-medium" :style="{ color: t.text }">{{ draft.name }}</span>
         </div>
-        <div class="text-[12px]" :style="{ color: t.textMuted }">
+        <div class="text-[0.86em]" :style="{ color: t.textMuted }">
           {{ draft.description }}
         </div>
-        <div class="text-[10px] mt-2" :style="{ color: t.textFaint }">
+        <div class="text-[0.71em] mt-2" :style="{ color: t.textFaint }">
           Drag agents onto the canvas after creating.
         </div>
       </div>
@@ -33,7 +33,7 @@
 
     <template #actions>
       <button
-        class="text-[11px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[0.79em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{ background: t.accent, color: t.accentText }"
         @click="draft && emit('save', { ...draft })"
       >

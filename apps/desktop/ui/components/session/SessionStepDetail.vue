@@ -6,15 +6,15 @@
     >
       <component :is="toolIcon" :size="12" class="flex-shrink-0" :style="{ color: t.textMuted }" />
       <div class="flex-1 min-w-0">
-        <div class="text-[13px] font-medium truncate" :style="{ color: t.text }">
+        <div class="text-[0.93em] font-medium truncate" :style="{ color: t.text }">
           {{ step.label }}
-          <span v-if="step.target" class="font-mono text-[11px]" :style="{ color: t.textDim }">
+          <span v-if="step.target" class="font-mono text-[0.79em]" :style="{ color: t.textDim }">
             · {{ step.target }}
           </span>
         </div>
         <div
           v-if="step.description || step.pathHint"
-          class="text-[10px] truncate"
+          class="text-[0.71em] truncate"
           :style="{ color: t.textDim }"
         >
           <span v-if="step.description">{{ step.description }}</span>
@@ -24,7 +24,7 @@
       </div>
       <div v-if="detailPath" ref="openMenuRef" class="relative flex-shrink-0">
         <button
-          class="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] transition"
+          class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.71em] transition"
           :style="{
             background: openMenuOpen ? t.bgActive : t.bgInput,
             color: t.text,
@@ -49,7 +49,7 @@
           <button
             v-for="opt in editorOptions"
             :key="opt.scheme"
-            class="w-full text-left px-3 py-1.5 flex items-center gap-2 text-[11px] transition"
+            class="w-full text-left px-3 py-1.5 flex items-center gap-2 text-[0.79em] transition"
             :style="{
               color: t.text,
               background: openHoverIdx === opt.scheme ? t.bgHover : 'transparent',
@@ -63,7 +63,7 @@
           </button>
           <div :style="{ height: '1px', background: t.border, margin: '4px 0' }" />
           <button
-            class="w-full text-left px-3 py-1.5 flex items-center gap-2 text-[11px] transition"
+            class="w-full text-left px-3 py-1.5 flex items-center gap-2 text-[0.79em] transition"
             :style="{ color: t.text }"
             @click="copyPath"
           >
@@ -84,14 +84,14 @@
 
     <div class="flex-1 overflow-y-auto">
       <template v-if="!detail">
-        <div class="px-4 py-6 text-[12px] text-center" :style="{ color: t.textDim }">
+        <div class="px-4 py-6 text-[0.86em] text-center" :style="{ color: t.textDim }">
           No detail available.
         </div>
       </template>
 
       <template v-else-if="detail.kind === 'diff'">
         <div
-          class="px-4 py-2 flex items-center gap-2 text-[11px] sticky top-0 z-10"
+          class="px-4 py-2 flex items-center gap-2 text-[0.79em] sticky top-0 z-10"
           :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
         >
           <span class="inline-flex items-center gap-1 font-mono" :style="{ color: t.text }">
@@ -100,7 +100,7 @@
           </span>
           <span
             v-if="step.additions !== undefined"
-            class="inline-flex items-center px-1 rounded-sm font-mono text-[10px]"
+            class="inline-flex items-center px-1 rounded-sm font-mono text-[0.71em]"
             :style="{
               background: 'rgba(34, 197, 94, 0.12)',
               color: t.statusOk,
@@ -111,7 +111,7 @@
           </span>
           <span
             v-if="step.deletions !== undefined"
-            class="inline-flex items-center px-1 rounded-sm font-mono text-[10px]"
+            class="inline-flex items-center px-1 rounded-sm font-mono text-[0.71em]"
             :style="{
               background: t.dangerBg,
               color: t.danger,
@@ -127,7 +127,7 @@
             <button
               v-for="m in diffModes"
               :key="m.value"
-              class="px-2 py-0.5 text-[10px] inline-flex items-center gap-1 transition"
+              class="px-2 py-0.5 text-[0.71em] inline-flex items-center gap-1 transition"
               :style="{
                 background: diffMode === m.value ? t.bgActive : 'transparent',
                 color: diffMode === m.value ? t.text : t.textDim,
@@ -145,21 +145,21 @@
 
       <template v-else-if="detail.kind === 'file'">
         <div
-          class="px-4 py-2 flex items-center gap-2 text-[11px]"
+          class="px-4 py-2 flex items-center gap-2 text-[0.79em]"
           :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
         >
           <FileText :size="11" :style="{ color: t.textDim }" />
           <span class="font-mono" :style="{ color: t.text }">{{ detail.path }}</span>
           <span
             v-if="detail.language"
-            class="ml-auto text-[9px] uppercase tracking-wider"
+            class="ml-auto text-[0.64em] uppercase tracking-wider"
             :style="{ color: t.textDim }"
           >
             {{ detail.language }}
           </span>
         </div>
         <pre
-          class="font-mono text-[12px] leading-[1.55] px-4 py-3 whitespace-pre-wrap"
+          class="font-mono text-[0.86em] leading-[1.55] px-4 py-3 whitespace-pre-wrap"
           :style="{ color: t.text }"
           >{{ detail.content }}</pre
         >
@@ -172,12 +172,12 @@
           class="px-4 py-2"
           :style="{ borderBottom: `1px solid ${t.border}` }"
         >
-          <div class="text-[12px] flex items-center gap-2" :style="{ color: t.text }">
+          <div class="text-[0.86em] flex items-center gap-2" :style="{ color: t.text }">
             <FolderSearch :size="11" :style="{ color: t.textDim }" />
             <span class="font-mono truncate">{{ item.label }}</span>
             <span
               v-if="item.path"
-              class="ml-auto font-mono text-[10px] truncate"
+              class="ml-auto font-mono text-[0.71em] truncate"
               :style="{ color: t.textFaint }"
             >
               {{ item.path }}
@@ -185,7 +185,7 @@
           </div>
           <pre
             v-if="item.snippet"
-            class="mt-1 font-mono text-[11px] leading-[1.5] whitespace-pre-wrap"
+            class="mt-1 font-mono text-[0.79em] leading-[1.5] whitespace-pre-wrap"
             :style="{ color: t.textMuted }"
             >{{ item.snippet }}</pre
           >
@@ -194,12 +194,12 @@
 
       <template v-else-if="detail.kind === 'terminal'">
         <div class="px-4 py-3 space-y-2">
-          <div class="flex items-center gap-2 text-[12px] font-mono">
+          <div class="flex items-center gap-2 text-[0.86em] font-mono">
             <span :style="{ color: t.textDim }">$</span>
             <span :style="{ color: t.text }">{{ detail.command }}</span>
             <span
               v-if="detail.exitCode !== undefined"
-              class="ml-auto text-[10px] inline-flex items-center px-1.5 rounded-sm"
+              class="ml-auto text-[0.71em] inline-flex items-center px-1.5 rounded-sm"
               :style="{
                 background: detail.exitCode === 0 ? 'rgba(34, 197, 94, 0.12)' : t.dangerBg,
                 color: detail.exitCode === 0 ? t.statusOk : t.danger,
@@ -211,7 +211,7 @@
           </div>
           <pre
             v-if="detail.output"
-            class="font-mono text-[12px] leading-[1.55] whitespace-pre-wrap px-3 py-2 rounded"
+            class="font-mono text-[0.86em] leading-[1.55] whitespace-pre-wrap px-3 py-2 rounded"
             :style="{
               color: t.textMuted,
               background: t.bgInput,
@@ -224,7 +224,7 @@
 
       <template v-else-if="detail.kind === 'text'">
         <div
-          class="px-4 py-3 text-[13px] leading-relaxed whitespace-pre-wrap"
+          class="px-4 py-3 text-[0.93em] leading-relaxed whitespace-pre-wrap"
           :style="{ color: t.text }"
         >
           {{ detail.content }}

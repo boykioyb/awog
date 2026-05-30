@@ -7,10 +7,11 @@
       </div>
     </template>
 
-    <div class="p-4">
-      <div class="text-[12px] leading-relaxed" :style="{ color: t.textMuted }">
+    <div class="p-4 space-y-3">
+      <div class="text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
         {{ description }}
       </div>
+      <slot name="extra" />
     </div>
 
     <template #footer>

@@ -11,7 +11,7 @@
 
     <div class="p-4 space-y-4">
       <div
-        class="text-[11px] p-2.5 rounded flex items-start gap-2"
+        class="text-[0.79em] p-2.5 rounded flex items-start gap-2"
         :style="{
           background: t.warningBg,
           border: `1px solid ${t.warningBorder}`,
@@ -34,7 +34,7 @@
           :rows="5"
           autofocus
           placeholder="Example: The implementation doesn't handle the partitioned worker case..."
-          class="w-full rounded px-2 py-1.5 text-[12px] resize-none leading-relaxed"
+          class="w-full rounded px-2 py-1.5 text-[0.86em] resize-none leading-relaxed"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.border}`,

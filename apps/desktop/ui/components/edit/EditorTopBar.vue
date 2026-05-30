@@ -20,9 +20,9 @@
     <GitBranch v-if="fileKind === 'diff'" :size="12" :style="{ color: t.textDim }" />
     <FileCode v-else :size="12" :style="{ color: t.textDim }" />
     <span class="text-xs font-mono" :style="{ color: t.text }">{{ fileName }}</span>
-    <span class="text-[10px]" :style="{ color: t.textFaint }">· {{ taskId }}</span>
+    <span class="text-[0.71em]" :style="{ color: t.textFaint }">· {{ taskId }}</span>
 
-    <div v-if="diffStats" class="flex items-center gap-2 ml-2 text-[10px] font-mono">
+    <div v-if="diffStats" class="flex items-center gap-2 ml-2 text-[0.71em] font-mono">
       <span :style="{ color: t.textDim }">
         {{ diffStats.files }} {{ diffStats.files === 1 ? 'file' : 'files' }}
       </span>
@@ -39,7 +39,7 @@
         <button
           v-for="v in viewOptions"
           :key="v.id"
-          class="px-2 py-1 text-[11px] flex items-center gap-1 transition"
+          class="px-2 py-1 text-[0.79em] flex items-center gap-1 transition"
           :style="{
             background: activeView === v.id ? t.bgActive : 'transparent',
             color: activeView === v.id ? t.text : t.textDim,

@@ -2,7 +2,7 @@
   <div class="relative">
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[12px] transition"
+      class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[0.86em] transition"
       :style="{
         color: t.textDim,
         background: open ? t.bgSubtle : 'transparent',
@@ -25,7 +25,7 @@
 
     <div
       v-if="open"
-      class="absolute right-0 bottom-full mb-1.5 w-[340px] rounded-md shadow-xl text-[12px] z-30"
+      class="absolute right-0 bottom-full mb-1.5 w-[340px] rounded-md shadow-xl text-[0.86em] z-30"
       :style="{
         background: t.bgPanel,
         border: `1px solid ${t.border}`,
@@ -95,7 +95,7 @@
             <span class="font-medium" :style="{ color: t.text }">Plan usage</span>
             <span
               v-if="profile?.subscriptionType"
-              class="text-[10px] px-1.5 py-0.5 rounded-sm uppercase tracking-wider"
+              class="text-[0.71em] px-1.5 py-0.5 rounded-sm uppercase tracking-wider"
               :style="{
                 background: t.bgSubtle,
                 color: t.textDim,
@@ -118,13 +118,13 @@
           </button>
         </div>
 
-        <div v-if="usageError" class="text-[11px] mb-1.5" :style="{ color: t.danger ?? '#ef4444' }">
+        <div v-if="usageError" class="text-[0.79em] mb-1.5" :style="{ color: t.danger ?? '#ef4444' }">
           {{ usageError }}
         </div>
 
         <div
           v-if="usage.length === 0 && !usageLoading && !usageError"
-          class="text-[11px]"
+          class="text-[0.79em]"
           :style="{ color: t.textDim }"
         >
           Loading…
@@ -134,7 +134,7 @@
           <div
             v-for="entry in usage"
             :key="entry.rateLimitType"
-            class="flex items-center gap-2 text-[11px]"
+            class="flex items-center gap-2 text-[0.79em]"
           >
             <span class="min-w-[100px]" :style="{ color: t.text }">
               {{ rateLimitLabel(entry.rateLimitType) }}
@@ -152,14 +152,14 @@
               />
             </div>
             <span
-              class="font-mono text-[10px] min-w-[28px] text-right"
+              class="font-mono text-[0.71em] min-w-[28px] text-right"
               :style="{ color: t.textDim }"
             >
               {{ Math.round(entry.utilization * 100) }}%
             </span>
             <span
               v-if="entry.resetsAt"
-              class="text-[10px] min-w-[56px] text-right"
+              class="text-[0.71em] min-w-[56px] text-right"
               :style="{ color: t.textFaint }"
             >
               {{ formatResetsIn(entry.resetsAt) }}
@@ -167,7 +167,7 @@
           </div>
         </div>
 
-        <div class="mt-2.5 text-[10px]" :style="{ color: t.textFaint }">
+        <div class="mt-2.5 text-[0.71em]" :style="{ color: t.textFaint }">
           Last turn:
           <span class="font-mono">
             {{ formatTokenCount(lastInput) }} in / {{ formatTokenCount(lastOutput) }} out

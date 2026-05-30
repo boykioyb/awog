@@ -116,8 +116,10 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     gitDeleted: '#fca5a5',
     gitUntracked: '#737373',
     gitConflict: '#fb923c',
-    diffOurs: '#7dd3fc',
-    diffTheirs: '#c4b5fd',
+    // Conflict resolver block highlights — ADR 0017 OQ-10. Background tint
+    // overlaid on top of `bg`; foreground label color uses `info` / accent.
+    diffOurs: 'rgba(96, 165, 250, 0.18)',
+    diffTheirs: 'rgba(192, 132, 252, 0.18)',
     overlay: 'rgba(0, 0, 0, 0.6)',
     onAccent: '#ffffff',
     diffAdd: '#86efac',
@@ -177,8 +179,9 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     gitDeleted: '#b91c1c',
     gitUntracked: '#78716c',
     gitConflict: '#c2410c',
-    diffOurs: '#0369a1',
-    diffTheirs: '#6d28d9',
+    // Conflict resolver block highlights — ADR 0017 OQ-10 (light variant).
+    diffOurs: 'rgba(59, 130, 246, 0.10)',
+    diffTheirs: 'rgba(168, 85, 247, 0.10)',
     overlay: 'rgba(0, 0, 0, 0.45)',
     onAccent: '#ffffff',
     diffAdd: '#16a34a',

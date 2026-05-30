@@ -39,7 +39,7 @@
               v-if="renamingId === p.id"
               :ref="setRenameInputRef"
               v-model="renameValue"
-              class="text-[12px] font-medium flex-1 rounded px-1 py-0.5"
+              class="text-[0.86em] font-medium flex-1 rounded px-1 py-0.5"
               :style="{
                 background: t.bgInput,
                 border: `1px solid ${t.borderStrong}`,
@@ -53,14 +53,14 @@
             />
             <div
               v-else
-              class="text-[12px] font-medium flex-1 truncate"
+              class="text-[0.86em] font-medium flex-1 truncate"
               :style="{ color: t.text }"
               @dblclick.stop="startRename(p.id, p.name)"
             >
               {{ p.name }}
             </div>
             <span
-              class="text-[10px] px-1.5 py-0 rounded"
+              class="text-[0.71em] px-1.5 py-0 rounded"
               :style="{
                 background: t.bgInput,
                 color: t.textDim,
@@ -78,7 +78,7 @@
               <MoreHorizontal :size="13" />
             </button>
           </div>
-          <div class="text-[10px] font-mono truncate ml-5" :style="{ color: t.textDim }">
+          <div class="text-[0.71em] font-mono truncate ml-5" :style="{ color: t.textDim }">
             {{ p.path }}
           </div>
         </div>
@@ -116,7 +116,7 @@
             <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">
               {{ selectedProject.name }}
             </h1>
-            <div class="text-[12px] font-mono truncate" :style="{ color: t.textDim }">
+            <div class="text-[0.86em] font-mono truncate" :style="{ color: t.textDim }">
               {{ selectedProject.path }}
             </div>
           </div>
@@ -141,7 +141,7 @@
 
         <div
           v-if="selectedProject.description"
-          class="mb-6 text-[13px] leading-relaxed"
+          class="mb-6 text-[0.93em] leading-relaxed"
           :style="{ color: t.textMuted }"
         >
           {{ selectedProject.description }}
@@ -163,18 +163,18 @@
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <div
-            class="text-[10px] uppercase tracking-wider font-medium mb-2"
+            class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
             :style="{ color: t.textDim }"
           >
             Git Remote
           </div>
           <div class="flex items-center gap-2">
             <GitFork :size="12" :style="{ color: t.textDim }" />
-            <span class="text-[11px] font-mono flex-1 truncate" :style="{ color: t.text }">
+            <span class="text-[0.79em] font-mono flex-1 truncate" :style="{ color: t.text }">
               {{ selectedProject.gitRemote }}
             </span>
             <button
-              class="px-2 py-0.5 text-[10px] rounded transition"
+              class="px-2 py-0.5 text-[0.71em] rounded transition"
               :style="{ color: t.textDim }"
             >
               Open
@@ -184,12 +184,12 @@
 
         <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
           <div
-            class="text-[10px] uppercase tracking-wider font-medium"
+            class="text-[0.71em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
             Tasks · {{ projectTaskStats.total }}
           </div>
-          <div class="flex items-center gap-3 text-[10px]" :style="{ color: t.textDim }">
+          <div class="flex items-center gap-3 text-[0.71em]" :style="{ color: t.textDim }">
             <span v-if="projectTaskStats.running > 0" class="inline-flex items-center gap-1">
               <Circle :size="8" class="animate-pulse" :style="{ color: t.text, fill: t.text }" />
               {{ projectTaskStats.running }} running
@@ -203,7 +203,7 @@
         </div>
         <div
           v-if="projectTasks.length === 0"
-          class="text-[11px] py-4"
+          class="text-[0.79em] py-4"
           :style="{ color: t.textFaint }"
         >
           No tasks yet for this project
@@ -231,12 +231,12 @@
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline gap-2 mb-0.5 flex-wrap">
-                <span class="text-[10px] font-mono" :style="{ color: t.textFaint }">
+                <span class="text-[0.71em] font-mono" :style="{ color: t.textFaint }">
                   {{ tk.id }}
                 </span>
-                <span class="text-[10px]" :style="{ color: t.textFaint }">{{ tk.createdAt }}</span>
+                <span class="text-[0.71em]" :style="{ color: t.textFaint }">{{ tk.createdAt }}</span>
               </div>
-              <div class="text-[12px]" :style="{ color: t.text }">
+              <div class="text-[0.86em]" :style="{ color: t.text }">
                 {{ tk.title }}
               </div>
             </div>

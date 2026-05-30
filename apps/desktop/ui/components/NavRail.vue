@@ -72,6 +72,19 @@
           class="absolute top-1 left-6 w-1.5 h-1.5 rounded-full"
           :style="{ background: gitStore.hasConflict ? t.gitConflict : t.warning }"
         />
+        <span
+          v-if="item.id === 'git' && showLabels && (gitAhead > 0 || gitBehind > 0)"
+          class="ml-auto inline-flex items-center gap-1 font-mono text-[0.71em] px-1 py-0.5 rounded"
+          :style="{
+            background: t.bgInput,
+            color: t.accent,
+            border: `1px solid ${t.border}`,
+          }"
+          :title="`${gitAhead} ahead · ${gitBehind} behind`"
+        >
+          <span v-if="gitAhead > 0">↑{{ gitAhead }}</span>
+          <span v-if="gitBehind > 0">↓{{ gitBehind }}</span>
+        </span>
       </NuxtLink>
     </div>
 
@@ -147,6 +160,8 @@ const { t, themeName, toggle } = useTheme()
 const route = useRoute()
 const gitStore = useGitStore()
 const gitDirty = computed(() => gitStore.hasUncommitted)
+const gitAhead = computed(() => gitStore.ahead)
+const gitBehind = computed(() => gitStore.behind)
 
 const expanded = useState<boolean>('navRailExpanded', () => true)
 const mobileOpen = ref(false)

@@ -11,7 +11,7 @@
           :style="{ borderBottom: `1px solid ${t.border}` }"
         >
           <div
-            class="text-[11px] uppercase tracking-wider font-medium"
+            class="text-[0.79em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
             Workflows

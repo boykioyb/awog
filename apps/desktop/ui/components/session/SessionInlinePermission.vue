@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="pending"
-    class="rounded-md text-[12px]"
+    class="rounded-md text-[0.86em]"
     :style="{
       background: t.warningBg,
       border: `1px solid ${t.warningBorder}`,
@@ -15,7 +15,7 @@
       <ShieldQuestion :size="13" :style="{ color: t.warning }" />
       <div class="font-semibold" :style="{ color: t.text }">Permission required</div>
       <div
-        class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[10px]"
+        class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[0.71em]"
         :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
       >
         {{ pending.toolName }}
@@ -29,7 +29,7 @@
 
       <div
         v-if="pending.blockedPath"
-        class="text-[11px] flex items-center gap-1.5 px-2 py-1.5 rounded"
+        class="text-[0.79em] flex items-center gap-1.5 px-2 py-1.5 rounded"
         :style="{
           background: t.warningBg,
           color: t.warning,
@@ -42,7 +42,7 @@
 
       <div
         v-if="primaryTarget"
-        class="text-[11px] flex items-center gap-1.5 px-2 py-1.5 rounded font-mono"
+        class="text-[0.79em] flex items-center gap-1.5 px-2 py-1.5 rounded font-mono"
         :style="{ background: t.bgSubtle, color: t.text, border: `1px solid ${t.border}` }"
       >
         <component :is="targetIcon" :size="11" :style="{ color: t.textDim }" />
@@ -51,7 +51,7 @@
 
       <details
         v-if="hasMoreInput"
-        class="text-[11px] rounded"
+        class="text-[0.79em] rounded"
         :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
       >
         <summary
@@ -68,7 +68,7 @@
         >
       </details>
 
-      <div v-if="pending.decisionReason" class="text-[10px]" :style="{ color: t.textFaint }">
+      <div v-if="pending.decisionReason" class="text-[0.71em]" :style="{ color: t.textFaint }">
         {{ pending.decisionReason }}
       </div>
     </div>

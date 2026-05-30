@@ -5,7 +5,7 @@
     :style="{ background: t.bgInput, border: `1px solid ${t.dangerBorder}` }"
   >
     <div
-      class="px-3 py-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-medium"
+      class="px-3 py-2 flex items-center gap-1.5 text-[0.71em] uppercase tracking-wider font-medium"
       :style="{
         color: t.danger,
         background: t.dangerBg,
@@ -16,8 +16,8 @@
       Mermaid render failed
     </div>
     <div class="p-3">
-      <div class="text-[11px] mb-2 font-mono" :style="{ color: t.danger }">{{ error }}</div>
-      <div class="text-[10px] mb-2" :style="{ color: t.textDim }">Diagram source:</div>
+      <div class="text-[0.79em] mb-2 font-mono" :style="{ color: t.danger }">{{ error }}</div>
+      <div class="text-[0.71em] mb-2" :style="{ color: t.textDim }">Diagram source:</div>
       <pre
         class="text-[10.5px] font-mono whitespace-pre-wrap p-2 rounded"
         :style="{ color: t.textMuted, background: t.bg, border: `1px solid ${t.border}` }"
@@ -33,7 +33,7 @@
   >
     <div
       v-if="status === 'loading'"
-      class="text-[11px] inline-flex items-center gap-2"
+      class="text-[0.79em] inline-flex items-center gap-2"
       :style="{ color: t.textDim }"
     >
       <Activity :size="11" class="animate-pulse" />

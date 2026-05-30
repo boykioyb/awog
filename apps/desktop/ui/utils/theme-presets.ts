@@ -14,7 +14,7 @@ export type AccentPreset =
   | 'tokyo'
   | 'gruvbox'
   | 'catppuccin'
-export type ThemeColor = AccentPreset
+export type ThemeColor = AccentPreset | 'custom'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 
 export const ACCENT_PRESETS: { value: AccentPreset; label: string; swatch: string }[] = [
@@ -392,14 +392,23 @@ export const getSurfaceOverride = (
   return themeName === 'dark' ? SURFACE_DARK[depth] : SURFACE_LIGHT[depth]
 }
 
+const HEX6_RE = /^#[0-9a-fA-F]{6}$/
+
 export const applyThemeColor = (
   tokens: ThemeTokens,
   themeName: ThemeName,
   color: ThemeColor,
+  customHex?: string,
 ): ThemeTokens => {
   if (color === 'mono') return tokens
-  const anchor =
-    themeName === 'dark' ? THEME_COLOR_ANCHORS_DARK[color] : THEME_COLOR_ANCHORS_LIGHT[color]
+  let anchor: string
+  if (color === 'custom') {
+    if (!customHex || !HEX6_RE.test(customHex)) return tokens
+    anchor = customHex
+  } else {
+    anchor =
+      themeName === 'dark' ? THEME_COLOR_ANCHORS_DARK[color] : THEME_COLOR_ANCHORS_LIGHT[color]
+  }
   const alpha = themeName === 'dark' ? 0.1 : 0.07
   const next = { ...tokens }
   SURFACE_KEYS.forEach((k) => {

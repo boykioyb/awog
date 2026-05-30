@@ -1,7 +1,7 @@
 <template>
   <div>
     <label
-      class="text-[10px] uppercase tracking-wider block mb-1.5 font-medium"
+      class="text-[0.71em] uppercase tracking-wider block mb-1.5 font-medium"
       :style="{ color: t.textDim }"
     >
       {{ label }}

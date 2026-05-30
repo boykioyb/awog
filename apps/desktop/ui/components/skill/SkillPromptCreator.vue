@@ -18,8 +18,8 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <Sparkles :size="13" :style="{ color: t.accent }" />
-        <div class="text-[12px] font-medium" :style="{ color: t.text }">New skill</div>
-        <span class="text-[10px]" :style="{ color: t.textDim }">
+        <div class="text-[0.86em] font-medium" :style="{ color: t.text }">New skill</div>
+        <span class="text-[0.71em]" :style="{ color: t.textDim }">
           · LLM will create SKILL.md on disk
         </span>
         <span class="flex-1" />
@@ -33,118 +33,23 @@
         </button>
       </div>
 
-      <div ref="logRef" class="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[280px]">
-        <div
-          v-if="messages.length === 0 && !streamingText"
-          class="text-[12px] py-4"
-          :style="{ color: t.textDim }"
-        >
-          Describe the skill you want — for example
-          <span :style="{ color: t.text }">"Review PRs against our TypeScript style guide"</span>
-          or
-          <span :style="{ color: t.text }">"Plan a sprint from a Linear epic"</span>
-          . The LLM will pick a slug + location and write the SKILL.md folder.
-        </div>
-
-        <div v-for="(msg, i) in messages" :key="i" class="space-y-1">
-          <div
-            v-if="msg.role === 'user'"
-            class="rounded-xl px-3 py-2 text-[12px] leading-relaxed ml-auto whitespace-pre-wrap"
-            :style="{
-              background: t.bgInput,
-              color: t.text,
-              border: `1px solid ${t.border}`,
-              maxWidth: '85%',
-              width: 'fit-content',
-            }"
-          >
-            {{ msg.text }}
+      <AgentChatLog
+        ref="logRef"
+        :messages="messages"
+        :streaming-text="streamingText"
+        :streaming-steps="streamingSteps"
+        :error="error"
+      >
+        <template #empty>
+          <div class="text-[0.86em] py-4" :style="{ color: t.textDim }">
+            Describe the skill you want — for example
+            <span :style="{ color: t.text }">"Review PRs against our TypeScript style guide"</span>
+            or
+            <span :style="{ color: t.text }">"Plan a sprint from a Linear epic"</span>
+            . The LLM will pick a slug + location and write the SKILL.md folder.
           </div>
-          <div v-else class="space-y-1.5">
-            <!-- eslint-disable vue/no-v-html — renderMarkdown (marked html:false) escape HTML thô -->
-            <div
-              v-if="msg.text"
-              class="awog-md text-[12px]"
-              :style="{ color: t.text, '--awog-accent': t.accent }"
-              v-html="renderMarkdown(msg.text)"
-            />
-            <!-- eslint-enable vue/no-v-html -->
-            <div v-if="msg.steps?.length" class="space-y-0.5 pl-2">
-              <div
-                v-for="step in msg.steps"
-                :key="step.id"
-                class="text-[10px] inline-flex items-center gap-1.5"
-                :style="{ color: t.textDim }"
-              >
-                <component
-                  :is="
-                    step.status === 'error' ? AlertCircle : step.status === 'done' ? Check : Loader2
-                  "
-                  :size="10"
-                  :class="
-                    step.status === 'running' || step.status === undefined ? 'animate-spin' : ''
-                  "
-                  :style="{
-                    color:
-                      step.status === 'error'
-                        ? t.danger
-                        : step.status === 'done'
-                          ? t.success
-                          : t.textDim,
-                  }"
-                />
-                <span class="font-mono">{{ step.label }}</span>
-                <span v-if="step.target" class="font-mono truncate" :style="{ color: t.textFaint }">
-                  · {{ step.target }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="streamingText || streamingSteps.length > 0" class="space-y-1.5">
-          <!-- eslint-disable vue/no-v-html — renderMarkdown (marked html:false) escape HTML thô -->
-          <div
-            v-if="streamingText"
-            class="awog-md text-[12px]"
-            :style="{ color: t.text, '--awog-accent': t.accent }"
-            v-html="renderMarkdown(streamingText)"
-          />
-          <!-- eslint-enable vue/no-v-html -->
-          <div v-if="streamingSteps.length > 0" class="space-y-0.5 pl-2">
-            <div
-              v-for="step in streamingSteps"
-              :key="step.id"
-              class="text-[10px] inline-flex items-center gap-1.5"
-              :style="{ color: t.textDim }"
-            >
-              <component
-                :is="
-                  step.status === 'error' ? AlertCircle : step.status === 'done' ? Check : Loader2
-                "
-                :size="10"
-                :class="
-                  step.status === 'running' || step.status === undefined ? 'animate-spin' : ''
-                "
-                :style="{
-                  color:
-                    step.status === 'error'
-                      ? t.danger
-                      : step.status === 'done'
-                        ? t.success
-                        : t.textDim,
-                }"
-              />
-              <span class="font-mono">{{ step.label }}</span>
-              <span v-if="step.target" class="font-mono truncate" :style="{ color: t.textFaint }">
-                · {{ step.target }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="error" class="text-[11px]" :style="{ color: t.danger }">{{ error }}</div>
-      </div>
+        </template>
+      </AgentChatLog>
 
       <div class="px-4 pb-4">
         <div
@@ -160,16 +65,16 @@
                 ? 'Describe what this skill should do…'
                 : 'Iterate further (or close when happy)…'
             "
-            class="w-full bg-transparent text-[12px] leading-relaxed resize-none focus:outline-none"
+            class="w-full bg-transparent text-[0.86em] leading-relaxed resize-none focus:outline-none"
             :style="{ color: t.text }"
             @keydown.enter.exact.prevent="onSend"
           />
           <div class="flex items-center justify-between">
-            <div class="text-[10px]" :style="{ color: t.textFaint }">
+            <div class="text-[0.71em]" :style="{ color: t.textFaint }">
               <template v-if="messages.length === 0">
                 Enter to send · Shift+Enter for newline
               </template>
-              <template v-else>{{ messages.length }} turn(s) · close to refresh skills</template>
+              <template v-else>{{ messages.length }} turn(s) · skills auto-refresh</template>
             </div>
             <button
               class="w-7 h-7 rounded-full inline-flex items-center justify-center transition"
@@ -192,9 +97,8 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, ArrowUp, Check, Loader2, Sparkles, X } from 'lucide-vue-next'
+import { ArrowUp, Loader2, Sparkles, X } from 'lucide-vue-next'
 import type { SessionStep } from '~/types'
-import { renderMarkdown } from '~/utils/markdown'
 
 interface ChatMsg {
   role: 'user' | 'agent'
@@ -245,7 +149,7 @@ const error = ref<string | null>(null)
 const isStreaming = ref(false)
 const currentMessageId = ref<string | null>(null)
 
-const logRef = ref<HTMLElement | null>(null)
+const logRef = ref<{ scrollToBottom: () => void } | null>(null)
 
 const canSend = computed(() => !isStreaming.value && promptText.value.trim().length > 0)
 
@@ -280,10 +184,7 @@ const cardPos = computed(() => {
 })
 
 const scrollToBottom = () => {
-  nextTick(() => {
-    const el = logRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
+  logRef.value?.scrollToBottom()
 }
 
 const onClose = () => {
@@ -296,7 +197,7 @@ const onBackdropClick = () => {
 }
 
 const upsertStreamingStep = (step: SessionStep) => {
-  const idx = streamingSteps.value.findIndex((s) => s.id === step.id)
+  const idx = streamingSteps.value.findIndex((s: SessionStep) => s.id === step.id)
   if (idx >= 0) {
     streamingSteps.value = [
       ...streamingSteps.value.slice(0, idx),
@@ -373,7 +274,7 @@ const onSend = async () => {
 
   // History sent to the model is everything EXCEPT the message we just pushed —
   // userText is the new turn.
-  const history = messages.value.slice(0, -1).map((m) => ({ role: m.role, text: m.text }))
+  const history = messages.value.slice(0, -1).map((m: ChatMsg) => ({ role: m.role, text: m.text }))
 
   try {
     await sidecar.request('skills.author', {
@@ -381,13 +282,18 @@ const onSend = async () => {
       history,
       userText: text,
       accountId: account.id,
-      projectIds: ws.projects.map((p) => p.id),
+      projectIds: ws.projects.map((p: { id: string }) => p.id),
     })
     // Finalise: move the streaming buffer into a permanent agent message.
     messages.value = [
       ...messages.value,
       { role: 'agent', text: streamingText.value, steps: [...streamingSteps.value] },
     ]
+    // Every turn may have written a new SKILL.md — refresh now so the parent
+    // skill list reflects it immediately, without waiting for modal close.
+    ws.hydrateSkillsFromSidecar().catch(() => {
+      // hydrate logs its own warning
+    })
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
   } finally {
