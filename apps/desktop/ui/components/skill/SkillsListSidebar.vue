@@ -7,7 +7,7 @@
       @update:model-value="(v: string) => $emit('update:search-query', v)"
     />
     <button
-      class="flex items-center gap-1 px-2 py-1.5 text-xs rounded transition"
+      class="flex items-center gap-1 px-2 py-1.5 text-[1em] rounded transition"
       :style="{
         background: 'transparent',
         color: t.textMuted,
@@ -21,7 +21,7 @@
     </button>
     <button
       ref="newButtonRef"
-      class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
+      class="flex items-center gap-1 px-2.5 py-1.5 text-[1em] rounded font-medium transition"
       :style="{ background: t.accent, color: t.accentText }"
       @click="$emit('new')"
     >
@@ -31,7 +31,7 @@
   </div>
   <div
     v-if="skills.length > 0"
-    class="px-3 py-1.5 flex items-center gap-2 text-[0.79em]"
+    class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
     :style="{ borderBottom: `1px solid ${t.border}`, color: t.textDim }"
   >
     <input
@@ -50,7 +50,7 @@
     <span class="flex-1" />
     <button
       v-if="bulkSelection.size > 0"
-      class="text-[0.71em] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
+      class="text-[1em] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
       :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
       @click="$emit('clear-bulk')"
     >

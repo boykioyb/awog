@@ -14,7 +14,7 @@
             {{ server.id }}
           </h1>
           <span
-            class="text-[0.79em] px-1.5 py-0.5 rounded uppercase"
+            class="text-[1em] px-1.5 py-0.5 rounded uppercase"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -24,17 +24,17 @@
             {{ server.transport }}
           </span>
           <span
-            class="text-[0.79em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+            class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
             :style="statusStyle"
           >
             <span class="w-1.5 h-1.5 rounded-full" :style="{ background: statusColor }" />
             {{ server.status }}
           </span>
         </div>
-        <div class="text-[0.93em] leading-relaxed mb-1" :style="{ color: t.text }">
+        <div class="text-[1em] leading-relaxed mb-1" :style="{ color: t.text }">
           {{ server.name }}
         </div>
-        <div class="text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
+        <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
           {{ server.description }}
         </div>
       </div>
@@ -135,7 +135,7 @@
     </div>
 
     <!-- Test result banner -->
-    <div v-if="testResult" class="rounded p-3 mb-4 text-[0.86em]" :style="testBannerStyle">
+    <div v-if="testResult" class="rounded p-3 mb-4 text-[1em]" :style="testBannerStyle">
       <div class="flex items-start gap-2">
         <component
           :is="testResult.ok ? CheckCircle2 : AlertCircle"
@@ -149,7 +149,7 @@
           <div class="font-mono break-words">{{ testResult.summary }}</div>
           <pre
             v-if="testResult.stderr && testResult.stderr.length > 0"
-            class="text-[0.71em] font-mono mt-2 p-2 rounded max-h-28 overflow-y-auto"
+            class="text-[1em] font-mono mt-2 p-2 rounded max-h-28 overflow-y-auto"
             :style="{ background: t.bgPanel, color: t.textDim }"
             >{{ testResult.stderr.join('\n') }}</pre
           >
@@ -160,7 +160,7 @@
     <!-- Last error banner -->
     <div
       v-if="server.lastError"
-      class="rounded p-3 mb-4 text-[0.86em]"
+      class="rounded p-3 mb-4 text-[1em]"
       :style="{
         background: t.dangerBg,
         border: `1px solid ${t.dangerBorder}`,
@@ -215,7 +215,7 @@
 
     <!-- Tools -->
     <Section :title="toolsSectionTitle">
-      <div v-if="server.tools.length === 0" class="text-[0.79em]" :style="{ color: t.textFaint }">
+      <div v-if="server.tools.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
         Chưa detect được tool — server chưa initialize.
       </div>
       <template v-else>
@@ -229,13 +229,13 @@
               v-model="toolFilter"
               type="text"
               placeholder="Filter tools by name or description…"
-              class="flex-1 bg-transparent text-[0.79em] outline-none"
+              class="flex-1 bg-transparent text-[1em] outline-none"
               :style="{ color: t.text }"
             />
             <button
               v-if="toolFilter"
               type="button"
-              class="text-[0.71em]"
+              class="text-[1em]"
               :style="{ color: t.textDim }"
               @click="toolFilter = ''"
             >
@@ -246,7 +246,7 @@
 
         <div
           v-if="filteredTools.length === 0"
-          class="text-[0.79em] py-2"
+          class="text-[1em] py-2"
           :style="{ color: t.textFaint }"
         >
           Không có tool nào khớp filter.
@@ -270,12 +270,12 @@
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5">
-                <div class="text-[0.86em] font-mono truncate" :style="{ color: t.text }">
+                <div class="text-[1em] font-mono truncate" :style="{ color: t.text }">
                   {{ tool.name }}
                 </div>
                 <span
                   v-if="isToolDenied(tool.name)"
-                  class="text-[0.64em] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded"
+                  class="text-[1em] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded"
                   :style="{
                     background: t.dangerBg,
                     color: t.danger,
@@ -285,7 +285,7 @@
                   denied
                 </span>
               </div>
-              <div class="text-[0.79em] mt-0.5" :style="{ color: t.textMuted }">
+              <div class="text-[1em] mt-0.5" :style="{ color: t.textMuted }">
                 {{ tool.description }}
               </div>
             </div>
@@ -318,10 +318,10 @@
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <FileText :size="11" :style="{ color: t.textDim }" />
-          <div class="text-[0.79em] font-mono flex-1 truncate" :style="{ color: t.text }">
+          <div class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
             {{ res.uri }}
           </div>
-          <div class="text-[0.71em]" :style="{ color: t.textDim }">{{ res.mime }}</div>
+          <div class="text-[1em]" :style="{ color: t.textDim }">{{ res.mime }}</div>
         </div>
       </div>
     </Section>
@@ -329,7 +329,7 @@
     <!-- Logs (stderr ring buffer) -->
     <Section v-if="stderrLines.length > 0" :title="`Logs · ${stderrLines.length} line(s)`">
       <pre
-        class="text-[0.71em] font-mono p-2.5 rounded max-h-48 overflow-y-auto"
+        class="text-[1em] font-mono p-2.5 rounded max-h-48 overflow-y-auto"
         :style="{ background: t.bgElevated, color: t.textDim, border: `1px solid ${t.border}` }"
         >{{ stderrLines.join('\n') }}</pre
       >
@@ -337,14 +337,14 @@
 
     <!-- Used by agents -->
     <Section :title="`Used by · ${agentsUsing.length} agents`">
-      <div v-if="agentsUsing.length === 0" class="text-[0.79em]" :style="{ color: t.textFaint }">
+      <div v-if="agentsUsing.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
         Chưa có agent nào whitelist server này.
       </div>
       <div v-else class="flex flex-wrap gap-1.5">
         <span
           v-for="ag in agentsUsing"
           :key="ag.id"
-          class="text-[0.79em] px-2 py-1 rounded"
+          class="text-[1em] px-2 py-1 rounded"
           :style="{
             background: t.bgInput,
             color: t.text,

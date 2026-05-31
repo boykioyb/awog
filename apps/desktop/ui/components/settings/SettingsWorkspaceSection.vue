@@ -2,7 +2,7 @@
   <div class="space-y-6">
     <div>
       <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Workspace</h2>
-      <div class="text-xs" :style="{ color: t.textDim }">
+      <div class="text-[1em]" :style="{ color: t.textDim }">
         Local storage and Git settings for this workspace
       </div>
     </div>
@@ -13,7 +13,7 @@
       >
         <input
           v-model="settings.workspacePath"
-          class="w-full rounded px-2 py-1.5 text-[0.86em] font-mono"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
         />
       </SettingsField>
@@ -38,8 +38,8 @@
 
     <!-- Git / Auto-commit (M6) -->
     <div class="pt-2">
-      <h3 class="text-sm font-semibold mb-1" :style="{ color: t.text }">Git / Auto-commit</h3>
-      <div class="text-xs mb-3" :style="{ color: t.textDim }">
+      <h3 class="text-[1em] font-semibold mb-1" :style="{ color: t.text }">Git / Auto-commit</h3>
+      <div class="text-[1em] mb-3" :style="{ color: t.textDim }">
         How AWOG commits when the engine finishes a phase, and how dirty trees are handled before a
         new task.
       </div>
@@ -63,7 +63,7 @@
             :value="git.autoCommitMessageTemplate"
             rows="1"
             placeholder="[{phaseId}] {agentName}: {summary}"
-            class="w-full rounded px-2 py-1.5 text-[0.86em] font-mono resize-y min-h-[2.25rem]"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[2.25rem]"
             :style="inputStyle"
             @input="onTemplateInput($event)"
           />
@@ -77,7 +77,7 @@
             <label
               v-for="opt in scopeOptions"
               :key="opt.value"
-              class="flex items-center gap-2 text-[0.86em]"
+              class="flex items-center gap-2 text-[1em]"
               :class="opt.disabled ? 'cursor-not-allowed' : 'cursor-pointer'"
               :style="{ color: opt.disabled ? t.textFaint : t.text }"
               :title="opt.disabled ? 'Available in v2' : ''"
@@ -113,7 +113,7 @@
             <label
               v-for="opt in policyOptions"
               :key="opt.value"
-              class="flex items-center gap-2 text-[0.86em] cursor-pointer"
+              class="flex items-center gap-2 text-[1em] cursor-pointer"
               :style="{ color: t.text }"
             >
               <input
@@ -136,7 +136,7 @@
             type="number"
             min="0"
             :value="autoFetchSeconds"
-            class="w-full rounded px-2 py-1.5 text-[0.86em] font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             @input="onFetchIntervalInput($event)"
           />
@@ -150,14 +150,14 @@
           <textarea
             :value="git.commitMessageRule"
             rows="30"
-            class="w-full rounded px-2 py-1.5 text-[0.86em] font-mono resize-y min-h-[70vh]"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[70vh]"
             :style="inputStyle"
             @input="onRuleInput($event)"
           />
           <div class="mt-1 flex justify-end">
             <button
               type="button"
-              class="text-[0.71em] underline"
+              class="text-[1em] underline"
               :style="{ color: t.textDim }"
               @click="resetRule"
             >

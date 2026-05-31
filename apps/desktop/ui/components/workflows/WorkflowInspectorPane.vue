@@ -17,7 +17,7 @@
     :style="{ borderLeft: `1px solid ${t.border}`, background: t.bgPanel }"
   >
     <div class="px-3 py-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">
-      <div class="text-[0.79em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
         Inspector
       </div>
     </div>
@@ -30,7 +30,7 @@
         :available-skills="availableSkills"
         @update:node="(updated) => emit('update:node', updated)"
       />
-      <div v-else class="text-center text-xs py-12" :style="{ color: t.textDim }">
+      <div v-else class="text-center text-[1em] py-12" :style="{ color: t.textDim }">
         <Eye :size="20" class="mx-auto mb-2" :stroke-width="1.5" :style="{ color: t.textFaint }" />
         Select a node to edit
       </div>

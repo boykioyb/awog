@@ -6,7 +6,7 @@
     <!-- Project selector -->
     <div class="relative">
       <button
-        class="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition"
+        class="flex items-center gap-1.5 px-2 py-1.5 rounded text-[1em] transition"
         :style="{
           background: projectOpen ? t.bgActive : t.bgInput,
           color: t.text,
@@ -18,8 +18,12 @@
         <span class="font-medium">{{ currentProject?.name ?? 'No project' }}</span>
         <span
           v-if="currentDirtyCount > 0"
-          class="text-[0.64em] px-1 rounded"
-          :style="{ background: t.warning, color: t.accentText, minWidth: '14px' }"
+          class="text-[12px] px-1.5 py-0.5 rounded font-mono font-medium leading-none inline-flex items-center justify-center"
+          :style="{
+            background: t.warning,
+            color: t.accentText,
+            minWidth: '18px',
+          }"
         >
           {{ currentDirtyCount }}
         </span>
@@ -49,21 +53,32 @@
         >
           <FolderGit2 :size="12" :style="{ color: p.color || t.textDim }" />
           <div class="flex-1 min-w-0">
-            <div class="text-xs font-medium truncate" :style="{ color: t.text }">
-              {{ p.name }}
+            <div class="flex items-center gap-2">
+              <span class="text-[1em] font-medium truncate" :style="{ color: t.text }">
+                {{ p.name }}
+              </span>
+              <span
+                v-if="(dirtyCountByProject[p.id] ?? 0) > 0"
+                class="text-[12px] px-1.5 py-0.5 rounded font-mono font-medium leading-none inline-flex items-center justify-center flex-shrink-0"
+                :style="{
+                  background: t.warning,
+                  color: t.accentText,
+                  minWidth: '18px',
+                }"
+              >
+                {{ dirtyCountByProject[p.id] }}
+              </span>
+              <Check
+                v-if="p.id === selectedProjectId"
+                :size="11"
+                class="flex-shrink-0"
+                :style="{ color: t.accent }"
+              />
             </div>
-            <div class="text-[0.71em] font-mono truncate" :style="{ color: t.textFaint }">
+            <div class="text-[1em] font-mono truncate" :style="{ color: t.textFaint }">
               {{ p.path }}
             </div>
           </div>
-          <span
-            v-if="(dirtyCountByProject[p.id] ?? 0) > 0"
-            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
-            :style="{ background: t.warning, color: t.accentText }"
-          >
-            {{ dirtyCountByProject[p.id] }}
-          </span>
-          <Check v-if="p.id === selectedProjectId" :size="11" :style="{ color: t.accent }" />
         </div>
       </div>
     </div>
@@ -72,7 +87,7 @@
 
     <div class="relative">
       <button
-        class="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition"
+        class="flex items-center gap-1.5 px-2 py-1.5 rounded text-[1em] transition"
         :style="{
           background: branchOpen ? t.bgActive : t.bgInput,
           color: t.text,
@@ -110,12 +125,12 @@
               color: b.isCurrent ? t.accent : 'transparent',
             }"
           />
-          <span class="text-xs font-mono flex-1 truncate" :style="{ color: t.text }">
+          <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
             {{ b.name }}
           </span>
           <span
             v-if="b.ahead > 0 || b.behind > 0"
-            class="text-[0.71em] font-mono"
+            class="text-[1em] font-mono"
             :style="{ color: t.textDim }"
           >
             {{ b.ahead > 0 ? `↑${b.ahead}` : '' }}{{ b.behind > 0 ? ` ↓${b.behind}` : '' }}
@@ -124,7 +139,7 @@
       </div>
     </div>
 
-    <div class="flex items-center gap-2 text-[0.79em]" :style="{ color: t.textDim }">
+    <div class="flex items-center gap-2 text-[1em]" :style="{ color: t.textDim }">
       <span v-if="ahead > 0" class="font-mono">
         ↑{{ ahead }}
         <span :style="{ color: t.textFaint }">ahead</span>
@@ -141,7 +156,7 @@
     <div class="ml-auto flex items-center gap-2">
       <template v-if="isMerging">
         <button
-          class="px-2.5 py-1 text-[0.79em] rounded font-medium transition"
+          class="px-2.5 py-1 text-[1em] rounded font-medium transition"
           :style="completeMergeBtnStyle"
           :disabled="hasConflict"
           :title="
@@ -152,7 +167,7 @@
           {{ tr('git.header.complete_merge') }}
         </button>
         <button
-          class="px-2.5 py-1 text-[0.79em] rounded transition"
+          class="px-2.5 py-1 text-[1em] rounded transition"
           :style="{
             background: t.dangerBg,
             color: t.danger,

@@ -10,7 +10,7 @@
     <template v-if="agent" #header-actions-extra>
       <button
         type="button"
-        class="px-2.5 py-1.5 text-xs rounded inline-flex items-center gap-1.5 transition"
+        class="px-2.5 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
         :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
         title="Revise the whole agent (name / description / model / role / system prompt) via an LLM prompt"
         @click="onEditWithLlm"
@@ -22,7 +22,7 @@
 
     <div
       v-if="agent?.id"
-      class="flex items-center gap-2 text-[0.71em] -mt-5 mb-6"
+      class="flex items-center gap-2 text-[1em] -mt-5 mb-6"
       :style="{ color: t.textDim }"
     >
       <span class="font-mono">{{ agent.id }}.md</span>
@@ -34,14 +34,14 @@
       <Field v-if="!agent" label="Save to">
         <select
           v-model="saveTo"
-          class="w-full rounded px-2 py-1.5 text-xs font-mono"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
         >
           <option v-for="opt in saveToOptions" :key="opt.value" :value="opt.value">
             {{ opt.label }}
           </option>
         </select>
-        <div class="text-[0.71em] mt-1" :style="{ color: t.textDim }">
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
           Tier determines where the AGENT.md is written (Sprint 3 C3). Default is global
           (~/.awog/agents/). Project tiers commit-able via git.
         </div>
@@ -52,7 +52,7 @@
           <input
             v-model="draft.name"
             placeholder="e.g. Tax Consultant, SEO Specialist"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -60,10 +60,10 @@
           <input
             v-model="draft.role"
             placeholder="DevOps, BA, Security..."
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
-          <div class="text-[0.71em] mt-1" :style="{ color: t.textDim }">
+          <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
             Short label shown on the badge (optional)
           </div>
         </Field>
@@ -73,10 +73,10 @@
         <input
           v-model="draft.description"
           placeholder="When to use this agent — one sentence shown in pickers."
-          class="w-full rounded px-2 py-1.5 text-xs"
+          class="w-full rounded px-2 py-1.5 text-[1em]"
           :style="inputStyle"
         />
-        <div class="text-[0.71em] mt-1" :style="{ color: t.textDim }">
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
           Required by Claude Code subagent format.
         </div>
       </Field>
@@ -109,8 +109,8 @@
                 />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-[0.86em]" :style="{ color: t.text }">{{ m.label }}</div>
-                <div class="text-[0.71em]" :style="{ color: t.textDim }">{{ m.vendor }}</div>
+                <div class="text-[1em]" :style="{ color: t.text }">{{ m.label }}</div>
+                <div class="text-[1em]" :style="{ color: t.textDim }">{{ m.vendor }}</div>
               </div>
             </div>
           </button>
@@ -119,7 +119,7 @@
 
       <div>
         <label
-          class="text-[0.71em] uppercase tracking-wider font-medium mb-1.5 block"
+          class="text-[1em] uppercase tracking-wider font-medium mb-1.5 block"
           :style="{ color: t.textDim }"
         >
           System Prompt
@@ -128,7 +128,7 @@
           v-model="draft.systemPrompt"
           :rows="4"
           placeholder="You are a... Define the agent's role, personality, and how it should approach tasks."
-          class="w-full rounded px-2 py-1.5 text-[0.86em] leading-relaxed resize-y min-h-[6rem]"
+          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[6rem]"
           :style="inputStyle"
         />
       </div>
@@ -144,7 +144,7 @@
       <div>
         <div class="flex items-center justify-between mb-1.5">
           <label
-            class="text-[0.71em] uppercase tracking-wider font-medium"
+            class="text-[1em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
             Skills · {{ draft.skillIds.length }} selected
@@ -170,15 +170,15 @@
               @change="toggleSkill(s.id)"
             />
             <div class="flex-1 min-w-0">
-              <div class="text-[0.79em] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-              <div class="text-[0.71em] leading-snug" :style="{ color: t.textDim }">
+              <div class="text-[1em] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
+              <div class="text-[1em] leading-snug" :style="{ color: t.textDim }">
                 {{ s.description }}
               </div>
             </div>
           </label>
           <div
             v-if="filteredSkills.length === 0"
-            class="text-[0.79em] py-4 text-center"
+            class="text-[1em] py-4 text-center"
             :style="{ color: t.textFaint }"
           >
             <template v-if="ws.skills.length === 0">No skills yet — create one first</template>
@@ -190,12 +190,12 @@
       <div>
         <div class="flex items-center justify-between mb-1.5">
           <label
-            class="text-[0.71em] uppercase tracking-wider font-medium"
+            class="text-[1em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
             MCP Servers · {{ activeMcpCount }} {{ activeMcpCount === 1 ? 'allowed' : 'allowed' }}
           </label>
-          <span class="text-[0.71em]" :style="{ color: t.textFaint }">
+          <span class="text-[1em]" :style="{ color: t.textFaint }">
             {{ mcpPickerHint }}
           </span>
         </div>
@@ -220,10 +220,10 @@
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5">
-                <span class="text-[0.79em] font-mono" :style="{ color: t.text }">{{ s.name }}</span>
+                <span class="text-[1em] font-mono" :style="{ color: t.text }">{{ s.name }}</span>
                 <span
                   v-if="!s.enabled"
-                  class="text-[0.64em] uppercase tracking-wider px-1 py-0.5 rounded"
+                  class="text-[1em] uppercase tracking-wider px-1 py-0.5 rounded"
                   :style="{
                     color: t.textFaint,
                     background: t.bgPanel,
@@ -233,14 +233,14 @@
                   disabled
                 </span>
               </div>
-              <div class="text-[0.71em] leading-snug truncate" :style="{ color: t.textDim }">
+              <div class="text-[1em] leading-snug truncate" :style="{ color: t.textDim }">
                 {{ s.description || `${s.transport} · ${s.tools.length} tool(s)` }}
               </div>
             </div>
           </label>
           <div
             v-if="ws.mcpServers.length === 0"
-            class="text-[0.79em] py-4 text-center"
+            class="text-[1em] py-4 text-center"
             :style="{ color: t.textFaint }"
           >
             No MCP servers yet — add one in Settings → MCP Servers.

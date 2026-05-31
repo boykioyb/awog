@@ -2,14 +2,14 @@
   <div class="space-y-6">
     <div>
       <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Appearance</h2>
-      <div class="text-xs" :style="{ color: t.textDim }">
+      <div class="text-[1em]" :style="{ color: t.textDim }">
         Customize fonts and theme used across the app
       </div>
     </div>
 
     <div :style="{ borderTop: `1px solid ${t.border}` }">
       <SettingsField label="Theme" hint="Toggle via moon/sun icon in the sidebar">
-        <div class="text-[0.86em]" :style="{ color: t.textMuted }">
+        <div class="text-[1em]" :style="{ color: t.textMuted }">
           {{ themeName === 'dark' ? 'Dark' : 'Light' }}
         </div>
       </SettingsField>
@@ -17,7 +17,7 @@
       <SettingsField label="Sans font" hint="Body and UI typography">
         <select
           v-model="appearance.sansFamily"
-          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
+          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
           :style="selectStyle"
           @change="onUpdate({ sansFamily: appearance.sansFamily })"
         >
@@ -30,7 +30,7 @@
       <SettingsField label="Mono font" hint="Code blocks, terminals, debug output">
         <select
           v-model="appearance.monoFamily"
-          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
+          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
           :style="selectStyle"
           @change="onUpdate({ monoFamily: appearance.monoFamily })"
         >
@@ -43,7 +43,7 @@
       <SettingsField :label="tr('settings.language')" :hint="tr('settings.language.hint')">
         <select
           v-model="appearance.locale"
-          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
+          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
           :style="selectStyle"
           @change="onUpdate({ locale: appearance.locale })"
         >
@@ -67,7 +67,7 @@
       <SettingsField label="Font weight" hint="Applies to body text">
         <select
           v-model.number="appearance.fontWeight"
-          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
+          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
           :style="selectStyle"
           @change="onUpdate({ fontWeight: appearance.fontWeight })"
         >
@@ -120,7 +120,7 @@
           <button
             v-for="o in SURFACE_DEPTH_OPTIONS"
             :key="o.value"
-            class="flex-1 px-3 py-1.5 text-[0.86em] transition-colors"
+            class="flex-1 px-3 py-1.5 text-[1em] transition-colors"
             :style="depthStyle(o.value)"
             :title="o.hint"
             @click="onUpdate({ surfaceDepth: o.value })"
@@ -132,7 +132,7 @@
     </div>
 
     <div>
-      <div class="text-[0.79em] mb-2 uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[1em] mb-2 uppercase tracking-wider" :style="{ color: t.textDim }">
         Preview
       </div>
       <div
@@ -147,7 +147,7 @@
           </div>
           <div :style="{ color: t.text }">
             Body text — 0123456789. Layer panel uses
-            <code class="font-mono text-[0.86em]" :style="{ color: t.accent }">bgPanel</code>
+            <code class="font-mono text-[1em]" :style="{ color: t.accent }">bgPanel</code>
             .
           </div>
           <div
@@ -159,21 +159,21 @@
           </div>
           <div class="flex gap-2 items-center">
             <button
-              class="px-3 py-1.5 rounded text-[0.86em] font-medium"
+              class="px-3 py-1.5 rounded text-[1em] font-medium"
               :style="{ background: t.accent, color: t.accentText }"
             >
               Primary action
             </button>
             <button
-              class="px-3 py-1.5 rounded text-[0.86em]"
+              class="px-3 py-1.5 rounded text-[1em]"
               :style="{ background: t.bgHover, color: t.text, border: `1px solid ${t.border}` }"
             >
               Secondary
             </button>
-            <a class="text-[0.86em]" :style="{ color: t.accent }">Link</a>
+            <a class="text-[1em]" :style="{ color: t.accent }">Link</a>
           </div>
           <pre
-            class="font-mono text-[0.86em] p-2 rounded"
+            class="font-mono text-[1em] p-2 rounded"
             :style="{ background: t.bgElevated, border: `1px solid ${t.border}`, color: t.textDim }"
           >
 const sum = (a: number, b: number) =&gt; a + b</pre
@@ -184,7 +184,7 @@ const sum = (a: number, b: number) =&gt; a + b</pre
 
     <div class="flex justify-end">
       <button
-        class="px-3 py-1.5 rounded text-[0.86em]"
+        class="px-3 py-1.5 rounded text-[1em]"
         :style="{ border: `1px solid ${t.border}`, color: t.textDim }"
         @click="reset"
       >

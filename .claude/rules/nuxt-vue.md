@@ -49,6 +49,11 @@
 
 - **Detail header buttons:** mọi action button trong `*Detail.vue` header row (Edit/Delete/Duplicate/Test/Restart…) dùng cùng icon-only style. Class `p-1.5 rounded transition`, icon size `13`, color mặc định `t.textDim`, hover bgHover+text (hoặc dangerBg+danger cho destructive). `title` attribute bắt buộc thay text label. **Không** mix text+border (`px-3 py-1.5`) với icon-only trong cùng row.
 - **Editor textareas:** `<textarea>` trong `*Editor.vue` cho content dài (description, body, systemPrompt, command, args) dùng `resize-y min-h-[<rem>]` — không `resize-none`. Chat composer / single-purpose modal input giữ `resize-none` (ghi comment lý do).
+- **Font-size:**
+  - **Body text min = 14px.** Dùng `text-[1em]` (scale theo `--font-size-base` từ Appearance setting). Không `text-xs`/`text-sm`/`text-[<1em]` cho text đọc được. `FONT_SIZE_MIN = 14` đã enforce ở [composables/useAppearance.ts](../../apps/desktop/ui/composables/useAppearance.ts).
+  - **Badge/hint/count chip = `text-[12px]` fixed** (không em, không scale). Áp dụng cho: numeric badge (dirty count, ahead/behind), section count `(N)`, status hint inline (`current`, `↑2`, `↓33`). Kèm `font-mono leading-none` + `minWidth: 18px` khi là pill số để box vuông cân.
+  - **Section/group label** (uppercase header trong sidebar/section): giữ `text-[1em]` — là header, không phải badge.
+  - Pixel-fixed lớn (`text-[80px]`, hero, empty state) OK — intentional.
 
 Chi tiết + bảng `rows → min-h`: [docs/coding/nuxt-frontend.md#ui-patterns](../../docs/coding/nuxt-frontend.md#ui-patterns).
 

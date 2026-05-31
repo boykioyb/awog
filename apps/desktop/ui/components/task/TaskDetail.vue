@@ -2,11 +2,11 @@
   <div class="flex-1 overflow-y-auto">
     <div class="px-4 md:px-6 py-4 md:py-5" :style="{ borderBottom: `1px solid ${t.border}` }">
       <div class="flex items-center gap-2 mb-3">
-        <span class="text-[0.79em] font-mono" :style="{ color: t.textDim }">{{ task.id }}</span>
+        <span class="text-[1em] font-mono" :style="{ color: t.textDim }">{{ task.id }}</span>
         <span :style="{ color: t.textFaint }">·</span>
-        <span class="text-[0.79em]" :style="{ color: t.textDim }">{{ task.createdAt }}</span>
+        <span class="text-[1em]" :style="{ color: t.textDim }">{{ task.createdAt }}</span>
         <div
-          class="ml-auto inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[0.79em]"
+          class="ml-auto inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[1em]"
           :style="{ background: statusBg, color: statusColor, border: `1px solid ${statusBorder}` }"
         >
           <component
@@ -32,12 +32,12 @@
         </button>
       </div>
       <h1 class="text-xl font-semibold mb-2" :style="{ color: t.text }">{{ task.title }}</h1>
-      <div class="flex items-center gap-3 text-[0.86em] flex-wrap" :style="{ color: t.textMuted }">
+      <div class="flex items-center gap-3 text-[1em] flex-wrap" :style="{ color: t.textMuted }">
         <template v-if="project">
           <div class="inline-flex items-center gap-1.5">
             <FolderGit2 :size="11" />
             <span :style="{ color: t.text }">{{ project.name }}</span>
-            <span class="font-mono text-[0.71em]" :style="{ color: t.textDim }">
+            <span class="font-mono text-[1em]" :style="{ color: t.textDim }">
               {{ project.path }}
             </span>
           </div>
@@ -50,13 +50,13 @@
           {{ workflow?.name }}
         </div>
       </div>
-      <div class="mt-3 text-[0.93em] leading-relaxed" :style="{ color: t.textMuted }">
+      <div class="mt-3 text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
         {{ task.description }}
       </div>
     </div>
     <div class="px-4 md:px-6 py-4">
       <div
-        class="text-[0.79em] uppercase tracking-wider font-medium mb-3"
+        class="text-[1em] uppercase tracking-wider font-medium mb-3"
         :style="{ color: t.textDim }"
       >
         Pipeline

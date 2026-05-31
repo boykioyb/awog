@@ -5,15 +5,15 @@
   >
     <AlertTriangle :size="48" :stroke-width="1.5" :style="{ color: t.warning }" />
     <div class="text-center max-w-md">
-      <div class="text-sm font-medium mb-2" :style="{ color: t.text }">
+      <div class="text-[1em] font-medium mb-2" :style="{ color: t.text }">
         {{ headline }}
       </div>
-      <div class="text-xs leading-relaxed" :style="{ color: t.textDim }">
+      <div class="text-[1em] leading-relaxed" :style="{ color: t.textDim }">
         {{ description }}
       </div>
     </div>
     <button
-      class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition"
+      class="flex items-center gap-1.5 text-[1em] px-3 py-1.5 rounded transition"
       :style="{
         background: t.bgInput,
         color: t.accent,

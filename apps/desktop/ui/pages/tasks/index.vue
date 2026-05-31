@@ -22,14 +22,14 @@
           <ListFilter :size="12" />
           <div
             v-if="activeFilterCount > 0"
-            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[0.57em] font-semibold"
+            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[1em] font-semibold"
             :style="{ background: t.accent, color: t.accentText }"
           >
             {{ activeFilterCount }}
           </div>
         </button>
         <button
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
+          class="flex items-center gap-1 px-2.5 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="showNewModal = true"
         >
@@ -69,7 +69,7 @@
         />
         <button
           v-if="activeFilterCount > 0"
-          class="text-[0.71em] transition"
+          class="text-[1em] transition"
           :style="{ color: clearHover ? t.text : t.textDim }"
           @click="clearFilters"
           @mouseenter="clearHover = true"
@@ -107,11 +107,11 @@
                 }"
               />
               <span
-                class="text-[0.71em] uppercase tracking-wider font-medium flex-1 text-left truncate"
+                class="text-[1em] uppercase tracking-wider font-medium flex-1 text-left truncate"
               >
                 {{ group.label }}
               </span>
-              <span class="text-[0.71em]" :style="{ color: t.textFaint }">
+              <span class="text-[1em]" :style="{ color: t.textFaint }">
                 {{ group.tasks.length }}
               </span>
             </button>
@@ -148,7 +148,7 @@
     </template>
 
     <template #empty-detail>
-      <div class="flex-1 flex items-center justify-center text-sm" :style="{ color: t.textDim }">
+      <div class="flex-1 flex items-center justify-center text-[1em]" :style="{ color: t.textDim }">
         Select a task
       </div>
     </template>

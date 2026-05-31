@@ -3,12 +3,12 @@
     <template #header>
       <div class="flex items-center gap-2">
         <AlertCircle :size="14" :style="{ color: kind === 'danger' ? t.danger : t.accent }" />
-        <div class="text-sm font-medium" :style="{ color: t.text }">{{ title }}</div>
+        <div class="text-[1em] font-medium" :style="{ color: t.text }">{{ title }}</div>
       </div>
     </template>
 
     <div class="p-4 space-y-3">
-      <div class="text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
+      <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
         {{ description }}
       </div>
       <slot name="extra" />
@@ -16,14 +16,14 @@
 
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{ color: t.textMuted }"
         @click="emit('cancel')"
       >
         {{ cancelLabel ?? 'Cancel' }}
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded font-medium transition"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
         :style="{ background: confirmBg, color: t.onAccent }"
         @click="emit('confirm')"
       >

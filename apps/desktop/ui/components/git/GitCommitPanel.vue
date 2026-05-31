@@ -20,9 +20,9 @@
       >
         <div class="flex items-center gap-2">
           <AlertTriangle :size="16" :style="{ color: t.warning }" />
-          <div class="text-sm font-medium">{{ tr('git.commit_panel.detached_title') }}</div>
+          <div class="text-[1em] font-medium">{{ tr('git.commit_panel.detached_title') }}</div>
         </div>
-        <div class="text-xs leading-relaxed" :style="{ color: t.textDim }">
+        <div class="text-[1em] leading-relaxed" :style="{ color: t.textDim }">
           {{
             tr('git.commit_panel.detached_body', {
               sha: store.detachedAt ?? '',
@@ -32,7 +32,7 @@
         </div>
         <div class="flex items-center gap-2 justify-end pt-1">
           <button
-            class="text-xs px-3 py-1.5 rounded transition"
+            class="text-[1em] px-3 py-1.5 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -43,7 +43,7 @@
             {{ tr('common.cancel') }}
           </button>
           <button
-            class="text-xs px-3 py-1.5 rounded transition"
+            class="text-[1em] px-3 py-1.5 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.accent,
@@ -54,7 +54,7 @@
             {{ tr('git.commit_panel.create_branch_then_commit') }}
           </button>
           <button
-            class="text-xs px-3 py-1.5 rounded transition font-medium"
+            class="text-[1em] px-3 py-1.5 rounded transition font-medium"
             :style="{
               background: t.warning,
               color: t.accentText,
@@ -68,13 +68,13 @@
       </div>
     </div>
     <div class="px-3 py-2 flex items-center justify-between gap-2">
-      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
         {{ tr('git.commit_panel.message_header') }}
       </div>
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="flex items-center gap-1 text-[0.71em] px-2 py-1 rounded transition"
+          class="flex items-center gap-1 text-[1em] px-2 py-1 rounded transition"
           :style="generateBtnStyle"
           :disabled="generateDisabled"
           :title="
@@ -94,7 +94,7 @@
             }}
           </span>
         </button>
-        <div class="text-[0.71em]" :style="{ color: t.textFaint }">
+        <div class="text-[1em]" :style="{ color: t.textFaint }">
           {{ tr('git.commit_panel.files_staged', { count: store.stagedFiles.length }) }}
         </div>
       </div>
@@ -104,7 +104,7 @@
         :value="store.commitMessage"
         rows="3"
         :placeholder="tr('git.commit_panel.message_placeholder')"
-        class="w-full rounded text-xs px-2 py-1.5 font-mono resize-y min-h-[5rem]"
+        class="w-full rounded text-[1em] px-2 py-1.5 font-mono resize-y min-h-[5rem]"
         :style="{
           background: t.bgInput,
           color: t.text,
@@ -115,13 +115,13 @@
         @focus="focused = true"
         @blur="focused = false"
       />
-      <div v-if="inlineError" class="text-[0.71em] mt-1" :style="{ color: t.danger }">
+      <div v-if="inlineError" class="text-[1em] mt-1" :style="{ color: t.danger }">
         {{ inlineError }}
       </div>
     </div>
     <div class="px-3 py-2 flex items-center gap-2" :style="{ borderTop: `1px solid ${t.border}` }">
       <button
-        class="flex-1 text-xs font-medium px-3 py-1.5 rounded transition"
+        class="flex-1 text-[1em] font-medium px-3 py-1.5 rounded transition"
         :style="commitBtnStyle"
         :disabled="commitDisabled"
         @click="doCommit"
@@ -129,7 +129,7 @@
         {{ tr('git.commit_panel.commit') }}
       </button>
       <button
-        class="text-xs px-3 py-1.5 rounded transition"
+        class="text-[1em] px-3 py-1.5 rounded transition"
         :style="{
           background: t.bgInput,
           color: t.textMuted,

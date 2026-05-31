@@ -8,7 +8,6 @@ import type {
   SessionStep,
   SessionTokenKind,
 } from '~/types'
-import { MOCK_SESSIONS } from '~/utils/initial-sessions'
 import { useWorkspaceStore } from '~/stores/workspace'
 import { useSettingsStore } from '~/stores/settings'
 import { nowIso } from '~/utils/time'
@@ -103,7 +102,7 @@ const isPermissionRequestPayload = (
 
 const DEFAULT_SETTINGS: SessionSettings = {
   provider: 'anthropic',
-  modelId: 'claude-opus-4-7',
+  modelId: 'claude-opus-4-8',
   level: 'high',
   mode: 'ask',
 }
@@ -190,11 +189,7 @@ export const useSessionsStore = defineStore('sessions', {
     async hydrateFromSidecar(): Promise<void> {
       const sidecar = useSidecar()
       if (!sidecar.available) {
-        // Browser dev: no sidecar — seed mock data so the UI is browsable.
-        if (this.sessions.length === 0) {
-          this.sessions = [...MOCK_SESSIONS]
-          this.selectedSessionId = this.sessions[0]?.id ?? null
-        }
+        // Browser dev: no sidecar — start with an empty session list.
         return
       }
       try {

@@ -5,7 +5,7 @@
     :style="{ borderRight: `1px solid ${t.border}`, background: t.bgPanel }"
   >
     <div
-      class="px-3 py-2 text-[0.79em] uppercase tracking-wider font-medium"
+      class="px-3 py-2 text-[1em] uppercase tracking-wider font-medium"
       :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
     >
       Files in {{ taskId }}
@@ -23,10 +23,10 @@
         <GitBranch v-if="f.kind === 'diff'" :size="11" :style="{ color: t.textDim }" />
         <FileCode v-else :size="11" :style="{ color: t.textDim }" />
         <div class="flex-1 min-w-0">
-          <div class="text-[0.79em] font-mono truncate" :style="{ color: t.text }">
+          <div class="text-[1em] font-mono truncate" :style="{ color: t.text }">
             {{ f.fileName }}
           </div>
-          <div class="text-[0.64em] truncate" :style="{ color: t.textFaint }">
+          <div class="text-[1em] truncate" :style="{ color: t.textFaint }">
             {{ f.phase }} · v{{ f.version }}
           </div>
         </div>

@@ -16,7 +16,7 @@
     >
       <span
         v-if="!collapsed"
-        class="text-[0.71em] uppercase tracking-wider px-2"
+        class="text-[1em] uppercase tracking-wider px-2"
         :style="{ color: t.textDim }"
       >
         {{ tr('git.sidebar.title') }}
@@ -63,7 +63,7 @@
       >
         <template v-if="localBranches.length === 0">
           <div
-            class="px-3 py-1.5 text-[0.71em] italic"
+            class="px-3 py-1.5 text-[1em] italic"
             :style="{ color: t.textFaint, paddingLeft: '28px' }"
           >
             {{ tr('git.sidebar.empty') }}
@@ -94,7 +94,7 @@
       >
         <template v-if="store.remotes.length === 0">
           <div
-            class="px-3 py-1.5 text-[0.71em] italic"
+            class="px-3 py-1.5 text-[1em] italic"
             :style="{ color: t.textFaint, paddingLeft: '28px' }"
           >
             {{ tr('git.sidebar.empty') }}
@@ -132,7 +132,7 @@
         @toggle="open.tags = !open.tags"
       >
         <div
-          class="px-3 py-1.5 text-[0.71em] italic"
+          class="px-3 py-1.5 text-[1em] italic"
           :style="{ color: t.textFaint, paddingLeft: '28px' }"
         >
           {{ tr('git.sidebar.empty') }}
@@ -152,7 +152,7 @@
       >
         <template v-if="store.stashes.length === 0">
           <div
-            class="px-3 py-1.5 text-[0.71em] italic"
+            class="px-3 py-1.5 text-[1em] italic"
             :style="{ color: t.textFaint, paddingLeft: '28px' }"
           >
             {{ tr('git.sidebar.empty') }}
@@ -178,7 +178,7 @@
         @toggle="open.submodules = !open.submodules"
       >
         <div
-          class="px-3 py-1.5 text-[0.71em] italic"
+          class="px-3 py-1.5 text-[1em] italic"
           :style="{ color: t.textFaint, paddingLeft: '28px' }"
         >
           {{ tr('git.sidebar.empty') }}

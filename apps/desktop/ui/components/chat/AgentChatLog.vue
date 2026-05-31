@@ -7,7 +7,7 @@
     <div v-for="(msg, i) in messages" :key="i">
       <div v-if="msg.role === 'user'" class="flex flex-col items-end gap-1">
         <div
-          class="rounded-2xl px-3.5 py-2 text-[0.86em] leading-relaxed whitespace-pre-wrap"
+          class="rounded-2xl px-3.5 py-2 text-[1em] leading-relaxed whitespace-pre-wrap"
           :style="{
             background: t.bgElevated,
             color: t.text,
@@ -21,7 +21,7 @@
 
       <div
         v-else
-        class="rounded-2xl px-3.5 py-2.5 text-[0.86em] leading-relaxed"
+        class="rounded-2xl px-3.5 py-2.5 text-[1em] leading-relaxed"
         :style="{
           background: t.bgElevated,
           border: `1px solid ${t.border}`,
@@ -29,7 +29,7 @@
         }"
       >
         <div
-          class="flex items-center gap-1.5 mb-1.5 text-[0.71em] uppercase tracking-wider"
+          class="flex items-center gap-1.5 mb-1.5 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textFaint }"
         >
           <Sparkles :size="10" :style="{ color: t.accent }" />
@@ -52,14 +52,14 @@
           v-if="msg.text"
           :text="msg.text"
           :streaming="false"
-          class="awog-md text-[0.86em]"
+          class="awog-md text-[1em]"
           :style="{ color: t.text, '--awog-accent': t.accent }"
         />
 
         <button
           v-if="msg.steps?.length"
           type="button"
-          class="inline-flex items-center gap-1.5 text-[0.79em] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
+          class="inline-flex items-center gap-1.5 text-[1em] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
           :class="msg.text ? 'mt-2' : ''"
           :style="{ color: t.textDim }"
           @click="openStepsModal(i)"
@@ -79,7 +79,7 @@
 
     <div
       v-if="streamingText || streamingSteps.length > 0"
-      class="rounded-2xl px-3.5 py-2.5 text-[0.86em] leading-relaxed"
+      class="rounded-2xl px-3.5 py-2.5 text-[1em] leading-relaxed"
       :style="{
         background: t.bgElevated,
         border: `1px solid ${t.border}`,
@@ -87,7 +87,7 @@
       }"
     >
       <div
-        class="flex items-center gap-1.5 mb-1.5 text-[0.71em] uppercase tracking-wider"
+        class="flex items-center gap-1.5 mb-1.5 text-[1em] uppercase tracking-wider"
         :style="{ color: t.textFaint }"
       >
         <Sparkles :size="10" :style="{ color: t.accent }" />
@@ -100,14 +100,14 @@
         v-if="streamingText"
         :text="streamingText"
         :streaming="true"
-        class="awog-md text-[0.86em]"
+        class="awog-md text-[1em]"
         :style="{ color: t.text, '--awog-accent': t.accent }"
       />
 
       <button
         v-if="streamingSteps.length > 0"
         type="button"
-        class="inline-flex items-center gap-1.5 text-[0.79em] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
+        class="inline-flex items-center gap-1.5 text-[1em] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
         :class="streamingText ? 'mt-2' : ''"
         :style="{ color: t.textDim }"
         @click="openStreamingStepsModal"
@@ -124,7 +124,7 @@
       </button>
     </div>
 
-    <div v-if="error" class="text-[0.79em]" :style="{ color: t.danger }">{{ error }}</div>
+    <div v-if="error" class="text-[1em]" :style="{ color: t.danger }">{{ error }}</div>
   </div>
 
   <Teleport to="body">
@@ -149,11 +149,11 @@
           :style="{ borderBottom: `1px solid ${t.border}` }"
         >
           <Info :size="13" :style="{ color: t.textDim }" />
-          <div class="text-[0.93em] font-semibold" :style="{ color: t.text }">
+          <div class="text-[1em] font-semibold" :style="{ color: t.text }">
             {{ stepsSummary(stepsModalSteps) }}
           </div>
           <span
-            class="ml-auto font-mono text-[0.71em]"
+            class="ml-auto font-mono text-[1em]"
             :style="{ color: t.textDim }"
             :title="`${stepsModalSteps.length} total step(s)`"
           >

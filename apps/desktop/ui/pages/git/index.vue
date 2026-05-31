@@ -63,7 +63,7 @@
           <GitStashDetailPane v-else-if="selected.kind === 'stash'" :index="selected.index" />
 
           <!-- Fallback (submodule / unknown) -->
-          <div v-else class="flex-1 overflow-hidden p-6 text-xs" :style="{ color: t.textDim }">
+          <div v-else class="flex-1 overflow-hidden p-6 text-[1em]" :style="{ color: t.textDim }">
             {{ tr('git.sidebar.empty') }}
           </div>
         </template>
@@ -100,7 +100,7 @@
           <input
             v-model="newStashMessage"
             :placeholder="tr('git.stash.placeholder')"
-            class="w-full rounded text-xs px-2 py-1.5"
+            class="w-full rounded text-[1em] px-2 py-1.5"
             :style="{
               background: t.bgInput,
               color: t.text,
@@ -112,14 +112,14 @@
         </div>
         <template #footer>
           <button
-            class="px-3 py-1.5 text-xs rounded transition"
+            class="px-3 py-1.5 text-[1em] rounded transition"
             :style="{ color: t.textMuted }"
             @click="showSaveStash = false"
           >
             {{ tr('common.cancel') }}
           </button>
           <button
-            class="px-3 py-1.5 text-xs rounded font-medium transition"
+            class="px-3 py-1.5 text-[1em] rounded font-medium transition"
             :style="{ background: t.accent, color: t.accentText }"
             @click="onSaveStash"
           >
@@ -165,7 +165,7 @@
       >
         <template #extra>
           <label
-            class="flex items-center gap-2 text-[0.79em] cursor-pointer select-none"
+            class="flex items-center gap-2 text-[1em] cursor-pointer select-none"
             :style="{ color: t.text }"
           >
             <input
@@ -223,7 +223,7 @@
         <div
           v-for="toast in store.toasts"
           :key="toast.id"
-          class="px-3 py-2 rounded text-xs shadow-lg"
+          class="px-3 py-2 rounded text-[1em] shadow-lg"
           :style="toastStyle(toast.kind)"
         >
           {{ toast.text }}

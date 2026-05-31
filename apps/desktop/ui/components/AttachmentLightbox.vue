@@ -13,24 +13,24 @@
         }"
       >
         <component :is="headerIcon" :size="13" :style="{ color: t.textMuted }" />
-        <span class="text-[0.86em] font-mono truncate" :style="{ color: t.text }">
+        <span class="text-[1em] font-mono truncate" :style="{ color: t.text }">
           {{ attachment.name }}
         </span>
         <span
           v-if="attachment.type === 'image' && attachment.width && attachment.height"
-          class="text-[0.71em] font-mono"
+          class="text-[1em] font-mono"
           :style="{ color: t.textDim }"
         >
           {{ attachment.width }} × {{ attachment.height }}
         </span>
-        <span v-if="attachment.size" class="text-[0.71em]" :style="{ color: t.textDim }">
+        <span v-if="attachment.size" class="text-[1em]" :style="{ color: t.textDim }">
           · {{ attachment.size }}
         </span>
 
         <div class="ml-auto flex items-center gap-1">
           <button
             v-if="textViewer"
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.79em] transition"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
             :style="actionBtnStyle"
             title="Toggle raw / rendered"
             @click="textViewer = textViewer === 'rendered' ? 'raw' : 'rendered'"
@@ -39,7 +39,7 @@
             {{ textViewer === 'rendered' ? 'Raw' : 'Rendered' }}
           </button>
           <button
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.79em] transition"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
             :style="copyBtnStyle"
             :title="copyTitle"
             @click="onCopy"
@@ -49,7 +49,7 @@
           </button>
           <button
             v-if="attachment.url"
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.79em] transition"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
             :style="actionBtnStyle"
             title="Open in new tab"
             @click="openInNewTab"
@@ -59,7 +59,7 @@
           </button>
           <button
             v-if="attachment.url"
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.79em] transition"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
             :style="actionBtnStyle"
             title="Download"
             @click="onDownload"
@@ -109,13 +109,13 @@
             </div>
             <pre
               v-else
-              class="px-5 py-4 font-mono text-[12.5px] leading-[1.6] whitespace-pre-wrap"
+              class="px-5 py-4 font-mono text-[1em] leading-[1.6] whitespace-pre-wrap"
               :style="{ color: t.text, margin: 0 }"
               >{{ attachment.preview }}</pre
             >
           </div>
           <div
-            class="px-4 py-1.5 flex items-center justify-between text-[0.71em]"
+            class="px-4 py-1.5 flex items-center justify-between text-[1em]"
             :style="{
               borderTop: `1px solid ${t.border}`,
               background: t.bgSubtle,
@@ -129,14 +129,14 @@
           </div>
         </div>
 
-        <div v-else class="text-center text-[0.86em]" :style="{ color: t.textDim }">
+        <div v-else class="text-center text-[1em]" :style="{ color: t.textDim }">
           No preview available for this attachment.
         </div>
       </div>
 
       <div
         v-if="copyError"
-        class="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded text-[0.79em]"
+        class="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded text-[1em]"
         :style="{
           background: t.dangerBg,
           color: t.danger,

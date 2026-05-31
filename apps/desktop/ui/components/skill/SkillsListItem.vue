@@ -28,13 +28,13 @@
         :title="bulkSelected ? 'Remove from selection' : 'Add to selection'"
         @click.stop="$emit('toggle-bulk', skill)"
       />
-      <span v-if="skill.icon" class="text-[0.86em]">{{ skill.icon }}</span>
+      <span v-if="skill.icon" class="text-[1em]">{{ skill.icon }}</span>
       <Wand2 v-else :size="11" :style="{ color: t.textDim }" />
       <input
         v-if="renaming"
         :ref="onRenameInputMounted"
         :value="renameValue"
-        class="text-[0.86em] font-mono flex-1 rounded px-1 py-0.5"
+        class="text-[1em] font-mono flex-1 rounded px-1 py-0.5"
         :style="{
           background: t.bgInput,
           border: `1px solid ${t.borderStrong}`,
@@ -49,13 +49,13 @@
       />
       <span
         v-else
-        class="text-[0.86em] font-mono flex-1 truncate"
+        class="text-[1em] font-mono flex-1 truncate"
         :style="{ color: t.text }"
         @dblclick.stop="$emit('start-rename', skill)"
       >
         {{ skill.name }}
       </span>
-      <span class="text-[0.71em]" :style="{ color: t.textFaint }">
+      <span class="text-[1em]" :style="{ color: t.textFaint }">
         {{ agentCount }}
       </span>
       <button
@@ -68,11 +68,11 @@
       </button>
     </div>
     <div class="flex items-center gap-1.5 pl-5">
-      <span class="text-[0.71em] font-mono truncate" :style="{ color: t.textDim }">
+      <span class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
         /{{ skill.id }}
       </span>
       <span
-        class="text-[0.64em] px-1 py-0.5 rounded font-mono uppercase tracking-wider"
+        class="text-[1em] px-1 py-0.5 rounded font-mono uppercase tracking-wider"
         :style="sourceBadgeStyle"
       >
         {{ sourceLabel }}

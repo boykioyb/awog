@@ -1,18 +1,18 @@
 <template>
   <BaseModal :open="error !== null" :title="tr('git.auth.title')" size="sm" @close="emit('close')">
-    <div class="p-4 text-xs flex flex-col gap-3" :style="{ color: t.textMuted }">
+    <div class="p-4 text-[1em] flex flex-col gap-3" :style="{ color: t.textMuted }">
       <div :style="{ color: t.text }">{{ tr('git.auth.lead', { op: error?.op ?? '' }) }}</div>
       <div :style="{ color: t.textMuted }">{{ hintCopy }}</div>
       <pre
         v-if="error?.message"
-        class="text-[0.71em] font-mono p-2 rounded max-h-32 overflow-auto whitespace-pre-wrap"
+        class="text-[1em] font-mono p-2 rounded max-h-32 overflow-auto whitespace-pre-wrap"
         :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
         >{{ error.message }}</pre
       >
     </div>
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded font-medium transition"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="emit('close')"
       >

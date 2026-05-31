@@ -13,7 +13,7 @@
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search servers..." />
         <button
           ref="newButtonRef"
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
+          class="flex items-center gap-1 px-2.5 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="onNew"
         >
@@ -29,7 +29,7 @@
         <button
           v-for="f in transportFilters"
           :key="f"
-          class="px-2 py-0.5 text-[0.79em] rounded transition flex-shrink-0 capitalize"
+          class="px-2 py-0.5 text-[1em] rounded transition flex-shrink-0 capitalize"
           :style="{
             background: transportFilter === f ? t.bgActive : 'transparent',
             color: transportFilter === f ? t.text : t.textDim,
@@ -60,7 +60,7 @@
               v-if="renamingId === srv.id"
               :ref="setRenameInputRef"
               v-model="renameValue"
-              class="text-[0.86em] flex-1 rounded px-1 py-0.5"
+              class="text-[1em] flex-1 rounded px-1 py-0.5"
               :style="{
                 background: t.bgInput,
                 border: `1px solid ${t.borderStrong}`,
@@ -74,7 +74,7 @@
             />
             <span
               v-else
-              class="text-[0.86em] flex-1 truncate"
+              class="text-[1em] flex-1 truncate"
               :style="{ color: t.text }"
               @dblclick.stop="startRename(srv.id, srv.name)"
             >
@@ -93,7 +93,7 @@
               <MoreHorizontal :size="13" />
             </button>
           </div>
-          <div class="text-[0.71em] truncate pl-5 font-mono" :style="{ color: t.textDim }">
+          <div class="text-[1em] truncate pl-5 font-mono" :style="{ color: t.textDim }">
             {{ srv.id }} · {{ srv.transport }} · {{ srv.tools.length }} tools
           </div>
         </div>

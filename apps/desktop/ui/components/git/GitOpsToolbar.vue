@@ -1,7 +1,7 @@
 <template>
   <div class="flex items-center gap-1">
     <button
-      class="flex items-center gap-1 text-[0.79em] px-2.5 py-1.5 rounded transition"
+      class="flex items-center gap-1 text-[1em] px-2.5 py-1.5 rounded transition"
       :style="btnStyle(store.isFetching)"
       :disabled="store.isFetching"
       @click="store.fetchRemote()"
@@ -12,7 +12,7 @@
     </button>
 
     <button
-      class="flex items-center gap-1 text-[0.79em] px-2.5 py-1.5 rounded transition"
+      class="flex items-center gap-1 text-[1em] px-2.5 py-1.5 rounded transition"
       :style="btnStyle(store.isPulling)"
       :disabled="store.isPulling"
       @click="store.pull()"
@@ -24,7 +24,7 @@
     </button>
 
     <button
-      class="flex items-center gap-1 text-[0.79em] px-2.5 py-1.5 rounded font-medium transition"
+      class="flex items-center gap-1 text-[1em] px-2.5 py-1.5 rounded font-medium transition"
       :style="primaryBtnStyle"
       :disabled="store.isPushing"
       @click="store.push()"

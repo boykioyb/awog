@@ -17,10 +17,10 @@
           transition: 'transform 0.15s',
         }"
       />
-      <span class="text-[0.71em] uppercase tracking-wider font-medium flex-1 text-left truncate">
+      <span class="text-[1em] uppercase tracking-wider font-medium flex-1 text-left truncate">
         {{ label }}
       </span>
-      <span class="text-[0.71em]" :style="{ color: t.textFaint }">
+      <span class="text-[1em]" :style="{ color: t.textFaint }">
         {{ files.length }}
       </span>
     </button>
@@ -47,12 +47,12 @@
             @change="onToggle(file)"
           />
           <span
-            class="text-[0.71em] font-mono w-3.5 text-center flex-shrink-0"
+            class="text-[1em] font-mono w-3.5 text-center flex-shrink-0"
             :style="{ color: badgeColor(file) }"
           >
             {{ badgeChar(file) }}
           </span>
-          <span class="text-xs truncate flex-1 font-mono" :style="{ color: t.text }">
+          <span class="text-[1em] truncate flex-1 font-mono" :style="{ color: t.text }">
             {{ file.path }}
           </span>
           <button
@@ -103,14 +103,14 @@
               />
               <span
                 v-if="files[i]"
-                class="text-[0.71em] font-mono w-3.5 text-center flex-shrink-0"
+                class="text-[1em] font-mono w-3.5 text-center flex-shrink-0"
                 :style="{ color: badgeColor(files[i]!) }"
               >
                 {{ badgeChar(files[i]!) }}
               </span>
               <span
                 v-if="files[i]"
-                class="text-xs truncate flex-1 font-mono"
+                class="text-[1em] truncate flex-1 font-mono"
                 :style="{ color: t.text }"
               >
                 {{ files[i]!.path }}

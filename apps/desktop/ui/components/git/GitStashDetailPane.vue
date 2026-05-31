@@ -1,41 +1,41 @@
 <template>
   <div class="flex-1 overflow-auto p-6">
-    <div v-if="!stash" :style="{ color: t.textDim }" class="text-xs">
+    <div v-if="!stash" :style="{ color: t.textDim }" class="text-[1em]">
       {{ tr('git.sidebar.empty') }}
     </div>
     <div v-else class="max-w-xl">
       <div class="flex items-center gap-2 mb-3">
         <Archive :size="18" :style="{ color: t.accent }" />
-        <span class="text-sm font-mono" :style="{ color: t.accent }">{{ stash.ref }}</span>
-        <span class="text-[0.71em]" :style="{ color: t.textDim }">
+        <span class="text-[1em] font-mono" :style="{ color: t.accent }">{{ stash.ref }}</span>
+        <span class="text-[1em]" :style="{ color: t.textDim }">
           {{ tr('git.stash.on_branch', { branch: stash.branch }) }}
         </span>
       </div>
 
       <div class="rounded p-4" :style="{ background: t.bgPanel, border: `1px solid ${t.border}` }">
-        <div class="text-xs whitespace-pre-wrap" :style="{ color: t.text }">
+        <div class="text-[1em] whitespace-pre-wrap" :style="{ color: t.text }">
           {{ stash.message }}
         </div>
-        <div class="text-[0.71em] mt-2" :style="{ color: t.textFaint }">
+        <div class="text-[1em] mt-2" :style="{ color: t.textFaint }">
           {{ stash.date }}
         </div>
         <div class="flex items-center gap-2 mt-4">
           <button
-            class="text-[0.79em] px-3 py-1.5 rounded font-medium transition"
+            class="text-[1em] px-3 py-1.5 rounded font-medium transition"
             :style="{ background: t.accent, color: t.accentText }"
             @click="store.stashPop(stash.index)"
           >
             {{ tr('git.stash.pop') }}
           </button>
           <button
-            class="text-[0.79em] px-3 py-1.5 rounded transition"
+            class="text-[1em] px-3 py-1.5 rounded transition"
             :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
             @click="store.stashApply(stash.index)"
           >
             {{ tr('git.stash.apply') }}
           </button>
           <button
-            class="ml-auto text-[0.79em] px-3 py-1.5 rounded transition"
+            class="ml-auto text-[1em] px-3 py-1.5 rounded transition"
             :style="{
               background: t.dangerBg,
               color: t.danger,

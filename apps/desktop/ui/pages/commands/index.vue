@@ -13,7 +13,7 @@
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search commands..." />
         <button
           ref="newButtonRef"
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
+          class="flex items-center gap-1 px-2.5 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="onNew"
         >
@@ -29,7 +29,7 @@
         <button
           v-for="ty in typeFilters"
           :key="ty"
-          class="px-2 py-0.5 text-[0.79em] rounded transition flex-shrink-0"
+          class="px-2 py-0.5 text-[1em] rounded transition flex-shrink-0"
           :style="{
             background: typeFilter === ty ? t.bgActive : 'transparent',
             color: typeFilter === ty ? t.text : t.textDim,
@@ -60,7 +60,7 @@
               v-if="renamingId === cmd.id"
               :ref="setRenameInputRef"
               v-model="renameValue"
-              class="text-[0.86em] font-mono flex-1 rounded px-1 py-0.5"
+              class="text-[1em] font-mono flex-1 rounded px-1 py-0.5"
               :style="{
                 background: t.bgInput,
                 border: `1px solid ${t.borderStrong}`,
@@ -74,7 +74,7 @@
             />
             <span
               v-else
-              class="text-[0.86em] font-mono flex-1 truncate"
+              class="text-[1em] font-mono flex-1 truncate"
               :style="{ color: t.text }"
               @dblclick.stop="!cmd.system && startRename(cmd.id, cmd.name)"
             >
@@ -82,7 +82,7 @@
             </span>
             <span
               v-if="cmd.system"
-              class="text-[0.64em] uppercase px-1 rounded"
+              class="text-[1em] uppercase px-1 rounded"
               :style="{
                 background: t.bgInput,
                 color: t.textFaint,
@@ -100,7 +100,7 @@
               <MoreHorizontal :size="13" />
             </button>
           </div>
-          <div class="text-[0.71em] truncate pl-5" :style="{ color: t.textDim }">
+          <div class="text-[1em] truncate pl-5" :style="{ color: t.textDim }">
             {{ cmd.type }} · {{ cmd.description }}
           </div>
         </div>

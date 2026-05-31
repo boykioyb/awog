@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full overflow-hidden">
     <div
       v-if="!detail"
-      class="flex-1 flex items-center justify-center text-xs"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
       Select a commit
@@ -17,7 +17,7 @@
           v-for="tab in TABS"
           :key="tab.id"
           type="button"
-          class="px-3 py-1 text-[0.71em] uppercase tracking-wider rounded transition"
+          class="px-3 py-1 text-[1em] uppercase tracking-wider rounded transition"
           :style="{
             background: activeTab === tab.id ? t.bgActive : 'transparent',
             color: activeTab === tab.id ? t.text : t.textDim,
@@ -28,7 +28,7 @@
           {{ tab.label }}
         </button>
         <span class="flex-1" />
-        <span class="text-[0.71em] font-mono" :style="{ color: t.accent }">
+        <span class="text-[1em] font-mono" :style="{ color: t.accent }">
           {{ detail.commit.shortHash }}
         </span>
       </div>
@@ -40,12 +40,12 @@
           class="rounded px-3 py-2"
           :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
         >
-          <div class="text-[0.64em] uppercase tracking-wider mb-1" :style="{ color: t.textFaint }">
+          <div class="text-[1em] uppercase tracking-wider mb-1" :style="{ color: t.textFaint }">
             Author
           </div>
           <div class="flex items-center gap-2">
             <span
-              class="inline-flex items-center justify-center text-[0.71em] rounded-full"
+              class="inline-flex items-center justify-center text-[1em] rounded-full"
               :style="{
                 width: '24px',
                 height: '24px',
@@ -57,21 +57,21 @@
               {{ initials(detail.commit.authorName) }}
             </span>
             <div class="flex-1 min-w-0">
-              <div class="text-xs truncate" :style="{ color: t.text }">
+              <div class="text-[1em] truncate" :style="{ color: t.text }">
                 {{ detail.commit.authorName }}
               </div>
-              <div class="text-[0.71em] truncate" :style="{ color: t.textDim }">
+              <div class="text-[1em] truncate" :style="{ color: t.textDim }">
                 {{ detail.commit.authorEmail }}
               </div>
             </div>
-            <div class="text-[0.71em] text-right" :style="{ color: t.textDim }">
+            <div class="text-[1em] text-right" :style="{ color: t.textDim }">
               {{ formatDateTime(detail.commit.date) }}
             </div>
           </div>
         </div>
 
         <!-- SHA + parents -->
-        <div class="flex flex-wrap items-center gap-2 text-[0.71em]">
+        <div class="flex flex-wrap items-center gap-2 text-[1em]">
           <span :style="{ color: t.textFaint }">SHA</span>
           <button
             type="button"
@@ -84,14 +84,14 @@
           </button>
         </div>
         <div v-if="detail.commit.parents.length > 0" class="flex flex-wrap items-center gap-2">
-          <span class="text-[0.71em]" :style="{ color: t.textFaint }">
+          <span class="text-[1em]" :style="{ color: t.textFaint }">
             Parent{{ detail.commit.parents.length > 1 ? 's' : '' }}
           </span>
           <button
             v-for="p in detail.commit.parents"
             :key="p"
             type="button"
-            class="font-mono text-[0.71em] px-2 py-0.5 rounded transition"
+            class="font-mono text-[1em] px-2 py-0.5 rounded transition"
             :style="{ background: t.bgInput, color: t.accent, border: `1px solid ${t.border}` }"
             @click="emit('select-parent', p)"
           >
@@ -101,12 +101,12 @@
 
         <!-- Message -->
         <div>
-          <div class="text-sm font-medium" :style="{ color: t.text }">
+          <div class="text-[1em] font-medium" :style="{ color: t.text }">
             {{ detail.commit.subject }}
           </div>
           <div
             v-if="detail.commit.body"
-            class="text-xs mt-2 whitespace-pre-wrap"
+            class="text-[1em] mt-2 whitespace-pre-wrap"
             :style="{ color: t.textMuted }"
           >
             {{ detail.commit.body }}
@@ -122,7 +122,7 @@
           :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
         >
           <span
-            class="inline-flex items-center justify-center text-[0.64em] rounded-full flex-shrink-0 font-medium"
+            class="inline-flex items-center justify-center text-[1em] rounded-full flex-shrink-0 font-medium"
             :style="{
               width: '22px',
               height: '22px',
@@ -132,22 +132,22 @@
           >
             {{ initials(detail.commit.authorName) }}
           </span>
-          <span class="text-xs truncate flex-shrink-0 max-w-[10rem]" :style="{ color: t.text }">
+          <span class="text-[1em] truncate flex-shrink-0 max-w-[10rem]" :style="{ color: t.text }">
             {{ detail.commit.authorName }}
           </span>
           <button
             type="button"
-            class="text-[0.71em] font-mono px-1.5 py-0.5 rounded transition flex-shrink-0"
+            class="text-[1em] font-mono px-1.5 py-0.5 rounded transition flex-shrink-0"
             :style="{ background: t.bgInput, color: t.accent, border: `1px solid ${t.border}` }"
             title="Copy short hash"
             @click="onCopyHash(detail.commit.shortHash)"
           >
             {{ detail.commit.shortHash }}
           </button>
-          <span class="text-[0.71em] flex-shrink-0" :style="{ color: t.textDim }">
+          <span class="text-[1em] flex-shrink-0" :style="{ color: t.textDim }">
             {{ relativeDate(detail.commit.date) }}
           </span>
-          <span class="text-xs truncate flex-1 min-w-0" :style="{ color: t.textMuted }">
+          <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.textMuted }">
             {{ detail.commit.subject }}
           </span>
           <button
@@ -163,7 +163,7 @@
 
         <div
           v-if="detail.files.length === 0"
-          class="flex-1 flex items-center justify-center text-xs"
+          class="flex-1 flex items-center justify-center text-[1em]"
           :style="{ color: t.textDim }"
         >
           No file changes
@@ -202,7 +202,7 @@
               :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
             >
               <span
-                class="text-[0.71em] font-mono truncate flex-1 min-w-0"
+                class="text-[1em] font-mono truncate flex-1 min-w-0"
                 :style="{ color: t.textMuted }"
                 :title="activeFile.path"
               >
@@ -229,7 +229,7 @@
       <div v-else class="flex flex-col flex-1 overflow-hidden">
         <div
           v-if="detail.files.length === 0"
-          class="flex-1 flex items-center justify-center text-xs"
+          class="flex-1 flex items-center justify-center text-[1em]"
           :style="{ color: t.textDim }"
         >
           No files in this commit
@@ -241,7 +241,7 @@
             v-for="(f, i) in detail.files"
             :key="f.path"
             type="button"
-            class="w-full flex items-center gap-2 px-3 py-1 text-left text-[0.71em] font-mono transition"
+            class="w-full flex items-center gap-2 px-3 py-1 text-left text-[1em] font-mono transition"
             :style="{
               background: activeFileIndex === i ? t.bgActive : 'transparent',
               color: t.text,
@@ -249,7 +249,7 @@
             @click="onSelectTreeFile(i, f.path)"
           >
             <span
-              class="inline-flex items-center justify-center w-4 h-4 text-[0.64em] rounded"
+              class="inline-flex items-center justify-center w-4 h-4 text-[1em] rounded"
               :style="fileStatusStyle(f)"
               :title="fileStatusLabel(f)"
             >

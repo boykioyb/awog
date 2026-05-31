@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full overflow-hidden">
     <div
       v-if="!file"
-      class="flex-1 flex items-center justify-center text-xs"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
       {{ tr('git.conflict.select_file') }}
@@ -13,25 +13,25 @@
         :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <AlertTriangle :size="12" :style="{ color: t.gitConflict }" />
-        <span class="text-xs font-mono truncate flex-1" :style="{ color: t.text }">
+        <span class="text-[1em] font-mono truncate flex-1" :style="{ color: t.text }">
           {{ file.path }}
         </span>
-        <span class="text-[0.71em]" :style="{ color: t.textDim }">binary</span>
+        <span class="text-[1em]" :style="{ color: t.textDim }">binary</span>
       </div>
       <div class="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
-        <div class="text-xs" :style="{ color: t.textDim }">
+        <div class="text-[1em]" :style="{ color: t.textDim }">
           {{ tr('git.conflict.binary_note') }}
         </div>
         <div class="flex items-center gap-2">
           <button
-            class="px-3 py-1.5 text-xs rounded transition"
+            class="px-3 py-1.5 text-[1em] rounded transition"
             :style="{ background: t.info, color: t.onAccent }"
             @click="onBinary('ours')"
           >
             Take ours (binary)
           </button>
           <button
-            class="px-3 py-1.5 text-xs rounded transition"
+            class="px-3 py-1.5 text-[1em] rounded transition"
             :style="{ background: t.warning, color: t.onAccent }"
             @click="onBinary('theirs')"
           >
@@ -46,16 +46,16 @@
         :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <AlertTriangle :size="12" :style="{ color: t.gitConflict }" />
-        <span class="text-xs font-mono truncate flex-1" :style="{ color: t.text }">
+        <span class="text-[1em] font-mono truncate flex-1" :style="{ color: t.text }">
           {{ file.path }}
         </span>
-        <span class="text-[0.71em]" :style="{ color: t.textDim }">
+        <span class="text-[1em]" :style="{ color: t.textDim }">
           {{
             tr('git.conflict.resolved_count', { done: resolvedCount, total: file.blocks.length })
           }}
         </span>
         <button
-          class="text-[0.71em] px-2 py-1 rounded transition"
+          class="text-[1em] px-2 py-1 rounded transition"
           :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
           :title="tr('git.conflict.take_all_ours_tip')"
           @click="onTakeAll('ours')"
@@ -63,7 +63,7 @@
           Take all ours
         </button>
         <button
-          class="text-[0.71em] px-2 py-1 rounded transition"
+          class="text-[1em] px-2 py-1 rounded transition"
           :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
           :title="tr('git.conflict.take_all_theirs_tip')"
           @click="onTakeAll('theirs')"
@@ -71,7 +71,7 @@
           Take all theirs
         </button>
         <button
-          class="text-[0.71em] px-2 py-1 rounded font-medium transition"
+          class="text-[1em] px-2 py-1 rounded font-medium transition"
           :style="markBtnStyle"
           :disabled="!allResolved"
           @click="onMarkResolved"
@@ -88,7 +88,7 @@
           :style="{ border: `1px solid ${blockBorder(block.index)}` }"
         >
           <div
-            class="px-3 py-1.5 flex items-center gap-2 text-[0.71em]"
+            class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
             :style="{
               background: t.bgPanel,
               color: t.textDim,
@@ -110,11 +110,11 @@
               }"
               @click="onPick(block.index, 'ours')"
             >
-              <div class="text-[0.71em] uppercase tracking-wider mb-1" :style="{ color: t.info }">
+              <div class="text-[1em] uppercase tracking-wider mb-1" :style="{ color: t.info }">
                 Ours ({{ block.oursLabel || 'HEAD' }})
               </div>
               <pre
-                class="text-[0.86em] font-mono whitespace-pre-wrap"
+                class="text-[1em] font-mono whitespace-pre-wrap"
                 :style="{ color: t.text }"
               ><code>{{ block.ours.join('\n') }}</code></pre>
             </div>
@@ -124,13 +124,13 @@
               @click="onPick(block.index, 'theirs')"
             >
               <div
-                class="text-[0.71em] uppercase tracking-wider mb-1"
+                class="text-[1em] uppercase tracking-wider mb-1"
                 :style="{ color: t.warning }"
               >
                 Theirs ({{ block.theirsLabel || 'incoming' }})
               </div>
               <pre
-                class="text-[0.86em] font-mono whitespace-pre-wrap"
+                class="text-[1em] font-mono whitespace-pre-wrap"
                 :style="{ color: t.text }"
               ><code>{{ block.theirs.join('\n') }}</code></pre>
             </div>
@@ -141,14 +141,14 @@
             :style="{ background: t.bgPanel, borderTop: `1px solid ${t.border}` }"
           >
             <button
-              class="text-[0.71em] px-2 py-1 rounded transition"
+              class="text-[1em] px-2 py-1 rounded transition"
               :style="pickBtnStyle(block.index, 'ours')"
               @click="onPick(block.index, 'ours')"
             >
               Take ours
             </button>
             <button
-              class="text-[0.71em] px-2 py-1 rounded transition"
+              class="text-[1em] px-2 py-1 rounded transition"
               :style="pickBtnStyle(block.index, 'theirs')"
               @click="onPick(block.index, 'theirs')"
             >

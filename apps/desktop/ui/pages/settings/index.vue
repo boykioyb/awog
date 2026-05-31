@@ -3,7 +3,7 @@
     <template #list>
       <div class="py-4">
         <div
-          class="px-3 mb-3 text-[0.79em] uppercase tracking-wider font-medium"
+          class="px-3 mb-3 text-[1em] uppercase tracking-wider font-medium"
           :style="{ color: t.textDim }"
         >
           Settings
@@ -12,7 +12,7 @@
           <button
             v-for="s in sections"
             :key="s.id"
-            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded text-[0.86em] transition"
+            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded text-[1em] transition"
             :style="{
               background: section === s.id ? t.bgActive : 'transparent',
               color: section === s.id ? t.text : t.textDim,

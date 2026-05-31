@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full overflow-hidden">
     <div
       v-if="!detail"
-      class="flex-1 flex items-center justify-center text-xs"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
       Select a commit
@@ -13,12 +13,12 @@
         :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <div class="flex items-center gap-2 mb-2">
-          <span class="text-sm font-mono" :style="{ color: t.accent }">
+          <span class="text-[1em] font-mono" :style="{ color: t.accent }">
             {{ detail.commit.shortHash }}
           </span>
           <span
             v-if="linkedPhaseId"
-            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.infoBg,
               color: t.info,
@@ -31,7 +31,7 @@
           <button
             v-if="linkedPhaseId && linkedTaskId"
             type="button"
-            class="text-[0.71em] px-1.5 py-0.5 rounded transition inline-flex items-center gap-1"
+            class="text-[1em] px-1.5 py-0.5 rounded transition inline-flex items-center gap-1"
             :style="{
               background: 'transparent',
               color: t.accent,
@@ -50,22 +50,22 @@
           </button>
           <span
             v-else-if="linkedPhaseId"
-            class="text-[0.71em] px-1.5 py-0.5 rounded"
+            class="text-[1em] px-1.5 py-0.5 rounded"
             :style="{ color: t.textFaint, border: `1px solid ${t.border}` }"
             :title="tr('git.commit_detail.task_not_found')"
           >
             task not found
           </span>
         </div>
-        <div class="text-sm" :style="{ color: t.text }">{{ detail.commit.subject }}</div>
+        <div class="text-[1em]" :style="{ color: t.text }">{{ detail.commit.subject }}</div>
         <div
           v-if="detail.commit.body"
-          class="text-xs mt-2 whitespace-pre-wrap"
+          class="text-[1em] mt-2 whitespace-pre-wrap"
           :style="{ color: t.textMuted }"
         >
           {{ detail.commit.body }}
         </div>
-        <div class="flex items-center gap-2 text-[0.71em] mt-2" :style="{ color: t.textDim }">
+        <div class="flex items-center gap-2 text-[1em] mt-2" :style="{ color: t.textDim }">
           <span>{{ detail.commit.authorName }}</span>
           <span>&lt;{{ detail.commit.authorEmail }}&gt;</span>
           <span :style="{ color: t.textFaint }">·</span>
@@ -77,7 +77,7 @@
         class="px-3 py-2 flex items-center gap-2 flex-shrink-0"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
-        <div class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textDim }">
+        <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
           Files ({{ detail.files.length }})
         </div>
       </div>
@@ -97,7 +97,7 @@
           >
             <button
               type="button"
-              class="text-[0.71em] font-mono px-2 py-1 transition truncate max-w-full"
+              class="text-[1em] font-mono px-2 py-1 transition truncate max-w-full"
               :style="{ color: activeFileIndex === i ? t.text : t.textMuted }"
               @click="activeFileIndex = i"
             >

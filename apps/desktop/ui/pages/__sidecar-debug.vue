@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen p-8 font-mono text-sm" style="background: #0a0a0a; color: #d4d4d4">
+  <div class="min-h-screen p-8 font-mono text-[1em]" style="background: #0a0a0a; color: #d4d4d4">
     <h1 class="text-xl mb-4">Sidecar IPC Debug</h1>
 
     <div class="mb-4">
@@ -29,18 +29,18 @@
     </div>
 
     <div v-if="result" class="mb-4 p-3 rounded" style="background: #064e3b">
-      <div class="text-xs mb-1" style="color: #6ee7b7">Result</div>
+      <div class="text-[1em] mb-1" style="color: #6ee7b7">Result</div>
       <pre class="whitespace-pre-wrap break-all">{{ JSON.stringify(result, null, 2) }}</pre>
     </div>
 
     <div v-if="error" class="mb-4 p-3 rounded" style="background: #7f1d1d">
-      <div class="text-xs mb-1" style="color: #fecaca">Error</div>
+      <div class="text-[1em] mb-1" style="color: #fecaca">Error</div>
       <pre class="whitespace-pre-wrap break-all">{{ error }}</pre>
     </div>
 
     <div class="mt-8">
-      <div class="text-xs mb-2" style="color: #9ca3af">Sidecar events (last 20)</div>
-      <div class="p-3 rounded text-xs" style="background: #111827; min-height: 100px">
+      <div class="text-[1em] mb-2" style="color: #9ca3af">Sidecar events (last 20)</div>
+      <div class="p-3 rounded text-[1em]" style="background: #111827; min-height: 100px">
         <div v-if="eventLog.length === 0" style="color: #6b7280">No events yet</div>
         <div v-for="(line, i) in eventLog" :key="i" class="font-mono">{{ line }}</div>
       </div>

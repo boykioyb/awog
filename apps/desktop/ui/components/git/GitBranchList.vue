@@ -4,11 +4,11 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
         {{ tr('git.branches.title') }}
       </div>
       <button
-        class="flex items-center gap-1 px-2 py-1 text-[0.71em] rounded transition"
+        class="flex items-center gap-1 px-2 py-1 text-[1em] rounded transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="showCreate = true"
       >
@@ -17,7 +17,7 @@
       </button>
     </div>
     <div class="flex-1 overflow-y-auto">
-      <div class="px-3 py-2 text-[0.71em] uppercase tracking-wider" :style="{ color: t.textFaint }">
+      <div class="px-3 py-2 text-[1em] uppercase tracking-wider" :style="{ color: t.textFaint }">
         {{ tr('git.branches.local') }}
       </div>
       <GitBranchTree
@@ -31,7 +31,7 @@
 
       <div
         v-if="remoteRows.length > 0"
-        class="px-3 py-2 text-[0.71em] uppercase tracking-wider"
+        class="px-3 py-2 text-[1em] uppercase tracking-wider"
         :style="{ color: t.textFaint, borderTop: `1px solid ${t.border}` }"
       >
         {{ tr('git.branches.remote') }}
@@ -95,7 +95,7 @@
     >
       <template #extra>
         <label
-          class="flex items-center gap-2 text-[0.79em] cursor-pointer select-none"
+          class="flex items-center gap-2 text-[1em] cursor-pointer select-none"
           :style="{ color: t.text }"
         >
           <input

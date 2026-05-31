@@ -3,14 +3,14 @@
     <template #header>
       <div class="flex items-center gap-2">
         <AlertCircle :size="14" :style="{ color: t.danger }" />
-        <div class="text-sm font-medium" :style="{ color: t.text }">
+        <div class="text-[1em] font-medium" :style="{ color: t.text }">
           {{ tr('git.reset.modal.title', { branch: currentBranch }) }}
         </div>
       </div>
     </template>
 
     <div class="p-4 space-y-3">
-      <div class="text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
+      <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
         {{ tr('git.reset.modal.body', { branch: currentBranch, sha: targetSha7 }) }}
       </div>
 
@@ -29,10 +29,10 @@
             :style="{ accentColor: opt.value === 'hard' ? t.danger : t.accent }"
           />
           <div class="flex-1 min-w-0">
-            <div class="text-xs font-medium" :style="{ color: textColor(opt.value) }">
+            <div class="text-[1em] font-medium" :style="{ color: textColor(opt.value) }">
               {{ opt.label }}
             </div>
-            <div class="text-[0.71em] leading-snug" :style="{ color: t.textDim }">
+            <div class="text-[1em] leading-snug" :style="{ color: t.textDim }">
               {{ opt.description }}
             </div>
           </div>
@@ -41,7 +41,7 @@
 
       <label
         v-if="selected === 'hard'"
-        class="flex items-center gap-2 text-[0.79em] cursor-pointer select-none px-2 py-1.5 rounded"
+        class="flex items-center gap-2 text-[1em] cursor-pointer select-none px-2 py-1.5 rounded"
         :style="{
           color: t.danger,
           background: t.dangerBg,
@@ -60,14 +60,14 @@
 
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
         {{ tr('common.cancel') }}
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded font-medium transition"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
         :style="{
           background: selected === 'hard' ? t.danger : t.accent,
           color: t.onAccent,

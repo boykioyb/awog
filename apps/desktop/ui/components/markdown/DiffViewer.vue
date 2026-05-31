@@ -1,5 +1,5 @@
 <template>
-  <div class="font-mono text-[0.86em] leading-[1.55]">
+  <div class="font-mono text-[1em] leading-[1.55]">
     <div v-for="(row, i) in rows" :key="i" class="flex" :style="{ background: row.bg }">
       <div
         class="select-none text-right pr-3 pl-3 flex-shrink-0"

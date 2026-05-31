@@ -2,7 +2,7 @@
   <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
-        class="rounded flex items-center justify-center text-sm font-bold flex-shrink-0"
+        class="rounded flex items-center justify-center text-[1em] font-bold flex-shrink-0"
         :style="{
           minWidth: '48px',
           height: '48px',
@@ -16,7 +16,7 @@
       </div>
       <div class="flex-1 min-w-0">
         <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">{{ agent.name }}</h1>
-        <div class="text-[0.86em] inline-flex items-center gap-1.5" :style="{ color: t.textDim }">
+        <div class="text-[1em] inline-flex items-center gap-1.5" :style="{ color: t.textDim }">
           <Sparkles :size="11" />
           {{ model?.label }}
           <span :style="{ color: t.textFaint }">·</span>
@@ -102,7 +102,7 @@
 
     <div v-if="agent.mcpServerIds && agent.mcpServerIds.length > 0" class="mb-6">
       <div
-        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
+        class="text-[1em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
         MCP Servers · {{ agent.mcpServerIds.length }} allowed
@@ -111,14 +111,14 @@
         <span
           v-for="id in agent.mcpServerIds"
           :key="id"
-          class="inline-flex items-center gap-1.5 text-[0.79em] px-2 py-1 rounded font-mono"
+          class="inline-flex items-center gap-1.5 text-[1em] px-2 py-1 rounded font-mono"
           :style="mcpPillStyle(id)"
         >
           <Plug :size="10" />
           {{ mcpLabel(id) }}
         </span>
       </div>
-      <div class="text-[0.71em] mt-1.5" :style="{ color: t.textDim }">
+      <div class="text-[1em] mt-1.5" :style="{ color: t.textDim }">
         Session sees only these MCP servers when this agent is active (intersected with
         session-level whitelist if any).
       </div>
@@ -126,7 +126,7 @@
 
     <div v-if="agent.tools && agent.tools.length > 0" class="mb-6">
       <div
-        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
+        class="text-[1em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
         Tools · {{ agent.tools.length }}
@@ -135,7 +135,7 @@
         <span
           v-for="tool in agent.tools"
           :key="tool"
-          class="text-[0.79em] px-2 py-1 rounded font-mono"
+          class="text-[1em] px-2 py-1 rounded font-mono"
           :style="{
             background: t.bgInput,
             color: t.textMuted,
@@ -145,19 +145,19 @@
           {{ tool }}
         </span>
       </div>
-      <div class="text-[0.71em] mt-1.5" :style="{ color: t.textDim }">
+      <div class="text-[1em] mt-1.5" :style="{ color: t.textDim }">
         SDK toolset restricted to this whitelist (Options.allowedTools).
       </div>
     </div>
 
     <div class="mb-6">
       <div
-        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
+        class="text-[1em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
         Skills · {{ agentSkills.length }}
       </div>
-      <div v-if="agentSkills.length === 0" class="text-[0.79em] py-2" :style="{ color: t.textFaint }">
+      <div v-if="agentSkills.length === 0" class="text-[1em] py-2" :style="{ color: t.textFaint }">
         No skills assigned. This agent cannot be used in workflows.
       </div>
       <div v-else class="space-y-1">
@@ -169,8 +169,8 @@
         >
           <Wand2 :size="11" :style="{ color: t.textDim, marginTop: '3px' }" />
           <div class="flex-1 min-w-0">
-            <div class="text-[0.86em] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-            <div class="text-[0.71em] mt-0.5 leading-relaxed" :style="{ color: t.textDim }">
+            <div class="text-[1em] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
+            <div class="text-[1em] mt-0.5 leading-relaxed" :style="{ color: t.textDim }">
               {{ s.description }}
             </div>
           </div>

@@ -6,7 +6,7 @@
 <template>
   <div>
     <div class="flex items-center justify-between mb-2">
-      <div class="text-[0.71em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
         {{ title }}
       </div>
       <div class="flex items-center gap-1">
@@ -17,7 +17,7 @@
           <button
             v-for="mode in ['preview', 'raw'] as const"
             :key="mode"
-            class="px-2 py-1 text-[0.71em] inline-flex items-center gap-1 transition"
+            class="px-2 py-1 text-[1em] inline-flex items-center gap-1 transition"
             :style="viewModeStyle(mode)"
             @click="viewMode = mode"
           >
@@ -27,7 +27,7 @@
         </div>
         <button
           v-if="content"
-          class="px-2 py-1 text-[0.71em] rounded inline-flex items-center gap-1 transition"
+          class="px-2 py-1 text-[1em] rounded inline-flex items-center gap-1 transition"
           :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
           :title="copied ? 'Copied!' : 'Copy markdown to clipboard'"
           @click="onCopy"
@@ -37,7 +37,7 @@
         </button>
         <button
           v-if="allowEdit"
-          class="px-2 py-1 text-[0.71em] rounded inline-flex items-center gap-1 transition"
+          class="px-2 py-1 text-[1em] rounded inline-flex items-center gap-1 transition"
           :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
           :title="editTitle"
           @click="onEdit"
@@ -50,21 +50,21 @@
 
     <div
       v-if="!content"
-      class="text-[0.79em] italic p-3 rounded"
+      class="text-[1em] italic p-3 rounded"
       :style="{ color: t.textFaint, background: t.bgInput, border: `1px solid ${t.border}` }"
     >
       {{ emptyText }}
     </div>
     <div
       v-else-if="viewMode === 'preview'"
-      class="p-3 rounded text-[0.93em] leading-relaxed"
+      class="p-3 rounded text-[1em] leading-relaxed"
       :style="{ color: t.textMuted, background: t.bgInput, border: `1px solid ${t.border}` }"
     >
       <MarkdownRenderer :content="content" />
     </div>
     <pre
       v-else
-      class="text-[0.86em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
+      class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
       :style="{
         color: t.textMuted,
         background: t.bgInput,

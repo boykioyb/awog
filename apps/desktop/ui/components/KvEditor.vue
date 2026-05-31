@@ -5,7 +5,7 @@
         <input
           :value="entry.key"
           placeholder="key"
-          class="rounded px-2 py-1 text-[0.79em] font-mono"
+          class="rounded px-2 py-1 text-[1em] font-mono"
           :style="{ ...inputStyle, width: '38%' }"
           @input="(e: Event) => updateKey(i, (e.target as HTMLInputElement).value)"
         />
@@ -14,7 +14,7 @@
           :value="isSecretRow(entry.value) ? secretMaskFor(entry.value) : entry.value"
           :disabled="isSecretRow(entry.value)"
           placeholder="value"
-          class="flex-1 rounded px-2 py-1 text-[0.79em] font-mono disabled:cursor-not-allowed"
+          class="flex-1 rounded px-2 py-1 text-[1em] font-mono disabled:cursor-not-allowed"
           :style="{
             ...inputStyle,
             opacity: isSecretRow(entry.value) ? 0.7 : 1,
@@ -41,14 +41,14 @@
         </button>
       </div>
       <button
-        class="text-[0.79em] flex items-center gap-1"
+        class="text-[1em] flex items-center gap-1"
         :style="{ color: t.textDim }"
         @click="add"
       >
         <Plus :size="11" />
         Add entry
       </button>
-      <div v-if="secretError" class="text-[0.71em] pt-1" :style="{ color: t.danger }">
+      <div v-if="secretError" class="text-[1em] pt-1" :style="{ color: t.danger }">
         {{ secretError }}
       </div>
     </div>

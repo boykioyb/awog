@@ -2,7 +2,7 @@
   <div class="space-y-5">
     <div>
       <div
-        class="text-[0.71em] uppercase tracking-wider mb-2 font-medium"
+        class="text-[1em] uppercase tracking-wider mb-2 font-medium"
         :style="{ color: t.textDim }"
       >
         Node
@@ -10,8 +10,8 @@
       <div class="flex items-center gap-2.5">
         <RoleBadge :role="agent.role" />
         <div class="flex-1 min-w-0">
-          <div class="text-sm truncate" :style="{ color: t.text }">{{ agent.name }}</div>
-          <div class="text-[0.71em] font-mono" :style="{ color: t.textDim }">{{ node.id }}</div>
+          <div class="text-[1em] truncate" :style="{ color: t.text }">{{ agent.name }}</div>
+          <div class="text-[1em] font-mono" :style="{ color: t.textDim }">{{ node.id }}</div>
         </div>
       </div>
     </div>
@@ -19,7 +19,7 @@
     <Field label="Skill">
       <select
         :value="node.skillId || ''"
-        class="w-full rounded px-2 py-1.5 text-xs font-mono"
+        class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
         :style="inputStyle"
         @change="onSkillChange"
       >
@@ -28,7 +28,7 @@
         </option>
         <option v-for="s in availableSkills" :key="s.id" :value="s.id">{{ s.name }}</option>
       </select>
-      <div v-if="skill" class="text-[0.71em] mt-1.5 leading-relaxed" :style="{ color: t.textDim }">
+      <div v-if="skill" class="text-[1em] mt-1.5 leading-relaxed" :style="{ color: t.textDim }">
         {{ skill.description }}
       </div>
     </Field>
@@ -38,7 +38,7 @@
         <div v-for="(out, i) in node.outputs" :key="i" class="flex items-center gap-1">
           <input
             :value="out"
-            class="flex-1 rounded px-2 py-1 text-[0.79em] font-mono"
+            class="flex-1 rounded px-2 py-1 text-[1em] font-mono"
             :style="inputStyle"
             @input="updateOutput(i, ($event.target as HTMLInputElement).value)"
           />
@@ -53,7 +53,7 @@
           </button>
         </div>
         <button
-          class="text-[0.79em] flex items-center gap-1 mt-1 transition"
+          class="text-[1em] flex items-center gap-1 mt-1 transition"
           :style="{ color: t.textDim }"
           @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
           @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
@@ -73,9 +73,9 @@
           :style="{ accentColor: t.accent }"
           @change="onApprovalChange"
         />
-        <span class="text-xs" :style="{ color: t.text }">Require human approval</span>
+        <span class="text-[1em]" :style="{ color: t.text }">Require human approval</span>
       </label>
-      <div class="text-[0.71em] mt-1 ml-5" :style="{ color: t.textDim }">
+      <div class="text-[1em] mt-1 ml-5" :style="{ color: t.textDim }">
         Workflow pauses for review before continuing
       </div>
     </div>

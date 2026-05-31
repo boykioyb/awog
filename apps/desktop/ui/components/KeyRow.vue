@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-start gap-2 text-[0.79em]">
+  <div class="flex items-start gap-2 text-[1em]">
     <div
       class="font-medium flex-shrink-0 w-28 truncate"
       :title="label"

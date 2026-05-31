@@ -6,12 +6,12 @@
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
       <FileText :size="12" :style="{ color: t.textDim }" />
-      <span class="text-xs font-mono truncate" :style="{ color: t.text }">
+      <span class="text-[1em] font-mono truncate" :style="{ color: t.text }">
         {{ diff.path }}
       </span>
       <span
         v-if="diff.oldPath && diff.oldPath !== diff.path"
-        class="text-[0.71em]"
+        class="text-[1em]"
         :style="{ color: t.textDim }"
       >
         (renamed from {{ diff.oldPath }})
@@ -19,7 +19,7 @@
       <div class="ml-auto flex items-center gap-1">
         <span
           v-if="diff.isBinary"
-          class="text-[0.71em] px-1.5 py-0.5 rounded"
+          class="text-[1em] px-1.5 py-0.5 rounded"
           :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
         >
           binary
@@ -31,7 +31,7 @@
         >
           <button
             type="button"
-            class="flex items-center gap-1 px-2 py-0.5 text-[0.71em] transition"
+            class="flex items-center gap-1 px-2 py-0.5 text-[1em] transition"
             :style="toggleStyle('unified')"
             title="Unified view"
             @click="viewMode = 'unified'"
@@ -41,7 +41,7 @@
           </button>
           <button
             type="button"
-            class="flex items-center gap-1 px-2 py-0.5 text-[0.71em] transition"
+            class="flex items-center gap-1 px-2 py-0.5 text-[1em] transition"
             :style="toggleStyle('split')"
             title="Side-by-side view"
             @click="viewMode = 'split'"
@@ -55,14 +55,14 @@
 
     <div
       v-if="!diff"
-      class="flex-1 flex items-center justify-center text-xs"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
       Select a file to view diff
     </div>
     <div
       v-else-if="diff.isBinary"
-      class="flex-1 flex flex-col items-center justify-center text-xs gap-2"
+      class="flex-1 flex flex-col items-center justify-center text-[1em] gap-2"
       :style="{ color: t.textDim }"
     >
       <FileImage :size="32" :stroke-width="1.5" />
@@ -70,7 +70,7 @@
     </div>
     <div
       v-else-if="diff.hunks.length === 0"
-      class="flex-1 flex items-center justify-center text-xs"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
       No changes
@@ -79,7 +79,7 @@
     <!-- Unified view -->
     <div
       v-else-if="viewMode === 'unified'"
-      class="flex-1 overflow-auto font-mono text-[0.86em] leading-[1.55]"
+      class="flex-1 overflow-auto font-mono text-[1em] leading-[1.55]"
     >
       <div v-for="(hunk, hi) in diff.hunks" :key="hi">
         <div
@@ -95,7 +95,7 @@
           <button
             v-if="canStageHunk"
             type="button"
-            class="text-[0.71em] px-2 py-0.5 rounded transition flex items-center gap-1"
+            class="text-[1em] px-2 py-0.5 rounded transition flex items-center gap-1"
             :style="{
               background: t.bgInput,
               color: t.accent,
@@ -152,7 +152,7 @@
     </div>
 
     <!-- Split (side-by-side) view -->
-    <div v-else class="flex-1 overflow-auto font-mono text-[0.86em] leading-[1.55]">
+    <div v-else class="flex-1 overflow-auto font-mono text-[1em] leading-[1.55]">
       <div v-for="(hunk, hi) in diff.hunks" :key="hi">
         <div
           class="px-3 py-1 sticky top-0 z-10"

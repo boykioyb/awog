@@ -60,7 +60,7 @@
     >
       <button
         v-if="showBackButton"
-        class="md:hidden flex items-center gap-1 px-3 py-2 text-xs transition flex-shrink-0"
+        class="md:hidden flex items-center gap-1 px-3 py-2 text-[1em] transition flex-shrink-0"
         :style="{ color: t.textMuted, borderBottom: `1px solid ${t.border}` }"
         @click="onBack"
       >
@@ -73,7 +73,7 @@
       <template v-else>
         <slot name="empty-detail">
           <div
-            class="flex-1 flex items-center justify-center text-sm"
+            class="flex-1 flex items-center justify-center text-[1em]"
             :style="{ color: t.textDim }"
           >
             Select an item

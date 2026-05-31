@@ -1,14 +1,14 @@
 <template>
   <div class="flex items-center gap-2">
     <span
-      class="text-[0.71em] uppercase tracking-wider font-medium flex-shrink-0"
+      class="text-[1em] uppercase tracking-wider font-medium flex-shrink-0"
       :style="{ color: t.textDim, minWidth: '56px' }"
     >
       {{ label }}
     </span>
     <select
       :value="modelValue"
-      class="flex-1 rounded px-2 py-1 text-[0.79em]"
+      class="flex-1 rounded px-2 py-1 text-[1em]"
       :style="{
         background: t.bgInput,
         border: `1px solid ${t.border}`,

@@ -22,7 +22,7 @@
             :style="{ borderBottom: `1px solid ${t.border}` }"
           >
             <slot name="header">
-              <div class="text-sm font-medium" :style="{ color: t.text }">{{ title }}</div>
+              <div class="text-[1em] font-medium" :style="{ color: t.text }">{{ title }}</div>
             </slot>
             <button
               class="ml-auto"

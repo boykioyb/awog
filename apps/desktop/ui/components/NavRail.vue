@@ -47,7 +47,7 @@
       </div>
       <span
         v-if="showLabels"
-        class="text-sm font-semibold tracking-tight"
+        class="text-[1em] font-semibold tracking-tight"
         :style="{ color: t.text }"
       >
         AWOG
@@ -61,7 +61,7 @@
         :key="item.id"
         :to="item.to"
         :title="!showLabels ? item.label : ''"
-        class="relative flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors group"
+        class="relative flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors group"
         :style="navItemStyle(item)"
         @click="onItemClick"
       >
@@ -74,7 +74,7 @@
         />
         <span
           v-if="item.id === 'git' && showLabels && (gitAhead > 0 || gitBehind > 0)"
-          class="ml-auto inline-flex items-center gap-1 font-mono text-[0.71em] px-1 py-0.5 rounded"
+          class="ml-auto inline-flex items-center gap-1 font-mono text-[1em] px-1 py-0.5 rounded"
           :style="{
             background: t.bgInput,
             color: t.accent,
@@ -93,7 +93,7 @@
       <NuxtLink
         to="/settings"
         :title="!showLabels ? 'Settings' : ''"
-        class="flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors"
+        class="flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
         :style="navItemStyle({ to: '/settings' })"
         @click="onItemClick"
       >
@@ -103,7 +103,7 @@
 
       <button
         :title="!showLabels ? (themeName === 'dark' ? 'Switch to light' : 'Switch to dark') : ''"
-        class="flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors"
+        class="flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
         :style="{ color: t.textMuted }"
         @click="toggle"
         @mouseenter="hoverTheme = true"
@@ -122,7 +122,7 @@
 
       <button
         :title="!showLabels ? (isMobile ? 'Open menu' : 'Expand') : isMobile ? 'Close' : 'Collapse'"
-        class="flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors"
+        class="flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
         :style="{ color: t.textMuted }"
         @click="onToggle"
       >

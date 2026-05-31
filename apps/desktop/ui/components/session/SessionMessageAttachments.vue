@@ -23,7 +23,7 @@
           }"
         >
           <span
-            class="text-[0.71em] font-mono truncate flex-1 text-left"
+            class="text-[1em] font-mono truncate flex-1 text-left"
             :style="{ color: t.onAccent }"
           >
             {{ att.name }}
@@ -60,11 +60,11 @@
           :style="{ color: fileIconFor(att.name).color }"
         />
         <div class="flex-1 min-w-0">
-          <div class="font-mono text-[0.86em] truncate" :style="{ color: t.text }">
+          <div class="font-mono text-[1em] truncate" :style="{ color: t.text }">
             {{ att.name }}
           </div>
           <div
-            class="text-[0.71em] truncate flex items-center gap-1.5"
+            class="text-[1em] truncate flex items-center gap-1.5"
             :style="{ color: t.textFaint }"
           >
             <span :style="{ color: fileIconFor(att.name).color, fontWeight: 500 }">

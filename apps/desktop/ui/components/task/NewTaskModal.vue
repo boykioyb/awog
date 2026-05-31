@@ -2,13 +2,13 @@
   <BaseModal :open="!dirtyWarnOpen" title="New task" @close="emit('cancel')">
     <div class="p-4 space-y-4">
       <Field label="Project">
-        <select v-model="projectId" class="w-full rounded px-2 py-1.5 text-xs" :style="inputStyle">
+        <select v-model="projectId" class="w-full rounded px-2 py-1.5 text-[1em]" :style="inputStyle">
           <option v-if="projects.length === 0" value="">No projects — create one first</option>
           <option v-for="p in projects" :key="p.id" :value="p.id">
             {{ p.name }} — {{ p.path }}
           </option>
         </select>
-        <div class="text-[0.71em] mt-1" :style="{ color: t.textDim }">
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
           Code changes will happen in this local repository
         </div>
       </Field>
@@ -17,7 +17,7 @@
           <button
             v-for="s in sourceOptions"
             :key="s.id"
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[0.79em] transition"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[1em] transition"
             :style="{
               background: sourceType === s.id ? t.accent : t.bgInput,
               color: sourceType === s.id ? t.accentText : t.textMuted,
@@ -34,7 +34,7 @@
         <input
           v-model="githubUrl"
           placeholder="https://github.com/org/repo/issues/123"
-          class="w-full rounded px-2 py-1.5 text-xs font-mono"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
           @input="onGithubUrlInput"
         />
@@ -43,19 +43,19 @@
         <input
           :value="jiraKey"
           placeholder="PROJ-1234"
-          class="w-full rounded px-2 py-1.5 text-xs font-mono"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
           @input="jiraKey = ($event.target as HTMLInputElement).value.toUpperCase()"
         />
       </Field>
       <Field label="Title">
-        <input v-model="title" class="w-full rounded px-2 py-1.5 text-xs" :style="inputStyle" />
+        <input v-model="title" class="w-full rounded px-2 py-1.5 text-[1em]" :style="inputStyle" />
       </Field>
       <Field label="Description">
         <textarea
           v-model="description"
           :rows="4"
-          class="w-full rounded px-2 py-1.5 text-[0.79em] resize-y min-h-[5rem]"
+          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[5rem]"
           :style="inputStyle"
         />
       </Field>
@@ -84,10 +84,10 @@
               />
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-[0.86em] font-medium" :style="{ color: t.text }">
+              <div class="text-[1em] font-medium" :style="{ color: t.text }">
                 {{ wf.name }}
               </div>
-              <div class="text-[0.71em]" :style="{ color: t.textDim }">
+              <div class="text-[1em]" :style="{ color: t.textDim }">
                 {{ wf.description }}
               </div>
             </div>
@@ -97,12 +97,12 @@
     </div>
 
     <template #footer>
-      <button class="px-3 py-1.5 text-xs" :style="{ color: t.textMuted }" @click="emit('cancel')">
+      <button class="px-3 py-1.5 text-[1em]" :style="{ color: t.textMuted }" @click="emit('cancel')">
         Cancel
       </button>
       <button
         :disabled="!canSubmit"
-        class="px-3 py-1.5 text-xs rounded font-medium"
+        class="px-3 py-1.5 text-[1em] rounded font-medium"
         :style="{
           background: !canSubmit ? t.bgInput : t.accent,
           color: !canSubmit ? t.textFaint : t.accentText,

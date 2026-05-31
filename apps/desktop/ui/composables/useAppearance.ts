@@ -45,7 +45,7 @@ export const WEIGHT_OPTIONS: { value: FontWeight; label: string }[] = [
   { value: 700, label: 'Bold (700)' },
 ]
 
-export const FONT_SIZE_MIN = 12
+export const FONT_SIZE_MIN = 14
 export const FONT_SIZE_MAX = 18
 
 const SANS_VALUES: readonly SansFontFamily[] = ['system', 'inter', 'geist']

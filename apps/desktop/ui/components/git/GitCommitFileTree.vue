@@ -21,7 +21,7 @@
           v-model="query"
           type="text"
           placeholder="Filter files..."
-          class="flex-1 bg-transparent outline-none text-[0.75em] py-1"
+          class="flex-1 bg-transparent outline-none text-[1em] py-1"
           :style="{ color: t.text }"
         />
         <button
@@ -64,7 +64,7 @@
     <div class="flex-1 overflow-y-auto py-1">
       <div
         v-if="visibleFiles.length === 0"
-        class="flex items-center justify-center h-full text-[0.71em] px-3 text-center"
+        class="flex items-center justify-center h-full text-[1em] px-3 text-center"
         :style="{ color: t.textDim }"
       >
         {{ query ? 'No files match filter' : 'No files' }}
@@ -76,7 +76,7 @@
           <button
             v-if="row.kind === 'dir'"
             type="button"
-            class="w-full flex items-center gap-1 py-1 text-left text-[0.75em] transition truncate"
+            class="w-full flex items-center gap-1 py-1 text-left text-[1em] transition truncate"
             :style="{
               paddingLeft: `${8 + row.depth * 12}px`,
               paddingRight: '8px',
@@ -102,12 +102,12 @@
           <button
             v-else
             type="button"
-            class="w-full flex items-center gap-1.5 py-1 text-left text-[0.75em] transition truncate"
+            class="w-full flex items-center gap-1.5 py-1 text-left text-[1em] transition truncate"
             :style="fileRowStyle(row.fileIndex)"
             @click="onSelectFile(row.fileIndex)"
           >
             <span
-              class="inline-flex items-center justify-center text-[0.64em] rounded flex-shrink-0 font-mono"
+              class="inline-flex items-center justify-center text-[1em] rounded flex-shrink-0 font-mono"
               :style="{
                 width: '14px',
                 height: '14px',
@@ -129,13 +129,13 @@
           v-for="idx in visibleFiles"
           :key="detail.files[idx]!.path"
           type="button"
-          class="w-full flex items-center gap-1.5 px-2 py-1 text-left text-[0.75em] font-mono transition truncate"
+          class="w-full flex items-center gap-1.5 px-2 py-1 text-left text-[1em] font-mono transition truncate"
           :style="fileRowStyle(idx)"
           :title="detail.files[idx]!.path"
           @click="onSelectFile(idx)"
         >
           <span
-            class="inline-flex items-center justify-center text-[0.64em] rounded flex-shrink-0 font-mono"
+            class="inline-flex items-center justify-center text-[1em] rounded flex-shrink-0 font-mono"
             :style="{ width: '14px', height: '14px', ...statusBadgeStyle(detail.files[idx]!) }"
             :title="statusLabel(detail.files[idx]!)"
           >

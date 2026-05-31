@@ -1,17 +1,17 @@
 <template>
   <BaseModal :open="open" :title="tr('git.tag.title')" size="sm" @close="emit('close')">
     <div class="p-4 flex flex-col gap-3">
-      <div class="text-[0.71em]" :style="{ color: t.textDim }">
+      <div class="text-[1em]" :style="{ color: t.textDim }">
         {{ tr('git.tag.target', { sha: targetShortHash }) }}
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textFaint }">
+        <label class="text-[1em] uppercase tracking-wider" :style="{ color: t.textFaint }">
           {{ tr('git.tag.name') }}
         </label>
         <input
           v-model="name"
           placeholder="v1.2.0"
-          class="w-full rounded text-xs px-2 py-1.5"
+          class="w-full rounded text-[1em] px-2 py-1.5"
           :style="{
             background: t.bgInput,
             color: t.text,
@@ -22,7 +22,7 @@
         />
       </div>
       <label
-        class="flex items-center gap-2 text-[0.79em] cursor-pointer select-none"
+        class="flex items-center gap-2 text-[1em] cursor-pointer select-none"
         :style="{ color: t.text }"
       >
         <input
@@ -34,7 +34,7 @@
         <span>{{ tr('git.tag.annotated') }}</span>
       </label>
       <div v-if="annotated" class="flex flex-col gap-1">
-        <label class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textFaint }">
+        <label class="text-[1em] uppercase tracking-wider" :style="{ color: t.textFaint }">
           {{ tr('git.tag.message') }}
         </label>
         <!-- Resize-y per coding-guide for content-style textareas. -->
@@ -42,7 +42,7 @@
           v-model="message"
           rows="3"
           placeholder="Release notes…"
-          class="w-full rounded text-xs px-2 py-1.5 resize-y min-h-[5rem]"
+          class="w-full rounded text-[1em] px-2 py-1.5 resize-y min-h-[5rem]"
           :style="{
             background: t.bgInput,
             color: t.text,
@@ -54,14 +54,14 @@
     </div>
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
         {{ tr('common.cancel') }}
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded font-medium transition"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
         :style="{
           background: t.accent,
           color: t.accentText,

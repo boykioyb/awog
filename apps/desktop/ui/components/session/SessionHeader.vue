@@ -11,7 +11,7 @@
         @blur="commitTitle"
         @keydown.enter="($event.target as HTMLInputElement).blur()"
       />
-      <div class="text-[0.71em] mt-0.5 flex items-center gap-1.5" :style="{ color: t.textDim }">
+      <div class="text-[1em] mt-0.5 flex items-center gap-1.5" :style="{ color: t.textDim }">
         <span class="font-mono">{{ session.id }}</span>
         <span :style="{ color: t.textFaint }">·</span>
         <span>{{ session.messages.length }} messages</span>
@@ -49,7 +49,7 @@
     <div v-if="showProjectMenu" class="fixed inset-0 z-40" @click="showProjectMenu = false" />
     <div
       v-if="showProjectMenu"
-      class="fixed z-50 rounded-md shadow-lg overflow-hidden text-[0.86em] min-w-[180px]"
+      class="fixed z-50 rounded-md shadow-lg overflow-hidden text-[1em] min-w-[180px]"
       :style="{
         background: t.bgPanel,
         border: `1px solid ${t.border}`,

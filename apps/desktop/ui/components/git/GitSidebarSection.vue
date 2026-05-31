@@ -8,10 +8,12 @@
       <ChevronRight v-if="!open" :size="11" />
       <ChevronDown v-else :size="11" />
       <component :is="icon" v-if="icon" :size="12" :style="{ marginLeft: '2px' }" />
-      <span class="text-[0.71em] uppercase tracking-wider font-medium ml-1 flex-1 truncate">
+      <span class="text-[1em] uppercase tracking-wider font-medium ml-1 flex-1 truncate">
         {{ label }}
       </span>
-      <span v-if="count !== undefined && count > 0" class="text-[0.71em]">({{ count }})</span>
+      <span v-if="count !== undefined && count > 0" class="text-[12px] font-mono leading-none">
+        ({{ count }})
+      </span>
       <button
         v-if="actionIcon"
         class="opacity-0 group-hover:opacity-100 p-0.5 rounded transition"

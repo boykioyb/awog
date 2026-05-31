@@ -14,7 +14,7 @@
             {{ skill.name }}
           </h1>
           <span
-            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.bgInput,
               color: t.textDim,
@@ -24,7 +24,7 @@
             /{{ skill.id }}
           </span>
           <span
-            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
             :style="{
               background: isProjectScoped ? t.accent : t.bgInput,
               color: isProjectScoped ? t.accentText : t.textDim,
@@ -35,7 +35,7 @@
             {{ sourceLabel }}
           </span>
         </div>
-        <div class="text-[0.93em] leading-relaxed" :style="{ color: t.textMuted }">
+        <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
           {{ skill.description }}
         </div>
       </div>
@@ -90,7 +90,7 @@
       <span
         v-for="g in skill.globs ?? []"
         :key="`g-${g}`"
-        class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+        class="text-[1em] px-1.5 py-0.5 rounded font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         glob: {{ g }}
@@ -98,7 +98,7 @@
       <span
         v-for="tool in skill.alwaysAllow ?? []"
         :key="`a-${tool}`"
-        class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+        class="text-[1em] px-1.5 py-0.5 rounded font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         allow: {{ tool }}
@@ -106,7 +106,7 @@
       <span
         v-for="src in skill.requiredSources ?? []"
         :key="`s-${src}`"
-        class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+        class="text-[1em] px-1.5 py-0.5 rounded font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         source: {{ src }}
@@ -126,12 +126,12 @@
 
     <div>
       <div
-        class="text-[0.71em] uppercase tracking-wider font-medium mb-2"
+        class="text-[1em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
         Used by · {{ agentsUsing.length }} agents
       </div>
-      <div v-if="agentsUsing.length === 0" class="text-[0.79em]" :style="{ color: t.textFaint }">
+      <div v-if="agentsUsing.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
         Not assigned to any agent yet
       </div>
       <div v-else class="space-y-1.5">
@@ -145,10 +145,10 @@
             <RoleBadge :role="agent.role" />
           </div>
           <div class="flex-1">
-            <div class="text-[0.86em] font-medium" :style="{ color: t.text }">
+            <div class="text-[1em] font-medium" :style="{ color: t.text }">
               {{ agent.name }}
             </div>
-            <div class="text-[0.71em]" :style="{ color: t.textDim }">
+            <div class="text-[1em]" :style="{ color: t.textDim }">
               {{ MODELS.find((m) => m.id === agent.model)?.label }}
             </div>
           </div>

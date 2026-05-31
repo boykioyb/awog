@@ -14,7 +14,7 @@
       class="flex gap-1.5 items-center"
     >
       <Activity :size="11" class="animate-pulse" :style="{ color: t.textDim }" />
-      <span class="text-[0.79em]" :style="{ color: t.textDim }">
+      <span class="text-[1em]" :style="{ color: t.textDim }">
         {{ agentName(agentId) }} đang phản hồi...
       </span>
     </div>
@@ -24,7 +24,7 @@
     <button
       v-if="quotePopup"
       type="button"
-      class="fixed z-50 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[0.79em] shadow-lg transition"
+      class="fixed z-50 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[1em] shadow-lg transition"
       :style="{
         top: `${quotePopup.top}px`,
         left: `${quotePopup.left}px`,

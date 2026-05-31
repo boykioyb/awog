@@ -4,11 +4,11 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
         Stashes
       </div>
       <button
-        class="flex items-center gap-1 px-2 py-1 text-[0.71em] rounded transition"
+        class="flex items-center gap-1 px-2 py-1 text-[1em] rounded transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="showSave = true"
       >
@@ -26,18 +26,18 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <div class="flex items-center gap-2">
-          <span class="text-xs font-mono" :style="{ color: t.accent }">{{ entry.ref }}</span>
-          <span class="text-[0.71em]" :style="{ color: t.textDim }">on {{ entry.branch }}</span>
-          <span class="ml-auto text-[0.71em]" :style="{ color: t.textFaint }">
+          <span class="text-[1em] font-mono" :style="{ color: t.accent }">{{ entry.ref }}</span>
+          <span class="text-[1em]" :style="{ color: t.textDim }">on {{ entry.branch }}</span>
+          <span class="ml-auto text-[1em]" :style="{ color: t.textFaint }">
             {{ formatDate(entry.date) }}
           </span>
         </div>
-        <div class="text-xs mt-1 truncate" :style="{ color: t.text }">
+        <div class="text-[1em] mt-1 truncate" :style="{ color: t.text }">
           {{ entry.message }}
         </div>
         <div class="flex items-center gap-1 mt-2">
           <button
-            class="text-[0.71em] px-2 py-1 rounded transition"
+            class="text-[1em] px-2 py-1 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.text,
@@ -48,7 +48,7 @@
             Pop
           </button>
           <button
-            class="text-[0.71em] px-2 py-1 rounded transition"
+            class="text-[1em] px-2 py-1 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -59,7 +59,7 @@
             Apply
           </button>
           <button
-            class="text-[0.71em] px-2 py-1 rounded transition ml-auto"
+            class="text-[1em] px-2 py-1 rounded transition ml-auto"
             :style="{
               background: t.dangerBg,
               color: t.danger,
@@ -83,7 +83,7 @@
         <input
           v-model="newMessage"
           :placeholder="tr('git.stash.placeholder')"
-          class="w-full rounded text-xs px-2 py-1.5"
+          class="w-full rounded text-[1em] px-2 py-1.5"
           :style="{
             background: t.bgInput,
             color: t.text,
@@ -95,14 +95,14 @@
       </div>
       <template #footer>
         <button
-          class="px-3 py-1.5 text-xs rounded transition"
+          class="px-3 py-1.5 text-[1em] rounded transition"
           :style="{ color: t.textMuted }"
           @click="showSave = false"
         >
           {{ tr('common.cancel') }}
         </button>
         <button
-          class="px-3 py-1.5 text-xs rounded font-medium transition"
+          class="px-3 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="onSave"
         >

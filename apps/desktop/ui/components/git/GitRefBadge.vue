@@ -1,6 +1,6 @@
 <template>
   <span
-    class="inline-flex items-center gap-1 text-[0.71em] px-1.5 py-0.5 rounded font-mono whitespace-nowrap"
+    class="inline-flex items-center gap-1 text-[1em] px-1.5 py-0.5 rounded font-mono whitespace-nowrap"
     :style="style"
     :title="title"
   >

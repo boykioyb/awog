@@ -1,6 +1,6 @@
 <template>
   <div
-    class="px-3 py-1.5 flex items-center gap-2 text-[0.79em]"
+    class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
     :style="{
       background: t.warningBg,
       color: t.warning,

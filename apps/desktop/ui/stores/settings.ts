@@ -133,7 +133,7 @@ interface AccountTestResponse {
 
 export const useSettingsStore = defineStore('settings', {
   state: (): SettingsState => ({
-    workspacePath: '~/workspaces/acme-platform',
+    workspacePath: '',
     autoApprove: false,
     notificationsEnabled: true,
     providers: {
@@ -146,7 +146,7 @@ export const useSettingsStore = defineStore('settings', {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       instructions: '',
       provider: 'anthropic',
-      modelId: 'claude-opus-4-7',
+      modelId: 'claude-opus-4-8',
       mode: 'ask',
       thinkingLevel: 'high',
       timezone: 'Asia/Ho_Chi_Minh',

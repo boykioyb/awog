@@ -1,6 +1,6 @@
 <template>
   <div class="flex-1 overflow-auto p-6">
-    <div v-if="!remote" :style="{ color: t.textDim }" class="text-xs">
+    <div v-if="!remote" :style="{ color: t.textDim }" class="text-[1em]">
       {{ tr('git.sidebar.empty') }}
     </div>
     <div v-else class="max-w-xl">
@@ -12,7 +12,7 @@
       </div>
 
       <div class="rounded p-4" :style="{ background: t.bgPanel, border: `1px solid ${t.border}` }">
-        <div class="grid gap-2 text-xs" style="grid-template-columns: 80px 1fr">
+        <div class="grid gap-2 text-[1em]" style="grid-template-columns: 80px 1fr">
           <span :style="{ color: t.textDim }">{{ tr('git.remote.fetch_url') }}</span>
           <span class="font-mono break-all" :style="{ color: t.textMuted }">
             {{ remote.fetchUrl }}
@@ -25,7 +25,7 @@
 
         <div class="flex items-center gap-2 mt-4">
           <button
-            class="text-[0.79em] px-3 py-1.5 rounded transition flex items-center gap-1"
+            class="text-[1em] px-3 py-1.5 rounded transition flex items-center gap-1"
             :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
             :disabled="store.isFetching"
             @click="store.fetchRemote()"
@@ -34,7 +34,7 @@
             {{ tr('git.remote.fetch') }}
           </button>
           <button
-            class="text-[0.79em] px-3 py-1.5 rounded transition"
+            class="text-[1em] px-3 py-1.5 rounded transition"
             :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
             :disabled="store.isPulling"
             @click="store.pull()"
@@ -42,7 +42,7 @@
             {{ tr('git.remote.pull') }}
           </button>
           <button
-            class="text-[0.79em] px-3 py-1.5 rounded font-medium transition"
+            class="text-[1em] px-3 py-1.5 rounded font-medium transition"
             :style="{ background: t.accent, color: t.accentText }"
             :disabled="store.isPushing"
             @click="store.push()"

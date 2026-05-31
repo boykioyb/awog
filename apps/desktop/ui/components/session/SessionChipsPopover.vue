@@ -3,7 +3,7 @@
     <!-- Provider chip -->
     <div class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.86em] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'provider')"
         @click="togglePop('provider')"
       >
@@ -17,7 +17,7 @@
         :style="popStyle"
       >
         <div
-          class="px-2.5 py-1 text-[0.71em] uppercase tracking-wider"
+          class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
         >
           Connection
@@ -25,7 +25,7 @@
         <button
           v-for="p in availableProviders"
           :key="p"
-          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[0.79em] transition"
+          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
           :style="{
             background: session.settings.provider === p ? t.bgActive : 'transparent',
             color: t.text,
@@ -41,7 +41,7 @@
           {{ PROVIDER_LABEL[p] }}
           <span
             v-if="!settings.isProviderConnected(p)"
-            class="ml-auto text-[0.64em] uppercase tracking-wider"
+            class="ml-auto text-[1em] uppercase tracking-wider"
             :style="{ color: t.textDim }"
           >
             Not connected
@@ -54,7 +54,7 @@
          pattern) since the supported level range is model-dependent. -->
     <div class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.86em] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'model')"
         @click="togglePop('model')"
       >
@@ -71,7 +71,7 @@
         :style="popStyle"
       >
         <div
-          class="px-2.5 py-1 text-[0.71em] uppercase tracking-wider"
+          class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
         >
           {{ PROVIDER_LABEL[session.settings.provider] }} · Models
@@ -79,7 +79,7 @@
         <button
           v-for="m in availableModels"
           :key="m.id"
-          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[0.79em] transition"
+          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
           :style="{
             background: session.settings.modelId === m.id ? t.bgActive : 'transparent',
             color: t.text,
@@ -88,7 +88,7 @@
           @click="onPickModel(m.id)"
         >
           <span class="flex-1 min-w-0">{{ m.label }}</span>
-          <span class="text-[0.64em] uppercase tracking-wider" :style="{ color: t.textDim }">
+          <span class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
             {{ m.tier }}
           </span>
           <Check
@@ -99,7 +99,7 @@
         </button>
 
         <div
-          class="px-2.5 py-1 mt-1 text-[0.71em] uppercase tracking-wider"
+          class="px-2.5 py-1 mt-1 text-[1em] uppercase tracking-wider"
           :style="{
             color: t.textDim,
             borderTop: `1px solid ${t.border}`,
@@ -113,7 +113,7 @@
           :key="lv"
           type="button"
           :disabled="!availableLevels.includes(lv)"
-          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[0.79em] transition disabled:cursor-not-allowed"
+          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition disabled:cursor-not-allowed"
           :style="{
             background: session.settings.level === lv ? t.bgActive : 'transparent',
             color: availableLevels.includes(lv) ? t.text : t.textFaint,
@@ -131,7 +131,7 @@
          tool set is what makes the mode meaningful in practice). -->
     <div class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.86em] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'mode')"
         @click="togglePop('mode')"
       >
@@ -139,7 +139,7 @@
         {{ currentModeDef.label }}
         <span
           v-if="hasAnyDisabled"
-          class="font-mono text-[0.71em]"
+          class="font-mono text-[1em]"
           :style="{ color: t.textDim }"
           :title="`${enabledToolCount} of ${TOOLS_CATALOG.length} tools enabled`"
         >
@@ -153,7 +153,7 @@
         :style="popStyle"
       >
         <div
-          class="px-2.5 py-1 text-[0.71em] uppercase tracking-wider"
+          class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
         >
           Mode
@@ -161,7 +161,7 @@
         <button
           v-for="m in MODE_OPTIONS"
           :key="m.value"
-          class="w-full text-left px-2.5 py-1.5 flex items-start gap-2 text-[0.79em] transition"
+          class="w-full text-left px-2.5 py-1.5 flex items-start gap-2 text-[1em] transition"
           :style="{
             background: session.settings.mode === m.value ? t.bgActive : 'transparent',
             color: t.text,
@@ -177,7 +177,7 @@
           />
           <div class="flex-1 min-w-0">
             <div :style="{ color: t.text }">{{ m.label }}</div>
-            <div class="text-[0.71em] leading-snug" :style="{ color: t.textDim }">
+            <div class="text-[1em] leading-snug" :style="{ color: t.textDim }">
               {{ m.desc }}
             </div>
           </div>
@@ -186,7 +186,7 @@
         <!-- Tools row: opens the second-level modal. -->
         <button
           type="button"
-          class="w-full text-left px-2.5 py-2 flex items-center gap-2 text-[0.79em] transition"
+          class="w-full text-left px-2.5 py-2 flex items-center gap-2 text-[1em] transition"
           :style="{
             color: t.text,
             background: 'transparent',
@@ -196,7 +196,7 @@
         >
           <Info :size="11" :style="{ color: t.textDim }" />
           <span class="flex-1">Tools</span>
-          <span class="font-mono text-[0.71em]" :style="{ color: t.textDim }">
+          <span class="font-mono text-[1em]" :style="{ color: t.textDim }">
             {{ enabledToolCount }}/{{ TOOLS_CATALOG.length }}
           </span>
           <ChevronRight :size="11" :style="{ color: t.textDim }" />
@@ -208,14 +208,14 @@
          MCP servers exist in the workspace (nothing to pick). -->
     <div v-if="mcpEnabledServers.length > 0" class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[0.86em] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'mcp')"
         :title="mcpChipTitle"
         @click="togglePop('mcp')"
       >
         <Plug :size="10" />
         MCP
-        <span class="font-mono text-[0.71em]" :style="{ color: t.textDim }">
+        <span class="font-mono text-[1em]" :style="{ color: t.textDim }">
           · {{ activeMcpCount }}/{{ mcpEnabledServers.length }}
         </span>
         <ChevronDown :size="9" :style="{ color: t.textDim }" />
@@ -226,13 +226,13 @@
         :style="mcpPopStyle"
       >
         <div
-          class="px-2.5 py-1 text-[0.71em] uppercase tracking-wider flex items-center gap-2"
+          class="px-2.5 py-1 text-[1em] uppercase tracking-wider flex items-center gap-2"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
         >
           <span class="flex-1">MCP servers</span>
           <button
             v-if="session.mcpServerIds !== undefined"
-            class="text-[0.71em] normal-case tracking-normal hover:underline"
+            class="text-[1em] normal-case tracking-normal hover:underline"
             :style="{ color: t.textDim }"
             @click="resetMcp"
           >
@@ -242,7 +242,7 @@
         <button
           v-for="srv in mcpEnabledServers"
           :key="srv.id"
-          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[0.79em] transition"
+          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
           :style="{ color: t.text, background: 'transparent' }"
           @click="toggleMcp(srv.id)"
         >
@@ -257,7 +257,7 @@
           </span>
           <div class="flex-1 min-w-0">
             <div class="truncate" :style="{ color: t.text }">{{ srv.name }}</div>
-            <div class="text-[0.64em] font-mono truncate" :style="{ color: t.textDim }">
+            <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
               {{ srv.id }}
               <span v-if="srv.tools.length > 0">· {{ srv.tools.length }} tools</span>
             </div>
@@ -270,7 +270,7 @@
         </button>
         <div
           v-if="session.mcpServerIds === undefined"
-          class="px-2.5 py-1.5 text-[0.71em]"
+          class="px-2.5 py-1.5 text-[1em]"
           :style="{ color: t.textDim, borderTop: `1px solid ${t.border}` }"
         >
           Default · all enabled MCP servers participate
@@ -302,12 +302,12 @@
           :style="{ borderBottom: `1px solid ${t.border}` }"
         >
           <Info :size="13" :style="{ color: t.textDim }" />
-          <div class="text-[0.93em] font-semibold flex-1" :style="{ color: t.text }">
+          <div class="text-[1em] font-semibold flex-1" :style="{ color: t.text }">
             Tools · {{ enabledToolCount }}/{{ TOOLS_CATALOG.length }}
           </div>
           <button
             type="button"
-            class="text-[0.71em] underline-offset-2 hover:underline disabled:opacity-50 px-2"
+            class="text-[1em] underline-offset-2 hover:underline disabled:opacity-50 px-2"
             :style="{ color: t.textDim }"
             :disabled="!hasAnyDisabled"
             @click="resetAllTools"
@@ -327,7 +327,7 @@
         <div class="overflow-y-auto py-1">
           <template v-for="group in TOOL_GROUPS" :key="group">
             <div
-              class="px-3 pt-2 pb-0.5 text-[0.64em] uppercase tracking-wider"
+              class="px-3 pt-2 pb-0.5 text-[1em] uppercase tracking-wider"
               :style="{ color: t.textFaint }"
             >
               {{ TOOL_GROUP_LABEL[group] }}
@@ -336,7 +336,7 @@
               v-for="tool in toolsByGroup(group)"
               :key="tool.name"
               type="button"
-              class="w-full text-left px-3 py-1.5 flex items-start gap-2 text-[0.79em] transition hover:bg-white/5"
+              class="w-full text-left px-3 py-1.5 flex items-start gap-2 text-[1em] transition hover:bg-white/5"
               :style="{ color: t.text, background: 'transparent' }"
               @click="toggleTool(tool.name)"
             >
@@ -355,7 +355,7 @@
                 >
                   {{ tool.label }}
                 </div>
-                <div class="text-[0.71em] leading-snug" :style="{ color: t.textDim }">
+                <div class="text-[1em] leading-snug" :style="{ color: t.textDim }">
                   {{ tool.description }}
                 </div>
               </div>

@@ -14,7 +14,7 @@
             /{{ command.name }}
           </h1>
           <span
-            class="text-[0.79em] px-1.5 py-0.5 rounded"
+            class="text-[1em] px-1.5 py-0.5 rounded"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -25,7 +25,7 @@
           </span>
           <span
             v-if="command.system"
-            class="text-[0.71em] uppercase px-1.5 py-0.5 rounded"
+            class="text-[1em] uppercase px-1.5 py-0.5 rounded"
             :style="{
               background: t.infoBg,
               color: t.info,
@@ -35,14 +35,14 @@
             system
           </span>
         </div>
-        <div class="text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
+        <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
           {{ command.description }}
         </div>
         <div v-if="command.aliases.length > 0" class="flex flex-wrap gap-1 mt-2">
           <span
             v-for="a in command.aliases"
             :key="a"
-            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.bgInput,
               color: t.textDim,
@@ -55,7 +55,7 @@
       </div>
       <div v-if="!command.system" class="flex items-center gap-1 flex-shrink-0">
         <button
-          class="px-3 py-1.5 text-xs rounded inline-flex items-center gap-1.5 transition"
+          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
           :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
           @click="emit('edit')"
         >
@@ -80,7 +80,7 @@
 
     <!-- Arguments -->
     <Section :title="`Arguments · ${command.args.length}`">
-      <div v-if="command.args.length === 0" class="text-[0.79em]" :style="{ color: t.textFaint }">
+      <div v-if="command.args.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
         Không có argument.
       </div>
       <div v-else class="space-y-1.5">
@@ -92,9 +92,9 @@
         >
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1.5">
-              <span class="text-[0.86em] font-mono" :style="{ color: t.text }">{{ arg.name }}</span>
+              <span class="text-[1em] font-mono" :style="{ color: t.text }">{{ arg.name }}</span>
               <span
-                class="text-[0.64em] uppercase px-1 rounded"
+                class="text-[1em] uppercase px-1 rounded"
                 :style="{
                   background: t.bgInput,
                   color: t.textDim,
@@ -103,16 +103,16 @@
               >
                 {{ arg.type }}
               </span>
-              <span v-if="arg.required" class="text-[0.64em] uppercase" :style="{ color: t.danger }">
+              <span v-if="arg.required" class="text-[1em] uppercase" :style="{ color: t.danger }">
                 required
               </span>
             </div>
-            <div class="text-[0.79em] mt-0.5" :style="{ color: t.textMuted }">
+            <div class="text-[1em] mt-0.5" :style="{ color: t.textMuted }">
               {{ arg.description }}
             </div>
             <div
               v-if="arg.default"
-              class="text-[0.71em] mt-0.5 font-mono"
+              class="text-[1em] mt-0.5 font-mono"
               :style="{ color: t.textFaint }"
             >
               default: {{ arg.default }}
@@ -125,7 +125,7 @@
     <!-- Body -->
     <Section :title="bodyLabel">
       <pre
-        class="text-[0.79em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
+        class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
         :style="{
           color: t.textMuted,
           background: t.bgInput,
@@ -143,7 +143,7 @@
         :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
       >
         <div
-          class="px-3 py-2 flex items-center gap-2 text-[0.86em]"
+          class="px-3 py-2 flex items-center gap-2 text-[1em]"
           :style="{ background: t.bgInput }"
         >
           <Slash :size="11" :style="{ color: t.textDim }" />
@@ -157,7 +157,7 @@
             &lt;{{ arg.name }}{{ arg.required ? '' : '?' }}&gt;
           </span>
         </div>
-        <div class="px-3 py-2 text-[0.79em]" :style="{ color: t.textMuted }">
+        <div class="px-3 py-2 text-[1em]" :style="{ color: t.textMuted }">
           {{ command.description }}
         </div>
       </div>

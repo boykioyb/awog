@@ -12,7 +12,7 @@
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search agents..." />
         <button
-          class="flex items-center gap-1 px-2 py-1.5 text-xs rounded transition"
+          class="flex items-center gap-1 px-2 py-1.5 text-[1em] rounded transition"
           :style="{
             background: 'transparent',
             color: t.textMuted,
@@ -26,7 +26,7 @@
         </button>
         <button
           ref="newButtonRef"
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
+          class="flex items-center gap-1 px-2.5 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="startCreate"
         >
@@ -36,7 +36,7 @@
       </div>
       <div
         v-if="filtered.length > 0"
-        class="px-3 py-1.5 flex items-center gap-2 text-[0.79em]"
+        class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
         :style="{ borderBottom: `1px solid ${t.border}`, color: t.textDim }"
       >
         <input
@@ -55,7 +55,7 @@
         <span class="flex-1" />
         <button
           v-if="bulkSelection.size > 0"
-          class="text-[0.71em] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
+          class="text-[1em] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
           :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
           @click="clearBulk"
         >
@@ -103,7 +103,7 @@
                 v-if="renamingKey === agentKey(agent)"
                 :ref="setRenameInputRef"
                 v-model="renameValue"
-                class="text-[0.86em] font-medium flex-1 min-w-0 rounded px-1 py-0.5"
+                class="text-[1em] font-medium flex-1 min-w-0 rounded px-1 py-0.5"
                 :style="{
                   background: t.bgInput,
                   border: `1px solid ${t.borderStrong}`,
@@ -117,7 +117,7 @@
               />
               <div
                 v-else
-                class="text-[0.86em] font-medium truncate"
+                class="text-[1em] font-medium truncate"
                 :style="{ color: t.text }"
                 @dblclick.stop="startRename(agent)"
               >
@@ -125,7 +125,7 @@
               </div>
               <span
                 v-if="agent.role"
-                class="text-[0.57em] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
+                class="text-[1em] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
                 :style="{
                   color: t.textMuted,
                   background: t.bgInput,
@@ -144,12 +144,12 @@
               </button>
             </div>
             <div class="flex items-center gap-1.5 mt-0.5">
-              <span class="text-[0.71em] truncate flex-1" :style="{ color: t.textDim }">
+              <span class="text-[1em] truncate flex-1" :style="{ color: t.textDim }">
                 {{ modelLabel(agent) }} · {{ agent.skillIds.length }}
                 {{ agent.skillIds.length === 1 ? 'skill' : 'skills' }}
               </span>
               <span
-                class="text-[0.64em] px-1 py-0.5 rounded font-mono uppercase tracking-wider"
+                class="text-[1em] px-1 py-0.5 rounded font-mono uppercase tracking-wider"
                 :style="sourceBadgeStyle(agent)"
               >
                 {{ sourceLabel(agent) }}
@@ -217,11 +217,11 @@
       boxShadow: `0 12px 32px ${t.shadow}`,
     }"
   >
-    <span class="text-[0.86em]" :style="{ color: t.text }">
+    <span class="text-[1em]" :style="{ color: t.text }">
       {{ bulkSelection.size }} agent{{ bulkSelection.size === 1 ? '' : 's' }} selected
     </span>
     <button
-      class="text-[0.79em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded transition"
+      class="text-[1em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded transition"
       :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
       :disabled="bulkDeleting"
       @click="clearBulk"
@@ -229,7 +229,7 @@
       Cancel
     </button>
     <button
-      class="text-[0.79em] inline-flex items-center gap-1.5 px-3 py-1 rounded font-medium transition"
+      class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1 rounded font-medium transition"
       :style="{
         background: t.dangerBg,
         color: t.danger,
@@ -259,7 +259,7 @@
     <div
       v-for="toast in toasts"
       :key="toast.id"
-      class="px-3 py-2 rounded text-xs shadow-lg"
+      class="px-3 py-2 rounded text-[1em] shadow-lg"
       :style="toastStyle(toast.kind)"
     >
       {{ toast.text }}

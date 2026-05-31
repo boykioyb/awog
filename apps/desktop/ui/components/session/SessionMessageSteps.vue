@@ -4,7 +4,7 @@
     :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
   >
     <div
-      class="flex items-center gap-2 pb-1.5 text-[0.71em] uppercase tracking-wider"
+      class="flex items-center gap-2 pb-1.5 text-[1em] uppercase tracking-wider"
       :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
     >
       <span class="flex-1">{{ summary }}</span>

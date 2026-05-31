@@ -12,6 +12,15 @@ export interface ModelDef {
 
 export const MODELS: ModelDef[] = [
   {
+    id: 'claude-opus-4-8',
+    label: 'Claude Opus 4.8',
+    vendor: 'Anthropic',
+    tier: 'Frontier',
+    provider: 'anthropic',
+    supportsThinking: true,
+    maxLevel: 'max',
+  },
+  {
     id: 'claude-opus-4-7',
     label: 'Claude Opus 4.7',
     vendor: 'Anthropic',

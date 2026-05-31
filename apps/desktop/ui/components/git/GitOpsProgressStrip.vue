@@ -20,7 +20,7 @@
     <!-- Hover-revealed status pill + cancel button, anchored top-right of the
          strip so it overlaps the header content without reserving width. -->
     <div
-      class="absolute right-2 -top-7 flex items-center gap-2 px-2 py-1 rounded text-[0.71em] pointer-events-auto shadow-lg"
+      class="absolute right-2 -top-7 flex items-center gap-2 px-2 py-1 rounded text-[1em] pointer-events-auto shadow-lg"
       :style="{
         background: t.bgPanel,
         color: t.textDim,

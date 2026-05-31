@@ -12,7 +12,7 @@
           <input
             :value="draft.id"
             placeholder="e.g. gitnexus"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             @input="(e: Event) => (draft.id = slugify((e.target as HTMLInputElement).value))"
           />
@@ -20,7 +20,7 @@
         <Field label="Display name">
           <input
             v-model="draft.name"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -30,7 +30,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[0.86em] resize-y min-h-[3rem]"
+          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -39,7 +39,7 @@
         <Field label="Transport">
           <select
             v-model="draft.transport"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           >
             <option value="stdio">stdio</option>
@@ -50,7 +50,7 @@
         <Field label="Trust">
           <select
             v-model="draft.trust"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           >
             <option value="allow">allow (auto)</option>
@@ -62,7 +62,7 @@
           <input
             v-model.number="draft.timeoutMs"
             type="number"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -74,7 +74,7 @@
           <input
             v-model="draft.command"
             placeholder="npx, uvx, /path/to/bin"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -82,7 +82,7 @@
           <textarea
             v-model="argsText"
             :rows="3"
-            class="w-full rounded px-2 py-1.5 text-[0.79em] font-mono resize-y min-h-[4rem]"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[4rem]"
             :style="inputStyle"
           />
         </Field>
@@ -90,7 +90,7 @@
           <input
             v-model="draft.cwd"
             placeholder="${workspace}"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -107,7 +107,7 @@
           <input
             v-model="draft.url"
             placeholder="https://mcp.example.com/v1"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -125,7 +125,7 @@
 
       <div class="flex items-center gap-2 pt-2" :style="{ borderTop: `1px solid ${t.border}` }">
         <button
-          class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[0.79em] rounded font-medium transition disabled:opacity-50"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[1em] rounded font-medium transition disabled:opacity-50"
           :style="{
             background: t.bgInput,
             color: t.text,
@@ -138,13 +138,13 @@
           <CheckCircle2 v-else :size="11" />
           {{ verifying ? 'Testing…' : 'Verify connection' }}
         </button>
-        <span v-if="verifyResult" class="text-[0.79em]" :style="{ color: verifyTextColor }">
+        <span v-if="verifyResult" class="text-[1em]" :style="{ color: verifyTextColor }">
           {{ verifyResult.summary }}
         </span>
       </div>
       <pre
         v-if="verifyResult && verifyResult.stderr && verifyResult.stderr.length > 0"
-        class="text-[0.71em] font-mono p-2 rounded max-h-32 overflow-y-auto"
+        class="text-[1em] font-mono p-2 rounded max-h-32 overflow-y-auto"
         :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
         >{{ verifyResult.stderr.join('\n') }}</pre
       >

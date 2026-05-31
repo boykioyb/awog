@@ -14,16 +14,16 @@
     <div class="px-2.5 py-2 flex items-center gap-2">
       <RoleBadge v-if="data.agent" :role="data.agent.role" />
       <div class="min-w-0 flex-1">
-        <div class="text-[0.86em] font-medium truncate" :style="{ color: t.text }">
+        <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">
           {{ data.agent?.name ?? 'Unknown agent' }}
         </div>
-        <div class="text-[0.71em] font-mono truncate" :style="{ color: t.textDim }">
+        <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
           {{ data.skill?.name || 'no skill' }}
         </div>
       </div>
     </div>
     <div
-      class="px-2.5 py-1.5 text-[0.71em] flex items-center justify-between"
+      class="px-2.5 py-1.5 text-[1em] flex items-center justify-between"
       :style="{ borderTop: `1px solid ${t.border}`, color: t.textDim }"
     >
       <div class="flex items-center gap-1 truncate">

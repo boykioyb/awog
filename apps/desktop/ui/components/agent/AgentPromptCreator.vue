@@ -18,8 +18,8 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <Sparkles :size="13" :style="{ color: t.accent }" />
-        <div class="text-[0.86em] font-medium" :style="{ color: t.text }">New agent</div>
-        <span class="text-[0.71em]" :style="{ color: t.textDim }">
+        <div class="text-[1em] font-medium" :style="{ color: t.text }">New agent</div>
+        <span class="text-[1em]" :style="{ color: t.textDim }">
           · LLM will write the persona to disk
         </span>
         <span class="flex-1" />
@@ -41,7 +41,7 @@
         :error="error"
       >
         <template #empty>
-          <div class="text-[0.86em] py-4" :style="{ color: t.textDim }">
+          <div class="text-[1em] py-4" :style="{ color: t.textDim }">
             Describe the agent you want — for example
             <span :style="{ color: t.text }">"Senior code reviewer focused on security"</span>
             or
@@ -69,12 +69,12 @@
                 ? 'Describe the agent persona…'
                 : 'Iterate further (or close when happy)…'
             "
-            class="w-full bg-transparent text-[0.86em] leading-relaxed resize-none focus:outline-none"
+            class="w-full bg-transparent text-[1em] leading-relaxed resize-none focus:outline-none"
             :style="{ color: t.text }"
             @keydown.enter.exact.prevent="onSend"
           />
           <div class="flex items-center justify-between">
-            <div class="text-[0.71em]" :style="{ color: t.textFaint }">
+            <div class="text-[1em]" :style="{ color: t.textFaint }">
               <template v-if="messages.length === 0">
                 Enter to send · Shift+Enter for newline
               </template>

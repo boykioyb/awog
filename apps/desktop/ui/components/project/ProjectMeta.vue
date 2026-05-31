@@ -1,14 +1,14 @@
 <template>
   <div class="rounded p-2.5" :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }">
     <div
-      class="text-[0.71em] uppercase tracking-wider font-medium mb-1 inline-flex items-center gap-1"
+      class="text-[1em] uppercase tracking-wider font-medium mb-1 inline-flex items-center gap-1"
       :style="{ color: t.textDim }"
     >
       <component :is="icon" :size="10" />
       {{ label }}
     </div>
     <div
-      class="text-[0.86em]"
+      class="text-[1em]"
       :style="{
         color: t.text,
         fontFamily: mono ? 'ui-monospace, monospace' : 'inherit',

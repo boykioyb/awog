@@ -3,7 +3,7 @@
     <template #header>
       <div class="flex items-center gap-2 min-w-0">
         <GitCompare :size="14" :style="{ color: t.accent }" />
-        <div class="text-sm font-medium truncate" :style="{ color: t.text }">
+        <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">
           {{ tr('git.compare.title') }}
           <span class="font-mono" :style="{ color: t.accent }">{{ targetShortHash }}</span>
           {{ tr('git.compare.to_working_tree') }}
@@ -17,12 +17,12 @@
         class="w-[260px] flex-shrink-0 overflow-y-auto"
         :style="{ borderRight: `1px solid ${t.border}`, background: t.bgPanel }"
       >
-        <div v-if="loading" class="px-3 py-2 text-[0.71em]" :style="{ color: t.textDim }">
+        <div v-if="loading" class="px-3 py-2 text-[1em]" :style="{ color: t.textDim }">
           {{ tr('git.compare.loading') }}
         </div>
         <div
           v-else-if="files.length === 0"
-          class="px-3 py-2 text-[0.71em]"
+          class="px-3 py-2 text-[1em]"
           :style="{ color: t.textDim }"
         >
           {{ tr('git.compare.no_diff') }}
@@ -32,7 +32,7 @@
           v-else
           :key="f.path"
           type="button"
-          class="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[0.71em] font-mono transition"
+          class="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[1em] font-mono transition"
           :style="{
             background: activeIndex === i ? t.bgActive : 'transparent',
             color: t.text,
@@ -48,7 +48,7 @@
         <GitDiffViewer v-if="activeFile" :diff="activeFile" />
         <div
           v-else
-          class="h-full flex items-center justify-center text-xs"
+          class="h-full flex items-center justify-center text-[1em]"
           :style="{ color: t.textDim }"
         >
           {{ loading ? tr('common.loading') : tr('git.compare.select_file') }}
@@ -58,7 +58,7 @@
 
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >

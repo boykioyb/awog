@@ -6,7 +6,7 @@
     <button
       v-for="tab in tabs"
       :key="tab.id"
-      class="relative flex items-center gap-1.5 px-3 py-2 text-xs transition"
+      class="relative flex items-center gap-1.5 px-3 py-2 text-[1em] transition"
       :style="tabStyle(tab.id)"
       @click="emit('update:active-tab', tab.id)"
     >

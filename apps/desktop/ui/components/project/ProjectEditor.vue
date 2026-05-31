@@ -22,11 +22,11 @@
         >
           <div class="flex items-center gap-2 mb-1">
             <component :is="m.icon" :size="13" :style="{ color: t.text }" />
-            <div class="text-[0.86em] font-medium" :style="{ color: t.text }">
+            <div class="text-[1em] font-medium" :style="{ color: t.text }">
               {{ m.label }}
             </div>
           </div>
-          <div class="text-[0.71em]" :style="{ color: t.textDim }">
+          <div class="text-[1em]" :style="{ color: t.textDim }">
             {{ m.hint }}
           </div>
         </button>
@@ -39,7 +39,7 @@
           <input
             v-model="draft.name"
             placeholder="e.g. payment-service"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
             :disabled="busy"
           />
@@ -48,7 +48,7 @@
           <input
             v-model="draft.language"
             placeholder="Python"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
             :disabled="busy"
           />
@@ -60,13 +60,13 @@
           <input
             v-model="draft.path"
             placeholder="~/code/my-project"
-            class="flex-1 rounded px-2 py-1.5 text-xs font-mono"
+            class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             :disabled="busy"
             @blur="onPathBlur"
           />
           <button
-            class="px-3 py-1.5 text-xs rounded transition inline-flex items-center gap-1.5 disabled:opacity-50"
+            class="px-3 py-1.5 text-[1em] rounded transition inline-flex items-center gap-1.5 disabled:opacity-50"
             :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
             :disabled="busy || !canBrowse"
             :title="canBrowse ? 'Pick folder' : 'Native dialog unavailable (browser dev)'"
@@ -76,7 +76,7 @@
             Browse
           </button>
         </div>
-        <div class="text-[0.71em] mt-1" :style="{ color: t.textDim }">
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
           {{
             importMode === 'clone'
               ? 'New folder will be created here'
@@ -90,7 +90,7 @@
           <input
             v-model="draft.gitRemote"
             placeholder="git@github.com:org/repo.git"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             :disabled="busy"
           />
@@ -99,7 +99,7 @@
           <input
             v-model="draft.gitBranch"
             placeholder="main"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             :disabled="busy || importMode === 'clone'"
           />
@@ -111,7 +111,7 @@
           v-model="draft.description"
           :rows="3"
           placeholder="What does this project do?"
-          class="w-full rounded px-2 py-1.5 text-[0.86em] leading-relaxed resize-y min-h-[4rem]"
+          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[4rem]"
           :style="inputStyle"
           :disabled="busy"
         />
@@ -119,7 +119,7 @@
 
       <div
         v-if="busy || error"
-        class="rounded p-3 text-[0.79em]"
+        class="rounded p-3 text-[1em]"
         :style="{
           background: t.bgElevated,
           border: `1px solid ${error ? t.danger : t.border}`,
@@ -136,7 +136,7 @@
         <div v-if="error" class="font-mono leading-relaxed">{{ error }}</div>
         <pre
           v-if="busy && lastProgressLine"
-          class="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap font-mono text-[0.71em]"
+          class="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap font-mono text-[1em]"
           :style="{ color: t.textDim }"
           >{{ lastProgressLine }}</pre
         >

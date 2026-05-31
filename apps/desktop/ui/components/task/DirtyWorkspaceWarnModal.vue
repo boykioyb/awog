@@ -1,11 +1,11 @@
 <template>
   <BaseModal :open="open" title="Workspace có change uncommitted" size="md" @close="emit('close')">
-    <div class="p-4 space-y-3 text-[0.86em]" :style="{ color: t.text }">
+    <div class="p-4 space-y-3 text-[1em]" :style="{ color: t.text }">
       <p>
         Workspace có change uncommitted. Recommend commit hoặc stash trước khi chạy task để tránh
         trộn change của user với change của agent.
       </p>
-      <label class="flex items-center gap-2 text-[0.79em]" :style="{ color: t.textMuted }">
+      <label class="flex items-center gap-2 text-[1em]" :style="{ color: t.textMuted }">
         <input
           type="checkbox"
           :checked="suppress"
@@ -17,14 +17,14 @@
 
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{ color: t.textMuted }"
         @click="onContinueAnyway"
       >
         Continue anyway
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{
           background: 'transparent',
           color: t.text,
@@ -35,7 +35,7 @@
         Stash &amp; continue
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded font-medium transition"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="onCommitNow"
       >

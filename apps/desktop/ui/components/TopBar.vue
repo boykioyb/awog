@@ -5,7 +5,7 @@
   >
     <div
       v-if="selectedTask && selectedProject && isTasksRoute"
-      class="flex items-center gap-1.5 text-xs"
+      class="flex items-center gap-1.5 text-[1em]"
       :style="{ color: t.textDim }"
     >
       <FolderGit2 :size="12" />
@@ -14,13 +14,13 @@
       <GitBranch :size="11" />
       <span class="font-mono">{{ selectedProject.gitBranch }}</span>
       <span :style="{ color: t.textFaint }">·</span>
-      <span class="font-mono text-[0.71em]">{{ selectedProject.path }}</span>
+      <span class="font-mono text-[1em]">{{ selectedProject.path }}</span>
     </div>
-    <div v-else class="flex items-center gap-1.5 text-xs" :style="{ color: t.textDim }">
+    <div v-else class="flex items-center gap-1.5 text-[1em]" :style="{ color: t.textDim }">
       <FolderGit2 :size="12" />
       <span>{{ workspaceLabel }}</span>
     </div>
-    <div class="ml-auto text-xs capitalize" :style="{ color: t.textDim }">
+    <div class="ml-auto text-[1em] capitalize" :style="{ color: t.textDim }">
       {{ viewLabel }}
     </div>
   </div>
@@ -41,7 +41,11 @@ const selectedProject = computed(() =>
   selectedTask.value ? ws.projectById(selectedTask.value.projectId) : undefined,
 )
 
-const workspaceLabel = computed(() => settings.workspacePath.replace('~/workspaces/', ''))
+const workspaceLabel = computed(() => {
+  const path = settings.workspacePath.trim()
+  if (!path) return 'No workspace'
+  return path.replace(/\/+$/, '').split('/').pop() || path
+})
 
 const viewLabel = computed(() => {
   const seg = route.path.split('/')[1]

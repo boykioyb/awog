@@ -2,7 +2,7 @@
   <div>
     <div
       v-if="message.role === 'system'"
-      class="text-center text-[0.71em] uppercase tracking-wider"
+      class="text-center text-[1em] uppercase tracking-wider"
       :style="{ color: t.textDim }"
     >
       ── {{ message.text }} · {{ fmt(message.at) }} ──
@@ -12,7 +12,7 @@
       <div v-if="message.role === 'user'" class="flex flex-col items-end gap-1.5">
         <div
           v-if="message.text"
-          class="rounded-2xl px-4 py-2 text-[0.93em] leading-relaxed whitespace-pre-wrap"
+          class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed whitespace-pre-wrap"
           :style="{
             background: t.bgElevated,
             color: t.text,
@@ -35,7 +35,7 @@
           :attachments="message.attachments"
           @open="(att: SessionAttachment) => emit('openAttachment', att)"
         />
-        <div class="text-[0.64em] flex items-center gap-1.5" :style="{ color: t.textFaint }">
+        <div class="text-[1em] flex items-center gap-1.5" :style="{ color: t.textFaint }">
           <span>{{ fmt(message.at) }}</span>
           <span v-if="message.modeAtSend">· sent in {{ message.modeAtSend }} mode</span>
         </div>
@@ -43,7 +43,7 @@
 
       <div
         v-if="message.role === 'agent'"
-        class="rounded-2xl px-4 py-3 text-[0.93em] leading-relaxed"
+        class="rounded-2xl px-4 py-3 text-[1em] leading-relaxed"
         :style="{
           background: t.bgElevated,
           border: `1px solid ${t.border}`,
@@ -51,7 +51,7 @@
         }"
       >
         <div
-          class="flex items-center gap-1.5 mb-2 text-[0.71em] uppercase tracking-wider"
+          class="flex items-center gap-1.5 mb-2 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textFaint }"
         >
           <Sparkles :size="10" :style="{ color: t.accent }" />
@@ -82,7 +82,7 @@
           v-if="message.text"
           :text="message.text"
           :streaming="!!(message.startedAt && !message.completedAt)"
-          class="awog-md text-[0.93em]"
+          class="awog-md text-[1em]"
           :style="{ color: t.text, '--awog-accent': t.accent }"
           :data-agent-message-id="message.id"
         />
@@ -90,7 +90,7 @@
         <button
           v-if="message.steps?.length"
           type="button"
-          class="inline-flex items-center gap-1.5 text-[0.79em] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
+          class="inline-flex items-center gap-1.5 text-[1em] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
           :class="message.text ? 'mt-2' : ''"
           :style="{ color: t.textDim }"
           @click="expanded = !expanded"
@@ -126,7 +126,7 @@
 
         <div
           v-if="message.startedAt"
-          class="mt-2 pt-2 text-[0.71em] flex items-center gap-2"
+          class="mt-2 pt-2 text-[1em] flex items-center gap-2"
           :style="{ color: t.textFaint, borderTop: `1px dashed ${t.border}` }"
         >
           <template v-if="message.completedAt">
@@ -147,7 +147,7 @@
             :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
           >
             <div
-              class="px-2.5 py-1.5 flex items-center gap-1.5 text-[0.79em]"
+              class="px-2.5 py-1.5 flex items-center gap-1.5 text-[1em]"
               :style="{ borderBottom: art.preview ? `1px solid ${t.border}` : 'none' }"
             >
               <FileText :size="11" :style="{ color: t.textDim }" />
@@ -155,7 +155,7 @@
             </div>
             <pre
               v-if="art.preview"
-              class="text-[0.79em] px-2.5 py-2 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap"
+              class="text-[1em] px-2.5 py-2 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap"
               :style="{ color: t.textMuted, maxHeight: '160px' }"
               >{{ art.preview }}</pre
             >

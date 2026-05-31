@@ -4,7 +4,7 @@
     :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
   >
     <button
-      class="flex items-center gap-1.5 px-2 py-1 text-xs rounded transition"
+      class="flex items-center gap-1.5 px-2 py-1 text-[1em] rounded transition"
       :style="{
         color: backHover ? t.text : t.textMuted,
         background: backHover ? t.bgHover : 'transparent',
@@ -19,10 +19,10 @@
     <div class="w-px h-4" :style="{ background: t.border }" />
     <GitBranch v-if="fileKind === 'diff'" :size="12" :style="{ color: t.textDim }" />
     <FileCode v-else :size="12" :style="{ color: t.textDim }" />
-    <span class="text-xs font-mono" :style="{ color: t.text }">{{ fileName }}</span>
-    <span class="text-[0.71em]" :style="{ color: t.textFaint }">· {{ taskId }}</span>
+    <span class="text-[1em] font-mono" :style="{ color: t.text }">{{ fileName }}</span>
+    <span class="text-[1em]" :style="{ color: t.textFaint }">· {{ taskId }}</span>
 
-    <div v-if="diffStats" class="flex items-center gap-2 ml-2 text-[0.71em] font-mono">
+    <div v-if="diffStats" class="flex items-center gap-2 ml-2 text-[1em] font-mono">
       <span :style="{ color: t.textDim }">
         {{ diffStats.files }} {{ diffStats.files === 1 ? 'file' : 'files' }}
       </span>
@@ -39,7 +39,7 @@
         <button
           v-for="v in viewOptions"
           :key="v.id"
-          class="px-2 py-1 text-[0.79em] flex items-center gap-1 transition"
+          class="px-2 py-1 text-[1em] flex items-center gap-1 transition"
           :style="{
             background: activeView === v.id ? t.bgActive : 'transparent',
             color: activeView === v.id ? t.text : t.textDim,

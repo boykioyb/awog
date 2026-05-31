@@ -31,7 +31,7 @@
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
           <span
-            class="text-[0.64em] uppercase tracking-wider font-semibold flex-shrink-0"
+            class="text-[1em] uppercase tracking-wider font-semibold flex-shrink-0"
             :style="{ color: typeColor }"
           >
             {{ typeLabel }}
@@ -55,7 +55,7 @@
           <template v-else-if="item.type === 'thinking'">
             <span class="italic" :style="{ color: t.textMuted }">{{ item.text }}</span>
           </template>
-          <span class="ml-auto text-[0.71em] font-mono flex-shrink-0" :style="{ color: t.textDim }">
+          <span class="ml-auto text-[1em] font-mono flex-shrink-0" :style="{ color: t.textDim }">
             <span
               v-if="isRunning"
               class="inline-flex items-center gap-1"
@@ -69,14 +69,14 @@
         </div>
         <div
           v-if="item.type === 'subagent' && item.purpose"
-          class="text-[0.71em] mt-0.5"
+          class="text-[1em] mt-0.5"
           :style="{ color: t.textDim }"
         >
           {{ item.purpose }}
         </div>
         <div
           v-if="item.type === 'tool' && item.result"
-          class="text-[0.71em] mt-0.5"
+          class="text-[1em] mt-0.5"
           :style="{ color: t.textDim }"
         >
           → {{ item.result }}

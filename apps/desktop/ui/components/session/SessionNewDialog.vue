@@ -15,7 +15,7 @@
         class="px-4 py-3 flex items-center justify-between"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
-        <div class="text-[0.93em] font-semibold" :style="{ color: t.text }">New session</div>
+        <div class="text-[1em] font-semibold" :style="{ color: t.text }">New session</div>
         <button
           type="button"
           class="p-1 rounded transition flex items-center"
@@ -29,7 +29,7 @@
 
       <form class="px-4 py-4 space-y-4" @submit.prevent="onSubmit">
         <div class="space-y-1.5">
-          <label class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+          <label class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
             Title
           </label>
           <input
@@ -37,7 +37,7 @@
             v-model="title"
             type="text"
             placeholder="Untitled session"
-            class="w-full px-3 py-2 rounded text-[0.93em] outline-none"
+            class="w-full px-3 py-2 rounded text-[1em] outline-none"
             :style="{
               background: t.bgSubtle,
               color: t.text,
@@ -48,13 +48,13 @@
         </div>
 
         <div class="space-y-1.5">
-          <label class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+          <label class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
             Project
           </label>
           <div class="relative" tabindex="0" @blur="closeProjectMenu">
             <button
               type="button"
-              class="w-full px-3 py-2 rounded text-[0.93em] flex items-center justify-between gap-2"
+              class="w-full px-3 py-2 rounded text-[1em] flex items-center justify-between gap-2"
               :style="{
                 background: t.bgSubtle,
                 color: t.text,
@@ -90,7 +90,7 @@
                     v-model="projectQuery"
                     type="text"
                     placeholder="Search projects…"
-                    class="w-full pl-7 pr-2 py-1 rounded text-[0.86em] outline-none"
+                    class="w-full pl-7 pr-2 py-1 rounded text-[1em] outline-none"
                     :style="{
                       background: t.bgSubtle,
                       color: t.text,
@@ -104,7 +104,7 @@
                 <button
                   v-if="!projectQuery"
                   type="button"
-                  class="w-full text-left px-3 py-1.5 text-[0.86em] transition flex items-center gap-2"
+                  class="w-full text-left px-3 py-1.5 text-[1em] transition flex items-center gap-2"
                   :style="{
                     color: projectId === null ? t.accent : t.text,
                     background: projectId === null ? t.bgSubtle : 'transparent',
@@ -123,7 +123,7 @@
                   v-for="p in filteredProjects"
                   :key="p.id"
                   type="button"
-                  class="w-full text-left px-3 py-1.5 text-[0.86em] transition flex items-center gap-2"
+                  class="w-full text-left px-3 py-1.5 text-[1em] transition flex items-center gap-2"
                   :style="{
                     color: projectId === p.id ? t.accent : t.text,
                     background: projectId === p.id ? t.bgSubtle : 'transparent',
@@ -135,7 +135,7 @@
                 </button>
                 <div
                   v-if="projectQuery && !filteredProjects.length"
-                  class="px-3 py-2 text-[0.79em]"
+                  class="px-3 py-2 text-[1em]"
                   :style="{ color: t.textDim }"
                 >
                   No matches for “{{ projectQuery }}”.
@@ -148,7 +148,7 @@
         <div class="flex items-center justify-end gap-2 pt-2">
           <button
             type="button"
-            class="px-3 py-1.5 rounded text-[0.86em] transition"
+            class="px-3 py-1.5 rounded text-[1em] transition"
             :style="{ color: t.textDim, background: 'transparent' }"
             @click="onCancel"
           >
@@ -156,7 +156,7 @@
           </button>
           <button
             type="submit"
-            class="px-3 py-1.5 rounded text-[0.86em] font-medium transition"
+            class="px-3 py-1.5 rounded text-[1em] font-medium transition"
             :style="{ background: t.accent, color: t.accentText }"
           >
             Create

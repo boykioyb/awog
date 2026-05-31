@@ -7,11 +7,11 @@
       boxShadow: `0 12px 32px ${t.shadow}`,
     }"
   >
-    <span class="text-[0.86em]" :style="{ color: t.text }">
+    <span class="text-[1em]" :style="{ color: t.text }">
       {{ count }} skill{{ count === 1 ? '' : 's' }} selected
     </span>
     <button
-      class="text-[0.79em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded transition"
+      class="text-[1em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded transition"
       :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
       :disabled="deleting"
       @click="$emit('cancel')"
@@ -19,7 +19,7 @@
       Cancel
     </button>
     <button
-      class="text-[0.79em] inline-flex items-center gap-1.5 px-3 py-1 rounded font-medium transition"
+      class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1 rounded font-medium transition"
       :style="{
         background: t.dangerBg,
         color: t.danger,

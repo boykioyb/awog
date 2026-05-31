@@ -7,19 +7,23 @@
   >
     <component :is="icon" v-if="icon" :size="12" :style="{ color: iconColor, flexShrink: 0 }" />
     <span
-      class="text-xs flex-1 truncate text-left"
+      class="text-[1em] flex-1 truncate text-left"
       :class="mono ? 'font-mono' : ''"
       :style="{ color: labelColor }"
     >
       {{ label }}
     </span>
-    <span v-if="hint" class="text-[0.71em] flex-shrink-0 font-mono" :style="{ color: hintColor }">
+    <span
+      v-if="hint"
+      class="text-[12px] flex-shrink-0 font-mono leading-none"
+      :style="{ color: hintColor }"
+    >
       {{ hint }}
     </span>
     <span
       v-if="badge !== null && badge !== undefined"
-      class="text-[0.71em] flex-shrink-0 px-1.5 py-0.5 rounded font-medium"
-      :style="badgeStyle"
+      class="text-[12px] flex-shrink-0 px-1.5 py-0.5 rounded font-medium font-mono leading-none inline-flex items-center justify-center"
+      :style="{ ...badgeStyle, minWidth: '18px' }"
     >
       {{ badge }}
     </span>

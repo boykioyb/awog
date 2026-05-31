@@ -19,9 +19,9 @@
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
         <div class="flex items-center gap-2 mb-1.5">
-          <span class="text-[0.86em] font-mono" :style="{ color: t.text }">/{{ draft.name }}</span>
+          <span class="text-[1em] font-mono" :style="{ color: t.text }">/{{ draft.name }}</span>
           <span
-            class="text-[0.71em] px-1.5 py-0.5 rounded"
+            class="text-[1em] px-1.5 py-0.5 rounded"
             :style="{ background: t.bgPanel, color: t.textMuted, border: `1px solid ${t.border}` }"
           >
             {{ draft.type }}
@@ -29,17 +29,17 @@
           <span
             v-for="arg in draft.args"
             :key="arg.name"
-            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
             :style="{ background: t.bgPanel, color: t.textDim, border: `1px solid ${t.border}` }"
           >
             &lt;{{ arg.name }}{{ arg.required ? '' : '?' }}&gt;
           </span>
         </div>
-        <div class="text-[0.86em] mb-2" :style="{ color: t.textMuted }">
+        <div class="text-[1em] mb-2" :style="{ color: t.textMuted }">
           {{ draft.description }}
         </div>
         <div
-          class="text-[0.71em] font-mono p-2 rounded whitespace-pre-wrap"
+          class="text-[1em] font-mono p-2 rounded whitespace-pre-wrap"
           :style="{ background: t.bgPanel, color: t.textDim, border: `1px solid ${t.border}` }"
         >
           {{ draft.body }}
@@ -49,7 +49,7 @@
 
     <template #actions>
       <button
-        class="text-[0.79em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded"
+        class="text-[1em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded"
         :style="{ color: t.textMuted }"
         @click="draft && emit('edit-manually', draft)"
       >
@@ -57,7 +57,7 @@
         Edit details
       </button>
       <button
-        class="text-[0.79em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{ background: t.accent, color: t.accentText }"
         @click="draft && emit('save', { ...(draft as SlashCommand) })"
       >

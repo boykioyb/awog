@@ -26,14 +26,14 @@
           <ListFilter :size="12" />
           <div
             v-if="activeFilterCount > 0"
-            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[0.57em] font-semibold"
+            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[1em] font-semibold"
             :style="{ background: t.accent, color: t.accentText }"
           >
             {{ activeFilterCount }}
           </div>
         </button>
         <button
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
+          class="flex items-center gap-1 px-2.5 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="onNewSession"
         >
@@ -72,7 +72,7 @@
         />
         <button
           v-if="activeFilterCount > 0"
-          class="text-[0.71em] transition"
+          class="text-[1em] transition"
           :style="{ color: clearHover ? t.text : t.textDim }"
           @click="clearFilters"
           @mouseenter="clearHover = true"
@@ -109,11 +109,11 @@
                 }"
               />
               <span
-                class="text-[0.71em] uppercase tracking-wider font-medium flex-1 text-left truncate"
+                class="text-[1em] uppercase tracking-wider font-medium flex-1 text-left truncate"
               >
                 {{ group.label }}
               </span>
-              <span class="text-[0.71em]" :style="{ color: t.textFaint }">
+              <span class="text-[1em]" :style="{ color: t.textFaint }">
                 {{ group.sessions.length }}
               </span>
             </button>
@@ -154,7 +154,7 @@
                     v-if="renamingId === ses.id"
                     :ref="setRenameInputRef"
                     v-model="renameValue"
-                    class="text-[0.93em] leading-tight w-full rounded px-1 py-0.5"
+                    class="text-[1em] leading-tight w-full rounded px-1 py-0.5"
                     :style="{
                       background: t.bgInput,
                       border: `1px solid ${t.borderStrong}`,
@@ -168,7 +168,7 @@
                   />
                   <div class="flex items-center gap-1">
                     <div
-                      class="text-[0.93em] leading-tight truncate flex-1"
+                      class="text-[1em] leading-tight truncate flex-1"
                       :style="{ color: t.text }"
                       @dblclick.stop="startRename(ses.id, ses.title)"
                     >
@@ -184,7 +184,7 @@
                     </button>
                   </div>
                   <div
-                    class="text-[0.71em] mt-0.5 flex items-center gap-1.5"
+                    class="text-[1em] mt-0.5 flex items-center gap-1.5"
                     :style="{ color: t.textDim }"
                   >
                     <span>{{ fmt(ses.updatedAt) }}</span>
@@ -214,7 +214,7 @@
     </template>
 
     <template #empty-detail>
-      <div class="flex-1 flex items-center justify-center text-sm" :style="{ color: t.textDim }">
+      <div class="flex-1 flex items-center justify-center text-[1em]" :style="{ color: t.textDim }">
         Select a session
       </div>
     </template>

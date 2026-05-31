@@ -2,7 +2,7 @@
   <div class="space-y-6">
     <div>
       <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Models & API Keys</h2>
-      <div class="text-xs" :style="{ color: t.textDim }">
+      <div class="text-[1em]" :style="{ color: t.textDim }">
         Sign in to your model providers. Credentials stay on this device and never leave the
         sidecar.
       </div>
@@ -22,11 +22,11 @@
             <Sparkles :size="14" :style="{ color: t.textMuted }" />
           </div>
           <div class="flex-1">
-            <div class="text-[0.93em] font-medium" :style="{ color: t.text }">Anthropic</div>
-            <div class="text-[0.71em]" :style="{ color: t.textDim }">Claude Opus · Claude Sonnet</div>
+            <div class="text-[1em] font-medium" :style="{ color: t.text }">Anthropic</div>
+            <div class="text-[1em]" :style="{ color: t.textDim }">Claude Opus · Claude Sonnet</div>
           </div>
           <div
-            class="flex items-center gap-1.5 text-[0.79em]"
+            class="flex items-center gap-1.5 text-[1em]"
             :style="{ color: settings.isProviderConnected('anthropic') ? t.text : t.textDim }"
           >
             <div
@@ -43,14 +43,14 @@
         <div v-if="anthropicAccounts.length === 0" class="space-y-2">
           <button
             type="button"
-            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded text-[0.86em] font-medium transition"
+            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded text-[1em] font-medium transition"
             :style="{ background: t.accent, color: t.accentText, border: 'none' }"
             @click="onOpenOAuthDialog"
           >
             <LogIn :size="14" />
             Sign in with Claude
           </button>
-          <div class="text-[0.79em] text-center" :style="{ color: t.textDim }">
+          <div class="text-[1em] text-center" :style="{ color: t.textDim }">
             Uses your Claude Pro or Max subscription. No API key required.
           </div>
         </div>
@@ -85,20 +85,20 @@
               </button>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5">
-                  <div class="text-[0.86em] truncate" :style="{ color: t.text }">{{ acc.label }}</div>
+                  <div class="text-[1em] truncate" :style="{ color: t.text }">{{ acc.label }}</div>
                   <span
                     class="inline-block w-1.5 h-1.5 rounded-full shrink-0"
                     :style="{ background: statusColor(acc.status) }"
                     :title="acc.status"
                   />
                 </div>
-                <div class="text-[0.71em] truncate" :style="{ color: t.textDim }">
+                <div class="text-[1em] truncate" :style="{ color: t.textDim }">
                   {{ accountSubtitle(acc) }}
                 </div>
               </div>
               <button
                 type="button"
-                class="px-2 py-1 text-[0.79em] rounded transition inline-flex items-center gap-1"
+                class="px-2 py-1 text-[1em] rounded transition inline-flex items-center gap-1"
                 :style="iconBtnStyle"
                 :disabled="isTesting(acc.id)"
                 title="Test connection"
@@ -110,7 +110,7 @@
               </button>
               <button
                 type="button"
-                class="px-2 py-1 text-[0.79em] rounded transition flex items-center"
+                class="px-2 py-1 text-[1em] rounded transition flex items-center"
                 :style="iconBtnStyle"
                 title="Disconnect"
                 @click="onDisconnect('anthropic', acc.id)"
@@ -120,7 +120,7 @@
             </div>
             <div
               v-if="testResults[acc.id]"
-              class="text-[0.79em] px-2 py-1 rounded"
+              class="text-[1em] px-2 py-1 rounded"
               :style="testResultStyle(testResults[acc.id]!)"
             >
               {{ formatTestResult(testResults[acc.id]!) }}
@@ -129,7 +129,7 @@
 
           <button
             type="button"
-            class="w-full rounded px-2 py-1.5 text-[0.79em] flex items-center justify-center gap-1.5 transition"
+            class="w-full rounded px-2 py-1.5 text-[1em] flex items-center justify-center gap-1.5 transition"
             :style="{
               color: t.textDim,
               border: `1px dashed ${t.border}`,
@@ -146,7 +146,7 @@
         <div class="mt-3 pt-3" :style="{ borderTop: `1px solid ${t.border}` }">
           <button
             type="button"
-            class="w-full flex items-center justify-between text-[0.79em] transition"
+            class="w-full flex items-center justify-between text-[1em] transition"
             :style="{ color: t.textDim }"
             @click="advancedOpen = !advancedOpen"
           >
@@ -155,7 +155,7 @@
               Advanced — use API key
             </span>
             <span
-              class="px-1.5 py-0.5 rounded text-[0.71em] uppercase tracking-wider"
+              class="px-1.5 py-0.5 rounded text-[1em] uppercase tracking-wider"
               :style="{
                 background: t.bgInput,
                 border: `1px solid ${t.border}`,
@@ -167,7 +167,7 @@
           </button>
           <div
             v-if="advancedOpen"
-            class="mt-2 text-[0.79em] leading-relaxed"
+            class="mt-2 text-[1em] leading-relaxed"
             :style="{ color: t.textDim }"
           >
             API key auth will be added in a later release. For now, use Sign in with Claude above.
@@ -183,7 +183,7 @@
         :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
       >
         <span
-          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[0.71em] uppercase tracking-wider"
+          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[1em] uppercase tracking-wider"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.border}`,
@@ -200,15 +200,15 @@
             <Sparkles :size="14" :style="{ color: t.textMuted }" />
           </div>
           <div class="flex-1 min-w-0 pr-20">
-            <div class="text-[0.93em] font-medium" :style="{ color: t.text }">{{ prov.label }}</div>
-            <div class="text-[0.71em]" :style="{ color: t.textDim }">
+            <div class="text-[1em] font-medium" :style="{ color: t.text }">{{ prov.label }}</div>
+            <div class="text-[1em]" :style="{ color: t.textDim }">
               {{ prov.models.join(' · ') }}
             </div>
           </div>
         </div>
         <button
           type="button"
-          class="mt-2 w-full rounded px-2 py-1.5 text-[0.79em] flex items-center justify-center gap-1.5"
+          class="mt-2 w-full rounded px-2 py-1.5 text-[1em] flex items-center justify-center gap-1.5"
           :style="{
             color: t.textDim,
             border: `1px dashed ${t.border}`,
@@ -231,7 +231,7 @@
         :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
       >
         <span
-          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[0.71em] uppercase tracking-wider"
+          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[1em] uppercase tracking-wider"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.border}`,
@@ -248,17 +248,17 @@
             <Sparkles :size="14" :style="{ color: t.textMuted }" />
           </div>
           <div class="flex-1 min-w-0 pr-20">
-            <div class="text-[0.93em] font-medium truncate" :style="{ color: t.text }">
+            <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">
               {{ cp.label || 'Untitled provider' }}
             </div>
-            <div class="text-[0.71em] truncate" :style="{ color: t.textDim }">
+            <div class="text-[1em] truncate" :style="{ color: t.textDim }">
               {{ cp.baseUrl || 'No base URL' }}
               {{ cp.models.length ? `· ${cp.models.join(' · ')}` : '' }}
             </div>
           </div>
           <button
             type="button"
-            class="px-2 py-1 text-[0.79em] rounded transition flex items-center"
+            class="px-2 py-1 text-[1em] rounded transition flex items-center"
             :style="iconBtnStyle"
             title="Remove"
             @click="settings.removeCustomProvider(cp.id)"
@@ -286,8 +286,8 @@
           <Plus :size="14" :style="{ color: t.textDim }" />
         </div>
         <div class="flex-1">
-          <div class="text-[0.93em]" :style="{ color: t.text }">Add a custom provider</div>
-          <div class="text-[0.71em]" :style="{ color: t.textDim }">
+          <div class="text-[1em]" :style="{ color: t.text }">Add a custom provider</div>
+          <div class="text-[1em]" :style="{ color: t.textDim }">
             OpenRouter, Ollama, LM Studio — coming soon
           </div>
         </div>

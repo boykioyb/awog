@@ -109,7 +109,7 @@
     <div
       v-for="toast in toasts"
       :key="toast.id"
-      class="px-3 py-2 rounded text-xs shadow-lg"
+      class="px-3 py-2 rounded text-[1em] shadow-lg"
       :style="toastStyle(toast.kind)"
     >
       {{ toast.text }}

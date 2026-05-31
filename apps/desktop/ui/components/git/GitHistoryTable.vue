@@ -4,17 +4,17 @@
       class="flex items-center justify-between px-3 py-2 flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
         History
       </div>
-      <div class="text-[0.71em]" :style="{ color: t.textFaint }">
+      <div class="text-[1em]" :style="{ color: t.textFaint }">
         {{ tr('git.history.commits_count', { count: commits.length }) }}
       </div>
     </div>
 
     <div
       v-if="commits.length === 0"
-      class="flex-1 flex items-center justify-center text-xs"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
       {{ tr('git.history.no_commits') }}
@@ -65,7 +65,7 @@
               <GitRefBadge v-for="r in visibleRefs(c)" :key="`${c.hash}-${r.name}`" :ref-item="r" />
               <span
                 v-if="overflowCount(c) > 0"
-                class="text-[0.64em] px-1 py-0.5 rounded"
+                class="text-[1em] px-1 py-0.5 rounded"
                 :style="{
                   color: t.textDim,
                   background: t.bgInput,
@@ -77,7 +77,7 @@
               </span>
               <span
                 v-if="c.phaseId"
-                class="text-[0.64em] px-1 py-0.5 rounded font-mono"
+                class="text-[1em] px-1 py-0.5 rounded font-mono"
                 :style="{
                   background: t.infoBg,
                   color: t.info,
@@ -88,13 +88,13 @@
                 <Link :size="9" class="inline-block mr-0.5" />
                 {{ c.phaseId }}
               </span>
-              <span class="text-xs truncate" :style="{ color: t.text }">{{ c.subject }}</span>
+              <span class="text-[1em] truncate" :style="{ color: t.text }">{{ c.subject }}</span>
             </div>
 
             <!-- Author -->
             <div class="flex items-center gap-1.5 flex-shrink-0 w-[140px]">
               <span
-                class="inline-flex items-center justify-center text-[0.64em] rounded-full"
+                class="inline-flex items-center justify-center text-[1em] rounded-full"
                 :style="{
                   width: '18px',
                   height: '18px',
@@ -106,7 +106,7 @@
               >
                 {{ initials(c.authorName) }}
               </span>
-              <span class="text-[0.71em] truncate" :style="{ color: t.textMuted }">
+              <span class="text-[1em] truncate" :style="{ color: t.textMuted }">
                 {{ c.authorName }}
               </span>
             </div>
@@ -114,7 +114,7 @@
             <!-- Hash -->
             <button
               type="button"
-              class="font-mono text-[0.71em] flex-shrink-0 w-[70px] text-left transition"
+              class="font-mono text-[1em] flex-shrink-0 w-[70px] text-left transition"
               :style="{ color: t.accent }"
               :title="tr('git.header.copy_hash', { hash: c.hash })"
               @click.stop="onCopyHash(c.hash)"
@@ -124,7 +124,7 @@
 
             <!-- Date -->
             <span
-              class="text-[0.71em] flex-shrink-0 w-[140px] text-right"
+              class="text-[1em] flex-shrink-0 w-[140px] text-right"
               :style="{ color: t.textDim }"
               :title="new Date(c.date).toLocaleString()"
             >
@@ -141,7 +141,7 @@
       >
         <button
           type="button"
-          class="px-3 py-1 text-[0.71em] rounded transition"
+          class="px-3 py-1 text-[1em] rounded transition"
           :style="{
             background: t.bgInput,
             color: t.textMuted,

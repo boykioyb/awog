@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex items-center gap-2 text-[0.71em] px-2 py-1 rounded"
+    class="flex items-center gap-2 text-[1em] px-2 py-1 rounded"
     :style="{ background: t.bgInput, border: `1px solid ${t.border}`, color: t.textDim }"
   >
     <span class="font-mono uppercase">{{ progress.op }}</span>

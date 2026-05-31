@@ -4,7 +4,7 @@
     :type="type"
     :placeholder="placeholder"
     :disabled="disabled"
-    class="w-full rounded px-2 py-1.5 text-xs outline-none transition"
+    class="w-full rounded px-2 py-1.5 text-[1em] outline-none transition"
     :class="{ 'opacity-60 cursor-not-allowed': disabled }"
     :style="style"
     @input="onInput"

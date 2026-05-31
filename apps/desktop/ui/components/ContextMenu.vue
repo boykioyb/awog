@@ -22,7 +22,7 @@
           <button
             v-else
             :ref="(el: unknown) => setRowRef(i, el)"
-            class="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition"
+            class="w-full flex items-center gap-2 px-3 py-1.5 text-[1em] text-left transition"
             :style="itemStyle(item, hoverIndex === i || openSubmenuIndex === i)"
             :disabled="item.disabled"
             :title="item.tooltip ?? undefined"
@@ -34,7 +34,7 @@
             <span class="flex-1 truncate">{{ item.label }}</span>
             <span
               v-if="item.shortcut && !hasChildren(item)"
-              class="text-[0.71em]"
+              class="text-[1em]"
               :style="{ color: t.textFaint }"
             >
               {{ item.shortcut }}
@@ -71,7 +71,7 @@
             />
             <button
               v-else
-              class="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition"
+              class="w-full flex items-center gap-2 px-3 py-1.5 text-[1em] text-left transition"
               :style="itemStyle(child, subHoverIndex === ci)"
               :disabled="child.disabled"
               :title="child.tooltip ?? undefined"
@@ -81,7 +81,7 @@
             >
               <component :is="child.icon" v-if="child.icon" :size="12" class="flex-shrink-0" />
               <span class="flex-1 truncate">{{ child.label }}</span>
-              <span v-if="child.shortcut" class="text-[0.71em]" :style="{ color: t.textFaint }">
+              <span v-if="child.shortcut" class="text-[1em]" :style="{ color: t.textFaint }">
                 {{ child.shortcut }}
               </span>
             </button>

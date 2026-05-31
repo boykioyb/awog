@@ -4,13 +4,13 @@
       class="flex items-center justify-between px-3 py-2"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
         {{ tr('git.status.working_tree') }}
       </div>
       <div class="flex items-center gap-1">
         <button
           v-if="store.unstagedFiles.length > 0 || store.untrackedFiles.length > 0"
-          class="text-[0.71em] px-2 py-1 rounded transition"
+          class="text-[1em] px-2 py-1 rounded transition"
           :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
           @click="stageAll"
         >
@@ -18,7 +18,7 @@
         </button>
         <button
           v-if="store.stagedFiles.length > 0"
-          class="text-[0.71em] px-2 py-1 rounded transition"
+          class="text-[1em] px-2 py-1 rounded transition"
           :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
           @click="unstageAll"
         >

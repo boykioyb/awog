@@ -2,10 +2,10 @@
   <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl w-full">
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-2 min-w-0">
-        <div class="text-sm font-medium truncate" :style="{ color: t.text }">{{ title }}</div>
+        <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">{{ title }}</div>
         <span
           v-if="dirty"
-          class="text-[0.71em] uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
+          class="text-[1em] uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
           :style="{
             color: t.statusWarn,
             background: t.warningBg,
@@ -23,14 +23,14 @@
         <slot name="header-actions-extra" />
         <slot name="header-actions">
           <button
-            class="px-3 py-1.5 text-xs rounded transition"
+            class="px-3 py-1.5 text-[1em] rounded transition"
             :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
             @click="requestClose"
           >
             Cancel
           </button>
           <button
-            class="px-3 py-1.5 text-xs rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+            class="px-3 py-1.5 text-[1em] rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             :disabled="saveDisabled"
             :style="{
               background: saveDisabled ? t.bgInput : t.accent,
@@ -58,19 +58,19 @@
       size="sm"
       @close="showDiscardConfirm = false"
     >
-      <div class="p-4 text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
+      <div class="p-4 text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
         You have unsaved changes. Discard them and close the editor?
       </div>
       <template #footer>
         <button
-          class="px-3 py-1.5 text-xs rounded transition"
+          class="px-3 py-1.5 text-[1em] rounded transition"
           :style="{ color: t.textMuted }"
           @click="showDiscardConfirm = false"
         >
           Keep editing
         </button>
         <button
-          class="px-3 py-1.5 text-xs rounded font-medium transition"
+          class="px-3 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.danger, color: t.onAccent }"
           @click="confirmDiscard"
         >

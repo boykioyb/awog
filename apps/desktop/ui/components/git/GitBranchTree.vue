@@ -20,13 +20,13 @@
         <ChevronDown v-else :size="11" :style="{ color: t.textDim }" />
         <Folder :size="12" :style="{ color: t.textDim }" />
         <span
-          class="text-xs font-medium truncate"
+          class="text-[1em] font-medium truncate"
           :class="isRemote ? 'font-mono' : ''"
           :style="{ color: t.textMuted }"
         >
           {{ row.displayName }}
         </span>
-        <span class="text-[0.71em]" :style="{ color: t.textFaint }">({{ row.leafCount }})</span>
+        <span class="text-[1em]" :style="{ color: t.textFaint }">({{ row.leafCount }})</span>
       </div>
       <div
         v-else
@@ -51,7 +51,7 @@
           :style="{ color: row.branch.isCurrent ? t.accent : t.textDim }"
         />
         <span
-          class="text-xs flex-1 truncate"
+          class="text-[1em] flex-1 truncate"
           :class="isRemote ? 'font-mono' : ''"
           :style="{ color: isRemote ? t.textMuted : t.text }"
         >
@@ -59,14 +59,14 @@
         </span>
         <span
           v-if="!isRemote && row.branch.isCurrent"
-          class="text-[0.71em]"
+          class="text-[1em]"
           :style="{ color: t.textDim }"
         >
           current
         </span>
         <span
           v-if="!isRemote && (row.branch.ahead > 0 || row.branch.behind > 0)"
-          class="text-[0.71em] font-mono"
+          class="text-[1em] font-mono"
           :style="{ color: t.textDim }"
         >
           {{ row.branch.ahead > 0 ? `↑${row.branch.ahead}` : ''

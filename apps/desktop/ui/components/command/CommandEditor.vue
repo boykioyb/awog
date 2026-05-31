@@ -10,11 +10,11 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Name (after /)">
           <div class="flex items-center gap-1">
-            <span class="font-mono text-xs" :style="{ color: t.textDim }">/</span>
+            <span class="font-mono text-[1em]" :style="{ color: t.textDim }">/</span>
             <input
               :value="draft.name"
               placeholder="review"
-              class="flex-1 rounded px-2 py-1.5 text-xs font-mono"
+              class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
               :style="inputStyle"
               @input="(e: Event) => (draft.name = slugify((e.target as HTMLInputElement).value))"
             />
@@ -23,7 +23,7 @@
         <Field label="Type">
           <select
             v-model="draft.type"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           >
             <option value="prompt">prompt (template)</option>
@@ -38,7 +38,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[0.86em] resize-y min-h-[3rem]"
+          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -47,7 +47,7 @@
         <input
           v-model="aliasesText"
           placeholder="r, rev"
-          class="w-full rounded px-2 py-1.5 text-xs font-mono"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
         />
       </Field>
@@ -56,7 +56,7 @@
         <Field label="Scope">
           <select
             v-model="draft.scope"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           >
             <option value="global">global</option>
@@ -72,7 +72,7 @@
           <input
             v-model.number="draft.timeoutMs"
             type="number"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -90,13 +90,13 @@
             <input
               :value="arg.name"
               placeholder="name"
-              class="col-span-3 rounded px-2 py-1 text-[0.79em] font-mono"
+              class="col-span-3 rounded px-2 py-1 text-[1em] font-mono"
               :style="inputStyle"
               @input="(e: Event) => (arg.name = (e.target as HTMLInputElement).value)"
             />
             <select
               v-model="arg.type"
-              class="col-span-2 rounded px-2 py-1 text-[0.79em]"
+              class="col-span-2 rounded px-2 py-1 text-[1em]"
               :style="inputStyle"
             >
               <option value="string">string</option>
@@ -109,12 +109,12 @@
             <input
               :value="arg.description"
               placeholder="description"
-              class="col-span-5 rounded px-2 py-1 text-[0.79em]"
+              class="col-span-5 rounded px-2 py-1 text-[1em]"
               :style="inputStyle"
               @input="(e: Event) => (arg.description = (e.target as HTMLInputElement).value)"
             />
             <label
-              class="col-span-1 flex items-center gap-1 text-[0.71em] cursor-pointer"
+              class="col-span-1 flex items-center gap-1 text-[1em] cursor-pointer"
               :style="{ color: t.textDim }"
             >
               <input v-model="arg.required" type="checkbox" />
@@ -129,7 +129,7 @@
             </button>
           </div>
           <button
-            class="text-[0.79em] flex items-center gap-1"
+            class="text-[1em] flex items-center gap-1"
             :style="{ color: t.textDim }"
             @click="addArg"
           >
@@ -144,7 +144,7 @@
           v-model="draft.body"
           :rows="draft.type === 'prompt' ? 6 : 3"
           :placeholder="bodyPlaceholder"
-          class="w-full rounded px-2 py-1.5 text-[0.79em] font-mono leading-relaxed resize-y min-h-[5rem]"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[5rem]"
           :style="inputStyle"
         />
       </Field>

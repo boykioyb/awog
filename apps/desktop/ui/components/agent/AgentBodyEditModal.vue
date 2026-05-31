@@ -25,10 +25,10 @@
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-[0.86em] font-medium" :style="{ color: t.text }">{{ draft.name }}</span>
+          <span class="text-[1em] font-medium" :style="{ color: t.text }">{{ draft.name }}</span>
           <span
             v-if="draft.role"
-            class="text-[0.71em] px-1.5 py-0.5 rounded uppercase tracking-wider"
+            class="text-[1em] px-1.5 py-0.5 rounded uppercase tracking-wider"
             :style="{
               background: t.bgPanel,
               color: t.textMuted,
@@ -39,7 +39,7 @@
           </span>
           <span
             v-if="draft.id"
-            class="text-[0.71em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.bgPanel,
               color: t.textMuted,
@@ -49,11 +49,11 @@
             /{{ draft.id }}
           </span>
         </div>
-        <div class="text-[0.79em]" :style="{ color: t.textMuted }">
+        <div class="text-[1em]" :style="{ color: t.textMuted }">
           {{ draft.description }}
         </div>
         <div
-          class="rounded p-2 max-h-[40vh] overflow-y-auto text-[0.86em] leading-relaxed"
+          class="rounded p-2 max-h-[40vh] overflow-y-auto text-[1em] leading-relaxed"
           :style="{
             background: t.bgPanel,
             border: `1px solid ${t.border}`,
@@ -67,7 +67,7 @@
 
     <template #actions>
       <button
-        class="text-[0.79em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{
           background: canApply ? t.accent : t.bgInput,
           color: canApply ? t.accentText : t.textDim,

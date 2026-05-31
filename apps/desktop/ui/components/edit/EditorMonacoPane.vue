@@ -5,7 +5,7 @@
     :style="{ borderRight: isSplit ? `1px solid ${t.border}` : 'none' }"
   >
     <div class="flex-1 overflow-auto" :style="{ background: t.bg }">
-      <div class="flex font-mono text-[12.5px] leading-[1.6]" :style="{ minHeight: '100%' }">
+      <div class="flex font-mono text-[1em] leading-[1.6]" :style="{ minHeight: '100%' }">
         <div
           class="select-none text-right pr-3 pl-3 py-3 flex-shrink-0"
           :style="{

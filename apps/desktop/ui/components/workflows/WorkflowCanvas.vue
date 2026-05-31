@@ -28,7 +28,7 @@
     @drop="onCanvasDrop"
     @dragover.prevent
   >
-    <div class="absolute top-3 left-3 z-10 flex items-center gap-2 text-xs pointer-events-none">
+    <div class="absolute top-3 left-3 z-10 flex items-center gap-2 text-[1em] pointer-events-none">
       <div
         class="flex items-center gap-1.5 px-2.5 py-1 rounded backdrop-blur"
         :style="{ background: panelOverlayBg, border: `1px solid ${t.border}` }"
@@ -82,7 +82,7 @@
           :stroke-width="1.5"
           :style="{ color: t.textFaint }"
         />
-        <div class="text-sm" :style="{ color: t.textDim }">Drag agents from the left to begin</div>
+        <div class="text-[1em]" :style="{ color: t.textDim }">Drag agents from the left to begin</div>
       </div>
     </div>
   </div>
