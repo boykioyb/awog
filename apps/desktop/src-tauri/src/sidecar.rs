@@ -26,6 +26,8 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
+#[cfg(not(debug_assertions))]
+use tauri::Manager;
 use tauri_plugin_shell::{
     process::{CommandEvent, CommandChild},
     ShellExt,
@@ -125,10 +127,15 @@ pub fn spawn(app: AppHandle) -> Result<SidecarHandle> {
         .sidecar(SIDECAR_BINARY)
         .map_err(|e| anyhow!("failed to locate sidecar binary `{SIDECAR_BINARY}`: {e}"))?;
 
-    // Dev: Tauri copies only the launcher binary into target/debug/, leaving
-    // lib/ + node_modules/ behind. Point the launcher back at the sidecar dist
-    // via env so it can resolve the entry script. Release packaging will bundle
-    // siblings via tauri resources (TODO).
+    // The launcher shell script needs `lib/` + `node_modules/` siblings to
+    // resolve the Node entry. Tauri's externalBin only ships the launcher
+    // itself, so we stage those siblings separately and point the launcher
+    // at them via $AWOG_SIDECAR_DIST.
+    //
+    // Dev: read straight from the sidecar package dist/ (where `pnpm -F
+    // @awog/sidecar build` wrote them).
+    // Release: bundled as resources under `sidecar-runtime/` — resolved via
+    // PathResolver::resource_dir().
     #[cfg(debug_assertions)]
     {
         let manifest = env!("CARGO_MANIFEST_DIR");
@@ -136,6 +143,16 @@ pub fn spawn(app: AppHandle) -> Result<SidecarHandle> {
         dist.pop();
         dist.push("sidecar/dist");
         command = command.env("AWOG_SIDECAR_DIST", dist.to_string_lossy().to_string());
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        let resource_dir = app
+            .path()
+            .resource_dir()
+            .map_err(|e| anyhow!("failed to resolve resource_dir: {e}"))?;
+        let sidecar_dist = resource_dir.join("sidecar-runtime");
+        command = command.env("AWOG_SIDECAR_DIST", sidecar_dist.to_string_lossy().to_string());
     }
 
     let (mut events, child) = command
