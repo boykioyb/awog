@@ -20,14 +20,15 @@
       >
         <div class="flex items-center gap-2">
           <AlertTriangle :size="16" :style="{ color: t.warning }" />
-          <div class="text-sm font-medium">Commit ở detached HEAD?</div>
+          <div class="text-sm font-medium">{{ tr('git.commit_panel.detached_title') }}</div>
         </div>
         <div class="text-xs leading-relaxed" :style="{ color: t.textDim }">
-          Bạn đang ở detached HEAD
-          <span class="font-mono" :style="{ color: t.text }">{{ store.detachedAt }}</span>
-          . Commit ở đây sẽ mất nếu không tạo branch trước. Tạo branch
-          <span class="font-mono" :style="{ color: t.text }">temp/{{ store.detachedAt }}</span>
-          để giữ commit, hoặc commit anyway.
+          {{
+            tr('git.commit_panel.detached_body', {
+              sha: store.detachedAt ?? '',
+              branch: `temp/${store.detachedAt ?? ''}`,
+            })
+          }}
         </div>
         <div class="flex items-center gap-2 justify-end pt-1">
           <button
@@ -39,7 +40,7 @@
             }"
             @click="pendingDetachedCommit = false"
           >
-            Cancel
+            {{ tr('common.cancel') }}
           </button>
           <button
             class="text-xs px-3 py-1.5 rounded transition"
@@ -50,7 +51,7 @@
             }"
             @click="onCreateBranchThenCommit"
           >
-            Create branch + commit
+            {{ tr('git.commit_panel.create_branch_then_commit') }}
           </button>
           <button
             class="text-xs px-3 py-1.5 rounded transition font-medium"
@@ -61,14 +62,14 @@
             }"
             @click="onCommitAnyway"
           >
-            Commit anyway
+            {{ tr('git.commit_panel.commit_anyway') }}
           </button>
         </div>
       </div>
     </div>
     <div class="px-3 py-2 flex items-center justify-between gap-2">
       <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
-        Commit message
+        {{ tr('git.commit_panel.message_header') }}
       </div>
       <div class="flex items-center gap-2">
         <button
@@ -77,16 +78,24 @@
           :style="generateBtnStyle"
           :disabled="generateDisabled"
           :title="
-            store.stagedFiles.length === 0 ? 'Stage file trước khi generate' : 'Tạo message bằng AI'
+            store.stagedFiles.length === 0
+              ? tr('git.commit_panel.generate_disabled_hint')
+              : tr('git.commit_panel.generate_hint')
           "
           @click="doGenerate"
         >
           <Loader2 v-if="store.isGeneratingMessage" :size="12" class="animate-spin" />
           <Sparkles v-else :size="12" />
-          <span>{{ store.isGeneratingMessage ? 'Generating…' : 'Generate AI' }}</span>
+          <span>
+            {{
+              store.isGeneratingMessage
+                ? tr('git.commit_panel.generating')
+                : tr('git.commit_panel.generate')
+            }}
+          </span>
         </button>
         <div class="text-[0.71em]" :style="{ color: t.textFaint }">
-          {{ store.stagedFiles.length }} file(s) staged
+          {{ tr('git.commit_panel.files_staged', { count: store.stagedFiles.length }) }}
         </div>
       </div>
     </div>
@@ -94,7 +103,7 @@
       <textarea
         :value="store.commitMessage"
         rows="3"
-        placeholder="Summary (required)&#10;&#10;Optional longer description"
+        :placeholder="tr('git.commit_panel.message_placeholder')"
         class="w-full rounded text-xs px-2 py-1.5 font-mono resize-y min-h-[5rem]"
         :style="{
           background: t.bgInput,
@@ -117,7 +126,7 @@
         :disabled="commitDisabled"
         @click="doCommit"
       >
-        Commit
+        {{ tr('git.commit_panel.commit') }}
       </button>
       <button
         class="text-xs px-3 py-1.5 rounded transition"
@@ -129,7 +138,7 @@
         :disabled="store.commits.length === 0"
         @click="doAmend"
       >
-        Amend
+        {{ tr('git.commit_panel.amend') }}
       </button>
     </div>
   </div>
@@ -139,6 +148,7 @@
 import { AlertTriangle, Loader2, Sparkles } from 'lucide-vue-next'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
 const focused = ref(false)
@@ -179,7 +189,7 @@ const commitBtnStyle = computed(() => ({
 const doCommit = async () => {
   if (commitDisabled.value) return
   if (!store.commitMessage.trim()) {
-    inlineError.value = 'Commit message không được rỗng'
+    inlineError.value = tr('git.commit_panel.empty_message')
     return
   }
   if (store.isDetached) {

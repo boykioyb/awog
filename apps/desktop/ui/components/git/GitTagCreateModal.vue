@@ -1,13 +1,12 @@
 <template>
-  <BaseModal :open="open" title="Create tag" size="sm" @close="emit('close')">
+  <BaseModal :open="open" :title="tr('git.tag.title')" size="sm" @close="emit('close')">
     <div class="p-4 flex flex-col gap-3">
       <div class="text-[0.71em]" :style="{ color: t.textDim }">
-        Target:
-        <span class="font-mono" :style="{ color: t.accent }">{{ targetShortHash }}</span>
+        {{ tr('git.tag.target', { sha: targetShortHash }) }}
       </div>
       <div class="flex flex-col gap-1">
         <label class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textFaint }">
-          Tag name
+          {{ tr('git.tag.name') }}
         </label>
         <input
           v-model="name"
@@ -32,11 +31,11 @@
           class="cursor-pointer"
           :style="{ accentColor: t.accent }"
         />
-        <span>Annotated tag (with message)</span>
+        <span>{{ tr('git.tag.annotated') }}</span>
       </label>
       <div v-if="annotated" class="flex flex-col gap-1">
         <label class="text-[0.71em] uppercase tracking-wider" :style="{ color: t.textFaint }">
-          Message
+          {{ tr('git.tag.message') }}
         </label>
         <!-- Resize-y per coding-guide for content-style textareas. -->
         <textarea
@@ -59,7 +58,7 @@
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
-        Cancel
+        {{ tr('common.cancel') }}
       </button>
       <button
         class="px-3 py-1.5 text-xs rounded font-medium transition"
@@ -72,7 +71,7 @@
         :disabled="!canSubmit"
         @click="onSubmit"
       >
-        Create tag
+        {{ tr('git.tag.confirm') }}
       </button>
     </template>
   </BaseModal>
@@ -92,6 +91,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 const name = ref('')
 const message = ref('')

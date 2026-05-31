@@ -37,16 +37,20 @@ const props = defineProps<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const sidecar = useSidecar()
 
 const headline = computed(() =>
-  props.installed ? 'Git version cũ — không hỗ trợ' : 'Git CLI không được tìm thấy',
+  props.installed ? tr('git.not_installed.headline_old') : tr('git.not_installed.headline_missing'),
 )
 const description = computed(() => {
   if (props.installed) {
-    return `AWOG yêu cầu Git ≥ ${props.required}. Phiên bản hiện tại: ${props.version || 'unknown'}. Vui lòng nâng cấp Git rồi restart AWOG.`
+    return tr('git.not_installed.description_old', {
+      required: props.required,
+      version: props.version || 'unknown',
+    })
   }
-  return `AWOG cần Git CLI ≥ ${props.required} để versioning workspace. Cài Git rồi restart AWOG.`
+  return tr('git.not_installed.description_missing', { required: props.required })
 })
 
 const onDownload = async () => {

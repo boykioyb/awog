@@ -40,6 +40,18 @@
         </select>
       </SettingsField>
 
+      <SettingsField :label="tr('settings.language')" :hint="tr('settings.language.hint')">
+        <select
+          v-model="appearance.locale"
+          class="w-full px-2 py-1.5 rounded text-[0.86em] outline-none"
+          :style="selectStyle"
+          @change="onUpdate({ locale: appearance.locale })"
+        >
+          <option value="en">English</option>
+          <option value="vi">Tiếng Việt</option>
+        </select>
+      </SettingsField>
+
       <SettingsField label="Font size" :hint="`${appearance.fontSize}px`">
         <input
           v-model.number="appearance.fontSize"
@@ -195,6 +207,7 @@ import {
 import { ACCENT_PRESETS, SURFACE_DEPTH_OPTIONS, THEME_COLOR_PRESETS } from '~/utils/theme-presets'
 
 const { t, themeName } = useTheme()
+const { t: tr } = useI18n()
 const { appearance, update, reset } = useAppearance()
 
 const onUpdate = (patch: Partial<AppearanceSettings>) => {

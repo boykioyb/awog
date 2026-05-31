@@ -8,11 +8,11 @@
     }"
   >
     <AlertTriangle :size="12" />
-    <span class="font-medium">DETACHED HEAD</span>
+    <span class="font-medium">{{ tr('git.detached.label') }}</span>
     <span v-if="detachedAt" class="font-mono" :style="{ color: t.textDim }">
-      at {{ detachedAt }}
+      {{ tr('git.detached.at', { sha: detachedAt }) }}
     </span>
-    <span :style="{ color: t.textDim }">— commit ở đây sẽ mất nếu không tạo branch trước.</span>
+    <span :style="{ color: t.textDim }">{{ tr('git.detached.warn') }}</span>
   </div>
 </template>
 
@@ -26,4 +26,5 @@ type Props = {
 defineProps<Props>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 </script>

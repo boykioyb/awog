@@ -1,16 +1,9 @@
 <template>
-  <BaseModal :open="open" title="Uncommitted changes" size="sm" @close="emit('close')">
+  <BaseModal :open="open" :title="tr('git.dirty_checkout.title')" size="sm" @close="emit('close')">
     <div class="p-4 text-xs flex flex-col gap-2" :style="{ color: t.textMuted }">
-      <div>
-        Workspace có change uncommitted. Chuyển sang
-        <span class="font-mono">{{ targetBranch }}</span>
-        bằng cách nào?
-      </div>
+      <div>{{ tr('git.dirty_checkout.question', { branch: targetBranch }) }}</div>
       <div :style="{ color: t.textFaint }">
-        <span class="font-medium" :style="{ color: t.textMuted }">Stash:</span>
-        cất change vào stash, checkout sạch, sau đó pop lại.
-        <span class="font-medium" :style="{ color: t.textMuted }">Force:</span>
-        bỏ qua check — change sẽ bị git ghi đè nếu xung đột.
+        {{ tr('git.dirty_checkout.stash_hint') }} {{ tr('git.dirty_checkout.force_hint') }}
       </div>
       <div
         v-if="files.length > 0"
@@ -34,7 +27,7 @@
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
-        Cancel
+        {{ tr('common.cancel') }}
       </button>
       <button
         class="px-3 py-1.5 text-xs rounded transition"
@@ -45,7 +38,7 @@
         }"
         @click="emit('stash-and-checkout')"
       >
-        Stash & checkout
+        {{ tr('git.dirty_checkout.stash_and_checkout') }}
       </button>
       <button
         class="px-3 py-1.5 text-xs rounded font-medium transition"
@@ -56,7 +49,7 @@
         }"
         @click="emit('force')"
       >
-        Force checkout
+        {{ tr('git.dirty_checkout.force_checkout') }}
       </button>
     </template>
   </BaseModal>
@@ -82,4 +75,5 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 </script>

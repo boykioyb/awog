@@ -7,7 +7,9 @@
       <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
         History
       </div>
-      <div class="text-[0.71em]" :style="{ color: t.textFaint }">{{ commits.length }} commits</div>
+      <div class="text-[0.71em]" :style="{ color: t.textFaint }">
+        {{ tr('git.history.commits_count', { count: commits.length }) }}
+      </div>
     </div>
 
     <div
@@ -15,7 +17,7 @@
       class="flex-1 flex items-center justify-center text-xs"
       :style="{ color: t.textDim }"
     >
-      No commits yet
+      {{ tr('git.history.no_commits') }}
     </div>
 
     <div v-else class="flex-1 overflow-y-auto">
@@ -71,7 +73,7 @@
                 }"
                 :title="overflowTitle(c)"
               >
-                +{{ overflowCount(c) }} more
+                {{ tr('git.history.overflow_more', { count: overflowCount(c) }) }}
               </span>
               <span
                 v-if="c.phaseId"
@@ -81,7 +83,7 @@
                   color: t.info,
                   border: `1px solid ${t.infoBorder}`,
                 }"
-                :title="`Linked phase ${c.phaseId}`"
+                :title="tr('git.history.linked_phase_tip', { phase: c.phaseId })"
               >
                 <Link :size="9" class="inline-block mr-0.5" />
                 {{ c.phaseId }}
@@ -114,7 +116,7 @@
               type="button"
               class="font-mono text-[0.71em] flex-shrink-0 w-[70px] text-left transition"
               :style="{ color: t.accent }"
-              :title="`Click để copy ${c.hash}`"
+              :title="tr('git.header.copy_hash', { hash: c.hash })"
               @click.stop="onCopyHash(c.hash)"
             >
               {{ c.shortHash }}
@@ -149,7 +151,7 @@
           :disabled="loading"
           @click="emit('load-more')"
         >
-          {{ loading ? 'Loading…' : 'Load more' }}
+          {{ loading ? tr('common.loading') : tr('common.load_more') }}
         </button>
       </div>
     </div>
@@ -164,8 +166,8 @@
 
     <GitBranchNameModal
       :open="branchModalOpen"
-      title="New branch from this commit"
-      submit-label="Create"
+      :title="tr('git.menu.new_branch')"
+      :submit-label="tr('git.branches.create_submit')"
       placeholder="branch-name"
       :from-label="contextMenu ? contextMenu.commit.shortHash : ''"
       :model-value="newBranchName"
@@ -192,32 +194,42 @@
 
     <ConfirmDeleteModal
       v-if="checkoutCommitConfirm"
-      title="Checkout commit (detached HEAD)?"
-      :description="`HEAD sẽ trỏ thẳng tới commit ${actionSha7} thay vì một branch. Mọi commit mới sẽ không thuộc branch nào cho tới khi bạn tạo branch hoặc checkout lại.`"
+      :title="tr('git.checkout_commit.title')"
+      :description="tr('git.checkout_commit.description', { sha: actionSha7 })"
+      kind="primary"
+      :confirm-label="tr('git.checkout_commit.confirm')"
       @confirm="onCheckoutCommitConfirm"
       @cancel="checkoutCommitConfirm = false"
     />
 
     <ConfirmDeleteModal
       v-if="cherryPickConfirm"
-      title="Cherry-pick commit?"
-      :description="`Áp dụng commit ${actionSha7} lên top của ${store.currentBranch}. Conflict sẽ mở Conflict Resolver.`"
+      :title="tr('git.cherry_pick.title')"
+      :description="
+        tr('git.cherry_pick.description', { sha: actionSha7, branch: store.currentBranch })
+      "
+      kind="primary"
+      :confirm-label="tr('git.cherry_pick.confirm')"
       @confirm="onCherryPickConfirm"
       @cancel="cherryPickConfirm = false"
     />
 
     <ConfirmDeleteModal
       v-if="revertConfirm"
-      title="Revert commit?"
-      :description="`Tạo một commit nghịch đảo của ${actionSha7} trên ${store.currentBranch}. Conflict sẽ mở Conflict Resolver.`"
+      :title="tr('git.revert.title')"
+      :description="tr('git.revert.description', { sha: actionSha7, branch: store.currentBranch })"
+      kind="primary"
+      :confirm-label="tr('git.revert.confirm')"
       @confirm="onRevertConfirm"
       @cancel="revertConfirm = false"
     />
 
     <ConfirmDeleteModal
       v-if="savePatchConfirm"
-      title="Save commit as patch?"
-      :description="`Sẽ mở save dialog để chọn nơi ghi file ${actionSha7}.patch.`"
+      :title="tr('git.save_patch.title')"
+      :description="tr('git.save_patch.description', { sha: actionSha7 })"
+      kind="primary"
+      :confirm-label="tr('git.save_patch.confirm')"
       @confirm="onSavePatchConfirm"
       @cancel="savePatchConfirm = false"
     />
@@ -264,6 +276,7 @@ const props = withDefaults(defineProps<Props>(), { loading: false })
 const emit = defineEmits<{ select: [hash: string]; 'load-more': [] }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const hovered = ref<string | null>(null)
 
 const ROW_HEIGHT = 28
@@ -363,45 +376,45 @@ const captureTarget = (commit: GitCommit) => {
 // Interactive Rebase submenu — entirely placeholder, every child disabled
 // with a tooltip explaining the deferral. UI plumbing for nesting still ships
 // so we can light these up in v2 without changing the menu layout.
-const rebaseChildren: ContextMenuItem[] = [
+const rebaseChildren = computed<ContextMenuItem[]>(() => [
   {
-    label: "Interactively Rebase 'HEAD' to Here…",
+    label: tr('git.menu.rebase_to_here', { branch: 'HEAD' }),
     disabled: true,
-    tooltip: 'Coming v2',
+    tooltip: tr('common.coming_v2'),
   },
   { separator: true },
   {
-    label: 'Reword Message…',
+    label: tr('git.menu.reword'),
     icon: Pencil,
     disabled: true,
-    tooltip: 'Coming v2',
+    tooltip: tr('common.coming_v2'),
   },
   {
-    label: 'Edit…',
+    label: tr('git.menu.edit'),
     icon: Edit3,
     disabled: true,
-    tooltip: 'Coming v2',
+    tooltip: tr('common.coming_v2'),
   },
   {
-    label: 'Squash into Parent…',
+    label: tr('git.menu.squash'),
     icon: SquareStack,
     disabled: true,
-    tooltip: 'Coming v2',
+    tooltip: tr('common.coming_v2'),
   },
   {
-    label: 'Fixup into Parent…',
+    label: tr('git.menu.fixup'),
     icon: Scissors,
     disabled: true,
-    tooltip: 'Coming v2',
+    tooltip: tr('common.coming_v2'),
   },
   {
-    label: 'Drop…',
+    label: tr('git.menu.drop'),
     icon: Trash2,
     danger: true,
     disabled: true,
-    tooltip: 'Coming v2',
+    tooltip: tr('common.coming_v2'),
   },
-]
+])
 
 const contextMenuItems = computed<ContextMenuItem[]>(() => {
   const ctx = contextMenu.value
@@ -409,7 +422,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
   const c = ctx.commit
   return [
     {
-      label: 'New Branch from this commit…',
+      label: tr('git.menu.new_branch'),
       icon: GitBranchPlus,
       action: () => {
         captureTarget(c)
@@ -418,7 +431,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
     {
-      label: 'New Tag…',
+      label: tr('git.menu.new_tag'),
       icon: Tag,
       action: () => {
         captureTarget(c)
@@ -426,12 +439,12 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
     {
-      label: 'Interactive Rebase',
+      label: tr('git.menu.interactive_rebase'),
       icon: GitFork,
-      children: rebaseChildren,
+      children: rebaseChildren.value,
     },
     {
-      label: `Reset '${store.currentBranch}' to Here…`,
+      label: tr('git.menu.reset_to_here', { branch: store.currentBranch }),
       icon: RotateCcw,
       action: () => {
         captureTarget(c)
@@ -440,7 +453,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
     },
     { separator: true },
     {
-      label: 'Checkout Commit…',
+      label: tr('git.menu.checkout_commit'),
       icon: GitBranchPlus,
       action: () => {
         captureTarget(c)
@@ -448,7 +461,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
     {
-      label: 'Cherry-pick Commit…',
+      label: tr('git.menu.cherry_pick'),
       icon: Copy,
       action: () => {
         captureTarget(c)
@@ -456,7 +469,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
     {
-      label: 'Revert Commit…',
+      label: tr('git.menu.revert'),
       icon: Undo2,
       action: () => {
         captureTarget(c)
@@ -464,7 +477,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
     {
-      label: 'Save as Patch…',
+      label: tr('git.menu.save_patch'),
       icon: FileDown,
       action: () => {
         captureTarget(c)
@@ -473,16 +486,17 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
     },
     { separator: true },
     {
-      label: 'Compare to Local Changes',
+      label: tr('git.menu.compare_to_local'),
       icon: GitCompare,
-      action: () => {
+      action: async () => {
         captureTarget(c)
-        openCompare(c.hash)
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+        await openCompare(c.hash)
       },
     },
     { separator: true },
     {
-      label: 'Copy Commit SHA',
+      label: tr('git.menu.copy_sha'),
       icon: Copy,
       shortcut: '⌘C',
       action: () => onCopyHash(c.hash),
@@ -552,7 +566,7 @@ const onSavePatchConfirm = async () => {
   await store.savePatch(sha, savePath)
 }
 
-const openCompare = async (sha: string) => {
+async function openCompare(sha: string) {
   compareOpen.value = true
   compareLoading.value = true
   compareFiles.value = []

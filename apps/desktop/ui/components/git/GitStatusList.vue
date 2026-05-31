@@ -5,7 +5,7 @@
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
       <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
-        Working tree
+        {{ tr('git.status.working_tree') }}
       </div>
       <div class="flex items-center gap-1">
         <button
@@ -14,7 +14,7 @@
           :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
           @click="stageAll"
         >
-          Stage all
+          {{ tr('git.status.stage_all') }}
         </button>
         <button
           v-if="store.stagedFiles.length > 0"
@@ -22,7 +22,7 @@
           :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
           @click="unstageAll"
         >
-          Unstage all
+          {{ tr('git.status.unstage_all') }}
         </button>
       </div>
     </div>
@@ -31,12 +31,12 @@
       <EmptyView
         v-if="store.statusFiles.length === 0"
         :icon="CheckCircle2"
-        title="Working tree clean"
+        :title="tr('git.status.tree_clean')"
       />
 
       <GitStatusSection
         v-if="store.conflictedFiles.length > 0"
-        label="Conflicted"
+        :label="tr('git.status.conflicted')"
         :files="store.conflictedFiles"
         :selected-path="store.selectedFilePath"
         :show-stage="false"
@@ -49,7 +49,7 @@
 
       <GitStatusSection
         v-if="store.stagedFiles.length > 0"
-        label="Staged"
+        :label="tr('git.status.staged')"
         :files="store.stagedFiles"
         :selected-path="store.selectedFilePath"
         :show-stage="true"
@@ -63,7 +63,7 @@
 
       <GitStatusSection
         v-if="store.unstagedFiles.length > 0"
-        label="Changes"
+        :label="tr('git.status.changes')"
         :files="store.unstagedFiles"
         :selected-path="store.selectedFilePath"
         :show-stage="true"
@@ -76,7 +76,7 @@
 
       <GitStatusSection
         v-if="store.untrackedFiles.length > 0"
-        label="Untracked"
+        :label="tr('git.status.untracked')"
         :files="store.untrackedFiles"
         :selected-path="store.selectedFilePath"
         :show-stage="true"
@@ -90,8 +90,8 @@
 
     <ConfirmDeleteModal
       v-if="pendingDiscard"
-      title="Discard changes?"
-      :description="`Sẽ xóa vĩnh viễn change uncommitted của '${pendingDiscard}'. Tiếp tục?`"
+      :title="tr('git.discard.title')"
+      :description="tr('git.discard.description', { path: pendingDiscard })"
       @confirm="confirmDiscard"
       @cancel="pendingDiscard = null"
     />
@@ -112,6 +112,7 @@ import type { GitFileStatus } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
 const pendingDiscard = ref<string | null>(null)
@@ -196,20 +197,20 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
   // Stage / Unstage (primary action)
   if (file.hasConflict) {
     items.push({
-      label: 'Mark resolved (stage)',
+      label: tr('git.menu.mark_resolved'),
       icon: Plus,
       action: () => store.stageFile(file.path),
     })
   } else if (file.isStaged) {
     items.push({
-      label: 'Unstage',
+      label: tr('git.menu.unstage'),
       icon: Undo2,
       shortcut: '⌘U',
       action: () => store.unstageFile(file.path),
     })
   } else {
     items.push({
-      label: 'Stage',
+      label: tr('git.menu.stage'),
       icon: Plus,
       shortcut: '⌘S',
       action: () => store.stageFile(file.path),
@@ -219,7 +220,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
   // Discard (only when uncommitted change exists)
   if (!file.isStaged) {
     items.push({
-      label: 'Discard changes…',
+      label: tr('git.menu.discard'),
       icon: Trash2,
       danger: true,
       shortcut: '⇧⌘D',
@@ -231,21 +232,21 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
 
   // Bulk
   if (file.isStaged && hasAnyStaged) {
-    items.push({ label: 'Unstage all', icon: Undo2, action: unstageAll })
+    items.push({ label: tr('git.menu.unstage_all'), icon: Undo2, action: unstageAll })
   } else if (!file.isStaged && hasAnyUnstaged) {
-    items.push({ label: 'Stage all', icon: Plus, action: stageAll })
+    items.push({ label: tr('git.menu.stage_all'), icon: Plus, action: stageAll })
   }
 
   items.push({ separator: true })
 
   // Clipboard
   items.push({
-    label: 'Copy relative path',
+    label: tr('git.menu.copy_rel_path'),
     icon: Copy,
     action: () => copyToClipboard(file.path),
   })
   items.push({
-    label: 'Copy absolute path',
+    label: tr('git.menu.copy_abs_path'),
     icon: Copy,
     shortcut: '⌘C',
     action: () => copyToClipboard(absPath),
@@ -254,13 +255,13 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
   // OS integration — wired to Tauri `reveal_path` / `open_path` commands.
   const hasWorkspace = resolveWorkspaceRoot() !== ''
   items.push({
-    label: 'Show in Finder',
+    label: tr('git.menu.show_in_finder'),
     icon: FolderOpen,
     disabled: !hasWorkspace,
     action: () => revealInFinder(file.path),
   })
   items.push({
-    label: 'Open',
+    label: tr('git.menu.open'),
     icon: FileText,
     disabled: !hasWorkspace,
     action: () => openFile(file.path),

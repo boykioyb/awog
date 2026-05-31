@@ -110,6 +110,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   themeColor: 'mono',
   themeColorCustom: '#a3a3a3',
   surfaceDepth: 'flat',
+  locale: 'en',
 }
 
 interface AccountsListResponse {

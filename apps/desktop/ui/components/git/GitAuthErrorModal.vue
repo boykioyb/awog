@@ -1,11 +1,7 @@
 <template>
-  <BaseModal :open="error !== null" title="Authentication failed" size="sm" @close="emit('close')">
+  <BaseModal :open="error !== null" :title="tr('git.auth.title')" size="sm" @close="emit('close')">
     <div class="p-4 text-xs flex flex-col gap-3" :style="{ color: t.textMuted }">
-      <div :style="{ color: t.text }">
-        Git
-        <span class="font-mono">{{ error?.op }}</span>
-        không xác thực được với remote.
-      </div>
+      <div :style="{ color: t.text }">{{ tr('git.auth.lead', { op: error?.op ?? '' }) }}</div>
       <div :style="{ color: t.textMuted }">{{ hintCopy }}</div>
       <pre
         v-if="error?.message"
@@ -20,7 +16,7 @@
         :style="{ background: t.accent, color: t.accentText }"
         @click="emit('close')"
       >
-        Đóng
+        {{ tr('common.close') }}
       </button>
     </template>
   </BaseModal>
@@ -36,15 +32,16 @@ const props = defineProps<{ error: AuthError | null }>()
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 const hintCopy = computed(() => {
   switch (props.error?.hint) {
     case 'ssh-key':
-      return 'Kiểm tra SSH key đã add vào agent. Chạy `ssh-add` trong terminal.'
+      return tr('git.auth.hint.ssh_key')
     case 'https-token':
-      return 'Token HTTPS hết hạn hoặc sai. Cập nhật qua git credential helper / Keychain.'
+      return tr('git.auth.hint.https_token')
     default:
-      return 'Xác thực thất bại — kiểm tra credential cấu hình cho remote.'
+      return tr('git.auth.hint.unknown')
   }
 })
 </script>

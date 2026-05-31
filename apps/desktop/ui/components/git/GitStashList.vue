@@ -4,7 +4,9 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">Stashes</div>
+      <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
+        Stashes
+      </div>
       <button
         class="flex items-center gap-1 px-2 py-1 text-[0.71em] rounded transition"
         :style="{ background: t.accent, color: t.accentText }"
@@ -71,11 +73,16 @@
       </div>
     </div>
 
-    <BaseModal :open="showSave" title="Save stash" size="sm" @close="showSave = false">
+    <BaseModal
+      :open="showSave"
+      :title="tr('git.stash.title_save')"
+      size="sm"
+      @close="showSave = false"
+    >
       <div class="p-4">
         <input
           v-model="newMessage"
-          placeholder="Stash message (optional)"
+          :placeholder="tr('git.stash.placeholder')"
           class="w-full rounded text-xs px-2 py-1.5"
           :style="{
             background: t.bgInput,
@@ -92,22 +99,22 @@
           :style="{ color: t.textMuted }"
           @click="showSave = false"
         >
-          Cancel
+          {{ tr('common.cancel') }}
         </button>
         <button
           class="px-3 py-1.5 text-xs rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="onSave"
         >
-          Save
+          {{ tr('common.save') }}
         </button>
       </template>
     </BaseModal>
 
     <ConfirmDeleteModal
       v-if="pendingDrop !== null"
-      title="Drop stash?"
-      :description="`Stash sẽ bị xóa vĩnh viễn. Tiếp tục?`"
+      :title="tr('git.stash.drop_title')"
+      :description="tr('git.stash.drop_description')"
       @confirm="confirmDrop"
       @cancel="pendingDrop = null"
     />
@@ -118,6 +125,7 @@
 import { Archive, Plus } from 'lucide-vue-next'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
 const showSave = ref(false)

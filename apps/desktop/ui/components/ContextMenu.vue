@@ -21,7 +21,7 @@
           />
           <button
             v-else
-            :ref="(el) => setRowRef(i, el)"
+            :ref="(el: unknown) => setRowRef(i, el)"
             class="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition"
             :style="itemStyle(item, hoverIndex === i || openSubmenuIndex === i)"
             :disabled="item.disabled"
@@ -94,11 +94,10 @@
 
 <script setup lang="ts">
 import { ChevronRight } from 'lucide-vue-next'
-import type { FunctionalComponent } from 'vue'
 
 export interface ContextMenuItem {
   label?: string
-  icon?: FunctionalComponent | unknown
+  icon?: unknown
   danger?: boolean
   disabled?: boolean
   // Optional keyboard shortcut hint (e.g. "⌘S") shown right-aligned. Display
@@ -159,20 +158,19 @@ const position = computed(() => {
   return { top: Math.max(MENU_PAD, top), left: Math.max(MENU_PAD, left) }
 })
 
-const itemColor = (item: ContextMenuItem, hover: boolean): string => {
+// Always bright when enabled — context menu items are interactive, hover only
+// changes background. Defaulting to textMuted made enabled rows look disabled.
+const itemColor = (item: ContextMenuItem): string => {
   if (item.disabled) return t.value.textFaint
   if (item.danger) return t.value.danger
-  return hover ? t.value.text : t.value.textMuted
+  return t.value.text
 }
 
-const itemStyle = (item: ContextMenuItem, hover: boolean) => {
-  const color = itemColor(item, hover)
-  return {
-    background: hover && !item.disabled ? t.value.bgHover : 'transparent',
-    color,
-    cursor: item.disabled ? 'not-allowed' : 'pointer',
-  }
-}
+const itemStyle = (item: ContextMenuItem, hover: boolean) => ({
+  background: hover && !item.disabled ? t.value.bgHover : 'transparent',
+  color: itemColor(item),
+  cursor: item.disabled ? 'not-allowed' : 'pointer',
+})
 
 const clearCloseTimer = () => {
   if (closeTimer) {

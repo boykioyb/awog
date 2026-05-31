@@ -1,6 +1,6 @@
 <template>
   <div
-    class="px-3 py-2 flex items-center gap-3 flex-shrink-0"
+    class="relative px-3 py-2 flex items-center gap-3 flex-shrink-0"
     :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
   >
     <!-- Project selector -->
@@ -144,10 +144,12 @@
           class="px-2.5 py-1 text-[0.79em] rounded font-medium transition"
           :style="completeMergeBtnStyle"
           :disabled="hasConflict"
-          :title="hasConflict ? 'Còn conflict chưa resolve' : 'Complete merge'"
+          :title="
+            hasConflict ? tr('git.header.complete_merge_disabled') : tr('git.header.complete_merge')
+          "
           @click="emit('complete-merge')"
         >
-          Complete merge
+          {{ tr('git.header.complete_merge') }}
         </button>
         <button
           class="px-2.5 py-1 text-[0.79em] rounded transition"
@@ -156,7 +158,7 @@
             color: t.danger,
             border: `1px solid ${t.dangerBorder}`,
           }"
-          title="Abort merge — restore HEAD"
+          :title="tr('git.header.abort_merge')"
           @click="emit('request-abort-merge')"
         >
           Abort merge
@@ -165,6 +167,10 @@
       </template>
       <GitOpsToolbar />
     </div>
+
+    <!-- Floating progress strip — anchored to header bottom border so it
+         doesn't push the toolbar wider while pull/push/fetch run. -->
+    <GitOpsProgressStrip />
   </div>
 </template>
 
@@ -197,6 +203,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 const projectOpen = ref(false)
 const projectHover = ref<string | null>(null)

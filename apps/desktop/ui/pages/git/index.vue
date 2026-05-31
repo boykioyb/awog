@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-1 overflow-hidden flex-col">
+  <div class="flex flex-1 overflow-hidden">
     <!-- Git not installed / unsupported version banner (M7) -->
     <GitNotInstalledBanner
       v-if="gitInstallStatus && (!gitInstallStatus.installed || !gitInstallStatus.supported)"
@@ -8,117 +8,191 @@
       :required="gitInstallStatus.required"
     />
     <template v-else>
-      <GitPageHeader
-        :projects="projects"
-        :current-project="currentProject"
-        :current-dirty-count="currentDirtyCount"
-        :dirty-count-by-project="store.dirtyCountByProject"
-        :selected-project-id="store.selectedProjectId"
-        :local-branches="localBranches"
-        :current-branch="store.currentBranch"
-        :ahead="store.ahead"
-        :behind="store.behind"
-        :has-conflict="store.hasConflict"
-        :has-uncommitted="store.hasUncommitted"
-        :is-merging="store.isMerging"
-        @select-project="(id: string) => store.setSelectedProject(id)"
-        @switch-branch="switchBranch"
-        @complete-merge="onCompleteMerge"
-        @request-abort-merge="pendingAbort = true"
+      <!-- ─── Left sidebar (Sublime Merge style) ───────────────────────── -->
+      <GitSidebar
+        :selected="selected"
+        :dirty-count="currentDirtyCount"
+        @update:selected="onSelectSection"
+        @create-branch="showCreateBranch = true"
+        @save-stash="showSaveStash = true"
+        @context-branch="onBranchContext"
       />
 
+      <!-- ─── Main pane ────────────────────────────────────────────────── -->
+      <div class="flex flex-col flex-1 overflow-hidden">
+        <GitPageHeader
+          :projects="projects"
+          :current-project="currentProject"
+          :current-dirty-count="currentDirtyCount"
+          :dirty-count-by-project="store.dirtyCountByProject"
+          :selected-project-id="store.selectedProjectId"
+          :local-branches="localBranches"
+          :current-branch="store.currentBranch"
+          :ahead="store.ahead"
+          :behind="store.behind"
+          :has-conflict="store.hasConflict"
+          :has-uncommitted="store.hasUncommitted"
+          :is-merging="store.isMerging"
+          @select-project="(id: string) => store.setSelectedProject(id)"
+          @switch-branch="switchBranch"
+          @complete-merge="onCompleteMerge"
+          @request-abort-merge="pendingAbort = true"
+        />
+
+        <GitDetachedHeadBanner v-if="store.isDetached" :detached-at="store.detachedAt" />
+
+        <GitNoRepoEmpty v-if="store.repoState === 'no-repo'" @init="store.initRepo()" />
+
+        <template v-else>
+          <!-- Local Changes -->
+          <GitChangesTab
+            v-if="selected.kind === 'local-changes'"
+            :current-diff="currentDiff"
+            :selected-conflict-path="selectedConflictPath"
+            :can-stage-selected-hunk="canStageSelectedHunk"
+            @stage-hunk="onStageHunk"
+          />
+
+          <!-- Commit history (All Commits / branch / tag) -->
+          <GitHistoryTab v-else-if="isHistorySection" :detail="commitDetail" />
+
+          <!-- Remote detail -->
+          <GitRemoteDetailPane v-else-if="selected.kind === 'remote'" :name="selected.name" />
+
+          <!-- Stash detail -->
+          <GitStashDetailPane v-else-if="selected.kind === 'stash'" :index="selected.index" />
+
+          <!-- Fallback (submodule / unknown) -->
+          <div v-else class="flex-1 overflow-hidden p-6 text-xs" :style="{ color: t.textDim }">
+            {{ tr('git.sidebar.empty') }}
+          </div>
+        </template>
+      </div>
+
+      <!-- ─── Modals ───────────────────────────────────────────────────── -->
       <ConfirmDeleteModal
         v-if="pendingAbort"
-        title="Abort merge?"
-        description="Working tree sẽ về state trước merge. Tất cả thay đổi chưa commit của merge này sẽ mất. Tiếp tục?"
+        :title="tr('git.abort_merge.title')"
+        :description="tr('git.abort_merge.description')"
         @confirm="onConfirmAbort"
         @cancel="pendingAbort = false"
       />
 
-      <GitTabBar
-        :active-tab="activeTab"
-        :has-uncommitted="store.hasUncommitted"
-        :has-conflict="store.hasConflict"
-        @update:active-tab="(tab: GitTab) => (activeTab = tab)"
+      <GitBranchNameModal
+        :open="showCreateBranch"
+        :title="tr('git.branches.create_title')"
+        :submit-label="tr('git.branches.create_submit')"
+        placeholder="branch-name"
+        from-label="HEAD"
+        :model-value="newBranchName"
+        @update:model-value="newBranchName = $event"
+        @close="showCreateBranch = false"
+        @submit="onCreateBranch"
       />
 
-      <!-- Detached HEAD warning banner (AC-42) -->
-      <GitDetachedHeadBanner v-if="store.isDetached" :detached-at="store.detachedAt" />
+      <BaseModal
+        :open="showSaveStash"
+        :title="tr('git.stash.title_save')"
+        size="sm"
+        @close="showSaveStash = false"
+      >
+        <div class="p-4">
+          <input
+            v-model="newStashMessage"
+            :placeholder="tr('git.stash.placeholder')"
+            class="w-full rounded text-xs px-2 py-1.5"
+            :style="{
+              background: t.bgInput,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+              outline: 'none',
+            }"
+            @keydown.enter="onSaveStash"
+          />
+        </div>
+        <template #footer>
+          <button
+            class="px-3 py-1.5 text-xs rounded transition"
+            :style="{ color: t.textMuted }"
+            @click="showSaveStash = false"
+          >
+            {{ tr('common.cancel') }}
+          </button>
+          <button
+            class="px-3 py-1.5 text-xs rounded font-medium transition"
+            :style="{ background: t.accent, color: t.accentText }"
+            @click="onSaveStash"
+          >
+            {{ tr('common.save') }}
+          </button>
+        </template>
+      </BaseModal>
 
-      <!-- Empty state for no-repo -->
-      <GitNoRepoEmpty v-if="store.repoState === 'no-repo'" @init="store.initRepo()" />
-
-      <!-- Changes tab -->
-      <GitChangesTab
-        v-else-if="activeTab === 'changes'"
-        :current-diff="currentDiff"
-        :selected-conflict-path="selectedConflictPath"
-        :can-stage-selected-hunk="canStageSelectedHunk"
-        @stage-hunk="onStageHunk"
+      <GitBranchContextMenu
+        :open="branchMenu !== null"
+        :position="branchMenu ?? { x: 0, y: 0 }"
+        :branch-name="branchMenu?.name ?? ''"
+        :is-remote="branchMenu?.isRemote ?? false"
+        :is-current="branchMenu?.isCurrent ?? false"
+        @close="branchMenu = null"
+        @checkout="onMenuCheckout"
+        @checkout-as-local="onMenuCheckoutAsLocal"
+        @create-from="onMenuCreateFrom"
+        @rename="onMenuRename"
+        @copy="copyToClipboard"
+        @fetch="store.fetchRemote()"
+        @delete="(name: string) => (pendingBranchDelete = name)"
       />
 
-      <!-- History tab -->
-      <GitHistoryTab v-else-if="activeTab === 'history'" :detail="commitDetail" />
+      <GitBranchNameModal
+        :open="renameTarget !== null"
+        :title="tr('git.branches.rename_title')"
+        :submit-label="tr('git.branches.rename_submit')"
+        placeholder="new-branch-name"
+        :from-label="renameTarget ?? ''"
+        :model-value="renameValue"
+        @update:model-value="renameValue = $event"
+        @close="renameTarget = null"
+        @submit="onRename"
+      />
 
-      <!-- Branches tab -->
-      <MasterDetailShell
-        v-else-if="activeTab === 'branches'"
-        selected-id="_tab"
-        list-width="24rem"
-        disable-mobile
-        resizable
-        storage-key="awog.git.list-width.branches"
+      <ConfirmDeleteModal
+        v-if="pendingBranchDelete"
+        :title="tr('git.delete_branch.title')"
+        :description="tr('git.delete_branch.description', { name: pendingBranchDelete })"
+        @confirm="onConfirmBranchDelete"
+        @cancel="onCancelBranchDelete"
       >
-        <template #list>
-          <GitBranchList />
+        <template #extra>
+          <label
+            class="flex items-center gap-2 text-[0.79em] cursor-pointer select-none"
+            :style="{ color: t.text }"
+          >
+            <input
+              v-model="deleteRemoteToo"
+              type="checkbox"
+              class="cursor-pointer"
+              :style="{ accentColor: t.danger }"
+            />
+            <span>
+              {{ tr('git.delete_branch.also_delete_remote', { name: pendingBranchDelete }) }}
+            </span>
+          </label>
         </template>
-        <template #detail>
-          <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
-            <div class="text-xs">Click branch để checkout. Right-click cho thêm action.</div>
-          </div>
-        </template>
-      </MasterDetailShell>
+      </ConfirmDeleteModal>
 
-      <!-- Stash tab -->
-      <MasterDetailShell
-        v-else-if="activeTab === 'stash'"
-        selected-id="_tab"
-        list-width="24rem"
-        disable-mobile
-        resizable
-        storage-key="awog.git.list-width.stash"
-      >
-        <template #list>
-          <GitStashList />
-        </template>
-        <template #detail>
-          <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
-            <div class="text-xs">Stash sẽ apply file vào working tree khi pop / apply.</div>
-          </div>
-        </template>
-      </MasterDetailShell>
+      <ConfirmDeleteModal
+        v-if="store.pendingDeleteError"
+        :title="tr('git.delete_branch.force_title')"
+        :description="
+          tr('git.delete_branch.force_description', {
+            name: store.pendingDeleteError.branch,
+          })
+        "
+        @confirm="onForceBranchDelete"
+        @cancel="store.clearPendingDeleteError()"
+      />
 
-      <!-- Remotes tab -->
-      <MasterDetailShell
-        v-else-if="activeTab === 'remotes'"
-        selected-id="_tab"
-        list-width="24rem"
-        disable-mobile
-        resizable
-        storage-key="awog.git.list-width.remotes"
-      >
-        <template #list>
-          <GitRemoteList />
-        </template>
-        <template #detail>
-          <div class="flex-1 overflow-hidden p-6" :style="{ color: t.textDim }">
-            <div class="text-xs">Cấu hình add/remove remote chưa có trong v1.</div>
-          </div>
-        </template>
-      </MasterDetailShell>
-
-      <!-- Dirty-tree checkout modal — lifted from GitBranchList so the branch
-           picker dropdown in the header also triggers the same flow. -->
       <GitDirtyCheckoutModal
         :open="store.pendingCheckoutError !== null"
         :target-branch="store.pendingCheckoutError?.branch ?? ''"
@@ -128,7 +202,6 @@
         @stash-and-checkout="onStashAndCheckout"
       />
 
-      <!-- Remote ops modals (M4) -->
       <GitAuthErrorModal :error="store.pendingAuthError" @close="store.clearPendingAuthError" />
       <GitPullDivergenceModal
         :open="store.pendingPullDivergence"
@@ -163,17 +236,32 @@
 <script setup lang="ts">
 import type { GitBranch, GitCommit, GitFileDiff, GitFileStatus, Project } from '~/types'
 import type { CheckInstalledResult } from '~/composables/useGitApi'
-import type { GitTab } from '~/components/git/git-tabs'
+import type { GitSection } from '~/components/git/git-section'
+import { isValidGitRef } from '~/utils/branch-tree'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 const workspace = useWorkspaceStore()
 
-// Bootstrap: probe sidecar for `git --version`. Blocks `/git` page if missing
-// or unsupported (< 2.20). Other pages still usable.
+// ─── Bootstrap ───────────────────────────────────────────────────────────
 const gitInstallStatus = ref<CheckInstalledResult | null>(null)
 
-const activeTab = ref<GitTab>('changes')
+// ─── Sidebar selection state ─────────────────────────────────────────────
+const selected = ref<GitSection>({ kind: 'local-changes' })
+
+const isHistorySection = computed(
+  () =>
+    selected.value.kind === 'all-commits' ||
+    selected.value.kind === 'branch' ||
+    selected.value.kind === 'tag',
+)
+
+const onSelectSection = (s: GitSection) => {
+  selected.value = s
+}
+
+// ─── Page-level state from old layout ────────────────────────────────────
 const currentDiff = ref<GitFileDiff | null>(null)
 const commitDetail = ref<{ commit: GitCommit; files: GitFileDiff[] } | null>(null)
 const pendingAbort = ref(false)
@@ -192,9 +280,6 @@ const selectedConflictPath = computed(() => {
   return file?.hasConflict ? path : null
 })
 
-// Allow Stage-hunk only when the currently selected file is in the unstaged
-// section (working-tree diff). Staged files show a different diff source so
-// hunk indices wouldn't match the unstaged patch the sidecar rebuilds.
 const canStageSelectedHunk = computed(() => {
   const path = store.selectedFilePath
   if (!path) return false
@@ -206,10 +291,10 @@ const onStageHunk = async (hunkIndex: number) => {
   const path = store.selectedFilePath
   if (!path) return
   await store.stageHunk(path, hunkIndex)
-  // Re-fetch the diff so the staged lines disappear from the working-tree view.
   currentDiff.value = await store.loadDiff(path)
 }
 
+// ─── Remote ops handlers ─────────────────────────────────────────────────
 const onChooseMerge = async () => {
   store.clearPendingPullDivergence()
   await store.pull('merge')
@@ -230,10 +315,6 @@ const onConfirmAbort = async () => {
   await store.mergeAbort()
 }
 
-// Always try the checkout. The store catches a DIRTY_TREE error from the
-// sidecar and sets `pendingCheckoutError`, which opens GitDirtyCheckoutModal
-// (mounted at page level so this works from both the header dropdown and the
-// Branches tab).
 const switchBranch = async (name: string, isCurrent: boolean) => {
   if (isCurrent) return
   await store.checkoutBranch(name)
@@ -254,6 +335,125 @@ const onStashAndCheckout = async () => {
   await store.checkoutBranch(pending.branch)
 }
 
+// ─── Branch create / rename / delete via sidebar ─────────────────────────
+const showCreateBranch = ref(false)
+const newBranchName = ref('')
+const createFromRef = ref<string>('')
+
+const onCreateBranch = async (value: string) => {
+  const name = value.trim()
+  if (!isValidGitRef(name)) return
+  await store.createBranch(name, createFromRef.value || undefined)
+  newBranchName.value = ''
+  createFromRef.value = ''
+  showCreateBranch.value = false
+}
+
+type BranchMenu = {
+  x: number
+  y: number
+  name: string
+  isRemote: boolean
+  isCurrent: boolean
+}
+const branchMenu = ref<BranchMenu | null>(null)
+const renameTarget = ref<string | null>(null)
+const renameValue = ref('')
+const pendingBranchDelete = ref<string | null>(null)
+const deleteRemoteToo = ref(false)
+
+const MENU_WIDTH = 200
+const MENU_HEIGHT = 220
+const onBranchContext = (e: MouseEvent, branch: GitBranch) => {
+  const maxX = window.innerWidth - MENU_WIDTH - 8
+  const maxY = window.innerHeight - MENU_HEIGHT - 8
+  branchMenu.value = {
+    x: Math.min(e.clientX, maxX),
+    y: Math.min(e.clientY, maxY),
+    name: branch.name,
+    isRemote: branch.isRemote,
+    isCurrent: branch.isCurrent,
+  }
+}
+
+const onMenuCheckout = async (name: string, isCurrent: boolean) => {
+  branchMenu.value = null
+  if (isCurrent) return
+  await store.checkoutBranch(name)
+}
+
+const onMenuCheckoutAsLocal = async (remoteName: string) => {
+  branchMenu.value = null
+  const localName = remoteName.replace(/^origin\//, '')
+  await store.createBranch(localName, remoteName)
+  await store.checkoutBranch(localName)
+}
+
+const onMenuCreateFrom = (fromRef: string) => {
+  branchMenu.value = null
+  createFromRef.value = fromRef
+  showCreateBranch.value = true
+}
+
+const onMenuRename = (name: string) => {
+  branchMenu.value = null
+  renameTarget.value = name
+  renameValue.value = name
+}
+
+const onRename = async (value: string) => {
+  const oldName = renameTarget.value
+  if (!oldName) return
+  const next = value.trim()
+  if (!isValidGitRef(next)) return
+  await store.renameBranch(oldName, next)
+  renameTarget.value = null
+  renameValue.value = ''
+}
+
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // ignore (insecure context)
+  }
+}
+
+const onConfirmBranchDelete = async () => {
+  if (pendingBranchDelete.value) {
+    const opts: { deleteRemote?: boolean } = {}
+    if (deleteRemoteToo.value) opts.deleteRemote = true
+    await store.deleteBranch(pendingBranchDelete.value, opts)
+  }
+  pendingBranchDelete.value = null
+  deleteRemoteToo.value = false
+}
+const onCancelBranchDelete = () => {
+  pendingBranchDelete.value = null
+  deleteRemoteToo.value = false
+}
+
+const onForceBranchDelete = async () => {
+  const pending = store.pendingDeleteError
+  if (!pending) return
+  store.clearPendingDeleteError()
+  const opts: { force: true; deleteRemote?: boolean } = { force: true }
+  if (deleteRemoteToo.value) opts.deleteRemote = true
+  await store.deleteBranch(pending.branch, opts)
+  deleteRemoteToo.value = false
+}
+
+// ─── Stash save via sidebar ──────────────────────────────────────────────
+const showSaveStash = ref(false)
+const newStashMessage = ref('')
+
+const onSaveStash = async () => {
+  await store.stashSave(newStashMessage.value)
+  newStashMessage.value = ''
+  showSaveStash.value = false
+}
+
+// ─── Toast style helper ──────────────────────────────────────────────────
 const toastStyle = (kind: 'info' | 'success' | 'error') => {
   if (kind === 'success') {
     return {
@@ -276,7 +476,7 @@ const toastStyle = (kind: 'info' | 'success' | 'error') => {
   }
 }
 
-// Reactively load diff for selected file in Changes tab.
+// ─── Diff / commit detail watchers ───────────────────────────────────────
 watch(
   () => store.selectedFilePath,
   async (path: string | null) => {
@@ -289,7 +489,6 @@ watch(
   { immediate: true },
 )
 
-// Reactively load commit detail in History tab.
 watch(
   () => store.selectedCommitHash,
   async (hash: string | null) => {
@@ -302,7 +501,6 @@ watch(
   { immediate: true },
 )
 
-// Reset diff/commit detail when project changes.
 watch(
   () => store.selectedProjectId,
   () => {
@@ -313,23 +511,21 @@ watch(
   },
 )
 
-// Bootstrap status on mount + subscribe to external git events from sidecar.
+// ─── Bootstrap ───────────────────────────────────────────────────────────
 let unsubscribe: (() => void) | null = null
 onMounted(async () => {
-  // Probe Git CLI first — short-circuit page if missing/unsupported.
   try {
     gitInstallStatus.value = await useGitApi().checkInstalled()
   } catch {
-    // Sidecar unavailable (browser dev) — pretend installed so dev UX stays
-    // functional with mock data.
-    gitInstallStatus.value = { installed: true, version: 'mock', supported: true, required: '2.20' }
+    gitInstallStatus.value = {
+      installed: true,
+      version: 'mock',
+      supported: true,
+      required: '2.20',
+    }
   }
   if (!gitInstallStatus.value.installed || !gitInstallStatus.value.supported) return
 
-  // Hydrate projects first — store defaults to mock id `'prj1'`, so without a
-  // real project selected `resolveWorkspaceRoot()` returns null and every read
-  // falls back to mock data. Auto-select first real project when current
-  // selection isn't in the hydrated list.
   if (workspace.projects.length === 0) {
     await workspace.hydrateProjectsFromSidecar()
   }

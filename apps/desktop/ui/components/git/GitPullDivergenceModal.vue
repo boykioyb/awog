@@ -1,16 +1,20 @@
 <template>
-  <BaseModal :open="open" title="Branch đã diverge" size="sm" @close="emit('close')">
+  <BaseModal :open="open" :title="tr('git.pull_divergence.title')" size="sm" @close="emit('close')">
     <div class="p-4 text-xs flex flex-col gap-2" :style="{ color: t.textMuted }">
-      <div :style="{ color: t.text }">Local branch và upstream đã đi theo hai hướng khác nhau.</div>
-      <div :style="{ color: t.textMuted }">Fast-forward không khả thi. Chọn cách hợp nhất:</div>
+      <div :style="{ color: t.text }">{{ tr('git.pull_divergence.lead') }}</div>
+      <div :style="{ color: t.textMuted }">{{ tr('git.pull_divergence.sub') }}</div>
       <ul class="list-disc pl-5 mt-1 space-y-1" :style="{ color: t.textFaint }">
         <li>
-          <span class="font-medium" :style="{ color: t.textMuted }">Merge:</span>
-          tạo commit hợp nhất, giữ lịch sử cả hai nhánh.
+          <span class="font-medium" :style="{ color: t.textMuted }">
+            {{ tr('git.pull_divergence.merge_label') }}
+          </span>
+          {{ tr('git.pull_divergence.merge_hint') }}
         </li>
         <li>
-          <span class="font-medium" :style="{ color: t.textMuted }">Rebase:</span>
-          phát lại commit của local lên trên upstream, lịch sử thẳng.
+          <span class="font-medium" :style="{ color: t.textMuted }">
+            {{ tr('git.pull_divergence.rebase_label') }}
+          </span>
+          {{ tr('git.pull_divergence.rebase_hint') }}
         </li>
       </ul>
     </div>
@@ -20,7 +24,7 @@
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
-        Hủy
+        {{ tr('common.cancel') }}
       </button>
       <button
         class="px-3 py-1.5 text-xs rounded transition"
@@ -31,14 +35,14 @@
         }"
         @click="emit('choose-rebase')"
       >
-        Rebase
+        {{ tr('git.pull_divergence.rebase_btn') }}
       </button>
       <button
         class="px-3 py-1.5 text-xs rounded font-medium transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="emit('choose-merge')"
       >
-        Merge
+        {{ tr('git.pull_divergence.merge_btn') }}
       </button>
     </template>
   </BaseModal>
@@ -53,4 +57,5 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 </script>

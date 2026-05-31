@@ -5,7 +5,7 @@
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
       <div class="text-[0.79em] uppercase tracking-wider" :style="{ color: t.textDim }">
-        Branches
+        {{ tr('git.branches.title') }}
       </div>
       <button
         class="flex items-center gap-1 px-2 py-1 text-[0.71em] rounded transition"
@@ -13,12 +13,12 @@
         @click="showCreate = true"
       >
         <Plus :size="10" />
-        New
+        {{ tr('git.branches.new') }}
       </button>
     </div>
     <div class="flex-1 overflow-y-auto">
       <div class="px-3 py-2 text-[0.71em] uppercase tracking-wider" :style="{ color: t.textFaint }">
-        Local
+        {{ tr('git.branches.local') }}
       </div>
       <GitBranchTree
         :rows="localRows"
@@ -34,7 +34,7 @@
         class="px-3 py-2 text-[0.71em] uppercase tracking-wider"
         :style="{ color: t.textFaint, borderTop: `1px solid ${t.border}` }"
       >
-        Remote
+        {{ tr('git.branches.remote') }}
       </div>
       <GitBranchTree
         :rows="remoteRows"
@@ -64,8 +64,8 @@
 
     <GitBranchNameModal
       :open="showCreate"
-      title="Create branch"
-      submit-label="Create"
+      :title="tr('git.branches.create_title')"
+      :submit-label="tr('git.branches.create_submit')"
       placeholder="branch-name"
       :from-label="createFromRef || 'HEAD'"
       :model-value="newName"
@@ -76,8 +76,8 @@
 
     <GitBranchNameModal
       :open="renameTarget !== null"
-      title="Rename branch"
-      submit-label="Rename"
+      :title="tr('git.branches.rename_title')"
+      :submit-label="tr('git.branches.rename_submit')"
       placeholder="new-branch-name"
       :from-label="renameTarget ?? ''"
       :model-value="renameValue"
@@ -88,8 +88,8 @@
 
     <ConfirmDeleteModal
       v-if="pendingDelete"
-      title="Delete branch?"
-      :description="`Branch '${pendingDelete}' sẽ bị xóa. Tiếp tục?`"
+      :title="tr('git.delete_branch.title')"
+      :description="tr('git.delete_branch.description', { name: pendingDelete })"
       @confirm="confirmDelete"
       @cancel="onCancelDelete"
     >
@@ -104,18 +104,17 @@
             class="cursor-pointer"
             :style="{ accentColor: t.danger }"
           />
-          <span>
-            Also delete
-            <span class="font-mono">origin/{{ pendingDelete }}</span>
-          </span>
+          <span>{{ tr('git.delete_branch.also_delete_remote', { name: pendingDelete }) }}</span>
         </label>
       </template>
     </ConfirmDeleteModal>
 
     <ConfirmDeleteModal
       v-if="store.pendingDeleteError"
-      title="Force delete branch?"
-      :description="`Branch '${store.pendingDeleteError.branch}' chưa được merge. Xóa bằng force sẽ mất commit chưa merge. Tiếp tục?`"
+      :title="tr('git.delete_branch.force_title')"
+      :description="
+        tr('git.delete_branch.force_description', { name: store.pendingDeleteError.branch })
+      "
       @confirm="onForceDelete"
       @cancel="store.clearPendingDeleteError()"
     />
@@ -127,6 +126,7 @@ import { Plus } from 'lucide-vue-next'
 import { buildBranchTree, flattenTree, isValidGitRef } from '~/utils/branch-tree'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
 const showCreate = ref(false)

@@ -1002,7 +1002,9 @@ export const useGitStore = defineStore('git', () => {
       const params: { name: string; force?: boolean } = { name }
       if (opts.force) params.force = true
       await useGitApi().branchCheckout(root, params)
-      await Promise.all([loadBranches({ force: true }), loadStatus()])
+      // loadHistory too — commit refs[] (HEAD pointer) is decoration-time, so
+      // skipping the refresh leaves the HEAD badge on the previous branch tip.
+      await Promise.all([loadBranches({ force: true }), loadStatus(), loadHistory()])
       pushToast(`Checked out '${name}'`, 'success')
     } catch (err) {
       if (isUnavailable(err)) {
@@ -1312,7 +1314,10 @@ export const useGitStore = defineStore('git', () => {
     }
     try {
       await useGitApi().checkoutCommit(root, sha)
-      await Promise.all([loadStatus(), loadBranches({ force: true })])
+      // Re-fetch log too — commit refs[] decoration (HEAD pointer especially)
+      // is computed at log time, so a stale list keeps the HEAD badge on the
+      // old commit until we re-load.
+      await Promise.all([loadStatus(), loadBranches({ force: true }), loadHistory()])
       pushToast(`Checked out ${sha.slice(0, 7)} (detached HEAD)`, 'success')
     } catch (err) {
       if (isUnavailable(err)) return

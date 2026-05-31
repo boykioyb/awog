@@ -49,7 +49,7 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Settings** — 4 section (Workspace / Models & API Keys / Connectors / Appearance).
 ✅ **Markdown editor fullscreen** — file tree sidebar, code/split/preview, mermaid diagram, diff viewer, status bar.
 ✅ **Theme system** — dark (Linear/GitHub) + light (Notion/Vercel) với 20+ token, scrollbar sync.
-✅ **Git Manager wired (M0..M7)** — route `/git` với 5 tab (Changes / History / Branches / Stash / Remotes) đã wire qua **23 sidecar `git.*` IPC method** (xem [ADR 0017](../../../docs/decisions/0017-git-manager-ipc-contract.md), [docs/features/git-manager.md](../../../docs/features/git-manager.md)). Bootstrap probe `git.checkInstalled` block page nếu thiếu Git ≥ 2.20. Empty-state `git.init` cho workspace chưa init. Stage-hunk per hunk (`git apply --cached`), detached HEAD warn + `temp/<sha7>` flow, virtual-scroll khi section > 200 file, branches/remotes cache 5s, debounced 200ms status refresh từ chokidar watcher. Pinia store `git` giữ fallback mock cho browser dev (sidecar unavailable).
+✅ **Git Manager wired (M0..M7)** — route `/git` layout **Sublime-Merge style**: sidebar resizable/collapsible (Local Changes / All Commits / Branches / Remotes / Tags / Stashes / Submodules) + main pane switch theo selection, đã wire qua **23 sidecar `git.*` IPC method** (xem [ADR 0017](../../../docs/decisions/0017-git-manager-ipc-contract.md), [docs/features/git-manager.md](../../../docs/features/git-manager.md)). Bootstrap probe `git.checkInstalled` block page nếu thiếu Git ≥ 2.20. Empty-state `git.init` cho workspace chưa init. Stage-hunk per hunk (`git apply --cached`), detached HEAD warn + `temp/<sha7>` flow, virtual-scroll khi section > 200 file, branches/remotes cache 5s, debounced 200ms status refresh từ chokidar watcher. Progress strip overlay (absolute, không shift layout) khi fetch/pull/push. Pinia store `git` giữ fallback mock cho browser dev (sidecar unavailable). I18n en/vi (`useI18n()` composable).
 ✅ **Tauri shell** — đã wire (M6), webview load UI Nuxt, IPC stdio qua `engine_call` (xem [ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md), [ADR 0008](../../../docs/decisions/0008-stdio-ipc-for-sidecar.md)).
 ✅ **Node.js sidecar wiring** — package `@awog/sidecar` chạy stdio NDJSON JSON-RPC; UI gọi qua composable `useSidecar()`.
 ✅ **Anthropic OAuth Pro/Max** — sign-in 3-step dialog, token refresh, account management (xem [docs/features/models-and-accounts.md](../../../docs/features/models-and-accounts.md), [ADR 0011](../../../docs/decisions/0011-anthropic-subscription-oauth.md)).
@@ -172,7 +172,7 @@ Template bind inline style:
 - `/workflows` → DAG designer
 - `/agents` → agents CRUD
 - `/skills` → skills CRUD
-- `/git` → Git Manager (Changes / History / Branches / Stash / Remotes) — prototype mock
+- `/git` → Git Manager (sidebar nav: Local Changes / All Commits / Branches / Remotes / Tags / Stashes / Submodules) — live IPC
 - `/settings` → 4-section settings
 - `/edit/:taskId?file=<filename>` → fullscreen markdown editor (no layout)
 

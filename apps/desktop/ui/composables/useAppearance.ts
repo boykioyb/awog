@@ -2,6 +2,7 @@ import { storeToRefs } from 'pinia'
 import type {
   AccentPreset,
   AppearanceSettings,
+  AppLocale,
   FontWeight,
   MonoFontFamily,
   SansFontFamily,
@@ -67,6 +68,7 @@ const ACCENT_VALUES: readonly AccentPreset[] = [
 ]
 const THEME_COLOR_VALUES: readonly ThemeColor[] = [...ACCENT_VALUES, 'custom']
 const DEPTH_VALUES: readonly SurfaceDepth[] = ['flat', 'standard', 'deep']
+const LOCALE_VALUES: readonly AppLocale[] = ['en', 'vi']
 
 const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/
 
@@ -91,6 +93,7 @@ const coerceAppearance = (raw: unknown): AppearanceSettings => {
     themeColor: pick(v.themeColor, THEME_COLOR_VALUES, DEFAULT_APPEARANCE.themeColor),
     themeColorCustom: pickHex(v.themeColorCustom, DEFAULT_APPEARANCE.themeColorCustom),
     surfaceDepth: pick(v.surfaceDepth, DEPTH_VALUES, DEFAULT_APPEARANCE.surfaceDepth),
+    locale: pick(v.locale, LOCALE_VALUES, DEFAULT_APPEARANCE.locale),
   }
 }
 

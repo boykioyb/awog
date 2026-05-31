@@ -34,13 +34,6 @@
       <span v-if="store.ahead > 0" class="font-mono">↑{{ store.ahead }}</span>
       <Loader2 v-if="store.isPushing" :size="10" class="animate-spin" />
     </button>
-
-    <GitProgressBar
-      v-if="activeProgress"
-      class="ml-2"
-      :progress="activeProgress"
-      @cancel="store.cancel(activeProgress.op)"
-    />
   </div>
 </template>
 
@@ -63,14 +56,4 @@ const primaryBtnStyle = computed(() => ({
   border: `1px solid ${store.isPushing ? t.value.border : t.value.accent}`,
   cursor: store.isPushing ? 'not-allowed' : 'pointer',
 }))
-
-// Surface progress bar only while an op is actively in flight.
-const activeProgress = computed(() => {
-  if (!store.progressOp) return null
-  return {
-    op: store.progressOp,
-    phase: store.progressPhase,
-    pct: store.progressPct,
-  }
-})
 </script>

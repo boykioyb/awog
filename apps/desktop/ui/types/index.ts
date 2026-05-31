@@ -606,6 +606,8 @@ export type AccentPreset =
 export type ThemeColor = AccentPreset | 'custom'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 
+export type AppLocale = 'en' | 'vi'
+
 export interface AppearanceSettings {
   sansFamily: SansFontFamily
   monoFamily: MonoFontFamily
@@ -615,4 +617,5 @@ export interface AppearanceSettings {
   themeColor: ThemeColor
   themeColorCustom: string
   surfaceDepth: SurfaceDepth
+  locale: AppLocale
 }

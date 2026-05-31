@@ -4,18 +4,14 @@
       <div class="flex items-center gap-2">
         <AlertCircle :size="14" :style="{ color: t.danger }" />
         <div class="text-sm font-medium" :style="{ color: t.text }">
-          Reset '{{ currentBranch }}' to here?
+          {{ tr('git.reset.modal.title', { branch: currentBranch }) }}
         </div>
       </div>
     </template>
 
     <div class="p-4 space-y-3">
       <div class="text-[0.86em] leading-relaxed" :style="{ color: t.textMuted }">
-        HEAD của
-        <span class="font-mono" :style="{ color: t.text }">{{ currentBranch }}</span>
-        sẽ chuyển về commit
-        <span class="font-mono" :style="{ color: t.accent }">{{ targetSha7 }}</span>
-        . Chế độ reset quyết định working tree + index có giữ nguyên hay không.
+        {{ tr('git.reset.modal.body', { branch: currentBranch, sha: targetSha7 }) }}
       </div>
 
       <div class="flex flex-col gap-2">
@@ -58,7 +54,7 @@
           class="cursor-pointer"
           :style="{ accentColor: t.danger }"
         />
-        <span>I understand this will destroy uncommitted changes</span>
+        <span>{{ tr('git.reset.hard_ack') }}</span>
       </label>
     </div>
 
@@ -68,7 +64,7 @@
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
-        Cancel
+        {{ tr('common.cancel') }}
       </button>
       <button
         class="px-3 py-1.5 text-xs rounded font-medium transition"
@@ -81,7 +77,7 @@
         :disabled="!canConfirm"
         @click="onConfirm"
       >
-        Reset
+        {{ tr('git.reset.confirm') }}
       </button>
     </template>
   </BaseModal>
@@ -105,24 +101,27 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
-const MODES: ReadonlyArray<{ value: ResetMode; label: string; description: string }> = [
-  {
-    value: 'soft',
-    label: 'Soft',
-    description: 'Move HEAD only. Index + working tree giữ nguyên — staged changes ở lại.',
-  },
-  {
-    value: 'mixed',
-    label: 'Mixed (default)',
-    description: 'Move HEAD + reset index. Working tree giữ nguyên — changes về dạng unstaged.',
-  },
-  {
-    value: 'hard',
-    label: 'Hard',
-    description: 'DESTROY uncommitted changes. Working tree + index = target commit.',
-  },
-]
+const MODES = computed<ReadonlyArray<{ value: ResetMode; label: string; description: string }>>(
+  () => [
+    {
+      value: 'soft',
+      label: tr('git.reset.mode.soft.label'),
+      description: tr('git.reset.mode.soft.detail'),
+    },
+    {
+      value: 'mixed',
+      label: tr('git.reset.mode.mixed.label'),
+      description: tr('git.reset.mode.mixed.detail'),
+    },
+    {
+      value: 'hard',
+      label: tr('git.reset.mode.hard.label'),
+      description: tr('git.reset.mode.hard.detail'),
+    },
+  ],
+)
 
 const selected = ref<ResetMode>('mixed')
 const ackHard = ref(false)

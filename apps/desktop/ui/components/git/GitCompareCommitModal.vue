@@ -4,9 +4,9 @@
       <div class="flex items-center gap-2 min-w-0">
         <GitCompare :size="14" :style="{ color: t.accent }" />
         <div class="text-sm font-medium truncate" :style="{ color: t.text }">
-          Compare
+          {{ tr('git.compare.title') }}
           <span class="font-mono" :style="{ color: t.accent }">{{ targetShortHash }}</span>
-          → working tree
+          {{ tr('git.compare.to_working_tree') }}
         </div>
       </div>
     </template>
@@ -18,14 +18,14 @@
         :style="{ borderRight: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <div v-if="loading" class="px-3 py-2 text-[0.71em]" :style="{ color: t.textDim }">
-          Loading diff…
+          {{ tr('git.compare.loading') }}
         </div>
         <div
           v-else-if="files.length === 0"
           class="px-3 py-2 text-[0.71em]"
           :style="{ color: t.textDim }"
         >
-          No differences
+          {{ tr('git.compare.no_diff') }}
         </div>
         <button
           v-for="(f, i) in files"
@@ -51,7 +51,7 @@
           class="h-full flex items-center justify-center text-xs"
           :style="{ color: t.textDim }"
         >
-          {{ loading ? 'Loading…' : 'Select a file' }}
+          {{ loading ? tr('common.loading') : tr('git.compare.select_file') }}
         </div>
       </div>
     </div>
@@ -62,7 +62,7 @@
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
-        Close
+        {{ tr('common.close') }}
       </button>
     </template>
   </BaseModal>
@@ -83,6 +83,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const activeIndex = ref(0)
 
 // Reset the active index whenever a new compare opens or the file list changes

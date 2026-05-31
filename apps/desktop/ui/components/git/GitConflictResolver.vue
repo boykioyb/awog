@@ -5,7 +5,7 @@
       class="flex-1 flex items-center justify-center text-xs"
       :style="{ color: t.textDim }"
     >
-      Select a conflicted file
+      {{ tr('git.conflict.select_file') }}
     </div>
     <template v-else-if="file.isBinary">
       <div
@@ -20,7 +20,7 @@
       </div>
       <div class="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
         <div class="text-xs" :style="{ color: t.textDim }">
-          Binary file — chỉ chọn version, không edit inline.
+          {{ tr('git.conflict.binary_note') }}
         </div>
         <div class="flex items-center gap-2">
           <button
@@ -50,12 +50,14 @@
           {{ file.path }}
         </span>
         <span class="text-[0.71em]" :style="{ color: t.textDim }">
-          {{ resolvedCount }} / {{ file.blocks.length }} resolved
+          {{
+            tr('git.conflict.resolved_count', { done: resolvedCount, total: file.blocks.length })
+          }}
         </span>
         <button
           class="text-[0.71em] px-2 py-1 rounded transition"
           :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
-          title="Take ours cho tất cả block"
+          :title="tr('git.conflict.take_all_ours_tip')"
           @click="onTakeAll('ours')"
         >
           Take all ours
@@ -63,7 +65,7 @@
         <button
           class="text-[0.71em] px-2 py-1 rounded transition"
           :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
-          title="Take theirs cho tất cả block"
+          :title="tr('git.conflict.take_all_theirs_tip')"
           @click="onTakeAll('theirs')"
         >
           Take all theirs
@@ -121,7 +123,10 @@
               :style="{ background: pickBg(block.index, 'theirs') }"
               @click="onPick(block.index, 'theirs')"
             >
-              <div class="text-[0.71em] uppercase tracking-wider mb-1" :style="{ color: t.warning }">
+              <div
+                class="text-[0.71em] uppercase tracking-wider mb-1"
+                :style="{ color: t.warning }"
+              >
                 Theirs ({{ block.theirsLabel || 'incoming' }})
               </div>
               <pre
@@ -167,6 +172,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
 // Per-file resolution map. Cleared whenever the selected path changes.

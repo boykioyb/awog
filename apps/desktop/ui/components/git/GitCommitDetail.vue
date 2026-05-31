@@ -37,7 +37,12 @@
               color: t.accent,
               border: `1px solid ${t.border}`,
             }"
-            :title="`Open task ${linkedTaskId} at phase ${linkedPhaseId}`"
+            :title="
+              tr('git.commit_detail.open_in_task', {
+                task: linkedTaskId ?? '',
+                phase: linkedPhaseId ?? '',
+              })
+            "
             @click="onOpenInTask"
           >
             <ExternalLink :size="9" />
@@ -47,7 +52,7 @@
             v-else-if="linkedPhaseId"
             class="text-[0.71em] px-1.5 py-0.5 rounded"
             :style="{ color: t.textFaint, border: `1px solid ${t.border}` }"
-            title="No task in store references this phase id"
+            :title="tr('git.commit_detail.task_not_found')"
           >
             task not found
           </span>
@@ -102,7 +107,7 @@
               type="button"
               class="p-1 rounded transition"
               :style="{ color: t.textDim }"
-              :title="`Revert ${f.path} về version trước commit này`"
+              :title="tr('git.commit_detail.revert_file_title', { path: f.path })"
               @click="onRevertFile(f.path)"
             >
               <Undo2 :size="11" />
@@ -126,6 +131,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 const workspace = useWorkspaceStore()
 const activeFileIndex = ref(0)
@@ -168,7 +174,8 @@ const onRevertFile = async (path: string) => {
   if (!commit) return
   const ref = `${commit.hash}^`
   // eslint-disable-next-line no-alert -- simple confirm for v1; replace with modal in M6
-  if (!window.confirm(`Revert ${path} về version trước commit ${commit.shortHash}?`)) return
+  if (!window.confirm(tr('git.commit_detail.revert_file_confirm', { path, sha: commit.shortHash })))
+    return
   await store.checkoutFileAtCommit(path, ref)
 }
 </script>
