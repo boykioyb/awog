@@ -64,6 +64,25 @@ export interface OAuthState {
   createdAt: number
 }
 
+// ─── Workspace filesystem (read-only) ────────────────────────────────────────
+// Used by the Session workspace panel's Files tab. `path` is workspace-relative
+// (POSIX-style); all I/O is gated by assertInsideWorkspace.
+
+export interface FsEntry {
+  name: string
+  path: string
+  kind: 'file' | 'dir'
+  size?: number
+}
+
+export interface FsFileContent {
+  path: string
+  content: string
+  language?: string
+  truncated: boolean
+  isBinary: boolean
+}
+
 // ─── Session (chat) ────────────────────────────────────────────────────────
 // Mirror of UI shape (apps/desktop/ui/types/index.ts). Sidecar M4 keeps these
 // in-memory only via per-request snapshots from the UI.
