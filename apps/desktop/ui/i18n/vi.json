@@ -330,6 +330,19 @@
   "workspace.terminal.exited": "tiến trình kết thúc, mã",
   "workspace.terminal.new": "Terminal mới",
 
+  "session.empty.title": "Bắt đầu trò chuyện",
+  "session.empty.subtitle": "Gửi tin nhắn để bắt đầu. Nhắc tới file, mời agent, hoặc chạy lệnh.",
+
+  "session.followup.title": "Follow-up",
+  "session.followup.placeholder": "Thêm ghi chú agent nên cân nhắc ở lượt sau…",
+
+  "session.mermaid.zoom": "Phóng to sơ đồ",
+  "session.mermaid.title": "Sơ đồ",
+  "session.mermaid.zoomIn": "Phóng to",
+  "session.mermaid.zoomOut": "Thu nhỏ",
+  "session.mermaid.reset": "Vừa khung",
+  "session.mermaid.failed": "Không render được sơ đồ.",
+
   "settings.language": "Ngôn ngữ",
   "settings.language.hint": "Ngôn ngữ giao diện. Không cần restart."
 }

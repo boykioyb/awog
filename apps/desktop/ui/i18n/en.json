@@ -330,6 +330,19 @@
   "workspace.terminal.exited": "process exited, code",
   "workspace.terminal.new": "New terminal",
 
+  "session.empty.title": "Start a conversation",
+  "session.empty.subtitle": "Send a message to begin. Mention files, invite agents, or run a command.",
+
+  "session.followup.title": "Follow-up",
+  "session.followup.placeholder": "Add comments the agent should consider in the next turn…",
+
+  "session.mermaid.zoom": "Expand diagram",
+  "session.mermaid.title": "Diagram",
+  "session.mermaid.zoomIn": "Zoom in",
+  "session.mermaid.zoomOut": "Zoom out",
+  "session.mermaid.reset": "Fit to width",
+  "session.mermaid.failed": "Failed to render diagram.",
+
   "settings.language": "Language",
   "settings.language.hint": "UI language. Restart not required."
 }

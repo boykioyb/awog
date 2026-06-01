@@ -198,3 +198,46 @@ body,
 .awog-md strong {
   font-weight: 600;
 }
+
+/* ─── Mermaid diagrams (.awog-mermaid) ────────────────────────────────────── */
+/* Rendered into v-html'd markup by utils/mermaid.ts. Position relative so the
+   injected zoom button can anchor top-right; the button reveals on hover. */
+.awog-mermaid {
+  position: relative;
+  margin: 0.6em 0;
+}
+.awog-mermaid[data-rendered] {
+  display: flex;
+  justify-content: center;
+}
+.awog-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+.awog-mermaid-zoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+}
+.awog-mermaid:hover .awog-mermaid-zoom,
+.awog-mermaid-zoom:focus-visible {
+  opacity: 1;
+}
+.awog-mermaid-zoom:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.55);
+}

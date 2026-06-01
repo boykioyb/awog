@@ -38,6 +38,15 @@
         <div class="text-[1em] flex items-center gap-1.5" :style="{ color: t.textFaint }">
           <span>{{ fmt(message.at) }}</span>
           <span v-if="message.modeAtSend">· sent in {{ message.modeAtSend }} mode</span>
+          <button
+            type="button"
+            class="awog-copy-btn"
+            :style="{ color: t.textFaint }"
+            title="Branch from this message"
+            @click="onBranch"
+          >
+            <GitBranch :size="11" />
+          </button>
         </div>
       </div>
 
@@ -66,6 +75,16 @@
           </template>
           <span class="flex-1" />
           <button
+            v-if="!isStreaming"
+            type="button"
+            class="awog-copy-btn"
+            :style="{ color: t.textDim }"
+            title="Branch from this message"
+            @click="onBranch"
+          >
+            <GitBranch :size="12" />
+          </button>
+          <button
             v-if="message.text"
             type="button"
             class="awog-copy-btn"
@@ -78,20 +97,12 @@
           </button>
         </div>
 
-        <MarkdownStreamBody
-          v-if="message.text"
-          :text="message.text"
-          :streaming="!!(message.startedAt && !message.completedAt)"
-          class="awog-md text-[1em]"
-          :style="{ color: t.text, '--awog-accent': t.accent }"
-          :data-agent-message-id="message.id"
-        />
-
+        <!-- Steps summary + collapse toggle. Sits above the body so the
+             control reads before the interleaved command/text flow. -->
         <button
           v-if="message.steps?.length"
           type="button"
-          class="inline-flex items-center gap-1.5 text-[1em] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
-          :class="message.text ? 'mt-2' : ''"
+          class="inline-flex items-center gap-1.5 text-[12px] py-0.5 px-1.5 -ml-1.5 mb-2 rounded transition hover:bg-white/5"
           :style="{ color: t.textDim }"
           @click="expanded = !expanded"
         >
@@ -112,11 +123,42 @@
           />
         </button>
 
-        <!-- Inline collapsible step list. Replaces the previous centered
-             modal so the subagent drawer (slides in from the right) remains
-             visible and the user can compare steps + drawer reply
-             side-by-side. -->
-        <SessionMessageSteps v-if="message.steps?.length && expanded" :steps="message.steps" />
+        <!-- Body. With steps expanded we interleave reply-text segments and
+             step clusters in chronological order (each step carries the text
+             offset where its tool fired). Collapsed → plain reply text only.
+             No steps → plain reply text. -->
+        <template v-if="message.steps?.length && expanded">
+          <template v-for="(block, bi) in timelineBlocks" :key="bi">
+            <MarkdownStreamBody
+              v-if="block.type === 'text'"
+              :text="block.text"
+              :streaming="isStreaming && bi === lastTextBlockIndex"
+              class="awog-md text-[1em]"
+              :class="bi > 0 ? 'mt-2' : ''"
+              :style="{ color: t.text, '--awog-accent': t.accent }"
+              :data-agent-message-id="message.id"
+            />
+            <!-- Inline step cluster. Replaces the previous single steps box so
+                 the subagent drawer (slides in from the right) stays visible and
+                 commands line up with the text they ran between. -->
+            <div
+              v-else
+              class="mt-2 rounded-md px-3 py-2 space-y-1 text-[12px]"
+              :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
+            >
+              <StepItem v-for="s in block.steps" :key="s.id" :step="s" />
+            </div>
+          </template>
+        </template>
+
+        <MarkdownStreamBody
+          v-else-if="message.text"
+          :text="message.text"
+          :streaming="isStreaming"
+          class="awog-md text-[1em]"
+          :style="{ color: t.text, '--awog-accent': t.accent }"
+          :data-agent-message-id="message.id"
+        />
 
         <SessionInlinePermission
           v-if="store.pendingPermission?.messageId === message.id"
@@ -167,7 +209,16 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, Check, ChevronDown, Copy, FileText, Info, Sparkles } from 'lucide-vue-next'
+import {
+  Activity,
+  Check,
+  ChevronDown,
+  Copy,
+  FileText,
+  GitBranch,
+  Info,
+  Sparkles,
+} from 'lucide-vue-next'
 import type { SessionAttachment, SessionMessage, SessionStep, SessionTokenKind } from '~/types'
 import { tokenizeMessage } from '~/utils/tokenize'
 import { formatTime } from '~/utils/time'
@@ -206,8 +257,57 @@ const hasRunningStep = computed((): boolean =>
   ),
 )
 
-// Same aggregation logic as SessionMessageSteps' inner summary — kept local
-// here for the toggle-button label. Two callsites only (Rule of Three).
+const isStreaming = computed(() => !!(props.message.startedAt && !props.message.completedAt))
+
+type TimelineBlock = { type: 'text'; text: string } | { type: 'steps'; steps: SessionStep[] }
+
+// Reply turns mix narration text with tool calls. Each top-level step carries
+// the text offset where its tool fired (stamped by the sessions store), so we
+// rebuild the chronological order here: split the reply text at those offsets
+// and coalesce runs of consecutive steps into one cluster. Whitespace-only
+// gaps are dropped (the cluster/​text margins handle spacing).
+const timelineBlocks = computed<TimelineBlock[]>(() => {
+  const text = props.message.text ?? ''
+  const steps = props.message.steps ?? []
+  if (!steps.length) return text ? [{ type: 'text', text }] : []
+  const len = text.length
+  const ordered = steps
+    .map((s, i) => ({ s, i, off: Math.min(Math.max(s.textOffset ?? len, 0), len) }))
+    .sort((a, b) => a.off - b.off || a.i - b.i)
+  const blocks: TimelineBlock[] = []
+  let cursor = 0
+  const pushStep = (step: SessionStep) => {
+    const last = blocks[blocks.length - 1]
+    if (last && last.type === 'steps') last.steps.push(step)
+    else blocks.push({ type: 'steps', steps: [step] })
+  }
+  ordered.forEach(({ s, off }) => {
+    if (off > cursor) {
+      const seg = text.slice(cursor, off)
+      if (seg.trim()) blocks.push({ type: 'text', text: seg })
+      cursor = off
+    }
+    pushStep(s)
+  })
+  if (cursor < len) {
+    const seg = text.slice(cursor)
+    if (seg.trim()) blocks.push({ type: 'text', text: seg })
+  }
+  return blocks
+})
+
+// Only the trailing text segment is still being typed — flag it so
+// MarkdownStreamBody throttles just that one and renders the rest immediately.
+const lastTextBlockIndex = computed(() => {
+  const blocks = timelineBlocks.value
+  for (let i = blocks.length - 1; i >= 0; i -= 1) {
+    if (blocks[i]?.type === 'text') return i
+  }
+  return -1
+})
+
+// Claude-Code-style summary for the collapse toggle label:
+// "ran 9 commands · read 3 files · used 6 tools". Aggregates steps by tool.
 const stepsSummary = (steps: SessionStep[]): string => {
   let cmds = 0
   let reads = 0
@@ -233,6 +333,12 @@ const stepsSummary = (steps: SessionStep[]): string => {
     return `${others} step${others === 1 ? '' : 's'}`
   }
   return parts.join(' · ')
+}
+
+// Fork the conversation from this message into a new session and switch to it.
+// The original session is left untouched.
+const onBranch = () => {
+  store.branchFromMessage(props.message.id)
 }
 
 const formatElapsed = (ms: number): string => {

@@ -226,6 +226,41 @@ export const useSessionsStore = defineStore('sessions', {
       return session
     },
 
+    // Fork a new session from a given message — copies the conversation up to
+    // and including that message into a fresh session so the user can explore
+    // an alternate direction without disturbing the original. Selects the new
+    // session. Returns its id (or null when the message can't be located).
+    branchFromMessage(messageId: string): string | null {
+      const source = this.sessions.find((s) => s.messages.some((m) => m.id === messageId))
+      if (!source) return null
+      const idx = source.messages.findIndex((m) => m.id === messageId)
+      if (idx < 0) return null
+      const ts = nowIso()
+      // JSON round-trip detaches the copies from the source's reactive objects
+      // (messages hold only serialisable data — text, steps, usage, …).
+      const messages = JSON.parse(
+        JSON.stringify(source.messages.slice(0, idx + 1)),
+      ) as Session['messages']
+      const branch: Session = {
+        id: newId('ses'),
+        title: `${source.title} (branch)`,
+        projectId: source.projectId,
+        createdAt: ts,
+        updatedAt: ts,
+        pinned: false,
+        invitedAgentIds: [...source.invitedAgentIds],
+        messages,
+        pendingAgentIds: [],
+        settings: { ...source.settings },
+      }
+      if (source.disabledTools) branch.disabledTools = [...source.disabledTools]
+      if (source.mcpServerIds) branch.mcpServerIds = [...source.mcpServerIds]
+      this.sessions.unshift(branch)
+      this.selectedSessionId = branch.id
+      pushToSidecar('sessions.upsert', { session: branch, mode: 'create' })
+      return branch.id
+    },
+
     updateSettings(sessionId: string, patch: Partial<SessionSettings>) {
       const session = this.sessions.find((s) => s.id === sessionId)
       if (!session) return
@@ -520,11 +555,20 @@ export const useSessionsStore = defineStore('sessions', {
         if (idx >= 0) {
           const next = [...existing]
           // Merge so the second event (done) can omit fields the first (running)
-          // already populated — e.g. target derived from the partial input.
+          // already populated — e.g. target derived from the partial input. The
+          // incoming event never carries textOffset, so the stamped value below
+          // survives the merge (existing first).
           next[idx] = { ...existing[idx], ...step }
           slot.steps = next
         } else {
-          slot.steps = [...existing, step]
+          // First sighting of a top-level step. Flush any buffered text so the
+          // boundary captures everything streamed before the tool fired, then
+          // stamp the offset. SessionMessageItem reads textOffset to interleave
+          // step rows with reply-text segments in chronological order.
+          flushBuffer()
+          const stamped =
+            step.textOffset === undefined ? { ...step, textOffset: (slot.text ?? '').length } : step
+          slot.steps = [...existing, stamped]
         }
       }
 

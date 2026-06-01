@@ -286,6 +286,11 @@ export interface SessionStep {
   // Sidecar fills this from the SDK's parent_tool_use_id; UI store uses it to
   // attach the step under the parent's `children` array instead of top-level.
   parentId?: string
+  // Character offset into the assistant `text` at which this tool fired. Stamped
+  // by the sessions store when a top-level step first arrives (= length of the
+  // text streamed so far) so SessionMessageItem can interleave step rows with
+  // the reply text in chronological order. Unset for nested subagent steps.
+  textOffset?: number
 }
 
 export interface SessionMessage {

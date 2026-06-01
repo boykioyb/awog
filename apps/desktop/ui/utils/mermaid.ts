@@ -7,7 +7,10 @@ import type { Mermaid } from 'mermaid'
 
 let mermaidPromise: Promise<Mermaid> | null = null
 
-const decodeSource = (s: string): string => {
+// `data-source` on each `.awog-mermaid` block is base64-encoded UTF-8 (see
+// utils/markdown.ts). Exported so the zoom modal can recover the raw diagram
+// source and re-render it at full size.
+export function decodeMermaidSource(s: string): string {
   if (typeof window === 'undefined') return Buffer.from(s, 'base64').toString('utf8')
   return decodeURIComponent(escape(window.atob(s)))
 }
@@ -34,10 +37,38 @@ async function getMermaid(): Promise<Mermaid> {
 let counter = 0
 const nextId = (): string => `awog-mmd-${Date.now().toString(36)}-${(counter++).toString(36)}`
 
+// Render a raw diagram source to an SVG string. Used by the full-screen zoom
+// modal, which re-renders from source so the enlarged diagram is crisp (rather
+// than scaling the inline SVG). Throws on parse failure — caller shows a hint.
+export async function renderMermaidSource(source: string): Promise<string> {
+  const mermaid = await getMermaid()
+  const { svg } = await mermaid.render(nextId(), source.trim())
+  return svg
+}
+
+// Build the small overlay button that opens the full-screen zoom modal. It's a
+// plain DOM node (not a Vue component) because it lives inside v-html'd markup;
+// SessionMessageList delegates the click via `.awog-mermaid-zoom`.
+function makeZoomButton(label: string): HTMLButtonElement {
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'awog-mermaid-zoom'
+  btn.title = label
+  btn.setAttribute('aria-label', label)
+  // lucide `maximize-2` glyph, inlined (lucide is a Vue component lib, unusable
+  // inside raw HTML). currentColor lets CSS drive the stroke.
+  btn.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>'
+  return btn
+}
+
 // Scan the container for unrendered mermaid placeholders and replace each one
 // with its rendered SVG. Errors (incomplete source mid-stream, invalid syntax)
 // leave the block as-is so the raw fenced code keeps showing.
-export async function renderMermaidIn(root: HTMLElement | null | undefined): Promise<void> {
+export async function renderMermaidIn(
+  root: HTMLElement | null | undefined,
+  opts?: { zoomLabel?: string },
+): Promise<void> {
   if (!root) return
   const blocks = Array.from(
     root.querySelectorAll<HTMLElement>('.awog-mermaid:not([data-rendered])'),
@@ -49,7 +80,7 @@ export async function renderMermaidIn(root: HTMLElement | null | undefined): Pro
       const encoded = el.dataset.source ?? ''
       let source: string
       try {
-        source = decodeSource(encoded).trim()
+        source = decodeMermaidSource(encoded).trim()
       } catch {
         return
       }
@@ -59,6 +90,9 @@ export async function renderMermaidIn(root: HTMLElement | null | undefined): Pro
         el.innerHTML = svg
         el.dataset.rendered = 'true'
         if (bindFunctions) bindFunctions(el)
+        // Append the zoom affordance after the SVG so a click anywhere on it
+        // opens the full-screen view (delegated in SessionMessageList).
+        el.appendChild(makeZoomButton(opts?.zoomLabel ?? 'Zoom'))
       } catch {
         // Parse failed (likely truncated mid-stream). Leave the <pre><code> fallback;
         // we'll retry on the next call once the source stabilises.
