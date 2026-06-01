@@ -26,6 +26,7 @@ import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type {
   AccountRecord,
+  AgentMode,
   ProviderName,
   SessionMessage,
   SessionSettings,
@@ -124,6 +125,19 @@ function renderTranscript(history: SessionMessage[], pendingText: string): strin
   return turns.join('\n\n')
 }
 
+// Session mode → SDK permission behaviour.
+//   ask          → prompt every write/exec via canUseTool
+//   accept-edits → SDK auto-accepts file edits; other tools still prompt
+//   plan         → planning mode (ExitPlanMode gate)
+//   execute      → bypass ALL permission checks (full access, no prompts)
+const MODE_PERMISSION: Record<AgentMode, 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'> =
+  {
+    ask: 'default',
+    'accept-edits': 'acceptEdits',
+    plan: 'plan',
+    execute: 'bypassPermissions',
+  }
+
 function buildOptions(
   settings: SessionSettings,
   accessToken: string,
@@ -159,14 +173,19 @@ function buildOptions(
     // preset.
     // Streaming partial text events so we can forward chunks to the UI.
     includePartialMessages: true,
-    // 'default' lets canUseTool drive the prompt path. We never call into
-    // Claude Code's interactive CLI permission UI; canUseTool is required.
-    permissionMode: 'default',
+    // Mode drives the permission path. 'default'/'acceptEdits'/'plan' all let
+    // canUseTool gate prompts; 'execute' bypasses every check (full access).
+    permissionMode: MODE_PERMISSION[settings.mode] ?? 'default',
   }
+
+  // bypassPermissions REQUIRES this opt-in flag (SDK safety gate). Execute mode
+  // is the user's explicit "full access, don't ask" choice.
+  if (settings.mode === 'execute') opts.allowDangerouslySkipPermissions = true
 
   if (abortController) opts.abortController = abortController
   if (cwd) opts.cwd = cwd
-  if (canUseTool) opts.canUseTool = canUseTool
+  // No permission gate in execute mode — skip canUseTool so nothing is parked.
+  if (canUseTool && settings.mode !== 'execute') opts.canUseTool = canUseTool
   if (disabledTools && disabledTools.length) opts.disallowedTools = disabledTools
   if (mcpServers && Object.keys(mcpServers).length > 0) opts.mcpServers = mcpServers
   if (allowedTools && allowedTools.length > 0) opts.allowedTools = allowedTools

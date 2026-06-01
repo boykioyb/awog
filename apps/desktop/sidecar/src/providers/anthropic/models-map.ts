@@ -3,6 +3,7 @@
 // need to map to dated snapshots like `claude-haiku-4-5-20251001`.
 
 export const ANTHROPIC_MODELS = [
+  'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-opus-4-6',
   'claude-sonnet-4-6',
@@ -19,6 +20,7 @@ export function isAnthropicModel(id: string): id is AnthropicModelId {
 // does NOT support thinking; runner skips it for that model. M4 does not enable
 // thinking yet — M5/M7 will wire it for models with SUPPORTS_THINKING[id] === true.
 export const SUPPORTS_THINKING: Record<AnthropicModelId, boolean> = {
+  'claude-opus-4-8': true,
   'claude-opus-4-7': true,
   'claude-opus-4-6': true,
   'claude-sonnet-4-6': true,
