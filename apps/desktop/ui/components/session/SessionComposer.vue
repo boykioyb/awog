@@ -3,6 +3,18 @@
     class="px-4 md:px-6 py-2 relative"
     :style="{ background: t.bg, borderTop: `1px solid ${t.border}` }"
   >
+    <!-- Resize grip for the whole composer block — drag up to grow. -->
+    <div
+      class="absolute top-0 left-0 right-0 h-2 -translate-y-1/2 flex items-center justify-center cursor-row-resize z-10"
+      title="Drag to resize"
+      @mousedown="onResizeStart"
+    >
+      <div
+        class="w-10 h-1 rounded-full transition"
+        :style="{ background: resizing ? t.accent : t.border }"
+      />
+    </div>
+
     <div
       v-if="autocomplete.items.length > 0"
       class="absolute left-4 right-4 md:left-6 md:right-6 bottom-full mb-1 z-10"
@@ -16,44 +28,58 @@
       />
     </div>
 
+    <!-- Mode + MCP promoted to their own row above the input (user preference).
+         The remaining connection/account/model chips stay in the toolbar below. -->
+    <div class="flex items-center gap-1 mb-1.5">
+      <SessionChipsPopover :session="session" :only="['mode', 'mcp']" />
+    </div>
+
+    <!-- Input field: soft rounded with the send action inside. Connection /
+         account / model chips live in the toolbar below it (lighter than a top
+         chip header). Textarea stays resizable (top grip + bottom-right grip). -->
     <div
-      class="rounded-md"
+      class="rounded-xl"
       :style="{
         background: t.bgInput,
         border: `1px solid ${composerFocus ? t.borderFocus : t.border}`,
       }"
     >
-      <div
-        class="px-2 py-1 flex items-center gap-1 flex-wrap"
-        :style="{ borderBottom: `1px solid ${t.border}` }"
-      >
-        <SessionChipsPopover :session="session" />
-
-        <div class="ml-auto flex items-center gap-1">
-          <SessionContextStatus :session="session" />
-        </div>
-
+      <div class="flex items-end gap-2 pl-3 pr-2 py-1.5">
+        <textarea
+          ref="textareaRef"
+          v-model="draft"
+          rows="2"
+          :placeholder="placeholder"
+          class="flex-1 bg-transparent py-1 text-[1em] resize-y min-h-[2.75rem] max-h-[50vh] outline-none"
+          :style="{ color: t.text }"
+          @focus="composerFocus = true"
+          @blur="onBlur"
+          @input="mention.detect"
+          @click="mention.detect"
+          @keyup="mention.detect"
+          @keydown="onComposerKeydown"
+        />
         <button
-          class="inline-flex items-center justify-center w-6 h-6 rounded transition"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
           :style="{ color: t.textDim }"
           title="Attach file or image"
           @click="fileInputRef?.click()"
         >
-          <Paperclip :size="12" />
+          <Paperclip :size="14" />
         </button>
         <button
           v-if="isStreaming"
-          class="inline-flex items-center justify-center w-6 h-6 rounded transition"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
           :style="{ background: t.danger, color: t.accentText, cursor: 'pointer' }"
           title="Stop (interrupt response)"
           @click="onStop"
         >
-          <Square :size="10" fill="currentColor" />
+          <Square :size="11" fill="currentColor" />
         </button>
         <button
           v-else
           :disabled="!canSend"
-          class="inline-flex items-center justify-center w-6 h-6 rounded transition"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
           :style="{
             background: !canSend ? 'transparent' : t.accent,
             color: !canSend ? t.textFaint : t.accentText,
@@ -62,24 +88,9 @@
           title="Send (Enter)"
           @click="onSend"
         >
-          <Send :size="12" />
+          <Send :size="13" />
         </button>
       </div>
-
-      <textarea
-        ref="textareaRef"
-        v-model="draft"
-        rows="2"
-        :placeholder="placeholder"
-        class="w-full bg-transparent px-3 py-2 text-[1em] resize-none outline-none"
-        :style="{ color: t.text }"
-        @focus="composerFocus = true"
-        @blur="onBlur"
-        @input="mention.detect"
-        @click="mention.detect"
-        @keyup="mention.detect"
-        @keydown="onComposerKeydown"
-      />
 
       <div
         v-if="pendingAttachments.length > 0"
@@ -197,6 +208,17 @@
         @change="onFileSelected"
       />
     </div>
+
+    <!-- Toolbar: account / model / effort chips + context usage. Sits under the
+         input (Claude Code style). The provider/connection chip is dropped —
+         the account chip already implies the provider. Mode + MCP live in the
+         row above the input; the attach button sits next to Send. -->
+    <div class="flex items-center gap-1 mt-1.5">
+      <SessionChipsPopover :session="session" :only="['account', 'model']" />
+      <div class="ml-auto flex items-center gap-1">
+        <SessionContextStatus :session="session" />
+      </div>
+    </div>
     <div class="text-[1em] mt-1 px-1" :style="{ color: t.textFaint }">
       Enter to send · @ file · $ agent · / command · select text in a reply to quote it
     </div>
@@ -205,7 +227,7 @@
 
 <script setup lang="ts">
 import { FileText, Paperclip, Quote, Send, Square, X } from 'lucide-vue-next'
-import { computed, inject, ref, toRef, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { composeOutgoingMessage, truncateForChip } from '~/utils/follow-up'
@@ -225,6 +247,49 @@ const composerFocus = ref(false)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingAttachments = ref<SessionAttachment[]>([])
+
+// Drag the top grip to resize the whole composer block. Writes the textarea's
+// inline height imperatively (same channel as the native resize-y grip, so the
+// two affordances coexist without fighting Vue's reactive style).
+const RESIZE_MIN_PX = 52
+const resizing = ref(false)
+let resizeStartY = 0
+let resizeStartH = 0
+
+const onResizeMove = (e: MouseEvent) => {
+  const el = textareaRef.value
+  if (!el) return
+  const max = window.innerHeight * 0.5
+  const next = Math.max(RESIZE_MIN_PX, Math.min(max, resizeStartH + (resizeStartY - e.clientY)))
+  el.style.height = `${next}px`
+}
+
+const onResizeEnd = () => {
+  if (!resizing.value) return
+  resizing.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  window.removeEventListener('mousemove', onResizeMove)
+  window.removeEventListener('mouseup', onResizeEnd)
+}
+
+const onResizeStart = (e: MouseEvent) => {
+  const el = textareaRef.value
+  if (!el) return
+  e.preventDefault()
+  resizeStartY = e.clientY
+  resizeStartH = el.offsetHeight
+  resizing.value = true
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+  window.addEventListener('mousemove', onResizeMove)
+  window.addEventListener('mouseup', onResizeEnd)
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', onResizeMove)
+  window.removeEventListener('mouseup', onResizeEnd)
+})
 
 // Follow-ups are owned by SessionChat (parent) so the same state is shared
 // with SessionMessageList. inject is safe to call without a default — if a

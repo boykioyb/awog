@@ -7,25 +7,23 @@
         color: t.textDim,
         background: open ? t.bgSubtle : 'transparent',
       }"
-      :title="`Context window: ${formatTokenCount(used)} / ${formatTokenCount(limit)} (${percent}%)`"
+      :title="`${modelLabel} · context ${formatTokenCount(used)} / ${formatTokenCount(limit)} (${percent}%)`"
       @click="open = !open"
     >
-      <span :style="{ color: t.text }">{{ modelLabel }}</span>
-      <span :style="{ color: t.textFaint }">·</span>
-      <span :style="{ color: usageColor }" class="font-mono">{{ percent }}%</span>
       <span
-        class="inline-block rounded-full"
+        class="inline-block rounded-full flex-shrink-0"
         :style="{
-          width: '8px',
-          height: '8px',
+          width: '9px',
+          height: '9px',
           background: `conic-gradient(${usageColor} ${percent * 3.6}deg, ${t.border} 0)`,
         }"
       />
+      <span :style="{ color: usageColor }" class="font-mono">{{ percent }}%</span>
     </button>
 
     <div
       v-if="open"
-      class="absolute right-0 bottom-full mb-1.5 w-[340px] rounded-md shadow-xl text-[1em] z-30"
+      class="absolute right-0 bottom-full mb-1.5 w-[400px] rounded-md shadow-xl text-[1em] z-30"
       :style="{
         background: t.bgPanel,
         border: `1px solid ${t.border}`,
@@ -57,7 +55,7 @@
 
         <div
           class="relative h-1.5 rounded-full overflow-hidden"
-          :style="{ background: t.bgSubtle }"
+          :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
         >
           <div
             v-for="seg in segments"
@@ -95,7 +93,7 @@
             <span class="font-medium" :style="{ color: t.text }">Plan usage</span>
             <span
               v-if="profile?.subscriptionType"
-              class="text-[1em] px-1.5 py-0.5 rounded-sm uppercase tracking-wider"
+              class="text-[12px] leading-none px-1.5 py-0.5 rounded-sm uppercase tracking-wider"
               :style="{
                 background: t.bgSubtle,
                 color: t.textDim,
@@ -130,18 +128,18 @@
           Loading…
         </div>
 
-        <div v-else class="space-y-1.5">
+        <div v-else class="space-y-2.5">
           <div
             v-for="entry in usage"
             :key="entry.rateLimitType"
-            class="flex items-center gap-2 text-[1em]"
+            class="flex items-center gap-3 text-[1em]"
           >
-            <span class="min-w-[100px]" :style="{ color: t.text }">
+            <span class="w-[130px] flex-shrink-0 truncate" :style="{ color: t.text }">
               {{ rateLimitLabel(entry.rateLimitType) }}
             </span>
             <div
-              class="flex-1 relative h-1 rounded-full overflow-hidden"
-              :style="{ background: t.bgSubtle }"
+              class="flex-1 relative h-1.5 rounded-full overflow-hidden"
+              :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
             >
               <div
                 class="absolute top-0 left-0 h-full rounded-full"
@@ -151,19 +149,14 @@
                 }"
               />
             </div>
-            <span
-              class="font-mono text-[1em] min-w-[28px] text-right"
-              :style="{ color: t.textDim }"
+            <div
+              class="flex items-baseline justify-end gap-1 font-mono text-[12px] flex-shrink-0 whitespace-nowrap w-[78px]"
             >
-              {{ Math.round(entry.utilization * 100) }}%
-            </span>
-            <span
-              v-if="entry.resetsAt"
-              class="text-[1em] min-w-[56px] text-right"
-              :style="{ color: t.textFaint }"
-            >
-              {{ formatResetsIn(entry.resetsAt) }}
-            </span>
+              <span :style="{ color: t.textDim }">{{ Math.round(entry.utilization * 100) }}%</span>
+              <span v-if="entry.resetsAt" :style="{ color: t.textFaint }">
+                / {{ formatResetsIn(entry.resetsAt) }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -333,6 +326,20 @@ const usageLoading = ref(false)
 const usageError = ref<string | null>(null)
 const usageFetchedAt = ref(0)
 
+// Usage must follow the account picked for THIS session (the account chip),
+// not the global active one. Effective = explicit per-session override, else
+// the provider's global active account.
+const effectiveAccountId = computed<string | null>(
+  () =>
+    props.session.settings.accountId ??
+    settingsStore.providers[props.session.settings.provider]?.activeAccountId ??
+    null,
+)
+// Which account the loaded usage belongs to, so switching account forces a
+// refetch even inside the 60s client window (else we'd show the old account's
+// numbers). The sidecar cache is keyed per-account, so the refetch is cheap.
+const usageAccountId = ref<string | null>(null)
+
 interface UsageResponse {
   profile: ProfileShape | null
   usage: UsageEntry[]
@@ -345,16 +352,21 @@ const refreshUsage = async (force = false) => {
     return
   }
   if (usageLoading.value) return
-  // 60s client-side cache to mirror sidecar TTL; force bypasses.
-  if (!force && usageFetchedAt.value && Date.now() - usageFetchedAt.value < 60_000) return
+  const accountId = effectiveAccountId.value ?? undefined
+  const accountChanged = usageAccountId.value !== (accountId ?? null)
+  // 60s client-side cache to mirror sidecar TTL; force or an account switch
+  // bypasses it (the sidecar cache is per-account, so a switch is still cheap).
+  const withinTtl = usageFetchedAt.value > 0 && Date.now() - usageFetchedAt.value < 60_000
+  if (!force && !accountChanged && withinTtl) return
 
   usageLoading.value = true
   usageError.value = null
   try {
-    const res = await sidecar.request<UsageResponse>('account.usage', { force })
+    const res = await sidecar.request<UsageResponse>('account.usage', { accountId, force })
     usage.value = res.usage ?? []
     profile.value = res.profile
     usageFetchedAt.value = res.cachedAt ?? Date.now()
+    usageAccountId.value = accountId ?? null
   } catch (err) {
     usageError.value = err instanceof Error ? err.message : 'Failed to load usage'
   } finally {
@@ -362,9 +374,10 @@ const refreshUsage = async (force = false) => {
   }
 }
 
-// Fetch on first popover open. Subsequent opens reuse cached data unless user
-// clicks the refresh button.
-watch(open, (isOpen) => {
+// Fetch when the popover opens, and re-fetch if the selected account changes
+// while it's open. Subsequent opens reuse cached data unless the account
+// changed or the user clicks refresh.
+watch([open, effectiveAccountId], ([isOpen]) => {
   if (isOpen) refreshUsage(false)
 })
 

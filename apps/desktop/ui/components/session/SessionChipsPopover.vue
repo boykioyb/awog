@@ -1,7 +1,7 @@
 <template>
   <div ref="rootRef" class="flex items-center gap-1 flex-wrap">
     <!-- Provider chip -->
-    <div class="relative">
+    <div v-if="shows('provider')" class="relative">
       <button
         class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'provider')"
@@ -41,7 +41,7 @@
           {{ PROVIDER_LABEL[p] }}
           <span
             v-if="!settings.isProviderConnected(p)"
-            class="ml-auto text-[1em] uppercase tracking-wider"
+            class="ml-auto text-[12px] uppercase tracking-wider"
             :style="{ color: t.textDim }"
           >
             Not connected
@@ -50,9 +50,82 @@
       </div>
     </div>
 
+    <!-- Account chip — per-session account override. Lets two sessions run on
+         different accounts concurrently: the runner resolves settings.accountId
+         and falls back to the global active account when it's unset. Hidden
+         unless the provider has more than one account (nothing to switch). -->
+    <div v-if="shows('account') && providerAccounts.length > 0" class="relative">
+      <button
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
+        :style="chipStyle(openPop === 'account')"
+        :title="accountChipTitle"
+        @click="togglePop('account')"
+      >
+        <UserRound :size="10" class="flex-shrink-0" />
+        <span class="truncate" :style="{ maxWidth: '120px' }">{{ currentAccountLabel }}</span>
+        <ChevronDown :size="9" class="flex-shrink-0" :style="{ color: t.textDim }" />
+      </button>
+      <div
+        v-if="openPop === 'account'"
+        class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20"
+        :style="accountPopStyle"
+      >
+        <div
+          class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
+          :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
+        >
+          {{ PROVIDER_LABEL[session.settings.provider] }} · Account
+        </div>
+        <button
+          v-for="acc in providerAccounts"
+          :key="acc.id"
+          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
+          :style="{
+            background: isAccountActive(acc.id) ? t.bgActive : 'transparent',
+            color: t.text,
+            minWidth: '260px',
+          }"
+          @click="onPickAccount(acc.id)"
+        >
+          <span
+            class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+            :style="{ background: acc.status === 'connected' ? t.success : t.textFaint }"
+            :title="acc.status"
+          />
+          <div class="flex-1 min-w-0">
+            <div class="truncate" :style="{ color: t.text }">{{ acc.label }}</div>
+            <div
+              v-if="acc.account?.email"
+              class="text-[12px] font-mono truncate"
+              :style="{ color: t.textDim }"
+            >
+              {{ acc.account.email }}
+            </div>
+          </div>
+          <span
+            v-if="acc.id === activeAccountId"
+            class="text-[12px] uppercase tracking-wider flex-shrink-0"
+            :style="{ color: t.textDim }"
+          >
+            default
+          </span>
+          <Check v-if="isAccountActive(acc.id)" :size="11" :style="{ color: t.success }" />
+        </button>
+        <button
+          v-if="session.settings.accountId !== undefined"
+          type="button"
+          class="w-full text-left px-2.5 py-1.5 text-[1em] transition"
+          :style="{ color: t.textDim, borderTop: `1px solid ${t.border}` }"
+          @click="resetAccount"
+        >
+          Follow active account
+        </button>
+      </div>
+    </div>
+
     <!-- Model + Effort chip. Effort lives under the model popover (Claude Code
          pattern) since the supported level range is model-dependent. -->
-    <div class="relative">
+    <div v-if="shows('model')" class="relative">
       <button
         class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'model')"
@@ -83,12 +156,15 @@
           :style="{
             background: session.settings.modelId === m.id ? t.bgActive : 'transparent',
             color: t.text,
-            minWidth: '220px',
+            minWidth: '300px',
           }"
           @click="onPickModel(m.id)"
         >
-          <span class="flex-1 min-w-0">{{ m.label }}</span>
-          <span class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
+          <span class="flex-1 min-w-0 whitespace-nowrap">{{ m.label }}</span>
+          <span
+            class="text-[12px] uppercase tracking-wider flex-shrink-0"
+            :style="{ color: t.textDim }"
+          >
             {{ m.tier }}
           </span>
           <Check
@@ -129,7 +205,7 @@
 
     <!-- Mode + Tools chip (tools live under the mode popover since the enabled
          tool set is what makes the mode meaningful in practice). -->
-    <div class="relative">
+    <div v-if="shows('mode')" class="relative">
       <button
         class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'mode')"
@@ -165,7 +241,7 @@
           :style="{
             background: session.settings.mode === m.value ? t.bgActive : 'transparent',
             color: t.text,
-            minWidth: '220px',
+            minWidth: '300px',
           }"
           @click="onPickMode(m.value)"
         >
@@ -206,7 +282,7 @@
 
     <!-- MCP chip — per-session whitelist over enabled servers. Hidden when no
          MCP servers exist in the workspace (nothing to pick). -->
-    <div v-if="mcpEnabledServers.length > 0" class="relative">
+    <div v-if="shows('mcp') && mcpEnabledServers.length > 0" class="relative">
       <button
         class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'mcp')"
@@ -387,6 +463,7 @@ import {
   Play,
   Plug,
   Sparkles,
+  UserRound,
   X,
 } from 'lucide-vue-next'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
@@ -400,16 +477,23 @@ import {
 } from '~/utils/models'
 import { TOOLS_CATALOG, TOOL_GROUP_LABEL, type ToolGroup } from '~/utils/tools-catalog'
 
-type PopoverName = 'provider' | 'model' | 'mode' | 'mcp' | null
+type PopoverName = 'provider' | 'account' | 'model' | 'mode' | 'mcp' | null
 
 // Display order for Effort section — show ALL levels (disabled ones grayed)
 // so the user sees the full ladder and can read why a level is unavailable
 // (it depends on the chosen model's `supportsThinking` + `maxLevel`).
 const ALL_LEVELS: ThinkingLevel[] = ['low', 'medium', 'high', 'extra-high', 'max']
 
+// `only` filters which chips render so the composer can split them across
+// rows (e.g. Mode + MCP above the input, the rest below). Undefined = show all.
+type ChipKind = 'provider' | 'account' | 'model' | 'mode' | 'mcp'
+
 const props = defineProps<{
   session: Session
+  only?: ChipKind[]
 }>()
+
+const shows = (kind: ChipKind): boolean => !props.only || props.only.includes(kind)
 
 const { t } = useTheme()
 const settings = useSettingsStore()
@@ -509,6 +593,54 @@ const onPickLevel = (lv: ThinkingLevel) => {
 
 const onPickMode = (m: AgentMode) => {
   store.updateSettings(props.session.id, { mode: m })
+  openPop.value = null
+}
+
+// ─── Account chip ─────────────────────────────────────────────────────────────
+// Per-session account selection so concurrent sessions can each pin a different
+// account (the single global "active" account in Settings is only the default).
+// undefined accountId = follow the global active; an explicit id pins this
+// session even when the global active later changes.
+
+const providerAccounts = computed(
+  () => settings.providers[props.session.settings.provider]?.accounts ?? [],
+)
+const activeAccountId = computed(
+  () => settings.providers[props.session.settings.provider]?.activeAccountId ?? null,
+)
+// The account actually in effect for this session: explicit override, else the
+// global active. Drives both the chip label and the row highlight/check.
+const effectiveAccountId = computed(() => props.session.settings.accountId ?? activeAccountId.value)
+const currentAccount = computed(
+  () => providerAccounts.value.find((a) => a.id === effectiveAccountId.value) ?? null,
+)
+const currentAccountLabel = computed(() => currentAccount.value?.label ?? 'Account')
+const isAccountActive = (id: string): boolean => effectiveAccountId.value === id
+
+const accountChipTitle = computed(() => {
+  const label = currentAccount.value?.label
+  if (props.session.settings.accountId === undefined) {
+    return `Following the active account${label ? ` · ${label}` : ''}`
+  }
+  return `Pinned to ${label ?? 'account'} for this session`
+})
+
+const accountPopStyle = computed(() => ({
+  background: t.value.bgPanel,
+  border: `1px solid ${t.value.borderStrong}`,
+  boxShadow: `0 8px 24px ${t.value.shadow}`,
+  minWidth: '260px',
+  maxHeight: '320px',
+  overflowY: 'auto' as const,
+}))
+
+const onPickAccount = (id: string) => {
+  store.updateSettings(props.session.id, { accountId: id })
+  openPop.value = null
+}
+
+const resetAccount = () => {
+  store.updateSettings(props.session.id, { accountId: undefined })
   openPop.value = null
 }
 

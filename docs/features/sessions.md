@@ -158,6 +158,16 @@ Cho phép user trích một đoạn trong message cũ của agent rồi đính k
 - [`components/session/SessionMessageList.vue`](../../apps/desktop/ui/components/session/SessionMessageList.vue) — selection detect.
 - [`components/session/SessionComposer.vue`](../../apps/desktop/ui/components/session/SessionComposer.vue) — chip + note editor.
 
+### Mention `@file` / `$agent` / `/command` `/skill`
+
+Composer phát hiện trigger trong draft (tại con trỏ, sau khoảng trắng) và mở [`SessionAutocomplete.vue`](../../apps/desktop/ui/components/session/SessionAutocomplete.vue):
+
+- **`@file`** — fuzzy toàn cây **file thật** của project gắn session. Lấy `workspaceRoot` từ `session.projectId`; nạp **lazy** (lần đầu gõ `@`) qua RPC [`fs.listFiles`](workspace-panel.md) rồi cache per-workspace ở [`useWorkspaceFileIndex.ts`](../../apps/desktop/ui/composables/useWorkspaceFileIndex.ts) (dedupe request in-flight). Match theo **tên + path**, xếp khớp-tên lên trước; hiển thị tối đa **50**, tiêu đề báo `N of M — type to narrow` khi còn nữa; path clip từ **trái** (giữ đuôi phân biệt các file trùng tên). Insert `@<relative-path>`.
+- **`$agent`** — từ `workspace.agents` (live, hydrate sidecar).
+- **`/command` / `/skill`** — `COMMANDS` tĩnh + `workspace.skills` (live).
+
+**Sidecar-only:** cả ba nguồn rỗng trong browser dev thuần (`pnpm dev`, không Tauri → không sidecar). Agents/skills/files đều hydrate từ sidecar, **không seed mock** — test trong Tauri shell (`pnpm tauri:dev`) với session đã gắn project. State machine: [`useMentionAutocomplete.ts`](../../apps/desktop/ui/composables/useMentionAutocomplete.ts) (detect / apply / navigate).
+
 ### Tool permissions & allow-list
 
 Composer chips popover có **Mode** chip gồm 4 mode (Ask / Accept Edits / Plan / Execute) + "Tools · X/Y" row:
@@ -169,11 +179,25 @@ Composer chips popover có **Mode** chip gồm 4 mode (Ask / Accept Edits / Plan
 
 **Catalog:** [`utils/tools-catalog.ts`](../../apps/desktop/ui/utils/tools-catalog.ts) với tool names + descriptions.
 
-### Composer chips layout (M7)
+### Composer chips layout
 
-- **Provider** — unchanged.
-- **Model** — merges Effort. Label = `Opus 4.7 · High` (effort only when model supports thinking). Popover: **MODELS** section + **EFFORT** section (Low/Medium/High/Extra high/Max, disabled+greyed above model's maxLevel).
-- **Mode** — 4 mode options + Tools · X/Y row.
+Chips chia **2 hàng** quanh ô nhập. Component [`SessionChipsPopover.vue`](../../apps/desktop/ui/components/session/SessionChipsPopover.vue) nhận prop `only?: ChipKind[]` để lọc chip nào render; composer render component **2 lần** (trên + dưới).
+
+- **Hàng trên ô nhập:** **Mode** (Ask / Accept Edits / Plan / Execute + "Tools · X/Y" row) và **MCP** (whitelist per-session over enabled servers).
+- **Hàng dưới ô nhập:** **Account** + **Model**. Chip **Connection/Provider** đã bỏ — account đã ngụ ý provider (hiện chỉ Anthropic hoạt động). Bên phải hàng là **context status** = vòng ring + `%`; tên model nằm trong tooltip (tránh trùng với Model chip).
+- **Model** — gộp Effort. Label = `Claude Opus 4.8 · High` (effort chỉ khi model hỗ trợ thinking). Popover: section MODELS + section EFFORT (Low…Max, disabled+greyed trên `maxLevel` của model).
+- **Attach (📎):** nằm cạnh nút **Send** bên trong ô nhập (không còn ở toolbar).
+
+### Per-session account (multi-account)
+
+Mỗi session chọn account riêng → 2 session chạy **đồng thời** trên 2 account khác nhau. Account active trong Settings chỉ là **mặc định**.
+
+- **Account chip** (hiện khi provider có ≥ 1 account): list account + dot trạng thái, badge `default` cho account active global, `✓` cho account đang hiệu lực; nút **"Follow active account"** để bỏ ghim.
+- **Resolve:** `effectiveAccountId = session.settings.accountId ?? activeAccountId`. `accountId` undefined = bám theo active global; id cụ thể = ghim session (giữ nguyên kể cả khi đổi active global sau đó). Khớp logic với [`runner.resolveAccount`](../../apps/desktop/sidecar/src/sessions/runner.ts).
+- **Token tách biệt:** runner inject OAuth token vào object `env` cục bộ per-query (không mutate `process.env`), lock theo `sessionId` → chạy song song an toàn.
+- **Plan usage theo account:** [`SessionContextStatus.vue`](../../apps/desktop/ui/components/session/SessionContextStatus.vue) truyền `effectiveAccountId` vào RPC [`account.usage`](../../apps/desktop/sidecar/src/methods/account.usage.ts); đổi account → refetch ngay (cache sidecar keyed per-account, không lẫn số liệu).
+
+Field lưu: `SessionSettings.accountId?: string` ([types](../../apps/desktop/ui/types/index.ts)).
 
 ### Auto-title & plan-mode toggle
 
