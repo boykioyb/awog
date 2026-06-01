@@ -68,11 +68,11 @@
       </button>
     </div>
     <div class="flex items-center gap-1.5 pl-5">
-      <span class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
+      <span class="text-[1em] font-mono truncate flex-1 min-w-0" :style="{ color: t.textDim }">
         /{{ skill.id }}
       </span>
       <span
-        class="text-[1em] px-1 py-0.5 rounded font-mono uppercase tracking-wider"
+        class="text-[0.7em] px-1 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
         :style="sourceBadgeStyle"
       >
         {{ sourceLabel }}

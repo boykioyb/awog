@@ -104,7 +104,7 @@
         @save="handleSave"
         @cancel="editing = false"
       />
-      <div v-else-if="selectedProject" class="p-4 md:p-6 max-w-3xl">
+      <div v-else-if="selectedProject" class="p-4 md:p-6">
         <div class="flex items-start gap-3 mb-6">
           <div
             class="w-12 h-12 rounded flex items-center justify-center"
@@ -173,10 +173,7 @@
             <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
               {{ selectedProject.gitRemote }}
             </span>
-            <button
-              class="px-2 py-0.5 text-[1em] rounded transition"
-              :style="{ color: t.textDim }"
-            >
+            <button class="px-2 py-0.5 text-[1em] rounded transition" :style="{ color: t.textDim }">
               Open
             </button>
           </div>

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl w-full">
+  <div class="flex-1 overflow-y-auto p-4 md:p-6 w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
         class="w-10 h-10 rounded flex items-center justify-center text-lg"

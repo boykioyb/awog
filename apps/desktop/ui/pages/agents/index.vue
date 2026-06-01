@@ -144,12 +144,12 @@
               </button>
             </div>
             <div class="flex items-center gap-1.5 mt-0.5">
-              <span class="text-[1em] truncate flex-1" :style="{ color: t.textDim }">
+              <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.textDim }">
                 {{ modelLabel(agent) }} · {{ agent.skillIds.length }}
                 {{ agent.skillIds.length === 1 ? 'skill' : 'skills' }}
               </span>
               <span
-                class="text-[1em] px-1 py-0.5 rounded font-mono uppercase tracking-wider"
+                class="text-[0.7em] px-1 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
                 :style="sourceBadgeStyle(agent)"
               >
                 {{ sourceLabel(agent) }}
@@ -297,13 +297,12 @@ const SOURCE_DIR_FOR_DELETE: Record<AgentSource, string> = {
 }
 
 const sourceLabel = (a: Agent): string => {
-  // Project-tier badge shows project name so users can tell which repo a
-  // project-scoped agent comes from — `.claude` alone is ambiguous when
-  // multiple projects are registered.
+  // Project-tier badge shows just the project name so users can tell which repo
+  // a project-scoped agent comes from. The tier (.claude/.agents) is conveyed by
+  // the accent styling, so the redundant suffix is dropped to keep the tag compact.
   if (a.source === 'project-claude' || a.source === 'project-agents') {
     const project = a.projectId ? ws.projects.find((p) => p.id === a.projectId) : undefined
-    const projectLabel = project?.name ?? a.projectId ?? '?'
-    return `${projectLabel} · ${SOURCE_LABEL[a.source]}`
+    return project?.name ?? a.projectId ?? '?'
   }
   return SOURCE_LABEL[a.source]
 }
@@ -311,11 +310,13 @@ const sourceLabel = (a: Agent): string => {
 const isProjectAgent = (a: Agent): boolean =>
   a.source === 'project-claude' || a.source === 'project-agents'
 
+// Quiet tag: muted bg for all; project-scoped gets accent text + border instead
+// of a loud solid fill so the list reads calmer.
 const sourceBadgeStyle = (a: Agent): CSSProperties => {
   const highlight = isProjectAgent(a)
   return {
-    background: highlight ? t.value.accent : t.value.bgInput,
-    color: highlight ? t.value.accentText : t.value.textDim,
+    background: t.value.bgInput,
+    color: highlight ? t.value.accent : t.value.textDim,
     border: `1px solid ${highlight ? t.value.accent : t.value.border}`,
   }
 }

@@ -215,11 +215,13 @@ const bulkSelectedSkills = computed<Skill[]>(() =>
   ws.skills.filter((s: Skill) => bulkSelection.value.has(skillKey(s))),
 )
 
+// Quiet tag: muted bg for all; project-scoped gets accent text + border instead
+// of a loud solid fill so the list reads calmer.
 const sourceBadgeStyle = (s: Skill): CSSProperties => {
   const highlight = isProjectSkill(s)
   return {
-    background: highlight ? t.value.accent : t.value.bgInput,
-    color: highlight ? t.value.accentText : t.value.textDim,
+    background: t.value.bgInput,
+    color: highlight ? t.value.accent : t.value.textDim,
     border: `1px solid ${highlight ? t.value.accent : t.value.border}`,
   }
 }
@@ -321,11 +323,10 @@ const onRefresh = () => {
 }
 
 onMounted(() => {
-  // Initial load is NON-silent so the toast confirms which tiers got scanned
-  // and how many skills came back — surfaces "sidecar still on old code" and
-  // "user dirs are empty" cases that would otherwise look like a silent blank
-  // list.
-  refresh()
+  // Silent on entry — the scan-report toast was noisy on every visit. The
+  // manual Refresh button still reports (which tiers scanned, counts); load
+  // errors still toast via the catch block.
+  refresh({ silent: true })
 })
 
 const agentCountFor = (skillId: string): number =>

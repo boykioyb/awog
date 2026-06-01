@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl w-full">
+  <div class="flex-1 overflow-y-auto p-4 md:p-6 w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
         class="rounded flex items-center justify-center text-[1em] font-bold flex-shrink-0"
@@ -12,17 +12,32 @@
           color: t.textMuted,
         }"
       >
-        {{ agent.role }}
+        <span v-if="agent.role">{{ agent.role }}</span>
+        <Bot v-else :size="22" :style="{ color: t.textMuted }" />
       </div>
       <div class="flex-1 min-w-0">
-        <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">{{ agent.name }}</h1>
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
+          <h1 class="text-lg font-semibold" :style="{ color: t.text }">{{ agent.name }}</h1>
+          <span
+            class="text-[0.7em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap"
+            :style="sourceBadgeStyle"
+            :title="sourcePath"
+          >
+            {{ sourceBadgeLabel }}
+          </span>
+        </div>
         <div class="text-[1em] inline-flex items-center gap-1.5" :style="{ color: t.textDim }">
           <Sparkles :size="11" />
-          {{ model?.label }}
-          <span :style="{ color: t.textFaint }">·</span>
-          <span>{{ model?.vendor }}</span>
+          <span>{{ modelLabel }}</span>
+          <template v-if="model?.vendor">
+            <span :style="{ color: t.textFaint }">·</span>
+            <span>{{ model.vendor }}</span>
+          </template>
           <span :style="{ color: t.textFaint }">·</span>
           <span class="font-mono">{{ agent.id }}</span>
+        </div>
+        <div class="text-[1em] font-mono mt-1 truncate" :style="{ color: t.textFaint }">
+          {{ sourcePath }}
         </div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
@@ -182,8 +197,8 @@
 
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import { Copy, Edit3, Plug, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
-import type { Agent, Skill } from '~/types'
+import { Bot, Copy, Edit3, Plug, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
+import type { Agent, AgentSource, Skill } from '~/types'
 import { MODELS } from '~/utils/models'
 
 const props = defineProps<{
@@ -201,6 +216,56 @@ const { t } = useTheme()
 const ws = useWorkspaceStore()
 
 const model = computed(() => MODELS.find((m) => m.id === props.agent.model))
+
+// Fall back to the raw model id (e.g. the Claude Code alias `sonnet`) when it
+// isn't in the MODELS registry, matching how the list renders it.
+const modelLabel = computed(() => model.value?.label ?? props.agent.model ?? '')
+
+const SOURCE_LABEL: Record<AgentSource, string> = {
+  global: '~/.awog',
+  'user-claude': '~/.claude',
+  'user-agents': '~/.agents',
+  'project-claude': '.claude',
+  'project-agents': '.agents',
+}
+
+// Absolute-ish prefix for user-tier agents; project tiers resolve via the
+// registered project path below.
+const USER_PATH_PREFIX: Partial<Record<AgentSource, string>> = {
+  global: '~/.awog/agents',
+  'user-claude': '~/.claude/agents',
+  'user-agents': '~/.agents/agents',
+}
+
+const isProjectScoped = computed(
+  () => props.agent.source === 'project-claude' || props.agent.source === 'project-agents',
+)
+
+const project = computed(() =>
+  props.agent.projectId ? ws.projects.find((p) => p.id === props.agent.projectId) : undefined,
+)
+
+// Project-scoped → project name (which repo); user-scoped → tier path label.
+const sourceBadgeLabel = computed(() =>
+  isProjectScoped.value
+    ? (project.value?.name ?? props.agent.projectId ?? '?')
+    : SOURCE_LABEL[props.agent.source],
+)
+
+const sourcePath = computed(() => {
+  const userPrefix = USER_PATH_PREFIX[props.agent.source]
+  if (userPrefix) return `${userPrefix}/${props.agent.id}.md`
+  const sub = props.agent.source === 'project-claude' ? '.claude/agents' : '.agents/agents'
+  const base = project.value?.path ?? '<project>'
+  return `${base}/${sub}/${props.agent.id}.md`
+})
+
+// Quiet tag: muted bg; project-scoped gets accent text + border (matches list).
+const sourceBadgeStyle = computed<CSSProperties>(() => ({
+  background: t.value.bgInput,
+  color: isProjectScoped.value ? t.value.accent : t.value.textDim,
+  border: `1px solid ${isProjectScoped.value ? t.value.accent : t.value.border}`,
+}))
 
 const agentSkills = computed<Skill[]>(() =>
   ws.skills.filter((s) => props.agent.skillIds.includes(s.id)),

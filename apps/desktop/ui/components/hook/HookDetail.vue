@@ -1,5 +1,5 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
+  <div class="p-4 md:p-6 w-full">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
