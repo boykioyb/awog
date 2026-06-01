@@ -341,6 +341,48 @@ export interface Session {
   mcpServerIds?: string[]
 }
 
+// ─── Session Workspace Panel ─────────────────────────────────────────────────
+// Right-docked panel in the Session detail view exposing workspace tools that
+// run alongside the chat. Mirrors Claude Code's workspace switcher.
+
+export type WorkspaceTab = 'diff' | 'files' | 'plan' | 'terminal' | 'tasks' | 'preview'
+
+// Where the workspace drawer docks (overlay on top of the chat).
+export type WorkspacePanelPosition = 'right' | 'left' | 'bottom'
+
+// One entry from `fs.listDir`. `path` is workspace-relative (POSIX-style).
+export interface FsEntry {
+  name: string
+  path: string
+  kind: 'file' | 'dir'
+  size?: number
+}
+
+// Result of `fs.readFile`. `content` is empty when `isBinary` or fully capped.
+export interface FsFileContent {
+  path: string
+  content: string
+  language?: string
+  truncated: boolean
+  isBinary: boolean
+}
+
+// Handle to a live PTY owned by the sidecar terminal manager.
+export interface TerminalSessionRef {
+  terminalId: string
+  sessionId: string
+  createdAt: number
+}
+
+// View-model derived from in-flight session steps (not persisted) — the
+// Background tasks tab aggregates running bash / subagent steps of a turn.
+export interface WorkspaceBackgroundTask {
+  id: string
+  kind: 'bash' | 'subagent'
+  label: string
+  status: StepStatus
+}
+
 // ─── MCP Server ────────────────────────────────────────────────────────────
 
 export type MCPTransport = 'stdio' | 'http' | 'sse'

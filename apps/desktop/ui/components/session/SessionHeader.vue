@@ -36,6 +36,15 @@
       </div>
     </div>
     <button
+      ref="wsBtnRef"
+      class="p-1.5 rounded transition flex-shrink-0"
+      :style="{ color: activeDrawer || showWorkspaceMenu ? t.accent : t.textDim }"
+      :title="tr('workspace.toggle')"
+      @click="showWorkspaceMenu = !showWorkspaceMenu"
+    >
+      <PanelRight :size="14" />
+    </button>
+    <button
       class="p-1.5 rounded transition flex-shrink-0"
       :style="{ color: t.textDim }"
       title="Delete session"
@@ -44,6 +53,14 @@
       <Trash2 :size="14" />
     </button>
   </div>
+
+  <WorkspaceMenu
+    :open="showWorkspaceMenu"
+    :anchor="wsMenuPos"
+    :active="activeDrawer"
+    @select="onSelectWorkspace"
+    @close="showWorkspaceMenu = false"
+  />
 
   <Teleport to="body">
     <div v-if="showProjectMenu" class="fixed inset-0 z-40" @click="showProjectMenu = false" />
@@ -96,13 +113,17 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, FolderGit2, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, FolderGit2, PanelRight, Trash2 } from 'lucide-vue-next'
 import { nextTick, ref, computed, watch } from 'vue'
-import type { Session } from '~/types'
+import type { Session, WorkspaceTab } from '~/types'
 import { formatTime } from '~/utils/time'
+import { useWorkspacePanelStore } from '~/stores/workspacePanel'
+import WorkspaceMenu from './workspace/WorkspaceMenu.vue'
 
 const settingsStore = useSettingsStore()
 const sessionsStore = useSessionsStore()
+const panel = useWorkspacePanelStore()
+const { t: tr } = useI18n()
 const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
 
 const props = defineProps<{
@@ -122,11 +143,23 @@ const showProjectMenu = ref(false)
 const projectBtnRef = ref<HTMLElement | null>(null)
 const menuPos = ref({ top: 0, left: 0 })
 
+// Workspace tools dropdown (Diff / Files / Terminal / …).
+const showWorkspaceMenu = ref(false)
+const wsBtnRef = ref<HTMLElement | null>(null)
+const wsMenuPos = ref({ top: 0, left: 0 })
+const activeDrawer = computed(() => panel.activeDrawer(props.session.id))
+
+const onSelectWorkspace = (tab: WorkspaceTab) => {
+  panel.openDrawer(props.session.id, tab)
+  showWorkspaceMenu.value = false
+}
+
 watch(
   () => props.session.id,
   () => {
     titleDraft.value = props.session.title
     showProjectMenu.value = false
+    showWorkspaceMenu.value = false
   },
 )
 
@@ -135,6 +168,14 @@ watch(showProjectMenu, async (open) => {
   await nextTick()
   const r = projectBtnRef.value?.getBoundingClientRect()
   if (r) menuPos.value = { top: r.bottom + 4, left: r.left }
+})
+
+watch(showWorkspaceMenu, async (open) => {
+  if (!open) return
+  await nextTick()
+  const r = wsBtnRef.value?.getBoundingClientRect()
+  // Right-align the 230px menu under the button, clamped to the viewport.
+  if (r) wsMenuPos.value = { top: r.bottom + 4, left: Math.max(8, r.right - 230) }
 })
 
 const project = computed(() =>

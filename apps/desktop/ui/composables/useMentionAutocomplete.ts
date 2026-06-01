@@ -1,9 +1,13 @@
 import { FileText, Sparkles, User as UserIcon } from 'lucide-vue-next'
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
-import type { Agent } from '~/types'
-import { COMMANDS, PROJECT_FILES } from '~/utils/session-catalog'
+import type { Agent, FsEntry } from '~/types'
+import { COMMANDS } from '~/utils/session-catalog'
 import type { AutoItem } from '~/components/session/SessionAutocomplete.vue'
+
+// Max `@file` suggestions shown at once. The dropdown scrolls; beyond this the
+// user narrows by typing more of the path rather than scrolling a huge list.
+const FILE_RESULT_LIMIT = 50
 
 /**
  * Detect `@skill/file`, `$agent`, `/command` mentions in a textarea draft và
@@ -15,17 +19,30 @@ import type { AutoItem } from '~/components/session/SessionAutocomplete.vue'
  *
  * @param draft - reactive textarea value (two-way binding ở caller)
  * @param textareaRef - ref tới `<textarea>` DOM element (cần để đọc selection)
+ * @param workspaceRoot - absolute path của project gắn với session (null = chưa
+ *   gắn project → `@` không có file thật để gợi ý)
  */
 export const useMentionAutocomplete = (
   draft: Ref<string>,
   textareaRef: Ref<HTMLTextAreaElement | null>,
+  workspaceRoot: Ref<string | null>,
 ) => {
   const workspace = useWorkspaceStore()
+  const fileIndex = useWorkspaceFileIndex()
 
   const mentionToken = ref<string | null>(null)
   const mentionTrigger = ref<'@' | '$' | '/' | null>(null)
   const mentionStart = ref(0)
   const activeIndex = ref(0)
+
+  // Lazy file load: `ensureLoaded` fetches the workspace file index the first
+  // time the user opens an `@` mention (deduped + cached per workspace). Reading
+  // the returned ref's `.value` here ties the autocomplete to it, so the list
+  // recomputes when the sidecar fetch resolves.
+  const files = computed<FsEntry[]>(() => {
+    const root = mentionTrigger.value === '@' ? workspaceRoot.value : null
+    return root ? fileIndex.ensureLoaded(root).value : []
+  })
 
   const agentHandle = (ag: Agent) => ag.name.toLowerCase().replace(/\s+/g, '-')
 
@@ -84,22 +101,36 @@ export const useMentionAutocomplete = (
       return { title: 'Run command or skill', items: [...commandItems, ...skillItems] }
     }
 
-    // trigger '@' → files only (skills moved to '/' to match Claude Code SDK
-    // slash-command convention; see plan peppy-napping-crystal.md)
-    const fileItems: AutoItem[] = PROJECT_FILES.filter(
+    // trigger '@' → real workspace files (fuzzy across the whole tree). Skills
+    // moved to '/' to match the Claude Code SDK slash-command convention.
+    const matched = files.value.filter(
       (f) => q === '' || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
     )
-      .slice(0, 10)
-      .map((f) => ({
-        kind: 'file',
-        id: f.id,
-        label: f.name,
-        hint: f.path,
-        icon: FileText,
-        insertHandle: `@${f.path}`,
-      }))
+    // Rank filename matches above path-only matches (typing `redis` should
+    // surface redis_client.py before src/x/uses-redis.ts); stable by path.
+    const ranked = q
+      ? [...matched].sort((a, b) => {
+          const an = a.name.toLowerCase().includes(q) ? 0 : 1
+          const bn = b.name.toLowerCase().includes(q) ? 0 : 1
+          return an - bn || a.path.localeCompare(b.path)
+        })
+      : matched
+    const fileItems: AutoItem[] = ranked.slice(0, FILE_RESULT_LIMIT).map((f) => ({
+      kind: 'file',
+      id: f.path,
+      label: f.name,
+      hint: f.path,
+      icon: FileText,
+      insertHandle: `@${f.path}`,
+    }))
 
-    return { title: 'Insert file', items: fileItems }
+    // Cap is intentional — surface it (don't silently truncate) so the user
+    // knows to keep typing to narrow when there are more matches than shown.
+    const title =
+      matched.length > FILE_RESULT_LIMIT
+        ? `Insert file · ${FILE_RESULT_LIMIT} of ${matched.length} — type to narrow`
+        : 'Insert file'
+    return { title, items: fileItems }
   })
 
   const detect = () => {

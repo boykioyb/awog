@@ -198,20 +198,23 @@
       />
     </div>
     <div class="text-[1em] mt-1 px-1" :style="{ color: t.textFaint }">
-      Enter to send · @ skill / file · $ agent · / command · select text in a reply to quote it
+      Enter to send · @ file · $ agent · / command · select text in a reply to quote it
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { FileText, Paperclip, Quote, Send, Square, X } from 'lucide-vue-next'
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref, toRef, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { composeOutgoingMessage, truncateForChip } from '~/utils/follow-up'
 
 const props = defineProps<{
   session: Session
+  // Absolute path of the session's bound project — drives `@file` mention
+  // suggestions. Null when no project is bound.
+  workspaceRoot: string | null
 }>()
 
 const { t } = useTheme()
@@ -230,7 +233,7 @@ const followUpController = inject(FOLLOW_UP_KEY, null)
 const pendingFollowUps = computed(() => followUpController?.pending.value ?? [])
 const editingFollowUpId = ref<string | null>(null)
 
-const mention = useMentionAutocomplete(draft, textareaRef)
+const mention = useMentionAutocomplete(draft, textareaRef, toRef(props, 'workspaceRoot'))
 const { autocomplete, activeIndex } = mention
 
 watch(

@@ -36,11 +36,17 @@
         class="flex-shrink-0"
         :style="{ color: tokenColor(item.kind) }"
       />
-      <span class="flex-1 min-w-0 truncate">{{ item.label }}</span>
+      <span class="flex-shrink-0 truncate" :style="{ maxWidth: '45%' }">{{ item.label }}</span>
       <span
         v-if="item.hint"
-        class="font-mono text-[1em] truncate"
-        :style="{ color: t.textDim, maxWidth: '50%' }"
+        class="font-mono text-[1em] truncate ml-auto"
+        :style="{
+          color: t.textDim,
+          maxWidth: item.kind === 'file' ? '70%' : '50%',
+          // File paths share a basename (requirements.md ×N) — the tail is what
+          // disambiguates, so clip from the left (rtl) to keep the end visible.
+          direction: item.kind === 'file' ? 'rtl' : 'ltr',
+        }"
       >
         {{ item.hint }}
       </span>
