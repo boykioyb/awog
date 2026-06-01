@@ -119,9 +119,12 @@ export async function fetchClaudeUsage(accessToken: string): Promise<UsageEntry[
   for (const type of BUCKET_TYPES) {
     const bucket = data[type]
     if (!bucket) continue
+    // The endpoint reports utilization as a percentage (0-100): 1 = 1%,
+    // 100 = 100%. Normalise to a 0..1 ratio (the UI multiplies back by 100).
+    // The old `raw > 1 ? raw / 100 : raw` heuristic mis-read any bucket ≤ 1% as
+    // a full ratio (1 → 100%), so a 1% session window showed as 100%.
     const raw = typeof bucket.utilization === 'number' ? bucket.utilization : 0
-    // API returns percentage (0-100) sometimes, ratio (0-1) other times.
-    const utilization = raw > 1 ? raw / 100 : raw
+    const utilization = Math.min(1, Math.max(0, raw / 100))
     const status: UsageEntry['status'] =
       utilization >= 1 ? 'rejected' : utilization >= 0.9 ? 'allowed_warning' : 'allowed'
     const entry: UsageEntry = { rateLimitType: type, utilization, status }
