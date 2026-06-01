@@ -94,11 +94,11 @@ Identity tuple: `(source, projectId, id)`. Cùng slug có thể tồn tại đ�
 
 | Trigger | Ý nghĩa |
 |---|---|
-| `@path/file.md` | Reference file workspace |
+| `@path/file.md` | Reference file workspace — **live**: fuzzy toàn cây file thật qua `fs.listFiles` (git ls-files + walk fallback), cache per `workspaceRoot`, top 50 + đếm khi còn nữa. Rỗng nếu session chưa gắn project / không có sidecar. |
 | `$agent-name` | Invoke agent → expand `agent.skillIds` auto-active |
 | `/slug` | Explicit skill invocation (hợp nhất với COMMANDS list) |
 
-Xem [composables/useMentionAutocomplete.ts](../../apps/desktop/ui/composables/useMentionAutocomplete.ts).
+`@` lấy `workspaceRoot` từ `session.projectId`; index cache ở [composables/useWorkspaceFileIndex.ts](../../apps/desktop/ui/composables/useWorkspaceFileIndex.ts). Chi tiết: [sessions.md → Mention](sessions.md). State machine: [composables/useMentionAutocomplete.ts](../../apps/desktop/ui/composables/useMentionAutocomplete.ts).
 
 ## LLM integration
 

@@ -100,7 +100,8 @@ ui/
 │   ├── useMockGenerator.ts # Generic mock generator (T) — PR-4
 │   ├── usePromptCreator.ts # Shared prompt → entity flow state — PR-4
 │   ├── useBreakpoint.ts    # Responsive breakpoint detector
-│   ├── useMentionAutocomplete.ts # @-mention autocomplete state — PR-5.A
+│   ├── useMentionAutocomplete.ts # @file / $agent / /command-skill autocomplete state — PR-5.A (@file = live workspace files)
+│   ├── useWorkspaceFileIndex.ts # @file index: fetch/cache fs.listFiles per workspaceRoot (lazy, deduped, browser-dev → empty)
 │   └── useSidecar.ts       # Wrapper invoke('engine_call') + listen('sidecar.event') — M7
 ├── stores/
 │   ├── workspace.ts        # Tasks, projects, agents, skills, workflows + actions
