@@ -123,10 +123,7 @@
               :style="{ background: pickBg(block.index, 'theirs') }"
               @click="onPick(block.index, 'theirs')"
             >
-              <div
-                class="text-[1em] uppercase tracking-wider mb-1"
-                :style="{ color: t.warning }"
-              >
+              <div class="text-[1em] uppercase tracking-wider mb-1" :style="{ color: t.warning }">
                 Theirs ({{ block.theirsLabel || 'incoming' }})
               </div>
               <pre

@@ -82,7 +82,9 @@
           :stroke-width="1.5"
           :style="{ color: t.textFaint }"
         />
-        <div class="text-[1em]" :style="{ color: t.textDim }">Drag agents from the left to begin</div>
+        <div class="text-[1em]" :style="{ color: t.textDim }">
+          Drag agents from the left to begin
+        </div>
       </div>
     </div>
   </div>

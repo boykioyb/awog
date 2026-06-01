@@ -2,7 +2,11 @@
   <BaseModal :open="!dirtyWarnOpen" title="New task" @close="emit('cancel')">
     <div class="p-4 space-y-4">
       <Field label="Project">
-        <select v-model="projectId" class="w-full rounded px-2 py-1.5 text-[1em]" :style="inputStyle">
+        <select
+          v-model="projectId"
+          class="w-full rounded px-2 py-1.5 text-[1em]"
+          :style="inputStyle"
+        >
           <option v-if="projects.length === 0" value="">No projects — create one first</option>
           <option v-for="p in projects" :key="p.id" :value="p.id">
             {{ p.name }} — {{ p.path }}
@@ -97,7 +101,11 @@
     </div>
 
     <template #footer>
-      <button class="px-3 py-1.5 text-[1em]" :style="{ color: t.textMuted }" @click="emit('cancel')">
+      <button
+        class="px-3 py-1.5 text-[1em]"
+        :style="{ color: t.textMuted }"
+        @click="emit('cancel')"
+      >
         Cancel
       </button>
       <button

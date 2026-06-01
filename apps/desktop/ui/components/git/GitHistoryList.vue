@@ -4,9 +4,7 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
-        History
-      </div>
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">History</div>
       <div class="text-[1em]" :style="{ color: t.textFaint }">
         {{ store.commits.length }} commits
       </div>

@@ -63,7 +63,7 @@ const active = computed(() => {
 const label = computed(() => {
   if (!active.value) return ''
   const phase = active.value.phase ?? 'working'
-  const pct = active.value.pct
+  const { pct } = active.value
   if (pct === null) return `${phase}…`
   return `${phase}… ${pct}%`
 })

@@ -46,7 +46,11 @@
     </div>
 
     <template #footer>
-      <button class="px-3 py-1.5 text-[1em]" :style="{ color: t.textMuted }" @click="emit('cancel')">
+      <button
+        class="px-3 py-1.5 text-[1em]"
+        :style="{ color: t.textMuted }"
+        @click="emit('cancel')"
+      >
         Cancel
       </button>
       <button

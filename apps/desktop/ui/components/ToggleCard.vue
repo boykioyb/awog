@@ -7,10 +7,7 @@
     }"
     @click="emit('toggle')"
   >
-    <div
-      class="text-[1em] uppercase tracking-wider font-medium mb-1"
-      :style="{ color: t.textDim }"
-    >
+    <div class="text-[1em] uppercase tracking-wider font-medium mb-1" :style="{ color: t.textDim }">
       {{ label }}
     </div>
     <div class="flex items-center gap-2">

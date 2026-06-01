@@ -50,7 +50,7 @@ const hover = ref(false)
 
 const label = computed(() => {
   const phase = props.progress.phase ?? 'working'
-  const pct = props.progress.pct
+  const { pct } = props.progress
   if (pct === null) return `${phase}…`
   return `${phase}… ${pct}%`
 })

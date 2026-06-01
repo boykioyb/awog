@@ -40,11 +40,7 @@
           <X :size="11" />
         </button>
       </div>
-      <button
-        class="text-[1em] flex items-center gap-1"
-        :style="{ color: t.textDim }"
-        @click="add"
-      >
+      <button class="text-[1em] flex items-center gap-1" :style="{ color: t.textDim }" @click="add">
         <Plus :size="11" />
         Add entry
       </button>
