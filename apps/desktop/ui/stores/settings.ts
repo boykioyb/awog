@@ -133,7 +133,7 @@ interface AccountTestResponse {
 
 export const useSettingsStore = defineStore('settings', {
   state: (): SettingsState => ({
-    workspacePath: '',
+    workspacePath: '~/.awog/workspaces/home',
     autoApprove: false,
     notificationsEnabled: true,
     providers: {
