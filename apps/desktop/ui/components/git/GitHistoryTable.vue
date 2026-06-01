@@ -4,9 +4,7 @@
       class="flex items-center justify-between px-3 py-2 flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
-        History
-      </div>
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">History</div>
       <div class="text-[1em]" :style="{ color: t.textFaint }">
         {{ tr('git.history.commits_count', { count: commits.length }) }}
       </div>
@@ -93,20 +91,8 @@
 
             <!-- Author -->
             <div class="flex items-center gap-1.5 flex-shrink-0 w-[140px]">
-              <span
-                class="inline-flex items-center justify-center text-[1em] rounded-full"
-                :style="{
-                  width: '18px',
-                  height: '18px',
-                  background: t.bgInput,
-                  color: t.textMuted,
-                  border: `1px solid ${t.border}`,
-                }"
-                :title="`${c.authorName} <${c.authorEmail}>`"
-              >
-                {{ initials(c.authorName) }}
-              </span>
-              <span class="text-[1em] truncate" :style="{ color: t.textMuted }">
+              <GitAuthorAvatar :name="c.authorName" :email="c.authorEmail" :size="18" />
+              <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.textMuted }">
                 {{ c.authorName }}
               </span>
             </div>
@@ -302,14 +288,6 @@ const overflowTitle = (c: GitCommit) =>
     .slice(MAX_VISIBLE_REFS)
     .map((r) => r.name)
     .join(', ')
-
-const initials = (name: string): string => {
-  const trimmed = name.trim()
-  if (!trimmed) return '?'
-  const parts = trimmed.split(/\s+/)
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
-  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase()
-}
 
 // Sublime/GitKraken-style relative format. "Today at HH:MM", "Yesterday at
 // HH:MM", "DayOfWeek at HH:MM" within a week, else "MMM DD" / "MMM DD, YYYY".
