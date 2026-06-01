@@ -11,7 +11,7 @@
     <template #list>
       <!-- Single-row toolbar -->
       <div
-        class="px-3 py-3 flex items-center gap-1.5"
+        class="px-3 py-3 flex items-center gap-2"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search..." />
@@ -37,7 +37,7 @@
           :style="{ background: t.accent, color: t.accentText }"
           @click="onNewSession"
         >
-          <Plus :size="11" />
+          <Plus :size="12" />
           New
         </button>
       </div>
@@ -248,7 +248,9 @@
 <script setup lang="ts">
 import {
   ChevronDown,
+  Copy,
   Edit3,
+  FolderOpen,
   ListFilter,
   MessageSquare,
   MoreHorizontal,
@@ -521,13 +523,53 @@ const confirmDelete = () => {
   }
 }
 
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // clipboard may be unavailable (non-secure context) — ignore
+  }
+}
+
+const revealInFinder = async (path: string) => {
+  try {
+    // '.' targets the project root folder itself (reveal_path rejects empty).
+    await useSidecar().revealPath(path, '.')
+  } catch {
+    // sidecar unavailable / path missing — ignore
+  }
+}
+
 const menuItems = computed<ContextMenuItem[]>(() => {
   const ctx = contextMenu.value
   if (!ctx) return []
   const item = store.sessions.find((s) => s.id === ctx.id)
   if (!item) return []
+  const projectPath = item.projectId
+    ? workspace.projects.find((p) => p.id === item.projectId)?.path
+    : undefined
   return [
     { label: 'Rename', icon: Edit3, action: () => startRename(item.id, item.title) },
+    { label: 'Copy session ID', icon: Copy, action: () => copyToClipboard(item.id) },
+    {
+      label: 'Copy project path',
+      icon: Copy,
+      disabled: !projectPath,
+      tooltip: projectPath ? undefined : 'Session has no project',
+      action: () => {
+        if (projectPath) copyToClipboard(projectPath)
+      },
+    },
+    {
+      label: 'Show in Finder',
+      icon: FolderOpen,
+      disabled: !projectPath,
+      tooltip: projectPath ? undefined : 'Session has no project',
+      action: () => {
+        if (projectPath) revealInFinder(projectPath)
+      },
+    },
+    { separator: true },
     {
       label: 'Delete',
       icon: Trash2,
