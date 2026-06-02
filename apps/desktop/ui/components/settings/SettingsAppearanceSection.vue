@@ -77,10 +77,10 @@
         </select>
       </SettingsField>
 
-      <SettingsField label="Theme color" hint="Subtle hue tint applied across all surfaces">
+      <SettingsField label="Theme color" hint="Hue tint or full background base across surfaces">
         <div class="flex flex-wrap items-center gap-1.5">
           <button
-            v-for="p in THEME_COLOR_PRESETS"
+            v-for="p in themeColorPresets"
             :key="p.value"
             :title="p.label"
             class="w-6 h-6 rounded-full transition-transform hover:scale-110"
@@ -195,7 +195,13 @@ const sum = (a: number, b: number) =&gt; a + b</pre
 </template>
 
 <script setup lang="ts">
-import type { AccentPreset, AppearanceSettings, SurfaceDepth, ThemeColor } from '~/types'
+import type {
+  AccentPreset,
+  AppearanceSettings,
+  BackgroundPreset,
+  SurfaceDepth,
+  ThemeColor,
+} from '~/types'
 import {
   FONT_SIZE_MAX,
   FONT_SIZE_MIN,
@@ -204,7 +210,12 @@ import {
   WEIGHT_OPTIONS,
   useAppearance,
 } from '~/composables/useAppearance'
-import { ACCENT_PRESETS, SURFACE_DEPTH_OPTIONS, THEME_COLOR_PRESETS } from '~/utils/theme-presets'
+import {
+  ACCENT_PRESETS,
+  BACKGROUND_PRESETS,
+  SURFACE_DEPTH_OPTIONS,
+  THEME_COLOR_PRESETS,
+} from '~/utils/theme-presets'
 
 const { t, themeName } = useTheme()
 const { t: tr } = useI18n()
@@ -220,9 +231,20 @@ const selectStyle = computed(() => ({
   color: t.value.text,
 }))
 
+// Background-base presets (GitHub Dark, Subtle Purple) are dark surfaces, so they
+// only make sense in dark theme — hide them in light mode where they no-op.
+const BACKGROUND_VALUES = new Set<BackgroundPreset>(BACKGROUND_PRESETS.map((p) => p.value))
+const themeColorPresets = computed(() =>
+  themeName.value === 'dark'
+    ? THEME_COLOR_PRESETS
+    : THEME_COLOR_PRESETS.filter((p) => !BACKGROUND_VALUES.has(p.value as BackgroundPreset)),
+)
+
 const buildSwatchStyle = (swatch: string, active: boolean) => ({
   background: swatch,
-  border: `2px solid ${active ? t.value.text : 'transparent'}`,
+  // Faint border when inactive so near-black swatches (e.g. GitHub Dark) stay
+  // visible against the dark panel; accent ring when active.
+  border: `2px solid ${active ? t.value.text : t.value.border}`,
   boxShadow: active ? `0 0 0 1px ${t.value.bgPanel} inset` : 'none',
   cursor: 'pointer',
 })

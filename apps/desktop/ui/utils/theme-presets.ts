@@ -14,7 +14,10 @@ export type AccentPreset =
   | 'tokyo'
   | 'gruvbox'
   | 'catppuccin'
-export type ThemeColor = AccentPreset | 'custom'
+// Full dark background bases (not accents) — replace the surface palette outright
+// instead of tinting it. Dark-theme only. Mirrors `BackgroundPreset` in ~/types.
+export type BackgroundPreset = 'github-dark' | 'subtle-purple'
+export type ThemeColor = AccentPreset | BackgroundPreset | 'custom'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 
 export const ACCENT_PRESETS: { value: AccentPreset; label: string; swatch: string }[] = [
@@ -33,7 +36,21 @@ export const ACCENT_PRESETS: { value: AccentPreset; label: string; swatch: strin
   { value: 'catppuccin', label: 'Catppuccin', swatch: '#cba6f7' },
 ]
 
-export const THEME_COLOR_PRESETS = ACCENT_PRESETS
+// Full background bases for the Theme color picker. Unlike the hue-tint presets
+// above, these swap the whole surface palette (see BACKGROUND_SURFACES). They are
+// dark surfaces, so the picker only shows them in dark theme.
+export const BACKGROUND_PRESETS: { value: BackgroundPreset; label: string; swatch: string }[] = [
+  { value: 'github-dark', label: 'GitHub Dark', swatch: '#0d1117' },
+  { value: 'subtle-purple', label: 'Subtle Purple', swatch: '#1f1f23' },
+]
+
+// Theme color picker = the accent hue tints + the full background bases. Accent
+// picker keeps using ACCENT_PRESETS only (a near-black accent button would be
+// invisible), so the two lists are intentionally distinct now.
+export const THEME_COLOR_PRESETS: { value: ThemeColor; label: string; swatch: string }[] = [
+  ...ACCENT_PRESETS,
+  ...BACKGROUND_PRESETS,
+]
 
 export const SURFACE_DEPTH_OPTIONS: { value: SurfaceDepth; label: string; hint: string }[] = [
   { value: 'flat', label: 'Flat', hint: 'No layer separation (default)' },
@@ -301,6 +318,41 @@ const SURFACE_LIGHT: Record<NonFlatDepth, SurfaceTokens> = {
   },
 }
 
+// Complete dark surface palettes for the background-base theme colors. Unlike the
+// hue-tint presets these REPLACE the surfaces outright: a GitHub `#0d1117` canvas
+// ramp, and a subtle purple-tinted dark (`#1f1f23`). Applied only in dark theme.
+const BACKGROUND_SURFACES: Record<BackgroundPreset, SurfaceTokens> = {
+  'github-dark': {
+    bg: '#0d1117',
+    bgPanel: '#0d1117',
+    bgCanvas: '#161b22',
+    bgElevated: '#1c2128',
+    bgHover: '#21262d',
+    bgActive: '#282e36',
+    bgInput: '#161b22',
+    bgRail: '#010409',
+    bgSubtle: '#11161d',
+    border: '#21262d',
+    borderStrong: '#30363d',
+  },
+  'subtle-purple': {
+    bg: '#1f1f23',
+    bgPanel: '#1f1f23',
+    bgCanvas: '#26262c',
+    bgElevated: '#2b2b32',
+    bgHover: '#303038',
+    bgActive: '#37373f',
+    bgInput: '#26262c',
+    bgRail: '#161619',
+    bgSubtle: '#232329',
+    border: '#33333b',
+    borderStrong: '#42424b',
+  },
+}
+
+const isBackgroundPreset = (color: ThemeColor): color is BackgroundPreset =>
+  color === 'github-dark' || color === 'subtle-purple'
+
 const THEME_COLOR_ANCHORS_DARK: Record<ColorAccent, string> = {
   blue: '#3b82f6',
   violet: '#8b5cf6',
@@ -401,6 +453,13 @@ export const applyThemeColor = (
   customHex?: string,
 ): ThemeTokens => {
   if (color === 'mono') return tokens
+  // Full background bases replace the surface palette outright. They are dark
+  // surfaces (text tokens stay light), so they only make sense in dark theme —
+  // no-op in light (the picker hides them there too).
+  if (isBackgroundPreset(color)) {
+    if (themeName !== 'dark') return tokens
+    return { ...tokens, ...BACKGROUND_SURFACES[color] }
+  }
   let anchor: string
   if (color === 'custom') {
     if (!customHex || !HEX6_RE.test(customHex)) return tokens

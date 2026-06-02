@@ -66,7 +66,12 @@ const ACCENT_VALUES: readonly AccentPreset[] = [
   'gruvbox',
   'catppuccin',
 ]
-const THEME_COLOR_VALUES: readonly ThemeColor[] = [...ACCENT_VALUES, 'custom']
+const THEME_COLOR_VALUES: readonly ThemeColor[] = [
+  ...ACCENT_VALUES,
+  'github-dark',
+  'subtle-purple',
+  'custom',
+]
 const DEPTH_VALUES: readonly SurfaceDepth[] = ['flat', 'standard', 'deep']
 const LOCALE_VALUES: readonly AppLocale[] = ['en', 'vi']
 

@@ -650,7 +650,12 @@ export type AccentPreset =
   | 'tokyo'
   | 'gruvbox'
   | 'catppuccin'
-export type ThemeColor = AccentPreset | 'custom'
+/**
+ * Full dark background bases (not accents). Selected via the Theme color picker;
+ * they replace the surface palette outright instead of tinting it. Dark-theme only.
+ */
+export type BackgroundPreset = 'github-dark' | 'subtle-purple'
+export type ThemeColor = AccentPreset | BackgroundPreset | 'custom'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 
 export type AppLocale = 'en' | 'vi'
