@@ -19,19 +19,23 @@ async function getMermaid(): Promise<Mermaid> {
   if (!mermaidPromise) {
     mermaidPromise = import('mermaid').then((m) => {
       const lib = m.default
-      lib.initialize({
-        startOnLoad: false,
-        // We render into a dark UI, so default to the `dark` theme regardless
-        // of the user's appearance preference for now. Theme-aware swap can
-        // come later if/when we add a light surface.
-        theme: 'dark',
-        securityLevel: 'strict',
-        fontFamily: 'inherit',
-      })
+      lib.initialize({ startOnLoad: false, securityLevel: 'strict', fontFamily: 'inherit' })
       return lib
     })
   }
   return mermaidPromise
+}
+
+// mermaid config is global, so we (re)set the theme right before each render to
+// match the current app appearance — `dark` for dark mode, the built-in light
+// `default` otherwise. Without this, diagrams render dark-on-light in light mode.
+function applyTheme(mermaid: Mermaid, dark: boolean): void {
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    fontFamily: 'inherit',
+    theme: dark ? 'dark' : 'default',
+  })
 }
 
 let counter = 0
@@ -40,8 +44,9 @@ const nextId = (): string => `awog-mmd-${Date.now().toString(36)}-${(counter++).
 // Render a raw diagram source to an SVG string. Used by the full-screen zoom
 // modal, which re-renders from source so the enlarged diagram is crisp (rather
 // than scaling the inline SVG). Throws on parse failure — caller shows a hint.
-export async function renderMermaidSource(source: string): Promise<string> {
+export async function renderMermaidSource(source: string, dark = true): Promise<string> {
   const mermaid = await getMermaid()
+  applyTheme(mermaid, dark)
   const { svg } = await mermaid.render(nextId(), source.trim())
   return svg
 }
@@ -67,14 +72,18 @@ function makeZoomButton(label: string): HTMLButtonElement {
 // leave the block as-is so the raw fenced code keeps showing.
 export async function renderMermaidIn(
   root: HTMLElement | null | undefined,
-  opts?: { zoomLabel?: string },
+  opts?: { zoomLabel?: string; dark?: boolean },
 ): Promise<void> {
   if (!root) return
+  // Skip blocks already rendered, and blocks whose exact source we already tried
+  // and failed on — avoids re-parsing identical invalid/partial source on every
+  // DOM mutation. A longer source (continued streaming) clears the guard.
   const blocks = Array.from(
     root.querySelectorAll<HTMLElement>('.awog-mermaid:not([data-rendered])'),
-  )
+  ).filter((el) => el.dataset.mermaidTried !== String((el.dataset.source ?? '').length))
   if (!blocks.length) return
   const mermaid = await getMermaid()
+  applyTheme(mermaid, opts?.dark ?? true)
   await Promise.all(
     blocks.map(async (el) => {
       const encoded = el.dataset.source ?? ''
@@ -82,6 +91,7 @@ export async function renderMermaidIn(
       try {
         source = decodeMermaidSource(encoded).trim()
       } catch {
+        el.dataset.mermaidTried = String(encoded.length)
         return
       }
       if (!source) return
@@ -94,8 +104,10 @@ export async function renderMermaidIn(
         // opens the full-screen view (delegated in SessionMessageList).
         el.appendChild(makeZoomButton(opts?.zoomLabel ?? 'Zoom'))
       } catch {
-        // Parse failed (likely truncated mid-stream). Leave the <pre><code> fallback;
-        // we'll retry on the next call once the source stabilises.
+        // Parse failed: truncated mid-stream (will retry when source grows) or a
+        // genuinely invalid diagram. Tag the tried length so we don't re-parse the
+        // same source on every mutation; the <pre><code> fallback stays visible.
+        el.dataset.mermaidTried = String(encoded.length)
       }
     }),
   )

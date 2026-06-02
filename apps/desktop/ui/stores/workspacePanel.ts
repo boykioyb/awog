@@ -68,6 +68,28 @@ export const useWorkspacePanelStore = defineStore('workspacePanel', () => {
     else openDrawer(sessionId, tab)
   }
 
+  // "Open this file at a line" request, raised by markdown link clicks in the
+  // chat and consumed by WorkspaceFilesTab. `seq` makes the same path+line
+  // re-trigger the watcher (clicking the same link twice still navigates).
+  let openSeq = 0
+  const fileOpenRequest = ref<Record<string, { path: string; line: number | null; seq: number }>>(
+    {},
+  )
+
+  const pendingFileOpen = (
+    sessionId: string,
+  ): { path: string; line: number | null; seq: number } | null =>
+    fileOpenRequest.value[sessionId] ?? null
+
+  const requestOpenFile = (sessionId: string, path: string, line: number | null = null): void => {
+    openSeq += 1
+    fileOpenRequest.value = {
+      ...fileOpenRequest.value,
+      [sessionId]: { path, line, seq: openSeq },
+    }
+    openDrawer(sessionId, 'files')
+  }
+
   const setPosition = (pos: WorkspacePanelPosition): void => {
     position.value = pos
     persist(POSITION_KEY, pos)
@@ -98,5 +120,7 @@ export const useWorkspacePanelStore = defineStore('workspacePanel', () => {
     setWidth,
     setHeight,
     commitSize,
+    pendingFileOpen,
+    requestOpenFile,
   }
 })

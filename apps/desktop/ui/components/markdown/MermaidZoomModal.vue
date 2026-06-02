@@ -114,7 +114,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { t } = useTheme()
+const { t, themeName } = useTheme()
 const { t: tr } = useI18n()
 
 const ZOOM_STEP = 0.25
@@ -171,14 +171,14 @@ const onKeydown = (ev: KeyboardEvent) => {
 }
 
 watch(
-  () => props.source,
-  async (source) => {
+  () => [props.source, themeName.value] as const,
+  async ([source]) => {
     status.value = 'loading'
     svg.value = null
     try {
       // The scoped `:deep(svg) { max-width: none }` rule lets the scale wrapper
       // grow the diagram past its natural width — no SVG-markup rewrite needed.
-      svg.value = await renderMermaidSource(source)
+      svg.value = await renderMermaidSource(source, themeName.value === 'dark')
       status.value = 'rendered'
     } catch {
       status.value = 'error'

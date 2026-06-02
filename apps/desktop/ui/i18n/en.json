@@ -336,6 +336,9 @@
   "session.followup.title": "Follow-up",
   "session.followup.placeholder": "Add comments the agent should consider in the next turn…",
 
+  "session.scroll.top": "Scroll to top",
+  "session.scroll.bottom": "Scroll to bottom",
+
   "session.mermaid.zoom": "Expand diagram",
   "session.mermaid.title": "Diagram",
   "session.mermaid.zoomIn": "Zoom in",

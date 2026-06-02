@@ -1,67 +1,95 @@
 <template>
-  <div
-    ref="scrollRef"
-    class="flex-1 overflow-y-auto px-4 md:px-6 py-4"
-    :class="isEmpty ? 'flex flex-col items-center justify-center' : 'space-y-3'"
-    @click="onMermaidZoomClick"
-  >
+  <div class="relative flex-1 flex flex-col min-h-0">
     <div
-      v-if="isEmpty"
-      class="flex flex-col items-center gap-5 max-w-md text-center select-none px-6"
+      ref="scrollRef"
+      class="flex-1 overflow-y-auto px-4 md:px-6 py-4 min-h-0"
+      :class="isEmpty ? 'flex flex-col items-center justify-center' : 'space-y-3'"
+      @click="onContentClick"
+      @scroll="updateScrollState"
     >
       <div
-        class="ws-empty-orb flex items-center justify-center rounded-2xl"
-        :style="{
-          width: '72px',
-          height: '72px',
-          background: t.bgSubtle,
-          border: `1px solid ${t.border}`,
-          color: t.accent,
-        }"
+        v-if="isEmpty"
+        class="flex flex-col items-center gap-5 max-w-md text-center select-none px-6"
       >
-        <MessagesSquare :size="30" :stroke-width="1.5" />
-      </div>
-      <div class="space-y-1.5">
-        <p class="text-[1em] font-semibold" :style="{ color: t.text }">
-          {{ tr('session.empty.title') }}
-        </p>
-        <p class="text-[1em] leading-relaxed" :style="{ color: t.textDim }">
-          {{ tr('session.empty.subtitle') }}
-        </p>
-      </div>
-      <div class="flex flex-wrap gap-2 justify-center">
-        <span
-          v-for="hint in hints"
-          :key="hint.token"
-          class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[1em]"
-          :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+        <div
+          class="ws-empty-orb flex items-center justify-center rounded-2xl"
+          :style="{
+            width: '72px',
+            height: '72px',
+            background: t.bgSubtle,
+            border: `1px solid ${t.border}`,
+            color: t.accent,
+          }"
         >
-          <component :is="hint.icon" :size="12" :style="{ color: t.accent }" />
-          <span class="font-mono">{{ hint.token }}</span>
-        </span>
+          <MessagesSquare :size="30" :stroke-width="1.5" />
+        </div>
+        <div class="space-y-1.5">
+          <p class="text-[1em] font-semibold" :style="{ color: t.text }">
+            {{ tr('session.empty.title') }}
+          </p>
+          <p class="text-[1em] leading-relaxed" :style="{ color: t.textDim }">
+            {{ tr('session.empty.subtitle') }}
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2 justify-center">
+          <span
+            v-for="hint in hints"
+            :key="hint.token"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[1em]"
+            :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+          >
+            <component :is="hint.icon" :size="12" :style="{ color: t.accent }" />
+            <span class="font-mono">{{ hint.token }}</span>
+          </span>
+        </div>
       </div>
+
+      <template v-else>
+        <SessionMessageItem
+          v-for="msg in messages"
+          :key="msg.id"
+          :message="msg"
+          :now="now"
+          @open-attachment="(att: SessionAttachment) => emit('openAttachment', att)"
+        />
+
+        <div
+          v-for="agentId in pendingAgentIds"
+          :key="`pending-${agentId}`"
+          class="flex gap-1.5 items-center"
+        >
+          <Activity :size="11" class="animate-pulse" :style="{ color: t.textDim }" />
+          <span class="text-[1em]" :style="{ color: t.textDim }">
+            {{ agentName(agentId) }} đang phản hồi...
+          </span>
+        </div>
+      </template>
     </div>
 
-    <template v-else>
-      <SessionMessageItem
-        v-for="msg in messages"
-        :key="msg.id"
-        :message="msg"
-        :now="now"
-        @open-attachment="(att: SessionAttachment) => emit('openAttachment', att)"
-      />
-
-      <div
-        v-for="agentId in pendingAgentIds"
-        :key="`pending-${agentId}`"
-        class="flex gap-1.5 items-center"
+    <!-- Floating scroll controls — appear only when the list overflows and
+         you're away from that edge. -->
+    <div class="absolute right-3 bottom-3 z-10 flex flex-col gap-1.5">
+      <button
+        v-if="canScrollUp"
+        type="button"
+        class="w-8 h-8 inline-flex items-center justify-center rounded-full shadow-md transition"
+        :style="{ background: t.bgElevated, color: t.textDim, border: `1px solid ${t.border}` }"
+        :title="tr('session.scroll.top')"
+        @click="scrollToEdge('top')"
       >
-        <Activity :size="11" class="animate-pulse" :style="{ color: t.textDim }" />
-        <span class="text-[1em]" :style="{ color: t.textDim }">
-          {{ agentName(agentId) }} đang phản hồi...
-        </span>
-      </div>
-    </template>
+        <ArrowUp :size="15" />
+      </button>
+      <button
+        v-if="canScrollDown"
+        type="button"
+        class="w-8 h-8 inline-flex items-center justify-center rounded-full shadow-md transition"
+        :style="{ background: t.bgElevated, color: t.textDim, border: `1px solid ${t.border}` }"
+        :title="tr('session.scroll.bottom')"
+        @click="scrollToEdge('bottom')"
+      >
+        <ArrowDown :size="15" />
+      </button>
+    </div>
   </div>
 
   <Teleport to="body">
@@ -101,11 +129,21 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, AtSign, Bot, MessagesSquare, Quote, Slash } from 'lucide-vue-next'
+import {
+  Activity,
+  ArrowDown,
+  ArrowUp,
+  AtSign,
+  Bot,
+  MessagesSquare,
+  Quote,
+  Slash,
+} from 'lucide-vue-next'
 import type { SessionAttachment, SessionMessage, SessionStep } from '~/types'
 import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { decodeMermaidSource, renderMermaidIn } from '~/utils/mermaid'
+import { useWorkspacePanelStore } from '~/stores/workspacePanel'
 
 const props = defineProps<{
   messages: SessionMessage[]
@@ -116,7 +154,7 @@ const emit = defineEmits<{
   openAttachment: [attachment: SessionAttachment]
 }>()
 
-const { t } = useTheme()
+const { t, themeName } = useTheme()
 const { t: tr } = useI18n()
 
 // Empty state: no messages and nothing streaming yet.
@@ -129,8 +167,32 @@ const hints = [
 ]
 const workspace = useWorkspaceStore()
 const store = useSessionsStore()
+const panel = useWorkspacePanelStore()
+const sidecar = useSidecar()
 
 const scrollRef = ref<HTMLElement | null>(null)
+
+// Floating scroll controls — visible only when the list overflows and the user
+// is away from that edge.
+const canScrollUp = ref(false)
+const canScrollDown = ref(false)
+const updateScrollState = () => {
+  const el = scrollRef.value
+  if (!el) {
+    canScrollUp.value = false
+    canScrollDown.value = false
+    return
+  }
+  const scrollable = el.scrollHeight - el.clientHeight > 16
+  canScrollUp.value = scrollable && el.scrollTop > 8
+  canScrollDown.value = scrollable && el.scrollHeight - el.clientHeight - el.scrollTop > 8
+}
+const scrollToEdge = (edge: 'top' | 'bottom') => {
+  const el = scrollRef.value
+  if (!el) return
+  el.scrollTo({ top: edge === 'top' ? 0 : el.scrollHeight, behavior: 'smooth' })
+}
+onMounted(() => nextTick(updateScrollState))
 
 // Selection-driven "Quote & follow up" popup. We watch document selectionchange
 // and only surface the button when the entire range sits inside a single agent
@@ -276,44 +338,97 @@ onUnmounted(() => {
 onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
 onUnmounted(() => document.removeEventListener('selectionchange', onSelectionChange))
 
-// Render mermaid diagrams once each assistant message stabilises (either
-// historical/no startedAt, or live with completedAt set). Skipping in-flight
-// placeholders avoids parsing incomplete diagram source on every chunk.
-const mermaidSignature = computed(() =>
-  props.messages
-    .filter(
-      (m: SessionMessage) => m.role === 'agent' && (!m.startedAt || m.completedAt !== undefined),
-    )
-    .map((m: SessionMessage) => `${m.id}:${m.text?.length ?? 0}`)
-    .join('|'),
-)
-
-watch(
-  mermaidSignature,
-  () => {
-    nextTick(() => {
-      renderMermaidIn(scrollRef.value, { zoomLabel: tr('session.mermaid.zoom') })
+// Mermaid blocks live inside the v-html'd reply markup. MarkdownStreamBody
+// re-renders that markup on its own throttle (streaming chunks, then a final
+// flush when the turn ends), which can wipe an already-rendered SVG and race a
+// one-shot render — the cause of diagrams intermittently staying as raw code.
+// A MutationObserver makes it resilient: any DOM change (new message, chunk,
+// v-html flush) re-scans for unrendered `.awog-mermaid` after a short debounce.
+// renderMermaidIn skips blocks already rendered / already-failed on the same
+// source, so re-scans are cheap and incomplete mid-stream source retries later.
+let mermaidTimer: ReturnType<typeof setTimeout> | null = null
+let mermaidObserver: MutationObserver | null = null
+const scheduleMermaidRender = () => {
+  if (mermaidTimer) clearTimeout(mermaidTimer)
+  mermaidTimer = setTimeout(() => {
+    mermaidTimer = null
+    renderMermaidIn(scrollRef.value, {
+      zoomLabel: tr('session.mermaid.zoom'),
+      dark: themeName.value === 'dark',
     })
-  },
-  { immediate: true },
-)
-
-// Full-screen diagram viewer. Mermaid blocks are rendered into v-html'd markup
-// (no Vue listeners), so we delegate the zoom-button click here and recover the
-// diagram source from the block's data-source attribute.
-const mermaidZoomSource = ref<string | null>(null)
-const onMermaidZoomClick = (ev: MouseEvent) => {
-  const target = ev.target as HTMLElement | null
-  const trigger = target?.closest('.awog-mermaid-zoom')
-  if (!trigger) return
-  const block = trigger.closest<HTMLElement>('.awog-mermaid')
-  const encoded = block?.dataset.source
-  if (!encoded) return
-  try {
-    mermaidZoomSource.value = decodeMermaidSource(encoded)
-  } catch {
-    // Malformed source — ignore the click rather than open an empty modal.
+  }, 100)
+}
+onMounted(() => {
+  scheduleMermaidRender()
+  if (scrollRef.value) {
+    mermaidObserver = new MutationObserver(scheduleMermaidRender)
+    mermaidObserver.observe(scrollRef.value, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
   }
+})
+onUnmounted(() => {
+  mermaidObserver?.disconnect()
+  if (mermaidTimer) clearTimeout(mermaidTimer)
+})
+
+// Theme switch: re-render already-drawn diagrams so colors follow the new
+// appearance (they're baked-in SVG, not CSS-driven). Clearing the markers makes
+// the blocks eligible again; renderMermaidIn redraws from their data-source.
+watch(themeName, () => {
+  scrollRef.value?.querySelectorAll<HTMLElement>('.awog-mermaid[data-rendered]').forEach((el) => {
+    delete el.dataset.rendered
+    delete el.dataset.mermaidTried
+  })
+  scheduleMermaidRender()
+})
+
+// Delegated click handler for the v-html'd reply body (no Vue listeners inside).
+// Handles two affordances: the mermaid zoom button, and markdown links — which
+// must NOT hijack the webview. External URLs open in the system browser;
+// workspace-relative paths (e.g. `apps/api/foo.py#L42`) open the Files panel and
+// jump to the line.
+const mermaidZoomSource = ref<string | null>(null)
+const onContentClick = (ev: MouseEvent) => {
+  const target = ev.target as HTMLElement | null
+  if (!target) return
+
+  const zoom = target.closest('.awog-mermaid-zoom')
+  if (zoom) {
+    const encoded = zoom.closest<HTMLElement>('.awog-mermaid')?.dataset.source
+    if (encoded) {
+      try {
+        mermaidZoomSource.value = decodeMermaidSource(encoded)
+      } catch {
+        // Malformed source — ignore the click rather than open an empty modal.
+      }
+    }
+    return
+  }
+
+  const anchor = target.closest('a')
+  if (!anchor) return
+  const href = anchor.getAttribute('href') ?? ''
+  // In-page anchors / empty hrefs: leave to the browser (harmless no-op).
+  if (!href || href.startsWith('#')) return
+  ev.preventDefault()
+  // Any scheme (http:, https:, mailto:, vscode:…) → hand off to the OS so the
+  // app webview is never navigated away.
+  if (/^[a-z][\w+.-]*:/i.test(href)) {
+    sidecar.openExternal(href).catch(() => {})
+    return
+  }
+  // Otherwise a workspace-relative file reference. Strip the fragment, pull the
+  // first line from `#L<n>` / `#L<a>-L<b>`, and open it in the Files panel.
+  const sessionId = store.selectedSessionId
+  if (!sessionId) return
+  const hashIdx = href.indexOf('#')
+  const path = (hashIdx >= 0 ? href.slice(0, hashIdx) : href).replace(/^\/+/, '')
+  const lineMatch = hashIdx >= 0 ? href.slice(hashIdx).match(/L(\d+)/i) : null
+  const line = lineMatch ? Number(lineMatch[1]) : null
+  if (path) panel.requestOpenFile(sessionId, path, line)
 }
 
 watch(
@@ -321,6 +436,7 @@ watch(
   async () => {
     await nextTick()
     if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+    updateScrollState()
   },
 )
 </script>

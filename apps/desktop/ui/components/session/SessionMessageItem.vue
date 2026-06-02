@@ -265,7 +265,7 @@ type TimelineBlock = { type: 'text'; text: string } | { type: 'steps'; steps: Se
 // the text offset where its tool fired (stamped by the sessions store), so we
 // rebuild the chronological order here: split the reply text at those offsets
 // and coalesce runs of consecutive steps into one cluster. Whitespace-only
-// gaps are dropped (the cluster/​text margins handle spacing).
+// gaps are dropped (the cluster/text margins handle spacing).
 const timelineBlocks = computed<TimelineBlock[]>(() => {
   const text = props.message.text ?? ''
   const steps = props.message.steps ?? []

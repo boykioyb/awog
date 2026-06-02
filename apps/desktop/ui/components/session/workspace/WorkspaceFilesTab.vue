@@ -61,13 +61,32 @@
         >
           {{ tr('workspace.files.binary') }}
         </div>
-        <pre
+        <div
           v-else
-          class="flex-1 overflow-auto font-mono text-[1em] leading-[1.55] px-3 py-2 whitespace-pre-wrap"
-          :style="{ color: t.text }">{{ fileContent?.content }}<span
-            v-if="fileContent?.truncated"
-            :style="{ color: t.textFaint }"
-          >{{ '\n' + tr('workspace.files.truncated') }}</span></pre>
+          ref="previewRef"
+          class="flex-1 overflow-auto font-mono text-[1em] leading-[1.6] py-1"
+        >
+          <div
+            v-for="(ln, i) in lines"
+            :key="i"
+            :data-line="i + 1"
+            class="flex"
+            :style="i + 1 === targetLine ? { background: t.bgActive } : undefined"
+          >
+            <span
+              class="select-none text-right pr-3 pl-3 flex-shrink-0"
+              :style="{ color: t.textFaint, minWidth: '3.5em' }"
+            >
+              {{ i + 1 }}
+            </span>
+            <span class="whitespace-pre flex-1 pr-3" :style="{ color: t.text }">
+              {{ ln === '' ? ' ' : ln }}
+            </span>
+          </div>
+          <div v-if="fileContent?.truncated" class="px-3 py-1" :style="{ color: t.textFaint }">
+            {{ tr('workspace.files.truncated') }}
+          </div>
+        </div>
       </template>
     </div>
   </div>
@@ -75,7 +94,7 @@
 
 <script setup lang="ts">
 import { FileText, FolderTree, RefreshCw } from 'lucide-vue-next'
-import { onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { FsEntry, FsFileContent, Session } from '~/types'
 import { useFsApi } from '~/composables/useFsApi'
 import { SidecarUnavailableError } from '~/composables/useSidecar'
@@ -102,6 +121,17 @@ const selectedPath = ref<string | null>(null)
 const fileContent = ref<FsFileContent | null>(null)
 const loading = ref(false)
 
+// Line-by-line render so we can scroll to + highlight a target line when the
+// user clicks a `path#Lnn` reference in the chat.
+const previewRef = ref<HTMLElement | null>(null)
+const targetLine = ref<number | null>(null)
+const lines = computed(() => (fileContent.value?.content ?? '').split('\n'))
+
+const scrollToLine = (line: number) => {
+  const el = previewRef.value?.querySelector<HTMLElement>(`[data-line="${line}"]`)
+  el?.scrollIntoView({ block: 'center' })
+}
+
 const loadDir = async (path: string) => {
   try {
     const result = await api.listDir(props.workspaceRoot, path || undefined)
@@ -124,6 +154,7 @@ const toggle = async (path: string) => {
 const select = async (entry: FsEntry) => {
   selectedPath.value = entry.path
   fileContent.value = null
+  targetLine.value = null
   try {
     fileContent.value = await api.readFile(props.workspaceRoot, entry.path)
   } catch (err) {
@@ -131,6 +162,35 @@ const select = async (entry: FsEntry) => {
     fileContent.value = { path: entry.path, content: '', truncated: false, isBinary: false }
   }
 }
+
+// Open a workspace-relative path directly (bypasses the tree) and jump to a
+// line — driven by chat link clicks via the workspacePanel store.
+const openAtPath = async (path: string, line: number | null) => {
+  selectedPath.value = path
+  fileContent.value = null
+  targetLine.value = null
+  try {
+    fileContent.value = await api.readFile(props.workspaceRoot, path)
+  } catch (err) {
+    if (err instanceof SidecarUnavailableError) return
+    fileContent.value = { path, content: '', truncated: false, isBinary: false }
+    return
+  }
+  if (line && !fileContent.value.isBinary) {
+    targetLine.value = line
+    await nextTick()
+    scrollToLine(line)
+  }
+}
+
+watch(
+  () => panel.pendingFileOpen(props.session.id),
+  (req) => {
+    // openAtPath swallows its own errors; .catch keeps the promise non-floating.
+    if (req) openAtPath(req.path, req.line).catch(() => {})
+  },
+  { immediate: true },
+)
 
 const refresh = async () => {
   if (loading.value) return
@@ -141,6 +201,7 @@ const refresh = async () => {
   expanded.value = {}
   selectedPath.value = null
   fileContent.value = null
+  targetLine.value = null
   try {
     await loadDir('')
   } finally {
