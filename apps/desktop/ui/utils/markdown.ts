@@ -1,4 +1,5 @@
 import { Marked } from 'marked'
+import hljs from 'highlight.js/lib/common'
 
 const HTML_ESCAPE: Record<string, string> = {
   '&': '&amp;',
@@ -35,7 +36,18 @@ md.use({
       if (lang === 'mermaid') {
         return `<div class="awog-mermaid" data-source="${encodeSource(text)}"><pre><code class="language-mermaid">${escapeHtml(text)}</code></pre></div>`
       }
-      return false as unknown as string
+      // Syntax-highlight every other fence with highlight.js. hljs escapes the
+      // source itself and wraps tokens in <span class="hljs-*">, which main.css
+      // themes via light-dark() (color follows the app appearance). When the
+      // fence has no / an unknown language we let hljs auto-detect.
+      const language =
+        typeof lang === 'string' ? lang.toLowerCase().replace(/[^a-z0-9+#.-]/g, '') : ''
+      const highlighted =
+        language && hljs.getLanguage(language)
+          ? hljs.highlight(text, { language, ignoreIllegals: true }).value
+          : hljs.highlightAuto(text).value
+      const cls = language ? `hljs language-${language}` : 'hljs'
+      return `<pre><code class="${cls}">${highlighted}</code></pre>`
     },
   },
 })

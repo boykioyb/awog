@@ -149,21 +149,79 @@ body,
   font-size: 0.9em;
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.07);
+  background: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.07));
 }
 .awog-md pre {
   margin: 0.6em 0;
   padding: 10px 12px;
   border-radius: 6px;
   overflow-x: auto;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.35));
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.06));
 }
 .awog-md pre code {
   background: transparent;
   padding: 0;
   font-size: 0.85em;
   line-height: 1.5;
+}
+
+/* ─── highlight.js tokens ──────────────────────────────────────────────────── */
+/* Emitted by utils/markdown.ts. Themed with light-dark() (a GitHub-ish palette)
+   so colors follow the app appearance — color-scheme is set per theme in
+   useTheme, so no re-render is needed on theme switch. */
+.awog-md pre code.hljs {
+  color: light-dark(#1f2328, #c9d1d9);
+}
+.awog-md .hljs-comment,
+.awog-md .hljs-quote {
+  color: light-dark(#6e7781, #8b949e);
+  font-style: italic;
+}
+.awog-md .hljs-keyword,
+.awog-md .hljs-selector-tag,
+.awog-md .hljs-literal,
+.awog-md .hljs-doctag,
+.awog-md .hljs-section,
+.awog-md .hljs-type,
+.awog-md .hljs-name {
+  color: light-dark(#cf222e, #ff7b72);
+}
+.awog-md .hljs-string,
+.awog-md .hljs-attr,
+.awog-md .hljs-symbol,
+.awog-md .hljs-bullet,
+.awog-md .hljs-addition {
+  color: light-dark(#0a3069, #a5d6ff);
+}
+.awog-md .hljs-number,
+.awog-md .hljs-meta,
+.awog-md .hljs-link {
+  color: light-dark(#0550ae, #79c0ff);
+}
+.awog-md .hljs-title,
+.awog-md .hljs-title.function_,
+.awog-md .hljs-built_in {
+  color: light-dark(#8250df, #d2a8ff);
+}
+.awog-md .hljs-variable,
+.awog-md .hljs-template-variable,
+.awog-md .hljs-property,
+.awog-md .hljs-params,
+.awog-md .hljs-attribute {
+  color: light-dark(#953800, #ffa657);
+}
+.awog-md .hljs-tag {
+  color: light-dark(#116329, #7ee787);
+}
+.awog-md .hljs-deletion {
+  color: light-dark(#82071e, #ffa198);
+}
+.awog-md .hljs-emphasis {
+  font-style: italic;
+}
+.awog-md .hljs-strong {
+  font-weight: 600;
 }
 .awog-md blockquote {
   margin: 0.6em 0;
