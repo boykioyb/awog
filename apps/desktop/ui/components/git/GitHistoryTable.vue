@@ -536,7 +536,9 @@ const onSavePatchConfirm = async () => {
     if (typeof picked === 'string') savePath = picked
   } else {
     // Browser fallback — no native dialog, so prompt for an absolute path so
-    // the user can still smoke-test the feature.
+    // the user can still smoke-test the feature. Dev-only path; Tauri build
+    // always takes the native `save` dialog branch above.
+    // eslint-disable-next-line no-alert
     const fallback = window.prompt('Save patch to (absolute path):', `/tmp/${defaultName}`)
     savePath = fallback?.trim() || null
   }

@@ -333,6 +333,28 @@ const anchor = ref<{ top: number; left: number } | null>(null)
 const mobilePane = ref<'list' | 'detail'>('list')
 const refreshing = ref(false)
 
+const filtered = computed<Agent[]>(() => {
+  const q = searchQuery.value.toLowerCase()
+  if (!q) return ws.agents
+  return ws.agents.filter(
+    (a) =>
+      a.name.toLowerCase().includes(q) ||
+      a.role.toLowerCase().includes(q) ||
+      a.id.toLowerCase().includes(q),
+  )
+})
+
+type ToastKind = 'info' | 'success' | 'error'
+const toasts = ref<{ id: string; text: string; kind: ToastKind }[]>([])
+
+const pushToast = (text: string, kind: ToastKind = 'info') => {
+  const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+  toasts.value = [...toasts.value, { id, text, kind }]
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((tt) => tt.id !== id)
+  }, 3200)
+}
+
 // Bulk selection — Set of composite agentKey() strings. Independent of
 // `selectedKey` (single-item navigation) so a user can keep their detail-pane
 // selection while ticking other rows. Same pattern as Skills page.
@@ -430,17 +452,6 @@ const confirmBulkDelete = async () => {
   }
 }
 
-type ToastKind = 'info' | 'success' | 'error'
-const toasts = ref<{ id: string; text: string; kind: ToastKind }[]>([])
-
-const pushToast = (text: string, kind: ToastKind = 'info') => {
-  const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-  toasts.value = [...toasts.value, { id, text, kind }]
-  setTimeout(() => {
-    toasts.value = toasts.value.filter((tt) => tt.id !== id)
-  }, 3200)
-}
-
 const toastStyle = (kind: ToastKind): CSSProperties => {
   if (kind === 'success') {
     return {
@@ -510,17 +521,6 @@ const onRefresh = () => {
 const selectedAgent = computed<Agent | undefined>(() =>
   ws.agents.find((a) => agentKey(a) === selectedKey.value),
 )
-
-const filtered = computed<Agent[]>(() => {
-  const q = searchQuery.value.toLowerCase()
-  if (!q) return ws.agents
-  return ws.agents.filter(
-    (a) =>
-      a.name.toLowerCase().includes(q) ||
-      a.role.toLowerCase().includes(q) ||
-      a.id.toLowerCase().includes(q),
-  )
-})
 
 const modelLabel = (agent: Agent) =>
   MODELS.find((m) => m.id === agent.model)?.label ?? agent.model ?? ''

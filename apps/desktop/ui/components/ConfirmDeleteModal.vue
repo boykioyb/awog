@@ -20,14 +20,14 @@
         :style="{ color: t.textMuted }"
         @click="emit('cancel')"
       >
-        {{ cancelLabel ?? 'Cancel' }}
+        {{ cancelLabel || 'Cancel' }}
       </button>
       <button
         class="px-3 py-1.5 text-[1em] rounded font-medium transition"
         :style="{ background: confirmBg, color: t.onAccent }"
         @click="emit('confirm')"
       >
-        {{ confirmLabel ?? (kind === 'danger' ? 'Delete' : 'Confirm') }}
+        {{ confirmLabel || (kind === 'danger' ? 'Delete' : 'Confirm') }}
       </button>
     </template>
   </BaseModal>
@@ -48,7 +48,7 @@ const props = withDefaults(
     confirmLabel?: string
     cancelLabel?: string
   }>(),
-  { kind: 'danger' },
+  { kind: 'danger', confirmLabel: '', cancelLabel: '' },
 )
 
 const emit = defineEmits<{

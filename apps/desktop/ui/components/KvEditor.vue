@@ -92,6 +92,21 @@ const secretMaskFor = (value: string): string => {
   return key ? `••••••  (keychain · ${key})` : '••••••'
 }
 
+const add = () => emit('update:modelValue', [...props.modelValue, { key: '', value: '' }])
+const remove = (i: number) =>
+  emit(
+    'update:modelValue',
+    props.modelValue.filter((_, idx) => idx !== i),
+  )
+const updateKey = (i: number, k: string) => {
+  const next = props.modelValue.map((e, idx) => (idx === i ? { ...e, key: k } : e))
+  emit('update:modelValue', next)
+}
+const updateVal = (i: number, v: string) => {
+  const next = props.modelValue.map((e, idx) => (idx === i ? { ...e, value: v } : e))
+  emit('update:modelValue', next)
+}
+
 const toggleSecret = async (i: number) => {
   if (!props.secretMode) return
   const entry = props.modelValue[i]
@@ -125,20 +140,5 @@ const toggleSecret = async (i: number) => {
   } finally {
     secretBusy.value = null
   }
-}
-
-const add = () => emit('update:modelValue', [...props.modelValue, { key: '', value: '' }])
-const remove = (i: number) =>
-  emit(
-    'update:modelValue',
-    props.modelValue.filter((_, idx) => idx !== i),
-  )
-const updateKey = (i: number, k: string) => {
-  const next = props.modelValue.map((e, idx) => (idx === i ? { ...e, key: k } : e))
-  emit('update:modelValue', next)
-}
-const updateVal = (i: number, v: string) => {
-  const next = props.modelValue.map((e, idx) => (idx === i ? { ...e, value: v } : e))
-  emit('update:modelValue', next)
 }
 </script>

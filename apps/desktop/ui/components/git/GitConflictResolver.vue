@@ -210,7 +210,7 @@ const onPick = (blockIndex: number, choice: Choice) => {
 const onTakeAll = (choice: Choice) => {
   if (!file.value) return
   const next = new Map<number, Choice>()
-  for (const block of file.value.blocks) next.set(block.index, choice)
+  file.value.blocks.forEach((block) => next.set(block.index, choice))
   resolutions.value = next
 }
 
@@ -239,8 +239,9 @@ const pickBg = (blockIndex: number, side: Choice) => {
 
 const pickBtnStyle = (blockIndex: number, side: Choice) => {
   const active = resolutions.value.get(blockIndex) === side
+  const activeBg = side === 'ours' ? t.value.info : t.value.warning
   return {
-    background: active ? (side === 'ours' ? t.value.info : t.value.warning) : t.value.bgInput,
+    background: active ? activeBg : t.value.bgInput,
     color: active ? t.value.onAccent : t.value.textMuted,
     border: `1px solid ${active ? 'transparent' : t.value.border}`,
   }

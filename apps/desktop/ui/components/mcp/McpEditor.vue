@@ -176,6 +176,74 @@ interface VerifyResponse {
   stderr?: string[]
 }
 
+type Draft = Omit<MCPServer, 'tools' | 'resources' | 'status'> & {
+  tools: MCPTool[]
+  resources: MCPServer['resources']
+  status: MCPServer['status']
+}
+
+const RUNTIME_KEYS: ReadonlyArray<keyof MCPServer> = ['status', 'tools', 'resources', 'lastError']
+
+// Mirror of stripRuntimeFields in stores/workspace.ts — keep config-only shape
+// for `mcp.test` (sidecar zod schema rejects runtime fields).
+const stripRuntime = (
+  d: Draft,
+): Omit<MCPServer, 'status' | 'tools' | 'resources' | 'lastError'> => {
+  const entries = (Object.keys(d) as Array<keyof MCPServer>)
+    .filter((k) => !RUNTIME_KEYS.includes(k))
+    .map((k) => [k, (d as MCPServer)[k]] as const)
+  return Object.fromEntries(entries) as Omit<
+    MCPServer,
+    'status' | 'tools' | 'resources' | 'lastError'
+  >
+}
+
+const makeDefaults = (): Draft => ({
+  id: '',
+  name: '',
+  description: '',
+  transport: 'stdio' as MCPTransport,
+  command: 'npx',
+  args: ['-y', '@modelcontextprotocol/server-filesystem'],
+  env: {},
+  cwd: '',
+  url: '',
+  headers: {},
+  enabled: true,
+  autoStart: true,
+  timeoutMs: 30000,
+  trust: 'prompt' as MCPTrust,
+  status: 'idle',
+  tools: [],
+  resources: [],
+})
+
+const cloneDraft = (d: McpDraft): Draft => ({
+  ...d,
+  args: [...(d.args ?? [])],
+  env: { ...(d.env ?? {}) },
+  headers: { ...(d.headers ?? {}) },
+  tools: [...d.tools],
+  resources: [...d.resources],
+})
+
+const initDraft = (s: MCPServer | null, seed: McpDraft | null | undefined): Draft => {
+  if (s) {
+    return {
+      ...s,
+      args: [...(s.args ?? [])],
+      env: { ...(s.env ?? {}) },
+      headers: { ...(s.headers ?? {}) },
+      tools: [...s.tools],
+      resources: [...s.resources],
+    }
+  }
+  return seed ? cloneDraft(seed) : makeDefaults()
+}
+
+const draft = ref<Draft>(initDraft(props.server, props.initialDraft))
+const original = ref<Draft>(initDraft(props.server, props.initialDraft))
+
 const verifying = ref(false)
 const verifyResult = ref<VerifyState | null>(null)
 
@@ -224,65 +292,6 @@ const onVerify = async () => {
     verifying.value = false
   }
 }
-
-// Mirror of stripRuntimeFields in stores/workspace.ts — keep config-only shape
-// for `mcp.test` (sidecar zod schema rejects runtime fields).
-function stripRuntime(d: Draft): Omit<MCPServer, 'status' | 'tools' | 'resources' | 'lastError'> {
-  const { status: _s, tools: _t, resources: _r, lastError: _e, ...config } = d as MCPServer
-  return config
-}
-
-type Draft = Omit<MCPServer, 'tools' | 'resources' | 'status'> & {
-  tools: MCPTool[]
-  resources: MCPServer['resources']
-  status: MCPServer['status']
-}
-
-const makeDefaults = (): Draft => ({
-  id: '',
-  name: '',
-  description: '',
-  transport: 'stdio' as MCPTransport,
-  command: 'npx',
-  args: ['-y', '@modelcontextprotocol/server-filesystem'],
-  env: {},
-  cwd: '',
-  url: '',
-  headers: {},
-  enabled: true,
-  autoStart: true,
-  timeoutMs: 30000,
-  trust: 'prompt' as MCPTrust,
-  status: 'idle',
-  tools: [],
-  resources: [],
-})
-
-const cloneDraft = (d: McpDraft): Draft => ({
-  ...d,
-  args: [...(d.args ?? [])],
-  env: { ...(d.env ?? {}) },
-  headers: { ...(d.headers ?? {}) },
-  tools: [...d.tools],
-  resources: [...d.resources],
-})
-
-const initDraft = (s: MCPServer | null, seed: McpDraft | null | undefined): Draft => {
-  if (s) {
-    return {
-      ...s,
-      args: [...(s.args ?? [])],
-      env: { ...(s.env ?? {}) },
-      headers: { ...(s.headers ?? {}) },
-      tools: [...s.tools],
-      resources: [...s.resources],
-    }
-  }
-  return seed ? cloneDraft(seed) : makeDefaults()
-}
-
-const draft = ref<Draft>(initDraft(props.server, props.initialDraft))
-const original = ref<Draft>(initDraft(props.server, props.initialDraft))
 
 const argsText = ref((draft.value.args ?? []).join('\n'))
 watch(argsText, (v) => {

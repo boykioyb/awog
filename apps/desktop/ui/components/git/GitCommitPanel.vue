@@ -219,8 +219,8 @@ const executePendingCommit = async () => {
   }
 }
 
-const onCommitAnyway = () => {
-  void executePendingCommit()
+const onCommitAnyway = async () => {
+  await executePendingCommit()
 }
 
 const onCreateBranchThenCommit = async () => {

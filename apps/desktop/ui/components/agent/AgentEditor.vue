@@ -326,7 +326,7 @@ const saveToOptions = computed<SaveToOption[]>(() => {
     { value: 'user-claude', label: '~/.claude/agents/  (Claude Code SDK)' },
     { value: 'user-agents', label: '~/.agents/agents/  (Craft Agents)' },
   ]
-  for (const p of ws.projects) {
+  ws.projects.forEach((p) => {
     out.push({
       value: `project-claude:${p.id}`,
       label: `${p.name} · .claude/agents/`,
@@ -335,7 +335,7 @@ const saveToOptions = computed<SaveToOption[]>(() => {
       value: `project-agents:${p.id}`,
       label: `${p.name} · .agents/agents/`,
     })
-  }
+  })
   return out
 })
 

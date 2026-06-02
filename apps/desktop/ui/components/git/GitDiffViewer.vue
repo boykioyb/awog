@@ -249,15 +249,13 @@
 import { AlignJustify, Columns2, FileImage, FileText } from 'lucide-vue-next'
 import type { GitDiffHunk, GitDiffLine, GitDiffLineKind, GitFileDiff } from '~/types'
 
-const props = defineProps<{
+defineProps<{
   diff: GitFileDiff | null
   // When true the file shown is unstaged (or partially staged) — render
   // per-hunk Stage buttons. Caller decides; component just emits.
   canStageHunk?: boolean
 }>()
 const emit = defineEmits<{ stageHunk: [hunkIndex: number] }>()
-// Keep `props` referenced for vue-tsc — Vue compiler reads template-only usage.
-void props
 
 const { t } = useTheme()
 const viewMode = ref<'unified' | 'split'>('unified')
