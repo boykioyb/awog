@@ -299,3 +299,46 @@ body,
   color: rgba(255, 255, 255, 0.9);
   background: rgba(0, 0, 0, 0.55);
 }
+
+/* ─── Code blocks (.awog-code-block) ──────────────────────────────────────── */
+/* markdown.ts wraps every non-mermaid fence; SessionMessageList injects the
+   copy + expand actions post-render. Position relative so the action bar can
+   anchor top-right; it reveals on hover. Colors use light-dark() because the
+   code surface (unlike a mermaid diagram) follows the app appearance. */
+.awog-md .awog-code-block {
+  position: relative;
+}
+.awog-code-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.awog-code-block:hover .awog-code-actions,
+.awog-code-actions:focus-within {
+  opacity: 1;
+}
+.awog-code-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: light-dark(rgba(0, 0, 0, 0.45), rgba(255, 255, 255, 0.55));
+  background: light-dark(rgba(255, 255, 255, 0.75), rgba(0, 0, 0, 0.35));
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+.awog-code-actions button:hover {
+  color: light-dark(rgba(0, 0, 0, 0.85), rgba(255, 255, 255, 0.9));
+  background: light-dark(rgba(255, 255, 255, 0.95), rgba(0, 0, 0, 0.55));
+}
+.awog-code-copy.is-copied {
+  color: #3fb950 !important;
+}

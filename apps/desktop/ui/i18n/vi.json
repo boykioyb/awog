@@ -346,6 +346,11 @@
   "session.mermaid.reset": "Vừa khung",
   "session.mermaid.failed": "Không render được sơ đồ.",
 
+  "session.code.copy": "Sao chép mã",
+  "session.code.copied": "Đã sao chép",
+  "session.code.expand": "Phóng to",
+  "session.code.title": "Mã nguồn",
+
   "settings.language": "Ngôn ngữ",
   "settings.language.hint": "Ngôn ngữ giao diện. Không cần restart."
 }

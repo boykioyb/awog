@@ -126,6 +126,13 @@
     :source="mermaidZoomSource"
     @close="mermaidZoomSource = null"
   />
+
+  <CodeZoomModal
+    v-if="codeZoom"
+    :source="codeZoom.source"
+    :language="codeZoom.language"
+    @close="codeZoom = null"
+  />
 </template>
 
 <script setup lang="ts">
@@ -143,6 +150,7 @@ import type { SessionAttachment, SessionMessage, SessionStep } from '~/types'
 import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { decodeMermaidSource, renderMermaidIn } from '~/utils/mermaid'
+import { decodeSource } from '~/utils/markdown'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
 
 const props = defineProps<{
@@ -346,12 +354,59 @@ onUnmounted(() => document.removeEventListener('selectionchange', onSelectionCha
 // v-html flush) re-scans for unrendered `.awog-mermaid` after a short debounce.
 // renderMermaidIn skips blocks already rendered / already-failed on the same
 // source, so re-scans are cheap and incomplete mid-stream source retries later.
+// Inline SVG icons for the injected code-block actions. lucide is a Vue
+// component lib (unusable inside the v-html'd markup), so we inline the glyph
+// paths and let CSS drive the stroke via currentColor — same approach as the
+// mermaid zoom button in utils/mermaid.ts.
+const ICON_COPY =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'
+const ICON_CHECK =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+const ICON_EXPAND =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>'
+
+// Inject copy + expand buttons into every freshly-rendered `.awog-code-block`
+// (markdown.ts emits the wrapper; buttons live here so the click handlers + i18n
+// stay in one place). Idempotent via the data-decorated guard, so re-running on
+// each v-html flush during streaming is cheap — same resilience model as the
+// mermaid re-scan below.
+const decorateCodeBlocks = () => {
+  const root = scrollRef.value
+  if (!root) return
+  root.querySelectorAll<HTMLElement>('.awog-code-block:not([data-decorated])').forEach((block) => {
+    block.dataset.decorated = 'true'
+    const bar = document.createElement('div')
+    bar.className = 'awog-code-actions'
+
+    const copyBtn = document.createElement('button')
+    copyBtn.type = 'button'
+    copyBtn.className = 'awog-code-copy'
+    copyBtn.title = tr('session.code.copy')
+    copyBtn.setAttribute('aria-label', tr('session.code.copy'))
+    copyBtn.innerHTML = ICON_COPY
+
+    const expandBtn = document.createElement('button')
+    expandBtn.type = 'button'
+    expandBtn.className = 'awog-code-expand'
+    expandBtn.title = tr('session.code.expand')
+    expandBtn.setAttribute('aria-label', tr('session.code.expand'))
+    expandBtn.innerHTML = ICON_EXPAND
+
+    bar.appendChild(copyBtn)
+    bar.appendChild(expandBtn)
+    block.appendChild(bar)
+  })
+}
+
 let mermaidTimer: ReturnType<typeof setTimeout> | null = null
 let mermaidObserver: MutationObserver | null = null
-const scheduleMermaidRender = () => {
+// Enhance the rendered reply markup: decorate code blocks (sync) + render any
+// mermaid diagrams (async). Debounced so a burst of streaming mutations coalesces.
+const scheduleContentEnhance = () => {
   if (mermaidTimer) clearTimeout(mermaidTimer)
   mermaidTimer = setTimeout(() => {
     mermaidTimer = null
+    decorateCodeBlocks()
     renderMermaidIn(scrollRef.value, {
       zoomLabel: tr('session.mermaid.zoom'),
       dark: themeName.value === 'dark',
@@ -359,9 +414,9 @@ const scheduleMermaidRender = () => {
   }, 100)
 }
 onMounted(() => {
-  scheduleMermaidRender()
+  scheduleContentEnhance()
   if (scrollRef.value) {
-    mermaidObserver = new MutationObserver(scheduleMermaidRender)
+    mermaidObserver = new MutationObserver(scheduleContentEnhance)
     mermaidObserver.observe(scrollRef.value, {
       childList: true,
       subtree: true,
@@ -382,15 +437,18 @@ watch(themeName, () => {
     delete el.dataset.rendered
     delete el.dataset.mermaidTried
   })
-  scheduleMermaidRender()
+  scheduleContentEnhance()
 })
 
 // Delegated click handler for the v-html'd reply body (no Vue listeners inside).
-// Handles two affordances: the mermaid zoom button, and markdown links — which
-// must NOT hijack the webview. External URLs open in the system browser;
-// workspace-relative paths (e.g. `apps/api/foo.py#L42`) open the Files panel and
-// jump to the line.
+// Handles four affordances: the mermaid zoom button, code-block copy + expand
+// buttons, and markdown links — which must NOT hijack the webview. External URLs
+// open in the system browser; workspace-relative paths (e.g. `apps/api/foo.py#L42`)
+// open the Files panel and jump to the line.
 const mermaidZoomSource = ref<string | null>(null)
+const codeZoom = ref<{ source: string; language: string } | null>(null)
+// Holds the timer that reverts a copy button from its "copied" state.
+let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 const onContentClick = (ev: MouseEvent) => {
   const target = ev.target as HTMLElement | null
   if (!target) return
@@ -401,6 +459,46 @@ const onContentClick = (ev: MouseEvent) => {
     if (encoded) {
       try {
         mermaidZoomSource.value = decodeMermaidSource(encoded)
+      } catch {
+        // Malformed source — ignore the click rather than open an empty modal.
+      }
+    }
+    return
+  }
+
+  // Code-block copy: write the raw (decoded) source to the clipboard and flash a
+  // check icon. The button is plain DOM (injected by decorateCodeBlocks), so we
+  // swap its markup directly rather than through Vue state.
+  const copyBtn = target.closest<HTMLElement>('.awog-code-copy')
+  if (copyBtn) {
+    const encoded = copyBtn.closest<HTMLElement>('.awog-code-block')?.dataset.source
+    if (encoded) {
+      navigator.clipboard
+        .writeText(decodeSource(encoded))
+        .then(() => {
+          copyBtn.classList.add('is-copied')
+          copyBtn.innerHTML = ICON_CHECK
+          copyBtn.title = tr('session.code.copied')
+          if (copyResetTimer) clearTimeout(copyResetTimer)
+          copyResetTimer = setTimeout(() => {
+            copyBtn.classList.remove('is-copied')
+            copyBtn.innerHTML = ICON_COPY
+            copyBtn.title = tr('session.code.copy')
+          }, 1500)
+        })
+        .catch(() => {})
+    }
+    return
+  }
+
+  // Code-block expand: open the full-screen viewer with the raw source + language.
+  const expandBtn = target.closest('.awog-code-expand')
+  if (expandBtn) {
+    const block = expandBtn.closest<HTMLElement>('.awog-code-block')
+    const encoded = block?.dataset.source
+    if (encoded) {
+      try {
+        codeZoom.value = { source: decodeSource(encoded), language: block?.dataset.lang ?? '' }
       } catch {
         // Malformed source — ignore the click rather than open an empty modal.
       }
@@ -430,6 +528,10 @@ const onContentClick = (ev: MouseEvent) => {
   const line = lineMatch ? Number(lineMatch[1]) : null
   if (path) panel.requestOpenFile(sessionId, path, line)
 }
+
+onUnmounted(() => {
+  if (copyResetTimer) clearTimeout(copyResetTimer)
+})
 
 watch(
   () => props.messages.length,

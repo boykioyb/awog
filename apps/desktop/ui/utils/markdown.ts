@@ -16,6 +16,29 @@ const encodeSource = (s: string): string =>
     ? Buffer.from(s, 'utf8').toString('base64')
     : window.btoa(unescape(encodeURIComponent(s)))
 
+// Inverse of encodeSource — recover the raw UTF-8 source baked into a
+// `.awog-code-block[data-source]` attribute, used by the copy button and the
+// full-screen code viewer to operate on the original text (not the highlighted
+// markup).
+export function decodeSource(s: string): string {
+  return typeof window === 'undefined'
+    ? Buffer.from(s, 'base64').toString('utf8')
+    : decodeURIComponent(escape(window.atob(s)))
+}
+
+// Highlight a code source with highlight.js. Shared by the markdown `code`
+// renderer and the full-screen code viewer so both produce identical markup
+// (hljs escapes the source itself and wraps tokens in <span class="hljs-*">,
+// themed by main.css). Unknown / missing language falls back to auto-detect.
+export function highlightCode(source: string, lang?: string): { html: string; language: string } {
+  const language = typeof lang === 'string' ? lang.toLowerCase().replace(/[^a-z0-9+#.-]/g, '') : ''
+  const html =
+    language && hljs.getLanguage(language)
+      ? hljs.highlight(source, { language, ignoreIllegals: true }).value
+      : hljs.highlightAuto(source).value
+  return { html, language }
+}
+
 // Use a dedicated instance so we don't mutate the global parser if other code uses marked.
 const md = new Marked({
   // `gfm` + `breaks` give the most natural rendering for LLM replies (line breaks preserved,
@@ -36,18 +59,14 @@ md.use({
       if (lang === 'mermaid') {
         return `<div class="awog-mermaid" data-source="${encodeSource(text)}"><pre><code class="language-mermaid">${escapeHtml(text)}</code></pre></div>`
       }
-      // Syntax-highlight every other fence with highlight.js. hljs escapes the
-      // source itself and wraps tokens in <span class="hljs-*">, which main.css
-      // themes via light-dark() (color follows the app appearance). When the
-      // fence has no / an unknown language we let hljs auto-detect.
-      const language =
-        typeof lang === 'string' ? lang.toLowerCase().replace(/[^a-z0-9+#.-]/g, '') : ''
-      const highlighted =
-        language && hljs.getLanguage(language)
-          ? hljs.highlight(text, { language, ignoreIllegals: true }).value
-          : hljs.highlightAuto(text).value
+      // Every other fence: syntax-highlight, then wrap in `.awog-code-block`
+      // carrying the raw source (base64) + language. The wrapper anchors the
+      // copy / expand actions that SessionMessageList injects post-render; the
+      // data-attrs let those affordances copy / re-render the original text
+      // instead of scraping the highlighted spans.
+      const { html, language } = highlightCode(text, lang)
       const cls = language ? `hljs language-${language}` : 'hljs'
-      return `<pre><code class="${cls}">${highlighted}</code></pre>`
+      return `<div class="awog-code-block" data-source="${encodeSource(text)}" data-lang="${language}"><pre><code class="${cls}">${html}</code></pre></div>`
     },
   },
 })

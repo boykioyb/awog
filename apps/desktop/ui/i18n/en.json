@@ -346,6 +346,11 @@
   "session.mermaid.reset": "Fit to width",
   "session.mermaid.failed": "Failed to render diagram.",
 
+  "session.code.copy": "Copy code",
+  "session.code.copied": "Copied",
+  "session.code.expand": "Expand",
+  "session.code.title": "Code",
+
   "settings.language": "Language",
   "settings.language.hint": "UI language. Restart not required."
 }
