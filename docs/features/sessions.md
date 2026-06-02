@@ -126,15 +126,17 @@ Sidecar emit qua channel `sidecar-event` (Tauri event, không phải JSON-RPC re
 7. `session.message.done` → mark `pending: false`, optionally set `canceled: true` nếu abort.
 8. RPC response (resolved) → replace placeholder bằng `finalMessage` (source of truth).
 
-### Markdown + Mermaid live rendering
+### Markdown rendering (code · mermaid · links · scroll)
 
-- Markdown render live (không gate trên `completedAt`) — `marked` instance + gfm + breaks + linebreak.
-- Mermaid fences (` ```mermaid `) → placeholder `<div class="awog-mermaid" data-source="<b64>">`, lazy-load mermaid v11 sau step signature change.
-- Heading color bind `--awog-accent` CSS var → reacts to appearance/accent theme.
+- Markdown render live (không gate trên `completedAt`) — `marked` + gfm + breaks. Heading color bind `--awog-accent` CSS var → reacts to appearance/accent.
+- **Code highlight** — fence (trừ mermaid) tô màu cú pháp bằng `highlight.js` ngay trong renderer `code()` của marked (đồng bộ; hljs tự escape source → an toàn). Màu token theme-aware qua CSS `light-dark()` (đổi theo appearance, **không re-render**). Xem [ADR 0020](../decisions/0020-highlightjs-code-rendering.md).
+- **Mermaid** — fences (` ```mermaid `) → placeholder `<div class="awog-mermaid" data-source="<b64>">`, lazy-load mermaid v11. Render qua **MutationObserver** trên vùng chat (debounce 100ms) → bền với re-render của `MarkdownStreamBody` (sửa lỗi diagram "nhiều lúc không hiện"); guard `data-mermaid-tried` tránh re-parse nguồn lỗi. Theme-aware (`theme: dark|default`), vẽ lại khi đổi theme. Hover hiện nút **phóng to** → `MermaidZoomModal` full-screen (zoom/pan/Esc).
+- **Link trong reply** — click `<a>` bị chặn để không cướp webview: URL ngoài (`http(s)`/`mailto:`) → mở trình duyệt hệ thống (`sidecar.openExternal`); path workspace (`apps/.../foo.py#L42`) → mở **Files tab** + nhảy tới dòng (xem [workspace-panel.md](workspace-panel.md)).
+- **Scroll controls** — 2 nút nổi (lên đầu / xuống cuối) chỉ hiện khi list overflow và đang xa mép tương ứng.
 
-### Steps summary chip
+### Steps interleave + summary toggle
 
-Aggregated summary ở message end: "ran X commands · read Y files · edited Z files · N searches · M subagents". Click → modal với full step list. ESC close.
+Reply bubble **xen kẽ** đoạn text và cụm step (command/tool) theo đúng trình tự thời gian: mỗi top-level step mang `textOffset` (độ dài text tại thời điểm tool chạy — store đóng dấu khi step tới, kèm flush buffer typewriter). Toggle phía trên gom summary "ran X commands · read Y files · …"; collapse → chỉ hiện `message.text`. Click step → drawer chi tiết (Task → subagent drawer). Step **không persist** xuống JSONL nên interleave chỉ áp dụng cho phiên live/in-memory.
 
 ## Composer features
 
@@ -145,8 +147,8 @@ Cho phép user trích một đoạn trong message cũ của agent rồi đính k
 **Flow:**
 
 1. User bôi đen text trong agent message body — `selectionchange` listener phát hiện range nằm trọn trong một `[data-agent-message-id]`, hiển thị button "Quote & follow up" nổi sát selection (teleport `<body>`).
-2. Click button → push `SessionFollowUp` vào `pendingFollowUps`. Chip xuất hiện trong composer (truncate hiển thị 140 ký tự — toàn văn được giữ trong state).
-3. Click "Note" trên chip → mở textarea inline để gõ chỉ thị. "Done" để đóng.
+2. Click button → mở **modal nhập note** neo tại vị trí selection ([`SessionFollowUpNoteModal.vue`](../../apps/desktop/ui/components/session/SessionFollowUpNoteModal.vue)): preview đoạn quote + textarea (⌘/Ctrl+Enter lưu, Esc/click-ngoài huỷ). Follow-up chỉ được thêm vào `pendingFollowUps` **khi Save** → chip xuất hiện trong composer đã kèm note (không còn chip rỗng).
+3. Chip vẫn có nút "Note" để sửa lại chỉ thị sau (textarea inline). "Done" để đóng.
 4. Send → `composeOutgoingMessage` prepend từng follow-up dạng quote block markdown (`> …\n\n<note>`), nối với draft, rồi gửi nguyên text qua `sessions.sendMessage`. **Không truncate** quote phía agent-facing.
 
 **State ownership:** `pendingFollowUps` thuộc `SessionChat` (parent của MessageList + Composer), expose qua `provide(FOLLOW_UP_KEY, …)`. Switch session → parent wipe, tránh stale state.
@@ -272,10 +274,11 @@ Permission prompts: SDK emit `permission_request` event nếu `permissionMode: '
 
 - [`apps/desktop/ui/pages/sessions/index.vue`](../../apps/desktop/ui/pages/sessions/index.vue) — route + layout chat.
 - [`apps/desktop/ui/stores/sessions.ts`](../../apps/desktop/ui/stores/sessions.ts) — Pinia store, action `fetchAll`, `sendMessage`, `cancelMessage`, `rename`, `remove`.
-- [`apps/desktop/ui/components/session/`](../../apps/desktop/ui/components/session/) — `SessionChat`, `SessionMessageList`, `SessionComposer`, `SessionChipsPopover`, `SessionSubagentDrawer`, …
-- [`apps/desktop/ui/composables/useSidecar.ts`](../../apps/desktop/ui/composables/useSidecar.ts) — wrapper `invoke` + `listen`.
-- [`apps/desktop/ui/utils/markdown.ts`](../../apps/desktop/ui/utils/markdown.ts) — render markdown qua `marked` (gfm + breaks).
-- [`apps/desktop/ui/utils/mermaid.ts`](../../apps/desktop/ui/utils/mermaid.ts) — lazy-load mermaid v11, render diagrams.
+- [`apps/desktop/ui/components/session/`](../../apps/desktop/ui/components/session/) — `SessionChat`, `SessionMessageList` (render + scroll controls + link/mermaid click), `SessionComposer`, `SessionChipsPopover`, `SessionSubagentDrawer`, `SessionFollowUpNoteModal`, …
+- [`apps/desktop/ui/components/markdown/MermaidZoomModal.vue`](../../apps/desktop/ui/components/markdown/MermaidZoomModal.vue) — diagram full-screen (zoom/pan), theme-aware.
+- [`apps/desktop/ui/composables/useSidecar.ts`](../../apps/desktop/ui/composables/useSidecar.ts) — wrapper `invoke` + `listen` (+ `openExternal`).
+- [`apps/desktop/ui/utils/markdown.ts`](../../apps/desktop/ui/utils/markdown.ts) — render markdown qua `marked` (gfm + breaks) + highlight.js code ([ADR 0020](../decisions/0020-highlightjs-code-rendering.md)).
+- [`apps/desktop/ui/utils/mermaid.ts`](../../apps/desktop/ui/utils/mermaid.ts) — lazy-load mermaid v11, render + theme-aware + zoom button.
 - [`apps/desktop/ui/utils/notify.ts`](../../apps/desktop/ui/utils/notify.ts) — Web Notification API for permission requests.
 
 ### Sidecar

@@ -61,6 +61,10 @@ step của subagent) **giao** với `git.status` (working tree). `GitDiffViewer`
 unified/split. Auto-refresh debounce 200ms khi nhận `git:status:changed`. NO_REPO →
 empty-state; session chưa đụng file nào → "no file changes from this session".
 
+### Files
+Cây thư mục lazy (1 cấp/expand) + preview file. Preview render **theo dòng có số** (`whitespace-pre`) thay vì `<pre>` đơn khối → cho phép cuộn tới + highlight dòng mục tiêu.
+**Open-at-line từ chat:** click link path trong reply (vd `apps/api/foo.py#L42`) gọi `workspacePanel.requestOpenFile(sessionId, path, line)` → mở Files drawer + watcher trong tab `readFile` path, select, `scrollIntoView` + tô nền dòng `line`. Click thủ công trong cây thì không highlight (clear `targetLine`).
+
 ### Plan
 Approve/Reject map vào **permission request ExitPlanMode đang park** → `sessions.permission`.
 Chỉ hiển thị nút khi có pending permission cho session với `toolName` khớp `/exitplanmode|plan/i`.
