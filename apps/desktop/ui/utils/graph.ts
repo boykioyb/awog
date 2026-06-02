@@ -9,8 +9,9 @@ export function topoSort(nodes: WorkflowNode[], edges: WorkflowEdge[]): string[]
     adj[n.id] = []
   })
   edges.forEach((e) => {
-    if (inDegree[e.to] !== undefined) inDegree[e.to]++
-    if (adj[e.from]) adj[e.from].push(e.to)
+    const toDegree = inDegree[e.to]
+    if (toDegree !== undefined) inDegree[e.to] = toDegree + 1
+    adj[e.from]?.push(e.to)
   })
 
   const queue: string[] = nodes.filter((n) => inDegree[n.id] === 0).map((n) => n.id)
@@ -19,8 +20,10 @@ export function topoSort(nodes: WorkflowNode[], edges: WorkflowEdge[]): string[]
   while (queue.length) {
     const id = queue.shift()!
     result.push(id)
-    ;(adj[id] || []).forEach((next) => {
-      inDegree[next]--
+    ;(adj[id] ?? []).forEach((next) => {
+      const degree = inDegree[next]
+      if (degree === undefined) return
+      inDegree[next] = degree - 1
       if (inDegree[next] === 0) queue.push(next)
     })
   }

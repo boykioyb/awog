@@ -480,7 +480,7 @@ const statusStyle = computed(() => ({
 }))
 
 const agentsUsing = computed<Agent[]>(() =>
-  ws.agents.filter((a) => a.context.includes(props.server.id)),
+  ws.agents.filter((a) => a.mcpServerIds?.includes(props.server.id) ?? false),
 )
 
 const toolFilter = ref('')
