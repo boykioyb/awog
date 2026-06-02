@@ -204,6 +204,26 @@ Khi cần `resize-none` ở chỗ mới, thêm comment 1 dòng nói lý do.
 - **Singleton state** (như `useTheme`) → giữ state ngoài hàm (module-scope ref) khi cần share giữa các caller; ghi rõ trong tài liệu của composable.
 - **Không gọi composable trong điều kiện** (cùng quy tắc như React hook nhưng Vue cho phép setup boundary).
 
+### Page-controller composable (tách page lớn)
+
+Khi một page/SFC vượt ~250 dòng, **không** để logic phình trong `<script setup>`. Tách:
+
+1. **Markup lặp → component con** (vd [`AgentListItem.vue`](../../apps/desktop/ui/components/agent/AgentListItem.vue)).
+2. **UI/logic lặp giữa nhiều trang → composable dùng chung** (vd [`useToasts`](../../apps/desktop/ui/composables/useToasts.ts) gom toast của agents + skills). Rule of Three: 2 copy = tín hiệu, 3 = bắt buộc.
+3. **Toàn bộ state + computed + handler còn lại → page-controller composable** `useXxxManager()` (vd [`useSkillsManager`](../../apps/desktop/ui/composables/useSkillsManager.ts)). Page còn lại đúng `<template>` + một destructure:
+
+```vue
+<script setup lang="ts">
+import { Wand2 } from 'lucide-vue-next' // chỉ import gì template trực tiếp cần (icon)
+const { filtered, selectedKey, editing, onSelect, pushToast /* … */ } = useSkillsManager()
+</script>
+```
+
+- **Template ref / lifecycle đặt được trong composable:** `ref="sidebarRef"`, `onMounted`, `watch` đăng ký trên instance gọi composable.
+- **Write tới destructured ref trong template tự `.value =`:** Vue compiler transform `editing = true`, `pendingDelete = null`, `(v) => (searchQuery = v)` thành `.value =`. Đã verify với `@vue/compiler-sfc` 3.5 → **không cần** viết setter riêng.
+- **Auto-import:** composable trong `composables/` không cần `import` trong page.
+- Kết quả thực tế: `pages/skills/index.vue` 570 → 179 dòng (logic dời sang `useSkillsManager`).
+
 ## Component/composable dùng chung
 
 Sau đợt refactor [ADR 0009](../decisions/0009-ui-consolidation-refactor.md) ([clarifications 0009a](../decisions/0009a-ui-consolidation-clarifications.md)), các primitive sau là **single source of truth** cho pattern lặp ở [apps/desktop/ui/](../../apps/desktop/ui/). Trước khi tự viết modal/input/list-detail mới, kiểm tra bảng dưới.

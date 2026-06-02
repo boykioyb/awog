@@ -20,7 +20,15 @@
 - `computed` cho derived; `watch` chỉ khi cần side effect.
 - `ref` cho primitive / thay nguyên khối; `reactive` cho object mutate nhiều field.
 - **Props readonly** — đừng mutate `props.x`, emit event.
-- Component dài > ~250 dòng → tách subcomponent.
+- Component/SFC dài > ~250 dòng → tách subcomponent **và** đẩy logic vào composable (xem [Composable](#composable)).
+
+## Composable
+
+- **Tên + vị trí:** `useXxx.ts` trong `composables/` → auto-import (không `import` trong page/component). Không gọi composable ở module top-level.
+- **Page-controller pattern:** page/SFC vượt ~250 dòng → đẩy **toàn bộ** state + computed + handler vào một composable `useXxxManager()` (vd [`useSkillsManager`](../../apps/desktop/ui/composables/useSkillsManager.ts)). Page chỉ còn `<template>` + `const { ... } = useXxxManager()`. Template ref (`ref="sidebarRef"`), `onMounted`, `watch` đặt được trong composable (đăng ký trên instance gọi nó).
+- **Composable dùng chung cho UI lặp:** pattern lặp giữa nhiều trang → 1 composable (vd [`useToasts`](../../apps/desktop/ui/composables/useToasts.ts) gom toast của agents + skills). Rule of Three: 2 copy = tín hiệu, 3 = bắt buộc tách.
+- **Thin template:** composable trả về đúng thứ template bind. Vue compiler tự transform write tới destructured ref trong template thành `.value =` (`editing = true`, `pendingDelete = null`) → **không cần** setter riêng.
+- **SoC:** composable orchestrate state/IPC; không `import fs`/SDK (đi qua sidecar). Markup lặp tách thành component con (vd [`AgentListItem.vue`](../../apps/desktop/ui/components/agent/AgentListItem.vue)), không nhồi vào composable.
 
 ## Pinia store
 
