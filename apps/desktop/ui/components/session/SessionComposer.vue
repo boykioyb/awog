@@ -219,9 +219,6 @@
         <SessionContextStatus :session="session" />
       </div>
     </div>
-    <div class="text-[1em] mt-1 px-1" :style="{ color: t.textFaint }">
-      Enter to send · @ file · $ agent · / command · select text in a reply to quote it
-    </div>
   </div>
 </template>
 

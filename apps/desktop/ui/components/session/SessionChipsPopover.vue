@@ -520,10 +520,12 @@ const popStyle = computed(() => ({
   minWidth: '200px',
 }))
 
+// Borderless chips (user preference): no background, no border. The open/closed
+// state is carried by text brightness (active = full text, idle = dimmed) and
+// the chevron + the popover itself — not a box outline.
 const chipStyle = (active: boolean) => ({
-  background: active ? t.value.bgActive : t.value.bgSubtle,
-  color: t.value.text,
-  border: `1px solid ${active ? t.value.borderFocus : t.value.border}`,
+  background: 'transparent',
+  color: active ? t.value.text : t.value.textDim,
 })
 
 const togglePop = (name: NonNullable<PopoverName>) => {
