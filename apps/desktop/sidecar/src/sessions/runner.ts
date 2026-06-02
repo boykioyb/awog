@@ -19,6 +19,7 @@ import { loadCredentials } from '../credentials/store.js'
 import { ensureFreshAccessToken } from '../credentials/token-manager.js'
 import {
   isAnthropicModel,
+  resolveModelRequest,
   SUPPORTS_THINKING,
   type AnthropicModelId,
 } from '../providers/anthropic/models-map.js'
@@ -163,8 +164,12 @@ function buildOptions(
   // never set it on process.env, but cheap belt-and-braces).
   delete env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN
 
+  // Resolve AWOG model id → real API model + any beta headers (e.g. the 1M
+  // context variant rewrites to `claude-opus-4-8` + the context-1m beta).
+  const { model, betas } = resolveModelRequest(settings.modelId)
+
   const opts: Options = {
-    model: settings.modelId,
+    model,
     env,
     persistSession: false,
     // Inherit the full Claude Code tool surface (Read/Write/Edit/Bash/Glob/
@@ -177,6 +182,8 @@ function buildOptions(
     // canUseTool gate prompts; 'execute' bypasses every check (full access).
     permissionMode: MODE_PERMISSION[settings.mode] ?? 'default',
   }
+
+  if (betas && betas.length) opts.betas = betas as NonNullable<Options['betas']>
 
   // bypassPermissions REQUIRES this opt-in flag (SDK safety gate). Execute mode
   // is the user's explicit "full access, don't ask" choice.

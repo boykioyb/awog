@@ -21,6 +21,17 @@ export const MODELS: ModelDef[] = [
     maxLevel: 'max',
   },
   {
+    // AWOG-internal id (not a real API name). Sidecar maps it to claude-opus-4-8
+    // + the context-1m beta header — see resolveModelRequest in models-map.ts.
+    id: 'claude-opus-4-8-1m',
+    label: 'Claude Opus 4.8 (1M context)',
+    vendor: 'Anthropic',
+    tier: 'Frontier',
+    provider: 'anthropic',
+    supportsThinking: true,
+    maxLevel: 'max',
+  },
+  {
     id: 'claude-opus-4-7',
     label: 'Claude Opus 4.7',
     vendor: 'Anthropic',
