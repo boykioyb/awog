@@ -12,12 +12,14 @@
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search projects..." />
         <button
-          class="flex items-center gap-1 px-2.5 py-1.5 text-[1em] rounded font-medium transition"
-          :style="{ background: t.accent, color: t.accentText }"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          title="Add project"
           @click="startCreate"
+          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
+          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
-          <Plus :size="12" />
-          Add
+          <Plus :size="14" />
         </button>
       </div>
       <div class="flex-1 overflow-y-auto">
