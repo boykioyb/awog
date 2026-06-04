@@ -39,16 +39,6 @@
           <span class="text-[1em] font-medium truncate" :style="{ color: t.text }">
             {{ agent.name }}
           </span>
-          <span
-            class="text-[1em] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
-            :style="{
-              color: t.textMuted,
-              background: t.bgInput,
-              border: `1px solid ${t.border}`,
-            }"
-          >
-            {{ agent.role }}
-          </span>
         </div>
         <div class="text-[1em] font-mono" :style="{ color: t.textDim }">
           {{ phase.skillName }}

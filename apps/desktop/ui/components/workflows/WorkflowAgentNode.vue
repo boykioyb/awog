@@ -12,13 +12,13 @@
     <Handle type="target" :position="Position.Left" :style="handleStyle" />
 
     <div class="px-2.5 py-2 flex items-center gap-2">
-      <RoleBadge v-if="data.agent" :role="data.agent.role" />
+      <RoleBadge v-if="data.agent" :role="agentRoleLabel(data.agent)" />
       <div class="min-w-0 flex-1">
         <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">
-          {{ data.agent?.name ?? 'Unknown agent' }}
+          {{ data.agent?.name ?? tr('workflows.node.unknown_agent') }}
         </div>
         <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
-          {{ data.skill?.name || 'no skill' }}
+          {{ data.skill?.name || tr('workflows.no_skill') }}
         </div>
       </div>
     </div>
@@ -30,7 +30,12 @@
         <FileText :size="9" />
         <span class="truncate">{{ data.outputs?.[0] ?? '' }}</span>
       </div>
-      <AlertCircle v-if="data.approval" :size="10" :style="{ color: t.warning }" />
+      <AlertCircle
+        v-if="data.approval"
+        :size="10"
+        :style="{ color: t.warning }"
+        :title="tr('workflows.node.approval_gate')"
+      />
     </div>
 
     <Handle type="source" :position="Position.Bottom" :style="handleStyle" />
@@ -69,6 +74,7 @@
 import { Handle, Position } from '@vue-flow/core'
 import { AlertCircle, FileText, Trash2 } from 'lucide-vue-next'
 import type { Agent, Skill } from '~/types'
+import { agentRoleLabel } from '~/utils/agent-role'
 
 interface NodeData {
   agent?: Agent
@@ -88,6 +94,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 const handleStyle = computed(() => ({
   background: t.value.borderStrong,

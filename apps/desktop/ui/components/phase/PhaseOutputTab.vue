@@ -83,8 +83,10 @@ const isEditable = computed(() => {
   )
 })
 
+// Live path: run.output is the artifact body the engine streamed + persisted.
+// Fall back to mock content only when output is empty (browser-dev seed tasks).
 const displayContent = computed(
-  () => mockArtifactContent(props.phase.skillName, fileName.value) || props.run.output,
+  () => props.run.output || mockArtifactContent(props.phase.skillName, fileName.value),
 )
 const isMarkdown = computed(() => fileName.value.endsWith('.md'))
 </script>

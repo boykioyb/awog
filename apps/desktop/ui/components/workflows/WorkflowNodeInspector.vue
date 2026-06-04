@@ -5,10 +5,10 @@
         class="text-[1em] uppercase tracking-wider mb-2 font-medium"
         :style="{ color: t.textDim }"
       >
-        Node
+        {{ tr('workflows.node.title') }}
       </div>
       <div class="flex items-center gap-2.5">
-        <RoleBadge :role="agent.role" />
+        <RoleBadge :role="agentRoleLabel(agent)" />
         <div class="flex-1 min-w-0">
           <div class="text-[1em] truncate" :style="{ color: t.text }">{{ agent.name }}</div>
           <div class="text-[1em] font-mono" :style="{ color: t.textDim }">{{ node.id }}</div>
@@ -16,7 +16,7 @@
       </div>
     </div>
 
-    <Field label="Skill">
+    <Field :label="tr('workflows.node.skill')">
       <select
         :value="node.skillId || ''"
         class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
@@ -24,7 +24,7 @@
         @change="onSkillChange"
       >
         <option v-if="availableSkills.length === 0" value="">
-          No skills assigned to this agent
+          {{ tr('workflows.node.no_skills') }}
         </option>
         <option v-for="s in availableSkills" :key="s.id" :value="s.id">{{ s.name }}</option>
       </select>
@@ -33,7 +33,7 @@
       </div>
     </Field>
 
-    <Field label="Output artifacts">
+    <Field :label="tr('workflows.node.outputs')">
       <div class="space-y-1">
         <div v-for="(out, i) in node.outputs" :key="i" class="flex items-center gap-1">
           <input
@@ -60,7 +60,7 @@
           @click="addOutput"
         >
           <Plus :size="11" />
-          Add output
+          {{ tr('workflows.node.add_output') }}
         </button>
       </div>
     </Field>
@@ -73,10 +73,12 @@
           :style="{ accentColor: t.accent }"
           @change="onApprovalChange"
         />
-        <span class="text-[1em]" :style="{ color: t.text }">Require human approval</span>
+        <span class="text-[1em]" :style="{ color: t.text }">
+          {{ tr('workflows.node.approval') }}
+        </span>
       </label>
       <div class="text-[1em] mt-1 ml-5" :style="{ color: t.textDim }">
-        Workflow pauses for review before continuing
+        {{ tr('workflows.node.approval_hint') }}
       </div>
     </div>
   </div>
@@ -85,6 +87,7 @@
 <script setup lang="ts">
 import { Plus, X } from 'lucide-vue-next'
 import type { Agent, Skill, WorkflowNode } from '~/types'
+import { agentRoleLabel } from '~/utils/agent-role'
 
 const props = defineProps<{
   node: WorkflowNode
@@ -98,6 +101,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,

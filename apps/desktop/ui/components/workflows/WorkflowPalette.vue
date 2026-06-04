@@ -15,8 +15,8 @@
       class="px-3 py-2 sticky top-0"
       :style="{ background: t.bgPanel, borderBottom: `1px solid ${t.border}` }"
     >
-      <div class="text-[1em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
-        Drag agents to canvas
+      <div class="text-[14px] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
+        {{ tr('workflows.palette.title') }}
       </div>
     </div>
     <div class="p-2 space-y-0.5">
@@ -41,11 +41,17 @@
               border: `1px solid ${t.border}`,
             }"
           >
-            {{ agent.role }}
+            {{ agentRoleLabel(agent) }}
           </span>
         </div>
-        <div class="text-[1em]" :style="{ color: t.textDim }">
-          {{ agent.skillIds.length }} skills
+        <div class="flex items-center gap-1.5">
+          <span
+            class="text-[12px] font-mono leading-none px-1 py-0.5 rounded flex-shrink-0 truncate"
+            :style="{ color: t.textFaint, background: t.bgInput }"
+            :title="scopeLabel(agent)"
+          >
+            {{ scopeLabel(agent) }}
+          </span>
         </div>
       </div>
     </div>
@@ -54,6 +60,7 @@
 
 <script setup lang="ts">
 import type { Agent } from '~/types'
+import { agentRoleLabel } from '~/utils/agent-role'
 
 type Props = {
   agents: Agent[]
@@ -62,6 +69,23 @@ type Props = {
 defineProps<Props>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
+const ws = useWorkspaceStore()
+
+// User-level tiers map to short paths; project tiers resolve to the owning
+// project's name so duplicate-named agents across tiers are distinguishable.
+const SOURCE_LABEL: Record<string, string> = {
+  'user-claude': '~/.claude',
+  'user-agents': '~/.agents',
+}
+
+const scopeLabel = (agent: Agent): string => {
+  if ((agent.source === 'project-claude' || agent.source === 'project-agents') && agent.projectId) {
+    return ws.projectById(agent.projectId)?.name ?? 'Project'
+  }
+  if (agent.source === 'global') return tr('workflows.scope.global_badge')
+  return SOURCE_LABEL[agent.source] ?? agent.source
+}
 
 const onDragStart = (e: DragEvent, agentId: string) => {
   e.dataTransfer?.setData('agentId', agentId)

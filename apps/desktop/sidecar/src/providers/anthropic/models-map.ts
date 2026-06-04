@@ -21,6 +21,24 @@ export function isAnthropicModel(id: string): id is AnthropicModelId {
   return (ANTHROPIC_MODELS as readonly string[]).includes(id)
 }
 
+// Claude Code subagent AGENT.md files commonly set `model:` to a short alias
+// (haiku/sonnet/opus) or `inherit`, not a full AWOG model id. Map those to the
+// concrete model so the task engine can run such agents. Full ids + unknown
+// values pass through unchanged (caller still validates via isAnthropicModel).
+const MODEL_ALIASES: Record<string, AnthropicModelId> = {
+  haiku: 'claude-haiku-4-5',
+  sonnet: 'claude-sonnet-4-6',
+  opus: 'claude-opus-4-8',
+  // `inherit`/`default` have no parent in a task run → pick a sensible mid model.
+  inherit: 'claude-sonnet-4-6',
+  default: 'claude-sonnet-4-6',
+}
+
+export function normalizeModelId(id: string | undefined): string {
+  if (!id) return ''
+  return MODEL_ALIASES[id.trim().toLowerCase()] ?? id
+}
+
 // Beta header that opts a request into the 1M-token context window.
 const CONTEXT_1M_BETA = 'context-1m-2025-08-07'
 

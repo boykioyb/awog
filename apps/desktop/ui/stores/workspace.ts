@@ -5,28 +5,17 @@ import type {
   Hook,
   MCPServer,
   Project,
-  Run,
   Skill,
   SkillSource,
   SlashCommand,
-  Task,
-  TaskSource,
-  Workflow,
-  WorkflowNode,
 } from '~/types'
-import { topoSort } from '~/utils/graph'
-import { INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_WORKFLOWS } from '~/utils/initial-data'
+import { INITIAL_PROJECTS } from '~/utils/initial-data'
 import { INITIAL_COMMANDS, INITIAL_HOOKS } from '~/utils/initial-extensions'
-import { makeLiveTrace, makeTrace, mockOutput } from '~/utils/mock-output'
 import { nowIso } from '~/utils/time'
 
-interface CreateTaskInput {
-  title: string
-  description: string
-  source: TaskSource
-  workflowId: string
-  projectId: string
-}
+// Tasks + Workflows moved to their own live stores (stores/tasks.ts,
+// stores/workflows.ts) — see ADR 0024. This store keeps projects/agents/skills/
+// mcp/hooks/commands.
 
 export interface LinkProjectInput {
   name: string
@@ -115,8 +104,6 @@ export const useWorkspaceStore = defineStore('workspace', {
     // Latest scan report (1 entry per scanned dir + count). Surfaces resolved
     // paths to the UI so misconfigured HOME / missing dirs are diagnosable.
     skillScanReports: [] as SkillScanReport[],
-    workflows: [...INITIAL_WORKFLOWS] as Workflow[],
-    tasks: [...INITIAL_TASKS] as Task[],
     // MCP servers hydrate from sidecar (`~/.awog/mcp-servers/<id>.json`). No
     // mock seed — empty until `hydrateMcpFromSidecar` populates it.
     mcpServers: [] as MCPServer[],
@@ -125,21 +112,13 @@ export const useWorkspaceStore = defineStore('workspace', {
     mcpStderr: {} as Record<string, string[]>,
     hooks: [...INITIAL_HOOKS] as Hook[],
     commands: [...INITIAL_COMMANDS] as SlashCommand[],
-    selectedTaskId: 'tsk-001' as string | null,
   }),
 
   getters: {
-    selectedTask(state): Task | undefined {
-      return state.tasks.find((t: Task) => t.id === state.selectedTaskId)
-    },
     projectById:
       (state) =>
       (id: string): Project | undefined =>
         state.projects.find((p: Project) => p.id === id),
-    workflowById:
-      (state) =>
-      (id: string): Workflow | undefined =>
-        state.workflows.find((w: Workflow) => w.id === id),
     agentById:
       (state) =>
       (id: string): Agent | undefined =>
@@ -148,194 +127,9 @@ export const useWorkspaceStore = defineStore('workspace', {
       (state) =>
       (id: string): Skill | undefined =>
         state.skills.find((s: Skill) => s.id === id),
-    taskById:
-      (state) =>
-      (id: string): Task | undefined =>
-        state.tasks.find((t: Task) => t.id === id),
   },
 
   actions: {
-    selectTask(id: string | null) {
-      this.selectedTaskId = id
-    },
-
-    deleteTask(id: string) {
-      this.tasks = this.tasks.filter((t: Task) => t.id !== id)
-      if (this.selectedTaskId === id) {
-        this.selectedTaskId = this.tasks[0]?.id ?? null
-      }
-    },
-
-    renameTask(id: string, title: string) {
-      const task = this.tasks.find((t: Task) => t.id === id)
-      if (task) task.title = title
-    },
-
-    createTask(data: CreateTaskInput) {
-      const wf = this.workflows.find((w: Workflow) => w.id === data.workflowId)
-      if (!wf) return
-      const phases: Task['phases'] = {}
-      wf.nodes.forEach((n: WorkflowNode) => {
-        const sk = this.skills.find((s: Skill) => s.id === n.skillId)
-        phases[n.id] = {
-          nodeId: n.id,
-          status: 'pending',
-          skillName: sk?.name || 'unknown',
-          runs: [],
-        }
-      })
-      const newId = `tsk-${String(this.tasks.length + 1).padStart(3, '0')}`
-      const newTask: Task = {
-        id: newId,
-        title: data.title,
-        description: data.description,
-        source: data.source,
-        projectId: data.projectId,
-        workflowId: data.workflowId,
-        status: 'queued',
-        currentNodeId: null,
-        waitingApproval: null,
-        waitingConnection: null,
-        createdAt: 'Just now',
-        phases,
-      }
-      this.tasks.unshift(newTask)
-      this.selectedTaskId = newId
-    },
-
-    sendMessageToPhase(taskId: string, nodeId: string, runVersion: number, text: string) {
-      const task = this.tasks.find((t: Task) => t.id === taskId)
-      if (!task) return
-      const phase = task.phases[nodeId]
-      if (!phase) return
-      const run = phase.runs.find((r: Run) => r.version === runVersion)
-      if (!run) return
-      run.messages.push({ role: 'user', text, at: 'Just now' })
-
-      setTimeout(() => {
-        const t2 = this.tasks.find((t: Task) => t.id === taskId)
-        const ph2 = t2?.phases[nodeId]
-        const r2 = ph2?.runs.find((r: Run) => r.version === runVersion)
-        if (r2) {
-          r2.messages.push({
-            role: 'agent',
-            text: 'Understood. I will incorporate this feedback when you trigger a rerun.',
-            at: 'Just now',
-          })
-        }
-      }, 1500)
-    },
-
-    rerunFromPhase(taskId: string, nodeId: string, instruction: string) {
-      const task = this.tasks.find((t: Task) => t.id === taskId)
-      if (!task) return
-      const wf = this.workflows.find((w: Workflow) => w.id === task.workflowId)
-      if (!wf) return
-
-      const order = topoSort(wf.nodes, wf.edges)
-      const startIdx = order.indexOf(nodeId)
-      const downstream = order.slice(startIdx)
-
-      downstream.forEach((nid: string, i: number) => {
-        const phase = task.phases[nid]
-        if (!phase) return
-        if (i === 0) {
-          const newRunVersion = (phase.runs[phase.runs.length - 1]?.version || 0) + 1
-          phase.runs = phase.runs.map((r: Run) =>
-            r.status === 'completed' ? { ...r, status: 'superseded' as const } : r,
-          )
-          const node = wf.nodes.find((n: WorkflowNode) => n.id === nid)!
-          phase.runs.push({
-            version: newRunVersion,
-            status: 'running',
-            output: '',
-            trace: makeLiveTrace(node.agentId),
-            messages: instruction ? [{ role: 'user', text: instruction, at: 'Just now' }] : [],
-            duration: null,
-            triggeredBy: 'rerun',
-          })
-          phase.status = 'running'
-        } else {
-          phase.runs = phase.runs.map((r: Run) => ({ ...r, status: 'superseded' as const }))
-          phase.status = 'pending'
-        }
-      })
-      task.status = 'running'
-      task.currentNodeId = nodeId
-      task.waitingApproval = null
-
-      // Simulate completion
-      setTimeout(() => {
-        const t2 = this.tasks.find((t: Task) => t.id === taskId)
-        const ph = t2?.phases[nodeId]
-        if (!ph) return
-        const latest = ph.runs[ph.runs.length - 1]
-        if (!latest) return
-        const node = wf.nodes.find((n: WorkflowNode) => n.id === nodeId)!
-        const kindBySkill: Record<string, string> = {
-          gather_requirements: 'requirements',
-          design_architecture: 'architecture',
-          fix_bug: 'fix',
-        }
-        const kind = kindBySkill[ph.skillName] ?? 'review'
-        latest.status = node.approval ? 'waiting_approval' : 'completed'
-        latest.output = mockOutput(ph.skillName)
-        latest.trace = makeTrace(node.agentId, kind as never)
-        latest.duration = '38s'
-        ph.status = node.approval ? 'waiting_approval' : 'completed'
-        if (node.approval && t2) {
-          t2.status = 'waiting_approval'
-          t2.waitingApproval = nodeId
-        }
-      }, 3000)
-    },
-
-    approvePhase(taskId: string, nodeId: string) {
-      const task = this.tasks.find((t: Task) => t.id === taskId)
-      if (!task) return
-      const wf = this.workflows.find((w: Workflow) => w.id === task.workflowId)
-      if (!wf) return
-
-      const order = topoSort(wf.nodes, wf.edges)
-      const idx = order.indexOf(nodeId)
-      const isLast = idx === order.length - 1
-      const nextNodeId: string | null = isLast ? null : (order[idx + 1] ?? null)
-
-      const phase = task.phases[nodeId]
-      if (!phase) return
-      phase.status = 'completed'
-      const last = phase.runs[phase.runs.length - 1]
-      if (last) {
-        last.status = 'completed'
-        last.approvedBy = 'human'
-        last.approvedAt = 'Just now'
-      }
-      task.status = isLast ? 'completed' : 'running'
-      task.currentNodeId = nextNodeId
-      task.waitingApproval = null
-
-      if (nextNodeId) {
-        setTimeout(() => {
-          const t2 = this.tasks.find((t: Task) => t.id === taskId)
-          const nextPhase = t2?.phases[nextNodeId]
-          const nextNode = wf.nodes.find((n: WorkflowNode) => n.id === nextNodeId)
-          if (nextPhase && nextNode) {
-            nextPhase.status = 'running'
-            nextPhase.runs = [
-              {
-                version: 1,
-                status: 'running',
-                output: '',
-                trace: makeLiveTrace(nextNode.agentId),
-                messages: [],
-                duration: null,
-              },
-            ]
-          }
-        }, 600)
-      }
-    },
-
     // Project CRUD — persisted via sidecar (~/.awog/projects/<id>.json).
     // Browser dev (no sidecar): keep mock data + local-only mutations.
 
@@ -664,44 +458,6 @@ export const useWorkspaceStore = defineStore('workspace', {
         // eslint-disable-next-line no-console
         console.warn('[workspace] skills.delete failed', err)
       }
-    },
-
-    // Workflow CRUD
-    saveWorkflow(workflow: Workflow) {
-      const existing = this.workflows.find((w: Workflow) => w.id === workflow.id)
-      if (existing) {
-        Object.assign(existing, workflow)
-      } else {
-        this.workflows.push({ ...workflow, id: workflow.id || `wf${Date.now()}` })
-      }
-    },
-    updateWorkflowNodes(workflowId: string, nodes: Workflow['nodes']) {
-      const wf = this.workflows.find((w: Workflow) => w.id === workflowId)
-      if (wf) wf.nodes = nodes
-    },
-    updateWorkflowEdges(workflowId: string, edges: Workflow['edges']) {
-      const wf = this.workflows.find((w: Workflow) => w.id === workflowId)
-      if (wf) wf.edges = edges
-    },
-    deleteWorkflow(id: string) {
-      this.workflows = this.workflows.filter((w: Workflow) => w.id !== id)
-    },
-
-    renameWorkflow(id: string, name: string) {
-      const wf = this.workflows.find((w: Workflow) => w.id === id)
-      if (wf) wf.name = name
-    },
-
-    createWorkflow(name: string): Workflow {
-      const newWf: Workflow = {
-        id: `wf${Date.now()}`,
-        name,
-        description: 'New workflow',
-        nodes: [],
-        edges: [],
-      }
-      this.workflows.push(newWf)
-      return newWf
     },
 
     // MCP Server — persisted via sidecar (~/.awog/mcp-servers/<id>.json).

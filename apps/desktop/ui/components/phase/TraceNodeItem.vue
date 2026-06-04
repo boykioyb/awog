@@ -107,7 +107,8 @@ const props = defineProps<{
 
 const { t } = useTheme()
 
-const expanded = ref(true)
+// Collapsed by default — click a node (chevron) to expand its children.
+const expanded = ref(false)
 const hovered = ref(false)
 
 const hasChildren = computed(() => !!(props.item.children && props.item.children.length > 0))

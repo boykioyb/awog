@@ -44,7 +44,7 @@ export interface Skill {
 
 // Mirror of sidecar Agent (apps/desktop/sidecar/src/types/shared.ts). Five
 // tiers like Skills. systemPrompt = body of the AGENT.md file; description +
-// model + role + skillIds + context live in YAML frontmatter. See ADR 0015.
+// model + role live in YAML frontmatter. See ADR 0015.
 
 export type AgentSource =
   | 'global'
@@ -62,7 +62,6 @@ export interface Agent {
   model: string
   systemPrompt: string
   role: string
-  skillIds: string[]
   // Claude Code subagent `tools` field — SDK toolset whitelist. When set,
   // session sidecar forwards as Options.allowedTools so the agent only sees
   // these tools (Read/Write/Edit/Bash/Grep/…). Empty/undefined = full toolset.
@@ -77,6 +76,11 @@ export interface Agent {
 export interface WorkflowNode {
   id: string
   agentId: string
+  // Agent identity tuple (ADR 0024 D-11). Optional so legacy/mock workflows
+  // still parse; the inspector fills these when an agent is picked, and the
+  // engine's node-runner uses them for loadAgent(id, source, projectId).
+  agentSource?: AgentSource
+  agentProjectId?: string
   skillId: string
   x: number
   y: number
@@ -89,12 +93,20 @@ export interface WorkflowEdge {
   to: string
 }
 
+// Where a workflow is stored (ADR 0024 follow-up). 'global' = shared across
+// projects (~/.awog/workflows); 'project' = lives in the repo
+// ({project.path}/.awog/workflows, git-trackable). Like Skills, these are tags
+// derived from the on-disk location — not persisted in the JSON itself.
+export type WorkflowSource = 'global' | 'project'
+
 export interface Workflow {
   id: string
   name: string
   description: string
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
+  source?: WorkflowSource
+  projectId?: string
 }
 
 export type TaskStatus =
@@ -102,6 +114,7 @@ export type TaskStatus =
   | 'running'
   | 'waiting_approval'
   | 'waiting_connection'
+  | 'paused'
   | 'completed'
   | 'failed'
 
@@ -144,9 +157,11 @@ export interface WaitingConnectionInfo {
   kind: ConnectionUnavailableKind
 }
 
+// `connectionId` = mcpServerId of the connection used to reach the source.
+// Optional; engine unions that MCP server into every node (ADR 0025 simplified).
 export type TaskSource =
-  | { type: 'github'; repo: string; issueNumber: number; url: string }
-  | { type: 'jira'; key: string }
+  | { type: 'github'; repo: string; issueNumber: number; url: string; connectionId?: string }
+  | { type: 'jira'; key: string; connectionId?: string }
   | { type: 'manual' }
 
 export interface TraceNode {
@@ -204,7 +219,77 @@ export interface Task {
   waitingApproval: string | null
   waitingConnection: WaitingConnectionInfo | null
   createdAt: string
+  // Snapshot of the workflow DAG at creation time (sidecar fills this). Used so
+  // editing the workflow later never mutates a running task (ADR 0024).
+  workflowSnapshot?: Workflow
   phases: Record<string, Phase>
+}
+
+// ─── Task execution events (sidecar → UI, ADR 0024 D-5) ──────────────────────
+// Streamed over the `sidecar-event` channel during task execution. Every event
+// carries taskId so the long-lived listener routes to the right task; phase
+// events add nodeId; run events add version. One event ↔ one persisted TaskEvent.
+
+export interface TaskStatusEvent {
+  taskId: string
+  status: TaskStatus
+  waitingApproval: string | null
+}
+
+export interface TaskPhaseStatusEvent {
+  taskId: string
+  nodeId: string
+  status: PhaseStatus
+}
+
+export interface TaskRunStartedEvent {
+  taskId: string
+  nodeId: string
+  version: number
+  agentId?: string
+  triggeredBy?: Run['triggeredBy']
+}
+
+export interface TaskRunTraceEvent {
+  taskId: string
+  nodeId: string
+  version: number
+  node: TraceNode
+  parentId?: string | null
+}
+
+export interface TaskRunOutputEvent {
+  taskId: string
+  nodeId: string
+  version: number
+  delta?: string
+  output?: string
+}
+
+export interface TaskRunDoneEvent {
+  taskId: string
+  nodeId: string
+  version: number
+  status: RunStatus
+  duration: string | null
+  approvedBy?: 'human' | 'auto'
+  approvedAt?: string
+}
+
+export interface TaskArtifactWrittenEvent {
+  taskId: string
+  nodeId: string
+  version: number
+  path: string
+  name: string
+  commitSha?: string
+}
+
+export interface TaskMessageEvent {
+  taskId: string
+  nodeId: string
+  version: number
+  message: Message
 }
 
 export interface SessionArtifactRef {
@@ -344,6 +429,10 @@ export interface Session {
   // `undefined` = use all currently enabled servers (legacy/new session default).
   // `[]` = explicitly no MCP servers attached. `[id1, id2]` = only these.
   mcpServerIds?: string[]
+  // Claude Agent SDK session id captured by the sidecar on the first turn, used
+  // to resume subsequent turns (ADR 0023). Owned/persisted by the sidecar; the
+  // UI never sends it — it only hydrates it from the session JSONL.
+  sdkSessionId?: string
 }
 
 // ─── Session Workspace Panel ─────────────────────────────────────────────────
@@ -370,6 +459,14 @@ export interface FsFileContent {
   language?: string
   truncated: boolean
   isBinary: boolean
+}
+
+// One hit from `fs.search` (find-in-files). `line`/`column` are 1-based.
+export interface FsSearchMatch {
+  path: string
+  line: number
+  column: number
+  preview: string
 }
 
 // Handle to a live PTY owned by the sidecar terminal manager.
@@ -566,6 +663,16 @@ export type GitRemote = {
   name: string
   fetchUrl: string
   pushUrl: string
+}
+
+// A git repo discovered inside a project folder. A project may be a container
+// holding several repos in subfolders — surfaced via `git.discoverRepos` so the
+// Git header can show a repo picker. Mirror of sidecar GitRepoEntry.
+export type GitRepoEntry = {
+  path: string
+  name: string
+  relativePath: string
+  isRoot: boolean
 }
 
 export type GitDiffLineKind = 'context' | 'add' | 'del'

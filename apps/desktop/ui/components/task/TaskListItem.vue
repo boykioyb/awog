@@ -111,10 +111,13 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const store = useWorkspaceStore()
+const workflowsStore = useWorkflowsStore()
 
 const hovered = ref(false)
 
-const workflow = computed(() => store.workflowById(props.task.workflowId))
+const workflow = computed(
+  () => props.task.workflowSnapshot ?? workflowsStore.workflowById(props.task.workflowId),
+)
 const project = computed(() => store.projectById(props.task.projectId))
 
 const meta = computed(() => STATUS_META[props.task.status])

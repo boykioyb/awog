@@ -89,7 +89,8 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const router = useRouter()
 const { t } = useTheme()
-const workspace = useWorkspaceStore()
+const tasksStore = useTasksStore()
+const workflowsStore = useWorkflowsStore()
 
 const rootStyle = computed(() => ({
   background: t.value.bg,
@@ -100,9 +101,11 @@ const rootStyle = computed(() => ({
 const taskId = computed(() => String(route.params.taskId))
 const fileName = computed(() => String(route.query.file || ''))
 
-const task = computed(() => workspace.taskById(taskId.value))
+const task = computed(() => tasksStore.taskById(taskId.value))
 const workflow = computed(() =>
-  task.value ? workspace.workflowById(task.value.workflowId) : undefined,
+  task.value
+    ? (task.value.workflowSnapshot ?? workflowsStore.workflowById(task.value.workflowId))
+    : undefined,
 )
 
 function resolveKind(out: string): EditorFileKind | null {

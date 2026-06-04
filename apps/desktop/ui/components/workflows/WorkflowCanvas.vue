@@ -37,7 +37,12 @@
         <span :style="{ color: t.text }">{{ workflow.name }}</span>
         <span :style="{ color: t.textFaint }" class="mx-1">·</span>
         <span :style="{ color: t.textDim }">
-          {{ workflow.nodes.length }} agents · {{ workflow.edges.length }} edges
+          {{
+            tr('workflows.canvas.meta', {
+              agents: workflow.nodes.length,
+              edges: workflow.edges.length,
+            })
+          }}
         </span>
       </div>
     </div>
@@ -83,7 +88,7 @@
           :style="{ color: t.textFaint }"
         />
         <div class="text-[1em]" :style="{ color: t.textDim }">
-          Drag agents from the left to begin
+          {{ tr('workflows.canvas.empty') }}
         </div>
       </div>
     </div>
@@ -134,6 +139,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const { t, themeName } = useTheme()
+const { t: tr } = useI18n()
 
 const canvasContainer = ref<HTMLElement | null>(null)
 
@@ -245,7 +251,6 @@ const onCanvasDrop = (e: DragEvent) => {
   if (!agentId) return
   const agent = props.agents.find((a) => a.id === agentId)
   if (!agent) return
-  const firstSkill = props.skills.find((s) => agent.skillIds.includes(s.id))
 
   const rect = canvasContainer.value.getBoundingClientRect()
   const position = project({
@@ -256,12 +261,18 @@ const onCanvasDrop = (e: DragEvent) => {
   const newNode: WorkflowNode = {
     id: `n${Date.now()}`,
     agentId,
-    skillId: firstSkill?.id || agent.skillIds[0] || '',
+    // Capture the full agent identity tuple at drop time (ADR 0024 D-11) so the
+    // engine resolves the right agent across tiers without a lookup-by-id guess.
+    agentSource: agent.source,
+    // Skills are no longer tied to agents — node starts with no skill; the user
+    // picks one in the inspector (or leaves it for the agent's own judgment).
+    skillId: '',
     x: position.x - 100,
     y: position.y - 30,
     outputs: ['output.md'],
     approval: false,
   }
+  if (agent.projectId !== undefined) newNode.agentProjectId = agent.projectId
   emit('update:nodes', [...props.workflow.nodes, newNode])
   emit('update:selectedNode', newNode.id)
 }

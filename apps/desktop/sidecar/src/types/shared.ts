@@ -83,6 +83,17 @@ export interface FsFileContent {
   isBinary: boolean
 }
 
+export interface FsSearchMatch {
+  // Workspace-relative file path.
+  path: string
+  // 1-based line number.
+  line: number
+  // 1-based column of the first match on the line (best-effort).
+  column: number
+  // The matched line content (trimmed/capped for the IPC payload).
+  preview: string
+}
+
 // ─── Session (chat) ────────────────────────────────────────────────────────
 // Mirror of UI shape (apps/desktop/ui/types/index.ts). Sidecar M4 keeps these
 // in-memory only via per-request snapshots from the UI.
@@ -128,6 +139,11 @@ export interface Session {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Claude Agent SDK session id captured on the first turn, used to `resume`
+  // subsequent turns instead of re-sending the whole transcript (ADR 0023).
+  // Resumable cache only — AWOG JSONL stays the source of truth; cleared/re-seeded
+  // when resume fails. Opaque UUID.
+  sdkSessionId?: string
 }
 
 // ─── Session steps (tool use / thinking) ───────────────────────────────────
@@ -277,9 +293,8 @@ export interface McpServerSnapshot extends McpServerConfig {
 //   project-agents → {project.path}/.agents/agents/<id>.md
 //
 // Frontmatter is interchangeable with Claude Code subagents. AWOG extends with
-// `role`, `skillIds`, `context` for the workspace agent picker; these are
-// no-ops for vanilla Claude Code but harmless. systemPrompt = body.
-// See ADR 0015.
+// `role` for the workspace agent picker; a no-op for vanilla Claude Code but
+// harmless. systemPrompt = body. See ADR 0015.
 
 export type AgentSource =
   | 'global'
@@ -297,7 +312,6 @@ export interface Agent {
   model: string
   systemPrompt: string
   role: string
-  skillIds: string[]
   // Claude Code subagent `tools` field — restrict the SDK toolset for this
   // agent. Empty/undefined means "inherit session's full toolset" (no
   // restriction). When set, sidecar passes to `runStream({ allowedTools })`.
@@ -307,4 +321,143 @@ export interface Agent {
   // session's MCP set" (no per-agent filtering). When set, sidecar intersects
   // with the session-level mcpServerIds before forwarding to the SDK.
   mcpServerIds?: string[]
+}
+
+// ─── Workflow ────────────────────────────────────────────────────────────────
+// DAG template persisted as plain JSON at ~/.awog/workflows/<id>.json (ADR 0024
+// D-3). Mirror of UI shape (apps/desktop/ui/types/index.ts). A node carries the
+// full agent identity tuple (id + source + projectId) so the engine can resolve
+// it via loadAgent at execution time (D-11).
+
+export interface WorkflowNode {
+  id: string
+  agentId: string
+  // Agent identity tuple — agentSource/agentProjectId are optional so legacy
+  // workflows (pre-D-11) still parse; node-runner falls back to a best-effort
+  // lookup-by-id when source is absent.
+  agentSource?: AgentSource
+  agentProjectId?: string
+  skillId: string
+  x: number
+  y: number
+  outputs: string[]
+  approval: boolean
+}
+
+export interface WorkflowEdge {
+  from: string
+  to: string
+}
+
+// Where a workflow lives (ADR 0024 follow-up). 'global' = ~/.awog/workflows
+// (shared across projects); 'project' = {project.path}/.awog/workflows (travels
+// with the repo, git-trackable). Like Skills, source/projectId are derived from
+// the on-disk location, NOT persisted inside the JSON.
+export type WorkflowSource = 'global' | 'project'
+
+export interface Workflow {
+  id: string
+  name: string
+  description: string
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  // Location tags — set when listing/loading; stripped before writing.
+  source?: WorkflowSource
+  projectId?: string
+}
+
+// ─── Task (workflow instance) ────────────────────────────────────────────────
+// A Task is an instance of a Workflow bound to a Project. Persisted event-sourced
+// as JSONL at ~/.awog/tasks/<id>/events.log with a derived task.json snapshot
+// (ADR 0024 D-2). Mirror of UI shape (apps/desktop/ui/types/index.ts).
+
+export type TaskStatus =
+  | 'queued'
+  | 'running'
+  | 'waiting_approval'
+  | 'waiting_connection'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+
+export type PhaseStatus =
+  | 'pending'
+  | 'running'
+  | 'waiting_approval'
+  | 'waiting_connection'
+  | 'completed'
+  | 'failed'
+
+export type RunStatus = 'running' | 'waiting_approval' | 'completed' | 'superseded' | 'failed'
+
+// `connectionId` = the mcpServerId of the connection the task uses to reach its
+// source. Optional; the engine unions that MCP server into every node. Token
+// never lives here — only the id (ADR 0025, simplified: no service tag/tier).
+export type TaskSource =
+  | { type: 'github'; repo: string; issueNumber: number; url: string; connectionId?: string }
+  | { type: 'jira'; key: string; connectionId?: string }
+  | { type: 'manual' }
+
+export interface TraceNode {
+  id: string
+  type: 'agent' | 'subagent' | 'tool' | 'thinking'
+  name?: string
+  model?: string
+  purpose?: string
+  tool?: string
+  input?: string
+  result?: string
+  text?: string
+  agentName?: string
+  agentId?: string
+  duration: string | null
+  startedAt?: string
+  status?: 'running'
+  children?: TraceNode[]
+}
+
+export interface TaskMessage {
+  role: 'user' | 'agent'
+  text: string
+  at: string
+}
+
+export interface TaskRun {
+  version: number
+  status: RunStatus
+  output: string
+  trace: TraceNode[]
+  messages: TaskMessage[]
+  duration: string | null
+  approvedBy?: 'human' | 'auto'
+  approvedAt?: string
+  triggeredBy?: 'rerun' | 'resume-connection'
+}
+
+export interface TaskPhase {
+  nodeId: string
+  status: PhaseStatus
+  skillName: string
+  runs: TaskRun[]
+}
+
+export interface Task {
+  id: string
+  title: string
+  projectId: string
+  source: TaskSource
+  description: string
+  workflowId: string
+  status: TaskStatus
+  // Singular currentNodeId kept for back-compat; with the parallel scheduler the
+  // authoritative "what is running" is derived from per-phase status.
+  currentNodeId: string | null
+  waitingApproval: string | null
+  // Deferred (ADR 0010) — always null in v1; kept so the producer is additive.
+  waitingConnection: unknown | null
+  createdAt: string
+  // Snapshot of the workflow DAG at creation time so editing the workflow later
+  // never mutates a running task (ADR 0024 risk #4). Optional for legacy reads.
+  workflowSnapshot?: Workflow
+  phases: Record<string, TaskPhase>
 }

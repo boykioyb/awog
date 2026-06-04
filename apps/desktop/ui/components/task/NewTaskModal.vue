@@ -34,10 +34,10 @@
           </button>
         </div>
       </Field>
-      <Field v-if="sourceType === 'github'" label="GitHub Issue URL">
+      <Field v-if="sourceType === 'github'" label="GitHub Issue / PR URL">
         <input
           v-model="githubUrl"
-          placeholder="https://github.com/org/repo/issues/123"
+          placeholder="https://github.com/org/repo/pull/123"
           class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
           @input="onGithubUrlInput"
@@ -51,6 +51,36 @@
           :style="inputStyle"
           @input="jiraKey = ($event.target as HTMLInputElement).value.toUpperCase()"
         />
+      </Field>
+      <!-- Optional connection (ADR 0025 simplified): its tools are unioned into
+           every task node so the agent can reach the source. -->
+      <Field v-if="showConnectionPicker" :label="tr('connections.picker.label')">
+        <div v-if="connectionOptions.length === 0" class="flex items-center justify-between gap-2">
+          <span class="text-[1em]" :style="{ color: t.textDim }">
+            {{ tr('connections.picker.empty') }}
+          </span>
+          <button
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[1em] rounded font-medium transition"
+            :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
+            @click="onAddConnection"
+          >
+            <Plus :size="11" />
+            {{ tr('connections.picker.cta') }}
+          </button>
+        </div>
+        <template v-else>
+          <select
+            v-model="connectionId"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
+            :style="inputStyle"
+          >
+            <option value="">{{ tr('connections.picker.none') }}</option>
+            <option v-for="c in connectionOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+          <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+            {{ tr('connections.picker.hint') }}
+          </div>
+        </template>
       </Field>
       <Field label="Title">
         <input v-model="title" class="w-full rounded px-2 py-1.5 text-[1em]" :style="inputStyle" />
@@ -132,8 +162,8 @@
 </template>
 
 <script setup lang="ts">
-import { Github, Layers, FileText } from 'lucide-vue-next'
-import type { TaskSource } from '~/types'
+import { Github, Layers, FileText, Plus } from 'lucide-vue-next'
+import type { MCPServer, TaskSource } from '~/types'
 
 interface CreateTaskInput {
   title: string
@@ -149,12 +179,21 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useWorkspaceStore()
+const workflowsStore = useWorkflowsStore()
 const gitStore = useGitStore()
 const { git } = useGitSettings()
 
 const projects = computed(() => store.projects)
-const workflows = computed(() => store.workflows)
+const projectId = ref(projects.value[0]?.id || '')
+// Workflows offered for the selected project: global (shared) + that project's
+// own workflows (ADR 0024 follow-up — per-project workflow scoping).
+const workflows = computed(() =>
+  workflowsStore.workflows.filter(
+    (w) => (w.source ?? 'global') === 'global' || w.projectId === projectId.value,
+  ),
+)
 
 // Suppress the dirty-workspace warn modal for the rest of the browser session.
 // `sessionStorage` resets on app reload — matches the spec "Đừng hỏi lại trong
@@ -187,13 +226,48 @@ const jiraKey = ref('')
 const title = ref('')
 const description = ref('')
 const workflowId = ref(workflows.value[0]?.id || '')
-const projectId = ref(projects.value[0]?.id || '')
+
+// Changing the project re-filters the workflow list; drop a selection that no
+// longer belongs to the chosen project.
+watch(projectId, () => {
+  if (!workflows.value.some((w) => w.id === workflowId.value)) {
+    workflowId.value = workflows.value[0]?.id || ''
+  }
+})
 
 const sourceOptions = [
   { id: 'github' as const, label: 'GitHub', icon: Github },
   { id: 'jira' as const, label: 'Jira', icon: Layers },
   { id: 'manual' as const, label: 'Manual', icon: FileText },
 ]
+
+// ─── Connection picker (ADR 0025, simplified) ────────────────────────────────
+// Optional: a connection (MCP server) whose tools the engine unions into every
+// node so the agent can reach the source. Flat list of ALL enabled connections
+// (no service filter, no tier). '' = none (rely on the agent's own MCP set).
+const connectionId = ref('')
+
+const showConnectionPicker = computed(
+  () => sourceType.value === 'github' || sourceType.value === 'jira',
+)
+
+const connectionOptions = computed<MCPServer[]>(() => store.mcpServers.filter((s) => s.enabled))
+
+// Chosen connection was deleted / disabled since selection.
+const connectionMissing = computed(
+  () => !!connectionId.value && !connectionOptions.value.some((c) => c.id === connectionId.value),
+)
+
+const onAddConnection = () => {
+  emit('cancel')
+  navigateTo('/connections')
+}
+
+onMounted(() => {
+  // The Tasks page does not hydrate connections — pull them so the picker lists
+  // the enabled MCP servers (sidecar offline → empty state + CTA).
+  store.hydrateMcpFromSidecar().catch(() => {})
+})
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,
@@ -203,9 +277,12 @@ const inputStyle = computed(() => ({
 }))
 
 const parseGithubUrl = (url: string) => {
-  const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/)
+  // Accept both issue and PR URLs (GitHub shares the number space):
+  //   github.com/<owner>/<repo>/issues/<n>  |  .../pull/<n>
+  const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)/)
   if (m && m[1] && m[2] && m[3]) {
-    return { repo: `${m[1]}/${m[2]}`, issueNumber: parseInt(m[3], 10), url }
+    const kind = url.includes('/pull/') ? 'pull' : 'issue'
+    return { repo: `${m[1]}/${m[2]}`, issueNumber: parseInt(m[3], 10), kind, url }
   }
   return null
 }
@@ -213,7 +290,8 @@ const parseGithubUrl = (url: string) => {
 const onGithubUrlInput = () => {
   const parsed = parseGithubUrl(githubUrl.value)
   if (parsed && !title.value) {
-    title.value = `Issue #${parsed.issueNumber} in ${parsed.repo}`
+    const label = parsed.kind === 'pull' ? 'PR' : 'Issue'
+    title.value = `${label} #${parsed.issueNumber} in ${parsed.repo}`
   }
 }
 
@@ -228,14 +306,23 @@ const canSubmit = computed(
 )
 
 const buildPayload = (): CreateTaskInput => {
+  // Attach the connection only when one is picked and still valid.
+  const conn =
+    connectionId.value && !connectionMissing.value ? { connectionId: connectionId.value } : {}
   let source: TaskSource
   if (sourceType.value === 'github') {
     const parsed = parseGithubUrl(githubUrl.value)
     source = parsed
-      ? { type: 'github', repo: parsed.repo, issueNumber: parsed.issueNumber, url: parsed.url }
-      : { type: 'github', repo: 'unknown', issueNumber: 0, url: githubUrl.value }
+      ? {
+          type: 'github',
+          repo: parsed.repo,
+          issueNumber: parsed.issueNumber,
+          url: parsed.url,
+          ...conn,
+        }
+      : { type: 'github', repo: 'unknown', issueNumber: 0, url: githubUrl.value, ...conn }
   } else if (sourceType.value === 'jira') {
-    source = { type: 'jira', key: jiraKey.value }
+    source = { type: 'jira', key: jiraKey.value, ...conn }
   } else {
     source = { type: 'manual' }
   }
