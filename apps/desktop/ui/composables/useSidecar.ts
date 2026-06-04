@@ -46,8 +46,14 @@ export function useSidecar() {
 
   const request = async <T = unknown>(method: string, params?: unknown): Promise<T> => {
     if (!api) throw new SidecarUnavailableError()
+    // Electron's contextBridge/IPC uses structured clone, which cannot clone Vue
+    // reactive proxies, refs, functions or class instances ("An object could not
+    // be cloned"). RPC params are always JSON-bound (they reach the engine as
+    // JSON anyway), so normalize to a plain JSON value here — this mirrors what
+    // the old Tauri `invoke` JSON channel did implicitly.
+    const plain = params == null ? null : JSON.parse(JSON.stringify(params))
     try {
-      return (await api.request(method, params ?? null)) as T
+      return (await api.request(method, plain)) as T
     } catch (err) {
       throw toSidecarError(err)
     }
