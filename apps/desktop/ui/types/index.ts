@@ -778,9 +778,13 @@ export interface AppearanceSettings {
   monoFamily: MonoFontFamily
   fontSize: number
   fontWeight: FontWeight
-  accent: AccentPreset
+  accent: AccentPreset | 'custom'
+  accentCustom: string
   themeColor: ThemeColor
   themeColorCustom: string
+  // How strongly the hue-tint Theme color blends into surfaces, as a percent
+  // (0–50). Only applies to hue tints — no effect for `mono` or background bases.
+  themeColorStrength: number
   surfaceDepth: SurfaceDepth
   locale: AppLocale
 }

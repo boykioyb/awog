@@ -48,6 +48,9 @@ export const WEIGHT_OPTIONS: { value: FontWeight; label: string }[] = [
 export const FONT_SIZE_MIN = 12
 export const FONT_SIZE_MAX = 18
 
+export const THEME_STRENGTH_MIN = 0
+export const THEME_STRENGTH_MAX = 50
+
 const SANS_VALUES: readonly SansFontFamily[] = ['system', 'inter', 'geist']
 const MONO_VALUES: readonly MonoFontFamily[] = ['system', 'jetbrains-mono', 'fira-code']
 const WEIGHT_VALUES: readonly FontWeight[] = [300, 400, 500, 600, 700]
@@ -66,6 +69,7 @@ const ACCENT_VALUES: readonly AccentPreset[] = [
   'gruvbox',
   'catppuccin',
 ]
+const ACCENT_SELECTION_VALUES: readonly (AccentPreset | 'custom')[] = [...ACCENT_VALUES, 'custom']
 const THEME_COLOR_VALUES: readonly ThemeColor[] = [
   ...ACCENT_VALUES,
   'github-dark',
@@ -89,14 +93,22 @@ const coerceAppearance = (raw: unknown): AppearanceSettings => {
     typeof v.fontSize === 'number' && v.fontSize >= FONT_SIZE_MIN && v.fontSize <= FONT_SIZE_MAX
       ? v.fontSize
       : DEFAULT_APPEARANCE.fontSize
+  const themeColorStrength =
+    typeof v.themeColorStrength === 'number' &&
+    v.themeColorStrength >= THEME_STRENGTH_MIN &&
+    v.themeColorStrength <= THEME_STRENGTH_MAX
+      ? v.themeColorStrength
+      : DEFAULT_APPEARANCE.themeColorStrength
   return {
     sansFamily: pick(v.sansFamily, SANS_VALUES, DEFAULT_APPEARANCE.sansFamily),
     monoFamily: pick(v.monoFamily, MONO_VALUES, DEFAULT_APPEARANCE.monoFamily),
     fontSize,
     fontWeight: pick(v.fontWeight, WEIGHT_VALUES, DEFAULT_APPEARANCE.fontWeight),
-    accent: pick(v.accent, ACCENT_VALUES, DEFAULT_APPEARANCE.accent),
+    accent: pick(v.accent, ACCENT_SELECTION_VALUES, DEFAULT_APPEARANCE.accent),
+    accentCustom: pickHex(v.accentCustom, DEFAULT_APPEARANCE.accentCustom),
     themeColor: pick(v.themeColor, THEME_COLOR_VALUES, DEFAULT_APPEARANCE.themeColor),
     themeColorCustom: pickHex(v.themeColorCustom, DEFAULT_APPEARANCE.themeColorCustom),
+    themeColorStrength,
     surfaceDepth: pick(v.surfaceDepth, DEPTH_VALUES, DEFAULT_APPEARANCE.surfaceDepth),
     locale: pick(v.locale, LOCALE_VALUES, DEFAULT_APPEARANCE.locale),
   }

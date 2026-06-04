@@ -15,41 +15,35 @@
       </SettingsField>
 
       <SettingsField label="Sans font" hint="Body and UI typography">
-        <select
-          v-model="appearance.sansFamily"
-          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
-          :style="selectStyle"
-          @change="onUpdate({ sansFamily: appearance.sansFamily })"
+        <AppSelect
+          :model-value="appearance.sansFamily"
+          @update:model-value="(v) => onUpdate({ sansFamily: v })"
         >
           <option v-for="o in SANS_OPTIONS" :key="o.value" :value="o.value">
             {{ o.label }}
           </option>
-        </select>
+        </AppSelect>
       </SettingsField>
 
       <SettingsField label="Mono font" hint="Code blocks, terminals, debug output">
-        <select
-          v-model="appearance.monoFamily"
-          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
-          :style="selectStyle"
-          @change="onUpdate({ monoFamily: appearance.monoFamily })"
+        <AppSelect
+          :model-value="appearance.monoFamily"
+          @update:model-value="(v) => onUpdate({ monoFamily: v })"
         >
           <option v-for="o in MONO_OPTIONS" :key="o.value" :value="o.value">
             {{ o.label }}
           </option>
-        </select>
+        </AppSelect>
       </SettingsField>
 
       <SettingsField :label="tr('settings.language')" :hint="tr('settings.language.hint')">
-        <select
-          v-model="appearance.locale"
-          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
-          :style="selectStyle"
-          @change="onUpdate({ locale: appearance.locale })"
+        <AppSelect
+          :model-value="appearance.locale"
+          @update:model-value="(v) => onUpdate({ locale: v })"
         >
           <option value="en">English</option>
           <option value="vi">Tiếng Việt</option>
-        </select>
+        </AppSelect>
       </SettingsField>
 
       <SettingsField label="Font size" :hint="`${appearance.fontSize}px`">
@@ -65,54 +59,57 @@
       </SettingsField>
 
       <SettingsField label="Font weight" hint="Applies to body text">
-        <select
-          v-model.number="appearance.fontWeight"
-          class="w-full px-2 py-1.5 rounded text-[1em] outline-none"
-          :style="selectStyle"
-          @change="onUpdate({ fontWeight: appearance.fontWeight })"
-        >
+        <AppSelect :model-value="appearance.fontWeight" @update:model-value="onFontWeight">
           <option v-for="o in WEIGHT_OPTIONS" :key="o.value" :value="o.value">
             {{ o.label }}
           </option>
-        </select>
+        </AppSelect>
       </SettingsField>
 
-      <SettingsField label="Theme color" hint="Hue tint or full background base across surfaces">
-        <div class="flex flex-wrap items-center gap-1.5">
-          <button
-            v-for="p in themeColorPresets"
-            :key="p.value"
-            :title="p.label"
-            class="w-6 h-6 rounded-full transition-transform hover:scale-110"
-            :style="themeColorSwatchStyle(p.value, p.swatch)"
-            @click="onUpdate({ themeColor: p.value })"
+      <SettingsField
+        label="Theme color"
+        hint="Hue tint or full background base across surfaces"
+        block
+      >
+        <ColorSwatchPicker
+          :presets="themeColorPresets"
+          :selected="appearance.themeColor"
+          :custom-hex="appearance.themeColorCustom"
+          @pick="onThemeColorPick"
+          @pick-custom="onThemeColorCustom"
+        />
+        <div
+          class="mt-3 space-y-1 transition-opacity"
+          :style="{ opacity: themeColorTints ? 1 : 0.4 }"
+          :title="themeColorTints ? undefined : 'Not applicable for this color'"
+        >
+          <div class="flex items-center justify-between" :style="{ color: t.textDim }">
+            <span class="text-[1em]">Tint strength</span>
+            <span class="text-[12px] font-mono leading-none" :style="{ color: t.textMuted }">
+              {{ appearance.themeColorStrength }}%
+            </span>
+          </div>
+          <input
+            v-model.number="appearance.themeColorStrength"
+            type="range"
+            :min="THEME_STRENGTH_MIN"
+            :max="THEME_STRENGTH_MAX"
+            step="1"
+            :disabled="!themeColorTints"
+            class="w-full disabled:cursor-not-allowed"
+            @input="onUpdate({ themeColorStrength: appearance.themeColorStrength })"
           />
-          <label
-            class="relative w-6 h-6 rounded-full transition-transform hover:scale-110 cursor-pointer overflow-hidden"
-            :title="`Custom (${appearance.themeColorCustom})`"
-            :style="customSwatchStyle"
-          >
-            <input
-              type="color"
-              class="absolute inset-0 opacity-0 cursor-pointer"
-              :value="appearance.themeColorCustom"
-              @input="onCustomColorInput"
-            />
-          </label>
         </div>
       </SettingsField>
 
-      <SettingsField label="Accent color" hint="Buttons, links, focus rings, active items">
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="p in ACCENT_PRESETS"
-            :key="p.value"
-            :title="p.label"
-            class="w-6 h-6 rounded-full transition-transform hover:scale-110"
-            :style="accentSwatchStyle(p.value, p.swatch)"
-            @click="onUpdate({ accent: p.value })"
-          />
-        </div>
+      <SettingsField label="Accent color" hint="Buttons, links, focus rings, active items" block>
+        <ColorSwatchPicker
+          :presets="ACCENT_PRESETS"
+          :selected="appearance.accent"
+          :custom-hex="appearance.accentCustom"
+          @pick="onAccentPick"
+          @pick-custom="onAccentCustom"
+        />
       </SettingsField>
 
       <SettingsField label="Surface depth" hint="Layer contrast between panels">
@@ -207,6 +204,8 @@ import {
   FONT_SIZE_MIN,
   MONO_OPTIONS,
   SANS_OPTIONS,
+  THEME_STRENGTH_MAX,
+  THEME_STRENGTH_MIN,
   WEIGHT_OPTIONS,
   useAppearance,
 } from '~/composables/useAppearance'
@@ -225,11 +224,10 @@ const onUpdate = (patch: Partial<AppearanceSettings>) => {
   update(patch)
 }
 
-const selectStyle = computed(() => ({
-  background: t.value.bg,
-  border: `1px solid ${t.value.border}`,
-  color: t.value.text,
-}))
+// The native <select> always yields a string; coerce back to the numeric
+// FontWeight union the appearance store expects.
+const onFontWeight = (v: AppearanceSettings['fontWeight']) =>
+  onUpdate({ fontWeight: Number(v) as AppearanceSettings['fontWeight'] })
 
 // Background-base presets (GitHub Dark, Subtle Purple) are dark surfaces, so they
 // only make sense in dark theme — hide them in light mode where they no-op.
@@ -240,30 +238,20 @@ const themeColorPresets = computed(() =>
     : THEME_COLOR_PRESETS.filter((p) => !BACKGROUND_VALUES.has(p.value as BackgroundPreset)),
 )
 
-const buildSwatchStyle = (swatch: string, active: boolean) => ({
-  background: swatch,
-  // Faint border when inactive so near-black swatches (e.g. GitHub Dark) stay
-  // visible against the dark panel; accent ring when active.
-  border: `2px solid ${active ? t.value.text : t.value.border}`,
-  boxShadow: active ? `0 0 0 1px ${t.value.bgPanel} inset` : 'none',
-  cursor: 'pointer',
+// Tint strength only matters for hue-tint colors — `mono` and the full background
+// bases don't blend, so the slider is hidden for them.
+const themeColorTints = computed(() => {
+  const c = appearance.value.themeColor
+  return c !== 'mono' && !BACKGROUND_VALUES.has(c as BackgroundPreset)
 })
 
-const accentSwatchStyle = (value: AccentPreset, swatch: string) =>
-  buildSwatchStyle(swatch, appearance.value.accent === value)
-
-const themeColorSwatchStyle = (value: ThemeColor, swatch: string) =>
-  buildSwatchStyle(swatch, appearance.value.themeColor === value)
-
-const customSwatchStyle = computed(() =>
-  buildSwatchStyle(appearance.value.themeColorCustom, appearance.value.themeColor === 'custom'),
-)
-
-const onCustomColorInput = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const hex = target.value.toLowerCase()
+// Preset/custom values originate from the picker's own preset lists, so the cast
+// back to the precise union is safe.
+const onThemeColorPick = (value: string) => onUpdate({ themeColor: value as ThemeColor })
+const onThemeColorCustom = (hex: string) =>
   onUpdate({ themeColor: 'custom', themeColorCustom: hex })
-}
+const onAccentPick = (value: string) => onUpdate({ accent: value as AccentPreset })
+const onAccentCustom = (hex: string) => onUpdate({ accent: 'custom', accentCustom: hex })
 
 const depthStyle = (value: SurfaceDepth) => {
   const active = appearance.value.surfaceDepth === value

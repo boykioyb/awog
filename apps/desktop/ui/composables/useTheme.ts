@@ -16,8 +16,13 @@ export const useTheme = () => {
       themeName.value,
       appearance.value.themeColor,
       appearance.value.themeColorCustom,
+      appearance.value.themeColorStrength,
     )
-    const accent = getAccentOverride(themeName.value, appearance.value.accent)
+    const accent = getAccentOverride(
+      themeName.value,
+      appearance.value.accent,
+      appearance.value.accentCustom,
+    )
     return { ...withTint, ...accent }
   })
 

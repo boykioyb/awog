@@ -109,8 +109,10 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   fontSize: 12,
   fontWeight: 400,
   accent: 'mono',
+  accentCustom: '#a3a3a3',
   themeColor: 'mono',
   themeColorCustom: '#a3a3a3',
+  themeColorStrength: 10,
   surfaceDepth: 'flat',
   locale: 'en',
 }

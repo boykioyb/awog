@@ -89,6 +89,26 @@ const rgba = (hex: string, alpha: number): string => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+// Blend `hex` toward `anchorHex` by `alpha` (0..1) — used for accent hover/muted
+// derivation and surface hue-tinting.
+const mix = (hex: string, anchorHex: string, alpha: number): string => {
+  const parse = (h: string) => {
+    const c = h.replace('#', '')
+    return {
+      r: parseInt(c.slice(0, 2), 16),
+      g: parseInt(c.slice(2, 4), 16),
+      b: parseInt(c.slice(4, 6), 16),
+    }
+  }
+  const a = parse(hex)
+  const b = parse(anchorHex)
+  const r = Math.round(a.r * (1 - alpha) + b.r * alpha)
+  const g = Math.round(a.g * (1 - alpha) + b.g * alpha)
+  const bb = Math.round(a.b * (1 - alpha) + b.b * alpha)
+  const toHex = (n: number) => n.toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(bb)}`
+}
+
 interface AccentRecipe {
   accent: string
   accentHover: string
@@ -246,6 +266,26 @@ const ACCENT_RECIPES_LIGHT: Record<ColorAccent, AccentRecipe> = {
   },
 }
 
+const HEX6_RE = /^#[0-9a-fA-F]{6}$/
+
+// Perceptual (sRGB-weighted) luminance in 0..1 — picks readable text on the accent.
+const luminance = (hex: string): number => {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16) / 255
+  const g = parseInt(h.slice(2, 4), 16) / 255
+  const b = parseInt(h.slice(4, 6), 16) / 255
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+// Derive a full accent recipe from a single user hex: hover lightens toward white,
+// muted darkens toward black, text flips to dark on bright accents.
+const buildCustomAccentRecipe = (hex: string): AccentRecipe => ({
+  accent: hex,
+  accentHover: mix(hex, '#ffffff', 0.18),
+  accentMuted: mix(hex, '#000000', 0.4),
+  accentText: luminance(hex) > 0.6 ? '#0a0a0a' : '#ffffff',
+})
+
 const buildAccentTokens = (recipe: AccentRecipe, themeName: ThemeName): AccentTokens => {
   const bgActiveAlpha = themeName === 'dark' ? 0.2 : 0.13
   const bgHoverAlpha = themeName === 'dark' ? 0.11 : 0.07
@@ -395,30 +435,19 @@ const SURFACE_KEYS = [
   'borderStrong',
 ] as const
 
-const mix = (hex: string, anchorHex: string, alpha: number): string => {
-  const parse = (h: string) => {
-    const c = h.replace('#', '')
-    return {
-      r: parseInt(c.slice(0, 2), 16),
-      g: parseInt(c.slice(2, 4), 16),
-      b: parseInt(c.slice(4, 6), 16),
-    }
-  }
-  const a = parse(hex)
-  const b = parse(anchorHex)
-  const r = Math.round(a.r * (1 - alpha) + b.r * alpha)
-  const g = Math.round(a.g * (1 - alpha) + b.g * alpha)
-  const bb = Math.round(a.b * (1 - alpha) + b.b * alpha)
-  const toHex = (n: number) => n.toString(16).padStart(2, '0')
-  return `#${toHex(r)}${toHex(g)}${toHex(bb)}`
-}
-
 export const getAccentOverride = (
   themeName: ThemeName,
-  preset: AccentPreset,
+  preset: AccentPreset | 'custom',
+  customHex?: string,
 ): Partial<ThemeTokens> => {
   if (preset === 'mono') return {}
-  const recipe = themeName === 'dark' ? ACCENT_RECIPES_DARK[preset] : ACCENT_RECIPES_LIGHT[preset]
+  let recipe: AccentRecipe
+  if (preset === 'custom') {
+    if (!customHex || !HEX6_RE.test(customHex)) return {}
+    recipe = buildCustomAccentRecipe(customHex)
+  } else {
+    recipe = themeName === 'dark' ? ACCENT_RECIPES_DARK[preset] : ACCENT_RECIPES_LIGHT[preset]
+  }
   const baseSyntax = THEMES[themeName].syntax
   // Headings + link follow the accent so MarkdownRenderer harmonises with the
   // user's pick (the hardcoded h1/h2/h3 in themes.ts were a holdover from the
@@ -444,13 +473,14 @@ export const getSurfaceOverride = (
   return themeName === 'dark' ? SURFACE_DARK[depth] : SURFACE_LIGHT[depth]
 }
 
-const HEX6_RE = /^#[0-9a-fA-F]{6}$/
-
 export const applyThemeColor = (
   tokens: ThemeTokens,
   themeName: ThemeName,
   color: ThemeColor,
   customHex?: string,
+  // User-controlled tint strength as a percent (0–50). Maps directly to the mix
+  // alpha (10% → 0.1). Falls back to the legacy per-theme default when omitted.
+  strengthPct?: number,
 ): ThemeTokens => {
   if (color === 'mono') return tokens
   // Full background bases replace the surface palette outright. They are dark
@@ -468,7 +498,9 @@ export const applyThemeColor = (
     anchor =
       themeName === 'dark' ? THEME_COLOR_ANCHORS_DARK[color] : THEME_COLOR_ANCHORS_LIGHT[color]
   }
-  const alpha = themeName === 'dark' ? 0.1 : 0.07
+  const defaultAlpha = themeName === 'dark' ? 0.1 : 0.07
+  const alpha = typeof strengthPct === 'number' ? strengthPct / 100 : defaultAlpha
+  if (alpha <= 0) return tokens
   const next = { ...tokens }
   SURFACE_KEYS.forEach((k) => {
     next[k] = mix(tokens[k], anchor, alpha)
