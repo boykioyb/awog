@@ -1,7 +1,9 @@
 # 0008 — Stdio IPC giữa Tauri shell và Node.js sidecar
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted — **Partially superseded by [ADR 0027](./0027-tauri-vs-electron-revisit.md)** (2026-06-05).
 - **Ngày:** 2026-05-24
+
+> **Cập nhật 2026-06-05:** Giao thức JSON-RPC 2.0 dạng NDJSON trên stdin/stdout được **giữ nguyên không đổi**; chỉ HOST thay đổi — engine giờ được spawn bởi Electron main process (`child_process.spawn` + `ELECTRON_RUN_AS_NODE`) thay vì plugin sidecar của Tauri. (`utilityProcess` của Electron đã được thử nhưng ESM loader đã vá của nó crash trên các CJS dep của engine, nên chọn `child_process.spawn` + stdio — xem [docs/features/electron-migration.md](../features/electron-migration.md) §5.) Xem thêm [ADR 0027](./0027-tauri-vs-electron-revisit.md).
 
 ## Bối cảnh
 

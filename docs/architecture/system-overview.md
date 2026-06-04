@@ -2,29 +2,29 @@
 
 ## Kiến trúc tổng quan
 
-AWOG là một **desktop application** đóng gói bằng Tauri, với Nuxt 4 làm UI + server-side engine chạy như Node.js sidecar. Toàn bộ hệ thống chạy local trên máy người dùng. Không có backend service tách rời, không có database, không có thành phần cloud (trong MVP).
+AWOG là một **desktop application** đóng gói bằng Electron, với Nuxt 4 làm UI (render trong Chromium) + execution engine chạy như Node.js process riêng. Toàn bộ hệ thống chạy local trên máy người dùng. Không có backend service tách rời, không có database, không có thành phần cloud (trong MVP). Đã migrate từ Tauri (Rust) — xem [ADR 0027](../decisions/0027-tauri-vs-electron-revisit.md) và [electron-migration.md](../features/electron-migration.md).
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                  Tauri Shell (Rust)                      │
+│              Electron Main process (Node)                │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  System Tray  │  Notification  │  Window Lifecycle │  │
 │  └────────────────────────────────────────────────────┘  │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │  Webview (WKWebView / WebView2 / WebKitGTK)        │  │
+│  │  Renderer (Chromium)   ◄─ contextBridge window.awog│  │
 │  │  ┌──────────────────────────────────────────────┐  │  │
 │  │  │  Nuxt 4 UI + Vue 3 + Pinia + VueFlow + Monaco│  │  │
 │  │  │  Agents | Skills | Workflows | Tasks | Artif.│  │  │
 │  │  └──────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────┘  │
 └──────────────────────────┬───────────────────────────────┘
-                           │ stdio IPC (JSON-RPC trên stdin/stdout)
+                           │ stdio JSON-RPC (NDJSON, ELECTRON_RUN_AS_NODE spawn)
 ┌──────────────────────────┴───────────────────────────────┐
-│             Node.js Sidecar (do Tauri spawn)             │
+│          Node.js Engine (do Electron main spawn)         │
 │  ┌──────────────┐  ┌────────────┐  ┌────────────────┐    │
-│  │ Nuxt Server  │  │ Workspace  │  │ Model Adapters │    │
-│  │ + Execution  │  │ Repo       │  │ (Anthropic,    │    │
-│  │ Engine       │  │ (FS + Git) │  │  OpenAI, ...)  │    │
+│  │ Execution    │  │ Workspace  │  │ Model Adapters │    │
+│  │ Engine       │  │ Repo       │  │ (Anthropic,    │    │
+│  │              │  │ (FS + Git) │  │  OpenAI, ...)  │    │
 │  └──────────────┘  └────────────┘  └────────────────┘    │
 └──────────────────────────┬───────────────────────────────┘
                            │
@@ -41,29 +41,32 @@ AWOG là một **desktop application** đóng gói bằng Tauri, với Nuxt 4 l�
 
 ## Component
 
-### Tauri Shell (Rust)
+### Electron Main process (Node)
 
-- Entry point của ứng dụng.
-- Quản lý cửa sổ chính (mở, đóng, minimize).
+- Entry point của ứng dụng (`apps/desktop/electron/`).
+- Tạo `BrowserWindow` load Nuxt SPA: dev `http://localhost:3030`; prod custom protocol `app://` phục vụ `apps/desktop/ui/.output/public`.
+- Quản lý cửa sổ chính (mở, đóng, minimize), single-instance.
 - System tray với menu: mở app, xem task đang chạy, quit.
 - Native notification khi task hoàn tất hoặc cần approval.
-- Spawn và giám sát Node.js sidecar.
+- Spawn và giám sát Node.js engine; relay JSON-RPC envelope renderer ⇄ engine.
 - Đóng cửa sổ **không** thoát ứng dụng — engine tiếp tục chạy ở tray.
 
-### Webview + Nuxt UI
+### Renderer (Chromium) + Nuxt UI
 
-- Render trong webview do hệ điều hành cung cấp (WKWebView / WebView2 / WebKitGTK).
+- Render trong Chromium do Electron mang theo (đồng nhất mọi OS — thay webview đa-engine của Tauri).
 - Render mọi editor (agent, skill, workflow, artifact).
 - Quản lý UI state cục bộ bằng Pinia.
-- Giao tiếp với Node.js sidecar qua Tauri command (`invoke` / `listen`), Tauri forward sang sidecar qua stdio IPC ([ADR 0008](../decisions/0008-stdio-ipc-for-sidecar.md)).
+- `contextIsolation: true` + `sandbox: true` + `nodeIntegration: false`; **không** `import fs`/`child_process`/SDK.
+- Giao tiếp với engine qua `contextBridge` (`window.awog.request/onEvent/openExternal/revealPath/openPath/pickFolder/savePath`); main forward sang engine qua stdio JSON-RPC ([ADR 0008](../decisions/0008-stdio-ipc-for-sidecar.md)).
 
-### Node.js Sidecar
+### Node.js Engine
 
 - Sở hữu execution engine.
-- Trung gian gọi API của model (API key không rời máy local).
+- Spawn bởi main qua `child_process.spawn(process.execPath, { env: { ELECTRON_RUN_AS_NODE: '1' }, stdio: ['pipe','pipe','pipe'] })` — chạy binary Electron như Node thuần (ESM loader chuẩn). Engine giữ nguyên, không đổi.
+- Trung gian gọi API của model — API key/OAuth token **chỉ** ở engine process, không vào renderer.
 - Đọc/ghi thư mục workspace, thao tác Git.
-- **Production:** không mở port mạng — nhận lệnh qua stdin (JSON-RPC), trả response/event qua stdout, log qua stderr ([ADR 0008](../decisions/0008-stdio-ipc-for-sidecar.md)).
-- **Dev mode:** khi chạy với `AWOG_DEV_HTTP=1`, bind thêm HTTP loopback có dev token để Nuxt HMR gọi được engine khi `nuxt dev` chạy ngoài Tauri ([ADR 0009](../decisions/0009-dev-mode-http-fallback.md)).
+- **Production:** không mở port mạng — nhận lệnh qua stdin (NDJSON JSON-RPC 2.0), trả response/event qua stdout, log qua stderr ([ADR 0008](../decisions/0008-stdio-ipc-for-sidecar.md)).
+- **Dev mode:** khi chạy với `AWOG_DEV_HTTP=1`, bind thêm HTTP loopback có dev token để Nuxt HMR gọi được engine khi `nuxt dev` chạy ngoài Electron ([ADR 0009](../decisions/0009-dev-mode-http-fallback.md)).
 
 ### Execution Engine
 
@@ -85,15 +88,15 @@ AWOG là một **desktop application** đóng gói bằng Tauri, với Nuxt 4 l�
 
 ## Runtime Model
 
-- **Hai process.** Tauri (Rust) là parent, Node.js là sidecar child.
-- **Thực thi async.** Task chạy trên worker loop trong sidecar; gọi model dài không block API route.
+- **Hai process.** Electron main (Node) là parent, Node.js engine là child (spawn qua `ELECTRON_RUN_AS_NODE`).
+- **Thực thi async.** Task chạy trên worker loop trong engine; gọi model dài không block IPC.
 - **Event sourcing cho trace.** Mỗi bước append một event JSON Lines vào `events.log` của task.
 - **State trên đĩa.** Không có authoritative state trong RAM — restart-safe.
 - **Sống ở tray.** Engine tiếp tục chạy khi đóng cửa sổ; notification kéo người dùng quay lại khi cần.
 
 ## Non-Goals (MVP)
 
-- Không có worker pool đa process bên trong sidecar.
+- Không có worker pool đa process bên trong engine.
 - Không có distributed execution.
 - Không có message queue bên ngoài.
 - Không có database (filesystem là data layer).

@@ -1,7 +1,9 @@
 # 0007 — Bundle Node.js runtime cùng binary
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted — **Superseded by [ADR 0027](./0027-tauri-vs-electron-revisit.md)** (2026-06-05).
 - **Ngày:** 2026-05-24
+
+> **Cập nhật 2026-06-05:** Không còn bundle Node runtime độc lập — Electron mang sẵn Node của nó; engine chạy qua `ELECTRON_RUN_AS_NODE`. Cách bundle Node riêng (download từ nodejs.org + launcher) đã bị gỡ bỏ. Xem [ADR 0027](./0027-tauri-vs-electron-revisit.md) + [docs/features/electron-migration.md](../features/electron-migration.md).
 
 ## Bối cảnh
 

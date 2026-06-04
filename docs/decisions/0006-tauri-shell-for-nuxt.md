@@ -1,8 +1,10 @@
 # 0006 — Tauri làm shell đóng gói cho Nuxt
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted — **Superseded by [ADR 0027](./0027-tauri-vs-electron-revisit.md)** (2026-06-05) — shell chuyển từ Tauri sang Electron.
 - **Ngày:** 2026-05-24
 - **Supersedes:** [0003](./0003-nuxt-fullstack.md)
+
+> **Cập nhật 2026-06-05:** Lớp shell Tauri/Rust đã được thay bằng Electron main process (`apps/desktop/electron/`). Lý do tóm tắt: engine AWOG vĩnh viễn là Node, nên lợi thế size của Tauri bốc hơi một khi phải bundle Node. Xem [ADR 0027](./0027-tauri-vs-electron-revisit.md) + [docs/features/electron-migration.md](../features/electron-migration.md).
 
 ## Bối cảnh
 
