@@ -30,13 +30,63 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
-    version: '0.3.0',
-    date: '2026-06-02',
+    version: '0.3.1',
+    date: '2026-06-04',
     highlight: {
-      en: 'Theme presets, the 1M-context Opus model, and a round of UI polish.',
-      vi: 'Theme preset mới, model Opus 1M context, và một loạt tinh chỉnh giao diện.',
+      en: 'First stable cross-platform builds — native installers for Windows, macOS, and Linux.',
+      vi: 'Bản stable đa nền tảng đầu tiên — installer cho Windows, macOS và Linux.',
     },
     items: [
+      {
+        kind: 'added',
+        en: 'Native installers built by CI: Windows (.msi/.exe), macOS (.dmg, Apple Silicon + Intel), Linux (.deb/.AppImage).',
+        vi: 'Installer dựng bởi CI: Windows (.msi/.exe), macOS (.dmg, Apple Silicon + Intel), Linux (.deb/.AppImage).',
+      },
+    ],
+  },
+  {
+    version: '0.3.0',
+    date: '2026-06-04',
+    highlight: {
+      en: 'The Task & Workflow engine, a Monaco code workspace, Connections, and multi-provider agents.',
+      vi: 'Engine Task & Workflow, code workspace Monaco, Connections, và agent đa provider.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Task & Workflow execution engine: design agent pipelines as a DAG and run them with approval gates.',
+        vi: 'Engine chạy Task & Workflow: thiết kế pipeline agent dạng DAG và chạy với cổng phê duyệt.',
+      },
+      {
+        kind: 'added',
+        en: 'Project code workspace with a multi-tab Monaco editor.',
+        vi: 'Code workspace cho project với Monaco editor đa tab.',
+      },
+      {
+        kind: 'added',
+        en: 'Connections (formerly MCP Servers) for stdio/HTTP tools, with secrets in the OS keychain.',
+        vi: 'Connections (trước là MCP Servers) cho tool stdio/HTTP, secret lưu trong keychain hệ điều hành.',
+      },
+      {
+        kind: 'added',
+        en: 'Per-agent LLM provider and account picker — Anthropic today, OpenAI and Google coming next.',
+        vi: 'Chọn LLM provider và account cho từng agent — hiện Anthropic, OpenAI và Google sắp tới.',
+      },
+      {
+        kind: 'added',
+        en: 'Session resume and compaction for long-running conversations.',
+        vi: 'Resume session và nén ngữ cảnh cho hội thoại dài.',
+      },
+      {
+        kind: 'changed',
+        en: 'Agents are now defined purely by their system prompt; skills are applied per step in Workflows.',
+        vi: 'Agent giờ chỉ định nghĩa bằng system prompt; skills áp dụng theo từng bước trong Workflows.',
+      },
+      {
+        kind: 'improved',
+        en: 'Git Manager discovers multiple repositories inside a single project.',
+        vi: 'Git Manager tự phát hiện nhiều repo trong cùng một project.',
+      },
       {
         kind: 'added',
         en: 'Background-base theme presets: GitHub Dark and Subtle Purple.',
