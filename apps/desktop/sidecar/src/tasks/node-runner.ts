@@ -190,8 +190,11 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
         },
         onToolResult: (res) => {
           const start = toolStarts.get(res.id)
-          const use = start?.use ?? { id: res.id, name: res.name, input: res.input }
           const elapsed = start ? Date.now() - start.ms : 0
+          // res.input is the fully-parsed tool input; the use captured in toolStarts at
+          // streaming content_block_start time may still hold empty input ({}), so build
+          // the result node from res so the trace shows the tool's actual arguments.
+          const use = { id: res.id, name: res.name, input: res.input }
           void emitTrace(
             taskId,
             node.id,

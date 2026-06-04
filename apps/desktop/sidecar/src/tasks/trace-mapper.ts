@@ -11,21 +11,29 @@ function truncate(text: string): string {
   return text.length > RESULT_PREVIEW_MAX ? `${text.slice(0, RESULT_PREVIEW_MAX)}\n…(truncated)` : text
 }
 
+function clip(text: string, max = 100): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
 // "What is this tool acting on" — a compact one-liner for the trace input field.
 function pickTarget(name: string, input: Record<string, unknown>): string | undefined {
   if (name === 'Task') {
     const desc = input.description
-    if (typeof desc === 'string' && desc.length > 0) return desc
+    if (typeof desc === 'string' && desc.length > 0) return clip(desc)
   }
-  const candidates = ['file_path', 'path', 'pattern', 'query', 'url', 'description']
+  const candidates = ['file_path', 'path', 'pattern', 'query', 'url', 'command', 'description']
   for (const key of candidates) {
     const v = input[key]
-    if (typeof v === 'string' && v.length > 0) return v
+    if (typeof v === 'string' && v.length > 0) return clip(v)
   }
-  const cmd = input.command
-  if (typeof cmd === 'string' && cmd.length > 0) {
-    return cmd.length > 80 ? `${cmd.slice(0, 77)}…` : cmd
-  }
+  // Fallback: a compact summary of the first scalar fields so tools whose input keys
+  // aren't above (e.g. MCP get_pull_request({ owner, repo, pullNumber })) still show
+  // their arguments instead of empty parens.
+  const scalars = Object.entries(input)
+    .filter(([, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+    .slice(0, 3)
+    .map(([key, v]) => `${key}: ${v}`)
+  if (scalars.length > 0) return clip(scalars.join(', '))
   return undefined
 }
 
