@@ -34,18 +34,9 @@
         <!-- Scope: filters the list AND sets where a new workflow is saved
              (Global = shared; a project = lives in that repo). -->
         <div class="px-3 py-2" :style="{ borderBottom: `1px solid ${t.border}` }">
-          <select
-            v-model="scopeFilter"
-            class="w-full rounded px-2 py-1 text-[1em] cursor-pointer"
-            :style="{
-              background: t.bgInput,
-              border: `1px solid ${t.border}`,
-              color: t.text,
-              outline: 'none',
-            }"
-          >
+          <AppSelect v-model="scopeFilter">
             <option v-for="o in scopeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-          </select>
+          </AppSelect>
         </div>
 
         <div class="overflow-y-auto p-2 space-y-0.5" style="max-height: 40%">

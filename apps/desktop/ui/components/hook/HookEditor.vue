@@ -27,23 +27,15 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Event">
-          <select
-            v-model="draft.event"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
-            :style="inputStyle"
-          >
+          <AppSelect v-model="draft.event" mono>
             <option v-for="ev in HOOK_EVENTS" :key="ev" :value="ev">{{ ev }}</option>
-          </select>
+          </AppSelect>
         </Field>
         <Field label="Run mode">
-          <select
-            v-model="draft.runMode"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
-            :style="inputStyle"
-          >
+          <AppSelect v-model="draft.runMode">
             <option value="blocking">blocking (chờ exit)</option>
             <option value="background">background (fire-and-forget)</option>
-          </select>
+          </AppSelect>
         </Field>
       </div>
 

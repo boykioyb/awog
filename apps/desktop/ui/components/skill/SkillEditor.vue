@@ -22,17 +22,12 @@
           </button>
         </div>
         <div v-if="isProjectSource(draft.source)" class="mt-2">
-          <select
-            v-model="draft.projectId"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
-            :style="inputStyle"
-            :disabled="isExistingSkill"
-          >
+          <AppSelect v-model="draft.projectId" :disabled="isExistingSkill">
             <option value="" disabled>— pick a project —</option>
             <option v-for="p in ws.projects" :key="p.id" :value="p.id">
               {{ p.name }} ({{ p.path }})
             </option>
-          </select>
+          </AppSelect>
         </div>
         <div class="text-[1em] mt-1.5" :style="{ color: t.textDim }">
           {{ sourceHint }}

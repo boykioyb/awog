@@ -21,16 +21,12 @@
           </div>
         </Field>
         <Field label="Type">
-          <select
-            v-model="draft.type"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
-            :style="inputStyle"
-          >
+          <AppSelect v-model="draft.type">
             <option value="prompt">prompt (template)</option>
             <option value="agent-switch">agent-switch</option>
             <option value="shell">shell</option>
             <option value="workflow">workflow</option>
-          </select>
+          </AppSelect>
         </Field>
       </div>
 
@@ -54,11 +50,7 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Scope">
-          <select
-            v-model="draft.scope"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
-            :style="inputStyle"
-          >
+          <AppSelect v-model="draft.scope">
             <option value="global">global</option>
             <option v-for="p in ws.projects" :key="p.id" :value="`project:${p.id}`">
               project: {{ p.name }}
@@ -66,7 +58,7 @@
             <option v-for="a in ws.agents" :key="a.id" :value="`agent:${a.id}`">
               agent: {{ a.name }}
             </option>
-          </select>
+          </AppSelect>
         </Field>
         <Field v-if="draft.type === 'shell'" label="Timeout (ms)">
           <input
@@ -90,26 +82,22 @@
             <input
               :value="arg.name"
               placeholder="name"
-              class="col-span-3 rounded px-2 py-1 text-[1em] font-mono"
+              class="col-span-3 rounded px-2 py-1.5 text-[1em] font-mono"
               :style="inputStyle"
               @input="(e: Event) => (arg.name = (e.target as HTMLInputElement).value)"
             />
-            <select
-              v-model="arg.type"
-              class="col-span-2 rounded px-2 py-1 text-[1em]"
-              :style="inputStyle"
-            >
+            <AppSelect v-model="arg.type" class="col-span-2">
               <option value="string">string</option>
               <option value="number">number</option>
               <option value="file">file</option>
               <option value="agent">agent</option>
               <option value="artifact">artifact</option>
               <option value="boolean">boolean</option>
-            </select>
+            </AppSelect>
             <input
               :value="arg.description"
               placeholder="description"
-              class="col-span-5 rounded px-2 py-1 text-[1em]"
+              class="col-span-5 rounded px-2 py-1.5 text-[1em]"
               :style="inputStyle"
               @input="(e: Event) => (arg.description = (e.target as HTMLInputElement).value)"
             />

@@ -37,26 +37,18 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Transport">
-          <select
-            v-model="draft.transport"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
-            :style="inputStyle"
-          >
+          <AppSelect v-model="draft.transport">
             <option value="stdio">stdio</option>
             <option value="http">http</option>
             <option value="sse">sse</option>
-          </select>
+          </AppSelect>
         </Field>
         <Field label="Trust">
-          <select
-            v-model="draft.trust"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
-            :style="inputStyle"
-          >
+          <AppSelect v-model="draft.trust">
             <option value="allow">allow (auto)</option>
             <option value="prompt">prompt (approval)</option>
             <option value="deny">deny</option>
-          </select>
+          </AppSelect>
         </Field>
         <Field label="Timeout (ms)">
           <input

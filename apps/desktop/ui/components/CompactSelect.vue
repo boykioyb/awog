@@ -7,22 +7,15 @@
     >
       {{ label }}
     </span>
-    <!-- Wrapper owns the flex sizing; the native <select> only honors an explicit
-         width:100% in WKWebView (a bare flex-1 select shrinks to its value text). -->
+    <!-- Wrapper owns the flex sizing; AppSelect fills it via width:100% (a bare
+         flex child <select> shrinks to its value text in WKWebView). -->
     <div class="flex-1 min-w-0">
-      <select
-        :value="modelValue"
-        class="w-full rounded px-2 py-1 text-[1em] cursor-pointer"
-        :style="{
-          background: t.bgInput,
-          border: `1px solid ${t.border}`,
-          color: t.text,
-          outline: 'none',
-        }"
-        @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
+      <AppSelect
+        :model-value="modelValue"
+        @update:model-value="(v) => emit('update:modelValue', v)"
       >
         <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
-      </select>
+      </AppSelect>
     </div>
   </div>
 </template>

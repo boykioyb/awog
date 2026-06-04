@@ -17,17 +17,12 @@
     </div>
 
     <Field :label="tr('workflows.node.skill')">
-      <select
-        :value="node.skillId || ''"
-        class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
-        :style="inputStyle"
-        @change="onSkillChange"
-      >
+      <AppSelect :model-value="node.skillId || ''" mono @update:model-value="onSkillChange">
         <option v-if="availableSkills.length === 0" value="">
           {{ tr('workflows.node.no_skills') }}
         </option>
         <option v-for="s in availableSkills" :key="s.id" :value="s.id">{{ s.name }}</option>
-      </select>
+      </AppSelect>
       <div v-if="skill" class="text-[1em] mt-1.5 leading-relaxed" :style="{ color: t.textDim }">
         {{ skill.description }}
       </div>
@@ -110,8 +105,7 @@ const inputStyle = computed(() => ({
   outline: 'none',
 }))
 
-const onSkillChange = (e: Event) => {
-  const { value } = e.target as HTMLSelectElement
+const onSkillChange = (value: string) => {
   emit('update:node', {
     ...props.node,
     skillId: value,

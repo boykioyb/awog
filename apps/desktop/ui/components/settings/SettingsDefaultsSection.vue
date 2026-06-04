@@ -52,75 +52,51 @@
         />
       </div>
       <SettingsField label="Default provider" hint="Which connection a new session starts with">
-        <select
-          :value="defaults.provider"
-          class="w-full rounded px-2 py-1.5 text-[1em]"
-          :style="inputStyle"
-          @change="
-            onChangeDefaultProvider(($event.target as HTMLSelectElement).value as ProviderName)
-          "
-        >
+        <AppSelect :model-value="defaults.provider" @update:model-value="onChangeDefaultProvider">
           <option v-for="p in PROVIDER_OPTIONS" :key="p.value" :value="p.value">
             {{ p.label }}
           </option>
-        </select>
+        </AppSelect>
       </SettingsField>
       <SettingsField label="Default model" hint="Models filtered by the selected provider">
-        <select
-          :value="defaults.modelId"
-          class="w-full rounded px-2 py-1.5 text-[1em]"
-          :style="inputStyle"
-          @change="onChangeDefaultModel(($event.target as HTMLSelectElement).value)"
-        >
+        <AppSelect :model-value="defaults.modelId" @update:model-value="onChangeDefaultModel">
           <option v-for="m in defaultModels" :key="m.id" :value="m.id">
             {{ m.label }} · {{ m.tier }}
           </option>
-        </select>
+        </AppSelect>
       </SettingsField>
       <SettingsField
         label="Default mode"
         hint="How autonomous agents act by default in a new session"
       >
-        <select
-          :value="defaults.mode"
-          class="w-full rounded px-2 py-1.5 text-[1em]"
-          :style="inputStyle"
-          @change="
-            settings.updateDefaults({
-              mode: ($event.target as HTMLSelectElement).value as AgentMode,
-            })
-          "
+        <AppSelect
+          :model-value="defaults.mode"
+          @update:model-value="(v) => settings.updateDefaults({ mode: v })"
         >
           <option v-for="m in MODE_OPTIONS" :key="m.value" :value="m.value">
             {{ m.label }} — {{ m.hint }}
           </option>
-        </select>
+        </AppSelect>
       </SettingsField>
       <SettingsField
         label="Default thinking level"
         hint="Reasoning budget. Disabled levels depend on the selected model."
       >
-        <select
-          :value="defaults.thinkingLevel"
-          class="w-full rounded px-2 py-1.5 text-[1em]"
-          :style="inputStyle"
-          @change="
-            settings.updateDefaults({
-              thinkingLevel: ($event.target as HTMLSelectElement).value as ThinkingLevel,
-            })
-          "
+        <AppSelect
+          :model-value="defaults.thinkingLevel"
+          @update:model-value="(v) => settings.updateDefaults({ thinkingLevel: v })"
         >
           <option v-for="lv in defaultLevelOptions" :key="lv" :value="lv">
             {{ LEVEL_LABEL[lv] }}
           </option>
-        </select>
+        </AppSelect>
       </SettingsField>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { AgentMode, ProviderName, ThinkingLevel } from '~/types'
+import type { AgentMode, ProviderName } from '~/types'
 import { LEVEL_LABEL, MODELS, levelsForModel, modelById, modelsForProvider } from '~/utils/models'
 
 const { t } = useTheme()

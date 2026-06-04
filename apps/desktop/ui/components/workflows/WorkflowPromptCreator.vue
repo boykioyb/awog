@@ -19,19 +19,10 @@
         <span class="text-[1em] flex-shrink-0" :style="{ color: t.textDim }">
           {{ tr('workflows.creator.save_to') }}
         </span>
-        <select
-          v-model="scope"
-          class="flex-1 min-w-0 rounded px-2 py-1 text-[1em] cursor-pointer"
-          :style="{
-            background: t.bgInput,
-            border: `1px solid ${t.border}`,
-            color: t.text,
-            outline: 'none',
-          }"
-        >
+        <AppSelect v-model="scope" class="flex-1 min-w-0">
           <option value="global">{{ tr('workflows.creator.scope_global') }}</option>
           <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
+        </AppSelect>
       </div>
     </template>
 

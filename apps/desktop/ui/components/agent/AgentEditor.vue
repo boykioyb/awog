@@ -32,15 +32,11 @@
 
     <div class="space-y-5">
       <Field v-if="!agent" label="Save to">
-        <select
-          v-model="saveTo"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
-          :style="inputStyle"
-        >
+        <AppSelect v-model="saveTo" mono>
           <option v-for="opt in saveToOptions" :key="opt.value" :value="opt.value">
             {{ opt.label }}
           </option>
-        </select>
+        </AppSelect>
         <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
           Tier determines where the AGENT.md is written (Sprint 3 C3). Default is global
           (~/.awog/agents/). Project tiers commit-able via git.
@@ -104,16 +100,11 @@
       </Field>
 
       <Field label="Account">
-        <select
-          v-model="accountSelect"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
-          :style="inputStyle"
-          :disabled="providerAccounts.length === 0"
-        >
+        <AppSelect v-model="accountSelect" mono :disabled="providerAccounts.length === 0">
           <option v-for="a in providerAccounts" :key="a.id" :value="a.id">
             {{ a.label }}{{ a.id === activeAccountId ? ' (active)' : '' }}
           </option>
-        </select>
+        </AppSelect>
         <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
           Which {{ providerLabel }} account this agent uses. Defaults to the active account; pick
           another to pin this agent to it.
