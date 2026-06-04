@@ -26,9 +26,16 @@ on:
 permissions:
   contents: write
 
+# Re-tagging the same version (common while iterating) supersedes the old run
+# instead of queueing behind it.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
+
+# Nuxt `generate` (run as the Tauri beforeBuildCommand) OOMs the default Node
+# heap on the smaller macOS runners — give it room.
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
   build:
