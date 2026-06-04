@@ -21,9 +21,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import { TerminalSquare } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import type { UnlistenFn } from '@tauri-apps/api/event'
 import { useTerminalApi } from '~/composables/useTerminalApi'
-import { useSidecar, type SidecarEvent } from '~/composables/useSidecar'
+import { useSidecar, type SidecarEvent, type UnlistenFn } from '~/composables/useSidecar'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{

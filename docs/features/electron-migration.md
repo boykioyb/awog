@@ -106,24 +106,29 @@ contextBridge.exposeInMainWorld('awog', {
 
 `ipcMain.handle('engine:request')` trả về `Promise` — lỗi engine ném ra reject → `ipcRenderer.invoke` reject → `useSidecar` bắt và bọc thành `SidecarError` (giữ `code`/`message`/`data`). Cần thống nhất shape lỗi: main serialize `{code,message,data}` (giống Rust hôm nay).
 
-## 5. Engine launch + transport (quyết định then chốt)
+## 5. Engine launch + transport (đã pivot sau khi thử nghiệm)
 
-**Vấn đề:** `utilityProcess.fork` **không pipe được stdin** — Electron buộc `stdio[0]==='ignore'` ("Configuring stdin to any property other than ignore is not supported"). Vì vậy **không thể** tái dùng JSON-RPC qua stdin/stdout y như Tauri.
+> **Cập nhật 2026-06-04:** D2 ban đầu chốt `utilityProcess.fork` + `parentPort`, nhưng **thử nghiệm thực tế cho thấy `utilityProcess` KHÔNG nạp được engine**. Đã pivot sang `child_process.spawn` + `ELECTRON_RUN_AS_NODE` + giữ nguyên transport stdio. Xem §14.
 
-**Quyết định (khuyến nghị):** dùng `utilityProcess.fork` + transport **`parentPort` MessagePort** — **giữ nguyên shape JSON-RPC** (`{jsonrpc,id,method,params}` / `{jsonrpc,id,result|error}` / `{method:'event',params}`), chỉ đổi *cách truyền* từ "ghi dòng NDJSON" sang `postMessage(obj)`. Lợi:
-- `rpc.ts` (`dispatch`/`register`/`RpcError`) + 115 method **không đụng**.
-- Bỏ được hack `setBlocking(true)` trên stdout (lý do tồn tại chỉ vì pipe buffering); MessagePort không có vấn đề đó.
-- Message là object structured-clone → bỏ luôn `JSON.parse`/`JSON.stringify` thủ công + reframing `\n`.
+**Vì sao bỏ `utilityProcess`:** `utilityProcess.fork(<engine>)` crash khi link ESM graph của engine:
+```
+TypeError: Cannot read properties of undefined (reading 'exports')
+  at cjsPreparseModuleExports (node:internal/modules/esm/translators:379)
+```
+Electron's `utilityProcess` dùng **ESM loader đã vá**, vỡ khi một dependency CJS trong graph của engine bị cjs-preparse. (Engine nạp bình thường dưới `node` thuần / `ELECTRON_RUN_AS_NODE`.) Đây là giới hạn đã biết của `utilityProcess` với ESM. Thêm nữa, `utilityProcess` cũng **cấm pipe stdin** (`stdio[0]==='ignore'`), nên kể cả không crash cũng không tái dùng được stdio.
 
-**Thay đổi engine (nhỏ, gọn trong `transport/`):**
-- Thêm `transport/parentport.ts`: `if (process.parentPort)` → `process.parentPort.on('message', e => handleMessage(e.data))`, và `send(obj) = process.parentPort.postMessage(obj)`.
-- Refactor `index.ts`: tách `handleMessage(msg: unknown)` (phần dispatch, hiện nằm trong `handleLine`); `transport/stdio.ts` parse dòng rồi gọi `handleMessage` (giữ cho `pnpm dev` chạy engine standalone), `parentport.ts` nhận object rồi gọi thẳng.
-- `index.ts` chọn transport theo `process.parentPort` (Electron) vs stdin TTY (standalone dev).
-- Graceful shutdown: thay `stdin 'close' → exit` bằng `process.parentPort.on('close')` / `main` gọi `child.kill()` khi `app` quit.
+**Quyết định hiện tại:** `child_process.spawn(process.execPath, [enginePath], { env: { …, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['pipe','pipe','pipe'] })`.
+- `process.execPath` = binary Electron; `ELECTRON_RUN_AS_NODE=1` chạy nó như **Node thuần** → dùng **ESM loader chuẩn của Node** (engine nạp OK, đã verify ping round-trip).
+- **Giữ nguyên transport stdio JSON-RPC hiện có** → **engine KHÔNG đổi một dòng nào** (tốt hơn cả kế hoạch). `engine.ts` (Electron main) reframe NDJSON + ghi stdin, đúng như Rust `sidecar.rs` cũ.
+- Token vẫn ở engine process (invariant #1). Lifecycle: `before-quit → engine.stop()` (`child.kill()`); engine cũng tự `exit(0)` khi stdin đóng.
 
-> **Phương án thay thế (B):** `child_process.fork` với `ELECTRON_RUN_AS_NODE=1` (chạy binary Electron như Node thuần) — `fork` có sẵn IPC channel (`child.send`/`process.on('message')`), cũng message-based, hoặc giữ stdio đầy đủ. Nhược: ít "blessed" hơn trong Electron, không tận dụng lifecycle/teardown tự động của `utilityProcess`, vẫn cần ABI Electron cho native module. → **Khuyến nghị A** (`utilityProcess`) đúng định hướng ADR 0027.
+**Cạm bẫy `ELECTRON_RUN_AS_NODE`:**
+- **Main process** TUYỆT ĐỐI không được set biến này, nếu không nó chạy như Node thuần (mất API `app`/`BrowserWindow`). Một số shell/CI export biến này global → `dev.mjs` **strip** nó khỏi env khi spawn Electron; engine child tự **thêm lại**.
+- Bản đóng gói: **giữ fuse `runAsNode` BẬT** (mặc định) để `ELECTRON_RUN_AS_NODE` hoạt động trong packaged app.
 
-**Module path:** `utilityProcess.fork(path)` trỏ `…/sidecar/lib/src/index.js` (prod: trong resources; dev: `apps/desktop/sidecar/dist/lib/src/index.js`).
+> **Đã verify (headless):** real Electron main (`process.type=browser`) → `engine.start()` (spawn) → `ping` → `{pong:true}` qua stdio. ✅
+
+**Module path:** `enginePath()` → dev `apps/desktop/sidecar/dist/lib/src/index.js`; prod `<resources>/sidecar/lib/src/index.js`.
 
 ## 6. Native modules (ABI Electron)
 
@@ -203,4 +208,4 @@ Cấu hình `electron-builder` (khuyến nghị thay Forge — multi-target tron
 | # | Quyết định | Chốt |
 |---|---|---|
 | D1 | Công cụ đóng gói | ✅ **electron-builder** (một config ra đủ dmg/nsis/AppImage/deb, khớp matrix đa-OS). |
-| D2 | Engine launch + transport | ✅ **`utilityProcess.fork` + `parentPort` MessagePort** — giữ nguyên shape JSON-RPC + `rpc.ts` + 115 method, chỉ đổi carrier sang `postMessage`. |
+| D2 | Engine launch + transport | ⚠️ Ban đầu chốt `utilityProcess.fork` + `parentPort`, nhưng `utilityProcess` crash khi nạp ESM engine (§5). **Pivot → `child_process.spawn(process.execPath, ELECTRON_RUN_AS_NODE=1)` + transport stdio cũ** → engine KHÔNG đổi. Đã verify ping round-trip. |

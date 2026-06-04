@@ -1,6 +1,10 @@
 /* eslint-disable max-classes-per-file -- error subclasses live next to the composable that throws them */
-import { invoke } from '@tauri-apps/api/core'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+
+// Engine client — thin wrapper over the Electron preload bridge (`window.awog`).
+// Keeps the same public surface the rest of the UI already imports
+// (available/request/onEvent/openExternal/revealPath/openPath) so the migration
+// from the Tauri shell stays contained to this file. See
+// docs/features/electron-migration.md §3-4.
 
 export class SidecarError extends Error {
   code: number
@@ -17,81 +21,66 @@ export class SidecarError extends Error {
 
 export class SidecarUnavailableError extends Error {
   constructor() {
-    super('Sidecar unavailable: app is not running inside Tauri shell')
+    super('Engine unavailable: app is not running inside the Electron shell')
     this.name = 'SidecarUnavailableError'
   }
 }
 
 export type SidecarEvent = { type: string; payload: unknown }
 export type SidecarEventHandler = (event: SidecarEvent) => void
+export type UnlistenFn = () => void
 
-const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+const bridge = () => (typeof window !== 'undefined' ? window.awog : undefined)
 
-const parseError = (raw: unknown): SidecarError => {
-  if (typeof raw === 'string') {
-    try {
-      const obj = JSON.parse(raw) as { code?: number; message?: string; data?: unknown }
-      if (typeof obj?.code === 'number' && typeof obj?.message === 'string') {
-        return new SidecarError(obj.code, obj.message, obj.data)
-      }
-      return new SidecarError(-32603, raw)
-    } catch {
-      return new SidecarError(-32603, raw)
-    }
+const toSidecarError = (raw: unknown): SidecarError => {
+  if (raw && typeof raw === 'object' && 'code' in raw && 'message' in raw) {
+    const e = raw as { code: number; message: string; data?: unknown }
+    return new SidecarError(e.code, e.message, e.data)
   }
-  return new SidecarError(-32603, 'Unknown sidecar error', raw)
+  if (raw instanceof Error) return new SidecarError(-32603, raw.message)
+  return new SidecarError(-32603, 'Unknown engine error', raw)
 }
 
 export function useSidecar() {
+  const api = bridge()
+
   const request = async <T = unknown>(method: string, params?: unknown): Promise<T> => {
-    if (!isTauri()) throw new SidecarUnavailableError()
+    if (!api) throw new SidecarUnavailableError()
     try {
-      return await invoke<T>('sidecar_request', { method, params: params ?? null })
+      return (await api.request(method, params ?? null)) as T
     } catch (err) {
-      throw parseError(err)
+      throw toSidecarError(err)
     }
   }
 
+  // onEvent stays async (call sites `await` it) even though the bridge resolves
+  // the unsubscribe synchronously.
   const onEvent = async (handler: SidecarEventHandler): Promise<UnlistenFn> => {
-    if (!isTauri()) throw new SidecarUnavailableError()
-    // Tauri 2 rejects dots in event names; Rust side emits `sidecar-event`.
-    return listen<SidecarEvent>('sidecar-event', (e) => handler(e.payload))
+    if (!api) throw new SidecarUnavailableError()
+    return api.onEvent((e) => handler(e))
   }
 
   const openExternal = async (url: string): Promise<void> => {
-    if (!isTauri()) throw new SidecarUnavailableError()
-    try {
-      await invoke<void>('open_external', { url })
-    } catch (err) {
-      throw new Error(typeof err === 'string' ? err : 'open_external failed')
-    }
+    if (!api) throw new SidecarUnavailableError()
+    await api.openExternal(url)
   }
 
-  // Reveal a workspace-relative file/dir in the OS file manager (Finder /
-  // Explorer / xdg-open parent). Validated server-side against `workspaceRoot`
-  // — passing a path outside the workspace rejects with an error.
+  // Reveal a workspace-relative file/dir in the OS file manager. Validated in
+  // the main process against `workspaceRoot` (path outside → rejects).
   const revealPath = async (workspaceRoot: string, path: string): Promise<void> => {
-    if (!isTauri()) throw new SidecarUnavailableError()
-    try {
-      await invoke<void>('reveal_path', { workspaceRoot, path })
-    } catch (err) {
-      throw new Error(typeof err === 'string' ? err : 'reveal_path failed')
-    }
+    if (!api) throw new SidecarUnavailableError()
+    await api.revealPath(workspaceRoot, path)
   }
 
-  // Open a workspace-relative file with the OS default handler (or directory
-  // in the file manager). Same workspace-validation as revealPath.
+  // Open a workspace-relative file with the OS default handler (dir → file
+  // manager). Same workspace validation as revealPath.
   const openPath = async (workspaceRoot: string, path: string): Promise<void> => {
-    if (!isTauri()) throw new SidecarUnavailableError()
-    try {
-      await invoke<void>('open_path', { workspaceRoot, path })
-    } catch (err) {
-      throw new Error(typeof err === 'string' ? err : 'open_path failed')
-    }
+    if (!api) throw new SidecarUnavailableError()
+    await api.openPath(workspaceRoot, path)
   }
 
   return {
-    available: isTauri(),
+    available: !!api,
     request,
     onEvent,
     openExternal,

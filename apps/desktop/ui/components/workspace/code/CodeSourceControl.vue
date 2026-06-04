@@ -97,7 +97,7 @@
 import { Check, ExternalLink, GitBranch, RefreshCw } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CSSProperties } from 'vue'
-import type { UnlistenFn } from '@tauri-apps/api/event'
+import type { UnlistenFn } from '~/composables/useSidecar'
 import {
   useGitApi,
   type SidecarGitFileStatus,

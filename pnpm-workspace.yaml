@@ -1,9 +1,11 @@
 packages:
   - apps/desktop/ui
   - apps/desktop/sidecar
+  - apps/desktop/electron
 
 allowBuilds:
   '@parcel/watcher': true
   esbuild: false
   vue-demi: false
   node-pty: true
+  electron: true

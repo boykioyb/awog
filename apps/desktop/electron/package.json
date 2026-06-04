@@ -1,0 +1,23 @@
+{
+  "name": "@awog/desktop",
+  "private": true,
+  "version": "0.3.4",
+  "description": "AWOG Electron desktop shell (main process + IPC bridge)",
+  "main": "dist/main.js",
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "dev": "node scripts/dev.mjs",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"no lint\"",
+    "pack": "node scripts/pack.mjs",
+    "rebuild": "electron-rebuild -f -w node-pty --module-dir ../sidecar"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.0",
+    "@types/node": "^20.14.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.3"
+  }
+}

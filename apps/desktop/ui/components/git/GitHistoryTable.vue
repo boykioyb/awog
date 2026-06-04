@@ -518,26 +518,23 @@ const onRevertConfirm = async () => {
   await store.revertCommit(actionSha.value)
 }
 
-const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-
 const onSavePatchConfirm = async () => {
   savePatchConfirm.value = false
   const sha = actionSha.value
   const sha7 = actionSha7.value
   const defaultName = `${sha7}.patch`
+  const api = typeof window !== 'undefined' ? window.awog : undefined
   let savePath: string | null = null
-  if (isTauri()) {
-    const { save } = await import('@tauri-apps/plugin-dialog')
-    const picked = await save({
+  if (api) {
+    savePath = await api.savePath({
       title: 'Save commit as patch',
       defaultPath: defaultName,
       filters: [{ name: 'Patch', extensions: ['patch'] }],
     })
-    if (typeof picked === 'string') savePath = picked
   } else {
     // Browser fallback — no native dialog, so prompt for an absolute path so
-    // the user can still smoke-test the feature. Dev-only path; Tauri build
-    // always takes the native `save` dialog branch above.
+    // the user can still smoke-test the feature. Dev-only path; the Electron
+    // build always takes the native dialog branch above.
     // eslint-disable-next-line no-alert
     const fallback = window.prompt('Save patch to (absolute path):', `/tmp/${defaultName}`)
     savePath = fallback?.trim() || null

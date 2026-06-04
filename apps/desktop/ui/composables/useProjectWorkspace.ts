@@ -3,7 +3,7 @@
 // project-wide watcher reconcile. The page stays a thin template. SoC: this
 // orchestrates state + IPC only — no direct fs access (everything via useFsApi).
 import { inject, type InjectionKey } from 'vue'
-import type { UnlistenFn } from '@tauri-apps/api/event'
+import type { UnlistenFn } from '~/composables/useSidecar'
 import type { FsEntry, FsSearchMatch, Project } from '~/types'
 import { useFsApi, type FsSearchOptions } from '~/composables/useFsApi'
 import { useSidecar } from '~/composables/useSidecar'
