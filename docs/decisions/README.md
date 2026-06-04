@@ -16,6 +16,19 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0008](./0008-stdio-ipc-for-sidecar.md) | Stdio IPC giữa Tauri shell và Node.js sidecar | Accepted |
 | [0009](./0009-dev-mode-http-fallback.md) | Dev-mode HTTP fallback cho sidecar | Accepted |
 | [0010](./0010-pause-on-quota-for-connection-switch.md) | Pause-on-quota để cho phép switch connection thủ công | Accepted |
+| [0011](./0011-anthropic-subscription-oauth.md) | Anthropic subscription OAuth flow | Accepted |
+| [0012](./0012-projects-storage.md) | Lưu trữ projects bằng plain JSON per-file | Accepted |
+| [0013](./0013-adopt-skill-md-format.md) | Adopt SKILL.md format for skills (Claude Code SDK / craft-agents-oss compatible) | Accepted |
+| [0014](./0014-mcp-servers-stdio-runtime.md) | MCP servers runtime: stdio-only pha 1, per-file JSON, in-sidecar process group | Accepted |
+| [0015](./0015-agents-persisted-runtime-systemprompt.md) | Agents: per-file JSON persistence + systemPrompt runtime override | Accepted |
+| [0016](./0016-deprecate-context-providers-fold-into-mcp.md) | Deprecate Context Providers, fold into MCP Servers | Accepted |
+| [0017](./0017-git-manager-ipc-contract.md) | Git Manager IPC contract — chốt 12 open question cho sidecar wiring | Accepted |
+| [0018](./0018-mcp-secret-keychain.md) | MCP secret storage: OS keychain via `@napi-rs/keyring` | Accepted |
+| [0019](./0019-pty-terminal-in-sidecar.md) | PTY terminal trong sidecar (node-pty) cho Workspace Panel | Accepted |
+| [0020](./0020-highlightjs-code-rendering.md) | Syntax-highlight code block trong chat bằng highlight.js | Accepted |
+| [0021](./0021-monaco-code-editor.md) | Monaco làm code editor cho in-app Project Workspace | Proposed |
+| [0022](./0022-fs-read-write-search-ipc.md) | Mở rộng `fs.*` IPC: read-write + search cho project workspace | Proposed |
+| [0023](./0023-sdk-session-resume-and-compact.md) | SDK session resume + `/compact` (bỏ transcript-flattening) | Proposed |
 
 ## Template
 

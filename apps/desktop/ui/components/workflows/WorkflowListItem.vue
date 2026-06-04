@@ -33,9 +33,9 @@
       <Workflow :size="11" :style="{ color: t.textDim }" />
       <input
         v-if="renaming"
-        :ref="setInputRef"
+        ref="inputEl"
         :value="renameValue"
-        class="text-[12px] flex-1 rounded px-1 py-0.5"
+        class="text-[1em] flex-1 rounded px-1 py-0.5"
         :style="{
           background: t.bgInput,
           border: `1px solid ${t.borderStrong}`,
@@ -50,7 +50,7 @@
       />
       <div
         v-else
-        class="text-[12px] truncate flex-1"
+        class="text-[1em] truncate flex-1"
         :style="{ color: t.text }"
         @dblclick.stop="emit('start-rename')"
       >
@@ -65,8 +65,19 @@
         <MoreHorizontal :size="13" />
       </button>
     </div>
-    <div class="text-[10px] mt-0.5 ml-5" :style="{ color: t.textDim }">
-      {{ workflow.nodes.length }} steps · {{ workflow.edges.length }} edges
+    <div class="flex items-center gap-1.5 mt-0.5 ml-5">
+      <span class="text-[1em]" :style="{ color: t.textDim }">
+        {{
+          tr('workflows.item.meta', { steps: workflow.nodes.length, edges: workflow.edges.length })
+        }}
+      </span>
+      <span
+        class="text-[12px] font-mono leading-none px-1 py-0.5 rounded flex-shrink-0"
+        :style="{ color: t.textFaint, background: t.bgInput }"
+        :title="scopeLabel"
+      >
+        {{ scopeLabel }}
+      </span>
     </div>
   </div>
 </template>
@@ -95,15 +106,31 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
+const ws = useWorkspaceStore()
 
-const setInputRef = (el: unknown) => {
-  if (el instanceof HTMLInputElement) {
-    nextTick(() => {
-      el.focus()
-      el.select()
-    })
+// Tier badge: 'Global' for shared workflows, else the owning project's name.
+const scopeLabel = computed(() => {
+  if (props.workflow.source === 'project' && props.workflow.projectId) {
+    return ws.projectById(props.workflow.projectId)?.name ?? 'Project'
   }
-}
+  return tr('workflows.scope.global_badge')
+})
+
+// Static ref + watch so focus+select-all runs ONCE when rename starts. A
+// function ref here would be re-invoked on every keystroke (controlled :value
+// re-renders), re-selecting the text so each new char overwrote the previous.
+const inputEl = ref<HTMLInputElement | null>(null)
+watch(
+  () => props.renaming,
+  (on) => {
+    if (!on) return
+    nextTick(() => {
+      inputEl.value?.focus()
+      inputEl.value?.select()
+    })
+  },
+)
 
 const onContextMenu = (e: MouseEvent) => {
   e.preventDefault()

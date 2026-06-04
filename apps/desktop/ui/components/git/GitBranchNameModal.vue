@@ -1,14 +1,14 @@
 <template>
   <BaseModal :open="open" :title="title" size="sm" @close="emit('close')">
     <div class="p-4 flex flex-col gap-2">
-      <div v-if="fromLabel" class="text-[10px]" :style="{ color: t.textDim }">
+      <div v-if="fromLabel" class="text-[1em]" :style="{ color: t.textDim }">
         From:
         <span class="font-mono">{{ fromLabel }}</span>
       </div>
       <input
         v-model="localValue"
         :placeholder="placeholder"
-        class="w-full rounded text-xs px-2 py-1.5"
+        class="w-full rounded text-[1em] px-2 py-1.5"
         :style="{
           background: t.bgInput,
           color: t.text,
@@ -20,14 +20,14 @@
     </div>
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
         Cancel
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded font-medium transition"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="emit('submit', localValue)"
       >

@@ -3,7 +3,7 @@
     <template #header>
       <div class="flex items-center gap-2">
         <RotateCcw :size="14" :style="{ color: t.text }" />
-        <div class="text-sm font-medium" :style="{ color: t.text }">
+        <div class="text-[1em] font-medium" :style="{ color: t.text }">
           Rerun from {{ agent.name }}
         </div>
       </div>
@@ -11,7 +11,7 @@
 
     <div class="p-4 space-y-4">
       <div
-        class="text-[11px] p-2.5 rounded flex items-start gap-2"
+        class="text-[1em] p-2.5 rounded flex items-start gap-2"
         :style="{
           background: t.warningBg,
           border: `1px solid ${t.warningBorder}`,
@@ -34,7 +34,7 @@
           :rows="5"
           autofocus
           placeholder="Example: The implementation doesn't handle the partitioned worker case..."
-          class="w-full rounded px-2 py-1.5 text-[12px] resize-none leading-relaxed"
+          class="w-full rounded px-2 py-1.5 text-[1em] resize-none leading-relaxed"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.border}`,
@@ -46,12 +46,16 @@
     </div>
 
     <template #footer>
-      <button class="px-3 py-1.5 text-xs" :style="{ color: t.textMuted }" @click="emit('cancel')">
+      <button
+        class="px-3 py-1.5 text-[1em]"
+        :style="{ color: t.textMuted }"
+        @click="emit('cancel')"
+      >
         Cancel
       </button>
       <button
         :disabled="!instruction.trim()"
-        class="px-3 py-1.5 text-xs rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
         :style="{
           background: !instruction.trim() ? t.bgInput : t.accent,
           color: !instruction.trim() ? t.textFaint : t.accentText,

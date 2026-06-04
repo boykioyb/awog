@@ -8,8 +8,8 @@
         :stroke-width="1.5"
         :style="{ color: t.textFaint }"
       />
-      <div class="text-sm" :style="{ color: t.textDim }">{{ title }}</div>
-      <div v-if="description" class="text-xs mt-1" :style="{ color: t.textFaint }">
+      <div class="text-[1em]" :style="{ color: t.textDim }">{{ title }}</div>
+      <div v-if="description" class="text-[1em] mt-1" :style="{ color: t.textFaint }">
         {{ description }}
       </div>
     </div>

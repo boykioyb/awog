@@ -10,7 +10,7 @@
       :value="modelValue"
       :placeholder="placeholder"
       type="text"
-      class="w-full rounded pl-7 pr-2 py-1.5 text-xs outline-none"
+      class="w-full rounded pl-7 pr-2 py-1.5 text-[1em] outline-none"
       :style="{
         background: t.bgInput,
         color: t.text,

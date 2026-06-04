@@ -52,18 +52,34 @@ Project ──┬─< Task ──┬─< Phase ──< Run
 
 ### Skill
 
+Skill = một folder chứa `SKILL.md` (YAML frontmatter + markdown body). Cùng format với Claude Code SDK / craft-agents-oss để file interchangeable. Xem [ADR 0013](../decisions/0013-adopt-skill-md-format.md) và [docs/features/skill-builder.md](../features/skill-builder.md).
+
 ```
 {
-  id: string
-  name: string                  // snake_case, ví dụ design_architecture
-  category: enum                // Analysis | Design | Development | Quality
-  description: string
-  inputs:  string[]             // ví dụ ["requirement.md", "existing_codebase"]
-  outputs: string[]             // ví dụ ["architecture.md", "component_diagram.mmd"]
-  promptTemplate: string
-  tags: string[]                // ví dụ ["planning", "code", "review"]
+  id: string                    // = slug (kebab-case folder name on disk)
+  source: SkillSource           // tier: global | user-claude | user-agents | project-claude | project-agents
+  projectId?: string            // required khi source = project-*
+  name: string                  // frontmatter.name (display)
+  description: string           // frontmatter.description (1-2 câu)
+  body: string                  // markdown sau frontmatter
+  globs?: string[]              // tự kích hoạt khi file match
+  alwaysAllow?: string[]        // SDK tool names auto-approve
+  icon?: string                 // emoji hoặc URL
+  requiredSources?: string[]    // source slugs auto-enable
 }
 ```
+
+Identity tuple: `(source, projectId, id)`. Cùng slug có thể tồn tại độc lập ở các tier khác nhau.
+
+**Source tiers**:
+
+| Source | Path | Khi nào dùng |
+|---|---|---|
+| `global` | `~/.awog/skills/<slug>/SKILL.md` | AWOG-native, default cho skill mới |
+| `user-claude` | `~/.claude/skills/<slug>/SKILL.md` | Share với Claude Code SDK |
+| `user-agents` | `~/.agents/skills/<slug>/SKILL.md` | Share với Craft Agents |
+| `project-claude` | `{project.path}/.claude/skills/<slug>/SKILL.md` | Scope per repo |
+| `project-agents` | `{project.path}/.agents/skills/<slug>/SKILL.md` | Scope per repo (Craft) |
 
 ### Workflow
 

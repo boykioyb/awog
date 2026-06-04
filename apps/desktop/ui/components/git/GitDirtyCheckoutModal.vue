@@ -1,75 +1,79 @@
 <template>
-  <BaseModal :open="open" title="Uncommitted changes" size="sm" @close="emit('close')">
-    <div class="p-4 text-xs flex flex-col gap-1" :style="{ color: t.textMuted }">
-      <div>
-        Workspace có change uncommitted. Chuyển sang
-        <span class="font-mono">{{ targetBranch }}</span>
-        bằng cách nào?
-      </div>
+  <BaseModal :open="open" :title="tr('git.dirty_checkout.title')" size="sm" @close="emit('close')">
+    <div class="p-4 text-[1em] flex flex-col gap-2" :style="{ color: t.textMuted }">
+      <div>{{ tr('git.dirty_checkout.question', { branch: targetBranch }) }}</div>
       <div :style="{ color: t.textFaint }">
-        <span class="font-medium" :style="{ color: t.textMuted }">Keep:</span>
-        mang change theo (chỉ work khi không conflict với branch đích).
-        <span class="font-medium" :style="{ color: t.textMuted }">Stash:</span>
-        cất tạm rồi checkout sạch.
-        <span class="font-medium" :style="{ color: t.textMuted }">Discard:</span>
-        xóa hết change.
+        {{ tr('git.dirty_checkout.stash_hint') }} {{ tr('git.dirty_checkout.force_hint') }}
+      </div>
+      <div
+        v-if="files.length > 0"
+        class="max-h-40 overflow-y-auto rounded p-2 text-[1em] font-mono"
+        :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
+      >
+        <div
+          v-for="f in files"
+          :key="f.path"
+          class="truncate"
+          :style="{ color: t.textMuted }"
+          :title="f.path"
+        >
+          {{ f.path }}
+        </div>
       </div>
     </div>
     <template #footer>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{ color: t.textMuted }"
         @click="emit('close')"
       >
-        Cancel
+        {{ tr('common.cancel') }}
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded transition"
-        :style="{
-          background: t.dangerBg,
-          color: t.danger,
-          border: `1px solid ${t.dangerBorder}`,
-        }"
-        @click="emit('discard')"
-      >
-        Discard & checkout
-      </button>
-      <button
-        class="px-3 py-1.5 text-xs rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded transition"
         :style="{
           background: t.bgInput,
           color: t.text,
           border: `1px solid ${t.border}`,
         }"
-        @click="emit('keep')"
+        @click="emit('stash-and-checkout')"
       >
-        Keep & checkout
+        {{ tr('git.dirty_checkout.stash_and_checkout') }}
       </button>
       <button
-        class="px-3 py-1.5 text-xs rounded font-medium transition"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="emit('stash')"
+        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
+        :style="{
+          background: t.dangerBg,
+          color: t.danger,
+          border: `1px solid ${t.dangerBorder}`,
+        }"
+        @click="emit('force')"
       >
-        Stash & checkout
+        {{ tr('git.dirty_checkout.force_checkout') }}
       </button>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
+import type { SidecarGitFileStatus } from '~/composables/useGitApi'
+
 type Props = {
   open: boolean
   targetBranch: string
+  files?: SidecarGitFileStatus[]
 }
 
-defineProps<Props>()
+withDefaults(defineProps<Props>(), {
+  files: () => [],
+})
 
 const emit = defineEmits<{
   close: []
-  discard: []
-  keep: []
-  stash: []
+  force: []
+  'stash-and-checkout': []
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 </script>

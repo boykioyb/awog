@@ -12,3 +12,7 @@ tailwind.config.ts
 *.config.ts
 *.config.mjs
 *.config.js
+
+# i18n dictionaries — pure JSON
+i18n/
+*.json

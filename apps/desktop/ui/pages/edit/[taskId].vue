@@ -32,7 +32,7 @@
         :class="{ 'hidden md:flex': mobilePane === 'tree' }"
       >
         <button
-          class="md:hidden flex items-center gap-1 px-3 py-2 text-xs transition flex-shrink-0"
+          class="md:hidden flex items-center gap-1 px-3 py-2 text-[1em] transition flex-shrink-0"
           :style="{ color: t.textMuted, borderBottom: `1px solid ${t.border}` }"
           @click="mobilePane = 'tree'"
         >
@@ -64,7 +64,7 @@
     </div>
 
     <div
-      class="h-6 flex items-center px-3 gap-4 text-[10px] font-mono flex-shrink-0"
+      class="h-6 flex items-center px-3 gap-4 text-[1em] font-mono flex-shrink-0"
       :style="{ borderTop: `1px solid ${t.border}`, background: t.bgPanel, color: t.textDim }"
     >
       <span>{{ languageLabel }}</span>
@@ -89,7 +89,8 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const router = useRouter()
 const { t } = useTheme()
-const workspace = useWorkspaceStore()
+const tasksStore = useTasksStore()
+const workflowsStore = useWorkflowsStore()
 
 const rootStyle = computed(() => ({
   background: t.value.bg,
@@ -100,10 +101,19 @@ const rootStyle = computed(() => ({
 const taskId = computed(() => String(route.params.taskId))
 const fileName = computed(() => String(route.query.file || ''))
 
-const task = computed(() => workspace.taskById(taskId.value))
+const task = computed(() => tasksStore.taskById(taskId.value))
 const workflow = computed(() =>
-  task.value ? workspace.workflowById(task.value.workflowId) : undefined,
+  task.value
+    ? (task.value.workflowSnapshot ?? workflowsStore.workflowById(task.value.workflowId))
+    : undefined,
 )
+
+function resolveKind(out: string): EditorFileKind | null {
+  if (out.endsWith('.md')) return 'md'
+  if (out.endsWith('.diff') || out.endsWith('.patch')) return 'diff'
+  if (out.endsWith('.yaml') || out.endsWith('.yml')) return 'yaml'
+  return null
+}
 
 const taskFiles = computed<EditorTaskFile[]>(() => {
   const files: EditorTaskFile[] = []
@@ -172,13 +182,6 @@ const languageLabel = computed(() => {
 })
 
 const mobilePane = ref<'tree' | 'editor'>(fileName.value ? 'editor' : 'tree')
-
-function resolveKind(out: string): EditorFileKind | null {
-  if (out.endsWith('.md')) return 'md'
-  if (out.endsWith('.diff') || out.endsWith('.patch')) return 'diff'
-  if (out.endsWith('.yaml') || out.endsWith('.yml')) return 'yaml'
-  return null
-}
 
 function onChangeView(v: EditorViewMode) {
   activeView.value = v

@@ -1,6 +1,6 @@
 # Feature: Task Execution Engine
 
-**Trạng thái:** Draft
+**Trạng thái:** Approved — contract chốt tại [ADR 0024](../decisions/0024-task-execution-engine-ipc-contract.md)
 
 ## Overview
 
@@ -96,8 +96,8 @@ Tối giản: status icon + title + một dòng meta context-aware:
 - [human-approval](./human-approval.md)
 - [agent-trace](./agent-trace.md)
 
-## Câu hỏi mở
+## Câu hỏi mở (đã chốt qua ADR 0024)
 
-- Concurrency: chạy song song được bao nhiêu task?
-- Chính sách retry khi agent lỗi?
-- Khi rerun từ phase ở giữa, các artifact downstream đã ghi nên giữ trong Git history hay archive riêng?
+- ~~Concurrency~~ → **Parallel scheduler**, cap 4 node/task đồng thời; nhiều task chạy song song (ADR 0024 D-1).
+- ~~Retry khi agent lỗi~~ → **Không auto-retry** (MVP); node fail kéo downstream fail; user rerun thủ công.
+- ~~Artifact downstream khi rerun~~ → **Giữ trong Git history** (project repo); run cũ đánh `superseded`, không archive riêng.

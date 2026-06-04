@@ -1,5 +1,13 @@
 <template>
-  <span v-if="source.type === 'github'" class="inline-flex items-center gap-1">
+  <span
+    v-if="source.type === 'github'"
+    class="inline-flex items-center gap-1 cursor-pointer hover:underline"
+    :title="source.url"
+    role="link"
+    tabindex="0"
+    @click.stop="openSource(source.url)"
+    @keydown.enter.stop="openSource(source.url)"
+  >
     <Github :size="compact ? 10 : 11" />
     <span class="font-mono">{{ source.repo }}#{{ source.issueNumber }}</span>
   </span>
@@ -24,4 +32,15 @@ withDefaults(
   }>(),
   { compact: false },
 )
+
+// Open the issue/PR in the OS browser (Tauri); fall back to window.open in
+// browser-dev where the sidecar bridge isn't available.
+const openSource = (url: string): void => {
+  if (!url) return
+  useSidecar()
+    .openExternal(url)
+    .catch(() => {
+      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
+    })
+}
 </script>

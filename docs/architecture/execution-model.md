@@ -57,16 +57,22 @@ Khi workflow tới một approval node:
 - Event lỗi được ghi vào trace.
 - Không retry tự động (MVP). Người dùng có thể rerun node fail thủ công.
 
-## Concurrency (MVP)
+## Concurrency
 
-- Một worker thực thi duy nhất.
-- Mỗi task xử lý một node tại một thời điểm.
-- Nhiều task có thể queue, nhưng chạy tuần tự cho đơn giản.
-- Thiết kế để thay bằng scheduler song song sau MVP.
+> Cập nhật theo [ADR 0024](../decisions/0024-task-execution-engine-ipc-contract.md) — thay mô hình "single worker" ban đầu bằng parallel scheduler.
+
+- **Parallel scheduler per-task.** Một node trở nên *runnable* khi mọi node upstream (nguồn của edge vào) có phase `completed`. Các nhánh DAG độc lập (vd REV và QA cùng phụ thuộc DEV) chạy **đồng thời**.
+- **Join semantics**: node có nhiều edge vào chỉ chạy khi *tất cả* upstream `completed`.
+- **Concurrency cap** `CONCURRENCY_CAP = 4` node chạy đồng thời trong một task; phần dư queue tới khi có slot.
+- **Approval gate** chỉ chặn nhánh downstream của chính nó, không chặn nhánh sibling.
+- **Failure**: node fail → downstream (reachability BFS) fail; sibling in-flight chạy nốt; không dispatch thêm → task `failed`. Không auto-retry (MVP).
+- **Git contention**: node ghi-code nên nối **tuần tự** trong DAG; nhánh song song dành cho read/analysis sinh `.md` artifact (tránh `git add -A` race — xem ADR 0024 D-9).
+- Nhiều task có thể chạy song song (mỗi task có scheduler + cap riêng).
 
 ## Restart Safety
 
-- Mọi state (task, event, artifact) được lưu xuống đĩa trước khi đổi status.
-- Khi khởi động, engine quét `tasks/` và:
-  - Resume task `Running` từ bước hoàn tất gần nhất.
-  - Để nguyên task `WaitingApproval`.
+- State event-sourced JSONL (`tasks/<id>/events.log`) — mọi status change append trước khi có hiệu lực; `task.json` là snapshot cache (`fold`).
+- `engine.resumeOnBoot` (gọi lúc sidecar start): `listTasks` → fold mỗi task:
+  - `completed` / `failed` / `waiting_approval` / `paused` → để nguyên.
+  - `queued` / `running` → **KHÔNG auto-resume.** Đưa task về `paused` và chờ người dùng bấm **Resume** (kill/restart không được âm thầm chạy lại agent — tốn token + tự sửa repo không có sự đồng ý). Run còn `running` lúc boot (interrupted) → append `run.status: failed` + phase về `pending` để chạy lại sạch khi resume (artifact overwrite, autoCommit skip nếu no-change). Không resume nửa chừng một lượt SDK.
+  - Resume (`tasks.resume`) → recompute runnable set từ frontier (completed phase giữ completed, pending chạy lại).

@@ -1,5 +1,5 @@
 <template>
-  <div class="font-mono text-[12px] leading-[1.55]">
+  <div class="font-mono text-[1em] leading-[1.55]">
     <div
       v-for="(group, gi) in parsed.groups"
       :key="gi"

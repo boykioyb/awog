@@ -1,14 +1,14 @@
 <template>
   <div
     v-if="!run.output"
-    class="text-[11px] py-6 text-center inline-flex items-center justify-center gap-2 w-full"
+    class="text-[1em] py-6 text-center inline-flex items-center justify-center gap-2 w-full"
     :style="{ color: t.textDim }"
   >
     <Activity :size="12" class="animate-pulse" />
     Generating output...
   </div>
   <div v-else>
-    <div class="flex items-center gap-2 mb-2 text-[11px]" :style="{ color: t.textDim }">
+    <div class="flex items-center gap-2 mb-2 text-[1em]" :style="{ color: t.textDim }">
       <FileText :size="11" />
       <span class="font-mono">{{ node.outputs.join(', ') }}</span>
       <template v-if="run.approvedBy">
@@ -17,7 +17,7 @@
       </template>
       <button
         v-if="isEditable"
-        class="ml-auto flex items-center gap-1 px-2 py-0.5 text-[10px] rounded transition"
+        class="ml-auto flex items-center gap-1 px-2 py-0.5 text-[1em] rounded transition"
         :style="{
           color: t.text,
           border: `1px solid ${t.borderStrong}`,
@@ -40,7 +40,7 @@
     </div>
     <pre
       v-else
-      class="text-[11px] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
+      class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
       :style="{
         color: t.textMuted,
         background: t.bgInput,
@@ -83,8 +83,10 @@ const isEditable = computed(() => {
   )
 })
 
+// Live path: run.output is the artifact body the engine streamed + persisted.
+// Fall back to mock content only when output is empty (browser-dev seed tasks).
 const displayContent = computed(
-  () => mockArtifactContent(props.phase.skillName, fileName.value) || props.run.output,
+  () => props.run.output || mockArtifactContent(props.phase.skillName, fileName.value),
 )
 const isMarkdown = computed(() => fileName.value.endsWith('.md'))
 </script>

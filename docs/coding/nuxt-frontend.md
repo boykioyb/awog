@@ -120,6 +120,76 @@ Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compil
 - **`assets/css/main.css`** chỉ chứa reset, scrollbar, base — không component style.
 - **Responsive:** dùng prefix Tailwind (`md:`, `lg:`). Hiện UI tối ưu cho desktop ≥ 1280.
 
+## UI patterns
+
+Hai pattern UI dễ regress (đã sửa nhiều lần) — quy ước rõ ở đây để không lặp lại.
+
+### 1. Detail header action buttons — icon-only đồng nhất
+
+Mọi `*Detail.vue` (SkillDetail / AgentDetail / McpDetail / …) có hàng action button ở góc phải header. **Tất cả button trong hàng đó dùng cùng style icon-only**, không mix text+border với icon-only.
+
+```vue
+<button
+  class="p-1.5 rounded transition"
+  :style="{ color: t.textDim }"
+  title="Edit"
+  @click="emit('edit')"
+  @mouseenter="(e: MouseEvent) => {
+    const el = e.currentTarget as HTMLElement
+    el.style.background = t.bgHover     // hoặc t.dangerBg cho destructive
+    el.style.color = t.text              // hoặc t.danger cho destructive
+  }"
+  @mouseleave="(e: MouseEvent) => {
+    const el = e.currentTarget as HTMLElement
+    el.style.background = 'transparent'
+    el.style.color = t.textDim
+  }"
+>
+  <Edit3 :size="13" />
+</button>
+```
+
+- Icon size **13** (lucide-vue-next), padding **`p-1.5`**.
+- Default color `t.textDim`. Không bao giờ dùng `t.text` mặc định — giữ button subtle, hover mới làm nổi.
+- `title` bắt buộc — thay cho text label, mô tả verb ("Edit", "Restart server", "Delete server").
+- Stateful action (vd. MCP Test có spinner) vẫn icon-only — swap icon (`Loader2 animate-spin`) + cập nhật `title` ("Testing…"). Tooltip + animation đủ truyền state, không cần text.
+- **Không** dùng `px-3 py-1.5 text-xs rounded inline-flex items-center gap-1.5` cho header action — đó là EditorShell save/cancel pattern, khác surface.
+
+Áp dụng cho: `SkillDetail`, `AgentDetail`, `McpDetail`, mọi `*Detail.vue` thêm sau. Save/Cancel trong `EditorShell` và inline button row của `MarkdownBodyView` có pattern riêng — không đụng.
+
+### 2. Editor textarea — `resize-y` không `resize-none`
+
+Mọi `<textarea>` trong `*Editor.vue` (Agent/Skill/Mcp/Project/Command/Hook) + create-form modal (NewTaskModal) chứa **nội dung dài-tự do** (description, body, systemPrompt, command, args) phải vertically-resizable.
+
+```vue
+<textarea
+  v-model="..."
+  :rows="N"
+  class="w-full rounded px-2 py-1.5 text-[12px] resize-y min-h-[<initial-rem>]"
+  :style="inputStyle"
+/>
+```
+
+- `resize-y`: chỉ chiều dọc (horizontal sẽ phá grid).
+- `min-h-[…]`: floor để user không kéo nhỏ hơn `rows`. Bảng map:
+
+| `rows` | `min-h` |
+|---|---|
+| 2 | `min-h-[3rem]` |
+| 3 | `min-h-[4rem]` |
+| 4 | `min-h-[5rem]` |
+| 6 | `min-h-[8rem]` |
+| 12 | `min-h-[12rem]` |
+
+**Không áp dụng** (giữ `resize-none` có chủ đích):
+
+- `PromptCreatorPanel` + 3 creator chat modal (Agent/Skill/Mcp): chat-style, compact + flex auto-grow.
+- `SessionComposer`, `GitCommitPanel`, `PhaseDiscussTab`: chat composer với auto-grow logic riêng.
+- `SettingsOAuthCodeDialog`, `RerunModal`: single-purpose modal input.
+- `EditorMonacoPane`: Monaco controls.
+
+Khi cần `resize-none` ở chỗ mới, thêm comment 1 dòng nói lý do.
+
 ## Routing (Nuxt pages)
 
 - File-based. Đừng tự khai báo route trừ khi thực sự cần.
@@ -133,6 +203,26 @@ Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compil
 - File `useXxx.ts`. Trả về object có shape ổn định.
 - **Singleton state** (như `useTheme`) → giữ state ngoài hàm (module-scope ref) khi cần share giữa các caller; ghi rõ trong tài liệu của composable.
 - **Không gọi composable trong điều kiện** (cùng quy tắc như React hook nhưng Vue cho phép setup boundary).
+
+### Page-controller composable (tách page lớn)
+
+Khi một page/SFC vượt ~250 dòng, **không** để logic phình trong `<script setup>`. Tách:
+
+1. **Markup lặp → component con** (vd [`AgentListItem.vue`](../../apps/desktop/ui/components/agent/AgentListItem.vue)).
+2. **UI/logic lặp giữa nhiều trang → composable dùng chung** (vd [`useToasts`](../../apps/desktop/ui/composables/useToasts.ts) gom toast của agents + skills). Rule of Three: 2 copy = tín hiệu, 3 = bắt buộc.
+3. **Toàn bộ state + computed + handler còn lại → page-controller composable** `useXxxManager()` (vd [`useSkillsManager`](../../apps/desktop/ui/composables/useSkillsManager.ts)). Page còn lại đúng `<template>` + một destructure:
+
+```vue
+<script setup lang="ts">
+import { Wand2 } from 'lucide-vue-next' // chỉ import gì template trực tiếp cần (icon)
+const { filtered, selectedKey, editing, onSelect, pushToast /* … */ } = useSkillsManager()
+</script>
+```
+
+- **Template ref / lifecycle đặt được trong composable:** `ref="sidebarRef"`, `onMounted`, `watch` đăng ký trên instance gọi composable.
+- **Write tới destructured ref trong template tự `.value =`:** Vue compiler transform `editing = true`, `pendingDelete = null`, `(v) => (searchQuery = v)` thành `.value =`. Đã verify với `@vue/compiler-sfc` 3.5 → **không cần** viết setter riêng.
+- **Auto-import:** composable trong `composables/` không cần `import` trong page.
+- Kết quả thực tế: `pages/skills/index.vue` 570 → 179 dòng (logic dời sang `useSkillsManager`).
 
 ## Component/composable dùng chung
 

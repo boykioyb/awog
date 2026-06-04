@@ -1,6 +1,6 @@
 <template>
   <EditorShell
-    :title="server?.id ? 'Edit MCP Server' : 'New MCP Server'"
+    :title="server?.id ? tr('connections.editor.edit_title') : tr('connections.editor.new_title')"
     :dirty="dirty"
     :can-save="!!draft.id && !!draft.name"
     @save="onSave"
@@ -12,7 +12,7 @@
           <input
             :value="draft.id"
             placeholder="e.g. gitnexus"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             @input="(e: Event) => (draft.id = slugify((e.target as HTMLInputElement).value))"
           />
@@ -20,7 +20,7 @@
         <Field label="Display name">
           <input
             v-model="draft.name"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -30,7 +30,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[12px] resize-none"
+          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -39,7 +39,7 @@
         <Field label="Transport">
           <select
             v-model="draft.transport"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           >
             <option value="stdio">stdio</option>
@@ -50,7 +50,7 @@
         <Field label="Trust">
           <select
             v-model="draft.trust"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           >
             <option value="allow">allow (auto)</option>
@@ -62,7 +62,7 @@
           <input
             v-model.number="draft.timeoutMs"
             type="number"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -74,7 +74,7 @@
           <input
             v-model="draft.command"
             placeholder="npx, uvx, /path/to/bin"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -82,7 +82,7 @@
           <textarea
             v-model="argsText"
             :rows="3"
-            class="w-full rounded px-2 py-1.5 text-[11px] font-mono resize-none"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[4rem]"
             :style="inputStyle"
           />
         </Field>
@@ -90,11 +90,15 @@
           <input
             v-model="draft.cwd"
             placeholder="${workspace}"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
-        <KvEditor v-model="envEntries" label="Env vars" />
+        <KvEditor
+          v-model="envEntries"
+          label="Env vars"
+          :secret-mode="draft.id ? { serverId: draft.id } : undefined"
+        />
       </div>
 
       <!-- http config -->
@@ -103,34 +107,96 @@
           <input
             v-model="draft.url"
             placeholder="https://mcp.example.com/v1"
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
-        <KvEditor v-model="headerEntries" label="Headers" />
+        <KvEditor
+          v-model="headerEntries"
+          label="Headers"
+          :secret-mode="draft.id ? { serverId: draft.id } : undefined"
+        />
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <ToggleField v-model="draft.enabled" label="Enabled" />
         <ToggleField v-model="draft.autoStart" label="Auto-start" />
       </div>
+
+      <div class="flex items-center gap-2 pt-2" :style="{ borderTop: `1px solid ${t.border}` }">
+        <button
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[1em] rounded font-medium transition disabled:opacity-50"
+          :style="{
+            background: t.bgInput,
+            color: t.text,
+            border: `1px solid ${t.border}`,
+          }"
+          :disabled="!canVerify || verifying"
+          @click="onVerify"
+        >
+          <Loader2 v-if="verifying" :size="11" class="animate-spin" />
+          <CheckCircle2 v-else :size="11" />
+          {{ verifying ? 'Testing…' : 'Verify connection' }}
+        </button>
+        <span v-if="verifyResult" class="text-[1em]" :style="{ color: verifyTextColor }">
+          {{ verifyResult.summary }}
+        </span>
+      </div>
+      <pre
+        v-if="verifyResult && verifyResult.stderr && verifyResult.stderr.length > 0"
+        class="text-[1em] font-mono p-2 rounded max-h-32 overflow-y-auto"
+        :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+        >{{ verifyResult.stderr.join('\n') }}</pre
+      >
     </div>
   </EditorShell>
 </template>
 
 <script setup lang="ts">
-import type { MCPServer, MCPTool, MCPTransport, MCPTrust } from '~/types'
+import { Loader2, CheckCircle2 } from 'lucide-vue-next'
+import type { MCPServer, MCPTool, MCPTransport, MCPTrust, MCPResource } from '~/types'
 import type { McpDraft } from '~/composables/useMcpGenerator'
 
 const props = defineProps<{ server: MCPServer | null; initialDraft?: McpDraft | null }>()
 const emit = defineEmits<{ save: [server: MCPServer]; cancel: [] }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
+
+interface VerifyState {
+  ok: boolean
+  summary: string
+  stderr?: string[]
+}
+
+interface VerifyResponse {
+  ok: boolean
+  tools?: MCPTool[]
+  resources?: MCPResource[]
+  error?: string
+  stderr?: string[]
+}
 
 type Draft = Omit<MCPServer, 'tools' | 'resources' | 'status'> & {
   tools: MCPTool[]
   resources: MCPServer['resources']
   status: MCPServer['status']
+}
+
+const RUNTIME_KEYS: ReadonlyArray<keyof MCPServer> = ['status', 'tools', 'resources', 'lastError']
+
+// Mirror of stripRuntimeFields in stores/workspace.ts — keep config-only shape
+// for `mcp.test` (sidecar zod schema rejects runtime fields).
+const stripRuntime = (
+  d: Draft,
+): Omit<MCPServer, 'status' | 'tools' | 'resources' | 'lastError'> => {
+  const entries = (Object.keys(d) as Array<keyof MCPServer>)
+    .filter((k) => !RUNTIME_KEYS.includes(k))
+    .map((k) => [k, (d as MCPServer)[k]] as const)
+  return Object.fromEntries(entries) as Omit<
+    MCPServer,
+    'status' | 'tools' | 'resources' | 'lastError'
+  >
 }
 
 const makeDefaults = (): Draft => ({
@@ -178,6 +244,55 @@ const initDraft = (s: MCPServer | null, seed: McpDraft | null | undefined): Draf
 
 const draft = ref<Draft>(initDraft(props.server, props.initialDraft))
 const original = ref<Draft>(initDraft(props.server, props.initialDraft))
+
+const verifying = ref(false)
+const verifyResult = ref<VerifyState | null>(null)
+
+const canVerify = computed(
+  () => draft.value.transport === 'stdio' && !!draft.value.command && !!draft.value.id,
+)
+
+const verifyTextColor = computed(() => (verifyResult.value?.ok ? t.value.success : t.value.danger))
+
+const onVerify = async () => {
+  if (!canVerify.value) return
+  verifying.value = true
+  verifyResult.value = null
+  try {
+    const sidecar = useSidecar()
+    if (!sidecar.available) {
+      verifyResult.value = { ok: false, summary: 'Sidecar offline — cannot verify' }
+      return
+    }
+    const res = await sidecar.request<VerifyResponse>('mcp.test', {
+      server: stripRuntime(draft.value),
+    })
+    if (res.ok) {
+      const toolCount = res.tools?.length ?? 0
+      const resCount = res.resources?.length ?? 0
+      verifyResult.value = {
+        ok: true,
+        summary: `Connected — ${toolCount} tool${toolCount === 1 ? '' : 's'}, ${resCount} resource${resCount === 1 ? '' : 's'}`,
+        stderr: res.stderr,
+      }
+      if (res.tools) draft.value.tools = res.tools
+      if (res.resources) draft.value.resources = res.resources
+    } else {
+      verifyResult.value = {
+        ok: false,
+        summary: `Failed — ${res.error ?? 'unknown error'}`,
+        stderr: res.stderr,
+      }
+    }
+  } catch (err) {
+    verifyResult.value = {
+      ok: false,
+      summary: err instanceof Error ? err.message : 'verify failed',
+    }
+  } finally {
+    verifying.value = false
+  }
+}
 
 const argsText = ref((draft.value.args ?? []).join('\n'))
 watch(argsText, (v) => {

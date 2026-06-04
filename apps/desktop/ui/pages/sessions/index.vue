@@ -3,11 +3,15 @@
     v-model:mobile-pane="mobilePane"
     :selected-id="store.selectedSessionId"
     list-width="20rem"
+    resizable
+    storage-key="awog:sessions:list-width"
+    :min-list-width="220"
+    :max-list-width="560"
   >
     <template #list>
       <!-- Single-row toolbar -->
       <div
-        class="px-3 py-3 flex items-center gap-1.5"
+        class="px-3 py-3 flex items-center gap-2"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search..." />
@@ -22,19 +26,21 @@
           <ListFilter :size="12" />
           <div
             v-if="activeFilterCount > 0"
-            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-semibold"
+            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[1em] font-semibold"
             :style="{ background: t.accent, color: t.accentText }"
           >
             {{ activeFilterCount }}
           </div>
         </button>
         <button
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
-          :style="{ background: t.accent, color: t.accentText }"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          title="New session"
           @click="onNewSession"
+          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
+          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
-          <Plus :size="11" />
-          New
+          <Plus :size="14" />
         </button>
       </div>
 
@@ -55,20 +61,9 @@
           ]"
         />
         <CompactSelect v-model="projectFilter" label="Project" :options="projectOptions" />
-        <CompactSelect v-model="providerFilter" label="Connection" :options="providerOptions" />
-        <CompactSelect v-model="modelFilter" label="Model" :options="modelOptions" />
-        <CompactSelect
-          v-model="agentFilter"
-          label="Agents"
-          :options="[
-            { value: 'all', label: 'All' },
-            { value: 'with', label: 'With agents' },
-            { value: 'without', label: 'No agents (scratch pad)' },
-          ]"
-        />
         <button
           v-if="activeFilterCount > 0"
-          class="text-[10px] transition"
+          class="text-[1em] transition"
           :style="{ color: clearHover ? t.text : t.textDim }"
           @click="clearFilters"
           @mouseenter="clearHover = true"
@@ -105,11 +100,11 @@
                 }"
               />
               <span
-                class="text-[10px] uppercase tracking-wider font-medium flex-1 text-left truncate"
+                class="text-[0.857em] uppercase tracking-wider font-medium flex-1 text-left truncate"
               >
                 {{ group.label }}
               </span>
-              <span class="text-[10px]" :style="{ color: t.textFaint }">
+              <span class="text-[0.857em]" :style="{ color: t.textFaint }">
                 {{ group.sessions.length }}
               </span>
             </button>
@@ -150,7 +145,7 @@
                     v-if="renamingId === ses.id"
                     :ref="setRenameInputRef"
                     v-model="renameValue"
-                    class="text-[13px] leading-tight w-full rounded px-1 py-0.5"
+                    class="text-[1em] leading-tight w-full rounded px-1 py-0.5"
                     :style="{
                       background: t.bgInput,
                       border: `1px solid ${t.borderStrong}`,
@@ -164,7 +159,7 @@
                   />
                   <div class="flex items-center gap-1">
                     <div
-                      class="text-[13px] leading-tight truncate flex-1"
+                      class="text-[1em] leading-tight truncate flex-1"
                       :style="{ color: t.text }"
                       @dblclick.stop="startRename(ses.id, ses.title)"
                     >
@@ -180,10 +175,10 @@
                     </button>
                   </div>
                   <div
-                    class="text-[10px] mt-0.5 flex items-center gap-1.5"
+                    class="text-[1em] mt-0.5 flex items-center gap-1.5"
                     :style="{ color: t.textDim }"
                   >
-                    <span>{{ ses.updatedAt }}</span>
+                    <span>{{ fmt(ses.updatedAt) }}</span>
                     <span :style="{ color: t.textFaint }">·</span>
                     <span>{{ ses.messages.length }} msg</span>
                     <span v-if="ses.invitedAgentIds.length" :style="{ color: t.textFaint }">·</span>
@@ -210,7 +205,7 @@
     </template>
 
     <template #empty-detail>
-      <div class="flex-1 flex items-center justify-center text-sm" :style="{ color: t.textDim }">
+      <div class="flex-1 flex items-center justify-center text-[1em]" :style="{ color: t.textDim }">
         Select a session
       </div>
     </template>
@@ -231,12 +226,22 @@
     :items="menuItems"
     @close="contextMenu = null"
   />
+
+  <SessionNewDialog
+    :open="newDialogOpen"
+    @close="newDialogOpen = false"
+    @create="onCreateSession"
+  />
+
+  <SessionSubagentDrawer />
 </template>
 
 <script setup lang="ts">
 import {
   ChevronDown,
+  Copy,
   Edit3,
+  FolderOpen,
   ListFilter,
   MessageSquare,
   MoreHorizontal,
@@ -244,21 +249,33 @@ import {
   Plus,
   Trash2,
 } from 'lucide-vue-next'
-import type { ProviderName, Session } from '~/types'
+import type { Session } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import { PROVIDER_LABEL, modelById } from '~/utils/models'
+import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
 const store = useSessionsStore()
 const workspace = useWorkspaceStore()
+const settingsStore = useSettingsStore()
+const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
+
+onMounted(() => {
+  store.hydrateFromSidecar()
+  // Project list is needed by SessionNewDialog + group/filter chips; hydrate
+  // here so opening "New session" never shows an empty picker on cold start.
+  workspace.hydrateProjectsFromSidecar()
+  // MCP list powers the per-session MCP chip in the composer.
+  workspace.hydrateMcpFromSidecar()
+  // Agents (`$` mention) + skills (`/` mention) are hydrated per-session in
+  // SessionChat, scoped to the selected session's project — so the composer
+  // picker never offers other projects' entries.
+})
 
 const searchQuery = ref('')
 const hoverId = ref<string | null>(null)
 const groupBy = ref<'none' | 'project' | 'provider' | 'model'>('project')
 const projectFilter = ref<string>('all')
-const providerFilter = ref<string>('all')
-const modelFilter = ref<string>('all')
-const agentFilter = ref<'all' | 'with' | 'without'>('all')
 const collapsedGroups = ref<Record<string, boolean>>({})
 const groupHover = ref<string | null>(null)
 const showFilters = ref(false)
@@ -283,10 +300,6 @@ const filtered = computed(() => {
         return false
       }
     }
-    if (providerFilter.value !== 'all' && s.settings.provider !== providerFilter.value) return false
-    if (modelFilter.value !== 'all' && s.settings.modelId !== modelFilter.value) return false
-    if (agentFilter.value === 'with' && s.invitedAgentIds.length === 0) return false
-    if (agentFilter.value === 'without' && s.invitedAgentIds.length > 0) return false
     if (q) {
       const hit =
         s.title.toLowerCase().includes(q) ||
@@ -315,49 +328,10 @@ const projectOptions = computed(() => [
   })),
 ])
 
-const providerOptions = computed(() => {
-  const counts = new Map<ProviderName, number>()
-  allSessions.value.forEach((s) => {
-    counts.set(s.settings.provider, (counts.get(s.settings.provider) ?? 0) + 1)
-  })
-  return [
-    { value: 'all', label: 'All' },
-    ...(['anthropic', 'openai', 'google'] as ProviderName[])
-      .filter((p) => counts.has(p))
-      .map((p) => ({
-        value: p,
-        label: `${PROVIDER_LABEL[p]} (${counts.get(p) ?? 0})`,
-      })),
-  ]
-})
-
-const modelOptions = computed(() => {
-  const counts = new Map<string, number>()
-  allSessions.value.forEach((s) => {
-    counts.set(s.settings.modelId, (counts.get(s.settings.modelId) ?? 0) + 1)
-  })
-  return [
-    { value: 'all', label: 'All' },
-    ...Array.from(counts.entries()).map(([id, count]) => ({
-      value: id,
-      label: `${modelById(id)?.label ?? id} (${count})`,
-    })),
-  ]
-})
-
-const activeFilterCount = computed(
-  () =>
-    (projectFilter.value !== 'all' ? 1 : 0) +
-    (providerFilter.value !== 'all' ? 1 : 0) +
-    (modelFilter.value !== 'all' ? 1 : 0) +
-    (agentFilter.value !== 'all' ? 1 : 0),
-)
+const activeFilterCount = computed(() => (projectFilter.value !== 'all' ? 1 : 0))
 
 const clearFilters = () => {
   projectFilter.value = 'all'
-  providerFilter.value = 'all'
-  modelFilter.value = 'all'
-  agentFilter.value = 'all'
 }
 
 const filterActiveLike = computed(() => showFilters.value || activeFilterCount.value > 0)
@@ -426,8 +400,15 @@ const toggleGroup = (key: string) => {
   collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
 }
 
+const newDialogOpen = ref(false)
+
 const onNewSession = () => {
-  store.createSession({ title: 'Untitled session', projectId: null })
+  newDialogOpen.value = true
+}
+
+const onCreateSession = (payload: { title: string; projectId: string | null }) => {
+  store.createSession(payload)
+  newDialogOpen.value = false
   mobilePane.value = 'detail'
 }
 
@@ -490,13 +471,53 @@ const confirmDelete = () => {
   }
 }
 
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // clipboard may be unavailable (non-secure context) — ignore
+  }
+}
+
+const revealInFinder = async (path: string) => {
+  try {
+    // '.' targets the project root folder itself (reveal_path rejects empty).
+    await useSidecar().revealPath(path, '.')
+  } catch {
+    // sidecar unavailable / path missing — ignore
+  }
+}
+
 const menuItems = computed<ContextMenuItem[]>(() => {
   const ctx = contextMenu.value
   if (!ctx) return []
   const item = store.sessions.find((s) => s.id === ctx.id)
   if (!item) return []
+  const projectPath = item.projectId
+    ? workspace.projects.find((p) => p.id === item.projectId)?.path
+    : undefined
   return [
     { label: 'Rename', icon: Edit3, action: () => startRename(item.id, item.title) },
+    { label: 'Copy session ID', icon: Copy, action: () => copyToClipboard(item.id) },
+    {
+      label: 'Copy project path',
+      icon: Copy,
+      disabled: !projectPath,
+      tooltip: projectPath ? undefined : 'Session has no project',
+      action: () => {
+        if (projectPath) copyToClipboard(projectPath)
+      },
+    },
+    {
+      label: 'Show in Finder',
+      icon: FolderOpen,
+      disabled: !projectPath,
+      tooltip: projectPath ? undefined : 'Session has no project',
+      action: () => {
+        if (projectPath) revealInFinder(projectPath)
+      },
+    },
+    { separator: true },
     {
       label: 'Delete',
       icon: Trash2,

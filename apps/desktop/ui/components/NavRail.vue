@@ -30,17 +30,24 @@
     <!-- Logo / brand -->
     <div
       class="h-11 flex items-center px-3 flex-shrink-0 gap-2"
-      :style="{ borderBottom: `1px solid ${t.border}` }"
+      :style="{ borderBottom: `1px solid ${t.border}`, color: t.text }"
     >
       <div
-        class="w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0"
-        :style="{ background: t.accent, color: t.accentText }"
+        class="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+        :style="{ border: `1px solid ${t.border}`, background: t.bgElevated }"
       >
-        A
+        <svg viewBox="0 0 32 32" width="20" height="20" role="img" aria-label="AWOG">
+          <rect x="4" y="13" width="18" height="14" rx="2.5" fill="currentColor" opacity="0.4" />
+          <rect x="7" y="9" width="18" height="14" rx="2.5" fill="currentColor" opacity="0.7" />
+          <rect x="10" y="5" width="18" height="14" rx="2.5" fill="currentColor" />
+          <rect x="13" y="9.4" width="10" height="1.4" rx="0.7" fill="#60a5fa" />
+          <rect x="13" y="12.4" width="7" height="1.4" rx="0.7" fill="#60a5fa" opacity="0.65" />
+          <circle cx="25.5" cy="7.5" r="1.6" fill="#fbbf24" />
+        </svg>
       </div>
       <span
         v-if="showLabels"
-        class="text-sm font-semibold tracking-tight"
+        class="text-[1em] font-semibold tracking-tight"
         :style="{ color: t.text }"
       >
         AWOG
@@ -54,7 +61,7 @@
         :key="item.id"
         :to="item.to"
         :title="!showLabels ? item.label : ''"
-        class="relative flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors group"
+        class="relative flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors group"
         :style="navItemStyle(item)"
         @click="onItemClick"
       >
@@ -65,15 +72,43 @@
           class="absolute top-1 left-6 w-1.5 h-1.5 rounded-full"
           :style="{ background: gitStore.hasConflict ? t.gitConflict : t.warning }"
         />
+        <span
+          v-if="item.id === 'git' && showLabels && (gitAhead > 0 || gitBehind > 0)"
+          class="ml-auto inline-flex items-center gap-1 font-mono text-[1em] px-1 py-0.5 rounded"
+          :style="{
+            background: t.bgInput,
+            color: t.accent,
+            border: `1px solid ${t.border}`,
+          }"
+          :title="`${gitAhead} ahead · ${gitBehind} behind`"
+        >
+          <span v-if="gitAhead > 0">↑{{ gitAhead }}</span>
+          <span v-if="gitBehind > 0">↓{{ gitBehind }}</span>
+        </span>
       </NuxtLink>
     </div>
 
-    <!-- Bottom: settings + theme toggle + collapse -->
+    <!-- Bottom: what's new + settings + theme toggle + collapse -->
     <div class="flex flex-col gap-0.5 p-1.5" :style="{ borderTop: `1px solid ${t.border}` }">
+      <button
+        :title="!showLabels ? tr('whatsnew.label') : ''"
+        class="relative flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
+        :style="{ color: t.textMuted }"
+        @click="onWhatsNew"
+      >
+        <Sparkles :size="15" class="flex-shrink-0" />
+        <span v-if="showLabels" class="truncate">{{ tr('whatsnew.label') }}</span>
+        <span
+          v-if="hasUnseen"
+          class="absolute top-1 left-6 w-1.5 h-1.5 rounded-full"
+          :style="{ background: t.accent }"
+        />
+      </button>
+
       <NuxtLink
         to="/settings"
         :title="!showLabels ? 'Settings' : ''"
-        class="flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors"
+        class="flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
         :style="navItemStyle({ to: '/settings' })"
         @click="onItemClick"
       >
@@ -83,7 +118,7 @@
 
       <button
         :title="!showLabels ? (themeName === 'dark' ? 'Switch to light' : 'Switch to dark') : ''"
-        class="flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors"
+        class="flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
         :style="{ color: t.textMuted }"
         @click="toggle"
         @mouseenter="hoverTheme = true"
@@ -102,7 +137,7 @@
 
       <button
         :title="!showLabels ? (isMobile ? 'Open menu' : 'Expand') : isMobile ? 'Close' : 'Collapse'"
-        class="flex items-center gap-2.5 px-2 h-8 rounded text-xs transition-colors"
+        class="flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
         :style="{ color: t.textMuted }"
         @click="onToggle"
       >
@@ -115,6 +150,8 @@
       </button>
     </div>
   </nav>
+
+  <WhatsNewModal :open="whatsNewOpen" :releases="releases" @close="closePanel" />
 </template>
 
 <script setup lang="ts">
@@ -134,12 +171,17 @@ import {
   Zap,
   Slash,
   GitBranch,
+  Sparkles,
 } from 'lucide-vue-next'
 
 const { t, themeName, toggle } = useTheme()
+const { t: tr } = useI18n()
+const { open: whatsNewOpen, hasUnseen, releases, openPanel, closePanel } = useWhatsNew()
 const route = useRoute()
 const gitStore = useGitStore()
 const gitDirty = computed(() => gitStore.hasUncommitted)
+const gitAhead = computed(() => gitStore.ahead)
+const gitBehind = computed(() => gitStore.behind)
 
 const expanded = useState<boolean>('navRailExpanded', () => true)
 const mobileOpen = ref(false)
@@ -159,6 +201,11 @@ const onToggle = () => {
 }
 
 const onItemClick = () => {
+  if (isMobile.value) mobileOpen.value = false
+}
+
+const onWhatsNew = () => {
+  openPanel()
   if (isMobile.value) mobileOpen.value = false
 }
 
@@ -184,7 +231,7 @@ const items: NavItem[] = [
   { id: 'agents', label: 'Agents', icon: Users, to: '/agents' },
   { id: 'skills', label: 'Skills', icon: Wand2, to: '/skills' },
   { id: 'git', label: 'Git', icon: GitBranch, to: '/git' },
-  { id: 'mcp-servers', label: 'MCP Servers', icon: Plug, to: '/mcp-servers' },
+  { id: 'connections', label: 'Connections', icon: Plug, to: '/connections' },
   { id: 'hooks', label: 'Hooks', icon: Zap, to: '/hooks' },
   { id: 'commands', label: 'Commands', icon: Slash, to: '/commands' },
 ]

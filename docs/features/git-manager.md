@@ -9,6 +9,8 @@
 
 - [Overview](#overview)
 - [Personas](#personas)
+- [Multi-repo trong project](#multi-repo-trong-project)
+- [Tree view & navigation](#tree-view--navigation)
 - [Scope MVP](#scope-mvp)
 - [Out of scope](#out-of-scope)
 - [User flows](#user-flows)
@@ -47,6 +49,23 @@ Module gồm:
 - **Tech Lead** (tương lai) — review code do agent commit theo phase, cần map commit ↔ phase ↔ trace để debug.
 
 Không phải target: người dùng chưa biết Git (MVP không có wizard onboarding Git).
+
+## Multi-repo trong project
+
+Một "project" trong AWOG thường là **folder workspace chứa nhiều repo con** (vd `packages/api`, `services/worker`) — bản thân folder gốc không có `.git`. Trước đây Git Manager chạy `git status` ngay tại `project.path`, gặp folder container thì trả `NO_REPO` và hiện empty state "Workspace has no Git repo" dù bên trong có repo thật.
+
+**Giải pháp:** sidecar quét folder project tìm các git repo, UI cho chọn repo qua dropdown ở header.
+
+- **Discovery (`git.discoverRepos`)** — walk từ `root` tối đa **2 cấp** (`root`, `./<repo>`, `./<group>/<repo>`). Tại mỗi folder, nếu là **repo Git hợp lệ** → ghi nhận và **không** đệ quy sâu hơn. "Hợp lệ" = `.git/` là dir có file `HEAD` (loại bỏ folder `.git` rác — vd chỉ chứa junk subdir, không phải repo thật) **hoặc** `.git` là file bắt đầu bằng `gitdir:` (worktree/submodule). Bỏ qua `node_modules`/`.git`/build dir (dùng chung `SKIP_DIRS` của [`fs/skip-dirs.ts`](../../apps/desktop/sidecar/src/fs/skip-dirs.ts)), không follow symlink, cap 50 repo. Read-only, **không spawn git**. Code: [`git/discover.ts`](../../apps/desktop/sidecar/src/git/discover.ts).
+- **Effective git root** — store giữ `selectedRepoPathByProject` per project; `resolveWorkspaceRoot()` trả repo đang chọn, fallback về `project.path` (project single-repo / chưa discover). Mọi `git.*` action vẫn chạy `cwd = repo path` → giữ nguyên security invariant #3.
+- **UX** — dropdown repo chỉ hiện khi `repos.length > 1` (project single-repo trông y như cũ). Mặc định chọn root-repo nếu có, ngược lại repo đầu tiên. Đổi repo → reset selection + reload mọi section (invalidate cache branch/remote/history per project để không hiện nhầm repo trước).
+- **Project không có repo nào** → vẫn rơi về empty state + CTA "Initialize Git repository" (init tại `project.path`); sau init re-discover để root-repo xuất hiện trong picker.
+
+## Tree view & navigation
+
+- **Header** tối giản: breadcrumb `[project] / [repo?] / [branch]` (repo dropdown chỉ khi >1 repo) + cụm action Fetch/Pull/Push bên phải. Ahead/behind chỉ hiển thị **trên nút** Pull/Push (không lặp ở giữa). Các selector `whitespace-nowrap` + truncate để không vỡ layout khi tên dài.
+- **Sidebar Branches** — gom branch theo prefix `/` thành folder gập được (vd `sora-hoa/*` → folder `sora-hoa`); chuỗi 1-con collapse phẳng (collapse singleton). **Folder mặc định đóng** (track tập folder user đã mở). Branch hiện tại tô **accent + đậm** (prop `highlight` của [`GitSidebarItem.vue`](../../apps/desktop/ui/components/git/GitSidebarItem.vue)). Logic build tree: [`utils/branch-tree.ts`](../../apps/desktop/ui/utils/branch-tree.ts).
+- **Changes list** — toggle **tree / flat** ở header (mặc định tree, nhớ qua localStorage `awog.git.changes.view`). Tree gom file theo folder (collapse single-child dir chains, **mặc định mở**); flat giữ nguyên virtual-scroll cho > 200 file. Stage all / Unstage all là icon button. Build tree dùng chung [`utils/file-path-tree.ts`](../../apps/desktop/ui/utils/file-path-tree.ts) (cũng dùng cho commit-detail file tree).
 
 ## Scope MVP
 
@@ -643,6 +662,14 @@ export interface GitRemote {
   pushUrl: string
 }
 
+// Repo phát hiện trong folder project (xem "Multi-repo trong project").
+export interface GitRepoEntry {
+  path: string                  // absolute path tới repo root (folder chứa .git)
+  name: string                  // basename(path)
+  relativePath: string          // path tương đối project root; '.' nếu root là repo
+  isRoot: boolean               // true khi path === project root
+}
+
 export interface GitDiffHunk {
   oldStart: number
   oldLines: number
@@ -819,9 +846,16 @@ async function cancel(op: 'fetch' | 'pull' | 'push'): Promise<void>             
 
 ### Methods
 
+> **Ngoại lệ contract:** `git.discoverRepos` (xem [Multi-repo trong project](#multi-repo-trong-project)) **không** nhận `workspaceRoot` mà nhận `root` (folder project, có thể không phải repo). Đây là method duy nhất chạy *trước* khi biết repo, nên không qua mutex/`assertWorkspace` của git runner — chỉ là walk filesystem read-only, không spawn git.
+
 #### Read
 
 ```ts
+// git.discoverRepos — quét folder project tìm các git repo (tối đa 2 cấp)
+input:  { root: string }   // absolute path của folder project (container)
+output: { repos: GitRepoEntry[] }   // root-repo trước, rồi theo relativePath
+git:    (không spawn git — chỉ stat `.git` + readdir, bỏ qua SKIP_DIRS)
+
 // git.status — list working tree status
 input:  { includeIgnored?: boolean }  // default false
 output: GitStatus
@@ -1046,7 +1080,7 @@ interface WorkspaceSettings {
   autoCommitScope: 'workspace' | 'artifacts-only'      // default 'workspace'
   autoStashDirtyBeforeTask: boolean                    // default false
   dirtyTaskPolicy: 'warn' | 'auto-stash' | 'block'     // default 'warn' — 'block' giữ cho enterprise sau
-  autoFetchIntervalMs: number                          // default 0 (off); user có thể đặt 60000 = 60s
+  autoFetchIntervalMs: number                          // default 300000 (5 phút); 0 = tắt
 }
 ```
 
@@ -1147,10 +1181,12 @@ interface WorkspaceSettings {
 | `git.diff` cho 1 file | < 100ms parse + render | Monaco render diff incremental. |
 | `git.log` limit 100 | < 500ms | Initial load tab History. |
 | `git.fetch` | network-bound | Streaming progress, UI không block. |
-| Auto-fetch interval | OFF mặc định | User opt-in 60s / 5min / 15min. Lý do OFF default: tránh network noise khi offline. |
+| Auto-fetch interval | **5 phút mặc định** (ON) | Chỉnh / tắt (0) ở Settings → Workspace. |
 | Status auto-refresh | Debounce 200ms khi nhận `git:status:changed` event | Tránh thrash khi user spam stage/unstage. |
 | Render `GitStatusList` | < 16ms per scroll frame (60fps) | Virtual scroll cho > 200 row. |
 | `git.commit` | < 500ms (commit nhỏ) | Bigger commit (>1k file) có thể chậm — chấp nhận. |
+
+**Auto-fetch (background):** trang `/git` chạy `fetchRemote(silent)` ngay khi mở, lặp lại mỗi `autoFetchIntervalMs` (default 300000ms = 5 phút), và fetch lại khi cửa sổ focus lại. Silent = không toast, không progress strip, lỗi (offline/auth) nuốt im; vẫn refresh branches/status để ahead/behind của main/develop/release luôn tươi. Bỏ qua khi đang busy hoặc tab ẩn. Wiring ở [`pages/git/index.vue`](../../apps/desktop/ui/pages/git/index.vue) + flag `silent` trong `fetchRemote` ([stores/git.ts](../../apps/desktop/ui/stores/git.ts)). Đặt interval = 0 để tắt.
 
 **Strategy:**
 - Parse output Git ở sidecar (Node.js), gửi UI **structured JSON** (không stream raw).

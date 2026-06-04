@@ -27,21 +27,23 @@ const emit = defineEmits<{
   delete: [name: string]
 }>()
 
+const { t: tr } = useI18n()
+
 const items = computed<ContextMenuItem[]>(() => {
   if (props.isRemote) {
     return [
       {
-        label: 'Checkout as new local branch',
+        label: tr('git.branches.menu.checkout_as_local'),
         icon: GitBranchPlus,
         action: () => emit('checkout-as-local', props.branchName),
       },
       {
-        label: 'Fetch',
+        label: tr('git.branches.menu.fetch'),
         icon: Download,
         action: () => emit('fetch'),
       },
       {
-        label: 'Copy name',
+        label: tr('git.branches.menu.copy_name'),
         icon: Copy,
         action: () => emit('copy', props.branchName),
       },
@@ -49,28 +51,30 @@ const items = computed<ContextMenuItem[]>(() => {
   }
   return [
     {
-      label: props.isCurrent ? 'Already checked out' : 'Checkout',
+      label: props.isCurrent
+        ? tr('git.branches.menu.already_checked_out')
+        : tr('git.branches.menu.checkout'),
       icon: Check,
       disabled: props.isCurrent,
       action: () => emit('checkout', props.branchName, props.isCurrent),
     },
     {
-      label: 'New branch from here…',
+      label: tr('git.branches.menu.new_from_here'),
       icon: GitBranchPlus,
       action: () => emit('create-from', props.branchName),
     },
     {
-      label: 'Rename…',
+      label: tr('git.branches.menu.rename'),
       icon: Pencil,
       action: () => emit('rename', props.branchName),
     },
     {
-      label: 'Copy name',
+      label: tr('git.branches.menu.copy_name'),
       icon: Copy,
       action: () => emit('copy', props.branchName),
     },
     {
-      label: 'Delete branch',
+      label: tr('git.branches.menu.delete'),
       icon: Trash2,
       danger: true,
       disabled: props.isCurrent,

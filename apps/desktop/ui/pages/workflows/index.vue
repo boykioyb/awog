@@ -4,6 +4,8 @@
       v-model:mobile-pane="mobilePane"
       :selected-id="selectedWorkflowId"
       list-width="15rem"
+      resizable
+      storage-key="awog.workflows.listWidth"
     >
       <template #list>
         <div
@@ -11,16 +13,16 @@
           :style="{ borderBottom: `1px solid ${t.border}` }"
         >
           <div
-            class="text-[11px] uppercase tracking-wider font-medium"
+            class="text-[14px] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
-            Workflows
+            {{ tr('workflows.header') }}
           </div>
           <button
             ref="newButtonRef"
             class="transition"
             :style="{ color: t.textDim }"
-            title="New workflow"
+            :title="tr('workflows.new')"
             @click="openPromptModal"
             @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
             @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
@@ -29,14 +31,31 @@
           </button>
         </div>
 
+        <!-- Scope: filters the list AND sets where a new workflow is saved
+             (Global = shared; a project = lives in that repo). -->
+        <div class="px-3 py-2" :style="{ borderBottom: `1px solid ${t.border}` }">
+          <select
+            v-model="scopeFilter"
+            class="w-full rounded px-2 py-1 text-[1em] cursor-pointer"
+            :style="{
+              background: t.bgInput,
+              border: `1px solid ${t.border}`,
+              color: t.text,
+              outline: 'none',
+            }"
+          >
+            <option v-for="o in scopeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
+        </div>
+
         <div class="overflow-y-auto p-2 space-y-0.5" style="max-height: 40%">
           <WorkflowListItem
-            v-for="wf in store.workflows"
-            :key="wf.id"
+            v-for="wf in displayedWorkflows"
+            :key="`${wf.source ?? 'global'}:${wf.projectId ?? ''}:${wf.id}`"
+            v-model:rename-value="renameValue"
             :workflow="wf"
             :selected="selectedWorkflowId === wf.id"
             :renaming="renamingId === wf.id"
-            v-model:rename-value="renameValue"
             @select="selectWorkflow(wf.id)"
             @context-menu="onListItemMenu($event, wf.id)"
             @start-rename="startRename(wf.id, wf.name)"
@@ -45,7 +64,7 @@
           />
         </div>
 
-        <WorkflowPalette :agents="store.agents" />
+        <WorkflowPalette :agents="paletteAgents" />
       </template>
 
       <template #detail>
@@ -62,16 +81,17 @@
       </template>
 
       <template #empty-detail>
-        <EmptyView :icon="Workflow" title="No workflow selected" />
+        <EmptyView :icon="Workflow" :title="tr('workflows.empty')" />
       </template>
     </MasterDetailShell>
 
-    <!-- Inspector (3rd pane, sibling to MasterDetailShell) -->
+    <!-- Inspector (3rd pane) — hidden by default, only shown when a node is selected. -->
     <WorkflowInspectorPane
+      v-if="selectedNode"
       :node="selectedNode"
       :agent="selectedAgent"
       :skill="selectedSkill"
-      :available-skills="selectedAgentSkills"
+      :available-skills="availableSkills"
       @update:node="onInspectorUpdate"
     />
   </div>
@@ -79,14 +99,19 @@
   <WorkflowPromptCreator
     v-if="showPromptModal"
     :anchor="anchor"
+    :projects="store.projects"
+    :agents="store.agents"
+    :default-scope="scopeFilter === 'all' ? 'global' : scopeFilter"
     @save="onPromptSave"
     @cancel="showPromptModal = false"
   />
 
   <ConfirmDeleteModal
     v-if="pendingDeleteId"
-    title="Delete workflow?"
-    :description="`Workflow '${pendingDeleteName}' sẽ bị xóa.`"
+    :title="tr('workflows.delete.title')"
+    :description="tr('workflows.delete.desc', { name: pendingDeleteName })"
+    :cancel-label="tr('common.cancel')"
+    :confirm-label="tr('common.delete')"
     @confirm="confirmDelete"
     @cancel="pendingDeleteId = null"
   />
@@ -102,21 +127,76 @@
 
 <script setup lang="ts">
 import { Edit3, Plus, Trash2, Workflow } from 'lucide-vue-next'
-import type { WorkflowEdge, WorkflowNode } from '~/types'
+import type { Agent, WorkflowEdge, WorkflowNode } from '~/types'
 import type { WorkflowDraft } from '~/composables/useWorkflowGenerator'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
+// Agents/skills stay in the workspace store; workflows are their own live store.
 const store = useWorkspaceStore()
+const workflowsStore = useWorkflowsStore()
 
-const selectedWorkflowId = ref<string | null>(store.workflows[0]?.id ?? null)
+onMounted(async () => {
+  // hydrateFromSidecar ensures projects are loaded first; then pull agents +
+  // skills (the palette + node skill picker need them — this page is reachable
+  // without visiting /agents or /skills first).
+  await workflowsStore.hydrateFromSidecar()
+  const ids = store.projects.map((p) => p.id)
+  void store.hydrateAgentsFromSidecar(ids)
+  void store.hydrateSkillsFromSidecar(ids)
+})
+
+// Flush any pending debounced canvas persistence before navigating away so a
+// drag/connect right before leaving the page is never lost.
+onBeforeUnmount(() => {
+  workflowsStore.flushPendingPersist()
+})
+
+const selectedWorkflowId = ref<string | null>(workflowsStore.workflows[0]?.id ?? null)
 const selectedNodeId = ref<string | null>(null)
 const showPromptModal = ref(false)
 const newButtonRef = ref<HTMLButtonElement | null>(null)
 const anchor = ref<{ top: number; left: number } | null>(null)
 const mobilePane = ref<'list' | 'detail'>('list')
 
-const workflow = computed(() => store.workflows.find((w) => w.id === selectedWorkflowId.value))
+// Scope value: 'all' (view everything), 'global', or a projectId. Doubles as the
+// target scope for a newly-created workflow ('all' → global).
+const scopeFilter = ref<string>('all')
+
+const scopeOptions = computed(() => [
+  { value: 'all', label: tr('workflows.scope.all') },
+  { value: 'global', label: tr('workflows.scope.global') },
+  ...store.projects.map((p) => ({ value: p.id, label: p.name })),
+])
+
+const displayedWorkflows = computed(() => {
+  const scope = scopeFilter.value
+  if (scope === 'all') return workflowsStore.workflows
+  if (scope === 'global') {
+    return workflowsStore.workflows.filter((w) => (w.source ?? 'global') === 'global')
+  }
+  return workflowsStore.workflows.filter((w) => w.source === 'project' && w.projectId === scope)
+})
+
+const workflow = computed(() =>
+  workflowsStore.workflows.find((w) => w.id === selectedWorkflowId.value),
+)
+
+// Agents shown in the palette, filtered to what the SELECTED workflow can use:
+//   - project workflow → portable (global/user) agents + that project's agents
+//   - global workflow (or none) → only portable agents, so a shared workflow
+//     never references a project agent that won't exist when run elsewhere.
+const isProjectAgent = (a: Agent): boolean =>
+  a.source === 'project-claude' || a.source === 'project-agents'
+
+const paletteAgents = computed<Agent[]>(() => {
+  const wf = workflow.value
+  if (wf?.source === 'project' && wf.projectId) {
+    return store.agents.filter((a) => !isProjectAgent(a) || a.projectId === wf.projectId)
+  }
+  return store.agents.filter((a) => !isProjectAgent(a))
+})
 
 const selectedNode = computed(() =>
   workflow.value?.nodes.find((n) => n.id === selectedNodeId.value),
@@ -130,10 +210,9 @@ const selectedSkill = computed(() =>
   selectedNode.value ? store.skills.find((s) => s.id === selectedNode.value!.skillId) : undefined,
 )
 
-const selectedAgentSkills = computed(() => {
-  if (!selectedAgent.value) return []
-  return store.skills.filter((s) => selectedAgent.value!.skillIds.includes(s.id))
-})
+// Skills are independent of agents now — the node skill picker offers every
+// available skill, not a per-agent subset.
+const availableSkills = computed(() => store.skills)
 
 const openPromptModal = () => {
   const rect = newButtonRef.value?.getBoundingClientRect()
@@ -141,9 +220,18 @@ const openPromptModal = () => {
   showPromptModal.value = true
 }
 
-const onPromptSave = (draft: WorkflowDraft) => {
-  const wf = store.createWorkflow(draft.name)
-  store.saveWorkflow({ ...wf, description: draft.description })
+const onPromptSave = (draft: WorkflowDraft, scope: string) => {
+  // scope comes from the modal's "Save to" picker ('global' or a projectId).
+  // draft.nodes/edges come from the LLM (empty in the offline mock fallback).
+  const wf = workflowsStore.createWorkflow(draft.name, scope)
+  workflowsStore.saveWorkflow({
+    ...wf,
+    description: draft.description,
+    nodes: draft.nodes,
+    edges: draft.edges,
+  })
+  // Switch the list filter to the new workflow's scope so it's visible + selected.
+  scopeFilter.value = scope
   selectedWorkflowId.value = wf.id
   selectedNodeId.value = null
   showPromptModal.value = false
@@ -152,12 +240,12 @@ const onPromptSave = (draft: WorkflowDraft) => {
 
 const onNodesUpdate = (nodes: WorkflowNode[]) => {
   if (!workflow.value) return
-  store.updateWorkflowNodes(workflow.value.id, nodes)
+  workflowsStore.updateWorkflowNodes(workflow.value.id, nodes)
 }
 
 const onEdgesUpdate = (edges: WorkflowEdge[]) => {
   if (!workflow.value) return
-  store.updateWorkflowEdges(workflow.value.id, edges)
+  workflowsStore.updateWorkflowEdges(workflow.value.id, edges)
 }
 
 const onSelectedNodeUpdate = (id: string | null) => {
@@ -165,6 +253,8 @@ const onSelectedNodeUpdate = (id: string | null) => {
 }
 
 const selectWorkflow = (id: string) => {
+  // Flush pending edits for the current workflow before switching away.
+  workflowsStore.flushPendingPersist()
   selectedWorkflowId.value = id
   selectedNodeId.value = null
   mobilePane.value = 'detail'
@@ -201,9 +291,9 @@ const commitRename = () => {
   const id = renamingId.value
   if (!id) return
   const trimmed = renameValue.value.trim()
-  const wf = store.workflows.find((w) => w.id === id)
+  const wf = workflowsStore.workflows.find((w) => w.id === id)
   if (trimmed && wf && trimmed !== wf.name) {
-    store.renameWorkflow(id, trimmed)
+    workflowsStore.renameWorkflow(id, trimmed)
   }
   renamingId.value = null
 }
@@ -213,15 +303,15 @@ const cancelRename = () => {
 }
 
 const pendingDeleteName = computed(
-  () => store.workflows.find((w) => w.id === pendingDeleteId.value)?.name ?? '',
+  () => workflowsStore.workflows.find((w) => w.id === pendingDeleteId.value)?.name ?? '',
 )
 
 const confirmDelete = () => {
   if (!pendingDeleteId.value) return
   const deletingId = pendingDeleteId.value
-  store.deleteWorkflow(deletingId)
+  workflowsStore.deleteWorkflow(deletingId)
   if (selectedWorkflowId.value === deletingId) {
-    selectedWorkflowId.value = store.workflows[0]?.id ?? null
+    selectedWorkflowId.value = workflowsStore.workflows[0]?.id ?? null
     selectedNodeId.value = null
   }
   pendingDeleteId.value = null
@@ -230,12 +320,12 @@ const confirmDelete = () => {
 const menuItems = computed<ContextMenuItem[]>(() => {
   const ctx = contextMenu.value
   if (!ctx) return []
-  const wf = store.workflows.find((w) => w.id === ctx.id)
+  const wf = workflowsStore.workflows.find((w) => w.id === ctx.id)
   if (!wf) return []
   return [
-    { label: 'Rename', icon: Edit3, action: () => startRename(wf.id, wf.name) },
+    { label: tr('common.rename'), icon: Edit3, action: () => startRename(wf.id, wf.name) },
     {
-      label: 'Delete',
+      label: tr('common.delete'),
       icon: Trash2,
       danger: true,
       action: () => {

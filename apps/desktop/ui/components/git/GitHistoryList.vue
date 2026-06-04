@@ -4,15 +4,15 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">History</div>
-      <div class="text-[10px]" :style="{ color: t.textFaint }">
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">History</div>
+      <div class="text-[1em]" :style="{ color: t.textFaint }">
         {{ store.commits.length }} commits
       </div>
     </div>
 
     <div
       v-if="store.commits.length === 0"
-      class="flex-1 flex items-center justify-center text-xs"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
       No commits yet
@@ -37,11 +37,11 @@
         @click="store.selectCommit(c.hash)"
       >
         <div class="flex items-center gap-2">
-          <span class="text-xs font-mono" :style="{ color: t.accent }">{{ c.shortHash }}</span>
-          <span class="text-xs flex-1 truncate" :style="{ color: t.text }">{{ c.subject }}</span>
+          <span class="text-[1em] font-mono" :style="{ color: t.accent }">{{ c.shortHash }}</span>
+          <span class="text-[1em] flex-1 truncate" :style="{ color: t.text }">{{ c.subject }}</span>
           <span
             v-if="c.phaseId"
-            class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.infoBg,
               color: t.info,
@@ -53,23 +53,43 @@
             {{ c.phaseId }}
           </span>
         </div>
-        <div class="flex items-center gap-2 text-[10px]" :style="{ color: t.textDim }">
+        <div class="flex items-center gap-2 text-[1em]" :style="{ color: t.textDim }">
           <span>{{ c.authorName }}</span>
           <span :style="{ color: t.textFaint }">·</span>
           <span>{{ formatDate(c.date) }}</span>
           <span
             v-for="r in c.refs"
-            :key="r"
-            class="ml-1 px-1.5 py-0.5 rounded text-[9px]"
+            :key="`${r.kind}:${r.name}`"
+            class="ml-1 px-1.5 py-0.5 rounded text-[1em]"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
               border: `1px solid ${t.border}`,
             }"
           >
-            {{ r }}
+            {{ r.name }}
           </span>
         </div>
+      </div>
+      <div
+        v-if="store.historyHasMore"
+        class="px-3 py-2 flex justify-center"
+        :style="{ borderTop: `1px solid ${t.border}` }"
+      >
+        <button
+          type="button"
+          class="px-3 py-1 text-[1em] rounded transition"
+          :style="{
+            background: t.bgInput,
+            color: t.textMuted,
+            border: `1px solid ${t.border}`,
+            opacity: store.isLoadingHistoryMore ? 0.6 : 1,
+          }"
+          :disabled="store.isLoadingHistoryMore"
+          @click="store.loadMoreHistory()"
+        >
+          {{ store.isLoadingHistoryMore ? 'Loading…' : 'Load more' }}
+        </button>
       </div>
     </div>
   </div>

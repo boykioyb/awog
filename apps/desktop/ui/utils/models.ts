@@ -12,13 +12,33 @@ export interface ModelDef {
 
 export const MODELS: ModelDef[] = [
   {
+    id: 'claude-opus-4-8',
+    label: 'Claude Opus 4.8',
+    vendor: 'Anthropic',
+    tier: 'Frontier',
+    provider: 'anthropic',
+    supportsThinking: true,
+    maxLevel: 'max',
+  },
+  {
+    // AWOG-internal id (not a real API name). Sidecar maps it to claude-opus-4-8
+    // + the context-1m beta header — see resolveModelRequest in models-map.ts.
+    id: 'claude-opus-4-8-1m',
+    label: 'Claude Opus 4.8 (1M context)',
+    vendor: 'Anthropic',
+    tier: 'Frontier',
+    provider: 'anthropic',
+    supportsThinking: true,
+    maxLevel: 'max',
+  },
+  {
     id: 'claude-opus-4-7',
     label: 'Claude Opus 4.7',
     vendor: 'Anthropic',
     tier: 'Frontier',
     provider: 'anthropic',
     supportsThinking: true,
-    maxLevel: 'extra-high',
+    maxLevel: 'max',
   },
   {
     id: 'claude-opus-4-6',
@@ -27,7 +47,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Frontier',
     provider: 'anthropic',
     supportsThinking: true,
-    maxLevel: 'extra-high',
+    maxLevel: 'max',
   },
   {
     id: 'claude-sonnet-4-6',
@@ -36,7 +56,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Balanced',
     provider: 'anthropic',
     supportsThinking: true,
-    maxLevel: 'high',
+    maxLevel: 'extra-high',
   },
   {
     id: 'claude-haiku-4-5',
@@ -45,7 +65,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Fast',
     provider: 'anthropic',
     supportsThinking: false,
-    maxLevel: 'standard',
+    maxLevel: 'low',
   },
   {
     id: 'gpt-5',
@@ -54,7 +74,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Frontier',
     provider: 'openai',
     supportsThinking: true,
-    maxLevel: 'extra-high',
+    maxLevel: 'max',
   },
   {
     id: 'gpt-5-mini',
@@ -72,7 +92,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Reasoning',
     provider: 'openai',
     supportsThinking: true,
-    maxLevel: 'extra-high',
+    maxLevel: 'max',
   },
   {
     id: 'codex-1',
@@ -81,7 +101,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Coding',
     provider: 'openai',
     supportsThinking: false,
-    maxLevel: 'standard',
+    maxLevel: 'low',
   },
   {
     id: 'gemini-2-5-pro',
@@ -99,7 +119,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Fast',
     provider: 'google',
     supportsThinking: false,
-    maxLevel: 'standard',
+    maxLevel: 'low',
   },
   {
     id: 'llama-3-3-70b',
@@ -108,7 +128,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Local',
     provider: 'local',
     supportsThinking: false,
-    maxLevel: 'standard',
+    maxLevel: 'low',
   },
   {
     id: 'qwen-3-coder-32b',
@@ -117,7 +137,7 @@ export const MODELS: ModelDef[] = [
     tier: 'Coding',
     provider: 'local',
     supportsThinking: false,
-    maxLevel: 'standard',
+    maxLevel: 'low',
   },
 ]
 
@@ -128,15 +148,19 @@ export const PROVIDER_LABEL: Record<ProviderName, string> = {
 }
 
 export const LEVEL_LABEL: Record<ThinkingLevel, string> = {
-  standard: 'Standard',
+  low: 'Low',
+  medium: 'Medium',
   high: 'High',
-  'extra-high': 'Extra High',
+  'extra-high': 'Extra high',
+  max: 'Max',
 }
 
 const LEVEL_RANK: Record<ThinkingLevel, number> = {
-  standard: 0,
-  high: 1,
-  'extra-high': 2,
+  low: 0,
+  medium: 1,
+  high: 2,
+  'extra-high': 3,
+  max: 4,
 }
 
 export const modelById = (id: string) => MODELS.find((m) => m.id === id)
@@ -145,9 +169,9 @@ export const modelsForProvider = (provider: ProviderName) =>
   MODELS.filter((m) => m.provider === provider)
 
 export const levelsForModel = (model: ModelDef | undefined): ThinkingLevel[] => {
-  if (!model || !model.supportsThinking) return ['standard']
+  if (!model || !model.supportsThinking) return ['low']
   const max = LEVEL_RANK[model.maxLevel]
-  return (['standard', 'high', 'extra-high'] as ThinkingLevel[]).filter(
+  return (['low', 'medium', 'high', 'extra-high', 'max'] as ThinkingLevel[]).filter(
     (lv) => LEVEL_RANK[lv] <= max,
   )
 }

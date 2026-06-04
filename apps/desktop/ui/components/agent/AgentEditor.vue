@@ -7,17 +7,52 @@
     @save="onSave"
     @cancel="emit('cancel')"
   >
-    <div v-if="agent?.id" class="text-[10px] font-mono -mt-5 mb-6" :style="{ color: t.textDim }">
-      {{ agent.id }}
+    <template v-if="agent" #header-actions-extra>
+      <button
+        type="button"
+        class="px-2.5 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+        :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
+        title="Revise the whole agent (name / description / model / role / system prompt) via an LLM prompt"
+        @click="onEditWithLlm"
+      >
+        <Sparkles :size="11" />
+        Edit agent with LLM
+      </button>
+    </template>
+
+    <div
+      v-if="agent?.id"
+      class="flex items-center gap-2 text-[1em] -mt-5 mb-6"
+      :style="{ color: t.textDim }"
+    >
+      <span class="font-mono">{{ agent.id }}.md</span>
+      <span :style="{ color: t.textFaint }">·</span>
+      <span class="font-mono">{{ sourceDirLabel }}</span>
     </div>
 
     <div class="space-y-5">
+      <Field v-if="!agent" label="Save to">
+        <select
+          v-model="saveTo"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          :style="inputStyle"
+        >
+          <option v-for="opt in saveToOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+          Tier determines where the AGENT.md is written (Sprint 3 C3). Default is global
+          (~/.awog/agents/). Project tiers commit-able via git.
+        </div>
+      </Field>
+
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Name" class="sm:col-span-2">
           <input
             v-model="draft.name"
             placeholder="e.g. Tax Consultant, SEO Specialist"
-            class="w-full rounded px-2 py-1.5 text-xs"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -25,19 +60,70 @@
           <input
             v-model="draft.role"
             placeholder="DevOps, BA, Security..."
-            class="w-full rounded px-2 py-1.5 text-xs font-mono"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
-          <div class="text-[10px] mt-1" :style="{ color: t.textDim }">
-            Short label shown on the badge
+          <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+            Short label shown on the badge (optional)
           </div>
         </Field>
       </div>
 
+      <Field label="Description">
+        <textarea
+          v-model="draft.description"
+          :rows="2"
+          placeholder="When to use this agent — one sentence shown in pickers."
+          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[3rem]"
+          :style="inputStyle"
+        />
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+          Required by Claude Code subagent format.
+        </div>
+      </Field>
+
+      <Field label="Provider">
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="p in PROVIDERS"
+            :key="p.id"
+            type="button"
+            :disabled="!isProviderConnected(p.id)"
+            class="px-3 py-1.5 rounded text-[1em] transition disabled:cursor-not-allowed"
+            :style="providerBtnStyle(p.id)"
+            :title="isProviderConnected(p.id) ? '' : 'Connect this provider in Settings first'"
+            @click="selectProvider(p.id)"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+          Providers without a connected account are disabled. The model list is filtered to the
+          selected provider.
+        </div>
+      </Field>
+
+      <Field label="Account">
+        <select
+          v-model="accountSelect"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          :style="inputStyle"
+          :disabled="providerAccounts.length === 0"
+        >
+          <option v-for="a in providerAccounts" :key="a.id" :value="a.id">
+            {{ a.label }}{{ a.id === activeAccountId ? ' (active)' : '' }}
+          </option>
+        </select>
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+          Which {{ providerLabel }} account this agent uses. Defaults to the active account; pick
+          another to pin this agent to it.
+        </div>
+      </Field>
+
       <Field label="Model">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
           <button
-            v-for="m in MODELS"
+            v-for="m in providerModels"
             :key="m.id"
             class="text-left px-3 py-2 rounded transition"
             :style="{
@@ -62,110 +148,107 @@
                 />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-[12px]" :style="{ color: t.text }">{{ m.label }}</div>
-                <div class="text-[10px]" :style="{ color: t.textDim }">{{ m.vendor }}</div>
+                <div class="text-[1em]" :style="{ color: t.text }">{{ m.label }}</div>
+                <div class="text-[1em]" :style="{ color: t.textDim }">{{ m.vendor }}</div>
               </div>
             </div>
           </button>
         </div>
       </Field>
 
-      <Field label="System Prompt">
+      <div>
+        <label
+          class="text-[1em] uppercase tracking-wider font-medium mb-1.5 block"
+          :style="{ color: t.textDim }"
+        >
+          System Prompt
+        </label>
         <textarea
           v-model="draft.systemPrompt"
           :rows="4"
           placeholder="You are a... Define the agent's role, personality, and how it should approach tasks."
-          class="w-full rounded px-2 py-1.5 text-[12px] leading-relaxed resize-none"
+          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[6rem]"
           :style="inputStyle"
         />
-      </Field>
+      </div>
+
+      <AgentBodyEditModal
+        v-if="llmEditing && agent"
+        :agent="draftAsAgent"
+        :anchor="llmEditAnchor"
+        @apply="onApplyLlmEdit"
+        @cancel="llmEditing = false"
+      />
 
       <div>
         <div class="flex items-center justify-between mb-1.5">
           <label
-            class="text-[10px] uppercase tracking-wider font-medium"
+            class="text-[1em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
-            Skills · {{ draft.skillIds.length }} selected
+            Connections
+            <template v-if="ws.mcpServers.length > 0">· {{ mcpCountLabel }}</template>
           </label>
-          <SearchInput v-model="skillSearch" placeholder="Filter skills..." class="w-44" />
         </div>
         <div
-          class="rounded p-2 max-h-72 overflow-y-auto space-y-3"
+          class="rounded p-2 space-y-0.5"
           :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
         >
-          <div v-for="[category, catSkills] in skillsByCategory" :key="category">
-            <div
-              class="text-[10px] uppercase tracking-wider font-medium mb-1.5 px-1"
-              :style="{ color: t.textDim }"
-            >
-              {{ category }}
+          <label
+            v-for="s in ws.mcpServers"
+            :key="s.id"
+            class="flex items-start gap-2 px-1.5 py-1.5 rounded cursor-pointer transition"
+            :style="{
+              background: isMcpAllowed(s.id) ? t.bgActive : 'transparent',
+              opacity: s.enabled ? 1 : 0.55,
+            }"
+          >
+            <input
+              type="checkbox"
+              :checked="isMcpAllowed(s.id)"
+              :style="{ accentColor: t.accent, marginTop: '2px' }"
+              @change="toggleMcpServer(s.id)"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[1em] font-mono" :style="{ color: t.text }">{{ s.name }}</span>
+                <span
+                  v-if="!s.enabled"
+                  class="text-[1em] uppercase tracking-wider px-1 py-0.5 rounded"
+                  :style="{
+                    color: t.textFaint,
+                    background: t.bgPanel,
+                    border: `1px solid ${t.border}`,
+                  }"
+                >
+                  disabled
+                </span>
+              </div>
+              <div class="text-[1em] leading-snug truncate" :style="{ color: t.textDim }">
+                {{ s.description || `${s.transport} · ${s.tools.length} tool(s)` }}
+              </div>
             </div>
-            <div class="space-y-0.5">
-              <label
-                v-for="s in catSkills"
-                :key="s.id"
-                class="flex items-start gap-2 px-1.5 py-1.5 rounded cursor-pointer transition"
-                :style="{
-                  background: draft.skillIds.includes(s.id) ? t.bgActive : 'transparent',
-                }"
-              >
-                <input
-                  type="checkbox"
-                  :checked="draft.skillIds.includes(s.id)"
-                  :style="{ accentColor: t.accent, marginTop: '2px' }"
-                  @change="toggleSkill(s.id)"
-                />
-                <div class="flex-1 min-w-0">
-                  <div class="text-[11px] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-                  <div class="text-[10px] leading-snug" :style="{ color: t.textDim }">
-                    {{ s.description }}
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
+          </label>
           <div
-            v-if="filteredSkills.length === 0"
-            class="text-[11px] py-4 text-center"
+            v-if="ws.mcpServers.length === 0"
+            class="text-[1em] py-4 text-center"
             :style="{ color: t.textFaint }"
           >
-            No skills match "{{ skillSearch }}"
+            No connections yet — add one on the Connections page.
           </div>
         </div>
       </div>
-
-      <Field label="Context Providers">
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="p in CONTEXT_PROVIDERS"
-            :key="p.id"
-            class="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] transition"
-            :style="{
-              background: draft.context.includes(p.id) ? t.accent : t.bgInput,
-              color: draft.context.includes(p.id) ? t.accentText : t.textMuted,
-              border: `1px solid ${draft.context.includes(p.id) ? t.accent : t.border}`,
-            }"
-            @click="toggleContext(p.id)"
-          >
-            <component :is="p.icon" :size="11" />
-            {{ p.label }}
-          </button>
-        </div>
-      </Field>
     </div>
   </EditorShell>
 </template>
 
 <script setup lang="ts">
-import type { Agent, Skill, SkillCategory } from '~/types'
-import type { AgentDraft } from '~/composables/useAgentGenerator'
-import { CONTEXT_PROVIDERS } from '~/utils/initial-data'
+import { Sparkles } from 'lucide-vue-next'
+import type { Agent, AgentSource, ProviderName } from '~/types'
 import { MODELS } from '~/utils/models'
 
 const props = defineProps<{
   agent: Agent | null
-  initialDraft?: AgentDraft | null
 }>()
 
 const emit = defineEmits<{
@@ -175,31 +258,50 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
+const settings = useSettingsStore()
+
+// Provider picker (ADR 0026). Only providers with a connected account are
+// selectable; the model grid below is filtered to the chosen provider.
+const PROVIDERS: { id: ProviderName; label: string }[] = [
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'google', label: 'Google' },
+]
+
+const isProviderConnected = (p: ProviderName): boolean => settings.isProviderConnected(p)
+
+const SOURCE_DIR_LABEL: Record<AgentSource, string> = {
+  global: '~/.awog/agents/',
+  'user-claude': '~/.claude/agents/',
+  'user-agents': '~/.agents/agents/',
+  'project-claude': '.claude/agents/',
+  'project-agents': '.agents/agents/',
+}
+
+const sourceDirLabel = computed(() =>
+  props.agent ? SOURCE_DIR_LABEL[props.agent.source] : SOURCE_DIR_LABEL.global,
+)
 
 const makeDefaults = (): Agent => ({
+  // New agents created via Editor (not LLM creator) default to global tier.
+  // Project-tier authoring is done through the chat-style creator which lets
+  // the LLM pick the path. ADR 0015 pha 1 scope.
   id: '',
+  source: 'global',
   name: '',
-  role: '',
+  description: '',
+  provider: 'anthropic',
   model: 'claude-sonnet-4-6',
-  skillIds: [],
-  context: ['artifacts'],
   systemPrompt: '',
+  role: '',
 })
 
 const initDraft = (): Agent => {
   if (props.agent) {
     return {
       ...props.agent,
-      skillIds: [...props.agent.skillIds],
-      context: [...props.agent.context],
-    }
-  }
-  if (props.initialDraft) {
-    return {
-      id: '',
-      ...props.initialDraft,
-      skillIds: [...props.initialDraft.skillIds],
-      context: [...props.initialDraft.context],
+      ...(props.agent.tools ? { tools: [...props.agent.tools] } : {}),
+      ...(props.agent.mcpServerIds ? { mcpServerIds: [...props.agent.mcpServerIds] } : {}),
     }
   }
   return makeDefaults()
@@ -207,7 +309,81 @@ const initDraft = (): Agent => {
 
 const draft = ref<Agent>(initDraft())
 const original = ref<Agent>(initDraft())
-const skillSearch = ref('')
+
+// "Save to" tier picker for NEW agents (Sprint 3 C3). Composite value
+// "<source>" for user tiers, "<source>:<projectId>" for project tiers.
+// Parsed on change to update draft.source + draft.projectId. Hidden when
+// editing an existing agent (source/projectId immutable after creation
+// without a copy-and-delete migration which we don't expose pha 2).
+interface SaveToOption {
+  value: string
+  label: string
+}
+
+const saveToOptions = computed<SaveToOption[]>(() => {
+  const out: SaveToOption[] = [
+    { value: 'global', label: '~/.awog/agents/  (AWOG-native, default)' },
+    { value: 'user-claude', label: '~/.claude/agents/  (Claude Code SDK)' },
+    { value: 'user-agents', label: '~/.agents/agents/  (Craft Agents)' },
+  ]
+  ws.projects.forEach((p) => {
+    out.push({
+      value: `project-claude:${p.id}`,
+      label: `${p.name} · .claude/agents/`,
+    })
+    out.push({
+      value: `project-agents:${p.id}`,
+      label: `${p.name} · .agents/agents/`,
+    })
+  })
+  return out
+})
+
+const saveTo = computed<string>({
+  get() {
+    if (draft.value.source === 'project-claude' || draft.value.source === 'project-agents') {
+      return `${draft.value.source}:${draft.value.projectId ?? ''}`
+    }
+    return draft.value.source
+  },
+  set(value: string) {
+    const [source, projectId] = value.split(':') as [Agent['source'], string | undefined]
+    draft.value.source = source
+    if (source === 'project-claude' || source === 'project-agents') {
+      draft.value.projectId = projectId
+    } else {
+      delete draft.value.projectId
+    }
+  },
+})
+
+// LLM-edit modal state. Only available when editing an existing agent (the
+// modal needs an Agent with id, source, projectId to round-trip metadata).
+const llmEditing = ref(false)
+const llmEditAnchor = ref<{ top: number; left: number } | null>(null)
+
+// AgentBodyEditModal expects a full Agent. We pass the current draft so the
+// LLM sees the user's unsaved edits as context, but the modal preserves
+// id/source/projectId from props.agent on apply.
+const draftAsAgent = computed<Agent>(() => ({ ...draft.value }))
+
+const onEditWithLlm = (e: MouseEvent) => {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  llmEditAnchor.value = { top: rect.bottom + 8, left: rect.left }
+  llmEditing.value = true
+}
+
+const onApplyLlmEdit = (updated: Agent) => {
+  // Replace draft content but keep storage metadata (id/source/projectId) from
+  // the original — those come from the saved Agent, not the LLM draft.
+  draft.value = {
+    ...updated,
+    id: draft.value.id,
+    source: draft.value.source,
+    ...(draft.value.projectId ? { projectId: draft.value.projectId } : {}),
+  }
+  llmEditing.value = false
+}
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,
@@ -216,39 +392,104 @@ const inputStyle = computed(() => ({
   outline: 'none' as const,
 }))
 
-const filteredSkills = computed<Skill[]>(() => {
-  const q = skillSearch.value.toLowerCase()
-  if (!q) return ws.skills
-  return ws.skills.filter(
-    (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
-  )
+// Models filtered to the agent's provider (local-tier models are never agent
+// providers, so they fall out naturally).
+const providerModels = computed(() => MODELS.filter((m) => m.provider === draft.value.provider))
+
+// Switching provider resets the model to the first of the new provider so the
+// stored model always belongs to the selected provider, and clears the account
+// override (an account of provider A is meaningless for provider B).
+const selectProvider = (p: ProviderName) => {
+  if (draft.value.provider === p) return
+  draft.value.provider = p
+  draft.value.model = MODELS.find((m) => m.provider === p)?.id ?? ''
+  delete draft.value.accountId
+}
+
+// Accounts available for the selected provider (from the credentials store).
+const providerAccounts = computed(() => settings.providers[draft.value.provider]?.accounts ?? [])
+
+const providerLabel = computed(
+  () => PROVIDERS.find((p) => p.id === draft.value.provider)?.label ?? draft.value.provider,
+)
+
+// Id of the provider's active account — used to tag it "(active)" in the list
+// instead of repeating it as a separate "Active account (...)" default option.
+const activeAccountId = computed(() => settings.activeAccount(draft.value.provider)?.id ?? '')
+
+// No "inherit" sentinel in the UI — when the agent hasn't pinned an account,
+// show the provider's active account as selected. Storage still keeps accountId
+// undefined unless the user picks a different one (so an unpinned agent keeps
+// following the active account; runtime falls back to active when unset).
+const accountSelect = computed<string>({
+  get: () => draft.value.accountId ?? activeAccountId.value,
+  set: (v) => {
+    if (v && v !== activeAccountId.value) draft.value.accountId = v
+    else delete draft.value.accountId
+  },
 })
 
-const skillsByCategory = computed<[SkillCategory, Skill[]][]>(() => {
-  const map = new Map<SkillCategory, Skill[]>()
-  filteredSkills.value.forEach((s) => {
-    const arr = map.get(s.category) || []
-    arr.push(s)
-    map.set(s.category, arr)
-  })
-  return Array.from(map.entries())
-})
+const providerBtnStyle = (p: ProviderName) => {
+  const active = draft.value.provider === p
+  if (active) {
+    return {
+      background: t.value.bgActive,
+      color: t.value.text,
+      border: `1px solid ${t.value.borderFocus}`,
+    }
+  }
+  if (!isProviderConnected(p)) {
+    return {
+      background: t.value.bgInput,
+      color: t.value.textFaint,
+      border: `1px solid ${t.value.border}`,
+      opacity: 0.55,
+    }
+  }
+  return {
+    background: t.value.bgInput,
+    color: t.value.textDim,
+    border: `1px solid ${t.value.border}`,
+  }
+}
 
-const canSave = computed(() => !!(draft.value.name && draft.value.role && draft.value.model))
+// Claude Code subagent requires name + description. role is AWOG-only and
+// optional. model defaults to claude-sonnet-4-6 in makeDefaults.
+const canSave = computed(() => !!(draft.value.name && draft.value.description && draft.value.model))
 
 const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 
-const toggleSkill = (id: string) => {
-  draft.value.skillIds = draft.value.skillIds.includes(id)
-    ? draft.value.skillIds.filter((s) => s !== id)
-    : [...draft.value.skillIds, id]
+// MCP picker: undefined mcpServerIds = "inherit session" (no per-agent filter).
+// User ticks a server → flip to explicit whitelist mode. Empty array means
+// "explicitly none" — still per-agent restriction, but allows zero servers.
+const isMcpAllowed = (id: string): boolean => {
+  const ids = draft.value.mcpServerIds
+  // Unset = inherit; treat every server as allowed in the UI's "selected" sense
+  // would be misleading. Show as NOT ticked so user knows current behaviour
+  // is "no per-agent filter". Tick = explicit add.
+  return Array.isArray(ids) && ids.includes(id)
 }
 
-const toggleContext = (ctx: string) => {
-  draft.value.context = draft.value.context.includes(ctx)
-    ? draft.value.context.filter((c) => c !== ctx)
-    : [...draft.value.context, ctx]
+const toggleMcpServer = (id: string) => {
+  const current = draft.value.mcpServerIds ?? []
+  const next = current.includes(id) ? current.filter((s) => s !== id) : [...current, id]
+  if (next.length === 0) {
+    // Drop the field entirely so AGENT.md doesn't serialize an empty array
+    // (interpreted as "inherit session" upstream, matches initial state).
+    delete draft.value.mcpServerIds
+  } else {
+    draft.value.mcpServerIds = next
+  }
 }
+
+// undefined = inherit (no per-agent filter) → agent sees every enabled server.
+// [] = explicit none. A list = whitelist. Shown only when servers exist.
+const mcpCountLabel = computed(() => {
+  const ids = draft.value.mcpServerIds
+  if (ids === undefined) return 'inherit (all enabled)'
+  if (ids.length === 0) return 'none'
+  return `${ids.length} allowed`
+})
 
 const onSave = () => {
   if (!canSave.value) return

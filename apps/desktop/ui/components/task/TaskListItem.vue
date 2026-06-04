@@ -26,7 +26,7 @@
           v-if="renaming"
           :ref="setRenameInputRef"
           :value="renameValue"
-          class="text-[13px] leading-tight w-full rounded px-1 py-0.5"
+          class="text-[1em] leading-tight w-full rounded px-1 py-0.5"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.borderStrong}`,
@@ -41,19 +41,19 @@
         />
         <div
           v-else
-          class="text-[13px] leading-tight truncate"
+          class="text-[1em] leading-tight truncate"
           :style="{ color: t.text }"
           @dblclick.stop="emit('start-rename')"
         >
           {{ task.title }}
         </div>
-        <div v-if="metaText" class="text-[10px] mt-1 truncate" :style="{ color: t.textDim }">
+        <div v-if="metaText" class="text-[1em] mt-1 truncate" :style="{ color: t.textDim }">
           {{ metaText }}
         </div>
       </div>
       <div
         v-if="isActive && totalCount > 0"
-        class="text-[10px] font-mono flex-shrink-0"
+        class="text-[1em] font-mono flex-shrink-0"
         :style="{ color: t.textDim }"
       >
         {{ completedCount }}/{{ totalCount }}
@@ -111,10 +111,13 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const store = useWorkspaceStore()
+const workflowsStore = useWorkflowsStore()
 
 const hovered = ref(false)
 
-const workflow = computed(() => store.workflowById(props.task.workflowId))
+const workflow = computed(
+  () => props.task.workflowSnapshot ?? workflowsStore.workflowById(props.task.workflowId),
+)
 const project = computed(() => store.projectById(props.task.projectId))
 
 const meta = computed(() => STATUS_META[props.task.status])

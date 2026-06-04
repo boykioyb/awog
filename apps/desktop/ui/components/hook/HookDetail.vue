@@ -1,5 +1,5 @@
 <template>
-  <div class="p-4 md:p-6 max-w-3xl">
+  <div class="p-4 md:p-6 w-full">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
@@ -12,7 +12,7 @@
         <div class="flex items-center gap-2 mb-1 flex-wrap">
           <h1 class="text-lg font-semibold" :style="{ color: t.text }">{{ hook.name }}</h1>
           <span
-            class="text-[11px] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -21,17 +21,17 @@
           >
             {{ hook.event }}
           </span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded uppercase" :style="modeBadgeStyle">
+          <span class="text-[1em] px-1.5 py-0.5 rounded uppercase" :style="modeBadgeStyle">
             {{ hook.runMode }}
           </span>
         </div>
-        <div class="text-[12px] leading-relaxed" :style="{ color: t.textMuted }">
+        <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
           {{ hook.description }}
         </div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
         <button
-          class="px-3 py-1.5 text-xs rounded inline-flex items-center gap-1.5 transition"
+          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
           :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
           @click="ws.runHookOnce(hook.id)"
         >
@@ -39,7 +39,7 @@
           Run once
         </button>
         <button
-          class="px-3 py-1.5 text-xs rounded inline-flex items-center gap-1.5 transition"
+          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
           :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
           @click="emit('edit')"
         >
@@ -67,7 +67,7 @@
     <Section title="Matcher">
       <div
         v-if="Object.keys(hook.matcher).length === 0"
-        class="text-[11px]"
+        class="text-[1em]"
         :style="{ color: t.textFaint }"
       >
         Không có filter — chạy cho mọi payload của event này.
@@ -86,7 +86,7 @@
     <!-- Command -->
     <Section title="Command">
       <pre
-        class="text-[11px] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
+        class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
         :style="{
           color: t.textMuted,
           background: t.bgInput,
@@ -103,14 +103,14 @@
 
     <!-- Recent runs -->
     <Section :title="`Recent runs · ${hook.recentRuns.length}`">
-      <div v-if="hook.recentRuns.length === 0" class="text-[11px]" :style="{ color: t.textFaint }">
+      <div v-if="hook.recentRuns.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
         Chưa chạy lần nào.
       </div>
       <div v-else class="space-y-1">
         <div
           v-for="(run, i) in hook.recentRuns"
           :key="i"
-          class="flex items-center gap-3 p-2 rounded text-[11px] flex-wrap"
+          class="flex items-center gap-3 p-2 rounded text-[1em] flex-wrap"
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <span

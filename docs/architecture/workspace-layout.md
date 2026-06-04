@@ -12,10 +12,12 @@ workspace/
 │   ├── solution-architect.json
 │   └── senior-developer.json
 │
-├── skills/                     # Định nghĩa skill
-│   ├── gather_requirements.json
-│   ├── design_architecture.json
-│   └── implement_feature.json
+├── skills/                     # AWOG-native skill folders (SKILL.md format)
+│   ├── code-review/
+│   │   ├── SKILL.md            # YAML frontmatter + markdown body
+│   │   └── icon.svg            # (optional) UI icon
+│   └── implement-feature/
+│       └── SKILL.md
 │
 ├── workflows/                  # Định nghĩa workflow (DAG + version)
 │   ├── backend-feature-pipeline.json
@@ -65,7 +67,22 @@ workspace/
 - **Project entry chỉ trỏ tới codebase, không sao chép** — `path` trỏ đến vị trí thực của repo trên đĩa người dùng.
 - **Task artifacts nested trong task** thay vì gom chung, để mỗi task có folder riêng dễ archive.
 - **Run version** không tạo file riêng — lưu trong `task.json` dưới `phases[nodeId].runs[]`. Output content có thể inline (text ngắn) hoặc link tới file trong `tasks/<id>/artifacts/`.
-- **Name là slug.** Tên agent / skill / workflow / project ánh xạ trực tiếp ra tên file (kebab-case hoặc snake_case theo entity).
+- **Name là slug.** Tên agent / workflow / project ánh xạ trực tiếp ra tên file (kebab-case hoặc snake_case theo entity).
+- **Skills dùng folder per skill** chứa `SKILL.md` (Claude Code SDK / craft-agents-oss format) thay vì 1 file JSON. Xem [skill-builder feature](../features/skill-builder.md) và [ADR 0013](../decisions/0013-adopt-skill-md-format.md).
+
+## Skills — multi-tier discovery
+
+AWOG scan skills từ 5 path khác nhau (3 user-level, 2 project-level):
+
+| Tier | Path | Quét khi |
+|---|---|---|
+| `global` (AWOG-native) | `~/.awog/skills/<slug>/SKILL.md` | Luôn luôn |
+| `user-claude` | `~/.claude/skills/<slug>/SKILL.md` | Luôn luôn (share với Claude Code SDK) |
+| `user-agents` | `~/.agents/skills/<slug>/SKILL.md` | Luôn luôn (share với Craft Agents) |
+| `project-claude` | `{project.path}/.claude/skills/<slug>/SKILL.md` | Per registered project |
+| `project-agents` | `{project.path}/.agents/skills/<slug>/SKILL.md` | Per registered project |
+
+Sidecar `skills.list({ projectIds })` merge cả 5 tier, trả kèm `reports[]` (path thực sự scan + count) để UI diagnose path mismatch.
 
 ## Portability
 

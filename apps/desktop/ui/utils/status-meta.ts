@@ -5,6 +5,7 @@ import {
   Clock,
   History,
   KeyRound,
+  PauseCircle,
   XCircle,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
@@ -14,6 +15,7 @@ export type StatusKey =
   | 'running'
   | 'waiting_approval'
   | 'waiting_connection'
+  | 'paused'
   | 'completed'
   | 'failed'
   | 'pending'
@@ -29,6 +31,7 @@ export const STATUS_META: Record<StatusKey, StatusMeta> = {
   running: { label: 'Running', icon: Circle },
   waiting_approval: { label: 'Awaiting approval', icon: AlertCircle },
   waiting_connection: { label: 'Needs key', icon: KeyRound },
+  paused: { label: 'Paused', icon: PauseCircle },
   completed: { label: 'Completed', icon: CheckCircle2 },
   failed: { label: 'Failed', icon: XCircle },
   pending: { label: 'Pending', icon: Circle },

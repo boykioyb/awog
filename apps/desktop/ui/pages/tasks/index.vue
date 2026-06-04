@@ -1,7 +1,7 @@
 <template>
   <MasterDetailShell
     v-model:mobile-pane="mobilePane"
-    :selected-id="store.selectedTaskId"
+    :selected-id="tasksStore.selectedTaskId"
     list-width="20rem"
   >
     <template #list>
@@ -22,19 +22,21 @@
           <ListFilter :size="12" />
           <div
             v-if="activeFilterCount > 0"
-            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-semibold"
+            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[1em] font-semibold"
             :style="{ background: t.accent, color: t.accentText }"
           >
             {{ activeFilterCount }}
           </div>
         </button>
         <button
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
-          :style="{ background: t.accent, color: t.accentText }"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          title="New task"
           @click="showNewModal = true"
+          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
+          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
-          <Plus :size="11" />
-          New
+          <Plus :size="14" />
         </button>
       </div>
 
@@ -69,7 +71,7 @@
         />
         <button
           v-if="activeFilterCount > 0"
-          class="text-[10px] transition"
+          class="text-[1em] transition"
           :style="{ color: clearHover ? t.text : t.textDim }"
           @click="clearFilters"
           @mouseenter="clearHover = true"
@@ -107,11 +109,11 @@
                 }"
               />
               <span
-                class="text-[10px] uppercase tracking-wider font-medium flex-1 text-left truncate"
+                class="text-[1em] uppercase tracking-wider font-medium flex-1 text-left truncate"
               >
                 {{ group.label }}
               </span>
-              <span class="text-[10px]" :style="{ color: t.textFaint }">
+              <span class="text-[1em]" :style="{ color: t.textFaint }">
                 {{ group.tasks.length }}
               </span>
             </button>
@@ -120,11 +122,11 @@
                 v-for="tk in group.tasks"
                 :key="tk.id"
                 :task="tk"
-                :selected="store.selectedTaskId === tk.id"
+                :selected="tasksStore.selectedTaskId === tk.id"
                 :group-by="groupBy"
                 :renaming="renamingId === tk.id"
                 :rename-value="renameValue"
-                @click="store.selectTask(tk.id)"
+                @click="tasksStore.selectTask(tk.id)"
                 @context-menu="(e) => onContextMenu(e, tk.id)"
                 @open-menu="(e) => openMenuFromButton(e, tk.id)"
                 @start-rename="startRename(tk.id, tk.title)"
@@ -140,15 +142,15 @@
 
     <template #detail>
       <TaskDetail
-        v-if="store.selectedTask"
-        :task="store.selectedTask"
+        v-if="tasksStore.selectedTask"
+        :task="tasksStore.selectedTask"
         @open-file="onOpenFile"
-        @delete="askDelete(store.selectedTask.id)"
+        @delete="askDelete(tasksStore.selectedTask.id)"
       />
     </template>
 
     <template #empty-detail>
-      <div class="flex-1 flex items-center justify-center text-sm" :style="{ color: t.textDim }">
+      <div class="flex-1 flex items-center justify-center text-[1em]" :style="{ color: t.textDim }">
         Select a task
       </div>
     </template>
@@ -180,7 +182,19 @@ import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import { STATUS_META } from '~/utils/status-meta'
 
 const { t } = useTheme()
+// Projects stay in the workspace store; tasks + workflows are their own live stores.
 const store = useWorkspaceStore()
+const tasksStore = useTasksStore()
+const workflowsStore = useWorkflowsStore()
+
+onMounted(async () => {
+  // TaskDetail's pipeline resolves agent name/role from the workspace store —
+  // hydrate agents + skills (with project ids for project-tier) on landing here.
+  await store.hydrateProjectsFromSidecar()
+  const ids = store.projects.map((p) => p.id)
+  void store.hydrateAgentsFromSidecar(ids)
+  void store.hydrateSkillsFromSidecar(ids)
+})
 
 const statusFilter = ref('all')
 const projectFilter = ref('all')
@@ -194,9 +208,9 @@ const filterHover = ref(false)
 const clearHover = ref(false)
 const groupHover = ref<string | null>(null)
 
-const tasks = computed(() => store.tasks)
+const tasks = computed(() => tasksStore.tasks)
 const projects = computed(() => store.projects)
-const workflows = computed(() => store.workflows)
+const workflows = computed(() => workflowsStore.workflows)
 
 const filtered = computed(() =>
   tasks.value.filter((tk) => {
@@ -304,17 +318,17 @@ const onSaveTask = (data: {
   workflowId: string
   projectId: string
 }) => {
-  store.createTask(data)
+  tasksStore.createTask(data)
   showNewModal.value = false
 }
 
 const onOpenFile = (fileName: string, _content: string) => {
-  if (!store.selectedTaskId) return
-  navigateTo(`/edit/${store.selectedTaskId}?file=${encodeURIComponent(fileName)}`)
+  if (!tasksStore.selectedTaskId) return
+  navigateTo(`/edit/${tasksStore.selectedTaskId}?file=${encodeURIComponent(fileName)}`)
 }
 
 watch(
-  () => store.selectedTaskId,
+  () => tasksStore.selectedTaskId,
   (id) => {
     if (id) mobilePane.value = 'detail'
   },
@@ -326,7 +340,7 @@ const renameValue = ref('')
 const pendingDeleteId = ref<string | null>(null)
 
 const pendingDeleteName = computed(
-  () => store.tasks.find((tk) => tk.id === pendingDeleteId.value)?.title ?? '',
+  () => tasksStore.tasks.find((tk) => tk.id === pendingDeleteId.value)?.title ?? '',
 )
 
 const onContextMenu = (e: MouseEvent, id: string) => {
@@ -349,9 +363,9 @@ const commitRename = () => {
     return
   }
   const trimmed = renameValue.value.trim()
-  const task = store.tasks.find((tk) => tk.id === id)
+  const task = tasksStore.tasks.find((tk) => tk.id === id)
   if (trimmed && task && trimmed !== task.title) {
-    store.renameTask(id, trimmed)
+    tasksStore.renameTask(id, trimmed)
   }
   renamingId.value = null
 }
@@ -366,14 +380,14 @@ const askDelete = (id: string) => {
 
 const confirmDelete = () => {
   if (!pendingDeleteId.value) return
-  store.deleteTask(pendingDeleteId.value)
+  tasksStore.deleteTask(pendingDeleteId.value)
   pendingDeleteId.value = null
 }
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   const ctx = contextMenu.value
   if (!ctx) return []
-  const task = store.tasks.find((tk) => tk.id === ctx.id)
+  const task = tasksStore.tasks.find((tk) => tk.id === ctx.id)
   if (!task) return []
   return [
     { label: 'Rename', icon: Edit3, action: () => startRename(task.id, task.title) },

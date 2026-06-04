@@ -1,6 +1,7 @@
 # Feature: Projects
 
-**Trạng thái:** Draft
+**Trạng thái:** Approved
+**Ngày approve:** 2026-05-27
 
 ## Overview
 
@@ -40,16 +41,20 @@ Project là một codebase local đã đăng ký trong AWOG. Mọi Task đều b
 
 - **3 meta box**: Branch / Language / Created.
 - **Git Remote section** với link mở external.
+- **Session list của project**: các session có `projectId` khớp, hiển thị title + thời điểm cập nhật + số message (+ số agent nếu có), sort mới nhất trước. Click jump sang Sessions view và select session đó.
+  - Nút **New session** trong header section: tạo session mới gắn sẵn `projectId` này rồi điều hướng sang Sessions view với session vừa tạo đang được chọn.
 - **Task list của project** với status icon, click jump sang Tasks view và select task đó.
 
 ## UI/UX
 
 - Top bar hiện breadcrumb project: `<name> · <branch> · <path>` khi đang ở task của project đó.
-- Item project trong list: tên + path tóm tắt + count task active.
+- Item project trong list: tên + path tóm tắt (không có count badge — bỏ để list gọn).
 
 ## Lưu trữ dữ liệu
 
-`workspace/projects/<project-id>.json`.
+`~/.awog/projects/<project-id>.json` — plain JSON 1 file per project. Atomic write (`.tmp` + rename). Xem [ADR 0012](../decisions/0012-projects-storage.md).
+
+ID format: `prj-<base36-timestamp>-<base36-counter>`.
 
 ## Phụ thuộc
 
@@ -63,5 +68,16 @@ Project là một codebase local đã đăng ký trong AWOG. Mọi Task đều b
 
 ## Câu hỏi mở
 
-- Khi project bị move/rename ngoài AWOG, phát hiện và xử lý thế nào?
-- Project có nên chứa setting riêng (ví dụ context provider whitelist) override workspace setting?
+- Khi project bị move/rename ngoài AWOG → **deferred sau MVP**. Trước mắt: nếu task chạm path không tồn tại, sidecar trả error rõ ràng, UI hiển thị "Path missing" trên project detail.
+- Project setting riêng override workspace setting → **deferred sau MVP**. Hiện tại không có per-project setting.
+
+## Acceptance Criteria
+
+- **AC1 — Link existing folder:** Chọn mode "Existing folder", nhập tên + path tồn tại trên đĩa → project xuất hiện trong list. Restart UI → vẫn còn.
+- **AC2 — Clone từ Git:** Chọn mode "Clone", nhập gitRemote + destination → AWOG clone về folder đó, project xuất hiện với gitBranch = branch mặc định của remote. Folder đã tồn tại tại destination → reject với error rõ ràng.
+- **AC3 — Edit:** Sửa description / branch / language → save → reload UI → giá trị mới persist.
+- **AC4 — Delete:** Click delete + confirm → project biến mất khỏi UI, **folder trên đĩa vẫn còn**. Task tham chiếu projectId này hiển thị orphan (giữ projectId, không crash).
+- **AC5 — Path validate:** Link path không tồn tại → reject với message "Path does not exist". Path chứa `..` literal → reject.
+- **AC6 — gitRemote validate:** Khi clone, chỉ chấp nhận scheme `https://`, `http://`, `git@`, `ssh://`. URL khác → reject.
+- **AC7 — Task list:** Project detail hiển thị danh sách task có `projectId` khớp, click jump sang Tasks và select task đó.
+- **AC8 — Session list:** Project detail hiển thị danh sách session có `projectId` khớp (mới nhất trước), click jump sang Sessions và select session đó. Click **New session** → tạo session mới với `projectId` này, điều hướng sang Sessions với session đó đang được chọn. Không có session → empty state "No sessions yet for this project".

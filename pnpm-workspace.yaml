@@ -1,0 +1,9 @@
+packages:
+  - apps/desktop/ui
+  - apps/desktop/sidecar
+
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: false
+  vue-demi: false
+  node-pty: true

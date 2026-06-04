@@ -2,43 +2,43 @@
   <div class="space-y-5">
     <div>
       <div
-        class="text-[10px] uppercase tracking-wider mb-2 font-medium"
+        class="text-[1em] uppercase tracking-wider mb-2 font-medium"
         :style="{ color: t.textDim }"
       >
-        Node
+        {{ tr('workflows.node.title') }}
       </div>
       <div class="flex items-center gap-2.5">
-        <RoleBadge :role="agent.role" />
+        <RoleBadge :role="agentRoleLabel(agent)" />
         <div class="flex-1 min-w-0">
-          <div class="text-sm truncate" :style="{ color: t.text }">{{ agent.name }}</div>
-          <div class="text-[10px] font-mono" :style="{ color: t.textDim }">{{ node.id }}</div>
+          <div class="text-[1em] truncate" :style="{ color: t.text }">{{ agent.name }}</div>
+          <div class="text-[1em] font-mono" :style="{ color: t.textDim }">{{ node.id }}</div>
         </div>
       </div>
     </div>
 
-    <Field label="Skill">
+    <Field :label="tr('workflows.node.skill')">
       <select
         :value="node.skillId || ''"
-        class="w-full rounded px-2 py-1.5 text-xs font-mono"
+        class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
         :style="inputStyle"
         @change="onSkillChange"
       >
         <option v-if="availableSkills.length === 0" value="">
-          No skills assigned to this agent
+          {{ tr('workflows.node.no_skills') }}
         </option>
         <option v-for="s in availableSkills" :key="s.id" :value="s.id">{{ s.name }}</option>
       </select>
-      <div v-if="skill" class="text-[10px] mt-1.5 leading-relaxed" :style="{ color: t.textDim }">
+      <div v-if="skill" class="text-[1em] mt-1.5 leading-relaxed" :style="{ color: t.textDim }">
         {{ skill.description }}
       </div>
     </Field>
 
-    <Field label="Output artifacts">
+    <Field :label="tr('workflows.node.outputs')">
       <div class="space-y-1">
         <div v-for="(out, i) in node.outputs" :key="i" class="flex items-center gap-1">
           <input
             :value="out"
-            class="flex-1 rounded px-2 py-1 text-[11px] font-mono"
+            class="flex-1 rounded px-2 py-1 text-[1em] font-mono"
             :style="inputStyle"
             @input="updateOutput(i, ($event.target as HTMLInputElement).value)"
           />
@@ -53,14 +53,14 @@
           </button>
         </div>
         <button
-          class="text-[11px] flex items-center gap-1 mt-1 transition"
+          class="text-[1em] flex items-center gap-1 mt-1 transition"
           :style="{ color: t.textDim }"
           @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
           @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
           @click="addOutput"
         >
           <Plus :size="11" />
-          Add output
+          {{ tr('workflows.node.add_output') }}
         </button>
       </div>
     </Field>
@@ -73,32 +73,21 @@
           :style="{ accentColor: t.accent }"
           @change="onApprovalChange"
         />
-        <span class="text-xs" :style="{ color: t.text }">Require human approval</span>
+        <span class="text-[1em]" :style="{ color: t.text }">
+          {{ tr('workflows.node.approval') }}
+        </span>
       </label>
-      <div class="text-[10px] mt-1 ml-5" :style="{ color: t.textDim }">
-        Workflow pauses for review before continuing
+      <div class="text-[1em] mt-1 ml-5" :style="{ color: t.textDim }">
+        {{ tr('workflows.node.approval_hint') }}
       </div>
     </div>
-
-    <Field v-if="skill" label="Skill inputs (auto-resolved)">
-      <div class="space-y-1">
-        <div
-          v-for="inp in skill.inputs"
-          :key="inp"
-          class="text-[11px] font-mono flex items-center gap-1.5"
-          :style="{ color: t.textMuted }"
-        >
-          <Hash :size="9" :style="{ color: t.textDim }" />
-          {{ inp }}
-        </div>
-      </div>
-    </Field>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Plus, X, Hash } from 'lucide-vue-next'
+import { Plus, X } from 'lucide-vue-next'
 import type { Agent, Skill, WorkflowNode } from '~/types'
+import { agentRoleLabel } from '~/utils/agent-role'
 
 const props = defineProps<{
   node: WorkflowNode
@@ -112,6 +101,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,
@@ -122,11 +112,9 @@ const inputStyle = computed(() => ({
 
 const onSkillChange = (e: Event) => {
   const { value } = e.target as HTMLSelectElement
-  const newSkill = props.availableSkills.find((s) => s.id === value)
   emit('update:node', {
     ...props.node,
     skillId: value,
-    outputs: newSkill ? [...newSkill.outputs] : props.node.outputs,
   })
 }
 

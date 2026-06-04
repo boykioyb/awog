@@ -5,7 +5,7 @@
   >
     <div
       v-if="selectedTask && selectedProject && isTasksRoute"
-      class="flex items-center gap-1.5 text-xs"
+      class="flex items-center gap-1.5 text-[1em]"
       :style="{ color: t.textDim }"
     >
       <FolderGit2 :size="12" />
@@ -14,13 +14,9 @@
       <GitBranch :size="11" />
       <span class="font-mono">{{ selectedProject.gitBranch }}</span>
       <span :style="{ color: t.textFaint }">·</span>
-      <span class="font-mono text-[10px]">{{ selectedProject.path }}</span>
+      <span class="font-mono text-[1em]">{{ selectedProject.path }}</span>
     </div>
-    <div v-else class="flex items-center gap-1.5 text-xs" :style="{ color: t.textDim }">
-      <FolderGit2 :size="12" />
-      <span>{{ workspaceLabel }}</span>
-    </div>
-    <div class="ml-auto text-xs capitalize" :style="{ color: t.textDim }">
+    <div class="ml-auto text-[1em] capitalize" :style="{ color: t.textDim }">
       {{ viewLabel }}
     </div>
   </div>
@@ -31,17 +27,15 @@ import { FolderGit2, GitBranch } from 'lucide-vue-next'
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
-const settings = useSettingsStore()
+const tasksStore = useTasksStore()
 const route = useRoute()
 
 const isTasksRoute = computed(() => route.path.startsWith('/tasks'))
 
-const selectedTask = computed(() => ws.selectedTask)
+const selectedTask = computed(() => tasksStore.selectedTask)
 const selectedProject = computed(() =>
   selectedTask.value ? ws.projectById(selectedTask.value.projectId) : undefined,
 )
-
-const workspaceLabel = computed(() => settings.workspacePath.replace('~/workspaces/', ''))
 
 const viewLabel = computed(() => {
   const seg = route.path.split('/')[1]

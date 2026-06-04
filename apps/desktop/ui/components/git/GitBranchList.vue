@@ -4,19 +4,21 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">Branches</div>
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
+        {{ tr('git.branches.title') }}
+      </div>
       <button
-        class="flex items-center gap-1 px-2 py-1 text-[10px] rounded transition"
+        class="flex items-center gap-1 px-2 py-1 text-[1em] rounded transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="showCreate = true"
       >
         <Plus :size="10" />
-        New
+        {{ tr('git.branches.new') }}
       </button>
     </div>
     <div class="flex-1 overflow-y-auto">
-      <div class="px-3 py-2 text-[10px] uppercase tracking-wider" :style="{ color: t.textFaint }">
-        Local
+      <div class="px-3 py-2 text-[1em] uppercase tracking-wider" :style="{ color: t.textFaint }">
+        {{ tr('git.branches.local') }}
       </div>
       <GitBranchTree
         :rows="localRows"
@@ -29,10 +31,10 @@
 
       <div
         v-if="remoteRows.length > 0"
-        class="px-3 py-2 text-[10px] uppercase tracking-wider"
+        class="px-3 py-2 text-[1em] uppercase tracking-wider"
         :style="{ color: t.textFaint, borderTop: `1px solid ${t.border}` }"
       >
-        Remote
+        {{ tr('git.branches.remote') }}
       </div>
       <GitBranchTree
         :rows="remoteRows"
@@ -62,8 +64,8 @@
 
     <GitBranchNameModal
       :open="showCreate"
-      title="Create branch"
-      submit-label="Create"
+      :title="tr('git.branches.create_title')"
+      :submit-label="tr('git.branches.create_submit')"
       placeholder="branch-name"
       :from-label="createFromRef || 'HEAD'"
       :model-value="newName"
@@ -74,8 +76,8 @@
 
     <GitBranchNameModal
       :open="renameTarget !== null"
-      title="Rename branch"
-      submit-label="Rename"
+      :title="tr('git.branches.rename_title')"
+      :submit-label="tr('git.branches.rename_submit')"
       placeholder="new-branch-name"
       :from-label="renameTarget ?? ''"
       :model-value="renameValue"
@@ -84,21 +86,37 @@
       @submit="onRename"
     />
 
-    <GitDirtyCheckoutModal
-      :open="dirtyCheckout !== null"
-      :target-branch="dirtyCheckout ?? ''"
-      @close="dirtyCheckout = null"
-      @discard="onDirtyResolve('discard')"
-      @keep="onDirtyResolve('keep')"
-      @stash="onDirtyResolve('stash')"
-    />
-
     <ConfirmDeleteModal
       v-if="pendingDelete"
-      title="Delete branch?"
-      :description="`Branch '${pendingDelete}' sẽ bị xóa. Tiếp tục?`"
+      :title="tr('git.delete_branch.title')"
+      :description="tr('git.delete_branch.description', { name: pendingDelete })"
       @confirm="confirmDelete"
-      @cancel="pendingDelete = null"
+      @cancel="onCancelDelete"
+    >
+      <template #extra>
+        <label
+          class="flex items-center gap-2 text-[1em] cursor-pointer select-none"
+          :style="{ color: t.text }"
+        >
+          <input
+            v-model="deleteRemoteToo"
+            type="checkbox"
+            class="cursor-pointer"
+            :style="{ accentColor: t.danger }"
+          />
+          <span>{{ tr('git.delete_branch.also_delete_remote', { name: pendingDelete }) }}</span>
+        </label>
+      </template>
+    </ConfirmDeleteModal>
+
+    <ConfirmDeleteModal
+      v-if="store.pendingDeleteError"
+      :title="tr('git.delete_branch.force_title')"
+      :description="
+        tr('git.delete_branch.force_description', { name: store.pendingDeleteError.branch })
+      "
+      @confirm="onForceDelete"
+      @cancel="store.clearPendingDeleteError()"
     />
   </div>
 </template>
@@ -108,13 +126,13 @@ import { Plus } from 'lucide-vue-next'
 import { buildBranchTree, flattenTree, isValidGitRef } from '~/utils/branch-tree'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
 const showCreate = ref(false)
 const newName = ref('')
 const createFromRef = ref<string>('')
 const pendingDelete = ref<string | null>(null)
-const dirtyCheckout = ref<string | null>(null)
 const renameTarget = ref<string | null>(null)
 const renameValue = ref('')
 
@@ -164,36 +182,39 @@ const onTreeMoreMenu = (e: MouseEvent, name: string, isRemote: boolean, isCurren
 }
 
 // ─── Checkout (dirty-aware) ──────────────────────────────────────────────
+// Sidecar arbitrates dirty-tree refusal — on DIRTY_TREE the store populates
+// `pendingCheckoutError` and the modal opens. UI no longer guards client-side.
 const onCheckout = async (name: string, isCurrent: boolean) => {
   if (isCurrent) return
-  if (store.hasUncommitted) {
-    dirtyCheckout.value = name
-    return
-  }
   await store.checkoutBranch(name)
 }
 
-// Một handler chung cho 3 action của dirty-checkout (stash/discard/keep).
-// Mỗi action có pre-step khác nhau trước khi cùng checkout.
-const onDirtyResolve = async (action: 'stash' | 'discard' | 'keep') => {
-  const target = dirtyCheckout.value
-  if (!target) return
-  dirtyCheckout.value = null
-  if (action === 'stash') {
-    await store.stashSave(`auto-stash before switch to ${target}`)
-  } else if (action === 'discard') {
-    store.clearStatusForCurrentProject()
-  }
-  // 'keep': giữ nguyên statusFiles — chỉ checkout. Mock: branches/git carry-over.
-  await store.checkoutBranch(target)
-}
-
 // ─── Modal actions ───────────────────────────────────────────────────────
+const deleteRemoteToo = ref(false)
 const confirmDelete = async () => {
   if (pendingDelete.value) {
-    await store.deleteBranch(pendingDelete.value)
+    const opts: { deleteRemote?: boolean } = {}
+    if (deleteRemoteToo.value) opts.deleteRemote = true
+    await store.deleteBranch(pendingDelete.value, opts)
   }
   pendingDelete.value = null
+  deleteRemoteToo.value = false
+}
+const onCancelDelete = () => {
+  pendingDelete.value = null
+  deleteRemoteToo.value = false
+}
+
+// Force delete pathway — triggered when sidecar returned UNMERGED. Preserves
+// the user's "also delete remote" choice from the first modal.
+const onForceDelete = async () => {
+  const pending = store.pendingDeleteError
+  if (!pending) return
+  store.clearPendingDeleteError()
+  const opts: { force: true; deleteRemote?: boolean } = { force: true }
+  if (deleteRemoteToo.value) opts.deleteRemote = true
+  await store.deleteBranch(pending.branch, opts)
+  deleteRemoteToo.value = false
 }
 
 const onCreate = async (value: string) => {

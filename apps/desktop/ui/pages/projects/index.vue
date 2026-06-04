@@ -12,12 +12,14 @@
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search projects..." />
         <button
-          class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition"
-          :style="{ background: t.accent, color: t.accentText }"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          title="Add project"
           @click="startCreate"
+          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
+          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
-          <Plus :size="12" />
-          Add
+          <Plus :size="14" />
         </button>
       </div>
       <div class="flex-1 overflow-y-auto">
@@ -39,7 +41,7 @@
               v-if="renamingId === p.id"
               :ref="setRenameInputRef"
               v-model="renameValue"
-              class="text-[12px] font-medium flex-1 rounded px-1 py-0.5"
+              class="text-[1em] font-medium flex-1 rounded px-1 py-0.5"
               :style="{
                 background: t.bgInput,
                 border: `1px solid ${t.borderStrong}`,
@@ -53,22 +55,12 @@
             />
             <div
               v-else
-              class="text-[12px] font-medium flex-1 truncate"
+              class="text-[1em] font-medium flex-1 truncate"
               :style="{ color: t.text }"
               @dblclick.stop="startRename(p.id, p.name)"
             >
               {{ p.name }}
             </div>
-            <span
-              class="text-[10px] px-1.5 py-0 rounded"
-              :style="{
-                background: t.bgInput,
-                color: t.textDim,
-                border: `1px solid ${t.border}`,
-              }"
-            >
-              {{ taskCountFor(p.id) }}
-            </span>
             <button
               class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
               :style="{ color: t.textMuted }"
@@ -78,7 +70,7 @@
               <MoreHorizontal :size="13" />
             </button>
           </div>
-          <div class="text-[10px] font-mono truncate ml-5" :style="{ color: t.textDim }">
+          <div class="text-[1em] font-mono truncate ml-5" :style="{ color: t.textDim }">
             {{ p.path }}
           </div>
         </div>
@@ -86,14 +78,25 @@
     </template>
 
     <template #detail>
-      <ProjectEditor v-if="creating" :project="null" @save="handleSave" @cancel="cancelCreate" />
+      <ProjectEditor
+        v-if="creating"
+        :project="null"
+        :busy="busy"
+        :busy-label="busyLabel"
+        :last-progress-line="lastProgressLine"
+        :error="error"
+        @save="handleSave"
+        @cancel="cancelCreate"
+      />
       <ProjectEditor
         v-else-if="editing && selectedProject"
         :project="selectedProject"
+        :busy="busy"
+        :error="error"
         @save="handleSave"
         @cancel="editing = false"
       />
-      <div v-else-if="selectedProject" class="p-4 md:p-6 max-w-3xl">
+      <div v-else-if="selectedProject" class="p-4 md:p-6">
         <div class="flex items-start gap-3 mb-6">
           <div
             class="w-12 h-12 rounded flex items-center justify-center"
@@ -105,13 +108,21 @@
             <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">
               {{ selectedProject.name }}
             </h1>
-            <div class="text-[12px] font-mono truncate" :style="{ color: t.textDim }">
+            <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
               {{ selectedProject.path }}
             </div>
           </div>
           <div class="flex items-center gap-1 flex-shrink-0">
             <button
-              class="px-3 py-1.5 text-xs rounded inline-flex items-center gap-1.5 transition"
+              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+              :style="{ background: t.accent, color: t.accentText }"
+              @click="openInEditor(selectedProject.id)"
+            >
+              <Code2 :size="13" />
+              Open in Editor
+            </button>
+            <button
+              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
               :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
               @click="editing = true"
             >
@@ -130,7 +141,7 @@
 
         <div
           v-if="selectedProject.description"
-          class="mb-6 text-[13px] leading-relaxed"
+          class="mb-6 text-[1em] leading-relaxed"
           :style="{ color: t.textMuted }"
         >
           {{ selectedProject.description }}
@@ -139,7 +150,11 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-6">
           <ProjectMeta :icon="GitBranch" label="Branch" :value="selectedProject.gitBranch" mono />
           <ProjectMeta :icon="Code2" label="Language" :value="selectedProject.language" />
-          <ProjectMeta :icon="Clock" label="Created" :value="selectedProject.createdAt" />
+          <ProjectMeta
+            :icon="Clock"
+            label="Created"
+            :value="formatTime(selectedProject.createdAt)"
+          />
         </div>
 
         <div
@@ -148,20 +163,17 @@
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <div
-            class="text-[10px] uppercase tracking-wider font-medium mb-2"
+            class="text-[1em] uppercase tracking-wider font-medium mb-2"
             :style="{ color: t.textDim }"
           >
             Git Remote
           </div>
           <div class="flex items-center gap-2">
             <GitFork :size="12" :style="{ color: t.textDim }" />
-            <span class="text-[11px] font-mono flex-1 truncate" :style="{ color: t.text }">
+            <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
               {{ selectedProject.gitRemote }}
             </span>
-            <button
-              class="px-2 py-0.5 text-[10px] rounded transition"
-              :style="{ color: t.textDim }"
-            >
+            <button class="px-2 py-0.5 text-[1em] rounded transition" :style="{ color: t.textDim }">
               Open
             </button>
           </div>
@@ -169,12 +181,70 @@
 
         <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
           <div
-            class="text-[10px] uppercase tracking-wider font-medium"
+            class="text-[1em] uppercase tracking-wider font-medium"
+            :style="{ color: t.textDim }"
+          >
+            Sessions · {{ projectSessions.length }}
+          </div>
+          <button
+            class="px-2.5 py-1 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+            :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+            title="New session for this project"
+            @click="startSessionForProject"
+          >
+            <Plus :size="12" />
+            New session
+          </button>
+        </div>
+        <div
+          v-if="projectSessions.length === 0"
+          class="text-[1em] py-4 mb-6"
+          :style="{ color: t.textFaint }"
+        >
+          No sessions yet for this project
+        </div>
+        <div v-else class="space-y-1.5 mb-6">
+          <button
+            v-for="ses in projectSessions"
+            :key="ses.id"
+            class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
+            :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+            @click="openSession(ses.id)"
+          >
+            <MessageSquare :size="12" :style="{ color: t.textDim, marginTop: '2px' }" />
+            <div class="flex-1 min-w-0">
+              <div class="text-[1em] truncate" :style="{ color: t.text }">
+                {{ ses.title }}
+              </div>
+              <div
+                class="text-[1em] mt-0.5 flex items-center gap-1.5"
+                :style="{ color: t.textDim }"
+              >
+                <span>{{ formatTime(ses.updatedAt) }}</span>
+                <span :style="{ color: t.textFaint }">·</span>
+                <span>{{ ses.messages.length }} msg</span>
+                <template v-if="ses.invitedAgentIds.length">
+                  <span :style="{ color: t.textFaint }">·</span>
+                  <span>
+                    {{ ses.invitedAgentIds.length }} agent{{
+                      ses.invitedAgentIds.length > 1 ? 's' : ''
+                    }}
+                  </span>
+                </template>
+              </div>
+            </div>
+            <ExternalLink :size="11" :style="{ color: t.textDim, marginTop: '2px' }" />
+          </button>
+        </div>
+
+        <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
+          <div
+            class="text-[1em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
             Tasks · {{ projectTaskStats.total }}
           </div>
-          <div class="flex items-center gap-3 text-[10px]" :style="{ color: t.textDim }">
+          <div class="flex items-center gap-3 text-[1em]" :style="{ color: t.textDim }">
             <span v-if="projectTaskStats.running > 0" class="inline-flex items-center gap-1">
               <Circle :size="8" class="animate-pulse" :style="{ color: t.text, fill: t.text }" />
               {{ projectTaskStats.running }} running
@@ -188,7 +258,7 @@
         </div>
         <div
           v-if="projectTasks.length === 0"
-          class="text-[11px] py-4"
+          class="text-[1em] py-4"
           :style="{ color: t.textFaint }"
         >
           No tasks yet for this project
@@ -216,12 +286,12 @@
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline gap-2 mb-0.5 flex-wrap">
-                <span class="text-[10px] font-mono" :style="{ color: t.textFaint }">
+                <span class="text-[1em] font-mono" :style="{ color: t.textFaint }">
                   {{ tk.id }}
                 </span>
-                <span class="text-[10px]" :style="{ color: t.textFaint }">{{ tk.createdAt }}</span>
+                <span class="text-[1em]" :style="{ color: t.textFaint }">{{ tk.createdAt }}</span>
               </div>
-              <div class="text-[12px]" :style="{ color: t.text }">
+              <div class="text-[1em]" :style="{ color: t.text }">
                 {{ tk.title }}
               </div>
             </div>
@@ -264,16 +334,22 @@ import {
   FolderGit2,
   GitBranch,
   GitFork,
+  MessageSquare,
   MoreHorizontal,
   Plus,
   Trash2,
 } from 'lucide-vue-next'
-import type { Project, Task } from '~/types'
+import type { Project, Session, Task } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
+import type { ProjectEditorSavePayload } from '~/components/project/types'
 import { STATUS_META } from '~/utils/status-meta'
+import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
+const tasksStore = useTasksStore()
+const sessionsStore = useSessionsStore()
+const sidecar = useSidecar()
 
 const selectedId = ref<string | null>(ws.projects[0]?.id ?? null)
 const creating = ref(false)
@@ -281,6 +357,39 @@ const editing = ref(false)
 const searchQuery = ref('')
 const confirmDelete = ref<Project | null>(null)
 const mobilePane = ref<'list' | 'detail'>('list')
+
+const busy = ref(false)
+const busyLabel = ref('')
+const lastProgressLine = ref('')
+const error = ref('')
+
+ws.hydrateProjectsFromSidecar().then(() => {
+  if (!selectedId.value && ws.projects.length > 0) {
+    selectedId.value = ws.projects[0]!.id
+  }
+})
+
+// Sessions list per project is shown in the detail pane; hydrate once so it's
+// populated. Guarded internally, so navigating to /sessions later won't re-load.
+sessionsStore.hydrateFromSidecar()
+
+if (sidecar.available) {
+  let unlisten: (() => void) | null = null
+  sidecar
+    .onEvent((evt) => {
+      if (evt.type === 'project.clone.progress') {
+        const p = evt.payload as { line?: string } | null
+        if (p?.line) lastProgressLine.value = p.line.trim()
+      }
+    })
+    .then((fn) => {
+      unlisten = fn
+    })
+    .catch(() => {})
+  onBeforeUnmount(() => {
+    unlisten?.()
+  })
+}
 
 const selectedProject = computed<Project | null>(
   () => ws.projects.find((p) => p.id === selectedId.value) ?? null,
@@ -296,11 +405,20 @@ const filtered = computed(() => {
 
 const isActive = (id: string) => selectedId.value === id && !creating.value
 
-const taskCountFor = (id: string) => ws.tasks.filter((tk) => tk.projectId === id).length
-
 const projectTasks = computed<Task[]>(() =>
-  selectedProject.value ? ws.tasks.filter((tk) => tk.projectId === selectedProject.value!.id) : [],
+  selectedProject.value
+    ? tasksStore.tasks.filter((tk) => tk.projectId === selectedProject.value!.id)
+    : [],
 )
+
+const projectSessions = computed<Session[]>(() => {
+  const proj = selectedProject.value
+  if (!proj) return []
+  return sessionsStore.sessions
+    .filter((s) => s.projectId === proj.id)
+    .slice()
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+})
 
 const projectTaskStats = computed(() => ({
   total: projectTasks.value.length,
@@ -337,27 +455,54 @@ const selectProject = (id: string) => {
   mobilePane.value = 'detail'
 }
 
-const handleSave = (data: Project) => {
-  const isExisting = !!data.id && ws.projects.some((p) => p.id === data.id)
-  if (isExisting) {
-    ws.saveProject(data)
-    editing.value = false
-  } else {
-    const newId = `prj${Date.now()}`
-    const newProject: Project = {
-      ...data,
-      id: newId,
-      createdAt: 'Just now',
+const handleSave = async (payload: ProjectEditorSavePayload) => {
+  if (busy.value) return
+  error.value = ''
+  try {
+    if (payload.kind === 'update') {
+      busy.value = true
+      busyLabel.value = 'Saving…'
+      const saved = await ws.updateProject(payload.project)
+      selectedId.value = saved.id
+      editing.value = false
+    } else if (payload.kind === 'link') {
+      busy.value = true
+      busyLabel.value = 'Linking folder…'
+      const saved = await ws.linkProject({
+        name: payload.data.name,
+        path: payload.data.path,
+        description: payload.data.description,
+        language: payload.data.language,
+        gitRemote: payload.data.gitRemote,
+        gitBranch: payload.data.gitBranch,
+      })
+      selectedId.value = saved.id
+      creating.value = false
+    } else {
+      busy.value = true
+      busyLabel.value = 'Cloning repository…'
+      lastProgressLine.value = ''
+      const saved = await ws.cloneProject({
+        name: payload.data.name,
+        destPath: payload.data.path,
+        gitRemote: payload.data.gitRemote,
+        description: payload.data.description,
+        language: payload.data.language,
+      })
+      selectedId.value = saved.id
+      creating.value = false
     }
-    ws.saveProject(newProject)
-    selectedId.value = newId
-    creating.value = false
+    mobilePane.value = 'detail'
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    busy.value = false
+    busyLabel.value = ''
   }
-  mobilePane.value = 'detail'
 }
 
-const doDelete = (id: string) => {
-  ws.deleteProject(id)
+const doDelete = async (id: string) => {
+  await ws.deleteProject(id)
   if (selectedId.value === id) {
     selectedId.value = ws.projects[0]?.id ?? null
   }
@@ -372,9 +517,27 @@ const onBack = () => {
 }
 
 const openTask = (id: string) => {
-  ws.selectTask(id)
+  tasksStore.selectTask(id)
   navigateTo('/tasks')
 }
+
+const openSession = (id: string) => {
+  sessionsStore.selectSession(id)
+  navigateTo('/sessions')
+}
+
+// Create a fresh session scoped to this project, then jump to the Sessions
+// page where the new (selected) session is rendered. Awaiting hydrate first
+// avoids a later sessions.list response clobbering the just-created session.
+const startSessionForProject = async () => {
+  const proj = selectedProject.value
+  if (!proj) return
+  await sessionsStore.hydrateFromSidecar()
+  sessionsStore.createSession({ title: '', projectId: proj.id })
+  navigateTo('/sessions')
+}
+
+const openInEditor = (id: string) => navigateTo(`/projects/${id}/code`)
 
 const contextMenu = ref<{ x: number; y: number; id: string } | null>(null)
 const renamingId = ref<string | null>(null)
@@ -410,7 +573,10 @@ const commitRename = () => {
   const trimmed = renameValue.value.trim()
   const item = ws.projects.find((p) => p.id === id)
   if (trimmed && item && trimmed !== item.name) {
-    ws.saveProject({ ...item, name: trimmed })
+    ws.updateProject({ ...item, name: trimmed }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('[projects] rename failed', err)
+    })
   }
   renamingId.value = null
 }

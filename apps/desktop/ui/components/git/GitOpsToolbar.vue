@@ -1,7 +1,7 @@
 <template>
   <div class="flex items-center gap-1">
     <button
-      class="flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded transition"
+      class="flex items-center gap-1 text-[1em] px-2.5 py-1.5 rounded transition"
       :style="btnStyle(store.isFetching)"
       :disabled="store.isFetching"
       @click="store.fetchRemote()"
@@ -12,7 +12,7 @@
     </button>
 
     <button
-      class="flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded transition"
+      class="flex items-center gap-1 text-[1em] px-2.5 py-1.5 rounded transition"
       :style="btnStyle(store.isPulling)"
       :disabled="store.isPulling"
       @click="store.pull()"
@@ -24,7 +24,7 @@
     </button>
 
     <button
-      class="flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded font-medium transition"
+      class="flex items-center gap-1 text-[1em] px-2.5 py-1.5 rounded font-medium transition"
       :style="primaryBtnStyle"
       :disabled="store.isPushing"
       @click="store.push()"
@@ -34,29 +34,6 @@
       <span v-if="store.ahead > 0" class="font-mono">↑{{ store.ahead }}</span>
       <Loader2 v-if="store.isPushing" :size="10" class="animate-spin" />
     </button>
-
-    <div
-      v-if="store.progressOp"
-      class="ml-2 flex items-center gap-1 text-[10px]"
-      :style="{ color: t.textDim }"
-    >
-      <span class="font-mono uppercase">{{ store.progressOp }}</span>
-      <div
-        class="w-20 h-1 rounded overflow-hidden"
-        :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
-      >
-        <div
-          class="h-full transition-all"
-          :style="{
-            width: `${store.progressPct ?? 0}%`,
-            background: t.accent,
-          }"
-        />
-      </div>
-      <span v-if="store.progressPct !== null" class="font-mono w-6 text-right">
-        {{ store.progressPct }}%
-      </span>
-    </div>
   </div>
 </template>
 

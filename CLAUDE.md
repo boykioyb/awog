@@ -56,16 +56,17 @@ Pipeline điển hình: **PO → BA → PM → TL → developer → QA → revie
 
 | Lớp | Công nghệ | Ghi chú |
 |---|---|---|
-| Desktop shell | Tauri (Rust) | Chưa wire, planned — [ADR 0006](docs/decisions/0006-tauri-shell-for-nuxt.md) |
-| Frontend | Nuxt 4 (SPA, `ssr: false`) + Vue 3 + TS | Đang port từ React prototype |
-| State | Pinia | Store: `workspace`, `settings` |
-| Canvas | VueFlow | Workflow DAG editor |
+| Desktop shell | Tauri 2 (Rust) | Đã wire [ADR 0006](docs/decisions/0006-tauri-shell-for-nuxt.md) — stdio IPC, system tray planned |
+| Frontend | Nuxt 4 (SPA, `ssr: false`) + Vue 3 + TS | Đã port core features. **Agents/Skills/MCP/Projects/Git/Sessions/Tasks/Workflows wired** (Sessions có Workspace Panel: Diff/Files/Plan/Terminal/Tasks/Preview — [spec](docs/features/workspace-panel.md)). Tasks chạy thật qua engine ([ADR 0024](docs/decisions/0024-task-execution-engine-ipc-contract.md)). |
+| State | Pinia | Store: `workspace` (projects/agents/skills/mcp/hooks/commands), `tasks` (live — event-driven execution, app-lifetime subscribe), `workflows` (live — DAG persist + debounce), `settings` (live), `sessions` (live), `git` (live + browser fallback). Tasks/Workflows tách store riêng; browser-dev có mock fallback. |
+| Canvas | VueFlow | Workflow DAG editor (live — 2 tier: global `~/.awog/workflows/<id>.json` + per-project `{project}/.awog/workflows/<id>.json`, scope selector + tier badge) |
 | Styling | TailwindCSS 3 + inline `:style` theme token | Xem `useTheme()` composable |
 | Icons | lucide-vue-next | |
-| Code editor | Monaco | Cho prompt + artifact (markdown editor full-screen) |
-| Engine | Node.js sidecar | Chưa implement; UI đang chạy với mock data |
-| LLM | Anthropic SDK, OpenAI SDK | Phía sidecar, không expose API key cho UI |
-| Storage | Filesystem JSON/YAML/MD + Git | Không database |
+| Code editor | Monaco | Cho prompt + artifact (markdown editor full-screen) + **Project Code Workspace** (`MonacoEditor.vue`, model-cache multi-tab, worker bundle local, [ADR 0021](docs/decisions/0021-monaco-code-editor.md)) |
+| Engine (Sidecar) | Node.js `@awog/sidecar` | Wired M7+M8+Pha2A: OAuth, Sessions, Skills, MCP/**Connections** (stdio+http+keychain+per-agent whitelist+idle stop; global-only, danh sách phẳng — trang "MCP Servers" đổi tên thành "Connections" theo [ADR 0025](docs/decisions/0025-connections-manager.md) đã đơn giản hoá, mô hình Craft "Sources"; New Task có dropdown chọn connection tùy chọn → engine union vào mọi node, KHÔNG service enum/tier), Agents (5-tier AGENT.md+runtime systemPrompt/tools/skillIds/mcpServerIds injection), Git Manager (24 method), filesystem watcher (chokidar), `fs.*` read-write + search ([ADR 0022](docs/decisions/0022-fs-read-write-search-ipc.md): listDir/readFile/listFiles/writeFile/createFile/createDir/rename/delete/search/watch/unwatch — write/delete/search gated by `assertInsideWorkspace`), `terminal.*` PTY (node-pty, [ADR 0019](docs/decisions/0019-pty-terminal-in-sidecar.md)). **Task Execution Engine** ([ADR 0024](docs/decisions/0024-task-execution-engine-ipc-contract.md)): `workflows.*` (JSON snapshot + DAG validate) + `tasks.*` (JSONL event-sourced, parallel scheduler cap 4, per-node `invokeSdk` reuse SDK core, trace stream, git auto-commit per node, approve/rerun/discuss, restart-safe resume). Use `@anthropic-ai/claude-agent-sdk` [ADR 0008](docs/decisions/0008-stdio-ipc-for-sidecar.md) |
+| LLM client | `@anthropic-ai/claude-agent-sdk` (sidecar chỉ) | OAuth token via env, tool-use + permission prompts, thinking budgets |
+| Storage | Filesystem JSON/YAML/MD + Git + JSONL + OS keychain | credentials.json (chmod 600) + sessions JSONL + projects.json + mcp-servers/<id>.json (Connections; global `~/.awog/mcp-servers/`; env/header `secret:KEY` ref → OS keychain via `@napi-rs/keyring`, token KHÔNG bao giờ vào file/git, [ADR 0018](docs/decisions/0018-mcp-secret-keychain.md)) + agents/<id>.md (5-tier, Claude Code subagent format) |
+| Git Manager | Wired M0..M7 ([ADR 0017](docs/decisions/0017-git-manager-ipc-contract.md), [spec](docs/features/git-manager.md)) | 24 method `git.*` per-command (bao gồm `stageHunk`, `init`, `discoverRepos`), mutex per workspace, system git ≥ 2.20 với bootstrap probe + banner, chokidar watcher với debounce 200ms, virtual scroll > 200 file/section, detached HEAD warn, NO_REPO empty state + init CTA. **Multi-repo per project**: `discoverRepos` quét folder project (≤2 cấp) tìm repo con → header có repo picker khi project là container nhiều repo (project root không phải repo). **Auto-fetch** background mặc định 5 phút (silent, on git page open + window focus; chỉnh/tắt ở Settings → Workspace). **Branch tree** trong sidebar (gom theo prefix `/`, folder default đóng, current branch accent); **Changes tree/flat toggle** (default tree, persisted). UI Sublime-Merge style: sidebar resizable/collapsible (Local Changes / All Commits / Branches / Remotes / Tags / Stashes / Submodules) + main pane theo selection + progress strip overlay (absolute, không shift layout). I18n en/vi. Store `git` còn fallback mock cho browser dev. |
 
 ## Lệnh hay dùng
 
@@ -95,6 +96,16 @@ pnpm build
 | [apps/desktop/ui/utils/themes.ts](apps/desktop/ui/utils/themes.ts) | 20+ theme token |
 | [apps/desktop/ui/utils/initial-data.ts](apps/desktop/ui/utils/initial-data.ts) | Mock data cho store |
 | [apps/desktop/ui/types/index.ts](apps/desktop/ui/types/index.ts) | Entity types (Task, Project, Agent, Skill, Workflow) |
+| [apps/desktop/sidecar/src/skills/](apps/desktop/sidecar/src/skills/) | Skill storage: 5-tier scan + atomic SKILL.md write + `loadSkillByIdAnyTier` |
+| [apps/desktop/sidecar/src/agents/](apps/desktop/sidecar/src/agents/) | Agent storage: 5-tier AGENT.md (both single-file + folder/AGENT.md layout) |
+| [apps/desktop/sidecar/src/mcp/](apps/desktop/sidecar/src/mcp/) | McpManager (stdio+http+idle stop), HttpMcpClient + SSRF guard, secrets helper, store |
+| [apps/desktop/sidecar/src/credentials/keychain.ts](apps/desktop/sidecar/src/credentials/keychain.ts) | OS keychain wrapper qua `@napi-rs/keyring` (dynamic import + graceful fallback) |
+| [apps/desktop/sidecar/src/watcher.ts](apps/desktop/sidecar/src/watcher.ts) | Filesystem watcher chokidar — emit `*.fs-changed` events |
+| [apps/desktop/sidecar/src/methods/](apps/desktop/sidecar/src/methods/) | 50+ RPC methods: skills.*, agents.*, mcp.*, sessions.*, projects.*, git.*, auth.*, accounts.* |
+| [apps/desktop/ui/components/skill/](apps/desktop/ui/components/skill/) | SkillDetail, SkillEditor, SkillPromptCreator (mini chat), SkillBodyEditModal |
+| [apps/desktop/ui/components/agent/](apps/desktop/ui/components/agent/) | AgentDetail, AgentEditor (MCP picker, source picker, body edit), AgentPromptCreator, AgentBodyEditModal |
+| [apps/desktop/ui/components/mcp/](apps/desktop/ui/components/mcp/) | McpDetail, McpEditor (KvEditor secret-mode), McpPromptCreator |
+| [apps/desktop/ui/components/markdown/MarkdownBodyView.vue](apps/desktop/ui/components/markdown/MarkdownBodyView.vue) | Shared section: preview/raw toggle + copy + edit, used by Skills/Agents detail |
 | [agentflow-prototype.tsx](agentflow-prototype.tsx) | React prototype gốc — dùng tham chiếu khi port |
 
 ## Quy tắc làm việc
@@ -108,7 +119,7 @@ pnpm build
 
 ## Trạng thái port (tham chiếu nhanh)
 
-Theo [apps/desktop/ui/README.md](apps/desktop/ui/README.md): Tasks, Projects, Workflows, Agents, Skills, Settings, Markdown editor, Theme system — đã port. System tray + native notification — chờ Tauri shell. Engine wiring — chưa.
+Theo [apps/desktop/ui/README.md](apps/desktop/ui/README.md): Tasks, Projects, Workflows, Agents, Settings, Markdown editor, Theme system — đã port. **Skills** SKILL.md folder format ([ADR 0013](docs/decisions/0013-adopt-skill-md-format.md)) với 5-tier discovery + chat-driven creation. **Agents** AGENT.md 5-tier ([ADR 0015](docs/decisions/0015-agents-persisted-runtime-systemprompt.md)) với runtime injection systemPrompt + tools + skillIds + mcpServerIds (Pha 2A). **MCP Servers** stdio + http transport ([ADR 0014](docs/decisions/0014-mcp-servers-stdio-runtime.md)) + secret keychain ([ADR 0018](docs/decisions/0018-mcp-secret-keychain.md)) + per-agent whitelist + idle stop. **Context Providers** deprecated, fold vào MCP ([ADR 0016](docs/decisions/0016-deprecate-context-providers-fold-into-mcp.md)). **Filesystem watcher** trong sidecar (chokidar) auto-refresh UI khi file `.md`/`.json` thay đổi ngoài app. **Git Manager** M0..M7 wired ([ADR 0017](docs/decisions/0017-git-manager-ipc-contract.md)). **Tasks + Workflows** wired thật ([ADR 0024](docs/decisions/0024-task-execution-engine-ipc-contract.md)): Workflow Builder persist DAG ra đĩa; Task Execution Engine chạy node qua Claude Agent SDK (parallel scheduler, trace stream, git auto-commit per phase, approve/rerun/discuss, restart-safe). Store `tasks`/`workflows` riêng, subscribe `task.*` events ở app-lifetime. **Session Workspace Panel** ([spec](docs/features/workspace-panel.md)) — right-docked, 6 tab (Diff/Files/Plan/Terminal/Tasks/Preview); `fs.*` read-only + `terminal.*` PTY ([ADR 0019](docs/decisions/0019-pty-terminal-in-sidecar.md)). System tray + native notification — chờ Tauri shell. Pha 2A completion: [docs/features/phase-2a.tasks.md](docs/features/phase-2a.tasks.md).
 
 ## Khi user yêu cầu feature mới
 

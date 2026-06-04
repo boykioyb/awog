@@ -1,8 +1,14 @@
 # Feature: Context Providers
 
-**Trạng thái:** Draft
+**Trạng thái:** ⛔ **Deprecated** (2026-05-29 — xem [ADR 0016](../decisions/0016-deprecate-context-providers-fold-into-mcp.md))
 
-## Overview
+> Feature này bị bỏ. Mọi data source ngoài (Notion, Jira, Slack, GitHub, filesystem, v.v.) đi qua **[MCP Servers](./mcp-servers.md)**. Per-agent whitelist sẽ implement bằng `agent.mcpServerIds` ở pha 2 (xem MCP backlog B3 trong [ADR 0014](../decisions/0014-mcp-servers-stdio-runtime.md)).
+>
+> Nội dung dưới đây giữ làm tham chiếu lịch sử — không phản ánh thiết kế hiện tại.
+
+---
+
+## Overview (lịch sử)
 
 Context provider mở các nguồn tri thức bên ngoài cho agent. Mỗi agent khai báo provider mà nó được phép truy cập — hệ thống kiểm soát tại runtime.
 

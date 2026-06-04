@@ -4,9 +4,9 @@
       class="px-3 py-2 flex items-center justify-between flex-shrink-0"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[11px] uppercase tracking-wider" :style="{ color: t.textDim }">Stashes</div>
+      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">Stashes</div>
       <button
-        class="flex items-center gap-1 px-2 py-1 text-[10px] rounded transition"
+        class="flex items-center gap-1 px-2 py-1 text-[1em] rounded transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="showSave = true"
       >
@@ -24,18 +24,18 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <div class="flex items-center gap-2">
-          <span class="text-xs font-mono" :style="{ color: t.accent }">{{ entry.ref }}</span>
-          <span class="text-[10px]" :style="{ color: t.textDim }">on {{ entry.branch }}</span>
-          <span class="ml-auto text-[10px]" :style="{ color: t.textFaint }">
+          <span class="text-[1em] font-mono" :style="{ color: t.accent }">{{ entry.ref }}</span>
+          <span class="text-[1em]" :style="{ color: t.textDim }">on {{ entry.branch }}</span>
+          <span class="ml-auto text-[1em]" :style="{ color: t.textFaint }">
             {{ formatDate(entry.date) }}
           </span>
         </div>
-        <div class="text-xs mt-1 truncate" :style="{ color: t.text }">
+        <div class="text-[1em] mt-1 truncate" :style="{ color: t.text }">
           {{ entry.message }}
         </div>
         <div class="flex items-center gap-1 mt-2">
           <button
-            class="text-[10px] px-2 py-1 rounded transition"
+            class="text-[1em] px-2 py-1 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.text,
@@ -46,7 +46,7 @@
             Pop
           </button>
           <button
-            class="text-[10px] px-2 py-1 rounded transition"
+            class="text-[1em] px-2 py-1 rounded transition"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -57,7 +57,7 @@
             Apply
           </button>
           <button
-            class="text-[10px] px-2 py-1 rounded transition ml-auto"
+            class="text-[1em] px-2 py-1 rounded transition ml-auto"
             :style="{
               background: t.dangerBg,
               color: t.danger,
@@ -71,12 +71,17 @@
       </div>
     </div>
 
-    <BaseModal :open="showSave" title="Save stash" size="sm" @close="showSave = false">
+    <BaseModal
+      :open="showSave"
+      :title="tr('git.stash.title_save')"
+      size="sm"
+      @close="showSave = false"
+    >
       <div class="p-4">
         <input
           v-model="newMessage"
-          placeholder="Stash message (optional)"
-          class="w-full rounded text-xs px-2 py-1.5"
+          :placeholder="tr('git.stash.placeholder')"
+          class="w-full rounded text-[1em] px-2 py-1.5"
           :style="{
             background: t.bgInput,
             color: t.text,
@@ -88,26 +93,26 @@
       </div>
       <template #footer>
         <button
-          class="px-3 py-1.5 text-xs rounded transition"
+          class="px-3 py-1.5 text-[1em] rounded transition"
           :style="{ color: t.textMuted }"
           @click="showSave = false"
         >
-          Cancel
+          {{ tr('common.cancel') }}
         </button>
         <button
-          class="px-3 py-1.5 text-xs rounded font-medium transition"
+          class="px-3 py-1.5 text-[1em] rounded font-medium transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="onSave"
         >
-          Save
+          {{ tr('common.save') }}
         </button>
       </template>
     </BaseModal>
 
     <ConfirmDeleteModal
       v-if="pendingDrop !== null"
-      title="Drop stash?"
-      :description="`Stash sẽ bị xóa vĩnh viễn. Tiếp tục?`"
+      :title="tr('git.stash.drop_title')"
+      :description="tr('git.stash.drop_description')"
       @confirm="confirmDrop"
       @cancel="pendingDrop = null"
     />
@@ -118,6 +123,7 @@
 import { Archive, Plus } from 'lucide-vue-next'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
 const showSave = ref(false)

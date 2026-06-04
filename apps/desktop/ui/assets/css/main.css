@@ -4,6 +4,9 @@
 
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-size-base: 14px;
+  --font-weight-base: 400;
 }
 
 html,
@@ -12,12 +15,34 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
+  /* Desktop shell — no page-level scroll. Internal scroll lives inside
+     layout panels (`overflow-hidden` on the layout root, `overflow-y-auto`
+     inside specific containers). Teleported modals/drawers use position: fixed
+     so they can't push the body; clamping overflow here makes that contract
+     explicit. */
+  overflow: hidden;
+}
+
+/* `font-size` lives on `html` so Tailwind rem-based utilities (text-xs, p-2…)
+   scale together with the user-controlled `--font-size-base` setting. Custom
+   `text-[Npx]` was migrated to em across components for the same reason. */
+html {
+  font-size: var(--font-size-base);
 }
 
 body {
   font-family: var(--font-sans);
+  font-weight: var(--font-weight-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.font-mono,
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono);
 }
 
 /* Theme-aware scrollbar — CSS vars set by useTheme composable */
@@ -57,4 +82,263 @@ body,
 [data-theme-transition] {
   transition: background-color 200ms ease, color 200ms ease,
     border-color 200ms ease;
+}
+
+/* ─── Shared utilities ────────────────────────────────────────────────────── */
+
+.awog-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.awog-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Markdown rendering (.awog-md) ───────────────────────────────────────── */
+/* Applied to any v-html container that renders marked output (chat messages,
+   subagent drawer, etc). Color is provided via --awog-accent CSS var bound
+   per-instance so headings react to the theme accent. */
+
+.awog-md {
+  line-height: 1.6;
+}
+.awog-md p {
+  margin: 0 0 0.6em;
+}
+.awog-md p:last-child {
+  margin-bottom: 0;
+}
+.awog-md h1,
+.awog-md h2,
+.awog-md h3,
+.awog-md h4,
+.awog-md h5,
+.awog-md h6 {
+  font-weight: 600;
+  margin: 0.9em 0 0.4em;
+  line-height: 1.3;
+  color: var(--awog-accent, inherit);
+}
+.awog-md h1 { font-size: 1.25em; }
+.awog-md h2 { font-size: 1.12em; }
+.awog-md h3 { font-size: 1.04em; }
+.awog-md h4 { font-size: 1em; }
+.awog-md h1:first-child,
+.awog-md h2:first-child,
+.awog-md h3:first-child {
+  margin-top: 0;
+}
+.awog-md ul,
+.awog-md ol {
+  margin: 0.4em 0 0.6em 1.2em;
+  padding: 0;
+}
+.awog-md li {
+  margin: 0.15em 0;
+}
+.awog-md ul { list-style: disc; }
+.awog-md ol { list-style: decimal; }
+.awog-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.07));
+}
+.awog-md pre {
+  margin: 0.6em 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  background: light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.35));
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.06));
+}
+.awog-md pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+/* ─── highlight.js tokens ──────────────────────────────────────────────────── */
+/* Emitted by utils/markdown.ts. Themed with light-dark() (a GitHub-ish palette)
+   so colors follow the app appearance — color-scheme is set per theme in
+   useTheme, so no re-render is needed on theme switch. */
+.awog-md pre code.hljs {
+  color: light-dark(#1f2328, #c9d1d9);
+}
+.awog-md .hljs-comment,
+.awog-md .hljs-quote {
+  color: light-dark(#6e7781, #8b949e);
+  font-style: italic;
+}
+.awog-md .hljs-keyword,
+.awog-md .hljs-selector-tag,
+.awog-md .hljs-literal,
+.awog-md .hljs-doctag,
+.awog-md .hljs-section,
+.awog-md .hljs-type,
+.awog-md .hljs-name {
+  color: light-dark(#cf222e, #ff7b72);
+}
+.awog-md .hljs-string,
+.awog-md .hljs-attr,
+.awog-md .hljs-symbol,
+.awog-md .hljs-bullet,
+.awog-md .hljs-addition {
+  color: light-dark(#0a3069, #a5d6ff);
+}
+.awog-md .hljs-number,
+.awog-md .hljs-meta,
+.awog-md .hljs-link {
+  color: light-dark(#0550ae, #79c0ff);
+}
+.awog-md .hljs-title,
+.awog-md .hljs-title.function_,
+.awog-md .hljs-built_in {
+  color: light-dark(#8250df, #d2a8ff);
+}
+.awog-md .hljs-variable,
+.awog-md .hljs-template-variable,
+.awog-md .hljs-property,
+.awog-md .hljs-params,
+.awog-md .hljs-attribute {
+  color: light-dark(#953800, #ffa657);
+}
+.awog-md .hljs-tag {
+  color: light-dark(#116329, #7ee787);
+}
+.awog-md .hljs-deletion {
+  color: light-dark(#82071e, #ffa198);
+}
+.awog-md .hljs-emphasis {
+  font-style: italic;
+}
+.awog-md .hljs-strong {
+  font-weight: 600;
+}
+.awog-md blockquote {
+  margin: 0.6em 0;
+  padding: 0.2em 0.8em;
+  border-left: 3px solid light-dark(rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.15));
+  color: light-dark(rgba(0, 0, 0, 0.6), rgba(255, 255, 255, 0.7));
+}
+.awog-md hr {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.08));
+}
+.awog-md a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.awog-md table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.95em;
+}
+.awog-md th,
+.awog-md td {
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.1));
+  padding: 4px 8px;
+}
+.awog-md th {
+  background: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04));
+  font-weight: 600;
+}
+.awog-md strong {
+  font-weight: 600;
+}
+
+/* ─── Mermaid diagrams (.awog-mermaid) ────────────────────────────────────── */
+/* Rendered into v-html'd markup by utils/mermaid.ts. Position relative so the
+   injected zoom button can anchor top-right; the button reveals on hover. */
+.awog-mermaid {
+  position: relative;
+  margin: 0.6em 0;
+}
+.awog-mermaid[data-rendered] {
+  display: flex;
+  justify-content: center;
+}
+.awog-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+.awog-mermaid-zoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+}
+.awog-mermaid:hover .awog-mermaid-zoom,
+.awog-mermaid-zoom:focus-visible {
+  opacity: 1;
+}
+.awog-mermaid-zoom:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* ─── Code blocks (.awog-code-block) ──────────────────────────────────────── */
+/* markdown.ts wraps every non-mermaid fence; SessionMessageList injects the
+   copy + expand actions post-render. Position relative so the action bar can
+   anchor top-right; it reveals on hover. Colors use light-dark() because the
+   code surface (unlike a mermaid diagram) follows the app appearance. */
+.awog-md .awog-code-block {
+  position: relative;
+}
+.awog-code-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.awog-code-block:hover .awog-code-actions,
+.awog-code-actions:focus-within {
+  opacity: 1;
+}
+.awog-code-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: light-dark(rgba(0, 0, 0, 0.45), rgba(255, 255, 255, 0.55));
+  background: light-dark(rgba(255, 255, 255, 0.75), rgba(0, 0, 0, 0.35));
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+.awog-code-actions button:hover {
+  color: light-dark(rgba(0, 0, 0, 0.85), rgba(255, 255, 255, 0.9));
+  background: light-dark(rgba(255, 255, 255, 0.95), rgba(0, 0, 0, 0.55));
+}
+.awog-code-copy.is-copied {
+  color: #3fb950 !important;
 }

@@ -1,24 +1,77 @@
 <template>
   <div class="flex flex-col h-full overflow-hidden">
     <div
-      v-if="!blocks"
-      class="flex-1 flex items-center justify-center text-xs"
+      v-if="!file"
+      class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
-      Select a conflicted file
+      {{ tr('git.conflict.select_file') }}
     </div>
+    <template v-else-if="file.isBinary">
+      <div
+        class="px-3 py-2 flex items-center gap-2 flex-shrink-0"
+        :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
+      >
+        <AlertTriangle :size="12" :style="{ color: t.gitConflict }" />
+        <span class="text-[1em] font-mono truncate flex-1" :style="{ color: t.text }">
+          {{ file.path }}
+        </span>
+        <span class="text-[1em]" :style="{ color: t.textDim }">binary</span>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <div class="text-[1em]" :style="{ color: t.textDim }">
+          {{ tr('git.conflict.binary_note') }}
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            class="px-3 py-1.5 text-[1em] rounded transition"
+            :style="{ background: t.info, color: t.onAccent }"
+            @click="onBinary('ours')"
+          >
+            Take ours (binary)
+          </button>
+          <button
+            class="px-3 py-1.5 text-[1em] rounded transition"
+            :style="{ background: t.warning, color: t.onAccent }"
+            @click="onBinary('theirs')"
+          >
+            Take theirs (binary)
+          </button>
+        </div>
+      </div>
+    </template>
     <template v-else>
       <div
         class="px-3 py-2 flex items-center gap-2 flex-shrink-0"
         :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <AlertTriangle :size="12" :style="{ color: t.gitConflict }" />
-        <span class="text-xs font-mono truncate flex-1" :style="{ color: t.text }">{{ path }}</span>
-        <span class="text-[10px]" :style="{ color: t.textDim }">
-          {{ resolvedCount }} / {{ blocks.length }} resolved
+        <span class="text-[1em] font-mono truncate flex-1" :style="{ color: t.text }">
+          {{ file.path }}
+        </span>
+        <span class="text-[1em]" :style="{ color: t.textDim }">
+          {{
+            tr('git.conflict.resolved_count', { done: resolvedCount, total: file.blocks.length })
+          }}
         </span>
         <button
-          class="text-[10px] px-2 py-1 rounded font-medium transition"
+          class="text-[1em] px-2 py-1 rounded transition"
+          :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
+          :title="tr('git.conflict.take_all_ours_tip')"
+          @click="onTakeAll('ours')"
+        >
+          Take all ours
+        </button>
+        <button
+          class="text-[1em] px-2 py-1 rounded transition"
+          :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
+          :title="tr('git.conflict.take_all_theirs_tip')"
+          @click="onTakeAll('theirs')"
+        >
+          Take all theirs
+        </button>
+        <button
+          class="text-[1em] px-2 py-1 rounded font-medium transition"
           :style="markBtnStyle"
           :disabled="!allResolved"
           @click="onMarkResolved"
@@ -29,57 +82,54 @@
 
       <div class="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-3">
         <div
-          v-for="(block, i) in blocks"
-          :key="i"
+          v-for="block in file.blocks"
+          :key="block.index"
           class="rounded overflow-hidden"
-          :style="{ border: `1px solid ${blockBorder(block)}` }"
+          :style="{ border: `1px solid ${blockBorder(block.index)}` }"
         >
           <div
-            class="px-3 py-1.5 flex items-center gap-2 text-[10px]"
+            class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
             :style="{
               background: t.bgPanel,
               color: t.textDim,
               borderBottom: `1px solid ${t.border}`,
             }"
           >
-            <span class="font-mono">Conflict #{{ i + 1 }}</span>
+            <span class="font-mono">Conflict #{{ block.index + 1 }}</span>
             <span :style="{ color: t.textFaint }">·</span>
             <span>lines {{ block.startLine }}–{{ block.endLine }}</span>
-            <span class="ml-auto font-mono">{{ resolutionLabel(block) }}</span>
+            <span class="ml-auto font-mono">{{ resolutionLabel(block.index) }}</span>
           </div>
 
           <div class="grid" :style="{ gridTemplateColumns: '1fr 1fr' }">
             <div
               class="p-3 cursor-pointer transition"
               :style="{
-                background: pickBg(block, 'ours'),
+                background: pickBg(block.index, 'ours'),
                 borderRight: `1px solid ${t.border}`,
               }"
-              @click="onPick(i, 'ours')"
+              @click="onPick(block.index, 'ours')"
             >
-              <div class="text-[10px] uppercase tracking-wider mb-1" :style="{ color: t.diffOurs }">
-                Ours (HEAD)
+              <div class="text-[1em] uppercase tracking-wider mb-1" :style="{ color: t.info }">
+                Ours ({{ block.oursLabel || 'HEAD' }})
               </div>
               <pre
-                class="text-[12px] font-mono whitespace-pre-wrap"
+                class="text-[1em] font-mono whitespace-pre-wrap"
                 :style="{ color: t.text }"
-              ><code>{{ block.ours }}</code></pre>
+              ><code>{{ block.ours.join('\n') }}</code></pre>
             </div>
             <div
               class="p-3 cursor-pointer transition"
-              :style="{ background: pickBg(block, 'theirs') }"
-              @click="onPick(i, 'theirs')"
+              :style="{ background: pickBg(block.index, 'theirs') }"
+              @click="onPick(block.index, 'theirs')"
             >
-              <div
-                class="text-[10px] uppercase tracking-wider mb-1"
-                :style="{ color: t.diffTheirs }"
-              >
-                Theirs (incoming)
+              <div class="text-[1em] uppercase tracking-wider mb-1" :style="{ color: t.warning }">
+                Theirs ({{ block.theirsLabel || 'incoming' }})
               </div>
               <pre
-                class="text-[12px] font-mono whitespace-pre-wrap"
+                class="text-[1em] font-mono whitespace-pre-wrap"
                 :style="{ color: t.text }"
-              ><code>{{ block.theirs }}</code></pre>
+              ><code>{{ block.theirs.join('\n') }}</code></pre>
             </div>
           </div>
 
@@ -88,18 +138,18 @@
             :style="{ background: t.bgPanel, borderTop: `1px solid ${t.border}` }"
           >
             <button
-              class="text-[10px] px-2 py-1 rounded transition"
-              :style="pickBtnStyle(block, 'ours')"
-              @click="onPick(i, 'ours')"
+              class="text-[1em] px-2 py-1 rounded transition"
+              :style="pickBtnStyle(block.index, 'ours')"
+              @click="onPick(block.index, 'ours')"
             >
-              Use ours
+              Take ours
             </button>
             <button
-              class="text-[10px] px-2 py-1 rounded transition"
-              :style="pickBtnStyle(block, 'theirs')"
-              @click="onPick(i, 'theirs')"
+              class="text-[1em] px-2 py-1 rounded transition"
+              :style="pickBtnStyle(block.index, 'theirs')"
+              @click="onPick(block.index, 'theirs')"
             >
-              Use theirs
+              Take theirs
             </button>
           </div>
         </div>
@@ -110,65 +160,102 @@
 
 <script setup lang="ts">
 import { AlertTriangle } from 'lucide-vue-next'
-import type { GitConflictResolutionChoice, GitMergeConflictBlock } from '~/types'
+import type { GitConflictFile } from '~/types'
+
+type Choice = 'ours' | 'theirs'
 
 const props = defineProps<{
   path: string | null
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useGitStore()
 
-const blocks = computed<GitMergeConflictBlock[] | null>(() => {
+// Per-file resolution map. Cleared whenever the selected path changes.
+const resolutions = ref<Map<number, Choice>>(new Map())
+
+const file = computed<GitConflictFile | null>(() => {
   if (!props.path) return null
-  return store.conflictBlocksByPath[props.path] ?? null
+  if (store.currentConflictFile?.path === props.path) return store.currentConflictFile
+  return null
 })
 
-const resolvedCount = computed(
-  () => blocks.value?.filter((b) => b.resolution !== 'unresolved').length ?? 0,
-)
-const allResolved = computed(
-  () => !!blocks.value && blocks.value.length > 0 && resolvedCount.value === blocks.value.length,
+watch(
+  () => props.path,
+  async (next, prev) => {
+    if (next === prev) return
+    resolutions.value = new Map()
+    if (next) await store.loadConflictFile(next)
+    else store.clearConflictFile()
+  },
+  { immediate: true },
 )
 
-const onPick = (index: number, choice: GitConflictResolutionChoice) => {
-  if (!props.path) return
-  store.resolveConflict(props.path, index, choice)
+const resolvedCount = computed(() => {
+  if (!file.value) return 0
+  return file.value.blocks.filter((b) => resolutions.value.has(b.index)).length
+})
+const allResolved = computed(() => {
+  if (!file.value || file.value.isBinary) return false
+  return file.value.blocks.length > 0 && resolvedCount.value === file.value.blocks.length
+})
+
+const onPick = (blockIndex: number, choice: Choice) => {
+  const next = new Map(resolutions.value)
+  next.set(blockIndex, choice)
+  resolutions.value = next
 }
 
-const onMarkResolved = () => {
-  // Block đã được resolve khi user pick — chỉ cần đảm bảo file đã staged.
-  // Hành vi mark resolved thực ra đã chạy trong resolveConflict khi all resolved.
-  // Đây là no-op visual; có thể navigate về tab Changes sau.
+const onTakeAll = (choice: Choice) => {
+  if (!file.value) return
+  const next = new Map<number, Choice>()
+  file.value.blocks.forEach((block) => next.set(block.index, choice))
+  resolutions.value = next
 }
 
-const pickBg = (block: GitMergeConflictBlock, side: 'ours' | 'theirs') => {
-  if (block.resolution === side) {
-    return side === 'ours' ? 'rgba(125, 211, 252, 0.12)' : 'rgba(196, 181, 253, 0.12)'
+const onMarkResolved = async () => {
+  if (!file.value || !allResolved.value) return
+  const payload = file.value.blocks.map((b) => {
+    // `allResolved` guarantees presence — Map fallback keeps the type narrow.
+    const choice = resolutions.value.get(b.index) ?? 'ours'
+    return { blockIndex: b.index, choice }
+  })
+  await store.resolveConflict(file.value.path, payload)
+  resolutions.value = new Map()
+}
+
+const onBinary = async (choice: Choice) => {
+  if (!file.value) return
+  await store.resolveConflictBinary(file.value.path, choice)
+}
+
+const pickBg = (blockIndex: number, side: Choice) => {
+  if (resolutions.value.get(blockIndex) === side) {
+    return side === 'ours' ? t.value.diffOurs : t.value.diffTheirs
   }
   return t.value.bg
 }
 
-const pickBtnStyle = (block: GitMergeConflictBlock, side: 'ours' | 'theirs') => {
-  const active = block.resolution === side
-  const activeColor = side === 'ours' ? t.value.diffOurs : t.value.diffTheirs
+const pickBtnStyle = (blockIndex: number, side: Choice) => {
+  const active = resolutions.value.get(blockIndex) === side
+  const activeBg = side === 'ours' ? t.value.info : t.value.warning
   return {
-    background: active ? activeColor : t.value.bgInput,
-    color: active ? t.value.accentText : t.value.textMuted,
+    background: active ? activeBg : t.value.bgInput,
+    color: active ? t.value.onAccent : t.value.textMuted,
     border: `1px solid ${active ? 'transparent' : t.value.border}`,
   }
 }
 
-const blockBorder = (block: GitMergeConflictBlock) => {
-  if (block.resolution === 'unresolved') return t.value.gitConflict
+const blockBorder = (blockIndex: number) => {
+  if (!resolutions.value.has(blockIndex)) return t.value.gitConflict
   return t.value.border
 }
 
-const resolutionLabel = (block: GitMergeConflictBlock) => {
-  if (block.resolution === 'unresolved') return 'unresolved'
-  if (block.resolution === 'ours') return '✓ ours'
-  if (block.resolution === 'theirs') return '✓ theirs'
-  return block.resolution
+const resolutionLabel = (blockIndex: number) => {
+  const choice = resolutions.value.get(blockIndex)
+  if (!choice) return 'unresolved'
+  return choice === 'ours' ? 'check ours' : 'check theirs'
 }
 
 const markBtnStyle = computed(() => ({
