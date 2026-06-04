@@ -172,7 +172,7 @@
       />
       <component :is="statusIcon" :size="11" :class="statusClass" :style="{ color: statusColor }" />
       <component :is="toolIcon" :size="11" class="flex-shrink-0" :style="{ color: t.textMuted }" />
-      <span :style="{ color: t.text }">{{ step.label }}</span>
+      <span class="truncate min-w-0" :style="{ color: t.text }">{{ step.label }}</span>
 
       <span
         v-if="step.children?.length"
@@ -210,11 +210,12 @@
 
       <span
         v-if="step.target"
-        class="inline-flex items-center px-1.5 rounded-sm font-mono text-[1em]"
+        class="px-1.5 rounded-sm font-mono text-[1em] truncate min-w-0"
         :style="{
           background: t.bgInput,
           color: t.text,
           border: `1px solid ${t.border}`,
+          maxWidth: '50%',
         }"
       >
         {{ step.target }}

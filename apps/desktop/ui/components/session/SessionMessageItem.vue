@@ -12,7 +12,7 @@
       <div v-if="message.role === 'user'" class="flex flex-col items-end gap-1.5">
         <div
           v-if="message.text"
-          class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed whitespace-pre-wrap"
+          class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed whitespace-pre-wrap break-words"
           :style="{
             background: t.bgElevated,
             color: t.text,

@@ -719,6 +719,11 @@ export const useSessionsStore = defineStore('sessions', {
             outputTokens: result.usage.output_tokens,
           },
         })
+        // result.text is the authoritative full reply. Drop whatever is still
+        // sitting in the typewriter buffer so the finally-block flushBuffer()
+        // can't re-append it on top of the complete text (duplicated tail —
+        // or the whole message when no drain frame ran before the RPC resolved).
+        pending = ''
       } catch (err) {
         const isCanceled = err instanceof SidecarError && err.code === -32023
         if (isCanceled) {
@@ -753,6 +758,9 @@ export const useSessionsStore = defineStore('sessions', {
             text: `[error] ${message}`,
             at: nowIso(),
           })
+          // The error line replaces the bubble — discard buffered stream so
+          // flushBuffer() doesn't append leftover deltas onto the error text.
+          pending = ''
         }
       } finally {
         flushBuffer()

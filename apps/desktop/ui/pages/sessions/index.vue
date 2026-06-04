@@ -81,33 +81,52 @@
             :key="group.key"
             :style="{ marginTop: group.label && gi > 0 ? '4px' : '0' }"
           >
-            <button
+            <div
               v-if="group.label"
               class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
-              :style="{
-                color: t.textDim,
-                background: groupHover === group.key ? t.bgHover : 'transparent',
-              }"
-              @click="toggleGroup(group.key)"
+              :style="{ background: groupHover === group.key ? t.bgHover : 'transparent' }"
               @mouseenter="groupHover = group.key"
               @mouseleave="groupHover = null"
             >
-              <ChevronDown
-                :size="10"
-                :style="{
-                  transform: collapsedGroups[group.key] ? 'rotate(-90deg)' : 'none',
-                  transition: 'transform 0.15s',
-                }"
-              />
-              <span
-                class="text-[0.857em] uppercase tracking-wider font-medium flex-1 text-left truncate"
+              <button
+                class="flex items-center gap-1.5 flex-1 min-w-0 text-left transition"
+                :style="{ color: t.textDim }"
+                @click="toggleGroup(group.key)"
               >
-                {{ group.label }}
-              </span>
-              <span class="text-[0.857em]" :style="{ color: t.textFaint }">
+                <ChevronDown
+                  :size="10"
+                  class="flex-shrink-0"
+                  :style="{
+                    transform: collapsedGroups[group.key] ? 'rotate(-90deg)' : 'none',
+                    transition: 'transform 0.15s',
+                  }"
+                />
+                <span class="text-[0.857em] uppercase tracking-wider font-medium truncate">
+                  {{ group.label }}
+                </span>
+              </button>
+              <span class="text-[0.857em] flex-shrink-0" :style="{ color: t.textFaint }">
                 {{ group.sessions.length }}
               </span>
-            </button>
+              <!-- Quick-add a session into this project. Only meaningful when
+                   grouping by project (group.key === projectId); hidden for the
+                   provider/model views. Fades in on row hover. -->
+              <button
+                v-if="groupBy === 'project'"
+                class="p-0.5 rounded transition flex-shrink-0"
+                :style="{
+                  color: t.textDim,
+                  opacity: groupHover === group.key ? 1 : 0,
+                  pointerEvents: groupHover === group.key ? 'auto' : 'none',
+                }"
+                :title="`New session in ${group.label}`"
+                @click="quickNewSession(group)"
+                @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
+                @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
+              >
+                <Plus :size="12" />
+              </button>
+            </div>
             <template v-if="!collapsedGroups[group.key]">
               <div
                 v-for="ses in group.sessions"
@@ -409,6 +428,17 @@ const onNewSession = () => {
 const onCreateSession = (payload: { title: string; projectId: string | null }) => {
   store.createSession(payload)
   newDialogOpen.value = false
+  mobilePane.value = 'detail'
+}
+
+// Group-header "+" — create + select a session straight into the group's
+// project, no dialog. Only wired for project grouping; '_none' → projectless.
+const quickNewSession = (group: Group) => {
+  store.createSession({ title: '', projectId: group.key === '_none' ? null : group.key })
+  // Reveal it if the group was collapsed, so the new (selected) session shows.
+  if (collapsedGroups.value[group.key]) {
+    collapsedGroups.value = { ...collapsedGroups.value, [group.key]: false }
+  }
   mobilePane.value = 'detail'
 }
 
