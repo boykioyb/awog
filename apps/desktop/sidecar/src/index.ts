@@ -1,4 +1,5 @@
 import { startStdioLoop, send } from './transport/stdio.js'
+import { getParentPort, startParentPortLoop } from './transport/parentport.js'
 import { dispatch, RpcError } from './transport/rpc.js'
 import { log } from './util/logger.js'
 
@@ -129,17 +130,12 @@ function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {
   return v.jsonrpc === '2.0' && typeof v.id === 'number' && typeof v.method === 'string'
 }
 
-async function handleLine(line: string): Promise<void> {
-  let msg: unknown
-  try {
-    msg = JSON.parse(line)
-  } catch {
-    log.warn('bad json on stdin', { line })
-    return
-  }
-
+// Transport-agnostic request handler. The stdio transport parses a line into
+// an object then calls this; the parentPort transport passes the structured-
+// cloned message straight through. Both share the same dispatch + reply path.
+async function handleMessage(msg: unknown): Promise<void> {
   if (!isJsonRpcRequest(msg)) {
-    log.warn('bad envelope on stdin', { msg })
+    log.warn('bad envelope', { msg })
     return
   }
 
@@ -167,16 +163,38 @@ async function handleLine(line: string): Promise<void> {
   }
 }
 
-// Force stdout to blocking mode so streaming chunks reach the host immediately
-// instead of being batched in Node's 64KB pipe buffer. Without this, many small
-// `emit()` writes coalesce and the UI sees the whole response in one burst.
-const stdoutHandle = (process.stdout as unknown as {
-  _handle?: { setBlocking?: (b: boolean) => void }
-})._handle
-if (stdoutHandle?.setBlocking) stdoutHandle.setBlocking(true)
+// stdio carrier: parse a line into JSON then hand off to the shared handler.
+async function handleLine(line: string): Promise<void> {
+  let msg: unknown
+  try {
+    msg = JSON.parse(line)
+  } catch {
+    log.warn('bad json on stdin', { line })
+    return
+  }
+  await handleMessage(msg)
+}
 
-log.info('sidecar starting', { pid: process.pid, node: process.version })
-startStdioLoop(handleLine)
+// Pick the transport carrier. Under Electron's utilityProcess the engine talks
+// to the main process over process.parentPort (MessagePort); standalone it falls
+// back to NDJSON over stdin/stdout. Same JSON-RPC envelope either way (§5).
+const parentPort = getParentPort()
+if (parentPort) {
+  log.info('sidecar starting', { pid: process.pid, node: process.version, transport: 'parentPort' })
+  startParentPortLoop(parentPort, handleMessage)
+} else {
+  // Force stdout to blocking mode so streaming chunks reach the host immediately
+  // instead of being batched in Node's 64KB pipe buffer. Without this, many small
+  // `emit()` writes coalesce and the UI sees the whole response in one burst.
+  // Only relevant for the stdio carrier — MessagePort delivers each message eagerly.
+  const stdoutHandle = (process.stdout as unknown as {
+    _handle?: { setBlocking?: (b: boolean) => void }
+  })._handle
+  if (stdoutHandle?.setBlocking) stdoutHandle.setBlocking(true)
+
+  log.info('sidecar starting', { pid: process.pid, node: process.version, transport: 'stdio' })
+  startStdioLoop(handleLine)
+}
 
 // Auto-start enabled+autoStart MCP servers on sidecar boot (AC-3 restart-safe).
 void mcpManager.hydrateAutoStart()

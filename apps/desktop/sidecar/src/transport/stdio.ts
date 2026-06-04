@@ -3,8 +3,23 @@ import { log } from '../util/logger.js'
 
 export type LineHandler = (line: string) => void | Promise<void>
 
-export function send(obj: object): void {
+// Output sink: where outgoing JSON-RPC envelopes (responses + `event`
+// notifications) are written. Default = NDJSON to stdout — used when the engine
+// runs standalone (`pnpm dev`) or under any stdin/stdout host. Electron's
+// utilityProcess CANNOT pipe stdin, so `parentport.ts` overrides this sink with
+// `parentPort.postMessage`; the JSON-RPC envelope shape is identical either way.
+type OutputSink = (obj: object) => void
+
+let sink: OutputSink = (obj) => {
   process.stdout.write(`${JSON.stringify(obj)}\n`)
+}
+
+export function setOutputSink(next: OutputSink): void {
+  sink = next
+}
+
+export function send(obj: object): void {
+  sink(obj)
 }
 
 export function emit(type: string, payload: unknown): void {
