@@ -1,18 +1,14 @@
-# Stable cross-platform release builds (Windows / macOS / Linux).
+# Stable cross-platform release builds (macOS / Linux / Windows) via Electron.
 #
-# Trigger: push a tag `vX.Y.Z` (matching the app version in
-# apps/desktop/src-tauri/tauri.conf.json). The job builds the AWOG Tauri app on
-# each OS and uploads the installers to a DRAFT GitHub Release for review before
-# publishing. Manual `workflow_dispatch` is allowed for test builds.
+# Trigger: push a tag `vX.Y.Z` (matching the version in the root package.json).
+# Each OS runner builds the AWOG Electron app and uploads the installers to a
+# DRAFT GitHub Release for review before publishing. `workflow_dispatch` allows
+# test builds without a tag.
 #
-# Why a per-OS matrix: the Node sidecar is bundled as a Tauri `externalBin`
-# compiled for the host target triple (apps/desktop/sidecar/scripts/build.mjs),
-# and the Tauri bundlers (.dmg/.app, .msi/.nsis, .deb/.AppImage) are native —
-# neither cross-compiles, so each platform builds on its own runner.
-#
-# Optional code signing / notarization: set the repo secrets referenced in the
-# `env:` block of the build step. Without them the apps build UNSIGNED (fine for
-# internal/testing; users will see OS "unidentified developer" warnings).
+# Why a per-OS matrix: the engine bundles the platform-specific Claude CLI binary
+# (@anthropic-ai/claude-agent-sdk-<os>-<arch>) and node-pty is rebuilt for
+# Electron's ABI — neither cross-compiles, and the electron-builder targets
+# (.dmg/.zip, .nsis, .AppImage/.deb) are native, so each platform builds itself.
 
 name: Release
 
@@ -22,18 +18,16 @@ on:
       - 'v*'
   workflow_dispatch:
 
-# tauri-action needs write access to create the release + upload assets.
+# electron-builder needs write access to create the release + upload assets.
 permissions:
   contents: write
 
-# Re-tagging the same version (common while iterating) supersedes the old run
-# instead of queueing behind it.
+# Re-tagging the same version (common while iterating) supersedes the old run.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
 
-# Nuxt `generate` (run as the Tauri beforeBuildCommand) OOMs the default Node
-# heap on the smaller macOS runners — give it room.
+# `nuxt generate` OOMs the default Node heap on the smaller runners — give it room.
 env:
   NODE_OPTIONS: --max-old-space-size=4096
 
@@ -46,51 +40,31 @@ jobs:
         include:
           - label: macos-arm64
             platform: macos-14
-            target: aarch64-apple-darwin
-            args: '--target aarch64-apple-darwin'
-          # macOS Intel (x86_64) dropped for now: GitHub `macos-13` runners
-          # queue for 30-60min+ and block the run from going green. Re-add when
-          # runners are reliable, or switch to a universal-apple-darwin build.
+          # macOS Intel (x64) dropped: GitHub macos-13 runners queue for 30-60min+.
+          # Re-add a macos-13 entry (or a universal build) when runners are reliable.
           - label: linux-x64
             platform: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            args: ''
           - label: windows-x64
             platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            args: ''
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Tag builds must match the version baked into the app, or installers and
-      # the GitHub Release would disagree. `node` is cross-platform (bash shell
-      # works on Windows runners via Git Bash).
+      # Tag builds must match the version in the root package.json, or installers
+      # and the GitHub Release would disagree. (Cargo/tauri.conf are gone.)
       - name: Verify tag matches app version
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          CONF=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
-          echo "tag=$TAG  tauri.conf.json=$CONF"
-          if [ "$TAG" != "$CONF" ]; then
-            echo "::error::Tag v$TAG does not match app version $CONF — bump tauri.conf.json / package.json / Cargo.toml first."
+          PKG=$(node -p "require('./package.json').version")
+          echo "tag=$TAG  package.json=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag v$TAG does not match app version $PKG — bump package.json (root + ui + sidecar + electron) first."
             exit 1
           fi
-
-      - name: Install Linux build dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            curl wget file libxdo-dev libssl-dev libgtk-3-dev
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -103,43 +77,18 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache Rust build
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri -> target
-          key: ${{ matrix.target }}
-
-      - name: Install JS dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Compile the sidecar for THIS host (produces the externalBin launcher +
-      # dist/lib + dist/node_modules that tauri.conf.json bundles as resources).
-      # Must run before `tauri build`.
-      - name: Build sidecar (externalBin)
-        run: pnpm --filter @awog/sidecar build
-
-      # tauri-action runs the app's `beforeBuildCommand` (Nuxt generate) then
-      # `tauri build`, and uploads the bundles to a draft GitHub Release keyed by
-      # the tag. The UI build is handled by beforeBuildCommand; the sidecar above.
-      - name: Build app + draft release
-        uses: tauri-apps/tauri-action@v0
+      # pack.mjs: nuxt generate → engine bundle (pnpm deploy, flat node_modules +
+      # platform CLI) → node-pty electron-rebuild (optional) → tsc → electron-builder.
+      # --publish always uploads to a draft GitHub Release keyed by the tag.
+      - name: Build + publish draft release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing is intentionally OFF: passing empty APPLE_CERTIFICATE /
-          # signing env makes tauri-action attempt `security import` with an empty
-          # cert and fail ("failed to import keychain certificate"). To enable
-          # signing later, add the APPLE_*/TAURI_SIGNING_* secrets AND re-add the
-          # matching env lines here (see docs/release.md).
-        with:
-          projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: 'AWOG ${{ github.ref_name }}'
-          releaseBody: 'Stable build for Windows, macOS, and Linux. Download the installer for your platform below.'
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Unsigned by default (internal/testing). To enable macOS signing +
+          # notarization, add CSC_LINK / CSC_KEY_PASSWORD / APPLE_ID /
+          # APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID secrets and drop the
+          # CSC_IDENTITY_AUTO_DISCOVERY override below. See docs/release.md.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: pnpm --filter @awog/desktop exec node scripts/pack.mjs --publish always
