@@ -31,10 +31,9 @@ export function preloadPath(): string {
   return join(__dirname, 'preload.js')
 }
 
-// Tray icon. Prefers the app's own assets; falls back to the Tauri icon set in
-// dev (still present until the Tauri shell is removed). Packaging copies an icon
-// to <resources>/icons/ (electron-builder, §8).
+// Tray icon. Dev: the package's build/ assets. Packaged: shipped to
+// <resources>/tray.png via electron-builder extraResources.
 export function trayIconPath(): string {
-  if (app.isPackaged) return join(process.resourcesPath, 'icons', '32x32.png')
-  return join(__dirname, '..', '..', 'src-tauri', 'icons', '32x32.png')
+  if (app.isPackaged) return join(process.resourcesPath, 'tray.png')
+  return join(__dirname, '..', 'build', 'tray.png')
 }

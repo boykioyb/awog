@@ -22,6 +22,8 @@ extraResources:
     to: ui
   - from: ../sidecar/dist
     to: sidecar
+  - from: build/tray.png
+    to: tray.png
 
 # node-pty in the engine bundle is rebuilt for Electron's ABI by scripts/pack.mjs
 # (electron-rebuild), not by electron-builder — the native dep lives under
@@ -38,18 +40,24 @@ mac:
     - dmg
     - zip
   category: public.app-category.developer-tools
-  icon: ../src-tauri/icons/icon.icns
+  icon: build/icon.icns
   # Unsigned by default (internal/testing). Set CSC_* + notarize via CI secrets
   # to enable signing — see docs/release.md.
 
 win:
   target:
     - nsis
-  icon: ../src-tauri/icons/icon.ico
+  icon: build/icon.ico
 
 linux:
   target:
     - AppImage
     - deb
   category: Development
-  icon: ../src-tauri/icons/icon.png
+  icon: build/icon.png
+
+# Upload to a DRAFT GitHub Release keyed by the tag (CI: --publish always +
+# GH_TOKEN). Review assets across platforms, then publish manually.
+publish:
+  provider: github
+  releaseType: draft

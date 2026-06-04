@@ -19,12 +19,16 @@ const passthrough = process.argv.slice(2)
 
 const isWin = process.platform === 'win32'
 
-function run(cmd, args, cwd) {
+function run(cmd, args, cwd, { optional = false } = {}) {
   console.error(`\n[pack] ${cmd} ${args.join(' ')}  (cwd: ${cwd})`)
   // nuxt generate can OOM the default heap on CI runners.
   const env = { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' }
   const res = spawnSync(cmd, args, { cwd, stdio: 'inherit', shell: isWin, env })
   if (res.status !== 0) {
+    if (optional) {
+      console.error(`[pack] WARN: ${cmd} ${args.join(' ')} failed (exit ${res.status}) — continuing`)
+      return
+    }
     console.error(`[pack] FAILED: ${cmd} ${args.join(' ')} (exit ${res.status})`)
     process.exit(res.status ?? 1)
   }
@@ -34,8 +38,10 @@ function run(cmd, args, cwd) {
 run('pnpm', ['--filter', 'awog-ui', 'generate'], repoRoot)
 // 2. Engine bundle
 run('pnpm', ['--filter', '@awog/sidecar', 'build'], repoRoot)
-// 3. node-pty → Electron ABI (engine bundle lives at ../sidecar/dist)
-run('pnpm', ['exec', 'electron-rebuild', '-f', '-w', 'node-pty', '--module-dir', '../sidecar/dist'], electronDir)
+// 3. node-pty → Electron ABI (engine bundle lives at ../sidecar/dist).
+//    Optional: engine.ts loads node-pty lazily with a graceful fallback, so a
+//    rebuild failure only disables the terminal panel — it must not abort a release.
+run('pnpm', ['exec', 'electron-rebuild', '-f', '-w', 'node-pty', '--module-dir', '../sidecar/dist'], electronDir, { optional: true })
 // 4. Electron main/preload
 run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], electronDir)
 // 5. Package

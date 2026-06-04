@@ -1,6 +1,6 @@
-// Thin wrapper around the web Notification API. Works inside the Tauri webview
-// without a Rust plugin; if/when we need richer features (sound, actions, dock
-// badge), upgrade to `tauri-plugin-notification`.
+// Thin wrapper around the web Notification API. Works directly in the Electron
+// renderer (Chromium); if/when we need richer features (sound, actions, dock
+// badge), move to the main process via Electron's Notification module.
 
 let cachedPermission: NotificationPermission | null = null
 
