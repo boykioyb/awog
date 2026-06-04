@@ -102,18 +102,47 @@ async function copyProductionDeps() {
 }
 
 async function copyNodeRuntime() {
-  // Bundle the Node binary running THIS build. The sidecar build runs natively
-  // on each target OS/arch (CI matrix), so process.execPath is already the
-  // correct-platform Node — copy it so the packaged app ships its own runtime
-  // and needs NO system Node (zero-dependency). The launcher prefers it.
-  const isWindows = process.platform === 'win32'
+  // Bundle a SELF-CONTAINED Node so the packaged app needs NO system Node
+  // (zero-dependency). We download the official nodejs.org build for the host
+  // triple rather than copying process.execPath, because some installs
+  // (Homebrew) ship a Node that dynamically links @rpath/libnode.dylib and is
+  // NOT relocatable. Pinning to process.version guarantees the dist exists (the
+  // build is running that exact release).
+  const { platform, arch } = process
+  const isWindows = platform === 'win32'
   const nodeName = isWindows ? 'node.exe' : 'node'
   const runtimeDir = join(outDir, 'node-runtime')
   await mkdir(runtimeDir, { recursive: true })
+
+  const plat = platform === 'darwin' ? 'darwin' : platform === 'linux' ? 'linux' : 'win'
+  const a = arch === 'arm64' ? 'arm64' : 'x64'
+  const ext = isWindows ? 'zip' : 'tar.gz'
+  const base = `node-${process.version}-${plat}-${a}`
+  const url = `https://nodejs.org/dist/${process.version}/${base}.${ext}`
+
+  const tmpArchive = join(outDir, `_node.${ext}`)
+  const extractDir = join(outDir, '_node-extract')
+  await rm(extractDir, { recursive: true, force: true })
+  await mkdir(extractDir, { recursive: true })
+
+  console.error(`[build] downloading self-contained Node: ${url}`)
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`failed to download Node (${res.status}): ${url}`)
+  await writeFile(tmpArchive, Buffer.from(await res.arrayBuffer()))
+
+  // `tar` ships on macOS, Linux and Windows 10+ (bsdtar) and handles .tar.gz + .zip.
+  execFileSync('tar', ['-xf', tmpArchive, '-C', extractDir], { stdio: 'inherit' })
+
+  const srcNode = isWindows
+    ? join(extractDir, base, nodeName)
+    : join(extractDir, base, 'bin', nodeName)
   const dst = join(runtimeDir, nodeName)
-  await cp(process.execPath, dst, { dereference: true })
+  await cp(srcNode, dst, { dereference: true })
   if (!isWindows) await chmod(dst, 0o755)
-  console.error(`[build] Bundled Node runtime: ${process.execPath} -> ${dst}`)
+
+  await rm(tmpArchive, { force: true })
+  await rm(extractDir, { recursive: true, force: true })
+  console.error(`[build] Bundled self-contained Node ${process.version} -> ${dst}`)
 }
 
 async function writeLauncher(outFile, isWindows) {
