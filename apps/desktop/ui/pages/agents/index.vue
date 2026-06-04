@@ -123,6 +123,7 @@
               :selected="selectedKey === agentKey(agent)"
               :checked="bulkSelection.has(agentKey(agent))"
               :renaming="renamingKey === agentKey(agent)"
+              :in-group="showHeaders"
               @select="onSelect(agent)"
               @toggle-bulk="toggleBulk(agent)"
               @context-menu="(e) => onContextMenu(e, agent)"

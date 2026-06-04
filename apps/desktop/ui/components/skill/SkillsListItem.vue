@@ -69,6 +69,7 @@
         /{{ skill.id }}
       </span>
       <span
+        v-if="showSourceBadge"
         class="text-[0.7em] px-1 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
         :style="sourceBadgeStyle"
       >
@@ -91,9 +92,20 @@ type Props = {
   renameValue: string
   sourceLabel: string
   sourceBadgeStyle: CSSProperties
+  // True khi list đang gom nhóm theo project (có group header). Khi đó tag tier
+  // trên project-skill là thừa vì header đã chỉ rõ project — chỉ giữ tag của skill
+  // user/global vì group "User & Global" gộp chung nhiều tier.
+  inGroup: boolean
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+// Ẩn tag khi project-skill nằm trong group (header đã chỉ rõ project). Skill
+// user/global vẫn giữ tag vì còn phân biệt ~/.awog vs ~/.claude vs ~/.agents.
+const isProjectSkill = computed<boolean>(
+  () => props.skill.source === 'project-claude' || props.skill.source === 'project-agents',
+)
+const showSourceBadge = computed<boolean>(() => !(props.inGroup && isProjectSkill.value))
 
 const emit = defineEmits<{
   select: [skill: Skill]

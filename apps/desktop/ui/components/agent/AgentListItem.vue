@@ -70,6 +70,7 @@
           {{ modelLabel }}
         </span>
         <span
+          v-if="showSourceBadge"
           class="text-[12px] leading-none px-1 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
           :style="sourceBadgeStyle"
         >
@@ -91,6 +92,10 @@ const props = defineProps<{
   selected: boolean
   checked: boolean
   renaming: boolean
+  // True khi list đang gom nhóm theo project (có group header). Khi đó tag project
+  // trên item là thừa vì header đã hiển thị tên project — chỉ giữ tag source của
+  // agent user/global vì group "User & Global" gộp chung nhiều tier.
+  inGroup: boolean
 }>()
 
 const emit = defineEmits<{
@@ -132,6 +137,10 @@ const sourceLabel = computed<string>(() => {
   }
   return SOURCE_LABEL[a.source]
 })
+
+// Ẩn tag project khi item nằm trong group (header đã chỉ rõ project). Tag source
+// của agent user/global vẫn giữ vì còn phân biệt ~/.claude vs ~/.awog trong group chung.
+const showSourceBadge = computed<boolean>(() => !(props.inGroup && isProjectAgent(props.agent)))
 
 // Quiet tag: muted bg for all; project-scoped gets accent text + border instead
 // of a loud solid fill so the list reads calmer.

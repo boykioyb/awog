@@ -119,6 +119,7 @@
           :rename-value="renameValue"
           :source-label="sourceLabel(skill)"
           :source-badge-style="sourceBadgeStyle(skill)"
+          :in-group="showHeaders"
           @select="(s: Skill) => $emit('select', s)"
           @context-menu="(e: MouseEvent, s: Skill) => $emit('context-menu', e, s)"
           @toggle-bulk="(s: Skill) => $emit('toggle-bulk', s)"
