@@ -28,6 +28,11 @@ extraResources:
 # extraResources, which electron-builder does not rebuild.
 npmRebuild: false
 
+# Ship only the locales the UI uses — Electron bundles ~55 by default.
+electronLanguages:
+  - en
+  - vi
+
 mac:
   target:
     - dmg

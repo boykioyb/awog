@@ -20,7 +20,7 @@
 // — see `pnpm --filter @awog/desktop rebuild` (engine.ts loads it lazily, so the
 // app boots either way; only the terminal panel needs the rebuild).
 
-import { mkdir, rm, cp, writeFile } from 'node:fs/promises'
+import { mkdir, rm, cp, writeFile, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -76,6 +76,45 @@ async function stageProductionDeps() {
   await rm(deployDir, { recursive: true, force: true })
 }
 
+// Trim dead weight from the staged node_modules:
+//  - *.pdb: Windows debug symbols (node-pty ships ~64MB of them) — never used
+//    at runtime on any OS.
+//  - node-pty/prebuilds for platforms other than the build host — each per-OS
+//    bundle (matrix CI) only needs its own platform's prebuild.
+async function pruneBundle() {
+  const nmDir = join(outDir, 'node_modules')
+  let pdbBytes = 0
+  let pdbCount = 0
+  async function walk(dir) {
+    const entries = await readdir(dir, { withFileTypes: true })
+    await Promise.all(
+      entries.map(async (e) => {
+        const p = join(dir, e.name)
+        if (e.isDirectory()) return walk(p)
+        if (e.name.endsWith('.pdb')) {
+          pdbBytes += (await stat(p)).size
+          pdbCount += 1
+          await rm(p, { force: true })
+        }
+        return undefined
+      }),
+    )
+  }
+  await walk(nmDir)
+
+  // Keep only the host platform's node-pty prebuild dir.
+  const prebuilds = join(nmDir, 'node-pty', 'prebuilds')
+  if (existsSync(prebuilds)) {
+    const keep = `${process.platform}-${process.arch}`
+    const dirs = await readdir(prebuilds)
+    await Promise.all(
+      dirs.filter((d) => d !== keep).map((d) => rm(join(prebuilds, d), { recursive: true, force: true })),
+    )
+    console.error(`[build] node-pty prebuilds: kept ${keep}, dropped ${dirs.length - 1} others`)
+  }
+  console.error(`[build] pruned ${pdbCount} .pdb files (${(pdbBytes / 1048576).toFixed(0)} MB)`)
+}
+
 async function writeStagePackageJson() {
   // Minimal package.json: keep name/type/deps so Node resolves modules + treats
   // lib/*.js as ESM. Drop scripts/devDeps (not needed in the shipped bundle).
@@ -113,6 +152,7 @@ async function main() {
 
   compileTs()
   await stageProductionDeps()
+  await pruneBundle()
   await writeStagePackageJson()
   verifyCliBinary()
 
