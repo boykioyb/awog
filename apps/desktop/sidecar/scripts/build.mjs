@@ -33,34 +33,48 @@ function targetTriple() {
   throw new Error(`Unsupported build target: ${platform}/${arch}`)
 }
 
-// Launcher: prefer siblings (lib/, node_modules/) next to the binary. Tauri's
-// externalBin copies ONLY the launcher to target/debug/ at dev time, so siblings
-// are absent there — fall back to $AWOG_SIDECAR_DIST (set by Rust in debug builds).
+// Launcher resolution:
+//   BASE = dir holding lib/ + node_modules/ — siblings next to the launcher
+//   (release: AWOG_SIDECAR_DIST → bundled `sidecar-runtime/` resources).
+//   NODE = the BUNDLED Node at BASE/node-runtime/ (zero-dependency); falls back
+//   to a system `node` only if the bundle is missing (e.g. a partial dev build).
+// Tauri's externalBin copies ONLY the launcher to target/debug/ at dev time, so
+// the siblings come from $AWOG_SIDECAR_DIST (set by Rust in debug builds).
 const POSIX_LAUNCHER = `#!/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
+BASE=""
 if [ -d "$DIR/lib" ] && [ -d "$DIR/node_modules" ]; then
-  exec node "$DIR/lib/src/index.js" "$@"
+  BASE="$DIR"
+elif [ -n "$AWOG_SIDECAR_DIST" ] && [ -d "$AWOG_SIDECAR_DIST/lib" ]; then
+  BASE="$AWOG_SIDECAR_DIST"
 fi
-if [ -n "$AWOG_SIDECAR_DIST" ] && [ -d "$AWOG_SIDECAR_DIST/lib" ]; then
-  exec node "$AWOG_SIDECAR_DIST/lib/src/index.js" "$@"
+if [ -z "$BASE" ]; then
+  echo "awog-sidecar: lib/ + node_modules/ not found and AWOG_SIDECAR_DIST unset. Run pnpm -F @awog/sidecar build." >&2
+  exit 1
 fi
-echo "awog-sidecar: lib/ + node_modules/ not found next to launcher and AWOG_SIDECAR_DIST unset. Run \\\`pnpm -F @awog/sidecar build\\\`." >&2
-exit 1
+NODE="node"
+if [ -f "$BASE/node-runtime/node" ]; then
+  NODE="$BASE/node-runtime/node"
+  chmod +x "$NODE" 2>/dev/null || true
+fi
+exec "$NODE" "$BASE/lib/src/index.js" "$@"
 `
 
 const WIN_LAUNCHER = [
   '@echo off',
-  'set DIR=%~dp0',
-  'if exist "%DIR%lib" if exist "%DIR%node_modules" (',
-  '  node "%DIR%lib\\src\\index.js" %*',
-  '  exit /b %ERRORLEVEL%',
+  'setlocal',
+  'set "DIR=%~dp0"',
+  'set "BASE="',
+  'if exist "%DIR%lib" if exist "%DIR%node_modules" set "BASE=%DIR%"',
+  'if not defined BASE if defined AWOG_SIDECAR_DIST if exist "%AWOG_SIDECAR_DIST%\\lib" set "BASE=%AWOG_SIDECAR_DIST%\\"',
+  'if not defined BASE (',
+  '  echo awog-sidecar: lib not found and AWOG_SIDECAR_DIST unset. 1>&2',
+  '  exit /b 1',
   ')',
-  'if defined AWOG_SIDECAR_DIST if exist "%AWOG_SIDECAR_DIST%\\lib" (',
-  '  node "%AWOG_SIDECAR_DIST%\\lib\\src\\index.js" %*',
-  '  exit /b %ERRORLEVEL%',
-  ')',
-  'echo awog-sidecar: lib/ + node_modules/ not found and AWOG_SIDECAR_DIST unset. 1>&2',
-  'exit /b 1',
+  'set "NODE=node"',
+  'if exist "%BASE%node-runtime\\node.exe" set "NODE=%BASE%node-runtime\\node.exe"',
+  '"%NODE%" "%BASE%lib\\src\\index.js" %*',
+  'exit /b %ERRORLEVEL%',
   '',
 ].join('\r\n')
 
@@ -87,6 +101,21 @@ async function copyProductionDeps() {
   await cp(src, dst, { recursive: true, dereference: true, verbatimSymlinks: false })
 }
 
+async function copyNodeRuntime() {
+  // Bundle the Node binary running THIS build. The sidecar build runs natively
+  // on each target OS/arch (CI matrix), so process.execPath is already the
+  // correct-platform Node — copy it so the packaged app ships its own runtime
+  // and needs NO system Node (zero-dependency). The launcher prefers it.
+  const isWindows = process.platform === 'win32'
+  const nodeName = isWindows ? 'node.exe' : 'node'
+  const runtimeDir = join(outDir, 'node-runtime')
+  await mkdir(runtimeDir, { recursive: true })
+  const dst = join(runtimeDir, nodeName)
+  await cp(process.execPath, dst, { dereference: true })
+  if (!isWindows) await chmod(dst, 0o755)
+  console.error(`[build] Bundled Node runtime: ${process.execPath} -> ${dst}`)
+}
+
 async function writeLauncher(outFile, isWindows) {
   await writeFile(outFile, isWindows ? WIN_LAUNCHER : POSIX_LAUNCHER, {
     encoding: 'utf8',
@@ -111,6 +140,11 @@ async function mirrorIntoTauri(srcFile, triple, isWindows) {
   if (existsSync(nmDst)) await rm(nmDst, { recursive: true, force: true })
   await cp(join(outDir, 'lib'), libDst, { recursive: true })
   await cp(join(outDir, 'node_modules'), nmDst, { recursive: true, dereference: true })
+  // Mirror the bundled Node runtime too so dev (externalBin siblings) + the
+  // tauri resource source stay in sync.
+  const nrDst = join(binDir, 'node-runtime')
+  if (existsSync(nrDst)) await rm(nrDst, { recursive: true, force: true })
+  await cp(join(outDir, 'node-runtime'), nrDst, { recursive: true })
   console.error(`[build] Mirrored launcher + assets → ${binDir}`)
 }
 
@@ -125,6 +159,7 @@ async function main() {
 
   await compileTs()
   await copyProductionDeps()
+  await copyNodeRuntime()
   await writeLauncher(outFile, isWindows)
   console.error(`[build] Launcher: ${outFile}`)
 

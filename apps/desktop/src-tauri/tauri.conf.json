@@ -32,7 +32,8 @@
     "externalBin": ["binaries/awog-sidecar"],
     "resources": {
       "../sidecar/dist/lib": "sidecar-runtime/lib",
-      "../sidecar/dist/node_modules": "sidecar-runtime/node_modules"
+      "../sidecar/dist/node_modules": "sidecar-runtime/node_modules",
+      "../sidecar/dist/node-runtime": "sidecar-runtime/node-runtime"
     },
     "icon": [
       "icons/32x32.png",
