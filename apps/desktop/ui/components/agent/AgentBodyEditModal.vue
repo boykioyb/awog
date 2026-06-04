@@ -130,7 +130,6 @@ const onApply = () => {
     model: d.model,
     systemPrompt: d.systemPrompt,
     role: d.role,
-    skillIds: d.skillIds,
   }
   if (props.agent.projectId) updated.projectId = props.agent.projectId
   if (props.agent.tools && props.agent.tools.length > 0) updated.tools = [...props.agent.tools]

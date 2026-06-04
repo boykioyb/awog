@@ -89,7 +89,6 @@ name: Display Name                # required
 description: One-sentence summary shown in the agent picker. Required.
 model: claude-sonnet-4-6          # optional. One of: ${ANTHROPIC_MODELS.join(', ')}
 role: BA                          # optional, short tag — AWOG extension
-skillIds: []                      # optional, AWOG extension — leave [] for now
 mcpServerIds: []                  # optional, AWOG extension — per-agent MCP whitelist (leave [] unless user mentions specific MCP servers)
 ---
 
@@ -113,7 +112,7 @@ Hard rules:
 - Frontmatter MUST include name and description.
 - Body MUST be the system prompt itself (plain Markdown), not a description of the system prompt. No JSON wrapper, no code fences around the whole file.
 - Default model is claude-sonnet-4-6 unless the user asks otherwise.
-- Keep skillIds + mcpServerIds as empty arrays unless the user explicitly mentions skills / MCP servers — those are managed via the editor picker.`
+- Keep mcpServerIds as an empty array unless the user explicitly mentions MCP servers — those are managed via the editor picker.`
 }
 
 async function resolveProjectPaths(projectIds: string[]): Promise<string[]> {

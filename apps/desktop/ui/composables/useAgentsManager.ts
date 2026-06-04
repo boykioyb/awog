@@ -1,6 +1,19 @@
 import { Edit3, Trash2 } from 'lucide-vue-next'
-import type { Agent, AgentSource } from '~/types'
+import type { Agent, AgentSource, Project } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
+
+// A run of agents sharing a project (or the trailing user/global tiers). The
+// list groups by project so it is obvious which project each agent comes from
+// — mirrors the Sessions + Skills lists.
+export type AgentGroup = {
+  key: string
+  label: string
+  agents: Agent[]
+}
+
+// Trailing group for tiers not tied to a project (global, user-claude,
+// user-agents). Underscore prefix avoids colliding with a real project id.
+const USER_GROUP_KEY = '_user'
 
 // All Agents-page state + actions. The page (pages/agents/index.vue) stays a
 // thin template that binds to this + useTheme() for its inline-styled chrome.
@@ -42,6 +55,20 @@ export function useAgentsManager() {
         a.role.toLowerCase().includes(q) ||
         a.id.toLowerCase().includes(q),
     )
+  })
+
+  // Group filtered agents by project (project-claude / project-agents carry a
+  // projectId); user-level + global tiers fall into one trailing group. Project
+  // groups come first in store order, empty groups are dropped.
+  const grouped = computed<AgentGroup[]>(() => {
+    const map = new Map<string, AgentGroup>()
+    ws.projects.forEach((p: Project) => map.set(p.id, { key: p.id, label: p.name, agents: [] }))
+    map.set(USER_GROUP_KEY, { key: USER_GROUP_KEY, label: 'User & Global', agents: [] })
+    filtered.value.forEach((a: Agent) => {
+      const target = a.projectId ? map.get(a.projectId) : map.get(USER_GROUP_KEY)
+      ;(target ?? map.get(USER_GROUP_KEY))?.agents.push(a)
+    })
+    return Array.from(map.values()).filter((g: AgentGroup) => g.agents.length > 0)
   })
 
   // Bulk selection — Set of composite agentKey() strings. Independent of
@@ -161,9 +188,9 @@ export function useAgentsManager() {
       // page mounted, which would otherwise be invisible to the agent scan.
       await ws.hydrateProjectsFromSidecar()
       // Min visible spinner duration so the click registers visually even when
-      // the local-mode hydrate completes in a few ms. Skills hydrate in parallel
-      // so the AgentEditor skill picker stays in sync with newly added skills.
-      await Promise.all([ws.hydrateAgentsFromSidecar(), ws.hydrateSkillsFromSidecar(), sleep(350)])
+      // the local-mode hydrate completes in a few ms. MCP servers hydrate in
+      // parallel so the AgentEditor Connections picker stays in sync.
+      await Promise.all([ws.hydrateAgentsFromSidecar(), ws.hydrateMcpFromSidecar(), sleep(350)])
       if (!selectedKey.value && ws.agents[0]) selectedKey.value = agentKey(ws.agents[0])
       if (!opts.silent) {
         const after = ws.agents.length
@@ -353,10 +380,10 @@ export function useAgentsManager() {
   onMounted(async () => {
     // Pull projects first so project-tier scans have a path to walk.
     await ws.hydrateProjectsFromSidecar()
-    // Agents + Skills run in parallel — Skills are needed by AgentEditor's
-    // skills picker. Without this, opening Edit shows "No skills yet — create
-    // one first" even when ~/.awog/skills has entries.
-    await Promise.all([ws.hydrateAgentsFromSidecar(), ws.hydrateSkillsFromSidecar()])
+    // Agents + MCP servers run in parallel — the MCP set is needed by
+    // AgentEditor's Connections picker. Without this, opening Edit shows
+    // "No MCP servers yet" even when servers are configured.
+    await Promise.all([ws.hydrateAgentsFromSidecar(), ws.hydrateMcpFromSidecar()])
     if (!selectedKey.value && ws.agents[0]) selectedKey.value = agentKey(ws.agents[0])
   })
 
@@ -365,6 +392,7 @@ export function useAgentsManager() {
     agentKey,
     searchQuery,
     filtered,
+    grouped,
     selectedKey,
     selectedAgent,
     mobilePane,

@@ -29,7 +29,6 @@ const AgentSchema = z.object({
   model: z.string().max(120).default(''),
   systemPrompt: z.string().max(64_000).default(''),
   role: z.string().max(60).default(''),
-  skillIds: StringArray.default([]),
   // Claude Code subagent `tools` field — SDK tool whitelist for this agent.
   tools: StringArray.optional(),
   // Per-agent MCP server whitelist (ADR 0016 replacement for context).
@@ -86,7 +85,6 @@ register('agents.upsert', async (raw) => {
     model: incoming.model,
     systemPrompt: incoming.systemPrompt,
     role: incoming.role,
-    skillIds: incoming.skillIds,
   }
   if (incoming.projectId) agent.projectId = incoming.projectId
   if (incoming.tools && incoming.tools.length > 0) agent.tools = incoming.tools

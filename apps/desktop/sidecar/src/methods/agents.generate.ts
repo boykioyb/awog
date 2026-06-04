@@ -22,7 +22,6 @@ const CurrentAgentSchema = z
     model: z.string().max(120).optional(),
     systemPrompt: z.string().max(64_000).optional(),
     role: z.string().max(60).optional(),
-    skillIds: z.array(z.string()).max(200).optional(),
     mcpServerIds: z.array(z.string()).max(200).optional(),
   })
   .optional()
@@ -49,7 +48,6 @@ const AgentDraftSchema = z.object({
   model: z.string().max(120).default(''),
   systemPrompt: z.string().max(64_000).default(''),
   role: z.string().max(60).default(''),
-  skillIds: StringArray.default([]),
   mcpServerIds: StringArray.default([]),
   // Accept-and-drop for legacy Context Providers — see ADR 0016.
   context: z.unknown().optional(),
@@ -66,7 +64,6 @@ Respond with ONLY a JSON object (no markdown fence, no prose) with this exact sh
   "model": "<claude-opus-4-7 | claude-sonnet-4-6 | claude-haiku-4-5 — pick what fits>",
   "systemPrompt": "<the markdown body — persona instructions in second person>",
   "role": "<short tag like BA / DEV / Security — optional, can be empty>",
-  "skillIds": [],
   "mcpServerIds": []
 }
 
@@ -75,7 +72,7 @@ Rules:
 - description should explain WHEN to invoke the agent (1 sentence under 200 chars).
 - systemPrompt is the persona body in plain Markdown — start with "You are..." and cover voice, output style, anti-patterns. 3-8 sentences typical.
 - Default model is claude-sonnet-4-6 unless the request hints at a more capable / cheaper tier.
-- skillIds + mcpServerIds should be empty unless the user explicitly listed skills / MCP servers — these are managed via the editor pickers.
+- mcpServerIds should be empty unless the user explicitly listed MCP servers — these are managed via the editor picker.
 - Do NOT wrap your output in a code fence. Output the raw JSON object only.`
 
 const EDIT_INSTRUCTIONS = `\n\nYou are revising an EXISTING agent. Preserve the id and any optional fields the user is not asking to change. Apply the user's edit instruction below to the current agent and return the full updated agent JSON.`

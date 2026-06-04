@@ -147,57 +147,9 @@
             class="text-[1em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
-            Skills · {{ draft.skillIds.length }} selected
+            Connections
+            <template v-if="ws.mcpServers.length > 0">· {{ mcpCountLabel }}</template>
           </label>
-          <SearchInput v-model="skillSearch" placeholder="Filter skills..." class="w-44" />
-        </div>
-        <div
-          class="rounded p-2 max-h-72 overflow-y-auto space-y-0.5"
-          :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
-        >
-          <label
-            v-for="s in filteredSkills"
-            :key="s.id"
-            class="flex items-start gap-2 px-1.5 py-1.5 rounded cursor-pointer transition"
-            :style="{
-              background: draft.skillIds.includes(s.id) ? t.bgActive : 'transparent',
-            }"
-          >
-            <input
-              type="checkbox"
-              :checked="draft.skillIds.includes(s.id)"
-              :style="{ accentColor: t.accent, marginTop: '2px' }"
-              @change="toggleSkill(s.id)"
-            />
-            <div class="flex-1 min-w-0">
-              <div class="text-[1em] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-              <div class="text-[1em] leading-snug" :style="{ color: t.textDim }">
-                {{ s.description }}
-              </div>
-            </div>
-          </label>
-          <div
-            v-if="filteredSkills.length === 0"
-            class="text-[1em] py-4 text-center"
-            :style="{ color: t.textFaint }"
-          >
-            <template v-if="ws.skills.length === 0">No skills yet — create one first</template>
-            <template v-else>No skills match "{{ skillSearch }}"</template>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div class="flex items-center justify-between mb-1.5">
-          <label
-            class="text-[1em] uppercase tracking-wider font-medium"
-            :style="{ color: t.textDim }"
-          >
-            MCP Servers · {{ activeMcpCount }} {{ activeMcpCount === 1 ? 'allowed' : 'allowed' }}
-          </label>
-          <span class="text-[1em]" :style="{ color: t.textFaint }">
-            {{ mcpPickerHint }}
-          </span>
         </div>
         <div
           class="rounded p-2 space-y-0.5"
@@ -243,7 +195,7 @@
             class="text-[1em] py-4 text-center"
             :style="{ color: t.textFaint }"
           >
-            No MCP servers yet — add one in Settings → MCP Servers.
+            No connections yet — add one on the Connections page.
           </div>
         </div>
       </div>
@@ -253,7 +205,7 @@
 
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next'
-import type { Agent, AgentSource, Skill } from '~/types'
+import type { Agent, AgentSource } from '~/types'
 import { MODELS } from '~/utils/models'
 
 const props = defineProps<{
@@ -291,14 +243,12 @@ const makeDefaults = (): Agent => ({
   model: 'claude-sonnet-4-6',
   systemPrompt: '',
   role: '',
-  skillIds: [],
 })
 
 const initDraft = (): Agent => {
   if (props.agent) {
     return {
       ...props.agent,
-      skillIds: [...props.agent.skillIds],
       ...(props.agent.tools ? { tools: [...props.agent.tools] } : {}),
       ...(props.agent.mcpServerIds ? { mcpServerIds: [...props.agent.mcpServerIds] } : {}),
     }
@@ -308,7 +258,6 @@ const initDraft = (): Agent => {
 
 const draft = ref<Agent>(initDraft())
 const original = ref<Agent>(initDraft())
-const skillSearch = ref('')
 
 // "Save to" tier picker for NEW agents (Sprint 3 C3). Composite value
 // "<source>" for user tiers, "<source>:<projectId>" for project tiers.
@@ -392,25 +341,11 @@ const inputStyle = computed(() => ({
   outline: 'none' as const,
 }))
 
-const filteredSkills = computed<Skill[]>(() => {
-  const q = skillSearch.value.toLowerCase()
-  if (!q) return ws.skills
-  return ws.skills.filter(
-    (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
-  )
-})
-
 // Claude Code subagent requires name + description. role is AWOG-only and
 // optional. model defaults to claude-sonnet-4-6 in makeDefaults.
 const canSave = computed(() => !!(draft.value.name && draft.value.description && draft.value.model))
 
 const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
-
-const toggleSkill = (id: string) => {
-  draft.value.skillIds = draft.value.skillIds.includes(id)
-    ? draft.value.skillIds.filter((s) => s !== id)
-    : [...draft.value.skillIds, id]
-}
 
 // MCP picker: undefined mcpServerIds = "inherit session" (no per-agent filter).
 // User ticks a server → flip to explicit whitelist mode. Empty array means
@@ -435,13 +370,13 @@ const toggleMcpServer = (id: string) => {
   }
 }
 
-const activeMcpCount = computed(() => draft.value.mcpServerIds?.length ?? 0)
-
-const mcpPickerHint = computed(() => {
+// undefined = inherit (no per-agent filter) → agent sees every enabled server.
+// [] = explicit none. A list = whitelist. Shown only when servers exist.
+const mcpCountLabel = computed(() => {
   const ids = draft.value.mcpServerIds
-  if (ids === undefined) return 'inherit session — all enabled MCP servers available'
-  if (ids.length === 0) return 'explicit empty — no MCP servers for this agent'
-  return 'agent-restricted whitelist'
+  if (ids === undefined) return 'inherit (all enabled)'
+  if (ids.length === 0) return 'none'
+  return `${ids.length} allowed`
 })
 
 const onSave = () => {

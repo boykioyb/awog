@@ -9,7 +9,7 @@
 //   project-agents → {project.path}/.agents/agents/<id>.md
 //
 // systemPrompt = markdown body. Frontmatter required: name, description.
-// Frontmatter optional: model, role, skillIds.
+// Frontmatter optional: model, role.
 // (`context` field from old Context Providers feature is silent-dropped on
 //  read and never written back — see ADR 0016.)
 
@@ -104,7 +104,6 @@ function buildAgent(
     model: typeof data.model === 'string' ? data.model : '',
     systemPrompt: body,
     role: typeof data.role === 'string' ? data.role : '',
-    skillIds: toStringArray(data.skillIds),
   }
   if (projectId) agent.projectId = projectId
   // Per-agent MCP whitelist — ADR 0016. Empty/undefined → inherit session.
@@ -325,7 +324,6 @@ export async function saveAgent(agent: Agent): Promise<void> {
     description: agent.description,
     model: agent.model,
     role: agent.role,
-    skillIds: agent.skillIds,
     tools: agent.tools,
     mcpServerIds: agent.mcpServerIds,
   }

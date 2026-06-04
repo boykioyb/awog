@@ -67,8 +67,7 @@
       </div>
       <div class="flex items-center gap-1.5 mt-0.5">
         <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.textDim }">
-          {{ modelLabel }} · {{ agent.skillIds.length }}
-          {{ agent.skillIds.length === 1 ? 'skill' : 'skills' }}
+          {{ modelLabel }}
         </span>
         <span
           class="text-[12px] leading-none px-1 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"

@@ -27,7 +27,6 @@ interface GenerateResponse {
     model: string
     systemPrompt: string
     role: string
-    skillIds: string[]
   }
 }
 
@@ -59,7 +58,6 @@ const mockDraft = (prompt: string): AgentDraft => ({
   model: 'claude-sonnet-4-6',
   systemPrompt: prompt,
   role: '',
-  skillIds: [],
 })
 
 export const useAgentGenerator = (): AgentGenerator => {
@@ -97,7 +95,6 @@ export const useAgentGenerator = (): AgentGenerator => {
           model: res.agent.model,
           systemPrompt: res.agent.systemPrompt,
           role: res.agent.role,
-          skillIds: res.agent.skillIds ?? [],
         }
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -127,7 +124,6 @@ export const useAgentGenerator = (): AgentGenerator => {
       model: current.model,
       systemPrompt: current.systemPrompt,
       role: current.role,
-      skillIds: current.skillIds,
     }
     try {
       const account = settings.activeAccount('anthropic')
@@ -155,7 +151,6 @@ export const useAgentGenerator = (): AgentGenerator => {
           model: res.agent.model,
           systemPrompt: res.agent.systemPrompt,
           role: res.agent.role,
-          skillIds: res.agent.skillIds ?? [],
         }
       } catch (err) {
         // eslint-disable-next-line no-console

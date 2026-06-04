@@ -37,7 +37,7 @@
         </button>
       </div>
       <div
-        v-if="filtered.length > 0"
+        v-if="grouped.length > 0"
         class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
         :style="{ borderBottom: `1px solid ${t.border}`, color: t.textDim }"
       >
@@ -55,6 +55,24 @@
         </span>
         <span v-else>Select to bulk-delete</span>
         <span class="flex-1" />
+        <template v-if="showHeaders">
+          <button
+            class="p-1 rounded transition opacity-60 hover:opacity-100"
+            :style="{ color: t.textDim }"
+            title="Collapse all groups"
+            @click="collapseAll"
+          >
+            <ChevronsDownUp :size="13" />
+          </button>
+          <button
+            class="p-1 rounded transition opacity-60 hover:opacity-100"
+            :style="{ color: t.textDim }"
+            title="Expand all groups"
+            @click="expandAll"
+          >
+            <ChevronsUpDown :size="13" />
+          </button>
+        </template>
         <button
           v-if="bulkSelection.size > 0"
           class="text-[1em] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
@@ -65,21 +83,56 @@
         </button>
       </div>
       <div class="flex-1 overflow-y-auto">
-        <AgentListItem
-          v-for="agent in filtered"
-          :key="agentKey(agent)"
-          :agent="agent"
-          :selected="selectedKey === agentKey(agent)"
-          :checked="bulkSelection.has(agentKey(agent))"
-          :renaming="renamingKey === agentKey(agent)"
-          @select="onSelect(agent)"
-          @toggle-bulk="toggleBulk(agent)"
-          @context-menu="(e) => onContextMenu(e, agent)"
-          @open-menu="(e) => openMenuFromButton(e, agent)"
-          @start-rename="startRename(agent)"
-          @rename="(v) => onRename(agent, v)"
-          @cancel-rename="cancelRename"
-        />
+        <div
+          v-for="(group, gi) in grouped"
+          :key="group.key"
+          :style="{ marginTop: gi > 0 ? '4px' : '0' }"
+        >
+          <button
+            v-if="showHeaders"
+            class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
+            :style="{
+              color: t.textDim,
+              background: groupHover === group.key ? t.bgHover : 'transparent',
+            }"
+            @click="toggleGroup(group.key)"
+            @mouseenter="groupHover = group.key"
+            @mouseleave="groupHover = null"
+          >
+            <ChevronDown
+              :size="10"
+              :style="{
+                transform: collapsedGroups[group.key] ? 'rotate(-90deg)' : 'none',
+                transition: 'transform 0.15s',
+              }"
+            />
+            <span
+              class="text-[12px] uppercase tracking-wider font-medium flex-1 text-left truncate"
+            >
+              {{ group.label }}
+            </span>
+            <span class="text-[12px] font-mono leading-none" :style="{ color: t.textFaint }">
+              {{ group.agents.length }}
+            </span>
+          </button>
+          <template v-if="!showHeaders || !collapsedGroups[group.key]">
+            <AgentListItem
+              v-for="agent in group.agents"
+              :key="agentKey(agent)"
+              :agent="agent"
+              :selected="selectedKey === agentKey(agent)"
+              :checked="bulkSelection.has(agentKey(agent))"
+              :renaming="renamingKey === agentKey(agent)"
+              @select="onSelect(agent)"
+              @toggle-bulk="toggleBulk(agent)"
+              @context-menu="(e) => onContextMenu(e, agent)"
+              @open-menu="(e) => openMenuFromButton(e, agent)"
+              @start-rename="startRename(agent)"
+              @rename="(v) => onRename(agent, v)"
+              @cancel-rename="cancelRename"
+            />
+          </template>
+        </div>
       </div>
     </template>
 
@@ -191,7 +244,16 @@
 </template>
 
 <script setup lang="ts">
-import { Loader2, Plus, RefreshCw, Trash2, Users } from 'lucide-vue-next'
+import {
+  ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Users,
+} from 'lucide-vue-next'
 
 // All page logic lives in the composable; this stays a thin template shell.
 // useTheme() supplies `t` for the inline-styled list chrome (header + bulk bar).
@@ -199,7 +261,7 @@ const { t } = useTheme()
 const {
   agentKey,
   searchQuery,
-  filtered,
+  grouped,
   selectedKey,
   selectedAgent,
   mobilePane,
@@ -245,4 +307,22 @@ const {
   toasts,
   toastStyle,
 } = useAgentsManager()
+
+// Collapse + hover are pure view state for the grouped list. A single group
+// (e.g. only user/global agents, no projects) reads as a flat list — no header.
+const collapsedGroups = ref<Record<string, boolean>>({})
+const groupHover = ref<string | null>(null)
+const showHeaders = computed(() => grouped.value.length > 1)
+
+const toggleGroup = (key: string) => {
+  collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
+}
+
+const collapseAll = () => {
+  collapsedGroups.value = Object.fromEntries(grouped.value.map((g) => [g.key, true]))
+}
+
+const expandAll = () => {
+  collapsedGroups.value = {}
+}
 </script>

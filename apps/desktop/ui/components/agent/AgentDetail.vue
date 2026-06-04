@@ -120,7 +120,7 @@
         class="text-[1em] uppercase tracking-wider font-medium mb-2"
         :style="{ color: t.textDim }"
       >
-        MCP Servers · {{ agent.mcpServerIds.length }} allowed
+        Connections · {{ agent.mcpServerIds.length }} allowed
       </div>
       <div class="flex flex-wrap gap-1.5">
         <span
@@ -134,7 +134,7 @@
         </span>
       </div>
       <div class="text-[1em] mt-1.5" :style="{ color: t.textDim }">
-        Session sees only these MCP servers when this agent is active (intersected with
+        Session sees only these connections when this agent is active (intersected with
         session-level whitelist if any).
       </div>
     </div>
@@ -164,41 +164,14 @@
         SDK toolset restricted to this whitelist (Options.allowedTools).
       </div>
     </div>
-
-    <div class="mb-6">
-      <div
-        class="text-[1em] uppercase tracking-wider font-medium mb-2"
-        :style="{ color: t.textDim }"
-      >
-        Skills · {{ agentSkills.length }}
-      </div>
-      <div v-if="agentSkills.length === 0" class="text-[1em] py-2" :style="{ color: t.textFaint }">
-        No skills assigned. This agent cannot be used in workflows.
-      </div>
-      <div v-else class="space-y-1">
-        <div
-          v-for="s in agentSkills"
-          :key="s.id"
-          class="rounded px-3 py-2 flex items-start gap-2.5"
-          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-        >
-          <Wand2 :size="11" :style="{ color: t.textDim, marginTop: '3px' }" />
-          <div class="flex-1 min-w-0">
-            <div class="text-[1em] font-mono" :style="{ color: t.text }">{{ s.name }}</div>
-            <div class="text-[1em] mt-0.5 leading-relaxed" :style="{ color: t.textDim }">
-              {{ s.description }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import { Bot, Copy, Edit3, Plug, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
-import type { Agent, AgentSource, Skill } from '~/types'
+import { Bot, Copy, Edit3, Plug, Sparkles, Trash2 } from 'lucide-vue-next'
+import type { Agent, AgentSource } from '~/types'
+import { agentSourcePath } from '~/utils/agent-source'
 import { MODELS } from '~/utils/models'
 
 const props = defineProps<{
@@ -229,14 +202,6 @@ const SOURCE_LABEL: Record<AgentSource, string> = {
   'project-agents': '.agents',
 }
 
-// Absolute-ish prefix for user-tier agents; project tiers resolve via the
-// registered project path below.
-const USER_PATH_PREFIX: Partial<Record<AgentSource, string>> = {
-  global: '~/.awog/agents',
-  'user-claude': '~/.claude/agents',
-  'user-agents': '~/.agents/agents',
-}
-
 const isProjectScoped = computed(
   () => props.agent.source === 'project-claude' || props.agent.source === 'project-agents',
 )
@@ -252,13 +217,7 @@ const sourceBadgeLabel = computed(() =>
     : SOURCE_LABEL[props.agent.source],
 )
 
-const sourcePath = computed(() => {
-  const userPrefix = USER_PATH_PREFIX[props.agent.source]
-  if (userPrefix) return `${userPrefix}/${props.agent.id}.md`
-  const sub = props.agent.source === 'project-claude' ? '.claude/agents' : '.agents/agents'
-  const base = project.value?.path ?? '<project>'
-  return `${base}/${sub}/${props.agent.id}.md`
-})
+const sourcePath = computed(() => agentSourcePath(props.agent, ws.projects))
 
 // Quiet tag: muted bg; project-scoped gets accent text + border (matches list).
 const sourceBadgeStyle = computed<CSSProperties>(() => ({
@@ -266,10 +225,6 @@ const sourceBadgeStyle = computed<CSSProperties>(() => ({
   color: isProjectScoped.value ? t.value.accent : t.value.textDim,
   border: `1px solid ${isProjectScoped.value ? t.value.accent : t.value.border}`,
 }))
-
-const agentSkills = computed<Skill[]>(() =>
-  ws.skills.filter((s) => props.agent.skillIds.includes(s.id)),
-)
 
 // MCP pill rendering. Resolve display name from store; gray out + warn style
 // if the referenced server is missing (deleted) or disabled.
