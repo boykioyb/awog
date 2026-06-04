@@ -31,6 +31,14 @@ interface TasksListResponse {
   tasks: Task[]
 }
 
+type PhaseTab = 'output' | 'trace' | 'discuss'
+// Per-phase view state (which phase card is expanded + its active tab). Lives in the
+// store, not component-local refs, so it survives navigating to the fullscreen artifact
+// editor (/edit/:taskId) and back — that route uses a different layout, so the tasks page
+// unmounts and component-local state would reset. Fields optional: absent → fall back to
+// the natural default in PhaseCard (running phases auto-expand, tab defaults to 'output').
+type PhaseUiState = { expanded?: boolean; tab?: PhaseTab }
+
 // Fire-and-forget persistence/command helper. UI state stays optimistic — the
 // authoritative task.* events overwrite it as the engine runs.
 const pushToSidecar = (method: string, params: unknown): void => {
@@ -101,6 +109,9 @@ export const useTasksStore = defineStore('tasks', {
     tasks: [] as Task[],
     selectedTaskId: null as string | null,
     hydrated: false,
+    // Detail-view UI state, persisted across the round-trip to the artifact editor.
+    phaseUi: {} as Record<string, PhaseUiState>, // key: `${taskId}:${nodeId}`
+    detailScroll: {} as Record<string, number>, // key: taskId → scrollTop
   }),
 
   getters: {
@@ -122,6 +133,14 @@ export const useTasksStore = defineStore('tasks', {
           .filter((p) => p.status === 'running')
           .map((p) => p.nodeId)
       },
+    phaseUiFor:
+      (state) =>
+      (taskId: string, nodeId: string): PhaseUiState | undefined =>
+        state.phaseUi[`${taskId}:${nodeId}`],
+    detailScrollFor:
+      (state) =>
+      (taskId: string): number =>
+        state.detailScroll[taskId] ?? 0,
   },
 
   actions: {
@@ -264,6 +283,16 @@ export const useTasksStore = defineStore('tasks', {
 
     selectTask(id: string | null): void {
       this.selectedTaskId = id
+    },
+
+    // Merge a partial UI patch (expanded and/or tab) for one phase card.
+    setPhaseUi(taskId: string, nodeId: string, patch: PhaseUiState): void {
+      const key = `${taskId}:${nodeId}`
+      this.phaseUi[key] = { ...(this.phaseUi[key] ?? {}), ...patch }
+    },
+
+    setDetailScroll(taskId: string, top: number): void {
+      this.detailScroll[taskId] = top
     },
 
     deleteTask(id: string): void {

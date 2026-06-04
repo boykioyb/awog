@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 overflow-y-auto">
+  <div ref="scrollEl" class="flex-1 overflow-y-auto">
     <div class="px-4 md:px-6 py-4 md:py-5" :style="{ borderBottom: `1px solid ${t.border}` }">
       <div class="flex items-center gap-2 mb-3">
         <span class="text-[1em] font-mono" :style="{ color: t.textDim }">{{ task.id }}</span>
@@ -109,6 +109,7 @@
         <template v-for="(nodeId, idx) in order" :key="nodeId">
           <PhaseCard
             v-if="task.phases[nodeId] && nodeFor(nodeId)"
+            :task-id="task.id"
             :phase="task.phases[nodeId]"
             :node="nodeFor(nodeId)!"
             :agent="agentFor(nodeId)"
@@ -217,4 +218,30 @@ const skillFor = (nodeId: string) => {
   const node = nodeFor(nodeId)
   return node ? store.skillById(node.skillId) : undefined
 }
+
+// Persist the detail scroll position per task so it's restored after the user opens the
+// fullscreen artifact editor and returns (the page unmounts in between). Phase expand/tab
+// state is persisted separately in the store via PhaseCard.
+const scrollEl = ref<HTMLElement | null>(null)
+
+const restoreScroll = (taskId: string) => {
+  nextTick(() => {
+    if (scrollEl.value) scrollEl.value.scrollTop = tasksStore.detailScrollFor(taskId)
+  })
+}
+const saveScroll = (taskId: string) => {
+  if (scrollEl.value) tasksStore.setDetailScroll(taskId, scrollEl.value.scrollTop)
+}
+
+onMounted(() => restoreScroll(props.task.id))
+onBeforeUnmount(() => saveScroll(props.task.id))
+// Switching the selected task reuses this instance (no remount) — save the outgoing
+// task's scroll and restore the incoming one.
+watch(
+  () => props.task.id,
+  (newId, oldId) => {
+    if (oldId) saveScroll(oldId)
+    restoreScroll(newId)
+  },
+)
 </script>

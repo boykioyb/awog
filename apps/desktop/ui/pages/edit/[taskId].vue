@@ -123,8 +123,13 @@ const taskFiles = computed<EditorTaskFile[]>(() => {
       if (run.status === 'superseded') return
       const node = workflow.value!.nodes.find((n) => n.id === phase.nodeId)
       if (!node) return
-      node.outputs.forEach((out) => {
-        const fileContent = mockArtifactContent(phase.skillName, out)
+      node.outputs.forEach((out, outIndex) => {
+        // Live path: run.output is the artifact body the engine streamed + persisted;
+        // it maps to the node's primary output (outputs[0]), matching PhaseOutputTab.
+        // Fall back to mock content only for an empty output or secondary declared
+        // outputs (browser-dev seed tasks).
+        const fileContent =
+          outIndex === 0 && run.output ? run.output : mockArtifactContent(phase.skillName, out)
         if (!fileContent) return
         const kind = resolveKind(out)
         if (!kind) return
@@ -188,7 +193,10 @@ function onChangeView(v: EditorViewMode) {
 }
 
 function onBack() {
-  router.push(`/tasks/${taskId.value}`)
+  // Tasks routing is store-driven (no /tasks/:id route) — select the task then
+  // navigate to the list page, which renders the detail for selectedTaskId.
+  tasksStore.selectTask(taskId.value)
+  router.push('/tasks')
 }
 
 function onOpenFile(name: string) {

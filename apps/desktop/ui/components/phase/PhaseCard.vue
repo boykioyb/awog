@@ -220,6 +220,7 @@ import { STATUS_META } from '~/utils/status-meta'
 import { countTraceItems } from '~/utils/mock-output'
 
 const props = defineProps<{
+  taskId: string
   phase: Phase
   node: WorkflowNode
   agent: Agent
@@ -237,9 +238,23 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const tasksStore = useTasksStore()
 
-const expanded = ref(props.phase.status === 'running' || props.phase.status === 'waiting_approval')
-const activeTab = ref<'output' | 'trace' | 'discuss'>('output')
+// Expand + active-tab state is backed by the store (keyed by task+node) so it survives
+// the round-trip to the fullscreen artifact editor, which unmounts this component.
+// Absent stored value → natural default: running/waiting phases auto-expand, tab = output.
+const phaseUi = computed(() => tasksStore.phaseUiFor(props.taskId, props.phase.nodeId))
+const defaultExpanded = computed(
+  () => props.phase.status === 'running' || props.phase.status === 'waiting_approval',
+)
+const expanded = computed({
+  get: () => phaseUi.value?.expanded ?? defaultExpanded.value,
+  set: (v) => tasksStore.setPhaseUi(props.taskId, props.phase.nodeId, { expanded: v }),
+})
+const activeTab = computed({
+  get: (): 'output' | 'trace' | 'discuss' => phaseUi.value?.tab ?? 'output',
+  set: (v) => tasksStore.setPhaseUi(props.taskId, props.phase.nodeId, { tab: v }),
+})
 const selectedRunVersion = ref<number | null>(null)
 const showRerunModal = ref(false)
 const headerHover = ref(false)
