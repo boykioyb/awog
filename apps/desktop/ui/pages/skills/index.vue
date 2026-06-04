@@ -8,7 +8,7 @@
     <template #list>
       <SkillsListSidebar
         ref="sidebarRef"
-        :skills="filtered"
+        :groups="grouped"
         :selected-key="selectedKey"
         :bulk-selection="bulkSelection"
         :renaming-key="renamingKey"
@@ -19,7 +19,6 @@
         :all-filtered-selected="allFilteredSelected"
         :some-filtered-selected="someFilteredSelected"
         :skill-key="skillKey"
-        :agent-count-for="agentCountFor"
         :source-label="sourceLabel"
         :source-badge-style="sourceBadgeStyle"
         @update:search-query="(v: string) => (searchQuery = v)"
@@ -124,7 +123,7 @@ import { Wand2 } from 'lucide-vue-next'
 const {
   skillKey,
   searchQuery,
-  filtered,
+  grouped,
   selectedKey,
   selectedSkill,
   mobilePane,
@@ -135,7 +134,6 @@ const {
   anchor,
   sourceLabel,
   sourceBadgeStyle,
-  agentCountFor,
   onSelect,
   onNew,
   onRefresh,

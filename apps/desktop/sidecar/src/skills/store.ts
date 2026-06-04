@@ -202,7 +202,7 @@ export async function listSkills(
 }
 
 // First-match lookup across all 5 tiers, given a skill id (no source). Used by
-// agent.skillIds runtime injection where the agent only references skill by
+// the workflow node runner where a node references its task-template skill by
 // slug. Search order: global → user-claude → user-agents → project-claude →
 // project-agents (per-project iterated in input order). Returns null if no
 // matching skill found.

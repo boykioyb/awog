@@ -1,8 +1,21 @@
 import type { CSSProperties } from 'vue'
 import { Edit3, Trash2 } from 'lucide-vue-next'
-import type { Agent, Skill, SkillSource } from '~/types'
+import type { Project, Skill, SkillSource } from '~/types'
 import type { SkillScanReport } from '~/stores/workspace'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
+
+// A run of skills sharing a project (or the trailing user/global tiers). The
+// list groups by project so it is obvious which project each skill comes from
+// — mirrors the Sessions list grouping.
+export type SkillGroup = {
+  key: string
+  label: string
+  skills: Skill[]
+}
+
+// Trailing group for tiers not tied to a project (global, user-claude,
+// user-agents). Underscore prefix avoids colliding with a real project id.
+const USER_GROUP_KEY = '_user'
 
 // All Skills-page state + actions. The page (pages/skills/index.vue) stays a
 // thin template that binds to this. Toasts come from the shared useToasts().
@@ -73,6 +86,20 @@ export function useSkillsManager() {
       )
     }),
   )
+
+  // Group filtered skills by project (project-claude / project-agents carry a
+  // projectId); user-level + global tiers fall into one trailing group. Project
+  // groups come first in store order, empty groups are dropped.
+  const grouped = computed<SkillGroup[]>(() => {
+    const map = new Map<string, SkillGroup>()
+    ws.projects.forEach((p: Project) => map.set(p.id, { key: p.id, label: p.name, skills: [] }))
+    map.set(USER_GROUP_KEY, { key: USER_GROUP_KEY, label: 'User & Global', skills: [] })
+    filtered.value.forEach((s: Skill) => {
+      const target = s.projectId ? map.get(s.projectId) : map.get(USER_GROUP_KEY)
+      ;(target ?? map.get(USER_GROUP_KEY))?.skills.push(s)
+    })
+    return Array.from(map.values()).filter((g: SkillGroup) => g.skills.length > 0)
+  })
 
   const allFilteredSelected = computed(() => {
     if (filtered.value.length === 0) return false
@@ -180,9 +207,6 @@ export function useSkillsManager() {
     // errors still toast via the catch block.
     refresh({ silent: true })
   })
-
-  const agentCountFor = (skillId: string): number =>
-    ws.agents.filter((a: Agent) => a.skillIds.includes(skillId)).length
 
   const WHERE_BY_SOURCE: Record<SkillSource, string> = {
     global: '~/.awog/skills/',
@@ -425,6 +449,7 @@ export function useSkillsManager() {
     skillKey,
     searchQuery,
     filtered,
+    grouped,
     selectedKey,
     selectedSkill,
     mobilePane,
@@ -435,7 +460,6 @@ export function useSkillsManager() {
     anchor,
     sourceLabel,
     sourceBadgeStyle,
-    agentCountFor,
     onSelect,
     onNew,
     onRefresh,

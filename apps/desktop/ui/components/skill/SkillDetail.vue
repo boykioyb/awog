@@ -123,46 +123,12 @@
         @edit-body="(anchor) => emit('edit-body', anchor)"
       />
     </div>
-
-    <div>
-      <div
-        class="text-[1em] uppercase tracking-wider font-medium mb-2"
-        :style="{ color: t.textDim }"
-      >
-        Used by · {{ agentsUsing.length }} agents
-      </div>
-      <div v-if="agentsUsing.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
-        Not assigned to any agent yet
-      </div>
-      <div v-else class="space-y-1.5">
-        <div
-          v-for="agent in agentsUsing"
-          :key="agent.id"
-          class="flex items-center gap-2.5 p-2.5 rounded"
-          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-        >
-          <div class="flex-shrink-0 flex justify-center" :style="{ width: `${colWidth}px` }">
-            <RoleBadge :role="agent.role" />
-          </div>
-          <div class="flex-1">
-            <div class="text-[1em] font-medium" :style="{ color: t.text }">
-              {{ agent.name }}
-            </div>
-            <div class="text-[1em]" :style="{ color: t.textDim }">
-              {{ MODELS.find((m) => m.id === agent.model)?.label }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Wand2, Edit3, Trash2 } from 'lucide-vue-next'
-import type { Agent, Skill } from '~/types'
-import { MODELS } from '~/utils/models'
-import { calcBadgeColWidth } from '~/utils/graph'
+import type { Skill } from '~/types'
 
 const props = defineProps<{
   skill: Skill
@@ -176,12 +142,6 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
-
-const agentsUsing = computed<Agent[]>(() =>
-  ws.agents.filter((a) => a.skillIds.includes(props.skill.id)),
-)
-
-const colWidth = computed(() => calcBadgeColWidth(agentsUsing.value.map((a) => a.role)))
 
 const hasMetaChips = computed(
   () =>

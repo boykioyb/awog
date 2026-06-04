@@ -55,9 +55,6 @@
       >
         {{ skill.name }}
       </span>
-      <span class="text-[1em]" :style="{ color: t.textFaint }">
-        {{ agentCount }}
-      </span>
       <button
         class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
         :style="{ color: t.textMuted }"
@@ -92,7 +89,6 @@ type Props = {
   bulkSelected: boolean
   renaming: boolean
   renameValue: string
-  agentCount: number
   sourceLabel: string
   sourceBadgeStyle: CSSProperties
 }
