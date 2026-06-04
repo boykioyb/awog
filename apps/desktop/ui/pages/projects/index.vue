@@ -61,16 +61,6 @@
             >
               {{ p.name }}
             </div>
-            <span
-              class="text-[1em] px-1.5 py-0 rounded"
-              :style="{
-                background: t.bgInput,
-                color: t.textDim,
-                border: `1px solid ${t.border}`,
-              }"
-            >
-              {{ taskCountFor(p.id) }}
-            </span>
             <button
               class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
               :style="{ color: t.textMuted }"
@@ -123,6 +113,14 @@
             </div>
           </div>
           <div class="flex items-center gap-1 flex-shrink-0">
+            <button
+              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+              :style="{ background: t.accent, color: t.accentText }"
+              @click="openInEditor(selectedProject.id)"
+            >
+              <Code2 :size="13" />
+              Open in Editor
+            </button>
             <button
               class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
               :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
@@ -179,6 +177,64 @@
               Open
             </button>
           </div>
+        </div>
+
+        <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
+          <div
+            class="text-[1em] uppercase tracking-wider font-medium"
+            :style="{ color: t.textDim }"
+          >
+            Sessions · {{ projectSessions.length }}
+          </div>
+          <button
+            class="px-2.5 py-1 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+            :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+            title="New session for this project"
+            @click="startSessionForProject"
+          >
+            <Plus :size="12" />
+            New session
+          </button>
+        </div>
+        <div
+          v-if="projectSessions.length === 0"
+          class="text-[1em] py-4 mb-6"
+          :style="{ color: t.textFaint }"
+        >
+          No sessions yet for this project
+        </div>
+        <div v-else class="space-y-1.5 mb-6">
+          <button
+            v-for="ses in projectSessions"
+            :key="ses.id"
+            class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
+            :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+            @click="openSession(ses.id)"
+          >
+            <MessageSquare :size="12" :style="{ color: t.textDim, marginTop: '2px' }" />
+            <div class="flex-1 min-w-0">
+              <div class="text-[1em] truncate" :style="{ color: t.text }">
+                {{ ses.title }}
+              </div>
+              <div
+                class="text-[1em] mt-0.5 flex items-center gap-1.5"
+                :style="{ color: t.textDim }"
+              >
+                <span>{{ formatTime(ses.updatedAt) }}</span>
+                <span :style="{ color: t.textFaint }">·</span>
+                <span>{{ ses.messages.length }} msg</span>
+                <template v-if="ses.invitedAgentIds.length">
+                  <span :style="{ color: t.textFaint }">·</span>
+                  <span>
+                    {{ ses.invitedAgentIds.length }} agent{{
+                      ses.invitedAgentIds.length > 1 ? 's' : ''
+                    }}
+                  </span>
+                </template>
+              </div>
+            </div>
+            <ExternalLink :size="11" :style="{ color: t.textDim, marginTop: '2px' }" />
+          </button>
         </div>
 
         <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
@@ -278,11 +334,12 @@ import {
   FolderGit2,
   GitBranch,
   GitFork,
+  MessageSquare,
   MoreHorizontal,
   Plus,
   Trash2,
 } from 'lucide-vue-next'
-import type { Project, Task } from '~/types'
+import type { Project, Session, Task } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import type { ProjectEditorSavePayload } from '~/components/project/types'
 import { STATUS_META } from '~/utils/status-meta'
@@ -290,6 +347,8 @@ import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
+const tasksStore = useTasksStore()
+const sessionsStore = useSessionsStore()
 const sidecar = useSidecar()
 
 const selectedId = ref<string | null>(ws.projects[0]?.id ?? null)
@@ -309,6 +368,10 @@ ws.hydrateProjectsFromSidecar().then(() => {
     selectedId.value = ws.projects[0]!.id
   }
 })
+
+// Sessions list per project is shown in the detail pane; hydrate once so it's
+// populated. Guarded internally, so navigating to /sessions later won't re-load.
+sessionsStore.hydrateFromSidecar()
 
 if (sidecar.available) {
   let unlisten: (() => void) | null = null
@@ -342,11 +405,20 @@ const filtered = computed(() => {
 
 const isActive = (id: string) => selectedId.value === id && !creating.value
 
-const taskCountFor = (id: string) => ws.tasks.filter((tk) => tk.projectId === id).length
-
 const projectTasks = computed<Task[]>(() =>
-  selectedProject.value ? ws.tasks.filter((tk) => tk.projectId === selectedProject.value!.id) : [],
+  selectedProject.value
+    ? tasksStore.tasks.filter((tk) => tk.projectId === selectedProject.value!.id)
+    : [],
 )
+
+const projectSessions = computed<Session[]>(() => {
+  const proj = selectedProject.value
+  if (!proj) return []
+  return sessionsStore.sessions
+    .filter((s) => s.projectId === proj.id)
+    .slice()
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+})
 
 const projectTaskStats = computed(() => ({
   total: projectTasks.value.length,
@@ -445,9 +517,27 @@ const onBack = () => {
 }
 
 const openTask = (id: string) => {
-  ws.selectTask(id)
+  tasksStore.selectTask(id)
   navigateTo('/tasks')
 }
+
+const openSession = (id: string) => {
+  sessionsStore.selectSession(id)
+  navigateTo('/sessions')
+}
+
+// Create a fresh session scoped to this project, then jump to the Sessions
+// page where the new (selected) session is rendered. Awaiting hydrate first
+// avoids a later sessions.list response clobbering the just-created session.
+const startSessionForProject = async () => {
+  const proj = selectedProject.value
+  if (!proj) return
+  await sessionsStore.hydrateFromSidecar()
+  sessionsStore.createSession({ title: '', projectId: proj.id })
+  navigateTo('/sessions')
+}
+
+const openInEditor = (id: string) => navigateTo(`/projects/${id}/code`)
 
 const contextMenu = ref<{ x: number; y: number; id: string } | null>(null)
 const renamingId = ref<string | null>(null)
