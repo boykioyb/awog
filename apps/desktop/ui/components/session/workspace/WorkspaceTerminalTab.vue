@@ -64,7 +64,7 @@
     <div class="flex-1 overflow-hidden relative">
       <div v-for="tab in tabs" v-show="tab.id === activeId" :key="tab.id" class="absolute inset-0">
         <WorkspaceTerminalInstance
-          :session="session"
+          :session-id="session.id"
           :workspace-root="workspaceRoot"
           :visible="tab.id === activeId"
         />

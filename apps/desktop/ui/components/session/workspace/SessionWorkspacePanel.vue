@@ -1,7 +1,7 @@
 <template>
   <!-- Overlay layer floating on top of the chat (never consumes main layout).
        Docks right / left / bottom per the position picker in the drawer header. -->
-  <div class="absolute z-30 flex" :class="containerClass" :style="containerStyle">
+  <div ref="rootEl" class="absolute z-30 flex" :class="containerClass" :style="containerStyle">
     <div
       class="flex-shrink-0 ws-resizer"
       :class="position === 'bottom' ? 'cursor-row-resize' : 'cursor-col-resize hidden md:block'"
@@ -65,6 +65,7 @@ const TAB_COMPONENTS = {
 const activeComponent = computed(() => TAB_COMPONENTS[props.active])
 const position = computed(() => panel.position)
 const dragging = ref(false)
+const rootEl = ref<HTMLElement | null>(null)
 
 // ── Position-aware geometry ─────────────────────────────────────────────────
 const containerClass = computed(() => {
@@ -81,8 +82,11 @@ const SHADOW = {
 
 const containerStyle = computed<CSSProperties>(() => {
   const shadow = SHADOW[position.value](t.value.shadow)
-  if (position.value === 'bottom') return { height: `${panel.heightPx}px`, boxShadow: shadow }
-  return { width: `${panel.widthPx}px`, boxShadow: shadow }
+  // max-*: 100% caps the drawer to the chat area (its positioned ancestor) so a
+  // persisted-too-large size never overflows under the NavRail / off-screen.
+  if (position.value === 'bottom')
+    return { height: `${panel.heightPx}px`, maxHeight: '100%', boxShadow: shadow }
+  return { width: `${panel.widthPx}px`, maxWidth: '100%', boxShadow: shadow }
 })
 
 const resizerStyle = computed<CSSProperties>(() => {
@@ -106,16 +110,26 @@ let dragStartY = 0
 let dragStartWidth = 0
 let dragStartHeight = 0
 
+// Live cap = the chat area (the drawer's positioned ancestor). Keeps the drawer
+// from being dragged wider/taller than the main chat (it would otherwise slide
+// under the NavRail). Falls back to the viewport if the ancestor is unknown.
+const availableSize = (): number => {
+  const parent = rootEl.value?.offsetParent as HTMLElement | null
+  if (position.value === 'bottom') return parent?.clientHeight ?? window.innerHeight
+  return parent?.clientWidth ?? window.innerWidth
+}
+
 const onDragMove = (e: MouseEvent) => {
+  const max = availableSize()
   if (position.value === 'bottom') {
     // Handle on top edge → drag up grows height.
-    panel.setHeight(dragStartHeight - (e.clientY - dragStartY))
+    panel.setHeight(Math.min(dragStartHeight - (e.clientY - dragStartY), max))
   } else if (position.value === 'left') {
     // Handle on right edge → drag right grows width.
-    panel.setWidth(dragStartWidth + (e.clientX - dragStartX))
+    panel.setWidth(Math.min(dragStartWidth + (e.clientX - dragStartX), max))
   } else {
     // right: handle on left edge → drag left grows width.
-    panel.setWidth(dragStartWidth - (e.clientX - dragStartX))
+    panel.setWidth(Math.min(dragStartWidth - (e.clientX - dragStartX), max))
   }
 }
 

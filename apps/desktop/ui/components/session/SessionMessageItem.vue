@@ -50,53 +50,10 @@
         </div>
       </div>
 
-      <div
-        v-if="message.role === 'agent'"
-        class="rounded-2xl px-4 py-3 text-[1em] leading-relaxed"
-        :style="{
-          background: t.bgElevated,
-          border: `1px solid ${t.border}`,
-          maxWidth: '92%',
-        }"
-      >
-        <div
-          class="flex items-center gap-1.5 mb-2 text-[1em] uppercase tracking-wider"
-          :style="{ color: t.textFaint }"
-        >
-          <Sparkles :size="10" :style="{ color: t.accent }" />
-          <span :style="{ color: t.textDim }">Assistant</span>
-          <template v-if="message.modelUsed">
-            <span>·</span>
-            <span class="font-mono normal-case tracking-normal">{{ message.modelUsed }}</span>
-          </template>
-          <template v-if="message.at">
-            <span>·</span>
-            <span class="normal-case tracking-normal">{{ fmt(message.at) }}</span>
-          </template>
-          <span class="flex-1" />
-          <button
-            v-if="!isStreaming"
-            type="button"
-            class="awog-copy-btn"
-            :style="{ color: t.textDim }"
-            title="Branch from this message"
-            @click="onBranch"
-          >
-            <GitBranch :size="12" />
-          </button>
-          <button
-            v-if="message.text"
-            type="button"
-            class="awog-copy-btn"
-            :style="{ color: copied ? t.success : t.textDim }"
-            :title="copied ? 'Copied' : 'Copy message'"
-            @click="copyMessage"
-          >
-            <Check v-if="copied" :size="12" />
-            <Copy v-else :size="12" />
-          </button>
-        </div>
-
+      <!-- Agent reply renders as a plain document (no bubble, no ASSISTANT
+           header). Identity/model/time + copy & branch actions live in the
+           byline footer below the reply. -->
+      <div v-if="message.role === 'agent'" class="text-[1em] leading-relaxed">
         <!-- Steps summary + collapse toggle. Sits above the body so the
              control reads before the interleaved command/text flow. -->
         <button
@@ -166,21 +123,6 @@
           class="mt-2"
         />
 
-        <div
-          v-if="message.startedAt"
-          class="mt-2 pt-2 text-[1em] flex items-center gap-2"
-          :style="{ color: t.textFaint, borderTop: `1px dashed ${t.border}` }"
-        >
-          <template v-if="message.completedAt">
-            <span>{{ formatElapsed(message.completedAt - message.startedAt) }}</span>
-            <span v-if="message.usage">· {{ message.usage.outputTokens }} tok</span>
-          </template>
-          <template v-else>
-            <Activity :size="10" class="animate-pulse" />
-            <span>Streaming… {{ formatElapsed(now - message.startedAt) }}</span>
-          </template>
-        </div>
-
         <div v-if="message.artifacts?.length" class="mt-2 space-y-1.5">
           <div
             v-for="art in message.artifacts"
@@ -203,22 +145,50 @@
             >
           </div>
         </div>
+
+        <!-- Byline footer: copy + branch actions, timestamp, and run stats —
+             reads after the reply (replaces the removed ASSISTANT header).
+             While streaming it shows a live ticker instead of the actions. -->
+        <div class="mt-2 flex items-center gap-2 text-[12px]" :style="{ color: t.textFaint }">
+          <template v-if="message.startedAt && !message.completedAt">
+            <Activity :size="11" class="animate-pulse" />
+            <span>Streaming… {{ formatElapsed(now - message.startedAt) }}</span>
+          </template>
+          <template v-else>
+            <button
+              v-if="message.text"
+              type="button"
+              class="awog-copy-btn"
+              :style="{ color: copied ? t.success : t.textFaint }"
+              :title="copied ? 'Copied' : 'Copy message'"
+              @click="copyMessage"
+            >
+              <Check v-if="copied" :size="12" />
+              <Copy v-else :size="12" />
+            </button>
+            <button
+              type="button"
+              class="awog-copy-btn"
+              :style="{ color: t.textFaint }"
+              title="Branch from this message"
+              @click="onBranch"
+            >
+              <GitBranch :size="12" />
+            </button>
+            <span v-if="message.at" class="ml-0.5">{{ fmt(message.at) }}</span>
+            <span v-if="message.startedAt && message.completedAt">
+              · {{ formatElapsed(message.completedAt - message.startedAt) }}
+            </span>
+            <span v-if="message.usage">· {{ message.usage.outputTokens }} tok</span>
+          </template>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {
-  Activity,
-  Check,
-  ChevronDown,
-  Copy,
-  FileText,
-  GitBranch,
-  Info,
-  Sparkles,
-} from 'lucide-vue-next'
+import { Activity, Check, ChevronDown, Copy, FileText, GitBranch, Info } from 'lucide-vue-next'
 import type { SessionAttachment, SessionMessage, SessionStep, SessionTokenKind } from '~/types'
 import { tokenizeMessage } from '~/utils/tokenize'
 import { formatTime } from '~/utils/time'

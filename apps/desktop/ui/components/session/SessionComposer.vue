@@ -2,7 +2,24 @@
   <div
     class="px-4 md:px-6 py-2 relative"
     :style="{ background: t.bg, borderTop: `1px solid ${t.border}` }"
+    @dragenter="onDragEnter"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
   >
+    <!-- File drop overlay — shown only while dragging OS files over the composer.
+         pointer-events-none so the drag/drop events keep reaching the root. -->
+    <div
+      v-if="isDraggingFiles"
+      class="absolute inset-0 z-20 flex items-center justify-center rounded-xl pointer-events-none m-1"
+      :style="{ background: `${t.bgInput}f2`, border: `2px dashed ${t.accent}` }"
+    >
+      <div class="flex items-center gap-2 text-[1em] font-medium" :style="{ color: t.accent }">
+        <Paperclip :size="16" />
+        <span>Drop files to attach</span>
+      </div>
+    </div>
+
     <!-- Resize grip for the whole composer block — drag up to grow. -->
     <div
       class="absolute top-0 left-0 right-0 h-2 -translate-y-1/2 flex items-center justify-center cursor-row-resize z-10"
@@ -209,6 +226,15 @@
       />
     </div>
 
+    <!-- Transient feedback after a `/command` runs (mode switch / compact). -->
+    <div
+      v-if="commandNotice"
+      class="mt-1 px-1 text-[12px] leading-none"
+      :style="{ color: t.textDim }"
+    >
+      {{ commandNotice }}
+    </div>
+
     <!-- Toolbar: account / model / effort chips + context usage. Sits under the
          input (Claude Code style). The provider/connection chip is dropped —
          the account chip already implies the provider. Mode + MCP live in the
@@ -228,6 +254,7 @@ import { computed, inject, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { composeOutgoingMessage, truncateForChip } from '~/utils/follow-up'
+import { findSessionCommand } from '~/utils/session-catalog'
 
 const props = defineProps<{
   session: Session
@@ -286,6 +313,7 @@ const onResizeStart = (e: MouseEvent) => {
 onBeforeUnmount(() => {
   window.removeEventListener('mousemove', onResizeMove)
   window.removeEventListener('mouseup', onResizeEnd)
+  if (noticeTimer) clearTimeout(noticeTimer)
 })
 
 // Follow-ups are owned by SessionChat (parent) so the same state is shared
@@ -295,7 +323,37 @@ const followUpController = inject(FOLLOW_UP_KEY, null)
 const pendingFollowUps = computed(() => followUpController?.pending.value ?? [])
 const editingFollowUpId = ref<string | null>(null)
 
-const mention = useMentionAutocomplete(draft, textareaRef, toRef(props, 'workspaceRoot'))
+// Transient one-line notice shown under the input after a `/command` runs (e.g.
+// a mode switch confirmation, or "compact not ready yet"). Mode switches are
+// also reflected live in the mode chip above the input.
+const commandNotice = ref<string | null>(null)
+let noticeTimer: ReturnType<typeof setTimeout> | null = null
+const showNotice = (text: string) => {
+  commandNotice.value = text
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => {
+    commandNotice.value = null
+  }, 3200)
+}
+
+// Dispatch a picked `/command`. The picker only offers mode switches + compact
+// (see session-catalog). Mode flips the session's permission mode immediately;
+// compact is wired to the SDK once the runner adopts session resume (B) — for
+// now it tells the user it is not ready instead of pretending to run.
+const onCommand = (commandId: string) => {
+  const cmd = findSessionCommand(commandId)
+  if (!cmd) return
+  if (cmd.action.type === 'mode') {
+    store.updateSettings(props.session.id, { mode: cmd.action.mode })
+    showNotice(`Mode → ${cmd.name}`)
+  } else if (cmd.action.type === 'compact') {
+    // Runs the SDK context compaction (ADR 0023). Feedback lands as a system
+    // note in the transcript, so no composer notice is needed here.
+    store.compactSession(props.session.id)
+  }
+}
+
+const mention = useMentionAutocomplete(draft, textareaRef, toRef(props, 'workspaceRoot'), onCommand)
 const { autocomplete, activeIndex } = mention
 
 watch(
@@ -304,6 +362,7 @@ watch(
     draft.value = ''
     mention.close()
     pendingAttachments.value = []
+    commandNotice.value = null
   },
 )
 
@@ -377,21 +436,85 @@ const fmtSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+// Read a File as a base64 data URL. Images are embedded inline (not as an
+// ephemeral blob: object URL) so the preview keeps working after the session is
+// persisted to JSONL and reloaded — a blob URL dies with the page that made it.
+const readDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'))
+    reader.readAsDataURL(file)
+  })
+
+// Shared by the paperclip picker and drag-and-drop — turns dropped/selected
+// File objects into pending attachments (metadata + an inline data URL for
+// images, so they preview reliably and survive a reload).
+const addFiles = async (files: FileList | File[]) => {
+  const built = await Promise.all(
+    Array.from(files).map(async (f): Promise<SessionAttachment> => {
+      const isImage = f.type.startsWith('image/')
+      return {
+        id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: f.name,
+        type: isImage ? 'image' : 'file',
+        size: fmtSize(f.size),
+        mime: f.type,
+        url: isImage ? await readDataUrl(f).catch(() => undefined) : undefined,
+      }
+    }),
+  )
+  pendingAttachments.value.push(...built)
+}
+
 const onFileSelected = (ev: Event) => {
   const input = ev.target as HTMLInputElement
   if (!input.files) return
-  Array.from(input.files).forEach((f) => {
-    const isImage = f.type.startsWith('image/')
-    pendingAttachments.value.push({
-      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: f.name,
-      type: isImage ? 'image' : 'file',
-      size: fmtSize(f.size),
-      mime: f.type,
-      url: isImage ? URL.createObjectURL(f) : undefined,
-    })
-  })
+  addFiles(input.files)
   input.value = ''
+}
+
+// Drag-and-drop from the OS file manager onto the composer. We only react when
+// the drag actually carries files (so internal text drags don't trigger the
+// overlay) and use a depth counter so moving over child elements doesn't flicker
+// the overlay off. Tauri's native file-drop is disabled for this window
+// (dragDropEnabled: false) so the webview gets standard HTML5 drop events with
+// real File objects — same path as the paperclip picker.
+const isDraggingFiles = ref(false)
+let dragDepth = 0
+
+const dragHasFiles = (ev: DragEvent) => Array.from(ev.dataTransfer?.types ?? []).includes('Files')
+
+const onDragEnter = (ev: DragEvent) => {
+  if (!dragHasFiles(ev)) return
+  ev.preventDefault()
+  dragDepth += 1
+  isDraggingFiles.value = true
+}
+
+const onDragOver = (ev: DragEvent) => {
+  if (!dragHasFiles(ev)) return
+  // preventDefault is required for the subsequent drop to fire.
+  ev.preventDefault()
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy'
+}
+
+const onDragLeave = (ev: DragEvent) => {
+  if (!dragHasFiles(ev)) return
+  dragDepth -= 1
+  if (dragDepth <= 0) {
+    dragDepth = 0
+    isDraggingFiles.value = false
+  }
+}
+
+const onDrop = (ev: DragEvent) => {
+  dragDepth = 0
+  isDraggingFiles.value = false
+  const files = ev.dataTransfer?.files
+  if (!files || files.length === 0) return
+  ev.preventDefault()
+  addFiles(files)
 }
 
 const toggleEditFollowUp = (id: string) => {

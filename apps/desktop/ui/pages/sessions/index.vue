@@ -61,17 +61,6 @@
           ]"
         />
         <CompactSelect v-model="projectFilter" label="Project" :options="projectOptions" />
-        <CompactSelect v-model="providerFilter" label="Connection" :options="providerOptions" />
-        <CompactSelect v-model="modelFilter" label="Model" :options="modelOptions" />
-        <CompactSelect
-          v-model="agentFilter"
-          label="Agents"
-          :options="[
-            { value: 'all', label: 'All' },
-            { value: 'with', label: 'With agents' },
-            { value: 'without', label: 'No agents (scratch pad)' },
-          ]"
-        />
         <button
           v-if="activeFilterCount > 0"
           class="text-[1em] transition"
@@ -111,11 +100,11 @@
                 }"
               />
               <span
-                class="text-[1em] uppercase tracking-wider font-medium flex-1 text-left truncate"
+                class="text-[0.857em] uppercase tracking-wider font-medium flex-1 text-left truncate"
               >
                 {{ group.label }}
               </span>
-              <span class="text-[1em]" :style="{ color: t.textFaint }">
+              <span class="text-[0.857em]" :style="{ color: t.textFaint }">
                 {{ group.sessions.length }}
               </span>
             </button>
@@ -260,7 +249,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-vue-next'
-import type { ProviderName, Session } from '~/types'
+import type { Session } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import { PROVIDER_LABEL, modelById } from '~/utils/models'
 import { formatTime } from '~/utils/time'
@@ -278,15 +267,15 @@ onMounted(() => {
   workspace.hydrateProjectsFromSidecar()
   // MCP list powers the per-session MCP chip in the composer.
   workspace.hydrateMcpFromSidecar()
+  // Agents (`$` mention) + skills (`/` mention) are hydrated per-session in
+  // SessionChat, scoped to the selected session's project — so the composer
+  // picker never offers other projects' entries.
 })
 
 const searchQuery = ref('')
 const hoverId = ref<string | null>(null)
 const groupBy = ref<'none' | 'project' | 'provider' | 'model'>('project')
 const projectFilter = ref<string>('all')
-const providerFilter = ref<string>('all')
-const modelFilter = ref<string>('all')
-const agentFilter = ref<'all' | 'with' | 'without'>('all')
 const collapsedGroups = ref<Record<string, boolean>>({})
 const groupHover = ref<string | null>(null)
 const showFilters = ref(false)
@@ -311,10 +300,6 @@ const filtered = computed(() => {
         return false
       }
     }
-    if (providerFilter.value !== 'all' && s.settings.provider !== providerFilter.value) return false
-    if (modelFilter.value !== 'all' && s.settings.modelId !== modelFilter.value) return false
-    if (agentFilter.value === 'with' && s.invitedAgentIds.length === 0) return false
-    if (agentFilter.value === 'without' && s.invitedAgentIds.length > 0) return false
     if (q) {
       const hit =
         s.title.toLowerCase().includes(q) ||
@@ -343,49 +328,10 @@ const projectOptions = computed(() => [
   })),
 ])
 
-const providerOptions = computed(() => {
-  const counts = new Map<ProviderName, number>()
-  allSessions.value.forEach((s) => {
-    counts.set(s.settings.provider, (counts.get(s.settings.provider) ?? 0) + 1)
-  })
-  return [
-    { value: 'all', label: 'All' },
-    ...(['anthropic', 'openai', 'google'] as ProviderName[])
-      .filter((p) => counts.has(p))
-      .map((p) => ({
-        value: p,
-        label: `${PROVIDER_LABEL[p]} (${counts.get(p) ?? 0})`,
-      })),
-  ]
-})
-
-const modelOptions = computed(() => {
-  const counts = new Map<string, number>()
-  allSessions.value.forEach((s) => {
-    counts.set(s.settings.modelId, (counts.get(s.settings.modelId) ?? 0) + 1)
-  })
-  return [
-    { value: 'all', label: 'All' },
-    ...Array.from(counts.entries()).map(([id, count]) => ({
-      value: id,
-      label: `${modelById(id)?.label ?? id} (${count})`,
-    })),
-  ]
-})
-
-const activeFilterCount = computed(
-  () =>
-    (projectFilter.value !== 'all' ? 1 : 0) +
-    (providerFilter.value !== 'all' ? 1 : 0) +
-    (modelFilter.value !== 'all' ? 1 : 0) +
-    (agentFilter.value !== 'all' ? 1 : 0),
-)
+const activeFilterCount = computed(() => (projectFilter.value !== 'all' ? 1 : 0))
 
 const clearFilters = () => {
   projectFilter.value = 'all'
-  providerFilter.value = 'all'
-  modelFilter.value = 'all'
-  agentFilter.value = 'all'
 }
 
 const filterActiveLike = computed(() => showFilters.value || activeFilterCount.value > 0)

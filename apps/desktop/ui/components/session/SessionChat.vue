@@ -58,6 +58,22 @@ const workspaceRoot = computed<string | null>(() => {
   return workspace.projects.find((p) => p.id === id)?.path ?? null
 })
 
+// The composer's `$` (agent) and `/` (skill) autocomplete read agents/skills
+// from the workspace store. Scope the hydration to THIS session's project so
+// the picker offers only the user/global tiers plus the bound project's — not
+// every other project's agents/skills. An empty id list ⇒ user/global only.
+// Re-runs only when the bound project changes, so switching between sessions of
+// the same project reuses the loaded set.
+watch(
+  () => props.session.projectId,
+  (projectId) => {
+    const ids = projectId ? [projectId] : []
+    workspace.hydrateAgentsFromSidecar(ids)
+    workspace.hydrateSkillsFromSidecar(ids)
+  },
+  { immediate: true },
+)
+
 const activeDrawer = computed(() => panel.activeDrawer(props.session.id))
 
 // Keyboard shortcuts open/toggle a workspace drawer (⇧⌘D diff, ⌃` terminal…).

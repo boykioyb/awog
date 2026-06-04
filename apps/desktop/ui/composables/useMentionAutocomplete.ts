@@ -1,13 +1,33 @@
 import { FileText, Sparkles, User as UserIcon } from 'lucide-vue-next'
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
-import type { Agent, FsEntry } from '~/types'
-import { COMMANDS } from '~/utils/session-catalog'
+import type { Agent, AgentSource, FsEntry, SkillSource } from '~/types'
+import { agentSourcePath } from '~/utils/agent-source'
+import { SESSION_COMMANDS } from '~/utils/session-catalog'
 import type { AutoItem } from '~/components/session/SessionAutocomplete.vue'
 
-// Max `@file` suggestions shown at once. The dropdown scrolls; beyond this the
-// user narrows by typing more of the path rather than scrolling a huge list.
-const FILE_RESULT_LIMIT = 50
+// Max suggestions shown at once for any trigger ($agent, /command-or-skill,
+// @file). The dropdown scrolls, so this only guards against pathological lists
+// (a workspace with thousands of files); agent/skill/command sets are far
+// smaller, so in practice the whole in-scope set is shown.
+const RESULT_LIMIT = 50
+
+// Surface the cap instead of silently truncating: when more than RESULT_LIMIT
+// match, the dropdown title tells the user to keep typing to narrow (there is
+// no load-more — the full set is already in memory, so the only lever is the
+// query filter). Below the cap the plain base title is shown.
+const narrowTitle = (base: string, shown: number, total: number): string =>
+  total > shown ? `${base} · ${shown} of ${total} — type to narrow` : base
+
+// Rank project-tier entries (.claude / .agents under the bound project) above
+// user/global-tier ones so the picker surfaces the project's own agents/skills
+// first. Stable within each tier, so the underlying scan order is preserved.
+// `source` is the shared 5-tier union for both Agent and Skill.
+const tierRank = (source: AgentSource | SkillSource): number =>
+  source === 'project-claude' || source === 'project-agents' ? 0 : 1
+
+const byProjectFirst = <T extends { source: AgentSource | SkillSource }>(items: T[]): T[] =>
+  [...items].sort((a, b) => tierRank(a.source) - tierRank(b.source))
 
 /**
  * Detect `@skill/file`, `$agent`, `/command` mentions in a textarea draft và
@@ -21,11 +41,14 @@ const FILE_RESULT_LIMIT = 50
  * @param textareaRef - ref tới `<textarea>` DOM element (cần để đọc selection)
  * @param workspaceRoot - absolute path của project gắn với session (null = chưa
  *   gắn project → `@` không có file thật để gợi ý)
+ * @param onCommand - gọi khi user pick một `/command` (id ví dụ `mode:plan`,
+ *   `compact`). Command là *hành động*, không chèn text — composer dispatch.
  */
 export const useMentionAutocomplete = (
   draft: Ref<string>,
   textareaRef: Ref<HTMLTextAreaElement | null>,
   workspaceRoot: Ref<string | null>,
+  onCommand?: (commandId: string) => void,
 ) => {
   const workspace = useWorkspaceStore()
   const fileIndex = useWorkspaceFileIndex()
@@ -52,8 +75,8 @@ export const useMentionAutocomplete = (
     const q = mentionToken.value.toLowerCase()
 
     if (trigger === '$') {
-      const items: AutoItem[] = workspace.agents
-        .filter((a) => {
+      const matched = byProjectFirst(
+        workspace.agents.filter((a) => {
           const h = agentHandle(a)
           return (
             q === '' ||
@@ -61,44 +84,53 @@ export const useMentionAutocomplete = (
             a.role.toLowerCase().startsWith(q) ||
             a.name.toLowerCase().includes(q)
           )
-        })
-        .slice(0, 6)
-        .map((a) => ({
-          kind: 'agent',
-          id: a.id,
-          label: a.name,
-          hint: `$${agentHandle(a)} · ${a.role}`,
-          icon: UserIcon,
-          insertHandle: `$${agentHandle(a)}`,
-        }))
-      return { title: 'Invoke agent', items }
+        }),
+      )
+      const items: AutoItem[] = matched.slice(0, RESULT_LIMIT).map((a) => ({
+        kind: 'agent',
+        id: a.id,
+        label: a.name,
+        // Show the on-disk path so same-named agents across tiers (e.g. three
+        // `ba` in ~/.claude, ~/.awog, and a project) are distinguishable.
+        hint: agentSourcePath(a, workspace.projects),
+        icon: UserIcon,
+        insertHandle: `$${agentHandle(a)}`,
+      }))
+      return { title: narrowTitle('Invoke agent', items.length, matched.length), items }
     }
 
     if (trigger === '/') {
-      const commandItems: AutoItem[] = COMMANDS.filter((c) => q === '' || c.name.startsWith(q))
-        .slice(0, 4)
-        .map((c) => ({
-          kind: 'command',
-          id: c.id,
-          label: `/${c.name}`,
-          hint: c.description,
-          icon: c.icon,
-          insertHandle: `/${c.name}`,
-        }))
-      const skillItems: AutoItem[] = workspace.skills
-        .filter(
+      const matchedCommands = SESSION_COMMANDS.filter((c) => q === '' || c.name.startsWith(q))
+      const matchedSkills = byProjectFirst(
+        workspace.skills.filter(
           (s) => q === '' || s.id.toLowerCase().startsWith(q) || s.name.toLowerCase().includes(q),
-        )
-        .slice(0, 6)
-        .map((s) => ({
-          kind: 'skill',
-          id: s.id,
-          label: `/${s.id}`,
-          hint: s.description,
-          icon: Sparkles,
-          insertHandle: `/${s.id}`,
-        }))
-      return { title: 'Run command or skill', items: [...commandItems, ...skillItems] }
+        ),
+      )
+      const commandItems: AutoItem[] = matchedCommands.slice(0, RESULT_LIMIT).map((c) => ({
+        kind: 'command',
+        id: c.id,
+        label: `/${c.name}`,
+        hint: c.description,
+        icon: c.icon,
+        insertHandle: `/${c.name}`,
+      }))
+      const skillItems: AutoItem[] = matchedSkills.slice(0, RESULT_LIMIT).map((s) => ({
+        kind: 'skill',
+        id: s.id,
+        label: `/${s.id}`,
+        hint: s.description,
+        icon: Sparkles,
+        insertHandle: `/${s.id}`,
+      }))
+      const items = [...commandItems, ...skillItems]
+      return {
+        title: narrowTitle(
+          'Run command or skill',
+          items.length,
+          matchedCommands.length + matchedSkills.length,
+        ),
+        items,
+      }
     }
 
     // trigger '@' → real workspace files (fuzzy across the whole tree). Skills
@@ -115,7 +147,7 @@ export const useMentionAutocomplete = (
           return an - bn || a.path.localeCompare(b.path)
         })
       : matched
-    const fileItems: AutoItem[] = ranked.slice(0, FILE_RESULT_LIMIT).map((f) => ({
+    const fileItems: AutoItem[] = ranked.slice(0, RESULT_LIMIT).map((f) => ({
       kind: 'file',
       id: f.path,
       label: f.name,
@@ -126,10 +158,7 @@ export const useMentionAutocomplete = (
 
     // Cap is intentional — surface it (don't silently truncate) so the user
     // knows to keep typing to narrow when there are more matches than shown.
-    const title =
-      matched.length > FILE_RESULT_LIMIT
-        ? `Insert file · ${FILE_RESULT_LIMIT} of ${matched.length} — type to narrow`
-        : 'Insert file'
+    const title = narrowTitle('Insert file', fileItems.length, matched.length)
     return { title, items: fileItems }
   })
 
@@ -176,6 +205,21 @@ export const useMentionAutocomplete = (
     const before = draft.value.slice(0, mentionStart.value)
     const afterPos = mentionStart.value + 1 + mentionToken.value.length
     const after = draft.value.slice(afterPos)
+    // Commands are actions, not text: strip the typed `/token` and dispatch
+    // instead of inserting a handle. The composer owns the actual behavior.
+    if (item.kind === 'command') {
+      draft.value = `${before}${after}`
+      const newPos = before.length
+      mentionToken.value = null
+      onCommand?.(item.id)
+      nextTick(() => {
+        const el = textareaRef.value
+        if (!el) return
+        el.focus()
+        el.setSelectionRange(newPos, newPos)
+      })
+      return
+    }
     const inserted = `${item.insertHandle} `
     draft.value = `${before}${inserted}${after}`
     const newPos = before.length + inserted.length

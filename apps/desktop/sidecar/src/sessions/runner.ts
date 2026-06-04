@@ -15,8 +15,11 @@
 // paste-code OAuth UX (auth.completeOAuth) intact while delegating the actual
 // API call + SSE handling to the SDK.
 
+import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { loadCredentials } from '../credentials/store.js'
 import { ensureFreshAccessToken } from '../credentials/token-manager.js'
+import { awogHome } from '../util/path.js'
 import {
   isAnthropicModel,
   resolveModelRequest,
@@ -139,6 +142,15 @@ const MODE_PERMISSION: Record<AgentMode, 'default' | 'acceptEdits' | 'bypassPerm
     execute: 'bypassPermissions',
   }
 
+// SDK session transcripts (needed for `resume`, ADR 0023) live under an
+// AWOG-owned config dir, NOT the user's real ~/.claude — isolation + privacy.
+const SDK_CONFIG_DIR = join(awogHome(), 'sdk-sessions')
+
+// `resume` comes from the persisted session (input L2). Re-validate the UUID
+// shape at this boundary before handing it to the SDK.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isValidSdkSessionId = (id: string): boolean => UUID_RE.test(id)
+
 function buildOptions(
   settings: SessionSettings,
   accessToken: string,
@@ -150,15 +162,18 @@ function buildOptions(
   mcpServers: Options['mcpServers'] | undefined,
   systemPromptAppend: string | undefined,
   allowedTools: string[] | undefined,
+  resume: string | undefined,
 ): Options {
   // Replace subprocess env entirely (SDK does NOT merge). Inherit PATH/HOME
   // explicitly so child can find git/node, then inject the OAuth token.
   const env: Record<string, string | undefined> = {
     ...process.env,
     CLAUDE_CODE_OAUTH_TOKEN: accessToken,
-    // Disable session persistence on disk under ~/.claude/; we own session
-    // storage at ~/.awog/sessions/. Avoids the SDK writing JSONL transcripts.
     CLAUDE_CODE_ENTRYPOINT: 'awog-sidecar',
+    // Session transcripts (for `resume`, ADR 0023) are persisted by the SDK
+    // here — an AWOG-owned dir, NOT the user's real ~/.claude. AWOG JSONL at
+    // ~/.awog/sessions/ stays the source of truth; this is a resumable cache.
+    CLAUDE_CONFIG_DIR: SDK_CONFIG_DIR,
   }
   // Strip our OAuth refresh secret defensively (not strictly needed since we
   // never set it on process.env, but cheap belt-and-braces).
@@ -171,7 +186,9 @@ function buildOptions(
   const opts: Options = {
     model,
     env,
-    persistSession: false,
+    // Persist sessions to CLAUDE_CONFIG_DIR so subsequent turns can `resume`
+    // (ADR 0023). persistSession:false would make resume impossible.
+    persistSession: true,
     // Inherit the full Claude Code tool surface (Read/Write/Edit/Bash/Glob/
     // Grep/WebSearch/...). The UI's permission flow (via canUseTool) is the
     // single gate for write/exec; leaving `tools` undefined yields the default
@@ -191,6 +208,9 @@ function buildOptions(
 
   if (abortController) opts.abortController = abortController
   if (cwd) opts.cwd = cwd
+  // Resume a prior SDK session → SDK loads its history; we send only the new
+  // turn. Validated UUID only (input L2). Invalid/absent ⇒ fresh (seed) session.
+  if (resume && isValidSdkSessionId(resume)) opts.resume = resume
   // No permission gate in execute mode — skip canUseTool so nothing is parked.
   if (canUseTool && settings.mode !== 'execute') opts.canUseTool = canUseTool
   if (disabledTools && disabledTools.length) opts.disallowedTools = disabledTools
@@ -257,6 +277,14 @@ export interface RunNonStreamArgs {
   // Claude Code subagent `tools` field from the active agent. When set,
   // restricts the SDK toolset to this whitelist (Options.allowedTools).
   allowedTools?: string[]
+  // Prior SDK session id (ADR 0023). When present + valid, resume it and send
+  // only `pendingText`; when absent, seed a fresh SDK session with the full
+  // transcript and capture its id. Resume failure falls back to a seed.
+  sdkSessionId?: string
+  // When set, `pendingText` is an SDK slash command (e.g. '/compact') forwarded
+  // verbatim as the sole prompt — no transcript wrapping. Requires a resumable
+  // session to act on (compact an empty session is a no-op).
+  slashCommand?: 'compact'
 }
 
 export interface StreamCallbacks {
@@ -272,6 +300,9 @@ export interface RunStreamResult {
   modelUsed: string
   usage: { input_tokens: number; output_tokens: number }
   stopReason: string | null
+  // SDK session id observed this turn (ADR 0023). Caller persists it onto the
+  // session so the next turn can resume. Undefined if the SDK emitted none.
+  sdkSessionId?: string
 }
 
 interface AssistantTextBlock {
@@ -307,11 +338,30 @@ function mapSdkErrorToRpc(err: unknown): RpcError {
   return new RpcError(-32021, `chat failed: ${message}`)
 }
 
+// Heuristic: did this error come from an unresumable SDK session (expired /
+// missing / diverged)? Used to fall back to a fresh seed. False positives just
+// cause a harmless re-seed; false negatives propagate as before. Kept specific.
+function isResumeFailure(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  return (
+    msg.includes('resume') ||
+    msg.includes('session not found') ||
+    msg.includes('no such session') ||
+    msg.includes('could not find session') ||
+    msg.includes('no conversation found')
+  )
+}
+
 export async function runStream(
   args: RunNonStreamArgs,
   cb: StreamCallbacks,
 ): Promise<RunStreamResult> {
   return withSessionLock(args.sessionId, async () => {
+    // persistSession:true writes SDK transcripts here (ADR 0023). Ensure the
+    // dir exists so the first turn can't fail on a missing path; best-effort —
+    // the SDK creates it too. mode 0o700 matches ~/.awog/sessions privacy.
+    await mkdir(SDK_CONFIG_DIR, { recursive: true, mode: 0o700 }).catch(() => {})
+
     const account = await resolveAccount(args.settings.provider, args.settings.accountId)
 
     if (!isAnthropicModel(args.settings.modelId)) {
@@ -319,44 +369,67 @@ export async function runStream(
     }
 
     const tokens = await ensureFreshAccessToken(args.settings.provider, account.id)
-    const prompt = renderTranscript(args.history, args.pendingText)
-    const options = buildOptions(
-      args.settings,
-      tokens.accessToken,
-      args.systemPrompt,
-      args.abortController,
-      args.cwd,
-      args.canUseTool,
-      args.disabledTools,
-      args.mcpServers,
-      args.systemPromptAppend,
-      args.allowedTools,
-    )
+    const primaryResume =
+      args.sdkSessionId && isValidSdkSessionId(args.sdkSessionId) ? args.sdkSessionId : undefined
+    // Whether THIS run streamed any assistant text yet — guards the resume-fail
+    // retry from double-emitting (resume failures throw at init, before any
+    // chunk, so in practice this stays false on the failing attempt).
+    let emittedAny = false
 
-    log.info('chat stream request', {
-      sessionId: args.sessionId,
-      model: args.settings.modelId,
-      messages: args.history.length + 1,
-      account: account.id,
-    })
+    // One query attempt. `resumeId` set ⇒ resume that SDK session and send only
+    // the new turn; unset ⇒ seed a fresh session with the full transcript.
+    // `/compact` (slashCommand) is forwarded verbatim as the sole prompt.
+    const runOnce = async (resumeId: string | undefined): Promise<RunStreamResult> => {
+      const prompt = args.slashCommand
+        ? args.pendingText.trim()
+        : resumeId
+          ? args.pendingText
+          : renderTranscript(args.history, args.pendingText)
+      const options = buildOptions(
+        args.settings,
+        tokens.accessToken,
+        args.systemPrompt,
+        args.abortController,
+        args.cwd,
+        args.canUseTool,
+        args.disabledTools,
+        args.mcpServers,
+        args.systemPromptAppend,
+        args.allowedTools,
+        resumeId,
+      )
 
-    let fullText = ''
-    let modelUsed = ''
-    let inputTokens = 0
-    let outputTokens = 0
-    let stopReason: string | null = null
+      log.info('chat stream request', {
+        sessionId: args.sessionId,
+        model: args.settings.modelId,
+        mode: resumeId ? 'resume' : 'seed',
+        slashCommand: args.slashCommand ?? null,
+        account: account.id,
+      })
 
-    // Track tool_use blocks we've already announced via onStep so the same id
-    // doesn't fire the 'running' event twice (the SDK may emit the same
-    // assistant turn snapshot more than once). Also remembers each tool's
-    // original name/input so the corresponding tool_result step can re-derive
-    // pathHint / additions / detail without parsing the result payload alone.
-    const announcedUses = new Map<string, { name: string; input: Record<string, unknown> }>()
-    const reportedResults = new Set<string>()
+      let fullText = ''
+      let modelUsed = ''
+      let inputTokens = 0
+      let outputTokens = 0
+      let stopReason: string | null = null
+      // SDK session id observed on this attempt — every SDKMessage carries it.
+      let capturedSessionId: string | undefined
 
-    try {
-      const q = query({ prompt, options })
+      // Track tool_use blocks we've already announced via onStep so the same id
+      // doesn't fire the 'running' event twice (the SDK may emit the same
+      // assistant turn snapshot more than once). Also remembers each tool's
+      // original name/input so the corresponding tool_result step can re-derive
+      // pathHint / additions / detail without parsing the result payload alone.
+      const announcedUses = new Map<string, { name: string; input: Record<string, unknown> }>()
+      const reportedResults = new Set<string>()
+
+      try {
+        const q = query({ prompt, options })
       for await (const evt of q as AsyncIterable<SDKMessage>) {
+        if (!capturedSessionId) {
+          const sid = (evt as { session_id?: unknown }).session_id
+          if (typeof sid === 'string' && sid.length > 0) capturedSessionId = sid
+        }
         if (evt.type === 'stream_event') {
           // Partial assistant message — drill into the underlying
           // BetaRawMessageStreamEvent for text deltas. The SDK forwards the
@@ -381,6 +454,7 @@ export async function runStream(
             // internal narration would otherwise leak into the parent's reply.
             if (!parentId) {
               fullText += inner.delta.text
+              emittedAny = true
               cb.onChunk(inner.delta.text)
             }
             continue
@@ -514,10 +588,28 @@ export async function runStream(
         modelUsed: modelUsed || args.settings.modelId,
         usage: { input_tokens: inputTokens, output_tokens: outputTokens },
         stopReason,
+        ...(capturedSessionId ? { sdkSessionId: capturedSessionId } : {}),
       }
     } catch (err) {
       if (err instanceof RpcError) throw err
       throw mapSdkErrorToRpc(err)
+    }
+    }
+
+    // Resume first; if the prior SDK session can't be resumed (expired/missing/
+    // diverged), fall back to a fresh seed — equivalent to pre-resume behaviour.
+    // Only retry when nothing was streamed yet, to avoid double-emitting text.
+    try {
+      return await runOnce(primaryResume)
+    } catch (err) {
+      if (primaryResume && !emittedAny && isResumeFailure(err)) {
+        log.warn('resume failed; re-seeding fresh SDK session', {
+          sessionId: args.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+        return await runOnce(undefined)
+      }
+      throw err
     }
   })
 }

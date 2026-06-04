@@ -22,13 +22,14 @@ import { Terminal } from '@xterm/xterm'
 import { TerminalSquare } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import type { Session } from '~/types'
 import { useTerminalApi } from '~/composables/useTerminalApi'
 import { useSidecar, type SidecarEvent } from '~/composables/useSidecar'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{
-  session: Session
+  // Opaque grouping key for the sidecar PTY manager — a session id, or
+  // `proj:<projectId>` for the Project Code Workspace (terminal.list groups by it).
+  sessionId: string
   workspaceRoot: string
   // True when this instance is the visible tab — drives deferred PTY creation
   // / refit (an off-screen `v-show: none` terminal has zero size).
@@ -72,7 +73,7 @@ const createPty = async (instance: Terminal, cols: number, rows: number) => {
   if (terminalId || creating) return
   creating = true
   try {
-    const result = await api.create(props.workspaceRoot, props.session.id, cols, rows)
+    const result = await api.create(props.workspaceRoot, props.sessionId, cols, rows)
     terminalId = result.terminalId
   } catch (err) {
     errorMsg.value = err instanceof Error ? err.message : tr('workspace.terminal.unavailable')

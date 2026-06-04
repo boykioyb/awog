@@ -52,17 +52,6 @@
           :now="now"
           @open-attachment="(att: SessionAttachment) => emit('openAttachment', att)"
         />
-
-        <div
-          v-for="agentId in pendingAgentIds"
-          :key="`pending-${agentId}`"
-          class="flex gap-1.5 items-center"
-        >
-          <Activity :size="11" class="animate-pulse" :style="{ color: t.textDim }" />
-          <span class="text-[1em]" :style="{ color: t.textDim }">
-            {{ agentName(agentId) }} đang phản hồi...
-          </span>
-        </div>
       </template>
     </div>
 
@@ -136,16 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  Activity,
-  ArrowDown,
-  ArrowUp,
-  AtSign,
-  Bot,
-  MessagesSquare,
-  Quote,
-  Slash,
-} from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, AtSign, Bot, MessagesSquare, Quote, Slash } from 'lucide-vue-next'
 import type { SessionAttachment, SessionMessage, SessionStep } from '~/types'
 import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
@@ -173,7 +153,6 @@ const hints = [
   { token: '$agent', icon: Bot },
   { token: '/command', icon: Slash },
 ]
-const workspace = useWorkspaceStore()
 const store = useSessionsStore()
 const panel = useWorkspacePanelStore()
 const sidecar = useSidecar()
@@ -308,8 +287,6 @@ provide(SELECT_STEP_KEY, (step: SessionStep) => {
   selectedStepId.value = step.id
   parentSelectStep?.(step)
 })
-
-const agentName = (id: string) => workspace.agentById(id)?.name ?? 'Agent'
 
 // Single ticker shared across all streaming messages — children read `now`
 // via prop so we don't create one interval per bubble.
@@ -518,15 +495,26 @@ const onContentClick = (ev: MouseEvent) => {
     sidecar.openExternal(href).catch(() => {})
     return
   }
-  // Otherwise a workspace-relative file reference. Strip the fragment, pull the
-  // first line from `#L<n>` / `#L<a>-L<b>`, and open it in the Files panel.
+  // Otherwise a workspace-relative file reference. Open it in the Files panel and
+  // highlight the referenced line range. The range may live in the href fragment
+  // (`#L138`, `#L138-L144`, `#L138-144`, GitHub `#L138C1-L144C5`) or — when the
+  // href only carries the start line — in the visible label (e.g. `…:138-144`).
   const sessionId = store.selectedSessionId
   if (!sessionId) return
   const hashIdx = href.indexOf('#')
   const path = (hashIdx >= 0 ? href.slice(0, hashIdx) : href).replace(/^\/+/, '')
-  const lineMatch = hashIdx >= 0 ? href.slice(hashIdx).match(/L(\d+)/i) : null
-  const line = lineMatch ? Number(lineMatch[1]) : null
-  if (path) panel.requestOpenFile(sessionId, path, line)
+  const frag = hashIdx >= 0 ? href.slice(hashIdx) : ''
+  const fragMatch = frag.match(/L(\d+)(?:C\d+)?(?:[-–]L?(\d+)(?:C\d+)?)?/i)
+  let line = fragMatch ? Number(fragMatch[1]) : null
+  let endLine = fragMatch && fragMatch[2] ? Number(fragMatch[2]) : null
+  if (endLine == null) {
+    const labelMatch = (anchor.textContent ?? '').match(/:(\d+)\s*[-–]\s*(\d+)/)
+    if (labelMatch) {
+      line = Number(labelMatch[1])
+      endLine = Number(labelMatch[2])
+    }
+  }
+  if (path) panel.requestOpenFile(sessionId, path, line, endLine)
 }
 
 onUnmounted(() => {

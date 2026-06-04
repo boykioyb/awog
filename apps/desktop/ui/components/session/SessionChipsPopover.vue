@@ -454,13 +454,9 @@
 import {
   Cable,
   Check,
-  CheckCheck,
   ChevronDown,
   ChevronRight,
-  HelpCircle,
   Info,
-  ListChecks,
-  Play,
   Plug,
   Sparkles,
   UserRound,
@@ -476,6 +472,7 @@ import {
   modelsForProvider,
 } from '~/utils/models'
 import { TOOLS_CATALOG, TOOL_GROUP_LABEL, type ToolGroup } from '~/utils/tools-catalog'
+import { MODE_OPTIONS } from '~/utils/session-modes'
 
 type PopoverName = 'provider' | 'account' | 'model' | 'mode' | 'mcp' | null
 
@@ -531,33 +528,6 @@ const chipStyle = (active: boolean) => ({
 const togglePop = (name: NonNullable<PopoverName>) => {
   openPop.value = openPop.value === name ? null : name
 }
-
-const MODE_OPTIONS = [
-  {
-    value: 'ask' as const,
-    label: 'Ask',
-    icon: HelpCircle,
-    desc: 'Read-only tools run freely; any write or shell command prompts you first.',
-  },
-  {
-    value: 'accept-edits' as const,
-    label: 'Accept Edits',
-    icon: CheckCheck,
-    desc: 'Auto-approve file edits (Edit / Write / MultiEdit). Shell commands still prompt.',
-  },
-  {
-    value: 'plan' as const,
-    label: 'Plan',
-    icon: ListChecks,
-    desc: 'Research-only — the model investigates and proposes a plan, no writes or shell.',
-  },
-  {
-    value: 'execute' as const,
-    label: 'Execute',
-    icon: Play,
-    desc: 'Bypass all prompts — edits AND shell commands run without confirmation. Use with care.',
-  },
-]
 
 const currentModeDef = computed(
   () => MODE_OPTIONS.find((m) => m.value === props.session.settings.mode) ?? MODE_OPTIONS[0]!,

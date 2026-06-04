@@ -15,10 +15,14 @@ const HEIGHT_KEY = 'awog.workspacePanel.height'
 
 const DEFAULT_WIDTH = 440
 const MIN_WIDTH = 300
-const MAX_WIDTH = 960
+// Sanity upper bounds only. The real cap is the chat area itself — enforced live
+// in SessionWorkspacePanel (drag clamps to the offsetParent size + CSS
+// max-width/height: 100%) so the drawer can fill the main chat but never slide
+// under the NavRail / off-screen.
+const MAX_WIDTH = 1920
 const DEFAULT_HEIGHT = 320
 const MIN_HEIGHT = 160
-const MAX_HEIGHT = 800
+const MAX_HEIGHT = 1200
 const VALID_POSITIONS: WorkspacePanelPosition[] = ['right', 'left', 'bottom']
 
 const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(max, n))
@@ -72,20 +76,22 @@ export const useWorkspacePanelStore = defineStore('workspacePanel', () => {
   // chat and consumed by WorkspaceFilesTab. `seq` makes the same path+line
   // re-trigger the watcher (clicking the same link twice still navigates).
   let openSeq = 0
-  const fileOpenRequest = ref<Record<string, { path: string; line: number | null; seq: number }>>(
-    {},
-  )
+  type FileOpenRequest = { path: string; line: number | null; endLine: number | null; seq: number }
+  const fileOpenRequest = ref<Record<string, FileOpenRequest>>({})
 
-  const pendingFileOpen = (
-    sessionId: string,
-  ): { path: string; line: number | null; seq: number } | null =>
+  const pendingFileOpen = (sessionId: string): FileOpenRequest | null =>
     fileOpenRequest.value[sessionId] ?? null
 
-  const requestOpenFile = (sessionId: string, path: string, line: number | null = null): void => {
+  const requestOpenFile = (
+    sessionId: string,
+    path: string,
+    line: number | null = null,
+    endLine: number | null = null,
+  ): void => {
     openSeq += 1
     fileOpenRequest.value = {
       ...fileOpenRequest.value,
-      [sessionId]: { path, line, seq: openSeq },
+      [sessionId]: { path, line, endLine, seq: openSeq },
     }
     openDrawer(sessionId, 'files')
   }

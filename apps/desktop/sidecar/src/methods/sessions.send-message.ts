@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { runStream, registerAborter, unregisterAborter } from '../sessions/runner.js'
-import { appendMessage } from '../sessions/store.js'
+import { appendMessage, loadSession, updateSessionMetadata } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
 import {
   parkPermissionRequest,
@@ -12,11 +12,9 @@ import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { listServers as listMcpServers } from '../mcp/store.js'
 import { loadAgent } from '../agents/store.js'
-import { loadSkillByIdAnyTier } from '../skills/store.js'
-import { listProjects } from '../projects/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
-import type { SessionMessage, SessionSettings, Skill } from '../types/shared.js'
+import type { SessionMessage, SessionSettings } from '../types/shared.js'
 
 const SessionMessageSchema = z
   .object({
@@ -116,12 +114,21 @@ register('sessions.sendMessage', async (raw) => {
     }
   }
 
+  // Prior SDK session id (ADR 0023): when present, the runner resumes it and
+  // sends only the new turn instead of the whole transcript. Best-effort load —
+  // a missing/not-yet-persisted session just means "seed a fresh SDK session".
+  let priorSdkSessionId: string | undefined
+  try {
+    const existing = await loadSession(params.sessionId)
+    priorSdkSessionId = existing?.sdkSessionId
+  } catch {
+    // Ignore — treat as no prior session (seed path).
+  }
+
   // Resolve the active agent (if any). When found:
   //   - `agent.systemPrompt` REPLACES `params.systemPrompt` (ADR 0015)
-  //   - `agent.skillIds` resolve via first-match across 5 tiers; each SKILL.md
-  //     body is appended under "# Available Skills" so the model can invoke
-  //     them. Missing skills are logged and skipped (non-fatal).
   //   - `agent.tools` (Claude Code subagent whitelist) → Options.allowedTools
+  //   - `agent.mcpServerIds` → per-agent MCP whitelist
   // Missing / unparseable agent → fall back to the caller's prompt + full toolset.
   let resolvedSystemPrompt = params.systemPrompt
   let resolvedAllowedTools: string[] | undefined
@@ -137,39 +144,6 @@ register('sessions.sendMessage', async (raw) => {
       if (agent?.tools && agent.tools.length > 0) resolvedAllowedTools = agent.tools
       if (agent?.mcpServerIds && agent.mcpServerIds.length > 0) {
         resolvedAgentMcpIds = agent.mcpServerIds
-      }
-
-      // Skills injection. We pass all registered project ids so a project-tier
-      // skill referenced by id also resolves. Skills not found → log + skip.
-      if (agent && agent.skillIds.length > 0) {
-        let allProjectIds: string[] = []
-        try {
-          const projects = await listProjects()
-          allProjectIds = projects.map((p) => p.id)
-        } catch {
-          // listProjects failed — skip project-tier skills, still attempt user tiers
-        }
-        const loaded = await Promise.all(
-          agent.skillIds.map(async (id) => {
-            const skill = await loadSkillByIdAnyTier(id, allProjectIds)
-            if (!skill) {
-              log.warn('agent references unknown skill', {
-                agentId: agent.id,
-                skillId: id,
-              })
-            }
-            return skill
-          }),
-        )
-        const skillSections = loaded
-          .filter((s): s is Skill => s !== null)
-          .map((s) => `## Skill: ${s.name}\n\n${s.body}`)
-        if (skillSections.length > 0) {
-          const base = resolvedSystemPrompt ?? ''
-          resolvedSystemPrompt = base
-            ? `${base}\n\n---\n\n# Available Skills\n\n${skillSections.join('\n\n')}`
-            : `# Available Skills\n\n${skillSections.join('\n\n')}`
-        }
       }
     } catch (err) {
       log.warn('failed to load agent for runtime injection', {
@@ -333,6 +307,7 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
         ...(mcpServersForSdk ? { mcpServers: mcpServersForSdk } : {}),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
+        ...(priorSdkSessionId ? { sdkSessionId: priorSdkSessionId } : {}),
         canUseTool,
         abortController,
       },
@@ -359,6 +334,19 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
     // calling canUseTool back), reject so the Map doesn't leak.
     onAbort()
     unregisterAborter(params.messageId)
+  }
+
+  // Persist the SDK session id (ADR 0023) so the next turn resumes instead of
+  // re-seeding. Only writes when it changed (first turn, or after a fork/reseed).
+  if (result.sdkSessionId && result.sdkSessionId !== priorSdkSessionId) {
+    try {
+      await updateSessionMetadata(params.sessionId, { sdkSessionId: result.sdkSessionId })
+    } catch (err) {
+      log.warn('failed to persist sdkSessionId', {
+        sessionId: params.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 
   // Persist both turns to JSONL. Best-effort: failures must not bubble back

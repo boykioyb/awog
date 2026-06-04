@@ -160,6 +160,12 @@ export const useSessionsStore = defineStore('sessions', {
     // drawer re-renders when the underlying step transitions running → done
     // and its detail updates from prompt to reply.
     subagentDrawerRef: null as { sessionId: string; messageId: string; stepId: string } | null,
+    // True once sessions have been loaded from the sidecar. Guards
+    // hydrateFromSidecar so navigating away and back never re-loads (and
+    // clobbers) the store — the store is the live source of truth for the app
+    // lifetime, including any in-flight streaming turn that keeps running while
+    // the user is on another page.
+    hydrated: false,
   }),
 
   getters: {
@@ -187,6 +193,12 @@ export const useSessionsStore = defineStore('sessions', {
 
   actions: {
     async hydrateFromSidecar(): Promise<void> {
+      // Load once per app lifetime. Re-running on every /sessions mount would
+      // overwrite this.sessions with the file snapshot — wiping a streaming
+      // turn's un-persisted placeholder + text and orphaning the running
+      // action's array reference, so the reply vanishes from the UI even
+      // though the sidecar process is still alive in the background.
+      if (this.hydrated) return
       const sidecar = useSidecar()
       if (!sidecar.available) {
         // Browser dev: no sidecar — start with an empty session list.
@@ -197,6 +209,7 @@ export const useSessionsStore = defineStore('sessions', {
         const list = Array.isArray(res.sessions) ? res.sessions : []
         this.sessions = list
         this.selectedSessionId = list[0]?.id ?? null
+        this.hydrated = true
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[sessions] hydrateFromSidecar failed', err)
@@ -824,6 +837,52 @@ export const useSessionsStore = defineStore('sessions', {
       } catch {
         // Race: stream may have settled between click and RPC. Either way the
         // finalize path will clean up; ignore the error.
+      }
+    },
+
+    // `/compact` — ask the sidecar to run the SDK's context compaction on this
+    // session (ADR 0023). Dedicated path (not sendMessage) so no `/compact` user
+    // bubble appears; we show a transient system note instead. The sidecar also
+    // appends a canonical note to the JSONL, which replaces ours on next hydrate.
+    async compactSession(sessionId: string): Promise<void> {
+      const session = this.sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      const noteId = newId('m')
+      session.messages.push({
+        id: noteId,
+        role: 'system',
+        text: 'Compacting context…',
+        at: nowIso(),
+      })
+      session.updatedAt = nowIso()
+      const noteById = (): SessionMessage | undefined =>
+        this.sessions.find((s) => s.id === sessionId)?.messages.find((m) => m.id === noteId)
+
+      const sidecar = useSidecar()
+      if (!sidecar.available) {
+        const n = noteById()
+        if (n) n.text = 'Compact requires the desktop app.'
+        return
+      }
+      try {
+        const res = await sidecar.request<{ ok: boolean; reason?: string }>('sessions.compact', {
+          sessionId,
+          provider: session.settings.provider,
+          modelId: session.settings.modelId,
+          ...(session.settings.accountId ? { accountId: session.settings.accountId } : {}),
+          ...(session.projectId ? { projectId: session.projectId } : {}),
+        })
+        const n = noteById()
+        if (n) {
+          n.text = res.ok
+            ? 'Context compacted to free up token budget.'
+            : 'Nothing to compact yet — send a message first.'
+        }
+      } catch (err) {
+        const n = noteById()
+        if (n) n.text = 'Compact failed.'
+        // eslint-disable-next-line no-console
+        console.warn('[sessions] compact failed', err)
       }
     },
   },
