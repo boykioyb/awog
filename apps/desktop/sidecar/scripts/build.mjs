@@ -66,9 +66,12 @@ const WIN_LAUNCHER = [
 
 async function compileTs() {
   console.error('[build] tsc -p tsconfig.build.json')
+  // `shell: true` so Windows resolves `pnpm` → `pnpm.cmd` via PATHEXT;
+  // execFileSync alone throws `spawnSync pnpm ENOENT` on win32.
   execFileSync('pnpm', ['exec', 'tsc', '-p', 'tsconfig.build.json'], {
     cwd: pkgRoot,
     stdio: 'inherit',
+    shell: true,
   })
 }
 
