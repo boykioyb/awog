@@ -117,3 +117,17 @@ export interface GitFileDiff {
 export interface GitDiff {
   files: GitFileDiff[]
 }
+
+// A git repository discovered inside a project/workspace folder. A "project" in
+// AWOG may be a container holding several repos in subfolders — see
+// `git.discoverRepos` + docs/features/git-manager.md.
+export interface GitRepoEntry {
+  // Absolute path to the repo root (the dir that contains `.git`).
+  path: string
+  // basename(path) — display fallback.
+  name: string
+  // Path relative to the scanned project root; '.' when the root itself is a repo.
+  relativePath: string
+  // True when path === scanned root (single-repo project).
+  isRoot: boolean
+}

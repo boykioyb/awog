@@ -4,26 +4,55 @@
       class="flex items-center justify-between px-3 py-2"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
-      <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div
+        class="text-[1em] uppercase tracking-wider whitespace-nowrap truncate"
+        :style="{ color: t.textDim }"
+      >
         {{ tr('git.status.working_tree') }}
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1 flex-shrink-0">
         <button
           v-if="store.unstagedFiles.length > 0 || store.untrackedFiles.length > 0"
-          class="text-[1em] px-2 py-1 rounded transition"
+          class="p-1.5 rounded transition"
           :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
+          :title="tr('git.status.stage_all')"
           @click="stageAll"
         >
-          {{ tr('git.status.stage_all') }}
+          <Plus :size="13" />
         </button>
         <button
           v-if="store.stagedFiles.length > 0"
-          class="text-[1em] px-2 py-1 rounded transition"
+          class="p-1.5 rounded transition"
           :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
+          :title="tr('git.status.unstage_all')"
           @click="unstageAll"
         >
-          {{ tr('git.status.unstage_all') }}
+          <Undo2 :size="13" />
         </button>
+        <!-- Tree / flat view toggle -->
+        <div
+          class="flex items-center rounded overflow-hidden flex-shrink-0 ml-1"
+          :style="{ border: `1px solid ${t.border}` }"
+        >
+          <button
+            type="button"
+            class="px-1.5 py-1 transition"
+            :style="modeBtnStyle('tree')"
+            :title="tr('git.changes.tree_view')"
+            @click="setViewMode('tree')"
+          >
+            <FolderTree :size="12" />
+          </button>
+          <button
+            type="button"
+            class="px-1.5 py-1 transition"
+            :style="modeBtnStyle('flat')"
+            :title="tr('git.changes.flat_view')"
+            @click="setViewMode('flat')"
+          >
+            <List :size="12" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -39,6 +68,7 @@
         :label="tr('git.status.conflicted')"
         :files="store.conflictedFiles"
         :selected-path="store.selectedFilePath"
+        :view-mode="viewMode"
         :show-stage="false"
         @select="(p) => store.selectFile(p)"
         @stage="(p) => store.stageFile(p)"
@@ -52,6 +82,7 @@
         :label="tr('git.status.staged')"
         :files="store.stagedFiles"
         :selected-path="store.selectedFilePath"
+        :view-mode="viewMode"
         :show-stage="true"
         :is-staged-section="true"
         @select="(p) => store.selectFile(p)"
@@ -66,6 +97,7 @@
         :label="tr('git.status.changes')"
         :files="store.unstagedFiles"
         :selected-path="store.selectedFilePath"
+        :view-mode="viewMode"
         :show-stage="true"
         @select="(p) => store.selectFile(p)"
         @stage="(p) => store.stageFile(p)"
@@ -79,6 +111,7 @@
         :label="tr('git.status.untracked')"
         :files="store.untrackedFiles"
         :selected-path="store.selectedFilePath"
+        :view-mode="viewMode"
         :show-stage="true"
         @select="(p) => store.selectFile(p)"
         @stage="(p) => store.stageFile(p)"
@@ -107,13 +140,42 @@
 </template>
 
 <script setup lang="ts">
-import { CheckCircle2, Copy, FileText, FolderOpen, Plus, Trash2, Undo2 } from 'lucide-vue-next'
+import {
+  CheckCircle2,
+  Copy,
+  FileText,
+  FolderOpen,
+  FolderTree,
+  List,
+  Plus,
+  Trash2,
+  Undo2,
+} from 'lucide-vue-next'
 import type { GitFileStatus } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
 const store = useGitStore()
+
+// ─── View mode (tree / flat) — persisted, defaults to tree ─────────────────
+type ChangesView = 'tree' | 'flat'
+const VIEW_KEY = 'awog.git.changes.view'
+const viewMode = ref<ChangesView>('tree')
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  const saved = window.localStorage.getItem(VIEW_KEY)
+  if (saved === 'tree' || saved === 'flat') viewMode.value = saved
+})
+const setViewMode = (mode: ChangesView) => {
+  viewMode.value = mode
+  if (typeof window !== 'undefined') window.localStorage.setItem(VIEW_KEY, mode)
+}
+const modeBtnStyle = (mode: ChangesView) => ({
+  background: viewMode.value === mode ? t.value.accent : t.value.bgPanel,
+  color: viewMode.value === mode ? t.value.accentText : t.value.textMuted,
+  cursor: 'pointer',
+})
 
 const pendingDiscard = ref<string | null>(null)
 

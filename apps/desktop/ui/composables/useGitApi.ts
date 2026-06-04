@@ -1,6 +1,7 @@
 // Thin typed wrapper around sidecar git.* RPCs. Shape mirrors
 // apps/desktop/sidecar/src/git/types.ts (workspace-rooted, no projectId).
 // Store layer adapts these into the per-project view it persists.
+import type { GitRepoEntry } from '~/types'
 import { useSidecar } from './useSidecar'
 
 export type SidecarGitFileChangeType =
@@ -288,6 +289,8 @@ export function useGitApi() {
   const sidecar = useSidecar()
   return {
     checkInstalled: () => sidecar.request<CheckInstalledResult>('git.checkInstalled'),
+    discoverRepos: (root: string) =>
+      sidecar.request<{ repos: GitRepoEntry[] }>('git.discoverRepos', { root }),
     status: (workspaceRoot: string, opts?: { includeIgnored?: boolean }) =>
       sidecar.request<SidecarGitStatus>('git.status', { workspaceRoot, ...opts }),
     log: (params: LogParams) =>

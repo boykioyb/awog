@@ -8,7 +8,7 @@
     <component :is="icon" v-if="icon" :size="12" :style="{ color: iconColor, flexShrink: 0 }" />
     <span
       class="text-[1em] flex-1 truncate text-left"
-      :class="mono ? 'font-mono' : ''"
+      :class="[mono ? 'font-mono' : '', highlight ? 'font-medium' : '']"
       :style="{ color: labelColor }"
     >
       {{ label }}
@@ -46,6 +46,8 @@ type Props = {
   badge?: number | string | null
   badgeTone?: BadgeTone
   mono?: boolean
+  // Emphasise the label (accent color + medium weight) — e.g. current branch.
+  highlight?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -57,6 +59,7 @@ const props = withDefaults(defineProps<Props>(), {
   badge: null,
   badgeTone: 'accent',
   mono: false,
+  highlight: false,
 })
 
 const emit = defineEmits<{
@@ -82,7 +85,10 @@ const iconColor = computed(() => {
   return props.active ? t.value.text : t.value.textDim
 })
 
-const labelColor = computed(() => (props.active ? t.value.text : t.value.textMuted))
+const labelColor = computed(() => {
+  if (props.highlight) return t.value.accent
+  return props.active ? t.value.text : t.value.textMuted
+})
 const hintColor = computed(() => t.value.textDim)
 
 const badgeStyle = computed(() => {

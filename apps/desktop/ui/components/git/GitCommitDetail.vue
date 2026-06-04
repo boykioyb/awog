@@ -133,7 +133,7 @@ const props = defineProps<{
 const { t } = useTheme()
 const { t: tr } = useI18n()
 const store = useGitStore()
-const workspace = useWorkspaceStore()
+const tasksStore = useTasksStore()
 const activeFileIndex = ref(0)
 
 // Parse `[<phaseId>] …` from the commit subject (AC-39). Falls back to the
@@ -152,7 +152,7 @@ const linkedPhaseId = computed<string | null>(() => {
 const linkedTaskId = computed<string | null>(() => {
   const phaseId = linkedPhaseId.value
   if (!phaseId) return null
-  const task = workspace.tasks.find((tk) =>
+  const task = tasksStore.tasks.find((tk) =>
     Object.prototype.hasOwnProperty.call(tk.phases, phaseId),
   )
   return task?.id ?? null

@@ -25,8 +25,70 @@
       </span>
     </button>
     <template v-if="!collapsed">
-      <!-- Naive render when small — virtualize when > VIRTUAL_THRESHOLD (AC-44). -->
-      <template v-if="files.length <= VIRTUAL_THRESHOLD">
+      <!-- Tree view: folder-grouped (collapse single-child dir chains). -->
+      <template v-if="viewMode === 'tree'">
+        <template v-for="row in treeRows" :key="row.id">
+          <button
+            v-if="row.kind === 'dir'"
+            class="w-full flex items-center gap-1 px-3 py-1.5 text-left transition truncate"
+            :style="{
+              paddingLeft: `${12 + row.depth * 12}px`,
+              color: t.textMuted,
+              background: 'transparent',
+            }"
+            @click="toggleDir(row.path)"
+          >
+            <ChevronDown
+              v-if="!collapsedDirs.has(row.path)"
+              :size="10"
+              :style="{ color: t.textFaint, flexShrink: 0 }"
+            />
+            <ChevronRight v-else :size="10" :style="{ color: t.textFaint, flexShrink: 0 }" />
+            <Folder :size="12" :style="{ color: t.textDim, flexShrink: 0 }" />
+            <span class="text-[1em] truncate font-mono">{{ row.label }}</span>
+          </button>
+          <div
+            v-else
+            class="group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition"
+            :style="{
+              paddingLeft: `${12 + row.depth * 12}px`,
+              background: selectedPath === row.item.path ? t.bgActive : 'transparent',
+            }"
+            @click="emit('select', row.item.path)"
+            @contextmenu.prevent="emit('context-menu', $event, row.item)"
+          >
+            <input
+              v-if="showStage"
+              type="checkbox"
+              class="cursor-pointer flex-shrink-0"
+              :checked="row.item.isStaged"
+              :style="{ accentColor: t.accent }"
+              @click.stop
+              @change="onToggle(row.item)"
+            />
+            <span
+              class="text-[1em] font-mono w-3.5 text-center flex-shrink-0"
+              :style="{ color: badgeColor(row.item) }"
+            >
+              {{ badgeChar(row.item) }}
+            </span>
+            <span class="text-[1em] truncate flex-1 font-mono" :style="{ color: t.text }">
+              {{ row.label }}
+            </span>
+            <button
+              class="opacity-0 group-hover:opacity-100 transition p-1 rounded"
+              title="Discard changes"
+              :style="{ color: t.textDim }"
+              @click.stop="emit('discard', row.item.path)"
+            >
+              <Trash2 :size="11" />
+            </button>
+          </div>
+        </template>
+      </template>
+
+      <!-- Flat view — naive render when small, virtualize when > VIRTUAL_THRESHOLD (AC-44). -->
+      <template v-else-if="files.length <= VIRTUAL_THRESHOLD">
         <div
           v-for="file in files"
           :key="file.path"
@@ -133,16 +195,21 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Folder, Trash2 } from 'lucide-vue-next'
 import type { GitFileStatus } from '~/types'
+import { buildPathTreeRows } from '~/utils/file-path-tree'
 
-const props = defineProps<{
-  label: string
-  files: GitFileStatus[]
-  selectedPath: string | null
-  showStage: boolean
-  isStagedSection?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    label: string
+    files: GitFileStatus[]
+    selectedPath: string | null
+    showStage: boolean
+    isStagedSection?: boolean
+    viewMode?: 'tree' | 'flat'
+  }>(),
+  { isStagedSection: false, viewMode: 'flat' },
+)
 
 const emit = defineEmits<{
   select: [path: string]
@@ -155,6 +222,17 @@ const emit = defineEmits<{
 const { t } = useTheme()
 const collapsed = ref(false)
 const hover = ref(false)
+
+// ─── Tree view ─────────────────────────────────────────────────────────────
+// Dirs expanded by default (you want to see what changed); collapse on click.
+const collapsedDirs = ref<Set<string>>(new Set())
+const treeRows = computed(() => buildPathTreeRows(props.files, collapsedDirs.value))
+const toggleDir = (path: string) => {
+  const next = new Set(collapsedDirs.value)
+  if (next.has(path)) next.delete(path)
+  else next.add(path)
+  collapsedDirs.value = next
+}
 
 // Virtual scroll (AC-44). Switch on when section has > VIRTUAL_THRESHOLD files
 // — naive `v-for` handles small lists faster without DOM overhead.

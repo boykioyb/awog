@@ -69,19 +69,52 @@
             {{ tr('git.sidebar.empty') }}
           </div>
         </template>
-        <GitSidebarItem
-          v-for="b in localBranches"
-          :key="`local:${b.name}`"
-          :active="isActive({ kind: 'branch', name: b.name })"
-          :label="b.name"
-          :icon="b.isCurrent ? GitBranchPlus : GitBranch"
-          :icon-tone="b.isCurrent ? 'accent' : 'dim'"
-          :indent="1"
-          :hint="branchHint(b)"
-          mono
-          @select="select({ kind: 'branch', name: b.name })"
-          @context="(ev: MouseEvent) => emit('context-branch', ev, b)"
-        />
+        <template v-for="row in branchRows" :key="`${row.kind}:${row.id}`">
+          <!-- Folder row: groups branches sharing a `/` prefix (sora-hoa/…) -->
+          <button
+            v-if="row.kind === 'folder'"
+            class="flex items-center gap-1.5 w-full py-1 pr-2 transition select-none"
+            :style="{
+              paddingLeft: `${8 + (row.depth + 1) * 14}px`,
+              cursor: 'pointer',
+              background: 'transparent',
+            }"
+            @click="toggleBranchFolder(row.id)"
+          >
+            <component
+              :is="collapsedBranchFolders.has(row.id) ? ChevronRight : ChevronDown"
+              :size="11"
+              :style="{ color: t.textDim, flexShrink: 0 }"
+            />
+            <Folder :size="12" :style="{ color: t.textDim, flexShrink: 0 }" />
+            <span
+              class="text-[1em] flex-1 truncate text-left font-mono"
+              :style="{ color: t.textMuted }"
+            >
+              {{ row.displayName }}
+            </span>
+            <span
+              class="text-[12px] flex-shrink-0 font-mono leading-none"
+              :style="{ color: t.textFaint }"
+            >
+              {{ row.leafCount }}
+            </span>
+          </button>
+          <!-- Branch leaf -->
+          <GitSidebarItem
+            v-else
+            :active="isActive({ kind: 'branch', name: row.branch.name })"
+            :label="row.displayName"
+            :icon="row.branch.isCurrent ? GitBranchPlus : GitBranch"
+            :icon-tone="row.branch.isCurrent ? 'accent' : 'dim'"
+            :indent="row.depth + 1"
+            :hint="branchHint(row.branch)"
+            :highlight="row.branch.isCurrent"
+            mono
+            @select="select({ kind: 'branch', name: row.branch.name })"
+            @context="(ev: MouseEvent) => emit('context-branch', ev, row.branch)"
+          />
+        </template>
       </GitSidebarSection>
 
       <!-- Remotes -->
@@ -218,8 +251,11 @@
 import {
   Archive,
   Boxes,
+  ChevronDown,
+  ChevronRight,
   Cloud,
   FileEdit,
+  Folder,
   GitBranch,
   GitBranchPlus,
   History,
@@ -229,6 +265,7 @@ import {
   Tag,
 } from 'lucide-vue-next'
 import type { GitBranch as GitBranchType, GitStashEntry } from '~/types'
+import { buildBranchTree, flattenTree } from '~/utils/branch-tree'
 import type { GitSection } from './git-section'
 import { sectionKey } from './git-section'
 
@@ -256,6 +293,27 @@ const select = (s: GitSection) => emit('update:selected', s)
 
 // ─── Branches ────────────────────────────────────────────────────────────
 const localBranches = computed(() => store.branches.filter((b: GitBranchType) => !b.isRemote))
+
+// Group branches sharing a `/` prefix into collapsible folders (e.g. all
+// `sora-hoa/*` under one `sora-hoa` folder). Singleton chains stay flat.
+// Folders are collapsed by default — we track which the user has expanded, so
+// any folder (incl. nested) starts closed until clicked.
+const branchTree = computed(() => buildBranchTree(localBranches.value))
+const expandedBranchFolders = ref<Set<string>>(new Set())
+const collapsedBranchFolders = computed(() => {
+  const collapsed = new Set<string>()
+  flattenTree(branchTree.value, new Set<string>()).forEach((row) => {
+    if (row.kind === 'folder' && !expandedBranchFolders.value.has(row.id)) collapsed.add(row.id)
+  })
+  return collapsed
+})
+const branchRows = computed(() => flattenTree(branchTree.value, collapsedBranchFolders.value))
+const toggleBranchFolder = (id: string) => {
+  const next = new Set(expandedBranchFolders.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedBranchFolders.value = next
+}
 const remoteBranches = computed(() => store.branches.filter((b: GitBranchType) => b.isRemote))
 const remoteCount = computed(() => store.remotes.length + remoteBranches.value.length)
 

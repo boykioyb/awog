@@ -26,14 +26,14 @@
           :current-dirty-count="currentDirtyCount"
           :dirty-count-by-project="store.dirtyCountByProject"
           :selected-project-id="store.selectedProjectId"
+          :repos="store.repos"
+          :selected-repo-path="store.currentRepoPath"
           :local-branches="localBranches"
           :current-branch="store.currentBranch"
-          :ahead="store.ahead"
-          :behind="store.behind"
           :has-conflict="store.hasConflict"
-          :has-uncommitted="store.hasUncommitted"
           :is-merging="store.isMerging"
-          @select-project="(id: string) => store.setSelectedProject(id)"
+          @select-project="onSelectProject"
+          @select-repo="onSelectRepo"
           @switch-branch="switchBranch"
           @complete-merge="onCompleteMerge"
           @request-abort-merge="pendingAbort = true"
@@ -501,15 +501,67 @@ watch(
   { immediate: true },
 )
 
-watch(
-  () => store.selectedProjectId,
-  () => {
-    currentDiff.value = null
-    commitDetail.value = null
-    const first = store.commits[0]
-    if (first) store.selectCommit(first.hash)
-  },
-)
+// ─── Project / repo switching ────────────────────────────────────────────
+// A project may hold several git repos; both switches re-discover (project
+// only) and reload every section against the new target.
+const resetDetail = () => {
+  currentDiff.value = null
+  commitDetail.value = null
+}
+
+const reloadAll = async () => {
+  await Promise.all([
+    store.loadStatus(),
+    store.loadHistory(),
+    store.loadBranches({ force: true }),
+    store.loadStashes(),
+    store.loadRemotes(),
+  ])
+  const first = store.commits[0]
+  if (!store.selectedCommitHash && first) store.selectCommit(first.hash)
+}
+
+const onSelectProject = async (id: string) => {
+  if (id === store.selectedProjectId) return
+  store.setSelectedProject(id)
+  resetDetail()
+  await store.discoverRepos()
+  await reloadAll()
+}
+
+const onSelectRepo = async (path: string) => {
+  store.setSelectedRepo(path)
+  resetDetail()
+  await reloadAll()
+}
+
+// ─── Background auto-fetch ────────────────────────────────────────────────
+// Keeps remote-tracking refs (origin/main, origin/develop, origin/release, …)
+// fresh so ahead/behind is accurate without clicking Fetch. Silent — no toast.
+// Interval configurable in Settings → Workspace (0 disables).
+const { git: gitSettings } = useGitSettings()
+let autoFetchTimer: ReturnType<typeof setInterval> | null = null
+
+const runAutoFetch = () => {
+  if (gitSettings.value.autoFetchIntervalMs <= 0) return
+  if (store.isBusy) return
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  store.fetchRemote(undefined, { silent: true }).catch(() => undefined)
+}
+
+const armAutoFetch = () => {
+  if (autoFetchTimer) {
+    clearInterval(autoFetchTimer)
+    autoFetchTimer = null
+  }
+  const ms = gitSettings.value.autoFetchIntervalMs
+  if (ms > 0) autoFetchTimer = setInterval(runAutoFetch, ms)
+}
+
+// Fetch again when the user returns to the app (cheap, guarded, silent).
+const onWindowFocus = () => runAutoFetch()
+
+watch(() => gitSettings.value.autoFetchIntervalMs, armAutoFetch)
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────
 let unsubscribe: (() => void) | null = null
@@ -534,22 +586,25 @@ onMounted(async () => {
     store.setSelectedProject(workspace.projects[0]!.id)
   }
 
-  await Promise.all([
-    store.loadStatus(),
-    store.loadHistory(),
-    store.loadBranches(),
-    store.loadStashes(),
-    store.loadRemotes(),
-  ])
-  const first = store.commits[0]
-  if (!store.selectedCommitHash && first) {
-    store.selectCommit(first.hash)
-  }
+  // Discover repos inside the selected project before loading so the effective
+  // git root targets a real repo (a project may be a container of repos).
+  await store.discoverRepos()
+  await reloadAll()
   unsubscribe = await store.subscribe()
+
+  // Initial silent fetch on open, then on the configured interval + on focus.
+  runAutoFetch()
+  armAutoFetch()
+  window.addEventListener('focus', onWindowFocus)
 })
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
   unsubscribe = null
+  if (autoFetchTimer) {
+    clearInterval(autoFetchTimer)
+    autoFetchTimer = null
+  }
+  window.removeEventListener('focus', onWindowFocus)
 })
 
 definePageMeta({ title: 'Git' })

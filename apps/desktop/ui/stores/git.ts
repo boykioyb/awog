@@ -9,6 +9,7 @@ import type {
   GitFileStatus,
   GitFileStatusCode,
   GitRemote,
+  GitRepoEntry,
   GitRepoState,
   GitStashEntry,
 } from '~/types'
@@ -169,6 +170,13 @@ const DEFAULT_PROJECT_ID = 'prj1'
 export const useGitStore = defineStore('git', () => {
   // ─── State ───────────────────────────────────────────────────────────────
   const selectedProjectId = ref<string>(DEFAULT_PROJECT_ID)
+  // Repos discovered inside each project folder (a project may be a container of
+  // several repos — see `git.discoverRepos`). Empty/absent → project assumed to
+  // be a single repo at its own path (legacy behaviour).
+  const reposByProject = ref<Record<string, GitRepoEntry[]>>({})
+  // Which discovered repo is active per project (absolute path). Absent → fall
+  // back to the project's own path.
+  const selectedRepoPathByProject = ref<Record<string, string>>({})
   const branchesAll = ref<GitBranch[]>([...INITIAL_BRANCHES])
   const commitsAll = ref<GitCommit[]>([...INITIAL_COMMITS])
   const stashesAll = ref<GitStashEntry[]>([...INITIAL_STASHES])
@@ -282,6 +290,24 @@ export const useGitStore = defineStore('git', () => {
     }, {}),
   )
 
+  // Repos discovered inside the selected project. Empty for single-repo projects.
+  const repos = computed<GitRepoEntry[]>(() => reposByProject.value[selectedProjectId.value] ?? [])
+
+  // Absolute path of the selected project folder (the container). Null in
+  // browser dev when the project / sidecar is unavailable.
+  const resolveProjectPath = (): string | null => {
+    const workspace = useWorkspaceStore()
+    const project = workspace.projects.find((p) => p.id === selectedProjectId.value)
+    return project?.path ?? null
+  }
+
+  // Effective git root: the selected repo within the project, falling back to
+  // the project's own path (single-repo / not-yet-discovered). Single source of
+  // truth that every git action targets via `resolveWorkspaceRoot()`.
+  const currentRepoPath = computed<string | null>(
+    () => selectedRepoPathByProject.value[selectedProjectId.value] ?? resolveProjectPath(),
+  )
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
   const pushToast = (text: string, kind: 'info' | 'success' | 'error' = 'info') => {
     const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -299,15 +325,64 @@ export const useGitStore = defineStore('git', () => {
     commitMessage.value = ''
   }
 
-  // Resolve the absolute path of the currently selected project. Returns
-  // null when the project does not exist (dev / browser without sidecar).
-  const resolveWorkspaceRoot = (): string | null => {
-    const workspace = useWorkspaceStore()
-    const project = workspace.projects.find((p) => p.id === selectedProjectId.value)
-    return project?.path ?? null
+  // Switch the active repo within the current project. Invalidates the
+  // per-project caches so the next load re-fetches the new repo (otherwise the
+  // branch TTL cache would surface the previous repo's branches).
+  const setSelectedRepo = (path: string) => {
+    const projectId = selectedProjectId.value
+    if (selectedRepoPathByProject.value[projectId] === path) return
+    selectedRepoPathByProject.value = { ...selectedRepoPathByProject.value, [projectId]: path }
+    selectedFilePath.value = null
+    selectedCommitHash.value = null
+    commitMessage.value = ''
+    const nextBranches = { ...branchesLastFetchedAt.value }
+    delete nextBranches[projectId]
+    branchesLastFetchedAt.value = nextBranches
+    const nextRemotes = { ...remotesLastFetchedAt.value }
+    delete nextRemotes[projectId]
+    remotesLastFetchedAt.value = nextRemotes
+    const nextHistory = { ...historyHasMoreByProject.value }
+    delete nextHistory[projectId]
+    historyHasMoreByProject.value = nextHistory
   }
 
+  // Resolve the absolute path git should run in: the selected repo within the
+  // project, falling back to the project root. Null when unavailable (dev /
+  // browser without sidecar).
+  const resolveWorkspaceRoot = (): string | null => currentRepoPath.value
+
   // ─── Actions ─────────────────────────────────────────────────────────────
+
+  // Scan the selected project folder for git repos (up to 2 levels deep). A
+  // project may be a container of several repos with no `.git` at its root —
+  // discovery lets the header show a repo picker. Best-effort: failures leave
+  // `repos` empty so loading falls back to the project root (single-repo).
+  const discoverRepos = async () => {
+    const projectId = selectedProjectId.value
+    const root = resolveProjectPath()
+    if (!root) return
+    try {
+      const api = useGitApi()
+      const result = await api.discoverRepos(root)
+      reposByProject.value = { ...reposByProject.value, [projectId]: result.repos }
+      // Keep the current selection if it still exists; else prefer the root
+      // repo, else the first discovered one.
+      const current = selectedRepoPathByProject.value[projectId]
+      const stillValid = current !== undefined && result.repos.some((r) => r.path === current)
+      if (!stillValid) {
+        const next = (result.repos.find((r) => r.isRoot) ?? result.repos[0])?.path
+        const map = { ...selectedRepoPathByProject.value }
+        if (next) map[projectId] = next
+        else delete map[projectId]
+        selectedRepoPathByProject.value = map
+      }
+    } catch (err) {
+      if (isUnavailable(err)) return
+      // eslint-disable-next-line no-console
+      console.warn('[git] discoverRepos failed', err)
+    }
+  }
+
   const loadStatus = async () => {
     const projectId = selectedProjectId.value
     const root = resolveWorkspaceRoot()
@@ -726,17 +801,25 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
-  const fetchRemote = async (remote?: string) => {
+  // `silent` = background auto-fetch: no progress strip, no toast, errors
+  // swallowed (offline/auth shouldn't nag). Still refreshes branches/status so
+  // ahead/behind for main/develop/release stay fresh.
+  const fetchRemote = async (remote?: string, opts: { silent?: boolean } = {}) => {
     if (isFetching.value) return
+    const silent = opts.silent === true
     isFetching.value = true
-    progressOp.value = 'fetch'
-    progressPct.value = null
-    progressPhase.value = 'starting'
+    if (!silent) {
+      progressOp.value = 'fetch'
+      progressPct.value = null
+      progressPhase.value = 'starting'
+    }
     const root = resolveWorkspaceRoot()
     if (!root) {
       try {
-        await runMockProgress('fetch', 1200)
-        pushToast('Fetched origin (mock)', 'success')
+        if (!silent) {
+          await runMockProgress('fetch', 1200)
+          pushToast('Fetched origin (mock)', 'success')
+        }
       } finally {
         isFetching.value = false
         resetProgress()
@@ -747,14 +830,17 @@ export const useGitStore = defineStore('git', () => {
       const params: { remote?: string } = {}
       if (remote !== undefined) params.remote = remote
       const result = await useGitApi().fetch(root, params)
-      const n = result.updated.length
-      pushToast(
-        n > 0 ? `Fetched ${n} ref${n === 1 ? '' : 's'}` : 'Fetched (đã up-to-date)',
-        'success',
-      )
+      if (!silent) {
+        const n = result.updated.length
+        pushToast(
+          n > 0 ? `Fetched ${n} ref${n === 1 ? '' : 's'}` : 'Fetched (đã up-to-date)',
+          'success',
+        )
+      }
       await Promise.all([loadBranches({ force: true }), loadStatus()])
     } catch (err) {
       if (isUnavailable(err)) return
+      if (silent) return // background: swallow (manual Fetch surfaces real errors)
       const auth = authPayload(err)
       if (auth) {
         pendingAuthError.value = { op: 'fetch', hint: auth.hint, message: auth.message }
@@ -1785,6 +1871,8 @@ export const useGitStore = defineStore('git', () => {
       const next = { ...repoStateByProject.value }
       delete next[projectId]
       repoStateByProject.value = next
+      // Re-scan so the freshly initialised root repo appears in the picker.
+      await discoverRepos()
       await Promise.all([
         loadStatus(),
         loadHistory(),
@@ -1914,8 +2002,12 @@ export const useGitStore = defineStore('git', () => {
     repoState,
     dirtyCountByProject,
     historyHasMore,
+    repos,
+    currentRepoPath,
     // actions
     setSelectedProject,
+    setSelectedRepo,
+    discoverRepos,
     loadStatus,
     loadHistory,
     loadMoreHistory,

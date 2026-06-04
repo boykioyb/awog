@@ -23,11 +23,23 @@ export function assertInsideWorkspace(workspaceRoot: string, userPath: string): 
   const abs = resolve(workspaceRoot, userPath)
   if (abs !== workspaceRoot && !abs.startsWith(workspaceRoot + sep)) deny('outside-workspace')
 
+  // Canonicalise the root for the symlink-escape comparison. Without this, a
+  // workspaceRoot that is itself under a symlink (macOS /tmp → /private/tmp, a
+  // symlinked home, …) makes realpath(abs) diverge from the literal root and
+  // false-denies every existing path (infosec F2). We compare real-vs-real but
+  // still RETURN the original-base `abs` so callers keep their path semantics.
+  let realRoot: string
+  try {
+    realRoot = realpathSync.native(workspaceRoot)
+  } catch {
+    realRoot = workspaceRoot // root missing → let the downstream fs op fail clearly
+  }
+
   // realpath check — symlink must not escape. ENOENT is OK (file may not exist
   // yet, e.g. checkout file at commit creating a new path); other errors fail.
   try {
     const real = realpathSync.native(abs)
-    if (real !== workspaceRoot && !real.startsWith(workspaceRoot + sep)) deny('symlink-escape')
+    if (real !== realRoot && !real.startsWith(realRoot + sep)) deny('symlink-escape')
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code
     if (code !== 'ENOENT') deny('realpath-failed')
