@@ -1,3 +1,12 @@
 {
-  "extends": "./.nuxt/tsconfig.json"
+  "extends": "./.nuxt/tsconfig.json",
+  // Nuxt 4 sinh `vueCompilerOptions.plugins: ["vue-router/volar/sfc-route-blocks"]`
+  // vào .nuxt/tsconfig*.json, nhưng vue-router 4.x không export subpath đó →
+  // @vue/language-core 2.2.12 crash vue-tsc ("plugin is not a function"). AWOG
+  // không dùng <route> SFC block nên plugin này thừa — override rỗng để vue-tsc
+  // chạy. (Bỏ override này khi nâng vue-tsc/@vue/language-core lên bản skip
+  // plugin lỗi, hoặc vue-router ship volar.)
+  "vueCompilerOptions": {
+    "plugins": []
+  }
 }
