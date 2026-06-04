@@ -59,6 +59,12 @@ export interface Agent {
   projectId?: string
   name: string
   description: string
+  // LLM provider this agent runs on (ADR 0026). Default 'anthropic'. The
+  // `model` must belong to this provider.
+  provider: ProviderName
+  // Optional per-agent account (id in credentials.json). Undefined = use the
+  // provider's active account. Falls back to active if the id no longer exists.
+  accountId?: string
   model: string
   systemPrompt: string
   role: string

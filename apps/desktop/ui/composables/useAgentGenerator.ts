@@ -55,6 +55,7 @@ const mockDraft = (prompt: string): AgentDraft => ({
     .replace(/-/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase()),
   description: firstSentence(prompt),
+  provider: 'anthropic',
   model: 'claude-sonnet-4-6',
   systemPrompt: prompt,
   role: '',
@@ -92,6 +93,7 @@ export const useAgentGenerator = (): AgentGenerator => {
           source: 'global',
           name: res.agent.name,
           description: res.agent.description,
+          provider: 'anthropic',
           model: res.agent.model,
           systemPrompt: res.agent.systemPrompt,
           role: res.agent.role,
@@ -148,6 +150,7 @@ export const useAgentGenerator = (): AgentGenerator => {
           projectId: current.projectId,
           name: res.agent.name,
           description: res.agent.description,
+          provider: current.provider,
           model: res.agent.model,
           systemPrompt: res.agent.systemPrompt,
           role: res.agent.role,

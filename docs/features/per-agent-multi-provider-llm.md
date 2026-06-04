@@ -21,9 +21,9 @@ Mỗi agent gắn **provider + model riêng** để dùng song song nhiều LLM 
 
 ### Phase 1 — Data model + UI + abstraction (độc lập runtime)
 
-- `Agent` thêm field `provider: ProviderName` (default `'anthropic'`); giữ `model`.
-- Frontmatter AGENT.md thêm `provider:` (vắng = anthropic, backward-compat). **`accountId` KHÔNG vào frontmatter** (local-machine, AGENT.md commit được → mất portability).
-- AgentEditor: picker phân tầng **Provider → Model** — chọn provider lọc danh sách model theo provider; **provider chưa connect hiển thị disabled** + hint "Connect in Connections/Settings".
+- `Agent` thêm `provider: ProviderName` (default `'anthropic'`) + `accountId?: string` (optional override); giữ `model`.
+- Frontmatter AGENT.md thêm `provider:` (vắng = anthropic) + `accountId:` (ghi khi set). Account id là local-machine → runtime **fallback active account** nếu id không còn (graceful, giữ portability).
+- AgentEditor: picker **Provider → Account → Model** — chọn provider lọc model + reset account; dropdown Account = các account của provider + "Active account (default)"; **provider chưa connect → disabled**.
 - Sidecar: interface `ModelProvider` (OCP); `AnthropicProvider` = wrap code hiện tại (`resolveAccount`/`ensureToken`/`buildOptions`/`query`/`mapError`/`models`), **0 đổi hành vi**. Call-site (`runStream`, `invokeSdk`, `*.generate.ts`) gọi qua `getProvider(settings.provider)`.
 
 ### Phase 2 — OpenAI (rồi Google) chạy thật
@@ -34,7 +34,6 @@ Mỗi agent gắn **provider + model riêng** để dùng song song nhiều LLM 
 
 ## Out of scope (MVP feature này)
 
-- Override account per-agent (chỉ active account của provider).
 - Custom/local provider (Ollama/vLLM/OpenRouter) — Phase sau, cần SSRF guard.
 - Per-agent thinking/beta đặc thù provider khác Anthropic.
 - Đổi provider của session chat (feature này về **agent**; session vẫn picker riêng).

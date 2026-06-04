@@ -70,10 +70,11 @@
       </div>
 
       <Field label="Description">
-        <input
+        <textarea
           v-model="draft.description"
+          :rows="2"
           placeholder="When to use this agent — one sentence shown in pickers."
-          class="w-full rounded px-2 py-1.5 text-[1em]"
+          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[3rem]"
           :style="inputStyle"
         />
         <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
@@ -81,10 +82,48 @@
         </div>
       </Field>
 
+      <Field label="Provider">
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="p in PROVIDERS"
+            :key="p.id"
+            type="button"
+            :disabled="!isProviderConnected(p.id)"
+            class="px-3 py-1.5 rounded text-[1em] transition disabled:cursor-not-allowed"
+            :style="providerBtnStyle(p.id)"
+            :title="isProviderConnected(p.id) ? '' : 'Connect this provider in Settings first'"
+            @click="selectProvider(p.id)"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+          Providers without a connected account are disabled. The model list is filtered to the
+          selected provider.
+        </div>
+      </Field>
+
+      <Field label="Account">
+        <select
+          v-model="accountSelect"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          :style="inputStyle"
+          :disabled="providerAccounts.length === 0"
+        >
+          <option v-for="a in providerAccounts" :key="a.id" :value="a.id">
+            {{ a.label }}{{ a.id === activeAccountId ? ' (active)' : '' }}
+          </option>
+        </select>
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
+          Which {{ providerLabel }} account this agent uses. Defaults to the active account; pick
+          another to pin this agent to it.
+        </div>
+      </Field>
+
       <Field label="Model">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
           <button
-            v-for="m in MODELS"
+            v-for="m in providerModels"
             :key="m.id"
             class="text-left px-3 py-2 rounded transition"
             :style="{
@@ -205,7 +244,7 @@
 
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next'
-import type { Agent, AgentSource } from '~/types'
+import type { Agent, AgentSource, ProviderName } from '~/types'
 import { MODELS } from '~/utils/models'
 
 const props = defineProps<{
@@ -219,6 +258,17 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
+const settings = useSettingsStore()
+
+// Provider picker (ADR 0026). Only providers with a connected account are
+// selectable; the model grid below is filtered to the chosen provider.
+const PROVIDERS: { id: ProviderName; label: string }[] = [
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'google', label: 'Google' },
+]
+
+const isProviderConnected = (p: ProviderName): boolean => settings.isProviderConnected(p)
 
 const SOURCE_DIR_LABEL: Record<AgentSource, string> = {
   global: '~/.awog/agents/',
@@ -240,6 +290,7 @@ const makeDefaults = (): Agent => ({
   source: 'global',
   name: '',
   description: '',
+  provider: 'anthropic',
   model: 'claude-sonnet-4-6',
   systemPrompt: '',
   role: '',
@@ -340,6 +391,67 @@ const inputStyle = computed(() => ({
   color: t.value.text,
   outline: 'none' as const,
 }))
+
+// Models filtered to the agent's provider (local-tier models are never agent
+// providers, so they fall out naturally).
+const providerModels = computed(() => MODELS.filter((m) => m.provider === draft.value.provider))
+
+// Switching provider resets the model to the first of the new provider so the
+// stored model always belongs to the selected provider, and clears the account
+// override (an account of provider A is meaningless for provider B).
+const selectProvider = (p: ProviderName) => {
+  if (draft.value.provider === p) return
+  draft.value.provider = p
+  draft.value.model = MODELS.find((m) => m.provider === p)?.id ?? ''
+  delete draft.value.accountId
+}
+
+// Accounts available for the selected provider (from the credentials store).
+const providerAccounts = computed(() => settings.providers[draft.value.provider]?.accounts ?? [])
+
+const providerLabel = computed(
+  () => PROVIDERS.find((p) => p.id === draft.value.provider)?.label ?? draft.value.provider,
+)
+
+// Id of the provider's active account — used to tag it "(active)" in the list
+// instead of repeating it as a separate "Active account (...)" default option.
+const activeAccountId = computed(() => settings.activeAccount(draft.value.provider)?.id ?? '')
+
+// No "inherit" sentinel in the UI — when the agent hasn't pinned an account,
+// show the provider's active account as selected. Storage still keeps accountId
+// undefined unless the user picks a different one (so an unpinned agent keeps
+// following the active account; runtime falls back to active when unset).
+const accountSelect = computed<string>({
+  get: () => draft.value.accountId ?? activeAccountId.value,
+  set: (v) => {
+    if (v && v !== activeAccountId.value) draft.value.accountId = v
+    else delete draft.value.accountId
+  },
+})
+
+const providerBtnStyle = (p: ProviderName) => {
+  const active = draft.value.provider === p
+  if (active) {
+    return {
+      background: t.value.bgActive,
+      color: t.value.text,
+      border: `1px solid ${t.value.borderFocus}`,
+    }
+  }
+  if (!isProviderConnected(p)) {
+    return {
+      background: t.value.bgInput,
+      color: t.value.textFaint,
+      border: `1px solid ${t.value.border}`,
+      opacity: 0.55,
+    }
+  }
+  return {
+    background: t.value.bgInput,
+    color: t.value.textDim,
+    border: `1px solid ${t.value.border}`,
+  }
+}
 
 // Claude Code subagent requires name + description. role is AWOG-only and
 // optional. model defaults to claude-sonnet-4-6 in makeDefaults.

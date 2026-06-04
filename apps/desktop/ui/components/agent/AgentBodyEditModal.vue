@@ -127,11 +127,13 @@ const onApply = () => {
     source: props.agent.source,
     name: d.name,
     description: d.description,
+    provider: props.agent.provider,
     model: d.model,
     systemPrompt: d.systemPrompt,
     role: d.role,
   }
   if (props.agent.projectId) updated.projectId = props.agent.projectId
+  if (props.agent.accountId) updated.accountId = props.agent.accountId
   if (props.agent.tools && props.agent.tools.length > 0) updated.tools = [...props.agent.tools]
   if (props.agent.mcpServerIds && props.agent.mcpServerIds.length > 0) {
     updated.mcpServerIds = [...props.agent.mcpServerIds]

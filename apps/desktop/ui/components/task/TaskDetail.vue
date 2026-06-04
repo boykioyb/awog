@@ -207,6 +207,7 @@ const agentFor = (nodeId: string): Agent => {
     source: node?.agentSource ?? 'global',
     name: id,
     description: '',
+    provider: 'anthropic',
     model: '',
     systemPrompt: '',
     role: '',

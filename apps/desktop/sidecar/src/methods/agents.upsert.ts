@@ -26,6 +26,10 @@ const AgentSchema = z.object({
   projectId: z.string().min(1).max(64).optional(),
   name: z.string().min(1).max(120),
   description: z.string().max(2000).default(''),
+  // ADR 0026 — LLM provider the agent runs on. Default anthropic.
+  provider: z.enum(['anthropic', 'openai', 'google']).default('anthropic'),
+  // Optional per-agent account override. Undefined = provider's active account.
+  accountId: z.string().min(1).max(120).optional(),
   model: z.string().max(120).default(''),
   systemPrompt: z.string().max(64_000).default(''),
   role: z.string().max(60).default(''),
@@ -82,11 +86,13 @@ register('agents.upsert', async (raw) => {
     source: incoming.source,
     name: incoming.name,
     description: incoming.description,
+    provider: incoming.provider,
     model: incoming.model,
     systemPrompt: incoming.systemPrompt,
     role: incoming.role,
   }
   if (incoming.projectId) agent.projectId = incoming.projectId
+  if (incoming.accountId) agent.accountId = incoming.accountId
   if (incoming.tools && incoming.tools.length > 0) agent.tools = incoming.tools
   if (incoming.mcpServerIds && incoming.mcpServerIds.length > 0) {
     agent.mcpServerIds = incoming.mcpServerIds

@@ -101,11 +101,20 @@ function buildAgent(
     source,
     name,
     description,
+    // ADR 0026 — LLM provider. Missing/unknown frontmatter → 'anthropic'
+    // (backward-compat with agents authored before multi-provider).
+    provider:
+      data.provider === 'openai' || data.provider === 'google' ? data.provider : 'anthropic',
     model: typeof data.model === 'string' ? data.model : '',
     systemPrompt: body,
     role: typeof data.role === 'string' ? data.role : '',
   }
   if (projectId) agent.projectId = projectId
+  // Optional per-agent account override (ADR 0026). Resolved at runtime; falls
+  // back to the provider's active account if the id no longer exists.
+  if (typeof data.accountId === 'string' && data.accountId.length > 0) {
+    agent.accountId = data.accountId
+  }
   // Per-agent MCP whitelist — ADR 0016. Empty/undefined → inherit session.
   const mcpServerIds = toStringArray(data.mcpServerIds)
   if (mcpServerIds.length > 0) agent.mcpServerIds = mcpServerIds
@@ -322,6 +331,10 @@ export async function saveAgent(agent: Agent): Promise<void> {
   const data: Record<string, string | string[] | undefined> = {
     name: agent.name,
     description: agent.description,
+    // Only write `provider` when non-default so vanilla / Anthropic agents keep
+    // a clean frontmatter (and stay backward-compatible). ADR 0026.
+    provider: agent.provider === 'anthropic' ? undefined : agent.provider,
+    accountId: agent.accountId,
     model: agent.model,
     role: agent.role,
     tools: agent.tools,

@@ -26,8 +26,8 @@ Bài toán: cho phép **mỗi agent chọn provider + account + model bất kỳ
 
 ### Phần 1 — Data model + UI (chung, làm trước)
 
-- **Agent thêm 2 field:** `provider: ProviderName` (mặc định `'anthropic'`) + giữ `model`. **`accountId` KHÔNG vào frontmatter** (account id là local-machine, AGENT.md commit được → không portable). Runtime mặc định dùng *active account* của `provider`; override account theo agent (nếu cần) lưu local, ngoài AGENT.md.
-- **AgentEditor:** picker phân tầng **Provider → (Account) → Model**, lọc model theo provider, **chỉ hiện provider đã connect** (xám/disable provider chưa có account). Bỏ tình trạng hiện tại hiển thị mọi model kể cả provider chưa wire.
+- **Agent thêm field:** `provider: ProviderName` (mặc định `'anthropic'`) + `accountId?: string` (optional override) + giữ `model`. **Quyết định (user 2026-06-04): CÓ override account per-agent.** `accountId` lưu vào frontmatter; vì account id là local-machine (AGENT.md commit được → có thể không tồn tại trên máy khác), runtime **fallback về active account của provider** nếu id không còn → graceful, không vỡ portability.
+- **AgentEditor:** picker **Provider → Account → Model**: chọn provider lọc model + reset account; dropdown Account liệt kê account của provider đó + "Active account (default)"; **chỉ provider đã connect mới chọn được** (disable provider chưa có account).
 - Frontmatter AGENT.md thêm `provider: openai` (cạnh `model:`); vắng = `anthropic` (backward-compat).
 
 ### Phần 2 — Runtime: trừu tượng hoá `ModelProvider` (open-closed, [principles](../../.claude/rules/principles.md))
@@ -80,7 +80,8 @@ Call-site (`runStream`, `invokeSdk`, mọi `*.generate.ts`) gọi qua `getProvid
   2. **Phase 1:** Data model + UI (Phần 1) + interface `ModelProvider` + `AnthropicProvider` (refactor không đổi hành vi). Spec ở `docs/features/`.
   3. **Phase 2:** Gateway dịch trong sidecar cho OpenAI rồi Google (Option A). Test tool-use/stream/thinking từng provider.
   4. Cập nhật [models-and-accounts.md](../features/models-and-accounts.md), [tech-stack.md](../architecture/tech-stack.md).
-- **Câu hỏi mở (cần chốt):** (a) Hướng A vs B? (b) accountId per-agent có cần override hay luôn dùng active account của provider? (c) Phase 0 (custom/local provider trước) có làm ngay không?
+- **Đã chốt (user 2026-06-04):** Hướng **A** (gateway trong sidecar); **CÓ** override account per-agent (`accountId` optional, fallback active); **bỏ Phase 0**. Phase 1 (data model + UI picker Provider/Account/Model + interface) đã implement.
+- **Câu hỏi mở còn lại:** Gateway Phase 2 tự viết translator hay nhúng lib? Connect OpenAI/Google chỉ API-key hay cả OAuth?
 
 ## Tham chiếu
 
