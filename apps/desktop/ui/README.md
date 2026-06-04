@@ -41,23 +41,24 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 
 ## Trạng thái port (từ React prototype)
 
-✅ **Tasks** — list + group/filter/search, task detail với pipeline timeline, 3 tab per phase (Output/Execution/Discussion), run history pills, Approve / Rerun-from-here, NewTaskModal.
-✅ **Projects** — CRUD với link existing / clone from git, project detail với task list, 3-col meta grid.
-✅ **Workflows** — DAG canvas drag-drop, agent palette, edge bezier, inspector pane.
+✅ **Tasks (wired)** — list + group/filter/search, task detail với pipeline timeline, 3 tab per phase (Output/Execution/Discussion), run history pills, Approve / Rerun-from-here, NewTaskModal. Chạy thật qua **Task Execution Engine** sidecar ([ADR 0024](../../../docs/decisions/0024-task-execution-engine-ipc-contract.md)): `tasks.*` RPC, stream `task.*` events (parallel phases, live trace, artifact = `run.output`), git auto-commit per phase. Store `tasks` subscribe ở app-lifetime.
+✅ **Projects** — CRUD với link existing / clone from git, project detail với session list (+ nút New session điều hướng sang Sessions) và task list, 3-col meta grid.
+✅ **Workflows (wired)** — DAG canvas drag-drop, agent palette, edge bezier, inspector pane. Persist 2 tier qua `workflows.*` RPC (no-cycle validate): **global** `~/.awog/workflows/<id>.json` (dùng chung) + **per-project** `{project}/.awog/workflows/<id>.json` (đi theo repo). Scope selector + tier badge trên list; store `workflows` debounce ~500ms khi kéo/nối + flush on unmount.
 ✅ **Agents** — CRUD list/detail/editor với 12-model picker, skills picker theo category, context providers.
 ✅ **Skills** — **đã pivot sang SKILL.md folder format** ([ADR 0013](../../../docs/decisions/0013-adopt-skill-md-format.md)). 5-tier discovery (global `~/.awog/skills`, `~/.claude/skills`, `~/.agents/skills` + project `.claude/skills`, `.agents/skills`). Chat-driven creation: click "+ New" → mini chat với claude-agent-sdk → LLM dùng Write tool tự tạo folder + SKILL.md. Body edit via LLM prompt. Bulk delete. Toast feedback toàn diện.
 ✅ **Settings** — 4 section (Workspace / Models & API Keys / Connectors / Appearance).
 ✅ **Markdown editor fullscreen** — file tree sidebar, code/split/preview, mermaid diagram, diff viewer, status bar.
 ✅ **Theme system** — dark (Linear/GitHub) + light (Notion/Vercel) với 20+ token, scrollbar sync.
-✅ **Git Manager wired (M0..M7)** — route `/git` layout **Sublime-Merge style**: sidebar resizable/collapsible (Local Changes / All Commits / Branches / Remotes / Tags / Stashes / Submodules) + main pane switch theo selection, đã wire qua **23 sidecar `git.*` IPC method** (xem [ADR 0017](../../../docs/decisions/0017-git-manager-ipc-contract.md), [docs/features/git-manager.md](../../../docs/features/git-manager.md)). Bootstrap probe `git.checkInstalled` block page nếu thiếu Git ≥ 2.20. Empty-state `git.init` cho workspace chưa init. Stage-hunk per hunk (`git apply --cached`), detached HEAD warn + `temp/<sha7>` flow, virtual-scroll khi section > 200 file, branches/remotes cache 5s, debounced 200ms status refresh từ chokidar watcher. Progress strip overlay (absolute, không shift layout) khi fetch/pull/push. Pinia store `git` giữ fallback mock cho browser dev (sidecar unavailable). I18n en/vi (`useI18n()` composable).
+✅ **Git Manager wired (M0..M7)** — route `/git` layout **Sublime-Merge style**: sidebar resizable/collapsible (Local Changes / All Commits / Branches / Remotes / Tags / Stashes / Submodules) + main pane switch theo selection, đã wire qua **24 sidecar `git.*` IPC method** (gồm `discoverRepos`; xem [ADR 0017](../../../docs/decisions/0017-git-manager-ipc-contract.md), [docs/features/git-manager.md](../../../docs/features/git-manager.md)). **Multi-repo per project** (repo picker ở header khi project là container nhiều repo), **auto-fetch** background mặc định 5 phút (silent), **branch tree** trong sidebar (folder default đóng, current branch accent) + **Changes tree/flat toggle** (default tree). Bootstrap probe `git.checkInstalled` block page nếu thiếu Git ≥ 2.20. Empty-state `git.init` cho workspace chưa init. Stage-hunk per hunk (`git apply --cached`), detached HEAD warn + `temp/<sha7>` flow, virtual-scroll khi section > 200 file, branches/remotes cache 5s, debounced 200ms status refresh từ chokidar watcher. Progress strip overlay (absolute, không shift layout) khi fetch/pull/push. Pinia store `git` giữ fallback mock cho browser dev (sidecar unavailable). I18n en/vi (`useI18n()` composable).
 ✅ **Tauri shell** — đã wire (M6), webview load UI Nuxt, IPC stdio qua `engine_call` (xem [ADR 0006](../../../docs/decisions/0006-tauri-shell-for-nuxt.md), [ADR 0008](../../../docs/decisions/0008-stdio-ipc-for-sidecar.md)).
 ✅ **Node.js sidecar wiring** — package `@awog/sidecar` chạy stdio NDJSON JSON-RPC; UI gọi qua composable `useSidecar()`.
 ✅ **Anthropic OAuth Pro/Max** — sign-in 3-step dialog, token refresh, account management (xem [docs/features/models-and-accounts.md](../../../docs/features/models-and-accounts.md), [ADR 0011](../../../docs/decisions/0011-anthropic-subscription-oauth.md)).
-✅ **Sessions chat streaming** — SSE token stream, markdown render, copy button, latency + token count + model id (xem [docs/features/sessions.md](../../../docs/features/sessions.md)).
+✅ **Sessions chat streaming** — SSE token stream, markdown render, reply borderless + byline footer (copy/branch · latency · token), attach file (📎 + kéo-thả) với preview ảnh inline (data URL) (xem [docs/features/sessions.md](../../../docs/features/sessions.md)).
 ✅ **Sessions persistence** — JSONL event-sourced tại `~/.awog/sessions/<id>.jsonl`.
 ✅ **Composer follow-up** — bôi đen text trong agent reply → "Quote & follow up" → chip + note editor trong composer, prepend quote block khi send (xem [docs/features/sessions.md#composer-follow-up-quote--instruct](../../../docs/features/sessions.md#composer-follow-up-quote--instruct)).
+✅ **What's New** — nút trên mục Settings ở NavRail mở `WhatsNewModal` liệt kê release note (changelog tĩnh `utils/changelog.ts`, song ngữ en/vi). Dot "unseen" khi version mới nhất khác version đã xem; lưu last-seen trong localStorage (`useWhatsNew`). Local-first, không fetch remote.
 ⏳ **System tray + native notification** — đặc tả ở docs, chưa implement.
-⏳ **Tasks/Workflows/Agents engine wiring** — vẫn dùng mock data, chờ engine model schema thật. (Skills đã có engine wiring qua sidecar `skills.*` RPCs.)
+⏳ **Agents engine wiring** — agent CRUD đã wire (sidecar `agents.*`); engine injection cho session/task đã dùng AGENT.md runtime. (Tasks/Workflows nay đã wire — xem trên.)
 
 ## Cấu trúc
 
@@ -104,7 +105,9 @@ ui/
 │   ├── useWorkspaceFileIndex.ts # @file index: fetch/cache fs.listFiles per workspaceRoot (lazy, deduped, browser-dev → empty)
 │   └── useSidecar.ts       # Wrapper invoke('engine_call') + listen('sidecar.event') — M7
 ├── stores/
-│   ├── workspace.ts        # Tasks, projects, agents, skills, workflows + actions
+│   ├── workspace.ts        # Projects, agents, skills, mcp, hooks, commands + actions
+│   ├── tasks.ts            # Live task store — hydrate + CRUD + subscribe task.* events (ADR 0024)
+│   ├── workflows.ts        # Live workflow store — hydrate + CRUD + debounced DAG persist
 │   └── settings.ts         # Workspace path, API keys, connectors
 ├── pages/
 │   ├── index.vue           # Redirect → /tasks
@@ -113,7 +116,8 @@ ui/
 │   ├── workflows/index.vue
 │   ├── agents/index.vue      # Agents (wired M8 + Pha 2A — AGENT.md 5-tier, runtime systemPrompt/tools/skillIds/mcpServerIds injection, bulk delete, toast, source picker)
 │   ├── skills/index.vue
-│   ├── mcp-servers/index.vue # MCP servers (wired M8 + Pha 2A — stdio + http + secret keychain + idle stop)
+│   ├── connections/index.vue # Connections (ADR 0025 — rename of MCP Servers, flat list; stdio + http + secret keychain + idle stop)
+│   ├── mcp-servers/index.vue # Redirect → /connections (back-compat)
 │   ├── settings/index.vue
 │   └── edit/[taskId].vue   # Fullscreen markdown editor (layout: false)
 ├── utils/
@@ -159,9 +163,13 @@ Template bind inline style:
 
 `useWorkspaceStore()` Pinia store:
 
-- State: `projects`, `agents`, `skills`, `workflows`, `tasks`, `selectedTaskId`
-- Getters: `selectedTask`, `projectById`, `workflowById`, `agentById`, `skillById`, `taskById`
-- Actions: `selectTask`, `createTask`, `sendMessageToPhase`, `rerunFromPhase`, `approvePhase`, CRUD cho projects/agents/skills/workflows
+- State: `projects`, `agents`, `skills`, `mcpServers`, `hooks`, `commands`
+- Getters: `projectById`, `agentById`, `skillById`
+- Actions: CRUD cho projects/agents/skills/mcp + hydrate sidecar
+
+`useTasksStore()` — live tasks: `hydrateFromSidecar`, `subscribe()` (app-lifetime `task.*` router), `createTask`/`deleteTask`/`renameTask`, `approvePhase`/`rerunFromPhase`/`sendMessageToPhase` (RPC + browser-dev sim). Getters `selectedTask`/`taskById`/`runningPhaseIds`.
+
+`useWorkflowsStore()` — live workflows: `hydrateFromSidecar`, CRUD + `updateWorkflowNodes/Edges` (debounced persist) + `flushPendingPersist`.
 
 `useSettingsStore()` — workspace path, API keys, connectors.
 
@@ -170,6 +178,7 @@ Template bind inline style:
 - `/` → redirect `/tasks`
 - `/tasks` → tasks list + detail
 - `/projects` → projects CRUD
+- `/projects/:id/code` → **Project Code Workspace** (fullscreen IDE, no layout): Monaco multi-tab editor + explorer (new/rename/delete) + find-in-files + bottom terminal + Source Control panel. Mở qua nút "Open in Editor" ở project detail, hoặc deep-link `?file=<path>` (cầu nối từ session Files tab — `MonacoEditor` dùng chung). Xem [docs/features/project-workspace.md](../../../docs/features/project-workspace.md), [ADR 0021](../../../docs/decisions/0021-monaco-code-editor.md)/[0022](../../../docs/decisions/0022-fs-read-write-search-ipc.md)
 - `/workflows` → DAG designer
 - `/agents` → agents CRUD
 - `/skills` → skills CRUD
@@ -190,7 +199,8 @@ Click "Open in editor" trong PhaseOutputTab sẽ navigate sang `/edit/:taskId?fi
 
 Còn lại:
 
-- Wire engine thật cho Tasks / Workflows / Agents / Skills (thay mock data)
+- ✅ Wire engine thật cho Tasks / Workflows ([ADR 0024](../../../docs/decisions/0024-task-execution-engine-ipc-contract.md)) — Agents/Skills đã wire
+- Pause-on-quota (`waiting_connection`, [ADR 0010](../../../docs/decisions/0010-pause-on-quota-for-connection-switch.md)) — deferred, additive trên engine
 - System tray + native notification ([design/tray-and-notifications.md](../../../docs/design/tray-and-notifications.md))
 - API key auth mode + OpenAI/Google provider ([models-and-accounts.md TODO](../../../docs/features/models-and-accounts.md#todo-post-m7))
 - OS keychain migration cho credentials

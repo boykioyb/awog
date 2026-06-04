@@ -13,6 +13,8 @@
 >
 > Multi-agent collab và per-agent model override vẫn defer pha 2B.
 
+> **Update 2026-06-03 (gỡ skillIds):** `agent.skillIds` đã **bỏ hẳn** khỏi model Agent (UI type + sidecar type + frontmatter AGENT.md + agents.generate/author/upsert). Lý do: runtime injection chỉ ghép body skill vào `systemPrompt` (không dùng SDK-native skill, không progressive disclosure) → trùng mục đích với chính `systemPrompt`. Agent giờ định nghĩa bằng `systemPrompt` (+ `tools` + `mcpServerIds`). Skills vẫn tồn tại độc lập và là **task template per-node trong Workflows** (`node.skillId`, không liên quan agent). Workflow node **không còn auto-seed** skill từ agent — người dùng chọn skill cho node trong inspector (picker liệt kê toàn bộ skill workspace); `workflows.generate` nhận `availableSkills` toàn cục thay cho per-agent skills. Theo yêu cầu user (KISS/YAGNI).
+
 ## Bối cảnh
 
 Tính năng [Agents](../features/agent-builder.md) đã có UI gần đầy đủ (page + 3 component + Pinia CRUD) nhưng **100% mock** — không có sidecar persistence và không ảnh hưởng runtime session khi gửi message.

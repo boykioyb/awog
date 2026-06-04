@@ -41,12 +41,14 @@ Project là một codebase local đã đăng ký trong AWOG. Mọi Task đều b
 
 - **3 meta box**: Branch / Language / Created.
 - **Git Remote section** với link mở external.
+- **Session list của project**: các session có `projectId` khớp, hiển thị title + thời điểm cập nhật + số message (+ số agent nếu có), sort mới nhất trước. Click jump sang Sessions view và select session đó.
+  - Nút **New session** trong header section: tạo session mới gắn sẵn `projectId` này rồi điều hướng sang Sessions view với session vừa tạo đang được chọn.
 - **Task list của project** với status icon, click jump sang Tasks view và select task đó.
 
 ## UI/UX
 
 - Top bar hiện breadcrumb project: `<name> · <branch> · <path>` khi đang ở task của project đó.
-- Item project trong list: tên + path tóm tắt + count task active.
+- Item project trong list: tên + path tóm tắt (không có count badge — bỏ để list gọn).
 
 ## Lưu trữ dữ liệu
 
@@ -78,3 +80,4 @@ ID format: `prj-<base36-timestamp>-<base36-counter>`.
 - **AC5 — Path validate:** Link path không tồn tại → reject với message "Path does not exist". Path chứa `..` literal → reject.
 - **AC6 — gitRemote validate:** Khi clone, chỉ chấp nhận scheme `https://`, `http://`, `git@`, `ssh://`. URL khác → reject.
 - **AC7 — Task list:** Project detail hiển thị danh sách task có `projectId` khớp, click jump sang Tasks và select task đó.
+- **AC8 — Session list:** Project detail hiển thị danh sách session có `projectId` khớp (mới nhất trước), click jump sang Sessions và select session đó. Click **New session** → tạo session mới với `projectId` này, điều hướng sang Sessions với session đó đang được chọn. Không có session → empty state "No sessions yet for this project".

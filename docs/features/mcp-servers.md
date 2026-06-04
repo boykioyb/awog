@@ -12,6 +12,8 @@
 > - **Filesystem watcher** — chokidar emit `mcp-servers.fs-changed` khi `*.json` thay đổi ngoài app → UI auto re-hydrate (C1).
 >
 > **Còn defer pha 2B**: `sse` transport (spec MCP chuyển sang Streamable HTTP đã handle), B4 sandbox stdio, B5 hot reload schema, B7 persistent McpManager process bridging, B8 remote registry discovery.
+>
+> **Đổi tên thành Connections (2026-06-03 — [ADR 0025](../decisions/0025-connections-manager.md), bản đã đơn giản hoá):** Trang **"MCP Servers" đổi tên thành "Connections"** (route `/connections`, redirect `/mcp-servers`, NavRail label). Vẫn là **danh sách MCP server phẳng, global-only** — mô hình "Sources" của [craft-agents-oss](https://github.com/lukilabs/craft-agents-oss). New Task có **dropdown Connection tùy chọn** (cho source github/jira): chọn 1 connection enabled → engine **union** MCP server đó vào mọi node (bypass per-agent whitelist, secret expand trong sidecar); để "None" thì node dùng MCP của agent (`agent.mcpServerIds` whitelist) như cũ. **Đã bỏ** (so với bản ADR ban đầu): `service` enum + tier per-project (dropdown KHÔNG lọc service, KHÔNG tier) — xem mục Amendment trong ADR 0025.
 
 ## Overview
 

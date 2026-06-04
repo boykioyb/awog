@@ -1,6 +1,6 @@
 # Feature: Artifact System
 
-**Trạng thái:** Draft
+**Trạng thái:** Approved — contract chốt tại [ADR 0024](../decisions/0024-task-execution-engine-ipc-contract.md)
 
 ## Overview
 

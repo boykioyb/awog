@@ -26,6 +26,9 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0018](./0018-mcp-secret-keychain.md) | MCP secret storage: OS keychain via `@napi-rs/keyring` | Accepted |
 | [0019](./0019-pty-terminal-in-sidecar.md) | PTY terminal trong sidecar (node-pty) cho Workspace Panel | Accepted |
 | [0020](./0020-highlightjs-code-rendering.md) | Syntax-highlight code block trong chat bằng highlight.js | Accepted |
+| [0021](./0021-monaco-code-editor.md) | Monaco làm code editor cho in-app Project Workspace | Proposed |
+| [0022](./0022-fs-read-write-search-ipc.md) | Mở rộng `fs.*` IPC: read-write + search cho project workspace | Proposed |
+| [0023](./0023-sdk-session-resume-and-compact.md) | SDK session resume + `/compact` (bỏ transcript-flattening) | Proposed |
 
 ## Template
 

@@ -32,7 +32,7 @@ Bottom của rail:
 │       └── /tasks/:id/edit/:file   ← markdown editor fullscreen
 ├── /projects                       ← list project
 │   ├── /projects/new
-│   └── /projects/:id               ← project detail + task list của project
+│   └── /projects/:id               ← project detail + session list + task list của project
 ├── /workflows                      ← DAG designer
 │   ├── /workflows/new
 │   └── /workflows/:id              ← canvas + inspector

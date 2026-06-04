@@ -134,6 +134,12 @@ Sidecar emit qua channel `sidecar-event` (Tauri event, không phải JSON-RPC re
 - **Link trong reply** — click `<a>` bị chặn để không cướp webview: URL ngoài (`http(s)`/`mailto:`) → mở trình duyệt hệ thống (`sidecar.openExternal`); path workspace (`apps/.../foo.py#L42`) → mở **Files tab** + nhảy tới dòng (xem [workspace-panel.md](workspace-panel.md)).
 - **Scroll controls** — 2 nút nổi (lên đầu / xuống cuối) chỉ hiện khi list overflow và đang xa mép tương ứng.
 
+### Reply layout (borderless + byline footer)
+
+Agent reply render như **tài liệu phẳng** — bỏ bubble (background/border/maxWidth) và bỏ header "ASSISTANT · model · time". Copy + Branch + timestamp + run-stats (`elapsed · N tok`) gom xuống **byline footer** một dòng (muted) ngay dưới reply; khi đang stream footer hiện ticker `Streaming… Xs` thay cho actions. User message vẫn giữ bubble căn phải. Chỉ báo "{agent} đang phản hồi…" trùng lặp ở cuối list đã bỏ — footer ticker là chỉ báo streaming **duy nhất**.
+
+Bảng markdown / blockquote / `hr` trong reply tô border qua CSS `light-dark()` (đổi theo light/dark, không re-render) — sửa lỗi mất border khi ở light mode.
+
 ### Steps interleave + summary toggle
 
 Reply bubble **xen kẽ** đoạn text và cụm step (command/tool) theo đúng trình tự thời gian: mỗi top-level step mang `textOffset` (độ dài text tại thời điểm tool chạy — store đóng dấu khi step tới, kèm flush buffer typewriter). Toggle phía trên gom summary "ran X commands · read Y files · …"; collapse → chỉ hiện `message.text`. Click step → drawer chi tiết (Task → subagent drawer). Step **không persist** xuống JSONL nên interleave chỉ áp dụng cho phiên live/in-memory.
@@ -188,7 +194,8 @@ Chips chia **2 hàng** quanh ô nhập. Component [`SessionChipsPopover.vue`](..
 - **Hàng trên ô nhập:** **Mode** (Ask / Accept Edits / Plan / Execute + "Tools · X/Y" row) và **MCP** (whitelist per-session over enabled servers).
 - **Hàng dưới ô nhập:** **Account** + **Model**. Chip **Connection/Provider** đã bỏ — account đã ngụ ý provider (hiện chỉ Anthropic hoạt động). Bên phải hàng là **context status** = vòng ring + `%`; tên model nằm trong tooltip (tránh trùng với Model chip).
 - **Model** — gộp Effort. Label = `Claude Opus 4.8 · High` (effort chỉ khi model hỗ trợ thinking). Popover: section MODELS + section EFFORT (Low…Max, disabled+greyed trên `maxLevel` của model).
-- **Attach (📎):** nằm cạnh nút **Send** bên trong ô nhập (không còn ở toolbar).
+- **Attach (📎):** nằm cạnh nút **Send** bên trong ô nhập (không còn ở toolbar). Hai cách thêm file: click 📎 (file picker) hoặc **kéo-thả từ trình quản lý file OS** vào composer — overlay "Drop files to attach" hiện khi đang kéo (chỉ kích hoạt khi drag mang `Files`; depth counter chống flicker). Tauri window đặt `dragDropEnabled: false` để webview nhận drop HTML5 chuẩn (`File` object) thay vì native file-drop của Tauri; cả 2 đường đi chung helper `addFiles`.
+- **Preview ảnh:** ảnh đọc thành **base64 data URL** (`FileReader.readAsDataURL`) — **không** dùng blob object URL. Data URL render ngay (thumbnail composer + message + `AttachmentLightbox`) và **sống sót qua persist/reload JSONL** (blob URL chết theo page). File khác chỉ lưu metadata. Đánh đổi: data URL embed inline làm JSONL phình ~33% theo kích thước ảnh — ảnh lớn nên cân nhắc lưu ra `.awog/attachments/` qua sidecar (roadmap).
 
 ### Per-session account (multi-account)
 
@@ -237,7 +244,7 @@ Mỗi refresh response trả `refresh_token` mới → overwrite cả token + re
 
 ## Limitations (M7+)
 
-- Chỉ text (chưa multimodal: image/file attachment).
+- Attachment (ảnh/file) đính kèm ở composer có **preview** (ảnh inline qua data URL) nhưng **chưa forward content xuống model** — multimodal turn (gửi ảnh cho Claude) thuộc roadmap.
 - Steps **không** persist JSONL — reload session mất step history (chỉ có message text).
 - Chưa surface `thinking` blocks (Claude extended thinking, xACBudgetTokens) ra UI — SDK accumulate nhưng UI không hiển thị chi tiết.
 - Multi-provider chưa có — chỉ Anthropic OAuth. OpenAI / Google / custom provider thuộc roadmap (xem [models-and-accounts.md](./models-and-accounts.md#todo-post-m7)).
