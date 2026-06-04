@@ -1,6 +1,6 @@
 <template>
   <EditorShell
-    :title="server?.id ? 'Edit MCP Server' : 'New MCP Server'"
+    :title="server?.id ? tr('connections.editor.edit_title') : tr('connections.editor.new_title')"
     :dirty="dirty"
     :can-save="!!draft.id && !!draft.name"
     @save="onSave"
@@ -161,6 +161,7 @@ const props = defineProps<{ server: MCPServer | null; initialDraft?: McpDraft | 
 const emit = defineEmits<{ save: [server: MCPServer]; cancel: [] }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 interface VerifyState {
   ok: boolean

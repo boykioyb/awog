@@ -18,9 +18,11 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <Sparkles :size="13" :style="{ color: t.accent }" />
-        <div class="text-[1em] font-medium" :style="{ color: t.text }">Add MCP server</div>
+        <div class="text-[1em] font-medium" :style="{ color: t.text }">
+          {{ tr('connections.creator.title') }}
+        </div>
         <span class="text-[1em]" :style="{ color: t.textDim }">
-          · LLM will write the config to disk
+          {{ tr('connections.creator.subtitle') }}
         </span>
         <span class="flex-1" />
         <button
@@ -42,11 +44,12 @@
       >
         <template #empty>
           <div class="text-[1em] py-4" :style="{ color: t.textDim }">
-            Describe the MCP server you want — for example
+            Describe the connection you want — for example
             <span :style="{ color: t.text }">"Filesystem server for ~/Documents"</span>
             or
             <span :style="{ color: t.text }">"GitHub server with my PAT"</span>
-            . The LLM will pick a slug, choose a preset if it matches, and write the config under
+            . The LLM will pick a slug, choose a preset if it matches, and write the MCP config
+            under
             <span class="font-mono" :style="{ color: t.text }">~/.awog/mcp-servers/</span>
             .
           </div>
@@ -64,8 +67,8 @@
             :disabled="isStreaming"
             :placeholder="
               messages.length === 0
-                ? 'Describe the MCP server…'
-                : 'Iterate further (or close when happy)…'
+                ? tr('connections.creator.placeholder')
+                : tr('connections.creator.placeholder_iterate')
             "
             class="w-full bg-transparent text-[1em] leading-relaxed resize-none focus:outline-none"
             :style="{ color: t.text }"
@@ -139,6 +142,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const sidecar = useSidecar()
 const settings = useSettingsStore()
 const ws = useWorkspaceStore()
