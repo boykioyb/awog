@@ -1,0 +1,50 @@
+appId: guild.awog.desktop
+productName: AWOG
+copyright: AWOG
+
+directories:
+  output: release
+  buildResources: build
+
+# The Electron app itself is just the compiled main/preload (CJS) + package.json.
+# It has no runtime node_modules (all deps are devDependencies).
+files:
+  - dist/**/*
+  - package.json
+  - '!**/*.map'
+
+# Engine + UI ship as resources OUTSIDE the asar:
+#  - the engine is spawned as a child process (ELECTRON_RUN_AS_NODE), so its
+#    node_modules + the Claude CLI binary must be real files on disk (+x);
+#  - the SPA is served via the app:// protocol from resources/ui.
+extraResources:
+  - from: ../ui/.output/public
+    to: ui
+  - from: ../sidecar/dist
+    to: sidecar
+
+# node-pty in the engine bundle is rebuilt for Electron's ABI by scripts/pack.mjs
+# (electron-rebuild), not by electron-builder — the native dep lives under
+# extraResources, which electron-builder does not rebuild.
+npmRebuild: false
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  icon: ../src-tauri/icons/icon.icns
+  # Unsigned by default (internal/testing). Set CSC_* + notarize via CI secrets
+  # to enable signing — see docs/release.md.
+
+win:
+  target:
+    - nsis
+  icon: ../src-tauri/icons/icon.ico
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  icon: ../src-tauri/icons/icon.png
