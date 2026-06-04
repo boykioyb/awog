@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.3.2',
+    date: '2026-06-04',
+    highlight: {
+      en: 'Task artifact editor fixes and tidier session replies.',
+      vi: 'Sửa trình soạn artifact của Task và gọn lại phần trả lời trong Session.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Opening a task artifact in the editor now shows the real generated output instead of placeholder text.',
+        vi: 'Mở artifact của task trong editor giờ hiển thị nội dung thật thay vì văn bản mẫu.',
+      },
+      {
+        kind: 'fixed',
+        en: '"Back to task" from the editor no longer 404s, and the task detail keeps its expanded step, active tab, and scroll position.',
+        vi: 'Nút "Back to task" trong editor không còn lỗi 404, và phần chi tiết task giữ nguyên bước đang mở, tab và vị trí cuộn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Session replies no longer duplicate their tail when streaming finishes, and long tool lists, URLs, and paths wrap instead of overflowing the chat column.',
+        vi: 'Câu trả lời trong Session không còn lặp đuôi khi stream xong, và danh sách tool, URL, đường dẫn dài tự xuống dòng thay vì tràn cột chat.',
+      },
+    ],
+  },
+  {
     version: '0.3.1',
     date: '2026-06-04',
     highlight: {

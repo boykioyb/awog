@@ -1,6 +1,6 @@
 {
   "name": "awog",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "AWOG — Artifact Workflow Orchestrate Guild (local-first AI team OS)",
   "scripts": {
