@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "pnpm --filter awog-ui dev",
     "build": "pnpm -r --filter awog-ui --filter @awog/sidecar build",
+    "electron:dev": "pnpm --filter @awog/desktop dev",
+    "electron:rebuild": "pnpm --filter @awog/desktop rebuild",
     "tauri": "cd apps/desktop && PATH=\"$HOME/.cargo/bin:$PATH\" tauri",
     "tauri:dev": "pnpm --filter @awog/sidecar build && cd apps/desktop && PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
     "typecheck": "pnpm -r typecheck",
