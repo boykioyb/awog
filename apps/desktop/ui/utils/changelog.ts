@@ -30,6 +30,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.3.3',
+    date: '2026-06-04',
+    highlight: {
+      en: 'Custom colors with hex input and a Theme tint-strength control.',
+      vi: 'Tùy chỉnh màu bằng mã hex và điều chỉnh độ đậm tint cho Theme.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Theme color and Accent color now accept an exact hex code and stack into a roomier two-line layout.',
+        vi: 'Theme color và Accent color giờ nhập được mã hex chính xác và xuống hai dòng cho thoáng hơn.',
+      },
+      {
+        kind: 'added',
+        en: 'A new Tint strength slider controls how strongly the Theme color tints app surfaces.',
+        vi: 'Thanh Tint strength mới điều chỉnh độ đậm khi Theme color nhuộm lên các bề mặt của app.',
+      },
+      {
+        kind: 'fixed',
+        en: "The task trace now shows each tool's real arguments instead of empty parentheses.",
+        vi: 'Trace của task giờ hiển thị tham số thật của mỗi tool thay vì dấu ngoặc trống.',
+      },
+      {
+        kind: 'improved',
+        en: 'Dropdowns across editors and settings now share a single consistent style.',
+        vi: 'Các dropdown trong editor và settings giờ dùng chung một kiểu hiển thị nhất quán.',
+      },
+    ],
+  },
+  {
     version: '0.3.2',
     date: '2026-06-04',
     highlight: {
