@@ -30,6 +30,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.3.4',
+    date: '2026-06-04',
+    highlight: {
+      en: 'The desktop app is now self-contained — no system Node.js required.',
+      vi: 'App desktop giờ tự chứa runtime — không cần cài Node.js trên máy.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Bundle the Node runtime so the app starts on machines without Node installed (fixes "sidecar writer channel closed").',
+        vi: 'Đóng gói sẵn Node runtime để app chạy được trên máy chưa cài Node (sửa lỗi "sidecar writer channel closed").',
+      },
+    ],
+  },
+  {
     version: '0.3.3',
     date: '2026-06-04',
     highlight: {
