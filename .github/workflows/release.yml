@@ -48,10 +48,9 @@ jobs:
             platform: macos-14
             target: aarch64-apple-darwin
             args: '--target aarch64-apple-darwin'
-          - label: macos-x64
-            platform: macos-13
-            target: x86_64-apple-darwin
-            args: '--target x86_64-apple-darwin'
+          # macOS Intel (x86_64) dropped for now: GitHub `macos-13` runners
+          # queue for 30-60min+ and block the run from going green. Re-add when
+          # runners are reliable, or switch to a universal-apple-darwin build.
           - label: linux-x64
             platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
@@ -131,16 +130,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # --- macOS signing + notarization (optional) ---
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # --- Tauri updater signing (optional) ---
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Code signing is intentionally OFF: passing empty APPLE_CERTIFICATE /
+          # signing env makes tauri-action attempt `security import` with an empty
+          # cert and fail ("failed to import keychain certificate"). To enable
+          # signing later, add the APPLE_*/TAURI_SIGNING_* secrets AND re-add the
+          # matching env lines here (see docs/release.md).
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
