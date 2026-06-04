@@ -4,6 +4,7 @@ import { isAbsolute } from 'node:path'
 import { register, RpcError } from '../transport/rpc.js'
 import { assertInsideWorkspace } from '../git/path-sanitize.js'
 import { runGit } from '../git/runner.js'
+import { SKIP_DIRS } from '../fs/skip-dirs.js'
 import type { FsEntry } from '../types/shared.js'
 
 // Flat, recursive file index for the chat composer's `@file` fuzzy mention.
@@ -22,26 +23,6 @@ const Params = z.object({
 
 // Cap the index so a pathological repo can't blow up the IPC payload / memory.
 const MAX_FILES = 20_000
-
-// Directories the fallback walk never descends into (the git path relies on
-// .gitignore instead). Mirrors the usual build/vendor noise.
-const SKIP_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  '.output',
-  '.nuxt',
-  '.next',
-  '.cache',
-  '.turbo',
-  'coverage',
-  '.venv',
-  'venv',
-  '__pycache__',
-  'target',
-  '.idea',
-  '.vscode',
-])
 
 const baseName = (relPath: string): string => {
   const idx = relPath.lastIndexOf('/')
