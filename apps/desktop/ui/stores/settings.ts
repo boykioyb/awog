@@ -86,7 +86,9 @@ export const DEFAULT_GIT_SETTINGS: GitSettings = {
   autoCommitScope: 'workspace',
   autoStashDirtyBeforeTask: false,
   dirtyTaskPolicy: 'warn',
-  autoFetchIntervalMs: 0,
+  // Background auto-fetch every 5 min by default so ahead/behind stays fresh.
+  // Set to 0 in Settings → Workspace to disable.
+  autoFetchIntervalMs: 300_000,
   commitMessageRule: DEFAULT_COMMIT_MESSAGE_RULE,
 }
 
@@ -104,7 +106,7 @@ interface SettingsState {
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
   sansFamily: 'system',
   monoFamily: 'jetbrains-mono',
-  fontSize: 14,
+  fontSize: 12,
   fontWeight: 400,
   accent: 'mono',
   themeColor: 'mono',

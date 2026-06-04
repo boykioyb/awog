@@ -45,7 +45,7 @@ export const WEIGHT_OPTIONS: { value: FontWeight; label: string }[] = [
   { value: 700, label: 'Bold (700)' },
 ]
 
-export const FONT_SIZE_MIN = 14
+export const FONT_SIZE_MIN = 12
 export const FONT_SIZE_MAX = 18
 
 const SANS_VALUES: readonly SansFontFamily[] = ['system', 'inter', 'geist']
@@ -151,13 +151,23 @@ export const useAppearance = () => {
     initialized.value = true
   }
 
+  // Apply + persist directly on every change instead of relying solely on the
+  // one-time watch above (which a component-scope change / HMR can orphan).
+  const update = (patch: Partial<AppearanceSettings>) => {
+    store.updateAppearance(patch)
+    applyToDom(store.appearance)
+    writeToStorage(store.appearance)
+  }
+
   const reset = () => {
     store.resetAppearance()
+    applyToDom(store.appearance)
+    writeToStorage(store.appearance)
   }
 
   return {
     appearance,
-    update: store.updateAppearance,
+    update,
     reset,
     defaults: DEFAULT_APPEARANCE,
   }

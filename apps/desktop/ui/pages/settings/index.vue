@@ -27,7 +27,7 @@
     </template>
 
     <template #detail>
-      <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl">
+      <div class="flex-1 overflow-y-auto p-4 md:p-6">
         <SettingsWorkspaceSection v-if="section === 'workspace'" />
         <SettingsDefaultsSection v-else-if="section === 'defaults'" />
         <SettingsModelsSection v-else-if="section === 'models'" />

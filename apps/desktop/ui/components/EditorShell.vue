@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 overflow-y-auto p-4 md:p-6 max-w-3xl w-full">
+  <div class="flex-1 overflow-y-auto p-4 md:p-6 w-full">
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-2 min-w-0">
         <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">{{ title }}</div>

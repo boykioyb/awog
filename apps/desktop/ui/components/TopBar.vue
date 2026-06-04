@@ -27,11 +27,12 @@ import { FolderGit2, GitBranch } from 'lucide-vue-next'
 
 const { t } = useTheme()
 const ws = useWorkspaceStore()
+const tasksStore = useTasksStore()
 const route = useRoute()
 
 const isTasksRoute = computed(() => route.path.startsWith('/tasks'))
 
-const selectedTask = computed(() => ws.selectedTask)
+const selectedTask = computed(() => tasksStore.selectedTask)
 const selectedProject = computed(() =>
   selectedTask.value ? ws.projectById(selectedTask.value.projectId) : undefined,
 )

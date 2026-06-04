@@ -88,8 +88,23 @@
       </NuxtLink>
     </div>
 
-    <!-- Bottom: settings + theme toggle + collapse -->
+    <!-- Bottom: what's new + settings + theme toggle + collapse -->
     <div class="flex flex-col gap-0.5 p-1.5" :style="{ borderTop: `1px solid ${t.border}` }">
+      <button
+        :title="!showLabels ? tr('whatsnew.label') : ''"
+        class="relative flex items-center gap-2.5 px-2 h-8 rounded text-[1em] transition-colors"
+        :style="{ color: t.textMuted }"
+        @click="onWhatsNew"
+      >
+        <Sparkles :size="15" class="flex-shrink-0" />
+        <span v-if="showLabels" class="truncate">{{ tr('whatsnew.label') }}</span>
+        <span
+          v-if="hasUnseen"
+          class="absolute top-1 left-6 w-1.5 h-1.5 rounded-full"
+          :style="{ background: t.accent }"
+        />
+      </button>
+
       <NuxtLink
         to="/settings"
         :title="!showLabels ? 'Settings' : ''"
@@ -135,6 +150,8 @@
       </button>
     </div>
   </nav>
+
+  <WhatsNewModal :open="whatsNewOpen" :releases="releases" @close="closePanel" />
 </template>
 
 <script setup lang="ts">
@@ -154,9 +171,12 @@ import {
   Zap,
   Slash,
   GitBranch,
+  Sparkles,
 } from 'lucide-vue-next'
 
 const { t, themeName, toggle } = useTheme()
+const { t: tr } = useI18n()
+const { open: whatsNewOpen, hasUnseen, releases, openPanel, closePanel } = useWhatsNew()
 const route = useRoute()
 const gitStore = useGitStore()
 const gitDirty = computed(() => gitStore.hasUncommitted)
@@ -184,6 +204,11 @@ const onItemClick = () => {
   if (isMobile.value) mobileOpen.value = false
 }
 
+const onWhatsNew = () => {
+  openPanel()
+  if (isMobile.value) mobileOpen.value = false
+}
+
 watch(
   () => route.path,
   () => {
@@ -206,7 +231,7 @@ const items: NavItem[] = [
   { id: 'agents', label: 'Agents', icon: Users, to: '/agents' },
   { id: 'skills', label: 'Skills', icon: Wand2, to: '/skills' },
   { id: 'git', label: 'Git', icon: GitBranch, to: '/git' },
-  { id: 'mcp-servers', label: 'MCP Servers', icon: Plug, to: '/mcp-servers' },
+  { id: 'connections', label: 'Connections', icon: Plug, to: '/connections' },
   { id: 'hooks', label: 'Hooks', icon: Zap, to: '/hooks' },
   { id: 'commands', label: 'Commands', icon: Slash, to: '/commands' },
 ]

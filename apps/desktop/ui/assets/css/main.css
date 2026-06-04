@@ -226,13 +226,13 @@ body,
 .awog-md blockquote {
   margin: 0.6em 0;
   padding: 0.2em 0.8em;
-  border-left: 3px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
+  border-left: 3px solid light-dark(rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.15));
+  color: light-dark(rgba(0, 0, 0, 0.6), rgba(255, 255, 255, 0.7));
 }
 .awog-md hr {
   margin: 0.8em 0;
   border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.08));
 }
 .awog-md a {
   color: #60a5fa;
@@ -246,11 +246,11 @@ body,
 }
 .awog-md th,
 .awog-md td {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.1));
   padding: 4px 8px;
 }
 .awog-md th {
-  background: rgba(255, 255, 255, 0.04);
+  background: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04));
   font-weight: 600;
 }
 .awog-md strong {

@@ -1,8 +1,7 @@
-// Format an ISO timestamp (or legacy "Just now" string) into "HH:MM DD/MM/YYYY"
-// in the user-configured timezone. Returns the original string if input is
-// already a sentinel like "Just now" or fails to parse — keeps mock data readable.
-
-const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh'
+// Format an ISO timestamp (or legacy "Just now" string) into "HH:MM DD/MM/YYYY".
+// Uses the runtime's LOCAL timezone by default (so timestamps match the user's
+// machine wherever they are); pass `tz` to override. Returns the original string
+// if input is a sentinel like "Just now" or fails to parse — keeps mock readable.
 
 export function formatTime(input: string | number | undefined, tz?: string): string {
   if (input === undefined || input === null) return ''
@@ -14,15 +13,17 @@ export function formatTime(input: string | number | undefined, tz?: string): str
   }
 
   try {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz || DEFAULT_TIMEZONE,
+    const opts: Intl.DateTimeFormatOptions = {
       hour: '2-digit',
       minute: '2-digit',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour12: false,
-    }).formatToParts(d)
+    }
+    // No tz → Intl uses the host's local timezone.
+    if (tz) opts.timeZone = tz
+    const parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(d)
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
     return `${get('hour')}:${get('minute')} ${get('day')}/${get('month')}/${get('year')}`
   } catch {
