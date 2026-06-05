@@ -7,6 +7,16 @@ export type AwogFileFilter = { name: string; extensions: string[] }
 export type AwogDialogOpts = { title?: string; defaultPath?: string }
 export type AwogSavePathOpts = AwogDialogOpts & { filters?: AwogFileFilter[] }
 
+// Auto-update (ADR 0028).
+export type AwogAppInfo = { version: string; isPackaged: boolean; canAutoInstall: boolean }
+export type AwogUpdateEvent =
+  | { type: 'checking' }
+  | { type: 'available'; version: string }
+  | { type: 'not-available' }
+  | { type: 'progress'; percent: number }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; message: string }
+
 export interface AwogBridge {
   // Resolves with the JSON-RPC result, or rejects with { code, message, data }.
   request(method: string, params?: unknown): Promise<unknown>
@@ -17,6 +27,14 @@ export interface AwogBridge {
   openPath(root: string, path: string): Promise<void>
   pickFolder(opts?: AwogDialogOpts): Promise<string | null>
   savePath(opts?: AwogSavePathOpts): Promise<string | null>
+  // Auto-update (ADR 0028).
+  getAppInfo(): Promise<AwogAppInfo>
+  checkForUpdates(): Promise<void>
+  downloadUpdate(): Promise<void>
+  installUpdate(): Promise<void>
+  openReleasesPage(): Promise<void>
+  onUpdateEvent(handler: (event: AwogUpdateEvent) => void): () => void
+  openLogs(): Promise<void>
 }
 
 declare global {

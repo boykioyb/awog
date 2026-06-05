@@ -58,6 +58,29 @@ Bản cài đặt sinh ra:
 
 Tab **Releases** trên GitHub → mở draft → kiểm tra đủ asset 3 nền tảng → **Publish release**.
 
+## Auto-update (ADR 0028)
+
+App tích hợp **`electron-updater`** (xem [ADR 0028](decisions/0028-auto-update.md) + [feature spec](features/auto-update.md)).
+
+- **Publish = bật update cho client.** electron-updater chỉ thấy release **đã publish** (không thấy draft) → bước §4 ở trên chính là cổng kiểm soát: chừng nào draft chưa publish, chưa máy nào nhận update.
+- **Metadata cần thiết** (`latest.yml` / `latest-mac.yml` / `latest-linux.yml`) được electron-builder sinh kèm khi `--publish always` — kiểm tra đủ 3 file trong asset trước khi publish.
+- **Per-platform:** Windows + Linux(**AppImage**) auto-update đầy đủ (check → hỏi tải → tải → restart cài). **macOS** (chưa ký số) + Linux **`.deb`** chỉ **notify-only** (thông báo + mở trang Releases). Bật auto-update macOS sau khi có Apple cert (ký + notarize, mục dưới) → đổi `canAutoInstall` trong [updater.ts](../apps/desktop/electron/src/updater.ts).
+
+## Log & chẩn đoán (bản release)
+
+App đóng gói **không có terminal** → stderr/stdout của main process vô hình. Dùng **`electron-log`** ([logger.ts](../apps/desktop/electron/src/logger.ts)) ghi ra **file** ở thư mục log chuẩn của OS:
+
+| OS | Đường dẫn |
+|---|---|
+| macOS | `~/Library/Logs/AWOG/main.log` |
+| Windows | `%AppData%\AWOG\logs\main.log` |
+| Linux | `~/.config/AWOG/logs/main.log` |
+
+- Trong log có: hoạt động **updater** (`autoUpdater.logger = log` — gồm lỗi chữ ký/mạng), output **engine** (dòng `[engine] …`), và `uncaughtException`/`unhandledRejection`.
+- Người dùng mở nhanh: **Settings → Updates → "Open logs"** (reveal file trong file manager).
+- Xem trực tiếp khi hỗ trợ: `tail -f ~/Library/Logs/AWOG/main.log` (macOS) hoặc mở file tương ứng.
+- Log file xoay vòng tại 5MB; level `info` trở lên ghi xuống file.
+
 ## Build thử thủ công
 
 - **Local:** `pnpm dist` (root) → chạy `pack.mjs`, sinh installer ở `apps/desktop/electron/release/`. `pnpm dist -- --dir` để chỉ tạo `.app`/thư mục unpacked (nhanh, không tạo dmg). (Tên script là `dist` vì `pack` trùng lệnh built-in của pnpm.)

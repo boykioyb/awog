@@ -23,6 +23,7 @@
 | 15 | [hooks](./hooks.md) | Draft |
 | 16 | [slash-commands](./slash-commands.md) | Draft |
 | 17 | [git-manager](./git-manager.md) | Draft |
+| 18 | [auto-update](./auto-update.md) | In Review |
 
 ## Template
 

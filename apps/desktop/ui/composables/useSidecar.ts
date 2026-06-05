@@ -30,6 +30,17 @@ export type SidecarEvent = { type: string; payload: unknown }
 export type SidecarEventHandler = (event: SidecarEvent) => void
 export type UnlistenFn = () => void
 
+// Auto-update (ADR 0028).
+export type AppInfo = { version: string; isPackaged: boolean; canAutoInstall: boolean }
+export type UpdateEvent =
+  | { type: 'checking' }
+  | { type: 'available'; version: string }
+  | { type: 'not-available' }
+  | { type: 'progress'; percent: number }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; message: string }
+export type UpdateEventHandler = (event: UpdateEvent) => void
+
 const bridge = () => (typeof window !== 'undefined' ? window.awog : undefined)
 
 const toSidecarError = (raw: unknown): SidecarError => {
@@ -85,6 +96,37 @@ export function useSidecar() {
     await api.openPath(workspaceRoot, path)
   }
 
+  // Auto-update bridge (ADR 0028). The renderer talks to the main-process updater
+  // only through here, on a channel separate from engine events.
+  const getAppInfo = async (): Promise<AppInfo> => {
+    if (!api) throw new SidecarUnavailableError()
+    return api.getAppInfo()
+  }
+  const checkForUpdates = async (): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.checkForUpdates()
+  }
+  const downloadUpdate = async (): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.downloadUpdate()
+  }
+  const installUpdate = async (): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.installUpdate()
+  }
+  const openReleasesPage = async (): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.openReleasesPage()
+  }
+  const onUpdateEvent = async (handler: UpdateEventHandler): Promise<UnlistenFn> => {
+    if (!api) throw new SidecarUnavailableError()
+    return api.onUpdateEvent((e) => handler(e))
+  }
+  const openLogs = async (): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.openLogs()
+  }
+
   return {
     available: !!api,
     request,
@@ -92,5 +134,12 @@ export function useSidecar() {
     openExternal,
     revealPath,
     openPath,
+    getAppInfo,
+    checkForUpdates,
+    downloadUpdate,
+    installUpdate,
+    openReleasesPage,
+    onUpdateEvent,
+    openLogs,
   }
 }

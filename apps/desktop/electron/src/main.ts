@@ -1,8 +1,14 @@
 import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron'
 import { engine } from './engine'
 import { registerIpc } from './ipc'
+import { setupLogging } from './logger'
 import { trayIconPath } from './paths'
+import { setupUpdater } from './updater'
 import { createMainWindow, registerAppProtocolScheme } from './window'
+
+// File logging first — so anything that fails during startup leaves a trace
+// (a packaged GUI app has no terminal for stderr).
+setupLogging()
 
 // AWOG Electron entry — the host process. Replaces the Tauri Rust shell:
 // owns the window + app lifecycle, spawns the Node engine as a utility process,
@@ -32,6 +38,7 @@ if (!gotLock) {
     setupAppMenu()
     engine.start()
     registerIpc(getWindow)
+    setupUpdater(getWindow)
     mainWindow = createMainWindow()
     setupTray()
 

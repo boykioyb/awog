@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.5.0',
+    date: '2026-06-05',
+    highlight: {
+      en: 'Auto-update — AWOG now tells you when a new version is out.',
+      vi: 'Tự cập nhật — AWOG báo cho bạn khi có phiên bản mới.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Auto-update: AWOG checks for new versions and, on Windows & Linux (AppImage), lets you download and restart to install. macOS and .deb builds show a notice with a link to the download page.',
+        vi: 'Tự cập nhật: AWOG kiểm tra phiên bản mới và, trên Windows & Linux (AppImage), cho phép tải rồi khởi động lại để cài. Bản macOS và .deb hiển thị thông báo kèm liên kết tới trang tải.',
+      },
+      {
+        kind: 'added',
+        en: 'Update settings: a new "Updates" section shows your current version, lets you toggle automatic checks, and check for updates on demand.',
+        vi: 'Cài đặt cập nhật: mục "Updates" mới hiển thị phiên bản hiện tại, cho bật/tắt tự kiểm tra và kiểm tra cập nhật theo yêu cầu.',
+      },
+      {
+        kind: 'added',
+        en: 'Diagnostics: AWOG now writes a log file (update activity, engine output, and errors). Open it any time from Settings → Updates → Open logs.',
+        vi: 'Chẩn đoán: AWOG ghi file log (hoạt động cập nhật, output engine và lỗi). Mở bất cứ lúc nào ở Settings → Updates → Open logs.',
+      },
+    ],
+  },
+  {
     version: '0.4.0',
     date: '2026-06-05',
     highlight: {

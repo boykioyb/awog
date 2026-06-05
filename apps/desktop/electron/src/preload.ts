@@ -11,6 +11,14 @@ type EngineEvent = { type: string; payload: unknown }
 type DialogOpts = { title?: string; defaultPath?: string }
 type FileFilter = { name: string; extensions: string[] }
 type SavePathOpts = DialogOpts & { filters?: FileFilter[] }
+type AppInfo = { version: string; isPackaged: boolean; canAutoInstall: boolean }
+type UpdateEvent =
+  | { type: 'checking' }
+  | { type: 'available'; version: string }
+  | { type: 'not-available' }
+  | { type: 'progress'; percent: number }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; message: string }
 
 const awog = {
   // Returns the JSON-RPC result, or rejects with the RpcErrorShape so the
@@ -40,6 +48,21 @@ const awog = {
     ipcRenderer.invoke('dialog:pickFolder', opts ?? {}),
   savePath: (opts?: SavePathOpts): Promise<string | null> =>
     ipcRenderer.invoke('dialog:savePath', opts ?? {}),
+
+  // Auto-update (ADR 0028). Renderer drives the schedule; main is reactive.
+  getAppInfo: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
+  checkForUpdates: (): Promise<void> => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('updater:download'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('updater:install'),
+  openReleasesPage: (): Promise<void> => ipcRenderer.invoke('updater:openReleases'),
+  // Reveal the app log file in the OS file manager.
+  openLogs: (): Promise<void> => ipcRenderer.invoke('app:openLogs'),
+  // Updater events ride a dedicated channel (not engine:event); returns unsubscribe.
+  onUpdateEvent(handler: (event: UpdateEvent) => void): () => void {
+    const listener = (_e: unknown, event: UpdateEvent): void => handler(event)
+    ipcRenderer.on('updater:event', listener)
+    return () => ipcRenderer.removeListener('updater:event', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('awog', awog)

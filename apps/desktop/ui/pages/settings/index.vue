@@ -32,16 +32,17 @@
         <SettingsDefaultsSection v-else-if="section === 'defaults'" />
         <SettingsModelsSection v-else-if="section === 'models'" />
         <SettingsAppearanceSection v-else-if="section === 'appearance'" />
+        <SettingsUpdatesSection v-else-if="section === 'updates'" />
       </div>
     </template>
   </MasterDetailShell>
 </template>
 
 <script setup lang="ts">
-import { FolderGit2, Key, Palette, Sliders } from 'lucide-vue-next'
+import { Download, FolderGit2, Key, Palette, Sliders } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
-type SectionId = 'workspace' | 'defaults' | 'models' | 'appearance'
+type SectionId = 'workspace' | 'defaults' | 'models' | 'appearance' | 'updates'
 
 const { t } = useTheme()
 const settings = useSettingsStore()
@@ -64,5 +65,6 @@ const sections: { id: SectionId; label: string; icon: Component }[] = [
   { id: 'workspace', label: 'Workspace', icon: FolderGit2 },
   { id: 'defaults', label: 'Defaults', icon: Sliders },
   { id: 'models', label: 'Models & API Keys', icon: Key },
+  { id: 'updates', label: 'Updates', icon: Download },
 ]
 </script>

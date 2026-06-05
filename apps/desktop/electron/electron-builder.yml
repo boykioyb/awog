@@ -10,8 +10,9 @@ directories:
   output: release
   buildResources: build
 
-# The Electron app itself is just the compiled main/preload (CJS) + package.json.
-# It has no runtime node_modules (all deps are devDependencies).
+# The Electron app is the compiled main/preload (CJS) + package.json. Its only
+# runtime dependency is electron-updater (ADR 0028) — electron-builder auto-includes
+# production `dependencies` node_modules into the asar; everything else is a devDependency.
 files:
   - dist/**/*
   - package.json

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { log } from './logger'
 import { enginePath } from './paths'
 
 // Engine process bridge — the Electron counterpart of the old Rust `sidecar.rs`.
@@ -51,11 +52,13 @@ class Engine {
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => this.onStdout(chunk))
 
-    // The engine logs structured NDJSON to stderr; surface it on the host.
+    // The engine logs structured NDJSON to stderr; route it to the log file so
+    // it survives in packaged builds (electron-log also mirrors to console in dev).
     child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => process.stderr.write(`[engine] ${chunk}`))
+    child.stderr.on('data', (chunk: string) => log.info('[engine]', chunk.trimEnd()))
 
     child.on('exit', (code) => {
+      log.warn('engine exited', { code })
       const err: RpcErrorShape = { code: -32000, message: `engine exited (code ${code})` }
       this.pending.forEach((p) => p.reject(err))
       this.pending.clear()

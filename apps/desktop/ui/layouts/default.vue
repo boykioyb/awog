@@ -6,6 +6,7 @@
     <NavRail />
     <div class="flex flex-col flex-1 overflow-hidden">
       <!-- <TopBar /> -->
+      <UpdateBanner />
       <slot />
     </div>
   </div>

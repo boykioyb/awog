@@ -9,8 +9,11 @@ import { useSettingsStore } from '~/stores/settings'
 import { useWorkspaceStore } from '~/stores/workspace'
 import { useTasksStore } from '~/stores/tasks'
 import { useWorkflowsStore } from '~/stores/workflows'
+import { useUpdateStore } from '~/stores/update'
 
 useAppearance()
+// Load the persisted auto-update toggle before the store schedules checks.
+useUpdateSettings()
 
 // Global hydration: every page (including /mcp-servers, /skills) needs the
 // active Anthropic account in the store, not just /settings and /sessions.
@@ -20,9 +23,11 @@ const workspace = useWorkspaceStore()
 // subscribes at app lifetime (not per-page). TopBar / edit pages read tasks too.
 const tasks = useTasksStore()
 const workflows = useWorkflowsStore()
+const update = useUpdateStore()
 
 let unsubscribeFs: (() => void) | null = null
 let unsubscribeTasks: (() => void) | null = null
+let unsubscribeUpdate: (() => void) | null = null
 
 onMounted(() => {
   settings.hydrateFromSidecar().catch(() => {
@@ -50,10 +55,19 @@ onMounted(() => {
     .catch(() => {})
   tasks.hydrateFromSidecar().catch(() => {})
   workflows.hydrateFromSidecar().catch(() => {})
+
+  // Auto-update: read app info, listen for updater events, schedule checks.
+  update
+    .subscribe()
+    .then((unlisten) => {
+      unsubscribeUpdate = unlisten
+    })
+    .catch(() => {})
 })
 
 onBeforeUnmount(() => {
   if (unsubscribeFs) unsubscribeFs()
   if (unsubscribeTasks) unsubscribeTasks()
+  if (unsubscribeUpdate) unsubscribeUpdate()
 })
 </script>

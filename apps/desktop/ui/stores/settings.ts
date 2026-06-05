@@ -92,6 +92,19 @@ export const DEFAULT_GIT_SETTINGS: GitSettings = {
   commitMessageRule: DEFAULT_COMMIT_MESSAGE_RULE,
 }
 
+// Auto-update (ADR 0028). Persisted in localStorage via `useUpdateSettings`
+// (same pattern as git/appearance). `enabled` gates the renderer's automatic
+// check schedule; manual "Check now" ignores it.
+export interface AutoUpdateSettings {
+  enabled: boolean
+  lastCheckedAt: string | null
+}
+
+export const DEFAULT_AUTO_UPDATE_SETTINGS: AutoUpdateSettings = {
+  enabled: true,
+  lastCheckedAt: null,
+}
+
 interface SettingsState {
   workspacePath: string
   autoApprove: boolean
@@ -101,6 +114,7 @@ interface SettingsState {
   defaults: SessionDefaults
   appearance: AppearanceSettings
   git: GitSettings
+  autoUpdate: AutoUpdateSettings
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -157,6 +171,7 @@ export const useSettingsStore = defineStore('settings', {
     },
     appearance: { ...DEFAULT_APPEARANCE },
     git: { ...DEFAULT_GIT_SETTINGS },
+    autoUpdate: { ...DEFAULT_AUTO_UPDATE_SETTINGS },
   }),
   getters: {
     activeAccount(state): (provider: ProviderName) => ProviderAccount | null {
@@ -288,6 +303,9 @@ export const useSettingsStore = defineStore('settings', {
     },
     resetGit() {
       this.git = { ...DEFAULT_GIT_SETTINGS }
+    },
+    updateAutoUpdate(patch: Partial<AutoUpdateSettings>) {
+      this.autoUpdate = { ...this.autoUpdate, ...patch }
     },
   },
 })
