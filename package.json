@@ -8,7 +8,7 @@
     "electron:dev": "pnpm --filter @awog/desktop dev",
     "dev:ui": "pnpm --filter awog-ui dev",
     "build": "pnpm -r --filter awog-ui --filter @awog/sidecar build",
-    "pack": "pnpm --filter @awog/desktop pack",
+    "dist": "pnpm --filter @awog/desktop run dist",
     "electron:rebuild": "pnpm --filter @awog/desktop rebuild",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",

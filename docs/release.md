@@ -60,7 +60,7 @@ Tab **Releases** trên GitHub → mở draft → kiểm tra đủ asset 3 nền 
 
 ## Build thử thủ công
 
-- **Local:** `pnpm pack` (root) → chạy `pack.mjs`, sinh installer ở `apps/desktop/electron/release/`. `pnpm pack -- --dir` để chỉ tạo `.app`/thư mục unpacked (nhanh, không tạo dmg).
+- **Local:** `pnpm dist` (root) → chạy `pack.mjs`, sinh installer ở `apps/desktop/electron/release/`. `pnpm dist -- --dir` để chỉ tạo `.app`/thư mục unpacked (nhanh, không tạo dmg). (Tên script là `dist` vì `pack` trùng lệnh built-in của pnpm.)
 - **CI:** `workflow_dispatch` (tab Actions → Release → Run workflow) build thử không cần tag.
 
 ## Footprint

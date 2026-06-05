@@ -44,7 +44,11 @@ run('pnpm', ['--filter', '@awog/sidecar', 'build'], repoRoot)
 run('pnpm', ['exec', 'electron-rebuild', '-f', '-w', 'node-pty', '--module-dir', '../sidecar/dist'], electronDir, { optional: true })
 // 4. Electron main/preload
 run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], electronDir)
-// 5. Package
-run('pnpm', ['exec', 'electron-builder', ...passthrough], electronDir)
+// 5. Package. Default to --publish never for local builds; CI passes
+//    --publish always. (With a `publish` config present, electron-builder would
+//    otherwise try to build update-info and crash when no repo/token is set.)
+const hasPublish = passthrough.some((a) => a === '--publish' || a.startsWith('--publish='))
+const ebArgs = hasPublish ? passthrough : ['--publish', 'never', ...passthrough]
+run('pnpm', ['exec', 'electron-builder', ...ebArgs], electronDir)
 
 console.error('\n[pack] Done. Installers in apps/desktop/electron/release/')
