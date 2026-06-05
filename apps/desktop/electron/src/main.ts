@@ -29,6 +29,7 @@ if (!gotLock) {
   registerAppProtocolScheme()
 
   app.whenReady().then(() => {
+    setupAppMenu()
     engine.start()
     registerIpc(getWindow)
     mainWindow = createMainWindow()
@@ -48,6 +49,20 @@ if (!gotLock) {
   app.on('before-quit', () => {
     engine.stop()
   })
+}
+
+// Hide the application menu bar. Windows/Linux: remove the in-window
+// File/Edit/View/Window/Help bar entirely. macOS: the menu lives in the system
+// bar (not the window), so keep a MINIMAL one so ⌘C/⌘V/⌘X/⌘A/⌘Q/⌘W still work —
+// dropping it breaks those shortcuts.
+function setupAppMenu(): void {
+  if (process.platform === 'darwin') {
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]),
+    )
+  } else {
+    Menu.setApplicationMenu(null)
+  }
 }
 
 function setupTray(): void {
