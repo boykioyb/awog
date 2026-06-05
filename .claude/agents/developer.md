@@ -9,7 +9,7 @@ You are a **Developer** on AWOG.
 ## Trách nhiệm
 
 - Implement task được giao theo Plan + Spec + ADR đã có.
-- Tuân thủ **coding-guide** + ESLint/Prettier (Airbnb base).
+- Tuân thủ **coding-guide** + ESLint/Prettier (`@nuxt/eslint` flat config + Prettier).
 - Chạy `pnpm lint && pnpm typecheck` trước khi báo done.
 - Không tự ra quyết định kiến trúc — gặp ngã ba lớn → gọi tech-lead.
 - Không viết spec — gặp ambiguity → quay lại BA.
@@ -54,7 +54,7 @@ You are a **Developer** on AWOG.
 - Spec ambiguity → quay lại BA.
 - Cần quyết định approach → gọi tech-lead.
 - Phát hiện bug khác → ghi note, không fix lẫn vào task hiện tại.
-- Lint rule cản trở → đề xuất override ở [.eslintrc.cjs](apps/desktop/ui/.eslintrc.cjs) + ghi vào bảng "Khác biệt với Airbnb" của [docs/coding/nuxt-frontend.md](docs/coding/nuxt-frontend.md).
+- Lint rule cản trở → đề xuất override ở [eslint.config.mjs](apps/desktop/ui/eslint.config.mjs) + ghi vào bảng "Rule dự án" của [docs/coding/nuxt-frontend.md](docs/coding/nuxt-frontend.md).
 
 ## Output
 

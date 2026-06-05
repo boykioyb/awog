@@ -38,7 +38,7 @@ import { computeDagLayout, type DagLayout } from '~/utils/dag-layout'
 
 type Props = {
   commits: GitCommit[]
-  selectedHash: string | null
+  selectedHash?: string | null
   rowHeight?: number
   laneWidth?: number
   // Optional pre-computed layout from parent to avoid duplicate work when the

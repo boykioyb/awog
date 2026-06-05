@@ -1,6 +1,6 @@
 # Lint & Format
 
-Frontend (`apps/desktop/ui/`) dùng **ESLint (Airbnb base) + Prettier**. Cấu hình: [`.eslintrc.cjs`](../../apps/desktop/ui/.eslintrc.cjs), [`.prettierrc`](../../apps/desktop/ui/.prettierrc).
+Frontend (`apps/desktop/ui/`) dùng **ESLint 9 flat config (`@nuxt/eslint`) + Prettier**. Cấu hình: [`eslint.config.mjs`](../../apps/desktop/ui/eslint.config.mjs), [`.prettierrc`](../../apps/desktop/ui/.prettierrc). Base rule do `@nuxt/eslint` cấp (typescript-eslint + eslint-plugin-vue + Nuxt auto-import); **Prettier giữ vai trò format** (`stylistic: false` trong `nuxt.config.ts`).
 
 ## Trước khi báo task xong
 
@@ -18,14 +18,18 @@ pnpm lint     # phải 0 error
 
 ## Tự fix vs sửa tay
 
-- **Tự fix bằng `lint:fix`**: format, import order, unused vars (báo cáo), prefer-const, no-var.
-- **Phải sửa tay**: nested ternary, explicit `any`, missing radix, unused vars/imports.
+- **Tự fix bằng `lint:fix`**: format (Prettier), prefer-const, no-var, gỡ `eslint-disable` thừa.
+- **Phải sửa tay**: nested ternary, explicit `any`, unused vars/imports, type-import không nhất quán.
 
-## Override khác Airbnb gốc (đã ghi sẵn)
+## Rule dự án (thêm/override trên `@nuxt/eslint` base)
 
-- `semi: 'never'`, `no-plusplus`/`no-continue` off, `no-param-reassign` `props: false`, Nuxt aliases unresolved off, `vue/multi-word-component-names` off.
+Khai trong [`eslint.config.mjs`](../../apps/desktop/ui/eslint.config.mjs):
 
-**Đừng tự thêm rule mới** mà không cập nhật [docs/coding/nuxt-frontend.md#lint--format](../../docs/coding/nuxt-frontend.md#lint--format) (bảng "Khác biệt với Airbnb").
+- **Bật chặt hơn:** `@typescript-eslint/no-explicit-any` = error, `consistent-type-imports` = error (`prefer: type-imports`), `no-unused-vars` (ignore `^_`), `vue/component-name-in-template-casing` = PascalCase, `vue/block-order` (template→script→style), `vue/html-self-closing`.
+- **Tắt (idiomatic Vue / pattern dự án):** `vue/multi-word-component-names`, `vue/no-multiple-template-root` (Vue 3 fragment), `@typescript-eslint/no-dynamic-delete` (`delete record[key]` cho cache per-project), `@typescript-eslint/unified-signatures` (giữ 1 call-signature / event trong `defineEmits`).
+- Format (semi, quote, printWidth…) **do Prettier lo**, không khai rule style trong ESLint.
+
+**Đừng tự thêm/đổi rule** mà không cập nhật [docs/coding/nuxt-frontend.md#lint--format](../../docs/coding/nuxt-frontend.md#lint--format).
 
 ## Hook tự động
 

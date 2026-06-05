@@ -275,19 +275,19 @@ Sau đợt refactor [ADR 0009](../decisions/0009-ui-consolidation-refactor.md) (
 
 ## Lint & Format
 
-Frontend dùng **ESLint** (rule) + **Prettier** (formatter), cấu hình base là **Airbnb** điều chỉnh cho Nuxt/Vue/TS.
+Frontend dùng **ESLint 9 (flat config)** cho rule + **Prettier** cho format. Base do module chính thức [`@nuxt/eslint`](https://eslint.nuxt.com/) cấp (Nuxt-aware auto-import/import handling).
+
+> **Lịch sử:** từng dùng `eslint-config-airbnb-base`/`airbnb-typescript` trên `.eslintrc.cjs`. Airbnb không hỗ trợ flat config nên khi nâng ESLint 8 (EOL) → 9 đã chuyển sang `@nuxt/eslint`.
 
 **Stack:**
-- [eslint-config-airbnb-base](https://github.com/airbnb/javascript) + [eslint-config-airbnb-typescript](https://github.com/iamturns/eslint-config-airbnb-typescript) — rule JS/TS gốc Airbnb
-- [eslint-plugin-vue](https://eslint.vuejs.org/) (`vue3-recommended`) — rule SFC Vue 3
-- [`@typescript-eslint`](https://typescript-eslint.io/) — rule TypeScript
-- [Prettier](https://prettier.io/) + `eslint-config-prettier` + `eslint-plugin-prettier` — format và tích hợp
+- [`@nuxt/eslint`](https://eslint.nuxt.com/) — base flat config (gói sẵn `typescript-eslint` + `eslint-plugin-vue` + Nuxt rule/auto-import). Cấu hình `stylistic: false` (Prettier lo format).
+- [Prettier](https://prettier.io/) + `eslint-plugin-prettier/recommended` (append cuối) — format + tích hợp vào ESLint.
 
 **Lệnh:**
 
 ```bash
-pnpm lint          # check
-pnpm lint:fix      # auto-fix lint + Prettier
+pnpm lint          # check (flat config, không cần --ext)
+pnpm lint:fix      # auto-fix lint + Prettier + gỡ eslint-disable thừa
 pnpm format        # Prettier toàn bộ .ts/.vue/.js/.json/.md
 pnpm format:check  # check format không sửa
 ```
@@ -303,27 +303,32 @@ pnpm format:check  # check format không sửa
 | `printWidth` | `100` |
 | `arrowParens` | `always` |
 
-**Khác biệt với Airbnb gốc:**
+**Rule dự án (thêm/override trên `@nuxt/eslint` base):**
 
 | Rule | Trạng thái | Lý do |
 |---|---|---|
-| `semi` | `'never'` | Style dự án — không dùng `;` (override Airbnb) |
-| `no-plusplus` | `off` | Cho phép `++`/`--` trong code thuật toán (topo sort, generator) |
-| `no-continue` | `off` | Cho phép trong loop nhiều nhánh |
-| `no-param-reassign` | `props: false` | Pinia store action mutate state ref |
-| `import/no-unresolved`, `import/extensions` | `off` | Nuxt auto-import + alias `~/` |
-| `vue/multi-word-component-names` | `off` | Cho phép `app.vue`, `index.vue` |
-| `no-console` | `warn`, allow `warn`/`error` | Chỉ chặn `console.log` |
 | `@typescript-eslint/no-explicit-any` | `error` | Áp luật chung của [general.md](./general.md) |
+| `@typescript-eslint/consistent-type-imports` | `error` (`prefer: type-imports`) | Tách `import type` rõ ràng |
+| `@typescript-eslint/no-unused-vars` | `error` (ignore `^_`) | Cho phép prefix `_` |
+| `vue/component-name-in-template-casing` | `PascalCase` | Component dùng PascalCase trong template |
+| `vue/block-order` | template→script→style | (đổi tên từ `vue/component-tags-order`) |
+| `vue/html-self-closing` | `always` | Tự đóng thẻ void/normal/component |
+| `vue/multi-word-component-names` | `off` | Cho phép `app.vue`, `index.vue` |
+| `vue/no-multiple-template-root` | `off` | Vue 3 cho phép fragment nhiều root |
+| `@typescript-eslint/no-dynamic-delete` | `off` | `delete record[key]` cho cache `Record<string,T>` per-project |
+| `@typescript-eslint/unified-signatures` | `off` | Giữ 1 call-signature / event trong `defineEmits` (idiomatic Vue) |
+| `no-console` | `warn`, allow `warn`/`error` | Chỉ chặn `console.log` |
+
+> Format (semi, quote, printWidth…) **do Prettier lo** — không khai rule style trong ESLint.
 
 **File config nằm ở:**
-- [`apps/desktop/ui/.eslintrc.cjs`](../../apps/desktop/ui/.eslintrc.cjs)
-- [`apps/desktop/ui/.prettierrc`](../../apps/desktop/ui/.prettierrc)
-- [`apps/desktop/ui/.eslintignore`](../../apps/desktop/ui/.eslintignore) / [`.prettierignore`](../../apps/desktop/ui/.prettierignore)
+- [`apps/desktop/ui/eslint.config.mjs`](../../apps/desktop/ui/eslint.config.mjs) — flat config (extend `withNuxt` + rule dự án + Prettier)
+- [`apps/desktop/ui/nuxt.config.ts`](../../apps/desktop/ui/nuxt.config.ts) — bật module `@nuxt/eslint` (`stylistic: false`, `checker: false`)
+- [`apps/desktop/ui/.prettierrc`](../../apps/desktop/ui/.prettierrc) / [`.prettierignore`](../../apps/desktop/ui/.prettierignore)
 
-> Khi muốn thêm/đổi rule: sửa `.eslintrc.cjs` + ghi nhật ký vào bảng "Khác biệt với Airbnb" ở trên + nêu lý do trong PR.
+> Khi muốn thêm/đổi rule: sửa `eslint.config.mjs` + cập nhật bảng "Rule dự án" ở trên + nêu lý do trong PR.
 
-**Bị ignore khỏi typed-lint:** `nuxt.config.ts`, `tailwind.config.ts`, `*.config.{ts,mjs,js}`, `.eslintrc.cjs` — vì TypeScript-ESLint typed rule yêu cầu file phải nằm trong `tsconfig.json` includes, các file config thường không.
+**Typed-lint:** rule cần parser TypeScript được scope vào `**/*.ts`, `**/*.tsx`, `**/*.vue` trong `eslint.config.mjs` (file `.mjs`/`.js` như `eslint.config.mjs` dùng parser mặc định, không chạy rule typescript-eslint). `ignores` (flat config thay cho `.eslintignore` đã bỏ ở ESLint 9): `public/**`, `**/*.json`, `dist`, `.output`.
 
 ## Checklist PR (frontend)
 
