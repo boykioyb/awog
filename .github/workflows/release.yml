@@ -69,7 +69,9 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # pnpm 10 — matches the local toolchain + root packageManager field.
+          # `pnpm deploy --legacy` (used by the engine build) is pnpm-10-only.
+          version: 10
 
       - name: Set up Node
         uses: actions/setup-node@v4
