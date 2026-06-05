@@ -26,7 +26,14 @@ export function registerAppProtocolScheme(): void {
 // its index.html; anything missing (deep/dynamic route, e.g. /sessions/abc) →
 // 200.html so client-side routing resolves it. Fetching a directory directly
 // would fail the navigation with ERR_UNEXPECTED (white screen).
+let appProtocolHandlerRegistered = false
+
 function registerAppProtocolHandler(): void {
+  // protocol.handle throws if called twice for the same scheme. createMainWindow
+  // runs again on every macOS dock re-activate, so register only once — else the
+  // re-opened window throws before it can show (app "won't reopen" from the dock).
+  if (appProtocolHandlerRegistered) return
+  appProtocolHandlerRegistered = true
   protocol.handle(APP_SCHEME, (request) => {
     const { pathname } = new URL(request.url)
     const rel = decodeURIComponent(pathname).replace(/^\/+/, '')

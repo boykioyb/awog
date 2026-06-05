@@ -19,6 +19,16 @@ let tray: Tray | null = null
 
 const getWindow = (): BrowserWindow | null => mainWindow
 
+// Create the main window and drop the reference when it closes, so the dock
+// re-activate + tray re-open work from a clean (null) state instead of poking a
+// destroyed window.
+function openMainWindow(): void {
+  mainWindow = createMainWindow()
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+}
+
 // Single-instance: a second launch focuses the existing window instead of
 // starting a rival engine that would fight over the workspace files.
 const gotLock = app.requestSingleInstanceLock()
@@ -39,12 +49,12 @@ if (!gotLock) {
     engine.start()
     registerIpc(getWindow)
     setupUpdater(getWindow)
-    mainWindow = createMainWindow()
+    openMainWindow()
     setupTray()
 
     app.on('activate', () => {
       // macOS: re-create the window when the dock icon is clicked and none open.
-      if (BrowserWindow.getAllWindows().length === 0) mainWindow = createMainWindow()
+      if (BrowserWindow.getAllWindows().length === 0) openMainWindow()
     })
   })
 
@@ -84,9 +94,11 @@ function setupTray(): void {
       {
         label: 'Show AWOG',
         click: () => {
-          if (!mainWindow) mainWindow = createMainWindow()
-          else mainWindow.show()
-          mainWindow.focus()
+          if (!mainWindow) openMainWindow()
+          else {
+            mainWindow.show()
+            mainWindow.focus()
+          }
         },
       },
       { type: 'separator' },
@@ -94,7 +106,8 @@ function setupTray(): void {
     ]),
   )
   tray.on('click', () => {
-    if (mainWindow) {
+    if (!mainWindow) openMainWindow()
+    else {
       mainWindow.show()
       mainWindow.focus()
     }
