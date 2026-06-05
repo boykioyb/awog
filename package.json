@@ -5,6 +5,7 @@
   "description": "AWOG — Artifact Workflow Orchestrate Guild (local-first AI team OS)",
   "scripts": {
     "dev": "pnpm --filter @awog/desktop dev",
+    "electron:dev": "pnpm --filter @awog/desktop dev",
     "dev:ui": "pnpm --filter awog-ui dev",
     "build": "pnpm -r --filter awog-ui --filter @awog/sidecar build",
     "pack": "pnpm --filter @awog/desktop pack",
