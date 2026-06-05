@@ -31,9 +31,12 @@ export function preloadPath(): string {
   return join(__dirname, 'preload.js')
 }
 
-// Tray icon. Dev: the package's build/ assets. Packaged: shipped to
-// <resources>/tray.png via electron-builder extraResources.
+// Tray icon. macOS uses a monochrome TEMPLATE image (transparent bg, auto
+// black/white per menu-bar appearance — no background tile); Windows/Linux use
+// the colored icon. createFromPath auto-loads the @2x variant alongside.
+// Dev: the package's build/ assets. Packaged: shipped via extraResources.
 export function trayIconPath(): string {
-  if (app.isPackaged) return join(process.resourcesPath, 'tray.png')
-  return join(__dirname, '..', 'build', 'tray.png')
+  const name = process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png'
+  if (app.isPackaged) return join(process.resourcesPath, name)
+  return join(__dirname, '..', 'build', name)
 }

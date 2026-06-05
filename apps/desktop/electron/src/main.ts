@@ -53,6 +53,8 @@ if (!gotLock) {
 function setupTray(): void {
   const icon = nativeImage.createFromPath(trayIconPath())
   if (icon.isEmpty()) return // no icon available — skip tray rather than crash
+  // macOS: template image → menu bar renders it black/white with no background.
+  if (process.platform === 'darwin') icon.setTemplateImage(true)
   tray = new Tray(icon)
   tray.setToolTip('AWOG')
   tray.setContextMenu(
