@@ -59,6 +59,9 @@ linux:
     - deb
   category: Development
   icon: build/icon.png
+  # .deb requires a maintainer ("Name <email>"); github noreply avoids exposing
+  # a personal address.
+  maintainer: AWOG <boykioyb@users.noreply.github.com>
 
 # Upload to a DRAFT GitHub Release keyed by the tag (CI: --publish always +
 # GH_TOKEN). Review assets across platforms, then publish manually.
