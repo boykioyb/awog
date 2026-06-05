@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, net, protocol } from 'electron'
+import { log } from './logger'
 import { DEV_URL, preloadPath, uiDir } from './paths'
 
 // Custom scheme for serving the packaged Nuxt SPA. Registered as privileged so
@@ -55,6 +56,20 @@ export function createMainWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+
+  // Surface renderer failures into the log file — a packaged GUI has no console,
+  // so a white-screen (e.g. a Vue render throw) would otherwise be invisible.
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2) log.error(`[renderer] ${message} (${sourceId}:${line})`)
+  })
+  win.webContents.on('render-process-gone', (_e, details) => {
+    log.error(`[renderer] process gone: ${details.reason} (exitCode ${details.exitCode})`)
+  })
+  if (app.isPackaged) {
+    win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+      if (code !== -3) log.error(`[renderer] did-fail-load ${code} ${desc} ${url}`)
+    })
+  }
 
   if (app.isPackaged) {
     registerAppProtocolHandler()
