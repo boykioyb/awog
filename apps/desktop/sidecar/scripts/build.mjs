@@ -112,7 +112,15 @@ async function pruneBundle() {
     )
     console.error(`[build] node-pty prebuilds: kept ${keep}, dropped ${dirs.length - 1} others`)
   }
-  console.error(`[build] pruned ${pdbCount} .pdb files (${(pdbBytes / 1048576).toFixed(0)} MB)`)
+
+  // Drop node_modules/.bin — package-executable symlinks the engine never uses
+  // at runtime (it imports modules + spawns the platform CLI binary directly).
+  // They are the only symlinks in the bundle; removing them avoids broken-symlink
+  // errors (e.g. `xattr -dr com.apple.quarantine` on the unsigned mac app:
+  // "No such file: .../node_modules/.bin/node-which") and symlink issues on Windows.
+  await rm(join(nmDir, '.bin'), { recursive: true, force: true })
+
+  console.error(`[build] pruned ${pdbCount} .pdb files (${(pdbBytes / 1048576).toFixed(0)} MB) + .bin symlinks`)
 }
 
 async function writeStagePackageJson() {
