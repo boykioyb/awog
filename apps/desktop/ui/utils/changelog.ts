@@ -30,6 +30,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.5.1',
+    date: '2026-06-05',
+    highlight: {
+      en: 'Windows stability: fixes a crash when opening Sessions.',
+      vi: 'Ổn định trên Windows: sửa lỗi crash khi mở Sessions.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Fixed a crash that occurred the moment the Sessions screen opened on Windows, by disabling hardware acceleration on Windows (a GPU-driver compositing crash).',
+        vi: 'Sửa lỗi crash xảy ra ngay khi mở màn Sessions trên Windows, bằng cách tắt tăng tốc phần cứng trên Windows (crash compositing do driver GPU).',
+      },
+    ],
+  },
+  {
     version: '0.5.0',
     date: '2026-06-05',
     highlight: {
