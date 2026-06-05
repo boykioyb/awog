@@ -67,11 +67,11 @@ jobs:
           fi
 
       - name: Set up pnpm
+        # No `version` input — action-setup reads it from the root package.json
+        # "packageManager" field (pnpm@10.33.0). Specifying both errors with
+        # "Multiple versions of pnpm specified". pnpm 10 is required:
+        # `pnpm deploy --legacy` (engine build) is pnpm-10-only.
         uses: pnpm/action-setup@v4
-        with:
-          # pnpm 10 — matches the local toolchain + root packageManager field.
-          # `pnpm deploy --legacy` (used by the engine build) is pnpm-10-only.
-          version: 10
 
       - name: Set up Node
         uses: actions/setup-node@v4
