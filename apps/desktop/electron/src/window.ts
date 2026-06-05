@@ -79,6 +79,9 @@ export function createMainWindow(): BrowserWindow {
     void win.loadURL(`${APP_ORIGIN}/`)
   } else {
     loadDevUrl(win)
+    // Dev: open DevTools so renderer errors (e.g. a white-screen route) are
+    // visible immediately — the hidden menu removes the default toggle shortcut.
+    win.webContents.openDevTools({ mode: 'detach' })
   }
 
   return win
