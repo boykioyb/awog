@@ -325,6 +325,21 @@ export interface SessionAttachment {
   height?: number
 }
 
+// One entry in the Session Info panel's "context files" list. Either a user
+// attachment (in-memory data — opens in the lightbox, can't be revealed in the
+// OS) or an `@file` mention (a real workspace-relative path that can be
+// revealed / opened with the OS handler). `key` dedupes + keys the v-for.
+export type SessionContextFile =
+  | {
+      kind: 'attachment'
+      key: string
+      name: string
+      size?: string
+      fileType: 'file' | 'image'
+      attachment: SessionAttachment
+    }
+  | { kind: 'mention'; key: string; name: string; path: string }
+
 // Composer-level annotation: user quotes an excerpt from a prior agent message
 // and attaches a short instruction. Inlined into the next outgoing message as
 // a quote block — see formatFollowUp in utils/follow-up.ts.

@@ -17,6 +17,12 @@
       :workspace-root="workspaceRoot"
     />
 
+    <SessionInfoPanel
+      v-if="infoPanel.isOpen(session.id)"
+      :session="session"
+      @open-attachment="openAttachment"
+    />
+
     <SessionDrawer
       :open="selectedStep !== null"
       :step="selectedStep"
@@ -37,8 +43,10 @@ import type { Session, SessionAttachment, SessionFollowUp, SessionStep } from '~
 import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
+import { useSessionInfoPanelStore } from '~/stores/sessionInfoPanel'
 import { WORKSPACE_TOOLS, matchesShortcut } from '~/utils/workspace-tools'
 import SessionWorkspacePanel from './workspace/SessionWorkspacePanel.vue'
+import SessionInfoPanel from './info/SessionInfoPanel.vue'
 
 const props = defineProps<{
   session: Session
@@ -48,6 +56,7 @@ const emit = defineEmits<{ delete: [] }>()
 
 const store = useSessionsStore()
 const panel = useWorkspacePanelStore()
+const infoPanel = useSessionInfoPanelStore()
 const workspace = useWorkspaceStore()
 
 // Absolute path of the session's bound project — every workspace tab operates

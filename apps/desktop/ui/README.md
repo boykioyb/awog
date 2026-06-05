@@ -56,6 +56,7 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Sessions chat streaming** — SSE token stream, markdown render, reply borderless + byline footer (copy/branch · latency · token), attach file (📎 + kéo-thả) với preview ảnh inline (data URL) (xem [docs/features/sessions.md](../../../docs/features/sessions.md)).
 ✅ **Sessions persistence** — JSONL event-sourced tại `~/.awog/sessions/<id>.jsonl`.
 ✅ **Composer follow-up** — bôi đen text trong agent reply → "Quote & follow up" → chip + note editor trong composer, prepend quote block khi send (xem [docs/features/sessions.md#composer-follow-up-quote--instruct](../../../docs/features/sessions.md#composer-follow-up-quote--instruct)).
+✅ **Session Info panel** — nút ⓘ ở session header mở panel right-docked (resizable, store `sessionInfoPanel`) hiển thị "context" của session: **Details** (id/created/updated/messages/model/provider/mode/thinking/connections/agents), **Project** (tên + path + "View in Finder" qua `revealPath`) và **Context files** (attachments + `@file` mentions gom từ messages — attachment mở lightbox, mention real-path có Reveal/Open qua `revealPath`/`openPath`). Loại trừ lẫn nhau với Workspace Panel (chỉ một panel dock phải mỗi lúc). Lưu ý: attachments/mentions chỉ in-memory (không persist xuống JSONL) → trống sau reload.
 ✅ **What's New** — nút trên mục Settings ở NavRail mở `WhatsNewModal` liệt kê release note (changelog tĩnh `utils/changelog.ts`, song ngữ en/vi). Dot "unseen" khi version mới nhất khác version đã xem; lưu last-seen trong localStorage (`useWhatsNew`). Local-first, không fetch remote.
 ⏳ **System tray + native notification** — đặc tả ở docs, chưa implement.
 ⏳ **Agents engine wiring** — agent CRUD đã wire (sidecar `agents.*`); engine injection cho session/task đã dùng AGENT.md runtime. (Tasks/Workflows nay đã wire — xem trên.)
@@ -90,6 +91,8 @@ ui/
 │   │
 │   │ # Feature folders (existing)
 │   ├── session/      # SessionChat (orchestrator), Header, MessageList, Composer, ChipsPopover, Autocomplete, Drawer, StepDetail — PR-5.A
+│   │   ├── workspace/ # SessionWorkspacePanel + tabs (Diff/Files/Plan/Terminal/Tasks/Preview)
+│   │   └── info/      # SessionInfoPanel + Section + FileRow (Session Info panel)
 │   ├── edit/         # EditorTopBar, EditorFileTree, EditorMonacoPane, EditorViewerPane — PR-5.G
 │   ├── settings/     # SettingsWorkspace/Defaults/Models/Connectors/AppearanceSection + SettingsField + CustomProviderForm + SettingsOAuthCodeDialog — PR-5.B + M7
 │   ├── git/          # GitBranchList (orchestrator), Tree, ContextMenu, NameModal, DirtyCheckoutModal, ... — PR-5.C

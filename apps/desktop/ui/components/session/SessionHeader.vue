@@ -36,6 +36,14 @@
       </div>
     </div>
     <button
+      class="p-1.5 rounded transition flex-shrink-0"
+      :style="{ color: infoOpen ? t.accent : t.textDim }"
+      :title="tr('sessionInfo.open')"
+      @click="toggleInfo"
+    >
+      <Info :size="14" />
+    </button>
+    <button
       ref="wsBtnRef"
       class="p-1.5 rounded transition flex-shrink-0"
       :style="{ color: activeDrawer || showWorkspaceMenu ? t.accent : t.textDim }"
@@ -113,16 +121,18 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, FolderGit2, PanelRight, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, FolderGit2, Info, PanelRight, Trash2 } from 'lucide-vue-next'
 import { nextTick, ref, computed, watch } from 'vue'
 import type { Session, WorkspaceTab } from '~/types'
 import { formatTime } from '~/utils/time'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
+import { useSessionInfoPanelStore } from '~/stores/sessionInfoPanel'
 import WorkspaceMenu from './workspace/WorkspaceMenu.vue'
 
 const settingsStore = useSettingsStore()
 const sessionsStore = useSessionsStore()
 const panel = useWorkspacePanelStore()
+const infoPanel = useSessionInfoPanelStore()
 const { t: tr } = useI18n()
 const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
 
@@ -148,10 +158,22 @@ const showWorkspaceMenu = ref(false)
 const wsBtnRef = ref<HTMLElement | null>(null)
 const wsMenuPos = ref({ top: 0, left: 0 })
 const activeDrawer = computed(() => panel.activeDrawer(props.session.id))
+const infoOpen = computed(() => infoPanel.isOpen(props.session.id))
 
+// The Info panel and the workspace drawer both dock right — keep one open at a
+// time so they never stack on the same edge.
 const onSelectWorkspace = (tab: WorkspaceTab) => {
   panel.openDrawer(props.session.id, tab)
+  infoPanel.close(props.session.id)
   showWorkspaceMenu.value = false
+}
+
+const toggleInfo = () => {
+  infoPanel.toggle(props.session.id)
+  if (infoOpen.value) {
+    panel.closeDrawer(props.session.id)
+    showWorkspaceMenu.value = false
+  }
 }
 
 watch(
