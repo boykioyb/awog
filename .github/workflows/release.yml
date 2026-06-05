@@ -36,6 +36,11 @@ jobs:
     name: Build (${{ matrix.label }})
     strategy:
       fail-fast: false
+      # Serialize: all jobs run `electron-builder --publish always` against the
+      # same GitHub release. Running them concurrently races on creating/updating
+      # the release and silently drops one platform's assets (the Windows .exe +
+      # latest.yml went missing in v0.5.2). One-at-a-time = every asset lands.
+      max-parallel: 1
       matrix:
         include:
           - label: macos-arm64
