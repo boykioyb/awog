@@ -52,7 +52,10 @@ export function createMainWindow(): BrowserWindow {
 
   if (app.isPackaged) {
     registerAppProtocolHandler()
-    void win.loadURL(`${APP_ORIGIN}/index.html`)
+    // Load the ROOT, not /index.html — the SPA router must see path "/" (the
+    // home route), else it treats "/index.html" as an unknown route → 404. The
+    // protocol handler still serves index.html for "/".
+    void win.loadURL(`${APP_ORIGIN}/`)
   } else {
     loadDevUrl(win)
   }
