@@ -57,6 +57,19 @@ export function createMainWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show())
 
+  // DevTools toggle (F12 / Ctrl+Shift+I / Cmd+Opt+I) — works in the PACKAGED app
+  // too, since hiding the menu removed the default shortcut. Needed to diagnose
+  // renderer issues (e.g. white screens) on installed builds.
+  win.webContents.on('before-input-event', (_e, input) => {
+    if (input.type !== 'keyDown') return
+    const key = input.key.toLowerCase()
+    const isToggle =
+      key === 'f12' ||
+      (input.control && input.shift && key === 'i') ||
+      (input.meta && input.alt && key === 'i')
+    if (isToggle) win.webContents.toggleDevTools()
+  })
+
   // Surface renderer failures into the log file — a packaged GUI has no console,
   // so a white-screen (e.g. a Vue render throw) would otherwise be invisible.
   win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
