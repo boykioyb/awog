@@ -1,9 +1,22 @@
-import { existsSync, statSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, net, protocol } from 'electron'
-import { log } from './logger'
 import { DEV_URL, preloadPath, uiDir } from './paths'
+
+// Self-contained diagnostic log (no external logger dependency). A packaged GUI
+// has no console, so renderer failures (e.g. a white-screen route) would be
+// invisible — append them to <userData logs>/awog-diagnostics.log. Logging must
+// never throw.
+function diagLog(message: string): void {
+  try {
+    const dir = app.getPath('logs')
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(join(dir, 'awog-diagnostics.log'), `${new Date().toISOString()} ${message}\n`)
+  } catch {
+    /* ignore */
+  }
+}
 
 // Custom scheme for serving the packaged Nuxt SPA. Registered as privileged so
 // it behaves like https (secure context, fetch, standard URL parsing) — needed
@@ -73,14 +86,14 @@ export function createMainWindow(): BrowserWindow {
   // Surface renderer failures into the log file — a packaged GUI has no console,
   // so a white-screen (e.g. a Vue render throw) would otherwise be invisible.
   win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
-    if (level >= 2) log.error(`[renderer] ${message} (${sourceId}:${line})`)
+    if (level >= 2) diagLog(`[renderer] ${message} (${sourceId}:${line})`)
   })
   win.webContents.on('render-process-gone', (_e, details) => {
-    log.error(`[renderer] process gone: ${details.reason} (exitCode ${details.exitCode})`)
+    diagLog(`[renderer] process gone: ${details.reason} (exitCode ${details.exitCode})`)
   })
   if (app.isPackaged) {
     win.webContents.on('did-fail-load', (_e, code, desc, url) => {
-      if (code !== -3) log.error(`[renderer] did-fail-load ${code} ${desc} ${url}`)
+      if (code !== -3) diagLog(`[renderer] did-fail-load ${code} ${desc} ${url}`)
     })
   }
 
