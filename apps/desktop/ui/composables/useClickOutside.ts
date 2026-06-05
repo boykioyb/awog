@@ -16,7 +16,11 @@ import type { Ref } from 'vue'
  * useClickOutside(menuRef, () => (open.value = false))
  */
 export const useClickOutside = (
-  targetRef: Ref<HTMLElement | null>,
+  // Read-only Ref so it accepts ref(), shallowRef(), and useTemplateRef() alike
+  // (the composable only reads `.value`). useTemplateRef is the preferred way to
+  // pass a template ref — vue-tsc mis-types a plain `ref<HTMLElement>()` bound via
+  // `ref="x"` as a structurally-expanded HTMLElement that won't match this param.
+  targetRef: Readonly<Ref<HTMLElement | null>>,
   handler: (event: MouseEvent) => void,
 ) => {
   const onMousedown = (event: MouseEvent) => {

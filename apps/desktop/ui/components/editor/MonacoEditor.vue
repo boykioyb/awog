@@ -34,7 +34,7 @@ const emit = defineEmits<{
 
 const { t, themeName } = useTheme()
 
-const hostRef = ref<HTMLElement | null>(null)
+const hostRef = useTemplateRef<HTMLElement>('hostRef')
 const editor = shallowRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
 const monacoRef = shallowRef<typeof Monaco | null>(null)
 const models = new Map<string, Monaco.editor.ITextModel>()

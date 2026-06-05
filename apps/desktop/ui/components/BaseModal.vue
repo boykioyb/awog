@@ -51,7 +51,7 @@
 
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { computed, watch, onBeforeUnmount, useTemplateRef } from 'vue'
 
 type Props = {
   open: boolean
@@ -69,7 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useTheme()
-const cardRef = ref<HTMLElement | null>(null)
+const cardRef = useTemplateRef<HTMLElement>('cardRef')
 
 const SIZE_MAP = {
   sm: 'max-w-[420px]',

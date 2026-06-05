@@ -46,7 +46,9 @@ const byProjectFirst = <T extends { source: AgentSource | SkillSource }>(items: 
  */
 export const useMentionAutocomplete = (
   draft: Ref<string>,
-  textareaRef: Ref<HTMLTextAreaElement | null>,
+  // Read-only Ref so a useTemplateRef('textareaRef') (the preferred template-ref
+  // idiom — see useClickOutside) is accepted; this composable only reads `.value`.
+  textareaRef: Readonly<Ref<HTMLTextAreaElement | null>>,
   workspaceRoot: Ref<string | null>,
   onCommand?: (commandId: string) => void,
 ) => {

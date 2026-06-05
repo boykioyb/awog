@@ -20,7 +20,7 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import { TerminalSquare } from 'lucide-vue-next'
-import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useTerminalApi } from '~/composables/useTerminalApi'
 import { useSidecar, type SidecarEvent, type UnlistenFn } from '~/composables/useSidecar'
 import '@xterm/xterm/css/xterm.css'
@@ -39,7 +39,7 @@ const { t } = useTheme()
 const { t: tr } = useI18n()
 const api = useTerminalApi()
 
-const containerRef = ref<HTMLElement | null>(null)
+const containerRef = useTemplateRef<HTMLElement>('containerRef')
 const term = shallowRef<Terminal | null>(null)
 const errorMsg = ref<string | null>(null)
 
