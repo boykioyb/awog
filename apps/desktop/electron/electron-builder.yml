@@ -2,6 +2,10 @@ appId: guild.awog.desktop
 productName: AWOG
 copyright: AWOG
 
+# Use productName (not the scoped package name @awog/desktop) for output files —
+# the "/" in the scope made fpm try to write into a non-existent @awog/ dir.
+artifactName: ${productName}-${version}-${arch}.${ext}
+
 directories:
   output: release
   buildResources: build
