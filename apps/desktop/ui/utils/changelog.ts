@@ -30,7 +30,7 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
-    version: '0.5.1',
+    version: '0.5.2',
     date: '2026-06-05',
     highlight: {
       en: 'Windows stability: fixes a crash when opening Sessions.',
@@ -39,8 +39,8 @@ export const CHANGELOG: Release[] = [
     items: [
       {
         kind: 'fixed',
-        en: 'Fixed a crash that occurred the moment the Sessions screen opened on Windows, by disabling hardware acceleration on Windows (a GPU-driver compositing crash).',
-        vi: 'Sửa lỗi crash xảy ra ngay khi mở màn Sessions trên Windows, bằng cách tắt tăng tốc phần cứng trên Windows (crash compositing do driver GPU).',
+        en: 'Fixed a renderer crash that occurred when opening Sessions on Windows: the code editor (Monaco/terminal) is now loaded only when a session is open, and all locale resources are shipped.',
+        vi: 'Sửa lỗi crash renderer khi mở Sessions trên Windows: trình soạn code (Monaco/terminal) giờ chỉ nạp khi mở một session, và đóng gói đầy đủ locale.',
       },
     ],
   },

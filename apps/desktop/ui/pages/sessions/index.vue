@@ -216,7 +216,11 @@
     </template>
 
     <template #detail>
-      <SessionChat
+      <!-- Lazy: SessionChat statically pulls Monaco + xterm into this page's
+           chunk. Loading that on the Sessions route crashed the renderer on
+           Windows (render-process-gone). LazySessionChat splits it into its own
+           chunk, loaded only when a session is actually open. -->
+      <LazySessionChat
         v-if="store.selectedSession"
         :session="store.selectedSession"
         @delete="askDelete(store.selectedSession.id)"

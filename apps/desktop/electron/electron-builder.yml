@@ -39,10 +39,9 @@ extraResources:
 # extraResources, which electron-builder does not rebuild.
 npmRebuild: false
 
-# Ship only the locales the UI uses — Electron bundles ~55 by default.
-electronLanguages:
-  - en
-  - vi
+# NOTE: do NOT strip locales via `electronLanguages`. Limiting to [en, vi]
+# produced "resource_bundle.cc: locale resources are not loaded" on Windows
+# right before a renderer crash on the Sessions route — ship all locales.
 
 mac:
   target:
