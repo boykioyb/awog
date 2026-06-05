@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.4.0',
+    date: '2026-06-05',
+    highlight: {
+      en: 'Rebuilt on Electron — consistent rendering and a reliable, self-contained build.',
+      vi: 'Dựng lại trên Electron — render nhất quán và bản đóng gói tự-chứa, ổn định.',
+    },
+    items: [
+      {
+        kind: 'changed',
+        en: 'Desktop shell migrated from Tauri to Electron, for consistent Chromium rendering on every platform.',
+        vi: 'Chuyển shell desktop từ Tauri sang Electron, render Chromium nhất quán trên mọi nền tảng.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The bundled Claude CLI binary now ships correctly, fixing the "native CLI binary not found" startup failure.',
+        vi: 'Đóng gói đúng binary Claude CLI, sửa lỗi khởi động "native CLI binary not found".',
+      },
+      {
+        kind: 'improved',
+        en: 'Slimmer install: trimmed ~65MB of unused native build artifacts; the macOS download stays around 170MB.',
+        vi: 'Bản cài gọn hơn: cắt ~65MB build artifact thừa; bản tải macOS ~170MB.',
+      },
+    ],
+  },
+  {
     version: '0.3.4',
     date: '2026-06-04',
     highlight: {
