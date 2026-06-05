@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, net, protocol } from 'electron'
@@ -19,15 +19,21 @@ export function registerAppProtocolScheme(): void {
   ])
 }
 
-// Serve files from the packaged UI dir; fall back to index.html for unknown
-// paths so client-side routes (e.g. /sessions/abc) resolve to the SPA shell.
+// Serve files from the packaged UI dir. `nuxt generate` emits a per-route
+// DIRECTORY (e.g. sessions/, agents/) each with its own index.html, plus a
+// 200.html SPA fallback. So: a real file → serve it; a route directory → serve
+// its index.html; anything missing (deep/dynamic route, e.g. /sessions/abc) →
+// 200.html so client-side routing resolves it. Fetching a directory directly
+// would fail the navigation with ERR_UNEXPECTED (white screen).
 function registerAppProtocolHandler(): void {
   protocol.handle(APP_SCHEME, (request) => {
     const { pathname } = new URL(request.url)
     const rel = decodeURIComponent(pathname).replace(/^\/+/, '')
-    const candidate = rel === '' ? 'index.html' : rel
-    let filePath = join(uiDir(), candidate)
-    if (!existsSync(filePath)) filePath = join(uiDir(), 'index.html')
+    let filePath = rel === '' ? join(uiDir(), 'index.html') : join(uiDir(), rel)
+    if (existsSync(filePath) && statSync(filePath).isDirectory()) {
+      filePath = join(filePath, 'index.html')
+    }
+    if (!existsSync(filePath)) filePath = join(uiDir(), '200.html')
     return net.fetch(pathToFileURL(filePath).toString())
   })
 }
