@@ -10,6 +10,13 @@ import { createMainWindow, registerAppProtocolScheme } from './window'
 // (a packaged GUI app has no terminal for stderr).
 setupLogging()
 
+// Windows GPU drivers are the most crash-prone — a renderer hard-crash
+// (render-process-gone reason 'crashed', exitCode -36861) was seen the instant
+// the Sessions route renders, on Windows only. Disabling hardware acceleration
+// there sidesteps the GPU-compositing crash; AWOG isn't graphics-heavy so the
+// software-rendering cost is negligible. Must run before app 'ready'.
+if (process.platform === 'win32') app.disableHardwareAcceleration()
+
 // AWOG Electron entry — the host process. Replaces the Tauri Rust shell:
 // owns the window + app lifecycle, spawns the Node engine as a utility process,
 // and bridges renderer ⇄ engine through the IPC router (ipc.ts).
