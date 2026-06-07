@@ -2,6 +2,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import type {
   Session,
   SessionAttachment,
+  SessionFollowUp,
   SessionMention,
   SessionMessage,
   SessionSettings,
@@ -35,7 +36,6 @@ const pushToSidecar = (method: string, params: unknown): void => {
   const sidecar = useSidecar()
   if (!sidecar.available) return
   sidecar.request(method, params).catch((err) => {
-    // eslint-disable-next-line no-console
     console.warn(`[sessions] ${method} failed:`, err)
   })
 }
@@ -120,7 +120,7 @@ const extractTokens = (text: string, agentsByHandle: Map<string, string>): Sessi
   const out: SessionMention[] = []
   const re = /([@$])([\w./-]+)|\/(\w+)/g
   let m: RegExpExecArray | null
-  // eslint-disable-next-line no-cond-assign
+
   while ((m = re.exec(text)) !== null) {
     const full = m[0]
     let kind: SessionTokenKind
@@ -211,7 +211,6 @@ export const useSessionsStore = defineStore('sessions', {
         this.selectedSessionId = list[0]?.id ?? null
         this.hydrated = true
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[sessions] hydrateFromSidecar failed', err)
       }
     },
@@ -368,7 +367,12 @@ export const useSessionsStore = defineStore('sessions', {
       pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
     },
 
-    async sendMessage(sessionId: string, text: string, attachments?: SessionAttachment[]) {
+    async sendMessage(
+      sessionId: string,
+      text: string,
+      attachments?: SessionAttachment[],
+      followUps?: SessionFollowUp[],
+    ) {
       const session = this.sessions.find((s) => s.id === sessionId)
       if (!session) return
       const trimmed = text.trim()
@@ -402,6 +406,11 @@ export const useSessionsStore = defineStore('sessions', {
         at: nowIso(),
         mentions: mentions.length ? mentions : undefined,
         attachments: attachments && attachments.length ? attachments : undefined,
+        // Structured quotes for display: the bubble renders these as numbered
+        // cards + injects the matching anchor badge into the source message,
+        // instead of showing the raw `> quote` markdown that lives in `text`
+        // (which stays intact for the model + history).
+        followUps: followUps && followUps.length ? [...followUps] : undefined,
         modeAtSend: session.settings.mode,
       }
       session.messages.push(userMsg)
@@ -803,9 +812,34 @@ export const useSessionsStore = defineStore('sessions', {
         if (opts?.updatedInput) payload.updatedInput = opts.updatedInput
         await sidecar.request('sessions.permission', payload)
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[sessions] resolvePermission failed', err)
       }
+    },
+
+    // Approve / reject a proposed plan (an ExitPlanMode `kind:'plan'` step).
+    // Decoupled from the permission gate: the plan ran read-only, so this just
+    // records the decision on the step, then — on approve — flips the session
+    // to execute mode (visible on the composer chip + persisted) and sends a
+    // continuation turn so the model carries the plan out.
+    resolvePlan(sessionId: string, stepId: string, decision: 'approve' | 'reject') {
+      const session = this.sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      let target: SessionStep | undefined
+      for (let mi = session.messages.length - 1; mi >= 0 && !target; mi -= 1) {
+        target = session.messages[mi]?.steps?.find((s) => s.id === stepId && s.kind === 'plan')
+      }
+      // Ignore stale clicks: already decided, or step not found.
+      if (!target || (target.planStatus && target.planStatus !== 'pending')) return
+      if (decision === 'reject') {
+        target.planStatus = 'rejected'
+        return
+      }
+      target.planStatus = 'approved'
+      this.updateSettings(sessionId, { mode: 'execute' })
+      void this.sendMessage(
+        sessionId,
+        'The plan is approved. Proceed to implement it now, following the plan.',
+      )
     },
 
     openSubagentDrawer(sessionId: string, messageId: string, stepId: string) {
@@ -889,7 +923,7 @@ export const useSessionsStore = defineStore('sessions', {
       } catch (err) {
         const n = noteById()
         if (n) n.text = 'Compact failed.'
-        // eslint-disable-next-line no-console
+
         console.warn('[sessions] compact failed', err)
       }
     },

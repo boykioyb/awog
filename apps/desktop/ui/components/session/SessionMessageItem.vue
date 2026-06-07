@@ -11,8 +11,8 @@
     <div v-else>
       <div v-if="message.role === 'user'" class="flex flex-col items-end gap-1.5">
         <div
-          v-if="message.text"
-          class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed whitespace-pre-wrap break-words"
+          v-if="message.followUps?.length || bodyText"
+          class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed break-words"
           :style="{
             background: t.bgElevated,
             color: t.text,
@@ -20,15 +20,24 @@
             maxWidth: '78%',
           }"
         >
-          <template v-for="(seg, i) in tokenizeMessage(message.text)" :key="i">
-            <span
-              v-if="seg.kind === 'token'"
-              :style="{ color: tokenColor(seg.tokenKind!), fontWeight: 500 }"
-            >
-              {{ seg.text }}
-            </span>
-            <template v-else>{{ seg.text }}</template>
-          </template>
+          <!-- Quotes the user attached via "Quote & follow up": numbered cards,
+               not the raw `> …` markdown that the model still receives in text. -->
+          <SessionFollowUpQuotes
+            v-if="message.followUps?.length"
+            :follow-ups="message.followUps"
+            :class="bodyText ? 'mb-2' : ''"
+          />
+          <div v-if="bodyText" class="whitespace-pre-wrap break-words">
+            <template v-for="(seg, i) in tokenizeMessage(bodyText)" :key="i">
+              <span
+                v-if="seg.kind === 'token'"
+                :style="{ color: tokenColor(seg.tokenKind!), fontWeight: 500 }"
+              >
+                {{ seg.text }}
+              </span>
+              <template v-else>{{ seg.text }}</template>
+            </template>
+          </div>
         </div>
         <SessionMessageAttachments
           v-if="message.attachments?.length"
@@ -191,6 +200,7 @@
 import { Activity, Check, ChevronDown, Copy, FileText, GitBranch, Info } from 'lucide-vue-next'
 import type { SessionAttachment, SessionMessage, SessionStep, SessionTokenKind } from '~/types'
 import { tokenizeMessage } from '~/utils/tokenize'
+import { stripFollowUpSection } from '~/utils/follow-up'
 import { formatTime } from '~/utils/time'
 
 const props = defineProps<{
@@ -207,6 +217,14 @@ const settingsStore = useSettingsStore()
 const store = useSessionsStore()
 
 const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
+
+// The user's own free-text, with any serialized follow-up quote section peeled
+// off (those render as cards above). No follow-ups → the message text verbatim.
+const bodyText = computed(() =>
+  props.message.followUps?.length
+    ? stripFollowUpSection(props.message.text, props.message.followUps)
+    : props.message.text,
+)
 
 const tokenColor = (kind: SessionTokenKind) => {
   if (kind === 'agent') return t.value.warning

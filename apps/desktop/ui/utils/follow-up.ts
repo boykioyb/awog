@@ -35,3 +35,16 @@ export const composeOutgoingMessage = (text: string, followUps: SessionFollowUp[
   const body = text.trim()
   return body ? `${section}\n\n${body}` : section
 }
+
+// Inverse of composeOutgoingMessage for DISPLAY: recover just the user's own
+// free-text from a sent message, dropping the serialized quote section (which we
+// render as styled numbered cards from `followUps` instead of raw markdown). The
+// full `message.text` is kept intact for the model + history — this only affects
+// what the bubble shows. Falls back to the full text if the prefix doesn't match.
+export const stripFollowUpSection = (text: string, followUps: SessionFollowUp[]): string => {
+  const section = formatFollowUpSection(followUps)
+  if (!section) return text
+  if (text === section) return ''
+  const prefix = `${section}\n\n`
+  return text.startsWith(prefix) ? text.slice(prefix.length) : text
+}

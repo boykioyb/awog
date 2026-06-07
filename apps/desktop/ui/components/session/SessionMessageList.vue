@@ -127,11 +127,13 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, AtSign, Bot, MessagesSquare, Quote, Slash } from 'lucide-vue-next'
 import type { SessionAttachment, SessionMessage, SessionStep } from '~/types'
-import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
+import { RESOLVE_PLAN_KEY, SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { decodeMermaidSource, renderMermaidIn } from '~/utils/mermaid'
+import { applyFollowUpAnchors, type FollowUpAnchor } from '~/utils/follow-up-anchor'
 import { decodeSource } from '~/utils/markdown'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
+import { useSessionInfoPanelStore } from '~/stores/sessionInfoPanel'
 
 const props = defineProps<{
   messages: SessionMessage[]
@@ -155,14 +157,21 @@ const hints = [
 ]
 const store = useSessionsStore()
 const panel = useWorkspacePanelStore()
+const infoPanel = useSessionInfoPanelStore()
 const sidecar = useSidecar()
 
-const scrollRef = ref<HTMLElement | null>(null)
+const scrollRef = useTemplateRef<HTMLElement>('scrollRef')
 
 // Floating scroll controls — visible only when the list overflows and the user
 // is away from that edge.
 const canScrollUp = ref(false)
 const canScrollDown = ref(false)
+// "Stick to bottom": while the user sits at (or near) the bottom we keep the view
+// pinned to the latest line so a streaming reply — and its final flush — stay in
+// view without manual scrolling. Scrolling up releases the pin so reading earlier
+// text isn't yanked back down.
+const STICK_THRESHOLD_PX = 80
+const stickToBottom = ref(true)
 const updateScrollState = () => {
   const el = scrollRef.value
   if (!el) {
@@ -170,16 +179,34 @@ const updateScrollState = () => {
     canScrollDown.value = false
     return
   }
+  const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop
   const scrollable = el.scrollHeight - el.clientHeight > 16
   canScrollUp.value = scrollable && el.scrollTop > 8
-  canScrollDown.value = scrollable && el.scrollHeight - el.clientHeight - el.scrollTop > 8
+  canScrollDown.value = scrollable && distanceFromBottom > 8
+  stickToBottom.value = distanceFromBottom <= STICK_THRESHOLD_PX
+}
+const scrollToBottom = () => {
+  const el = scrollRef.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+// Re-pin to the latest line, but only while still stuck — called on every content
+// mutation (streaming chunks, step clusters, the final reply flush) so the view
+// follows the answer to the end.
+const maybeStickToBottom = () => {
+  if (stickToBottom.value) scrollToBottom()
 }
 const scrollToEdge = (edge: 'top' | 'bottom') => {
   const el = scrollRef.value
   if (!el) return
   el.scrollTo({ top: edge === 'top' ? 0 : el.scrollHeight, behavior: 'smooth' })
 }
-onMounted(() => nextTick(updateScrollState))
+onMounted(() =>
+  nextTick(() => {
+    // Open a session at its latest message rather than the top.
+    scrollToBottom()
+    updateScrollState()
+  }),
+)
 
 // Selection-driven "Quote & follow up" popup. We watch document selectionchange
 // and only surface the button when the entire range sits inside a single agent
@@ -288,6 +315,13 @@ provide(SELECT_STEP_KEY, (step: SessionStep) => {
   parentSelectStep?.(step)
 })
 
+// Inline plan-card Approve/Reject → sessions store. Closes over the active
+// session id so StepItem only needs to pass (stepId, decision).
+provide(RESOLVE_PLAN_KEY, (stepId, decision) => {
+  const sid = store.selectedSessionId
+  if (sid) store.resolvePlan(sid, stepId, decision)
+})
+
 // Single ticker shared across all streaming messages — children read `now`
 // via prop so we don't create one interval per bubble.
 const now = ref(Date.now())
@@ -375,15 +409,56 @@ const decorateCodeBlocks = () => {
   })
 }
 
+// Numbered anchor badges (①②③) for "Quote & follow up". Desired set for a given
+// agent message = every follow-up that quotes it, numbered within its batch:
+// already-sent ones live on later user messages (message.followUps), in-flight
+// ones live in the composer controller (pending). Same fu.id across both keeps
+// the badge stable through the send transition.
+const desiredAnchorsFor = (messageId: string): FollowUpAnchor[] => {
+  const out: FollowUpAnchor[] = []
+  props.messages.forEach((m: SessionMessage) => {
+    if (m.role !== 'user' || !m.followUps?.length) return
+    m.followUps.forEach((fu, i) => {
+      if (fu.messageId === messageId)
+        out.push({ id: fu.id, selectedText: fu.selectedText, label: String(i + 1) })
+    })
+  })
+  const pending = followUpController?.pending.value ?? []
+  pending.forEach((fu, i) => {
+    if (fu.messageId === messageId)
+      out.push({ id: fu.id, selectedText: fu.selectedText, label: String(i + 1) })
+  })
+  return out
+}
+
+// Reconcile anchor badges across every rendered agent-message body. Steps can
+// split one message into multiple `[data-agent-message-id]` blocks, so we group
+// them and let applyFollowUpAnchors search across the lot for each quote.
+const decorateFollowUpAnchors = () => {
+  const root = scrollRef.value
+  if (!root) return
+  const blocksById = new Map<string, HTMLElement[]>()
+  root.querySelectorAll<HTMLElement>('[data-agent-message-id]').forEach((el) => {
+    const id = el.dataset.agentMessageId
+    if (!id) return
+    const list = blocksById.get(id)
+    if (list) list.push(el)
+    else blocksById.set(id, [el])
+  })
+  blocksById.forEach((blocks, id) => applyFollowUpAnchors(blocks, desiredAnchorsFor(id)))
+}
+
 let mermaidTimer: ReturnType<typeof setTimeout> | null = null
 let mermaidObserver: MutationObserver | null = null
-// Enhance the rendered reply markup: decorate code blocks (sync) + render any
-// mermaid diagrams (async). Debounced so a burst of streaming mutations coalesces.
+// Enhance the rendered reply markup: decorate code blocks + follow-up anchors
+// (sync) + render any mermaid diagrams (async). Debounced so a burst of streaming
+// mutations coalesces.
 const scheduleContentEnhance = () => {
   if (mermaidTimer) clearTimeout(mermaidTimer)
   mermaidTimer = setTimeout(() => {
     mermaidTimer = null
     decorateCodeBlocks()
+    decorateFollowUpAnchors()
     renderMermaidIn(scrollRef.value, {
       zoomLabel: tr('session.mermaid.zoom'),
       dark: themeName.value === 'dark',
@@ -393,7 +468,13 @@ const scheduleContentEnhance = () => {
 onMounted(() => {
   scheduleContentEnhance()
   if (scrollRef.value) {
-    mermaidObserver = new MutationObserver(scheduleContentEnhance)
+    // Every reply-body mutation (streaming chunk, step cluster, v-html flush)
+    // pins us to the bottom when stuck, then schedules the (debounced) mermaid +
+    // code-block enhancement. Stick first so the view tracks the reply with no lag.
+    mermaidObserver = new MutationObserver(() => {
+      maybeStickToBottom()
+      scheduleContentEnhance()
+    })
     mermaidObserver.observe(scrollRef.value, {
       childList: true,
       subtree: true,
@@ -416,6 +497,14 @@ watch(themeName, () => {
   })
   scheduleContentEnhance()
 })
+
+// Composing a follow-up (add / remove / reorder) changes which anchor badges the
+// source message should carry — re-decorate on every change to the pending set.
+watch(
+  () => followUpController?.pending.value,
+  () => scheduleContentEnhance(),
+  { deep: true },
+)
 
 // Delegated click handler for the v-html'd reply body (no Vue listeners inside).
 // Handles four affordances: the mermaid zoom button, code-block copy + expand
@@ -514,7 +603,12 @@ const onContentClick = (ev: MouseEvent) => {
       endLine = Number(labelMatch[2])
     }
   }
-  if (path) panel.requestOpenFile(sessionId, path, line, endLine)
+  if (path) {
+    // Opening the Files drawer — close the Info panel so they don't stack on
+    // the right edge.
+    infoPanel.close(sessionId)
+    panel.requestOpenFile(sessionId, path, line, endLine)
+  }
 }
 
 onUnmounted(() => {
@@ -524,8 +618,11 @@ onUnmounted(() => {
 watch(
   () => props.messages.length,
   async () => {
+    // A new message (user send / fresh agent reply) → follow it: re-pin and jump
+    // to the bottom regardless of where the user had scrolled.
+    stickToBottom.value = true
     await nextTick()
-    if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+    scrollToBottom()
     updateScrollState()
   },
 )

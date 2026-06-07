@@ -163,7 +163,7 @@
         class="px-2 py-1.5 flex flex-col gap-1.5"
         :style="{ borderTop: `1px solid ${t.border}` }"
       >
-        <div v-for="fu in pendingFollowUps" :key="fu.id" class="flex flex-col gap-1">
+        <div v-for="(fu, i) in pendingFollowUps" :key="fu.id" class="flex flex-col gap-1">
           <div
             class="inline-flex items-start gap-1.5 px-2 py-1 rounded text-[1em] w-full"
             :style="{
@@ -172,7 +172,23 @@
               border: `1px solid ${t.border}`,
             }"
           >
-            <Quote :size="11" :style="{ color: t.accent, marginTop: '2px', flexShrink: 0 }" />
+            <!-- Number matches the ① anchor badge dropped into the source message. -->
+            <span
+              class="inline-flex items-center justify-center font-mono leading-none flex-shrink-0"
+              :style="{
+                minWidth: '16px',
+                height: '16px',
+                marginTop: '1px',
+                padding: '0 4px',
+                borderRadius: '8px',
+                fontSize: '11px',
+                fontWeight: 700,
+                background: t.accent,
+                color: t.accentText,
+              }"
+            >
+              {{ i + 1 }}
+            </span>
             <div class="flex-1 min-w-0">
               <div class="truncate italic" :style="{ color: t.textDim }">
                 {{ truncateForChip(fu.selectedText) }}
@@ -249,8 +265,8 @@
 </template>
 
 <script setup lang="ts">
-import { FileText, Paperclip, Quote, Send, Square, X } from 'lucide-vue-next'
-import { computed, inject, onBeforeUnmount, ref, toRef, watch } from 'vue'
+import { FileText, Paperclip, Send, Square, X } from 'lucide-vue-next'
+import { computed, inject, onBeforeUnmount, ref, toRef, useTemplateRef, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { composeOutgoingMessage, truncateForChip } from '~/utils/follow-up'
@@ -268,7 +284,7 @@ const store = useSessionsStore()
 
 const draft = ref('')
 const composerFocus = ref(false)
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const textareaRef = useTemplateRef<HTMLTextAreaElement>('textareaRef')
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingAttachments = ref<SessionAttachment[]>([])
 
@@ -310,12 +326,6 @@ const onResizeStart = (e: MouseEvent) => {
   window.addEventListener('mouseup', onResizeEnd)
 }
 
-onBeforeUnmount(() => {
-  window.removeEventListener('mousemove', onResizeMove)
-  window.removeEventListener('mouseup', onResizeEnd)
-  if (noticeTimer) clearTimeout(noticeTimer)
-})
-
 // Follow-ups are owned by SessionChat (parent) so the same state is shared
 // with SessionMessageList. inject is safe to call without a default — if a
 // caller mounts the composer outside SessionChat we treat follow-ups as off.
@@ -335,6 +345,12 @@ const showNotice = (text: string) => {
     commandNotice.value = null
   }, 3200)
 }
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', onResizeMove)
+  window.removeEventListener('mouseup', onResizeEnd)
+  if (noticeTimer) clearTimeout(noticeTimer)
+})
 
 // Dispatch a picked `/command`. The picker only offers mode switches + compact
 // (see session-catalog). Mode flips the session's permission mode immediately;
@@ -384,7 +400,10 @@ const onSend = () => {
   // See lukilabs/craft-agents-oss#580 for the rationale.
   const text = composeOutgoingMessage(draft.value, followUps)
   const attachments = pendingAttachments.value.length ? [...pendingAttachments.value] : undefined
-  store.sendMessage(props.session.id, text, attachments)
+  // Pass the structured follow-ups too: the store stores them on the user message
+  // for the numbered-card render + anchor badges, while `text` (the serialized
+  // quote markdown) is what the model and history receive.
+  store.sendMessage(props.session.id, text, attachments, followUps.length ? followUps : undefined)
   draft.value = ''
   pendingAttachments.value = []
   editingFollowUpId.value = null

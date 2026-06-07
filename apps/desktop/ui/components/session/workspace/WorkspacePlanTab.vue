@@ -100,15 +100,10 @@ const plan = computed<SessionStep | null>(() => {
   return null
 })
 
-// Approve/Reject map onto the parked ExitPlanMode permission request — reuses
-// the existing permission flow. Only offered when such a request is live for
-// this session (open question: informational plans without a parked request).
-const canDecide = computed(() => {
-  const pending = store.pendingPermission
-  if (!pending || pending.sessionId !== props.session.id) return false
-  if (plan.value?.planStatus && plan.value.planStatus !== 'pending') return false
-  return /exitplanmode|plan/i.test(pending.toolName)
-})
+// Approve/Reject act on the plan step itself (decoupled from the permission
+// gate): offered while the latest plan is still pending. Approve flips the
+// session to execute mode + runs; reject marks it rejected.
+const canDecide = computed(() => !plan.value?.planStatus || plan.value.planStatus === 'pending')
 
 const statusBadgeStyle = computed(() => {
   const status = plan.value?.planStatus
@@ -117,6 +112,10 @@ const statusBadgeStyle = computed(() => {
   return { background: t.value.bgInput, color: t.value.statusWarn }
 })
 
-const approve = () => store.resolvePermission('allow')
-const reject = () => store.resolvePermission('deny')
+const approve = () => {
+  if (plan.value) store.resolvePlan(props.session.id, plan.value.id, 'approve')
+}
+const reject = () => {
+  if (plan.value) store.resolvePlan(props.session.id, plan.value.id, 'reject')
+}
 </script>

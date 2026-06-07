@@ -37,9 +37,9 @@
     </div>
   </div>
 
-  <div v-else-if="step.kind === 'thinking'" class="flex items-center gap-1.5 text-[1em]">
-    <Brain :size="11" :style="{ color: t.textDim }" />
-    <span class="italic" :style="{ color: t.textMuted }">{{ step.label }}</span>
+  <div v-else-if="step.kind === 'thinking'" class="flex items-center gap-1.5 text-[1em] min-w-0">
+    <Brain :size="11" class="flex-shrink-0" :style="{ color: t.textDim }" />
+    <span class="italic truncate min-w-0" :style="{ color: t.textMuted }">{{ step.label }}</span>
   </div>
 
   <div v-else-if="step.kind === 'note'" class="text-[1em]" :style="{ color: t.text }">
@@ -107,35 +107,28 @@
       {{ step.planRationale }}
     </div>
     <div
-      v-if="!step.planStatus || step.planStatus === 'pending'"
+      v-if="resolvePlan && (!step.planStatus || step.planStatus === 'pending')"
       class="px-3 py-2 flex items-center gap-1.5"
       :style="{ borderTop: `1px solid ${t.border}`, background: t.bgPanel }"
     >
       <button
+        type="button"
         class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[1em] font-medium transition"
         :style="{ background: t.accent, color: t.accentText }"
+        @click="resolvePlan(step.id, 'approve')"
       >
         <Check :size="11" />
         Approve & execute
       </button>
       <button
-        class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[1em] transition"
-        :style="{
-          background: 'transparent',
-          color: t.text,
-          border: `1px solid ${t.border}`,
-        }"
-      >
-        <Pencil :size="11" />
-        Edit plan
-      </button>
-      <button
+        type="button"
         class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[1em] transition"
         :style="{
           background: 'transparent',
           color: t.textDim,
           border: `1px solid ${t.border}`,
         }"
+        @click="resolvePlan(step.id, 'reject')"
       >
         <X :size="11" />
         Reject
@@ -260,7 +253,6 @@ import {
   FolderSearch,
   ListChecks,
   Loader2,
-  Pencil,
   Save,
   Search,
   Sparkles,
@@ -268,7 +260,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import type { SessionStep } from '~/types'
-import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
+import { RESOLVE_PLAN_KEY, SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 
 const props = defineProps<{
   step: SessionStep
@@ -280,6 +272,9 @@ const hover = ref(false)
 
 const selectStep = inject(SELECT_STEP_KEY, null)
 const selectedStepId = inject(SELECTED_STEP_ID_KEY, ref<string | null>(null))
+// Plan-card Approve/Reject. Null outside a session context → the card hides its
+// action buttons (read-only render).
+const resolvePlan = inject(RESOLVE_PLAN_KEY, null)
 
 const isSelected = computed(() => selectedStepId.value === props.step.id)
 
