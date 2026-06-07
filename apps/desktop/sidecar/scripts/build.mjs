@@ -7,14 +7,14 @@
 //
 // Layout produced under apps/desktop/sidecar/dist/:
 //   lib/            # tsc output (entry: lib/src/index.js)
-//   node_modules/   # FLAT production deps incl. @anthropic-ai/claude-agent-sdk
-//                   # + its platform CLI binary (@anthropic-ai/claude-agent-sdk-<os>-<arch>)
+//   node_modules/   # FLAT production deps (Pi runtime @earendil-works/pi-ai +
+//                   # pi-agent-core — pure JS, 0 native deps; node-pty + keyring)
 //   package.json    # so Node resolves deps + honours "type": "module"
 //
 // node_modules comes from `pnpm deploy --config.node-linker=hoisted`, which
-// builds a flat, self-contained tree from the store (no re-download) including
-// the host platform's optional CLI binary. We assemble lib/ (from tsc) on top.
-// Per-OS CI builds give each platform its own CLI binary (matrix).
+// builds a flat, self-contained tree from the store (no re-download). We
+// assemble lib/ (from tsc) on top. The Pi runtime ships entirely as JS in
+// node_modules — there is no CLI binary to bundle (ADR 0029).
 //
 // node-pty (native) must still be rebuilt against Electron's ABI after packaging
 // — see `pnpm --filter @awog/desktop rebuild` (engine.ts loads it lazily, so the
@@ -31,14 +31,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkgRoot = resolve(__dirname, '..')
 const repoRoot = resolve(pkgRoot, '..', '..', '..')
 const outDir = join(pkgRoot, 'dist')
-
-// Platform triple → name of the SDK's optional CLI package, for verification.
-function cliPackageForHost() {
-  const { platform, arch } = process
-  const os = platform === 'darwin' ? 'darwin' : platform === 'linux' ? 'linux' : 'win32'
-  const a = arch === 'arm64' ? 'arm64' : 'x64'
-  return `@anthropic-ai/claude-agent-sdk-${os}-${a}`
-}
 
 function compileTs() {
   console.error('[build] tsc -p tsconfig.build.json')
@@ -142,18 +134,6 @@ async function writeStagePackageJson() {
   await writeFile(join(outDir, 'package.json'), `${JSON.stringify(out, null, 2)}\n`)
 }
 
-function verifyCliBinary() {
-  const pkg = cliPackageForHost()
-  const binDir = join(outDir, 'node_modules', ...pkg.split('/'))
-  if (!existsSync(binDir)) {
-    throw new Error(
-      `[build] platform CLI package missing: ${pkg}. The packaged app will fail at runtime ` +
-        `("native CLI binary not found"). Ensure pnpm installed optional deps (no --omit=optional).`,
-    )
-  }
-  console.error(`[build] verified platform CLI package present: ${pkg}`)
-}
-
 async function main() {
   if (existsSync(outDir)) await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
@@ -162,7 +142,6 @@ async function main() {
   await stageProductionDeps()
   await pruneBundle()
   await writeStagePackageJson()
-  verifyCliBinary()
 
   console.error('[build] Done. Engine bundle ready at apps/desktop/sidecar/dist/')
 }

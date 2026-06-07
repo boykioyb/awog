@@ -1,7 +1,7 @@
 // Packaging orchestrator for the Electron app.
 //
 // 1. Build the Nuxt SPA (nuxt generate → ../ui/.output/public).
-// 2. Build the engine bundle (../sidecar/dist: lib + flat node_modules + CLI).
+// 2. Build the engine bundle (../sidecar/dist: lib + flat node_modules, pure JS).
 // 3. Rebuild node-pty (native) for Electron's ABI inside the engine bundle.
 // 4. Compile the Electron main/preload (tsc → dist).
 // 5. electron-builder → release/ (dmg/nsis/AppImage/deb for the host OS).

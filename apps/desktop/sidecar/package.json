@@ -13,7 +13,8 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.152",
+    "@earendil-works/pi-agent-core": "^0.78.1",
+    "@earendil-works/pi-ai": "^0.78.1",
     "@napi-rs/keyring": "^1.1.4",
     "chokidar": "^5.0.0",
     "node-pty": "^1.1.0",

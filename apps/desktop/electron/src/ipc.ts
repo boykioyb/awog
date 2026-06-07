@@ -8,8 +8,15 @@ import { engine, type RpcErrorShape } from './engine'
 // One auditable boundary for engine calls + a narrow set of shell/dialog ops
 // (security invariant #4).
 
-// OAuth authorize is the one URL the renderer may open externally today.
-const OPEN_EXTERNAL_ALLOWLIST = /^https:\/\/claude\.ai\/oauth\/authorize\?/
+// shell.openExternal hands a URL to the OS default handler. The renderer opens
+// several kinds of URL: OAuth flows (Claude authorize, OpenAI Codex device
+// verification), hard-coded help links (git download), and links embedded in
+// chat/markdown content or issue/PR badges (L1 — model output or pasted text,
+// arbitrary hosts). A per-host allowlist can't cover the L1 case, so we gate on
+// scheme instead: only web + mail links are handed off. This rejects schemes
+// that could launch local files or other apps from untrusted content —
+// file:, javascript:, data:, and custom protocol handlers (security invariant #7).
+const OPEN_EXTERNAL_SAFE_SCHEME = /^(?:https?|mailto):/i
 
 type RequestPayload = { method: string; params?: unknown }
 type PathPayload = { root: string; path: string }
@@ -61,7 +68,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('shell:openExternal', async (_e, url: string) => {
-    if (typeof url !== 'string' || !OPEN_EXTERNAL_ALLOWLIST.test(url)) {
+    if (typeof url !== 'string' || !OPEN_EXTERNAL_SAFE_SCHEME.test(url)) {
       throw new Error(`URL not allowlisted: ${url}`)
     }
     await shell.openExternal(url)
