@@ -112,7 +112,7 @@ const makeDefaults = (): Draft => ({
   event: 'artifact.after-write' as HookEvent,
   matcher: {},
   command: '',
-  // eslint-disable-next-line no-template-curly-in-string
+
   cwd: '${workspace}',
   timeoutMs: 30000,
   runMode: 'background' as HookRunMode,

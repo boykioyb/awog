@@ -101,7 +101,6 @@ export const useSkillGenerator = (): SkillGenerator => {
           requiredSources: res.skill.requiredSources,
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[skills] LLM generate failed, falling back to mock', err)
         error.value = err instanceof Error ? err.message : String(err)
         return mockDraft(trimmed)
@@ -163,7 +162,6 @@ export const useSkillGenerator = (): SkillGenerator => {
           requiredSources: res.skill.requiredSources,
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[skills] LLM edit failed', err)
         error.value = err instanceof Error ? err.message : String(err)
         return null

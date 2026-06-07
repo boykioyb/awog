@@ -1,4 +1,3 @@
-/* eslint-disable no-template-curly-in-string */
 import type { MCPServer, MCPTransport, MCPTrust } from '~/types'
 
 export type McpDraft = Omit<MCPServer, 'id'> & { id: string }

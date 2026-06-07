@@ -144,7 +144,6 @@ export const useWorkspaceStore = defineStore('workspace', {
         const res = await sidecar.request<ProjectsListResponse>('projects.list')
         this.projects = Array.isArray(res.projects) ? res.projects : []
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[workspace] hydrateProjectsFromSidecar failed', err)
       }
     },
@@ -233,7 +232,6 @@ export const useWorkspaceStore = defineStore('workspace', {
       try {
         await sidecar.request('projects.delete', { id })
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[workspace] projects.delete failed', err)
       }
     },
@@ -268,7 +266,6 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.agents = Array.isArray(res.agents) ? res.agents : []
         this.agentScanReports = Array.isArray(res.reports) ? res.reports : []
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[agents] hydrate failed', err)
       }
     },
@@ -381,7 +378,6 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.skills = Array.isArray(res.skills) ? res.skills : []
         this.skillScanReports = Array.isArray(res.reports) ? res.reports : []
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[skills] hydrate failed', err)
       }
     },
@@ -455,7 +451,6 @@ export const useWorkspaceStore = defineStore('workspace', {
         if (projectId) params.projectId = projectId
         await sidecar.request('skills.delete', params)
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[workspace] skills.delete failed', err)
       }
     },
@@ -470,7 +465,6 @@ export const useWorkspaceStore = defineStore('workspace', {
         const res = await sidecar.request<{ servers: MCPServer[] }>('mcp.list')
         this.mcpServers = Array.isArray(res.servers) ? res.servers : []
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[mcp] hydrate failed', err)
       }
     },

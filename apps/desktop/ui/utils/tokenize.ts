@@ -27,7 +27,7 @@ export const tokenizeMessage = (text: string): TextSegment[] => {
   const re = /([@$])([\w./-]+)|\/(\w+)/g
   let last = 0
   let m: RegExpExecArray | null
-  // eslint-disable-next-line no-cond-assign
+
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push({ kind: 'text', text: text.slice(last, m.index) })
     const full = m[0]

@@ -13,7 +13,6 @@ const pushToSidecar = (method: string, params: unknown): void => {
   const sidecar = useSidecar()
   if (!sidecar.available) return
   sidecar.request(method, params).catch((err) => {
-    // eslint-disable-next-line no-console
     console.warn(`[workflows] ${method} failed:`, err)
   })
 }
@@ -58,7 +57,6 @@ export const useWorkflowsStore = defineStore('workflows', {
         this.workflows = res.workflows ?? []
         this.hydrated = true
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[workflows] hydrate failed:', err)
       }
     },

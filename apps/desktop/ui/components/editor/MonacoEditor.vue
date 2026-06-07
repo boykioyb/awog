@@ -208,7 +208,7 @@ onMounted(async () => {
   ed.onDidChangeCursorPosition((e) => {
     emit('cursor-change', { line: e.position.lineNumber, column: e.position.column })
   })
-  // eslint-disable-next-line no-bitwise -- Monaco keybinding API uses a bitmask
+
   ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => emit('save'))
 
   // Flush any opens requested before Monaco finished loading.

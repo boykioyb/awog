@@ -468,7 +468,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       icon: GitCompare,
       action: async () => {
         captureTarget(c)
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
         await openCompare(c.hash)
       },
     },
@@ -535,7 +535,7 @@ const onSavePatchConfirm = async () => {
     // Browser fallback — no native dialog, so prompt for an absolute path so
     // the user can still smoke-test the feature. Dev-only path; the Electron
     // build always takes the native dialog branch above.
-    // eslint-disable-next-line no-alert
+
     const fallback = window.prompt('Save patch to (absolute path):', `/tmp/${defaultName}`)
     savePath = fallback?.trim() || null
   }

@@ -1,5 +1,3 @@
-/* eslint-disable max-classes-per-file -- error subclasses live next to the composable that throws them */
-
 // Engine client — thin wrapper over the Electron preload bridge (`window.awog`).
 // Keeps the same public surface the rest of the UI already imports
 // (available/request/onEvent/openExternal/revealPath/openPath) so the migration

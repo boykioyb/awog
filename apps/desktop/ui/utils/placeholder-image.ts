@@ -11,12 +11,12 @@ const shade = (hex: string, percent: number) => {
   const m = hex.match(/^#([0-9a-f]{6})$/i)
   if (!m || !m[1]) return hex
   const n = parseInt(m[1], 16)
-  /* eslint-disable no-bitwise */
+
   const r = Math.max(0, Math.min(255, (n >> 16) + percent))
   const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + percent))
   const b = Math.max(0, Math.min(255, (n & 0xff) + percent))
   const out = ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')
-  /* eslint-enable no-bitwise */
+
   return `#${out}`
 }
 

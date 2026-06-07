@@ -1,4 +1,3 @@
-/* eslint-disable no-template-curly-in-string */
 import type { Hook, HookEvent, HookRunMode } from '~/types'
 
 export type HookDraft = Omit<Hook, 'id'> & { id: string }

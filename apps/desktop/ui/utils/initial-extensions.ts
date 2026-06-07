@@ -1,4 +1,3 @@
-/* eslint-disable no-template-curly-in-string */
 import type { Hook, SlashCommand } from '~/types'
 
 export const INITIAL_HOOKS: Hook[] = [

@@ -179,7 +179,6 @@ export const useWorkflowGenerator = (getAgents: () => Agent[]) => {
         })
         return toDraft(res.workflow)
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[workflows] LLM generate failed, falling back to mock', err)
         error.value = err instanceof Error ? err.message : String(err)
         return mockDraft(trimmed)

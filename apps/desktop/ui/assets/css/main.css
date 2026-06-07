@@ -276,6 +276,12 @@ body,
 .awog-mermaid svg {
   max-width: 100%;
   height: auto;
+  /* The diagram is non-interactive (securityLevel: 'strict'). Make the SVG
+     transparent to pointer/wheel events so the mouse wheel scrolls the chat
+     instead of being trapped by the SVG's clip region (UA overflow: hidden).
+     Hover-to-reveal + the zoom button still work — they live on the wrapping
+     .awog-mermaid div, not the SVG. */
+  pointer-events: none;
 }
 .awog-mermaid-zoom {
   position: absolute;
@@ -303,6 +309,31 @@ body,
 .awog-mermaid-zoom:hover {
   color: rgba(255, 255, 255, 0.9);
   background: rgba(0, 0, 0, 0.55);
+}
+
+/* ─── Follow-up anchors (.awog-fu-anchor) ─────────────────────────────────── */
+/* Numbered superscript badge injected into a rendered agent message by
+   utils/follow-up-anchor.ts at the spot the user quoted. The number ties it to
+   the matching quote card in the user's reply. Uses --awog-accent (set on the
+   .awog-md root by SessionMessageItem) so it follows the theme. */
+.awog-md .awog-fu-anchor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  margin: 0 1px 0 2px;
+  border-radius: 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: super;
+  background: var(--awog-accent, #3b82f6);
+  color: #fff;
+  cursor: default;
+  user-select: none;
 }
 
 /* ─── Code blocks (.awog-code-block) ──────────────────────────────────────── */

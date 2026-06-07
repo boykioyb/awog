@@ -141,6 +141,11 @@ export type ProviderName = 'anthropic' | 'openai' | 'google'
 export type AuthMode = 'oauth' | 'apikey'
 export type AccountStatus = 'connected' | 'expired' | 'disconnected'
 
+// Wire protocol a custom endpoint speaks (ADR 0029 Phase C3). 'anthropic-
+// messages' = Anthropic Messages API (Phase B default); 'openai-completions' =
+// OpenAI Chat Completions (Ollama/vLLM/LM Studio/OpenRouter).
+export type EndpointApi = 'anthropic-messages' | 'openai-completions'
+
 export interface ProviderAccount {
   id: string
   label: string
@@ -148,6 +153,15 @@ export interface ProviderAccount {
   fingerprint: string
   status: AccountStatus
   expiresAt?: number
+  // Custom endpoint (ADR 0026 Phase B / ADR 0029 Phase C3). Present only for
+  // apikey accounts pointing at a user-supplied base URL (Ollama, vLLM,
+  // OpenRouter…). Non-secret; drives the custom-endpoint UI + agent model list.
+  baseURL?: string
+  // Wire protocol the custom endpoint speaks (ADR 0029 Phase C3). Undefined ⇒
+  // inferred from provider (anthropic → anthropic-messages, else openai-
+  // completions). Only present when baseURL is set.
+  api?: EndpointApi
+  models?: string[]
   organization?: { uuid: string; name: string }
   account?: { uuid: string; email: string }
   version: number

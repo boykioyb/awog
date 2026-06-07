@@ -256,7 +256,6 @@ const inspectPath = async (path: string) => {
     const info = await sidecar.request<InspectResult>('projects.inspect', { path })
     applyInspect(info)
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[ProjectEditor] inspect failed', err)
   } finally {
     inspecting.value = false
@@ -288,7 +287,6 @@ const onBrowse = async () => {
       await inspectPath(picked)
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[ProjectEditor] folder picker failed', err)
   }
 }

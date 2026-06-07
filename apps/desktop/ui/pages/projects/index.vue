@@ -574,7 +574,6 @@ const commitRename = () => {
   const item = ws.projects.find((p) => p.id === id)
   if (trimmed && item && trimmed !== item.name) {
     ws.updateProject({ ...item, name: trimmed }).catch((err) => {
-      // eslint-disable-next-line no-console
       console.warn('[projects] rename failed', err)
     })
   }

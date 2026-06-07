@@ -99,7 +99,6 @@ export const useAgentGenerator = (): AgentGenerator => {
           role: res.agent.role,
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[agents] LLM generate failed, falling back to mock', err)
         error.value = err instanceof Error ? err.message : String(err)
         return mockDraft(trimmed)
@@ -156,7 +155,6 @@ export const useAgentGenerator = (): AgentGenerator => {
           role: res.agent.role,
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[agents] LLM edit failed', err)
         error.value = err instanceof Error ? err.message : String(err)
         return null

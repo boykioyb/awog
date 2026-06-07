@@ -399,7 +399,7 @@ const onDirtyContinueAnyway = (suppress: boolean) => {
   // Spec calls for a trace event `task.started_dirty: true` here. The engine
   // doesn't yet emit task lifecycle traces, so we log a warning instead and
   // wire the trace event once the engine layer lands (deferred).
-  // eslint-disable-next-line no-console
+
   console.warn('[task] started with dirty workspace', { taskTitle: payload.title })
   emit('save', payload)
 }

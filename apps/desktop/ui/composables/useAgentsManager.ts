@@ -163,7 +163,6 @@ export function useAgentsManager() {
       pushToast(`Deleted ${ok}, failed ${failures.length} — see console for failed items`, 'info')
     }
     if (failures.length > 0) {
-      // eslint-disable-next-line no-console
       console.error('[agents] bulk delete failures', failures)
     }
   }
@@ -200,7 +199,6 @@ export function useAgentsManager() {
         else pushToast(`No changes · ${after} agents`, 'info')
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[agents] refresh failed', err)
       pushToast('Refresh failed — see console', 'error')
     } finally {
@@ -251,7 +249,6 @@ export function useAgentsManager() {
       selectedKey.value = agentKey(saved)
       pushToast(isRename ? `Renamed to ${saved.id}` : `Saved ${saved.id}`, 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[agents] save failed', err)
       pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
       return
@@ -271,7 +268,6 @@ export function useAgentsManager() {
       selectedKey.value = agentKey(saved)
       pushToast('Agent updated', 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[agents] body edit save failed', err)
       pushToast('Failed to save edit — see console', 'error')
       return
@@ -301,7 +297,6 @@ export function useAgentsManager() {
       mobilePane.value = 'detail'
       pushToast(`Duplicated to ${created.id}`, 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[agents] duplicate failed', err)
       pushToast(`Duplicate failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
     }
@@ -316,7 +311,6 @@ export function useAgentsManager() {
       await ws.deleteAgent(target.id, target.source, target.projectId)
       pushToast(`Deleted ${target.id}`, 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[agents] delete failed', err)
       pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
       return
@@ -351,7 +345,6 @@ export function useAgentsManager() {
       await ws.saveAgent({ ...target, name: trimmed })
       pushToast(`Renamed to "${trimmed}"`, 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[agents] rename failed', err)
       pushToast(`Rename failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
     }

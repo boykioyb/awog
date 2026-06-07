@@ -173,7 +173,7 @@ const onRevertFile = async (path: string) => {
   const commit = props.detail?.commit
   if (!commit) return
   const ref = `${commit.hash}^`
-  // eslint-disable-next-line no-alert -- simple confirm for v1; replace with modal in M6
+
   if (!window.confirm(tr('git.commit_detail.revert_file_confirm', { path, sha: commit.shortHash })))
     return
   await store.checkoutFileAtCommit(path, ref)

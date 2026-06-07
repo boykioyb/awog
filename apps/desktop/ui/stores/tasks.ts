@@ -45,7 +45,6 @@ const pushToSidecar = (method: string, params: unknown): void => {
   const sidecar = useSidecar()
   if (!sidecar.available) return
   sidecar.request(method, params).catch((err) => {
-    // eslint-disable-next-line no-console
     console.warn(`[tasks] ${method} failed:`, err)
   })
 }
@@ -160,7 +159,6 @@ export const useTasksStore = defineStore('tasks', {
         this.selectedTaskId = this.tasks[0]?.id ?? null
         this.hydrated = true
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[tasks] hydrate failed:', err)
       }
     },

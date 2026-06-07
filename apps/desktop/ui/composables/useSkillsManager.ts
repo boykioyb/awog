@@ -189,7 +189,6 @@ export function useSkillsManager() {
         }
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[skills] refresh failed', err)
       pushToast('Refresh failed — see console', 'error')
     } finally {
@@ -269,7 +268,6 @@ export function useSkillsManager() {
       selectedKey.value = skillKey(saved)
       pushToast('Skill updated', 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[skills] body edit save failed', err)
       pushToast('Failed to save edit — see console', 'error')
       return
@@ -288,7 +286,6 @@ export function useSkillsManager() {
       selectedKey.value = skillKey(saved)
       pushToast(isRename ? `Renamed to /${saved.id}` : `Saved /${saved.id}`, 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[skills] save failed', err)
       pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
       return
@@ -326,7 +323,6 @@ export function useSkillsManager() {
       }
       pushToast(`Deleted /${s.id}`, 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[skills] delete failed', err)
       pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
     }
@@ -371,7 +367,6 @@ export function useSkillsManager() {
       pushToast(`Deleted ${ok}, failed ${failures.length} — see console for failed items`, 'info')
     }
     if (failures.length > 0) {
-      // eslint-disable-next-line no-console
       console.error('[skills] bulk delete failures', failures)
     }
   }
@@ -417,7 +412,6 @@ export function useSkillsManager() {
       await ws.saveSkill({ ...target, name: trimmed })
       pushToast(`Renamed /${target.id} → "${trimmed}"`, 'success')
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[skills] rename failed', err)
       pushToast(`Rename failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
     }
