@@ -6,6 +6,7 @@
 // can emit step events that the existing component renders without changes.
 
 import type {
+  PlanStatus,
   SessionStep,
   SessionStepDetail,
   SessionStepStatus,
@@ -254,5 +255,60 @@ export function stepFromToolResult(info: ToolResultInfo): SessionStep {
   if (stats.additions !== undefined) step.additions = stats.additions
   if (stats.deletions !== undefined) step.deletions = stats.deletions
   if (detail !== undefined) step.detail = detail
+  return step
+}
+
+// Surface extended-thinking (reasoning) as a 'thinking' step. `text` is the
+// per-block accumulation (the caller appends each delta), so the same `id`
+// upserts in place as the reasoning grows. Newlines collapse to a single line
+// (StepItem renders thinking as one italic row) and the label is capped so a
+// long reasoning block doesn't bloat the stdio stream. Parity with the task
+// path (tasks/trace-mapper.ts → traceThinkingNode).
+export function stepFromThinking(id: string, text: string): SessionStep {
+  const oneLine = text.replace(/\s+/g, ' ').trim()
+  const label =
+    oneLine.length > RESULT_PREVIEW_MAX ? `${oneLine.slice(0, RESULT_PREVIEW_MAX)}…` : oneLine
+  return { id, kind: 'thinking', label: label || 'Thinking…' }
+}
+
+// Build a 'plan' step from an ExitPlanMode tool call's `plan` markdown. The UI
+// renders this as the plan card (StepItem + WorkspacePlanTab). We split the
+// markdown into a leading rationale paragraph + a list of concrete steps:
+// list lines (-, *, 1.) become planItems; non-list text before the first list
+// item becomes the rationale. A plan with no list falls back to one item = the
+// whole text so the card is never empty.
+export function stepFromPlan(
+  id: string,
+  plan: string,
+  status: PlanStatus = 'pending',
+): SessionStep {
+  const items: string[] = []
+  const rationaleLines: string[] = []
+  let seenList = false
+  for (const raw of plan.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    const m = line.match(/^(?:[-*]|\d+[.)])\s+(.*)$/)
+    if (m) {
+      seenList = true
+      items.push(m[1].trim())
+    } else if (!seenList) {
+      rationaleLines.push(line)
+    } else if (items.length > 0) {
+      // Continuation of the previous list item (wrapped line).
+      items[items.length - 1] = `${items[items.length - 1]} ${line}`
+    } else {
+      rationaleLines.push(line)
+    }
+  }
+  const step: SessionStep = {
+    id,
+    kind: 'plan',
+    label: 'Proposed plan',
+    planStatus: status,
+    planItems: items.length > 0 ? items : [plan.trim()],
+  }
+  const rationale = rationaleLines.join(' ').trim()
+  if (rationale) step.planRationale = rationale
   return step
 }

@@ -1,0 +1,86 @@
+// Assemble the AWOG AgentTool set for a Pi agent loop (ADR 0029).
+//
+// Tool names are the canonical Claude Code names (Read/Write/Edit/Bash/Grep/
+// Glob) so step-mapper.ts maps them without changes AND so Pi's OAuth tool-name
+// canonicalisation is a no-op (it rewrites to these exact names under OAuth).
+// MCP tools follow the `mcp__<serverId>__<tool>` convention (runtime/tools/
+// mcp-tools.ts) so trace-mapper + the system-prompt MCP nudge key off them.
+//
+// Filtering: allowedTools (agent.tools whitelist) intersects the set; then
+// disabledTools (session denylist) subtracts. Both compare by tool name and
+// apply to built-in AND MCP tools alike.
+
+import type { AgentTool } from '@earendil-works/pi-agent-core'
+import type { McpServersConfig } from '../permission-types.js'
+import {
+  createEditTool,
+  createGlobTool,
+  createGrepTool,
+  createReadTool,
+  createWriteTool,
+} from './fs-tools.js'
+import { createBashTool } from './bash-tool.js'
+import { createMcpToolDefinitions } from './mcp-tools.js'
+import { createExitPlanModeTool } from './plan-tool.js'
+
+export interface ToolFilter {
+  // Agent `tools` whitelist (Claude Code subagent field). When set + non-empty,
+  // only tools whose name is in this list survive. Undefined/empty = no filter.
+  allowedTools?: string[]
+  // Session-scoped denylist. Tools whose name is in this list are removed.
+  disabledTools?: string[]
+  // Include the ExitPlanMode tool. Only the chat runtime sets this (when the
+  // session is in plan mode) so the model can present a plan; tasks never plan.
+  includePlanTool?: boolean
+}
+
+// Apply allowedTools (intersect when set) + disabledTools (subtract) by name.
+// When allowedTools is unset, every tool is included by default; when set, a
+// tool survives only if its name is in the whitelist — applied uniformly to
+// built-in tools AND mcp__<serverId>__<tool> names (an agent's `tools` whitelist
+// gates MCP tool names too).
+function applyFilter(tools: AgentTool[], filter: ToolFilter): AgentTool[] {
+  const allow =
+    filter.allowedTools && filter.allowedTools.length > 0 ? new Set(filter.allowedTools) : null
+  const deny =
+    filter.disabledTools && filter.disabledTools.length > 0 ? new Set(filter.disabledTools) : null
+  return tools.filter((t) => {
+    if (allow && !allow.has(t.name)) return false
+    if (deny && deny.has(t.name)) return false
+    return true
+  })
+}
+
+export function createAwogToolDefinitions(cwd: string, filter: ToolFilter = {}): AgentTool[] {
+  // The full built-in set. `as AgentTool[]` widens the per-tool parameter
+  // generics to the AgentTool default (TSchema) for a homogeneous array — Pi's
+  // runtime validates each tool against its own schema regardless.
+  const all: AgentTool[] = [
+    createReadTool(cwd),
+    createWriteTool(cwd),
+    createEditTool(cwd),
+    createBashTool(cwd),
+    createGrepTool(cwd),
+    createGlobTool(cwd),
+    ...(filter.includePlanTool ? [createExitPlanModeTool()] : []),
+  ] as AgentTool[]
+
+  return applyFilter(all, filter)
+}
+
+// Assemble the COMPLETE tool set for a turn: built-in AWOG tools + the bridged
+// MCP tools (mcp__<serverId>__<tool>) from the already-resolved `mcpServers`
+// map. allowedTools/disabledTools filter both kinds uniformly. A failing MCP
+// server is skipped inside createMcpToolDefinitions (warn + skip), so this never
+// throws on MCP connectivity. Async because MCP needs a tools/list round-trip.
+export async function createRuntimeToolDefinitions(
+  cwd: string,
+  mcpServers: McpServersConfig | undefined,
+  filter: ToolFilter = {},
+  signal?: AbortSignal,
+): Promise<AgentTool[]> {
+  const builtIn = createAwogToolDefinitions(cwd, filter)
+  const mcp = await createMcpToolDefinitions(mcpServers, signal)
+  // Built-in tools are already filtered; filter MCP tools by the same rules.
+  return [...builtIn, ...applyFilter(mcp, filter)]
+}

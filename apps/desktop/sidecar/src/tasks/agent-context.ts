@@ -13,8 +13,8 @@ import { listProjects } from '../projects/store.js'
 import { listServers as listMcpServers } from '../mcp/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { log } from '../util/logger.js'
-import type { Agent, AgentSource } from '../types/shared.js'
-import type { Options } from '@anthropic-ai/claude-agent-sdk'
+import type { Agent, AgentSource, ProviderName } from '../types/shared.js'
+import type { McpServersConfig } from '../runtime/permission-types.js'
 
 export interface AgentRef {
   id: string
@@ -24,12 +24,17 @@ export interface AgentRef {
 
 export interface ResolvedAgentContext {
   agentName?: string
+  // The agent's LLM provider + optional account (AGENT.md / ADR 0026). node-runner
+  // threads these into SessionSettings so the runtime resolves the right account
+  // instead of hardcoding anthropic + active account. Default 'anthropic'.
+  provider?: ProviderName
+  accountId?: string
   // The agent's preferred model (AGENT.md frontmatter). node-runner uses it as
   // the run's modelId; falls back to a default when absent.
   model?: string
   systemPrompt?: string
   allowedTools?: string[]
-  mcpServers?: Options['mcpServers']
+  mcpServers?: McpServersConfig
   systemPromptAppend?: string
 }
 
@@ -58,7 +63,7 @@ async function loadAgentFlexibly(ref: AgentRef): Promise<Agent | null> {
 async function buildMcpServers(
   agentMcpIds: string[] | undefined,
   connectionId?: string,
-): Promise<{ mcpServers?: Options['mcpServers']; attached: { id: string; name: string }[] }> {
+): Promise<{ mcpServers?: McpServersConfig; attached: { id: string; name: string }[] }> {
   const attached: { id: string; name: string }[] = []
   const entries: [string, unknown][] = []
   try {
@@ -102,7 +107,7 @@ async function buildMcpServers(
     })
   }
   if (entries.length === 0) return { attached }
-  return { mcpServers: Object.fromEntries(entries) as Options['mcpServers'], attached }
+  return { mcpServers: Object.fromEntries(entries) as McpServersConfig, attached }
 }
 
 function mcpNudge(attached: { id: string; name: string }[]): string {
@@ -139,6 +144,11 @@ export async function resolveAgentContext(
   if (!agent) return ctx
 
   ctx.agentName = agent.name
+  // Surface the agent's provider/account so the run targets the right credential
+  // (defaults applied by the caller). Under the `sdk` runtime non-anthropic still
+  // won't work — this just stops hardcoding so the pi runtime can use it in C3.
+  if (agent.provider) ctx.provider = agent.provider
+  if (agent.accountId) ctx.accountId = agent.accountId
   if (agent.model) ctx.model = agent.model
   if (agent.systemPrompt) ctx.systemPrompt = agent.systemPrompt
   if (agent.tools && agent.tools.length > 0) ctx.allowedTools = agent.tools

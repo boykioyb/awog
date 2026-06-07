@@ -156,10 +156,11 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
       .join('\n\n')
 
     const settings: SessionSettings = {
-      provider: 'anthropic',
+      provider: agentCtx.provider ?? 'anthropic',
       modelId: agentCtx.model || DEFAULT_MODEL,
       level: 'medium',
       mode: 'execute',
+      ...(agentCtx.accountId ? { accountId: agentCtx.accountId } : {}),
     }
 
     // Emit the root agent trace node (children nest under it).

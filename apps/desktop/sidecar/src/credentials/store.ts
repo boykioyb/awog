@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, chmod, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
+import { codexSubscriptionModelIds } from '../auth/openai-codex-oauth.js'
 import { fingerprint } from './fingerprint.js'
 import type {
   AccountRecord,
@@ -90,8 +91,29 @@ export async function saveCredentials(data: CredentialsFile): Promise<void> {
   await rename(tmp, file)
 }
 
+// Pull a number field from a pi OAuth credential blob (e.g. `expires`, in ms
+// epoch). Returns undefined when absent or not a finite number — the blob is L2
+// trust (loaded from disk) so we re-validate at this boundary.
+function piOAuthNumber(record: AccountRecord, key: string): number | undefined {
+  const value = record.piOAuth?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function piOAuthString(record: AccountRecord, key: string): string | undefined {
+  const value = record.piOAuth?.[key]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
 function accountStatus(record: AccountRecord): AccountStatus {
   if (record.authMode === 'oauth') {
+    // pi-managed OAuth (codex/copilot/…): connected if creds present. pi auto-
+    // refreshes an expired token at request time, so a past `expires` is not
+    // "disconnected" — surface 'expired' as a hint, still recoverable.
+    if (record.piOAuth) {
+      const expires = piOAuthNumber(record, 'expires')
+      if (expires !== undefined && expires < Date.now()) return 'expired'
+      return 'connected'
+    }
     if (!record.oauth) return 'disconnected'
     return record.oauth.expiresAt < Date.now() ? 'expired' : 'connected'
   }
@@ -99,6 +121,9 @@ function accountStatus(record: AccountRecord): AccountStatus {
 }
 
 function accountFingerprint(record: AccountRecord): string {
+  // pi-managed OAuth: fingerprint the (secret) refresh token. Never expose it.
+  const piRefresh = piOAuthString(record, 'refresh')
+  if (piRefresh) return fingerprint(piRefresh)
   if (record.oauth?.refreshToken) return fingerprint(record.oauth.refreshToken)
   if (record.apiKey) return fingerprint(record.apiKey)
   return '00000000'
@@ -114,7 +139,23 @@ export function toSafe(record: AccountRecord): AccountSafe {
     version: record.version,
     createdAt: record.createdAt,
   }
+  // Expose only the non-secret expiry. piOAuth itself is NEVER copied into the
+  // safe view (invariant #1 — credential blob never leaves the sidecar).
   if (record.oauth?.expiresAt !== undefined) safe.expiresAt = record.oauth.expiresAt
+  else {
+    const piExpires = piOAuthNumber(record, 'expires')
+    if (piExpires !== undefined) safe.expiresAt = piExpires
+  }
+  if (record.baseURL) safe.baseURL = record.baseURL
+  if (record.api) safe.api = record.api
+  if (record.models && record.models.length) {
+    // A ChatGPT subscription (Codex OAuth, marked by piOAuth) can't use every
+    // catalog model — drop the API-key-only ones so the picker never offers an
+    // unusable model. API-key accounts keep their configured list verbatim.
+    const isCodex = record.authMode === 'oauth' && !!record.piOAuth
+    const models = isCodex ? codexSubscriptionModelIds(record.models) : record.models
+    if (models.length) safe.models = models
+  }
   if (record.organization) safe.organization = record.organization
   if (record.account) safe.account = record.account
   return safe

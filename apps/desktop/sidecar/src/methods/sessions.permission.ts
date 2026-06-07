@@ -5,7 +5,7 @@ import {
   resolvePermissionRequest,
 } from '../sessions/permissions.js'
 import { log } from '../util/logger.js'
-import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import type { PermissionResult } from '../runtime/permission-types.js'
 
 const Params = z.object({
   requestId: z.string().min(1),

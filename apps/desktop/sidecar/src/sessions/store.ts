@@ -23,7 +23,6 @@ type SessionMetadataPatch = Partial<
     | 'invitedAgentIds'
     | 'disabledTools'
     | 'mcpServerIds'
-    | 'sdkSessionId'
   >
 >
 

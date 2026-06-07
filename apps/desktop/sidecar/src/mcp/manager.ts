@@ -137,7 +137,10 @@ function resolveCwd(config: McpServerConfig): string | undefined {
 }
 
 // Minimal MCP client over stdio. Used both for test() and start() handshake.
-class StdioMcpClient {
+// Exported so the Pi runtime's MCP tool bridge (runtime/tools/mcp-tools.ts) can
+// reuse the SAME JSON-RPC-over-stdio transport for per-turn tools/list +
+// tools/call instead of writing a second client (ADR 0029 §4 — in-process MCP).
+export class StdioMcpClient {
   private nextId = 1
 
   private pending = new Map<number, (res: JsonRpcResponse) => void>()

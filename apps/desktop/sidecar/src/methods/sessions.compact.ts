@@ -2,15 +2,15 @@ import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { runStream } from '../sessions/runner.js'
-import { loadSession, appendMessage, updateSessionMetadata } from '../sessions/store.js'
+import { loadSession, appendMessage } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
 import { log } from '../util/logger.js'
 import type { SessionMessage, SessionSettings } from '../types/shared.js'
 
-// `/compact` — forward the SDK's internal compaction command (ADR 0023). The
-// SDK only treats `/compact` as a command when it is the sole prompt of a
-// resumed session, so this runs a dedicated lean turn: resume the session,
-// send the bare `/compact`, let the SDK summarize + shrink its context.
+// `/compact` — summarize the conversation to free up token budget (ADR 0023,
+// amended by ADR 0029). The Pi runtime reimplements compaction as a one-shot
+// summarize over the rebuilt history (no opaque SDK session). We load the
+// session's messages and hand them to the runtime via slashCommand: 'compact'.
 //
 // Separate from sessions.sendMessage so it never pushes a `/compact` user
 // bubble; the UI shows a system note instead. No agent / MCP / tool resolution
@@ -27,10 +27,9 @@ register('sessions.compact', async (raw) => {
   const params = Params.parse(raw)
 
   const session = await loadSession(params.sessionId)
-  if (!session?.sdkSessionId) {
-    // Nothing to compact: no SDK session has been started for this chat yet
-    // (e.g. a fresh session, or one created before resume existed). The next
-    // normal turn seeds one; compaction only makes sense afterwards.
+  if (!session || session.messages.length === 0) {
+    // Nothing to compact: a fresh session with no turns yet. The next normal
+    // turn seeds history; compaction only makes sense afterwards.
     return { ok: false, reason: 'no-session' }
   }
 
@@ -54,30 +53,17 @@ register('sessions.compact', async (raw) => {
     ...(params.accountId ? { accountId: params.accountId } : {}),
   }
 
-  const result = await runStream(
+  await runStream(
     {
       sessionId: params.sessionId,
       pendingText: '/compact',
-      history: [],
+      history: session.messages,
       settings,
       slashCommand: 'compact',
-      sdkSessionId: session.sdkSessionId,
       ...(cwd ? { cwd } : {}),
     },
     { onChunk: () => {} },
   )
-
-  // Compaction may rotate the session id — persist whatever the SDK reported.
-  if (result.sdkSessionId && result.sdkSessionId !== session.sdkSessionId) {
-    try {
-      await updateSessionMetadata(params.sessionId, { sdkSessionId: result.sdkSessionId })
-    } catch (err) {
-      log.warn('failed to persist sdkSessionId after compact', {
-        sessionId: params.sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
 
   // Leave a system breadcrumb in the transcript so the user sees compaction ran.
   const note: SessionMessage = {

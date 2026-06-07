@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { runStream, registerAborter, unregisterAborter } from '../sessions/runner.js'
-import { appendMessage, loadSession, updateSessionMetadata } from '../sessions/store.js'
+import { appendMessage } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
 import {
   parkPermissionRequest,
@@ -13,7 +13,7 @@ import { log } from '../util/logger.js'
 import { listServers as listMcpServers } from '../mcp/store.js'
 import { loadAgent } from '../agents/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
-import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
+import type { CanUseTool, McpServersConfig } from '../runtime/permission-types.js'
 import type { SessionMessage, SessionSettings } from '../types/shared.js'
 
 const SessionMessageSchema = z
@@ -48,11 +48,11 @@ const Params = z.object({
   settings: SessionSettingsSchema,
   systemPrompt: z.string().optional(),
   // Optional project linkage. When present, sidecar resolves the project's
-  // on-disk path and passes it as Options.cwd so the SDK's Read/Bash/Edit
-  // tools operate against the user's repo instead of process.cwd().
+  // on-disk path and passes it as the runtime tools' fs root so Read/Bash/Edit
+  // operate against the user's repo instead of process.cwd().
   projectId: z.string().optional(),
-  // Session-scoped tool denylist (SDK tool names). Forwarded to
-  // Options.disallowedTools so the model never even sees the tool exists.
+  // Session-scoped tool denylist (Claude Code tool names). Removes these tools
+  // from the runtime tool set so the model never even sees them.
   disabledTools: z.array(z.string()).optional(),
   // Session-scoped MCP server whitelist. `undefined` = legacy behaviour: use
   // all globally-enabled servers. `[]` = explicitly none. `[ids]` = only these
@@ -99,8 +99,8 @@ register('sessions.sendMessage', async (raw) => {
   registerAborter(params.messageId, abortController)
 
   // Resolve cwd from project, if linked. Best-effort: missing project → no
-  // cwd (SDK falls back to process.cwd()). Don't error the chat for a stale
-  // projectId.
+  // cwd (the runtime falls back to process.cwd()). Don't error the chat for a
+  // stale projectId.
   let cwd: string | undefined
   if (params.projectId) {
     try {
@@ -114,20 +114,9 @@ register('sessions.sendMessage', async (raw) => {
     }
   }
 
-  // Prior SDK session id (ADR 0023): when present, the runner resumes it and
-  // sends only the new turn instead of the whole transcript. Best-effort load —
-  // a missing/not-yet-persisted session just means "seed a fresh SDK session".
-  let priorSdkSessionId: string | undefined
-  try {
-    const existing = await loadSession(params.sessionId)
-    priorSdkSessionId = existing?.sdkSessionId
-  } catch {
-    // Ignore — treat as no prior session (seed path).
-  }
-
   // Resolve the active agent (if any). When found:
   //   - `agent.systemPrompt` REPLACES `params.systemPrompt` (ADR 0015)
-  //   - `agent.tools` (Claude Code subagent whitelist) → Options.allowedTools
+  //   - `agent.tools` (Claude Code subagent whitelist) → runtime allowedTools
   //   - `agent.mcpServerIds` → per-agent MCP whitelist
   // Missing / unparseable agent → fall back to the caller's prompt + full toolset.
   let resolvedSystemPrompt = params.systemPrompt
@@ -153,16 +142,16 @@ register('sessions.sendMessage', async (raw) => {
     }
   }
 
-  // Build the MCP server map for the SDK. ADR 0014 Q4: SDK spawns its own
-  // process per query. We only forward enabled stdio servers — disabled
-  // entries shouldn't surface tools to the model.
+  // Build the resolved MCP server map for the runtime. ADR 0029 §4: the runtime
+  // bridges these to in-process Pi tools. We only forward enabled stdio/http
+  // servers — disabled entries shouldn't surface tools to the model.
   // Per-session whitelist (params.mcpServerIds) further narrows the set:
   //   undefined → all enabled (legacy)
   //   []        → none
   //   [ids]     → only those (∩ enabled)
-  let mcpServersForSdk: Options['mcpServers'] | undefined
-  // Track which servers actually made it into the SDK so we can build a
-  // matching system-prompt nudge (only when user explicitly whitelisted).
+  let mcpServersForRuntime: McpServersConfig | undefined
+  // Track which servers actually made it through so we can build a matching
+  // system-prompt nudge (only when user explicitly whitelisted).
   const attachedMcpServers: { id: string; name: string }[] = []
   try {
     const all = await listMcpServers()
@@ -172,24 +161,22 @@ register('sessions.sendMessage', async (raw) => {
     const sessionWhitelist =
       params.mcpServerIds !== undefined ? new Set(params.mcpServerIds) : null
     const agentWhitelist = resolvedAgentMcpIds ? new Set(resolvedAgentMcpIds) : null
-    const entries: [string, Options['mcpServers'] extends Record<string, infer V> | undefined
-      ? V
-      : never][] = []
+    const entries: [string, McpServersConfig[string]][] = []
     for (const s of all) {
       if (!s.enabled) continue
       if (sessionWhitelist && !sessionWhitelist.has(s.id)) continue
       if (agentWhitelist && !agentWhitelist.has(s.id)) continue
-      let cfg
+      let cfg: McpServersConfig[string]
       if (s.transport === 'stdio') {
         if (!s.command) continue
         // Expand `secret:KEY` placeholders in env against OS keychain — ADR 0018.
-        // The SDK spawns the child itself; we pass plaintext env here. The
+        // The runtime passes plaintext env to the in-process MCP child. The
         // expansion happens fresh per turn so a re-saved keychain value
         // takes effect on the next message.
         // eslint-disable-next-line no-await-in-loop
         const expandedEnv = await expandSecrets(s.id, s.env)
         cfg = {
-          type: 'stdio' as const,
+          type: 'stdio',
           command: s.command,
           ...(s.args ? { args: s.args } : {}),
           ...(Object.keys(expandedEnv).length > 0 ? { env: expandedEnv } : {}),
@@ -199,7 +186,7 @@ register('sessions.sendMessage', async (raw) => {
         // eslint-disable-next-line no-await-in-loop
         const expandedHeaders = await expandSecrets(s.id, s.headers)
         cfg = {
-          type: 'http' as const,
+          type: 'http',
           url: s.url,
           ...(Object.keys(expandedHeaders).length > 0 ? { headers: expandedHeaders } : {}),
         }
@@ -211,7 +198,7 @@ register('sessions.sendMessage', async (raw) => {
       attachedMcpServers.push({ id: s.id, name: s.name })
     }
     if (entries.length > 0) {
-      mcpServersForSdk = Object.fromEntries(entries) as Options['mcpServers']
+      mcpServersForRuntime = Object.fromEntries(entries)
     }
   } catch (err) {
     log.warn('failed to list mcp servers for session', {
@@ -277,7 +264,7 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
   }
 
   // If the user aborts mid-prompt, reject every parked permission for this
-  // turn so the SDK promise chain unwinds cleanly. The runner's `abortController`
+  // turn so the promise chain unwinds cleanly. The runner's `abortController`
   // already short-circuits the model loop; this cleans up the parked promises
   // we own here.
   const onAbort = () => {
@@ -304,10 +291,9 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
         ...(params.disabledTools && params.disabledTools.length
           ? { disabledTools: params.disabledTools }
           : {}),
-        ...(mcpServersForSdk ? { mcpServers: mcpServersForSdk } : {}),
+        ...(mcpServersForRuntime ? { mcpServers: mcpServersForRuntime } : {}),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
-        ...(priorSdkSessionId ? { sdkSessionId: priorSdkSessionId } : {}),
         canUseTool,
         abortController,
       },
@@ -330,23 +316,10 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
     )
   } finally {
     abortController.signal.removeEventListener('abort', onAbort)
-    // Defensive: if anything left a parked permission (e.g. SDK error without
-    // calling canUseTool back), reject so the Map doesn't leak.
+    // Defensive: if anything left a parked permission (e.g. a runtime error
+    // without calling canUseTool back), reject so the Map doesn't leak.
     onAbort()
     unregisterAborter(params.messageId)
-  }
-
-  // Persist the SDK session id (ADR 0023) so the next turn resumes instead of
-  // re-seeding. Only writes when it changed (first turn, or after a fork/reseed).
-  if (result.sdkSessionId && result.sdkSessionId !== priorSdkSessionId) {
-    try {
-      await updateSessionMetadata(params.sessionId, { sdkSessionId: result.sdkSessionId })
-    } catch (err) {
-      log.warn('failed to persist sdkSessionId', {
-        sessionId: params.sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
   }
 
   // Persist both turns to JSONL. Best-effort: failures must not bubble back

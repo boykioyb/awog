@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
-import { resolveAccount } from '../sessions/runner.js'
+import { resolveAccount } from '../credentials/credential-resolver.js'
 import { ensureFreshAccessToken } from '../credentials/token-manager.js'
 import { fetchClaudeProfile, fetchClaudeUsage } from '../providers/anthropic/usage.js'
 import type { ClaudeProfile, UsageEntry } from '../providers/anthropic/usage.js'
@@ -24,6 +24,13 @@ const cache = new Map<string, CachedEntry>()
 register('account.usage', async (raw) => {
   const params = Params.parse(raw)
   const account = await resolveAccount('anthropic', params.accountId)
+
+  // Profile + usage come from claude.ai OAuth endpoints — only meaningful for
+  // OAuth (subscription) accounts. API-key accounts (incl. custom endpoints)
+  // have no usage surface, so report it as unavailable rather than throwing.
+  if (account.authMode !== 'oauth') {
+    return { profile: null, usage: [], cachedAt: Date.now() }
+  }
 
   const cached = cache.get(account.id)
   if (cached && !params.force && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {

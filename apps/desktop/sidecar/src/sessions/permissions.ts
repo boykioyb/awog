@@ -3,13 +3,13 @@
 // sessions.permission RPC resolves it with the user's choice. If the chat is
 // aborted while a prompt is open, rejectPermissionRequest unwinds it cleanly.
 
-import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
+import type { PermissionResult, PermissionUpdate } from '../runtime/permission-types.js'
 
 interface ParkedRequest {
   resolve: (result: PermissionResult) => void
   reject: (err: Error) => void
   // Suggestions captured at park time. When the user chooses "always allow"
-  // we hand these back as `updatedPermissions` so the SDK adds them to the
+  // we hand these back as `updatedPermissions` so they are added to the
   // session-scoped allowlist (destination: 'session').
   suggestions: PermissionUpdate[]
 }
@@ -45,9 +45,9 @@ export function rejectPermissionRequest(requestId: string, message: string): boo
   const parked = PENDING.get(requestId)
   if (!parked) return false
   PENDING.delete(requestId)
-  // Resolve as deny rather than reject so the SDK's canUseTool contract
-  // (must return PermissionResult) is honoured. The chat is already being
-  // aborted by the AbortController; this is just cleanup.
+  // Resolve as deny rather than reject so the canUseTool contract (must return
+  // PermissionResult) is honoured. The chat is already being aborted by the
+  // AbortController; this is just cleanup.
   parked.resolve({ behavior: 'deny', message })
   return true
 }

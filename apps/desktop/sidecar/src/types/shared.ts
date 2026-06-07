@@ -4,6 +4,13 @@ export type ProviderName = 'anthropic' | 'openai' | 'google'
 
 export type AuthMode = 'oauth' | 'apikey'
 
+// Wire protocol a custom endpoint speaks (ADR 0029 Phase C3). Maps to a Pi
+// `Model.api`: 'anthropic-messages' = the Anthropic Messages API (Phase B
+// default), 'openai-completions' = the OpenAI Chat Completions API (Ollama,
+// vLLM, LM Studio, OpenRouter, …). Undefined ⇒ inferred from the provider:
+// anthropic → anthropic-messages, openai/google → their native api.
+export type EndpointApi = 'anthropic-messages' | 'openai-completions'
+
 export type AccountStatus = 'connected' | 'expired' | 'disconnected'
 
 export interface OAuthTokens {
@@ -13,6 +20,15 @@ export interface OAuthTokens {
   scope?: string
   tokenUuid?: string
 }
+
+// Raw OAuth credential blob owned + refreshed by the Pi SDK (pi
+// `OAuthCredentials`: { refresh, access, expires, ...providerExtras }). Stored
+// VERBATIM because pi carries provider-specific extra fields (e.g. the codex
+// chatgpt_account_id) it needs at request time — AWOG must not reshape it.
+// Used for pi-managed OAuth providers (openai-codex now; copilot/vertex later)
+// whose token shape does NOT match AWOG's anthropic-shaped OAuthTokens. SECRET
+// — never leaves the sidecar (stripped in toSafe). See ADR 0029.
+export type PiOAuthCredentials = Record<string, unknown>
 
 export interface AccountOrg {
   uuid: string
@@ -29,7 +45,24 @@ export interface AccountRecord {
   label: string
   authMode: AuthMode
   oauth?: OAuthTokens
+  // Raw pi OAuth credentials for a pi-managed OAuth provider (ADR 0029 — OpenAI
+  // Codex / ChatGPT subscription). When set, authMode is 'oauth' and the runtime
+  // resolves the bearer token via pi's getOAuthApiKey instead of AWOG's anthropic
+  // token-manager. SECRET — stripped by toSafe. `oauth` (anthropic-shaped) and
+  // `piOAuth` are mutually exclusive per account.
+  piOAuth?: PiOAuthCredentials
   apiKey?: string
+  // Custom endpoint base URL (ADR 0026 Phase B / ADR 0029 Phase C3). When set,
+  // the runtime points the Pi Model at this base URL instead of the provider
+  // default. Only meaningful for apikey accounts. Non-secret.
+  baseURL?: string
+  // Wire protocol the custom endpoint speaks (ADR 0029 Phase C3). Undefined ⇒
+  // inferred from provider (anthropic → anthropic-messages, else openai-
+  // completions). Only meaningful when baseURL is set.
+  api?: EndpointApi
+  // Model ids exposed by a custom endpoint (user-supplied). Drives the agent
+  // model picker; bypasses the built-in model allowlist at runtime.
+  models?: string[]
   organization?: AccountOrg
   account?: AccountIdentity
   version: number
@@ -43,6 +76,10 @@ export interface AccountSafe {
   fingerprint: string
   status: AccountStatus
   expiresAt?: number
+  // Surfaced for custom endpoints (non-secret) so the UI can show / pick them.
+  baseURL?: string
+  api?: EndpointApi
+  models?: string[]
   organization?: AccountOrg
   account?: AccountIdentity
   version: number
@@ -139,11 +176,6 @@ export interface Session {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
-  // Claude Agent SDK session id captured on the first turn, used to `resume`
-  // subsequent turns instead of re-sending the whole transcript (ADR 0023).
-  // Resumable cache only — AWOG JSONL stays the source of truth; cleared/re-seeded
-  // when resume fails. Opaque UUID.
-  sdkSessionId?: string
 }
 
 // ─── Session steps (tool use / thinking) ───────────────────────────────────
@@ -161,6 +193,9 @@ export type SessionStepTool =
   | 'task'
 
 export type SessionStepStatus = 'running' | 'done' | 'error'
+
+// Plan step lifecycle (ExitPlanMode). pending → user approves/rejects in the UI.
+export type PlanStatus = 'pending' | 'approved' | 'rejected'
 
 export type SessionStepDetail =
   | { kind: 'file'; path: string; content: string; language?: string }
@@ -180,6 +215,12 @@ export interface SessionStep {
   pathHint?: string
   status?: SessionStepStatus
   detail?: SessionStepDetail
+  // Plan step (kind === 'plan', emitted from an ExitPlanMode tool call): the
+  // proposed steps + optional rationale + approval status the UI renders as a
+  // plan card with Approve/Reject. Mirrors the UI SessionStep plan fields.
+  planItems?: string[]
+  planStatus?: PlanStatus
+  planRationale?: string
   // Subagent grouping: when set, this step ran inside the Task step with this
   // tool_use_id. UI nests the step under that parent instead of rendering
   // top-level. Source: SDK's `parent_tool_use_id` on stream_event/assistant/user.

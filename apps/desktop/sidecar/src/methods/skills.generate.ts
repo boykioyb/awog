@@ -1,18 +1,16 @@
 // One-shot LLM call to draft a SKILL.md from a natural-language prompt.
 //
-// Reuses the same Anthropic OAuth account + claude-agent-sdk machinery as the
-// chat runner. Unlike chat we do not stream — we collect the full assistant
-// text, strip the surrounding ```json fence if present, and parse a strict
-// schema. The mock generator in the UI is the fallback when no account /
-// sidecar is available; this method is only reached when both are present.
+// Runs through the Pi runtime (completePi) — Anthropic account resolved by
+// accountId. Unlike chat we do not stream: we collect the full assistant text,
+// strip the surrounding ```json fence if present, and parse a strict schema.
+// The mock generator in the UI is the fallback when no account / sidecar is
+// available; this method is only reached when both are present.
 
 import { z } from 'zod'
-import { query, type Options } from '@anthropic-ai/claude-agent-sdk'
 import { register, RpcError } from '../transport/rpc.js'
-import { resolveAccount } from '../sessions/runner.js'
-import { ensureFreshAccessToken } from '../credentials/token-manager.js'
 import { log } from '../util/logger.js'
 import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
+import { completePi } from '../runtime/complete.js'
 
 const ModelSchema = z.enum(ANTHROPIC_MODELS)
 
@@ -95,67 +93,25 @@ function extractJson(raw: string): string {
   return trimmed
 }
 
-interface AssistantTextBlock {
-  type: 'text'
-  text: string
-}
-
-function isTextBlock(block: unknown): block is AssistantTextBlock {
-  return (
-    typeof block === 'object' &&
-    block !== null &&
-    (block as { type?: unknown }).type === 'text' &&
-    typeof (block as { text?: unknown }).text === 'string'
-  )
-}
-
 register('skills.generate', async (raw) => {
   const params = Params.parse(raw)
-  const account = await resolveAccount('anthropic', params.accountId)
-  const tokens = await ensureFreshAccessToken('anthropic', account.id)
 
   // Haiku is the cheap default — generating a one-page SKILL.md does not need
   // Opus. UI may override via modelId if user wants a higher tier.
   const modelId = params.modelId ?? 'claude-haiku-4-5'
 
-  const env: Record<string, string | undefined> = {
-    ...process.env,
-    CLAUDE_CODE_OAUTH_TOKEN: tokens.accessToken,
-    CLAUDE_CODE_ENTRYPOINT: 'awog-sidecar',
-  }
-  delete env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN
-
-  const options: Options = {
-    model: modelId,
-    env,
-    persistSession: false,
-    permissionMode: 'bypassPermissions',
-    systemPrompt: buildSystemPrompt(params.currentSkill),
-  }
-
   log.info('skills.generate', {
-    account: account.id,
     model: modelId,
     mode: params.currentSkill ? 'edit' : 'create',
   })
 
-  let collected = ''
-  try {
-    const q = query({ prompt: params.prompt, options })
-    for await (const evt of q) {
-      if (evt.type === 'assistant') {
-        const msg = evt.message as { content?: unknown[] }
-        for (const block of msg.content ?? []) {
-          if (isTextBlock(block)) collected += block.text
-        }
-      }
-      if (evt.type === 'result') break
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    log.warn('skills.generate sdk error', { err: message })
-    throw new RpcError(-32021, `skill generation failed: ${message}`)
-  }
+  // Pure-text generation through the Pi runtime (no tools).
+  const collected = await completePi({
+    accountId: params.accountId,
+    modelId,
+    systemPrompt: buildSystemPrompt(params.currentSkill),
+    prompt: params.prompt,
+  })
 
   if (!collected.trim()) {
     throw new RpcError(-32021, 'Empty response from model')
