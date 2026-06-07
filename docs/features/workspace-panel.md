@@ -66,10 +66,13 @@ Cây thư mục lazy (1 cấp/expand) + preview file. Preview render **theo dòn
 **Open-at-line từ chat:** click link path trong reply (vd `apps/api/foo.py#L42`) gọi `workspacePanel.requestOpenFile(sessionId, path, line)` → mở Files drawer + watcher trong tab `readFile` path, select, `scrollIntoView` + tô nền dòng `line`. Click thủ công trong cây thì không highlight (clear `targetLine`).
 
 ### Plan
-Approve/Reject map vào **permission request ExitPlanMode đang park** → `sessions.permission`.
-Chỉ hiển thị nút khi có pending permission cho session với `toolName` khớp `/exitplanmode|plan/i`.
-Approve → SDK exit plan → store tự flip `mode` (convention sẵn có). Câu hỏi mở: plan
-hiển thị mà không có request park (xem dưới).
+**Decoupled khỏi permission gate** (Pi runtime, ADR 0029): ở plan mode, runtime inject tool
+`ExitPlanMode` + plan-mode system prompt. Model nghiên cứu read-only rồi gọi `ExitPlanMode({plan})`;
+[event-adapter](../../apps/desktop/sidecar/src/runtime/event-adapter.ts) map call này thành
+`kind:'plan'` step (parse `planItems`/`planRationale` từ markdown trong [step-mapper](../../apps/desktop/sidecar/src/sessions/step-mapper.ts) `stepFromPlan`), tool `terminate` → kết thúc turn chờ duyệt.
+Approve/Reject hành động thẳng trên plan step (không qua `sessions.permission`): `store.resolvePlan(sessionId, stepId, decision)`.
+**Approve** → `planStatus='approved'` + flip `mode='execute'` + tự gửi turn tiếp tục → model chạy.
+**Reject** → `planStatus='rejected'`. Nút hiện khi `planStatus` còn `pending`. Surface kép: card inline trong [StepItem.vue](../../apps/desktop/ui/components/phase/StepItem.vue) (qua inject `RESOLVE_PLAN_KEY`) + tab Plan.
 
 ### Terminal
 **Multi-tab:** [WorkspaceTerminalTab.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceTerminalTab.vue) là manager — tab strip (+ tạo / X xóa / double-click đổi tên / click chuyển), mỗi tab là 1 [WorkspaceTerminalInstance.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceTerminalInstance.vue) (always-mounted, `v-show` active → PTY sống khi chuyển tab). Xóa tab cuối = đóng drawer.

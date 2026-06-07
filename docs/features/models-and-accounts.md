@@ -133,11 +133,36 @@ UI nút **"Test connection"** trong account row → RPC `accounts.test`:
 | Method | Params | Trả về | Ghi chú |
 |---|---|---|---|
 | `accounts.list` | — | `AccountSafe[]` | Đã derive `fingerprint` + `status`. |
-| `accounts.remove` | `{ id }` | `{ ok: true }` | Xóa entry khỏi `credentials.json`. Nếu là active → clear `activeAccountId`. |
-| `accounts.setActive` | `{ id }` | `AccountSafe` | Set `activeAccountId`. Tất cả request `/v1/messages` sau đó dùng account này. |
-| `accounts.test` | `{ id? }` | `{ ok, expiresInMs?, error? }` | Default test active account. |
-| `auth.startOAuth` | — | `{ authUrl, state }` | Sinh PKCE; state lưu trong memory chờ `completeOAuth`. |
+| `accounts.addApiKey` | `{ provider, apiKey, label?, baseURL?, api?, models? }` | `AccountSafe` | Thêm account API-key (built-in) hoặc custom endpoint (khi có `baseURL`). |
+| `accounts.update` | `{ provider, accountId, patch }` | `AccountSafe` | **Sửa** connection. `patch` field tùy chọn; sidecar **allow-list theo kind** (xem [Edit & curate](#edit--curate-connection)). Mass-assignment guard. |
+| `accounts.remove` | `{ provider, accountId }` | `{ ok: true }` | Xóa entry khỏi `credentials.json`. Nếu là active → clear `activeAccountId`. |
+| `accounts.setActive` | `{ provider, accountId }` | `AccountSafe` | Set `activeAccountId`. Tất cả request sau đó dùng account này. |
+| `accounts.test` | `{ provider, accountId }` | `{ ok, expiresInMs?, error? }` | Ping 1 token qua đúng path runtime. |
+| `auth.startOAuth` | `{ provider }` | `{ authUrl, state }` | Sinh PKCE; state lưu trong memory chờ `completeOAuth`. |
 | `auth.completeOAuth` | `{ code, state? }` | `AccountSafe` | Exchange code → token, upsert account. |
+| `auth.startOAuthCodex` | `{ flowId, label? }` | `AccountSafe` | OpenAI Codex browser (loopback) OAuth; phát `auth.oauth-url` rồi resolve sau khi user authorize. |
+| `auth.cancelOAuth` | `{ flowId }` | `{ ok, found }` | Hủy login OAuth đang chờ. |
+
+### Edit & curate connection
+
+`accounts.update` cho phép **sửa connection cho mọi provider** (trước đây chỉ add/remove/test/setActive).
+Sidecar quyết định **kind từ record đã lưu** (không từ patch) và build record mới bằng **explicit field
+copy** — patch không bao giờ chạm `authMode/oauth/piOAuth/id/version/createdAt/organization/account`,
+và không thể thêm/bỏ `baseURL` để "lật" một built-in key thành custom endpoint:
+
+| Kind | Field cho sửa | Ghi chú |
+|---|---|---|
+| `oauth` (Claude OAuth, ChatGPT/Codex) | `label` | Token + model do provider quản → không sửa. Codex models vẫn auto-derive. |
+| `apikey` + `baseURL` (custom endpoint) | `label`, `baseURL`, `api`, `apiKey?`, `models` | `baseURL` re-normalize theo `api` hiệu lực (`patch.api ?? record.api`) rồi `validateCustomEndpoint`. Bắt buộc ≥1 model. |
+| `apikey` (built-in key) | `label`, `apiKey?`, `models` | **Curate model** built-in: set `models` để override; rỗng → xóa override (picker fallback catalog). |
+
+- **`apiKey`**: chỉ rotate khi là chuỗi non-empty (blank/omitted = giữ key cũ; **không** ghi đè bằng `''`).
+  Rotate đổi `fingerprint` (tín hiệu UI). Không cần invalidate token-cache (apiKey đọc tươi mỗi turn).
+- **`version`** tăng +1 mỗi lần update (last-write-wins, không CAS).
+- **Curate built-in**: picker (`SessionChipsPopover`/`AgentEditor`) đã honor `account.models` non-empty;
+  id trùng catalog giữ metadata (label + thinking levels) qua `modelById`, id lạ hiển thị bare.
+- UI: nút Edit (icon `Pencil`) trên mỗi row → `SettingsAccountEditDialog` dùng chung (custom tái dùng
+  `CustomProviderForm` edit mode). Sau khi save, xóa `testResults[accountId]` cũ (đã stale).
 
 ## Security
 

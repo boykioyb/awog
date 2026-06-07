@@ -1,8 +1,10 @@
 # 0023 — SDK session resume + `/compact`
 
-- **Trạng thái:** Proposed
+- **Trạng thái:** Superseded by [ADR 0029](./0029-migrate-llm-runtime-to-pi-sdk.md) Phase C (Pi SDK runtime)
 - **Ngày:** 2026-06-03
 - **Người quyết định:** Tech Lead (AWOG)
+
+> **Cập nhật (2026-06-05):** Cơ chế `resume` với opaque `sdkSessionId` + `CLAUDE_CONFIG_DIR` cache của `@anthropic-ai/claude-agent-sdk` được THAY THẾ bằng **rebuild Context từ JSONL** với Pi SDK (xem [ADR 0029 § Resume](./0029-migrate-llm-runtime-to-pi-sdk.md#phương-án-đã-cân-nhắc)). AWOG JSONL vẫn là source-of-truth; Pi `Context` dựng lại mỗi lần gửi turn (serializable, không state ẩn). `/compact` là one-shot Pi summarize thay vì SDK-native slash command. **Nội dung ADR dưới đây lưu lại cho lịch sử; cơ chế thực hiện hiện tại xem ADR 0029.**
 
 ## Bối cảnh
 

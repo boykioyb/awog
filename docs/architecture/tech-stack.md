@@ -27,7 +27,7 @@
 |---|---|---|
 | Runtime | **Node.js** (engine do Electron main spawn) | Host execution engine. Spawn qua `child_process.spawn(process.execPath, { env: { ELECTRON_RUN_AS_NODE: '1' } })` — giữ OAuth token trong engine process, dùng Node ESM loader chuẩn |
 | Transport | **NDJSON JSON-RPC 2.0 trên stdin/stdout** | Engine giữ nguyên (không đổi một dòng); main reframe NDJSON + relay envelope giữa renderer ↔ engine |
-| LLM client | **Anthropic SDK**, **OpenAI SDK**, adapter cho Gemini và local model | Trung gian gọi model |
+| LLM client | **Pi SDK** (`@earendil-works/pi-ai` + `pi-agent-core`) — single runtime cho mọi provider | Multi-provider (Anthropic/OpenAI/Google/custom) via unified `runAgentLoop`; in-process tools; MCP bridge in-process; resume rebuild từ JSONL; permission `beforeToolCall`. Xem [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md). |
 
 ## Storage
 
@@ -50,7 +50,7 @@ Không có database trong MVP.
 
 - **Desktop app đóng gói qua `electron-builder`** cho macOS (.dmg/.zip), Windows (.exe — nsis), Linux (.AppImage/.deb).
 - **Không cloud sync** trong MVP.
-- **Không bundle Node runtime riêng** — Electron đã mang sẵn Node. UI build + engine bundle ship như `extraResources` NGOÀI asar. Claude CLI native binary (`@anthropic-ai/claude-agent-sdk-<os>-<arch>/claude`) đi kèm qua `pnpm deploy --config.node-linker=hoisted` (node_modules phẳng, self-contained). [ADR 0007](../decisions/0007-bundle-nodejs-runtime.md) (download Node self-contained) bị superseded — xem [electron-migration.md](../features/electron-migration.md).
+- **Không bundle Node runtime riêng** — Electron đã mang sẵn Node. UI build + engine bundle ship như `extraResources` NGOÀI asar. Pi SDK (ESM thuần JS, 0 native dep) ship trongsidecar node_modules. [ADR 0007](../decisions/0007-bundle-nodejs-runtime.md) (download Node self-contained) bị superseded — xem [electron-migration.md](../features/electron-migration.md).
 
 ## Tóm tắt lý do
 

@@ -46,7 +46,7 @@ sequenceDiagram
 - Tool-use chuyển từ "chưa support" sang "full support" (15 tools, mapping tới `SessionStep` union).
 - Permission prompts: SDK emit permission_request event → sidecar reemit → UI render inline card.
 - Cancel: per-message AbortController trong ACTIVE_ABORTERS Map, RPC `sessions.cancel` trigger abort.
-- Plan mode: auto-toggle khi step label là "Enter plan" / "Exit plan".
+- Plan mode: tool `ExitPlanMode` → `kind:'plan'` step (card duyệt); approve → `mode='execute'` + chạy. Xem [Auto-title & plan flow](#auto-title--plan-flow).
 
 Tham chiếu kiến trúc: [ADR 0006](../decisions/0006-tauri-shell-for-nuxt.md), [ADR 0008](../decisions/0008-stdio-ipc-for-sidecar.md).
 
@@ -208,10 +208,10 @@ Mỗi session chọn account riêng → 2 session chạy **đồng thời** trê
 
 Field lưu: `SessionSettings.accountId?: string` ([types](../../apps/desktop/ui/types/index.ts)).
 
-### Auto-title & plan-mode toggle
+### Auto-title & plan flow
 
 - **Auto-title:** Khi user gửi message đầu tiên trong session có title còn "Untitled session", title tự replace bằng first 60 chars của message (single-line).
-- **Plan-mode auto-toggle:** Khi sidecar emit step với label "Enter plan" / "Exit plan", `session.settings.mode` flips từ 'ask' ↔ 'plan'.
+- **Plan mode (Pi runtime):** runtime inject tool `ExitPlanMode` + plan-mode prompt khi `mode='plan'`. Model nghiên cứu read-only rồi gọi `ExitPlanMode({plan})` → emit `kind:'plan'` step (card duyệt). **Approve** (`store.resolvePlan`) → `mode='execute'` + tự gửi turn chạy; **Reject** → đánh dấu rejected. Chi tiết: [workspace-panel.md#plan](workspace-panel.md).
 
 ## Subagent drawer
 

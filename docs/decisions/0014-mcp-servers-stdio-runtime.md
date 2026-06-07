@@ -4,6 +4,8 @@
 - **Ngày:** 2026-05-28
 - **Người quyết định:** Tech Lead
 
+> **Update 2026-06-05 (Pi SDK runtime):** Dưới ADR 0029, **MCP tool call chạy in-process** qua `runtime/tools/mcp-tools.ts` (bridge AWOG `McpManager` → Pi `AgentTool`), không để Pi/runtime tự spawn process MCP. `McpManager` vẫn quản lý lifecycle + status + whitelist/secret + SSRF guard; tool invoke là **in-process** qua `manager.callTool(serverId, toolName, args)`. Điều này giữ `McpManager` là chủ duy nhất của process MCP (không 2 instance). Q4 trade-off "UI status = kết quả `mcp.test`" → **đã resolve** qua in-process visibility.
+>
 > **Update 2026-05-29 (pha 2A B1/B2/B3/C2):** Nhiều backlog đã wire:
 >
 > - **B1 — Per-agent MCP whitelist**: `agent.mcpServerIds` field ([ADR 0015](./0015-agents-persisted-runtime-systemprompt.md) update). `sessions.send-message` intersect session whitelist ∩ agent whitelist trước khi build `mcpServersForSdk`. UI: MCP picker section trong AgentEditor render từ `ws.mcpServers`.

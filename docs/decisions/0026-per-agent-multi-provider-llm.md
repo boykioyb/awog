@@ -1,8 +1,8 @@
 # 0026 — Per-agent multi-provider LLM (provider + account + model)
 
-- **Trạng thái:** Proposed
-- **Ngày:** 2026-06-04
-- **Người quyết định:** Tech Lead (chờ user/PO chốt hướng A vs B)
+- **Trạng thái:** Accepted — Phase 1 + A + B đã implement (2026-06-05); Phase C (gateway OpenAI/Google) còn lại
+- **Ngày:** 2026-06-04 (cập nhật 2026-06-05)
+- **Người quyết định:** Tech Lead + user (hướng A, làm cả ba scope, phân kỳ)
 
 ## Bối cảnh
 
@@ -81,7 +81,7 @@ Call-site (`runStream`, `invokeSdk`, mọi `*.generate.ts`) gọi qua `getProvid
   3. **Phase 2:** Gateway dịch trong sidecar cho OpenAI rồi Google (Option A). Test tool-use/stream/thinking từng provider.
   4. Cập nhật [models-and-accounts.md](../features/models-and-accounts.md), [tech-stack.md](../architecture/tech-stack.md).
 - **Đã chốt (user 2026-06-04):** Hướng **A** (gateway trong sidecar); **CÓ** override account per-agent (`accountId` optional, fallback active); **bỏ Phase 0**. Phase 1 (data model + UI picker Provider/Account/Model + interface) đã implement.
-- **Câu hỏi mở còn lại:** Gateway Phase 2 tự viết translator hay nhúng lib? Connect OpenAI/Google chỉ API-key hay cả OAuth?
+- **Đã implement (user 2026-06-05) — Phase C (Pi SDK single runtime multi-provider):** thay vì gateway dịch API, **migrate toàn bộ sang Pi SDK** làm single runtime cho mọi provider — xem [ADR 0029](./0029-migrate-llm-runtime-to-pi-sdk.md). Phần Phase A/B (API-key + custom Anthropic-compat endpoint) giữ lại cho legacy, nhưng mọi session/task hiện dùng Pi runtime. Phase C Phase A + B (API key + custom Anthropic-compatible endpoint) + native **OpenAI, Google, custom OpenAI-protocol** via Pi SDK (một `model-resolver` + cred flow). Sidecar module `apps/desktop/sidecar/src/runtime/`: model-resolver, context-builder, tools, permission (beforeToolCall), event-adapter, thinking, run-stream, invoke, complete. Multi-provider `AccountRecord.api` discriminate (`'anthropic-messages'|'openai-completions'`). Task engine + Sessions + 7 one-shot method (`generate`, `author`, ...) dùng Pi. Azure/custom OpenAI-compatible supported qua `api` field + custom `baseURL`. OAuth Anthropic verified; OpenAI/Google = API key. `@anthropic-ai/claude-agent-sdk` gỡ khỏi sidecar deps (phase C4).
 
 ## Tham chiếu
 
