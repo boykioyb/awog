@@ -508,7 +508,6 @@ const onToggleToolDeny = async (name: string) => {
   try {
     await ws.toggleMCPToolDeny(props.server.id, name)
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[mcp] toggle tool deny failed', err)
   }
 }

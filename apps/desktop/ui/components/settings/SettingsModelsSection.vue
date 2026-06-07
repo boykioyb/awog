@@ -98,6 +98,15 @@
               </div>
               <button
                 type="button"
+                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                :style="iconBtnStyle"
+                title="Edit"
+                @click="onEdit(acc)"
+              >
+                <Pencil :size="12" />
+              </button>
+              <button
+                type="button"
                 class="px-2 py-1 text-[1em] rounded transition inline-flex items-center gap-1"
                 :style="iconBtnStyle"
                 :disabled="isTesting(acc.id)"
@@ -142,7 +151,7 @@
           </button>
         </div>
 
-        <!-- Advanced (collapsed) -->
+        <!-- Advanced — API key (ADR 0026 Phase A) -->
         <div class="mt-3 pt-3" :style="{ borderTop: `1px solid ${t.border}` }">
           <button
             type="button"
@@ -154,150 +163,221 @@
               <component :is="advancedOpen ? ChevronDown : ChevronRight" :size="12" />
               Advanced — use API key
             </span>
-            <span
-              class="px-1.5 py-0.5 rounded text-[1em] uppercase tracking-wider"
+          </button>
+          <div v-if="advancedOpen" class="mt-2 space-y-2">
+            <div class="text-[1em] leading-relaxed" :style="{ color: t.textDim }">
+              Use a pay-as-you-go Anthropic API key (
+              <span class="font-mono">sk-ant-…</span>
+              ) instead of a subscription sign-in. The key stays on this device.
+            </div>
+            <input
+              v-model="apiKeyLabel"
+              class="w-full rounded px-2 py-1.5 text-[1em]"
+              :style="inputStyle"
+              placeholder="Label (optional)"
+            />
+            <div class="flex items-center gap-2">
+              <input
+                v-model="apiKeyValue"
+                :type="apiKeyReveal ? 'text' : 'password'"
+                class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+                :style="inputStyle"
+                placeholder="sk-ant-…"
+                @keydown.enter="onAddApiKey"
+              />
+              <button
+                type="button"
+                class="px-2 py-1.5 rounded text-[1em] flex items-center"
+                :style="iconBtnStyle"
+                :title="apiKeyReveal ? 'Hide' : 'Show'"
+                @click="apiKeyReveal = !apiKeyReveal"
+              >
+                <component :is="apiKeyReveal ? EyeOff : Eye" :size="13" />
+              </button>
+              <button
+                type="button"
+                class="px-3 py-1.5 rounded text-[1em] inline-flex items-center gap-1.5 transition"
+                :style="{ background: t.accent, color: t.accentText, border: 'none' }"
+                :disabled="!apiKeyValue.trim() || apiKeyBusy"
+                @click="onAddApiKey"
+              >
+                <Loader2 v-if="apiKeyBusy" :size="12" class="animate-spin" />
+                Add key
+              </button>
+            </div>
+            <div
+              v-if="apiKeyError"
+              class="text-[1em] px-2 py-1 rounded"
               :style="{
-                background: t.bgInput,
-                border: `1px solid ${t.border}`,
-                color: t.textFaint,
+                background: t.dangerBg,
+                color: t.danger,
+                border: `1px solid ${t.dangerBorder}`,
               }"
             >
-              Coming soon
-            </span>
-          </button>
-          <div
-            v-if="advancedOpen"
-            class="mt-2 text-[1em] leading-relaxed"
-            :style="{ color: t.textDim }"
-          >
-            API key auth will be added in a later release. For now, use Sign in with Claude above.
+              {{ apiKeyError }}
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- OpenAI + Google: coming soon -->
-      <div
-        v-for="prov in placeholderProviders"
+      <!-- OpenAI + Google: API key connect (ADR 0029 Phase C3) + OpenAI Codex
+           subscription OAuth (ADR 0029) -->
+      <SettingsApiKeyProviderCard
+        v-for="prov in apiKeyProviders"
         :key="prov.id"
-        class="rounded p-3 relative"
+        :provider="prov.id"
+        :label="prov.label"
+        :models-hint="prov.modelsHint"
+        :key-placeholder="prov.keyPlaceholder"
+        :codex="prov.id === 'openai'"
+      />
+
+      <!-- Custom endpoints — Anthropic- or OpenAI-compatible (ADR 0029 C3) -->
+      <div
+        class="rounded p-3"
         :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
       >
-        <span
-          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[1em] uppercase tracking-wider"
-          :style="{
-            background: t.bgInput,
-            border: `1px solid ${t.border}`,
-            color: t.textFaint,
-          }"
-        >
-          Coming soon
-        </span>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 mb-2">
           <div
             class="w-8 h-8 rounded flex items-center justify-center"
             :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
           >
-            <Sparkles :size="14" :style="{ color: t.textMuted }" />
+            <Server :size="14" :style="{ color: t.textMuted }" />
           </div>
-          <div class="flex-1 min-w-0 pr-20">
-            <div class="text-[1em] font-medium" :style="{ color: t.text }">{{ prov.label }}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-[1em] font-medium" :style="{ color: t.text }">Custom endpoints</div>
             <div class="text-[1em]" :style="{ color: t.textDim }">
-              {{ prov.models.join(' · ') }}
+              Anthropic- or OpenAI-compatible base URL + API key (Ollama, vLLM, LM Studio,
+              OpenRouter, LiteLLM)
             </div>
+          </div>
+        </div>
+
+        <div v-if="customAccounts.length" class="space-y-1.5 mb-2">
+          <div
+            v-for="acc in customAccounts"
+            :key="acc.id"
+            class="rounded p-2 space-y-1.5"
+            :style="{
+              background: t.bgInput,
+              border: `1px solid ${anthropicActiveId === acc.id ? t.borderStrong : t.border}`,
+            }"
+          >
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="flex items-center justify-center w-4 h-4 rounded-full transition shrink-0"
+                :style="{
+                  border: `1px solid ${t.borderStrong}`,
+                  background: anthropicActiveId === acc.id ? t.accent : 'transparent',
+                }"
+                :title="anthropicActiveId === acc.id ? 'Active' : 'Set active'"
+                @click="onSetActive('anthropic', acc.id)"
+              >
+                <Check
+                  v-if="anthropicActiveId === acc.id"
+                  :size="10"
+                  :style="{ color: t.accentText }"
+                />
+              </button>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <div class="text-[1em] truncate" :style="{ color: t.text }">{{ acc.label }}</div>
+                  <span
+                    class="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                    :style="{ background: statusColor(acc.status) }"
+                    :title="acc.status"
+                  />
+                </div>
+                <div class="text-[1em] truncate font-mono" :style="{ color: t.textDim }">
+                  {{ customSubtitle(acc) }}
+                </div>
+              </div>
+              <button
+                type="button"
+                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                :style="iconBtnStyle"
+                title="Edit"
+                @click="onEdit(acc)"
+              >
+                <Pencil :size="12" />
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1 text-[1em] rounded transition inline-flex items-center gap-1"
+                :style="iconBtnStyle"
+                :disabled="isTesting(acc.id)"
+                title="Test connection"
+                @click="onTest('anthropic', acc.id)"
+              >
+                <Loader2 v-if="isTesting(acc.id)" :size="12" class="animate-spin" />
+                <Activity v-else :size="12" />
+                Test
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                :style="iconBtnStyle"
+                title="Remove"
+                @click="onDisconnect('anthropic', acc.id)"
+              >
+                <LogOut :size="12" />
+              </button>
+            </div>
+            <div
+              v-if="testResults[acc.id]"
+              class="text-[1em] px-2 py-1 rounded"
+              :style="testResultStyle(testResults[acc.id]!)"
+            >
+              {{ formatTestResult(testResults[acc.id]!) }}
+            </div>
+          </div>
+        </div>
+
+        <div v-if="customFormOpen" class="mt-1">
+          <CustomProviderForm
+            v-model="customDraft"
+            submit-label="Add endpoint"
+            @submit="onAddCustom"
+            @cancel="customFormOpen = false"
+          />
+          <div
+            v-if="customError"
+            class="mt-2 text-[1em] px-2 py-1 rounded"
+            :style="{
+              background: t.dangerBg,
+              color: t.danger,
+              border: `1px solid ${t.dangerBorder}`,
+            }"
+          >
+            {{ customError }}
           </div>
         </div>
         <button
+          v-else
           type="button"
-          class="mt-2 w-full rounded px-2 py-1.5 text-[1em] flex items-center justify-center gap-1.5"
-          :style="{
-            color: t.textDim,
-            border: `1px dashed ${t.border}`,
-            background: 'transparent',
-            opacity: 0.5,
-            cursor: 'not-allowed',
-          }"
-          disabled
+          class="w-full rounded px-2 py-1.5 text-[1em] flex items-center justify-center gap-1.5 transition"
+          :style="{ color: t.textDim, border: `1px dashed ${t.border}`, background: 'transparent' }"
+          @click="customFormOpen = true"
         >
           <Plus :size="12" />
-          Add account
+          Add custom endpoint
         </button>
       </div>
-
-      <!-- Custom providers (preserved, but disabled with coming-soon badge) -->
-      <div
-        v-for="cp in settings.customProviders"
-        :key="cp.id"
-        class="rounded p-3 relative"
-        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-      >
-        <span
-          class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[1em] uppercase tracking-wider"
-          :style="{
-            background: t.bgInput,
-            border: `1px solid ${t.border}`,
-            color: t.textFaint,
-          }"
-        >
-          Coming soon
-        </span>
-        <div class="flex items-center gap-3">
-          <div
-            class="w-8 h-8 rounded flex items-center justify-center"
-            :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
-          >
-            <Sparkles :size="14" :style="{ color: t.textMuted }" />
-          </div>
-          <div class="flex-1 min-w-0 pr-20">
-            <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">
-              {{ cp.label || 'Untitled provider' }}
-            </div>
-            <div class="text-[1em] truncate" :style="{ color: t.textDim }">
-              {{ cp.baseUrl || 'No base URL' }}
-              {{ cp.models.length ? `· ${cp.models.join(' · ')}` : '' }}
-            </div>
-          </div>
-          <button
-            type="button"
-            class="px-2 py-1 text-[1em] rounded transition flex items-center"
-            :style="iconBtnStyle"
-            title="Remove"
-            @click="settings.removeCustomProvider(cp.id)"
-          >
-            <Trash2 :size="13" />
-          </button>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        class="w-full rounded p-3 flex items-center gap-3 text-left"
-        :style="{
-          background: t.bgElevated,
-          border: `1px dashed ${t.border}`,
-          opacity: 0.5,
-          cursor: 'not-allowed',
-        }"
-        disabled
-      >
-        <div
-          class="w-8 h-8 rounded flex items-center justify-center"
-          :style="{ background: t.bgInput }"
-        >
-          <Plus :size="14" :style="{ color: t.textDim }" />
-        </div>
-        <div class="flex-1">
-          <div class="text-[1em]" :style="{ color: t.text }">Add a custom provider</div>
-          <div class="text-[1em]" :style="{ color: t.textDim }">
-            OpenRouter, Ollama, LM Studio — coming soon
-          </div>
-        </div>
-      </button>
     </div>
 
     <SettingsOAuthCodeDialog
       :open="dialogOpen"
       @close="dialogOpen = false"
       @connected="onConnected"
+    />
+
+    <SettingsAccountEditDialog
+      :open="!!editAccount"
+      provider="anthropic"
+      :account="editAccount"
+      @close="editAccount = null"
+      @saved="onEditSaved"
     />
   </div>
 </template>
@@ -308,14 +388,28 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Eye,
+  EyeOff,
   Loader2,
   LogIn,
   LogOut,
+  Pencil,
   Plus,
+  Server,
   Sparkles,
-  Trash2,
 } from 'lucide-vue-next'
 import type { AccountStatus, ProviderAccount, ProviderName } from '~/types'
+import type { CustomProviderInput } from '~/stores/settings'
+
+const EMPTY_CUSTOM: CustomProviderInput = {
+  label: '',
+  baseUrl: '',
+  apiKey: '',
+  // Default to Anthropic-compatible (Phase B behavior); OpenAI-compatible is the
+  // opt-in for Ollama/vLLM/LM Studio/OpenRouter.
+  api: 'anthropic-messages',
+  models: [],
+}
 
 type AccountTestResult = {
   ok: boolean
@@ -331,13 +425,50 @@ const advancedOpen = ref(false)
 const testingIds = ref<Set<string>>(new Set())
 const testResults = ref<Record<string, AccountTestResult>>({})
 
-const placeholderProviders: { id: 'openai' | 'google'; label: string; models: string[] }[] = [
-  { id: 'openai', label: 'OpenAI', models: ['GPT-5', 'Codex'] },
-  { id: 'google', label: 'Google', models: ['Gemini 2.5 Pro'] },
+// Anthropic API-key form (ADR 0026 Phase A).
+const apiKeyLabel = ref('')
+const apiKeyValue = ref('')
+const apiKeyReveal = ref(false)
+const apiKeyBusy = ref(false)
+const apiKeyError = ref('')
+
+// Custom Anthropic-compatible endpoint form (ADR 0026 Phase B).
+const customFormOpen = ref(false)
+const customDraft = ref<CustomProviderInput>({ ...EMPTY_CUSTOM })
+const customBusy = ref(false)
+const customError = ref('')
+
+const apiKeyProviders: {
+  id: 'openai' | 'google'
+  label: string
+  modelsHint: string
+  keyPlaceholder: string
+}[] = [
+  { id: 'openai', label: 'OpenAI', modelsHint: 'GPT-5.1 · o3 · GPT-4.1', keyPlaceholder: 'sk-…' },
+  {
+    id: 'google',
+    label: 'Google',
+    modelsHint: 'Gemini 3 Pro · Gemini 2.5 Flash',
+    keyPlaceholder: 'AIza…',
+  },
 ]
 
-const anthropicAccounts = computed(() => settings.providers.anthropic.accounts)
+// The Anthropic card shows OAuth + plain API-key accounts. Custom endpoints
+// (apikey + baseURL) get their own section below.
+const anthropicAccounts = computed(() =>
+  settings.providers.anthropic.accounts.filter((a) => !a.baseURL),
+)
+const customAccounts = computed(() =>
+  settings.providers.anthropic.accounts.filter((a) => !!a.baseURL),
+)
 const anthropicActiveId = computed(() => settings.providers.anthropic.activeAccountId)
+
+const inputStyle = computed(() => ({
+  background: t.value.bgInput,
+  border: `1px solid ${t.value.border}`,
+  color: t.value.text,
+  outline: 'none' as const,
+}))
 
 const anthropicHeaderStatus = computed(() => {
   const count = anthropicAccounts.value.length
@@ -370,6 +501,16 @@ const accountSubtitle = (acc: ProviderAccount): string => {
 
 const isTesting = (accountId: string) => testingIds.value.has(accountId)
 
+// Edit dialog (shared for Anthropic OAuth/key + custom endpoints).
+const editAccount = ref<ProviderAccount | null>(null)
+const onEdit = (account: ProviderAccount) => {
+  editAccount.value = account
+}
+const onEditSaved = (account: ProviderAccount) => {
+  // A rotated key / changed endpoint makes a prior Test result stale.
+  delete testResults.value[account.id]
+}
+
 const onOpenOAuthDialog = () => {
   dialogOpen.value = true
 }
@@ -378,11 +519,65 @@ const onConnected = (_account: ProviderAccount) => {
   dialogOpen.value = false
 }
 
+const onAddApiKey = async () => {
+  if (!apiKeyValue.value.trim() || apiKeyBusy.value) return
+  apiKeyBusy.value = true
+  apiKeyError.value = ''
+  try {
+    await settings.addApiKeyAccount({
+      apiKey: apiKeyValue.value.trim(),
+      label: apiKeyLabel.value.trim() || undefined,
+    })
+    apiKeyValue.value = ''
+    apiKeyLabel.value = ''
+    advancedOpen.value = false
+  } catch (err) {
+    apiKeyError.value = err instanceof Error ? err.message : 'Failed to add API key'
+  } finally {
+    apiKeyBusy.value = false
+  }
+}
+
+const onAddCustom = async () => {
+  if (customBusy.value) return
+  if (!customDraft.value.apiKey.trim()) {
+    customError.value = 'API key is required for custom endpoints'
+    return
+  }
+  customBusy.value = true
+  customError.value = ''
+  try {
+    await settings.addApiKeyAccount({
+      // Custom endpoints stay under the anthropic bucket regardless of wire
+      // protocol (the bucket is a credential namespace, not the API shape; the
+      // runtime routes via account.api). Keeps the existing custom-account UI.
+      provider: 'anthropic',
+      apiKey: customDraft.value.apiKey.trim(),
+      label: customDraft.value.label.trim() || undefined,
+      baseURL: customDraft.value.baseUrl.trim(),
+      api: customDraft.value.api,
+      models: customDraft.value.models,
+    })
+    customDraft.value = { ...EMPTY_CUSTOM }
+    customFormOpen.value = false
+  } catch (err) {
+    customError.value = err instanceof Error ? err.message : 'Failed to add endpoint'
+  } finally {
+    customBusy.value = false
+  }
+}
+
+const customSubtitle = (acc: ProviderAccount): string => {
+  const parts: string[] = []
+  if (acc.baseURL) parts.push(acc.baseURL)
+  if (acc.models?.length) parts.push(acc.models.join(' · '))
+  return parts.join('  ·  ')
+}
+
 const onSetActive = async (provider: ProviderName, accountId: string) => {
   try {
     await settings.setActiveAccount(provider, accountId)
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[settings] setActiveAccount failed', err)
   }
 }
@@ -392,7 +587,6 @@ const onDisconnect = async (provider: ProviderName, accountId: string) => {
     await settings.disconnectAccount(provider, accountId)
     delete testResults.value[accountId]
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[settings] disconnectAccount failed', err)
   }
 }

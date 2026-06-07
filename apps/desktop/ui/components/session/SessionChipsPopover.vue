@@ -132,7 +132,7 @@
         @click="togglePop('model')"
       >
         <Sparkles :size="10" />
-        {{ currentModel?.label ?? 'Pick model' }}
+        {{ currentModelLabel }}
         <span v-if="currentModel?.supportsThinking" :style="{ color: t.textDim }">
           · {{ LEVEL_LABEL[session.settings.level] }}
         </span>
@@ -462,7 +462,7 @@ import {
   UserRound,
   X,
 } from 'lucide-vue-next'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, useTemplateRef } from 'vue'
 import type { AgentMode, ProviderName, Session, ThinkingLevel } from '~/types'
 import {
   LEVEL_LABEL,
@@ -470,6 +470,7 @@ import {
   levelsForModel,
   modelById,
   modelsForProvider,
+  type ModelDef,
 } from '~/utils/models'
 import { TOOLS_CATALOG, TOOL_GROUP_LABEL, type ToolGroup } from '~/utils/tools-catalog'
 import { MODE_OPTIONS } from '~/utils/session-modes'
@@ -497,7 +498,7 @@ const settings = useSettingsStore()
 const store = useSessionsStore()
 const ws = useWorkspaceStore()
 
-const rootRef = ref<HTMLElement | null>(null)
+const rootRef = useTemplateRef<HTMLElement>('rootRef')
 const openPop = ref<PopoverName>(null)
 
 useClickOutside(rootRef, () => {
@@ -505,8 +506,43 @@ useClickOutside(rootRef, () => {
 })
 
 const availableProviders = computed<ProviderName[]>(() => ['anthropic', 'openai', 'google'])
-const availableModels = computed(() => modelsForProvider(props.session.settings.provider))
+
+// Custom Anthropic-compatible endpoints (ADR 0026 Phase B) carry their own model
+// ids on the account record. When the session's effective account has them, the
+// picker lists those instead of the static catalog. Self-contained (reads the
+// store directly) so it has no ordering dependency on the account computeds.
+const effectiveAccountModels = computed<string[]>(() => {
+  const cfg = settings.providers[props.session.settings.provider]
+  if (!cfg) return []
+  const id = props.session.settings.accountId ?? cfg.activeAccountId
+  return cfg.accounts.find((a) => a.id === id)?.models ?? []
+})
+
+const availableModels = computed<ModelDef[]>(() => {
+  if (effectiveAccountModels.value.length) {
+    // The list is either a custom endpoint's ids OR a curated built-in subset.
+    // Keep catalog metadata (label + thinking levels) for ids we know; fall back
+    // to a bare entry for genuinely-custom ids.
+    return effectiveAccountModels.value.map(
+      (id) =>
+        modelById(id) ?? {
+          id,
+          label: id,
+          vendor: 'Custom endpoint',
+          tier: 'Custom',
+          provider: props.session.settings.provider,
+          supportsThinking: false,
+          maxLevel: 'low' as ThinkingLevel,
+        },
+    )
+  }
+  return modelsForProvider(props.session.settings.provider)
+})
 const currentModel = computed(() => modelById(props.session.settings.modelId))
+// Custom model ids aren't in the catalog → fall back to the raw id for display.
+const currentModelLabel = computed(
+  () => currentModel.value?.label ?? props.session.settings.modelId,
+)
 const availableLevels = computed(() => levelsForModel(currentModel.value))
 const providerLabel = computed(() => PROVIDER_LABEL[props.session.settings.provider])
 
@@ -549,13 +585,37 @@ const onPickProvider = (p: ProviderName) => {
 }
 
 const onPickModel = (modelId: string) => {
-  const model = modelById(modelId)
+  // Look up in availableModels (catalog OR the custom endpoint's own ids), not
+  // just the static catalog — modelById would reject a custom id.
+  const model = availableModels.value.find((m) => m.id === modelId)
   if (!model) return
   store.updateSettings(props.session.id, {
     modelId,
     level: resolveLevel(levelsForModel(model)),
   })
   openPop.value = null
+}
+
+// When the effective account changes, keep modelId valid for it: a custom
+// endpoint exposes its own ids; a built-in account must use the catalog.
+const reconcileModelForAccount = (accountId: string | undefined) => {
+  const cfg = settings.providers[props.session.settings.provider]
+  if (!cfg) return
+  const id = accountId ?? cfg.activeAccountId
+  const customModels = cfg.accounts.find((a) => a.id === id)?.models ?? []
+  if (customModels.length) {
+    if (!customModels.includes(props.session.settings.modelId)) {
+      store.updateSettings(props.session.id, { modelId: customModels[0]!, level: 'low' })
+    }
+  } else if (!modelById(props.session.settings.modelId)) {
+    const first = modelsForProvider(props.session.settings.provider)[0]
+    if (first) {
+      store.updateSettings(props.session.id, {
+        modelId: first.id,
+        level: resolveLevel(levelsForModel(first)),
+      })
+    }
+  }
 }
 
 const onPickLevel = (lv: ThinkingLevel) => {
@@ -608,11 +668,13 @@ const accountPopStyle = computed(() => ({
 
 const onPickAccount = (id: string) => {
   store.updateSettings(props.session.id, { accountId: id })
+  reconcileModelForAccount(id)
   openPop.value = null
 }
 
 const resetAccount = () => {
   store.updateSettings(props.session.id, { accountId: undefined })
+  reconcileModelForAccount(undefined)
   openPop.value = null
 }
 

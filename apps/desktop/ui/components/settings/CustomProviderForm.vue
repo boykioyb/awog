@@ -12,26 +12,49 @@
         />
       </label>
       <label class="block">
-        <span class="text-[1em]" :style="{ color: t.textDim }">Base URL</span>
-        <input
-          v-model="draft.baseUrl"
-          class="mt-1 w-full rounded px-2 py-1.5 text-[1em] font-mono"
-          :style="inputStyle"
-          placeholder="https://openrouter.ai/api/v1"
-          required
-        />
+        <span class="text-[1em]" :style="{ color: t.textDim }">API type</span>
+        <AppSelect v-model="draft.api" class="mt-1">
+          <option value="anthropic-messages">Anthropic-compatible</option>
+          <option value="openai-completions">OpenAI-compatible</option>
+        </AppSelect>
       </label>
     </div>
 
     <label class="block">
-      <span class="text-[1em]" :style="{ color: t.textDim }">API key (optional for local)</span>
+      <span class="text-[1em]" :style="{ color: t.textDim }">
+        <template v-if="isOpenAi">
+          Base URL — usually ends in
+          <span class="font-mono">/v1</span>
+          (we append
+          <span class="font-mono">/chat/completions</span>
+          )
+        </template>
+        <template v-else>
+          Base URL — root only, no
+          <span class="font-mono">/v1</span>
+          (we append
+          <span class="font-mono">/v1/messages</span>
+          )
+        </template>
+      </span>
+      <input
+        v-model="draft.baseUrl"
+        class="mt-1 w-full rounded px-2 py-1.5 text-[1em] font-mono"
+        :style="inputStyle"
+        :placeholder="baseUrlPlaceholder"
+        required
+      />
+    </label>
+
+    <label class="block">
+      <span class="text-[1em]" :style="{ color: t.textDim }">API key</span>
       <div class="mt-1 flex items-center gap-2">
         <input
           v-model="draft.apiKey"
           :type="reveal ? 'text' : 'password'"
           class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
-          placeholder="sk-…"
+          :placeholder="editing ? 'Leave blank to keep current key' : 'sk-…'"
         />
         <button
           type="button"
@@ -50,12 +73,11 @@
         Model IDs — one per line or comma-separated
       </span>
       <textarea
-        :value="modelsText"
+        v-model="modelsText"
         rows="3"
-        class="mt-1 w-full rounded px-2 py-1.5 text-[1em] font-mono"
+        class="mt-1 w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[4.5rem]"
         :style="inputStyle"
         placeholder="openrouter/auto&#10;anthropic/claude-sonnet-4.5&#10;openai/gpt-5"
-        @input="onModelsInput(($event.target as HTMLTextAreaElement).value)"
       />
     </label>
 
@@ -84,9 +106,16 @@
 import { Eye, EyeOff } from 'lucide-vue-next'
 import type { CustomProviderInput } from '~/stores/settings'
 
-defineProps<{
-  submitLabel: string
-}>()
+// `editing` only changes the API-key affordance: on edit, a blank key keeps the
+// current one (the parent sends `apiKey: trimmed || undefined`), so the field is
+// optional and hints as much.
+withDefaults(
+  defineProps<{
+    submitLabel: string
+    editing?: boolean
+  }>(),
+  { editing: false },
+)
 
 const draft = defineModel<CustomProviderInput>({ required: true })
 
@@ -97,6 +126,11 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const reveal = ref(false)
+
+const isOpenAi = computed(() => draft.value.api === 'openai-completions')
+const baseUrlPlaceholder = computed(() =>
+  isOpenAi.value ? 'http://localhost:11434/v1' : 'https://api.stepfun.ai/step_plan',
+)
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,
@@ -111,9 +145,15 @@ const iconBtnStyle = computed(() => ({
   background: 'transparent',
 }))
 
-const modelsText = computed(() => draft.value.models.join('\n'))
+// Raw text is the textarea's own source of truth. Binding :value to a computed
+// re-joined from the parsed array fights the cursor: each keystroke would split→
+// trim→filter→rejoin, so a trailing newline vanishes (can't go to a new line)
+// and spaces get eaten mid-typing. Keep the text local; parse into draft.models
+// reactively. Seeded once from the model — the form unmounts on close/submit so
+// it re-seeds fresh next open (no back-sync watcher needed).
+const modelsText = ref(draft.value.models.join('\n'))
 
-const onModelsInput = (raw: string) => {
+watch(modelsText, (raw) => {
   draft.value = {
     ...draft.value,
     models: raw
@@ -121,7 +161,7 @@ const onModelsInput = (raw: string) => {
       .map((s) => s.trim())
       .filter(Boolean),
   }
-}
+})
 
 const canSubmit = computed(
   () => draft.value.label.trim().length > 0 && draft.value.baseUrl.trim().length > 0,

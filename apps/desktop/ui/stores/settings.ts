@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type {
   AgentMode,
   AppearanceSettings,
+  EndpointApi,
   ProviderAccount,
   ProviderName,
   ThinkingLevel,
@@ -32,10 +33,24 @@ export interface CustomProvider {
   label: string
   baseUrl: string
   apiKey: string
+  // Wire protocol the endpoint speaks (ADR 0029 Phase C3). Drives how the base
+  // URL is normalized + how the runtime talks to it.
+  api: EndpointApi
   models: string[]
 }
 
 export type CustomProviderInput = Omit<CustomProvider, 'id'>
+
+// Patch for editing an existing connection (accounts.update). All fields
+// optional; the sidecar enforces which are legal per account kind. `apiKey`
+// blank/omitted = keep current key (only a non-empty value rotates it).
+export interface AccountUpdateInput {
+  label?: string
+  apiKey?: string
+  baseURL?: string
+  api?: EndpointApi
+  models?: string[]
+}
 
 // Git Manager — auto-commit per phase + workspace dirty policy (ADR 0017 / Git
 // Manager spec M6). Persisted in localStorage alongside the rest of the
@@ -110,7 +125,6 @@ interface SettingsState {
   autoApprove: boolean
   notificationsEnabled: boolean
   providers: ProviderRecord<ProviderConfig>
-  customProviders: CustomProvider[]
   defaults: SessionDefaults
   appearance: AppearanceSettings
   git: GitSettings
@@ -159,7 +173,6 @@ export const useSettingsStore = defineStore('settings', {
       openai: { accounts: [], activeAccountId: null },
       google: { accounts: [], activeAccountId: null },
     },
-    customProviders: [],
     defaults: {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       instructions: '',
@@ -210,13 +223,38 @@ export const useSettingsStore = defineStore('settings', {
         this.providers = next
       } catch (err) {
         // Sidecar unavailable in dev browser, or backend error. Keep empty state.
-        // eslint-disable-next-line no-console
+
         console.warn('[settings] hydrateFromSidecar failed', err)
       }
     },
     async connectAnthropicOAuth(): Promise<OAuthStartResponse> {
       const sidecar = useSidecar()
       return sidecar.request<OAuthStartResponse>('auth.startOAuth', { provider: 'anthropic' })
+    },
+    // Connect a ChatGPT Plus/Pro subscription via the OpenAI Codex browser
+    // (loopback) OAuth flow (ADR 0029). LONG-LIVED: the promise resolves only
+    // after the user authorizes in their browser (the sidecar emits an
+    // `auth.oauth-url` event in the meantime — the dialog subscribes for it and
+    // opens the URL). On success it merges the returned oauth account into the
+    // openai bucket. The dialog passes a flowId so it can cancel via cancelOAuth.
+    async connectOpenAiCodex(flowId: string, label?: string): Promise<ProviderAccount> {
+      const sidecar = useSidecar()
+      const account = await sidecar.request<ProviderAccount>('auth.startOAuthCodex', {
+        flowId,
+        label,
+      })
+      const config = this.providers.openai
+      const idx = config.accounts.findIndex((a: ProviderAccount) => a.id === account.id)
+      if (idx >= 0) config.accounts[idx] = account
+      else config.accounts.push(account)
+      if (!config.activeAccountId) config.activeAccountId = account.id
+      return account
+    },
+    // Cancel an in-flight OAuth login (aborts the long-lived connectOpenAiCodex
+    // on the sidecar). Idempotent; safe to call on a stale id.
+    async cancelOAuth(flowId: string): Promise<void> {
+      const sidecar = useSidecar()
+      await sidecar.request('auth.cancelOAuth', { flowId })
     },
     async completeAnthropicOAuth(
       state: string,
@@ -235,6 +273,56 @@ export const useSettingsStore = defineStore('settings', {
       if (idx >= 0) config.accounts[idx] = account
       else config.accounts.push(account)
       if (!config.activeAccountId) config.activeAccountId = account.id
+      return account
+    },
+    // Add an API-key account (ADR 0026 / ADR 0029 Phase C3). `provider` selects
+    // the bucket (defaults to anthropic). Without baseURL = a plain provider API
+    // key; with baseURL = a custom endpoint, where `api` picks the wire protocol
+    // (anthropic-messages | openai-completions). The sidecar owns the key; we
+    // only store the returned safe view (key stripped, baseURL/api/models
+    // surfaced for the picker).
+    async addApiKeyAccount(input: {
+      apiKey: string
+      provider?: ProviderName
+      label?: string
+      baseURL?: string
+      api?: EndpointApi
+      models?: string[]
+    }): Promise<ProviderAccount> {
+      const sidecar = useSidecar()
+      const provider = input.provider ?? 'anthropic'
+      const account = await sidecar.request<ProviderAccount>('accounts.addApiKey', {
+        provider,
+        apiKey: input.apiKey,
+        label: input.label,
+        baseURL: input.baseURL,
+        api: input.api,
+        models: input.models,
+      })
+      const config = this.providers[provider]
+      const idx = config.accounts.findIndex((a: ProviderAccount) => a.id === account.id)
+      if (idx >= 0) config.accounts[idx] = account
+      else config.accounts.push(account)
+      if (!config.activeAccountId) config.activeAccountId = account.id
+      return account
+    },
+    // Edit an existing connection (accounts.update). The sidecar decides which
+    // patch fields are legal for the account's kind and returns the updated safe
+    // view (key stripped, fingerprint/models refreshed); we merge it by id.
+    async updateAccount(
+      provider: ProviderName,
+      accountId: string,
+      patch: AccountUpdateInput,
+    ): Promise<ProviderAccount> {
+      const sidecar = useSidecar()
+      const account = await sidecar.request<ProviderAccount>('accounts.update', {
+        provider,
+        accountId,
+        patch,
+      })
+      const config = this.providers[provider]
+      const idx = config.accounts.findIndex((a: ProviderAccount) => a.id === account.id)
+      if (idx >= 0) config.accounts[idx] = account
       return account
     },
     async disconnectAccount(provider: ProviderName, accountId: string): Promise<void> {
@@ -275,19 +363,6 @@ export const useSettingsStore = defineStore('settings', {
         }
       }
       return result
-    },
-    addCustomProvider(input: CustomProviderInput): CustomProvider {
-      const provider: CustomProvider = { ...input, id: `cp${Date.now()}` }
-      this.customProviders.push(provider)
-      return provider
-    },
-    updateCustomProvider(id: string, patch: Partial<CustomProviderInput>) {
-      const idx = this.customProviders.findIndex((p: CustomProvider) => p.id === id)
-      if (idx < 0) return
-      this.customProviders[idx] = { ...this.customProviders[idx]!, ...patch }
-    },
-    removeCustomProvider(id: string) {
-      this.customProviders = this.customProviders.filter((p: CustomProvider) => p.id !== id)
     },
     updateDefaults(patch: Partial<SessionDefaults>) {
       this.defaults = { ...this.defaults, ...patch }

@@ -114,7 +114,7 @@
       <Field label="Model">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
           <button
-            v-for="m in providerModels"
+            v-for="m in modelOptions"
             :key="m.id"
             class="text-left px-3 py-2 rounded transition"
             :style="{
@@ -236,7 +236,7 @@
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next'
 import type { Agent, AgentSource, ProviderName } from '~/types'
-import { MODELS } from '~/utils/models'
+import { MODELS, modelById } from '~/utils/models'
 
 const props = defineProps<{
   agent: Agent | null
@@ -418,6 +418,36 @@ const accountSelect = computed<string>({
     if (v && v !== activeAccountId.value) draft.value.accountId = v
     else delete draft.value.accountId
   },
+})
+
+// The account this agent will actually use (pinned id, or provider's active).
+const selectedAccount = computed(
+  () => providerAccounts.value.find((a) => a.id === accountSelect.value) ?? null,
+)
+
+// Custom Anthropic-compatible endpoints (ADR 0026 Phase B) carry their own model
+// ids; built-in providers use the static MODELS catalog. The model grid binds to
+// this so picking a custom account swaps in its model list.
+const modelOptions = computed<{ id: string; label: string; vendor: string }[]>(() => {
+  const custom = selectedAccount.value?.models
+  if (custom && custom.length) {
+    // Custom endpoint ids OR a curated built-in subset. Keep catalog label/vendor
+    // for known ids; fall back to a bare entry for genuinely-custom ids.
+    const vendor = selectedAccount.value?.label ?? 'Custom endpoint'
+    return custom.map((id) => {
+      const def = modelById(id)
+      return def ? { id: def.id, label: def.label, vendor: def.vendor } : { id, label: id, vendor }
+    })
+  }
+  return providerModels.value.map((m) => ({ id: m.id, label: m.label, vendor: m.vendor }))
+})
+
+// Keep draft.model valid as the option set changes (provider / account switch).
+// Lazy by design — never clobbers a freshly-loaded agent's stored model.
+watch(modelOptions, (opts) => {
+  if (opts.length && !opts.some((o) => o.id === draft.value.model)) {
+    draft.value.model = opts[0]!.id
+  }
 })
 
 const providerBtnStyle = (p: ProviderName) => {

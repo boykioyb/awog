@@ -207,7 +207,6 @@ const onSave = async (data: MCPServer) => {
     const saved = await ws.saveMCPServer({ ...data, id: finalId })
     selectedId.value = saved.id
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[connections] save failed', err)
   }
   mode.value = 'view'
@@ -252,7 +251,6 @@ const confirmDelete = async () => {
   try {
     await ws.deleteMCPServer(id)
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[connections] delete failed', err)
     return
   }
@@ -299,7 +297,6 @@ const commitRename = async () => {
     try {
       await ws.saveMCPServer({ ...item, name: trimmed })
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[connections] rename failed', err)
     }
   }
