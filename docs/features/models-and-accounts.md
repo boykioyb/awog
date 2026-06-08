@@ -152,7 +152,7 @@ và không thể thêm/bỏ `baseURL` để "lật" một built-in key thành cu
 
 | Kind | Field cho sửa | Ghi chú |
 |---|---|---|
-| `oauth` (Claude OAuth, ChatGPT/Codex) | `label` | Token + model do provider quản → không sửa. Codex models vẫn auto-derive. |
+| `oauth` (Claude OAuth, ChatGPT/Codex) | `label`, `models` | Token do provider quản → không sửa. **Curate model** được: rỗng = "all available" — Claude OAuth rỗng → xóa override (fallback catalog anthropic); Codex (piOAuth) rỗng → **re-seed** toàn bộ codex model khả dụng (fallback catalog 'openai' sẽ sai), set non-empty → lọc `codexSubscriptionModelIds`. |
 | `apikey` + `baseURL` (custom endpoint) | `label`, `baseURL`, `api`, `apiKey?`, `models` | `baseURL` re-normalize theo `api` hiệu lực (`patch.api ?? record.api`) rồi `validateCustomEndpoint`. Bắt buộc ≥1 model. |
 | `apikey` (built-in key) | `label`, `apiKey?`, `models` | **Curate model** built-in: set `models` để override; rỗng → xóa override (picker fallback catalog). |
 
@@ -163,6 +163,19 @@ và không thể thêm/bỏ `baseURL` để "lật" một built-in key thành cu
   id trùng catalog giữ metadata (label + thinking levels) qua `modelById`, id lạ hiển thị bare.
 - UI: nút Edit (icon `Pencil`) trên mỗi row → `SettingsAccountEditDialog` dùng chung (custom tái dùng
   `CustomProviderForm` edit mode). Sau khi save, xóa `testResults[accountId]` cũ (đã stale).
+
+### Plan usage (RPC `account.usage`)
+
+Panel "Plan usage" trong session ([SessionContextStatus.vue](../../apps/desktop/ui/components/session/SessionContextStatus.vue))
+hiển thị giới hạn gói (5h + tuần). Hai cơ chế khác nhau theo provider:
+
+| Provider | Cách lấy |
+|---|---|
+| **Anthropic** (Claude subscription) | Fetch endpoint claude.ai `/api/oauth/profile` + `/api/oauth/usage` (cache 60s) — [providers/anthropic/usage.ts](../../apps/desktop/sidecar/src/providers/anthropic/usage.ts). |
+| **OpenAI** (ChatGPT/Codex subscription) | Codex **không** có endpoint usage. Rate-limit về qua **HTTP response headers** `x-codex-<bucket>-used-percent` (+ reset). Runtime **capture thụ động** qua hook `onResponse` (run-stream/invoke/complete) → lưu snapshot in-memory theo account ([providers/openai/usage.ts](../../apps/desktop/sidecar/src/providers/openai/usage.ts)); `account.usage` đọc lại. ⇒ usage chỉ có **sau một lượt chạy model**; chưa chạy → empty ("Run a turn to see plan usage"). |
+
+Provider khác (API-key OpenAI/Google, custom endpoint) không có usage → panel ẩn (`usageSupported`).
+`account.usage` best-effort: account/snapshot không có → trả `{ usage: [], … }`, không bao giờ throw.
 
 ## Security
 

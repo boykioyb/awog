@@ -71,7 +71,7 @@
           </button>
           <button
             type="button"
-            class="px-2 py-1 text-[1em] rounded transition inline-flex items-center gap-1"
+            class="px-2 py-1 text-[1em] rounded transition flex items-center"
             :style="iconBtnStyle"
             :disabled="isTesting(acc.id)"
             title="Test connection"
@@ -79,7 +79,6 @@
           >
             <Loader2 v-if="isTesting(acc.id)" :size="12" class="animate-spin" />
             <Activity v-else :size="12" />
-            Test
           </button>
           <button
             type="button"
@@ -283,15 +282,16 @@ const statusColor = (status: AccountStatus): string => {
   return t.value.textFaint
 }
 
-// Subscription (oauth) accounts have no API key to fingerprint usefully — label
-// them "Subscription"; pay-as-you-go keys show their fingerprint.
+// A short, human label under the account name: subscription vs API key. (The
+// key itself never leaves the sidecar; accounts are told apart by their label.)
 const accountSubtitle = (acc: ProviderAccount): string =>
-  acc.authMode === 'oauth' ? 'Subscription' : `fp ${acc.fingerprint}`
+  acc.authMode === 'oauth' ? 'Subscription' : 'API key'
 
 const isTesting = (accountId: string) => testingIds.value.has(accountId)
 
 // Edit dialog: built-in key accounts get label + rotate key + curate models;
-// codex (oauth) accounts get label only (the dialog decides by account kind).
+// codex (oauth) subscriptions get label + curate models (the dialog decides by
+// account kind).
 const editAccount = ref<ProviderAccount | null>(null)
 const onEdit = (account: ProviderAccount) => {
   editAccount.value = account

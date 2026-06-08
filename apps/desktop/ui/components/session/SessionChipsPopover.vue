@@ -50,11 +50,11 @@
       </div>
     </div>
 
-    <!-- Account chip — per-session account override. Lets two sessions run on
-         different accounts concurrently: the runner resolves settings.accountId
-         and falls back to the global active account when it's unset. Hidden
-         unless the provider has more than one account (nothing to switch). -->
-    <div v-if="shows('account') && providerAccounts.length > 0" class="relative">
+    <!-- Account chip — spans ALL connected providers (the provider chip is dropped
+         from the composer). Picking an account switches the session's provider +
+         account together, and pins it for this session (concurrent sessions can
+         each use a different account). Hidden when there are no accounts at all. -->
+    <div v-if="shows('account') && totalAccountCount > 0" class="relative">
       <button
         class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
         :style="chipStyle(openPop === 'account')"
@@ -70,47 +70,53 @@
         class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20"
         :style="accountPopStyle"
       >
-        <div
-          class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
-          :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
-        >
-          {{ PROVIDER_LABEL[session.settings.provider] }} · Account
-        </div>
-        <button
-          v-for="acc in providerAccounts"
-          :key="acc.id"
-          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
-          :style="{
-            background: isAccountActive(acc.id) ? t.bgActive : 'transparent',
-            color: t.text,
-            minWidth: '260px',
-          }"
-          @click="onPickAccount(acc.id)"
-        >
-          <span
-            class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-            :style="{ background: acc.status === 'connected' ? t.success : t.textFaint }"
-            :title="acc.status"
-          />
-          <div class="flex-1 min-w-0">
-            <div class="truncate" :style="{ color: t.text }">{{ acc.label }}</div>
-            <div
-              v-if="acc.account?.email"
-              class="text-[12px] font-mono truncate"
+        <template v-for="group in accountGroups" :key="group.provider">
+          <div
+            class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
+            :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
+          >
+            {{ PROVIDER_LABEL[group.provider] }} · Account
+          </div>
+          <button
+            v-for="acc in group.accounts"
+            :key="acc.id"
+            class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
+            :style="{
+              background: isAccountActive(group.provider, acc.id) ? t.bgActive : 'transparent',
+              color: t.text,
+              minWidth: '260px',
+            }"
+            @click="onPickAccount(group.provider, acc.id)"
+          >
+            <span
+              class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+              :style="{ background: acc.status === 'connected' ? t.success : t.textFaint }"
+              :title="acc.status"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="truncate" :style="{ color: t.text }">{{ acc.label }}</div>
+              <div
+                v-if="acc.account?.email"
+                class="text-[12px] font-mono truncate"
+                :style="{ color: t.textDim }"
+              >
+                {{ acc.account.email }}
+              </div>
+            </div>
+            <span
+              v-if="acc.id === group.activeAccountId"
+              class="text-[12px] uppercase tracking-wider flex-shrink-0"
               :style="{ color: t.textDim }"
             >
-              {{ acc.account.email }}
-            </div>
-          </div>
-          <span
-            v-if="acc.id === activeAccountId"
-            class="text-[12px] uppercase tracking-wider flex-shrink-0"
-            :style="{ color: t.textDim }"
-          >
-            default
-          </span>
-          <Check v-if="isAccountActive(acc.id)" :size="11" :style="{ color: t.success }" />
-        </button>
+              default
+            </span>
+            <Check
+              v-if="isAccountActive(group.provider, acc.id)"
+              :size="11"
+              :style="{ color: t.success }"
+            />
+          </button>
+        </template>
         <button
           v-if="session.settings.accountId !== undefined"
           type="button"
@@ -574,13 +580,10 @@ const resolveLevel = (levels: ThinkingLevel[]) =>
 
 const onPickProvider = (p: ProviderName) => {
   if (!settings.isProviderConnected(p)) return
-  const firstModel = modelsForProvider(p)[0]
-  if (!firstModel) return
-  store.updateSettings(props.session.id, {
-    provider: p,
-    modelId: firstModel.id,
-    level: resolveLevel(levelsForModel(firstModel)),
-  })
+  // Clear any pinned account (it belonged to the old provider); reconcile then
+  // picks a model the new provider's active account actually serves.
+  store.updateSettings(props.session.id, { provider: p, accountId: undefined })
+  reconcileModelForAccount(p, undefined)
   openPop.value = null
 }
 
@@ -596,19 +599,24 @@ const onPickModel = (modelId: string) => {
   openPop.value = null
 }
 
-// When the effective account changes, keep modelId valid for it: a custom
-// endpoint exposes its own ids; a built-in account must use the catalog.
-const reconcileModelForAccount = (accountId: string | undefined) => {
-  const cfg = settings.providers[props.session.settings.provider]
+// Keep modelId valid after a provider/account switch: an account with its own
+// models (custom endpoint OR curated/codex list) must use one of those; a plain
+// built-in account must use a model from THAT provider's catalog (checking the
+// provider's catalog, not modelById globally — else a Claude id would wrongly
+// survive a switch to OpenAI).
+const reconcileModelForAccount = (provider: ProviderName, accountId: string | undefined) => {
+  const cfg = settings.providers[provider]
   if (!cfg) return
   const id = accountId ?? cfg.activeAccountId
-  const customModels = cfg.accounts.find((a) => a.id === id)?.models ?? []
-  if (customModels.length) {
-    if (!customModels.includes(props.session.settings.modelId)) {
-      store.updateSettings(props.session.id, { modelId: customModels[0]!, level: 'low' })
+  const accModels = cfg.accounts.find((a) => a.id === id)?.models ?? []
+  if (accModels.length) {
+    if (!accModels.includes(props.session.settings.modelId)) {
+      store.updateSettings(props.session.id, { modelId: accModels[0]!, level: 'low' })
     }
-  } else if (!modelById(props.session.settings.modelId)) {
-    const first = modelsForProvider(props.session.settings.provider)[0]
+    return
+  }
+  if (!modelsForProvider(provider).some((m) => m.id === props.session.settings.modelId)) {
+    const first = modelsForProvider(provider)[0]
     if (first) {
       store.updateSettings(props.session.id, {
         modelId: first.id,
@@ -634,6 +642,21 @@ const onPickMode = (m: AgentMode) => {
 // undefined accountId = follow the global active; an explicit id pins this
 // session even when the global active later changes.
 
+// Accounts of EVERY connected provider, grouped. The composer drops the provider
+// chip — this picker spans providers, so choosing an account also switches the
+// session's provider (account implies provider).
+const PROVIDER_ORDER: ProviderName[] = ['anthropic', 'openai', 'google']
+const accountGroups = computed(() =>
+  PROVIDER_ORDER.map((provider) => ({
+    provider,
+    accounts: settings.providers[provider]?.accounts ?? [],
+    activeAccountId: settings.providers[provider]?.activeAccountId ?? null,
+  })).filter((g) => g.accounts.length > 0),
+)
+const totalAccountCount = computed(() =>
+  accountGroups.value.reduce((n, g) => n + g.accounts.length, 0),
+)
+
 const providerAccounts = computed(
   () => settings.providers[props.session.settings.provider]?.accounts ?? [],
 )
@@ -647,7 +670,9 @@ const currentAccount = computed(
   () => providerAccounts.value.find((a) => a.id === effectiveAccountId.value) ?? null,
 )
 const currentAccountLabel = computed(() => currentAccount.value?.label ?? 'Account')
-const isAccountActive = (id: string): boolean => effectiveAccountId.value === id
+// In effect only for an account under the session's CURRENT provider.
+const isAccountActive = (provider: ProviderName, id: string): boolean =>
+  props.session.settings.provider === provider && effectiveAccountId.value === id
 
 const accountChipTitle = computed(() => {
   const label = currentAccount.value?.label
@@ -666,15 +691,20 @@ const accountPopStyle = computed(() => ({
   overflowY: 'auto' as const,
 }))
 
-const onPickAccount = (id: string) => {
-  store.updateSettings(props.session.id, { accountId: id })
-  reconcileModelForAccount(id)
+// Pick an account, possibly under a different provider → switch provider too,
+// then reconcile the model to one that account serves.
+const onPickAccount = (provider: ProviderName, id: string) => {
+  store.updateSettings(
+    props.session.id,
+    provider === props.session.settings.provider ? { accountId: id } : { provider, accountId: id },
+  )
+  reconcileModelForAccount(provider, id)
   openPop.value = null
 }
 
 const resetAccount = () => {
   store.updateSettings(props.session.id, { accountId: undefined })
-  reconcileModelForAccount(undefined)
+  reconcileModelForAccount(props.session.settings.provider, undefined)
   openPop.value = null
 }
 

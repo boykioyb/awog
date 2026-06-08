@@ -13,6 +13,7 @@
 // AccountRecord.piOAuth — it carries provider extras (chatgpt_account_id, etc.)
 // pi needs. SECRET — never logged, never sent to the UI.
 
+import { getModels } from '@earendil-works/pi-ai'
 import {
   getOAuthApiKey,
   loginOpenAICodex,
@@ -38,6 +39,17 @@ const CODEX_API_ONLY_MODEL_IDS = new Set<string>(['gpt-5.3-codex-spark'])
 // catalog order. Input is the raw `getModels('openai-codex')` id list.
 export function codexSubscriptionModelIds(ids: readonly string[]): string[] {
   return ids.filter((id) => !CODEX_API_ONLY_MODEL_IDS.has(id))
+}
+
+// All codex models usable on a ChatGPT subscription (full catalog minus the
+// API-key-only ones). Used to seed a connection's models at sign-in and to reset
+// a curated list back to "all available". Best-effort: empty on catalog failure.
+export function availableCodexModelIds(): string[] {
+  try {
+    return codexSubscriptionModelIds(getModels(OPENAI_CODEX_PROVIDER_ID).map((m) => m.id))
+  } catch {
+    return []
+  }
 }
 
 // pi OAuthCredentials is { refresh, access, expires, [extras] } — structurally a

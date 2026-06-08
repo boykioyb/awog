@@ -2,6 +2,10 @@ import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { loadCredentials, saveCredentials, toSafe } from '../credentials/store.js'
 import { normalizeAnthropicBaseURL, validateCustomEndpoint } from '../credentials/endpoint-guard.js'
+import {
+  availableCodexModelIds,
+  codexSubscriptionModelIds,
+} from '../auth/openai-codex-oauth.js'
 import { log } from '../util/logger.js'
 import type { AccountRecord, EndpointApi } from '../types/shared.js'
 
@@ -116,9 +120,27 @@ register('accounts.update', async (raw) => {
       else delete next.models
       fieldsChanged.push('models')
     }
+  } else if (kind === 'oauth') {
+    // OAuth subscription: token-managed, so apiKey/baseURL are never read. Models
+    // ARE curatable (hide/add/edit) — empty means "all available":
+    //   - Codex (piOAuth): filter to subscription-eligible; empty → re-seed the
+    //     full available set (the openai catalog fallback would be the wrong,
+    //     pay-as-you-go models, so we reset instead of clearing).
+    //   - Claude OAuth: empty → clear the override (picker falls back to the
+    //     anthropic catalog, which is correct for the provider).
+    if (patch.models !== undefined) {
+      const models = patch.models.map((m) => m.trim()).filter(Boolean)
+      if (record.piOAuth) {
+        const filtered = codexSubscriptionModelIds(models)
+        next.models = filtered.length ? filtered : availableCodexModelIds()
+      } else if (models.length) {
+        next.models = models
+      } else {
+        delete next.models
+      }
+      fieldsChanged.push('models')
+    }
   }
-  // kind === 'oauth': label only (handled above). models/apiKey/baseURL are
-  // structurally ignored — codex models stay auto-derived, token stays managed.
 
   if (!fieldsChanged.length) {
     // Nothing to change — return the current safe view without a needless write.

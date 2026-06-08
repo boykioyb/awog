@@ -107,7 +107,7 @@
               </button>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition inline-flex items-center gap-1"
+                class="px-2 py-1 text-[1em] rounded transition flex items-center"
                 :style="iconBtnStyle"
                 :disabled="isTesting(acc.id)"
                 title="Test connection"
@@ -115,7 +115,6 @@
               >
                 <Loader2 v-if="isTesting(acc.id)" :size="12" class="animate-spin" />
                 <Activity v-else :size="12" />
-                Test
               </button>
               <button
                 type="button"
@@ -126,6 +125,17 @@
               >
                 <LogOut :size="12" />
               </button>
+            </div>
+            <!-- Curated models (only present when the user overrode the catalog). -->
+            <div v-if="acc.models?.length" class="flex flex-wrap gap-1">
+              <span
+                v-for="m in acc.models"
+                :key="m"
+                class="px-1.5 py-0.5 rounded font-mono text-[12px] leading-none"
+                :style="{ background: t.bg, color: t.textDim, border: `1px solid ${t.border}` }"
+              >
+                {{ m }}
+              </span>
             </div>
             <div
               v-if="testResults[acc.id]"
@@ -304,7 +314,7 @@
               </button>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition inline-flex items-center gap-1"
+                class="px-2 py-1 text-[1em] rounded transition flex items-center"
                 :style="iconBtnStyle"
                 :disabled="isTesting(acc.id)"
                 title="Test connection"
@@ -312,7 +322,6 @@
               >
                 <Loader2 v-if="isTesting(acc.id)" :size="12" class="animate-spin" />
                 <Activity v-else :size="12" />
-                Test
               </button>
               <button
                 type="button"
@@ -495,7 +504,9 @@ const accountSubtitle = (acc: ProviderAccount): string => {
   const parts: string[] = []
   if (acc.account?.email) parts.push(acc.account.email)
   if (acc.organization?.name) parts.push(acc.organization.name)
-  parts.push(`fp ${acc.fingerprint}`)
+  // No email/org (typical for an API-key account) → a plain human label. The key
+  // itself never leaves the sidecar; accounts are told apart by their label.
+  if (!parts.length) parts.push(acc.authMode === 'oauth' ? 'Subscription' : 'API key')
   return parts.join(' · ')
 }
 

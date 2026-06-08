@@ -54,7 +54,7 @@
           :type="reveal ? 'text' : 'password'"
           class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
-          :placeholder="editing ? 'Leave blank to keep current key' : 'sk-…'"
+          :placeholder="editing ? 'Enter a new key to replace' : 'sk-…'"
         />
         <button
           type="button"
@@ -66,20 +66,26 @@
           <component :is="reveal ? EyeOff : Eye" :size="13" />
         </button>
       </div>
+      <!-- The stored key never leaves the sidecar (security invariant #1) — we
+           can only tell the user that a key is saved, not show it. -->
+      <p v-if="editing" class="mt-1 text-[1em]" :style="{ color: t.textDim }">
+        <template v-if="hasKey">
+          An API key is saved — leave blank to keep it, or enter a new key to replace it.
+        </template>
+        <template v-else>Leave blank to keep the current key.</template>
+      </p>
     </label>
 
-    <label class="block">
-      <span class="text-[1em]" :style="{ color: t.textDim }">
-        Model IDs — one per line or comma-separated
-      </span>
-      <textarea
-        v-model="modelsText"
-        rows="3"
-        class="mt-1 w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[4.5rem]"
-        :style="inputStyle"
-        placeholder="openrouter/auto&#10;anthropic/claude-sonnet-4.5&#10;openai/gpt-5"
-      />
-    </label>
+    <div class="block">
+      <span class="text-[1em]" :style="{ color: t.textDim }">Model IDs</span>
+      <div class="mt-1">
+        <ModelListEditor
+          :model-value="draft.models"
+          placeholder="openrouter/auto"
+          @update:model-value="(v) => (draft = { ...draft, models: v })"
+        />
+      </div>
+    </div>
 
     <div class="flex items-center justify-end gap-2 pt-1">
       <button
@@ -108,13 +114,15 @@ import type { CustomProviderInput } from '~/stores/settings'
 
 // `editing` only changes the API-key affordance: on edit, a blank key keeps the
 // current one (the parent sends `apiKey: trimmed || undefined`), so the field is
-// optional and hints as much.
+// optional and hints as much. `hasKey` lets the form say a key is already saved
+// (the key itself never reaches the UI).
 withDefaults(
   defineProps<{
     submitLabel: string
     editing?: boolean
+    hasKey?: boolean
   }>(),
-  { editing: false },
+  { editing: false, hasKey: false },
 )
 
 const draft = defineModel<CustomProviderInput>({ required: true })
@@ -144,24 +152,6 @@ const iconBtnStyle = computed(() => ({
   border: `1px solid ${t.value.borderStrong}`,
   background: 'transparent',
 }))
-
-// Raw text is the textarea's own source of truth. Binding :value to a computed
-// re-joined from the parsed array fights the cursor: each keystroke would split→
-// trim→filter→rejoin, so a trailing newline vanishes (can't go to a new line)
-// and spaces get eaten mid-typing. Keep the text local; parse into draft.models
-// reactively. Seeded once from the model — the form unmounts on close/submit so
-// it re-seeds fresh next open (no back-sync watcher needed).
-const modelsText = ref(draft.value.models.join('\n'))
-
-watch(modelsText, (raw) => {
-  draft.value = {
-    ...draft.value,
-    models: raw
-      .split(/[\n,]/)
-      .map((s) => s.trim())
-      .filter(Boolean),
-  }
-})
 
 const canSubmit = computed(
   () => draft.value.label.trim().length > 0 && draft.value.baseUrl.trim().length > 0,

@@ -32,6 +32,7 @@
         <CustomProviderForm
           v-model="customDraft"
           editing
+          :has-key="!!account?.fingerprint"
           submit-label="Save changes"
           @submit="onSaveCustom"
           @cancel="onCancel"
@@ -49,7 +50,7 @@
         </div>
       </div>
 
-      <!-- OAuth/subscription (Claude, ChatGPT): rename only -->
+      <!-- Built-in key + OAuth/subscription: label, (key for built-in), curate models -->
       <form v-else @submit.prevent="onSave">
         <div class="px-4 py-4 space-y-3">
           <label class="block">
@@ -62,61 +63,47 @@
             />
           </label>
 
-          <!-- Built-in API-key: rotate key + curate models -->
-          <template v-if="kind === 'builtin-key'">
-            <label class="block">
-              <span class="text-[1em]" :style="{ color: t.textDim }">API key</span>
-              <div class="mt-1 flex items-center gap-2">
-                <input
-                  v-model="apiKey"
-                  :type="reveal ? 'text' : 'password'"
-                  class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
-                  :style="inputStyle"
-                  placeholder="Leave blank to keep current key"
-                />
-                <button
-                  type="button"
-                  class="px-2 py-1.5 rounded text-[1em] flex items-center"
-                  :style="iconBtnStyle"
-                  :title="reveal ? 'Hide' : 'Show'"
-                  @click="reveal = !reveal"
-                >
-                  <component :is="reveal ? EyeOff : Eye" :size="13" />
-                </button>
-              </div>
-            </label>
-
-            <label class="block">
-              <span class="text-[1em]" :style="{ color: t.textDim }">
-                Models — one per line or comma-separated. Leave empty to use all available.
-              </span>
-              <textarea
-                v-model="modelsText"
-                rows="3"
-                class="mt-1 w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[4.5rem]"
+          <!-- Built-in API-key only: rotate the key (OAuth tokens are managed). -->
+          <label v-if="kind === 'builtin-key'" class="block">
+            <span class="text-[1em]" :style="{ color: t.textDim }">API key</span>
+            <div class="mt-1 flex items-center gap-2">
+              <input
+                v-model="apiKey"
+                :type="reveal ? 'text' : 'password'"
+                class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
                 :style="inputStyle"
-                :placeholder="catalogIds.join('\n')"
+                placeholder="Enter a new key to replace"
               />
-            </label>
-            <div v-if="catalogIds.length" class="flex flex-wrap items-center gap-1">
-              <span class="text-[1em]" :style="{ color: t.textDim }">Available:</span>
               <button
-                v-for="id in catalogIds"
-                :key="id"
                 type="button"
-                class="px-1.5 py-0.5 rounded font-mono text-[12px] leading-none transition"
-                :style="{
-                  background: t.bgInput,
-                  color: t.textDim,
-                  border: `1px solid ${t.border}`,
-                }"
-                title="Add this model"
-                @click="addModelId(id)"
+                class="px-2 py-1.5 rounded text-[1em] flex items-center"
+                :style="iconBtnStyle"
+                :title="reveal ? 'Hide' : 'Show'"
+                @click="reveal = !reveal"
               >
-                {{ id }}
+                <component :is="reveal ? EyeOff : Eye" :size="13" />
               </button>
             </div>
-          </template>
+            <!-- The stored key never leaves the sidecar (security invariant #1) —
+                 we can only say a key is saved, not show it. -->
+            <p class="mt-1 text-[1em]" :style="{ color: t.textDim }">
+              <template v-if="account?.fingerprint">
+                An API key is saved — leave blank to keep it, or enter a new key to replace it.
+              </template>
+              <template v-else>Leave blank to keep the current key.</template>
+            </p>
+          </label>
+
+          <!-- Curate models — built-in key + subscription. Each model is a list
+               row (remove to hide); add via the input/suggestions. Empty = all. -->
+          <div v-if="showModels" class="block">
+            <span class="text-[1em]" :style="{ color: t.textDim }">
+              Models — remove to hide, add to include. Leave empty to use all available.
+            </span>
+            <div class="mt-1">
+              <ModelListEditor v-model="modelsList" :suggestions="catalogIds" />
+            </div>
+          </div>
 
           <div
             v-if="error"
@@ -183,13 +170,22 @@ const { t } = useTheme()
 const settings = useSettingsStore()
 
 // Kind drives which fields are editable. Mirrors the sidecar's accounts.update
-// allow-list: oauth → label only; apikey+baseURL → custom; apikey → built-in key.
+// allow-list: oauth → label + curate models; apikey+baseURL → custom; apikey →
+// built-in key (+ rotate key + curate models).
 const kind = computed<'oauth' | 'custom' | 'builtin-key' | null>(() => {
   const a = props.account
   if (!a) return null
   if (a.authMode === 'oauth') return 'oauth'
   return a.baseURL ? 'custom' : 'builtin-key'
 })
+
+// A ChatGPT subscription (Codex): provider 'openai' + OAuth. Its catalog isn't
+// the pay-as-you-go OpenAI list, so suggest the account's own seeded models.
+const isCodex = computed(() => props.account?.authMode === 'oauth' && props.provider === 'openai')
+
+// Models are curatable on built-in key + any subscription (custom uses its own
+// form). Empty = all available.
+const showModels = computed(() => kind.value === 'builtin-key' || kind.value === 'oauth')
 
 const EMPTY_CUSTOM: CustomProviderInput = {
   label: '',
@@ -202,13 +198,22 @@ const EMPTY_CUSTOM: CustomProviderInput = {
 const label = ref('')
 const apiKey = ref('')
 const reveal = ref(false)
-const modelsText = ref('')
+const modelsList = ref<string[]>([])
 const customDraft = ref<CustomProviderInput>({ ...EMPTY_CUSTOM })
 const busy = ref(false)
 const error = ref('')
 
-// Catalog ids for the built-in provider — shown as add-suggestions when curating.
-const catalogIds = computed(() => modelsForProvider(props.provider).map((m) => m.id))
+// The provider's available models. Codex has no static catalog here, so use the
+// account's own seeded set; other providers use the static catalog. Drives both
+// the pre-filled list and the add-suggestions.
+const catalogIds = computed(() =>
+  isCodex.value
+    ? (props.account?.models ?? [])
+    : modelsForProvider(props.provider).map((m) => m.id),
+)
+
+const sameSet = (a: string[], b: string[]): boolean =>
+  a.length === b.length && a.every((x) => b.includes(x))
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,
@@ -224,17 +229,6 @@ const iconBtnStyle = computed(() => ({
 }))
 
 const canSave = computed(() => label.value.trim().length > 0)
-
-const parseModels = (raw: string): string[] =>
-  raw
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-const addModelId = (id: string) => {
-  if (parseModels(modelsText.value).includes(id)) return
-  modelsText.value = modelsText.value.trim() ? `${modelsText.value.trim()}\n${id}` : id
-}
 
 const seed = () => {
   const a = props.account
@@ -252,8 +246,11 @@ const seed = () => {
       api: a.api ?? 'anthropic-messages',
       models: a.models ? [...a.models] : [],
     }
-  } else if (kind.value === 'builtin-key') {
-    modelsText.value = (a.models ?? []).join('\n')
+  } else if (showModels.value) {
+    // builtin-key + oauth subscription: show the effective list so the user can
+    // remove (hide) or add. Curated list if present, else the full catalog (so
+    // there's something to hide from).
+    modelsList.value = a.models?.length ? [...a.models] : [...catalogIds.value]
   }
 }
 
@@ -272,15 +269,21 @@ const commit = async (patch: Parameters<typeof settings.updateAccount>[2]) => {
   }
 }
 
-// OAuth (label only) + built-in key (label + rotate key + curate models).
+// builtin-key (label + rotate key + curate models) and oauth subscription
+// (label + curate models). Custom endpoints go through onSaveCustom.
 const onSave = () => {
   if (!canSave.value || busy.value) return
-  if (kind.value === 'builtin-key') {
-    commit({
-      label: label.value.trim(),
-      apiKey: apiKey.value.trim() || undefined,
-      models: parseModels(modelsText.value),
-    })
+  if (kind.value === 'builtin-key' || kind.value === 'oauth') {
+    const list = modelsList.value.map((s) => s.trim()).filter(Boolean)
+    // Keeping the whole catalog == "all available" → store nothing so it tracks
+    // the live catalog instead of pinning a snapshot. Codex has no static catalog
+    // to compare against, so it always stores the list explicitly.
+    const models = !isCodex.value && sameSet(list, catalogIds.value) ? [] : list
+    commit(
+      kind.value === 'builtin-key'
+        ? { label: label.value.trim(), apiKey: apiKey.value.trim() || undefined, models }
+        : { label: label.value.trim(), models },
+    )
   } else {
     commit({ label: label.value.trim() })
   }
