@@ -10,6 +10,7 @@
 import { runAgentLoop, generateSummary, type AgentEvent } from '@earendil-works/pi-agent-core'
 import type { Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../credentials/credential-resolver.js'
+import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../sessions/runner.js'
@@ -136,6 +137,8 @@ export async function runStreamPi(
         convertToLlm: (messages) => messages as Message[],
         ...(reasoning ? { reasoning } : {}),
         beforeToolCall,
+        // Capture Codex plan-usage from response headers (no-op for non-Codex).
+        onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
         // Sequential tool execution keeps step ordering deterministic for the UI
         // and avoids interleaving permission prompts across concurrent tools.
         toolExecution: 'sequential',

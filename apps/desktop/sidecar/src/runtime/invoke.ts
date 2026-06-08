@@ -13,6 +13,7 @@ import { runAgentLoop, type AgentEvent, type AgentMessage } from '@earendil-work
 import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
+import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { SessionSettings } from '../types/shared.js'
@@ -220,6 +221,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         // gating is the workflow author's job via the agent's allowedTools (the
         // tool set is already filtered in createRuntimeToolDefinitions above).
         beforeToolCall: async () => undefined,
+        // Capture Codex plan-usage from response headers (no-op for non-Codex).
+        onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
         // Sequential execution keeps trace step ordering deterministic.
         toolExecution: 'sequential',
       },

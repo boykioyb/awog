@@ -87,7 +87,9 @@
         </div>
       </div>
 
-      <div class="px-3 py-2.5">
+      <!-- Plan usage is a Claude-subscription surface (claude.ai endpoints) — only
+           show it for an Anthropic session; other providers have no usage API. -->
+      <div v-if="usageSupported" class="px-3 py-2.5">
         <div class="flex items-center justify-between mb-2">
           <div class="inline-flex items-center gap-1.5">
             <span class="font-medium" :style="{ color: t.text }">Plan usage</span>
@@ -121,11 +123,16 @@
         </div>
 
         <div
-          v-if="usage.length === 0 && !usageLoading && !usageError"
+          v-if="usage.length === 0 && !usageError"
           class="text-[1em]"
           :style="{ color: t.textDim }"
         >
-          Loading…
+          <template v-if="usageLoading">Loading…</template>
+          <!-- Codex usage is captured from a real turn — none yet ⇒ prompt to run. -->
+          <template v-else-if="session.settings.provider === 'openai'">
+            Run a turn to see plan usage.
+          </template>
+          <template v-else>No usage data.</template>
         </div>
 
         <div v-else class="space-y-2.5">
@@ -335,6 +342,21 @@ const effectiveAccountId = computed<string | null>(
     settingsStore.providers[props.session.settings.provider]?.activeAccountId ??
     null,
 )
+
+// Where Plan usage is available: Anthropic (claude.ai /api/oauth/* endpoints) and
+// OpenAI Codex / ChatGPT subscription (captured from response headers during a
+// turn). API-key OpenAI / Google / custom have no usage surface.
+const usageSupported = computed(() => {
+  const provider = props.session.settings.provider
+  if (provider === 'anthropic') return true
+  if (provider === 'openai') {
+    const acc = settingsStore.providers.openai?.accounts.find(
+      (a) => a.id === effectiveAccountId.value,
+    )
+    return acc?.authMode === 'oauth'
+  }
+  return false
+})
 // Which account the loaded usage belongs to, so switching account forces a
 // refetch even inside the 60s client window (else we'd show the old account's
 // numbers). The sidecar cache is keyed per-account, so the refetch is cheap.
@@ -347,6 +369,13 @@ interface UsageResponse {
 }
 
 const refreshUsage = async (force = false) => {
+  // Non-anthropic session → no plan-usage surface; clear and skip the RPC.
+  if (!usageSupported.value) {
+    usage.value = []
+    profile.value = null
+    usageError.value = null
+    return
+  }
   if (!sidecar.available) {
     usageError.value = 'Sidecar unavailable'
     return
@@ -362,7 +391,11 @@ const refreshUsage = async (force = false) => {
   usageLoading.value = true
   usageError.value = null
   try {
-    const res = await sidecar.request<UsageResponse>('account.usage', { accountId, force })
+    const res = await sidecar.request<UsageResponse>('account.usage', {
+      provider: props.session.settings.provider,
+      accountId,
+      force,
+    })
     usage.value = res.usage ?? []
     profile.value = res.profile
     usageFetchedAt.value = res.cachedAt ?? Date.now()
@@ -377,7 +410,7 @@ const refreshUsage = async (force = false) => {
 // Fetch when the popover opens, and re-fetch if the selected account changes
 // while it's open. Subsequent opens reuse cached data unless the account
 // changed or the user clicks refresh.
-watch([open, effectiveAccountId], ([isOpen]) => {
+watch([open, effectiveAccountId, usageSupported], ([isOpen]) => {
   if (isOpen) refreshUsage(false)
 })
 

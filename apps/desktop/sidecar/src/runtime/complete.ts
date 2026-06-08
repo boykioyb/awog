@@ -14,6 +14,7 @@ import { completeSimple, type AssistantMessage, type Message } from '@earendil-w
 import { runAgentLoop, type AgentEvent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
+import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { ProviderName, SessionSettings } from '../types/shared.js'
@@ -93,7 +94,7 @@ export async function completePi(args: CompleteArgs): Promise<string> {
         systemPrompt: args.systemPrompt,
         messages: [{ role: 'user', content: args.prompt, timestamp: Date.now() }],
       },
-      { apiKey },
+      { apiKey, onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers) },
     )
     if (result.stopReason === 'error') {
       throw new RpcError(-32021, `model error: ${result.errorMessage ?? 'unknown'}`)
@@ -233,6 +234,8 @@ export async function authorPi(args: AuthorArgs, cb: AuthorCallbacks): Promise<A
         // Author flows are unattended one-shots: always allow (the listed paths
         // in the systemPrompt are the gate, same as the sdk bypassPermissions).
         beforeToolCall: async () => undefined,
+        // Capture Codex plan-usage from response headers (no-op for non-Codex).
+        onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
         toolExecution: 'sequential',
       },
       emit,
