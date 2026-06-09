@@ -17,6 +17,14 @@ import type {
 // stdio and bounds in-memory cost when the model dumps a huge file read.
 const RESULT_PREVIEW_MAX = 2_000
 
+// Cap a long string for the step detail/inline preview. Shared by the Task
+// prompt stash, the Write content dump, and the tool_result preview.
+function truncatePreview(text: string): string {
+  return text.length > RESULT_PREVIEW_MAX
+    ? `${text.slice(0, RESULT_PREVIEW_MAX)}\n…(truncated)`
+    : text
+}
+
 // Map of SDK built-in tool names → UI StepTool. Unknown tools fall through to
 // 'task' so the step still renders (icon = sparkles).
 const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
@@ -178,11 +186,7 @@ export function stepFromToolUse(info: ToolUseInfo): SessionStep {
   if (info.name === 'Task') {
     const prompt = typeof info.input.prompt === 'string' ? info.input.prompt : ''
     if (prompt) {
-      const trimmed =
-        prompt.length > RESULT_PREVIEW_MAX
-          ? `${prompt.slice(0, RESULT_PREVIEW_MAX)}\n…(truncated)`
-          : prompt
-      step.detail = { kind: 'text', content: trimmed }
+      step.detail = { kind: 'text', content: truncatePreview(prompt) }
     }
   }
   return step
@@ -192,9 +196,7 @@ export function stepFromToolUse(info: ToolUseInfo): SessionStep {
 // Truncates aggressively — the UI's step inline view doesn't need full output.
 function previewToolResult(content: unknown): string {
   if (typeof content === 'string') {
-    return content.length > RESULT_PREVIEW_MAX
-      ? `${content.slice(0, RESULT_PREVIEW_MAX)}\n…(truncated)`
-      : content
+    return truncatePreview(content)
   }
   if (Array.isArray(content)) {
     const parts: string[] = []
@@ -206,10 +208,7 @@ function previewToolResult(content: unknown): string {
         }
       }
     }
-    const joined = parts.join('\n')
-    return joined.length > RESULT_PREVIEW_MAX
-      ? `${joined.slice(0, RESULT_PREVIEW_MAX)}\n…(truncated)`
-      : joined
+    return truncatePreview(parts.join('\n'))
   }
   return ''
 }
@@ -229,8 +228,8 @@ export function stepFromToolResult(info: ToolResultInfo): SessionStep {
   const stats = pickDiffStats(info.toolName, info.toolInput)
   const preview = previewToolResult(info.content)
 
-  // Detail panel: terminal output for Bash, file dump for Read, otherwise a
-  // plain text panel so the user can drill in for context. We don't render
+  // Detail panel: terminal output for Bash, file dump for Read/Write, otherwise
+  // a plain text panel so the user can drill in for context. We don't render
   // 'diff' here (UI's diff viewer needs a real unified-diff string we don't
   // have); StepItem still shows additions/deletions counters inline.
   let detail: SessionStepDetail | undefined
@@ -240,6 +239,15 @@ export function stepFromToolResult(info: ToolResultInfo): SessionStep {
   } else if (info.toolName === 'Read') {
     const path = typeof info.toolInput.file_path === 'string' ? info.toolInput.file_path : ''
     detail = { kind: 'file', path, content: preview }
+  } else if (info.toolName === 'Write') {
+    // The tool result is just "Wrote N bytes to …". Show the written content
+    // (from the input) instead so the detail pane renders the file.
+    const path = typeof info.toolInput.file_path === 'string' ? info.toolInput.file_path : ''
+    const content = typeof info.toolInput.content === 'string' ? info.toolInput.content : ''
+    detail =
+      content.length > 0
+        ? { kind: 'file', path, content: truncatePreview(content) }
+        : { kind: 'text', content: preview }
   } else if (preview.length > 0) {
     detail = { kind: 'text', content: preview }
   }

@@ -15,7 +15,8 @@ export interface TextSegment {
  * Token rules:
  * - `$<handle>` → kind `'agent'`
  * - `@<path>` chứa `/` hoặc `.` → kind `'file'`; ngược lại → kind `'skill'`
- * - `/<word>` → kind `'command'`
+ * - `/<word>` ở đầu chuỗi hoặc sau khoảng trắng → kind `'command'`
+ *   (path segment giữa chữ như `branch/5690/fix` KHÔNG match → tránh tô nhầm)
  *
  * @example
  * tokenizeMessage('hello $alice see @src/main.ts /run')
@@ -23,8 +24,10 @@ export interface TextSegment {
  */
 export const tokenizeMessage = (text: string): TextSegment[] => {
   const out: TextSegment[] = []
-  // matches @path/file, @skill, $agent, /command
-  const re = /([@$])([\w./-]+)|\/(\w+)/g
+  // matches @path/file, @skill, $agent, /command.
+  // `/command` chỉ match ở đầu chuỗi hoặc sau khoảng trắng — tránh tô nhầm các
+  // path segment trong branch/đường dẫn (vd `sora-hoa/5690/fix/rebar`).
+  const re = /([@$])([\w./-]+)|(?<=^|\s)\/(\w+)/g
   let last = 0
   let m: RegExpExecArray | null
 
