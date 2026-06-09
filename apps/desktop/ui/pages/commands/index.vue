@@ -33,7 +33,7 @@
           :key="ty"
           class="px-2 py-0.5 text-[1em] rounded transition flex-shrink-0"
           :style="{
-            background: typeFilter === ty ? t.bgActive : 'transparent',
+            background: pill(typeFilter === ty).background,
             color: typeFilter === ty ? t.text : t.textDim,
             border: `1px solid ${typeFilter === ty ? t.borderStrong : 'transparent'}`,
           }"
@@ -49,7 +49,7 @@
           :key="cmd.id"
           class="w-full px-3 py-2 cursor-pointer transition"
           :style="{
-            background: selectedId === cmd.id ? t.bgActive : 'transparent',
+            background: pill(selectedId === cmd.id).background,
             borderBottom: `1px solid ${t.border}`,
             borderLeft: `2px solid ${selectedId === cmd.id ? t.accent : 'transparent'}`,
           }"
@@ -162,6 +162,7 @@ import type { CommandDraft } from '~/composables/useCommandGenerator'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const ws = useWorkspaceStore()
 
 const searchQuery = ref('')

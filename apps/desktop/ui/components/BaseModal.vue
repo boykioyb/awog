@@ -11,9 +11,10 @@
           class="w-full rounded-lg overflow-hidden flex flex-col max-h-[85vh]"
           :class="sizeClass"
           :style="{
-            background: t.bgPanel,
-            border: `1px solid ${t.borderStrong}`,
-            boxShadow: `0 20px 60px ${t.shadow}`,
+            background: overlay.background,
+            border: `1px solid ${overlay.borderColor}`,
+            backdropFilter: overlay.backdropFilter,
+            boxShadow: overlay.boxShadow,
           }"
         >
           <div
@@ -69,6 +70,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useTheme()
+const { overlay } = useGlass()
 const cardRef = useTemplateRef<HTMLElement>('cardRef')
 
 const SIZE_MAP = {

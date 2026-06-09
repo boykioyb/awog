@@ -93,7 +93,7 @@
             class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
             :style="{
               color: t.textDim,
-              background: groupHover === group.key ? t.bgHover : 'transparent',
+              background: pill(false, groupHover === group.key).background,
             }"
             @click="toggleGroup(group.key)"
             @mouseenter="groupHover = group.key"
@@ -189,9 +189,10 @@
     v-if="bulkSelection.size > 0"
     class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 rounded-full shadow-lg flex items-center gap-3 px-4 py-2"
     :style="{
-      background: t.bgPanel,
-      border: `1px solid ${t.borderStrong}`,
-      boxShadow: `0 12px 32px ${t.shadow}`,
+      background: overlay.background,
+      border: `1px solid ${overlay.borderColor}`,
+      backdropFilter: overlay.backdropFilter,
+      boxShadow: overlay.boxShadow,
     }"
   >
     <span class="text-[1em]" :style="{ color: t.text }">
@@ -259,6 +260,7 @@ import {
 // All page logic lives in the composable; this stays a thin template shell.
 // useTheme() supplies `t` for the inline-styled list chrome (header + bulk bar).
 const { t } = useTheme()
+const { overlay, pill } = useGlass()
 const {
   agentKey,
   searchQuery,

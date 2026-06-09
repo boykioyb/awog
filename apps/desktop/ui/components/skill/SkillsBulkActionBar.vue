@@ -2,9 +2,10 @@
   <div
     class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 rounded-full shadow-lg flex items-center gap-3 px-4 py-2"
     :style="{
-      background: t.bgPanel,
-      border: `1px solid ${t.borderStrong}`,
-      boxShadow: `0 12px 32px ${t.shadow}`,
+      background: overlay.background,
+      border: `1px solid ${overlay.borderColor}`,
+      backdropFilter: overlay.backdropFilter,
+      boxShadow: overlay.boxShadow,
     }"
   >
     <span class="text-[1em]" :style="{ color: t.text }">
@@ -51,4 +52,5 @@ defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { overlay } = useGlass()
 </script>

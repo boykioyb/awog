@@ -33,8 +33,9 @@
       class="md-shell-list flex flex-col flex-shrink-0"
       :class="listPaneClass"
       :style="{
-        borderRight: resizable ? 'none' : `1px solid ${t.border}`,
-        background: t.bgPanel,
+        borderRight: resizable ? 'none' : `1px solid ${parts.border}`,
+        background: parts.bg,
+        backdropFilter: parts.blur,
       }"
     >
       <slot name="list" />
@@ -120,6 +121,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { parts } = useGlass()
 
 const listPaneClass = computed(() => {
   if (props.disableMobile) return 'flex'

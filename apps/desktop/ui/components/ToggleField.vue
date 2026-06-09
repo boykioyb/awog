@@ -11,7 +11,7 @@
     <span class="text-[1em] font-mono inline-flex items-center gap-1.5" :style="{ color: t.text }">
       <span
         class="w-2 h-2 rounded-full"
-        :style="{ background: modelValue ? '#22c55e' : t.textFaint }"
+        :style="{ background: modelValue ? t.statusOk : t.textFaint }"
       />
       {{ modelValue ? 'on' : 'off' }}
     </span>

@@ -1,11 +1,11 @@
 <template>
   <div
     class="h-screen w-full flex flex-col overflow-hidden"
-    :style="{ background: t.bg, color: t.text, fontFamily: 'var(--font-sans)' }"
+    :style="{ background: appBackground, color: t.text, fontFamily: 'var(--font-sans)' }"
   >
     <HeaderTabBar />
     <UpdateBanner />
-    <main class="flex-1 overflow-hidden">
+    <main class="flex-1 flex flex-col overflow-hidden min-h-0">
       <slot />
     </main>
   </div>
@@ -15,6 +15,7 @@
 import type { Project } from '~/types'
 
 const { t } = useTheme()
+const { appBackground } = useGlass()
 
 // HeaderTabBar dirty badge + ahead/behind chip need live `git.status` + `branches`
 // regardless of which page is mounted. The store defaults to mock id `'prj1'`

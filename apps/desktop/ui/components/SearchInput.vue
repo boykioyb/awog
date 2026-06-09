@@ -12,9 +12,9 @@
       type="text"
       class="w-full rounded pl-7 pr-2 py-1.5 text-[1em] outline-none"
       :style="{
-        background: t.bgInput,
+        background: glassInput.background,
         color: t.text,
-        border: `1px solid ${t.border}`,
+        border: `1px solid ${glassInput.borderColor}`,
       }"
       @input="onInput"
     />
@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const { t } = useTheme()
+const { input: glassInput } = useGlass()
 const inputRef = ref<HTMLInputElement | null>(null)
 
 const onInput = (e: Event) => emit('update:modelValue', (e.target as HTMLInputElement).value)

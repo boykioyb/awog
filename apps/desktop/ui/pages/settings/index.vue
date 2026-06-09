@@ -14,7 +14,7 @@
             :key="s.id"
             class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded text-[1em] transition"
             :style="{
-              background: section === s.id ? t.bgActive : 'transparent',
+              background: pill(section === s.id).background,
               color: section === s.id ? t.text : t.textDim,
             }"
             @click="onSelectSection(s.id)"
@@ -45,6 +45,7 @@ import type { Component } from 'vue'
 type SectionId = 'workspace' | 'defaults' | 'models' | 'appearance' | 'updates'
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const settings = useSettingsStore()
 
 const section = ref<SectionId>('appearance')

@@ -20,8 +20,8 @@ lựa chọn, soạn dở), và không mục nào "chạy nền" song song. Ngư
   + shadow), hover = `glassHover`, idle = trong suốt. Logo + nút tiện ích cũng là glass surface (rounded).
   Phân vùng rõ: logo · tab strip (cuộn ngang, tab `flex-shrink-0` không bị bóp) · divider hairline · tiện ích.
   Token glass thêm vào `utils/themes.ts` (`glassBg/glassBorder/glassHighlight/glassActive/glassHover`,
-  dark + light) — màu vẫn đi qua `useTheme()`, không hardcode. (Tùy chọn nâng cao sau: bật Electron
-  window `vibrancy`/`backgroundMaterial` để kính thật mờ desktop phía sau — thay đổi ở main process, chỉ macOS.)
+  dark + light) — màu vẫn đi qua `useTheme()`, không hardcode. **Glass đã trải ra toàn app** qua
+  composable `useGlass()` + công tắc Settings → Appearance: xem [liquid-glass.md](liquid-glass.md).
 - **State sống lâu dài:** bật **keep-alive** cho các trang section qua `<NuxtPage :keepalive="true" />`
   trong [app.vue](../../apps/desktop/ui/app.vue).
 

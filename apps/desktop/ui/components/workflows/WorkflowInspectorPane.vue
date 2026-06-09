@@ -14,7 +14,11 @@
 <template>
   <div
     class="w-72 flex-col flex-shrink-0 hidden md:flex"
-    :style="{ borderLeft: `1px solid ${t.border}`, background: t.bgPanel }"
+    :style="{
+      borderLeft: `1px solid ${parts.border}`,
+      background: parts.bg,
+      backdropFilter: parts.blur,
+    }"
   >
     <div class="px-3 py-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">
       <div class="text-[1em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
@@ -57,5 +61,6 @@ defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const { t } = useTheme()
+const { parts } = useGlass()
 const { t: tr } = useI18n()
 </script>

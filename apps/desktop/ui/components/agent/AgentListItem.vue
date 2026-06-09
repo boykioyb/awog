@@ -2,7 +2,7 @@
   <div
     class="w-full px-3 py-2.5 text-left cursor-pointer transition"
     :style="{
-      background: selected ? t.bgActive : 'transparent',
+      background: pill(selected).background,
       borderBottom: `1px solid ${t.border}`,
       borderLeft: `2px solid ${selected ? t.accent : 'transparent'}`,
     }"
@@ -109,6 +109,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const ws = useWorkspaceStore()
 
 const SOURCE_LABEL: Record<AgentSource, string> = {
@@ -154,7 +155,8 @@ const sourceBadgeStyle = computed<CSSProperties>(() => {
 })
 
 const onHover = (e: MouseEvent) => {
-  if (!props.selected) (e.currentTarget as HTMLElement).style.background = t.value.bgHover
+  if (!props.selected)
+    (e.currentTarget as HTMLElement).style.background = pill(false, true).background
 }
 
 const onLeave = (e: MouseEvent) => {

@@ -73,6 +73,7 @@
           }}{{ row.branch.behind > 0 ? ` ↓${row.branch.behind}` : '' }}
         </span>
         <button
+          v-if="!hideActions"
           class="opacity-0 group-hover:opacity-100 p-1 rounded transition"
           title="More actions"
           :style="{ color: t.textDim }"
@@ -100,9 +101,12 @@ type Props = {
   rows: Row[]
   collapsedFolders: ReadonlySet<string>
   isRemote?: boolean
+  // Hide the per-row "more actions" button (used by the compact branch picker in
+  // the Git header, which only needs checkout + folder toggle).
+  hideActions?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), { isRemote: false })
+const props = withDefaults(defineProps<Props>(), { isRemote: false, hideActions: false })
 
 const emit = defineEmits<{
   'toggle-folder': [path: string]

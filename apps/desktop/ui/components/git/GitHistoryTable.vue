@@ -74,14 +74,14 @@
                 {{ tr('git.history.overflow_more', { count: overflowCount(c) }) }}
               </span>
               <span
-                v-if="c.phaseId"
+                v-if="isLinkedPhase(c.phaseId)"
                 class="text-[1em] px-1 py-0.5 rounded font-mono"
                 :style="{
                   background: t.infoBg,
                   color: t.info,
                   border: `1px solid ${t.infoBorder}`,
                 }"
-                :title="tr('git.history.linked_phase_tip', { phase: c.phaseId })"
+                :title="tr('git.history.linked_phase_tip', { phase: c.phaseId ?? '' })"
               >
                 <Link :size="9" class="inline-block mr-0.5" />
                 {{ c.phaseId }}
@@ -319,6 +319,15 @@ const onCopyHash = (hash: string) => {
   // Best-effort: ignore rejection (permissions, insecure context).
   navigator.clipboard.writeText(hash).catch(() => undefined)
 }
+
+// The sidecar parses a `[prefix]` from every commit subject into `phaseId`
+// (for AWOG auto-commits like `[{phaseId}] …`). On non-AWOG repos that prefix is
+// just a sprint/module tag (`[S58]`, `[Box]`), so only badge a phase when it
+// actually resolves to a known AWOG task phase — otherwise it's noise on every row.
+const tasksStore = useTasksStore()
+const isLinkedPhase = (phaseId: string | undefined): boolean =>
+  !!phaseId &&
+  tasksStore.tasks.some((tk) => Object.prototype.hasOwnProperty.call(tk.phases, phaseId))
 
 // ─── Right-click context menu ────────────────────────────────────────────
 const store = useGitStore()

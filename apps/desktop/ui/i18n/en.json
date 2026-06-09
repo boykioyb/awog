@@ -254,6 +254,8 @@
   "git.sidebar.submodules": "Submodules",
   "git.sidebar.current": "current",
   "git.sidebar.empty": "Empty",
+  "git.sidebar.search_branches": "Search branches…",
+  "git.sidebar.no_match": "No matching branches",
 
   "git.remote.fetch_url": "Fetch URL",
   "git.remote.push_url": "Push URL",

@@ -500,6 +500,7 @@ const props = defineProps<{
 const shows = (kind: ChipKind): boolean => !props.only || props.only.includes(kind)
 
 const { t } = useTheme()
+const { menu } = useGlass()
 const settings = useSettingsStore()
 const store = useSessionsStore()
 const ws = useWorkspaceStore()
@@ -553,9 +554,10 @@ const availableLevels = computed(() => levelsForModel(currentModel.value))
 const providerLabel = computed(() => PROVIDER_LABEL[props.session.settings.provider])
 
 const popStyle = computed(() => ({
-  background: t.value.bgPanel,
-  border: `1px solid ${t.value.borderStrong}`,
-  boxShadow: `0 8px 24px ${t.value.shadow}`,
+  background: menu.value.background,
+  border: `1px solid ${menu.value.borderColor}`,
+  backdropFilter: menu.value.backdropFilter,
+  boxShadow: menu.value.boxShadow,
   minWidth: '200px',
 }))
 
@@ -683,9 +685,10 @@ const accountChipTitle = computed(() => {
 })
 
 const accountPopStyle = computed(() => ({
-  background: t.value.bgPanel,
-  border: `1px solid ${t.value.borderStrong}`,
-  boxShadow: `0 8px 24px ${t.value.shadow}`,
+  background: menu.value.background,
+  border: `1px solid ${menu.value.borderColor}`,
+  backdropFilter: menu.value.backdropFilter,
+  boxShadow: menu.value.boxShadow,
   minWidth: '260px',
   maxHeight: '320px',
   overflowY: 'auto' as const,
@@ -750,9 +753,10 @@ const activeMcpCount = computed<number>(
 )
 
 const mcpPopStyle = computed(() => ({
-  background: t.value.bgPanel,
-  border: `1px solid ${t.value.borderStrong}`,
-  boxShadow: `0 8px 24px ${t.value.shadow}`,
+  background: menu.value.background,
+  border: `1px solid ${menu.value.borderColor}`,
+  backdropFilter: menu.value.backdropFilter,
+  boxShadow: menu.value.boxShadow,
   minWidth: '260px',
   maxHeight: '320px',
   overflowY: 'auto' as const,

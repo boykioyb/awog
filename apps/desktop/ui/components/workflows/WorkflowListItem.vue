@@ -21,7 +21,7 @@
   <div
     class="w-full text-left px-2 py-1.5 rounded transition cursor-pointer"
     :style="{
-      background: selected ? t.bgActive : 'transparent',
+      background: pill(selected).background,
       borderLeft: `2px solid ${selected ? t.accent : 'transparent'}`,
     }"
     @click="emit('select')"
@@ -106,6 +106,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const { t: tr } = useI18n()
 const ws = useWorkspaceStore()
 
@@ -143,7 +144,7 @@ const onMenuButton = (e: MouseEvent) => {
 
 const onHoverEnter = (e: MouseEvent) => {
   if (props.selected) return
-  ;(e.currentTarget as HTMLElement).style.background = t.value.bgHover
+  ;(e.currentTarget as HTMLElement).style.background = pill(false, true).background
 }
 
 const onHoverLeave = (e: MouseEvent) => {

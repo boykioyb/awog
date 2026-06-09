@@ -126,6 +126,13 @@
           </button>
         </div>
       </SettingsField>
+
+      <SettingsField label="Liquid Glass" hint="Translucent frosted surfaces + ambient backdrop">
+        <AppToggle
+          :model-value="appearance.liquidGlass"
+          @update:model-value="(v) => onUpdate({ liquidGlass: v })"
+        />
+      </SettingsField>
     </div>
 
     <div>

@@ -815,5 +815,8 @@ export interface AppearanceSettings {
   // (0–50). Only applies to hue tints — no effect for `mono` or background bases.
   themeColorStrength: number
   surfaceDepth: SurfaceDepth
+  // Liquid Glass UI mode — translucent frosted surfaces + ambient backdrop across
+  // the app. Toggle in Settings → Appearance; off falls back to solid surfaces.
+  liquidGlass: boolean
   locale: AppLocale
 }

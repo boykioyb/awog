@@ -1,7 +1,11 @@
 <template>
   <div
     class="relative px-3 py-2 flex items-center gap-3 flex-shrink-0"
-    :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
+    :style="{
+      borderBottom: `1px solid ${parts.border}`,
+      background: parts.bg,
+      backdropFilter: parts.blur,
+    }"
   >
     <!-- Project selector -->
     <div class="relative">
@@ -161,40 +165,33 @@
       </button>
       <div
         v-if="branchOpen"
-        class="absolute left-0 top-full mt-1 z-30 min-w-[220px] rounded shadow-lg"
+        class="absolute left-0 top-full mt-1 z-30 min-w-[260px] rounded shadow-lg overflow-hidden flex flex-col"
         :style="{
-          background: t.bgPanel,
-          border: `1px solid ${t.borderStrong}`,
-          boxShadow: `0 10px 30px ${t.shadow}`,
+          background: menu.background,
+          border: `1px solid ${menu.borderColor}`,
+          backdropFilter: menu.backdropFilter,
+          boxShadow: menu.boxShadow,
+          maxHeight: 'min(70vh, 440px)',
         }"
       >
-        <div
-          v-for="b in localBranches"
-          :key="b.name"
-          class="flex items-center gap-2 px-3 py-2 cursor-pointer transition"
-          :style="{
-            background: branchHover === b.name ? t.bgHover : 'transparent',
-          }"
-          @mouseenter="branchHover = b.name"
-          @mouseleave="branchHover = null"
-          @click="onSwitchBranch(b.name, b.isCurrent)"
-        >
-          <Check
-            :size="11"
-            :style="{
-              color: b.isCurrent ? t.accent : 'transparent',
-            }"
+        <div class="p-2 flex-shrink-0" :style="{ borderBottom: `1px solid ${t.border}` }">
+          <SearchInput v-model="branchQuery" placeholder="Filter branches…" autofocus />
+        </div>
+        <div class="flex-1 overflow-y-auto py-1 min-h-0">
+          <GitBranchTree
+            :rows="branchRows"
+            :collapsed-folders="collapsedBranchFolders"
+            hide-actions
+            @toggle-folder="toggleBranchFolder"
+            @checkout="onSwitchBranch"
           />
-          <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
-            {{ b.name }}
-          </span>
-          <span
-            v-if="b.ahead > 0 || b.behind > 0"
-            class="text-[1em] font-mono"
-            :style="{ color: t.textDim }"
+          <div
+            v-if="branchRows.length === 0"
+            class="px-3 py-4 text-center text-[1em]"
+            :style="{ color: t.textFaint }"
           >
-            {{ b.ahead > 0 ? `↑${b.ahead}` : '' }}{{ b.behind > 0 ? ` ↓${b.behind}` : '' }}
-          </span>
+            {{ branchQuery ? 'No matching branches' : 'No branches' }}
+          </div>
         </div>
       </div>
     </div>
@@ -244,6 +241,7 @@ import {
   GitFork,
 } from 'lucide-vue-next'
 import type { GitBranch, GitRepoEntry, Project } from '~/types'
+import { buildBranchTree, flattenTree } from '~/utils/branch-tree'
 
 type Props = {
   projects: Project[]
@@ -270,6 +268,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { parts, menu } = useGlass()
 const { t: tr } = useI18n()
 
 const projectOpen = ref(false)
@@ -277,7 +276,32 @@ const projectHover = ref<string | null>(null)
 const repoOpen = ref(false)
 const repoHover = ref<string | null>(null)
 const branchOpen = ref(false)
-const branchHover = ref<string | null>(null)
+
+// Branch picker: filter + tree grouping (reuses the sidebar's branch-tree logic).
+const branchQuery = ref('')
+const collapsedBranchFolders = ref<Set<string>>(new Set())
+
+const filteredBranches = computed(() => {
+  const q = branchQuery.value.trim().toLowerCase()
+  if (!q) return props.localBranches
+  return props.localBranches.filter((b) => b.name.toLowerCase().includes(q))
+})
+
+const branchRows = computed(() =>
+  flattenTree(buildBranchTree(filteredBranches.value), collapsedBranchFolders.value),
+)
+
+const toggleBranchFolder = (id: string) => {
+  const next = new Set(collapsedBranchFolders.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  collapsedBranchFolders.value = next
+}
+
+// Fresh filter each time the picker opens.
+watch(branchOpen, (open) => {
+  if (open) branchQuery.value = ''
+})
 
 // Root repo shows its folder name; sub-repos show their path within the project.
 const repoLabel = (r: GitRepoEntry) => (r.isRoot ? r.name : r.relativePath)

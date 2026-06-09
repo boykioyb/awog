@@ -84,7 +84,7 @@
             <div
               v-if="group.label"
               class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
-              :style="{ background: groupHover === group.key ? t.bgHover : 'transparent' }"
+              :style="{ background: pill(false, groupHover === group.key).background }"
               @mouseenter="groupHover = group.key"
               @mouseleave="groupHover = null"
             >
@@ -135,12 +135,8 @@
                 :style="{
                   margin: '0 6px 1px 6px',
                   width: 'calc(100% - 12px)',
-                  background:
-                    store.selectedSessionId === ses.id
-                      ? t.bgActive
-                      : hoverId === ses.id
-                        ? t.bgHover
-                        : 'transparent',
+                  background: pill(store.selectedSessionId === ses.id, hoverId === ses.id)
+                    .background,
                 }"
                 @click="onSelectSession(ses.id)"
                 @contextmenu="onContextMenu($event, ses.id)"
@@ -200,12 +196,6 @@
                     <span>{{ fmt(ses.updatedAt) }}</span>
                     <span :style="{ color: t.textFaint }">·</span>
                     <span>{{ ses.messages.length }} msg</span>
-                    <span v-if="ses.invitedAgentIds.length" :style="{ color: t.textFaint }">·</span>
-                    <span v-if="ses.invitedAgentIds.length">
-                      {{ ses.invitedAgentIds.length }} agent{{
-                        ses.invitedAgentIds.length > 1 ? 's' : ''
-                      }}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -278,6 +268,7 @@ import { PROVIDER_LABEL, modelById } from '~/utils/models'
 import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const store = useSessionsStore()
 const workspace = useWorkspaceStore()
 const settingsStore = useSettingsStore()

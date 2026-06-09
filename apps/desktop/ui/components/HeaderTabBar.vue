@@ -1,10 +1,14 @@
 <template>
   <header
-    class="relative h-12 flex items-center gap-2.5 px-3 flex-shrink-0 backdrop-blur-xl backdrop-saturate-150 z-30"
+    class="relative h-12 flex items-center gap-2.5 px-3 flex-shrink-0 z-30"
     :style="{
-      background: t.glassBg,
-      borderBottom: `1px solid ${t.glassBorder}`,
-      boxShadow: `inset 0 1px 0 ${t.glassHighlight}, 0 8px 24px -16px ${t.shadow}`,
+      background: parts.bg,
+      backdropFilter: parts.blur,
+      WebkitBackdropFilter: parts.blur,
+      borderBottom: `1px solid ${parts.border}`,
+      boxShadow: parts.sheen
+        ? `${parts.sheen}, 0 8px 24px -16px ${parts.shadow}`
+        : `0 8px 24px -16px ${parts.shadow}`,
       color: t.text,
     }"
   >
@@ -12,9 +16,9 @@
     <div
       class="flex items-center justify-center w-8 h-8 rounded-xl flex-shrink-0"
       :style="{
-        background: t.glassActive,
-        border: `1px solid ${t.glassBorder}`,
-        boxShadow: `inset 0 1px 0 ${t.glassHighlight}`,
+        background: on ? t.glassActive : t.bgElevated,
+        border: `1px solid ${on ? t.glassBorder : t.border}`,
+        boxShadow: on ? `inset 0 1px 0 ${t.glassHighlight}` : 'none',
         color: t.text,
       }"
     >
@@ -80,7 +84,7 @@
     </nav>
 
     <!-- Divider -->
-    <div class="self-stretch my-2.5 w-px flex-shrink-0" :style="{ background: t.glassBorder }" />
+    <div class="self-stretch my-2.5 w-px flex-shrink-0" :style="{ background: parts.border }" />
 
     <!-- Utility cluster -->
     <div class="flex items-center gap-1 flex-shrink-0" @mouseleave="hoveredId = null">
@@ -143,6 +147,7 @@ import {
 } from 'lucide-vue-next'
 
 const { t, themeName, toggle } = useTheme()
+const { on, parts, pill } = useGlass()
 const { t: tr } = useI18n()
 const { open: whatsNewOpen, hasUnseen, releases, openPanel, closePanel } = useWhatsNew()
 const route = useRoute()
@@ -185,32 +190,26 @@ const isActive = (to: string) => {
   return route.path.startsWith(to)
 }
 
-// Liquid Glass surface: active = bright translucent lozenge with ring + sheen +
-// soft drop, hover = faint glass fill, idle = transparent.
+// Tab/utility pill: glass lozenge via useGlass (mode-aware) + app-semantic text
+// color + an active sheen/drop when glass is on.
 const pillStyle = (active: boolean, hovered: boolean) => {
-  if (active) {
-    return {
-      background: t.value.glassActive,
-      color: t.value.text,
-      border: `1px solid ${t.value.glassBorder}`,
-      boxShadow: `inset 0 1px 0 ${t.value.glassHighlight}, 0 2px 10px -6px ${t.value.shadow}`,
-    }
+  const base = pill(active, hovered)
+  return {
+    background: base.background,
+    border: `1px solid ${base.borderColor}`,
+    color: active || hovered ? t.value.text : t.value.textMuted,
+    boxShadow:
+      active && on.value
+        ? `inset 0 1px 0 ${t.value.glassHighlight}, 0 2px 10px -6px ${t.value.shadow}`
+        : 'none',
   }
-  if (hovered) {
-    return {
-      background: t.value.glassHover,
-      color: t.value.text,
-      border: '1px solid transparent',
-    }
-  }
-  return { background: 'transparent', color: t.value.textMuted, border: '1px solid transparent' }
 }
 
 const badgeStyle = computed(() => ({
-  background: t.value.glassActive,
+  background: on.value ? t.value.glassActive : t.value.bgInput,
   color: t.value.accent,
-  border: `1px solid ${t.value.glassBorder}`,
-  boxShadow: `inset 0 1px 0 ${t.value.glassHighlight}`,
+  border: `1px solid ${on.value ? t.value.glassBorder : t.value.border}`,
+  boxShadow: on.value ? `inset 0 1px 0 ${t.value.glassHighlight}` : 'none',
   minWidth: '18px',
 }))
 </script>

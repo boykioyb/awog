@@ -68,13 +68,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { pill } = useGlass()
 
 const basePaddingLeft = computed(() => 8 + props.indent * 14)
 
 const rowStyle = computed(() => ({
   paddingLeft: `${basePaddingLeft.value}px`,
   paddingRight: '8px',
-  background: props.active ? t.value.bgHover : 'transparent',
+  background: pill(props.active).background,
   borderLeft: `2px solid ${props.active ? t.value.accent : 'transparent'}`,
   cursor: 'pointer',
 }))

@@ -9,9 +9,10 @@
         width: `${cardPos.width}px`,
         ...(userHeight ? { height: `${userHeight}px` } : {}),
         maxHeight: 'calc(100vh - 24px)',
-        background: t.bgPanel,
-        border: `1px solid ${t.border}`,
-        boxShadow: `0 24px 60px ${t.shadow}`,
+        background: overlay.background,
+        border: `1px solid ${overlay.borderColor}`,
+        backdropFilter: overlay.backdropFilter,
+        boxShadow: overlay.boxShadow,
       }"
       @click.stop
     >
@@ -158,6 +159,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { overlay } = useGlass()
 
 const promptText = ref('')
 

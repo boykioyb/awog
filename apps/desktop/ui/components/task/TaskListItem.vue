@@ -2,7 +2,7 @@
   <div
     class="cursor-pointer transition mx-1.5 my-px rounded"
     :style="{
-      background: selected ? t.bgActive : hovered ? t.bgHover : 'transparent',
+      background: pill(selected, hovered).background,
       padding: '8px 10px',
     }"
     @click="emit('click')"
@@ -110,6 +110,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const store = useWorkspaceStore()
 const workflowsStore = useWorkflowsStore()
 

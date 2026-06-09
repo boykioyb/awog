@@ -3,8 +3,9 @@
     class="relative flex flex-col h-full overflow-hidden flex-shrink-0"
     :style="{
       width: collapsed ? '40px' : `${width}px`,
-      background: t.bgPanel,
-      borderRight: `1px solid ${t.border}`,
+      background: parts.bg,
+      backdropFilter: parts.blur,
+      borderRight: `1px solid ${parts.border}`,
       transition: dragging ? 'none' : 'width 150ms ease',
     }"
   >
@@ -32,6 +33,15 @@
       </button>
     </div>
 
+    <!-- Branch search (local + remote) -->
+    <div
+      v-if="!collapsed"
+      class="px-2 py-2 flex-shrink-0"
+      :style="{ borderBottom: `1px solid ${t.border}` }"
+    >
+      <SearchInput v-model="branchQuery" :placeholder="tr('git.sidebar.search_branches')" />
+    </div>
+
     <!-- Scroll body -->
     <div v-if="!collapsed" class="flex-1 overflow-y-auto py-1">
       <!-- Top items -->
@@ -54,19 +64,19 @@
       <GitSidebarSection
         :label="tr('git.sidebar.branches')"
         :icon="GitBranch"
-        :open="open.branches"
+        :open="open.branches || hasBranchQuery"
         :count="localBranches.length"
         :action-icon="Plus"
         :action-title="tr('git.branches.new')"
         @toggle="open.branches = !open.branches"
         @action="emit('create-branch')"
       >
-        <template v-if="localBranches.length === 0">
+        <template v-if="branchRows.length === 0">
           <div
             class="px-3 py-1.5 text-[1em] italic"
             :style="{ color: t.textFaint, paddingLeft: '28px' }"
           >
-            {{ tr('git.sidebar.empty') }}
+            {{ hasBranchQuery ? tr('git.sidebar.no_match') : tr('git.sidebar.empty') }}
           </div>
         </template>
         <template v-for="row in branchRows" :key="`${row.kind}:${row.id}`">
@@ -121,19 +131,19 @@
       <GitSidebarSection
         :label="tr('git.sidebar.remotes')"
         :icon="Cloud"
-        :open="open.remotes"
+        :open="open.remotes || hasBranchQuery"
         :count="remoteCount"
         @toggle="open.remotes = !open.remotes"
       >
-        <template v-if="store.remotes.length === 0">
+        <template v-if="visibleRemotes.length === 0">
           <div
             class="px-3 py-1.5 text-[1em] italic"
             :style="{ color: t.textFaint, paddingLeft: '28px' }"
           >
-            {{ tr('git.sidebar.empty') }}
+            {{ hasBranchQuery ? tr('git.sidebar.no_match') : tr('git.sidebar.empty') }}
           </div>
         </template>
-        <template v-for="r in store.remotes" :key="r.name">
+        <template v-for="r in visibleRemotes" :key="r.name">
           <GitSidebarItem
             :active="isActive({ kind: 'remote', name: r.name })"
             :label="r.name"
@@ -284,6 +294,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { parts } = useGlass()
 const { t: tr } = useI18n()
 const store = useGitStore()
 
@@ -291,16 +302,29 @@ const store = useGitStore()
 const isActive = (s: GitSection) => sectionKey(props.selected) === sectionKey(s)
 const select = (s: GitSection) => emit('update:selected', s)
 
+// ─── Branch search (local + remote) ───────────────────────────────────────
+const branchQuery = ref('')
+const hasBranchQuery = computed(() => branchQuery.value.trim().length > 0)
+const matchBranch = (name: string) =>
+  name.toLowerCase().includes(branchQuery.value.trim().toLowerCase())
+
 // ─── Branches ────────────────────────────────────────────────────────────
 const localBranches = computed(() => store.branches.filter((b: GitBranchType) => !b.isRemote))
+const filteredLocalBranches = computed(() =>
+  hasBranchQuery.value
+    ? localBranches.value.filter((b) => matchBranch(b.name))
+    : localBranches.value,
+)
 
 // Group branches sharing a `/` prefix into collapsible folders (e.g. all
 // `sora-hoa/*` under one `sora-hoa` folder). Singleton chains stay flat.
 // Folders are collapsed by default — we track which the user has expanded, so
-// any folder (incl. nested) starts closed until clicked.
-const branchTree = computed(() => buildBranchTree(localBranches.value))
+// any folder (incl. nested) starts closed until clicked. While searching, every
+// folder is forced open so matches are visible.
+const branchTree = computed(() => buildBranchTree(filteredLocalBranches.value))
 const expandedBranchFolders = ref<Set<string>>(new Set())
 const collapsedBranchFolders = computed(() => {
+  if (hasBranchQuery.value) return new Set<string>()
   const collapsed = new Set<string>()
   flattenTree(branchTree.value, new Set<string>()).forEach((row) => {
     if (row.kind === 'folder' && !expandedBranchFolders.value.has(row.id)) collapsed.add(row.id)
@@ -318,7 +342,17 @@ const remoteBranches = computed(() => store.branches.filter((b: GitBranchType) =
 const remoteCount = computed(() => store.remotes.length + remoteBranches.value.length)
 
 const remoteBranchesFor = (remoteName: string) =>
-  remoteBranches.value.filter((b: GitBranchType) => b.name.startsWith(`${remoteName}/`))
+  remoteBranches.value.filter(
+    (b: GitBranchType) =>
+      b.name.startsWith(`${remoteName}/`) && (!hasBranchQuery.value || matchBranch(b.name)),
+  )
+
+// While searching, hide remote headers that have no matching branches.
+const visibleRemotes = computed(() =>
+  hasBranchQuery.value
+    ? store.remotes.filter((r) => remoteBranchesFor(r.name).length > 0)
+    : store.remotes,
+)
 
 const stripRemotePrefix = (full: string, remoteName: string) =>
   full.startsWith(`${remoteName}/`) ? full.slice(remoteName.length + 1) : full

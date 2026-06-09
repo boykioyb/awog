@@ -28,7 +28,7 @@
           :key="p.id"
           class="w-full px-3 py-2.5 text-left cursor-pointer transition"
           :style="{
-            background: isActive(p.id) ? t.bgActive : 'transparent',
+            background: pill(isActive(p.id)).background,
             borderBottom: `1px solid ${t.border}`,
             borderLeft: `2px solid ${isActive(p.id) ? t.accent : 'transparent'}`,
           }"
@@ -346,6 +346,7 @@ import { STATUS_META } from '~/utils/status-meta'
 import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const ws = useWorkspaceStore()
 const tasksStore = useTasksStore()
 const sessionsStore = useSessionsStore()

@@ -142,6 +142,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   themeColorCustom: '#a3a3a3',
   themeColorStrength: 10,
   surfaceDepth: 'flat',
+  liquidGlass: true,
   locale: 'en',
 }
 

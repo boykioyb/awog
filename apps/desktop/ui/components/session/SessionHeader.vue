@@ -1,7 +1,11 @@
 <template>
   <div
     class="px-4 md:px-6 py-3 flex items-center gap-2"
-    :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
+    :style="{
+      borderBottom: `1px solid ${parts.border}`,
+      background: parts.bg,
+      backdropFilter: parts.blur,
+    }"
   >
     <div class="min-w-0 flex-1">
       <input
@@ -146,6 +150,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { parts } = useGlass()
 const workspace = useWorkspaceStore()
 
 const titleDraft = ref(props.session.title)

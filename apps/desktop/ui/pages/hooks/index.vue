@@ -33,7 +33,7 @@
           :key="cat"
           class="px-2 py-0.5 text-[1em] rounded transition flex-shrink-0"
           :style="{
-            background: eventFilter === cat ? t.bgActive : 'transparent',
+            background: pill(eventFilter === cat).background,
             color: eventFilter === cat ? t.text : t.textDim,
             border: `1px solid ${eventFilter === cat ? t.borderStrong : 'transparent'}`,
           }"
@@ -49,7 +49,7 @@
           :key="hook.id"
           class="w-full px-3 py-2 cursor-pointer transition"
           :style="{
-            background: selectedId === hook.id ? t.bgActive : 'transparent',
+            background: pill(selectedId === hook.id).background,
             borderBottom: `1px solid ${t.border}`,
             borderLeft: `2px solid ${selectedId === hook.id ? t.accent : 'transparent'}`,
             opacity: hook.enabled ? 1 : 0.55,
@@ -151,6 +151,7 @@ import type { HookDraft } from '~/composables/useHookGenerator'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const ws = useWorkspaceStore()
 
 const searchQuery = ref('')

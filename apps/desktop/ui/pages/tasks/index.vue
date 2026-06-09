@@ -95,7 +95,7 @@
               class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
               :style="{
                 color: t.textDim,
-                background: groupHover === group.key ? t.bgHover : 'transparent',
+                background: pill(false, groupHover === group.key).background,
               }"
               @click="toggleGroup(group.key)"
               @mouseenter="groupHover = group.key"
@@ -182,6 +182,7 @@ import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import { STATUS_META } from '~/utils/status-meta'
 
 const { t } = useTheme()
+const { pill } = useGlass()
 // Projects stay in the workspace store; tasks + workflows are their own live stores.
 const store = useWorkspaceStore()
 const tasksStore = useTasksStore()

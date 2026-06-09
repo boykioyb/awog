@@ -254,6 +254,8 @@
   "git.sidebar.submodules": "Submodules",
   "git.sidebar.current": "hiện tại",
   "git.sidebar.empty": "Trống",
+  "git.sidebar.search_branches": "Tìm branch…",
+  "git.sidebar.no_match": "Không có branch khớp",
 
   "git.remote.fetch_url": "Fetch URL",
   "git.remote.push_url": "Push URL",

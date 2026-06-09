@@ -2,7 +2,7 @@
   <div
     class="w-full px-3 py-2 cursor-pointer transition"
     :style="{
-      background: selected ? t.bgActive : 'transparent',
+      background: pill(selected).background,
       borderBottom: `1px solid ${t.border}`,
       borderLeft: `2px solid ${selected ? t.accent : 'transparent'}`,
     }"
@@ -10,7 +10,8 @@
     @contextmenu="$emit('context-menu', $event, skill)"
     @mouseenter="
       (e: MouseEvent) => {
-        if (!selected) (e.currentTarget as HTMLElement).style.background = t.bgHover
+        if (!selected)
+          (e.currentTarget as HTMLElement).style.background = pill(false, true).background
       }
     "
     @mouseleave="
@@ -120,6 +121,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { pill } = useGlass()
 
 const onRenameInputMounted = (el: unknown) => {
   emit('rename-input-mounted', el instanceof HTMLInputElement ? el : null)

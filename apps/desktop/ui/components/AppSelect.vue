@@ -49,11 +49,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { input: glassInput } = useGlass()
 
 const style = computed(() => ({
-  background: t.value.bgInput,
+  background: glassInput.value.background,
   color: t.value.text,
-  border: `1px solid ${props.invalid ? t.value.danger : t.value.border}`,
+  border: `1px solid ${props.invalid ? t.value.danger : glassInput.value.borderColor}`,
 }))
 
 // The native value is always a string; cast back to the bound model type (T is

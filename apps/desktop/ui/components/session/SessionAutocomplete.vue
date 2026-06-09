@@ -3,9 +3,10 @@
     v-if="items.length > 0"
     class="rounded-md overflow-hidden"
     :style="{
-      background: t.bgPanel,
-      border: `1px solid ${t.borderStrong}`,
-      boxShadow: `0 8px 24px ${t.shadow}`,
+      background: menu.background,
+      border: `1px solid ${menu.borderColor}`,
+      backdropFilter: menu.backdropFilter,
+      boxShadow: menu.boxShadow,
       maxHeight: '280px',
       overflowY: 'auto',
     }"
@@ -79,6 +80,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { menu } = useGlass()
 
 const tokenColor = (kind: SessionTokenKind) => {
   if (kind === 'agent') return t.value.warning

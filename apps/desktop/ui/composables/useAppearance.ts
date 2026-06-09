@@ -110,6 +110,8 @@ const coerceAppearance = (raw: unknown): AppearanceSettings => {
     themeColorCustom: pickHex(v.themeColorCustom, DEFAULT_APPEARANCE.themeColorCustom),
     themeColorStrength,
     surfaceDepth: pick(v.surfaceDepth, DEPTH_VALUES, DEFAULT_APPEARANCE.surfaceDepth),
+    liquidGlass:
+      typeof v.liquidGlass === 'boolean' ? v.liquidGlass : DEFAULT_APPEARANCE.liquidGlass,
     locale: pick(v.locale, LOCALE_VALUES, DEFAULT_APPEARANCE.locale),
   }
 }

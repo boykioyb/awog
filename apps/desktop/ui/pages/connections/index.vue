@@ -33,7 +33,7 @@
           :key="f"
           class="px-2 py-0.5 text-[1em] rounded transition flex-shrink-0 capitalize"
           :style="{
-            background: transportFilter === f ? t.bgActive : 'transparent',
+            background: pill(transportFilter === f).background,
             color: transportFilter === f ? t.text : t.textDim,
             border: `1px solid ${transportFilter === f ? t.borderStrong : 'transparent'}`,
           }"
@@ -49,7 +49,7 @@
           :key="srv.id"
           class="w-full px-3 py-2 cursor-pointer transition"
           :style="{
-            background: selectedId === srv.id ? t.bgActive : 'transparent',
+            background: pill(selectedId === srv.id).background,
             borderBottom: `1px solid ${t.border}`,
             borderLeft: `2px solid ${selectedId === srv.id ? t.accent : 'transparent'}`,
           }"
@@ -147,6 +147,7 @@ import type { MCPServer, MCPStatus, MCPTransport } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
 const { t } = useTheme()
+const { pill } = useGlass()
 const { t: tr } = useI18n()
 const ws = useWorkspaceStore()
 

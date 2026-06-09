@@ -7,9 +7,10 @@
         :style="{
           top: `${position.top}px`,
           left: `${position.left}px`,
-          background: t.bgPanel,
-          border: `1px solid ${t.borderStrong}`,
-          boxShadow: `0 12px 32px ${t.shadow}`,
+          background: menu.background,
+          border: `1px solid ${menu.borderColor}`,
+          backdropFilter: menu.backdropFilter,
+          boxShadow: menu.boxShadow,
         }"
         @click.stop
       >
@@ -125,6 +126,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useTheme()
+const { menu, pill } = useGlass()
 const hoverIndex = ref(-1)
 const openSubmenuIndex = ref<number>(-1)
 const subHoverIndex = ref(-1)
@@ -167,7 +169,7 @@ const itemColor = (item: ContextMenuItem): string => {
 }
 
 const itemStyle = (item: ContextMenuItem, hover: boolean) => ({
-  background: hover && !item.disabled ? t.value.bgHover : 'transparent',
+  background: pill(false, hover && !item.disabled).background,
   color: itemColor(item),
   cursor: item.disabled ? 'not-allowed' : 'pointer',
 })
