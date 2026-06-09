@@ -1,6 +1,9 @@
 <template>
   <NuxtLayout>
-    <NuxtPage />
+    <!-- keepalive: section tabs stay mounted when switching tabs so their state
+         survives and background work keeps running (multi-tab shell). Fullscreen
+         param-driven pages opt out via `definePageMeta({ keepalive: false })`. -->
+    <NuxtPage :keepalive="true" />
   </NuxtLayout>
 </template>
 
@@ -20,7 +23,7 @@ useUpdateSettings()
 const settings = useSettingsStore()
 const workspace = useWorkspaceStore()
 // Tasks run in the background and survive navigation, so their store hydrates +
-// subscribes at app lifetime (not per-page). TopBar / edit pages read tasks too.
+// subscribes at app lifetime (not per-page). HeaderTabBar / edit pages read tasks too.
 const tasks = useTasksStore()
 const workflows = useWorkflowsStore()
 const update = useUpdateStore()

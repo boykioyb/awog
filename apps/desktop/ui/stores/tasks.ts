@@ -117,6 +117,11 @@ export const useTasksStore = defineStore('tasks', {
     selectedTask(state): Task | undefined {
       return state.tasks.find((t) => t.id === state.selectedTaskId)
     },
+    // Number of tasks currently executing — drives the live `•N` badge on the
+    // Tasks tab in the header so running work is visible without opening it.
+    runningCount(state): number {
+      return state.tasks.filter((t) => t.status === 'running').length
+    },
     taskById:
       (state) =>
       (id: string): Task | undefined =>

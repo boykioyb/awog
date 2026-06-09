@@ -57,7 +57,8 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Sessions persistence** — JSONL event-sourced tại `~/.awog/sessions/<id>.jsonl`.
 ✅ **Composer follow-up** — bôi đen text trong agent reply → "Quote & follow up" → chip + note editor trong composer, prepend quote block khi send (xem [docs/features/sessions.md#composer-follow-up-quote--instruct](../../../docs/features/sessions.md#composer-follow-up-quote--instruct)).
 ✅ **Session Info panel** — nút ⓘ ở session header mở panel right-docked (resizable, store `sessionInfoPanel`) hiển thị "context" của session: **Details** (id/created/updated/messages/model/provider/mode/thinking/connections/agents), **Project** (tên + path + "View in Finder" qua `revealPath`) và **Context files** (attachments + `@file` mentions gom từ messages — attachment mở lightbox, mention real-path có Reveal/Open qua `revealPath`/`openPath`). Loại trừ lẫn nhau với Workspace Panel (chỉ một panel dock phải mỗi lúc). Lưu ý: attachments/mentions chỉ in-memory (không persist xuống JSONL) → trống sau reload.
-✅ **What's New** — nút trên mục Settings ở NavRail mở `WhatsNewModal` liệt kê release note (changelog tĩnh `utils/changelog.ts`, song ngữ en/vi). Dot "unseen" khi version mới nhất khác version đã xem; lưu last-seen trong localStorage (`useWhatsNew`). Local-first, không fetch remote.
+✅ **Header tab-bar shell** — navigation chuyển từ NavRail (sidebar trái) sang **thanh tab ngang trên header** (`HeaderTabBar.vue`): 10 mục cố định icon+label (cuộn ngang khi tràn) + cụm tiện ích phải (What's New / Settings / theme toggle). Mỗi trang section bật **keep-alive** (`<NuxtPage :keepalive>`) → đổi tab giữ nguyên state + tab đã ghé chạy nền song song. **Badge sống** trên tab: Tasks `N` (running count), Sessions chấm pulsing (đang stream), Git chấm dirty + chip `↑/↓`. Trang fullscreen (`edit/[taskId]`, `projects/[id]/code`, `__sidecar-debug`) opt-out keep-alive (`definePageMeta({ keepalive: false })`). Xem [docs/features/header-tab-shell.md](../../../docs/features/header-tab-shell.md).
+✅ **What's New** — nút trên header tab-bar (cụm tiện ích phải) mở `WhatsNewModal` liệt kê release note (changelog tĩnh `utils/changelog.ts`, song ngữ en/vi). Dot "unseen" khi version mới nhất khác version đã xem; lưu last-seen trong localStorage (`useWhatsNew`). Local-first, không fetch remote.
 ⏳ **System tray + native notification** — đặc tả ở docs, chưa implement.
 ⏳ **Agents engine wiring** — agent CRUD đã wire (sidecar `agents.*`); engine injection cho session/task đã dùng AGENT.md runtime. (Tasks/Workflows nay đã wire — xem trên.)
 
@@ -65,13 +66,13 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 
 ```
 ui/
-├── app.vue                 # Root, <NuxtLayout><NuxtPage /></NuxtLayout>
+├── app.vue                 # Root, <NuxtLayout><NuxtPage :keepalive /></NuxtLayout>
 ├── layouts/
-│   └── default.vue         # Shell: NavRail + TopBar + content slot
+│   └── default.vue         # Shell: HeaderTabBar (top) + UpdateBanner + content slot
 ├── components/
 │   │
 │   │ # Primitive + layout (dùng chéo, giữ ở root) — auto-import dùng pathPrefix:false
-│   ├── NavRail.vue, TopBar.vue
+│   ├── HeaderTabBar.vue
 │   ├── BaseModal.vue, MasterDetailShell.vue, EditorShell.vue, PromptCreatorPanel.vue
 │   ├── AppInput.vue, AppToggle.vue, SearchInput.vue, CompactSelect.vue
 │   ├── Field.vue, Section.vue, EmptyView.vue, ToggleCard.vue, ToggleField.vue

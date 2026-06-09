@@ -84,7 +84,7 @@ import { ChevronLeft } from 'lucide-vue-next'
 import { mockArtifactContent } from '~/utils/mock-output'
 import type { EditorFileKind, EditorTaskFile, EditorViewMode } from '~/types'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, keepalive: false })
 
 const route = useRoute()
 const router = useRouter()

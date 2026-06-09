@@ -1,9 +1,9 @@
-// What's New — flags unseen releases in the NavRail and owns the modal open
-// state. The changelog content is a static bundled file (`utils/changelog.ts`);
-// this composable only tracks which version the user has already viewed,
-// persisted in localStorage (same lightweight pattern as `useAppearance`).
-// Shared state lives in `useState` so the NavRail button and the modal stay in
-// sync without prop threading.
+// What's New — flags unseen releases in the header tab-bar and owns the modal
+// open state. The changelog content is a static bundled file
+// (`utils/changelog.ts`); this composable only tracks which version the user has
+// already viewed, persisted in localStorage (same lightweight pattern as
+// `useAppearance`). Shared state lives in `useState` so the HeaderTabBar button
+// and the modal stay in sync without prop threading.
 
 import { CHANGELOG, CURRENT_VERSION } from '~/utils/changelog'
 

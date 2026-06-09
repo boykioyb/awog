@@ -72,6 +72,13 @@ export interface ThemeTokens {
   statusWarn: string
   // Misc
   shadow: string
+  // Liquid Glass surfaces (translucent header + pill segments). Layered over
+  // `bg` and paired with backdrop-blur; alpha lets the base tint show through.
+  glassBg: string
+  glassBorder: string
+  glassHighlight: string
+  glassActive: string
+  glassHover: string
   syntax: SyntaxTokens
 }
 
@@ -127,6 +134,11 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     statusOk: '#22c55e',
     statusWarn: '#fbbf24',
     shadow: 'rgba(0, 0, 0, 0.5)',
+    glassBg: 'rgba(20, 20, 22, 0.72)',
+    glassBorder: 'rgba(255, 255, 255, 0.10)',
+    glassHighlight: 'rgba(255, 255, 255, 0.14)',
+    glassActive: 'rgba(255, 255, 255, 0.12)',
+    glassHover: 'rgba(255, 255, 255, 0.06)',
     syntax: {
       h1: '#f1c40f',
       h2: '#e74c3c',
@@ -189,6 +201,11 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     statusOk: '#16a34a',
     statusWarn: '#d97706',
     shadow: 'rgba(0, 0, 0, 0.08)',
+    glassBg: 'rgba(255, 255, 255, 0.72)',
+    glassBorder: 'rgba(0, 0, 0, 0.08)',
+    glassHighlight: 'rgba(255, 255, 255, 0.9)',
+    glassActive: 'rgba(0, 0, 0, 0.06)',
+    glassHover: 'rgba(0, 0, 0, 0.035)',
     syntax: {
       h1: '#b45309',
       h2: '#b91c1c',

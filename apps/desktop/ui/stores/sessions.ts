@@ -182,6 +182,12 @@ export const useSessionsStore = defineStore('sessions', {
         const s = state.sessions.find((x) => x.id === id)
         return !!s && (s.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG)
       },
+    // True when any session has an in-flight streaming turn — drives the live
+    // dot on the Sessions tab in the header so a running chat is visible while
+    // the user is on another tab (sessions keep streaming under keep-alive).
+    anyStreaming(state): boolean {
+      return state.sessions.some((s) => (s.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG))
+    },
     activeSubagentStep(state): SessionStep | null {
       const ref = state.subagentDrawerRef
       if (!ref) return null

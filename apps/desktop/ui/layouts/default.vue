@@ -1,14 +1,13 @@
 <template>
   <div
-    class="h-screen w-full flex overflow-hidden"
+    class="h-screen w-full flex flex-col overflow-hidden"
     :style="{ background: t.bg, color: t.text, fontFamily: 'var(--font-sans)' }"
   >
-    <NavRail />
-    <div class="flex flex-col flex-1 overflow-hidden">
-      <!-- <TopBar /> -->
-      <UpdateBanner />
+    <HeaderTabBar />
+    <UpdateBanner />
+    <main class="flex-1 overflow-hidden">
       <slot />
-    </div>
+    </main>
   </div>
 </template>
 
@@ -17,7 +16,7 @@ import type { Project } from '~/types'
 
 const { t } = useTheme()
 
-// NavRail dirty badge + ahead/behind chip need live `git.status` + `branches`
+// HeaderTabBar dirty badge + ahead/behind chip need live `git.status` + `branches`
 // regardless of which page is mounted. The store defaults to mock id `'prj1'`
 // which matches the INITIAL_BRANCHES seed (one with ahead=2) — without
 // selecting a real project first, the chip would show "↑2" everywhere until

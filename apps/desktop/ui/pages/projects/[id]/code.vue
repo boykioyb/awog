@@ -197,7 +197,7 @@ import {
   type ActivityView,
 } from '~/composables/useProjectWorkspace'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, keepalive: false })
 
 const { t } = useTheme()
 const route = useRoute()

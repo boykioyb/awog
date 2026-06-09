@@ -52,7 +52,7 @@
 import { ref } from 'vue'
 import { useSidecar, SidecarError } from '~/composables/useSidecar'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, keepalive: false })
 
 type PingResult = { pong: boolean; version: string; ts: number }
 
