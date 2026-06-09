@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.7.0',
+    date: '2026-06-09',
+    highlight: {
+      en: 'Tabbed workspace + Liquid Glass — switch sections without losing your place.',
+      vi: 'Workspace dạng tab + Liquid Glass — đổi mục mà không mất ngữ cảnh đang làm.',
+    },
+    items: [
+      {
+        kind: 'changed',
+        en: 'Navigation moved from the left sidebar to a tab bar in the header. Sections now stay alive when you switch tabs — scroll position, selections and in-progress work persist, and background tasks/sessions keep running. Tabs show live badges (running tasks, streaming sessions, Git status).',
+        vi: 'Điều hướng chuyển từ sidebar trái sang thanh tab trên header. Các mục giữ nguyên trạng thái khi đổi tab — vị trí cuộn, lựa chọn và việc đang làm được giữ lại, task/session vẫn chạy nền. Tab hiển thị badge sống (task đang chạy, session đang stream, trạng thái Git).',
+      },
+      {
+        kind: 'added',
+        en: 'Liquid Glass: a translucent, frosted macOS-style interface across the whole app. Toggle it in Settings → Appearance (on by default).',
+        vi: 'Liquid Glass: giao diện kính mờ phong cách macOS trên toàn app. Bật/tắt ở Settings → Appearance (mặc định bật).',
+      },
+      {
+        kind: 'improved',
+        en: 'Git: the branch picker now groups branches into folders with search and scrolling, and the sidebar gained a branch search covering both local and remote branches.',
+        vi: 'Git: bộ chọn branch giờ gom branch theo thư mục, có tìm kiếm và cuộn; sidebar thêm ô tìm branch cho cả local lẫn remote.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Git history no longer shows a phase badge on every commit in non-AWOG repos — it appears only when a commit links to a real AWOG task phase.',
+        vi: 'Lịch sử Git không còn gắn badge phase lên mọi commit ở repo ngoài — chỉ hiện khi commit liên kết tới một phase task AWOG thật.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Fixed the Sessions view where the message list could not scroll and the composer was cut off.',
+        vi: 'Sửa lỗi màn Sessions không cuộn được danh sách tin nhắn và bị che mất ô soạn tin.',
+      },
+    ],
+  },
+  {
     version: '0.5.2',
     date: '2026-06-05',
     highlight: {
