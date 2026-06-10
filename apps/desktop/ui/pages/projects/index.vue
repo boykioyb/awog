@@ -125,7 +125,7 @@
               <button
                 class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
                 :style="
-                  terminalOpen
+                  isTerminalOpen
                     ? {
                         background: t.bgActive,
                         color: t.accent,
@@ -134,7 +134,7 @@
                     : { color: t.text, border: `1px solid ${t.borderStrong}` }
                 "
                 title="Terminal"
-                @click="terminalOpen = !terminalOpen"
+                @click="toggleTerminal"
               >
                 <TerminalSquare :size="13" />
                 Terminal
@@ -322,12 +322,16 @@
             </button>
           </div>
         </div>
+        <!-- One dock per project with an open terminal, kept mounted so its
+             shell + content persist across project switches; only the selected
+             project's dock is shown. -->
         <ProjectTerminalDock
-          v-if="terminalOpen"
-          :key="selectedProject.id"
-          :terminal-key="`proj:${selectedProject.id}`"
-          :workspace-root="selectedProject.path"
-          @close="terminalOpen = false"
+          v-for="pid in terminalProjectIds"
+          v-show="pid === selectedProject.id"
+          :key="pid"
+          :terminal-key="`proj:${pid}`"
+          :workspace-root="terminalPathOf(pid)"
+          @close="closeTerminal(pid)"
         />
       </div>
     </template>
@@ -391,7 +395,10 @@ const editing = ref(false)
 const searchQuery = ref('')
 const confirmDelete = ref<Project | null>(null)
 const mobilePane = ref<'list' | 'detail'>('list')
-const terminalOpen = ref(false)
+// Projects whose terminal is open. One dock stays mounted per id (v-show'd by
+// selection) so a project's terminal — shell + typed content — survives
+// switching to another project and back.
+const terminalProjectIds = ref<string[]>([])
 
 const busy = ref(false)
 const busyLabel = ref('')
@@ -429,6 +436,22 @@ if (sidecar.available) {
 const selectedProject = computed<Project | null>(
   () => ws.projects.find((p) => p.id === selectedId.value) ?? null,
 )
+
+// ── Per-project terminal ──
+const terminalPathOf = (id: string): string => ws.projects.find((p) => p.id === id)?.path ?? ''
+const isTerminalOpen = computed(
+  () => !!selectedProject.value && terminalProjectIds.value.includes(selectedProject.value.id),
+)
+const toggleTerminal = () => {
+  const id = selectedProject.value?.id
+  if (!id) return
+  terminalProjectIds.value = terminalProjectIds.value.includes(id)
+    ? terminalProjectIds.value.filter((x) => x !== id)
+    : [...terminalProjectIds.value, id]
+}
+const closeTerminal = (id: string) => {
+  terminalProjectIds.value = terminalProjectIds.value.filter((x) => x !== id)
+}
 
 const filtered = computed(() => {
   const q = searchQuery.value.toLowerCase()
