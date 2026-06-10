@@ -66,6 +66,8 @@ Một "project" trong AWOG thường là **folder workspace chứa nhiều repo 
 - **Header** tối giản: breadcrumb `[project] / [repo?] / [branch]` (repo dropdown chỉ khi >1 repo) + cụm action Fetch/Pull/Push bên phải. Ahead/behind chỉ hiển thị **trên nút** Pull/Push (không lặp ở giữa). Các selector `whitespace-nowrap` + truncate để không vỡ layout khi tên dài.
 - **Sidebar Branches** — gom branch theo prefix `/` thành folder gập được (vd `sora-hoa/*` → folder `sora-hoa`); chuỗi 1-con collapse phẳng (collapse singleton). **Folder mặc định đóng** (track tập folder user đã mở). Branch hiện tại tô **accent + đậm** (prop `highlight` của [`GitSidebarItem.vue`](../../apps/desktop/ui/components/git/GitSidebarItem.vue)). Logic build tree: [`utils/branch-tree.ts`](../../apps/desktop/ui/utils/branch-tree.ts).
 - **Changes list** — toggle **tree / flat** ở header (mặc định tree, nhớ qua localStorage `awog.git.changes.view`). Tree gom file theo folder (collapse single-child dir chains, **mặc định mở**); flat giữ nguyên virtual-scroll cho > 200 file. Stage all / Unstage all là icon button. Build tree dùng chung [`utils/file-path-tree.ts`](../../apps/desktop/ui/utils/file-path-tree.ts) (cũng dùng cho commit-detail file tree).
+- **Folder checkbox (tree view)** — mỗi dir row có checkbox tri-state (checked = mọi file con đã stage, indeterminate = stage một phần, unchecked = chưa stage); click stage/unstage cả folder (lặp per-file `stageFile`/`unstageFile`, giống Stage all). Áp dụng cho cả section Staged (để unstage theo folder).
+- **Discard hàng loạt** (AC-10b) — nút **Discard all** (icon thùng rác, hiện khi hover) trên header mỗi section non-staged (Changes / Untracked / Conflicted) discard toàn bộ file trong section; nút **Discard folder** trên dir row (tree view) discard mọi file dưới folder; context-menu file có thêm mục "Discard all ({count})". Tất cả đi qua một confirm dialog count-aware + dùng chung action `discardPaths(paths)` của store (một IPC `git.discardFile` batch — checkout file tracked, unlink file untracked). KHÔNG áp dụng cho section Staged.
 
 ## Scope MVP
 
@@ -342,6 +344,12 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 - **When** user click action menu "Discard changes" trên file → confirm dialog.
 - **Then** sidecar chạy `git checkout -- <path>` (hoặc `git restore <path>`); file biến khỏi list; KHÔNG có undo.
 - Confirm dialog có copy: "Sẽ xóa vĩnh viễn change uncommitted của <path>. Tiếp tục?"
+
+**AC-10b: Discard hàng loạt (section / folder)**
+- **Given** section non-staged (Changes / Untracked / Conflicted) hoặc một folder trong tree view có ≥ 1 file.
+- **When** user click **Discard all** ở header section / **Discard folder** ở dir row / "Discard all ({count})" trong context-menu → confirm dialog count-aware ("{count} thay đổi chưa commit trong '{target}' sẽ mất vĩnh viễn. Tiếp tục?").
+- **Then** store gọi `discardPaths(paths)` → một IPC `git.discardFile` batch (checkout tracked + unlink untracked); các file biến khỏi list; rollback optimistic nếu IPC lỗi.
+- Section **Staged** KHÔNG có discard hàng loạt (chỉ unstage all).
 
 ### Nhóm 2 — Diff viewer
 

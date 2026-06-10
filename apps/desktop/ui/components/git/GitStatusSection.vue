@@ -1,52 +1,87 @@
 <template>
   <div class="px-1 pb-1">
-    <button
-      class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
+    <div
+      class="group w-full px-3 py-1.5 flex items-center gap-1.5 transition"
       :style="{
         color: t.textDim,
         background: hover ? t.bgHover : 'transparent',
       }"
-      @click="collapsed = !collapsed"
       @mouseenter="hover = true"
       @mouseleave="hover = false"
     >
-      <ChevronDown
-        :size="10"
-        :style="{
-          transform: collapsed ? 'rotate(-90deg)' : 'none',
-          transition: 'transform 0.15s',
-        }"
-      />
-      <span class="text-[1em] uppercase tracking-wider font-medium flex-1 text-left truncate">
-        {{ label }}
-      </span>
-      <span class="text-[1em]" :style="{ color: t.textFaint }">
+      <button
+        class="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+        @click="collapsed = !collapsed"
+      >
+        <ChevronDown
+          :size="10"
+          :style="{
+            transform: collapsed ? 'rotate(-90deg)' : 'none',
+            transition: 'transform 0.15s',
+          }"
+        />
+        <span class="text-[1em] uppercase tracking-wider font-medium truncate">
+          {{ label }}
+        </span>
+      </button>
+      <span class="text-[1em] flex-shrink-0" :style="{ color: t.textFaint }">
         {{ files.length }}
       </span>
-    </button>
+      <button
+        v-if="!isStagedSection && files.length > 0"
+        class="opacity-0 group-hover:opacity-100 transition p-1 rounded flex-shrink-0"
+        :title="tr('git.status.discard_all')"
+        :style="{ color: t.textDim }"
+        @click.stop="emit('discard-all', allPaths, label)"
+      >
+        <Trash2 :size="11" />
+      </button>
+    </div>
     <template v-if="!collapsed">
       <!-- Tree view: folder-grouped (collapse single-child dir chains). -->
       <template v-if="viewMode === 'tree'">
         <template v-for="row in treeRows" :key="row.id">
-          <button
+          <div
             v-if="row.kind === 'dir'"
-            class="w-full flex items-center gap-1 px-3 py-1.5 text-left transition truncate"
+            class="group/dir w-full flex items-center gap-1 px-3 py-1.5 transition"
             :style="{
               paddingLeft: `${12 + row.depth * 12}px`,
               color: t.textMuted,
-              background: 'transparent',
             }"
-            @click="toggleDir(row.path)"
           >
-            <ChevronDown
-              v-if="!collapsedDirs.has(row.path)"
-              :size="10"
-              :style="{ color: t.textFaint, flexShrink: 0 }"
+            <input
+              v-if="showStage"
+              type="checkbox"
+              class="cursor-pointer flex-shrink-0"
+              :checked="dirStageState(row.path) === 'all'"
+              :indeterminate="dirStageState(row.path) === 'some'"
+              :style="{ accentColor: t.accent }"
+              @click.stop
+              @change="onToggleDirStage(row.path)"
             />
-            <ChevronRight v-else :size="10" :style="{ color: t.textFaint, flexShrink: 0 }" />
-            <Folder :size="12" :style="{ color: t.textDim, flexShrink: 0 }" />
-            <span class="text-[1em] truncate font-mono">{{ row.label }}</span>
-          </button>
+            <button
+              class="flex items-center gap-1 flex-1 min-w-0 text-left"
+              @click="toggleDir(row.path)"
+            >
+              <ChevronDown
+                v-if="!collapsedDirs.has(row.path)"
+                :size="10"
+                :style="{ color: t.textFaint, flexShrink: 0 }"
+              />
+              <ChevronRight v-else :size="10" :style="{ color: t.textFaint, flexShrink: 0 }" />
+              <Folder :size="12" :style="{ color: t.textDim, flexShrink: 0 }" />
+              <span class="text-[1em] truncate font-mono">{{ row.label }}</span>
+            </button>
+            <button
+              v-if="!isStagedSection"
+              class="opacity-0 group-hover/dir:opacity-100 transition p-1 rounded flex-shrink-0"
+              :title="tr('git.menu.discard_folder')"
+              :style="{ color: t.textDim }"
+              @click.stop="emit('discard-folder', descendantPaths(row.path), row.label)"
+            >
+              <Trash2 :size="11" />
+            </button>
+          </div>
           <div
             v-else
             class="group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition"
@@ -216,12 +251,40 @@ const emit = defineEmits<{
   stage: [path: string]
   unstage: [path: string]
   discard: [path: string]
+  'discard-all': [paths: string[], target: string]
+  'discard-folder': [paths: string[], target: string]
+  'stage-folder': [paths: string[]]
+  'unstage-folder': [paths: string[]]
   'context-menu': [event: MouseEvent, file: GitFileStatus]
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const collapsed = ref(false)
 const hover = ref(false)
+
+// Paths owned by this whole section (used by the header "discard all" button).
+const allPaths = computed(() => props.files.map((f) => f.path))
+
+// Files under a tree directory row — `dirPath` is the merged full path of the
+// (possibly collapsed) dir chain, so descendants match the `dirPath/` prefix.
+const dirDescendants = (dirPath: string): GitFileStatus[] =>
+  props.files.filter((f) => f.path.startsWith(`${dirPath}/`))
+const descendantPaths = (dirPath: string): string[] => dirDescendants(dirPath).map((f) => f.path)
+
+// Tri-state of a folder's stage checkbox from its descendant files.
+const dirStageState = (dirPath: string): 'all' | 'some' | 'none' => {
+  const kids = dirDescendants(dirPath)
+  const staged = kids.filter((f) => f.isStaged).length
+  if (staged === 0) return 'none'
+  return staged === kids.length ? 'all' : 'some'
+}
+
+const onToggleDirStage = (dirPath: string) => {
+  const paths = descendantPaths(dirPath)
+  if (dirStageState(dirPath) === 'all') emit('unstage-folder', paths)
+  else emit('stage-folder', paths)
+}
 
 // ─── Tree view ─────────────────────────────────────────────────────────────
 // Dirs expanded by default (you want to see what changed); collapse on click.

@@ -74,6 +74,10 @@
         @stage="(p) => store.stageFile(p)"
         @unstage="(p) => store.unstageFile(p)"
         @discard="(p) => askDiscard(p)"
+        @discard-all="askDiscardMany"
+        @discard-folder="askDiscardMany"
+        @stage-folder="stageFolder"
+        @unstage-folder="unstageFolder"
         @context-menu="onFileContextMenu"
       />
 
@@ -89,6 +93,10 @@
         @stage="(p) => store.stageFile(p)"
         @unstage="(p) => store.unstageFile(p)"
         @discard="(p) => askDiscard(p)"
+        @discard-all="askDiscardMany"
+        @discard-folder="askDiscardMany"
+        @stage-folder="stageFolder"
+        @unstage-folder="unstageFolder"
         @context-menu="onFileContextMenu"
       />
 
@@ -103,6 +111,10 @@
         @stage="(p) => store.stageFile(p)"
         @unstage="(p) => store.unstageFile(p)"
         @discard="(p) => askDiscard(p)"
+        @discard-all="askDiscardMany"
+        @discard-folder="askDiscardMany"
+        @stage-folder="stageFolder"
+        @unstage-folder="unstageFolder"
         @context-menu="onFileContextMenu"
       />
 
@@ -117,6 +129,10 @@
         @stage="(p) => store.stageFile(p)"
         @unstage="(p) => store.unstageFile(p)"
         @discard="(p) => askDiscard(p)"
+        @discard-all="askDiscardMany"
+        @discard-folder="askDiscardMany"
+        @stage-folder="stageFolder"
+        @unstage-folder="unstageFolder"
         @context-menu="onFileContextMenu"
       />
     </div>
@@ -124,7 +140,14 @@
     <ConfirmDeleteModal
       v-if="pendingDiscard"
       :title="tr('git.discard.title')"
-      :description="tr('git.discard.description', { path: pendingDiscard })"
+      :description="
+        pendingDiscard.paths.length === 1
+          ? tr('git.discard.description', { path: pendingDiscard.target })
+          : tr('git.discard.description_batch', {
+              count: pendingDiscard.paths.length,
+              target: pendingDiscard.target,
+            })
+      "
       @confirm="confirmDiscard"
       @cancel="pendingDiscard = null"
     />
@@ -177,16 +200,20 @@ const modeBtnStyle = (mode: ChangesView) => ({
   cursor: 'pointer',
 })
 
-const pendingDiscard = ref<string | null>(null)
+// Discard confirmation — single file, a section ("discard all") or a folder all
+// flow through one modal. `target` labels what is being discarded in the prompt.
+const pendingDiscard = ref<{ paths: string[]; target: string } | null>(null)
 
 const askDiscard = (p: string) => {
-  pendingDiscard.value = p
+  pendingDiscard.value = { paths: [p], target: p }
+}
+
+const askDiscardMany = (paths: string[], target: string) => {
+  if (paths.length > 0) pendingDiscard.value = { paths, target }
 }
 
 const confirmDiscard = () => {
-  if (pendingDiscard.value) {
-    store.discardFile(pendingDiscard.value)
-  }
+  if (pendingDiscard.value) store.discardPaths(pendingDiscard.value.paths)
   pendingDiscard.value = null
 }
 
@@ -199,6 +226,11 @@ const stageAll = () => {
 const unstageAll = () => {
   store.stagedFiles.forEach((f: GitFileStatus) => store.unstageFile(f.path))
 }
+
+// Stage / unstage every file under a folder (tree-view folder checkbox). Loops
+// the per-file actions — same pattern as stage all, reuses optimistic logic.
+const stageFolder = (paths: string[]) => paths.forEach((p) => store.stageFile(p))
+const unstageFolder = (paths: string[]) => paths.forEach((p) => store.unstageFile(p))
 
 // ─── Context menu ──────────────────────────────────────────────────────────
 const contextMenu = ref<{ x: number; y: number; file: GitFileStatus } | null>(null)
@@ -297,6 +329,32 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
     items.push({ label: tr('git.menu.unstage_all'), icon: Undo2, action: unstageAll })
   } else if (!file.isStaged && hasAnyUnstaged) {
     items.push({ label: tr('git.menu.stage_all'), icon: Plus, action: stageAll })
+  }
+
+  // Bulk discard for the file's working-tree section (not offered for staged).
+  if (!file.isStaged) {
+    const group = file.hasConflict
+      ? store.conflictedFiles
+      : file.workTree === 'untracked'
+        ? store.untrackedFiles
+        : store.unstagedFiles
+    const sectionLabel = file.hasConflict
+      ? tr('git.status.conflicted')
+      : file.workTree === 'untracked'
+        ? tr('git.status.untracked')
+        : tr('git.status.changes')
+    if (group.length > 1) {
+      items.push({
+        label: tr('git.menu.discard_all', { count: group.length }),
+        icon: Trash2,
+        danger: true,
+        action: () =>
+          askDiscardMany(
+            group.map((f) => f.path),
+            sectionLabel,
+          ),
+      })
+    }
   }
 
   items.push({ separator: true })

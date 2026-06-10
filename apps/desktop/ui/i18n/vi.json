@@ -79,6 +79,7 @@
 
   "git.discard.title": "Discard thay đổi?",
   "git.discard.description": "Thay đổi chưa commit của '{path}' sẽ mất vĩnh viễn. Tiếp tục?",
+  "git.discard.description_batch": "{count} thay đổi chưa commit trong '{target}' sẽ mất vĩnh viễn. Tiếp tục?",
 
   "git.dirty_checkout.title": "Có thay đổi chưa commit",
   "git.dirty_checkout.message": "Workspace có thay đổi chưa commit. Chọn cách xử lý:",
@@ -134,6 +135,8 @@
   "git.menu.unstage": "Unstage",
   "git.menu.mark_resolved": "Đánh dấu đã resolved (stage)",
   "git.menu.discard": "Discard thay đổi…",
+  "git.menu.discard_all": "Discard tất cả ({count})",
+  "git.menu.discard_folder": "Discard thư mục",
   "git.menu.stage_all": "Stage tất cả",
   "git.menu.unstage_all": "Unstage tất cả",
   "git.menu.copy_rel_path": "Sao chép path tương đối",
@@ -295,6 +298,7 @@
   "git.status.conflicted": "Conflicted",
   "git.status.stage_all": "Stage tất cả",
   "git.status.unstage_all": "Unstage tất cả",
+  "git.status.discard_all": "Discard tất cả",
 
   "git.remotes.hint": "Cấu hình add/remove remote chưa có trong v1.",
   "git.stashes.hint": "Stash sẽ apply file vào working tree khi pop / apply.",

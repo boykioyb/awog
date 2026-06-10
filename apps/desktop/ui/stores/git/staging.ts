@@ -102,13 +102,21 @@ export function createGitStaging(ctx: GitActionCtx) {
     }
   }
 
-  const discardFile = async (path: string) => {
-    const snapshot = snapshotFile(path)
-    // Optimistic remove — after discard the file is gone from `git status`.
+  // Discard one or more paths in a single IPC round-trip. `git.discardFile`
+  // already batches (checkout tracked + unlink untracked), so bulk discard
+  // (section "discard all", folder discard) reuses it — no new RPC needed.
+  const discardPaths = async (paths: string[]) => {
+    if (paths.length === 0) return
+    const projectId = selectedProjectId.value
+    const pathSet = new Set(paths)
+    // Snapshot every matched file so we can roll back the optimistic removal.
+    const snapshots = statusFilesAll.value
+      .filter((f) => pathSet.has(f.path) && f.projectId === projectId)
+      .map((f) => ({ ...f }))
     statusFilesAll.value = statusFilesAll.value.filter(
-      (f) => !(f.path === path && f.projectId === selectedProjectId.value),
+      (f) => !(pathSet.has(f.path) && f.projectId === projectId),
     )
-    if (selectedFilePath.value === path) selectedFilePath.value = null
+    if (selectedFilePath.value && pathSet.has(selectedFilePath.value)) selectedFilePath.value = null
 
     const root = resolveWorkspaceRoot()
     if (!root) {
@@ -116,14 +124,21 @@ export function createGitStaging(ctx: GitActionCtx) {
       return
     }
     try {
-      await useGitApi().discardFile(root, [path])
+      await useGitApi().discardFile(root, paths)
     } catch (err) {
       if (isUnavailable(err)) return
-      if (snapshot) restoreFile(snapshot)
-      pushToast(`Discard thất bại: ${path}`, 'error')
+      statusFilesAll.value = [...statusFilesAll.value, ...snapshots]
+      pushToast(
+        paths.length === 1
+          ? `Discard thất bại: ${paths[0]}`
+          : `Discard thất bại: ${paths.length} file`,
+        'error',
+      )
       throw err
     }
   }
+
+  const discardFile = (path: string) => discardPaths([path])
 
   const selectFile = (path: string | null) => {
     selectedFilePath.value = path
@@ -310,6 +325,7 @@ export function createGitStaging(ctx: GitActionCtx) {
     stageFile,
     unstageFile,
     discardFile,
+    discardPaths,
     selectFile,
     selectCommit,
     setCommitMessage,

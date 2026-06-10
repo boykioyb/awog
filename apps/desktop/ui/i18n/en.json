@@ -79,6 +79,7 @@
 
   "git.discard.title": "Discard changes?",
   "git.discard.description": "Uncommitted changes for '{path}' will be permanently removed. Continue?",
+  "git.discard.description_batch": "{count} uncommitted changes under '{target}' will be permanently removed. Continue?",
 
   "git.dirty_checkout.title": "Uncommitted changes",
   "git.dirty_checkout.message": "Workspace has uncommitted changes. Choose how to proceed:",
@@ -134,6 +135,8 @@
   "git.menu.unstage": "Unstage",
   "git.menu.mark_resolved": "Mark resolved (stage)",
   "git.menu.discard": "Discard changes…",
+  "git.menu.discard_all": "Discard all ({count})",
+  "git.menu.discard_folder": "Discard folder",
   "git.menu.stage_all": "Stage all",
   "git.menu.unstage_all": "Unstage all",
   "git.menu.copy_rel_path": "Copy relative path",
@@ -295,6 +298,7 @@
   "git.status.conflicted": "Conflicted",
   "git.status.stage_all": "Stage all",
   "git.status.unstage_all": "Unstage all",
+  "git.status.discard_all": "Discard all",
 
   "git.remotes.hint": "Adding/removing remotes is not available in v1.",
   "git.stashes.hint": "Stash applies files into the working tree on pop / apply.",
