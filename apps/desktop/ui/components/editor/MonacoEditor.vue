@@ -30,6 +30,7 @@ const emit = defineEmits<{
   save: []
   ready: []
   'cursor-change': [pos: { line: number; column: number }]
+  'open-palette': [mode: 'file' | 'command']
 }>()
 
 const { t, themeName } = useTheme()
@@ -210,6 +211,12 @@ onMounted(async () => {
   })
 
   ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => emit('save'))
+  // Quick open / command palette — override Monaco's built-in quickCommand so the
+  // chord behaves the same whether focus is in the editor or elsewhere on the page.
+  ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, () => emit('open-palette', 'file'))
+  ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, () =>
+    emit('open-palette', 'command'),
+  )
 
   // Flush any opens requested before Monaco finished loading.
   pendingOpens.forEach((op) => ensureModel(op.path, op.content, op.language))

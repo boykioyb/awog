@@ -2,6 +2,7 @@
 // Owns explorer tree, open tabs, dirty/save, file ops, find-in-files, and the
 // project-wide watcher reconcile. The page stays a thin template. SoC: this
 // orchestrates state + IPC only — no direct fs access (everything via useFsApi).
+import { Files, GitBranch, Save, Search, TerminalSquare, X } from 'lucide-vue-next'
 import { inject, type InjectionKey } from 'vue'
 import type { UnlistenFn } from '~/composables/useSidecar'
 import type { FsEntry, FsSearchMatch, Project } from '~/types'
@@ -9,6 +10,7 @@ import { useFsApi, type FsSearchOptions } from '~/composables/useFsApi'
 import { useSidecar } from '~/composables/useSidecar'
 import { useWorkspaceStore } from '~/stores/workspace'
 import { useToasts } from '~/composables/useToasts'
+import type { PaletteCommand } from '~/composables/useCommandPalette'
 
 export type ActivityView = 'explorer' | 'search' | 'git'
 
@@ -49,6 +51,7 @@ export function useProjectWorkspace(projectId: string) {
   const fs = useFsApi()
   const sidecar = useSidecar()
   const ws = useWorkspaceStore()
+  const { t: tr } = useI18n()
   const { toasts, pushToast, toastStyle } = useToasts()
 
   const project = computed<Project | undefined>(() =>
@@ -74,7 +77,7 @@ export function useProjectWorkspace(projectId: string) {
       const res = await fs.listDir(workspaceRoot.value, path || undefined)
       childrenByPath[path] = res.entries
     } catch (err) {
-      pushToast(errMsg(err, 'Load thư mục thất bại'), 'error')
+      pushToast(errMsg(err, tr('code.toast.load_dir_failed')), 'error')
     }
   }
 
@@ -115,7 +118,7 @@ export function useProjectWorkspace(projectId: string) {
       const file = await fs.readFile(workspaceRoot.value, path)
       if (file.isBinary) {
         await sidecar.openPath(workspaceRoot.value, path).catch(() => undefined)
-        pushToast('Binary file — mở bằng ứng dụng ngoài', 'info')
+        pushToast(tr('code.toast.binary_external'), 'info')
         return
       }
       const tab: OpenTab = {
@@ -131,7 +134,7 @@ export function useProjectWorkspace(projectId: string) {
       editorRef.value?.openFile(path, file.content, file.language)
       activePath.value = path
     } catch (err) {
-      pushToast(errMsg(err, 'Mở file thất bại'), 'error')
+      pushToast(errMsg(err, tr('code.toast.open_failed')), 'error')
     }
   }
 
@@ -154,7 +157,7 @@ export function useProjectWorkspace(projectId: string) {
       savedContent.set(path, value)
       tab.dirty = false
     } catch (err) {
-      pushToast(errMsg(err, 'Lưu thất bại'), 'error')
+      pushToast(errMsg(err, tr('code.toast.save_failed')), 'error')
     }
   }
 
@@ -202,7 +205,7 @@ export function useProjectWorkspace(projectId: string) {
       expanded[dir] = true
       await openFile(path)
     } catch (err) {
-      pushToast(errMsg(err, 'Tạo file thất bại'), 'error')
+      pushToast(errMsg(err, tr('code.toast.create_file_failed')), 'error')
     }
   }
 
@@ -213,7 +216,7 @@ export function useProjectWorkspace(projectId: string) {
       await loadDir(dir)
       expanded[dir] = true
     } catch (err) {
-      pushToast(errMsg(err, 'Tạo thư mục thất bại'), 'error')
+      pushToast(errMsg(err, tr('code.toast.create_dir_failed')), 'error')
     }
   }
 
@@ -229,7 +232,7 @@ export function useProjectWorkspace(projectId: string) {
       }
       await loadDir(parent)
     } catch (err) {
-      pushToast(errMsg(err, 'Đổi tên thất bại'), 'error')
+      pushToast(errMsg(err, tr('code.toast.rename_failed')), 'error')
     }
   }
 
@@ -239,7 +242,7 @@ export function useProjectWorkspace(projectId: string) {
       if (findTab(path)) closeTab(path)
       await loadDir(dirName(path))
     } catch (err) {
-      pushToast(errMsg(err, 'Xóa thất bại'), 'error')
+      pushToast(errMsg(err, tr('code.toast.delete_failed')), 'error')
     }
   }
 
@@ -249,10 +252,16 @@ export function useProjectWorkspace(projectId: string) {
     regex: false,
     caseSensitive: false,
     wholeWord: false,
+    includeGlob: '',
+    excludeGlob: '',
   })
   const searchResults = ref<FsSearchMatch[]>([])
   const searchTruncated = ref(false)
   const searching = ref(false)
+  // Monotonic token so an out-of-order search response can't clobber a newer one
+  // (type "foo" then "foobar" fast → "foo" must not overwrite "foobar" results).
+  let searchSeq = 0
+  let searchTimer: ReturnType<typeof setTimeout> | null = null
 
   const searchGroups = computed<SearchGroup[]>(() => {
     const map = new Map<string, FsSearchMatch[]>()
@@ -270,17 +279,49 @@ export function useProjectWorkspace(projectId: string) {
       searchTruncated.value = false
       return
     }
+    const seq = ++searchSeq
     searching.value = true
+    // Empty glob strings are invalid backend params (z.string().min(1)) — only
+    // forward globs the user actually typed.
+    const opts: FsSearchOptions = {
+      regex: searchOpts.regex,
+      caseSensitive: searchOpts.caseSensitive,
+      wholeWord: searchOpts.wholeWord,
+    }
+    if (searchOpts.includeGlob?.trim()) opts.includeGlob = searchOpts.includeGlob.trim()
+    if (searchOpts.excludeGlob?.trim()) opts.excludeGlob = searchOpts.excludeGlob.trim()
     try {
-      const res = await fs.search(workspaceRoot.value, searchQuery.value, { ...searchOpts })
+      const res = await fs.search(workspaceRoot.value, searchQuery.value, opts)
+      if (seq !== searchSeq) return // a newer search superseded this one
       searchResults.value = res.matches
       searchTruncated.value = res.truncated
     } catch (err) {
-      pushToast(errMsg(err, 'Tìm kiếm thất bại'), 'error')
+      if (seq !== searchSeq) return
+      pushToast(errMsg(err, tr('code.toast.search_failed')), 'error')
     } finally {
-      searching.value = false
+      if (seq === searchSeq) searching.value = false
     }
   }
+
+  // Live search: re-run (debounced) on query / option changes. The `{ ...opts }`
+  // getter reads every searchOpts field so toggles + globs all trigger it.
+  watch([searchQuery, () => ({ ...searchOpts })], () => {
+    if (searchTimer) {
+      clearTimeout(searchTimer)
+      searchTimer = null
+    }
+    if (searchQuery.value.trim().length === 0) {
+      searchSeq++ // discard any in-flight response
+      searchResults.value = []
+      searchTruncated.value = false
+      searching.value = false
+      return
+    }
+    searchTimer = setTimeout(() => {
+      searchTimer = null
+      runSearch()
+    }, 250)
+  })
 
   async function openMatch(match: FsSearchMatch): Promise<void> {
     await openFile(match.path)
@@ -311,10 +352,7 @@ export function useProjectWorkspace(projectId: string) {
     )
     const conflicts = tabs.value.filter((tt) => changed.has(tt.path) && tt.dirty)
     if (conflicts.length > 0) {
-      pushToast(
-        `${conflicts.length} file đổi ngoài app khi đang sửa — kiểm tra trước khi lưu`,
-        'info',
-      )
+      pushToast(tr('code.toast.external_change', { count: conflicts.length }), 'info')
     }
   }
 
@@ -343,11 +381,84 @@ export function useProjectWorkspace(projectId: string) {
     await startWatch()
   }
 
+  // ── Command palette / quick open ────────────────────────────────────────────
+  const paletteOpen = ref(false)
+  const paletteMode = ref<'file' | 'command'>('file')
+
+  const openPalette = (m: 'file' | 'command' = 'file'): void => {
+    if (paletteOpen.value) return // ignore re-trigger while open (use `>` to switch mode)
+    paletteMode.value = m
+    paletteOpen.value = true
+  }
+  const closePalette = (): void => {
+    paletteOpen.value = false
+  }
+
+  // Actions for command mode — co-located with the handlers they call. Computed
+  // so labels re-translate if the locale changes while the workspace is open.
+  const paletteCommands = computed<PaletteCommand[]>(() => [
+    { id: 'save', label: tr('code.cmd.save'), icon: Save, run: () => void saveFile() },
+    {
+      id: 'closeTab',
+      label: tr('code.cmd.close_tab'),
+      icon: X,
+      run: () => {
+        if (activePath.value) requestCloseTab(activePath.value)
+      },
+    },
+    {
+      id: 'toggleTerminal',
+      label: tr('code.cmd.toggle_terminal'),
+      icon: TerminalSquare,
+      run: () => {
+        terminalOpen.value = !terminalOpen.value
+      },
+    },
+    {
+      id: 'showExplorer',
+      label: tr('code.cmd.show_explorer'),
+      icon: Files,
+      run: () => {
+        activity.value = 'explorer'
+      },
+    },
+    {
+      id: 'showSearch',
+      label: tr('code.cmd.find_in_files'),
+      icon: Search,
+      run: () => {
+        activity.value = 'search'
+      },
+    },
+    {
+      id: 'showGit',
+      label: tr('code.cmd.source_control'),
+      icon: GitBranch,
+      run: () => {
+        activity.value = 'git'
+      },
+    },
+  ])
+
+  // Cmd/Ctrl+P → quick open; Cmd/Ctrl+Shift+P → command palette. Capture phase so
+  // we beat Monaco's own bindings + the browser print dialog; bail on IME compose
+  // (the user types Vietnamese, so a composition keystroke must never hijack).
+  const onGlobalKeydown = (e: KeyboardEvent): void => {
+    if (e.isComposing || e.keyCode === 229) return
+    if (e.code !== 'KeyP' || e.altKey || !(e.metaKey || e.ctrlKey)) return
+    e.preventDefault()
+    e.stopPropagation()
+    openPalette(e.shiftKey ? 'command' : 'file')
+  }
+
   onMounted(async () => {
+    window.addEventListener('keydown', onGlobalKeydown, true)
     await ws.hydrateProjectsFromSidecar()
     if (ready.value) await boot()
   })
   onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onGlobalKeydown, true)
+    if (searchTimer) clearTimeout(searchTimer)
     stopWatch().catch(() => undefined)
   })
   // Projects may hydrate after mount (race) — boot when the root resolves.
@@ -398,6 +509,12 @@ export function useProjectWorkspace(projectId: string) {
     searching,
     runSearch,
     openMatch,
+    // command palette / quick open
+    paletteOpen,
+    paletteMode,
+    paletteCommands,
+    openPalette,
+    closePalette,
     // toasts
     toasts,
     toastStyle,

@@ -96,208 +96,239 @@
         @save="handleSave"
         @cancel="editing = false"
       />
-      <div v-else-if="selectedProject" class="p-4 md:p-6">
-        <div class="flex items-start gap-3 mb-6">
-          <div
-            class="w-12 h-12 rounded flex items-center justify-center"
-            :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
-          >
-            <FolderGit2 :size="20" :style="{ color: t.textMuted }" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">
-              {{ selectedProject.name }}
-            </h1>
-            <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
-              {{ selectedProject.path }}
+      <div v-else-if="selectedProject" class="flex flex-col h-full min-h-0">
+        <div class="flex-1 overflow-y-auto p-4 md:p-6">
+          <div class="flex items-start gap-3 mb-6">
+            <div
+              class="w-12 h-12 rounded flex items-center justify-center"
+              :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
+            >
+              <FolderGit2 :size="20" :style="{ color: t.textMuted }" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">
+                {{ selectedProject.name }}
+              </h1>
+              <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
+                {{ selectedProject.path }}
+              </div>
+            </div>
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <button
+                class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+                :style="{ background: t.accent, color: t.accentText }"
+                @click="openInEditor(selectedProject.id)"
+              >
+                <Code2 :size="13" />
+                Open in Editor
+              </button>
+              <button
+                class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+                :style="
+                  terminalOpen
+                    ? {
+                        background: t.bgActive,
+                        color: t.accent,
+                        border: `1px solid ${t.borderStrong}`,
+                      }
+                    : { color: t.text, border: `1px solid ${t.borderStrong}` }
+                "
+                title="Terminal"
+                @click="terminalOpen = !terminalOpen"
+              >
+                <TerminalSquare :size="13" />
+                Terminal
+              </button>
+              <button
+                class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+                :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+                @click="editing = true"
+              >
+                <Edit3 :size="11" />
+                Edit
+              </button>
+              <button
+                class="p-1.5 rounded transition"
+                :style="{ color: t.textDim }"
+                @click="confirmDelete = selectedProject"
+              >
+                <Trash2 :size="13" />
+              </button>
             </div>
           </div>
-          <div class="flex items-center gap-1 flex-shrink-0">
-            <button
-              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-              :style="{ background: t.accent, color: t.accentText }"
-              @click="openInEditor(selectedProject.id)"
-            >
-              <Code2 :size="13" />
-              Open in Editor
-            </button>
-            <button
-              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-              :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
-              @click="editing = true"
-            >
-              <Edit3 :size="11" />
-              Edit
-            </button>
-            <button
-              class="p-1.5 rounded transition"
-              :style="{ color: t.textDim }"
-              @click="confirmDelete = selectedProject"
-            >
-              <Trash2 :size="13" />
-            </button>
-          </div>
-        </div>
 
-        <div
-          v-if="selectedProject.description"
-          class="mb-6 text-[1em] leading-relaxed"
-          :style="{ color: t.textMuted }"
-        >
-          {{ selectedProject.description }}
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-6">
-          <ProjectMeta :icon="GitBranch" label="Branch" :value="selectedProject.gitBranch" mono />
-          <ProjectMeta :icon="Code2" label="Language" :value="selectedProject.language" />
-          <ProjectMeta
-            :icon="Clock"
-            label="Created"
-            :value="formatTime(selectedProject.createdAt)"
-          />
-        </div>
-
-        <div
-          v-if="selectedProject.gitRemote"
-          class="mb-6 rounded p-3"
-          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-        >
           <div
-            class="text-[1em] uppercase tracking-wider font-medium mb-2"
-            :style="{ color: t.textDim }"
+            v-if="selectedProject.description"
+            class="mb-6 text-[1em] leading-relaxed"
+            :style="{ color: t.textMuted }"
           >
-            Git Remote
+            {{ selectedProject.description }}
           </div>
-          <div class="flex items-center gap-2">
-            <GitFork :size="12" :style="{ color: t.textDim }" />
-            <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
-              {{ selectedProject.gitRemote }}
-            </span>
-            <button class="px-2 py-0.5 text-[1em] rounded transition" :style="{ color: t.textDim }">
-              Open
-            </button>
-          </div>
-        </div>
 
-        <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
-          <div
-            class="text-[1em] uppercase tracking-wider font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Sessions · {{ projectSessions.length }}
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-6">
+            <ProjectMeta :icon="GitBranch" label="Branch" :value="selectedProject.gitBranch" mono />
+            <ProjectMeta :icon="Code2" label="Language" :value="selectedProject.language" />
+            <ProjectMeta
+              :icon="Clock"
+              label="Created"
+              :value="formatTime(selectedProject.createdAt)"
+            />
           </div>
-          <button
-            class="px-2.5 py-1 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-            :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
-            title="New session for this project"
-            @click="startSessionForProject"
-          >
-            <Plus :size="12" />
-            New session
-          </button>
-        </div>
-        <div
-          v-if="projectSessions.length === 0"
-          class="text-[1em] py-4 mb-6"
-          :style="{ color: t.textFaint }"
-        >
-          No sessions yet for this project
-        </div>
-        <div v-else class="space-y-1.5 mb-6">
-          <button
-            v-for="ses in projectSessions"
-            :key="ses.id"
-            class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
+
+          <div
+            v-if="selectedProject.gitRemote"
+            class="mb-6 rounded p-3"
             :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-            @click="openSession(ses.id)"
           >
-            <MessageSquare :size="12" :style="{ color: t.textDim, marginTop: '2px' }" />
-            <div class="flex-1 min-w-0">
-              <div class="text-[1em] truncate" :style="{ color: t.text }">
-                {{ ses.title }}
-              </div>
-              <div
-                class="text-[1em] mt-0.5 flex items-center gap-1.5"
+            <div
+              class="text-[1em] uppercase tracking-wider font-medium mb-2"
+              :style="{ color: t.textDim }"
+            >
+              Git Remote
+            </div>
+            <div class="flex items-center gap-2">
+              <GitFork :size="12" :style="{ color: t.textDim }" />
+              <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
+                {{ selectedProject.gitRemote }}
+              </span>
+              <button
+                class="px-2 py-0.5 text-[1em] rounded transition"
                 :style="{ color: t.textDim }"
               >
-                <span>{{ formatTime(ses.updatedAt) }}</span>
-                <span :style="{ color: t.textFaint }">·</span>
-                <span>{{ ses.messages.length }} msg</span>
-                <template v-if="ses.invitedAgentIds.length">
-                  <span :style="{ color: t.textFaint }">·</span>
-                  <span>
-                    {{ ses.invitedAgentIds.length }} agent{{
-                      ses.invitedAgentIds.length > 1 ? 's' : ''
-                    }}
-                  </span>
-                </template>
-              </div>
+                Open
+              </button>
             </div>
-            <ExternalLink :size="11" :style="{ color: t.textDim, marginTop: '2px' }" />
-          </button>
-        </div>
+          </div>
 
-        <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
-          <div
-            class="text-[1em] uppercase tracking-wider font-medium"
-            :style="{ color: t.textDim }"
-          >
-            Tasks · {{ projectTaskStats.total }}
-          </div>
-          <div class="flex items-center gap-3 text-[1em]" :style="{ color: t.textDim }">
-            <span v-if="projectTaskStats.running > 0" class="inline-flex items-center gap-1">
-              <Circle :size="8" class="animate-pulse" :style="{ color: t.text, fill: t.text }" />
-              {{ projectTaskStats.running }} running
-            </span>
-            <span v-if="projectTaskStats.waiting > 0" class="inline-flex items-center gap-1">
-              <AlertCircle :size="9" :style="{ color: t.warning }" />
-              {{ projectTaskStats.waiting }} waiting
-            </span>
-            <span v-if="projectTaskStats.completed > 0">{{ projectTaskStats.completed }} done</span>
-          </div>
-        </div>
-        <div
-          v-if="projectTasks.length === 0"
-          class="text-[1em] py-4"
-          :style="{ color: t.textFaint }"
-        >
-          No tasks yet for this project
-        </div>
-        <div v-else class="space-y-1.5">
-          <button
-            v-for="tk in projectTasks"
-            :key="tk.id"
-            class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
-            :style="{
-              background: t.bgElevated,
-              border: `1px solid ${t.border}`,
-            }"
-            @click="openTask(tk.id)"
-          >
-            <component
-              :is="STATUS_META[tk.status].icon"
-              :size="12"
-              :class="tk.status === 'running' ? 'animate-pulse' : ''"
-              :style="{
-                color: statusColor(tk),
-                marginTop: '2px',
-                fill: tk.status === 'completed' ? statusColor(tk) : 'none',
-              }"
-            />
-            <div class="flex-1 min-w-0">
-              <div class="flex items-baseline gap-2 mb-0.5 flex-wrap">
-                <span class="text-[1em] font-mono" :style="{ color: t.textFaint }">
-                  {{ tk.id }}
-                </span>
-                <span class="text-[1em]" :style="{ color: t.textFaint }">{{ tk.createdAt }}</span>
-              </div>
-              <div class="text-[1em]" :style="{ color: t.text }">
-                {{ tk.title }}
-              </div>
+          <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
+            <div
+              class="text-[1em] uppercase tracking-wider font-medium"
+              :style="{ color: t.textDim }"
+            >
+              Sessions · {{ projectSessions.length }}
             </div>
-            <ExternalLink :size="11" :style="{ color: t.textDim, marginTop: '2px' }" />
-          </button>
+            <button
+              class="px-2.5 py-1 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+              :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+              title="New session for this project"
+              @click="startSessionForProject"
+            >
+              <Plus :size="12" />
+              New session
+            </button>
+          </div>
+          <div
+            v-if="projectSessions.length === 0"
+            class="text-[1em] py-4 mb-6"
+            :style="{ color: t.textFaint }"
+          >
+            No sessions yet for this project
+          </div>
+          <div v-else class="space-y-1.5 mb-6">
+            <button
+              v-for="ses in projectSessions"
+              :key="ses.id"
+              class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
+              :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+              @click="openSession(ses.id)"
+            >
+              <MessageSquare :size="12" :style="{ color: t.textDim, marginTop: '2px' }" />
+              <div class="flex-1 min-w-0">
+                <div class="text-[1em] truncate" :style="{ color: t.text }">
+                  {{ ses.title }}
+                </div>
+                <div
+                  class="text-[1em] mt-0.5 flex items-center gap-1.5"
+                  :style="{ color: t.textDim }"
+                >
+                  <span>{{ formatTime(ses.updatedAt) }}</span>
+                  <span :style="{ color: t.textFaint }">·</span>
+                  <span>{{ ses.messages.length }} msg</span>
+                  <template v-if="ses.invitedAgentIds.length">
+                    <span :style="{ color: t.textFaint }">·</span>
+                    <span>
+                      {{ ses.invitedAgentIds.length }} agent{{
+                        ses.invitedAgentIds.length > 1 ? 's' : ''
+                      }}
+                    </span>
+                  </template>
+                </div>
+              </div>
+              <ExternalLink :size="11" :style="{ color: t.textDim, marginTop: '2px' }" />
+            </button>
+          </div>
+
+          <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
+            <div
+              class="text-[1em] uppercase tracking-wider font-medium"
+              :style="{ color: t.textDim }"
+            >
+              Tasks · {{ projectTaskStats.total }}
+            </div>
+            <div class="flex items-center gap-3 text-[1em]" :style="{ color: t.textDim }">
+              <span v-if="projectTaskStats.running > 0" class="inline-flex items-center gap-1">
+                <Circle :size="8" class="animate-pulse" :style="{ color: t.text, fill: t.text }" />
+                {{ projectTaskStats.running }} running
+              </span>
+              <span v-if="projectTaskStats.waiting > 0" class="inline-flex items-center gap-1">
+                <AlertCircle :size="9" :style="{ color: t.warning }" />
+                {{ projectTaskStats.waiting }} waiting
+              </span>
+              <span v-if="projectTaskStats.completed > 0">
+                {{ projectTaskStats.completed }} done
+              </span>
+            </div>
+          </div>
+          <div
+            v-if="projectTasks.length === 0"
+            class="text-[1em] py-4"
+            :style="{ color: t.textFaint }"
+          >
+            No tasks yet for this project
+          </div>
+          <div v-else class="space-y-1.5">
+            <button
+              v-for="tk in projectTasks"
+              :key="tk.id"
+              class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
+              :style="{
+                background: t.bgElevated,
+                border: `1px solid ${t.border}`,
+              }"
+              @click="openTask(tk.id)"
+            >
+              <component
+                :is="STATUS_META[tk.status].icon"
+                :size="12"
+                :class="tk.status === 'running' ? 'animate-pulse' : ''"
+                :style="{
+                  color: statusColor(tk),
+                  marginTop: '2px',
+                  fill: tk.status === 'completed' ? statusColor(tk) : 'none',
+                }"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-baseline gap-2 mb-0.5 flex-wrap">
+                  <span class="text-[1em] font-mono" :style="{ color: t.textFaint }">
+                    {{ tk.id }}
+                  </span>
+                  <span class="text-[1em]" :style="{ color: t.textFaint }">{{ tk.createdAt }}</span>
+                </div>
+                <div class="text-[1em]" :style="{ color: t.text }">
+                  {{ tk.title }}
+                </div>
+              </div>
+              <ExternalLink :size="11" :style="{ color: t.textDim, marginTop: '2px' }" />
+            </button>
+          </div>
         </div>
+        <ProjectTerminalDock
+          v-if="terminalOpen"
+          :key="selectedProject.id"
+          :terminal-key="`proj:${selectedProject.id}`"
+          :workspace-root="selectedProject.path"
+          @close="terminalOpen = false"
+        />
       </div>
     </template>
 
@@ -337,9 +368,11 @@ import {
   MessageSquare,
   MoreHorizontal,
   Plus,
+  TerminalSquare,
   Trash2,
 } from 'lucide-vue-next'
 import type { Project, Session, Task } from '~/types'
+import ProjectTerminalDock from '~/components/workspace/ProjectTerminalDock.vue'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import type { ProjectEditorSavePayload } from '~/components/project/types'
 import { STATUS_META } from '~/utils/status-meta'
@@ -358,6 +391,7 @@ const editing = ref(false)
 const searchQuery = ref('')
 const confirmDelete = ref<Project | null>(null)
 const mobilePane = ref<'list' | 'detail'>('list')
+const terminalOpen = ref(false)
 
 const busy = ref(false)
 const busyLabel = ref('')

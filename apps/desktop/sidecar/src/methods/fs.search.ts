@@ -22,7 +22,7 @@ import type { FsSearchMatch } from '../types/shared.js'
 // Security: query passed via `-e <query> --` (operand, never a flag / shell
 // string); cwd = workspaceRoot; pathspecs validated by git (rejects `../`).
 
-const DEFAULT_MAX_RESULTS = 500
+const DEFAULT_MAX_RESULTS = 1000
 const HARD_MAX_RESULTS = 5000
 const MAX_QUERY_LEN = 1000
 const PREVIEW_CAP = 400
@@ -89,6 +89,13 @@ async function tryGitGrep(
   args.push('-e', opts.query, '--')
   if (opts.includeGlob) args.push(`:(glob)${opts.includeGlob}`)
   if (opts.excludeGlob) args.push(`:(exclude,glob)${opts.excludeGlob}`)
+  // `--no-index` ignores .gitignore, so a non-repo / multi-repo-container root
+  // would otherwise return node_modules/dist/.git junk. Exclude the same dirs the
+  // file index + literal walk already skip (SKIP_DIRS) so results stay relevant.
+  // (`--exclude-standard` is NOT valid with `--no-index`; `:(exclude)` pathspecs are.)
+  if (noIndex) {
+    for (const dir of SKIP_DIRS) args.push(`:(exclude,glob)**/${dir}/**`)
+  }
 
   let res
   try {

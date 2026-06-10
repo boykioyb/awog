@@ -5,11 +5,11 @@
       class="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
       :style="{ background: t.bgPanel, borderBottom: `1px solid ${t.border}` }"
     >
-      <button type="button" :title="'Back to projects'" :style="iconBtn" @click="goBack">
+      <button type="button" :title="tr('code.back')" :style="iconBtn" @click="goBack">
         <ArrowLeft :size="14" />
       </button>
       <span class="text-[1em] font-medium" :style="{ color: t.text }">
-        {{ project?.name ?? 'Project' }}
+        {{ project?.name ?? tr('code.project') }}
       </span>
       <span v-if="project" class="text-[12px] font-mono truncate" :style="{ color: t.textFaint }">
         {{ project.path }}
@@ -25,7 +25,7 @@
       >
         <button
           type="button"
-          :title="'Explorer'"
+          :title="tr('code.explorer')"
           :style="activityBtn('explorer')"
           @click="activity = 'explorer'"
         >
@@ -33,7 +33,7 @@
         </button>
         <button
           type="button"
-          :title="'Search'"
+          :title="tr('code.search')"
           :style="activityBtn('search')"
           @click="activity = 'search'"
         >
@@ -41,7 +41,7 @@
         </button>
         <button
           type="button"
-          :title="'Source Control'"
+          :title="tr('code.source_control')"
           :style="activityBtn('git')"
           @click="activity = 'git'"
         >
@@ -49,7 +49,7 @@
         </button>
         <button
           type="button"
-          :title="'Toggle terminal'"
+          :title="tr('code.toggle_terminal')"
           class="mt-auto"
           :style="{
             padding: '8px',
@@ -83,27 +83,35 @@
             @change="onEditorChange"
             @cursor-change="onCursorChange"
             @save="() => saveFile()"
+            @open-palette="openPalette"
           />
           <div
             v-if="tabs.length === 0"
             class="absolute inset-0 flex flex-col items-center justify-center gap-2"
           >
             <FileCode :size="40" :stroke-width="1.5" :style="{ color: t.textFaint }" />
-            <p class="text-[1em]" :style="{ color: t.textDim }">Open a file from the explorer</p>
+            <p class="text-[1em]" :style="{ color: t.textDim }">{{ tr('code.open_file_hint') }}</p>
           </div>
         </div>
         <!-- Bottom terminal panel -->
-        <CodeTerminalPanel v-if="terminalOpen" />
+        <ProjectTerminalDock
+          v-if="terminalOpen"
+          :terminal-key="terminalKey"
+          :workspace-root="workspaceRoot"
+          @close="terminalOpen = false"
+        />
         <!-- Status bar -->
         <div
           class="flex items-center gap-4 px-3 py-1 flex-shrink-0 text-[12px]"
           :style="{ background: t.bgPanel, borderTop: `1px solid ${t.border}`, color: t.textDim }"
         >
           <span v-if="activeTab" class="font-mono">
-            Ln {{ cursor.line }}, Col {{ cursor.column }}
+            {{ tr('code.status.position', { line: cursor.line, column: cursor.column }) }}
           </span>
           <span v-if="activeTab">{{ activeTab.language }}</span>
-          <span v-if="activeTab?.readOnly" :style="{ color: t.warning }">Read-only</span>
+          <span v-if="activeTab?.readOnly" :style="{ color: t.warning }">
+            {{ tr('code.status.readonly') }}
+          </span>
         </div>
       </div>
     </div>
@@ -111,8 +119,19 @@
     <!-- Not ready -->
     <div v-else class="flex-1 flex flex-col items-center justify-center gap-2">
       <FolderX :size="40" :stroke-width="1.5" :style="{ color: t.textFaint }" />
-      <p class="text-[1em]" :style="{ color: t.textDim }">Project not found or path missing</p>
+      <p class="text-[1em]" :style="{ color: t.textDim }">{{ tr('code.not_found') }}</p>
     </div>
+
+    <!-- Quick open (Cmd/Ctrl+P) + command palette (Cmd/Ctrl+Shift+P) -->
+    <CommandPalette
+      :open="paletteOpen"
+      :mode="paletteMode"
+      :workspace-root="workspaceRoot"
+      :commands="paletteCommands"
+      @close="closePalette"
+      @pick-file="openFile"
+      @run-command="(c) => c.run()"
+    />
 
     <!-- Close-tab dirty confirm -->
     <Teleport to="body">
@@ -125,7 +144,9 @@
           class="w-80 rounded-lg p-4"
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
-          <p class="text-[1em] font-medium mb-1" :style="{ color: t.text }">Unsaved changes</p>
+          <p class="text-[1em] font-medium mb-1" :style="{ color: t.text }">
+            {{ tr('code.unsaved.title') }}
+          </p>
           <p class="text-[1em] mb-4 break-all" :style="{ color: t.textDim }">{{ closeConfirm }}</p>
           <div class="flex justify-end gap-2">
             <button
@@ -134,7 +155,7 @@
               :style="{ background: t.bgHover, color: t.textDim }"
               @click="closeConfirm = null"
             >
-              Cancel
+              {{ tr('common.cancel') }}
             </button>
             <button
               type="button"
@@ -142,7 +163,7 @@
               :style="{ background: t.dangerBg, color: t.danger }"
               @click="confirmCloseDiscard"
             >
-              Discard
+              {{ tr('code.unsaved.discard') }}
             </button>
             <button
               type="button"
@@ -150,7 +171,7 @@
               :style="{ background: t.accent, color: t.accentText }"
               @click="confirmCloseSave"
             >
-              Save
+              {{ tr('common.save') }}
             </button>
           </div>
         </div>
@@ -190,7 +211,8 @@ import CodeExplorer from '~/components/workspace/code/CodeExplorer.vue'
 import CodeSearchPanel from '~/components/workspace/code/CodeSearchPanel.vue'
 import CodeSourceControl from '~/components/workspace/code/CodeSourceControl.vue'
 import CodeTabStrip from '~/components/workspace/code/CodeTabStrip.vue'
-import CodeTerminalPanel from '~/components/workspace/code/CodeTerminalPanel.vue'
+import ProjectTerminalDock from '~/components/workspace/ProjectTerminalDock.vue'
+import CommandPalette from '~/components/workspace/CommandPalette.vue'
 import {
   ProjectWorkspaceKey,
   useProjectWorkspace,
@@ -200,6 +222,7 @@ import {
 definePageMeta({ layout: false, keepalive: false })
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const route = useRoute()
 const projectId = route.params.id as string
 
@@ -211,6 +234,8 @@ const {
   ready,
   activity,
   terminalOpen,
+  terminalKey,
+  workspaceRoot,
   editorRef,
   tabs,
   activePath,
@@ -219,9 +244,15 @@ const {
   onEditorChange,
   onCursorChange,
   saveFile,
+  openFile,
   closeConfirm,
   confirmCloseSave,
   confirmCloseDiscard,
+  paletteOpen,
+  paletteMode,
+  paletteCommands,
+  openPalette,
+  closePalette,
   toasts,
   toastStyle,
 } = ctx
