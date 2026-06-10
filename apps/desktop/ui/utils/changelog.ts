@@ -30,6 +30,61 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.9.0',
+    date: '2026-06-10',
+    highlight: {
+      en: 'Quick Open & command palette in the code workspace, plus agent-to-agent task delegation.',
+      vi: 'Quick Open & bảng lệnh trong code workspace, cùng khả năng agent giao việc cho agent.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Project code workspace: press Cmd/Ctrl+P to fuzzy-find and open any file, and Cmd/Ctrl+Shift+P (or type ">") for a command palette of actions.',
+        vi: 'Code workspace của project: nhấn Cmd/Ctrl+P để fuzzy tìm và mở bất kỳ file nào, và Cmd/Ctrl+Shift+P (hoặc gõ ">") để mở bảng lệnh các hành động.',
+      },
+      {
+        kind: 'added',
+        en: 'The code workspace terminal is now multi-tab and resizable, and you can open a terminal straight from a project’s detail page — each project keeps its own terminal session when you switch projects and come back.',
+        vi: 'Terminal trong code workspace giờ hỗ trợ nhiều tab và kéo chỉnh chiều cao, và có thể mở terminal ngay từ trang chi tiết của project — mỗi project giữ phiên terminal riêng khi bạn chuyển project rồi quay lại.',
+      },
+      {
+        kind: 'improved',
+        en: 'Find-in-files updates live as you type, highlights matches, groups results per file, and takes include/exclude file globs; searches in non-Git folders no longer return node_modules clutter.',
+        vi: 'Tìm-trong-file cập nhật trực tiếp khi gõ, tô đậm đoạn khớp, gom kết quả theo file và nhận glob include/exclude; tìm trong thư mục không phải Git không còn trả về rác node_modules.',
+      },
+      {
+        kind: 'added',
+        en: 'Agents can delegate to other AWOG agents through a built-in Task tool — each subagent runs with its own provider, model, and account.',
+        vi: 'Agent có thể giao việc cho agent AWOG khác qua công cụ Task tích hợp — mỗi subagent chạy với provider, model và account của chính nó.',
+      },
+      {
+        kind: 'added',
+        en: 'A live to-do list shows the agent’s plan and progress as it works.',
+        vi: 'Danh sách to-do trực tiếp hiển thị kế hoạch và tiến độ của agent khi đang làm.',
+      },
+      {
+        kind: 'added',
+        en: 'Sessions stream the model’s extended thinking live in the step list.',
+        vi: 'Session hiển thị quá trình suy luận mở rộng của model trực tiếp trong danh sách bước.',
+      },
+      {
+        kind: 'added',
+        en: 'Git: discard every change in a section or folder at once, and stage a whole folder with a single checkbox.',
+        vi: 'Git: bỏ mọi thay đổi trong một mục hoặc thư mục cùng lúc, và stage cả thư mục bằng một ô tích.',
+      },
+      {
+        kind: 'improved',
+        en: 'The project code workspace is now fully localized (English / Vietnamese).',
+        vi: 'Code workspace của project giờ đã được bản địa hoá đầy đủ (Anh / Việt).',
+      },
+      {
+        kind: 'fixed',
+        en: 'Settings dialogs now render above the rest of the app instead of being clipped inside the panel.',
+        vi: 'Các hộp thoại Settings giờ hiển thị nổi trên phần còn lại của app thay vì bị cắt trong panel.',
+      },
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-06-10',
     highlight: {
