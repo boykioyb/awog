@@ -86,8 +86,40 @@
     </div>
   </div>
 
-  <div v-else-if="step.kind === 'note'" class="text-[1em]" :style="{ color: t.text }">
-    {{ step.label }}
+  <!-- Todo checklist (TodoWrite). Rendered inline + always expanded so it reads
+       as the agent's live progress, not a click-to-open row. -->
+  <div v-else-if="step.kind === 'note'" class="text-[1em] min-w-0">
+    <div class="flex items-center gap-1.5 mb-1" :style="{ color: t.textDim }">
+      <ListChecks :size="11" class="flex-shrink-0" :style="{ color: t.accent }" />
+      <span class="uppercase tracking-wider font-semibold">{{ step.label }}</span>
+    </div>
+    <div v-if="step.todos?.length" class="space-y-0.5">
+      <div v-for="(todo, i) in step.todos" :key="i" class="flex items-start gap-1.5">
+        <span
+          class="font-mono flex-shrink-0"
+          :style="{ color: todoColor(todo.status), paddingTop: '1px' }"
+        >
+          {{ todoMark(todo.status) }}
+        </span>
+        <span
+          class="min-w-0 break-words"
+          :style="{
+            color: todo.status === 'completed' ? t.textFaint : t.text,
+            textDecoration: todo.status === 'completed' ? 'line-through' : 'none',
+          }"
+        >
+          {{ todo.content }}
+        </span>
+      </div>
+    </div>
+    <!-- Fallback for legacy note steps persisted before structured todos. -->
+    <div
+      v-else-if="noteFallbackText"
+      class="whitespace-pre-wrap leading-relaxed"
+      :style="{ color: t.textMuted }"
+    >
+      {{ noteFallbackText }}
+    </div>
   </div>
 
   <div
@@ -118,38 +150,47 @@
             {{ planStatusLabel }}
           </span>
         </div>
-        <div v-if="step.label" class="text-[1em] mt-0.5" :style="{ color: t.textDim }">
-          {{ step.label }}
-        </div>
       </div>
     </div>
-    <ol class="px-3 py-2 space-y-1 list-none">
-      <li
-        v-for="(item, idx) in step.planItems"
-        :key="idx"
-        class="flex gap-2 text-[1em] leading-relaxed"
-        :style="{ color: t.text }"
-      >
-        <span
-          class="inline-flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0 text-[1em] font-semibold"
-          :style="{
-            background: planAccent.bg,
-            color: planAccent.accent,
-            border: `1px solid ${planAccent.border}`,
-          }"
-        >
-          {{ idx + 1 }}
-        </span>
-        <span class="flex-1 min-w-0">{{ item }}</span>
-      </li>
-    </ol>
+    <!-- Plan body: render the RAW markdown as a document (headers / nested lists
+         / bold preserved) so it reads as a plan, not a flat todo list. Older
+         steps without planMarkdown fall back to the flattened numbered list. -->
     <div
-      v-if="step.planRationale"
-      class="px-3 py-2 text-[1em] italic"
-      :style="{ color: t.textMuted, borderTop: `1px solid ${t.border}` }"
+      v-if="step.planMarkdown"
+      class="px-3 py-2 awog-md text-[1em]"
+      :style="{ color: t.text, '--awog-accent': t.accent }"
     >
-      {{ step.planRationale }}
+      <MarkdownRenderer :content="step.planMarkdown" />
     </div>
+    <template v-else>
+      <ol class="px-3 py-2 space-y-1 list-none">
+        <li
+          v-for="(parts, idx) in planItemParts"
+          :key="idx"
+          class="flex gap-2 text-[1em] leading-relaxed"
+          :style="{ color: t.text }"
+        >
+          <span
+            class="inline-flex items-center justify-center min-w-[16px] h-4 px-1 mt-0.5 rounded-full flex-shrink-0 text-[10px] font-semibold font-mono leading-none"
+            :style="{
+              background: t.bgInput,
+              color: t.accent,
+              border: `1px solid ${t.border}`,
+            }"
+          >
+            {{ idx + 1 }}
+          </span>
+          <span class="flex-1 min-w-0"><MarkdownInline :parts="parts" /></span>
+        </li>
+      </ol>
+      <div
+        v-if="step.planRationale"
+        class="px-3 py-2 text-[1em] italic"
+        :style="{ color: t.textMuted, borderTop: `1px solid ${t.border}` }"
+      >
+        <MarkdownInline :parts="parseInline(step.planRationale || '')" />
+      </div>
+    </template>
     <div
       v-if="resolvePlan && (!step.planStatus || step.planStatus === 'pending')"
       class="px-3 py-2 flex items-center gap-1.5"
@@ -303,7 +344,8 @@ import {
   Terminal,
   X,
 } from 'lucide-vue-next'
-import type { SessionStep } from '~/types'
+import type { SessionStep, TodoStatus } from '~/types'
+import { parseInline } from '~/utils/markdown-parse'
 import { RESOLVE_PLAN_KEY, SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 
 const props = defineProps<{
@@ -326,6 +368,23 @@ const thinkingDetail = computed(() =>
 const thinkingActive = computed(
   () => props.step.kind === 'thinking' && props.step.status === 'running',
 )
+
+// Todo checklist (kind === 'note'). Marker + color per status; legacy note steps
+// (persisted before structured todos) fall back to their detail text.
+const TODO_MARK: Record<TodoStatus, string> = { pending: '○', in_progress: '▸', completed: '✓' }
+const todoMark = (status: TodoStatus): string => TODO_MARK[status]
+const todoColor = (status: TodoStatus): string => {
+  if (status === 'completed') return t.value.success
+  if (status === 'in_progress') return t.value.accent
+  return t.value.textDim
+}
+const noteFallbackText = computed(() =>
+  props.step.kind === 'note' && props.step.detail?.kind === 'text' ? props.step.detail.content : '',
+)
+
+// Plan items carry inline markdown (**bold**, `code`) — parse once per render so
+// the list renders rich text instead of raw markers.
+const planItemParts = computed(() => (props.step.planItems ?? []).map((it) => parseInline(it)))
 
 // Auto-collapse the reasoning block the moment it completes (running → done),
 // matching the Claude extension. Guarded to thinking so a tool step's

@@ -184,9 +184,15 @@ export type TaskSource =
   | { type: 'jira'; key: string; connectionId?: string }
   | { type: 'manual' }
 
+export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+export interface TodoItem {
+  content: string
+  status: TodoStatus
+}
+
 export interface TraceNode {
   id: string
-  type: 'agent' | 'subagent' | 'tool' | 'thinking'
+  type: 'agent' | 'subagent' | 'tool' | 'thinking' | 'todo'
   name?: string
   model?: string
   purpose?: string
@@ -196,6 +202,8 @@ export interface TraceNode {
   text?: string
   agentName?: string
   agentId?: string
+  // Todo node (type === 'todo', from a TodoWrite tool call): the live checklist.
+  todos?: TodoItem[]
   duration: string | null
   startedAt?: string
   status?: 'running'
@@ -399,9 +407,15 @@ export interface SessionStep {
   status?: StepStatus
   children?: SessionStep[]
   detail?: StepDetail
+  // Raw plan markdown (rendered as a document); planItems/planRationale are the
+  // legacy flattened fallback for older persisted steps.
+  planMarkdown?: string
   planItems?: string[]
   planStatus?: PlanStatus
   planRationale?: string
+  // Todo step (kind === 'note', from a TodoWrite call): the live checklist the
+  // UI renders inline. Mirrors the sidecar SessionStep.todos field.
+  todos?: TodoItem[]
   // tool_use_id of the parent Task step when this step ran inside a subagent.
   // Sidecar fills this from the SDK's parent_tool_use_id; UI store uses it to
   // attach the step under the parent's `children` array instead of top-level.

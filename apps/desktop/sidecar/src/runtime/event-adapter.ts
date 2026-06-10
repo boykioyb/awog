@@ -16,10 +16,12 @@ import type { AssistantMessage } from '@earendil-works/pi-ai'
 import {
   stepFromPlan,
   stepFromThinking,
+  stepFromTodos,
   stepFromToolResult,
   stepFromToolUse,
 } from '../sessions/step-mapper.js'
 import type { StreamCallbacks } from '../sessions/runner.js'
+import type { SessionStep } from '../types/shared.js'
 
 interface Accumulator {
   text: string
@@ -51,7 +53,24 @@ export interface EventAdapter {
   result: () => Accumulator
 }
 
-export function createEventAdapter(cb: StreamCallbacks): EventAdapter {
+export interface EventAdapterOptions {
+  // When set, this adapter is draining a SUBAGENT run (Task tool, ADR 0030):
+  //   - every emitted step is tagged with this parentId so the UI nests it under
+  //     the Task step instead of rendering top-level.
+  //   - assistant text deltas are NOT forwarded to cb.onChunk (the subagent's
+  //     text is its returned result, not the parent's reply); they still
+  //     accumulate so the Task tool can read the final text.
+  parentId?: string
+}
+
+export function createEventAdapter(
+  cb: StreamCallbacks,
+  options: EventAdapterOptions = {},
+): EventAdapter {
+  const { parentId } = options
+  // Stamp parentId on a step when draining a subagent run (no-op otherwise).
+  const withParent = (step: SessionStep): SessionStep =>
+    parentId ? { ...step, parentId } : step
   const acc: Accumulator = {
     text: '',
     modelUsed: '',
@@ -73,20 +92,22 @@ export function createEventAdapter(cb: StreamCallbacks): EventAdapter {
         const inner = event.assistantMessageEvent
         if (inner.type === 'text_delta' && inner.delta.length > 0) {
           acc.text += inner.delta
-          cb.onChunk(inner.delta)
+          // Subagent text is the Task tool's result, not the parent reply — don't
+          // pour it into the parent's streamed answer.
+          if (!parentId) cb.onChunk(inner.delta)
         } else if (inner.type === 'thinking_delta' && inner.delta.length > 0 && cb.onStep) {
           // Extended-thinking → a 'thinking' step carrying the full reasoning so
           // far in `detail`, so the UI streams it live (status 'running'). Stable
           // id per content block keeps the upsert merging in place as it grows.
           const next = (thinkingBlocks.get(inner.contentIndex) ?? '') + inner.delta
           thinkingBlocks.set(inner.contentIndex, next)
-          cb.onStep(stepFromThinking(`thinking-${inner.contentIndex}`, next))
+          cb.onStep(withParent(stepFromThinking(`thinking-${inner.contentIndex}`, next)))
         } else if (inner.type === 'thinking_end' && cb.onStep) {
           // Reasoning block complete → mark it done (status 'done') so the UI can
           // auto-collapse. `inner.content` is authoritative; fall back to the
           // accumulated deltas if the provider omits it.
           const full = inner.content || thinkingBlocks.get(inner.contentIndex) || ''
-          if (full) cb.onStep(stepFromThinking(`thinking-${inner.contentIndex}`, full, true))
+          if (full) cb.onStep(withParent(stepFromThinking(`thinking-${inner.contentIndex}`, full, true)))
         }
         break
       }
@@ -101,17 +122,25 @@ export function createEventAdapter(cb: StreamCallbacks): EventAdapter {
         // approves/rejects in the UI (decoupled from the permission gate).
         if (event.toolName === 'ExitPlanMode') {
           const plan = typeof input.plan === 'string' ? input.plan : ''
-          cb.onStep(stepFromPlan(event.toolCallId, plan))
+          cb.onStep(withParent(stepFromPlan(event.toolCallId, plan)))
           break
         }
-        cb.onStep(stepFromToolUse({ id: event.toolCallId, name: event.toolName, input }))
+        // TodoWrite → an inline checklist 'note' step (built from the call input,
+        // like ExitPlanMode); its result event is ignored below. A STABLE id
+        // (per turn, per parent) so successive TodoWrite calls upsert ONE
+        // evolving checklist instead of stacking a new row per update.
+        if (event.toolName === 'TodoWrite') {
+          cb.onStep(withParent(stepFromTodos('todo-list', input.todos)))
+          break
+        }
+        cb.onStep(withParent(stepFromToolUse({ id: event.toolCallId, name: event.toolName, input })))
         break
       }
       case 'tool_execution_end': {
         if (!cb.onStep) break
-        // ExitPlanMode already emitted its plan step on start; the result is an
-        // internal ack — don't overwrite the plan card with a generic tool row.
-        if (event.toolName === 'ExitPlanMode') break
+        // ExitPlanMode / TodoWrite already emitted their step on start; the
+        // result is an internal ack — don't overwrite it with a generic tool row.
+        if (event.toolName === 'ExitPlanMode' || event.toolName === 'TodoWrite') break
         const meta = toolInputs.get(event.toolCallId) ?? { name: event.toolName, input: {} }
         // event.result is the AgentToolResult { content, details, terminate }.
         // step-mapper's previewToolResult understands the content array shape.
@@ -120,13 +149,15 @@ export function createEventAdapter(cb: StreamCallbacks): EventAdapter {
             ? (event.result as { content?: unknown }).content
             : event.result
         cb.onStep(
-          stepFromToolResult({
-            toolUseId: event.toolCallId,
-            toolName: meta.name,
-            toolInput: meta.input,
-            content,
-            isError: event.isError === true,
-          }),
+          withParent(
+            stepFromToolResult({
+              toolUseId: event.toolCallId,
+              toolName: meta.name,
+              toolInput: meta.input,
+              content,
+              isError: event.isError === true,
+            }),
+          ),
         )
         break
       }

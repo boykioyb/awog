@@ -111,6 +111,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
       throw new Error(`Task project has no path: ${task.projectId}`)
     }
     const cwd = project.path
+    const connectionId = sourceConnectionId(task)
 
     // Resolve agent + skills + MCP. The task's connection (if any) is unioned
     // into the node's MCP set regardless of the agent's per-agent whitelist.
@@ -121,7 +122,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
         ...(node.agentProjectId ? { projectId: node.agentProjectId } : {}),
       },
       undefined,
-      sourceConnectionId(task),
+      connectionId,
     )
     const agentName = agentCtx.agentName ?? node.agentId
 
@@ -179,6 +180,11 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
         ...(agentCtx.allowedTools ? { allowedTools: agentCtx.allowedTools } : {}),
         ...(agentCtx.mcpServers ? { mcpServers: agentCtx.mcpServers } : {}),
         cwd,
+        // Task subagent menu scope (ADR 0030): the task project + the node
+        // agent's project. The task's source connection is unioned into a
+        // subagent's MCP set, same as the node's own agent.
+        ...(skillProjectIds.length > 0 ? { projectIds: skillProjectIds } : {}),
+        ...(connectionId ? { connectionId } : {}),
         abortController: ctx.abortController,
       },
       {

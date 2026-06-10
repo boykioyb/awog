@@ -288,6 +288,7 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
         settings: toSessionSettings(params.settings),
         ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(cwd ? { cwd } : {}),
+        ...(params.projectId ? { projectId: params.projectId } : {}),
         ...(params.disabledTools && params.disabledTools.length
           ? { disabledTools: params.disabledTools }
           : {}),

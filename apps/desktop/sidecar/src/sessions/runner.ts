@@ -55,6 +55,9 @@ export interface RunNonStreamArgs {
   // straight to the runtime tools' fs root so Read/Write/Bash operate against
   // the user's repo instead of `process.cwd()`.
   cwd?: string
+  // Linked project id (when any). Scopes the Task tool's subagent menu to the
+  // user tiers + this project's agent tiers (ADR 0030).
+  projectId?: string
   // Permission gate. The runtime's beforeToolCall hook bridges this to the UI
   // permission RPC — callers (sessions.send-message) must always supply it for
   // gated modes.

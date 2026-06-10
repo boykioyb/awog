@@ -14,9 +14,12 @@ import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../sessions/runner.js'
+import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
 import { buildContext } from './context-builder.js'
-import { createRuntimeToolDefinitions } from './tools/index.js'
+import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
+import { TODO_USAGE_PROMPT } from './prompts.js'
+import { createTaskTool } from './tools/task-tool.js'
 import { makeBeforeToolCall } from './permission.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
@@ -92,13 +95,61 @@ export async function runStreamPi(
     args.abortController?.signal,
   )
 
-  // Plan mode: append a nudge so the model researches read-only and presents a
-  // plan via ExitPlanMode (Claude Code's plan-mode behaviour). Concatenated
-  // after any existing append (e.g. the MCP nudge) — buildContext joins it onto
-  // the system prompt.
-  const systemPromptAppend = inPlanMode
-    ? `${args.systemPromptAppend ? `${args.systemPromptAppend}\n\n` : ''}${PLAN_MODE_PROMPT}`
-    : args.systemPromptAppend
+  // Append system-prompt nudges after the agent's own prompt (+ any existing
+  // append like the MCP nudge): the TodoWrite usage nudge when the tool is
+  // available, then the plan-mode nudge in plan mode. buildContext joins the
+  // result onto the system prompt.
+  const todoAllowed = isToolAllowed('TodoWrite', {
+    ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+    ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+  })
+  const appendParts = [
+    args.systemPromptAppend,
+    todoAllowed ? TODO_USAGE_PROMPT : undefined,
+    inPlanMode ? PLAN_MODE_PROMPT : undefined,
+  ].filter((p): p is string => typeof p === 'string' && p.length > 0)
+  const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
+
+  const beforeToolCall = makeBeforeToolCall(args.canUseTool, args.settings.mode)
+
+  // Task subagent tool (ADR 0030). Added at the TOP LEVEL only — never to a
+  // subagent's toolset (so depth = 1). Skipped in plan mode (read-only) and when
+  // allowedTools/disabledTools exclude 'Task'. Added otherwise even with zero
+  // agents, so a stray Task call gets a graceful result instead of the
+  // "Tool Task not found" error. Pushed BEFORE buildContext so it lands in
+  // context.tools.
+  const taskAllowed =
+    !inPlanMode &&
+    isToolAllowed('Task', {
+      ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+      ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+    })
+  if (taskAllowed) {
+    const projectIds = args.projectId ? [args.projectId] : []
+    let agents: Awaited<ReturnType<typeof listAgents>>['agents'] = []
+    try {
+      agents = (await listAgents(projectIds)).agents
+    } catch (err) {
+      log.warn('failed to list agents for Task tool', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+    tools.push(
+      createTaskTool({
+        agents,
+        cwd: args.cwd ?? process.cwd(),
+        parentSettings: args.settings,
+        ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+        // Chat subagents reuse the parent permission gate: in 'ask' mode their
+        // writes/exec still prompt the user (depth-1 subagent, same session).
+        beforeToolCall,
+        makeChildSink: (parentToolCallId) => {
+          const child = createEventAdapter(cb, { parentId: parentToolCallId })
+          return { emit: child.handle, text: () => child.result().text }
+        },
+      }),
+    )
+  }
 
   const { context, prompt } = buildContext(
     args.history,
@@ -109,7 +160,6 @@ export async function runStreamPi(
   )
 
   const reasoning = toReasoning(args.settings.level, model)
-  const beforeToolCall = makeBeforeToolCall(args.canUseTool, args.settings.mode)
   const adapter = createEventAdapter(cb)
 
   log.info('chat stream request (pi)', {

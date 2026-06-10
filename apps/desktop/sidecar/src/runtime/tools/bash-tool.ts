@@ -69,6 +69,11 @@ export function createBashTool(cwd: string): AgentTool<typeof BashParams, BashDe
           if (settled) return
           settled = true
           clearTimeout(timer)
+          // Detach the abort listener on completion. `{ once: true }` only
+          // auto-removes when the event FIRES; without this, every finished
+          // command leaves a dangling listener on the (long-lived) turn signal
+          // → MaxListenersExceededWarning after ~10 commands in one turn.
+          if (signal) signal.removeEventListener('abort', onAbort)
           // Append the exit code so the model can react to failures; we return a
           // structured result rather than throwing (the loop wants a tool result
           // here, and a non-zero exit is information, not a tool crash).

@@ -22,6 +22,7 @@ import {
 import { createBashTool } from './bash-tool.js'
 import { createMcpToolDefinitions } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
+import { createTodoWriteTool, createWebSearchTool, createWebFetchTool } from './builtin-stubs.js'
 
 export interface ToolFilter {
   // Agent `tools` whitelist (Claude Code subagent field). When set + non-empty,
@@ -34,21 +35,26 @@ export interface ToolFilter {
   includePlanTool?: boolean
 }
 
+// Whether a tool name survives the filter: allowedTools (intersect when set) +
+// disabledTools (subtract). Exported so the top-level Task tool (added outside
+// this module, ADR 0030) can honour the same allowedTools/disabledTools rules.
+export function isToolAllowed(name: string, filter: ToolFilter): boolean {
+  const allow =
+    filter.allowedTools && filter.allowedTools.length > 0 ? new Set(filter.allowedTools) : null
+  const deny =
+    filter.disabledTools && filter.disabledTools.length > 0 ? new Set(filter.disabledTools) : null
+  if (allow && !allow.has(name)) return false
+  if (deny && deny.has(name)) return false
+  return true
+}
+
 // Apply allowedTools (intersect when set) + disabledTools (subtract) by name.
 // When allowedTools is unset, every tool is included by default; when set, a
 // tool survives only if its name is in the whitelist — applied uniformly to
 // built-in tools AND mcp__<serverId>__<tool> names (an agent's `tools` whitelist
 // gates MCP tool names too).
 function applyFilter(tools: AgentTool[], filter: ToolFilter): AgentTool[] {
-  const allow =
-    filter.allowedTools && filter.allowedTools.length > 0 ? new Set(filter.allowedTools) : null
-  const deny =
-    filter.disabledTools && filter.disabledTools.length > 0 ? new Set(filter.disabledTools) : null
-  return tools.filter((t) => {
-    if (allow && !allow.has(t.name)) return false
-    if (deny && deny.has(t.name)) return false
-    return true
-  })
+  return tools.filter((t) => isToolAllowed(t.name, filter))
 }
 
 export function createAwogToolDefinitions(cwd: string, filter: ToolFilter = {}): AgentTool[] {
@@ -62,6 +68,11 @@ export function createAwogToolDefinitions(cwd: string, filter: ToolFilter = {}):
     createBashTool(cwd),
     createGrepTool(cwd),
     createGlobTool(cwd),
+    // Graceful stubs for Claude Code built-ins the OAuth model emits but AWOG
+    // doesn't implement (ADR 0030) — avoids "Tool <name> not found".
+    createTodoWriteTool(),
+    createWebSearchTool(),
+    createWebFetchTool(),
     ...(filter.includePlanTool ? [createExitPlanModeTool()] : []),
   ] as AgentTool[]
 

@@ -27,6 +27,7 @@
         <Zap v-else-if="item.type === 'subagent'" :size="11" />
         <Wrench v-else-if="item.type === 'tool'" :size="11" />
         <Sparkles v-else-if="item.type === 'thinking'" :size="11" />
+        <ListChecks v-else-if="item.type === 'todo'" :size="11" />
       </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
@@ -55,6 +56,9 @@
           <template v-else-if="item.type === 'thinking'">
             <span class="italic" :style="{ color: t.textMuted }">{{ item.text }}</span>
           </template>
+          <template v-else-if="item.type === 'todo'">
+            <span :style="{ color: t.text }">{{ item.name }}</span>
+          </template>
           <span class="ml-auto text-[1em] font-mono flex-shrink-0" :style="{ color: t.textDim }">
             <span
               v-if="isRunning"
@@ -81,6 +85,25 @@
         >
           → {{ item.result }}
         </div>
+        <div v-if="item.type === 'todo' && item.todos?.length" class="mt-1 space-y-0.5">
+          <div v-for="(todo, i) in item.todos" :key="i" class="flex items-start gap-1.5 text-[1em]">
+            <span
+              class="font-mono flex-shrink-0"
+              :style="{ color: todoColor(todo.status), paddingTop: '1px' }"
+            >
+              {{ todoMark(todo.status) }}
+            </span>
+            <span
+              class="min-w-0 break-words"
+              :style="{
+                color: todo.status === 'completed' ? t.textFaint : t.text,
+                textDecoration: todo.status === 'completed' ? 'line-through' : 'none',
+              }"
+            >
+              {{ todo.content }}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
     <div v-if="hasChildren && expanded">
@@ -95,8 +118,8 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronRight, Cpu, Zap, Wrench, Sparkles, Circle } from 'lucide-vue-next'
-import type { TraceNode } from '~/types'
+import { ChevronRight, Cpu, Zap, Wrench, Sparkles, Circle, ListChecks } from 'lucide-vue-next'
+import type { TodoStatus, TraceNode } from '~/types'
 
 defineOptions({ name: 'TraceNodeItem' })
 
@@ -124,10 +147,20 @@ const typeLabel = computed(() => {
       return 'TOOL'
     case 'thinking':
       return 'THINK'
+    case 'todo':
+      return 'TODOS'
     default:
       return ''
   }
 })
+
+const TODO_MARK: Record<TodoStatus, string> = { pending: '○', in_progress: '▸', completed: '✓' }
+const todoMark = (status: TodoStatus): string => TODO_MARK[status]
+const todoColor = (status: TodoStatus): string => {
+  if (status === 'completed') return t.value.success
+  if (status === 'in_progress') return t.value.accent
+  return t.value.textDim
+}
 
 const typeColor = computed(() => {
   switch (props.item.type) {
@@ -139,6 +172,8 @@ const typeColor = computed(() => {
       return t.value.textMuted
     case 'thinking':
       return t.value.textDim
+    case 'todo':
+      return t.value.accent
     default:
       return t.value.textDim
   }

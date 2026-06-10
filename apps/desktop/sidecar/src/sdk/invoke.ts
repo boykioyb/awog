@@ -22,6 +22,12 @@ export interface InvokeArgs {
   // against the user's repo.
   cwd?: string
   abortController?: AbortController
+  // Agent tiers in scope for the Task subagent menu (ADR 0030): the task's
+  // project + the node agent's project. Empty/undefined → user tiers only.
+  projectIds?: string[]
+  // Task source connection (mcpServerId) unioned into a subagent's MCP set, same
+  // as the node's own agent (ADR 0025). undefined for manual sources.
+  connectionId?: string
 }
 
 export interface InvokeToolUse {

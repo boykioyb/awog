@@ -17,27 +17,38 @@
     </div>
 
     <div v-else class="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-      <p
-        v-if="plan.planRationale"
-        class="text-[1em] leading-relaxed"
-        :style="{ color: t.textMuted }"
+      <!-- Render the raw plan markdown as a document; legacy steps without
+           planMarkdown fall back to the flattened rationale + numbered list. -->
+      <div
+        v-if="plan.planMarkdown"
+        class="awog-md text-[1em]"
+        :style="{ color: t.text, '--awog-accent': t.accent }"
       >
-        {{ plan.planRationale }}
-      </p>
-
-      <ol class="space-y-1.5">
-        <li
-          v-for="(item, i) in plan.planItems ?? []"
-          :key="i"
-          class="flex items-start gap-2 text-[1em]"
-          :style="{ color: t.text }"
+        <MarkdownRenderer :content="plan.planMarkdown" />
+      </div>
+      <template v-else>
+        <p
+          v-if="plan.planRationale"
+          class="text-[1em] leading-relaxed"
+          :style="{ color: t.textMuted }"
         >
-          <span class="font-mono text-[12px] flex-shrink-0 mt-0.5" :style="{ color: t.textDim }">
-            {{ i + 1 }}.
-          </span>
-          <span class="leading-relaxed">{{ item }}</span>
-        </li>
-      </ol>
+          {{ plan.planRationale }}
+        </p>
+
+        <ol class="space-y-1.5">
+          <li
+            v-for="(item, i) in plan.planItems ?? []"
+            :key="i"
+            class="flex items-start gap-2 text-[1em]"
+            :style="{ color: t.text }"
+          >
+            <span class="font-mono text-[12px] flex-shrink-0 mt-0.5" :style="{ color: t.textDim }">
+              {{ i + 1 }}.
+            </span>
+            <span class="leading-relaxed">{{ item }}</span>
+          </li>
+        </ol>
+      </template>
 
       <div v-if="canDecide" class="flex items-center gap-2 pt-1">
         <button

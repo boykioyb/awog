@@ -17,9 +17,12 @@ import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { SessionSettings } from '../types/shared.js'
+import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
 import { buildContext } from './context-builder.js'
-import { createRuntimeToolDefinitions } from './tools/index.js'
+import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
+import { createTaskTool } from './tools/task-tool.js'
+import { TODO_USAGE_PROMPT } from './prompts.js'
 import { toReasoning } from './thinking.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../sdk/invoke.js'
 
@@ -60,9 +63,14 @@ function toInputRecord(args: unknown): Record<string, unknown> {
 }
 
 // Translate Pi AgentEvents → InvokeCallbacks while accumulating the final
-// InvokeResult. parentId is always null: the pi runtime does not nest subagents
-// for tasks yet (no parent_tool_use_id concept), so every event is main-agent.
-function createInvokeAdapter(cb: InvokeCallbacks): {
+// InvokeResult. `parentId` is null for the main agent; for a SUBAGENT run (Task
+// tool, ADR 0030) it is the Task call's id so every nested trace node nests
+// under the Task step, and the subagent's text is captured (not streamed as the
+// node's artifact body).
+function createInvokeAdapter(
+  cb: InvokeCallbacks,
+  parentId: string | null = null,
+): {
   handle: (event: AgentEvent) => void
   result: () => InvokeResult
 } {
@@ -82,11 +90,13 @@ function createInvokeAdapter(cb: InvokeCallbacks): {
         const inner = event.assistantMessageEvent
         if (inner.type === 'text_delta' && inner.delta.length > 0) {
           text += inner.delta
-          cb.onText?.(inner.delta)
+          // Subagent text is the Task tool's result, not the node's artifact —
+          // accumulate but don't stream it as the node output.
+          if (!parentId) cb.onText?.(inner.delta)
         } else if (inner.type === 'thinking_delta' && inner.delta.length > 0) {
           // Pi thinking events carry a contentIndex, not a string id — derive a
           // stable id per thinking block so the trace upserts deltas in place.
-          cb.onThinking?.(`thinking-${inner.contentIndex}`, inner.delta, null)
+          cb.onThinking?.(`thinking-${inner.contentIndex}`, inner.delta, parentId)
         }
         break
       }
@@ -100,7 +110,7 @@ function createInvokeAdapter(cb: InvokeCallbacks): {
           cb.onAssistantMeta?.(
             m.model ?? '',
             { input_tokens: m.usage.input, output_tokens: m.usage.output },
-            null,
+            parentId,
           )
         }
         break
@@ -108,7 +118,7 @@ function createInvokeAdapter(cb: InvokeCallbacks): {
       case 'tool_execution_start': {
         const input = toInputRecord(event.args)
         toolInputs.set(event.toolCallId, { name: event.toolName, input })
-        cb.onToolUse?.({ id: event.toolCallId, name: event.toolName, input, parentId: null })
+        cb.onToolUse?.({ id: event.toolCallId, name: event.toolName, input, parentId })
         break
       }
       case 'tool_execution_end': {
@@ -125,7 +135,7 @@ function createInvokeAdapter(cb: InvokeCallbacks): {
           input: meta.input,
           content,
           isError: event.isError === true,
-          parentId: null,
+          parentId,
         })
         break
       }
@@ -184,14 +194,54 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     args.abortController?.signal,
   )
 
+  // Task subagent tool (ADR 0030), top-level only (depth = 1). Honours the
+  // node agent's allowedTools/disabledTools. Tasks bypass permissions, so the
+  // subagent gate is always-allow (ADR 0024 D-7). Pushed BEFORE buildContext so
+  // it lands in context.tools.
+  if (
+    isToolAllowed('Task', {
+      ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+      ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+    })
+  ) {
+    let agents: Awaited<ReturnType<typeof listAgents>>['agents'] = []
+    try {
+      agents = (await listAgents(args.projectIds ?? [])).agents
+    } catch (err) {
+      log.warn('failed to list agents for Task tool', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+    tools.push(
+      createTaskTool({
+        agents,
+        cwd: args.cwd ?? process.cwd(),
+        parentSettings: settings,
+        ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+        ...(args.connectionId ? { connectionId: args.connectionId } : {}),
+        // Tasks run unattended: subagent tool calls bypass permissions too.
+        beforeToolCall: async () => undefined,
+        makeChildSink: (parentToolCallId) => {
+          const child = createInvokeAdapter(cb, parentToolCallId)
+          return { emit: child.handle, text: () => child.result().text }
+        },
+      }),
+    )
+  }
+
+  // Append the TodoWrite usage nudge when the tool is available so a node's
+  // multi-step work surfaces a live checklist (same as chat). buildContext joins
+  // it onto the system prompt.
+  const todoAllowed = isToolAllowed('TodoWrite', {
+    ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+    ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+  })
+  const systemPromptAppend = todoAllowed
+    ? `${args.systemPromptAppend ? `${args.systemPromptAppend}\n\n` : ''}${TODO_USAGE_PROMPT}`
+    : args.systemPromptAppend
+
   // Tasks are one-shot: no chat history, just systemPrompt + the single prompt.
-  const { context, prompt } = buildContext(
-    [],
-    args.prompt,
-    args.systemPrompt,
-    args.systemPromptAppend,
-    tools,
-  )
+  const { context, prompt } = buildContext([], args.prompt, args.systemPrompt, systemPromptAppend, tools)
 
   const reasoning = toReasoning(settings.level, model)
   const adapter = createInvokeAdapter(cb)

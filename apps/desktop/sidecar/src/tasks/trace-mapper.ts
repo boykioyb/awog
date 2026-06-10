@@ -4,6 +4,19 @@
 
 import type { TraceNode } from '../types/shared.js'
 import type { InvokeToolResult, InvokeToolUse } from '../sdk/invoke.js'
+import { countDone, parseTodos } from '../runtime/todos.js'
+
+// TodoWrite → a 'todo' trace node carrying the live checklist (built from the
+// call input). Both the start and result events route here (node-runner emits
+// both; they upsert by id) so the result never overwrites it with a generic
+// tool row. `duration` differs between start (null) and end (elapsed).
+function traceFromTodos(id: string, input: Record<string, unknown>, duration: string | null): TraceNode {
+  const todos = parseTodos(input.todos)
+  const node: TraceNode = { id, type: 'todo', duration }
+  node.name = todos.length > 0 ? `Todos · ${countDone(todos)}/${todos.length}` : 'Todos'
+  if (todos.length > 0) node.todos = todos
+  return node
+}
 
 const RESULT_PREVIEW_MAX = 2_000
 
@@ -75,6 +88,7 @@ export function traceAgentNode(id: string, agentName: string, agentId: string): 
 }
 
 export function traceFromToolUse(use: InvokeToolUse): TraceNode {
+  if (use.name === 'TodoWrite') return traceFromTodos(use.id, use.input, null)
   const node: TraceNode = {
     id: use.id,
     // 'Task' tool = a subagent delegation; render as a subagent branch.
@@ -97,6 +111,7 @@ export function traceFromToolUse(use: InvokeToolUse): TraceNode {
 }
 
 export function traceFromToolResult(use: InvokeToolUse, result: InvokeToolResult, elapsedMs: number): TraceNode {
+  if (use.name === 'TodoWrite') return traceFromTodos(use.id, use.input, formatDuration(elapsedMs))
   const node: TraceNode = {
     id: use.id,
     type: use.name === 'Task' ? 'subagent' : 'tool',

@@ -12,6 +12,7 @@ import type {
   SessionStepStatus,
   SessionStepTool,
 } from '../types/shared.js'
+import { countDone, parseTodos } from '../runtime/todos.js'
 
 // Truncation cap for tool_result preview text. Keeps step payloads small over
 // stdio and bounds in-memory cost when the model dumps a huge file read.
@@ -159,6 +160,24 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
     default:
       return toolName
   }
+}
+
+// Build a 'note' step from a TodoWrite call's `todos` input — a structured
+// checklist (step.todos) the UI renders inline rather than a generic 'task' step
+// (which would open the empty subagent drawer). Emitted from the call INPUT
+// (like ExitPlanMode), so the result event is ignored.
+export function stepFromTodos(id: string, todos: unknown): SessionStep {
+  const items = parseTodos(todos)
+  const total = items.length
+  const done = countDone(items)
+  const step: SessionStep = {
+    id,
+    kind: 'note',
+    label: total > 0 ? `Todos · ${done}/${total}` : 'Todos',
+    status: 'done',
+  }
+  if (total > 0) step.todos = items
+  return step
 }
 
 export interface ToolUseInfo {
@@ -324,6 +343,10 @@ export function stepFromPlan(
     kind: 'plan',
     label: 'Proposed plan',
     planStatus: status,
+    // Raw markdown is authoritative — the UI renders it as a document so the
+    // model's own structure (headers, nested lists, bold) survives. The
+    // flattened planItems/planRationale below stay for legacy fallback.
+    planMarkdown: plan.trim(),
     planItems: items.length > 0 ? items : [plan.trim()],
   }
   const rationale = rationaleLines.join(' ').trim()

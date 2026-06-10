@@ -197,6 +197,13 @@ export type SessionStepStatus = 'running' | 'done' | 'error'
 // Plan step lifecycle (ExitPlanMode). pending → user approves/rejects in the UI.
 export type PlanStatus = 'pending' | 'approved' | 'rejected'
 
+// A single entry in the model's TodoWrite checklist (the agent's live task list).
+export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+export interface TodoItem {
+  content: string
+  status: TodoStatus
+}
+
 export type SessionStepDetail =
   | { kind: 'file'; path: string; content: string; language?: string }
   | { kind: 'list'; items: { label: string; path?: string; snippet?: string }[] }
@@ -218,9 +225,16 @@ export interface SessionStep {
   // Plan step (kind === 'plan', emitted from an ExitPlanMode tool call): the
   // proposed steps + optional rationale + approval status the UI renders as a
   // plan card with Approve/Reject. Mirrors the UI SessionStep plan fields.
+  // planMarkdown holds the RAW plan markdown so the UI can render it as a
+  // document (headers/lists/bold preserved); planItems/planRationale are the
+  // legacy flattened form kept as a fallback for older persisted steps.
+  planMarkdown?: string
   planItems?: string[]
   planStatus?: PlanStatus
   planRationale?: string
+  // Todo step (kind === 'note', emitted from a TodoWrite tool call): the live
+  // checklist the UI renders inline. Mirrors the UI SessionStep.todos field.
+  todos?: TodoItem[]
   // Subagent grouping: when set, this step ran inside the Task step with this
   // tool_use_id. UI nests the step under that parent instead of rendering
   // top-level. Source: SDK's `parent_tool_use_id` on stream_event/assistant/user.
@@ -447,7 +461,7 @@ export type TaskSource =
 
 export interface TraceNode {
   id: string
-  type: 'agent' | 'subagent' | 'tool' | 'thinking'
+  type: 'agent' | 'subagent' | 'tool' | 'thinking' | 'todo'
   name?: string
   model?: string
   purpose?: string
@@ -457,6 +471,8 @@ export interface TraceNode {
   text?: string
   agentName?: string
   agentId?: string
+  // Todo node (type === 'todo', from a TodoWrite tool call): the live checklist.
+  todos?: TodoItem[]
   duration: string | null
   startedAt?: string
   status?: 'running'
