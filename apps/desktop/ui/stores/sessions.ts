@@ -492,13 +492,16 @@ export const useSessionsStore = defineStore('sessions', {
         s.updatedAt = nowIso()
       }
 
-      // Smooth typewriter drain. Anthropic emits text deltas in uneven chunks
-      // (1 char ↔ 80+ chars); pushing each chunk straight to the DOM makes the
-      // render feel staccato. Buffer incoming text and drain it on
-      // requestAnimationFrame at an adaptive rate (faster when buffer is full,
-      // slower when nearly empty) so the eye sees a steady stream.
-      let pending = ''
-      let raf = 0
+      // Typewriter reveal. The provider delivers text very unevenly: a long
+      // reply streams over several seconds, but a short reply arrives in a single
+      // ~4ms burst (measured) — so appending raw deltas makes short replies pop
+      // in all at once. Instead, deltas (and the final authoritative text) feed a
+      // `target`; a steady timer reveals it into slot.text a few chars at a time,
+      // so the reply always types out gradually (like the Claude extension).
+      // Decoupled from finalize: completion is stamped only once the reveal has
+      // caught up (revealDone), so finalize never snaps the remaining text in.
+      // setInterval (not requestAnimationFrame) so it keeps revealing even when
+      // the window is briefly unfocused.
       const sessionsRef = this.sessions
       const stillOurSlot = (): SessionMessage | null => {
         const s = sessionsRef.find((x) => x.id === sessionId)
@@ -507,34 +510,47 @@ export const useSessionsStore = defineStore('sessions', {
         if (!slot || slot.id !== placeholderId) return null
         return slot
       }
-      const drain = () => {
-        raf = 0
+      let target = ''
+      let revealTimer: ReturnType<typeof setInterval> | null = null
+      let textCompleted = false
+      let onRevealDone: (() => void) | null = null
+      const stopReveal = () => {
+        if (revealTimer) {
+          clearInterval(revealTimer)
+          revealTimer = null
+        }
+      }
+      const fireRevealDone = () => {
+        const cb = onRevealDone
+        onRevealDone = null
+        cb?.()
+      }
+      const tick = () => {
         const slot = stillOurSlot()
         if (!slot) {
-          pending = ''
+          stopReveal()
+          fireRevealDone()
           return
         }
-        if (!pending) return
-        // Adaptive: drain ~1/6 of buffer per frame, minimum 2 chars, so a long
-        // burst doesn't lag while short typing stays smooth.
-        const take = Math.max(2, Math.ceil(pending.length / 6))
-        slot.text = (slot.text ?? '') + pending.slice(0, take)
-        pending = pending.slice(take)
-        if (pending) raf = requestAnimationFrame(drain)
+        const shown = slot.text ?? ''
+        if (shown.length >= target.length) {
+          if (textCompleted) {
+            stopReveal()
+            fireRevealDone()
+          }
+          return
+        }
+        // Adaptive: reveal ~1/6 of the remaining gap per tick (min 2 chars), so a
+        // burst catches up in ~0.4s while a live stream tracks closely.
+        const take = Math.max(2, Math.ceil((target.length - shown.length) / 6))
+        slot.text = target.slice(0, shown.length + take)
+      }
+      const ensureReveal = () => {
+        if (!revealTimer) revealTimer = setInterval(tick, 16)
       }
       const appendDelta = (delta: string) => {
-        if (!stillOurSlot()) return
-        pending += delta
-        if (!raf) raf = requestAnimationFrame(drain)
-      }
-      const flushBuffer = () => {
-        if (raf) {
-          cancelAnimationFrame(raf)
-          raf = 0
-        }
-        const slot = stillOurSlot()
-        if (slot && pending) slot.text = (slot.text ?? '') + pending
-        pending = ''
+        target += delta
+        ensureReveal()
       }
 
       // Upsert a tool step. Running → done transitions land as a second event
@@ -589,11 +605,11 @@ export const useSessionsStore = defineStore('sessions', {
           next[idx] = { ...existing[idx], ...step }
           slot.steps = next
         } else {
-          // First sighting of a top-level step. Flush any buffered text so the
-          // boundary captures everything streamed before the tool fired, then
-          // stamp the offset. SessionMessageItem reads textOffset to interleave
-          // step rows with reply-text segments in chronological order.
-          flushBuffer()
+          // First sighting of a top-level step. Text is appended directly (no
+          // buffer), so slot.text already holds everything streamed before this
+          // tool fired — stamp the offset straight off it. SessionMessageItem
+          // reads textOffset to interleave step rows with reply-text segments in
+          // chronological order.
           const stamped =
             step.textOffset === undefined ? { ...step, textOffset: (slot.text ?? '').length } : step
           slot.steps = [...existing, stamped]
@@ -720,33 +736,42 @@ export const useSessionsStore = defineStore('sessions', {
             return { agent: ref }
           })(),
         })
-        // Keep placeholderId as the final id — stable key for Vue lists, no diff churn.
-        finalize({
-          id: placeholderId,
-          role: 'agent',
-          text: result.text,
-          at: nowIso(),
-          startedAt,
-          completedAt: Date.now(),
-          modelUsed: result.modelUsed,
-          usage: {
-            inputTokens: result.usage.input_tokens,
-            outputTokens: result.usage.output_tokens,
-          },
-        })
-        // result.text is the authoritative full reply. Drop whatever is still
-        // sitting in the typewriter buffer so the finally-block flushBuffer()
-        // can't re-append it on top of the complete text (duplicated tail —
-        // or the whole message when no drain frame ran before the RPC resolved).
-        pending = ''
+        // result.text is the authoritative full reply. Hand it to the typewriter
+        // as the final target and finalize only once the reveal has caught up, so
+        // the tail types out instead of snapping. Keep placeholderId as the final
+        // id — stable key for Vue lists, no diff churn.
+        const doFinalize = () =>
+          finalize({
+            id: placeholderId,
+            role: 'agent',
+            text: result.text,
+            at: nowIso(),
+            startedAt,
+            completedAt: Date.now(),
+            modelUsed: result.modelUsed,
+            usage: {
+              inputTokens: result.usage.input_tokens,
+              outputTokens: result.usage.output_tokens,
+            },
+          })
+        target = result.text
+        textCompleted = true
+        onRevealDone = doFinalize
+        ensureReveal()
+        tick()
       } catch (err) {
+        // Stop the typewriter — cancel keeps whatever was already revealed, error
+        // replaces the bubble. (Success leaves it running so the tail types out.)
+        stopReveal()
+        onRevealDone = null
         const isCanceled = err instanceof SidecarError && err.code === -32023
         if (isCanceled) {
-          // User-initiated stop. Keep whatever text already streamed into the
-          // placeholder, mark the turn complete + flag it as canceled.
+          // User-initiated stop. Keep everything received so far (`target` holds
+          // the full accumulated text, which may be ahead of the typed reveal),
+          // mark the turn complete + flag it as canceled.
           const s = this.sessions.find((x) => x.id === sessionId)
           const slot = s?.messages[placeholderIdx]
-          const partialText = slot?.id === placeholderId ? (slot.text ?? '') : ''
+          const partialText = slot?.id === placeholderId ? target : ''
           finalize({
             id: placeholderId,
             role: 'agent',
@@ -773,12 +798,8 @@ export const useSessionsStore = defineStore('sessions', {
             text: `[error] ${message}`,
             at: nowIso(),
           })
-          // The error line replaces the bubble — discard buffered stream so
-          // flushBuffer() doesn't append leftover deltas onto the error text.
-          pending = ''
         }
       } finally {
-        flushBuffer()
         if (unlisten) unlisten()
         if (this.activeMessageBySession[sessionId] === placeholderId) {
           delete this.activeMessageBySession[sessionId]
