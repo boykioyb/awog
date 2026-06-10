@@ -1,6 +1,8 @@
 // Per-model context window (input tokens). Source: Anthropic public docs as of M0
 // verification (2026-05-27). Update when new models ship or 1M-context flag is enabled.
 const CONTEXT_WINDOW: Record<string, number> = {
+  'claude-fable-5': 200_000,
+  'claude-fable-5-1m': 1_000_000,
   'claude-opus-4-8': 200_000,
   'claude-opus-4-8-1m': 1_000_000,
   'claude-opus-4-7': 200_000,

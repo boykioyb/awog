@@ -12,6 +12,26 @@ export interface ModelDef {
 
 export const MODELS: ModelDef[] = [
   {
+    id: 'claude-fable-5',
+    label: 'Claude Fable 5',
+    vendor: 'Anthropic',
+    tier: 'Frontier',
+    provider: 'anthropic',
+    supportsThinking: true,
+    maxLevel: 'max',
+  },
+  {
+    // AWOG-internal id (not a real API name). Sidecar maps it to claude-fable-5
+    // + the context-1m beta header — see resolveModelRequest in models-map.ts.
+    id: 'claude-fable-5-1m',
+    label: 'Claude Fable 5 (1M context)',
+    vendor: 'Anthropic',
+    tier: 'Frontier',
+    provider: 'anthropic',
+    supportsThinking: true,
+    maxLevel: 'max',
+  },
+  {
     id: 'claude-opus-4-8',
     label: 'Claude Opus 4.8',
     vendor: 'Anthropic',

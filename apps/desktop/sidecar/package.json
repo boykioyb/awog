@@ -1,7 +1,7 @@
 {
   "name": "@awog/sidecar",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -13,8 +13,8 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.78.1",
-    "@earendil-works/pi-ai": "^0.78.1",
+    "@earendil-works/pi-agent-core": "^0.79.1",
+    "@earendil-works/pi-ai": "^0.79.1",
     "@napi-rs/keyring": "^1.1.4",
     "chokidar": "^5.0.0",
     "node-pty": "^1.1.0",

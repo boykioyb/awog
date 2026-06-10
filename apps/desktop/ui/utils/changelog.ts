@@ -30,6 +30,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.8.0',
+    date: '2026-06-10',
+    highlight: {
+      en: 'Claude Fable 5 — Anthropic’s most capable model, with a 1M-token option.',
+      vi: 'Claude Fable 5 — model mạnh nhất của Anthropic, có tùy chọn ngữ cảnh 1M token.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Added Claude Fable 5 (claude-fable-5) to the model picker for Anthropic accounts — the new top tier above Opus. A separate "Fable 5 (1M context)" entry enables the 1M-token context window via the context-1m beta, mirroring the Opus 4.8 1M option.',
+        vi: 'Thêm Claude Fable 5 (claude-fable-5) vào bộ chọn model cho tài khoản Anthropic — tier cao nhất mới, trên Opus. Mục riêng "Fable 5 (1M context)" bật ngữ cảnh 1M token qua beta context-1m, tương tự tùy chọn 1M của Opus 4.8.',
+      },
+    ],
+  },
+  {
     version: '0.7.0',
     date: '2026-06-09',
     highlight: {
