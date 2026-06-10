@@ -1,113 +1,49 @@
 <template>
-  <div
-    v-if="open && account"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
-    :style="{ background: t.overlay }"
-    @click.self="onCancel"
-  >
+  <!-- Teleport ra body: ancestor Liquid Glass có backdrop-filter/transform tạo
+       containing block mới cho position:fixed, khiến overlay không phủ toàn
+       viewport nếu render inline. -->
+  <Teleport to="body">
     <div
-      class="w-full max-w-md rounded-lg shadow-xl"
-      :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-      role="dialog"
-      aria-modal="true"
+      v-if="open && account"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      :style="{ background: t.overlay }"
+      @click.self="onCancel"
     >
       <div
-        class="px-4 py-3 flex items-center justify-between"
-        :style="{ borderBottom: `1px solid ${t.border}` }"
+        class="w-full max-w-md rounded-lg shadow-xl"
+        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+        role="dialog"
+        aria-modal="true"
       >
-        <div class="text-[1em] font-semibold" :style="{ color: t.text }">Edit connection</div>
-        <button
-          type="button"
-          class="p-1 rounded transition flex items-center"
-          :style="{ color: t.textDim }"
-          aria-label="Close"
-          @click="onCancel"
-        >
-          <X :size="14" />
-        </button>
-      </div>
-
-      <!-- Custom endpoint: reuse the add form in edit mode (label/baseURL/api/key/models) -->
-      <div v-if="kind === 'custom'" class="px-4 py-4">
-        <CustomProviderForm
-          v-model="customDraft"
-          editing
-          :has-key="!!account?.fingerprint"
-          submit-label="Save changes"
-          @submit="onSaveCustom"
-          @cancel="onCancel"
-        />
         <div
-          v-if="error"
-          class="mt-2 text-[1em] px-2 py-1 rounded"
-          :style="{
-            background: t.dangerBg,
-            color: t.danger,
-            border: `1px solid ${t.dangerBorder}`,
-          }"
+          class="px-4 py-3 flex items-center justify-between"
+          :style="{ borderBottom: `1px solid ${t.border}` }"
         >
-          {{ error }}
+          <div class="text-[1em] font-semibold" :style="{ color: t.text }">Edit connection</div>
+          <button
+            type="button"
+            class="p-1 rounded transition flex items-center"
+            :style="{ color: t.textDim }"
+            aria-label="Close"
+            @click="onCancel"
+          >
+            <X :size="14" />
+          </button>
         </div>
-      </div>
 
-      <!-- Built-in key + OAuth/subscription: label, (key for built-in), curate models -->
-      <form v-else @submit.prevent="onSave">
-        <div class="px-4 py-4 space-y-3">
-          <label class="block">
-            <span class="text-[1em]" :style="{ color: t.textDim }">Label</span>
-            <input
-              v-model="label"
-              class="mt-1 w-full rounded px-2 py-1.5 text-[1em]"
-              :style="inputStyle"
-              placeholder="Label"
-            />
-          </label>
-
-          <!-- Built-in API-key only: rotate the key (OAuth tokens are managed). -->
-          <label v-if="kind === 'builtin-key'" class="block">
-            <span class="text-[1em]" :style="{ color: t.textDim }">API key</span>
-            <div class="mt-1 flex items-center gap-2">
-              <input
-                v-model="apiKey"
-                :type="reveal ? 'text' : 'password'"
-                class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
-                :style="inputStyle"
-                placeholder="Enter a new key to replace"
-              />
-              <button
-                type="button"
-                class="px-2 py-1.5 rounded text-[1em] flex items-center"
-                :style="iconBtnStyle"
-                :title="reveal ? 'Hide' : 'Show'"
-                @click="reveal = !reveal"
-              >
-                <component :is="reveal ? EyeOff : Eye" :size="13" />
-              </button>
-            </div>
-            <!-- The stored key never leaves the sidecar (security invariant #1) —
-                 we can only say a key is saved, not show it. -->
-            <p class="mt-1 text-[1em]" :style="{ color: t.textDim }">
-              <template v-if="account?.fingerprint">
-                An API key is saved — leave blank to keep it, or enter a new key to replace it.
-              </template>
-              <template v-else>Leave blank to keep the current key.</template>
-            </p>
-          </label>
-
-          <!-- Curate models — built-in key + subscription. Each model is a list
-               row (remove to hide); add via the input/suggestions. Empty = all. -->
-          <div v-if="showModels" class="block">
-            <span class="text-[1em]" :style="{ color: t.textDim }">
-              Models — remove to hide, add to include. Leave empty to use all available.
-            </span>
-            <div class="mt-1">
-              <ModelListEditor v-model="modelsList" :suggestions="catalogIds" />
-            </div>
-          </div>
-
+        <!-- Custom endpoint: reuse the add form in edit mode (label/baseURL/api/key/models) -->
+        <div v-if="kind === 'custom'" class="px-4 py-4">
+          <CustomProviderForm
+            v-model="customDraft"
+            editing
+            :has-key="!!account?.fingerprint"
+            submit-label="Save changes"
+            @submit="onSaveCustom"
+            @cancel="onCancel"
+          />
           <div
             v-if="error"
-            class="text-[1em] px-2 py-1 rounded"
+            class="mt-2 text-[1em] px-2 py-1 rounded"
             :style="{
               background: t.dangerBg,
               color: t.danger,
@@ -118,35 +54,104 @@
           </div>
         </div>
 
-        <div
-          class="px-4 py-3 flex items-center justify-end gap-2"
-          :style="{ borderTop: `1px solid ${t.border}` }"
-        >
-          <button
-            type="button"
-            class="px-3 py-1.5 text-[1em] rounded transition"
-            :style="{
-              background: 'transparent',
-              border: `1px solid ${t.borderStrong}`,
-              color: t.text,
-            }"
-            @click="onCancel"
+        <!-- Built-in key + OAuth/subscription: label, (key for built-in), curate models -->
+        <form v-else @submit.prevent="onSave">
+          <div class="px-4 py-4 space-y-3">
+            <label class="block">
+              <span class="text-[1em]" :style="{ color: t.textDim }">Label</span>
+              <input
+                v-model="label"
+                class="mt-1 w-full rounded px-2 py-1.5 text-[1em]"
+                :style="inputStyle"
+                placeholder="Label"
+              />
+            </label>
+
+            <!-- Built-in API-key only: rotate the key (OAuth tokens are managed). -->
+            <label v-if="kind === 'builtin-key'" class="block">
+              <span class="text-[1em]" :style="{ color: t.textDim }">API key</span>
+              <div class="mt-1 flex items-center gap-2">
+                <input
+                  v-model="apiKey"
+                  :type="reveal ? 'text' : 'password'"
+                  class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+                  :style="inputStyle"
+                  placeholder="Enter a new key to replace"
+                />
+                <button
+                  type="button"
+                  class="px-2 py-1.5 rounded text-[1em] flex items-center"
+                  :style="iconBtnStyle"
+                  :title="reveal ? 'Hide' : 'Show'"
+                  @click="reveal = !reveal"
+                >
+                  <component :is="reveal ? EyeOff : Eye" :size="13" />
+                </button>
+              </div>
+              <!-- The stored key never leaves the sidecar (security invariant #1) —
+                 we can only say a key is saved, not show it. -->
+              <p class="mt-1 text-[1em]" :style="{ color: t.textDim }">
+                <template v-if="account?.fingerprint">
+                  An API key is saved — leave blank to keep it, or enter a new key to replace it.
+                </template>
+                <template v-else>Leave blank to keep the current key.</template>
+              </p>
+            </label>
+
+            <!-- Curate models — built-in key + subscription. Each model is a list
+               row (remove to hide); add via the input/suggestions. Empty = all. -->
+            <div v-if="showModels" class="block">
+              <span class="text-[1em]" :style="{ color: t.textDim }">
+                Models — remove to hide, add to include. Leave empty to use all available.
+              </span>
+              <div class="mt-1">
+                <ModelListEditor v-model="modelsList" :suggestions="catalogIds" />
+              </div>
+            </div>
+
+            <div
+              v-if="error"
+              class="text-[1em] px-2 py-1 rounded"
+              :style="{
+                background: t.dangerBg,
+                color: t.danger,
+                border: `1px solid ${t.dangerBorder}`,
+              }"
+            >
+              {{ error }}
+            </div>
+          </div>
+
+          <div
+            class="px-4 py-3 flex items-center justify-end gap-2"
+            :style="{ borderTop: `1px solid ${t.border}` }"
           >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            class="px-3 py-1.5 text-[1em] rounded transition inline-flex items-center gap-1.5"
-            :style="{ background: t.accent, color: t.accentText, border: 'none' }"
-            :disabled="!canSave || busy"
-          >
-            <Loader2 v-if="busy" :size="12" class="animate-spin" />
-            Save changes
-          </button>
-        </div>
-      </form>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-[1em] rounded transition"
+              :style="{
+                background: 'transparent',
+                border: `1px solid ${t.borderStrong}`,
+                color: t.text,
+              }"
+              @click="onCancel"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-3 py-1.5 text-[1em] rounded transition inline-flex items-center gap-1.5"
+              :style="{ background: t.accent, color: t.accentText, border: 'none' }"
+              :disabled="!canSave || busy"
+            >
+              <Loader2 v-if="busy" :size="12" class="animate-spin" />
+              Save changes
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

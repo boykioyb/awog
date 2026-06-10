@@ -1,159 +1,164 @@
 <template>
-  <div
-    v-if="open"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
-    :style="{ background: t.overlay }"
-    @click.self="onCancel"
-  >
+  <!-- Teleport ra body: ancestor Liquid Glass (backdrop-filter/transform) tạo
+       containing block mới cho position:fixed → overlay phải teleport mới phủ
+       toàn viewport. -->
+  <Teleport to="body">
     <div
-      class="w-full max-w-md rounded-lg shadow-xl"
-      :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-      role="dialog"
-      aria-modal="true"
+      v-if="open"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      :style="{ background: t.overlay }"
+      @click.self="onCancel"
     >
       <div
-        class="px-4 py-3 flex items-center justify-between"
-        :style="{ borderBottom: `1px solid ${t.border}` }"
+        class="w-full max-w-md rounded-lg shadow-xl"
+        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+        role="dialog"
+        aria-modal="true"
       >
-        <div class="text-[1em] font-semibold" :style="{ color: t.text }">
-          Connect Claude Pro/Max
-        </div>
-        <button
-          type="button"
-          class="p-1 rounded transition flex items-center"
-          :style="{ color: t.textDim }"
-          aria-label="Close"
-          @click="onCancel"
+        <div
+          class="px-4 py-3 flex items-center justify-between"
+          :style="{ borderBottom: `1px solid ${t.border}` }"
         >
-          <X :size="14" />
-        </button>
-      </div>
-
-      <div class="px-4 py-4 space-y-4">
-        <!-- Step 1 -->
-        <section class="space-y-2">
-          <div class="flex items-center gap-2">
-            <span
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[1em] font-semibold"
-              :style="{ background: t.accent, color: t.accentText }"
-            >
-              1
-            </span>
-            <div class="text-[1em]" :style="{ color: t.text }">
-              Open the Anthropic login page in your browser.
-            </div>
+          <div class="text-[1em] font-semibold" :style="{ color: t.text }">
+            Connect Claude Pro/Max
           </div>
           <button
             type="button"
-            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded text-[1em] font-medium transition"
-            :style="openButtonStyle"
-            :disabled="phase === 'opening' || phase === 'waiting-code' || phase === 'confirming'"
-            @click="onOpenLogin"
+            class="p-1 rounded transition flex items-center"
+            :style="{ color: t.textDim }"
+            aria-label="Close"
+            @click="onCancel"
           >
-            <LogIn v-if="phase !== 'waiting-code'" :size="13" />
-            <Check v-else :size="13" />
-            <span>{{ openButtonLabel }}</span>
+            <X :size="14" />
           </button>
-        </section>
+        </div>
 
-        <!-- Step 2 -->
-        <section class="space-y-1">
-          <div class="flex items-center gap-2">
-            <span
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[1em] font-semibold"
-              :style="stepBadgeStyle(phase !== 'idle' && phase !== 'opening')"
-            >
-              2
-            </span>
-            <div class="text-[1em]" :style="{ color: t.text }">
-              After signing in, Anthropic will show a one-time code. Copy it.
+        <div class="px-4 py-4 space-y-4">
+          <!-- Step 1 -->
+          <section class="space-y-2">
+            <div class="flex items-center gap-2">
+              <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[1em] font-semibold"
+                :style="{ background: t.accent, color: t.accentText }"
+              >
+                1
+              </span>
+              <div class="text-[1em]" :style="{ color: t.text }">
+                Open the Anthropic login page in your browser.
+              </div>
             </div>
-          </div>
-        </section>
-
-        <!-- Step 3 -->
-        <section class="space-y-2">
-          <div class="flex items-center gap-2">
-            <span
-              class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[1em] font-semibold"
-              :style="
-                stepBadgeStyle(
-                  phase === 'waiting-code' || phase === 'confirming' || phase === 'error',
-                )
-              "
+            <button
+              type="button"
+              class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded text-[1em] font-medium transition"
+              :style="openButtonStyle"
+              :disabled="phase === 'opening' || phase === 'waiting-code' || phase === 'confirming'"
+              @click="onOpenLogin"
             >
-              3
-            </span>
-            <div class="text-[1em]" :style="{ color: t.text }">
-              Paste the code below, then click Confirm.
+              <LogIn v-if="phase !== 'waiting-code'" :size="13" />
+              <Check v-else :size="13" />
+              <span>{{ openButtonLabel }}</span>
+            </button>
+          </section>
+
+          <!-- Step 2 -->
+          <section class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[1em] font-semibold"
+                :style="stepBadgeStyle(phase !== 'idle' && phase !== 'opening')"
+              >
+                2
+              </span>
+              <div class="text-[1em]" :style="{ color: t.text }">
+                After signing in, Anthropic will show a one-time code. Copy it.
+              </div>
             </div>
+          </section>
+
+          <!-- Step 3 -->
+          <section class="space-y-2">
+            <div class="flex items-center gap-2">
+              <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[1em] font-semibold"
+                :style="
+                  stepBadgeStyle(
+                    phase === 'waiting-code' || phase === 'confirming' || phase === 'error',
+                  )
+                "
+              >
+                3
+              </span>
+              <div class="text-[1em]" :style="{ color: t.text }">
+                Paste the code below, then click Confirm.
+              </div>
+            </div>
+
+            <textarea
+              ref="codeInput"
+              v-model="code"
+              rows="3"
+              class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-none"
+              :style="inputStyle"
+              placeholder="Paste the one-time code here"
+              spellcheck="false"
+              :disabled="phase === 'confirming'"
+            />
+
+            <input
+              v-model="label"
+              type="text"
+              class="w-full rounded px-2 py-1.5 text-[1em]"
+              :style="inputStyle"
+              placeholder="Optional label (e.g. Personal Pro)"
+              :disabled="phase === 'confirming'"
+            />
+          </section>
+
+          <div
+            v-if="error"
+            class="rounded px-3 py-2 text-[1em]"
+            :style="{
+              background: t.dangerBg,
+              border: `1px solid ${t.dangerBorder}`,
+              color: t.danger,
+            }"
+          >
+            {{ error }}
           </div>
-
-          <textarea
-            ref="codeInput"
-            v-model="code"
-            rows="3"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-none"
-            :style="inputStyle"
-            placeholder="Paste the one-time code here"
-            spellcheck="false"
-            :disabled="phase === 'confirming'"
-          />
-
-          <input
-            v-model="label"
-            type="text"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
-            :style="inputStyle"
-            placeholder="Optional label (e.g. Personal Pro)"
-            :disabled="phase === 'confirming'"
-          />
-        </section>
+        </div>
 
         <div
-          v-if="error"
-          class="rounded px-3 py-2 text-[1em]"
-          :style="{
-            background: t.dangerBg,
-            border: `1px solid ${t.dangerBorder}`,
-            color: t.danger,
-          }"
+          class="px-4 py-3 flex items-center justify-end gap-2"
+          :style="{ borderTop: `1px solid ${t.border}` }"
         >
-          {{ error }}
+          <button
+            type="button"
+            class="px-3 py-1.5 text-[1em] rounded transition"
+            :style="secondaryBtnStyle"
+            :disabled="phase === 'confirming'"
+            @click="onCancel"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[1em] rounded transition"
+            :style="primaryBtnStyle"
+            :disabled="!canConfirm"
+            @click="onConfirm"
+          >
+            <Loader2
+              v-if="phase === 'confirming'"
+              :size="13"
+              class="animate-spin shrink-0"
+              aria-hidden="true"
+            />
+            <span class="leading-none">Confirm</span>
+          </button>
         </div>
       </div>
-
-      <div
-        class="px-4 py-3 flex items-center justify-end gap-2"
-        :style="{ borderTop: `1px solid ${t.border}` }"
-      >
-        <button
-          type="button"
-          class="px-3 py-1.5 text-[1em] rounded transition"
-          :style="secondaryBtnStyle"
-          :disabled="phase === 'confirming'"
-          @click="onCancel"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[1em] rounded transition"
-          :style="primaryBtnStyle"
-          :disabled="!canConfirm"
-          @click="onConfirm"
-        >
-          <Loader2
-            v-if="phase === 'confirming'"
-            :size="13"
-            class="animate-spin shrink-0"
-            aria-hidden="true"
-          />
-          <span class="leading-none">Confirm</span>
-        </button>
-      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
