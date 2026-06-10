@@ -37,9 +37,53 @@
     </div>
   </div>
 
-  <div v-else-if="step.kind === 'thinking'" class="flex items-center gap-1.5 text-[1em] min-w-0">
-    <Brain :size="11" class="flex-shrink-0" :style="{ color: t.textDim }" />
-    <span class="italic truncate min-w-0" :style="{ color: t.textMuted }">{{ step.label }}</span>
+  <div v-else-if="step.kind === 'thinking'" class="text-[1em] min-w-0">
+    <!-- Reasoning streams live in `detail` (full text, growing). The row is a
+         collapse toggle: expanded while thinking (status running) so the user
+         watches it like the Claude extension, then auto-collapses when done. -->
+    <button
+      v-if="thinkingDetail"
+      type="button"
+      class="flex items-center gap-1.5 w-full text-left min-w-0 transition"
+      @click="collapsed = !collapsed"
+    >
+      <Loader2
+        v-if="thinkingActive"
+        :size="11"
+        class="flex-shrink-0 animate-spin"
+        :style="{ color: t.textDim }"
+      />
+      <Brain v-else :size="11" class="flex-shrink-0" :style="{ color: t.textDim }" />
+      <span class="italic min-w-0" :class="{ truncate: collapsed }" :style="{ color: t.textMuted }">
+        {{ collapsed ? step.label : thinkingActive ? 'Thinking…' : 'Reasoning' }}
+      </span>
+      <ChevronDown
+        :size="10"
+        class="flex-shrink-0 ml-auto"
+        :style="{
+          color: t.textDim,
+          transform: collapsed ? 'rotate(-90deg)' : 'none',
+          transition: 'transform 0.15s',
+        }"
+      />
+    </button>
+    <div v-else class="flex items-center gap-1.5 min-w-0">
+      <Loader2
+        v-if="thinkingActive"
+        :size="11"
+        class="flex-shrink-0 animate-spin"
+        :style="{ color: t.textDim }"
+      />
+      <Brain v-else :size="11" class="flex-shrink-0" :style="{ color: t.textDim }" />
+      <span class="italic truncate min-w-0" :style="{ color: t.textMuted }">{{ step.label }}</span>
+    </div>
+    <div
+      v-if="thinkingDetail && !collapsed"
+      class="mt-1 whitespace-pre-wrap italic text-[1em] leading-relaxed"
+      :style="{ color: t.textMuted, paddingLeft: '18px' }"
+    >
+      {{ thinkingDetail }}
+    </div>
   </div>
 
   <div v-else-if="step.kind === 'note'" class="text-[1em]" :style="{ color: t.text }">
@@ -267,8 +311,31 @@ const props = defineProps<{
 }>()
 
 const { t } = useTheme()
-const collapsed = ref(false)
+// Thinking starts EXPANDED while the reasoning streams (so the user watches it
+// live, like the Claude extension) and auto-collapses once done — except a
+// reasoning block reloaded already-done starts collapsed. Group/tool steps keep
+// the prior default-expanded behaviour.
+const collapsed = ref(props.step.kind === 'thinking' && props.step.status === 'done')
 const hover = ref(false)
+
+// Full extended-thinking text (newlines preserved), streamed live in `detail`.
+const thinkingDetail = computed(() =>
+  props.step.detail?.kind === 'text' ? props.step.detail.content : null,
+)
+// Reasoning still being generated → spinner + keep expanded.
+const thinkingActive = computed(
+  () => props.step.kind === 'thinking' && props.step.status === 'running',
+)
+
+// Auto-collapse the reasoning block the moment it completes (running → done),
+// matching the Claude extension. Guarded to thinking so a tool step's
+// running → done transition never collapses its children.
+watch(
+  () => props.step.status,
+  (status) => {
+    if (props.step.kind === 'thinking' && status === 'done') collapsed.value = true
+  },
+)
 
 const selectStep = inject(SELECT_STEP_KEY, null)
 const selectedStepId = inject(SELECTED_STEP_ID_KEY, ref<string | null>(null))

@@ -75,12 +75,18 @@ export function createEventAdapter(cb: StreamCallbacks): EventAdapter {
           acc.text += inner.delta
           cb.onChunk(inner.delta)
         } else if (inner.type === 'thinking_delta' && inner.delta.length > 0 && cb.onStep) {
-          // Extended-thinking → a 'thinking' step (StepItem renders it inline).
-          // Stable id per content block keeps the upsert merging in place as the
-          // reasoning grows. Parity with the task path (runtime/invoke.ts).
+          // Extended-thinking → a 'thinking' step carrying the full reasoning so
+          // far in `detail`, so the UI streams it live (status 'running'). Stable
+          // id per content block keeps the upsert merging in place as it grows.
           const next = (thinkingBlocks.get(inner.contentIndex) ?? '') + inner.delta
           thinkingBlocks.set(inner.contentIndex, next)
           cb.onStep(stepFromThinking(`thinking-${inner.contentIndex}`, next))
+        } else if (inner.type === 'thinking_end' && cb.onStep) {
+          // Reasoning block complete → mark it done (status 'done') so the UI can
+          // auto-collapse. `inner.content` is authoritative; fall back to the
+          // accumulated deltas if the provider omits it.
+          const full = inner.content || thinkingBlocks.get(inner.contentIndex) || ''
+          if (full) cb.onStep(stepFromThinking(`thinking-${inner.contentIndex}`, full, true))
         }
         break
       }

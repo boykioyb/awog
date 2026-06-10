@@ -268,15 +268,25 @@ export function stepFromToolResult(info: ToolResultInfo): SessionStep {
 
 // Surface extended-thinking (reasoning) as a 'thinking' step. `text` is the
 // per-block accumulation (the caller appends each delta), so the same `id`
-// upserts in place as the reasoning grows. Newlines collapse to a single line
-// (StepItem renders thinking as one italic row) and the label is capped so a
-// long reasoning block doesn't bloat the stdio stream. Parity with the task
-// path (tasks/trace-mapper.ts → traceThinkingNode).
-export function stepFromThinking(id: string, text: string): SessionStep {
+// upserts in place as the reasoning grows. The FULL reasoning (newlines
+// preserved) rides in `detail` on EVERY update so the UI can show it streaming
+// live (like the Claude extension / Craft Agent), not just a one-line preview;
+// `label` stays a capped one-liner for the collapsed row. `status` flips to
+// 'done' on thinking_end so the UI can auto-collapse the block.
+// Parity with the task path (tasks/trace-mapper.ts → traceThinkingNode).
+export function stepFromThinking(id: string, text: string, done = false): SessionStep {
   const oneLine = text.replace(/\s+/g, ' ').trim()
   const label =
     oneLine.length > RESULT_PREVIEW_MAX ? `${oneLine.slice(0, RESULT_PREVIEW_MAX)}…` : oneLine
-  return { id, kind: 'thinking', label: label || 'Thinking…' }
+  const step: SessionStep = {
+    id,
+    kind: 'thinking',
+    label: label || 'Thinking…',
+    status: done ? 'done' : 'running',
+  }
+  const full = text.trim()
+  if (full) step.detail = { kind: 'text', content: full }
+  return step
 }
 
 // Build a 'plan' step from an ExitPlanMode tool call's `plan` markdown. The UI
