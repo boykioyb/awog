@@ -43,9 +43,16 @@ const TaskParams = Type.Object({
     description:
       'The full, self-contained task for the subagent. It runs autonomously with no further input, so include every detail it needs; its final message is returned to you as the result.',
   }),
-  subagent_type: Type.String({
-    description: 'The name of the subagent to launch (see the list of available types above).',
-  }),
+  // Optional on purpose: under OAuth the model is conditioned as Claude Code,
+  // where a `general-purpose` default always exists, so it occasionally omits
+  // this field. Marking it required makes Pi's schema validator hard-fail before
+  // execute() runs (cryptic "must have required properties" error). Keeping it
+  // optional lets execute() recover gracefully — same path as an unknown name.
+  subagent_type: Type.Optional(
+    Type.String({
+      description: 'The name of the subagent to launch (see the list of available types above).',
+    }),
+  ),
 })
 
 interface TaskDetails {
@@ -212,8 +219,9 @@ export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams,
     // permission prompts deterministic.
     executionMode: 'sequential',
     async execute(toolCallId, params, signal) {
+      const requested = params.subagent_type?.trim()
       const details: TaskDetails = {
-        subagentType: params.subagent_type,
+        subagentType: requested || '(unspecified)',
         description: params.description,
       }
 
@@ -229,19 +237,31 @@ export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams,
         }
       }
 
-      const agent = matchAgent(deps.agents, params.subagent_type)
+      // Resolve which agent to run. A missing subagent_type is tolerated: with
+      // exactly one agent in scope we pick it (the unambiguous default), else we
+      // ask the model to name one — the same recovery path as an unknown name.
+      let agent: Agent | undefined
+      if (requested) {
+        agent = matchAgent(deps.agents, requested)
+      } else if (deps.agents.length === 1) {
+        agent = deps.agents[0]
+      }
       if (!agent) {
         const names = deps.agents.map((a) => a.name).join(', ')
+        const reason = requested
+          ? `Unknown subagent_type "${requested}".`
+          : 'No subagent_type was provided.'
         return {
           content: [
             {
               type: 'text',
-              text: `Unknown subagent_type "${params.subagent_type}". Available subagents: ${names}. Retry with one of these, or complete the task yourself.`,
+              text: `${reason} Available subagents: ${names}. Retry with one of these, or complete the task yourself.`,
             },
           ],
           details,
         }
       }
+      details.subagentType = agent.name
 
       if (spawned >= MAX_SUBAGENTS_PER_TURN) {
         return {
