@@ -6,21 +6,31 @@
       :style="{ borderBottom: `1px solid ${t.border}` }"
     >
       <span class="text-[1em] uppercase tracking-wide font-medium" :style="{ color: t.textDim }">
-        Explorer
+        {{ tr('code.explorer') }}
       </span>
       <div class="flex items-center gap-0.5">
-        <button type="button" :title="'New file'" :style="iconBtn" @click="startNew('file', '')">
+        <button
+          type="button"
+          :title="tr('code.explorer.new_file')"
+          :style="iconBtn"
+          @click="startNew('file', '')"
+        >
           <FilePlus :size="13" />
         </button>
         <button
           type="button"
-          :title="'New folder'"
+          :title="tr('code.explorer.new_folder')"
           :style="iconBtn"
           @click="startNew('folder', '')"
         >
           <FolderPlus :size="13" />
         </button>
-        <button type="button" :title="'Refresh'" :style="iconBtn" @click="ctx.refreshTree()">
+        <button
+          type="button"
+          :title="tr('code.refresh')"
+          :style="iconBtn"
+          @click="ctx.refreshTree()"
+        >
           <RefreshCw :size="13" />
         </button>
       </div>
@@ -40,7 +50,7 @@
       <input
         ref="newItemInput"
         v-model="newItemName"
-        :placeholder="newItem.dir ? `${newItem.dir}/…` : 'name…'"
+        :placeholder="newItem.dir ? `${newItem.dir}/…` : tr('code.explorer.name_placeholder')"
         class="flex-1 min-w-0 px-1 rounded text-[1em] outline-none"
         :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.borderFocus}` }"
         @keydown.enter.prevent="submitNew"
@@ -56,7 +66,7 @@
         class="px-3 py-2 text-[1em]"
         :style="{ color: t.textFaint }"
       >
-        Empty
+        {{ tr('code.explorer.empty') }}
       </p>
       <CodeTreeNode
         v-for="entry in ctx.rootEntries.value"
@@ -117,7 +127,9 @@
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <p class="text-[1em] font-medium mb-1" :style="{ color: t.text }">
-            Delete {{ deleting.isDir ? 'folder' : 'file' }}?
+            {{
+              deleting.isDir ? tr('code.explorer.delete_folder') : tr('code.explorer.delete_file')
+            }}
           </p>
           <p class="text-[1em] mb-4 break-all" :style="{ color: t.textDim }">{{ deleting.path }}</p>
           <div class="flex justify-end gap-2">
@@ -127,7 +139,7 @@
               :style="ghostBtn"
               @click="deleting = null"
             >
-              Cancel
+              {{ tr('common.cancel') }}
             </button>
             <button
               type="button"
@@ -135,7 +147,7 @@
               :style="{ background: t.dangerBg, color: t.danger }"
               @click="confirmDelete"
             >
-              Delete
+              {{ tr('common.delete') }}
             </button>
           </div>
         </div>
@@ -154,6 +166,7 @@ import { useProjectWorkspaceContext } from '~/composables/useProjectWorkspace'
 import CodeTreeNode from './CodeTreeNode.vue'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const ctx = useProjectWorkspaceContext()
 const sidecar = useSidecar()
 
@@ -235,27 +248,33 @@ const menuItems = computed<MenuItem[]>(() => {
   const { entry } = m
   const items: MenuItem[] = []
   if (entry.kind === 'file') {
-    items.push({ label: 'Open', run: () => act(() => ctx.openFile(entry.path)) })
+    items.push({ label: tr('common.open'), run: () => act(() => ctx.openFile(entry.path)) })
   } else {
-    items.push({ label: 'New File', run: () => act(() => startNew('file', entry.path)) })
-    items.push({ label: 'New Folder', run: () => act(() => startNew('folder', entry.path)) })
+    items.push({
+      label: tr('code.menu.new_file'),
+      run: () => act(() => startNew('file', entry.path)),
+    })
+    items.push({
+      label: tr('code.menu.new_folder'),
+      run: () => act(() => startNew('folder', entry.path)),
+    })
   }
   items.push({
-    label: 'Rename',
+    label: tr('common.rename'),
     run: () =>
       act(() => {
         renamingPath.value = entry.path
       }),
   })
   items.push({
-    label: 'Reveal in OS',
+    label: tr('code.menu.reveal_os'),
     run: () =>
       act(() => {
         sidecar.revealPath(ctx.workspaceRoot.value, entry.path).catch(() => undefined)
       }),
   })
   items.push({
-    label: 'Delete',
+    label: tr('common.delete'),
     danger: true,
     run: () =>
       act(() => {

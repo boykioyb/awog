@@ -18,7 +18,7 @@
         type="button"
         class="opacity-0 group-hover:opacity-100 transition text-[12px] px-1 rounded"
         :style="{ color: t.textDim }"
-        :title="action === 'stage' ? 'Stage' : 'Unstage'"
+        :title="action === 'stage' ? tr('code.scm.stage') : tr('code.scm.unstage')"
         @click.stop="emit('action', file.path)"
       >
         {{ action === 'stage' ? '+' : '−' }}
@@ -49,6 +49,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 
 const baseName = (p: string): string => {
   const i = p.lastIndexOf('/')

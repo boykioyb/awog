@@ -5,13 +5,18 @@
       :style="{ borderBottom: `1px solid ${t.border}` }"
     >
       <span class="text-[1em] uppercase tracking-wide font-medium" :style="{ color: t.textDim }">
-        Source Control
+        {{ tr('code.source_control') }}
       </span>
       <div class="flex items-center gap-0.5">
-        <button type="button" :title="'Refresh'" :style="iconBtn" @click="load">
+        <button type="button" :title="tr('code.refresh')" :style="iconBtn" @click="load">
           <RefreshCw :size="13" />
         </button>
-        <button type="button" :title="'Open Git Manager'" :style="iconBtn" @click="openGitManager">
+        <button
+          type="button"
+          :title="tr('code.scm.open_git')"
+          :style="iconBtn"
+          @click="openGitManager"
+        >
           <ExternalLink :size="13" />
         </button>
       </div>
@@ -38,7 +43,7 @@
       <textarea
         v-model="message"
         rows="2"
-        placeholder="Commit message…"
+        :placeholder="tr('code.scm.commit_placeholder')"
         class="w-full px-2 py-1.5 rounded text-[1em] outline-none resize-y min-h-[3rem]"
         :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
       />
@@ -53,7 +58,7 @@
         @click="doCommit"
       >
         <Check :size="13" />
-        Commit {{ stagedCount ? `(${stagedCount})` : '' }}
+        {{ tr('code.scm.commit') }} {{ stagedCount ? `(${stagedCount})` : '' }}
       </button>
     </div>
 
@@ -64,11 +69,11 @@
         class="px-3 py-2 text-[1em]"
         :style="{ color: t.textFaint }"
       >
-        Not a git repository
+        {{ tr('code.scm.no_repo') }}
       </p>
       <CodeScmSection
         v-if="staged.length"
-        label="Staged Changes"
+        :label="tr('code.scm.staged')"
         :files="staged"
         action="unstage"
         @open="(p) => ctx.openFile(p)"
@@ -76,7 +81,7 @@
       />
       <CodeScmSection
         v-if="unstaged.length"
-        label="Changes"
+        :label="tr('code.scm.changes')"
         :files="unstaged"
         action="stage"
         @open="(p) => ctx.openFile(p)"
@@ -87,7 +92,7 @@
         class="px-3 py-2 text-[1em]"
         :style="{ color: t.textFaint }"
       >
-        No changes
+        {{ tr('code.scm.no_changes') }}
       </p>
     </div>
   </div>
@@ -108,6 +113,7 @@ import { useProjectWorkspaceContext } from '~/composables/useProjectWorkspace'
 import CodeScmSection from './CodeScmSection.vue'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const ctx = useProjectWorkspaceContext()
 const git = useGitApi()
 const sidecar = useSidecar()

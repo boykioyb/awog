@@ -17,7 +17,9 @@
       @click="ctx.openFile(tab.path)"
     >
       <span class="truncate max-w-[160px]">{{ tab.name }}</span>
-      <span v-if="tab.readOnly" class="text-[12px]" :style="{ color: t.textFaint }">RO</span>
+      <span v-if="tab.readOnly" class="text-[12px]" :style="{ color: t.textFaint }">
+        {{ tr('code.readonly_short') }}
+      </span>
       <button
         type="button"
         class="flex items-center justify-center w-4 h-4 rounded transition"
@@ -40,5 +42,6 @@ import { X } from 'lucide-vue-next'
 import { useProjectWorkspaceContext } from '~/composables/useProjectWorkspace'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const ctx = useProjectWorkspaceContext()
 </script>
