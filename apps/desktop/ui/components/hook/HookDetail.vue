@@ -24,6 +24,25 @@
           <span class="text-[1em] px-1.5 py-0.5 rounded uppercase" :style="modeBadgeStyle">
             {{ hook.runMode }}
           </span>
+          <span
+            v-if="hook.source && hook.source !== 'global'"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+            :style="{
+              background: t.bgInput,
+              color: isProjectScoped ? t.accent : t.textDim,
+              border: `1px solid ${isProjectScoped ? t.accent : t.border}`,
+            }"
+          >
+            {{ sourceLabel }}
+          </span>
+          <span
+            v-if="isImported"
+            class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+            :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+          >
+            <Lock :size="10" />
+            {{ tr('hooks.detail.imported') }}
+          </span>
         </div>
         <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
           {{ hook.description }}
@@ -31,24 +50,27 @@
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
         <button
-          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-          :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+          v-if="!isImported"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          :title="tr('hooks.detail.run_once')"
           @click="ws.runHookOnce(hook.id)"
         >
-          <Play :size="11" />
-          Run once
-        </button>
-        <button
-          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-          :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
-          @click="emit('edit')"
-        >
-          <Edit3 :size="11" />
-          Edit
+          <Play :size="13" />
         </button>
         <button
           class="p-1.5 rounded transition"
           :style="{ color: t.textDim }"
+          :title="tr('common.edit')"
+          @click="emit('edit')"
+        >
+          <Edit3 :size="13" />
+        </button>
+        <button
+          v-if="!isImported"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          :title="tr('common.delete')"
           @click="emit('delete')"
         >
           <Trash2 :size="13" />
@@ -56,21 +78,59 @@
       </div>
     </div>
 
+    <!-- Trust gate (ADR 0032 D-8): a project-tier hook from the repo must be
+         explicitly trusted before it can spawn. -->
+    <div
+      v-if="isProjectScoped && hook.trusted === false"
+      class="mb-6 p-3 rounded flex items-start gap-3"
+      :style="{ background: t.warningBg, border: `1px solid ${t.warningBorder}` }"
+    >
+      <ShieldAlert :size="16" :style="{ color: t.warning }" class="flex-shrink-0 mt-0.5" />
+      <div class="flex-1 min-w-0">
+        <div class="text-[1em] font-medium" :style="{ color: t.warning }">
+          {{ tr('hooks.trust.title') }}
+        </div>
+        <div class="text-[1em] mt-0.5" :style="{ color: t.textMuted }">
+          {{
+            tr('hooks.trust.desc', { path: isImported ? '.claude/settings.json' : '.awog/hooks' })
+          }}
+        </div>
+        <button
+          class="mt-2 px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+          :style="{ background: t.warning, color: t.bg }"
+          @click="onTrust"
+        >
+          <ShieldCheck :size="12" />
+          {{ tr('hooks.trust.button') }}
+        </button>
+      </div>
+    </div>
+
     <!-- Quick controls -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-      <ToggleCard label="Enabled" :value="hook.enabled" @toggle="ws.toggleHook(hook.id)" />
-      <KeyValueCard label="Run mode" :value="hook.runMode" />
-      <KeyValueCard label="Timeout" :value="`${hook.timeoutMs}ms`" />
+      <ToggleCard
+        v-if="!isImported"
+        :label="tr('hooks.detail.enabled')"
+        :value="hook.enabled"
+        @toggle="ws.toggleHook(hook.id)"
+      />
+      <KeyValueCard
+        v-else
+        :label="tr('hooks.detail.source')"
+        :value="tr('hooks.detail.readonly_hint', { source: sourceLabel })"
+      />
+      <KeyValueCard :label="tr('hooks.detail.run_mode')" :value="hook.runMode" />
+      <KeyValueCard :label="tr('hooks.detail.timeout')" :value="`${hook.timeoutMs}ms`" />
     </div>
 
     <!-- Matcher -->
-    <Section title="Matcher">
+    <Section :title="tr('hooks.detail.matcher')">
       <div
         v-if="Object.keys(hook.matcher).length === 0"
         class="text-[1em]"
         :style="{ color: t.textFaint }"
       >
-        Không có filter — chạy cho mọi payload của event này.
+        {{ tr('hooks.detail.matcher_empty') }}
       </div>
       <div v-else class="space-y-1.5">
         <KeyRow
@@ -84,7 +144,7 @@
     </Section>
 
     <!-- Command -->
-    <Section title="Command">
+    <Section :title="tr('hooks.detail.command')">
       <pre
         class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
         :style="{
@@ -96,15 +156,18 @@
         >{{ hook.command }}</pre
       >
       <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <KeyValueCard label="cwd" :value="hook.cwd" />
-        <KeyValueCard label="env" :value="`${Object.keys(hook.env ?? {}).length} vars`" />
+        <KeyValueCard :label="tr('hooks.detail.cwd')" :value="hook.cwd" />
+        <KeyValueCard
+          :label="tr('hooks.detail.env')"
+          :value="tr('hooks.detail.env_value', { count: Object.keys(hook.env ?? {}).length })"
+        />
       </div>
     </Section>
 
     <!-- Recent runs -->
-    <Section :title="`Recent runs · ${hook.recentRuns.length}`">
+    <Section :title="tr('hooks.detail.recent_runs', { count: hook.recentRuns.length })">
       <div v-if="hook.recentRuns.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
-        Chưa chạy lần nào.
+        {{ tr('hooks.detail.no_runs') }}
       </div>
       <div v-else class="space-y-1">
         <div
@@ -133,14 +196,35 @@
 </template>
 
 <script setup lang="ts">
-import { Zap, Edit3, Trash2, Play } from 'lucide-vue-next'
-import type { Hook } from '~/types'
+import { Zap, Edit3, Trash2, Play, ShieldAlert, ShieldCheck, Lock } from 'lucide-vue-next'
+import type { Hook, HookSource } from '~/types'
 
 const props = defineProps<{ hook: Hook }>()
 const emit = defineEmits<{ edit: []; delete: [] }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const ws = useWorkspaceStore()
+
+const isImported = computed(() => props.hook.readOnly === true)
+const isProjectScoped = computed(
+  () =>
+    props.hook.source === 'project' ||
+    props.hook.source === 'claude-project' ||
+    props.hook.source === 'claude-local',
+)
+const SOURCE_KEY: Record<HookSource, string> = {
+  global: 'hooks.source.global',
+  project: 'hooks.source.project',
+  'claude-project': 'hooks.source.claude_project',
+  'claude-local': 'hooks.source.claude_local',
+  'claude-user': 'hooks.source.claude_user',
+}
+const sourceLabel = computed(() => tr(SOURCE_KEY[props.hook.source ?? 'global']))
+
+const onTrust = () => {
+  if (props.hook.projectId) ws.trustHooks(props.hook.projectId, [props.hook.id])
+}
 
 const modeBadgeStyle = computed(() => ({
   background: props.hook.runMode === 'blocking' ? t.value.warningBg : t.value.bgInput,

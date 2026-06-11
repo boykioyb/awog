@@ -1,3 +1,4 @@
+import type { Ref } from 'vue'
 import type { Hook, HookEvent, HookRunMode } from '~/types'
 
 export type HookDraft = Omit<Hook, 'id'> & { id: string }
@@ -100,4 +101,107 @@ const mockGenerate = (prompt: string): HookDraft => {
   }
 }
 
-export const useHookGenerator = () => useMockGenerator<HookDraft>({ generate: mockGenerate })
+interface HookGenerator {
+  generate: (prompt: string) => Promise<HookDraft | null>
+  edit: (prompt: string, current: Hook) => Promise<HookDraft | null>
+  isGenerating: Ref<boolean>
+  error: Ref<string | null>
+}
+
+interface GenerateResponse {
+  hook: {
+    name: string
+    description: string
+    event: HookEvent
+    matcher: Record<string, string>
+    command: string
+    cwd: string
+    timeoutMs: number
+    runMode: HookRunMode
+  }
+}
+
+// Build a HookDraft from the LLM config, preserving identity/runtime fields of
+// the edited hook (id/enabled/env/source/projectId/recentRuns).
+const fromConfig = (cfg: GenerateResponse['hook'], base: Hook | null): HookDraft => ({
+  id: base?.id ?? slugify(cfg.name),
+  name: cfg.name,
+  description: cfg.description,
+  event: cfg.event,
+  matcher: cfg.matcher ?? {},
+  command: cfg.command,
+  cwd: cfg.cwd || '${workspace}',
+  timeoutMs: cfg.timeoutMs ?? 30000,
+  runMode: cfg.runMode ?? 'background',
+  enabled: base?.enabled ?? true,
+  env: base?.env ?? {},
+  recentRuns: base?.recentRuns ?? [],
+  ...(base?.source ? { source: base.source } : {}),
+  ...(base?.projectId ? { projectId: base.projectId } : {}),
+})
+
+// LLM-backed (mock fallback) generator. `generate` drafts from scratch; `edit`
+// revises an existing hook given the current hook as context.
+export const useHookGenerator = (): HookGenerator => {
+  const isGenerating = ref(false)
+  const error = ref<string | null>(null)
+  const sidecar = useSidecar()
+  const settings = useSettingsStore()
+
+  const mockEdit = (prompt: string, current: Hook): HookDraft => ({
+    ...mockGenerate(prompt),
+    id: current.id,
+    enabled: current.enabled,
+    env: current.env ?? {},
+    recentRuns: current.recentRuns ?? [],
+    ...(current.source ? { source: current.source } : {}),
+    ...(current.projectId ? { projectId: current.projectId } : {}),
+  })
+
+  const run = async (prompt: string, current: Hook | null): Promise<HookDraft | null> => {
+    const trimmed = prompt.trim()
+    if (!trimmed) {
+      error.value = 'Prompt cannot be empty'
+      return null
+    }
+    isGenerating.value = true
+    error.value = null
+    try {
+      const account = settings.activeAccount('anthropic')
+      if (!sidecar.available || !account) {
+        await new Promise<void>((r) => setTimeout(r, 350))
+        return current ? mockEdit(trimmed, current) : mockGenerate(trimmed)
+      }
+      try {
+        const params: Record<string, unknown> = { prompt: trimmed, accountId: account.id }
+        if (current) {
+          params.currentHook = {
+            name: current.name,
+            description: current.description,
+            event: current.event,
+            matcher: current.matcher,
+            command: current.command,
+            cwd: current.cwd,
+            timeoutMs: current.timeoutMs,
+            runMode: current.runMode,
+          }
+        }
+        const res = await sidecar.request<GenerateResponse>('hooks.generate', params)
+        return fromConfig(res.hook, current)
+      } catch (err) {
+        console.warn('[hooks] LLM generate failed, falling back to mock', err)
+        error.value = err instanceof Error ? err.message : String(err)
+        return current ? mockEdit(trimmed, current) : mockGenerate(trimmed)
+      }
+    } finally {
+      isGenerating.value = false
+    }
+  }
+
+  return {
+    generate: (prompt) => run(prompt, null),
+    edit: (prompt, current) => run(prompt, current),
+    isGenerating,
+    error,
+  }
+}
