@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.10.0',
+    date: '2026-06-11',
+    highlight: {
+      en: 'Slash commands, workspace Rules, and real lifecycle Hooks — all importable from your Claude Code config, with AI-assisted authoring.',
+      vi: 'Slash command, Rules cho workspace, và Hooks vòng đời thật — đều nhập được từ cấu hình Claude Code, kèm soạn thảo có AI hỗ trợ.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Slash commands: save reusable prompt templates and run them by typing "/name" in the composer — "$ARGUMENTS" / "$1" are filled from what you type. Your Claude Code ".claude/commands" are imported too.',
+        vi: 'Slash command: lưu prompt template tái dùng và chạy bằng cách gõ "/tên" trong khung soạn — "$ARGUMENTS" / "$1" được điền từ phần bạn gõ. Tự nhập luôn ".claude/commands" của Claude Code.',
+      },
+      {
+        kind: 'added',
+        en: 'Rules: workspace instruction files (the AWOG analog of CLAUDE.md) are auto-injected into the agent system prompt for every session and task — and your CLAUDE.md / .claude/rules are imported and prioritised.',
+        vi: 'Rules: file hướng dẫn workspace (bản AWOG của CLAUDE.md) tự được chèn vào system prompt của agent ở mọi session và task — và CLAUDE.md / .claude/rules của bạn được nhập và ưu tiên.',
+      },
+      {
+        kind: 'added',
+        en: 'Hooks: run real shell commands on lifecycle events (tool calls, file writes, task/phase completion). Your Claude Code hooks are imported (run read-only, trust-gated so a cloned repo can’t auto-run code).',
+        vi: 'Hooks: chạy lệnh shell thật theo sự kiện vòng đời (tool call, ghi file, hoàn thành task/phase). Hook của Claude Code được nhập (chạy read-only, có cổng tin cậy để repo lạ không tự chạy code).',
+      },
+      {
+        kind: 'added',
+        en: 'Agents can ask you a question mid-task and wait for your choice before continuing.',
+        vi: 'Agent có thể hỏi bạn một câu giữa chừng và chờ bạn chọn trước khi tiếp tục.',
+      },
+      {
+        kind: 'improved',
+        en: 'Create and edit commands, rules, and hooks with AI; all three list pages group items by project with collapsible sections.',
+        vi: 'Tạo và sửa command, rule, hook bằng AI; cả ba trang danh sách đều gom theo project với mục có thể thu gọn.',
+      },
+      {
+        kind: 'improved',
+        en: 'Token proxy (RTK) compresses shell-command output before it reaches the model — 60–90% fewer tokens on dev operations. Toggle in Settings → Workspace.',
+        vi: 'Token proxy (RTK) nén output lệnh shell trước khi vào model — giảm 60–90% token cho thao tác dev. Bật/tắt ở Settings → Workspace.',
+      },
+      {
+        kind: 'added',
+        en: 'Code workspace: preview Markdown files and copy a file’s path straight from the explorer.',
+        vi: 'Code workspace: xem trước file Markdown và sao chép đường dẫn file ngay từ explorer.',
+      },
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-06-10',
     highlight: {
