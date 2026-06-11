@@ -10,7 +10,11 @@ import type {
   SessionSettings,
   SessionStep,
 } from '../types/shared.js'
-import type { CanUseTool, McpServersConfig } from '../runtime/permission-types.js'
+import type {
+  AskUserQuestionFn,
+  CanUseTool,
+  McpServersConfig,
+} from '../runtime/permission-types.js'
 
 const PER_SESSION_LOCKS = new Map<string, Promise<unknown>>()
 
@@ -62,6 +66,10 @@ export interface RunNonStreamArgs {
   // permission RPC — callers (sessions.send-message) must always supply it for
   // gated modes.
   canUseTool?: CanUseTool
+  // Interactive AskUserQuestion handler. Only the chat runtime (sessions) wires
+  // this; the tool parks on it and resolves via the sessions.answerQuestion RPC.
+  // Tasks/subagents leave it undefined → the tool no-ops gracefully.
+  askUserQuestion?: AskUserQuestionFn
   // Per-session tool denylist. Removes these tool names from the runtime tool
   // set so the model never sees them.
   disabledTools?: string[]

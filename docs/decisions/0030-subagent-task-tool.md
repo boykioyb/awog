@@ -21,6 +21,8 @@ Implement tool `Task` thật cho **cả Sessions (chat) lẫn Tasks (workflow no
 
 2. **subagent_type → AWOG Agent.** Tool nhận sẵn danh sách agent (`listAgents(projectIds)`) để (a) liệt kê trong `description` cho model chọn đúng, (b) resolve theo `id` rồi `name` (case-insensitive). Resolve config qua `resolveAgentContext` ([tasks/agent-context.ts](../../apps/desktop/sidecar/src/tasks/agent-context.ts)) → `systemPrompt` + `allowedTools` + `mcpServers` (secrets expand) + `provider/model/accountId`.
 
+   **MCP kế thừa từ parent (sửa sau khi ship):** subagent dùng **union** MCP của turn cha (`TaskToolDeps.parentMcpServers`, đã resolve whitelist ∩ enabled + secret expand) với MCP riêng của AGENT.md (`mergeMcpServers`). Trước đây chỉ build từ `agent.mcpServerIds` → subagent có whitelist hẹp hơn parent mất luôn server của session (gọi `mcp__<id>__*` báo "not found", subagent báo "không có MCP access"). Nay bảo đảm subagent luôn với tới ≥ MCP của parent. `allowedTools` (nếu agent khai `tools`) vẫn lọc theo tên tool như cũ.
+
 3. **Subagent honor AGENT.md frontmatter** (chốt với user): subagent dùng `provider/model/accountId` của agent khi có, **fallback** về settings của parent. Tool tự `resolveCredential` + `resolveModel` cho subagent → mỗi subagent có thể chạy provider/account riêng. Credential **không bao giờ rời sidecar**.
 
 4. **Depth = 1 (chống đệ quy).** Toolset của subagent build qua `createRuntimeToolDefinitions` **không** kèm `Task` (và không `ExitPlanMode`). Subagent không thể spawn subagent — giống Claude Code. Không cần biến đếm depth.
@@ -51,7 +53,7 @@ Implement tool `Task` thật cho **cả Sessions (chat) lẫn Tasks (workflow no
   - Session 'ask' mode: subagent có thể sinh nhiều permission prompt nested — đánh đổi cho an toàn.
   - Cross-provider subagent chạm vùng credential mà [ADR 0026](./0026-per-agent-multi-provider-llm.md) vẫn còn mở; ở đây chỉ tái dùng `resolveCredential` per-account hiện hữu, không mở rộng gateway.
 - **Việc cần làm tiếp:**
-  - Cập nhật chú thích `<mcp-preference>` (subagent **nay có** MCP riêng, không còn "không kế thừa").
+  - ~~Cập nhật chú thích `<mcp-preference>`~~ ✅ subagent **nay kế thừa** MCP của session (union với MCP riêng AGENT.md); nudge trong [sessions.send-message.ts](../../apps/desktop/sidecar/src/methods/sessions.send-message.ts) đã đổi sang "subagent inherits these MCP servers automatically".
   - Cân nhắc surface text/summary của subagent thành 1 step `note` nested (hiện chỉ trả về model + hiện ở result của step `Task`).
   - infosec review path mới (spawn loop lồng + credential per-subagent).
 

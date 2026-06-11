@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { ipcMain, shell, dialog, type BrowserWindow } from 'electron'
 import { engine, type RpcErrorShape } from './engine'
+import { isVscodeAvailable, openInVscode } from './vscode'
 
 // IPC router — the Electron counterpart of the old Rust `commands.rs`.
 // Renderer reaches these only through the `window.awog` contextBridge (preload).
@@ -82,6 +83,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const target = resolveInsideWorkspace(root, path)
     const err = await shell.openPath(target)
     if (err) throw new Error(err)
+  })
+
+  // Whether the VS Code CLI can be located on this machine. Drives whether the
+  // file context menu shows "Open in VS Code".
+  ipcMain.handle('shell:vscodeAvailable', async (): Promise<boolean> => isVscodeAvailable())
+
+  ipcMain.handle('shell:openInVscode', async (_e, { root, path }: PathPayload) => {
+    await openInVscode(resolveInsideWorkspace(root, path))
   })
 
   ipcMain.handle('dialog:pickFolder', async (_e, opts: PickFolderOpts = {}): Promise<string | null> => {

@@ -23,6 +23,7 @@ import { createTaskTool } from './tools/task-tool.js'
 import { makeBeforeToolCall } from './permission.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
+import { buildRulesPrompt } from '../rules/inject.js'
 
 // Plan-mode system-prompt nudge. The model is read-only here (permission.ts
 // blocks Write/Edit/Bash); it should investigate, then present a concrete plan
@@ -93,6 +94,15 @@ export async function runStreamPi(
       ...(inPlanMode ? { includePlanTool: true } : {}),
     },
     args.abortController?.signal,
+    // Wire the interactive AskUserQuestion handler (chat only). The tool parks
+    // on it mid-turn and the answer comes back via the answerQuestion RPC.
+    args.askUserQuestion,
+    // Hook anchor (ADR 0032): fire tool.* / artifact.* around each tool call.
+    {
+      surface: 'session',
+      workspace: args.cwd ?? process.cwd(),
+      ...(args.projectId ? { projectId: args.projectId } : {}),
+    },
   )
 
   // Append system-prompt nudges after the agent's own prompt (+ any existing
@@ -103,8 +113,12 @@ export async function runStreamPi(
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
     ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
   })
+  // Workspace rules (ADR 0033): enabled global + session-project rules, appended
+  // to (not replacing) the agent's own prompt.
+  const rulesPrompt = await buildRulesPrompt(args.projectId)
   const appendParts = [
     args.systemPromptAppend,
+    rulesPrompt,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
     inPlanMode ? PLAN_MODE_PROMPT : undefined,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
@@ -140,6 +154,9 @@ export async function runStreamPi(
         cwd: args.cwd ?? process.cwd(),
         parentSettings: args.settings,
         ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+        // Subagent inherits this turn's resolved MCP servers (session whitelist +
+        // secrets already applied) so it can reach the same servers the session can.
+        ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
         // Chat subagents reuse the parent permission gate: in 'ask' mode their
         // writes/exec still prompt the user (depth-1 subagent, same session).
         beforeToolCall,

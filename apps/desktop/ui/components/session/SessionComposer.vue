@@ -53,7 +53,8 @@
 
     <!-- Input field: soft rounded with the send action inside. Connection /
          account / model chips live in the toolbar below it (lighter than a top
-         chip header). Textarea stays resizable (top grip + bottom-right grip). -->
+         chip header). The composer is resized via the top grip only (the
+         textarea's native corner grip is disabled — resize-none). -->
     <div
       class="rounded-xl"
       :style="{
@@ -67,7 +68,7 @@
           v-model="draft"
           rows="2"
           :placeholder="placeholder"
-          class="flex-1 bg-transparent py-1 text-[1em] resize-y min-h-[2.75rem] max-h-[50vh] outline-none"
+          class="flex-1 bg-transparent py-1 text-[1em] resize-none min-h-[2.75rem] max-h-[50vh] outline-none"
           :style="{ color: t.text }"
           @focus="composerFocus = true"
           @blur="onBlur"
@@ -271,6 +272,11 @@ import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { composeOutgoingMessage, truncateForChip } from '~/utils/follow-up'
 import { findSessionCommand } from '~/utils/session-catalog'
+import {
+  expandCommandBody,
+  findInvocableCommand,
+  parseSlashInvocation,
+} from '~/utils/slash-command'
 
 const props = defineProps<{
   session: Session
@@ -281,6 +287,7 @@ const props = defineProps<{
 
 const { t } = useTheme()
 const store = useSessionsStore()
+const ws = useWorkspaceStore()
 
 const draft = ref('')
 const composerFocus = ref(false)
@@ -396,9 +403,18 @@ const isStreaming = computed(() => store.isSessionStreaming(props.session.id))
 const onSend = () => {
   if (!canSend.value) return
   const followUps = pendingFollowUps.value
+  // Slash-command expansion: if the draft is `/name [args]` matching an enabled
+  // user command in scope, expand its template (substituting $ARGUMENTS / $1…)
+  // and send that instead of the literal `/name`.
+  let body = draft.value
+  const invocation = parseSlashInvocation(draft.value)
+  if (invocation) {
+    const cmd = findInvocableCommand(ws.commands, invocation.name, props.session.projectId)
+    if (cmd) body = expandCommandBody(cmd.body, invocation.args)
+  }
   // Full quote is preserved here — chip truncation is purely visual.
   // See lukilabs/craft-agents-oss#580 for the rationale.
-  const text = composeOutgoingMessage(draft.value, followUps)
+  const text = composeOutgoingMessage(body, followUps)
   const attachments = pendingAttachments.value.length ? [...pendingAttachments.value] : undefined
   // Pass the structured follow-ups too: the store stores them on the user message
   // for the numbered-card render + anchor badges, while `text` (the serialized

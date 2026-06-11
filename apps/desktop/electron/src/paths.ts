@@ -31,6 +31,18 @@ export function preloadPath(): string {
   return join(__dirname, 'preload.js')
 }
 
+// Absolute path to the bundled RTK binary (ADR 0031). Handed to the engine via
+// AWOG_RTK_BIN at spawn so the sidecar's Bash tool can compress command output.
+// Mirrors enginePath()'s dev/packaged split. The binary is fetched into
+// electron/resources/rtk/ by scripts/fetch-rtk.mjs and shipped via extraResources.
+export function rtkBinPath(): string {
+  const binName = process.platform === 'win32' ? 'rtk.exe' : 'rtk'
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'rtk', binName)
+  }
+  return join(__dirname, '..', 'resources', 'rtk', binName)
+}
+
 // Tray icon. macOS uses a monochrome TEMPLATE image (transparent bg, auto
 // black/white per menu-bar appearance — no background tile); Windows/Linux use
 // the colored icon. createFromPath auto-loads the @2x variant alongside.

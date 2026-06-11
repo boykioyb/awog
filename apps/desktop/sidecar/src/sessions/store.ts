@@ -101,11 +101,17 @@ function fold(events: SessionEvent[]): Session | null {
     } else if (e.type === 'message.appended') {
       if (!snapshot) continue
       const current: Session = snapshot
-      snapshot = {
-        ...current,
-        messages: [...current.messages, e.message],
-        updatedAt: e.at,
-      }
+      // Upsert by message id. A turn may be appended several times — the user
+      // message once, then the assistant message as partial → … → final snapshot
+      // (same id) so a cancel/crash mid-stream still persists the truncated
+      // reply. Replacing in place keeps order; last write wins. Legacy logs have
+      // a unique id per event, so this collapses to a plain push for them.
+      const idx = current.messages.findIndex((m) => m.id === e.message.id)
+      const messages =
+        idx >= 0
+          ? current.messages.map((m, i) => (i === idx ? e.message : m))
+          : [...current.messages, e.message]
+      snapshot = { ...current, messages, updatedAt: e.at }
     } else if (e.type === 'session.deleted') {
       deleted = true
     }

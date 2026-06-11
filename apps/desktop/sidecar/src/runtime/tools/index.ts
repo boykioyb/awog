@@ -11,7 +11,7 @@
 // apply to built-in AND MCP tools alike.
 
 import type { AgentTool } from '@earendil-works/pi-agent-core'
-import type { McpServersConfig } from '../permission-types.js'
+import type { AskUserQuestionFn, McpServersConfig } from '../permission-types.js'
 import {
   createEditTool,
   createGlobTool,
@@ -22,7 +22,9 @@ import {
 import { createBashTool } from './bash-tool.js'
 import { createMcpToolDefinitions } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
+import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createTodoWriteTool, createWebSearchTool, createWebFetchTool } from './builtin-stubs.js'
+import { wrapToolsWithHooks, type HookToolContext } from '../../hooks/tool-anchor.js'
 
 export interface ToolFilter {
   // Agent `tools` whitelist (Claude Code subagent field). When set + non-empty,
@@ -57,7 +59,14 @@ function applyFilter(tools: AgentTool[], filter: ToolFilter): AgentTool[] {
   return tools.filter((t) => isToolAllowed(t.name, filter))
 }
 
-export function createAwogToolDefinitions(cwd: string, filter: ToolFilter = {}): AgentTool[] {
+export function createAwogToolDefinitions(
+  cwd: string,
+  filter: ToolFilter = {},
+  // Interactive AskUserQuestion handler. Supplied only by the chat runtime
+  // (sessions). When absent (tasks / subagents) the tool falls back to a
+  // headless no-op so a stray call never deadlocks. See ask-user-question-tool.
+  askUser?: AskUserQuestionFn,
+): AgentTool[] {
   // The full built-in set. `as AgentTool[]` widens the per-tool parameter
   // generics to the AgentTool default (TSchema) for a homogeneous array — Pi's
   // runtime validates each tool against its own schema regardless.
@@ -73,6 +82,10 @@ export function createAwogToolDefinitions(cwd: string, filter: ToolFilter = {}):
     createTodoWriteTool(),
     createWebSearchTool(),
     createWebFetchTool(),
+    // AskUserQuestion: interactive in chat (askUser set), graceful no-op
+    // elsewhere. Always present so the model can use it and a stray OAuth call
+    // never errors out.
+    createAskUserQuestionTool(askUser),
     ...(filter.includePlanTool ? [createExitPlanModeTool()] : []),
   ] as AgentTool[]
 
@@ -89,9 +102,15 @@ export async function createRuntimeToolDefinitions(
   mcpServers: McpServersConfig | undefined,
   filter: ToolFilter = {},
   signal?: AbortSignal,
+  // Forwarded to the AskUserQuestion tool — set only by the chat runtime.
+  askUser?: AskUserQuestionFn,
+  // Hook anchor context (ADR 0032). When set, every tool's execute is wrapped so
+  // tool.* / artifact.* hooks fire around it (sessions + tasks). Absent → no wrap.
+  hookContext?: HookToolContext,
 ): Promise<AgentTool[]> {
-  const builtIn = createAwogToolDefinitions(cwd, filter)
+  const builtIn = createAwogToolDefinitions(cwd, filter, askUser)
   const mcp = await createMcpToolDefinitions(mcpServers, signal)
   // Built-in tools are already filtered; filter MCP tools by the same rules.
-  return [...builtIn, ...applyFilter(mcp, filter)]
+  const tools = [...builtIn, ...applyFilter(mcp, filter)]
+  return hookContext ? wrapToolsWithHooks(tools, hookContext) : tools
 }

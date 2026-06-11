@@ -62,24 +62,71 @@
             <span v-if="fileContent?.truncated" class="text-[12px]" :style="{ color: t.warning }">
               {{ tr('workspace.files.truncated') }}
             </span>
-            <span
-              v-if="fileContent?.language"
-              class="ml-auto text-[12px] uppercase tracking-wider"
-              :style="{ color: t.textDim }"
-            >
-              {{ fileContent.language }}
-            </span>
-            <button
-              v-if="session.projectId"
-              type="button"
-              class="p-1 rounded transition"
-              :class="{ 'ml-auto': !fileContent?.language }"
-              :style="{ color: t.textDim }"
-              :title="tr('workspace.files.openInEditor')"
-              @click="openInEditor"
-            >
-              <Code2 :size="13" />
-            </button>
+
+            <div class="ml-auto flex items-center gap-1 flex-shrink-0">
+              <!-- Markdown defaults to a rendered preview; toggle to raw source. -->
+              <div
+                v-if="isMarkdown && !fileContent?.isBinary"
+                class="inline-flex rounded overflow-hidden"
+                :style="{ border: `1px solid ${t.border}` }"
+              >
+                <button
+                  v-for="m in fileViewModes"
+                  :key="m.value"
+                  type="button"
+                  class="px-1.5 py-1 inline-flex items-center transition"
+                  :style="{
+                    background: fileView === m.value ? t.bgActive : 'transparent',
+                    color: fileView === m.value ? t.text : t.textDim,
+                  }"
+                  :title="tr(m.labelKey)"
+                  @click="fileView = m.value"
+                >
+                  <component :is="m.icon" :size="12" />
+                </button>
+              </div>
+              <button
+                v-if="isMarkdown && !fileContent?.isBinary"
+                type="button"
+                class="p-1 rounded transition"
+                :style="{ color: copiedKind === 'text' ? t.success : t.textDim }"
+                :title="tr('workspace.files.copyText')"
+                @click="copyText"
+              >
+                <Check v-if="copiedKind === 'text'" :size="13" />
+                <Type v-else :size="13" />
+              </button>
+              <button
+                v-if="!fileContent?.isBinary"
+                type="button"
+                class="p-1 rounded transition"
+                :style="{ color: copiedKind === 'raw' ? t.success : t.textDim }"
+                :title="
+                  isMarkdown ? tr('workspace.files.copyRaw') : tr('workspace.files.copyContent')
+                "
+                @click="copyRaw"
+              >
+                <Check v-if="copiedKind === 'raw'" :size="13" />
+                <Clipboard v-else :size="13" />
+              </button>
+              <span
+                v-if="fileContent?.language"
+                class="text-[12px] uppercase tracking-wider"
+                :style="{ color: t.textDim }"
+              >
+                {{ fileContent.language }}
+              </span>
+              <button
+                v-if="session.projectId"
+                type="button"
+                class="p-1 rounded transition"
+                :style="{ color: t.textDim }"
+                :title="tr('workspace.files.openInEditor')"
+                @click="openInEditor"
+              >
+                <Code2 :size="13" />
+              </button>
+            </div>
           </div>
           <div
             v-if="fileContent?.isBinary"
@@ -87,6 +134,14 @@
             :style="{ color: t.textDim }"
           >
             {{ tr('workspace.files.binary') }}
+          </div>
+          <div
+            v-else-if="isMarkdown && fileView === 'preview'"
+            ref="previewRef"
+            class="flex-1 min-h-0 overflow-y-auto px-4 py-3"
+            :style="{ color: t.text }"
+          >
+            <MarkdownRenderer :content="fileContent?.content ?? ''" />
           </div>
           <MonacoEditor
             v-else
@@ -131,32 +186,97 @@
             :expanded="expanded"
             :children-by-path="childrenByPath"
             :selected-path="selectedPath"
+            :renaming-path="renamingPath"
             :on-toggle="toggle"
             :on-select="select"
+            :on-context="onContext"
+            :on-rename-submit="onRenameSubmit"
+            :on-rename-cancel="onRenameCancel"
           />
         </div>
       </div>
     </div>
+
+    <!-- Right-click context menu -->
+    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menuItems" @close="closeMenu" />
+
+    <!-- Delete confirm -->
+    <Teleport to="body">
+      <div
+        v-if="deleting"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+        :style="{ background: 'rgba(0,0,0,0.5)' }"
+        @click.self="cancelDelete"
+      >
+        <div
+          class="w-80 rounded-lg p-4"
+          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+        >
+          <p class="text-[1em] font-medium mb-1" :style="{ color: t.text }">
+            {{
+              deleting.isDir ? tr('code.explorer.delete_folder') : tr('code.explorer.delete_file')
+            }}
+          </p>
+          <p class="text-[1em] mb-4 break-all" :style="{ color: t.textDim }">{{ deleting.path }}</p>
+          <div class="flex justify-end gap-2">
+            <button
+              type="button"
+              class="px-3 py-1.5 rounded text-[1em]"
+              :style="{ background: t.bgHover, color: t.text }"
+              @click="cancelDelete"
+            >
+              {{ tr('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="px-3 py-1.5 rounded text-[1em]"
+              :style="{ background: t.dangerBg, color: t.danger }"
+              @click="confirmDelete"
+            >
+              {{ tr('common.delete') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Toasts -->
+    <Teleport to="body">
+      <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+        <div
+          v-for="toast in toasts"
+          :key="toast.id"
+          class="px-3 py-2 rounded-md text-[1em] shadow-lg"
+          :style="toastStyle(toast.kind)"
+        >
+          {{ toast.text }}
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Check, Code2, Copy, FileText, FolderTree, ListTree, RefreshCw, X } from 'lucide-vue-next'
-import { onMounted, ref, watch } from 'vue'
-import type { FsEntry, FsFileContent, Session } from '~/types'
-import { useFsApi } from '~/composables/useFsApi'
-import { SidecarUnavailableError } from '~/composables/useSidecar'
-import { useWorkspacePanelStore } from '~/stores/workspacePanel'
+import {
+  Check,
+  Clipboard,
+  Code,
+  Code2,
+  Copy,
+  Eye,
+  FileText,
+  FolderTree,
+  ListTree,
+  RefreshCw,
+  Type,
+  X,
+} from 'lucide-vue-next'
+import type { Session } from '~/types'
+import { useWorkspaceFiles } from '~/composables/useWorkspaceFiles'
+import ContextMenu from '~/components/ContextMenu.vue'
 import MonacoEditor from '~/components/editor/MonacoEditor.vue'
 import WorkspaceDrawerHeader from './WorkspaceDrawerHeader.vue'
 import WorkspaceFileTreeNode from './WorkspaceFileTreeNode.vue'
-
-// Minimal slice of <MonacoEditor>'s defineExpose used here.
-interface EditorExposed {
-  openFile: (path: string, content: string, language?: string) => void
-  revealRange: (path: string, startLine: number, endLine: number) => void
-  focus: () => void
-}
 
 const props = defineProps<{
   session: Session
@@ -165,137 +285,86 @@ const props = defineProps<{
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
-const api = useFsApi()
-const panel = useWorkspacePanelStore()
 
-const close = () => panel.closeDrawer(props.session.id)
+const {
+  childrenByPath,
+  expanded,
+  selectedPath,
+  fileContent,
+  loading,
+  showTree,
+  editorRef,
+  onEditorReady,
+  toggle,
+  select,
+  refresh,
+  close,
+  openInEditor,
+  copied,
+  copyPath,
+  menu,
+  menuItems,
+  closeMenu,
+  onContext,
+  renamingPath,
+  onRenameSubmit,
+  onRenameCancel,
+  deleting,
+  cancelDelete,
+  confirmDelete,
+  toasts,
+  toastStyle,
+} = useWorkspaceFiles(props)
 
-// '' key = workspace root. Lazy: a directory's children load on first expand.
-const childrenByPath = ref<Record<string, FsEntry[]>>({})
-const expanded = ref<Record<string, boolean>>({})
-const selectedPath = ref<string | null>(null)
-const fileContent = ref<FsFileContent | null>(null)
-const loading = ref(false)
-// Tree is an overlay, hidden by default — toggled from the header icon. Picking
-// a file collapses it so the preview shows immediately at full size.
-const showTree = ref(false)
+// Markdown files render as a preview by default (toggle to the Monaco raw view).
+const isMarkdown = computed(() => {
+  const lang = (fileContent.value?.language ?? '').toLowerCase()
+  return (
+    lang === 'markdown' || lang === 'md' || /\.(md|markdown|mdx)$/i.test(selectedPath.value ?? '')
+  )
+})
 
-// Read-only Monaco surface, shared with the Project Code Workspace. We open one
-// file at a time imperatively; pending state covers the gap before Monaco mounts.
-const editorRef = ref<EditorExposed | null>(null)
-const pendingRange = ref<{ start: number; end: number } | null>(null)
+type FileView = 'preview' | 'raw'
+const fileView = ref<FileView>('preview')
+// Every newly-opened file starts in preview (the requested default) rather than
+// inheriting a 'raw' toggle left over from the previous file.
+watch(selectedPath, () => {
+  fileView.value = 'preview'
+})
+const fileViewModes = [
+  { value: 'preview' as const, labelKey: 'workspace.files.preview', icon: Eye },
+  { value: 'raw' as const, labelKey: 'workspace.files.raw', icon: Code },
+]
 
-const pushToEditor = () => {
-  const ed = editorRef.value
-  const fc = fileContent.value
-  const path = selectedPath.value
-  if (!ed || !fc || !path || fc.isBinary) return
-  ed.openFile(path, fc.content, fc.language)
-  if (pendingRange.value) {
-    ed.revealRange(path, pendingRange.value.start, pendingRange.value.end)
-    pendingRange.value = null
-  }
-}
+const previewRef = useTemplateRef<HTMLElement>('previewRef')
 
-const onEditorReady = () => pushToEditor()
-
-const loadDir = async (path: string) => {
-  try {
-    const result = await api.listDir(props.workspaceRoot, path || undefined)
-    childrenByPath.value = { ...childrenByPath.value, [path]: result.entries }
-  } catch (err) {
-    if (err instanceof SidecarUnavailableError) return
-    childrenByPath.value = { ...childrenByPath.value, [path]: [] }
-  }
-}
-
-const toggle = async (path: string) => {
-  if (expanded.value[path]) {
-    expanded.value = { ...expanded.value, [path]: false }
-    return
-  }
-  if (!childrenByPath.value[path]) await loadDir(path)
-  expanded.value = { ...expanded.value, [path]: true }
-}
-
-const loadInto = async (path: string, line: number | null, endLine: number | null) => {
-  selectedPath.value = path
-  fileContent.value = null
-  pendingRange.value = line != null ? { start: line, end: endLine ?? line } : null
-  try {
-    fileContent.value = await api.readFile(props.workspaceRoot, path)
-  } catch (err) {
-    if (err instanceof SidecarUnavailableError) return
-    fileContent.value = { path, content: '', truncated: false, isBinary: false }
-    return
-  }
-  pushToEditor()
-}
-
-const select = (entry: FsEntry) => {
-  showTree.value = false // collapse overlay → preview shows full-size immediately
-  loadInto(entry.path, null, null).catch(() => {})
-}
-
-const openInEditor = () => {
-  if (props.session.projectId && selectedPath.value) {
-    navigateTo(
-      `/projects/${props.session.projectId}/code?file=${encodeURIComponent(selectedPath.value)}`,
-    )
-  }
-}
-
-// Copy the workspace-relative path with a brief confirmation (matches the chat
-// copy-button pattern).
-const copied = ref(false)
+// Transient ✓ feedback for the content/raw copy buttons (separate from the
+// path-copy feedback `copied` owned by the composable).
+const copiedKind = ref<'text' | 'raw' | null>(null)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
-const copyPath = async () => {
-  if (!selectedPath.value) return
+const flashCopied = (kind: 'text' | 'raw') => {
+  copiedKind.value = kind
+  if (copiedTimer) clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => (copiedKind.value = null), 1200)
+}
+const writeClipboard = async (text: string) => {
   try {
-    await navigator.clipboard.writeText(selectedPath.value)
-    copied.value = true
-    if (copiedTimer) clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => {
-      copied.value = false
-    }, 1500)
+    await navigator.clipboard.writeText(text)
   } catch {
     // clipboard may be denied in restricted contexts — ignore
   }
 }
-
-// Chat link `path#Lnn` → open + jump, driven by the workspacePanel store.
-watch(
-  () => panel.pendingFileOpen(props.session.id),
-  (req) => {
-    if (req) loadInto(req.path, req.line, req.endLine).catch(() => {})
-  },
-  { immediate: true },
-)
-
-// Load (or reload) the root tree without touching the current selection.
-const loadRoot = async () => {
-  if (loading.value) return
-  loading.value = true
-  try {
-    await loadDir('')
-  } finally {
-    loading.value = false
-  }
+// Raw = the file/markdown source. Text = the rendered preview's plain text
+// (markdown stripped); falls back to the source when not in preview mode.
+const copyRaw = async () => {
+  await writeClipboard(fileContent.value?.content ?? '')
+  flashCopied('raw')
 }
-
-// Full reset — used by the refresh button and on workspaceRoot change. NOT on
-// initial mount: a chat-link `requestOpenFile` fires the immediate
-// `pendingFileOpen` watch during setup, and resetting here would wipe the file
-// the user just clicked (the old "click twice" bug).
-const refresh = async () => {
-  childrenByPath.value = {}
-  expanded.value = {}
-  selectedPath.value = null
-  fileContent.value = null
-  pendingRange.value = null
-  await loadRoot()
+const copyText = async () => {
+  await writeClipboard(previewRef.value?.textContent?.trim() || fileContent.value?.content || '')
+  flashCopied('text')
 }
-
-watch(() => props.workspaceRoot, refresh)
-onMounted(loadRoot)
+onUnmounted(() => {
+  if (copiedTimer) clearTimeout(copiedTimer)
+})
 </script>

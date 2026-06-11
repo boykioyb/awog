@@ -13,6 +13,7 @@
 import { spawn } from 'node:child_process'
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
+import { wrapCommand } from './rtk.js'
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_TIMEOUT_MS = 600_000
@@ -28,6 +29,10 @@ function filteredEnv(): NodeJS.ProcessEnv {
     const v = process.env[k]
     if (v !== undefined) out[k] = v
   }
+  // Defense-in-depth for AWOG invariant #5 (no telemetry): RTK telemetry is
+  // opt-in and off by default, but we also set the widely-honored DO_NOT_TRACK
+  // standard so a bundled RTK can never phone home from the agent's shell.
+  out.DO_NOT_TRACK = '1'
   return out
 }
 
@@ -56,8 +61,12 @@ export function createBashTool(cwd: string): AgentTool<typeof BashParams, BashDe
     parameters: BashParams,
     async execute(_id, params, signal): Promise<AgentToolResult<BashDetails>> {
       const timeout = Math.min(params.timeout ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
+      // Route through RTK when enabled+available (ADR 0031) to compress output
+      // before it reaches the model. `details.command` keeps the ORIGINAL command
+      // so the trace/UI shows what the model asked for, not the rtk-wrapped form.
+      const command = await wrapCommand(params.command)
       return new Promise<AgentToolResult<BashDetails>>((resolveResult) => {
-        const child = spawn('sh', ['-c', params.command], {
+        const child = spawn('sh', ['-c', command], {
           cwd,
           env: filteredEnv(),
           windowsHide: true,

@@ -29,6 +29,17 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0021](./0021-monaco-code-editor.md) | Monaco làm code editor cho in-app Project Workspace | Proposed |
 | [0022](./0022-fs-read-write-search-ipc.md) | Mở rộng `fs.*` IPC: read-write + search cho project workspace | Proposed |
 | [0023](./0023-sdk-session-resume-and-compact.md) | SDK session resume + `/compact` (bỏ transcript-flattening) | Proposed |
+| [0024](./0024-task-execution-engine-ipc-contract.md) | Task Execution Engine + Workflow IPC contract | Accepted |
+| [0025](./0025-connections-manager.md) | Connections Manager (đổi tên MCP Servers → Connections) | Amended — Simplified |
+| [0026](./0026-per-agent-multi-provider-llm.md) | Per-agent multi-provider LLM | Accepted (Phase C còn lại) |
+| [0027](./0027-tauri-vs-electron-revisit.md) | Tauri vs Electron revisit | Accepted — Option B (Electron) |
+| [0028](./0028-auto-update.md) | Auto-update | Accepted — Option A (electron-updater) |
+| [0029](./0029-migrate-llm-runtime-to-pi-sdk.md) | Migrate LLM runtime sang Pi SDK | Accepted |
+| [0030](./0030-subagent-task-tool.md) | Subagent `Task` tool | Accepted |
+| [0031](./0031-rtk-token-proxy.md) | Bundle RTK (Rust Token Killer) làm bộ nén output cho Bash tool | Accepted |
+| [0032](./0032-hook-execution-engine-ipc-contract.md) | Hook Execution Engine + IPC contract | Accepted |
+| [0033](./0033-rules-system-prompt-injection.md) | Rules — workspace instruction injection vào system prompt | Accepted |
+| [0034](./0034-slash-commands-markdown.md) | Slash Commands dưới dạng Markdown (Claude Code-aligned) | Accepted |
 
 ## Template
 

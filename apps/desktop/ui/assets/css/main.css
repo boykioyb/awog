@@ -244,7 +244,13 @@ body,
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* display:block + overflow-x lets a wide table scroll horizontally instead of
+   being crushed below its content width (which forced ugly mid-word breaks like
+   "Bac/ken/d" and clipped the last column). */
 .awog-md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: 0.6em 0;
   font-size: 0.95em;
@@ -253,10 +259,18 @@ body,
 .awog-md td {
   border: 1px solid light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.1));
   padding: 4px 8px;
+  /* Floor the column width so short-label columns ("Tầng") aren't squeezed to a
+     char-per-line; word-wrap stays at word boundaries, never mid-word. */
+  min-width: 6rem;
+  vertical-align: top;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 .awog-md th {
   background: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04));
   font-weight: 600;
+  /* Headers stay on one line; the column widens to fit instead of wrapping. */
+  white-space: nowrap;
 }
 .awog-md strong {
   font-weight: 600;

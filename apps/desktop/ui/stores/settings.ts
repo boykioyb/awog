@@ -120,6 +120,24 @@ export const DEFAULT_AUTO_UPDATE_SETTINGS: AutoUpdateSettings = {
   lastCheckedAt: null,
 }
 
+// RTK token optimizer (ADR 0031). `enabled` is persisted via `useRtkSettings`
+// (same pattern as auto-update) and pushed to the sidecar's Bash tool through the
+// `settings.set-rtk` RPC. The binary is bundled with the app, so default ON.
+export interface RtkSettings {
+  enabled: boolean
+}
+
+export const DEFAULT_RTK_SETTINGS: RtkSettings = {
+  enabled: true,
+}
+
+// Runtime probe result from the engine (settings.set-rtk response) — whether the
+// bundled binary loaded on this platform + its version. NOT persisted.
+export interface RtkStatus {
+  available: boolean
+  version?: string
+}
+
 interface SettingsState {
   workspacePath: string
   autoApprove: boolean
@@ -129,6 +147,8 @@ interface SettingsState {
   appearance: AppearanceSettings
   git: GitSettings
   autoUpdate: AutoUpdateSettings
+  rtk: RtkSettings
+  rtkStatus: RtkStatus
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -186,6 +206,8 @@ export const useSettingsStore = defineStore('settings', {
     appearance: { ...DEFAULT_APPEARANCE },
     git: { ...DEFAULT_GIT_SETTINGS },
     autoUpdate: { ...DEFAULT_AUTO_UPDATE_SETTINGS },
+    rtk: { ...DEFAULT_RTK_SETTINGS },
+    rtkStatus: { available: false },
   }),
   getters: {
     activeAccount(state): (provider: ProviderName) => ProviderAccount | null {
@@ -382,6 +404,12 @@ export const useSettingsStore = defineStore('settings', {
     },
     updateAutoUpdate(patch: Partial<AutoUpdateSettings>) {
       this.autoUpdate = { ...this.autoUpdate, ...patch }
+    },
+    updateRtk(patch: Partial<RtkSettings>) {
+      this.rtk = { ...this.rtk, ...patch }
+    },
+    setRtkStatus(status: RtkStatus) {
+      this.rtkStatus = status
     },
   },
 })

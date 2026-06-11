@@ -27,6 +27,12 @@ extraResources:
     to: ui
   - from: ../sidecar/dist
     to: sidecar
+  # Bundled RTK binary (ADR 0031) — fetched per host by scripts/fetch-rtk.mjs.
+  # Lands at <resources>/rtk/rtk (rtk.exe on Windows); see src/paths.ts.
+  - from: resources/rtk
+    to: rtk
+    filter:
+      - '!.rtk-version'
   - from: build/tray.png
     to: tray.png
   - from: build/trayTemplate.png

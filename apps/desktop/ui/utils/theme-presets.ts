@@ -453,13 +453,18 @@ export const getAccentOverride = (
   // user's pick (the hardcoded h1/h2/h3 in themes.ts were a holdover from the
   // default monochrome palette). Code / bold / italic / listMark / blockquote
   // stay on the neutral base — they signal structure, not branding.
+  //
+  // h3 deliberately does NOT use `accentMuted`: that shade is a dark/desaturated
+  // fill (e.g. violet #5b21b6) meant for backgrounds/borders, not text — it was
+  // unreadable as a heading on the matching surface. h3 keeps the readable base
+  // accent; the smaller font size in MarkdownRenderer carries the hierarchy.
   return {
     ...buildAccentTokens(recipe, themeName),
     syntax: {
       ...baseSyntax,
       h1: recipe.accent,
       h2: recipe.accentHover,
-      h3: recipe.accentMuted,
+      h3: recipe.accent,
       link: recipe.accent,
     },
   }

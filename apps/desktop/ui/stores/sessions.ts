@@ -5,6 +5,8 @@ import type {
   SessionFollowUp,
   SessionMention,
   SessionMessage,
+  SessionMessagePart,
+  SessionQuestionAnswer,
   SessionSettings,
   SessionStep,
   SessionTokenKind,
@@ -24,6 +26,9 @@ interface SidecarSendMessageResult {
   modelUsed: string
   usage: { input_tokens: number; output_tokens: number }
   stopReason: string | null
+  // Ordered timeline built by the sidecar (ADR 0032). Stored as the authoritative
+  // message.parts on finalize; absent for a non-streaming reply with no steps.
+  parts?: SessionMessagePart[]
 }
 
 interface SessionsListResponse {
@@ -38,6 +43,44 @@ const pushToSidecar = (method: string, params: unknown): void => {
   sidecar.request(method, params).catch((err) => {
     console.warn(`[sessions] ${method} failed:`, err)
   })
+}
+
+// Re-nest the flat step list persisted by the sidecar. During a live turn the
+// store's upsertStep builds the subagent tree incrementally (children attached
+// under their parent Task step); persistence flattens that back out (each step
+// keeps its `parentId`). On hydrate we rebuild the tree so reloaded subagent
+// turns render nested instead of dumping every child at top level. Idempotent:
+// already-nested input (top-level steps without parentId) passes through —
+// children live only inside `parent.children`, never at the array root.
+const normalizeSteps = (steps: SessionStep[]): SessionStep[] => {
+  const byId = new Map(steps.map((s) => [s.id, s]))
+  const topLevel: SessionStep[] = []
+  for (const step of steps) {
+    const parent = step.parentId ? byId.get(step.parentId) : undefined
+    if (parent && parent !== step) (parent.children ??= []).push(step)
+    else topLevel.push(step)
+  }
+  return topLevel
+}
+
+// Re-nest the ordered `parts` list the sidecar persists flat (ADR 0032): step
+// parts carry `parentId`; a subagent child part is moved into its parent step
+// part's `children` and dropped from the top level, while text parts and the
+// timeline order are preserved. The parts analogue of normalizeSteps; idempotent.
+const normalizeParts = (parts: SessionMessagePart[]): SessionMessagePart[] => {
+  const stepById = new Map<string, SessionStep>()
+  for (const p of parts) if (p.kind !== 'text') stepById.set(p.id, p)
+  const out: SessionMessagePart[] = []
+  for (const p of parts) {
+    if (p.kind === 'text') {
+      out.push(p)
+      continue
+    }
+    const parent = p.parentId ? stepById.get(p.parentId) : undefined
+    if (parent && parent !== p) (parent.children ??= []).push(p)
+    else out.push(p)
+  }
+  return out
 }
 
 interface SessionChunkPayload {
@@ -213,6 +256,17 @@ export const useSessionsStore = defineStore('sessions', {
       try {
         const res = await sidecar.request<SessionsListResponse>('sessions.list')
         const list = Array.isArray(res.sessions) ? res.sessions : []
+        // Persisted steps come back flat (subagent children carry `parentId`).
+        // Re-nest before the data goes reactive so the live and reloaded views
+        // render identically. Mutates the fresh-from-RPC objects in place.
+        for (const session of list) {
+          for (const message of session.messages) {
+            if (message.steps?.length) message.steps = normalizeSteps(message.steps)
+            // Parts persist flat too (subagent steps carry parentId) — re-nest so
+            // the reloaded timeline renders identically to the live turn (ADR 0032).
+            if (message.parts?.length) message.parts = normalizeParts(message.parts)
+          }
+        }
         this.sessions = list
         this.selectedSessionId = list[0]?.id ?? null
         this.hydrated = true
@@ -487,6 +541,16 @@ export const useSessionsStore = defineStore('sessions', {
         // Steps: prefer caller-supplied; otherwise re-attach streamed ones.
         if (next.steps !== undefined) slot.steps = next.steps
         else if (streamedSteps !== undefined) slot.steps = streamedSteps
+        // Parts (ADR 0032): the sidecar-built ordered timeline becomes authoritative
+        // on a successful finalize — an invisible swap over the live parts (same
+        // content). slot.steps is re-derived from it so the summary + step-detail
+        // owner-lookup stay consistent with what is rendered. Cancel/error paths
+        // omit parts → the slot keeps its live partial parts + derived steps.
+        if (next.parts !== undefined) {
+          const normalized = normalizeParts(next.parts)
+          slot.parts = normalized
+          slot.steps = normalized.filter((p): p is SessionStep => p.kind !== 'text')
+        }
 
         s.pendingAgentIds = (s.pendingAgentIds ?? []).filter((a) => a !== SIDECAR_PENDING_TAG)
         s.updatedAt = nowIso()
@@ -495,9 +559,9 @@ export const useSessionsStore = defineStore('sessions', {
       // Typewriter reveal. The provider delivers text very unevenly: a long
       // reply streams over several seconds, but a short reply arrives in a single
       // ~4ms burst (measured) — so appending raw deltas makes short replies pop
-      // in all at once. Instead, deltas (and the final authoritative text) feed a
-      // `target`; a steady timer reveals it into slot.text a few chars at a time,
-      // so the reply always types out gradually (like the Claude extension).
+      // in all at once. Instead, deltas feed `trailingTarget` (the live text
+      // part's full text); a steady timer reveals it into that part a few chars at
+      // a time, so the reply always types out gradually (like the Claude extension).
       // Decoupled from finalize: completion is stamped only once the reveal has
       // caught up (revealDone), so finalize never snaps the remaining text in.
       // setInterval (not requestAnimationFrame) so it keeps revealing even when
@@ -510,7 +574,15 @@ export const useSessionsStore = defineStore('sessions', {
         if (!slot || slot.id !== placeholderId) return null
         return slot
       }
-      let target = ''
+      // ── Live timeline reducer (ADR 0032 Option B) ──────────────────────────
+      // Build `slot.parts` in arrival order as the authoritative render structure
+      // (text runs interleaved with steps, subagent steps nested). The TRAILING
+      // text part types out via the typewriter; a step closes the open text run so
+      // the next delta opens a fresh one. `slot.steps` is derived from the parts
+      // (summary / owner-lookup consumers) and `slot.text` mirrors the revealed
+      // flat text (copy / search / collapsed render). No textOffset — array order
+      // IS the timeline.
+      let trailingTarget = '' // full text of the live (trailing) text part
       let revealTimer: ReturnType<typeof setInterval> | null = null
       let textCompleted = false
       let onRevealDone: (() => void) | null = null
@@ -525,6 +597,15 @@ export const useSessionsStore = defineStore('sessions', {
         onRevealDone = null
         cb?.()
       }
+      // The trailing text part (last part, if it is text) is the one being typed.
+      const trailingTextPart = (slot: SessionMessage): { kind: 'text'; text: string } | null => {
+        const last = slot.parts?.[slot.parts.length - 1]
+        return last && last.kind === 'text' ? last : null
+      }
+      // Revealed flat text across parts — kept on slot.text for copy / search and
+      // the collapsed / no-step render branch.
+      const revealedText = (slot: SessionMessage): string =>
+        (slot.parts ?? []).reduce((acc, p) => (p.kind === 'text' ? acc + p.text : acc), '')
       const tick = () => {
         const slot = stillOurSlot()
         if (!slot) {
@@ -532,8 +613,9 @@ export const useSessionsStore = defineStore('sessions', {
           fireRevealDone()
           return
         }
-        const shown = slot.text ?? ''
-        if (shown.length >= target.length) {
+        const tp = trailingTextPart(slot)
+        // Nothing open to type (between steps, or the reply ended on a step).
+        if (!tp || tp.text.length >= trailingTarget.length) {
           if (textCompleted) {
             stopReveal()
             fireRevealDone()
@@ -542,78 +624,96 @@ export const useSessionsStore = defineStore('sessions', {
         }
         // Adaptive: reveal ~1/6 of the remaining gap per tick (min 2 chars), so a
         // burst catches up in ~0.4s while a live stream tracks closely.
-        const take = Math.max(2, Math.ceil((target.length - shown.length) / 6))
-        slot.text = target.slice(0, shown.length + take)
+        const take = Math.max(2, Math.ceil((trailingTarget.length - tp.text.length) / 6))
+        tp.text = trailingTarget.slice(0, tp.text.length + take)
+        slot.text = revealedText(slot)
       }
       const ensureReveal = () => {
         if (!revealTimer) revealTimer = setInterval(tick, 16)
       }
+      // Append a streamed text delta to the live (trailing) text part, opening a
+      // fresh one if the last part is a step.
       const appendDelta = (delta: string) => {
-        target += delta
+        const slot = stillOurSlot()
+        if (!slot) return
+        if (!slot.parts) slot.parts = []
+        const last = slot.parts[slot.parts.length - 1]
+        if (!last || last.kind !== 'text') {
+          slot.parts = [...slot.parts, { kind: 'text', text: '' }]
+          trailingTarget = ''
+        }
+        trailingTarget += delta
         ensureReveal()
       }
 
-      // Upsert a tool step. Running → done transitions land as a second event
-      // with the same id; we merge in place so the keyed v-for re-renders
-      // without resetting collapsed/selected UI state. Steps with `parentId`
-      // are nested under the parent Task step's children (subagent grouping).
-      const findStepById = (arr: SessionStep[], id: string): SessionStep | null => {
-        for (let i = 0; i < arr.length; i += 1) {
-          const s = arr[i]
-          if (!s) continue
+      // Recurse into a step part's children to find a step by id.
+      const findStepInChildren = (arr: SessionStep[], id: string): SessionStep | null => {
+        for (const s of arr) {
           if (s.id === id) return s
           if (s.children?.length) {
-            const inner = findStepById(s.children, id)
+            const inner = findStepInChildren(s.children, id)
             if (inner) return inner
           }
         }
         return null
       }
+      const findStepPart = (slot: SessionMessage, id: string): SessionStep | null => {
+        for (const p of slot.parts ?? []) {
+          if (p.kind === 'text') continue
+          if (p.id === id) return p
+          if (p.children?.length) {
+            const inner = findStepInChildren(p.children, id)
+            if (inner) return inner
+          }
+        }
+        return null
+      }
+      // slot.steps is derived from the ordered parts (the step parts, children
+      // nested) so the summary toggle + step-detail owner-lookup keep working off
+      // a single source of truth.
+      const syncSteps = (slot: SessionMessage) => {
+        slot.steps = (slot.parts ?? []).filter((p): p is SessionStep => p.kind !== 'text')
+      }
+      // Upsert a step into the ordered parts. A running → done repeat (or a
+      // thinking re-emit) merges in place by id; a new top-level step closes the
+      // open text run (so it splits the reply) and pushes a fresh part. Subagent
+      // steps nest under their parent step part's children.
       const upsertStep = (step: SessionStep) => {
         const slot = stillOurSlot()
         if (!slot) return
-        const existing = slot.steps ?? []
+        if (!slot.parts) slot.parts = []
 
-        // Subagent step → attach under parent's children. If parent isn't
-        // tracked yet (race: child event arriving before parent's tool_use
-        // snapshot), fall back to top-level so it isn't lost.
+        // Subagent step → attach under parent's children. If parent isn't tracked
+        // yet (race: child event arriving before the parent tool_use), fall through
+        // to top-level so it isn't lost.
         if (step.parentId) {
-          const parent = findStepById(existing, step.parentId)
+          const parent = findStepPart(slot, step.parentId)
           if (parent) {
             const kids = parent.children ?? []
             const cidx = kids.findIndex((c) => c.id === step.id)
-            if (cidx >= 0) {
-              parent.children = [
-                ...kids.slice(0, cidx),
-                { ...kids[cidx], ...step },
-                ...kids.slice(cidx + 1),
-              ]
-            } else {
-              parent.children = [...kids, step]
-            }
+            parent.children =
+              cidx >= 0 ? kids.map((c, i) => (i === cidx ? { ...c, ...step } : c)) : [...kids, step]
+            syncSteps(slot)
             return
           }
         }
 
-        const idx = existing.findIndex((s) => s.id === step.id)
-        if (idx >= 0) {
-          const next = [...existing]
-          // Merge so the second event (done) can omit fields the first (running)
-          // already populated — e.g. target derived from the partial input. The
-          // incoming event never carries textOffset, so the stamped value below
-          // survives the merge (existing first).
-          next[idx] = { ...existing[idx], ...step }
-          slot.steps = next
-        } else {
-          // First sighting of a top-level step. Text is appended directly (no
-          // buffer), so slot.text already holds everything streamed before this
-          // tool fired — stamp the offset straight off it. SessionMessageItem
-          // reads textOffset to interleave step rows with reply-text segments in
-          // chronological order.
-          const stamped =
-            step.textOffset === undefined ? { ...step, textOffset: (slot.text ?? '').length } : step
-          slot.steps = [...existing, stamped]
+        // Close the open text run so the step renders between text segments.
+        const last = slot.parts[slot.parts.length - 1]
+        if (last && last.kind === 'text') {
+          last.text = trailingTarget
+          slot.text = revealedText(slot)
+          trailingTarget = ''
         }
+        const pidx = slot.parts.findIndex((p) => p.kind !== 'text' && p.id === step.id)
+        if (pidx >= 0) {
+          const cur = slot.parts[pidx] as SessionStep
+          // Merge so the done event can omit fields the running event populated.
+          slot.parts = slot.parts.map((p, i) => (i === pidx ? { ...cur, ...step } : p))
+        } else {
+          slot.parts = [...slot.parts, step]
+        }
+        syncSteps(slot)
       }
 
       // Subscribe BEFORE invoking RPC so we don't miss the first chunk emitted on flush.
@@ -736,10 +836,10 @@ export const useSessionsStore = defineStore('sessions', {
             return { agent: ref }
           })(),
         })
-        // result.text is the authoritative full reply. Hand it to the typewriter
-        // as the final target and finalize only once the reveal has caught up, so
-        // the tail types out instead of snapping. Keep placeholderId as the final
-        // id — stable key for Vue lists, no diff churn.
+        // result.text is the authoritative full reply. Finalize only once the
+        // typewriter has revealed the trailing text run, so the tail types out
+        // instead of snapping. Keep placeholderId as the final id — stable key for
+        // Vue lists, no diff churn.
         const doFinalize = () =>
           finalize({
             id: placeholderId,
@@ -753,8 +853,14 @@ export const useSessionsStore = defineStore('sessions', {
               inputTokens: result.usage.input_tokens,
               outputTokens: result.usage.output_tokens,
             },
+            // Authoritative ordered timeline (ADR 0032). Undefined → finalize keeps
+            // the derive path (legacy / non-streaming reply with no steps).
+            ...(result.parts ? { parts: result.parts } : {}),
           })
-        target = result.text
+        // All deltas have streamed into the live parts by now — just let the
+        // typewriter finish revealing the trailing text run, then finalize (which
+        // adopts the sidecar's authoritative parts + the full text, an invisible
+        // swap since the revealed content already matches).
         textCompleted = true
         onRevealDone = doFinalize
         ensureReveal()
@@ -766,12 +872,20 @@ export const useSessionsStore = defineStore('sessions', {
         onRevealDone = null
         const isCanceled = err instanceof SidecarError && err.code === -32023
         if (isCanceled) {
-          // User-initiated stop. Keep everything received so far (`target` holds
-          // the full accumulated text, which may be ahead of the typed reveal),
+          // User-initiated stop. Snap the trailing text run to everything received
+          // (the typed reveal may lag behind), keep the live partial parts as-is,
           // mark the turn complete + flag it as canceled.
           const s = this.sessions.find((x) => x.id === sessionId)
           const slot = s?.messages[placeholderIdx]
-          const partialText = slot?.id === placeholderId ? target : ''
+          let partialText = ''
+          if (slot?.id === placeholderId) {
+            const last = slot.parts?.[slot.parts.length - 1]
+            if (last && last.kind === 'text') last.text = trailingTarget
+            partialText = (slot.parts ?? []).reduce(
+              (acc, p) => (p.kind === 'text' ? acc + p.text : acc),
+              '',
+            )
+          }
           finalize({
             id: placeholderId,
             role: 'agent',
@@ -867,6 +981,32 @@ export const useSessionsStore = defineStore('sessions', {
         sessionId,
         'The plan is approved. Proceed to implement it now, following the plan.',
       )
+    },
+
+    // Answer an AskUserQuestion step (kind === 'question'). Mid-turn park: the
+    // agent loop is blocked in the tool's execute() waiting on this — we send the
+    // chosen answers to the sidecar (sessions.answerQuestion), which resolves the
+    // parked promise so the SAME turn continues. Optimistically mark the step
+    // done so the card flips to its read-only record immediately; the sidecar's
+    // tool_execution_end step (same id) then confirms it.
+    answerQuestion(sessionId: string, stepId: string, answers: SessionQuestionAnswer[]) {
+      const session = this.sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      let target: SessionStep | undefined
+      for (let mi = session.messages.length - 1; mi >= 0 && !target; mi -= 1) {
+        target = session.messages[mi]?.steps?.find((s) => s.id === stepId && s.kind === 'question')
+      }
+      // Ignore stale clicks: already answered, or step not found. (steps and parts
+      // share the same step object reference, so this mutation updates both.)
+      if (!target || target.answers) return
+      target.answers = answers
+      target.status = 'done'
+
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      sidecar.request('sessions.answerQuestion', { requestId: stepId, answers }).catch((err) => {
+        console.warn('[sessions] answerQuestion failed', err)
+      })
     },
 
     openSubagentDrawer(sessionId: string, messageId: string, stepId: string) {

@@ -144,7 +144,9 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
       h2: '#e74c3c',
       h3: '#3498db',
       bold: '#ededed',
-      italic: '#a3a3a3',
+      // Readable on dark — the old #a3a3a3 (== textMuted) was too dim for body
+      // emphasis; the italic slant already de-emphasises without dropping contrast.
+      italic: '#cbcbcb',
       code: '#86efac',
       link: '#60a5fa',
       listMark: '#737373',

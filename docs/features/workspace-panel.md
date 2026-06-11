@@ -65,6 +65,8 @@ empty-state; session chưa đụng file nào → "no file changes from this sess
 Cây thư mục lazy (1 cấp/expand) + preview file. Preview render **theo dòng có số** (`whitespace-pre`) thay vì `<pre>` đơn khối → cho phép cuộn tới + highlight dòng mục tiêu.
 **Open-at-line từ chat:** click link path trong reply (vd `apps/api/foo.py#L42`) gọi `workspacePanel.requestOpenFile(sessionId, path, line)` → mở Files drawer + watcher trong tab `readFile` path, select, `scrollIntoView` + tô nền dòng `line`. Click thủ công trong cây thì không highlight (clear `targetLine`).
 
+**Context menu (chuột phải vào file/folder trong cây):** dùng [ContextMenu.vue](../../apps/desktop/ui/components/ContextMenu.vue) chung. Actions: **Rename** (inline input trong node, `fs.rename`), **Copy Path** (tuyệt đối) / **Copy Relative Path** (workspace-relative, qua `navigator.clipboard`), **Reveal in OS** (`shell.revealPath`), **Open in VS Code** (chỉ hiện khi CLI `code` khả dụng — `shell:vscodeAvailable`/`shell:openInVscode` ở Electron main, [vscode.ts](../../apps/desktop/electron/src/vscode.ts) probe vị trí cài đặt theo OS rồi `spawn` arg-array, không shell), **Delete** (confirm modal, `recursive` cho dir). Sau rename/delete reload thư mục cha + repoint/clear preview. Logic tách vào composable [useWorkspaceFiles.ts](../../apps/desktop/ui/composables/useWorkspaceFiles.ts) (component giữ thin theo nuxt-vue page-controller).
+
 ### Plan
 **Decoupled khỏi permission gate** (Pi runtime, ADR 0029): ở plan mode, runtime inject tool
 `ExitPlanMode` + plan-mode system prompt. Model nghiên cứu read-only rồi gọi `ExitPlanMode({plan})`;
@@ -99,6 +101,7 @@ import + graceful fallback** → chưa cài/lỗi thì tab báo "unavailable", t
 - Terminal: cwd **luôn** = workspaceRoot; shell binary cố định (`$SHELL`/default), arg array rỗng (không cmd-injection); `data` là byte opaque vào stdin PTY.
 - **Env strip trước `pty.spawn`**: xoá `CLAUDE_CODE_OAUTH_TOKEN`/`*_API_KEY` + mọi key `/(_TOKEN|_KEY|_SECRET)$/i` (invariant #1 — shell không `echo` được token).
 - Cap 5 PTY/session + idle-kill; PTY không persist (đúng restart-safe).
+- **Reveal / Open in VS Code**: chạy ở Electron main (không phải sidecar), path qua `resolveInsideWorkspace` trước khi `shell.showItemInFolder`/`spawn`; `code` binary resolve từ allowlist vị trí cài đặt theo OS, `spawn` arg-array (không shell string, không nhận input ngoài 'code' cho probe) → không cmd-injection.
 
 ## Types mới
 - UI [types/index.ts](../../apps/desktop/ui/types/index.ts): `WorkspaceTab`, `FsEntry`, `FsFileContent`, `TerminalSessionRef`, `WorkspaceBackgroundTask`.

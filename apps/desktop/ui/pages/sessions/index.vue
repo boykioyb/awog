@@ -73,6 +73,49 @@
         </button>
       </div>
 
+      <!-- Bulk select / delete bar. Only shown once selection mode is active
+           (≥1 selected via a row's "Select" context-menu action). Kept inside
+           the sidebar column (not a fixed bottom overlay like Agents/Skills) so
+           it never covers the chat composer in the detail pane. -->
+      <div
+        v-if="bulkSelection.size > 0"
+        class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
+        :style="{ borderBottom: `1px solid ${t.border}`, color: t.textDim }"
+      >
+        <input
+          type="checkbox"
+          :checked="allVisibleChecked"
+          :indeterminate.prop="someVisibleChecked && !allVisibleChecked"
+          class="cursor-pointer flex-shrink-0"
+          :style="{ accentColor: t.accent }"
+          :title="allVisibleChecked ? 'Deselect all' : 'Select all'"
+          @click="toggleSelectAll(visibleIds)"
+        />
+        <span :style="{ color: t.text }">{{ bulkSelection.size }} selected</span>
+        <span class="flex-1" />
+        <!-- Icon-only actions (project convention): title carries the label. -->
+        <button
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          title="Clear selection"
+          @click="clearBulk"
+          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
+          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
+        >
+          <X :size="13" />
+        </button>
+        <button
+          class="p-1.5 rounded transition"
+          :style="{ color: t.danger }"
+          :title="`Delete ${bulkSelection.size} selected`"
+          @click="askBulkDelete"
+          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.background = t.dangerBg)"
+          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.background = 'transparent')"
+        >
+          <Trash2 :size="13" />
+        </button>
+      </div>
+
       <div class="flex-1 overflow-y-auto py-1">
         <EmptyView v-if="filtered.length === 0" :icon="MessageSquare" title="No sessions yet" />
         <template v-else>
@@ -101,7 +144,10 @@
                     transition: 'transform 0.15s',
                   }"
                 />
-                <span class="text-[0.857em] uppercase tracking-wider font-medium truncate">
+                <span
+                  class="text-[0.857em] uppercase tracking-wider font-semibold truncate"
+                  :style="{ color: t.text }"
+                >
                   {{ group.label }}
                 </span>
               </button>
@@ -143,8 +189,27 @@
                 @mouseenter="hoverId = ses.id"
                 @mouseleave="hoverId = null"
               >
+                <!-- Checkbox is hidden until selection mode is active (≥1 selected,
+                     entered via the row's "Select" context-menu action). -->
+                <input
+                  v-if="bulkSelection.size > 0"
+                  type="checkbox"
+                  :checked="bulkSelection.has(ses.id)"
+                  class="cursor-pointer flex-shrink-0 mt-0.5"
+                  :style="{ accentColor: t.accent }"
+                  :title="bulkSelection.has(ses.id) ? 'Remove from selection' : 'Add to selection'"
+                  @click.stop="toggleBulk(ses.id)"
+                />
+                <!-- Streaming takes visual priority over pin: the running state is
+                     transient and more important to surface at a glance. -->
+                <span
+                  v-if="streamingIds.has(ses.id)"
+                  class="flex-shrink-0 mt-1 w-2 h-2 rounded-full animate-pulse"
+                  :style="{ background: t.accent, boxShadow: `0 0 6px ${t.accent}` }"
+                  title="Running"
+                />
                 <Pin
-                  v-if="ses.pinned"
+                  v-else-if="ses.pinned"
                   :size="10"
                   class="flex-shrink-0 mt-1"
                   :style="{ color: t.textDim }"
@@ -195,7 +260,14 @@
                   >
                     <span>{{ fmt(ses.updatedAt) }}</span>
                     <span :style="{ color: t.textFaint }">·</span>
-                    <span>{{ ses.messages.length }} msg</span>
+                    <span
+                      v-if="streamingIds.has(ses.id)"
+                      class="animate-pulse"
+                      :style="{ color: t.accent }"
+                    >
+                      Running…
+                    </span>
+                    <span v-else>{{ ses.messages.length }} msg</span>
                   </div>
                 </div>
               </div>
@@ -232,6 +304,14 @@
     @cancel="pendingDeleteId = null"
   />
 
+  <ConfirmDeleteModal
+    v-if="bulkPendingDelete"
+    :title="`Delete ${bulkPendingDelete.length} session${bulkPendingDelete.length === 1 ? '' : 's'}?`"
+    :description="`${bulkPendingDelete.length} session${bulkPendingDelete.length === 1 ? '' : 's'} will be permanently deleted.`"
+    @confirm="confirmBulkDelete"
+    @cancel="bulkPendingDelete = null"
+  />
+
   <ContextMenu
     v-if="contextMenu"
     :x="contextMenu.x"
@@ -251,6 +331,7 @@
 
 <script setup lang="ts">
 import {
+  CheckSquare,
   ChevronDown,
   Copy,
   Edit3,
@@ -261,6 +342,7 @@ import {
   Pin,
   Plus,
   Trash2,
+  X,
 } from 'lucide-vue-next'
 import type { Session } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
@@ -304,6 +386,13 @@ const onSelectSession = (id: string) => {
 
 const allSessions = computed(() => store.sessions)
 
+// Ids of sessions with an in-flight streaming turn — drives the pulsing
+// "running" indicator per list row. Reactive on each session's pendingAgentIds,
+// so a row lights up when a turn starts and reverts to its msg count when done.
+const streamingIds = computed(
+  () => new Set(store.sessions.filter((s) => store.isSessionStreaming(s.id)).map((s) => s.id)),
+)
+
 const filtered = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   const list = allSessions.value.filter((s) => {
@@ -329,6 +418,25 @@ const filtered = computed(() => {
   })
   return list
 })
+
+// Bulk selection (checkbox / select-all / bulk delete). Logic lives in a
+// dedicated composable; the page only feeds it the currently-visible ids and
+// renders the checkboxes + action bar.
+const {
+  bulkSelection,
+  bulkPendingDelete,
+  toggleBulk,
+  clearBulk,
+  allVisibleSelected,
+  someVisibleSelected,
+  toggleSelectAll,
+  askBulkDelete,
+  confirmBulkDelete,
+} = useSessionsSelection()
+
+const visibleIds = computed(() => filtered.value.map((s) => s.id))
+const allVisibleChecked = computed(() => allVisibleSelected(visibleIds.value))
+const someVisibleChecked = computed(() => someVisibleSelected(visibleIds.value))
 
 const projectOptions = computed(() => [
   { value: 'all', label: `All (${allSessions.value.length})` },
@@ -521,7 +629,13 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   const projectPath = item.projectId
     ? workspace.projects.find((p) => p.id === item.projectId)?.path
     : undefined
+  const selected = bulkSelection.value.has(item.id)
   return [
+    {
+      label: selected ? 'Deselect' : 'Select',
+      icon: CheckSquare,
+      action: () => toggleBulk(item.id),
+    },
     { label: 'Rename', icon: Edit3, action: () => startRename(item.id, item.title) },
     { label: 'Copy session ID', icon: Copy, action: () => copyToClipboard(item.id) },
     {

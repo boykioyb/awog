@@ -1,20 +1,36 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { runStream, registerAborter, unregisterAborter } from '../sessions/runner.js'
-import { appendMessage } from '../sessions/store.js'
+import {
+  runStream,
+  registerAborter,
+  unregisterAborter,
+  type RunStreamResult,
+} from '../sessions/runner.js'
+import { appendMessage, appendEvent } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
 import {
   parkPermissionRequest,
   rejectPermissionRequest,
 } from '../sessions/permissions.js'
+import { parkQuestionRequest, rejectQuestionRequest } from '../sessions/questions.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
+import { liftTurnSignalListenerCap } from '../runtime/turn-signal.js'
 import { listServers as listMcpServers } from '../mcp/store.js'
 import { loadAgent } from '../agents/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
-import type { CanUseTool, McpServersConfig } from '../runtime/permission-types.js'
-import type { SessionMessage, SessionSettings } from '../types/shared.js'
+import type {
+  AskUserQuestionFn,
+  CanUseTool,
+  McpServersConfig,
+} from '../runtime/permission-types.js'
+import type {
+  SessionMessage,
+  SessionMessagePart,
+  SessionSettings,
+  SessionStep,
+} from '../types/shared.js'
 
 const SessionMessageSchema = z
   .object({
@@ -96,6 +112,10 @@ register('sessions.sendMessage', async (raw) => {
 
   // One AbortController per turn. sessions.cancel resolves it by messageId.
   const abortController = new AbortController()
+  // This turn signal fans out to undici (per LLM request), parallel tool calls,
+  // and subagents — lift Node's 10-listener cap to silence the false-positive
+  // MaxListenersExceededWarning (see runtime/turn-signal.ts).
+  liftTurnSignalListenerCap(abortController.signal)
   registerAborter(params.messageId, abortController)
 
   // Resolve cwd from project, if linked. Best-effort: missing project → no
@@ -222,7 +242,7 @@ ${lines}
 
 When you need to interact with these services, **prefer the corresponding \`mcp__<serverId>__<toolName>\` tools** over CLI equivalents (\`gh\`, \`gcloud\`, \`kubectl\`, \`aws\`, raw HTTP) or shell scripting. The MCP tools were explicitly enabled for this purpose.
 
-When delegating work via the Task tool, instruct the subagent in the prompt to use these MCP tools rather than CLI alternatives — subagents do not inherit MCP servers automatically, but they can be steered through your instruction.
+When delegating work via the Task tool, the subagent inherits these MCP servers automatically — instruct it in the prompt to use the same \`mcp__<serverId>__<toolName>\` tools rather than CLI alternatives.
 </mcp-preference>`
   }
 
@@ -263,6 +283,23 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
     }
   }
 
+  // Track open AskUserQuestion tool-call ids so abort/cancel can unwind them.
+  const turnQuestionIds = new Set<string>()
+
+  // AskUserQuestion handler. Parks on the tool-call id (which is also the step
+  // id the UI rendered from the session.step event, and the answerQuestion
+  // requestId) until the user submits answers. No separate event is emitted —
+  // the question already reached the UI as the kind:'question' step.
+  const askUserQuestion: AskUserQuestionFn = async (toolCallId) => {
+    turnQuestionIds.add(toolCallId)
+    const pending = parkQuestionRequest(toolCallId)
+    try {
+      return await pending
+    } finally {
+      turnQuestionIds.delete(toolCallId)
+    }
+  }
+
   // If the user aborts mid-prompt, reject every parked permission for this
   // turn so the promise chain unwinds cleanly. The runner's `abortController`
   // already short-circuits the model loop; this cleans up the parked promises
@@ -272,8 +309,119 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
       rejectPermissionRequest(id, 'User canceled the request')
     }
     turnRequestIds.clear()
+    // Unwind any open AskUserQuestion (resolves as empty answers) so the tool's
+    // execute() returns a "canceled" result instead of hanging.
+    for (const id of turnQuestionIds) {
+      rejectQuestionRequest(id)
+    }
+    turnQuestionIds.clear()
   }
   abortController.signal.addEventListener('abort', onAbort)
+
+  // Accumulate the streamed text + steps so we can persist the assistant turn at
+  // ANY exit — success, cancel, error, or a hard process kill mid-stream. A
+  // step's `running → done` transition arrives as a second event with the same
+  // id; keying a Map by id upserts in place while preserving first-seen order.
+  // Steps are stored flat (subagent children keep their `parentId`); the UI
+  // re-nests on hydrate.
+  let accumulatedText = ''
+  const collectedSteps = new Map<string, SessionStep>()
+
+  // Ordered timeline parts (ADR 0032): reply-text runs interleaved with steps in
+  // arrival order. This is the minimalist-agent `applyEvent` reducer — a tool/step
+  // pushes a part (closing the current text run so the next text delta opens a
+  // fresh run). Steps stay FLAT here (subagent children carry `parentId`), exactly
+  // like `steps`; the UI re-nests parts by parentId on hydrate. No offsets.
+  const parts: SessionMessagePart[] = []
+  const appendTextPart = (delta: string): void => {
+    const last = parts[parts.length - 1]
+    if (last && last.kind === 'text') last.text += delta
+    else parts.push({ kind: 'text', text: delta })
+  }
+  const upsertStepPart = (step: SessionStep): void => {
+    // Merge a repeat (running → done, thinking re-emits) in place, else push a new
+    // part — pushing a non-text part is what splits the reply text around it.
+    const existing = parts.find((p) => p.kind !== 'text' && p.id === step.id)
+    if (existing) Object.assign(existing, step)
+    else parts.push(step)
+  }
+
+  // Persist the USER message up front, before the model runs. Pre-fix it was
+  // written only after the turn resolved, so a cancel / crash mid-reply lost it
+  // entirely. appendMessage re-folds the file and skips if the session isn't
+  // created yet (new-session race — the UI's create RPC has landed by send time).
+  try {
+    await appendMessage(params.sessionId, {
+      id: `msg_u_${randomBytes(8).toString('hex')}`,
+      role: 'user',
+      text: params.text,
+      at: new Date().toISOString(),
+    })
+  } catch (err) {
+    log.warn('failed to persist user message', {
+      sessionId: params.sessionId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // Append a snapshot of the assistant message. Idempotent by message id: the
+  // JSONL fold upserts `message.appended` by id, so repeated snapshots (partial
+  // → partial → final) collapse to last-write-wins. Partial snapshots omit
+  // startedAt so a crash-loaded partial renders static, not stuck "streaming".
+  // appendEvent (no re-fold guard) keeps throttled writes cheap; if the session
+  // was deleted mid-turn the fold tombstones these anyway.
+  const persistAgent = async (opts: { final: boolean; result?: RunStreamResult }) => {
+    const steps = [...collectedSteps.values()]
+    const message: SessionMessage = {
+      id: params.messageId,
+      role: 'agent',
+      text: opts.result?.text ?? accumulatedText,
+      at: new Date().toISOString(),
+      ...(steps.length > 0 ? { steps } : {}),
+      // Ordered timeline (ADR 0032). Authoritative when present — the UI renders
+      // it directly instead of re-deriving from text + step offsets.
+      ...(parts.length > 0 ? { parts } : {}),
+    }
+    if (opts.final) {
+      message.completedAt = Date.now()
+      if (opts.result) {
+        message.modelUsed = opts.result.modelUsed
+        message.usage = {
+          inputTokens: opts.result.usage.input_tokens,
+          outputTokens: opts.result.usage.output_tokens,
+        }
+      } else {
+        // Reached on cancel/error: flag the truncated reply so the UI badges it.
+        message.canceled = true
+      }
+    }
+    try {
+      await appendEvent(params.sessionId, {
+        type: 'message.appended',
+        at: new Date().toISOString(),
+        message,
+      })
+    } catch (err) {
+      log.warn('failed to persist agent message', {
+        sessionId: params.sessionId,
+        final: opts.final,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Throttle mid-stream snapshots so a hard kill loses at most ~1s of reply, not
+  // the whole turn, without writing a JSONL line per token. Fire-and-forget: the
+  // per-session append lock serialises writes in call order, and the guaranteed
+  // final snapshot (below) always lands last.
+  const PARTIAL_PERSIST_THROTTLE_MS = 1200
+  let lastPartialPersistAt = 0
+  const schedulePartialPersist = () => {
+    const now = Date.now()
+    if (now - lastPartialPersistAt < PARTIAL_PERSIST_THROTTLE_MS) return
+    lastPartialPersistAt = now
+    void persistAgent({ final: false })
+  }
 
   let result
   try {
@@ -296,64 +444,57 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
         canUseTool,
+        askUserQuestion,
         abortController,
       },
       {
         onChunk: (delta) => {
+          accumulatedText += delta
+          appendTextPart(delta)
           emit('session.chunk', {
             sessionId: params.sessionId,
             messageId: params.messageId,
             delta,
           })
+          schedulePartialPersist()
         },
         onStep: (step) => {
+          // Stamp the reply position where this step fired (length of text
+          // streamed so far) so a JSONL reload can re-interleave text ↔ steps in
+          // chronological order. Preserve the first-seen offset across the
+          // running→done upsert (and thinking re-emits) — the tool fired once.
+          // Emit the stamped step so the live UI keeps the same value it persists.
+          const prev = collectedSteps.get(step.id)
+          const stamped: SessionStep = {
+            ...prev,
+            ...step,
+            textOffset: prev?.textOffset ?? step.textOffset ?? accumulatedText.length,
+          }
+          collectedSteps.set(step.id, stamped)
+          upsertStepPart(stamped)
           emit('session.step', {
             sessionId: params.sessionId,
             messageId: params.messageId,
-            step,
+            step: stamped,
           })
+          schedulePartialPersist()
         },
       },
     )
+    // Success → persist the authoritative final reply (full text + usage + steps).
+    await persistAgent({ final: true, result })
+  } catch (err) {
+    // Cancel / error / runtime failure: runStreamPi throws here. Persist whatever
+    // text + steps streamed so the partial reply survives reload, then re-throw
+    // so the UI keeps its cancel/error handling.
+    await persistAgent({ final: true })
+    throw err
   } finally {
     abortController.signal.removeEventListener('abort', onAbort)
     // Defensive: if anything left a parked permission (e.g. a runtime error
     // without calling canUseTool back), reject so the Map doesn't leak.
     onAbort()
     unregisterAborter(params.messageId)
-  }
-
-  // Persist both turns to JSONL. Best-effort: failures must not bubble back
-  // to the UI because the chat itself already succeeded. Race scenario where
-  // the session was not yet upserted is handled inside appendMessage (it
-  // re-folds the file and skips silently). See sessions/store.ts.
-  const now = new Date().toISOString()
-  const userMessage: SessionMessage = {
-    id: `msg_u_${randomBytes(8).toString('hex')}`,
-    role: 'user',
-    text: params.text,
-    at: now,
-  }
-  const agentMessage: SessionMessage = {
-    id: params.messageId,
-    role: 'agent',
-    text: result.text,
-    at: new Date().toISOString(),
-    completedAt: Date.now(),
-    modelUsed: result.modelUsed,
-    usage: {
-      inputTokens: result.usage.input_tokens,
-      outputTokens: result.usage.output_tokens,
-    },
-  }
-  try {
-    await appendMessage(params.sessionId, userMessage)
-    await appendMessage(params.sessionId, agentMessage)
-  } catch (err) {
-    log.warn('failed to persist messages', {
-      sessionId: params.sessionId,
-      err: err instanceof Error ? err.message : String(err),
-    })
   }
 
   // Terminal event so UI can clear "loading" state purely from the stream,
@@ -373,5 +514,8 @@ When delegating work via the Task tool, instruct the subagent in the prompt to u
     modelUsed: result.modelUsed,
     usage: result.usage,
     stopReason: result.stopReason,
+    // Ordered timeline (ADR 0032). UI finalize stores this as the authoritative
+    // message.parts; empty for a non-streaming reply with no steps (UI derives).
+    ...(parts.length > 0 ? { parts } : {}),
   }
 })

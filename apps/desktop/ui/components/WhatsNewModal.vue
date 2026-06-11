@@ -22,14 +22,16 @@
           {{ pick(rel.highlight) }}
         </p>
 
-        <ul class="space-y-1.5">
-          <li
-            v-for="(item, i) in rel.items"
-            :key="i"
-            class="flex items-start gap-2.5 text-[1em] leading-relaxed"
-          >
+        <!-- Grid keeps every body text aligned to one column: the badge column
+             auto-sizes to the widest label (e.g. "Improved"/"Thay đổi"), so rows
+             no longer start at a ragged left edge regardless of locale. -->
+        <ul
+          class="grid items-start justify-items-start gap-x-2.5 gap-y-1.5 text-[1em] leading-relaxed"
+          style="grid-template-columns: max-content 1fr"
+        >
+          <li v-for="(item, i) in rel.items" :key="i" class="contents">
             <span
-              class="mt-0.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[12px] font-medium leading-none flex-shrink-0"
+              class="mt-0.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[12px] font-medium leading-none"
               :style="kindStyle(item.kind)"
             >
               {{ tr(`whatsnew.kind.${item.kind}`) }}

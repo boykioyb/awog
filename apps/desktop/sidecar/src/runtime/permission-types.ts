@@ -14,6 +14,8 @@
 // Keeping these local (not in the broad types/shared.ts) keeps the runtime
 // permission/tool contract co-located with the code that owns it (SoC).
 
+import type { SessionQuestion, SessionQuestionAnswer } from '../types/shared.js'
+
 // ─── MCP server map ─────────────────────────────────────────────────────────
 // The already-resolved MCP server config the runtime tools consume. Upstream
 // (sessions.send-message.ts / tasks/agent-context.ts) has intersected the
@@ -81,3 +83,16 @@ export type CanUseTool = (
   input: Record<string, unknown>,
   options: CanUseToolOptions,
 ) => Promise<PermissionResult>
+
+// ─── AskUserQuestion gate ───────────────────────────────────────────────────
+// Assembled in sessions.send-message.ts and invoked by the AskUserQuestion tool
+// (runtime/tools/ask-user-question-tool.ts). Parks a promise keyed by the
+// tool-call id (= the step id), emits the question to the UI via the
+// session.step event, and resolves with the user's answers when the
+// sessions.answerQuestion RPC lands. Only the chat runtime wires this; tasks /
+// subagents leave it undefined so the tool falls back to a headless no-op.
+export type AskUserQuestionFn = (
+  toolCallId: string,
+  questions: SessionQuestion[],
+  signal?: AbortSignal,
+) => Promise<SessionQuestionAnswer[]>

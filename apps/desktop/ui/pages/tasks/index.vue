@@ -109,7 +109,8 @@
                 }"
               />
               <span
-                class="text-[1em] uppercase tracking-wider font-medium flex-1 text-left truncate"
+                class="text-[1em] uppercase tracking-wider font-semibold flex-1 text-left truncate"
+                :style="{ color: t.text }"
               >
                 {{ group.label }}
               </span>

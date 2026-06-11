@@ -94,6 +94,20 @@ export function useSidecar() {
     await api.openPath(workspaceRoot, path)
   }
 
+  // Whether VS Code's `code` CLI is available — gates the "Open in VS Code"
+  // file action. Returns false when running outside the Electron shell.
+  const isVscodeAvailable = async (): Promise<boolean> => {
+    if (!api) return false
+    return api.vscodeAvailable()
+  }
+
+  // Open a workspace-relative file/dir in VS Code. Same workspace validation as
+  // revealPath (path outside → rejects in the main process).
+  const openInVscode = async (workspaceRoot: string, path: string): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.openInVscode(workspaceRoot, path)
+  }
+
   // Auto-update bridge (ADR 0028). The renderer talks to the main-process updater
   // only through here, on a channel separate from engine events.
   const getAppInfo = async (): Promise<AppInfo> => {
@@ -132,6 +146,8 @@ export function useSidecar() {
     openExternal,
     revealPath,
     openPath,
+    isVscodeAvailable,
+    openInVscode,
     getAppInfo,
     checkForUpdates,
     downloadUpdate,

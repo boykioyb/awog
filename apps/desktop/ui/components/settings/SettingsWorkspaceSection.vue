@@ -34,6 +34,12 @@
       >
         <AppToggle v-model="settings.notificationsEnabled" />
       </SettingsField>
+      <SettingsField label="Token optimizer (RTK)" :hint="rtkHint">
+        <AppToggle
+          :model-value="rtk.enabled"
+          @update:model-value="updateRtk({ enabled: $event })"
+        />
+      </SettingsField>
     </div>
 
     <!-- Git / Auto-commit (M6) -->
@@ -180,6 +186,21 @@ import {
 const { t } = useTheme()
 const settings = useSettingsStore()
 const { git, update } = useGitSettings()
+const { rtk, rtkStatus, update: updateRtk, sync: syncRtk } = useRtkSettings()
+
+// Re-probe when the panel opens so the detected-binary line is fresh.
+onMounted(() => {
+  void syncRtk()
+})
+
+const rtkHint = computed(() => {
+  const base =
+    'Compress shell command output to save tokens (bundled, applies to the agent Bash tool)'
+  if (rtkStatus.value.available) {
+    return `${base} · rtk ${rtkStatus.value.version ?? ''} detected`.trimEnd()
+  }
+  return `${base} · binary not available on this platform`
+})
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,

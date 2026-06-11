@@ -1,9 +1,14 @@
 <template>
   <template v-for="(p, pi) in parts" :key="pi">
-    <strong v-if="p.type === 'bold'" :style="{ color: t.syntax.bold, fontWeight: 600 }">
+    <strong
+      v-if="p.type === 'bold'"
+      :style="{ color: muted ? 'inherit' : t.syntax.bold, fontWeight: 600 }"
+    >
       {{ p.text }}
     </strong>
-    <em v-else-if="p.type === 'italic'" :style="{ color: t.syntax.italic }">{{ p.text }}</em>
+    <em v-else-if="p.type === 'italic'" :style="{ color: muted ? 'inherit' : t.syntax.italic }">
+      {{ p.text }}
+    </em>
     <code
       v-else-if="p.type === 'code'"
       class="px-1 py-0.5 rounded font-mono text-[1em]"
@@ -26,6 +31,9 @@
 <script setup lang="ts">
 import type { InlinePart } from '~/utils/markdown-parse'
 
-defineProps<{ parts: InlinePart[] }>()
+// `muted`: render bold/italic with `inherit` instead of their syntax color so
+// inline emphasis inside a dimmed container (blockquote) takes the container's
+// color rather than popping bright — keeps the quote reading as one tone.
+withDefaults(defineProps<{ parts: InlinePart[]; muted?: boolean }>(), { muted: false })
 const { t } = useTheme()
 </script>

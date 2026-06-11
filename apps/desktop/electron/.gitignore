@@ -1,3 +1,5 @@
 dist/
 release/
 node_modules/
+# Bundled RTK binary — downloaded + checksum-verified by scripts/fetch-rtk.mjs (ADR 0031)
+resources/rtk/

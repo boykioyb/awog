@@ -1,7 +1,7 @@
-import { FileText, Sparkles, User as UserIcon } from 'lucide-vue-next'
+import { FileText, Slash, Sparkles, User as UserIcon } from 'lucide-vue-next'
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
-import type { Agent, AgentSource, FsEntry, SkillSource } from '~/types'
+import type { Agent, AgentSource, Command, FsEntry, SkillSource } from '~/types'
 import { agentSourcePath } from '~/utils/agent-source'
 import { SESSION_COMMANDS } from '~/utils/session-catalog'
 import type { AutoItem } from '~/components/session/SessionAutocomplete.vue'
@@ -71,6 +71,20 @@ export const useMentionAutocomplete = (
 
   const agentHandle = (ag: Agent) => ag.name.toLowerCase().replace(/\s+/g, '-')
 
+  // Enabled user commands in scope for this session: global + user-imported
+  // always; project + project-imported only when the composer is bound to that
+  // project (derived from workspaceRoot).
+  const applicableUserCommands = computed<Command[]>(() => {
+    const root = workspaceRoot.value
+    const projectId = root ? (workspace.projects.find((p) => p.path === root)?.id ?? null) : null
+    return workspace.commands.filter((c) => {
+      if (c.enabled === false) return false
+      const source = c.source ?? 'global'
+      if (source === 'global' || source === 'claude-user') return true
+      return !!projectId && c.projectId === projectId
+    })
+  })
+
   const autocomplete = computed<{ title: string; items: AutoItem[] }>(() => {
     if (mentionToken.value === null) return { title: '', items: [] }
     const trigger = mentionTrigger.value
@@ -103,6 +117,12 @@ export const useMentionAutocomplete = (
 
     if (trigger === '/') {
       const matchedCommands = SESSION_COMMANDS.filter((c) => q === '' || c.name.startsWith(q))
+      // User-authored slash commands applicable to this session (global + user
+      // imported always; project + project-imported only when bound). Inserted
+      // as text (`/id `) — expanded into the prompt on send, NOT dispatched.
+      const matchedUserCommands = applicableUserCommands.value.filter(
+        (c) => q === '' || c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q),
+      )
       const matchedSkills = byProjectFirst(
         workspace.skills.filter(
           (s) => q === '' || s.id.toLowerCase().startsWith(q) || s.name.toLowerCase().includes(q),
@@ -116,6 +136,14 @@ export const useMentionAutocomplete = (
         icon: c.icon,
         insertHandle: `/${c.name}`,
       }))
+      const userCommandItems: AutoItem[] = matchedUserCommands.slice(0, RESULT_LIMIT).map((c) => ({
+        kind: 'usercommand',
+        id: c.id,
+        label: `/${c.id}`,
+        hint: c.description,
+        icon: Slash,
+        insertHandle: `/${c.id}`,
+      }))
       const skillItems: AutoItem[] = matchedSkills.slice(0, RESULT_LIMIT).map((s) => ({
         kind: 'skill',
         id: s.id,
@@ -124,12 +152,12 @@ export const useMentionAutocomplete = (
         icon: Sparkles,
         insertHandle: `/${s.id}`,
       }))
-      const items = [...commandItems, ...skillItems]
+      const items = [...commandItems, ...userCommandItems, ...skillItems]
       return {
         title: narrowTitle(
           'Run command or skill',
           items.length,
-          matchedCommands.length + matchedSkills.length,
+          matchedCommands.length + matchedUserCommands.length + matchedSkills.length,
         ),
         items,
       }

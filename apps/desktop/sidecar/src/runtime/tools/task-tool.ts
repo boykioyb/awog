@@ -24,6 +24,7 @@ import { recordCodexUsageFromHeaders } from '../../providers/openai/usage.js'
 import { resolveAgentContext } from '../../tasks/agent-context.js'
 import { log } from '../../util/logger.js'
 import type { Agent, SessionSettings } from '../../types/shared.js'
+import type { McpServersConfig } from '../permission-types.js'
 import { resolveModel } from '../model-resolver.js'
 import { buildContext } from '../context-builder.js'
 import { createRuntimeToolDefinitions } from './index.js'
@@ -81,6 +82,13 @@ export interface TaskToolDeps {
   disabledTools?: string[]
   // Task source connection unioned into the subagent's MCP set (tasks only).
   connectionId?: string
+  // The parent turn's ALREADY-RESOLVED MCP servers (session/task whitelist ∩
+  // enabled + secrets expanded). Unioned into the subagent's own AGENT.md-resolved
+  // set so a subagent can always reach every MCP server its parent could — "what
+  // the session can use, the subagent it spawns can use too". Without this a
+  // subagent with its own narrower `mcpServerIds` whitelist silently loses the
+  // session's servers (e.g. fails `mcp__<id>__*` with "not found").
+  parentMcpServers?: McpServersConfig
   // Permission gate for the subagent's tool calls. Chat reuses the parent gate
   // (so writes still prompt); tasks pass an always-allow gate (bypass).
   beforeToolCall: BeforeToolCall
@@ -114,6 +122,18 @@ function describeTool(agents: Agent[]): string {
     .map((a) => `- ${a.name}: ${a.description?.split('\n')[0]?.trim() || a.role || 'general-purpose'}`)
     .join('\n')
   return `${intro}\n\nAvailable subagent_type values:\n${menu}`
+}
+
+// Union the parent turn's resolved MCP servers with the subagent's own. Returns
+// undefined when neither side has servers (so createRuntimeToolDefinitions skips
+// the MCP round-trip). On a duplicate server id the subagent's own entry wins;
+// both maps are already secrets-expanded so the entries are equivalent anyway.
+function mergeMcpServers(
+  parent: McpServersConfig | undefined,
+  own: McpServersConfig | undefined,
+): McpServersConfig | undefined {
+  if (!parent && !own) return undefined
+  return { ...(parent ?? {}), ...(own ?? {}) }
 }
 
 // Merge the resolved agent context onto the parent settings: the agent's
@@ -153,11 +173,17 @@ async function spawnSubagent(
   const { account } = await resolveCredential(settings.provider, settings.accountId)
   const { model, getApiKey } = resolveModel(settings, account)
 
-  // Subagent toolset: built-in + the agent's MCP tools, filtered by the agent's
+  // MCP set = the parent turn's resolved servers ∪ the subagent's own
+  // AGENT.md-resolved servers (own wins on a duplicate id — both maps are already
+  // secrets-expanded so identical entries are equivalent). Guarantees the subagent
+  // inherits every server the parent could reach, regardless of its own whitelist.
+  const mcpServers = mergeMcpServers(deps.parentMcpServers, agentCtx.mcpServers)
+
+  // Subagent toolset: built-in + the merged MCP tools, filtered by the agent's
   // allowedTools and the session denylist. NO Task tool (depth = 1) and NO plan.
   const tools = await createRuntimeToolDefinitions(
     deps.cwd,
-    agentCtx.mcpServers,
+    mcpServers,
     {
       ...(agentCtx.allowedTools ? { allowedTools: agentCtx.allowedTools } : {}),
       ...(deps.disabledTools ? { disabledTools: deps.disabledTools } : {}),

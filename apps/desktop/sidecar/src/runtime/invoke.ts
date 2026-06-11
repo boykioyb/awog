@@ -24,6 +24,7 @@ import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { TODO_USAGE_PROMPT } from './prompts.js'
 import { toReasoning } from './thinking.js'
+import { buildRulesPrompt } from '../rules/inject.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../sdk/invoke.js'
 
 // Map a thrown error to RPC codes so the UI treats CANCELED / AUTH_EXPIRED /
@@ -192,6 +193,14 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
       ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
     },
     args.abortController?.signal,
+    // Tasks run unattended — no interactive AskUserQuestion handler.
+    undefined,
+    // Hook anchor (ADR 0032): fire tool.* / artifact.* around each task tool call.
+    {
+      surface: 'task',
+      workspace: args.cwd ?? process.cwd(),
+      ...(args.projectIds?.[0] ? { projectId: args.projectIds[0] } : {}),
+    },
   )
 
   // Task subagent tool (ADR 0030), top-level only (depth = 1). Honours the
@@ -219,6 +228,9 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         parentSettings: settings,
         ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
         ...(args.connectionId ? { connectionId: args.connectionId } : {}),
+        // Subagent inherits the node's resolved MCP servers (agent whitelist +
+        // task connection + secrets already applied) so it never has less reach.
+        ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
         // Tasks run unattended: subagent tool calls bypass permissions too.
         beforeToolCall: async () => undefined,
         makeChildSink: (parentToolCallId) => {
@@ -236,9 +248,15 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
     ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
   })
-  const systemPromptAppend = todoAllowed
-    ? `${args.systemPromptAppend ? `${args.systemPromptAppend}\n\n` : ''}${TODO_USAGE_PROMPT}`
-    : args.systemPromptAppend
+  // Workspace rules (ADR 0033): enabled global + task-project rules, appended to
+  // (not replacing) the node agent's own prompt.
+  const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0])
+  const appendParts = [
+    args.systemPromptAppend,
+    rulesPrompt,
+    todoAllowed ? TODO_USAGE_PROMPT : undefined,
+  ].filter((p): p is string => typeof p === 'string' && p.length > 0)
+  const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
 
   // Tasks are one-shot: no chat history, just systemPrompt + the single prompt.
   const { context, prompt } = buildContext([], args.prompt, args.systemPrompt, systemPromptAppend, tools)

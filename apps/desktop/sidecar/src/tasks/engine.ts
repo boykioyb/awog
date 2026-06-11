@@ -10,6 +10,9 @@
 
 import { log } from '../util/logger.js'
 import { invokeSdk } from '../sdk/invoke.js'
+import { liftTurnSignalListenerCap } from '../runtime/turn-signal.js'
+import { loadProject } from '../projects/store.js'
+import { dispatch } from '../hooks/dispatcher.js'
 import { loadTask, listTasks } from './store.js'
 import { runNode, type NodeRunOutcome } from './node-runner.js'
 import { computeRunnable, downstreamOf, settledStatus } from './scheduler.js'
@@ -37,6 +40,23 @@ interface TaskRuntime {
 }
 
 const registry = new Map<string, TaskRuntime>()
+
+// Fire a task-lifecycle hook (ADR 0032). after-* events are non-blockable, so
+// this is fire-and-forget — a misbehaving hook never stalls the engine.
+function fireTaskHook(event: 'task.after-complete' | 'phase.after-approve', task: Task, detail: Record<string, unknown>): void {
+  void (async () => {
+    try {
+      const project = await loadProject(task.projectId)
+      await dispatch(
+        event,
+        { taskId: task.id, payload: detail },
+        { projectId: task.projectId, ...(project?.path ? { workspace: project.path } : {}) },
+      )
+    } catch (err) {
+      log.warn('task hook dispatch failed', { event, taskId: task.id, err: err instanceof Error ? err.message : String(err) })
+    }
+  })()
+}
 
 function ensureRuntime(taskId: string): TaskRuntime {
   let rt = registry.get(taskId)
@@ -74,6 +94,10 @@ function executeRun(
 ): void {
   const rt = ensureRuntime(taskId)
   const ac = new AbortController()
+  // This per-node turn signal fans out to undici (per LLM request), parallel
+  // tool calls, and subagents — lift Node's 10-listener cap to silence the
+  // false-positive MaxListenersExceededWarning (see runtime/turn-signal.ts).
+  liftTurnSignalListenerCap(ac.signal)
   rt.inFlight.set(node.id, ac)
   void (async () => {
     try {
@@ -139,8 +163,12 @@ async function finalize(taskId: string, task: Task): Promise<void> {
       Object.values(task.phases).find((p) => p.status === 'waiting_approval')?.nodeId ?? null
   }
   await emitTaskStatus(taskId, status, waitingApproval)
-  // Terminal → drop runtime. waiting_approval keeps it so approve can resume.
-  if (status === 'completed' || status === 'failed') registry.delete(taskId)
+  // Terminal → drop runtime + fire task.after-complete (ADR 0032). waiting_approval
+  // keeps the runtime so approve can resume.
+  if (status === 'completed' || status === 'failed') {
+    fireTaskHook('task.after-complete', task, { status, title: task.title })
+    registry.delete(taskId)
+  }
 }
 
 function requestSchedule(taskId: string): void {
@@ -261,6 +289,8 @@ export async function approvePhase(taskId: string, nodeId: string): Promise<void
     approvedAt: new Date().toISOString(),
   })
   await emitPhaseStatus(taskId, nodeId, 'completed')
+  // phase.after-approve hook (ADR 0032) — the auto-commit-on-approve use case.
+  fireTaskHook('phase.after-approve', task, { nodeId, version })
   ensureRuntime(taskId)
   await emitTaskStatus(taskId, 'running', null)
   requestSchedule(taskId)

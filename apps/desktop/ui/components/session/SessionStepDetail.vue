@@ -145,20 +145,68 @@
 
       <template v-else-if="detail.kind === 'file'">
         <div
-          class="px-4 py-2 flex items-center gap-2 text-[1em]"
+          class="px-4 py-2 flex items-center gap-2 text-[1em] sticky top-0 z-10"
           :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
         >
-          <FileText :size="11" :style="{ color: t.textDim }" />
-          <span class="font-mono" :style="{ color: t.text }">{{ detail.path }}</span>
+          <FileText :size="11" class="flex-shrink-0" :style="{ color: t.textDim }" />
+          <span class="font-mono truncate" :style="{ color: t.text }">{{ detail.path }}</span>
           <span
             v-if="detail.language"
-            class="ml-auto text-[1em] uppercase tracking-wider"
+            class="text-[1em] uppercase tracking-wider flex-shrink-0"
             :style="{ color: t.textDim }"
           >
             {{ detail.language }}
           </span>
+          <div class="ml-auto flex items-center gap-1 flex-shrink-0">
+            <!-- Markdown defaults to a rendered preview; toggle to the raw source. -->
+            <div
+              v-if="isMarkdown"
+              class="inline-flex rounded overflow-hidden"
+              :style="{ border: `1px solid ${t.border}` }"
+            >
+              <button
+                v-for="m in fileViewModes"
+                :key="m.value"
+                class="px-1.5 py-1 inline-flex items-center transition"
+                :style="{
+                  background: fileView === m.value ? t.bgActive : 'transparent',
+                  color: fileView === m.value ? t.text : t.textDim,
+                }"
+                :title="m.label"
+                @click="fileView = m.value"
+              >
+                <component :is="m.icon" :size="12" />
+              </button>
+            </div>
+            <button
+              v-if="isMarkdown"
+              class="p-1 rounded transition"
+              :style="{ color: copied === 'text' ? t.accent : t.textDim }"
+              title="Copy as plain text"
+              @click="copyText"
+            >
+              <component :is="copied === 'text' ? Check : Clipboard" :size="12" />
+            </button>
+            <button
+              class="p-1 rounded transition"
+              :style="{ color: copied === 'raw' ? t.accent : t.textDim }"
+              :title="isMarkdown ? 'Copy raw markdown' : 'Copy content'"
+              @click="copyRaw"
+            >
+              <component :is="copied === 'raw' ? Check : Code2" :size="12" />
+            </button>
+          </div>
+        </div>
+        <div
+          v-if="isMarkdown && fileView === 'preview'"
+          ref="previewRef"
+          class="px-4 py-3"
+          :style="{ color: t.text }"
+        >
+          <MarkdownRenderer :content="detail.content" />
         </div>
         <pre
+          v-else
           class="font-mono text-[1em] leading-[1.55] px-4 py-3 whitespace-pre-wrap"
           :style="{ color: t.text }"
           >{{ detail.content }}</pre
@@ -236,12 +284,14 @@
 
 <script setup lang="ts">
 import {
+  Check,
   ChevronDown,
   Clipboard,
   Code2,
   Columns2,
   Edit3,
   ExternalLink,
+  Eye,
   FileText,
   FolderSearch,
   Rows,
@@ -354,4 +404,52 @@ const TOOL_ICONS = {
 
 const toolIcon = computed(() => (props.step.tool ? TOOL_ICONS[props.step.tool] : FileText))
 const detail = computed(() => props.step.detail)
+
+// Markdown file detail renders as a preview by default (toggle to raw source).
+const isMarkdown = computed(() => {
+  const d = props.step.detail
+  if (!d || d.kind !== 'file') return false
+  const lang = (d.language ?? '').toLowerCase()
+  return lang === 'markdown' || lang === 'md' || /\.(md|markdown|mdx)$/i.test(d.path ?? '')
+})
+
+type FileView = 'preview' | 'raw'
+const fileView = ref<FileView>('preview')
+const fileViewModes = [
+  { value: 'preview' as const, label: 'Preview', icon: Eye },
+  { value: 'raw' as const, label: 'Raw', icon: Code2 },
+]
+
+const previewRef = useTemplateRef<HTMLElement>('previewRef')
+const fileContent = (): string =>
+  props.step.detail?.kind === 'file' ? props.step.detail.content : ''
+
+// Transient ✓ feedback per copy button.
+const copied = ref<'text' | 'raw' | null>(null)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+const flashCopied = (kind: 'text' | 'raw') => {
+  copied.value = kind
+  if (copiedTimer) clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => (copied.value = null), 1200)
+}
+const writeClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // clipboard may be unavailable (non-secure context) — ignore
+  }
+}
+// Raw = the markdown/file source. Text = the rendered preview's plain text
+// (markdown stripped); falls back to the source when not in preview mode.
+const copyRaw = async () => {
+  await writeClipboard(fileContent())
+  flashCopied('raw')
+}
+const copyText = async () => {
+  await writeClipboard(previewRef.value?.textContent?.trim() || fileContent())
+  flashCopied('text')
+}
+onUnmounted(() => {
+  if (copiedTimer) clearTimeout(copiedTimer)
+})
 </script>

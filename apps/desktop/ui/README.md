@@ -82,7 +82,7 @@ ui/
 │   │
 │   │ # Entity folders (PR-6 consolidation sweep)
 │   ├── agent/        # AgentDetail.vue, AgentEditor.vue, AgentPromptCreator.vue
-│   ├── command/      # CommandDetail.vue, CommandEditor.vue, CommandPromptCreator.vue
+│   ├── command/      # CommandDetail.vue, CommandEditor.vue, CommandPromptCreator.vue, CommandBodyEditModal.vue
 │   ├── hook/         # HookDetail.vue, HookEditor.vue, HookPromptCreator.vue
 │   ├── mcp/          # McpDetail.vue, McpEditor.vue, McpPromptCreator.vue
 │   ├── skill/        # SkillDetail.vue, SkillEditor.vue, SkillPromptCreator.vue

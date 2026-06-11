@@ -25,6 +25,9 @@ export interface AwogBridge {
   openExternal(url: string): Promise<void>
   revealPath(root: string, path: string): Promise<void>
   openPath(root: string, path: string): Promise<void>
+  // Whether VS Code's `code` CLI is available on this machine.
+  vscodeAvailable(): Promise<boolean>
+  openInVscode(root: string, path: string): Promise<void>
   pickFolder(opts?: AwogDialogOpts): Promise<string | null>
   savePath(opts?: AwogSavePathOpts): Promise<string | null>
   // Auto-update (ADR 0028).

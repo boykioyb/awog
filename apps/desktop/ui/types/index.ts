@@ -325,7 +325,7 @@ export interface SessionArtifactRef {
   preview?: string
 }
 
-export type SessionTokenKind = 'agent' | 'skill' | 'file' | 'command'
+export type SessionTokenKind = 'agent' | 'skill' | 'file' | 'command' | 'usercommand'
 
 export interface SessionMention {
   kind: SessionTokenKind
@@ -394,9 +394,27 @@ export type StepDetail =
 
 export type PlanStatus = 'pending' | 'approved' | 'rejected'
 
+// AskUserQuestion (kind === 'question'): the model pauses the turn to ask the
+// user 1–4 multiple-choice questions. Mirrors the sidecar shapes.
+// See docs/features/ask-user-question.md.
+export interface SessionQuestionOption {
+  label: string
+  description?: string
+}
+export interface SessionQuestion {
+  header: string
+  question: string
+  options: SessionQuestionOption[]
+  multiSelect: boolean
+}
+export interface SessionQuestionAnswer {
+  header: string
+  selected: string[]
+}
+
 export interface SessionStep {
   id: string
-  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan'
+  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question'
   tool?: StepTool
   label: string
   target?: string
@@ -416,16 +434,28 @@ export interface SessionStep {
   // Todo step (kind === 'note', from a TodoWrite call): the live checklist the
   // UI renders inline. Mirrors the sidecar SessionStep.todos field.
   todos?: TodoItem[]
+  // Question step (kind === 'question', from an AskUserQuestion call): the asked
+  // questions and — once answered — the user's chosen answers. SessionQuestionCard
+  // renders the interactive form while `answers` is unset, then a read-only record.
+  questions?: SessionQuestion[]
+  answers?: SessionQuestionAnswer[]
   // tool_use_id of the parent Task step when this step ran inside a subagent.
   // Sidecar fills this from the SDK's parent_tool_use_id; UI store uses it to
   // attach the step under the parent's `children` array instead of top-level.
   parentId?: string
-  // Character offset into the assistant `text` at which this tool fired. Stamped
-  // by the sessions store when a top-level step first arrives (= length of the
-  // text streamed so far) so SessionMessageItem can interleave step rows with
-  // the reply text in chronological order. Unset for nested subagent steps.
+  // Character offset into the assistant `text` at which this tool fired (= length
+  // of the text streamed so far) so SessionMessageItem can interleave step rows
+  // with the reply text in chronological order. Stamped + PERSISTED by the sidecar
+  // (sessions.send-message) so it survives a JSONL reload; the store only stamps
+  // as a fallback for the rare step that arrives without it. Unset for nested
+  // subagent steps.
   textOffset?: number
 }
+
+// One ordered slice of an assistant turn (ADR 0032): a run of reply text or a
+// single step. The array order IS the timeline — no character offsets. Subagent
+// steps nest under their parent step's `children` (re-nested on hydrate).
+export type SessionMessagePart = { kind: 'text'; text: string } | SessionStep
 
 export interface SessionMessage {
   id: string
@@ -437,6 +467,11 @@ export interface SessionMessage {
   mentions?: SessionMention[]
   suggestedSkillIds?: string[]
   steps?: SessionStep[]
+  // Ordered timeline (ADR 0032): reply-text runs interleaved with steps, subagent
+  // steps nested. Authoritative when present — SessionMessageItem renders it
+  // directly; absent (legacy / live stream before finalize) → it derives the order
+  // from `text` + `steps`. Built + persisted by the sidecar.
+  parts?: SessionMessagePart[]
   attachments?: SessionAttachment[]
   followUps?: SessionFollowUp[]
   modeAtSend?: AgentMode
@@ -592,11 +627,25 @@ export type HookEvent =
 
 export type HookRunMode = 'blocking' | 'background'
 
+// AWOG-native tiers (global/project) are editable; claude-* are IMPORTED
+// read-only from Claude Code settings.json hooks (PreToolUse/PostToolUse),
+// prioritised so project runs before global.
+export type HookSource = 'global' | 'project' | 'claude-project' | 'claude-local' | 'claude-user'
+
 export interface HookRunRecord {
   at: string
   durationMs: number
   exitCode: number
   stderr?: string
+}
+
+// Per-tier scan report (mirrors SkillScanReport) — which dirs were scanned + how
+// many hooks each held, surfaced in the refresh toast.
+export interface HookScanReport {
+  dir: string
+  source: HookSource
+  found: number
+  projectId?: string
 }
 
 export interface Hook {
@@ -611,34 +660,79 @@ export interface Hook {
   runMode: HookRunMode
   enabled: boolean
   env?: Record<string, string>
+  // Location tags — set by the sidecar on list/load; default to global tier.
+  source?: HookSource
+  projectId?: string
+  // Trust gate (ADR 0032 D-8): global = always true; project-tier = false until
+  // the user grants trust. Untrusted hooks never spawn.
+  trusted?: boolean
+  // Imported Claude Code hook (claude-*): not editable in AWOG.
+  readOnly?: boolean
   recentRuns: HookRunRecord[]
 }
 
-// ─── Slash Commands ────────────────────────────────────────────────────────
+// ─── Rules ─────────────────────────────────────────────────────────────────
+// Markdown instruction files auto-injected into the agent system prompt for
+// sessions + tasks (ADR 0033). Two tiers (global / project) like Skills/Hooks.
 
-export type CommandType = 'prompt' | 'agent-switch' | 'shell' | 'workflow'
-export type CommandArgType = 'string' | 'number' | 'file' | 'agent' | 'artifact' | 'boolean'
-export type CommandScope = 'global' | `project:${string}` | `agent:${string}`
+// AWOG-native tiers (global/project) are editable; claude-* are IMPORTED
+// read-only from Claude Code config (CLAUDE.md / .claude/rules), prioritised on
+// injection (ADR 0033 D-4 amended).
+export type RuleSource = 'global' | 'project' | 'claude-project' | 'claude-rules' | 'claude-user'
 
-export interface CommandArg {
-  name: string
-  type: CommandArgType
-  required: boolean
-  description: string
-  default?: string
-}
-
-export interface SlashCommand {
+export interface Rule {
   id: string
   name: string
-  aliases: string[]
   description: string
-  type: CommandType
-  args: CommandArg[]
+  // The instruction text injected into the system prompt.
   body: string
-  scope: CommandScope
-  timeoutMs?: number
-  system?: boolean
+  enabled: boolean
+  // Location tags — set by the sidecar on list/load; default to global tier.
+  source?: RuleSource
+  projectId?: string
+  // Imported Claude Code file: not editable in AWOG, always injected.
+  readOnly?: boolean
+}
+
+export interface RuleScanReport {
+  dir: string
+  source: RuleSource
+  found: number
+  projectId?: string
+}
+
+// ─── Slash Commands ────────────────────────────────────────────────────────
+// User-authored prompt templates invoked from the composer with `/name` (the
+// AWOG-native analog of Claude Code's `.claude/commands/*.md`). Per-file
+// Markdown; the body is expanded into the prompt on send (`$ARGUMENTS` / `$1`…).
+// AWOG-native tiers (global/project) are fully editable; claude-* tiers are
+// imported from Claude Code config (editable in-app, writes back to source).
+export type CommandSource = 'global' | 'project' | 'claude-project' | 'claude-user'
+
+export interface Command {
+  // Slug = the name typed after `/` (subdir namespacing uses ':').
+  id: string
+  name: string
+  description: string
+  // Prompt template; `$ARGUMENTS` / `$1`…`$9` substituted on send.
+  body: string
+  // Optional Claude-Code frontmatter passthrough.
+  argumentHint?: string
+  allowedTools?: string
+  model?: string
+  enabled: boolean
+  // Location tags — set by the sidecar on list/load; default to global tier.
+  source?: CommandSource
+  projectId?: string
+  // Imported Claude Code command: editable in-app, flagged for the Lock badge.
+  readOnly?: boolean
+}
+
+export interface CommandScanReport {
+  dir: string
+  source: CommandSource
+  found: number
+  projectId?: string
 }
 
 // ─── Git Manager ───────────────────────────────────────────────────────────

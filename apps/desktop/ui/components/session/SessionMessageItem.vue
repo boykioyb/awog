@@ -132,6 +132,11 @@
           class="mt-2"
         />
 
+        <!-- AskUserQuestion cards. Rendered OUTSIDE the collapsible step cluster
+             so a pending question is always visible (the turn is blocked until
+             the user answers); the answered record stays visible too. -->
+        <SessionQuestionCard v-for="q in questionSteps" :key="q.id" :step="q" class="mt-2" />
+
         <div v-if="message.artifacts?.length" class="mt-2 space-y-1.5">
           <div
             v-for="art in message.artifacts"
@@ -198,7 +203,13 @@
 
 <script setup lang="ts">
 import { Activity, Check, ChevronDown, Copy, FileText, GitBranch, Info } from 'lucide-vue-next'
-import type { SessionAttachment, SessionMessage, SessionStep, SessionTokenKind } from '~/types'
+import type {
+  SessionAttachment,
+  SessionMessage,
+  SessionMessagePart,
+  SessionStep,
+  SessionTokenKind,
+} from '~/types'
 import { tokenizeMessage } from '~/utils/tokenize'
 import { stripFollowUpSection } from '~/utils/follow-up'
 import { formatTime } from '~/utils/time'
@@ -249,40 +260,87 @@ const isStreaming = computed(() => !!(props.message.startedAt && !props.message.
 
 type TimelineBlock = { type: 'text'; text: string } | { type: 'steps'; steps: SessionStep[] }
 
-// Reply turns mix narration text with tool calls. Each top-level step carries
-// the text offset where its tool fired (stamped by the sessions store), so we
-// rebuild the chronological order here: split the reply text at those offsets
-// and coalesce runs of consecutive steps into one cluster. Whitespace-only
-// gaps are dropped (the cluster/text margins handle spacing).
+// Coalesce the authoritative ordered parts (ADR 0032) into render blocks: each
+// text part is a text block; consecutive step parts collapse into one cluster.
+// Thinking parts hoist into a single leading cluster (reasoning reads above the
+// reply, regardless of when the provider streamed it).
+const blocksFromParts = (parts: SessionMessagePart[]): TimelineBlock[] => {
+  const thinking = parts.filter((p): p is SessionStep => p.kind === 'thinking')
+  const lead: TimelineBlock[] = thinking.length ? [{ type: 'steps', steps: thinking }] : []
+  const body: TimelineBlock[] = []
+  for (const p of parts) {
+    if (p.kind === 'thinking') continue
+    // Question steps render via SessionQuestionCard (outside the cluster) so the
+    // interactive card is always visible — never bury it in a collapsed cluster.
+    if (p.kind === 'question') continue
+    if (p.kind === 'text') {
+      if (p.text.trim()) body.push({ type: 'text', text: p.text })
+      continue
+    }
+    const last = body[body.length - 1]
+    if (last && last.type === 'steps') last.steps.push(p)
+    else body.push({ type: 'steps', steps: [p] })
+  }
+  return [...lead, ...body]
+}
+
+// Reply turns mix narration text with tool calls. When the sidecar-built ordered
+// `parts` are present (finalized / reloaded turn) we render them directly. Absent
+// (legacy message / live stream before finalize) we derive the order from `text`
+// + each step's stamped textOffset: split the reply text at those offsets and
+// coalesce runs of consecutive steps into one cluster. Whitespace-only gaps are
+// dropped (the cluster/text margins handle spacing).
 const timelineBlocks = computed<TimelineBlock[]>(() => {
+  const parts = props.message.parts
+  if (parts?.length) return blocksFromParts(parts)
+
   const text = props.message.text ?? ''
-  const steps = props.message.steps ?? []
-  if (!steps.length) return text ? [{ type: 'text', text }] : []
+  const allSteps = props.message.steps ?? []
+  if (!allSteps.length) return text ? [{ type: 'text', text }] : []
+
+  // Reasoning precedes the answer it produced — it is not part of the reply
+  // text, so it never splits it. Some providers stream the reasoning summary
+  // AFTER the reply text; its step then carries an end-of-text offset and would
+  // render BELOW the answer. Pin every thinking block to a single leading
+  // cluster (arrival order) so reasoning always reads above the reply; the rest
+  // interleave by their stamped text offset as before.
+  const thinking = allSteps.filter((s: SessionStep) => s.kind === 'thinking')
+  // Question steps are rendered separately by SessionQuestionCard (see above).
+  const steps = allSteps.filter((s: SessionStep) => s.kind !== 'thinking' && s.kind !== 'question')
+  const lead: TimelineBlock[] = thinking.length ? [{ type: 'steps', steps: thinking }] : []
+  if (!steps.length) return text ? [...lead, { type: 'text', text }] : lead
+
   const len = text.length
   const ordered = steps
     .map((s, i) => ({ s, i, off: Math.min(Math.max(s.textOffset ?? len, 0), len) }))
     .sort((a, b) => a.off - b.off || a.i - b.i)
-  const blocks: TimelineBlock[] = []
+  const body: TimelineBlock[] = []
   let cursor = 0
   const pushStep = (step: SessionStep) => {
-    const last = blocks[blocks.length - 1]
+    const last = body[body.length - 1]
     if (last && last.type === 'steps') last.steps.push(step)
-    else blocks.push({ type: 'steps', steps: [step] })
+    else body.push({ type: 'steps', steps: [step] })
   }
   ordered.forEach(({ s, off }) => {
     if (off > cursor) {
       const seg = text.slice(cursor, off)
-      if (seg.trim()) blocks.push({ type: 'text', text: seg })
+      if (seg.trim()) body.push({ type: 'text', text: seg })
       cursor = off
     }
     pushStep(s)
   })
   if (cursor < len) {
     const seg = text.slice(cursor)
-    if (seg.trim()) blocks.push({ type: 'text', text: seg })
+    if (seg.trim()) body.push({ type: 'text', text: seg })
   }
-  return blocks
+  return [...lead, ...body]
 })
+
+// AskUserQuestion steps, rendered as interactive cards outside the collapsible
+// step cluster (always visible — the turn is blocked until the user answers).
+const questionSteps = computed<SessionStep[]>(
+  () => props.message.steps?.filter((s: SessionStep) => s.kind === 'question') ?? [],
+)
 
 // Only the trailing text segment is still being typed — flag it so
 // MarkdownStreamBody throttles just that one and renders the rest immediately.

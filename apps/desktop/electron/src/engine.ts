@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { log } from './logger'
-import { enginePath } from './paths'
+import { enginePath, rtkBinPath } from './paths'
 
 // Engine process bridge — the Electron counterpart of the old Rust `sidecar.rs`.
 //
@@ -45,7 +45,9 @@ class Engine {
   start(): void {
     if (this.child) return
     const child = spawn(process.execPath, [enginePath()], {
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      // AWOG_RTK_BIN tells the sidecar's Bash tool where the bundled RTK binary
+      // lives (ADR 0031) — the sidecar never probes PATH for it.
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', AWOG_RTK_BIN: rtkBinPath() },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 

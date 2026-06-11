@@ -20,10 +20,12 @@
 | 12 | [settings](./settings.md) | Draft |
 | 13 | [theme-system](./theme-system.md) | Draft |
 | 14 | [mcp-servers](./mcp-servers.md) | Draft |
-| 15 | [hooks](./hooks.md) | Draft |
+| 15 | [hooks](./hooks.md) | v1 implemented (ADR 0032) |
 | 16 | [slash-commands](./slash-commands.md) | Draft |
 | 17 | [git-manager](./git-manager.md) | Draft |
 | 18 | [auto-update](./auto-update.md) | In Review |
+| 19 | [rtk-token-proxy](./rtk-token-proxy.md) | Implemented |
+| 20 | [rules](./rules.md) | v1 implemented (ADR 0033) |
 
 ## Template
 

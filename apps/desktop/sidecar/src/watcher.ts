@@ -6,14 +6,21 @@
 //   - User-tier agent dirs:  ~/.awog/agents, ~/.claude/agents, ~/.agents/agents
 //   - User-tier skill dirs:  ~/.awog/skills, ~/.claude/skills, ~/.agents/skills
 //   - MCP servers JSON dir:  ~/.awog/mcp-servers
+//   - Global hooks JSON dir: ~/.awog/hooks (ADR 0032)
+//   - Global rules MD dir:   ~/.awog/rules (ADR 0033)
+//   - Command MD dirs:       ~/.awog/commands, ~/.claude/commands (imported)
 //   - Per-project dirs (added/removed dynamically as projects come and go):
 //     {project}/.claude/agents, {project}/.agents/agents
 //     {project}/.claude/skills, {project}/.agents/skills
+//     {project}/.awog/hooks, {project}/.awog/rules
 //
 // Events fired (sidecar.event):
 //   agents.fs-changed     — agent file added/removed/modified
 //   skills.fs-changed     — skill file added/removed/modified
 //   mcp-servers.fs-changed — MCP config file added/removed/modified
+//   hooks.fs-changed      — hook config file added/removed/modified
+//   rules.fs-changed      — rule file added/removed/modified
+//   commands.fs-changed   — slash-command file added/removed/modified
 //
 // Each event payload: { tier?: string, path?: string, type: 'add'|'change'|'unlink' }
 // UI subscribes once and re-hydrates the matching store on event arrival.
@@ -29,7 +36,7 @@ import { listProjects } from './projects/store.js'
 const DEBOUNCE_MS = 500
 const RESCAN_PROJECTS_MS = 30_000 // re-check registered projects every 30s
 
-type WatchKind = 'agents' | 'skills' | 'mcp-servers'
+type WatchKind = 'agents' | 'skills' | 'mcp-servers' | 'hooks' | 'rules' | 'commands'
 
 interface Watcher {
   close: () => Promise<void> | void
@@ -79,6 +86,11 @@ function userDirs(): DirSpec[] {
     { kind: 'skills', dir: join(homedir(), '.claude', 'skills') },
     { kind: 'skills', dir: join(homedir(), '.agents', 'skills') },
     { kind: 'mcp-servers', dir: join(awogHome(), 'mcp-servers') },
+    { kind: 'hooks', dir: join(awogHome(), 'hooks') },
+    { kind: 'rules', dir: join(awogHome(), 'rules') },
+    { kind: 'commands', dir: join(awogHome(), 'commands') },
+    // Imported Claude Code slash commands (read-only), user tier.
+    { kind: 'commands', dir: join(homedir(), '.claude', 'commands') },
   ]
 }
 
@@ -88,6 +100,14 @@ function projectDirs(projectPath: string): DirSpec[] {
     { kind: 'agents', dir: join(projectPath, '.agents', 'agents') },
     { kind: 'skills', dir: join(projectPath, '.claude', 'skills') },
     { kind: 'skills', dir: join(projectPath, '.agents', 'skills') },
+    { kind: 'hooks', dir: join(projectPath, '.awog', 'hooks') },
+    { kind: 'rules', dir: join(projectPath, '.awog', 'rules') },
+    // Imported Claude Code rules (read-only). Project CLAUDE.md is refresh-driven
+    // (a root file is awkward to watch); .claude/rules is a dir like the others.
+    { kind: 'rules', dir: join(projectPath, '.claude', 'rules') },
+    { kind: 'commands', dir: join(projectPath, '.awog', 'commands') },
+    // Imported Claude Code slash commands (read-only), project tier.
+    { kind: 'commands', dir: join(projectPath, '.claude', 'commands') },
   ]
 }
 
@@ -199,7 +219,11 @@ class AwogWatcher {
     // Remove watchers for projects that no longer exist.
     const toClose = this.entries.filter(
       (e) =>
-        (e.spec.kind === 'agents' || e.spec.kind === 'skills') &&
+        (e.spec.kind === 'agents' ||
+          e.spec.kind === 'skills' ||
+          e.spec.kind === 'hooks' ||
+          e.spec.kind === 'rules' ||
+          e.spec.kind === 'commands') &&
         isProjectSubdir(e.spec.dir) &&
         !pathRegistered(e.spec.dir, currentPaths),
     )
@@ -232,17 +256,29 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   if (kind === 'agents') return lower.endsWith('.md') || lower.endsWith('/agent.md')
   if (kind === 'skills') return lower.endsWith('skill.md')
   if (kind === 'mcp-servers') return lower.endsWith('.json')
+  // hooks: a hook config .json; never the run-log dir (.runs/*.jsonl) which
+  // churns on every hook run, and never the atomic .json.tmp.<pid> writes.
+  if (kind === 'hooks') return lower.endsWith('.json') && !lower.includes('/.runs/')
+  // rules: a rule Markdown file (atomic .md.tmp.<pid> writes are filtered out).
+  if (kind === 'rules') return lower.endsWith('.md')
+  // commands: a slash-command Markdown file (atomic .md.tmp.<pid> filtered out).
+  if (kind === 'commands') return lower.endsWith('.md')
   return false
 }
 
 function isProjectSubdir(dir: string): boolean {
-  // Project-tier dirs always end in `.claude/agents`, `.agents/agents`,
-  // `.claude/skills`, `.agents/skills`. User-tier dirs never have those
-  // prefixes outside `~/.claude/` and `~/.agents/` direct children.
-  if (!dir.includes('/.claude/') && !dir.includes('/.agents/')) return false
+  // Project-tier dirs live under {project}/.claude, {project}/.agents (skills/
+  // agents) or {project}/.awog (hooks). The matching user-tier dirs (~/.claude,
+  // ~/.agents, ~/.awog direct children) are NOT projects.
   const home = homedir()
-  if (dir.startsWith(`${home}/.claude/`) || dir.startsWith(`${home}/.agents/`)) return false
-  return true
+  if (
+    dir.startsWith(`${home}/.claude/`) ||
+    dir.startsWith(`${home}/.agents/`) ||
+    dir.startsWith(`${home}/.awog/`)
+  ) {
+    return false
+  }
+  return dir.includes('/.claude/') || dir.includes('/.agents/') || dir.includes('/.awog/')
 }
 
 function pathRegistered(dir: string, projectPaths: Set<string>): boolean {

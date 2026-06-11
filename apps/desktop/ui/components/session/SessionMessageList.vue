@@ -127,7 +127,12 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, AtSign, Bot, MessagesSquare, Quote, Slash } from 'lucide-vue-next'
 import type { SessionAttachment, SessionMessage, SessionStep } from '~/types'
-import { RESOLVE_PLAN_KEY, SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
+import {
+  ANSWER_QUESTION_KEY,
+  RESOLVE_PLAN_KEY,
+  SELECT_STEP_KEY,
+  SELECTED_STEP_ID_KEY,
+} from '~/utils/step-context'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
 import { decodeMermaidSource, renderMermaidIn } from '~/utils/mermaid'
 import { applyFollowUpAnchors, type FollowUpAnchor } from '~/utils/follow-up-anchor'
@@ -320,6 +325,13 @@ provide(SELECT_STEP_KEY, (step: SessionStep) => {
 provide(RESOLVE_PLAN_KEY, (stepId, decision) => {
   const sid = store.selectedSessionId
   if (sid) store.resolvePlan(sid, stepId, decision)
+})
+
+// Inline AskUserQuestion card → sessions store. Closes over the active session
+// id so SessionQuestionCard only needs to pass (stepId, answers).
+provide(ANSWER_QUESTION_KEY, (stepId, answers) => {
+  const sid = store.selectedSessionId
+  if (sid) store.answerQuestion(sid, stepId, answers)
 })
 
 // Single ticker shared across all streaming messages — children read `now`

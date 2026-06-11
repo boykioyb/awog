@@ -2,15 +2,20 @@ import { defineStore } from 'pinia'
 import type {
   Agent,
   AgentSource,
+  Command,
+  CommandScanReport,
   Hook,
+  HookRunRecord,
+  HookScanReport,
   MCPServer,
   Project,
+  Rule,
+  RuleScanReport,
   Skill,
   SkillSource,
-  SlashCommand,
 } from '~/types'
 import { INITIAL_PROJECTS } from '~/utils/initial-data'
-import { INITIAL_COMMANDS, INITIAL_HOOKS } from '~/utils/initial-extensions'
+import { INITIAL_HOOKS } from '~/utils/initial-extensions'
 import { nowIso } from '~/utils/time'
 
 // Tasks + Workflows moved to their own live stores (stores/tasks.ts,
@@ -110,8 +115,20 @@ export const useWorkspaceStore = defineStore('workspace', {
     // 100-line stderr ring buffer per server id, surfaced in the McpDetail Logs
     // tab. Populated via the `mcp.stderr-line` sidecar event subscription.
     mcpStderr: {} as Record<string, string[]>,
-    hooks: [...INITIAL_HOOKS] as Hook[],
-    commands: [...INITIAL_COMMANDS] as SlashCommand[],
+    // Hooks hydrate from sidecar (2-tier per-file JSON, ADR 0032). Browser dev
+    // (no sidecar) falls back to INITIAL_HOOKS inside hydrateHooksFromSidecar.
+    hooks: [] as Hook[],
+    // Per-tier scan report (mirrors skillScanReports) — surfaces resolved dirs +
+    // counts in the Hooks refresh toast.
+    hookScanReports: [] as HookScanReport[],
+    // Rules hydrate from sidecar (2-tier per-file Markdown, ADR 0033). No mock
+    // seed — empty until hydrateRulesFromSidecar populates it.
+    rules: [] as Rule[],
+    ruleScanReports: [] as RuleScanReport[],
+    // Slash commands hydrate from sidecar (2-tier per-file Markdown + imported
+    // Claude Code commands). No mock seed — empty until hydrateCommandsFromSidecar.
+    commands: [] as Command[],
+    commandScanReports: [] as CommandScanReport[],
   }),
 
   getters: {
@@ -495,6 +512,29 @@ export const useWorkspaceStore = defineStore('workspace', {
           }
           if (evt.type === 'mcp-servers.fs-changed') {
             this.hydrateMcpFromSidecar().catch(swallow)
+            return
+          }
+          if (evt.type === 'hooks.fs-changed') {
+            this.hydrateHooksFromSidecar().catch(swallow)
+            return
+          }
+          if (evt.type === 'rules.fs-changed') {
+            this.hydrateRulesFromSidecar().catch(swallow)
+            return
+          }
+          if (evt.type === 'commands.fs-changed') {
+            this.hydrateCommandsFromSidecar().catch(swallow)
+            return
+          }
+          // Live hook-run audit (ADR 0032): prepend the record to the matching
+          // hook's recentRuns so the detail view updates without a refetch.
+          if (evt.type === 'hook.run') {
+            const p = evt.payload as { hookId?: string; record?: HookRunRecord }
+            if (typeof p.hookId !== 'string' || !p.record) return
+            const hook = this.hooks.find((h: Hook) => h.id === p.hookId)
+            if (!hook) return
+            hook.recentRuns.unshift(p.record)
+            hook.recentRuns = hook.recentRuns.slice(0, 20)
           }
         })
         return unlisten
@@ -629,49 +669,349 @@ export const useWorkspaceStore = defineStore('workspace', {
       if (s) s.status = 'starting'
     },
 
-    // Hook CRUD
-    saveHook(data: Hook) {
-      const existing = this.hooks.find((h: Hook) => h.id === data.id)
-      if (existing) {
-        Object.assign(existing, data)
-      } else {
-        this.hooks.push({ ...data, id: data.id || `hk${Date.now()}` })
+    // Hook CRUD — persisted via sidecar (2-tier per-file JSON, ADR 0032).
+    // Browser dev (no sidecar) keeps the optimistic local mutation so the page
+    // stays browsable with INITIAL_HOOKS.
+
+    async hydrateHooksFromSidecar(projectIds?: string[]): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) {
+        if (this.hooks.length === 0) this.hooks = [...INITIAL_HOOKS]
+        return
       }
-    },
-    deleteHook(id: string) {
-      this.hooks = this.hooks.filter((h: Hook) => h.id !== id)
-    },
-    toggleHook(id: string) {
-      const h = this.hooks.find((x: Hook) => x.id === id)
-      if (h) h.enabled = !h.enabled
-    },
-    runHookOnce(id: string) {
-      const h = this.hooks.find((x: Hook) => x.id === id)
-      if (!h) return
-      const start = Date.now()
-      setTimeout(() => {
-        h.recentRuns.unshift({
-          at: 'Just now',
-          durationMs: Date.now() - start + 300,
-          exitCode: 0,
-        })
-        h.recentRuns = h.recentRuns.slice(0, 20)
-      }, 400)
+      const ids = projectIds ?? this.projects.map((p: Project) => p.id)
+      try {
+        const params = ids.length > 0 ? { projectIds: ids } : undefined
+        const res = await sidecar.request<{ hooks: Hook[]; reports?: HookScanReport[] }>(
+          'hooks.list',
+          params,
+        )
+        this.hooks = Array.isArray(res.hooks) ? res.hooks : []
+        this.hookScanReports = Array.isArray(res.reports) ? res.reports : []
+      } catch (err) {
+        console.warn('[hooks] hydrate failed', err)
+      }
     },
 
-    // Slash Command CRUD
-    saveCommand(data: SlashCommand) {
-      const existing = this.commands.find((c: SlashCommand) => c.id === data.id)
+    async saveHook(data: Hook): Promise<void> {
+      const source = data.source ?? 'global'
+      const match = (h: Hook) =>
+        h.id === data.id &&
+        (h.source ?? 'global') === source &&
+        (h.projectId ?? undefined) === (data.projectId ?? undefined)
+      const existing = this.hooks.find(match)
+      const isUpdate = !!existing
+      // Optimistic local update (also the browser-dev path).
       if (existing) {
         Object.assign(existing, data)
       } else {
-        this.commands.push({ ...data, id: data.id || `cmd${Date.now()}` })
+        this.hooks.push({ ...data, source, recentRuns: data.recentRuns ?? [] })
+      }
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        await sidecar.request('hooks.upsert', {
+          hook: { ...data, source },
+          mode: isUpdate ? 'update' : 'create',
+        })
+      } catch (err) {
+        console.warn('[hooks] upsert failed', err)
       }
     },
-    deleteCommand(id: string) {
-      const c = this.commands.find((x: SlashCommand) => x.id === id)
-      if (c?.system) return
-      this.commands = this.commands.filter((x: SlashCommand) => x.id !== id)
+
+    async deleteHook(id: string, source?: Hook['source'], projectId?: string): Promise<void> {
+      const target = this.hooks.find((h: Hook) => h.id === id)
+      const src = source ?? target?.source ?? 'global'
+      const pid = projectId ?? target?.projectId
+      this.hooks = this.hooks.filter(
+        (h: Hook) =>
+          !(
+            h.id === id &&
+            (h.source ?? 'global') === src &&
+            (h.projectId ?? undefined) === (pid ?? undefined)
+          ),
+      )
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = { id, source: src }
+        if (pid) params.projectId = pid
+        await sidecar.request('hooks.delete', params)
+      } catch (err) {
+        console.warn('[hooks] delete failed', err)
+      }
+    },
+
+    async toggleHook(id: string): Promise<void> {
+      const h = this.hooks.find((x: Hook) => x.id === id)
+      if (!h) return
+      h.enabled = !h.enabled
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = {
+          id,
+          source: h.source ?? 'global',
+          enabled: h.enabled,
+        }
+        if (h.projectId) params.projectId = h.projectId
+        await sidecar.request('hooks.toggle', params)
+      } catch (err) {
+        console.warn('[hooks] toggle failed', err)
+      }
+    },
+
+    async runHookOnce(id: string): Promise<void> {
+      const h = this.hooks.find((x: Hook) => x.id === id)
+      if (!h) return
+      const sidecar = useSidecar()
+      if (!sidecar.available) {
+        // Browser dev: simulate a successful run.
+        h.recentRuns.unshift({ at: 'Just now', durationMs: 300, exitCode: 0 })
+        h.recentRuns = h.recentRuns.slice(0, 20)
+        return
+      }
+      try {
+        const params: Record<string, unknown> = { id, source: h.source ?? 'global' }
+        if (h.projectId) params.projectId = h.projectId
+        const res = await sidecar.request<{ record: HookRunRecord }>('hooks.run-once', params)
+        if (res.record) {
+          h.recentRuns.unshift(res.record)
+          h.recentRuns = h.recentRuns.slice(0, 20)
+        }
+      } catch (err) {
+        console.warn('[hooks] run-once failed', err)
+      }
+    },
+
+    // Read the script file a hook command runs (e.g. format-after-edit.sh), so
+    // the editor can edit its content. Returns null when the command references
+    // no editable script (or it's outside the allowed hook dirs).
+    async readHookScript(
+      hook: Pick<Hook, 'command' | 'source' | 'projectId'>,
+    ): Promise<{ path: string; content: string; exists: boolean } | null> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return null
+      try {
+        const params: Record<string, unknown> = {
+          command: hook.command,
+          source: hook.source ?? 'global',
+        }
+        if (hook.projectId) params.projectId = hook.projectId
+        const res = await sidecar.request<{
+          script: { path: string; content: string; exists: boolean } | null
+        }>('hooks.read-script', params)
+        return res.script ?? null
+      } catch (err) {
+        console.warn('[hooks] read-script failed', err)
+        return null
+      }
+    },
+
+    async writeHookScript(
+      hook: Pick<Hook, 'command' | 'source' | 'projectId'>,
+      content: string,
+    ): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = {
+          command: hook.command,
+          source: hook.source ?? 'global',
+          content,
+        }
+        if (hook.projectId) params.projectId = hook.projectId
+        await sidecar.request('hooks.write-script', params)
+      } catch (err) {
+        console.warn('[hooks] write-script failed', err)
+      }
+    },
+
+    // Grant trust to project-tier hooks (ADR 0032 D-8) so they may spawn.
+    async trustHooks(projectId: string, hookIds: string[]): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        await sidecar.request('hooks.trust', { projectId, hookIds })
+        this.hooks.forEach((h: Hook) => {
+          if (h.projectId === projectId && hookIds.includes(h.id)) h.trusted = true
+        })
+      } catch (err) {
+        console.warn('[hooks] trust failed', err)
+      }
+    },
+
+    // Rule CRUD — persisted via sidecar (2-tier per-file Markdown, ADR 0033).
+
+    async hydrateRulesFromSidecar(projectIds?: string[]): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      const ids = projectIds ?? this.projects.map((p: Project) => p.id)
+      try {
+        const params = ids.length > 0 ? { projectIds: ids } : undefined
+        const res = await sidecar.request<{ rules: Rule[]; reports?: RuleScanReport[] }>(
+          'rules.list',
+          params,
+        )
+        this.rules = Array.isArray(res.rules) ? res.rules : []
+        this.ruleScanReports = Array.isArray(res.reports) ? res.reports : []
+      } catch (err) {
+        console.warn('[rules] hydrate failed', err)
+      }
+    },
+
+    async saveRule(data: Rule): Promise<void> {
+      const source = data.source ?? 'global'
+      const match = (r: Rule) =>
+        r.id === data.id &&
+        (r.source ?? 'global') === source &&
+        (r.projectId ?? undefined) === (data.projectId ?? undefined)
+      const existing = this.rules.find(match)
+      const isUpdate = !!existing
+      if (existing) {
+        Object.assign(existing, data)
+      } else {
+        this.rules.push({ ...data, source })
+      }
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        await sidecar.request('rules.upsert', {
+          rule: { ...data, source },
+          mode: isUpdate ? 'update' : 'create',
+        })
+      } catch (err) {
+        console.warn('[rules] upsert failed', err)
+      }
+    },
+
+    async deleteRule(id: string, source?: Rule['source'], projectId?: string): Promise<void> {
+      const target = this.rules.find((r: Rule) => r.id === id)
+      const src = source ?? target?.source ?? 'global'
+      const pid = projectId ?? target?.projectId
+      this.rules = this.rules.filter(
+        (r: Rule) =>
+          !(
+            r.id === id &&
+            (r.source ?? 'global') === src &&
+            (r.projectId ?? undefined) === (pid ?? undefined)
+          ),
+      )
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = { id, source: src }
+        if (pid) params.projectId = pid
+        await sidecar.request('rules.delete', params)
+      } catch (err) {
+        console.warn('[rules] delete failed', err)
+      }
+    },
+
+    async toggleRule(id: string): Promise<void> {
+      const r = this.rules.find((x: Rule) => x.id === id)
+      if (!r) return
+      r.enabled = !r.enabled
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = {
+          id,
+          source: r.source ?? 'global',
+          enabled: r.enabled,
+        }
+        if (r.projectId) params.projectId = r.projectId
+        await sidecar.request('rules.toggle', params)
+      } catch (err) {
+        console.warn('[rules] toggle failed', err)
+      }
+    },
+
+    // Slash Command CRUD — persisted via sidecar (2-tier per-file Markdown +
+    // imported Claude Code commands). Mirrors the Rule actions.
+
+    async hydrateCommandsFromSidecar(projectIds?: string[]): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      const ids = projectIds ?? this.projects.map((p: Project) => p.id)
+      try {
+        const params = ids.length > 0 ? { projectIds: ids } : undefined
+        const res = await sidecar.request<{ commands: Command[]; reports?: CommandScanReport[] }>(
+          'commands.list',
+          params,
+        )
+        this.commands = Array.isArray(res.commands) ? res.commands : []
+        this.commandScanReports = Array.isArray(res.reports) ? res.reports : []
+      } catch (err) {
+        console.warn('[commands] hydrate failed', err)
+      }
+    },
+
+    async saveCommand(data: Command): Promise<void> {
+      const source = data.source ?? 'global'
+      const match = (c: Command) =>
+        c.id === data.id &&
+        (c.source ?? 'global') === source &&
+        (c.projectId ?? undefined) === (data.projectId ?? undefined)
+      const existing = this.commands.find(match)
+      const isUpdate = !!existing
+      if (existing) {
+        Object.assign(existing, data)
+      } else {
+        this.commands.push({ ...data, source })
+      }
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        await sidecar.request('commands.upsert', {
+          command: { ...data, source },
+          mode: isUpdate ? 'update' : 'create',
+        })
+      } catch (err) {
+        console.warn('[commands] upsert failed', err)
+      }
+    },
+
+    async deleteCommand(id: string, source?: Command['source'], projectId?: string): Promise<void> {
+      const target = this.commands.find((c: Command) => c.id === id)
+      const src = source ?? target?.source ?? 'global'
+      const pid = projectId ?? target?.projectId
+      this.commands = this.commands.filter(
+        (c: Command) =>
+          !(
+            c.id === id &&
+            (c.source ?? 'global') === src &&
+            (c.projectId ?? undefined) === (pid ?? undefined)
+          ),
+      )
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = { id, source: src }
+        if (pid) params.projectId = pid
+        await sidecar.request('commands.delete', params)
+      } catch (err) {
+        console.warn('[commands] delete failed', err)
+      }
+    },
+
+    async toggleCommand(id: string): Promise<void> {
+      const c = this.commands.find((x: Command) => x.id === id)
+      if (!c) return
+      c.enabled = !c.enabled
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const params: Record<string, unknown> = {
+          id,
+          source: c.source ?? 'global',
+          enabled: c.enabled,
+        }
+        if (c.projectId) params.projectId = c.projectId
+        await sidecar.request('commands.toggle', params)
+      } catch (err) {
+        console.warn('[commands] toggle failed', err)
+      }
     },
   },
 })

@@ -7,6 +7,9 @@
 
 import type {
   PlanStatus,
+  SessionQuestion,
+  SessionQuestionAnswer,
+  SessionQuestionOption,
   SessionStep,
   SessionStepDetail,
   SessionStepStatus,
@@ -14,16 +17,25 @@ import type {
 } from '../types/shared.js'
 import { countDone, parseTodos } from '../runtime/todos.js'
 
-// Truncation cap for tool_result preview text. Keeps step payloads small over
-// stdio and bounds in-memory cost when the model dumps a huge file read.
+// Cap for inline previews and one-line labels — kept small so step payloads stay
+// light over stdio and the collapsed row never bloats.
 const RESULT_PREVIEW_MAX = 2_000
 
-// Cap a long string for the step detail/inline preview. Shared by the Task
-// prompt stash, the Write content dump, and the tool_result preview.
+// Cap for the expandable file-detail pane (Read/Write `kind: 'file'`). Large
+// enough that a real artifact — a plan doc, a source file — renders in full;
+// only a pathological multi-hundred-KB read gets clipped. Acts as a safety net
+// for in-memory + JSONL growth now that steps persist.
+const FILE_DETAIL_MAX = 200_000
+
+// Clip a long string to `max`, appending a marker only when it actually overflows.
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}\n…(truncated)` : text
+}
+
+// Cap a string for the inline preview / one-line label. Shared by the Task
+// prompt stash, the tool_result preview, and the thinking label.
 function truncatePreview(text: string): string {
-  return text.length > RESULT_PREVIEW_MAX
-    ? `${text.slice(0, RESULT_PREVIEW_MAX)}\n…(truncated)`
-    : text
+  return clip(text, RESULT_PREVIEW_MAX)
 }
 
 // Map of SDK built-in tool names → UI StepTool. Unknown tools fall through to
@@ -44,6 +56,7 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   TodoWrite: 'task',
   ExitPlanMode: 'task',
   EnterPlanMode: 'task',
+  AskUserQuestion: 'task',
 }
 
 function pickStepTool(toolName: string): SessionStepTool {
@@ -211,12 +224,9 @@ export function stepFromToolUse(info: ToolUseInfo): SessionStep {
   return step
 }
 
-// Convert SDK tool_result content (string | unknown[]) to a single preview.
-// Truncates aggressively — the UI's step inline view doesn't need full output.
-function previewToolResult(content: unknown): string {
-  if (typeof content === 'string') {
-    return truncatePreview(content)
-  }
+// Flatten SDK tool_result content (string | text-block array) to a single string.
+function toolResultText(content: unknown): string {
+  if (typeof content === 'string') return content
   if (Array.isArray(content)) {
     const parts: string[] = []
     for (const block of content) {
@@ -227,9 +237,15 @@ function previewToolResult(content: unknown): string {
         }
       }
     }
-    return truncatePreview(parts.join('\n'))
+    return parts.join('\n')
   }
   return ''
+}
+
+// Inline preview of a tool_result — flattened then capped small. The file-detail
+// pane uses toolResultText + FILE_DETAIL_MAX instead so the user sees the whole file.
+function previewToolResult(content: unknown): string {
+  return truncatePreview(toolResultText(content))
 }
 
 export interface ToolResultInfo {
@@ -256,16 +272,18 @@ export function stepFromToolResult(info: ToolResultInfo): SessionStep {
     const command = typeof info.toolInput.command === 'string' ? info.toolInput.command : ''
     detail = { kind: 'terminal', command, output: preview }
   } else if (info.toolName === 'Read') {
+    // Show the full file the model read (capped only for pathological sizes), not
+    // the small inline preview — the detail pane is where the user drills in.
     const path = typeof info.toolInput.file_path === 'string' ? info.toolInput.file_path : ''
-    detail = { kind: 'file', path, content: preview }
+    detail = { kind: 'file', path, content: clip(toolResultText(info.content), FILE_DETAIL_MAX) }
   } else if (info.toolName === 'Write') {
     // The tool result is just "Wrote N bytes to …". Show the written content
-    // (from the input) instead so the detail pane renders the file.
+    // (from the input) instead so the detail pane renders the artifact in full.
     const path = typeof info.toolInput.file_path === 'string' ? info.toolInput.file_path : ''
     const content = typeof info.toolInput.content === 'string' ? info.toolInput.content : ''
     detail =
       content.length > 0
-        ? { kind: 'file', path, content: truncatePreview(content) }
+        ? { kind: 'file', path, content: clip(content, FILE_DETAIL_MAX) }
         : { kind: 'text', content: preview }
   } else if (preview.length > 0) {
     detail = { kind: 'text', content: preview }
@@ -351,5 +369,61 @@ export function stepFromPlan(
   }
   const rationale = rationaleLines.join(' ').trim()
   if (rationale) step.planRationale = rationale
+  return step
+}
+
+// Coerce an AskUserQuestion `questions` arg (model input at start, validated
+// details at end) into the SessionQuestion[] shape the UI card consumes. We
+// don't fail the turn on a malformed shape — drop bad entries and let the tool's
+// own validation surface the error to the model.
+function parseQuestions(raw: unknown): SessionQuestion[] {
+  if (!Array.isArray(raw)) return []
+  const out: SessionQuestion[] = []
+  for (const q of raw) {
+    if (typeof q !== 'object' || q === null) continue
+    const rec = q as Record<string, unknown>
+    const header = typeof rec.header === 'string' ? rec.header : ''
+    const question = typeof rec.question === 'string' ? rec.question : ''
+    if (!header && !question) continue
+    const options: SessionQuestionOption[] = []
+    if (Array.isArray(rec.options)) {
+      for (const o of rec.options) {
+        if (typeof o !== 'object' || o === null) continue
+        const orec = o as Record<string, unknown>
+        const label = typeof orec.label === 'string' ? orec.label : ''
+        if (!label) continue
+        const opt: SessionQuestionOption = { label }
+        if (typeof orec.description === 'string' && orec.description) {
+          opt.description = orec.description
+        }
+        options.push(opt)
+      }
+    }
+    out.push({ header, question, options, multiSelect: rec.multiSelect === true })
+  }
+  return out
+}
+
+// Build a 'question' step from an AskUserQuestion tool call. Emitted from the
+// call INPUT on tool_execution_start (status 'running', no answers — the UI
+// renders the interactive card) and again on tool_execution_end with the chosen
+// answers (status 'done' — the card renders the read-only record). The step id
+// is the tool-call id, which is also the parking key + the answerQuestion
+// requestId. See docs/features/ask-user-question.md.
+export function stepFromQuestion(
+  id: string,
+  questions: unknown,
+  answers?: SessionQuestionAnswer[],
+  status: SessionStepStatus = 'running',
+): SessionStep {
+  const parsed = parseQuestions(questions)
+  const step: SessionStep = {
+    id,
+    kind: 'question',
+    label: parsed.length === 1 ? parsed[0].header || 'Question' : 'Questions',
+    status,
+    questions: parsed,
+  }
+  if (answers && answers.length > 0) step.answers = answers
   return step
 }

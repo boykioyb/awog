@@ -143,6 +143,7 @@ import {
   Zap,
   Slash,
   GitBranch,
+  ScrollText,
   Sparkles,
 } from 'lucide-vue-next'
 
@@ -182,6 +183,7 @@ const items: NavItem[] = [
   { id: 'git', label: 'Git', icon: GitBranch, to: '/git' },
   { id: 'connections', label: 'Connections', icon: Plug, to: '/connections' },
   { id: 'hooks', label: 'Hooks', icon: Zap, to: '/hooks' },
+  { id: 'rules', label: 'Rules', icon: ScrollText, to: '/rules' },
   { id: 'commands', label: 'Commands', icon: Slash, to: '/commands' },
 ]
 

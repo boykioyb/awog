@@ -29,7 +29,8 @@ Tool `Task` nhận:
 
 ### Chạy subagent
 
-- Toolset subagent build qua `createRuntimeToolDefinitions` (built-in + MCP của agent), filter theo `allowedTools` + session denylist. **Không** kèm `Task` và **không** `ExitPlanMode` → **depth = 1**, subagent không spawn subagent (giống Claude Code).
+- Toolset subagent build qua `createRuntimeToolDefinitions` (built-in + MCP), filter theo `allowedTools` + session denylist. **Không** kèm `Task` và **không** `ExitPlanMode` → **depth = 1**, subagent không spawn subagent (giống Claude Code).
+- **MCP của subagent = MCP của turn cha (đã resolve: whitelist ∩ enabled + secret expand) ∪ MCP riêng của AGENT.md** (`TaskToolDeps.parentMcpServers`, `mergeMcpServers`). Bảo đảm subagent luôn với tới được **mọi server mà parent với tới** — "session dùng được MCP nào thì subagent nó spawn cũng dùng được". Trước đây subagent chỉ build từ `agent.mcpServerIds` riêng nên một subagent có whitelist hẹp hơn sẽ **mất** server của session (vd gọi `mcp__<id>__*` báo "not found").
 - `runAgentLoop` lồng bên trong `execute()` của tool, `toolExecution: 'sequential'`.
 - Event subagent forward về callback của parent với `parentId = toolCallId` của lời gọi `Task`. Text subagent **không** đổ vào reply chính của parent — chỉ trả về model làm kết quả tool.
 

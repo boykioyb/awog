@@ -15,13 +15,14 @@ import type { AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core'
 import type { AssistantMessage } from '@earendil-works/pi-ai'
 import {
   stepFromPlan,
+  stepFromQuestion,
   stepFromThinking,
   stepFromTodos,
   stepFromToolResult,
   stepFromToolUse,
 } from '../sessions/step-mapper.js'
 import type { StreamCallbacks } from '../sessions/runner.js'
-import type { SessionStep } from '../types/shared.js'
+import type { SessionQuestionAnswer, SessionStep } from '../types/shared.js'
 
 interface Accumulator {
   text: string
@@ -133,11 +134,43 @@ export function createEventAdapter(
           cb.onStep(withParent(stepFromTodos('todo-list', input.todos)))
           break
         }
+        // AskUserQuestion → a 'question' step (the interactive card) from the
+        // call input. The tool parks until the user answers; the end event below
+        // fills in the chosen answers. Id = toolCallId = the answerQuestion key.
+        if (event.toolName === 'AskUserQuestion') {
+          cb.onStep(withParent(stepFromQuestion(event.toolCallId, input.questions)))
+          break
+        }
         cb.onStep(withParent(stepFromToolUse({ id: event.toolCallId, name: event.toolName, input })))
         break
       }
       case 'tool_execution_end': {
         if (!cb.onStep) break
+        // AskUserQuestion → update the 'question' step (emitted on start) with the
+        // chosen answers from the tool result `details`, flipping it to 'done' so
+        // the card renders the read-only record. Done before the generic path so
+        // it isn't overwritten by a plain tool row.
+        if (event.toolName === 'AskUserQuestion') {
+          const details =
+            event.result && typeof event.result === 'object'
+              ? (event.result as { details?: unknown }).details
+              : undefined
+          const rec = (typeof details === 'object' && details !== null ? details : {}) as {
+            questions?: unknown
+            answers?: SessionQuestionAnswer[]
+          }
+          cb.onStep(
+            withParent(
+              stepFromQuestion(
+                event.toolCallId,
+                rec.questions,
+                Array.isArray(rec.answers) ? rec.answers : [],
+                'done',
+              ),
+            ),
+          )
+          break
+        }
         // ExitPlanMode / TodoWrite already emitted their step on start; the
         // result is an internal ack — don't overwrite it with a generic tool row.
         if (event.toolName === 'ExitPlanMode' || event.toolName === 'TodoWrite') break
@@ -164,8 +197,23 @@ export function createEventAdapter(
       case 'agent_end': {
         const last = [...event.messages].reverse().find(isAssistant)
         if (last) {
-          const text = assistantText(last)
-          if (text) acc.text = text // authoritative final text
+          if (parentId) {
+            // Subagent (Task tool): the result returned to the parent model is
+            // the FINAL message text (its report), not the whole transcript —
+            // overwrite is intentional here.
+            const text = assistantText(last)
+            if (text) acc.text = text
+          } else if (!acc.text) {
+            // Main turn: acc.text already holds the FULL multi-iteration reply
+            // built from streamed text_delta, and the UI stamped each tool
+            // step's textOffset against exactly that text. Overwriting it with
+            // only the last assistant message desyncs offsets ↔ text, so
+            // SessionMessageItem's timelineBlocks slices the (shorter) final
+            // message at full-text offsets and chops the reply mid-word between
+            // tool clusters. Only fall back to the final message when nothing
+            // streamed (e.g. a non-streaming provider emitted no deltas).
+            acc.text = assistantText(last)
+          }
           if (last.model) acc.modelUsed = last.model
           acc.inputTokens = last.usage.input
           acc.outputTokens = last.usage.output
