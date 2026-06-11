@@ -1,10 +1,10 @@
 <template>
   <PromptCreatorPanel
     :anchor="anchor"
-    headline="What slash command do you want?"
-    subheadline="Mô tả shortcut bạn muốn — mình sẽ chọn type + sinh template"
-    placeholder='e.g., "Review artifact gần nhất, focus security"'
-    generated-label="Generated command"
+    :headline="tr('commands.creator.headline')"
+    :subheadline="tr('commands.creator.subheadline')"
+    :placeholder="tr('commands.creator.placeholder')"
+    :generated-label="tr('commands.creator.generated')"
     :has-draft="!!draft"
     :is-generating="isGenerating"
     :error="error"
@@ -15,34 +15,25 @@
     <template #preview>
       <div
         v-if="draft"
-        class="rounded-xl p-3"
+        class="rounded-xl p-3 space-y-2"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
-        <div class="flex items-center gap-2 mb-1.5">
+        <div class="flex items-center gap-2">
           <span class="text-[1em] font-mono" :style="{ color: t.text }">/{{ draft.name }}</span>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded"
-            :style="{ background: t.bgPanel, color: t.textMuted, border: `1px solid ${t.border}` }"
+            v-if="draft.argumentHint"
+            class="text-[1em] font-mono"
+            :style="{ color: t.textDim }"
           >
-            {{ draft.type }}
-          </span>
-          <span
-            v-for="arg in draft.args"
-            :key="arg.name"
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
-            :style="{ background: t.bgPanel, color: t.textDim, border: `1px solid ${t.border}` }"
-          >
-            &lt;{{ arg.name }}{{ arg.required ? '' : '?' }}&gt;
+            {{ draft.argumentHint }}
           </span>
         </div>
-        <div class="text-[1em] mb-2" :style="{ color: t.textMuted }">
-          {{ draft.description }}
-        </div>
+        <div class="text-[1em]" :style="{ color: t.textMuted }">{{ draft.description }}</div>
         <div
-          class="text-[1em] font-mono p-2 rounded whitespace-pre-wrap"
-          :style="{ background: t.bgPanel, color: t.textDim, border: `1px solid ${t.border}` }"
+          class="rounded p-2 max-h-[40vh] overflow-y-auto text-[1em] leading-relaxed"
+          :style="{ background: t.bgPanel, border: `1px solid ${t.border}`, color: t.textMuted }"
         >
-          {{ draft.body }}
+          <MarkdownRenderer :content="draft.body || '(empty template)'" />
         </div>
       </div>
     </template>
@@ -54,15 +45,15 @@
         @click="draft && emit('edit-manually', draft)"
       >
         <Sliders :size="11" />
-        Edit details
+        {{ tr('commands.creator.edit_details') }}
       </button>
       <button
         class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{ background: t.accent, color: t.accentText }"
-        @click="draft && emit('save', { ...(draft as SlashCommand) })"
+        @click="draft && emit('save', draft)"
       >
         <Save :size="11" />
-        Save command
+        {{ tr('commands.creator.save') }}
       </button>
     </template>
   </PromptCreatorPanel>
@@ -70,18 +61,18 @@
 
 <script setup lang="ts">
 import { Save, Sliders } from 'lucide-vue-next'
-import type { SlashCommand } from '~/types'
 import type { CommandDraft } from '~/composables/useCommandGenerator'
 
 defineProps<{ anchor?: { top: number; left: number } | null }>()
 
 const emit = defineEmits<{
-  save: [command: SlashCommand]
+  save: [draft: CommandDraft]
   'edit-manually': [draft: CommandDraft]
   cancel: []
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const { draft, isGenerating, error, onSubmit, onRegenerate } =
   usePromptCreator<CommandDraft>(useCommandGenerator())
 </script>

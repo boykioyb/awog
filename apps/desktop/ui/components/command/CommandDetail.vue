@@ -1,6 +1,5 @@
 <template>
-  <div class="p-4 md:p-6 w-full">
-    <!-- Header -->
+  <div class="flex-1 overflow-y-auto p-4 md:p-6 w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
         class="w-10 h-10 rounded flex items-center justify-center"
@@ -14,57 +13,49 @@
             /{{ command.name }}
           </h1>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded"
+            class="text-[1em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
             :style="{
-              background: t.bgInput,
-              color: t.textMuted,
-              border: `1px solid ${t.border}`,
+              background: isProjectScoped ? t.accent : t.bgInput,
+              color: isProjectScoped ? t.accentText : t.textDim,
+              border: `1px solid ${isProjectScoped ? t.accent : t.border}`,
             }"
+            :title="sourcePath"
           >
-            {{ command.type }}
+            {{ sourceLabel }}
           </span>
           <span
-            v-if="command.system"
-            class="text-[1em] uppercase px-1.5 py-0.5 rounded"
-            :style="{
-              background: t.infoBg,
-              color: t.info,
-              border: `1px solid ${t.infoBorder}`,
-            }"
+            v-if="isImported"
+            class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+            :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
           >
-            system
+            <Lock :size="10" />
+            {{ tr('commands.detail.imported') }}
           </span>
         </div>
         <div class="text-[1em] leading-relaxed" :style="{ color: t.textMuted }">
-          {{ command.description }}
+          {{ command.description || (isImported ? tr('commands.detail.imported_desc') : '') }}
         </div>
-        <div v-if="command.aliases.length > 0" class="flex flex-wrap gap-1 mt-2">
-          <span
-            v-for="a in command.aliases"
-            :key="a"
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
-            :style="{
-              background: t.bgInput,
-              color: t.textDim,
-              border: `1px solid ${t.border}`,
-            }"
-          >
-            /{{ a }}
+        <div class="mt-2 text-[1em] font-mono" :style="{ color: t.textDim }">
+          /{{ command.name }}
+          <span v-if="command.argumentHint" :style="{ color: t.textFaint }">
+            {{ command.argumentHint }}
           </span>
         </div>
       </div>
-      <div v-if="!command.system" class="flex items-center gap-1 flex-shrink-0">
-        <button
-          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-          :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
-          @click="emit('edit')"
-        >
-          <Edit3 :size="11" />
-          Edit
-        </button>
+      <div class="flex items-center gap-1 flex-shrink-0">
         <button
           class="p-1.5 rounded transition"
           :style="{ color: t.textDim }"
+          :title="tr('common.edit')"
+          @click="emit('edit')"
+        >
+          <Edit3 :size="13" />
+        </button>
+        <button
+          v-if="!isImported"
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          :title="tr('common.delete')"
           @click="emit('delete')"
         >
           <Trash2 :size="13" />
@@ -72,120 +63,89 @@
       </div>
     </div>
 
-    <!-- Scope -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-      <KeyValueCard label="Scope" :value="command.scope" />
-      <KeyValueCard v-if="command.timeoutMs" label="Timeout" :value="`${command.timeoutMs}ms`" />
+      <ToggleCard
+        v-if="!isImported"
+        :label="tr('commands.detail.enabled')"
+        :value="command.enabled"
+        @toggle="ws.toggleCommand(command.id)"
+      />
+      <KeyValueCard v-else :label="tr('commands.detail.source')" :value="readOnlyHint" />
+      <KeyValueCard
+        v-if="command.argumentHint"
+        :label="tr('commands.detail.argument_hint')"
+        :value="command.argumentHint"
+      />
+      <KeyValueCard
+        v-if="command.allowedTools"
+        :label="tr('commands.detail.allowed_tools')"
+        :value="command.allowedTools"
+      />
+      <KeyValueCard
+        v-if="command.model"
+        :label="tr('commands.detail.model')"
+        :value="command.model"
+      />
     </div>
 
-    <!-- Arguments -->
-    <Section :title="`Arguments · ${command.args.length}`">
-      <div v-if="command.args.length === 0" class="text-[1em]" :style="{ color: t.textFaint }">
-        Không có argument.
-      </div>
-      <div v-else class="space-y-1.5">
-        <div
-          v-for="arg in command.args"
-          :key="arg.name"
-          class="flex items-start gap-2.5 p-2.5 rounded"
-          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-        >
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-1.5">
-              <span class="text-[1em] font-mono" :style="{ color: t.text }">{{ arg.name }}</span>
-              <span
-                class="text-[1em] uppercase px-1 rounded"
-                :style="{
-                  background: t.bgInput,
-                  color: t.textDim,
-                  border: `1px solid ${t.border}`,
-                }"
-              >
-                {{ arg.type }}
-              </span>
-              <span v-if="arg.required" class="text-[1em] uppercase" :style="{ color: t.danger }">
-                required
-              </span>
-            </div>
-            <div class="text-[1em] mt-0.5" :style="{ color: t.textMuted }">
-              {{ arg.description }}
-            </div>
-            <div
-              v-if="arg.default"
-              class="text-[1em] mt-0.5 font-mono"
-              :style="{ color: t.textFaint }"
-            >
-              default: {{ arg.default }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </Section>
-
-    <!-- Body -->
-    <Section :title="bodyLabel">
-      <pre
-        class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
-        :style="{
-          color: t.textMuted,
-          background: t.bgInput,
-          border: `1px solid ${t.border}`,
-          margin: 0,
-        }"
-        >{{ command.body }}</pre
-      >
-    </Section>
-
-    <!-- Try it preview -->
-    <Section title="Picker preview">
-      <div
-        class="rounded overflow-hidden"
-        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-      >
-        <div
-          class="px-3 py-2 flex items-center gap-2 text-[1em]"
-          :style="{ background: t.bgInput }"
-        >
-          <Slash :size="11" :style="{ color: t.textDim }" />
-          <span class="font-mono" :style="{ color: t.text }">{{ command.name }}</span>
-          <span
-            v-for="arg in command.args"
-            :key="arg.name"
-            class="font-mono"
-            :style="{ color: t.textDim }"
-          >
-            &lt;{{ arg.name }}{{ arg.required ? '' : '?' }}&gt;
-          </span>
-        </div>
-        <div class="px-3 py-2 text-[1em]" :style="{ color: t.textMuted }">
-          {{ command.description }}
-        </div>
-      </div>
-    </Section>
+    <MarkdownBodyView
+      :title="tr('commands.detail.template')"
+      :content="command.body ?? ''"
+      :empty-text="tr('commands.detail.empty')"
+      allow-edit
+      :edit-label="tr('commands.detail.edit_llm')"
+      :edit-title="tr('commands.detail.edit_llm')"
+      @edit-body="(a) => emit('edit-body', a)"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { Slash, Edit3, Trash2 } from 'lucide-vue-next'
-import type { SlashCommand } from '~/types'
+import { Slash, Edit3, Trash2, Lock } from 'lucide-vue-next'
+import type { Command, CommandSource } from '~/types'
 
-const props = defineProps<{ command: SlashCommand }>()
-const emit = defineEmits<{ edit: []; delete: [] }>()
+const props = defineProps<{ command: Command }>()
+const emit = defineEmits<{
+  edit: []
+  delete: []
+  'edit-body': [anchor: { top: number; left: number } | null]
+}>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
+const ws = useWorkspaceStore()
 
-const bodyLabel = computed<string>(() => {
-  switch (props.command.type) {
-    case 'prompt':
-      return 'Prompt template'
-    case 'agent-switch':
-      return 'Target agent'
-    case 'shell':
-      return 'Shell command'
-    case 'workflow':
-      return 'Workflow ID'
+const isImported = computed(() => props.command.readOnly === true)
+
+const SOURCE_KEY: Record<CommandSource, string> = {
+  global: 'commands.source.global',
+  project: 'commands.source.project',
+  'claude-project': 'commands.source.claude_project',
+  'claude-user': 'commands.source.claude_user',
+}
+const sourceLabel = computed(() => tr(SOURCE_KEY[props.command.source ?? 'global']))
+
+const isProjectScoped = computed(
+  () => props.command.source === 'project' || props.command.source === 'claude-project',
+)
+
+const readOnlyHint = computed(() =>
+  tr('commands.detail.readonly_hint', { source: sourceLabel.value }),
+)
+
+const sourcePath = computed(() => {
+  const project = ws.projects.find((p) => p.id === props.command.projectId)
+  const base = project?.path ?? '<project>'
+  const file = `${props.command.id.split(':').join('/')}.md`
+  switch (props.command.source) {
+    case 'project':
+      return `${base}/.awog/commands/${file}`
+    case 'claude-project':
+      return `${base}/.claude/commands/${file}`
+    case 'claude-user':
+      return `~/.claude/commands/${file}`
     default:
-      return 'Body'
+      return `~/.awog/commands/${file}`
   }
 })
 </script>

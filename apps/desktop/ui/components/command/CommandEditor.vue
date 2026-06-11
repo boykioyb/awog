@@ -1,36 +1,63 @@
 <template>
   <EditorShell
-    :title="command?.id ? 'Edit Command' : 'New Command'"
+    :title="command?.id ? tr('commands.editor.edit_title') : tr('commands.editor.new_title')"
     :dirty="dirty"
-    :can-save="!!draft.name && !!draft.body"
+    :can-save="canSave"
     @save="onSave"
     @cancel="emit('cancel')"
   >
     <div class="space-y-4">
+      <Field :label="tr('commands.editor.save_location')">
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="opt in sourceOptions"
+            :key="opt.value"
+            type="button"
+            :disabled="isExisting"
+            class="text-[1em] px-2 py-1 rounded font-mono transition"
+            :style="sourceButtonStyle(opt.value === draft.source)"
+            @click="draft.source = opt.value"
+          >
+            {{ tr(opt.labelKey) }}
+          </button>
+        </div>
+        <div v-if="draft.source === 'project'" class="mt-2">
+          <AppSelect v-model="draft.projectId" :disabled="isExisting">
+            <option value="" disabled>{{ tr('commands.editor.pick_project') }}</option>
+            <option v-for="p in ws.projects" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.path }})
+            </option>
+          </AppSelect>
+        </div>
+        <div class="text-[1em] mt-1.5" :style="{ color: t.textDim }">{{ sourceHint }}</div>
+      </Field>
+
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Name (after /)">
+        <Field :label="tr('commands.editor.slug')">
           <div class="flex items-center gap-1">
             <span class="font-mono text-[1em]" :style="{ color: t.textDim }">/</span>
             <input
-              :value="draft.name"
-              placeholder="review"
+              :value="draft.id"
+              :disabled="isExisting"
+              :placeholder="tr('commands.editor.slug_placeholder')"
               class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
               :style="inputStyle"
-              @input="(e: Event) => (draft.name = slugify((e.target as HTMLInputElement).value))"
+              @input="onSlugInput"
             />
           </div>
         </Field>
-        <Field label="Type">
-          <AppSelect v-model="draft.type">
-            <option value="prompt">prompt (template)</option>
-            <option value="agent-switch">agent-switch</option>
-            <option value="shell">shell</option>
-            <option value="workflow">workflow</option>
-          </AppSelect>
+        <Field :label="tr('commands.editor.name')">
+          <input
+            v-model="draft.name"
+            :disabled="isImported"
+            :placeholder="tr('commands.editor.name_placeholder')"
+            class="w-full rounded px-2 py-1.5 text-[1em]"
+            :style="inputStyle"
+          />
         </Field>
       </div>
 
-      <Field label="Description">
+      <Field :label="tr('commands.editor.description')">
         <textarea
           v-model="draft.description"
           :rows="2"
@@ -39,168 +66,144 @@
         />
       </Field>
 
-      <Field label="Aliases (comma separated)">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field :label="tr('commands.editor.argument_hint')">
+          <input
+            v-model="draft.argumentHint"
+            :placeholder="tr('commands.editor.argument_hint_placeholder')"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            :style="inputStyle"
+          />
+        </Field>
+        <Field :label="tr('commands.editor.model')">
+          <input
+            v-model="draft.model"
+            :placeholder="tr('commands.editor.model_placeholder')"
+            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            :style="inputStyle"
+          />
+        </Field>
+      </div>
+
+      <Field :label="tr('commands.editor.allowed_tools')">
         <input
-          v-model="aliasesText"
-          placeholder="r, rev"
+          v-model="draft.allowedTools"
+          :placeholder="tr('commands.editor.allowed_tools_placeholder')"
           class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
         />
       </Field>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Scope">
-          <AppSelect v-model="draft.scope">
-            <option value="global">global</option>
-            <option v-for="p in ws.projects" :key="p.id" :value="`project:${p.id}`">
-              project: {{ p.name }}
-            </option>
-            <option v-for="a in ws.agents" :key="a.id" :value="`agent:${a.id}`">
-              agent: {{ a.name }}
-            </option>
-          </AppSelect>
-        </Field>
-        <Field v-if="draft.type === 'shell'" label="Timeout (ms)">
-          <input
-            v-model.number="draft.timeoutMs"
-            type="number"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
-            :style="inputStyle"
-          />
-        </Field>
-        <div v-else />
-      </div>
-
-      <!-- Arguments -->
-      <Field label="Arguments">
-        <div class="space-y-2">
-          <div
-            v-for="(arg, i) in draft.args"
-            :key="i"
-            class="grid grid-cols-12 gap-1.5 items-center"
-          >
-            <input
-              :value="arg.name"
-              placeholder="name"
-              class="col-span-3 rounded px-2 py-1.5 text-[1em] font-mono"
-              :style="inputStyle"
-              @input="(e: Event) => (arg.name = (e.target as HTMLInputElement).value)"
-            />
-            <AppSelect v-model="arg.type" class="col-span-2">
-              <option value="string">string</option>
-              <option value="number">number</option>
-              <option value="file">file</option>
-              <option value="agent">agent</option>
-              <option value="artifact">artifact</option>
-              <option value="boolean">boolean</option>
-            </AppSelect>
-            <input
-              :value="arg.description"
-              placeholder="description"
-              class="col-span-5 rounded px-2 py-1.5 text-[1em]"
-              :style="inputStyle"
-              @input="(e: Event) => (arg.description = (e.target as HTMLInputElement).value)"
-            />
-            <label
-              class="col-span-1 flex items-center gap-1 text-[1em] cursor-pointer"
-              :style="{ color: t.textDim }"
-            >
-              <input v-model="arg.required" type="checkbox" />
-              req
-            </label>
-            <button
-              class="col-span-1 flex justify-end"
-              :style="{ color: t.textDim }"
-              @click="draft.args = draft.args.filter((_, j) => j !== i)"
-            >
-              <X :size="11" />
-            </button>
-          </div>
-          <button
-            class="text-[1em] flex items-center gap-1"
-            :style="{ color: t.textDim }"
-            @click="addArg"
-          >
-            <Plus :size="11" />
-            Add argument
-          </button>
+      <Field :label="tr('commands.editor.template')">
+        <textarea
+          v-model="draft.body"
+          :rows="8"
+          :placeholder="tr('commands.editor.template_placeholder')"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[10rem]"
+          :style="inputStyle"
+        />
+        <div class="text-[1em] mt-1" :style="{ color: t.textFaint }">
+          {{ tr('commands.editor.template_hint') }}
         </div>
       </Field>
 
-      <Field :label="bodyLabel">
-        <textarea
-          v-model="draft.body"
-          :rows="draft.type === 'prompt' ? 6 : 3"
-          :placeholder="bodyPlaceholder"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[5rem]"
-          :style="inputStyle"
-        />
-      </Field>
+      <ToggleField
+        v-if="!isImported"
+        v-model="draft.enabled"
+        :label="tr('commands.editor.enabled')"
+      />
     </div>
   </EditorShell>
 </template>
 
 <script setup lang="ts">
-import { Plus, X } from 'lucide-vue-next'
-import type { CommandArg, CommandScope, CommandType, SlashCommand } from '~/types'
+import type { CSSProperties } from 'vue'
+import type { Command, CommandSource } from '~/types'
 import type { CommandDraft } from '~/composables/useCommandGenerator'
 
-const props = defineProps<{
-  command: SlashCommand | null
-  initialDraft?: CommandDraft | null
-}>()
-const emit = defineEmits<{ save: [command: SlashCommand]; cancel: [] }>()
+const props = defineProps<{ command: Command | null; initialDraft?: CommandDraft | null }>()
+const emit = defineEmits<{ save: [command: Command]; cancel: [] }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const ws = useWorkspaceStore()
 
-type Draft = Omit<SlashCommand, 'system'> & { system?: boolean }
+type Draft = Omit<Command, 'source' | 'projectId'> & { source: CommandSource; projectId: string }
+
+const sourceOptions: { value: CommandSource; labelKey: string }[] = [
+  { value: 'global', labelKey: 'commands.editor.source_global' },
+  { value: 'project', labelKey: 'commands.editor.source_project' },
+]
+const isExisting = computed(() => !!props.command?.id)
+// Imported (claude-*) command: identity is fixed by the source file; only the
+// content fields are editable. Save writes back to the Claude Code source file.
+const isImported = computed(() => props.command?.readOnly === true)
+
+const slugify = (s: string): string =>
+  s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9:]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 
 const makeDefaults = (): Draft => ({
   id: '',
   name: '',
-  aliases: [],
   description: '',
-  type: 'prompt' as CommandType,
-  args: [],
   body: '',
-  scope: 'global' as CommandScope,
+  argumentHint: '',
+  allowedTools: '',
+  model: '',
+  enabled: true,
+  source: 'global',
+  projectId: '',
 })
 
-const cloneDraft = (d: CommandDraft): Draft => ({
-  ...d,
-  aliases: [...d.aliases],
-  args: d.args.map((a) => ({ ...a })),
-})
-
-const initDraft = (c: SlashCommand | null, seed: CommandDraft | null | undefined): Draft => {
+const initDraft = (c: Command | null, seed?: CommandDraft | null): Draft => {
   if (c) {
     return {
+      ...makeDefaults(),
       ...c,
-      aliases: [...c.aliases],
-      args: c.args.map((a) => ({ ...a })),
+      source: c.source ?? 'global',
+      projectId: c.projectId ?? '',
     }
   }
-  return seed ? cloneDraft(seed) : makeDefaults()
+  if (seed) {
+    return {
+      ...makeDefaults(),
+      id: slugify(seed.name),
+      name: seed.name,
+      description: seed.description,
+      argumentHint: seed.argumentHint,
+      body: seed.body,
+    }
+  }
+  return makeDefaults()
 }
 
 const draft = ref<Draft>(initDraft(props.command, props.initialDraft))
 const original = ref<Draft>(initDraft(props.command, props.initialDraft))
-const aliasesText = ref(draft.value.aliases.join(', '))
 
-watch(aliasesText, (v) => {
-  draft.value.aliases = v
-    .split(',')
-    .map((x) => x.trim())
-    .filter((x) => x.length > 0)
-})
+// Auto-derive the slug from the name only while creating a fresh command and the
+// user hasn't typed a custom slug.
+let slugTouched = false
+const onSlugInput = (e: Event) => {
+  slugTouched = true
+  draft.value.id = slugify((e.target as HTMLInputElement).value)
+}
+watch(
+  () => draft.value.name,
+  (name) => {
+    if (!isExisting.value && !slugTouched) draft.value.id = slugify(name)
+  },
+)
 
 watch(
   () => props.command,
   (c) => {
-    draft.value = initDraft(c, props.initialDraft)
-    original.value = initDraft(c, props.initialDraft)
-    aliasesText.value = draft.value.aliases.join(', ')
+    slugTouched = false
+    draft.value = initDraft(c)
+    original.value = initDraft(c)
   },
 )
 
@@ -211,56 +214,37 @@ const inputStyle = computed(() => ({
   outline: 'none',
 }))
 
+const sourceButtonStyle = (active: boolean): CSSProperties => ({
+  background: active ? t.value.accent : t.value.bgInput,
+  color: active ? t.value.accentText : t.value.textMuted,
+  border: `1px solid ${active ? t.value.accent : t.value.border}`,
+  cursor: isExisting.value ? 'not-allowed' : 'pointer',
+  opacity: isExisting.value && !active ? 0.4 : 1,
+})
+
+const sourceHint = computed(() =>
+  tr(
+    draft.value.source === 'project'
+      ? 'commands.editor.hint_project'
+      : 'commands.editor.hint_global',
+  ),
+)
+
 const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
-
-const bodyLabel = computed<string>(() => {
-  switch (draft.value.type) {
-    case 'prompt':
-      return 'Prompt template'
-    case 'agent-switch':
-      return 'Target agent ID'
-    case 'shell':
-      return 'Shell command'
-    case 'workflow':
-      return 'Workflow ID'
-    default:
-      return 'Body'
-  }
-})
-
-const bodyPlaceholder = computed<string>(() => {
-  switch (draft.value.type) {
-    case 'prompt':
-      return 'Review {{context.lastArtifact.path}} focus on {{arg.focus}}'
-    case 'agent-switch':
-      return 'ag3'
-    case 'shell':
-      return 'pnpm test'
-    case 'workflow':
-      return 'wf2'
-    default:
-      return ''
-  }
-})
-
-const slugify = (raw: string): string =>
-  raw
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-const addArg = () => {
-  const newArg: CommandArg = {
-    name: 'arg',
-    type: 'string',
-    required: false,
-    description: '',
-  }
-  draft.value.args = [...draft.value.args, newArg]
-}
+const canSave = computed(
+  () =>
+    !!draft.value.name &&
+    !!draft.value.id &&
+    !!draft.value.body &&
+    (draft.value.source !== 'project' || !!draft.value.projectId),
+)
 
 const onSave = () => {
-  if (!draft.value.name || !draft.value.body) return
-  emit('save', { ...draft.value } as SlashCommand)
+  if (!canSave.value) return
+  const out = { ...draft.value } as Command
+  // Only the global tier carries no projectId; project + imported (claude-*)
+  // keep it so the sidecar can resolve the source file.
+  if (out.source === 'global') delete out.projectId
+  emit('save', out)
 }
 </script>
