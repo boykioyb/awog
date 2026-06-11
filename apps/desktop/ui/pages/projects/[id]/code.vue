@@ -73,18 +73,37 @@
       <!-- Editor area -->
       <div class="flex flex-col flex-1 min-w-0 min-h-0">
         <CodeTabStrip v-if="tabs.length > 0" />
-        <div class="flex-1 min-h-0 relative">
-          <MonacoEditor
-            v-show="tabs.length > 0"
-            ref="editorRef"
-            :path="activePath"
-            :read-only="activeTab?.readOnly ?? false"
-            @ready="handleEditorReady"
-            @change="onEditorChange"
-            @cursor-change="onCursorChange"
-            @save="() => saveFile()"
-            @open-palette="openPalette"
-          />
+        <div class="flex flex-1 min-h-0 relative">
+          <!-- Editor — kept mounted (v-show) in preview-only mode to preserve models -->
+          <div
+            v-show="tabs.length > 0 && effectiveView !== 'preview'"
+            class="h-full min-w-0"
+            :class="effectiveView === 'split' ? 'w-1/2' : 'flex-1'"
+          >
+            <MonacoEditor
+              ref="editorRef"
+              :path="activePath"
+              :read-only="activeTab?.readOnly ?? false"
+              @ready="handleEditorReady"
+              @change="onEditorChange"
+              @cursor-change="onCursorChange"
+              @save="() => saveFile()"
+              @open-palette="openPalette"
+            />
+          </div>
+          <!-- Live markdown preview -->
+          <div
+            v-if="tabs.length > 0 && effectiveView !== 'code'"
+            class="h-full min-w-0 overflow-y-auto px-8 py-5"
+            :class="effectiveView === 'split' ? 'w-1/2' : 'flex-1'"
+            :style="{
+              background: t.bg,
+              borderLeft: effectiveView === 'split' ? `1px solid ${t.border}` : undefined,
+            }"
+          >
+            <MarkdownRenderer :content="previewSource" />
+          </div>
+          <!-- Empty state -->
           <div
             v-if="tabs.length === 0"
             class="absolute inset-0 flex flex-col items-center justify-center gap-2"
@@ -207,6 +226,7 @@ import {
 import { computed, provide } from 'vue'
 import type { CSSProperties } from 'vue'
 import MonacoEditor from '~/components/editor/MonacoEditor.vue'
+import MarkdownRenderer from '~/components/markdown/MarkdownRenderer.vue'
 import CodeExplorer from '~/components/workspace/code/CodeExplorer.vue'
 import CodeSearchPanel from '~/components/workspace/code/CodeSearchPanel.vue'
 import CodeSourceControl from '~/components/workspace/code/CodeSourceControl.vue'
@@ -241,6 +261,8 @@ const {
   activePath,
   activeTab,
   cursor,
+  effectiveView,
+  previewSource,
   onEditorChange,
   onCursorChange,
   saveFile,

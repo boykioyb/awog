@@ -14,6 +14,9 @@ import type { PaletteCommand } from '~/composables/useCommandPalette'
 
 export type ActivityView = 'explorer' | 'search' | 'git'
 
+// Editor view for markdown files: code only · editor + live preview · preview only.
+export type CodeViewMode = 'code' | 'split' | 'preview'
+
 export interface OpenTab {
   path: string
   name: string
@@ -106,6 +109,23 @@ export function useProjectWorkspace(projectId: string) {
   const activeTab = computed(() => tabs.value.find((tt) => tt.path === activePath.value) ?? null)
   const findTab = (path: string): OpenTab | undefined => tabs.value.find((tt) => tt.path === path)
 
+  // ── Markdown preview / editor view mode ─────────────────────────────────────
+  // Honored only when the active file is markdown; other languages always render
+  // as 'code'. `viewMode` is remembered across tab switches so the preference
+  // sticks when hopping between markdown files.
+  const viewMode = ref<CodeViewMode>('code')
+  const previewSource = ref('') // live content of the active file, fed to the preview pane
+  const isMarkdown = computed(() => activeTab.value?.language === 'markdown')
+  const effectiveView = computed<CodeViewMode>(() => (isMarkdown.value ? viewMode.value : 'code'))
+  const setViewMode = (mode: CodeViewMode): void => {
+    viewMode.value = mode
+  }
+  // Sync preview when switching tabs (typing → onEditorChange; external reload →
+  // reconcile). liveContent is the freshest buffer for an already-open file.
+  watch(activePath, (path) => {
+    previewSource.value = liveContent.get(path) ?? ''
+  })
+
   async function openFile(path: string): Promise<void> {
     if (!ready.value) return
     if (findTab(path)) {
@@ -140,6 +160,7 @@ export function useProjectWorkspace(projectId: string) {
 
   function onEditorChange(payload: { path: string; value: string }): void {
     liveContent.set(payload.path, payload.value)
+    if (payload.path === activePath.value) previewSource.value = payload.value
     const tab = findTab(payload.path)
     if (tab) tab.dirty = payload.value !== savedContent.get(payload.path)
   }
@@ -343,6 +364,7 @@ export function useProjectWorkspace(projectId: string) {
           if (!file.isBinary && file.content !== savedContent.get(tt.path)) {
             savedContent.set(tt.path, file.content)
             liveContent.set(tt.path, file.content)
+            if (tt.path === activePath.value) previewSource.value = file.content
             editorRef.value?.openFile(tt.path, file.content, file.language)
           }
         } catch {
@@ -477,6 +499,11 @@ export function useProjectWorkspace(projectId: string) {
     activeTab,
     cursor,
     tabs,
+    // markdown preview / view mode
+    isMarkdown,
+    effectiveView,
+    previewSource,
+    setViewMode,
     onEditorChange,
     onCursorChange,
     openFile,
@@ -518,6 +545,7 @@ export function useProjectWorkspace(projectId: string) {
     // toasts
     toasts,
     toastStyle,
+    pushToast,
   }
 }
 

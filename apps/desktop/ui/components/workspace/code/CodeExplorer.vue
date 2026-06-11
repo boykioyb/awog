@@ -237,6 +237,19 @@ const act = (fn: () => void) => {
   fn()
 }
 
+// Absolute path = workspace root + relative entry path (entry.path is workspace-relative).
+const absPathOf = (path: string): string =>
+  `${ctx.workspaceRoot.value.replace(/[/\\]+$/, '')}/${path}`
+
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ctx.pushToast(tr('code.toast.path_copied'), 'success')
+  } catch {
+    // clipboard may be denied in restricted contexts — ignore
+  }
+}
+
 interface MenuItem {
   label: string
   run: () => void
@@ -265,6 +278,14 @@ const menuItems = computed<MenuItem[]>(() => {
       act(() => {
         renamingPath.value = entry.path
       }),
+  })
+  items.push({
+    label: tr('code.menu.copy_path'),
+    run: () => act(() => void copyToClipboard(absPathOf(entry.path))),
+  })
+  items.push({
+    label: tr('code.menu.copy_rel_path'),
+    run: () => act(() => void copyToClipboard(entry.path)),
   })
   items.push({
     label: tr('code.menu.reveal_os'),

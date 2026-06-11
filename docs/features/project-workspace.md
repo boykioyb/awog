@@ -58,6 +58,7 @@ Mục tiêu: một **code workspace full-screen** mở từ một Project, đủ
 - **Ngôn ngữ** theo phần mở rộng — tái dùng map ext→language đã có ở sidecar [fs.read-file.ts](../../apps/desktop/sidecar/src/methods/fs.read-file.ts), trả qua `FsFileContent.language`.
 - **Theme** map từ `useTheme()` tokens → `monaco.editor.defineTheme` (đồng bộ dark/light + theme preset của app, không hardcode hex).
 - **Tính năng**: syntax highlight, autocomplete built-in, multi-cursor, find/replace trong file (Cmd+F), bracket match, minimap (toggle). LSP/go-to-definition cross-file: out of scope MVP.
+- **Markdown preview**: khi tab đang mở là file `.md` (language `markdown`), tab strip hiện toggle 3 chế độ **Editor / Split / Preview** (ghim bên phải). Preview render live theo nội dung đang gõ qua `MarkdownRenderer` (tái dùng — AST tự viết, theme-aware, hỗ trợ mermaid; cùng renderer với artifact editor). View mode được nhớ khi chuyển giữa các file markdown; file không phải markdown luôn hiển thị dạng `code`. Monaco giữ mounted (`v-show`) ở chế độ Preview-only để không mất model/undo.
 - File > size cap hoặc binary → mở **read-only** + notice "open externally".
 
 ### File operations
