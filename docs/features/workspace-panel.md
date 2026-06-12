@@ -67,6 +67,12 @@ Cây thư mục lazy (1 cấp/expand) + preview file. Preview render **theo dòn
 
 **Context menu (chuột phải vào file/folder trong cây):** dùng [ContextMenu.vue](../../apps/desktop/ui/components/ContextMenu.vue) chung. Actions: **Rename** (inline input trong node, `fs.rename`), **Copy Path** (tuyệt đối) / **Copy Relative Path** (workspace-relative, qua `navigator.clipboard`), **Reveal in OS** (`shell.revealPath`), **Open in VS Code** (chỉ hiện khi CLI `code` khả dụng — `shell:vscodeAvailable`/`shell:openInVscode` ở Electron main, [vscode.ts](../../apps/desktop/electron/src/vscode.ts) probe vị trí cài đặt theo OS rồi `spawn` arg-array, không shell), **Delete** (confirm modal, `recursive` cho dir). Sau rename/delete reload thư mục cha + repoint/clear preview. Logic tách vào composable [useWorkspaceFiles.ts](../../apps/desktop/ui/composables/useWorkspaceFiles.ts) (component giữ thin theo nuxt-vue page-controller).
 
+**Fullscreen file viewer:** nút Maximize trên thanh toolbar của file (khi file không phải binary) mở [FileFullscreenModal.vue](../../apps/desktop/ui/components/workspace/FileFullscreenModal.vue) — overlay `Teleport`/`fixed inset-0` (z-100, dưới mermaid zoom z-120), toggle preview/raw, copy, Esc/click-ngoài để đóng. Markdown render qua `MarkdownRenderer` (đọc thoải mái ở cột `max-w-3xl`), file khác render `<pre>`. Dùng để thoát panel hẹp khi đọc file dài.
+
+**HTML/PDF preview + Show in browser:** file `.html`/`.htm`/`.pdf` có thêm nút **Preview** (toggle inline trong panel) và **Show in browser** (Globe). Preview render qua [FilePreviewFrame.vue](../../apps/desktop/ui/components/workspace/FilePreviewFrame.vue): HTML → `<iframe srcdoc sandbox="allow-scripts allow-popups allow-forms allow-modals">` (chạy JS trong **origin opaque**, KHÔNG `allow-same-origin` → render được nội dung do JS sinh nhưng không chạm được app://; asset tương đối vẫn không resolve → full-fidelity là "Show in browser"); PDF → đọc `fs.readFileBase64` → Blob `application/pdf` → `<iframe>` cho Chromium tự render (quá cap → báo "mở bằng browser"). PDF luôn ở chế độ preview (binary, không có raw); HTML có toggle preview/raw. Fullscreen modal cũng render được HTML/PDF (truyền `workspaceRoot`).
+
+**Mermaid zoom (mọi surface):** [MermaidBlock.vue](../../apps/desktop/ui/components/markdown/MermaidBlock.vue) (renderer dùng chung bởi `MarkdownRenderer` — Files preview, artifact editor, code workspace preview, phase output, plan, attachment, modal body…) có nút **Expand** (hover) mở [MermaidZoomModal.vue](../../apps/desktop/ui/components/markdown/MermaidZoomModal.vue): fullscreen + zoom nút/`%` + **scroll-to-zoom** (anchored con trỏ) + drag-to-pan + Esc. Trước đây chỉ chat session có zoom; nay mọi sơ đồ mermaid đều phóng được.
+
 ### Plan
 **Decoupled khỏi permission gate** (Pi runtime, ADR 0029): ở plan mode, runtime inject tool
 `ExitPlanMode` + plan-mode system prompt. Model nghiên cứu read-only rồi gọi `ExitPlanMode({plan})`;
@@ -88,7 +94,10 @@ import + graceful fallback** → chưa cài/lỗi thì tab báo "unavailable", t
 **fs.* (read-only):**
 - `fs.listDir {workspaceRoot, path?}` → `{entries: FsEntry[]}` — readdir 1 cấp, skip `.git`, `assertInsideWorkspace` mỗi entry.
 - `fs.readFile {workspaceRoot, path, maxBytes?}` → `{path, content, language?, truncated, isBinary}` — cap 512KB (hard 4MB), null-byte sniff.
+- `fs.readFileBase64 {workspaceRoot, path, maxBytes?}` → `{path, base64, mimeType, size, truncated}` — bytes base64 cho in-app preview HTML/PDF (cap 10MB, hard 25MB; quá cap trả `base64:''` + `truncated:true` để UI fallback "Show in browser"). `assertInsideWorkspace`.
 - `fs.listFiles {workspaceRoot}` → `{files: FsEntry[], truncated}` — flat index cho `@file` mention (git ls-files + walk fallback). *(thêm bởi composer feature, dùng chung type)*
+
+**Electron IPC (shell):** `shell:openFileExternal {root, path}` — validate `resolveInsideWorkspace` rồi `shell.openExternal(pathToFileURL(abs))` → mở file workspace bằng **trình duyệt mặc định** (khác `shell:openExternal` vốn chỉ cho http/mailto). Dùng cho "Show in browser" HTML/PDF.
 
 **terminal.*** ([ADR 0019](../decisions/0019-pty-terminal-in-sidecar.md)):
 - `terminal.create {workspaceRoot, sessionId, cols, rows}` → `{terminalId}`

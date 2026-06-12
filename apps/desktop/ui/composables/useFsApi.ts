@@ -2,7 +2,7 @@
 // Session workspace Files / Preview tabs; the read-write + search methods back
 // the Project Code Workspace (ADR 0022). Shape mirrors sidecar
 // src/types/shared.ts. SoC: this only orchestrates IPC — no direct fs access.
-import type { FsEntry, FsFileContent, FsSearchMatch } from '~/types'
+import type { FsEntry, FsFileBase64, FsFileContent, FsSearchMatch } from '~/types'
 import { useSidecar } from './useSidecar'
 
 export interface FsSearchOptions {
@@ -25,6 +25,12 @@ export function useFsApi() {
       }),
     readFile: (workspaceRoot: string, path: string, maxBytes?: number) =>
       sidecar.request<FsFileContent>('fs.readFile', {
+        workspaceRoot,
+        path,
+        ...(maxBytes !== undefined ? { maxBytes } : {}),
+      }),
+    readFileBase64: (workspaceRoot: string, path: string, maxBytes?: number) =>
+      sidecar.request<FsFileBase64>('fs.readFileBase64', {
         workspaceRoot,
         path,
         ...(maxBytes !== undefined ? { maxBytes } : {}),

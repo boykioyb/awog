@@ -101,6 +101,12 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     loadInto(entry.path, null, null).catch(() => {})
   }
 
+  // Re-read the currently open file from disk (content + preview) without
+  // touching the tree or selection — for the per-file "Reload" button.
+  const reloadFile = async () => {
+    if (selectedPath.value) await loadInto(selectedPath.value, null, null)
+  }
+
   const openInEditor = () => {
     if (props.session.projectId && selectedPath.value) {
       navigateTo(
@@ -287,6 +293,17 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     await loadRoot()
   }
 
+  // Open the selected file in the default browser (HTML/PDF "Show in browser").
+  const openInBrowser = async () => {
+    if (!selectedPath.value) return
+    try {
+      await sidecar.openFileExternal(props.workspaceRoot, selectedPath.value)
+    } catch (err) {
+      if (err instanceof SidecarUnavailableError) return
+      pushToast(errMsg(err, tr('workspace.files.openFailed')), 'error')
+    }
+  }
+
   watch(() => props.workspaceRoot, refresh)
   onMounted(() => {
     loadRoot()
@@ -311,8 +328,10 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     toggle,
     select,
     refresh,
+    reloadFile,
     close,
     openInEditor,
+    openInBrowser,
     copied,
     copyPath,
     // context menu

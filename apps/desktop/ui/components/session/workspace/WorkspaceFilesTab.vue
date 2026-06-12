@@ -64,9 +64,18 @@
             </span>
 
             <div class="ml-auto flex items-center gap-1 flex-shrink-0">
-              <!-- Markdown defaults to a rendered preview; toggle to raw source. -->
+              <button
+                type="button"
+                class="p-1 rounded transition"
+                :style="{ color: t.textDim }"
+                :title="tr('workspace.files.reload')"
+                @click="reloadCurrent"
+              >
+                <RotateCw :size="13" />
+              </button>
+              <!-- Markdown/HTML default to a rendered preview; toggle to raw source. -->
               <div
-                v-if="isMarkdown && !fileContent?.isBinary"
+                v-if="(isMarkdown || isHtml) && !fileContent?.isBinary"
                 class="inline-flex rounded overflow-hidden"
                 :style="{ border: `1px solid ${t.border}` }"
               >
@@ -126,10 +135,38 @@
               >
                 <Code2 :size="13" />
               </button>
+              <button
+                v-if="isHtml || isPdf"
+                type="button"
+                class="p-1 rounded transition"
+                :style="{ color: t.textDim }"
+                :title="tr('workspace.files.showInBrowser')"
+                @click="openInBrowser"
+              >
+                <Globe :size="13" />
+              </button>
+              <button
+                v-if="!fileContent?.isBinary || isPdf"
+                type="button"
+                class="p-1 rounded transition"
+                :style="{ color: t.textDim }"
+                :title="tr('workspace.files.fullscreen')"
+                @click="fullscreen = true"
+              >
+                <Maximize2 :size="13" />
+              </button>
             </div>
           </div>
+          <FilePreviewFrame
+            v-if="showFramePreview"
+            :key="`${selectedPath}-${previewKey}`"
+            class="flex-1 min-h-0"
+            :workspace-root="workspaceRoot"
+            :path="selectedPath ?? ''"
+            :kind="isPdf ? 'pdf' : 'html'"
+          />
           <div
-            v-if="fileContent?.isBinary"
+            v-else-if="fileContent?.isBinary"
             class="flex-1 flex items-center justify-center px-6 text-center text-[1em]"
             :style="{ color: t.textDim }"
           >
@@ -196,6 +233,16 @@
         </div>
       </div>
     </div>
+
+    <!-- Fullscreen file viewer -->
+    <FileFullscreenModal
+      v-if="fullscreen && selectedPath"
+      :workspace-root="workspaceRoot"
+      :path="selectedPath"
+      :content="fileContent?.content ?? ''"
+      :language="fileContent?.language"
+      @close="fullscreen = false"
+    />
 
     <!-- Right-click context menu -->
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menuItems" @close="closeMenu" />
@@ -266,14 +313,19 @@ import {
   Eye,
   FileText,
   FolderTree,
+  Globe,
   ListTree,
+  Maximize2,
   RefreshCw,
+  RotateCw,
   Type,
   X,
 } from 'lucide-vue-next'
 import type { Session } from '~/types'
 import { useWorkspaceFiles } from '~/composables/useWorkspaceFiles'
 import ContextMenu from '~/components/ContextMenu.vue'
+import FileFullscreenModal from '~/components/workspace/FileFullscreenModal.vue'
+import FilePreviewFrame from '~/components/workspace/FilePreviewFrame.vue'
 import MonacoEditor from '~/components/editor/MonacoEditor.vue'
 import WorkspaceDrawerHeader from './WorkspaceDrawerHeader.vue'
 import WorkspaceFileTreeNode from './WorkspaceFileTreeNode.vue'
@@ -298,8 +350,10 @@ const {
   toggle,
   select,
   refresh,
+  reloadFile,
   close,
   openInEditor,
+  openInBrowser,
   copied,
   copyPath,
   menu,
@@ -323,6 +377,9 @@ const isMarkdown = computed(() => {
     lang === 'markdown' || lang === 'md' || /\.(md|markdown|mdx)$/i.test(selectedPath.value ?? '')
   )
 })
+// HTML/PDF render in an iframe preview (rendered page / Chromium PDF viewer).
+const isHtml = computed(() => /\.html?$/i.test(selectedPath.value ?? ''))
+const isPdf = computed(() => /\.pdf$/i.test(selectedPath.value ?? ''))
 
 type FileView = 'preview' | 'raw'
 const fileView = ref<FileView>('preview')
@@ -335,8 +392,23 @@ const fileViewModes = [
   { value: 'preview' as const, labelKey: 'workspace.files.preview', icon: Eye },
   { value: 'raw' as const, labelKey: 'workspace.files.raw', icon: Code },
 ]
+// PDF is always rendered (binary, no source view); HTML honors the preview toggle.
+const showFramePreview = computed(
+  () => isPdf.value || (isHtml.value && fileView.value === 'preview'),
+)
 
 const previewRef = useTemplateRef<HTMLElement>('previewRef')
+
+// Fullscreen file viewer (escape the narrow docked panel for a big readable view).
+const fullscreen = ref(false)
+
+// Reload the current file: re-read content, and remount the preview iframe (it
+// reads bytes itself, so a key bump is what forces HTML/PDF to refetch).
+const previewKey = ref(0)
+const reloadCurrent = async () => {
+  await reloadFile()
+  previewKey.value++
+}
 
 // Transient ✓ feedback for the content/raw copy buttons (separate from the
 // path-copy feedback `copied` owned by the composable).
