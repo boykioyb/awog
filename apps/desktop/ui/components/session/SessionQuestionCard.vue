@@ -8,10 +8,13 @@
       borderLeft: `3px solid ${accent.accent}`,
     }"
   >
-    <!-- Header -->
+    <!-- Header. Once answered the card collapses to just this bar (the form is
+         hidden); click to re-open the read-only record. -->
     <div
       class="px-3 py-2 flex items-center gap-2"
-      :style="{ borderBottom: `1px solid ${t.border}` }"
+      :class="answered ? 'cursor-pointer select-none' : ''"
+      :style="{ borderBottom: showBody ? `1px solid ${t.border}` : 'none' }"
+      @click="answered && (collapsed = !collapsed)"
     >
       <MessageCircleQuestion :size="13" :style="{ color: accent.accent }" />
       <div class="font-semibold flex items-center gap-1.5" :style="{ color: t.text }">
@@ -19,7 +22,7 @@
           questions.length > 1 ? tr('session.question.title_plural') : tr('session.question.title')
         }}
         <span
-          class="px-1.5 py-0.5 rounded uppercase tracking-wider font-medium text-[12px]"
+          class="px-1 py-0.5 rounded uppercase tracking-wide font-medium text-[12px] leading-none"
           :style="{
             background: accent.bg,
             color: accent.accent,
@@ -29,10 +32,20 @@
           {{ answered ? tr('session.question.answered') : tr('session.question.pending') }}
         </span>
       </div>
+      <ChevronDown
+        v-if="answered"
+        :size="12"
+        class="ml-auto flex-shrink-0"
+        :style="{
+          color: t.textDim,
+          transform: collapsed ? 'rotate(-90deg)' : 'none',
+          transition: 'transform 0.15s',
+        }"
+      />
     </div>
 
-    <!-- Answered → read-only record -->
-    <div v-if="answered" class="px-3 py-2 space-y-2.5">
+    <!-- Answered → read-only record (hidden until the header is expanded) -->
+    <div v-if="answered && !collapsed" class="px-3 py-2 space-y-2.5">
       <div v-for="(q, qi) in questions" :key="qi">
         <div class="leading-relaxed" :style="{ color: t.textMuted }">{{ q.question }}</div>
         <div class="mt-1 flex flex-wrap gap-1">
@@ -56,8 +69,9 @@
       </div>
     </div>
 
-    <!-- Pending → interactive form -->
-    <template v-else>
+    <!-- Pending → interactive form (only while unanswered; collapsed-answered
+         renders neither this nor the record, just the header bar) -->
+    <template v-else-if="!answered">
       <!-- Question tabs (multi-question only) -->
       <div v-if="questions.length > 1" class="px-3 pt-2 flex items-center gap-1 flex-wrap">
         <button
@@ -170,6 +184,7 @@
 <script setup lang="ts">
 import {
   Check,
+  ChevronDown,
   Circle,
   CircleDot,
   MessageCircleQuestion,
@@ -194,6 +209,12 @@ const answer = inject(ANSWER_QUESTION_KEY, null)
 const questions = computed<SessionQuestion[]>(() => props.step.questions ?? [])
 const answered = computed(() => Array.isArray(props.step.answers) && props.step.answers.length > 0)
 const canAnswer = computed(() => !!answer && !answered.value)
+
+// Once answered, collapse to just the header bar (hide the read-only record);
+// the user can click the header to re-open it. Pending cards always show their
+// form, so this only gates the answered state.
+const collapsed = ref(true)
+const showBody = computed(() => !answered.value || !collapsed.value)
 
 // Fallback keeps `active` a concrete SessionQuestion (the template guards on
 // questions.length, but TS can't see that through the indexed access).

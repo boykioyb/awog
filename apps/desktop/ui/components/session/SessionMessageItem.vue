@@ -102,54 +102,44 @@
           <StepItem :step="todo" />
         </div>
 
-        <!-- Body. With steps expanded we interleave reply-text segments and
-             step clusters in chronological order (each step carries the text
-             offset where its tool fired). Collapsed → plain reply text only.
-             No steps → plain reply text. -->
-        <template v-if="clusterSteps.length && expanded">
-          <template v-for="(block, bi) in timelineBlocks" :key="bi">
-            <MarkdownStreamBody
-              v-if="block.type === 'text'"
-              :text="block.text"
-              :streaming="isStreaming && bi === lastTextBlockIndex"
-              class="awog-md text-[1em]"
-              :class="bi > 0 ? 'mt-2' : ''"
-              :style="{ color: t.text, '--awog-accent': t.accent }"
-              :data-agent-message-id="message.id"
-            />
-            <!-- Inline step timeline (Claude-Code style): flat vertical list, no
-                 box — each step's own status icon is the bullet, a thin left rail
-                 groups the run. `timeline` tells StepItem to wrap long paths and
-                 show a one-line result summary instead of truncating. -->
-            <div
-              v-else
-              class="mt-2 space-y-1 text-[12px] pl-3"
-              :style="{ borderLeft: `2px solid ${t.border}` }"
-            >
-              <StepItem v-for="s in block.steps" :key="s.id" :step="s" timeline />
-            </div>
-          </template>
+        <!-- Body. Reply text, AskUserQuestion cards, and step clusters interleave
+             in chronological order. Question cards always render at their position
+             (a pending question stays visible — the turn is blocked); step
+             clusters render only when expanded. Collapsed merges the text around
+             hidden steps so the reply still reads as one document. -->
+        <template v-for="(block, bi) in displayBlocks" :key="bi">
+          <MarkdownStreamBody
+            v-if="block.type === 'text'"
+            :text="block.text"
+            :streaming="isStreaming && bi === lastTextBlockIndex"
+            class="awog-md text-[1em]"
+            :class="bi > 0 ? 'mt-2' : ''"
+            :style="{ color: t.text, '--awog-accent': t.accent }"
+            :data-agent-message-id="message.id"
+          />
+          <SessionQuestionCard
+            v-else-if="block.type === 'question'"
+            :step="block.step"
+            class="mt-2"
+          />
+          <!-- Inline step timeline (Claude-Code style): flat vertical list, no
+               box — each step's own status icon is the bullet, a thin left rail
+               groups the run. `timeline` tells StepItem to wrap long paths and
+               show a one-line result summary instead of truncating. -->
+          <div
+            v-else
+            class="mt-2 space-y-1 text-[12px] pl-3"
+            :style="{ borderLeft: `2px solid ${t.border}` }"
+          >
+            <StepItem v-for="s in block.steps" :key="s.id" :step="s" timeline />
+          </div>
         </template>
-
-        <MarkdownStreamBody
-          v-else-if="message.text"
-          :text="message.text"
-          :streaming="isStreaming"
-          class="awog-md text-[1em]"
-          :style="{ color: t.text, '--awog-accent': t.accent }"
-          :data-agent-message-id="message.id"
-        />
 
         <SessionInlinePermission
           v-if="store.pendingPermission?.messageId === message.id"
           :message-id="message.id"
           class="mt-2"
         />
-
-        <!-- AskUserQuestion cards. Rendered OUTSIDE the collapsible step cluster
-             so a pending question is always visible (the turn is blocked until
-             the user answers); the answered record stays visible too. -->
-        <SessionQuestionCard v-for="q in questionSteps" :key="q.id" :step="q" class="mt-2" />
 
         <div v-if="message.artifacts?.length" class="mt-2 space-y-1.5">
           <div
@@ -280,7 +270,10 @@ const hasRunningStep = computed((): boolean =>
 
 const isStreaming = computed(() => !!(props.message.startedAt && !props.message.completedAt))
 
-type TimelineBlock = { type: 'text'; text: string } | { type: 'steps'; steps: SessionStep[] }
+type TimelineBlock =
+  | { type: 'text'; text: string }
+  | { type: 'steps'; steps: SessionStep[] }
+  | { type: 'question'; step: SessionStep }
 
 // Coalesce the authoritative ordered parts (ADR 0032) into render blocks: each
 // text part is a text block; consecutive step parts collapse into one cluster.
@@ -290,10 +283,14 @@ type TimelineBlock = { type: 'text'; text: string } | { type: 'steps'; steps: Se
 const blocksFromParts = (parts: SessionMessagePart[]): TimelineBlock[] => {
   const body: TimelineBlock[] = []
   for (const p of parts) {
-    // Question + note (TODO) steps render outside the cluster — questions via
-    // SessionQuestionCard (always visible while the turn is blocked), TODOs via
-    // the standalone checklist above. Never bury either in the collapsed cluster.
-    if (p.kind === 'question' || p.kind === 'note') continue
+    // TODO (note) steps render standalone above the body — never in the timeline.
+    if (p.kind === 'note') continue
+    // Question steps get their own block so the card renders inline at the point
+    // it was asked (always visible — the turn is blocked until answered).
+    if (p.kind === 'question') {
+      body.push({ type: 'question', step: p })
+      continue
+    }
     if (p.kind === 'text') {
       if (p.text.trim()) body.push({ type: 'text', text: p.text })
       continue
@@ -321,12 +318,11 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
   const allSteps = props.message.steps ?? []
   if (!allSteps.length) return text ? [{ type: 'text', text }] : []
 
-  // Thinking interleaves with tools by its stamped text offset: reasoning is
-  // streamed just before the tool/iteration it produced, so it sorts ahead of
-  // that step and reads "reason → act" per step. Question + note (TODO) steps
-  // render separately (SessionQuestionCard / the standalone TODO checklist), so
-  // keep only those out of the interleaved cluster.
-  const steps = allSteps.filter((s: SessionStep) => s.kind !== 'question' && s.kind !== 'note')
+  // Interleave by stamped text offset: thinking/tool steps and question cards
+  // sort to where they fired (reasoning just before its tool → "reason → act";
+  // a question card at the point it was asked). TODO (note) steps render
+  // standalone above the body, so keep only those out of the timeline.
+  const steps = allSteps.filter((s: SessionStep) => s.kind !== 'note')
   if (!steps.length) return text ? [{ type: 'text', text }] : []
 
   const len = text.length
@@ -336,6 +332,11 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
   const body: TimelineBlock[] = []
   let cursor = 0
   const pushStep = (step: SessionStep) => {
+    // Questions are standalone blocks; tool/thinking steps coalesce into a cluster.
+    if (step.kind === 'question') {
+      body.push({ type: 'question', step })
+      return
+    }
     const last = body[body.length - 1]
     if (last && last.type === 'steps') last.steps.push(step)
     else body.push({ type: 'steps', steps: [step] })
@@ -355,11 +356,26 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
   return body
 })
 
-// AskUserQuestion steps, rendered as interactive cards outside the collapsible
-// step cluster (always visible — the turn is blocked until the user answers).
-const questionSteps = computed<SessionStep[]>(
-  () => props.message.steps?.filter((s: SessionStep) => s.kind === 'question') ?? [],
-)
+// What actually renders. Expanded → the full interleaved timeline. Collapsed →
+// step clusters dropped and the text around them merged so the reply reads as
+// one document, but text and question cards stay inline at their position (a
+// pending question must remain visible even when the steps are tucked away).
+const displayBlocks = computed<TimelineBlock[]>(() => {
+  const blocks = timelineBlocks.value
+  if (expanded.value) return blocks
+  const out: TimelineBlock[] = []
+  for (const b of blocks) {
+    if (b.type === 'steps') continue
+    if (b.type === 'text') {
+      const last = out[out.length - 1]
+      if (last && last.type === 'text') last.text = `${last.text}\n\n${b.text}`
+      else out.push({ type: 'text', text: b.text })
+      continue
+    }
+    out.push(b)
+  }
+  return out
+})
 
 // TODO checklist steps (kind === 'note'), rendered standalone above the body and
 // outside the collapsible cluster so the agent's plan/progress is always visible.
@@ -372,7 +388,7 @@ const todoSteps = computed<SessionStep[]>(
 // Only the trailing text segment is still being typed — flag it so
 // MarkdownStreamBody throttles just that one and renders the rest immediately.
 const lastTextBlockIndex = computed(() => {
-  const blocks = timelineBlocks.value
+  const blocks = displayBlocks.value
   for (let i = blocks.length - 1; i >= 0; i -= 1) {
     if (blocks[i]?.type === 'text') return i
   }

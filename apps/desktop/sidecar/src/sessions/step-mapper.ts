@@ -79,11 +79,9 @@ function pickTarget(toolName: string, input: Record<string, unknown>): string | 
   const pattern = input.pattern
   if (typeof pattern === 'string' && pattern.length > 0) return pattern
   const cmd = input.command
-  if (typeof cmd === 'string' && cmd.length > 0) {
-    // Compact long commands so the inline step label stays one line. Detail
-    // pane shows the full string via terminal detail kind.
-    return cmd.length > 60 ? `${cmd.slice(0, 57)}…` : cmd
-  }
+  // Return the FULL command — the session timeline wraps it (StepItem timeline
+  // mode), so don't pre-truncate here (that baked an ellipsis the UI can't undo).
+  if (typeof cmd === 'string' && cmd.length > 0) return cmd
   const query = input.query
   if (typeof query === 'string' && query.length > 0) return query
   const url = input.url
@@ -248,6 +246,13 @@ function previewToolResult(content: unknown): string {
   return truncatePreview(toolResultText(content))
 }
 
+// Strip the Read tool's `cat -n` gutter (right-aligned line number + tab, see
+// runtime/tools/fs-tools.ts) from each line so the stored UI detail is the clean
+// file content. Only applied to Read results, where we know the gutter is present.
+function stripReadGutter(text: string): string {
+  return text.replace(/^ *\d+\t/gm, '')
+}
+
 export interface ToolResultInfo {
   toolUseId: string
   toolName: string
@@ -274,8 +279,12 @@ export function stepFromToolResult(info: ToolResultInfo): SessionStep {
   } else if (info.toolName === 'Read') {
     // Show the full file the model read (capped only for pathological sizes), not
     // the small inline preview — the detail pane is where the user drills in.
+    // Strip the Read tool's `cat -n` gutter (6-wide line number + tab) so the UI
+    // detail renders the real file (markdown preview / clean raw) instead of
+    // line-numbered noise. The model still receives the numbered output.
     const path = typeof info.toolInput.file_path === 'string' ? info.toolInput.file_path : ''
-    detail = { kind: 'file', path, content: clip(toolResultText(info.content), FILE_DETAIL_MAX) }
+    const content = clip(stripReadGutter(toolResultText(info.content)), FILE_DETAIL_MAX)
+    detail = { kind: 'file', path, content }
   } else if (info.toolName === 'Write') {
     // The tool result is just "Wrote N bytes to …". Show the written content
     // (from the input) instead so the detail pane renders the artifact in full.
