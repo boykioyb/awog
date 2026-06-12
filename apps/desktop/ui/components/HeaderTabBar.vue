@@ -34,19 +34,22 @@
 
     <!-- Section tabs -->
     <nav
+      ref="strip"
       class="tabstrip flex items-center gap-1.5 flex-1 overflow-x-auto h-full"
       @mouseleave="hoveredId = null"
+      @wheel="onWheel"
     >
       <NuxtLink
         v-for="item in items"
         :key="item.id"
         :to="item.to"
+        :title="item.label"
         class="relative flex items-center gap-2 px-3 h-8 rounded-xl text-[1em] whitespace-nowrap flex-shrink-0 transition-all duration-150"
         :style="pillStyle(isActive(item.to), hoveredId === item.id)"
         @mouseenter="hoveredId = item.id"
       >
         <component :is="item.icon" :size="15" class="flex-shrink-0" />
-        <span>{{ item.label }}</span>
+        <span v-if="!compact || isActive(item.to)">{{ item.label }}</span>
 
         <!-- Live badges -->
         <span
@@ -144,6 +147,7 @@ import {
   Slash,
   GitBranch,
   ScrollText,
+  Package,
   Sparkles,
 } from 'lucide-vue-next'
 
@@ -166,6 +170,50 @@ const anyStreaming = computed(() => sessionsStore.anyStreaming)
 
 const hoveredId = ref<string | null>(null)
 
+// Tab strip overflow handling. Primary: when the labelled tabs don't fit, drop
+// to icon-only (the active tab keeps its label so you always see where you are;
+// titles give hover tooltips). Fallback: if even icon-only overflows (very
+// narrow window), map a mouse wheel's vertical delta onto horizontal scroll —
+// trackpads already emit deltaX natively.
+const strip = useTemplateRef<HTMLElement>('strip')
+const compact = ref(false)
+
+const recomputeCompact = async () => {
+  const el = strip.value
+  if (!el) return
+  // Always measure against the full-label layout, then decide. Both updates
+  // flush in the same microtask batch before paint, so no visible flicker.
+  if (compact.value) {
+    compact.value = false
+    await nextTick()
+  }
+  const overflowing = el.scrollWidth > el.clientWidth + 1
+  if (overflowing !== compact.value) compact.value = overflowing
+}
+
+const onWheel = (e: WheelEvent) => {
+  const el = strip.value
+  if (!el || el.scrollWidth <= el.clientWidth) return
+  if (e.deltaY === 0) return // let native horizontal (trackpad) deltaX through
+  el.scrollLeft += e.deltaY
+  e.preventDefault()
+}
+
+let resizeObserver: ResizeObserver | null = null
+onMounted(() => {
+  void recomputeCompact()
+  if (typeof ResizeObserver !== 'undefined' && strip.value) {
+    resizeObserver = new ResizeObserver(() => {
+      void recomputeCompact()
+    })
+    resizeObserver.observe(strip.value)
+  }
+})
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
+
 interface NavItem {
   id: string
   label: string
@@ -174,12 +222,13 @@ interface NavItem {
 }
 
 const items: NavItem[] = [
-  { id: 'tasks', label: 'Tasks', icon: ListTodo, to: '/tasks' },
   { id: 'sessions', label: 'Sessions', icon: MessageSquare, to: '/sessions' },
+  { id: 'tasks', label: 'Tasks', icon: ListTodo, to: '/tasks' },
   { id: 'projects', label: 'Projects', icon: FolderGit2, to: '/projects' },
   { id: 'workflows', label: 'Workflows', icon: Workflow, to: '/workflows' },
   { id: 'agents', label: 'Agents', icon: Users, to: '/agents' },
   { id: 'skills', label: 'Skills', icon: Wand2, to: '/skills' },
+  { id: 'templates', label: 'Templates', icon: Package, to: '/templates' },
   { id: 'git', label: 'Git', icon: GitBranch, to: '/git' },
   { id: 'connections', label: 'Connections', icon: Plug, to: '/connections' },
   { id: 'hooks', label: 'Hooks', icon: Zap, to: '/hooks' },
@@ -188,7 +237,7 @@ const items: NavItem[] = [
 ]
 
 const isActive = (to: string) => {
-  if (to === '/tasks') return route.path === '/' || route.path.startsWith('/tasks')
+  if (to === '/sessions') return route.path === '/' || route.path.startsWith('/sessions')
   return route.path.startsWith(to)
 }
 
@@ -217,9 +266,16 @@ const badgeStyle = computed(() => ({
 </script>
 
 <style scoped>
-/* Hide the horizontal scrollbar on the tab strip — overflow stays scrollable. */
+/* Hide the scrollbar on the tab strip — overflow stays scrollable (trackpad /
+ * wheel). `overflow-x: auto` (Tailwind) implies `overflow-y: auto`, which on
+ * Chromium/Electron renders a stray vertical bar overlapping the header border;
+ * pin overflow-y to hidden and hide the bar cross-browser. */
+.tabstrip {
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
 .tabstrip::-webkit-scrollbar {
-  height: 0;
-  width: 0;
+  display: none; /* Chromium / WebKit (Electron) */
 }
 </style>

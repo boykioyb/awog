@@ -32,15 +32,27 @@
 
     <div class="space-y-5">
       <Field v-if="!agent" label="Save to">
-        <AppSelect v-model="saveTo" mono>
-          <option v-for="opt in saveToOptions" :key="opt.value" :value="opt.value">
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="opt in sourceOptions"
+            :key="opt.value"
+            type="button"
+            class="text-[1em] px-2 py-1 rounded font-mono transition"
+            :style="sourceButtonStyle(opt.value === draft.source)"
+            @click="setSource(opt.value)"
+          >
             {{ opt.label }}
-          </option>
-        </AppSelect>
-        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
-          Tier determines where the AGENT.md is written (Sprint 3 C3). Default is global
-          (~/.awog/agents/). Project tiers commit-able via git.
+          </button>
         </div>
+        <div v-if="draft.source === 'project'" class="mt-2">
+          <AppSelect v-model="projectSelect">
+            <option value="" disabled>— pick a project —</option>
+            <option v-for="p in ws.projects" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.path }})
+            </option>
+          </AppSelect>
+        </div>
+        <div class="text-[1em] mt-1" :style="{ color: t.textDim }">{{ sourceHint }}</div>
       </Field>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -234,6 +246,7 @@
 </template>
 
 <script setup lang="ts">
+import type { CSSProperties } from 'vue'
 import { Sparkles } from 'lucide-vue-next'
 import type { Agent, AgentSource, ProviderName } from '~/types'
 import { MODELS, modelById } from '~/utils/models'
@@ -263,10 +276,7 @@ const isProviderConnected = (p: ProviderName): boolean => settings.isProviderCon
 
 const SOURCE_DIR_LABEL: Record<AgentSource, string> = {
   global: '~/.awog/agents/',
-  'user-claude': '~/.claude/agents/',
-  'user-agents': '~/.agents/agents/',
-  'project-claude': '.claude/agents/',
-  'project-agents': '.agents/agents/',
+  project: '.awog/agents/',
 }
 
 const sourceDirLabel = computed(() =>
@@ -301,52 +311,43 @@ const initDraft = (): Agent => {
 const draft = ref<Agent>(initDraft())
 const original = ref<Agent>(initDraft())
 
-// "Save to" tier picker for NEW agents (Sprint 3 C3). Composite value
-// "<source>" for user tiers, "<source>:<projectId>" for project tiers.
-// Parsed on change to update draft.source + draft.projectId. Hidden when
-// editing an existing agent (source/projectId immutable after creation
-// without a copy-and-delete migration which we don't expose pha 2).
-interface SaveToOption {
-  value: string
-  label: string
+// "Save to" tier picker for NEW agents (ADR 0035): global (~/.awog/agents) or
+// project ({project}/.awog/agents). Hidden when editing an existing agent
+// (source/projectId immutable after creation without a copy-and-delete
+// migration which we don't expose).
+const sourceOptions: { value: AgentSource; label: string }[] = [
+  { value: 'global', label: '~/.awog/agents' },
+  { value: 'project', label: 'project · .awog/agents' },
+]
+
+const setSource = (source: AgentSource) => {
+  draft.value.source = source
+  if (source === 'project') {
+    if (!draft.value.projectId) draft.value.projectId = ws.projects[0]?.id ?? ''
+  } else {
+    delete draft.value.projectId
+  }
 }
 
-const saveToOptions = computed<SaveToOption[]>(() => {
-  const out: SaveToOption[] = [
-    { value: 'global', label: '~/.awog/agents/  (AWOG-native, default)' },
-    { value: 'user-claude', label: '~/.claude/agents/  (Claude Code SDK)' },
-    { value: 'user-agents', label: '~/.agents/agents/  (Craft Agents)' },
-  ]
-  ws.projects.forEach((p) => {
-    out.push({
-      value: `project-claude:${p.id}`,
-      label: `${p.name} · .claude/agents/`,
-    })
-    out.push({
-      value: `project-agents:${p.id}`,
-      label: `${p.name} · .agents/agents/`,
-    })
-  })
-  return out
+const projectSelect = computed<string>({
+  get: () => draft.value.projectId ?? '',
+  set: (v) => {
+    draft.value.projectId = v
+  },
 })
 
-const saveTo = computed<string>({
-  get() {
-    if (draft.value.source === 'project-claude' || draft.value.source === 'project-agents') {
-      return `${draft.value.source}:${draft.value.projectId ?? ''}`
-    }
-    return draft.value.source
-  },
-  set(value: string) {
-    const [source, projectId] = value.split(':') as [Agent['source'], string | undefined]
-    draft.value.source = source
-    if (source === 'project-claude' || source === 'project-agents') {
-      draft.value.projectId = projectId
-    } else {
-      delete draft.value.projectId
-    }
-  },
+const sourceButtonStyle = (active: boolean): CSSProperties => ({
+  background: active ? t.value.accent : t.value.bgInput,
+  color: active ? t.value.accentText : t.value.textMuted,
+  border: `1px solid ${active ? t.value.accent : t.value.border}`,
+  cursor: 'pointer',
 })
+
+const sourceHint = computed(() =>
+  draft.value.source === 'project'
+    ? 'Written to <project>/.awog/agents/ — committed with the repo.'
+    : 'Written to ~/.awog/agents/ — available across all projects.',
+)
 
 // LLM-edit modal state. Only available when editing an existing agent (the
 // modal needs an Agent with id, source, projectId to round-trip metadata).
@@ -475,8 +476,13 @@ const providerBtnStyle = (p: ProviderName) => {
 }
 
 // Claude Code subagent requires name + description. role is AWOG-only and
-// optional. model defaults to claude-sonnet-4-6 in makeDefaults.
-const canSave = computed(() => !!(draft.value.name && draft.value.description && draft.value.model))
+// optional. model defaults to claude-sonnet-4-6 in makeDefaults. Project tier
+// additionally requires a chosen project.
+const canSave = computed(
+  () =>
+    !!(draft.value.name && draft.value.description && draft.value.model) &&
+    (draft.value.source !== 'project' || !!draft.value.projectId),
+)
 
 const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(original.value))
 

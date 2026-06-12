@@ -4,9 +4,8 @@ import { listAgents } from '../agents/store.js'
 
 const Params = z
   .object({
-    // When omitted, only user-level tiers (global, user-claude, user-agents)
-    // are scanned. UI passes the registered project ids so .claude/.agents
-    // under each project also get picked up.
+    // When omitted, only the global tier (~/.awog/agents) is scanned. UI passes
+    // the registered project ids so {project}/.awog/agents is also picked up.
     projectIds: z.array(z.string().min(1).max(64)).max(50).optional(),
   })
   .optional()

@@ -178,8 +178,7 @@ const workflow = computed(() =>
 //   - project workflow → portable (global/user) agents + that project's agents
 //   - global workflow (or none) → only portable agents, so a shared workflow
 //     never references a project agent that won't exist when run elsewhere.
-const isProjectAgent = (a: Agent): boolean =>
-  a.source === 'project-claude' || a.source === 'project-agents'
+const isProjectAgent = (a: Agent): boolean => a.source === 'project'
 
 const paletteAgents = computed<Agent[]>(() => {
   const wf = workflow.value

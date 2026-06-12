@@ -3,5 +3,5 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ middleware: [() => navigateTo('/tasks')] })
+definePageMeta({ middleware: [() => navigateTo('/sessions')] })
 </script>

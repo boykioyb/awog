@@ -196,15 +196,10 @@ const modelLabel = computed(() => model.value?.label ?? props.agent.model ?? '')
 
 const SOURCE_LABEL: Record<AgentSource, string> = {
   global: '~/.awog',
-  'user-claude': '~/.claude',
-  'user-agents': '~/.agents',
-  'project-claude': '.claude',
-  'project-agents': '.agents',
+  project: '.awog',
 }
 
-const isProjectScoped = computed(
-  () => props.agent.source === 'project-claude' || props.agent.source === 'project-agents',
-)
+const isProjectScoped = computed(() => props.agent.source === 'project')
 
 const project = computed(() =>
   props.agent.projectId ? ws.projects.find((p) => p.id === props.agent.projectId) : undefined,

@@ -47,19 +47,11 @@ export async function buildRulesPrompt(projectId: string | undefined): Promise<s
   const withBody = rules.filter((r) => r.body.trim().length > 0)
   if (withBody.length === 0) return undefined
 
-  // Priority order (ADR 0033 D-4 amended): imported Claude Code config first —
-  // project CLAUDE.md, then project .claude/rules, then user CLAUDE.md — so the
-  // canonical project instruction leads; AWOG-native rules follow.
-  const ORDER: Record<string, number> = {
-    'claude-project': 0,
-    'claude-rules': 1,
-    'claude-user': 2,
-    project: 3,
-    global: 4,
-  }
-  const rank = (r: Rule): number => ORDER[r.source ?? 'global'] ?? 5
+  // Priority order (ADR 0035): project rules lead, then global.
+  const ORDER: Record<string, number> = { project: 0, global: 1 }
+  const rank = (r: Rule): number => ORDER[r.source ?? 'global'] ?? 2
   const sorted = [...withBody].sort((a, b) => rank(a) - rank(b))
 
   const sections = sorted.map((r) => `## ${r.name || r.id}\n\n${r.body.trim()}`).join('\n\n')
-  return `<workspace-rules>\nThe user has defined the following workspace rules (CLAUDE.md and AWOG rules). Follow them unless they conflict with a direct instruction in the current turn.\n\n${sections}\n</workspace-rules>`
+  return `<workspace-rules>\nThe user has defined the following workspace rules. Follow them unless they conflict with a direct instruction in the current turn.\n\n${sections}\n</workspace-rules>`
 }

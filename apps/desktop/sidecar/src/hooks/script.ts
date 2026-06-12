@@ -35,7 +35,7 @@ export function detectScriptToken(command: string): string | null {
 }
 
 async function workspaceFor(source: HookSource, projectId: string | undefined): Promise<string> {
-  if (source === 'project' || source === 'claude-project' || source === 'claude-local') {
+  if (source === 'project') {
     if (!projectId) throw new RpcError(-32602, 'Project hook requires a projectId')
     const project = await loadProject(projectId)
     if (!project) throw new RpcError(-32602, `Project not found: ${projectId}`)

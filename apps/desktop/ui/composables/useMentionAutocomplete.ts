@@ -19,12 +19,11 @@ const RESULT_LIMIT = 50
 const narrowTitle = (base: string, shown: number, total: number): string =>
   total > shown ? `${base} · ${shown} of ${total} — type to narrow` : base
 
-// Rank project-tier entries (.claude / .agents under the bound project) above
-// user/global-tier ones so the picker surfaces the project's own agents/skills
-// first. Stable within each tier, so the underlying scan order is preserved.
-// `source` is the shared 5-tier union for both Agent and Skill.
-const tierRank = (source: AgentSource | SkillSource): number =>
-  source === 'project-claude' || source === 'project-agents' ? 0 : 1
+// Rank project-tier entries (under the bound project's `.awog`) above global-tier
+// ones so the picker surfaces the project's own agents/skills first. Stable
+// within each tier, so the underlying scan order is preserved. `source` is the
+// shared 'global' | 'project' union for both Agent and Skill (ADR 0035).
+const tierRank = (source: AgentSource | SkillSource): number => (source === 'project' ? 0 : 1)
 
 const byProjectFirst = <T extends { source: AgentSource | SkillSource }>(items: T[]): T[] =>
   [...items].sort((a, b) => tierRank(a.source) - tierRank(b.source))
@@ -71,16 +70,15 @@ export const useMentionAutocomplete = (
 
   const agentHandle = (ag: Agent) => ag.name.toLowerCase().replace(/\s+/g, '-')
 
-  // Enabled user commands in scope for this session: global + user-imported
-  // always; project + project-imported only when the composer is bound to that
-  // project (derived from workspaceRoot).
+  // Enabled user commands in scope for this session: global always; project only
+  // when the composer is bound to that project (derived from workspaceRoot).
   const applicableUserCommands = computed<Command[]>(() => {
     const root = workspaceRoot.value
     const projectId = root ? (workspace.projects.find((p) => p.path === root)?.id ?? null) : null
     return workspace.commands.filter((c) => {
       if (c.enabled === false) return false
       const source = c.source ?? 'global'
-      if (source === 'global' || source === 'claude-user') return true
+      if (source === 'global') return true
       return !!projectId && c.projectId === projectId
     })
   })

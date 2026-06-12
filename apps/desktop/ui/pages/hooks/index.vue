@@ -266,13 +266,9 @@ const { toasts, pushToast, toastStyle } = useToasts()
 const HOOK_SOURCE_KEY: Record<HookSource, string> = {
   global: 'hooks.source.global',
   project: 'hooks.source.project',
-  'claude-project': 'hooks.source.claude_project',
-  'claude-local': 'hooks.source.claude_local',
-  'claude-user': 'hooks.source.claude_user',
 }
 const sourceLabel = (h: Hook): string => tr(HOOK_SOURCE_KEY[h.source ?? 'global'])
-const isProjectScoped = (h: Hook): boolean =>
-  h.source === 'project' || h.source === 'claude-project' || h.source === 'claude-local'
+const isProjectScoped = (h: Hook): boolean => h.source === 'project'
 
 const refreshing = ref(false)
 const refreshTitle = computed(() => tr('hooks.refresh'))

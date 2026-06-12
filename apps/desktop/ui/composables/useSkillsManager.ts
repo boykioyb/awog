@@ -13,8 +13,8 @@ export type SkillGroup = {
   skills: Skill[]
 }
 
-// Trailing group for tiers not tied to a project (global, user-claude,
-// user-agents). Underscore prefix avoids colliding with a real project id.
+// Trailing group for the global tier (not tied to a project). Underscore prefix
+// avoids colliding with a real project id.
 const USER_GROUP_KEY = '_user'
 
 // All Skills-page state + actions. The page (pages/skills/index.vue) stays a
@@ -29,16 +29,12 @@ export function useSkillsManager() {
 
   const SOURCE_LABEL: Record<SkillSource, string> = {
     global: '~/.awog',
-    'user-claude': '~/.claude',
-    'user-agents': '~/.agents',
-    'project-claude': '.claude',
-    'project-agents': '.agents',
+    project: '.awog',
   }
 
   const sourceLabel = (s: Skill): string => SOURCE_LABEL[s.source]
 
-  const isProjectSkill = (s: Skill): boolean =>
-    s.source === 'project-claude' || s.source === 'project-agents'
+  const isProjectSkill = (s: Skill): boolean => s.source === 'project'
 
   const searchQuery = ref('')
   const editing = ref(false)
@@ -87,9 +83,9 @@ export function useSkillsManager() {
     }),
   )
 
-  // Group filtered skills by project (project-claude / project-agents carry a
-  // projectId); user-level + global tiers fall into one trailing group. Project
-  // groups come first in store order, empty groups are dropped.
+  // Group filtered skills by project (project-tier skills carry a projectId);
+  // the global tier falls into one trailing group. Project groups come first in
+  // store order, empty groups are dropped.
   const grouped = computed<SkillGroup[]>(() => {
     const map = new Map<string, SkillGroup>()
     ws.projects.forEach((p: Project) => map.set(p.id, { key: p.id, label: p.name, skills: [] }))
@@ -141,7 +137,7 @@ export function useSkillsManager() {
 
   const refreshTitle = computed(() => {
     const projectCount = ws.projects.length
-    const scope = projectCount > 0 ? `${projectCount} project(s) + user dirs` : 'user dirs only'
+    const scope = projectCount > 0 ? `${projectCount} project(s) + global` : 'global only'
     return `Refresh skills from filesystem (${scope})`
   })
 
@@ -209,10 +205,7 @@ export function useSkillsManager() {
 
   const WHERE_BY_SOURCE: Record<SkillSource, string> = {
     global: '~/.awog/skills/',
-    'user-claude': '~/.claude/skills/',
-    'user-agents': '~/.agents/skills/',
-    'project-claude': '.claude/skills/',
-    'project-agents': '.agents/skills/',
+    project: '.awog/skills/',
   }
 
   const whereFor = (source: SkillSource): string => WHERE_BY_SOURCE[source]

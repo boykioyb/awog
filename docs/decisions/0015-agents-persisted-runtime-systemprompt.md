@@ -1,6 +1,6 @@
 # 0015 — Agents: AGENT.md 5-tier persistence + systemPrompt runtime override
 
-- **Trạng thái:** Accepted (pha 2A extensions 2026-05-29 — `agent.tools`, `agent.skillIds`, `agent.mcpServerIds` đã wire runtime, xem update bên dưới)
+- **Trạng thái:** Accepted (pha 2A extensions 2026-05-29 — `agent.tools`, `agent.skillIds`, `agent.mcpServerIds` đã wire runtime, xem update bên dưới). **Tier model superseded by [ADR 0035](./0035-consolidate-config-tiers-to-awog.md)** (2026-06-12: AGENT.md 5-tier → 2 tier `.awog` global/project; `.claude`/`.agents` thành nguồn import). AGENT.md format + runtime systemPrompt giữ nguyên.
 - **Ngày:** 2026-05-28
 - **Người quyết định:** Tech Lead
 

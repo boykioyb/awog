@@ -187,6 +187,7 @@ Template bind inline style:
 - `/workflows` → DAG designer
 - `/agents` → agents CRUD
 - `/skills` → skills CRUD
+- `/templates` → Project Templates (master-detail: list/detail/install/delete + export "New from project…") — bundle reusable `.awog` config ([ADR 0036](../../../docs/decisions/0036-project-templates.md), [spec](../../../docs/features/project-templates.md)). Projects detail has **Save as template** / **Install template**; Settings → Workspace + Projects banner host the **Config Import Assistant** (`.claude`/`.agents` → `.awog`, [ADR 0035](../../../docs/decisions/0035-consolidate-config-tiers-to-awog.md))
 - `/git` → Git Manager (sidebar nav: Local Changes / All Commits / Branches / Remotes / Tags / Stashes / Submodules) — live IPC
 - `/settings` → 4-section settings
 - `/edit/:taskId?file=<filename>` → fullscreen markdown editor (no layout)

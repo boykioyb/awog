@@ -81,13 +81,7 @@ const Params = z.object({
   agent: z
     .object({
       id: z.string().min(1).max(64),
-      source: z.enum([
-        'global',
-        'user-claude',
-        'user-agents',
-        'project-claude',
-        'project-agents',
-      ]),
+      source: z.enum(['global', 'project']),
       projectId: z.string().min(1).max(64).optional(),
     })
     .optional(),

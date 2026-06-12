@@ -72,19 +72,13 @@ const { t } = useTheme()
 const { t: tr } = useI18n()
 const ws = useWorkspaceStore()
 
-// User-level tiers map to short paths; project tiers resolve to the owning
-// project's name so duplicate-named agents across tiers are distinguishable.
-const SOURCE_LABEL: Record<string, string> = {
-  'user-claude': '~/.claude',
-  'user-agents': '~/.agents',
-}
-
+// Project-tier agents resolve to the owning project's name so they are
+// distinguishable from global agents (ADR 0035).
 const scopeLabel = (agent: Agent): string => {
-  if ((agent.source === 'project-claude' || agent.source === 'project-agents') && agent.projectId) {
+  if (agent.source === 'project' && agent.projectId) {
     return ws.projectById(agent.projectId)?.name ?? 'Project'
   }
-  if (agent.source === 'global') return tr('workflows.scope.global_badge')
-  return SOURCE_LABEL[agent.source] ?? agent.source
+  return tr('workflows.scope.global_badge')
 }
 
 const onDragStart = (e: DragEvent, agentId: string) => {

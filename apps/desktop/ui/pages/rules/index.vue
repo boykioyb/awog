@@ -227,9 +227,6 @@ const ruleKey = (r: Rule): string => `${r.source ?? 'global'}|${r.projectId ?? '
 const SOURCE_KEY: Record<RuleSource, string> = {
   global: 'rules.source.global',
   project: 'rules.source.project',
-  'claude-project': 'rules.source.claude_project',
-  'claude-rules': 'rules.source.claude_rules',
-  'claude-user': 'rules.source.claude_user',
 }
 const sourceLabel = (r: Rule): string => tr(SOURCE_KEY[r.source ?? 'global'])
 const sourceBadgeStyle = (r: Rule): CSSProperties => {

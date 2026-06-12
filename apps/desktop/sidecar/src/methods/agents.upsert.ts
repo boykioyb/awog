@@ -7,16 +7,7 @@ const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]{0,62}$/
 
 const AgentIdSchema = z.string().regex(AGENT_ID_RE, 'id must match [a-z0-9][a-z0-9-]{0,62}')
 
-const AgentSourceSchema: z.ZodType<AgentSource> = z.enum([
-  'global',
-  'user-claude',
-  'user-agents',
-  'project-claude',
-  'project-agents',
-])
-
-const USER_SOURCES: AgentSource[] = ['global', 'user-claude', 'user-agents']
-const isUserSource = (s: AgentSource): boolean => USER_SOURCES.includes(s)
+const AgentSourceSchema: z.ZodType<AgentSource> = z.enum(['global', 'project'])
 
 const StringArray = z.array(z.string().min(1).max(200)).max(200)
 
@@ -52,14 +43,11 @@ register('agents.upsert', async (raw) => {
   const params = Params.parse(raw)
   const incoming = params.agent
 
-  if (!isUserSource(incoming.source) && !incoming.projectId) {
-    throw new RpcError(-32602, `Source ${incoming.source} requires projectId`)
+  if (incoming.source === 'project' && !incoming.projectId) {
+    throw new RpcError(-32602, 'Project agent requires projectId')
   }
-  if (isUserSource(incoming.source) && incoming.projectId) {
-    throw new RpcError(
-      -32602,
-      `projectId must be omitted for user-level source ${incoming.source}`,
-    )
+  if (incoming.source === 'global' && incoming.projectId) {
+    throw new RpcError(-32602, 'projectId must be omitted for global source')
   }
 
   if (params.previousId && params.previousId !== incoming.id) {

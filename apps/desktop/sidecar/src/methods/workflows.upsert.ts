@@ -3,13 +3,7 @@ import { register } from '../transport/rpc.js'
 import { saveWorkflow } from '../workflows/store.js'
 import type { Workflow } from '../types/shared.js'
 
-const AgentSourceSchema = z.enum([
-  'global',
-  'user-claude',
-  'user-agents',
-  'project-claude',
-  'project-agents',
-])
+const AgentSourceSchema = z.enum(['global', 'project'])
 
 const WorkflowNodeSchema = z.object({
   id: z.string().min(1),

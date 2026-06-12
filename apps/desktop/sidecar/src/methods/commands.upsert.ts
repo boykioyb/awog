@@ -13,7 +13,7 @@ const Params = z.object({
     allowedTools: z.string().optional(),
     model: z.string().optional(),
     enabled: z.boolean().default(true),
-    source: z.enum(['global', 'project', 'claude-project', 'claude-user']).optional(),
+    source: z.enum(['global', 'project']).optional(),
     projectId: z.string().optional(),
   }),
   mode: z.enum(['create', 'update']),
@@ -23,14 +23,6 @@ register('commands.upsert', async (raw) => {
   const params = Params.parse(raw)
   const incoming = params.command
   const source = incoming.source ?? 'global'
-
-  // Imported (claude-*) commands: edit-in-place writes back to the Claude Code
-  // source file. No create/existence dance (the file already exists on disk).
-  const isImported = source === 'claude-project' || source === 'claude-user'
-  if (isImported) {
-    await saveCommand(incoming as Command)
-    return { command: { ...incoming, source } }
-  }
 
   if (source === 'project' && !incoming.projectId) {
     throw new RpcError(-32602, 'Project command requires a projectId')

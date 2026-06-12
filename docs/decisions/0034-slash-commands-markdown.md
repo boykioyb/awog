@@ -1,6 +1,6 @@
 # 0034 — Slash Commands dưới dạng Markdown (Claude Code-aligned)
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted — **imported claude-* command tiers superseded by [ADR 0035](./0035-consolidate-config-tiers-to-awog.md)** (2026-06-12: `.claude/commands` thành nguồn import-only). Markdown command format + expansion giữ nguyên.
 - **Ngày:** 2026-06-11
 - **Người quyết định:** Product Owner + Tech Lead (chốt qua trao đổi với user)
 

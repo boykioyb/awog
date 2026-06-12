@@ -1,6 +1,6 @@
 # 0013 — Adopt SKILL.md format for skills (Claude Code SDK / craft-agents-oss compatible)
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted — **tier model superseded by [ADR 0035](./0035-consolidate-config-tiers-to-awog.md)** (2026-06-12: `.awog` only, 2 tier global/project; `.claude`/`.agents` thành nguồn import). SKILL.md format giữ nguyên.
 - **Ngày:** 2026-05-28
 - **Người quyết định:** Product owner + tech lead
 

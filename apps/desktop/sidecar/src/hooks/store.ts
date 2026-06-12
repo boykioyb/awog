@@ -9,7 +9,6 @@
 // vouch for itself, D-8). env `secret:KEY` refs reuse the MCP keychain helpers.
 
 import { mkdir, readdir, readFile, writeFile, chmod, rename, unlink, appendFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
@@ -17,7 +16,6 @@ import { RpcError } from '../transport/rpc.js'
 import { loadProject } from '../projects/store.js'
 import { expandSecrets, purgeServerSecrets } from '../mcp/secrets.js'
 import { HookConfigSchema } from './schema.js'
-import { importClaudeHooks, updateImportedHookInFile, type ImportedHookPatch } from './claude-import.js'
 import type { Hook, HookRunRecord, HookScanReport, HookSource } from '../types/shared.js'
 
 const HOOKS_DIR_NAME = sanitizeChild('hooks')
@@ -36,26 +34,7 @@ function projectHooksDir(projectPath: string): string {
   return join(projectPath, '.awog', HOOKS_DIR_NAME)
 }
 
-// Imported Claude Code settings.json locations (read-only).
-function userClaudeSettings(): string {
-  return join(homedir(), '.claude', 'settings.json')
-}
-function projectClaudeSettings(projectPath: string): string {
-  return join(projectPath, '.claude', 'settings.json')
-}
-function projectClaudeSettingsLocal(projectPath: string): string {
-  return join(projectPath, '.claude', 'settings.local.json')
-}
-
-// Only AWOG-native tiers can be written; claude-* are imported read-only.
-function assertEditable(source: HookSource): void {
-  if (source !== 'global' && source !== 'project') {
-    throw new RpcError(-32602, `Hook source "${source}" is imported (read-only)`)
-  }
-}
-
 async function resolveHooksDir(source: HookSource, projectId: string | undefined): Promise<string> {
-  assertEditable(source)
   if (source === 'global') return globalHooksDir()
   if (!projectId) throw new RpcError(-32602, 'Project hook requires a projectId')
   const project = await loadProject(projectId)
@@ -176,33 +155,6 @@ export async function setHookTrust(projectId: string, hookIds: string[]): Promis
   await rename(tmp, file)
 }
 
-// ─── Imported Claude Code hooks (read-only) ──────────────────────────────────
-
-// ~/.claude/settings.json hooks — authored locally → trusted.
-async function importedUserHooks(): Promise<Hook[]> {
-  const hooks = await importClaudeHooks(userClaudeSettings(), 'claude-user', undefined)
-  hooks.forEach((h) => {
-    h.trusted = true
-  })
-  return hooks
-}
-
-// {project}/.claude/settings.json(.local) hooks — trust-gated like project tier
-// (same .trust.json), since a cloned repo's hooks are arbitrary shell (D-8).
-async function importedProjectHooks(
-  projectPath: string,
-  projectId: string,
-  trusted: Set<string>,
-): Promise<Hook[]> {
-  const main = await importClaudeHooks(projectClaudeSettings(projectPath), 'claude-project', projectId)
-  const local = await importClaudeHooks(projectClaudeSettingsLocal(projectPath), 'claude-local', projectId)
-  const all = [...main, ...local]
-  all.forEach((h) => {
-    h.trusted = trusted.has(h.id)
-  })
-  return all
-}
-
 // ─── Public read API ──────────────────────────────────────────────────────────
 
 // Full listing for the UI: tags location, resolves trust, attaches recent runs,
@@ -218,10 +170,6 @@ export async function listHooks(
   })
   reports.push({ dir: globalHooksDir(), source: 'global', found: global.length })
 
-  // Imported user Claude Code hooks (~/.claude/settings.json).
-  const userImported = await importedUserHooks()
-  reports.push({ dir: userClaudeSettings(), source: 'claude-user', found: userImported.length })
-
   const projectResults = await Promise.all(
     projectIds.map(async (id) => {
       const project = await loadProject(id)
@@ -233,14 +181,11 @@ export async function listHooks(
         h.trusted = trusted.has(h.id)
       })
       reports.push({ dir, source: 'project', found: native.length, projectId: id })
-      // Imported {project}/.claude/settings.json(.local) hooks.
-      const imported = await importedProjectHooks(project.path, id, trusted)
-      reports.push({ dir: projectClaudeSettings(project.path), source: 'claude-project', found: imported.length, projectId: id })
-      return [...native, ...imported]
+      return native
     }),
   )
 
-  const hooks = [...global, ...userImported, ...projectResults.flat()]
+  const hooks = [...global, ...projectResults.flat()]
   // Attach recent runs (last N) for the detail view.
   await Promise.all(
     hooks.map(async (h) => {
@@ -258,10 +203,9 @@ export async function listEnabledHooksForDispatch(projectId: string | undefined)
   global.forEach((h) => {
     h.trusted = true
   })
-  const userImported = await importedUserHooks()
-  if (!projectId) return [...global, ...userImported]
+  if (!projectId) return global
   const project = await loadProject(projectId)
-  if (!project) return [...global, ...userImported]
+  if (!project) return global
   const trusted = await readTrustedIds(project.path)
   const projHooks = (await listFromDir(projectHooksDir(project.path), 'project', projectId)).filter(
     (h) => h.enabled,
@@ -269,8 +213,7 @@ export async function listEnabledHooksForDispatch(projectId: string | undefined)
   projHooks.forEach((h) => {
     h.trusted = trusted.has(h.id)
   })
-  const projImported = await importedProjectHooks(project.path, projectId, trusted)
-  return [...global, ...userImported, ...projHooks, ...projImported]
+  return [...global, ...projHooks]
 }
 
 export async function loadHook(
@@ -294,30 +237,6 @@ export async function expandHookEnv(hook: Hook): Promise<Record<string, string>>
 }
 
 // ─── Public write API ──────────────────────────────────────────────────────────
-
-// Edit an IMPORTED hook (claude-*) by patching its Claude Code settings.json
-// entry (ADR 0032 amended). Resolves the settings file from the tier, then
-// updates command/matcher/timeout for the entry matching the synthesized id.
-export async function saveImportedHook(
-  source: HookSource,
-  projectId: string | undefined,
-  id: string,
-  patch: ImportedHookPatch,
-): Promise<void> {
-  let settingsPath: string
-  if (source === 'claude-user') {
-    settingsPath = userClaudeSettings()
-  } else {
-    if (!projectId) throw new RpcError(-32602, 'Imported project hook requires a projectId')
-    const project = await loadProject(projectId)
-    if (!project) throw new RpcError(-32602, `Project not found: ${projectId}`)
-    if (source === 'claude-project') settingsPath = projectClaudeSettings(project.path)
-    else if (source === 'claude-local') settingsPath = projectClaudeSettingsLocal(project.path)
-    else throw new RpcError(-32602, `Source "${source}" is not an editable imported hook`)
-  }
-  const ok = await updateImportedHookInFile(settingsPath, source, projectId, id, patch)
-  if (!ok) throw new RpcError(-32602, `Imported hook not found in ${settingsPath}: ${id}`)
-}
 
 export async function saveHook(hook: Hook): Promise<void> {
   const source = hook.source ?? 'global'

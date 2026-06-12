@@ -11,9 +11,7 @@ const Params = z.object({
     description: z.string().default(''),
     body: z.string().default(''),
     enabled: z.boolean().default(true),
-    source: z
-      .enum(['global', 'project', 'claude-project', 'claude-rules', 'claude-user'])
-      .optional(),
+    source: z.enum(['global', 'project']).optional(),
     projectId: z.string().optional(),
   }),
   mode: z.enum(['create', 'update']),
@@ -23,15 +21,6 @@ register('rules.upsert', async (raw) => {
   const params = Params.parse(raw)
   const incoming = params.rule
   const source = incoming.source ?? 'global'
-
-  // Imported (claude-*) rules: edit-in-place writes the body back to the Claude
-  // Code source file (CLAUDE.md / .claude/rules). No create/existence dance.
-  const isImported = source !== 'global' && source !== 'project'
-  if (isImported) {
-    await saveRule(incoming as Rule)
-    invalidateRulesCache()
-    return { rule: { ...incoming, source } }
-  }
 
   if (source === 'project' && !incoming.projectId) {
     throw new RpcError(-32602, 'Project rule requires a projectId')

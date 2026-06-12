@@ -4,9 +4,7 @@ import { writeHookScript } from '../hooks/script.js'
 
 const Params = z.object({
   command: z.string(),
-  source: z
-    .enum(['global', 'project', 'claude-project', 'claude-local', 'claude-user'])
-    .optional(),
+  source: z.enum(['global', 'project']).optional(),
   projectId: z.string().optional(),
   content: z.string(),
 })

@@ -114,14 +114,10 @@ const ws = useWorkspaceStore()
 
 const SOURCE_LABEL: Record<AgentSource, string> = {
   global: '~/.awog',
-  'user-claude': '~/.claude',
-  'user-agents': '~/.agents',
-  'project-claude': '.claude',
-  'project-agents': '.agents',
+  project: '.awog',
 }
 
-const isProjectAgent = (a: Agent): boolean =>
-  a.source === 'project-claude' || a.source === 'project-agents'
+const isProjectAgent = (a: Agent): boolean => a.source === 'project'
 
 const modelLabel = computed(
   () => MODELS.find((m) => m.id === props.agent.model)?.label ?? props.agent.model ?? '',
@@ -130,8 +126,8 @@ const modelLabel = computed(
 const sourceLabel = computed<string>(() => {
   const a = props.agent
   // Project-tier badge shows just the project name so users can tell which repo
-  // a project-scoped agent comes from. The tier (.claude/.agents) is conveyed by
-  // the accent styling, so the redundant suffix is dropped to keep the tag compact.
+  // a project-scoped agent comes from. The accent styling conveys the tier, so
+  // the redundant suffix is dropped to keep the tag compact.
   if (isProjectAgent(a)) {
     const project = a.projectId ? ws.projects.find((p) => p.id === a.projectId) : undefined
     return project?.name ?? a.projectId ?? '?'
@@ -140,7 +136,7 @@ const sourceLabel = computed<string>(() => {
 })
 
 // Ẩn tag project khi item nằm trong group (header đã chỉ rõ project). Tag source
-// của agent user/global vẫn giữ vì còn phân biệt ~/.claude vs ~/.awog trong group chung.
+// của agent global vẫn giữ trong group "User & Global".
 const showSourceBadge = computed<boolean>(() => !(props.inGroup && isProjectAgent(props.agent)))
 
 // Quiet tag: muted bg for all; project-scoped gets accent text + border instead

@@ -164,8 +164,7 @@ export const useWorkflowGenerator = (getAgents: () => Agent[]) => {
         name: a.name,
         role: a.role,
         // Tag tier so the model prefers project agents over global ones.
-        scope:
-          a.source === 'project-claude' || a.source === 'project-agents' ? 'project' : 'global',
+        scope: a.source === 'project' ? 'project' : 'global',
       }))
       // Skills are independent of agents now — the generator picks a node skill
       // from the full workspace skill list.

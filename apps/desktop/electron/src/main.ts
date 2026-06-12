@@ -3,6 +3,7 @@ import { engine } from './engine'
 import { registerIpc } from './ipc'
 import { setupLogging } from './logger'
 import { trayIconPath } from './paths'
+import { loadShellEnv } from './shell-env'
 import { setupUpdater } from './updater'
 import { createMainWindow, registerAppProtocolScheme } from './window'
 
@@ -46,6 +47,10 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     setupAppMenu()
+    // Recover the user's real PATH (Homebrew/nvm/…) before spawning the engine,
+    // so the agent's Bash tool / PTY / git runner can find tools under a GUI
+    // (Finder/Dock) launch that strips the environment. No-op in dev + Windows.
+    loadShellEnv()
     engine.start()
     registerIpc(getWindow)
     setupUpdater(getWindow)

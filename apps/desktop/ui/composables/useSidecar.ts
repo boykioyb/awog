@@ -94,6 +94,13 @@ export function useSidecar() {
     await api.openPath(workspaceRoot, path)
   }
 
+  // Open a workspace-relative file in the default browser (file:// URL). Same
+  // workspace validation as revealPath. Used for HTML/PDF "Show in browser".
+  const openFileExternal = async (workspaceRoot: string, path: string): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.openFileExternal(workspaceRoot, path)
+  }
+
   // Whether VS Code's `code` CLI is available — gates the "Open in VS Code"
   // file action. Returns false when running outside the Electron shell.
   const isVscodeAvailable = async (): Promise<boolean> => {
@@ -146,6 +153,7 @@ export function useSidecar() {
     openExternal,
     revealPath,
     openPath,
+    openFileExternal,
     isVscodeAvailable,
     openInVscode,
     getAppInfo,

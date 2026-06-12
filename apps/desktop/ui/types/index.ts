@@ -13,21 +13,11 @@ export interface Project {
 }
 
 // Skill = a SKILL.md folder. The id IS the slug (folder name on disk).
-// Five possible source tiers:
-//   global         → ~/.awog/skills/<id>/SKILL.md           (AWOG-native)
-//   user-claude    → ~/.claude/skills/<id>/SKILL.md         (Claude Code SDK)
-//   user-agents    → ~/.agents/skills/<id>/SKILL.md         (Craft Agents)
-//   project-claude → {project.path}/.claude/skills/<id>/SKILL.md
-//   project-agents → {project.path}/.agents/skills/<id>/SKILL.md
-// User-level tiers are always scanned; project tiers require a projectId.
-// Same shape as Claude Code SDK / craft-agents-oss skills so they are
-// interchangeable on disk.
-export type SkillSource =
-  | 'global'
-  | 'user-claude'
-  | 'user-agents'
-  | 'project-claude'
-  | 'project-agents'
+// Single editable home `.awog`, two tiers (ADR 0035):
+//   global  → ~/.awog/skills/<id>/SKILL.md             (applies everywhere)
+//   project → {project.path}/.awog/skills/<id>/SKILL.md (that project only)
+// `.claude`/`.agents` are import sources only (config-import-assistant).
+export type SkillSource = 'global' | 'project'
 
 export interface Skill {
   id: string
@@ -42,16 +32,12 @@ export interface Skill {
   requiredSources?: string[]
 }
 
-// Mirror of sidecar Agent (apps/desktop/sidecar/src/types/shared.ts). Five
-// tiers like Skills. systemPrompt = body of the AGENT.md file; description +
-// model + role live in YAML frontmatter. See ADR 0015.
+// Mirror of sidecar Agent (apps/desktop/sidecar/src/types/shared.ts). Single
+// editable home `.awog`, two tiers like Skills (ADR 0035). systemPrompt = body
+// of the AGENT.md file; description + model + role live in YAML frontmatter.
+// See ADR 0015.
 
-export type AgentSource =
-  | 'global'
-  | 'user-claude'
-  | 'user-agents'
-  | 'project-claude'
-  | 'project-agents'
+export type AgentSource = 'global' | 'project'
 
 export interface Agent {
   id: string
@@ -545,6 +531,16 @@ export interface FsFileContent {
   isBinary: boolean
 }
 
+// Raw file bytes as base64 for in-app preview of rich/binary formats (PDF,
+// images). `base64` is '' when the file exceeds the cap (truncated=true).
+export interface FsFileBase64 {
+  path: string
+  base64: string
+  mimeType: string
+  size: number
+  truncated: boolean
+}
+
 // One hit from `fs.search` (find-in-files). `line`/`column` are 1-based.
 export interface FsSearchMatch {
   path: string
@@ -627,10 +623,9 @@ export type HookEvent =
 
 export type HookRunMode = 'blocking' | 'background'
 
-// AWOG-native tiers (global/project) are editable; claude-* are IMPORTED
-// read-only from Claude Code settings.json hooks (PreToolUse/PostToolUse),
-// prioritised so project runs before global.
-export type HookSource = 'global' | 'project' | 'claude-project' | 'claude-local' | 'claude-user'
+// Single editable home `.awog`, two tiers (ADR 0035). Claude Code settings.json
+// hooks are an import source only (config-import-assistant), not a live tier.
+export type HookSource = 'global' | 'project'
 
 export interface HookRunRecord {
   at: string
@@ -675,10 +670,9 @@ export interface Hook {
 // Markdown instruction files auto-injected into the agent system prompt for
 // sessions + tasks (ADR 0033). Two tiers (global / project) like Skills/Hooks.
 
-// AWOG-native tiers (global/project) are editable; claude-* are IMPORTED
-// read-only from Claude Code config (CLAUDE.md / .claude/rules), prioritised on
-// injection (ADR 0033 D-4 amended).
-export type RuleSource = 'global' | 'project' | 'claude-project' | 'claude-rules' | 'claude-user'
+// Single editable home `.awog`, two tiers (ADR 0035). CLAUDE.md / .claude/rules
+// are import sources only (config-import-assistant) — no live injection.
+export type RuleSource = 'global' | 'project'
 
 export interface Rule {
   id: string
@@ -705,9 +699,9 @@ export interface RuleScanReport {
 // User-authored prompt templates invoked from the composer with `/name` (the
 // AWOG-native analog of Claude Code's `.claude/commands/*.md`). Per-file
 // Markdown; the body is expanded into the prompt on send (`$ARGUMENTS` / `$1`…).
-// AWOG-native tiers (global/project) are fully editable; claude-* tiers are
-// imported from Claude Code config (editable in-app, writes back to source).
-export type CommandSource = 'global' | 'project' | 'claude-project' | 'claude-user'
+// Single editable home `.awog`, two tiers (ADR 0035). `.claude/commands` are an
+// import source only (config-import-assistant), not a live tier.
+export type CommandSource = 'global' | 'project'
 
 export interface Command {
   // Slug = the name typed after `/` (subdir namespacing uses ':').
@@ -733,6 +727,47 @@ export interface CommandScanReport {
   source: CommandSource
   found: number
   projectId?: string
+}
+
+// ─── Config import (migration) — ADR 0035 / config-import-assistant ──────────
+// Mirror of sidecar types. The 5 config-entity kinds under `.awog/`.
+export type ConfigKind = 'agent' | 'skill' | 'hook' | 'rule' | 'command'
+
+// One importable item found in `.claude`/`.agents` (not yet in `.awog`).
+export interface ImportCandidate {
+  kind: ConfigKind
+  id: string
+  name: string
+  fromLabel: string
+  targetScope: 'global' | 'project'
+  projectId?: string
+  alreadyExists: boolean
+}
+
+export interface ImportResult {
+  imported: { kind: ConfigKind; id: string }[]
+  skipped: { kind: ConfigKind; id: string; reason: string }[]
+}
+
+// ─── Project Templates — ADR 0036 ────────────────────────────────────────────
+export interface TemplateEntityRef {
+  kind: ConfigKind
+  id: string
+  file: string
+}
+
+export interface ProjectTemplate {
+  id: string
+  name: string
+  description: string
+  createdAt: string
+  sourceProjectId?: string
+  entities: TemplateEntityRef[]
+}
+
+export interface TemplateInstallResult {
+  installed: { kind: ConfigKind; id: string }[]
+  skipped: { kind: ConfigKind; id: string; reason: string }[]
 }
 
 // ─── Git Manager ───────────────────────────────────────────────────────────

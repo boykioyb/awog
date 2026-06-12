@@ -102,10 +102,8 @@ type Props = {
 const props = defineProps<Props>()
 
 // Ẩn tag khi project-skill nằm trong group (header đã chỉ rõ project). Skill
-// user/global vẫn giữ tag vì còn phân biệt ~/.awog vs ~/.claude vs ~/.agents.
-const isProjectSkill = computed<boolean>(
-  () => props.skill.source === 'project-claude' || props.skill.source === 'project-agents',
-)
+// global vẫn giữ tag trong group "User & Global".
+const isProjectSkill = computed<boolean>(() => props.skill.source === 'project')
 const showSourceBadge = computed<boolean>(() => !(props.inGroup && isProjectSkill.value))
 
 const emit = defineEmits<{

@@ -11,16 +11,7 @@ const SkillIdSchema = z
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*$/, 'id must be lowercase alphanumeric and hyphens')
 
-const SkillSourceSchema: z.ZodType<SkillSource> = z.enum([
-  'global',
-  'user-claude',
-  'user-agents',
-  'project-claude',
-  'project-agents',
-])
-
-const USER_SOURCES: SkillSource[] = ['global', 'user-claude', 'user-agents']
-const isUserSource = (s: SkillSource): boolean => USER_SOURCES.includes(s)
+const SkillSourceSchema: z.ZodType<SkillSource> = z.enum(['global', 'project'])
 
 const StringArray = z.array(z.string().min(1).max(200)).max(50).optional()
 
@@ -47,11 +38,11 @@ register('skills.upsert', async (raw) => {
   const params = Params.parse(raw)
   const incoming = params.skill
 
-  if (!isUserSource(incoming.source) && !incoming.projectId) {
-    throw new RpcError(-32602, `Source ${incoming.source} requires projectId`)
+  if (incoming.source === 'project' && !incoming.projectId) {
+    throw new RpcError(-32602, 'Project skill requires projectId')
   }
-  if (isUserSource(incoming.source) && incoming.projectId) {
-    throw new RpcError(-32602, `projectId must be omitted for user-level source ${incoming.source}`)
+  if (incoming.source === 'global' && incoming.projectId) {
+    throw new RpcError(-32602, 'projectId must be omitted for global source')
   }
 
   if (params.previousId && params.previousId !== incoming.id) {

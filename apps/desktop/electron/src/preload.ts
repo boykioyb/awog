@@ -44,6 +44,8 @@ const awog = {
     ipcRenderer.invoke('shell:revealPath', { root, path }),
   openPath: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:openPath', { root, path }),
+  openFileExternal: (root: string, path: string): Promise<void> =>
+    ipcRenderer.invoke('shell:openFileExternal', { root, path }),
   vscodeAvailable: (): Promise<boolean> => ipcRenderer.invoke('shell:vscodeAvailable'),
   openInVscode: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:openInVscode', { root, path }),

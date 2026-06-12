@@ -1,17 +1,15 @@
 // Agent persistence. Each agent is a single `<id>.md` file with YAML
 // frontmatter + markdown body, format-compatible with Claude Code SDK
-// subagents. Five tiers (mirror Skills):
+// subagents. Single editable home `.awog`, two tiers (ADR 0035):
 //
-//   global         → ~/.awog/agents/<id>.md           (AWOG-native)
-//   user-claude    → ~/.claude/agents/<id>.md         (Claude Code SDK)
-//   user-agents    → ~/.agents/agents/<id>.md         (Craft Agents)
-//   project-claude → {project.path}/.claude/agents/<id>.md
-//   project-agents → {project.path}/.agents/agents/<id>.md
+//   global  → ~/.awog/agents/<id>.md            (applies everywhere)
+//   project → {project.path}/.awog/agents/<id>.md (that project only)
 //
 // systemPrompt = markdown body. Frontmatter required: name, description.
 // Frontmatter optional: model, role.
 // (`context` field from old Context Providers feature is silent-dropped on
 //  read and never written back — see ADR 0016.)
+// `.claude`/`.agents` agent dirs are import sources only (see migration/).
 
 import {
   mkdir,
@@ -23,7 +21,6 @@ import {
   rm,
   stat,
 } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
@@ -32,26 +29,18 @@ import { loadProject } from '../projects/store.js'
 import type { Agent, AgentSource } from '../types/shared.js'
 
 const AGENTS_DIR_NAME = sanitizeChild('agents')
+const AWOG_DIR_NAME = sanitizeChild('.awog')
 
-function userAgentsDir(source: 'global' | 'user-claude' | 'user-agents'): string {
-  if (source === 'global') return join(awogHome(), AGENTS_DIR_NAME)
-  if (source === 'user-claude') return join(homedir(), '.claude', 'agents')
-  return join(homedir(), '.agents', 'agents')
-}
-
-function projectAgentsDir(projectPath: string, source: AgentSource): string {
-  if (source === 'project-claude') return join(projectPath, '.claude', 'agents')
-  if (source === 'project-agents') return join(projectPath, '.agents', 'agents')
-  throw new Error(`Not a project-scoped source: ${source}`)
+function userAgentsDir(): string {
+  return join(awogHome(), AGENTS_DIR_NAME)
 }
 
 async function resolveAgentsDir(
   source: AgentSource,
   projectId: string | undefined,
 ): Promise<string> {
-  if (source === 'global' || source === 'user-claude' || source === 'user-agents') {
-    return userAgentsDir(source)
-  }
+  if (source === 'global') return userAgentsDir()
+  // source === 'project'
   if (!projectId) {
     throw new Error(`Source ${source} requires a projectId`)
   }
@@ -59,7 +48,7 @@ async function resolveAgentsDir(
   if (!project) {
     throw new Error(`Project not found: ${projectId}`)
   }
-  return projectAgentsDir(project.path, source)
+  return join(project.path, AWOG_DIR_NAME, AGENTS_DIR_NAME)
 }
 
 function agentFile(dir: string, id: string): string {
@@ -231,21 +220,9 @@ export async function listUserAgents(): Promise<{
   agents: Agent[]
   reports: AgentScanReport[]
 }> {
-  const tiers: { source: AgentSource; dir: string }[] = [
-    { source: 'global', dir: userAgentsDir('global') },
-    { source: 'user-claude', dir: userAgentsDir('user-claude') },
-    { source: 'user-agents', dir: userAgentsDir('user-agents') },
-  ]
-  const results = await Promise.all(
-    tiers.map(({ source, dir }) => listFromDir(dir, source, undefined)),
-  )
-  const agents = results.flat()
-  const reports: AgentScanReport[] = tiers.map((tier, i) => ({
-    dir: tier.dir,
-    source: tier.source,
-    found: results[i]?.length ?? 0,
-  }))
-  return { agents, reports }
+  const dir = userAgentsDir()
+  const agents = await listFromDir(dir, 'global', undefined)
+  return { agents, reports: [{ dir, source: 'global', found: agents.length }] }
 }
 
 export async function listProjectAgents(
@@ -253,20 +230,9 @@ export async function listProjectAgents(
 ): Promise<{ agents: Agent[]; reports: AgentScanReport[] }> {
   const project = await loadProject(projectId)
   if (!project) return { agents: [], reports: [] }
-  const tiers: { source: AgentSource; dir: string }[] = [
-    { source: 'project-claude', dir: projectAgentsDir(project.path, 'project-claude') },
-    { source: 'project-agents', dir: projectAgentsDir(project.path, 'project-agents') },
-  ]
-  const results = await Promise.all(
-    tiers.map(({ source, dir }) => listFromDir(dir, source, projectId)),
-  )
-  const agents = results.flat()
-  const reports: AgentScanReport[] = tiers.map((tier, i) => ({
-    dir: tier.dir,
-    source: tier.source,
-    found: results[i]?.length ?? 0,
-  }))
-  return { agents, reports }
+  const dir = join(project.path, AWOG_DIR_NAME, AGENTS_DIR_NAME)
+  const agents = await listFromDir(dir, 'project', projectId)
+  return { agents, reports: [{ dir, source: 'project', found: agents.length }] }
 }
 
 export async function listAgents(

@@ -120,14 +120,10 @@ const isImported = computed(() => props.command.readOnly === true)
 const SOURCE_KEY: Record<CommandSource, string> = {
   global: 'commands.source.global',
   project: 'commands.source.project',
-  'claude-project': 'commands.source.claude_project',
-  'claude-user': 'commands.source.claude_user',
 }
 const sourceLabel = computed(() => tr(SOURCE_KEY[props.command.source ?? 'global']))
 
-const isProjectScoped = computed(
-  () => props.command.source === 'project' || props.command.source === 'claude-project',
-)
+const isProjectScoped = computed(() => props.command.source === 'project')
 
 const readOnlyHint = computed(() =>
   tr('commands.detail.readonly_hint', { source: sourceLabel.value }),
@@ -137,15 +133,7 @@ const sourcePath = computed(() => {
   const project = ws.projects.find((p) => p.id === props.command.projectId)
   const base = project?.path ?? '<project>'
   const file = `${props.command.id.split(':').join('/')}.md`
-  switch (props.command.source) {
-    case 'project':
-      return `${base}/.awog/commands/${file}`
-    case 'claude-project':
-      return `${base}/.claude/commands/${file}`
-    case 'claude-user':
-      return `~/.claude/commands/${file}`
-    default:
-      return `~/.awog/commands/${file}`
-  }
+  if (props.command.source === 'project') return `${base}/.awog/commands/${file}`
+  return `~/.awog/commands/${file}`
 })
 </script>

@@ -6,7 +6,9 @@
 //   - an MCP-preference nudge when the agent whitelists servers
 //
 // A node carries the full agent tuple (id + source + projectId). When source is
-// absent (legacy workflow), fall back to a lookup-by-id across all tiers.
+// absent OR a stale pre-0035 value (`project-claude`, …), fall back to a
+// lookup-by-id across all `.awog` tiers (ADR 0035 D-7) so old workflows keep
+// resolving after the user imports the agent into `.awog`.
 
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listProjects } from '../projects/store.js'
@@ -48,10 +50,13 @@ async function allProjectIds(): Promise<string[]> {
 }
 
 async function loadAgentFlexibly(ref: AgentRef): Promise<Agent | null> {
-  if (ref.source) {
-    return loadAgent(ref.id, ref.source, ref.projectId)
+  // Known `.awog` tier → load directly; if it's missing (e.g. a stale pre-0035
+  // ref or not-yet-imported), fall through to the id-match below.
+  if (ref.source === 'global' || ref.source === 'project') {
+    const direct = await loadAgent(ref.id, ref.source, ref.projectId)
+    if (direct) return direct
   }
-  // No source on the node — find the first agent with this id across all tiers.
+  // No (or unresolvable) source — find the first agent with this id across tiers.
   try {
     const { agents } = await listAgents(await allProjectIds())
     return agents.find((a) => a.id === ref.id) ?? null

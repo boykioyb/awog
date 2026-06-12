@@ -1,6 +1,6 @@
 # 0033 — Rules: workspace instruction injection into system prompt
 
-- **Trạng thái:** Accepted — v1 implemented (2026-06-11)
+- **Trạng thái:** Accepted — v1 implemented (2026-06-11). **D-4/D-4b (imported CLAUDE.md/.claude/rules read-only live-inject) superseded by [ADR 0035](./0035-consolidate-config-tiers-to-awog.md)** (2026-06-12: CLAUDE.md thành nguồn import-only, KHÔNG còn auto-inject sống — user chốt). Cơ chế inject + 2 tier `.awog` giữ nguyên.
 - **Ngày:** 2026-06-11
 - **Người quyết định:** Tech Lead
 

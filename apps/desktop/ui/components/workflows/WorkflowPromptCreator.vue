@@ -122,8 +122,7 @@ const scope = ref(props.defaultScope)
 // Agents the LLM may wire as steps — scoped to the chosen "Save to" target so a
 // global workflow never references a project-only agent (mirrors the page's
 // palette filter, but keyed off the modal's scope, not the selected workflow).
-const isProjectAgent = (a: Agent): boolean =>
-  a.source === 'project-claude' || a.source === 'project-agents'
+const isProjectAgent = (a: Agent): boolean => a.source === 'project'
 const scopedAgents = computed(() => {
   if (scope.value === 'global') return props.agents.filter((a) => !isProjectAgent(a))
   return props.agents.filter((a) => !isProjectAgent(a) || a.projectId === scope.value)

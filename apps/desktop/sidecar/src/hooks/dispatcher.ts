@@ -268,8 +268,7 @@ export async function dispatch(
 
   const full: HookPayload = { event, ts: new Date().toISOString(), ...payload }
   // Project-scoped hooks run before global ("ưu tiên project"); ties by id.
-  const isProjectScoped = (h: Hook): boolean =>
-    h.source === 'project' || h.source === 'claude-project' || h.source === 'claude-local'
+  const isProjectScoped = (h: Hook): boolean => h.source === 'project'
   const matched = candidates
     .filter((h) => matcherMatches(h, full))
     .sort((a, b) => {

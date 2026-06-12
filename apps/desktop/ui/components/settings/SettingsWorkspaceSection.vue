@@ -40,6 +40,40 @@
           @update:model-value="updateRtk({ enabled: $event })"
         />
       </SettingsField>
+      <SettingsField
+        label="Import config from .claude / .agents"
+        hint="Scan ~/.claude and ~/.agents for agents, skills, hooks, rules, and commands to copy into .awog"
+      >
+        <button
+          type="button"
+          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+          :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+          :disabled="scanning"
+          @click="openGlobalImport"
+        >
+          <Download :size="13" :class="scanning ? 'animate-pulse' : ''" />
+          {{ tr('import.banner.check') }}
+        </button>
+      </SettingsField>
+    </div>
+
+    <ConfigImportDialog
+      :open="importDialogOpen"
+      :candidates="candidates"
+      :importing="importing"
+      @close="importDialogOpen = false"
+      @confirm="onImportConfirm"
+    />
+
+    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="px-3 py-2 rounded text-[1em] shadow-lg"
+        :style="toastStyle(toast.kind)"
+      >
+        {{ toast.text }}
+      </div>
     </div>
 
     <!-- Git / Auto-commit (M6) -->
@@ -177,16 +211,41 @@
 </template>
 
 <script setup lang="ts">
+import { Download } from 'lucide-vue-next'
 import {
   DEFAULT_COMMIT_MESSAGE_RULE,
   type AutoCommitScope,
   type DirtyTaskPolicy,
 } from '~/stores/settings'
+import { useConfigImport, type ImportSelection } from '~/composables/useConfigImport'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const settings = useSettingsStore()
 const { git, update } = useGitSettings()
 const { rtk, rtkStatus, update: updateRtk, sync: syncRtk } = useRtkSettings()
+const { toasts, pushToast, toastStyle } = useToasts()
+
+// Global config import (ADR 0035) — scans ~/.claude / ~/.agents (no projectId).
+const { candidates, scanning, importing, scan, importItems } = useConfigImport()
+const importDialogOpen = ref(false)
+
+const openGlobalImport = async () => {
+  await scan()
+  importDialogOpen.value = true
+}
+
+const onImportConfirm = async (items: ImportSelection[]) => {
+  const result = await importItems(items)
+  importDialogOpen.value = false
+  pushToast(
+    tr('import.toast.done', {
+      imported: result.imported.length,
+      skipped: result.skipped.length,
+    }),
+    'success',
+  )
+}
 
 // Re-probe when the panel opens so the detected-binary line is fresh.
 onMounted(() => {

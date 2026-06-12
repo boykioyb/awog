@@ -11,8 +11,8 @@ export type AgentGroup = {
   agents: Agent[]
 }
 
-// Trailing group for tiers not tied to a project (global, user-claude,
-// user-agents). Underscore prefix avoids colliding with a real project id.
+// Trailing group for the global tier (not tied to a project). Underscore prefix
+// avoids colliding with a real project id.
 const USER_GROUP_KEY = '_user'
 
 // All Agents-page state + actions. The page (pages/agents/index.vue) stays a
@@ -28,10 +28,7 @@ export function useAgentsManager() {
 
   const SOURCE_DIR_FOR_DELETE: Record<AgentSource, string> = {
     global: '~/.awog/agents/',
-    'user-claude': '~/.claude/agents/',
-    'user-agents': '~/.agents/agents/',
-    'project-claude': '.claude/agents/',
-    'project-agents': '.agents/agents/',
+    project: '.awog/agents/',
   }
 
   const selectedKey = ref<string | null>(ws.agents[0] ? agentKey(ws.agents[0]) : null)
@@ -57,9 +54,9 @@ export function useAgentsManager() {
     )
   })
 
-  // Group filtered agents by project (project-claude / project-agents carry a
-  // projectId); user-level + global tiers fall into one trailing group. Project
-  // groups come first in store order, empty groups are dropped.
+  // Group filtered agents by project (project-tier agents carry a projectId);
+  // the global tier falls into one trailing group. Project groups come first in
+  // store order, empty groups are dropped.
   const grouped = computed<AgentGroup[]>(() => {
     const map = new Map<string, AgentGroup>()
     ws.projects.forEach((p: Project) => map.set(p.id, { key: p.id, label: p.name, agents: [] }))
@@ -169,7 +166,7 @@ export function useAgentsManager() {
 
   const refreshTitle = computed(() => {
     const projectCount = ws.projects.length
-    const scope = projectCount > 0 ? `${projectCount} project(s) + user dirs` : 'user dirs only'
+    const scope = projectCount > 0 ? `${projectCount} project(s) + global` : 'global only'
     return `Refresh agents from filesystem (${scope})`
   })
 

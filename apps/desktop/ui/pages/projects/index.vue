@@ -157,6 +157,32 @@
             </div>
           </div>
 
+          <div class="mb-6 flex items-center gap-2 flex-wrap">
+            <button
+              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+              :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+              @click="openSaveAsTemplate"
+            >
+              <Package :size="13" />
+              {{ tr('templates.projects.save_as') }}
+            </button>
+            <button
+              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+              :disabled="templatesStore.templates.length === 0"
+              @click="openInstallTemplate"
+            >
+              <PackagePlus :size="13" />
+              {{ tr('templates.projects.install') }}
+            </button>
+          </div>
+
+          <ConfigImportBanner
+            :project-id="selectedProject.id"
+            class="mb-6"
+            @imported="onImported"
+          />
+
           <div
             v-if="selectedProject.description"
             class="mb-6 text-[1em] leading-relaxed"
@@ -356,6 +382,33 @@
     :items="menuItems"
     @close="contextMenu = null"
   />
+
+  <SaveAsTemplateDialog
+    v-if="selectedProject"
+    :open="saveTemplateOpen"
+    :fixed-project-id="selectedProject.id"
+    @close="saveTemplateOpen = false"
+    @saved="onTemplateSaved"
+  />
+
+  <InstallTemplateDialog
+    v-if="selectedProject"
+    :open="installTemplateOpen"
+    :fixed-project-id="selectedProject.id"
+    @close="installTemplateOpen = false"
+    @installed="onTemplateInstalled"
+  />
+
+  <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
+    <div
+      v-for="toast in toasts"
+      :key="toast.id"
+      class="px-3 py-2 rounded text-[1em] shadow-lg"
+      :style="toastStyle(toast.kind)"
+    >
+      {{ toast.text }}
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -371,6 +424,8 @@ import {
   GitFork,
   MessageSquare,
   MoreHorizontal,
+  Package,
+  PackagePlus,
   Plus,
   TerminalSquare,
   Trash2,
@@ -383,11 +438,52 @@ import { STATUS_META } from '~/utils/status-meta'
 import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const { pill } = useGlass()
 const ws = useWorkspaceStore()
 const tasksStore = useTasksStore()
 const sessionsStore = useSessionsStore()
+const templatesStore = useTemplatesStore()
 const sidecar = useSidecar()
+const { toasts, pushToast, toastStyle } = useToasts()
+
+// Templates are needed for the "Install template" button's enabled-state +
+// picker. Guarded so this runs once across the app lifetime.
+templatesStore.hydrate()
+
+const saveTemplateOpen = ref(false)
+const installTemplateOpen = ref(false)
+
+const openSaveAsTemplate = () => {
+  saveTemplateOpen.value = true
+}
+
+const openInstallTemplate = () => {
+  installTemplateOpen.value = true
+}
+
+const onTemplateSaved = (e: { name: string; count: number }) => {
+  pushToast(tr('templates.toast.saved', { name: e.name, count: e.count }), 'success')
+}
+
+const onTemplateInstalled = async (e: { installed: number; skipped: number }) => {
+  pushToast(
+    tr('templates.toast.installed', { installed: e.installed, skipped: e.skipped }),
+    'success',
+  )
+  // Re-pull entity stores so the freshly-installed project-tier config shows up.
+  await Promise.all([
+    ws.hydrateAgentsFromSidecar(),
+    ws.hydrateSkillsFromSidecar(),
+    ws.hydrateHooksFromSidecar(),
+    ws.hydrateRulesFromSidecar(),
+    ws.hydrateCommandsFromSidecar(),
+  ])
+}
+
+const onImported = (e: { imported: number; skipped: number }) => {
+  pushToast(tr('import.toast.done', { imported: e.imported, skipped: e.skipped }), 'success')
+}
 
 const selectedId = ref<string | null>(ws.projects[0]?.id ?? null)
 const creating = ref(false)

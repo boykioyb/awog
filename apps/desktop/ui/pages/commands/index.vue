@@ -228,8 +228,6 @@ const commandKey = (c: Command): string => `${c.source ?? 'global'}|${c.projectI
 const SOURCE_KEY: Record<CommandSource, string> = {
   global: 'commands.source.global',
   project: 'commands.source.project',
-  'claude-project': 'commands.source.claude_project',
-  'claude-user': 'commands.source.claude_user',
 }
 const sourceLabel = (c: Command): string => tr(SOURCE_KEY[c.source ?? 'global'])
 const sourceBadgeStyle = (c: Command): CSSProperties => {

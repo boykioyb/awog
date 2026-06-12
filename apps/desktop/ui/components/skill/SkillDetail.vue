@@ -152,30 +152,22 @@ const hasMetaChips = computed(
 
 const SOURCE_LABEL: Record<Skill['source'], string> = {
   global: '~/.awog',
-  'user-claude': '~/.claude',
-  'user-agents': '~/.agents',
-  'project-claude': '.claude',
-  'project-agents': '.agents',
+  project: '.awog',
 }
 
 const USER_PATH_PREFIX: Partial<Record<Skill['source'], string>> = {
   global: '~/.awog/skills',
-  'user-claude': '~/.claude/skills',
-  'user-agents': '~/.agents/skills',
 }
 
 const sourceLabel = computed(() => SOURCE_LABEL[props.skill.source])
 
-const isProjectScoped = computed(
-  () => props.skill.source === 'project-claude' || props.skill.source === 'project-agents',
-)
+const isProjectScoped = computed(() => props.skill.source === 'project')
 
 const sourcePath = computed(() => {
   const userPrefix = USER_PATH_PREFIX[props.skill.source]
   if (userPrefix) return `${userPrefix}/${props.skill.id}/SKILL.md`
   const project = ws.projects.find((p) => p.id === props.skill.projectId)
-  const sub = props.skill.source === 'project-claude' ? '.claude/skills' : '.agents/skills'
   const base = project?.path ?? '<project>'
-  return `${base}/${sub}/${props.skill.id}/SKILL.md`
+  return `${base}/.awog/skills/${props.skill.id}/SKILL.md`
 })
 </script>

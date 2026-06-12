@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { join, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { ipcMain, shell, dialog, type BrowserWindow } from 'electron'
 import { engine, type RpcErrorShape } from './engine'
 import { isVscodeAvailable, openInVscode } from './vscode'
@@ -83,6 +84,18 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const target = resolveInsideWorkspace(root, path)
     const err = await shell.openPath(target)
     if (err) throw new Error(err)
+  })
+
+  // Open a workspace file in the default browser via a file:// URL. Unlike the
+  // generic shell:openExternal (scheme-gated to http/mailto for untrusted L1
+  // URLs), this is a user-initiated action on a path we validate inside the
+  // workspace first — so building the file:// URL ourselves is safe (invariant
+  // #2). pathToFileURL handles encoding (spaces, unicode). Used for HTML/PDF
+  // "Show in browser"; for HTML the default handler is the browser, for PDF it's
+  // the OS default (best effort — the in-app preview covers in-browser rendering).
+  ipcMain.handle('shell:openFileExternal', async (_e, { root, path }: PathPayload) => {
+    const target = resolveInsideWorkspace(root, path)
+    await shell.openExternal(pathToFileURL(target).href)
   })
 
   // Whether the VS Code CLI can be located on this machine. Drives whether the

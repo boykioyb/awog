@@ -5,13 +5,7 @@ import type { AgentSource } from '../types/shared.js'
 
 const AGENT_ID_RE = /^[a-z0-9][a-z0-9-]{0,62}$/
 
-const AgentSourceSchema: z.ZodType<AgentSource> = z.enum([
-  'global',
-  'user-claude',
-  'user-agents',
-  'project-claude',
-  'project-agents',
-])
+const AgentSourceSchema: z.ZodType<AgentSource> = z.enum(['global', 'project'])
 
 const Params = z.object({
   id: z.string().regex(AGENT_ID_RE),

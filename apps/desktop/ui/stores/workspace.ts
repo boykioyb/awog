@@ -253,10 +253,10 @@ export const useWorkspaceStore = defineStore('workspace', {
       }
     },
 
-    // Agent CRUD — persisted via sidecar across 5 tiers (mirror Skills):
-    //   global / user-claude / user-agents / project-claude / project-agents
-    // Each agent is uniquely identified by (id, source, projectId). Browser
-    // dev (no sidecar): local-only mutations so the page stays browsable.
+    // Agent CRUD — persisted via sidecar across 2 tiers (mirror Skills, ADR
+    // 0035): global / project. Each agent is uniquely identified by (id, source,
+    // projectId). Browser dev (no sidecar): local-only mutations so the page
+    // stays browsable.
 
     async hydrateAgentsFromSidecar(projectIds?: string[]): Promise<void> {
       const sidecar = useSidecar()
@@ -367,8 +367,8 @@ export const useWorkspaceStore = defineStore('workspace', {
 
     // Skill CRUD — persisted via sidecar. Each skill is identified by the
     // tuple (source, projectId, id), so the same slug can live independently
-    // in global, project-claude, and project-agents tiers. Browser dev (no
-    // sidecar): keep local-only mutations so the page is browsable.
+    // in the global and project tiers (ADR 0035). Browser dev (no sidecar):
+    // keep local-only mutations so the page is browsable.
 
     async hydrateSkillsFromSidecar(projectIds?: string[]): Promise<void> {
       const sidecar = useSidecar()

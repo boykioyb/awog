@@ -1,17 +1,15 @@
 // Skill persistence. Each skill is a folder containing SKILL.md (YAML
-// frontmatter + markdown body). Five tiers:
+// frontmatter + markdown body). Single editable home `.awog`, two tiers
+// (ADR 0035):
 //
-//   global         → ~/.awog/skills/<id>/SKILL.md           (AWOG-native)
-//   user-claude    → ~/.claude/skills/<id>/SKILL.md         (Claude Code SDK)
-//   user-agents    → ~/.agents/skills/<id>/SKILL.md         (Craft Agents)
-//   project-claude → {project.path}/.claude/skills/<id>/SKILL.md
-//   project-agents → {project.path}/.agents/skills/<id>/SKILL.md
+//   global  → ~/.awog/skills/<id>/SKILL.md             (applies everywhere)
+//   project → {project.path}/.awog/skills/<id>/SKILL.md (that project only)
 //
 // Same on-disk shape as Claude Code SDK / craft-agents-oss, so a skill written
-// here is reusable outside AWOG and vice versa.
+// here is reusable outside AWOG and vice versa. `.claude`/`.agents` skill dirs
+// are import sources only (see migration/).
 
 import { mkdir, readdir, readFile, writeFile, rename, rm, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
@@ -20,26 +18,18 @@ import { loadProject } from '../projects/store.js'
 import type { Skill, SkillSource } from '../types/shared.js'
 
 const SKILLS_DIR_NAME = sanitizeChild('skills')
+const AWOG_DIR_NAME = sanitizeChild('.awog')
 
-function userSkillsDir(source: 'global' | 'user-claude' | 'user-agents'): string {
-  if (source === 'global') return join(awogHome(), SKILLS_DIR_NAME)
-  if (source === 'user-claude') return join(homedir(), '.claude', 'skills')
-  return join(homedir(), '.agents', 'skills')
-}
-
-function projectSkillsDir(projectPath: string, source: SkillSource): string {
-  if (source === 'project-claude') return join(projectPath, '.claude', 'skills')
-  if (source === 'project-agents') return join(projectPath, '.agents', 'skills')
-  throw new Error(`Not a project-scoped source: ${source}`)
+function userSkillsDir(): string {
+  return join(awogHome(), SKILLS_DIR_NAME)
 }
 
 async function resolveSkillsDir(
   source: SkillSource,
   projectId: string | undefined,
 ): Promise<string> {
-  if (source === 'global' || source === 'user-claude' || source === 'user-agents') {
-    return userSkillsDir(source)
-  }
+  if (source === 'global') return userSkillsDir()
+  // source === 'project'
   if (!projectId) {
     throw new Error(`Source ${source} requires a projectId`)
   }
@@ -47,7 +37,7 @@ async function resolveSkillsDir(
   if (!project) {
     throw new Error(`Project not found: ${projectId}`)
   }
-  return projectSkillsDir(project.path, source)
+  return join(project.path, AWOG_DIR_NAME, SKILLS_DIR_NAME)
 }
 
 function skillFolder(dir: string, id: string): string {
@@ -150,23 +140,9 @@ export interface ScanReport {
 }
 
 export async function listUserSkills(): Promise<{ skills: Skill[]; reports: ScanReport[] }> {
-  // All three user-level tiers are auto-scanned. Missing dirs return [] —
-  // perfectly fine for users who do not have ~/.claude/skills or ~/.agents/skills.
-  const tiers: { source: SkillSource; dir: string }[] = [
-    { source: 'global', dir: userSkillsDir('global') },
-    { source: 'user-claude', dir: userSkillsDir('user-claude') },
-    { source: 'user-agents', dir: userSkillsDir('user-agents') },
-  ]
-  const results = await Promise.all(
-    tiers.map(({ source, dir }) => listFromDir(dir, source, undefined)),
-  )
-  const skills = results.flat()
-  const reports: ScanReport[] = tiers.map((tier, i) => ({
-    dir: tier.dir,
-    source: tier.source,
-    found: results[i]?.length ?? 0,
-  }))
-  return { skills, reports }
+  const dir = userSkillsDir()
+  const skills = await listFromDir(dir, 'global', undefined)
+  return { skills, reports: [{ dir, source: 'global', found: skills.length }] }
 }
 
 export async function listProjectSkills(
@@ -174,20 +150,9 @@ export async function listProjectSkills(
 ): Promise<{ skills: Skill[]; reports: ScanReport[] }> {
   const project = await loadProject(projectId)
   if (!project) return { skills: [], reports: [] }
-  const tiers: { source: SkillSource; dir: string }[] = [
-    { source: 'project-claude', dir: projectSkillsDir(project.path, 'project-claude') },
-    { source: 'project-agents', dir: projectSkillsDir(project.path, 'project-agents') },
-  ]
-  const results = await Promise.all(
-    tiers.map(({ source, dir }) => listFromDir(dir, source, projectId)),
-  )
-  const skills = results.flat()
-  const reports: ScanReport[] = tiers.map((tier, i) => ({
-    dir: tier.dir,
-    source: tier.source,
-    found: results[i]?.length ?? 0,
-  }))
-  return { skills, reports }
+  const dir = join(project.path, AWOG_DIR_NAME, SKILLS_DIR_NAME)
+  const skills = await listFromDir(dir, 'project', projectId)
+  return { skills, reports: [{ dir, source: 'project', found: skills.length }] }
 }
 
 export async function listSkills(
@@ -201,11 +166,10 @@ export async function listSkills(
   return { skills, reports: [...user.reports, ...projectReports] }
 }
 
-// First-match lookup across all 5 tiers, given a skill id (no source). Used by
-// the workflow node runner where a node references its task-template skill by
-// slug. Search order: global → user-claude → user-agents → project-claude →
-// project-agents (per-project iterated in input order). Returns null if no
-// matching skill found.
+// First-match lookup across tiers, given a skill id (no source). Used by the
+// workflow node runner where a node references its task-template skill by slug.
+// Search order: global → project (per-project iterated in input order). Returns
+// null if no matching skill found.
 export async function loadSkillByIdAnyTier(
   id: string,
   projectIds: string[] = [],

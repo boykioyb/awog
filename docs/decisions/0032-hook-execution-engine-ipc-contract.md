@@ -1,6 +1,6 @@
 # 0032 — Hook Execution Engine + IPC Contract
 
-- **Trạng thái:** Accepted — v1 đang implement (2026-06-11)
+- **Trạng thái:** Accepted — v1 đang implement (2026-06-11). **Imported claude-* hook tiers superseded by [ADR 0035](./0035-consolidate-config-tiers-to-awog.md)** (2026-06-12: settings.json hooks thành nguồn import-only, không còn tier read-only sống). Engine + trust gate D-8 giữ nguyên.
 - **Ngày:** 2026-06-11
 - **Người quyết định:** Tech Lead
 

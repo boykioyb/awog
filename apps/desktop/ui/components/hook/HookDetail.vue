@@ -207,18 +207,10 @@ const { t: tr } = useI18n()
 const ws = useWorkspaceStore()
 
 const isImported = computed(() => props.hook.readOnly === true)
-const isProjectScoped = computed(
-  () =>
-    props.hook.source === 'project' ||
-    props.hook.source === 'claude-project' ||
-    props.hook.source === 'claude-local',
-)
+const isProjectScoped = computed(() => props.hook.source === 'project')
 const SOURCE_KEY: Record<HookSource, string> = {
   global: 'hooks.source.global',
   project: 'hooks.source.project',
-  'claude-project': 'hooks.source.claude_project',
-  'claude-local': 'hooks.source.claude_local',
-  'claude-user': 'hooks.source.claude_user',
 }
 const sourceLabel = computed(() => tr(SOURCE_KEY[props.hook.source ?? 'global']))
 

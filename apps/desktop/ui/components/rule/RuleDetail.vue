@@ -101,35 +101,17 @@ const isImported = computed(() => props.rule.readOnly === true)
 const SOURCE_KEY: Record<RuleSource, string> = {
   global: 'rules.source.global',
   project: 'rules.source.project',
-  'claude-project': 'rules.source.claude_project',
-  'claude-rules': 'rules.source.claude_rules',
-  'claude-user': 'rules.source.claude_user',
 }
 const sourceLabel = computed(() => tr(SOURCE_KEY[props.rule.source ?? 'global']))
 
-const isProjectScoped = computed(
-  () =>
-    props.rule.source === 'project' ||
-    props.rule.source === 'claude-project' ||
-    props.rule.source === 'claude-rules',
-)
+const isProjectScoped = computed(() => props.rule.source === 'project')
 
 const readOnlyHint = computed(() => tr('rules.detail.readonly_hint', { source: sourceLabel.value }))
 
 const sourcePath = computed(() => {
   const project = ws.projects.find((p) => p.id === props.rule.projectId)
   const base = project?.path ?? '<project>'
-  switch (props.rule.source) {
-    case 'project':
-      return `${base}/.awog/rules/${props.rule.id}.md`
-    case 'claude-project':
-      return `${base}/CLAUDE.md`
-    case 'claude-rules':
-      return `${base}/.claude/rules/${props.rule.id}.md`
-    case 'claude-user':
-      return `~/.claude/CLAUDE.md`
-    default:
-      return `~/.awog/rules/${props.rule.id}.md`
-  }
+  if (props.rule.source === 'project') return `${base}/.awog/rules/${props.rule.id}.md`
+  return `~/.awog/rules/${props.rule.id}.md`
 })
 </script>

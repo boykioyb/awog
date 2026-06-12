@@ -195,16 +195,12 @@ const { t } = useTheme()
 const ws = useWorkspaceStore()
 const sessions = useSessionsStore()
 
-const sourceOptions: { value: SkillSource; label: string; group: 'user' | 'project' }[] = [
-  { value: 'global', label: '~/.awog/skills', group: 'user' },
-  { value: 'user-claude', label: '~/.claude/skills', group: 'user' },
-  { value: 'user-agents', label: '~/.agents/skills', group: 'user' },
-  { value: 'project-claude', label: 'project · .claude/skills', group: 'project' },
-  { value: 'project-agents', label: 'project · .agents/skills', group: 'project' },
+const sourceOptions: { value: SkillSource; label: string }[] = [
+  { value: 'global', label: '~/.awog/skills' },
+  { value: 'project', label: 'project · .awog/skills' },
 ]
 
-const PROJECT_SOURCES: SkillSource[] = ['project-claude', 'project-agents']
-const isProjectSource = (s: SkillSource): boolean => PROJECT_SOURCES.includes(s)
+const isProjectSource = (s: SkillSource): boolean => s === 'project'
 
 type Draft = {
   id: string
@@ -312,21 +308,15 @@ const sourceButtonStyle = (active: boolean): CSSProperties => ({
   opacity: isExistingSkill.value && !active ? 0.4 : 1,
 })
 
-const USER_HINT: Partial<Record<SkillSource, string>> = {
-  global: '~/.awog/skills/ — AWOG-native, available across all projects.',
-  'user-claude': '~/.claude/skills/ — shared with Claude Code SDK installs.',
-  'user-agents': '~/.agents/skills/ — shared with Craft Agents installs.',
-}
-
 const sourceHint = computed(() => {
-  const userHint = USER_HINT[draft.value.source]
-  if (userHint) return `Saved to ${userHint}`
-  const project = ws.projects.find((p) => p.id === draft.value.projectId)
-  const sub = draft.value.source === 'project-claude' ? '.claude/skills' : '.agents/skills'
-  if (!project) {
-    return `Pick a project — file will be written to <project>/${sub}/${draft.value.id || 'slug'}/SKILL.md`
+  if (draft.value.source === 'global') {
+    return 'Saved to ~/.awog/skills/ — AWOG-native, available across all projects.'
   }
-  return `Saved to ${project.path}/${sub}/${draft.value.id || 'slug'}/SKILL.md`
+  const project = ws.projects.find((p) => p.id === draft.value.projectId)
+  if (!project) {
+    return `Pick a project — file will be written to <project>/.awog/skills/${draft.value.id || 'slug'}/SKILL.md`
+  }
+  return `Saved to ${project.path}/.awog/skills/${draft.value.id || 'slug'}/SKILL.md`
 })
 
 // Default project pre-fill the moment user switches to a project tier

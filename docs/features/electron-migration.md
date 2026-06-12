@@ -130,6 +130,12 @@ Electron's `utilityProcess` dùng **ESM loader đã vá**, vỡ khi một depend
 
 **Module path:** `enginePath()` → dev `apps/desktop/sidecar/dist/lib/src/index.js`; prod `<resources>/sidecar/lib/src/index.js`.
 
+### 5.1 Khôi phục PATH khi launch từ GUI (`shell-env.ts`)
+
+**Vấn đề:** app mở từ Finder/Dock (macOS) hoặc desktop launcher (Linux) — không phải terminal — chỉ thừa hưởng env tối thiểu (`PATH=/usr/bin:/bin:/usr/sbin:/sbin`, **không có `/opt/homebrew/bin`**). Engine spawn từ main process kế thừa PATH thiếu này, nên `sh -c` của Bash tool, node-pty terminal và git runner đều **không tìm thấy** tool homebrew/nvm (`node`, `ripgrep`, binary mà RTK shell-out tới…). Agent thấy lệnh fail rồi bỏ cuộc, thường tự bịa lý do kiểu *"rtk package isn't available, switch to Glob/Read"* (Grep/Glob/Read của AWOG là Node in-process nên vẫn chạy → đọc file trực tiếp được, càng củng cố nhầm lẫn).
+
+**Fix:** [`shell-env.ts`](../../apps/desktop/electron/src/shell-env.ts) → `loadShellEnv()` gọi trong `whenReady` **trước** `engine.start()`. Chạy login+interactive shell một lần (`$SHELL -l -i -c 'echo <marker> && env'`, timeout 5s, stdin/stderr ignore) để lấy lại env thật của user rồi merge vào `process.env` → engine + mọi child kế thừa PATH đầy đủ. No-op trên Windows (PATH lấy từ registry) và dev (`!app.isPackaged` — terminal launch đã có env). Login shell fail/timeout → fallback prepend các dir phổ biến (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local|.bun|.cargo/bin`). Cùng cách tiếp cận với craft-agents-oss và `fix-path`/`shell-env` npm, nhưng viết inline để **không thêm dependency**. Không override key `ELECTRON_*` (giữ flag runtime engine spawn đặt).
+
 ## 6. Native modules (ABI Electron)
 
 | Package | Loại | Cần rebuild theo Electron? |

@@ -2,17 +2,10 @@
 // when AGENT.md / SKILL.md / mcp-servers/*.json change so the UI can
 // auto-refresh without the user clicking 🔄 (Sprint 3 C1).
 //
-// Watch scope:
-//   - User-tier agent dirs:  ~/.awog/agents, ~/.claude/agents, ~/.agents/agents
-//   - User-tier skill dirs:  ~/.awog/skills, ~/.claude/skills, ~/.agents/skills
-//   - MCP servers JSON dir:  ~/.awog/mcp-servers
-//   - Global hooks JSON dir: ~/.awog/hooks (ADR 0032)
-//   - Global rules MD dir:   ~/.awog/rules (ADR 0033)
-//   - Command MD dirs:       ~/.awog/commands, ~/.claude/commands (imported)
+// Watch scope (ADR 0035 — `.awog` only; `.claude`/`.agents` are import sources):
+//   - User-tier:  ~/.awog/{agents,skills,mcp-servers,hooks,rules,commands}
 //   - Per-project dirs (added/removed dynamically as projects come and go):
-//     {project}/.claude/agents, {project}/.agents/agents
-//     {project}/.claude/skills, {project}/.agents/skills
-//     {project}/.awog/hooks, {project}/.awog/rules
+//     {project}/.awog/{agents,skills,hooks,rules,commands}
 //
 // Events fired (sidecar.event):
 //   agents.fs-changed     — agent file added/removed/modified
@@ -80,34 +73,21 @@ interface DirSpec {
 function userDirs(): DirSpec[] {
   return [
     { kind: 'agents', dir: join(awogHome(), 'agents') },
-    { kind: 'agents', dir: join(homedir(), '.claude', 'agents') },
-    { kind: 'agents', dir: join(homedir(), '.agents', 'agents') },
     { kind: 'skills', dir: join(awogHome(), 'skills') },
-    { kind: 'skills', dir: join(homedir(), '.claude', 'skills') },
-    { kind: 'skills', dir: join(homedir(), '.agents', 'skills') },
     { kind: 'mcp-servers', dir: join(awogHome(), 'mcp-servers') },
     { kind: 'hooks', dir: join(awogHome(), 'hooks') },
     { kind: 'rules', dir: join(awogHome(), 'rules') },
     { kind: 'commands', dir: join(awogHome(), 'commands') },
-    // Imported Claude Code slash commands (read-only), user tier.
-    { kind: 'commands', dir: join(homedir(), '.claude', 'commands') },
   ]
 }
 
 function projectDirs(projectPath: string): DirSpec[] {
   return [
-    { kind: 'agents', dir: join(projectPath, '.claude', 'agents') },
-    { kind: 'agents', dir: join(projectPath, '.agents', 'agents') },
-    { kind: 'skills', dir: join(projectPath, '.claude', 'skills') },
-    { kind: 'skills', dir: join(projectPath, '.agents', 'skills') },
+    { kind: 'agents', dir: join(projectPath, '.awog', 'agents') },
+    { kind: 'skills', dir: join(projectPath, '.awog', 'skills') },
     { kind: 'hooks', dir: join(projectPath, '.awog', 'hooks') },
     { kind: 'rules', dir: join(projectPath, '.awog', 'rules') },
-    // Imported Claude Code rules (read-only). Project CLAUDE.md is refresh-driven
-    // (a root file is awkward to watch); .claude/rules is a dir like the others.
-    { kind: 'rules', dir: join(projectPath, '.claude', 'rules') },
     { kind: 'commands', dir: join(projectPath, '.awog', 'commands') },
-    // Imported Claude Code slash commands (read-only), project tier.
-    { kind: 'commands', dir: join(projectPath, '.claude', 'commands') },
   ]
 }
 
@@ -267,18 +247,11 @@ function relevantFile(kind: WatchKind, path: string): boolean {
 }
 
 function isProjectSubdir(dir: string): boolean {
-  // Project-tier dirs live under {project}/.claude, {project}/.agents (skills/
-  // agents) or {project}/.awog (hooks). The matching user-tier dirs (~/.claude,
-  // ~/.agents, ~/.awog direct children) are NOT projects.
+  // Project-tier dirs live under {project}/.awog. The matching user-tier dir
+  // (~/.awog direct children) is NOT a project.
   const home = homedir()
-  if (
-    dir.startsWith(`${home}/.claude/`) ||
-    dir.startsWith(`${home}/.agents/`) ||
-    dir.startsWith(`${home}/.awog/`)
-  ) {
-    return false
-  }
-  return dir.includes('/.claude/') || dir.includes('/.agents/') || dir.includes('/.awog/')
+  if (dir.startsWith(`${home}/.awog/`)) return false
+  return dir.includes('/.awog/')
 }
 
 function pathRegistered(dir: string, projectPaths: Set<string>): boolean {

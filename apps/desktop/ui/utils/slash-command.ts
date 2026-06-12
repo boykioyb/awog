@@ -20,8 +20,8 @@ export const parseSlashInvocation = (text: string): SlashInvocation | null => {
 }
 
 // A command is invocable from a session if it is enabled and applies to scope:
-// global + user-imported always apply; project + project-imported apply only to
-// the session's bound project. Matched by id (the slug typed after `/`).
+// global always applies; project applies only to the session's bound project.
+// Matched by id (the slug typed after `/`).
 export const findInvocableCommand = (
   commands: Command[],
   name: string,
@@ -30,7 +30,7 @@ export const findInvocableCommand = (
   commands.find((c) => {
     if (c.id !== name || c.enabled === false) return false
     const source = c.source ?? 'global'
-    if (source === 'global' || source === 'claude-user') return true
+    if (source === 'global') return true
     return !!projectId && c.projectId === projectId
   })
 
