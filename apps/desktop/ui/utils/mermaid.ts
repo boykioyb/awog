@@ -4,6 +4,7 @@
 // update during streaming is cheap.
 
 import type { Mermaid } from 'mermaid'
+import { applyMermaidLabelContrast, mermaidTheme } from './mermaid-theme'
 
 let mermaidPromise: Promise<Mermaid> | null = null
 
@@ -27,14 +28,15 @@ async function getMermaid(): Promise<Mermaid> {
 }
 
 // mermaid config is global, so we (re)set the theme right before each render to
-// match the current app appearance — `dark` for dark mode, the built-in light
-// `default` otherwise. Without this, diagrams render dark-on-light in light mode.
+// match the current app appearance. The shared `themeVariables` give label text
+// enough contrast (mermaid's built-in `dark` theme alone renders it an
+// unreadable gray); without this the light path also renders dark-on-light.
 function applyTheme(mermaid: Mermaid, dark: boolean): void {
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
     fontFamily: 'inherit',
-    theme: dark ? 'dark' : 'default',
+    ...mermaidTheme(dark),
   })
 }
 
@@ -100,6 +102,9 @@ export async function renderMermaidIn(
         el.innerHTML = svg
         el.dataset.rendered = 'true'
         if (bindFunctions) bindFunctions(el)
+        // Fix label contrast against each node's actual fill (custom pastel
+        // fills + dark-theme light text would otherwise be unreadable).
+        applyMermaidLabelContrast(el)
         // Append the zoom affordance after the SVG so a click anywhere on it
         // opens the full-screen view (delegated in SessionMessageList).
         el.appendChild(makeZoomButton(opts?.zoomLabel ?? 'Zoom'))

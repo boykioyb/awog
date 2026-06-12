@@ -28,7 +28,7 @@
 
   <div
     v-else
-    class="my-3 p-4 rounded flex items-center justify-center overflow-x-auto mermaid-output"
+    class="group relative my-3 p-4 rounded flex items-center justify-center overflow-x-auto mermaid-output"
     :style="{ background: t.bgInput, border: `1px solid ${t.border}`, minHeight: '100px' }"
   >
     <div
@@ -42,70 +42,54 @@
     <!-- eslint-disable vue/no-v-html -- svg do mermaid sinh ra, không phải input người dùng -->
     <div
       v-else
+      ref="svgHost"
       :style="{ maxWidth: '100%', width: '100%', display: 'flex', justifyContent: 'center' }"
       v-html="svg"
     />
     <!-- eslint-enable vue/no-v-html -->
+
+    <!-- Fullscreen zoom affordance (hover-revealed) — opens the shared zoom modal -->
+    <button
+      v-if="status === 'rendered'"
+      type="button"
+      class="absolute top-2 right-2 p-1.5 rounded transition opacity-0 group-hover:opacity-100"
+      :style="{ background: t.bgElevated, border: `1px solid ${t.border}`, color: t.textDim }"
+      :title="tr('session.mermaid.zoom')"
+      @click="zoomOpen = true"
+    >
+      <Maximize2 :size="13" />
+    </button>
   </div>
+
+  <MermaidZoomModal v-if="zoomOpen" :source="code" @close="zoomOpen = false" />
 </template>
 
 <script setup lang="ts">
-import { Activity, AlertCircle } from 'lucide-vue-next'
+import { Activity, AlertCircle, Maximize2 } from 'lucide-vue-next'
 import { loadMermaid } from '~/utils/load-mermaid'
+import { applyMermaidLabelContrast, mermaidTheme } from '~/utils/mermaid-theme'
+import MermaidZoomModal from '~/components/markdown/MermaidZoomModal.vue'
 
 const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 const props = defineProps<{ code: string }>()
 const { t, themeName } = useTheme()
+const { t: tr } = useI18n()
+
+// Fullscreen zoom/pan view of this diagram (re-renders the source at full size).
+const zoomOpen = ref(false)
 
 const svg = ref<string | null>(null)
 const error = ref<string | null>(null)
 const status = ref<'loading' | 'rendered' | 'error'>('loading')
 
+// Host of the v-html'd SVG; re-color node labels for contrast once it mounts.
+const svgHost = useTemplateRef<HTMLElement>('svgHost')
+watch(svg, (v) => {
+  if (v) nextTick(() => applyMermaidLabelContrast(svgHost.value))
+})
+
 let cancelled = false
-
-const darkVars = {
-  darkMode: true,
-  background: '#161616',
-  primaryColor: '#262626',
-  primaryTextColor: '#ededed',
-  primaryBorderColor: '#525252',
-  secondaryColor: '#1f1f1f',
-  tertiaryColor: '#0a0a0a',
-  lineColor: '#a3a3a3',
-  textColor: '#ededed',
-  mainBkg: '#262626',
-  nodeBorder: '#525252',
-  clusterBkg: '#1a1a1a',
-  clusterBorder: '#2e2e2e',
-  edgeLabelBackground: '#161616',
-  actorBorder: '#525252',
-  actorBkg: '#262626',
-  actorTextColor: '#ededed',
-  actorLineColor: '#737373',
-  signalColor: '#ededed',
-  signalTextColor: '#ededed',
-  labelBoxBkgColor: '#262626',
-  labelBoxBorderColor: '#525252',
-  labelTextColor: '#ededed',
-  loopTextColor: '#ededed',
-  noteBkgColor: '#3f3f1a',
-  noteBorderColor: '#525252',
-  noteTextColor: '#ededed',
-}
-
-const lightVars = {
-  background: '#ffffff',
-  primaryColor: '#f5f5f4',
-  primaryTextColor: '#1c1917',
-  primaryBorderColor: '#a8a29e',
-  lineColor: '#57534e',
-  textColor: '#1c1917',
-  mainBkg: '#fafaf9',
-  nodeBorder: '#a8a29e',
-  clusterBkg: '#f5f5f4',
-  clusterBorder: '#d6d3d1',
-}
 
 watch(
   () => [props.code, themeName.value] as const,
@@ -127,8 +111,7 @@ watch(
           mermaid.initialize({
             startOnLoad: false,
             securityLevel: 'loose',
-            theme: themeName.value === 'dark' ? 'dark' : 'default',
-            themeVariables: themeName.value === 'dark' ? darkVars : lightVars,
+            ...mermaidTheme(themeName.value === 'dark'),
             fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif',
             fontSize: 13,
             flowchart: { htmlLabels: true, curve: 'basis', useMaxWidth: true },

@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-[120] flex flex-col"
+      class="mermaid-zoom-modal fixed inset-0 z-[120] flex flex-col"
       :style="{ background: t.overlay }"
       @click.self="emit('close')"
     >
@@ -13,6 +13,9 @@
         <Network :size="14" :style="{ color: t.accent }" />
         <span class="text-[1em] font-medium" :style="{ color: t.text }">
           {{ tr('session.mermaid.title') }}
+        </span>
+        <span class="text-[12px]" :style="{ color: t.textFaint }">
+          {{ tr('session.mermaid.hint') }}
         </span>
         <span class="flex-1" />
 
@@ -91,6 +94,7 @@
         <!-- eslint-disable vue/no-v-html -- svg from mermaid, not user HTML -->
         <div
           v-else
+          ref="canvas"
           class="mermaid-zoom-canvas mx-auto"
           :style="{ width: `${scale * 100}%` }"
           v-html="svg"
@@ -104,6 +108,7 @@
 <script setup lang="ts">
 import { Activity, Maximize, Minus, Network, Plus, X } from 'lucide-vue-next'
 import { renderMermaidSource } from '~/utils/mermaid'
+import { applyMermaidLabelContrast } from '~/utils/mermaid-theme'
 
 const props = defineProps<{
   // Raw (decoded) mermaid diagram source.
@@ -118,6 +123,9 @@ const { t, themeName } = useTheme()
 const { t: tr } = useI18n()
 
 const ZOOM_STEP = 0.25
+// Finer multiplicative step for the wheel so zooming feels continuous rather
+// than jumping in 25% increments like the toolbar buttons.
+const WHEEL_FACTOR = 1.12
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 4
 
@@ -125,17 +133,39 @@ const svg = ref<string | null>(null)
 const status = ref<'loading' | 'rendered' | 'error'>('loading')
 const scale = ref(1)
 const scroller = ref<HTMLElement | null>(null)
+const canvas = useTemplateRef<HTMLElement>('canvas')
 
 const clampScale = (v: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, v))
 const zoomBy = (delta: number) => {
   scale.value = clampScale(Math.round((scale.value + delta) * 100) / 100)
 }
 
-// Ctrl/Cmd + wheel zooms; plain wheel scrolls the surface as usual.
+// Wheel zooms, anchored to the cursor so the point under the pointer stays put
+// (pan is handled by drag). The scale wrapper sets width to `scale * 100%`, so a
+// zoom multiplies content size by `next / prev`; we scroll by the same ratio to
+// keep the hovered content fixed. Width applies reactively, hence the nextTick.
 const onWheel = (ev: WheelEvent) => {
-  if (!ev.ctrlKey && !ev.metaKey) return
   ev.preventDefault()
-  zoomBy(ev.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)
+  const el = scroller.value
+  const prev = scale.value
+  const next = clampScale(
+    Math.round(prev * (ev.deltaY < 0 ? WHEEL_FACTOR : 1 / WHEEL_FACTOR) * 100) / 100,
+  )
+  if (!el || next === prev) {
+    scale.value = next
+    return
+  }
+  const rect = el.getBoundingClientRect()
+  const px = ev.clientX - rect.left
+  const py = ev.clientY - rect.top
+  const ratio = next / prev
+  const targetLeft = (el.scrollLeft + px) * ratio - px
+  const targetTop = (el.scrollTop + py) * ratio - py
+  scale.value = next
+  nextTick(() => {
+    el.scrollLeft = targetLeft
+    el.scrollTop = targetTop
+  })
 }
 
 // Drag-to-pan on the scroll surface.
@@ -180,6 +210,8 @@ watch(
       // grow the diagram past its natural width — no SVG-markup rewrite needed.
       svg.value = await renderMermaidSource(source, themeName.value === 'dark')
       status.value = 'rendered'
+      // Re-color node labels for contrast against their actual fills.
+      nextTick(() => applyMermaidLabelContrast(canvas.value))
     } catch {
       status.value = 'error'
     }
