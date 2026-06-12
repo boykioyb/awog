@@ -33,7 +33,7 @@
       class="mt-0.5 space-y-0.5"
       :style="{ paddingLeft: '22px' }"
     >
-      <StepItem v-for="child in step.children" :key="child.id" :step="child" />
+      <StepItem v-for="child in step.children" :key="child.id" :step="child" :timeline="timeline" />
     </div>
   </div>
 
@@ -227,7 +227,8 @@
   <div v-else>
     <button
       type="button"
-      class="flex items-center gap-1.5 text-[1em] min-w-0 w-full text-left rounded py-0.5 px-1 -mx-1 transition"
+      class="flex gap-1.5 text-[1em] min-w-0 w-full text-left rounded py-0.5 px-1 -mx-1 transition"
+      :class="timeline ? 'items-start flex-wrap' : 'items-center'"
       :style="{
         background: isSelected ? t.bgActive : hover && step.detail ? t.bgHover : 'transparent',
         cursor: step.detail || step.children?.length ? 'pointer' : 'default',
@@ -248,9 +249,21 @@
           flexShrink: 0,
         }"
       />
-      <component :is="statusIcon" :size="11" :class="statusClass" :style="{ color: statusColor }" />
+      <component
+        :is="statusIcon"
+        :size="11"
+        class="flex-shrink-0"
+        :class="statusClass"
+        :style="{ color: statusColor }"
+      />
       <component :is="toolIcon" :size="11" class="flex-shrink-0" :style="{ color: t.textMuted }" />
-      <span class="truncate min-w-0" :style="{ color: t.text }">{{ step.label }}</span>
+      <span
+        class="min-w-0"
+        :class="timeline ? 'break-words' : 'truncate'"
+        :style="{ color: t.text }"
+      >
+        {{ step.label }}
+      </span>
 
       <span
         v-if="step.children?.length"
@@ -288,30 +301,54 @@
 
       <span
         v-if="step.target"
-        class="px-1.5 rounded-sm font-mono text-[1em] truncate min-w-0"
+        class="px-1.5 rounded-sm font-mono text-[1em] min-w-0"
+        :class="timeline ? 'break-all' : 'truncate'"
         :style="{
           background: t.bgInput,
           color: t.text,
           border: `1px solid ${t.border}`,
-          maxWidth: '50%',
+          maxWidth: timeline ? '100%' : '50%',
         }"
       >
         {{ step.target }}
       </span>
 
       <span v-if="step.description" :style="{ color: t.textFaint }">·</span>
-      <span v-if="step.description" class="flex-1 min-w-0 truncate" :style="{ color: t.textMuted }">
+      <span
+        v-if="step.description"
+        class="min-w-0"
+        :class="timeline ? 'break-words' : 'flex-1 truncate'"
+        :style="{ color: t.textMuted }"
+      >
         {{ step.description }}
       </span>
 
       <span
         v-if="step.pathHint"
-        class="font-mono text-[1em] truncate ml-auto"
-        :style="{ color: t.textFaint, maxWidth: '38%' }"
+        class="font-mono text-[1em]"
+        :class="timeline ? 'break-all' : 'truncate ml-auto'"
+        :style="{ color: t.textFaint, maxWidth: timeline ? '100%' : '38%' }"
       >
         {{ step.pathHint }}
       </span>
     </button>
+
+    <!-- Result summary (⎿), timeline variant only. Short gist of the tool result;
+         the full output is still one click away via the row's detail panel. -->
+    <div
+      v-if="timeline && step.kind === 'tool' && resultSummary"
+      class="flex items-start gap-1.5 mt-0.5 text-[1em]"
+      :style="{ paddingLeft: '3px' }"
+    >
+      <span class="flex-shrink-0 font-mono" :style="{ color: t.textDim }">⎿</span>
+      <span
+        class="min-w-0 break-words"
+        :style="{ color: step.status === 'error' ? t.danger : t.textFaint }"
+      >
+        {{ resultSummary }}
+      </span>
+    </div>
+
     <div
       v-if="step.children?.length && !collapsed"
       class="mt-0.5 space-y-0.5"
@@ -321,7 +358,7 @@
         marginLeft: '6px',
       }"
     >
-      <StepItem v-for="child in step.children" :key="child.id" :step="child" />
+      <StepItem v-for="child in step.children" :key="child.id" :step="child" :timeline="timeline" />
     </div>
   </div>
 </template>
@@ -348,9 +385,17 @@ import type { SessionStep, TodoStatus } from '~/types'
 import { parseInline } from '~/utils/markdown-parse'
 import { RESOLVE_PLAN_KEY, SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 
-const props = defineProps<{
-  step: SessionStep
-}>()
+const props = withDefaults(
+  defineProps<{
+    step: SessionStep
+    // Session timeline variant (Claude-Code style): wrap long paths/commands
+    // instead of truncating, and show a one-line result summary (⎿) under tool
+    // rows. Off by default so the compact task/phase trace + subagent drawer keep
+    // their tight single-line rows.
+    timeline?: boolean
+  }>(),
+  { timeline: false },
+)
 
 const { t } = useTheme()
 // Thinking starts EXPANDED while the reasoning streams (so the user watches it
@@ -385,6 +430,39 @@ const noteFallbackText = computed(() =>
 // Plan items carry inline markdown (**bold**, `code`) — parse once per render so
 // the list renders rich text instead of raw markers.
 const planItemParts = computed(() => (props.step.planItems ?? []).map((it) => parseInline(it)))
+
+// One-line result summary for the timeline `⎿` line (session variant only). The
+// full result is still one click away (selectStep → detail panel); this is just
+// the "Read 240 lines" / "42 passed" gist Claude Code shows inline. Capped so a
+// huge first line can't blow up the row — the wrap handles the rest.
+const RESULT_SUMMARY_MAX = 200
+const resultSummary = computed<string | null>(() => {
+  const d = props.step.detail
+  if (!d) return null
+  let text: string | null = null
+  if (d.kind === 'terminal') {
+    const out = (d.output ?? '').trim()
+    const firstLines = out
+      .split('\n')
+      .filter((l) => l.trim())
+      .slice(0, 2)
+      .join(' ')
+    text = firstLines || (d.exitCode !== undefined ? `exit ${d.exitCode}` : null)
+  } else if (d.kind === 'file') {
+    const lines = d.content ? d.content.split('\n').length : 0
+    text = lines ? `${lines} line${lines === 1 ? '' : 's'}` : d.path || null
+  } else if (d.kind === 'list') {
+    text = `${d.items.length} result${d.items.length === 1 ? '' : 's'}`
+  } else if (d.kind === 'text') {
+    text =
+      d.content
+        .split('\n')
+        .find((l) => l.trim())
+        ?.trim() ?? null
+  }
+  if (!text) return null
+  return text.length > RESULT_SUMMARY_MAX ? `${text.slice(0, RESULT_SUMMARY_MAX)}…` : text
+})
 
 // Auto-collapse the reasoning block the moment it completes (running → done),
 // matching the Claude extension. Guarded to thinking so a tool step's

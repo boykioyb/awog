@@ -91,11 +91,10 @@
               <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
                 Steps · {{ childSteps.length }}
               </div>
-              <div
-                class="rounded px-3 py-2 space-y-1"
-                :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
-              >
-                <StepItem v-for="child in childSteps" :key="child.id" :step="child" />
+              <!-- Flat timeline (Claude-Code style), matching the main session
+                   view: thin left rail + wrapped paths + ⎿ result summaries. -->
+              <div class="space-y-1 pl-3" :style="{ borderLeft: `2px solid ${t.border}` }">
+                <StepItem v-for="child in childSteps" :key="child.id" :step="child" timeline />
               </div>
             </div>
 

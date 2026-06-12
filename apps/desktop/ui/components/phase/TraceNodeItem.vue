@@ -7,17 +7,17 @@
         cursor: hasChildren ? 'pointer' : 'default',
         background: hovered ? t.bgHover : 'transparent',
       }"
-      @click="hasChildren && (expanded = !expanded)"
+      @click="canToggle && (open = !open)"
       @mouseenter="hovered = true"
       @mouseleave="hovered = false"
     >
       <div :style="{ width: '12px', paddingTop: '2px' }">
         <ChevronRight
-          v-if="hasChildren"
+          v-if="canToggle"
           :size="10"
           :style="{
             color: t.textDim,
-            transform: expanded ? 'rotate(90deg)' : 'none',
+            transform: open ? 'rotate(90deg)' : 'none',
             transition: 'transform 0.15s',
           }"
         />
@@ -50,11 +50,8 @@
           <template v-else-if="item.type === 'tool'">
             <span :style="{ color: t.text }">{{ item.tool }}</span>
             <span :style="{ color: t.textFaint }">(</span>
-            <span class="truncate" :style="{ color: t.textMuted }">{{ item.input }}</span>
+            <span class="min-w-0 break-all" :style="{ color: t.textMuted }">{{ item.input }}</span>
             <span :style="{ color: t.textFaint }">)</span>
-          </template>
-          <template v-else-if="item.type === 'thinking'">
-            <span class="italic" :style="{ color: t.textMuted }">{{ item.text }}</span>
           </template>
           <template v-else-if="item.type === 'todo'">
             <span :style="{ color: t.text }">{{ item.name }}</span>
@@ -78,12 +75,28 @@
         >
           {{ item.purpose }}
         </div>
-        <div
-          v-if="item.type === 'tool' && item.result"
-          class="text-[1em] mt-0.5"
-          :style="{ color: t.textDim }"
-        >
-          → {{ item.result }}
+        <!-- Collapsible detail: tool result (⎿) or reasoning text. Shows a 1-line
+             preview when closed ("đóng chi tiết") and the full text — newlines
+             preserved — when the node is expanded. ⎿ marker + faint style match
+             the session timeline. -->
+        <div v-if="detailText" class="flex items-start gap-1.5 text-[1em] mt-0.5 min-w-0">
+          <span
+            v-if="item.type === 'tool'"
+            class="flex-shrink-0 font-mono"
+            :style="{ color: t.textDim }"
+          >
+            ⎿
+          </span>
+          <span
+            class="min-w-0"
+            :class="[
+              open ? 'whitespace-pre-wrap break-words' : 'truncate',
+              item.type === 'thinking' ? 'italic' : '',
+            ]"
+            :style="{ color: detailColor }"
+          >
+            {{ detailText }}
+          </span>
         </div>
         <div v-if="item.type === 'todo' && item.todos?.length" class="mt-1 space-y-0.5">
           <div v-for="(todo, i) in item.todos" :key="i" class="flex items-start gap-1.5 text-[1em]">
@@ -106,7 +119,7 @@
         </div>
       </div>
     </div>
-    <div v-if="hasChildren && expanded">
+    <div v-if="hasChildren && open">
       <TraceNodeItem
         v-for="child in item.children"
         :key="child.id"
@@ -130,12 +143,33 @@ const props = defineProps<{
 
 const { t } = useTheme()
 
-// Collapsed by default — click a node (chevron) to expand its children.
-const expanded = ref(false)
 const hovered = ref(false)
 
 const hasChildren = computed(() => !!(props.item.children && props.item.children.length > 0))
 const isRunning = computed(() => props.item.status === 'running')
+
+// Collapsible detail shown below the label row: a tool's result (⎿) or a
+// thinking node's reasoning text. Null for container/todo nodes.
+const detailText = computed<string | null>(() => {
+  if (props.item.type === 'tool') return props.item.result ?? null
+  if (props.item.type === 'thinking') return props.item.text ?? null
+  return null
+})
+const detailColor = computed(() => {
+  if (props.item.type === 'thinking') return t.value.textMuted
+  // Tool result: errors are prefixed "[error] " by the trace-mapper.
+  if (props.item.result?.startsWith('[error]')) return t.value.danger
+  return t.value.textFaint
+})
+
+// A node is expandable when it has children (container) OR a collapsible detail.
+const canToggle = computed(() => hasChildren.value || !!detailText.value)
+
+// "Thấy step, đóng chi tiết" default: AGENT root opens (its tool steps show),
+// while SUBAGENT sub-trees and per-step detail (tool result / reasoning) stay
+// collapsed to a 1-line preview until the user clicks. Click toggles whichever
+// this node owns (children for containers, detail for tool/thinking).
+const open = ref(props.item.type === 'agent')
 
 const typeLabel = computed(() => {
   switch (props.item.type) {

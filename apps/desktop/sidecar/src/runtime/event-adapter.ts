@@ -83,12 +83,27 @@ export function createEventAdapter(
   // Remember each tool's name + input at start so the end event can re-derive
   // the step target / diff stats without re-parsing the result.
   const toolInputs = new Map<string, { name: string; input: Record<string, unknown> }>()
-  // Accumulate extended-thinking text per content block (keyed by contentIndex)
-  // so each delta upserts the same 'thinking' step in place.
-  const thinkingBlocks = new Map<number, string>()
+  // Per-turn assistant message counter. Pi resets `contentIndex` to 0 at the
+  // start of every assistant message, so a multi-iteration turn (think → tool →
+  // think → tool …) collides every iteration's reasoning on contentIndex 0.
+  // Bumping this on each assistant `message_start` makes the thinking step id
+  // unique per iteration (`thinking-${seq}-${contentIndex}`), so the UI keeps one
+  // reasoning block per step instead of overwriting them into a single one.
+  let assistantMsgSeq = 0
+  // Accumulate extended-thinking text per (message, content block) so each delta
+  // upserts the same 'thinking' step in place without bleeding the previous
+  // iteration's text into the next (the key embeds assistantMsgSeq).
+  const thinkingBlocks = new Map<string, string>()
 
   const handle = (event: AgentEvent): void => {
     switch (event.type) {
+      case 'message_start': {
+        // New assistant message in the loop → next reasoning block belongs to a
+        // fresh iteration. Non-assistant messages (tool results) don't carry
+        // thinking, so only the assistant boundary matters.
+        if (isAssistant(event.message)) assistantMsgSeq += 1
+        break
+      }
       case 'message_update': {
         const inner = event.assistantMessageEvent
         if (inner.type === 'text_delta' && inner.delta.length > 0) {
@@ -98,17 +113,20 @@ export function createEventAdapter(
           if (!parentId) cb.onChunk(inner.delta)
         } else if (inner.type === 'thinking_delta' && inner.delta.length > 0 && cb.onStep) {
           // Extended-thinking → a 'thinking' step carrying the full reasoning so
-          // far in `detail`, so the UI streams it live (status 'running'). Stable
-          // id per content block keeps the upsert merging in place as it grows.
-          const next = (thinkingBlocks.get(inner.contentIndex) ?? '') + inner.delta
-          thinkingBlocks.set(inner.contentIndex, next)
-          cb.onStep(withParent(stepFromThinking(`thinking-${inner.contentIndex}`, next)))
+          // far in `detail`, so the UI streams it live (status 'running'). Id is
+          // unique per iteration + content block so the upsert merges deltas of
+          // THIS block in place while leaving earlier iterations' blocks intact.
+          const key = `${assistantMsgSeq}-${inner.contentIndex}`
+          const next = (thinkingBlocks.get(key) ?? '') + inner.delta
+          thinkingBlocks.set(key, next)
+          cb.onStep(withParent(stepFromThinking(`thinking-${key}`, next)))
         } else if (inner.type === 'thinking_end' && cb.onStep) {
           // Reasoning block complete → mark it done (status 'done') so the UI can
           // auto-collapse. `inner.content` is authoritative; fall back to the
           // accumulated deltas if the provider omits it.
-          const full = inner.content || thinkingBlocks.get(inner.contentIndex) || ''
-          if (full) cb.onStep(withParent(stepFromThinking(`thinking-${inner.contentIndex}`, full, true)))
+          const key = `${assistantMsgSeq}-${inner.contentIndex}`
+          const full = inner.content || thinkingBlocks.get(key) || ''
+          if (full) cb.onStep(withParent(stepFromThinking(`thinking-${key}`, full, true)))
         }
         break
       }

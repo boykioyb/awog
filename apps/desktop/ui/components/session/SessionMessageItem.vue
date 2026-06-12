@@ -66,14 +66,14 @@
         <!-- Steps summary + collapse toggle. Sits above the body so the
              control reads before the interleaved command/text flow. -->
         <button
-          v-if="message.steps?.length"
+          v-if="clusterSteps.length"
           type="button"
           class="inline-flex items-center gap-1.5 text-[12px] py-0.5 px-1.5 -ml-1.5 mb-2 rounded transition hover:bg-white/5"
           :style="{ color: t.textDim }"
           @click="expanded = !expanded"
         >
           <Info :size="11" />
-          <span>{{ stepsSummary(message.steps) }}</span>
+          <span>{{ stepsSummary(clusterSteps) }}</span>
           <Activity
             v-if="hasRunningStep"
             :size="10"
@@ -89,11 +89,24 @@
           />
         </button>
 
+        <!-- TODO checklist (TodoWrite). Lifted OUT of the collapsible task cluster
+             so the agent's plan/progress stays visible even while the tool-call
+             detail is collapsed. The sidecar upserts one 'todo-list' step per turn,
+             so this normally renders a single evolving checklist. -->
+        <div
+          v-for="todo in todoSteps"
+          :key="todo.id"
+          class="mb-2 rounded-md px-3 py-2 text-[12px]"
+          :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
+        >
+          <StepItem :step="todo" />
+        </div>
+
         <!-- Body. With steps expanded we interleave reply-text segments and
              step clusters in chronological order (each step carries the text
              offset where its tool fired). Collapsed → plain reply text only.
              No steps → plain reply text. -->
-        <template v-if="message.steps?.length && expanded">
+        <template v-if="clusterSteps.length && expanded">
           <template v-for="(block, bi) in timelineBlocks" :key="bi">
             <MarkdownStreamBody
               v-if="block.type === 'text'"
@@ -104,15 +117,16 @@
               :style="{ color: t.text, '--awog-accent': t.accent }"
               :data-agent-message-id="message.id"
             />
-            <!-- Inline step cluster. Replaces the previous single steps box so
-                 the subagent drawer (slides in from the right) stays visible and
-                 commands line up with the text they ran between. -->
+            <!-- Inline step timeline (Claude-Code style): flat vertical list, no
+                 box — each step's own status icon is the bullet, a thin left rail
+                 groups the run. `timeline` tells StepItem to wrap long paths and
+                 show a one-line result summary instead of truncating. -->
             <div
               v-else
-              class="mt-2 rounded-md px-3 py-2 space-y-1 text-[12px]"
-              :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
+              class="mt-2 space-y-1 text-[12px] pl-3"
+              :style="{ borderLeft: `2px solid ${t.border}` }"
             >
-              <StepItem v-for="s in block.steps" :key="s.id" :step="s" />
+              <StepItem v-for="s in block.steps" :key="s.id" :step="s" timeline />
             </div>
           </template>
         </template>
@@ -244,16 +258,24 @@ const tokenColor = (kind: SessionTokenKind) => {
   return t.value.success
 }
 
-// Inline collapsible step list — local state so multiple bubbles can stay
-// collapsed/expanded independently. Default state is EXPANDED: when a message
-// arrives with steps the user should see them immediately (live progress +
-// retrospective audit).
-const expanded = ref(true)
+// Inline step timeline — local state so multiple bubbles can stay
+// collapsed/expanded independently. Default state is COLLAPSED ("đóng sẵn"): a
+// turn reads as a clean document, with the summary line ("ran N commands…") as
+// the toggle. Expanding reveals the Claude-Code-style step timeline (each tool
+// call + interleaved reasoning, with ⎿ result summaries).
+const expanded = ref(false)
+
+// Steps that render inside the collapsible cluster: tool calls + thinking. TODO
+// (note) and question steps are lifted out and rendered standalone (always
+// visible), so they neither gate nor label the collapse toggle.
+const clusterSteps = computed<SessionStep[]>(
+  () =>
+    props.message.steps?.filter((s: SessionStep) => s.kind !== 'note' && s.kind !== 'question') ??
+    [],
+)
 
 const hasRunningStep = computed((): boolean =>
-  (props.message.steps ?? []).some(
-    (s: SessionStep) => s.status === 'running' || s.status === undefined,
-  ),
+  clusterSteps.value.some((s: SessionStep) => s.status === 'running' || s.status === undefined),
 )
 
 const isStreaming = computed(() => !!(props.message.startedAt && !props.message.completedAt))
@@ -262,26 +284,27 @@ type TimelineBlock = { type: 'text'; text: string } | { type: 'steps'; steps: Se
 
 // Coalesce the authoritative ordered parts (ADR 0032) into render blocks: each
 // text part is a text block; consecutive step parts collapse into one cluster.
-// Thinking parts hoist into a single leading cluster (reasoning reads above the
-// reply, regardless of when the provider streamed it).
+// Thinking parts interleave in arrival order — each reasoning block sits right
+// before the tool/step it produced (Pi streams thinking ahead of each tool call),
+// so the cluster reads "reason → act" per step instead of one merged block.
 const blocksFromParts = (parts: SessionMessagePart[]): TimelineBlock[] => {
-  const thinking = parts.filter((p): p is SessionStep => p.kind === 'thinking')
-  const lead: TimelineBlock[] = thinking.length ? [{ type: 'steps', steps: thinking }] : []
   const body: TimelineBlock[] = []
   for (const p of parts) {
-    if (p.kind === 'thinking') continue
-    // Question steps render via SessionQuestionCard (outside the cluster) so the
-    // interactive card is always visible — never bury it in a collapsed cluster.
-    if (p.kind === 'question') continue
+    // Question + note (TODO) steps render outside the cluster — questions via
+    // SessionQuestionCard (always visible while the turn is blocked), TODOs via
+    // the standalone checklist above. Never bury either in the collapsed cluster.
+    if (p.kind === 'question' || p.kind === 'note') continue
     if (p.kind === 'text') {
       if (p.text.trim()) body.push({ type: 'text', text: p.text })
       continue
     }
+    // thinking + tool steps share the timeline; consecutive ones collapse into
+    // one cluster so reasoning lines up with the action it preceded.
     const last = body[body.length - 1]
     if (last && last.type === 'steps') last.steps.push(p)
     else body.push({ type: 'steps', steps: [p] })
   }
-  return [...lead, ...body]
+  return body
 }
 
 // Reply turns mix narration text with tool calls. When the sidecar-built ordered
@@ -298,17 +321,13 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
   const allSteps = props.message.steps ?? []
   if (!allSteps.length) return text ? [{ type: 'text', text }] : []
 
-  // Reasoning precedes the answer it produced — it is not part of the reply
-  // text, so it never splits it. Some providers stream the reasoning summary
-  // AFTER the reply text; its step then carries an end-of-text offset and would
-  // render BELOW the answer. Pin every thinking block to a single leading
-  // cluster (arrival order) so reasoning always reads above the reply; the rest
-  // interleave by their stamped text offset as before.
-  const thinking = allSteps.filter((s: SessionStep) => s.kind === 'thinking')
-  // Question steps are rendered separately by SessionQuestionCard (see above).
-  const steps = allSteps.filter((s: SessionStep) => s.kind !== 'thinking' && s.kind !== 'question')
-  const lead: TimelineBlock[] = thinking.length ? [{ type: 'steps', steps: thinking }] : []
-  if (!steps.length) return text ? [...lead, { type: 'text', text }] : lead
+  // Thinking interleaves with tools by its stamped text offset: reasoning is
+  // streamed just before the tool/iteration it produced, so it sorts ahead of
+  // that step and reads "reason → act" per step. Question + note (TODO) steps
+  // render separately (SessionQuestionCard / the standalone TODO checklist), so
+  // keep only those out of the interleaved cluster.
+  const steps = allSteps.filter((s: SessionStep) => s.kind !== 'question' && s.kind !== 'note')
+  if (!steps.length) return text ? [{ type: 'text', text }] : []
 
   const len = text.length
   const ordered = steps
@@ -333,13 +352,21 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
     const seg = text.slice(cursor)
     if (seg.trim()) body.push({ type: 'text', text: seg })
   }
-  return [...lead, ...body]
+  return body
 })
 
 // AskUserQuestion steps, rendered as interactive cards outside the collapsible
 // step cluster (always visible — the turn is blocked until the user answers).
 const questionSteps = computed<SessionStep[]>(
   () => props.message.steps?.filter((s: SessionStep) => s.kind === 'question') ?? [],
+)
+
+// TODO checklist steps (kind === 'note'), rendered standalone above the body and
+// outside the collapsible cluster so the agent's plan/progress is always visible.
+// The sidecar upserts one 'todo-list' step per turn, so this is normally a single
+// evolving checklist.
+const todoSteps = computed<SessionStep[]>(
+  () => props.message.steps?.filter((s: SessionStep) => s.kind === 'note') ?? [],
 )
 
 // Only the trailing text segment is still being typed — flag it so
