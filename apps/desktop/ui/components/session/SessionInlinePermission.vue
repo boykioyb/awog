@@ -98,6 +98,7 @@
           color: t.text,
           border: `1px solid ${t.borderStrong}`,
         }"
+        :title="`Always allow ${pending.toolName} for this session (no more prompts)`"
         @click="onAlwaysAllow"
       >
         Always allow

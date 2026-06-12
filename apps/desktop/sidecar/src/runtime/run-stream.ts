@@ -124,7 +124,7 @@ export async function runStreamPi(
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
 
-  const beforeToolCall = makeBeforeToolCall(args.canUseTool, args.settings.mode)
+  const beforeToolCall = makeBeforeToolCall(args.canUseTool, args.settings.mode, args.sessionId)
 
   // Task subagent tool (ADR 0030). Added at the TOP LEVEL only — never to a
   // subagent's toolset (so depth = 1). Skipped in plan mode (read-only) and when

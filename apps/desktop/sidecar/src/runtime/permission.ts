@@ -24,8 +24,9 @@ import type {
   BeforeToolCallContext,
   BeforeToolCallResult,
 } from '@earendil-works/pi-agent-core'
-import type { CanUseTool } from './permission-types.js'
+import type { CanUseTool, PermissionUpdate } from './permission-types.js'
 import type { AgentMode } from '../types/shared.js'
+import { allowSessionTool, isSessionToolAllowed } from '../sessions/permissions.js'
 import { log } from '../util/logger.js'
 
 // Tools that mutate the workspace or execute code. Everything else is read-only
@@ -45,6 +46,7 @@ export type BeforeToolCall = (
 export function makeBeforeToolCall(
   canUseTool: CanUseTool | undefined,
   mode: AgentMode,
+  sessionId?: string,
 ): BeforeToolCall {
   return async (context, signal) => {
     const toolName = context.toolCall.name
@@ -64,6 +66,10 @@ export function makeBeforeToolCall(
     // accept-edits: auto-allow file edits; other gated tools (Bash) still prompt.
     if (mode === 'accept-edits' && WRITE_TOOLS.has(toolName)) return undefined
 
+    // Session "always allow": the user previously chose to allow this tool for
+    // the whole session — skip the prompt for every later call of the same tool.
+    if (sessionId && isSessionToolAllowed(sessionId, toolName)) return undefined
+
     // ask (and accept-edits for Bash): defer to the UI permission prompt.
     if (!canUseTool) {
       // No gate supplied but mode wants one — fail safe (block) rather than
@@ -78,12 +84,25 @@ export function makeBeforeToolCall(
     try {
       // canUseTool takes an options bag; we supply the fields it reads.
       // `signal` ties the prompt to the turn abort; toolUseID identifies the call.
+      // A non-empty `suggestions` array is what makes the UI offer the
+      // "Always allow" button; the rule body is opaque to AWOG (the session
+      // allowlist below keys off toolName), so a single marker rule suffices.
       const input = (context.args ?? {}) as Record<string, unknown>
+      const suggestions: PermissionUpdate[] = [
+        { type: 'addRule', toolName, destination: 'session' },
+      ]
       const result = await canUseTool(toolName, input, {
         signal: signal ?? new AbortController().signal,
         toolUseID: toolUseId,
+        suggestions,
       })
       if (result.behavior === 'allow') {
+        // "Always allow" round-trips the suggestions back as updatedPermissions
+        // (sessions.permission.ts). Remember the tool so it stops prompting for
+        // the rest of this session.
+        if (sessionId && result.updatedPermissions && result.updatedPermissions.length > 0) {
+          allowSessionTool(sessionId, toolName)
+        }
         // Apply an approved input override by mutating the validated args object
         // in place — Pi executes the tool with `context.args`.
         if (result.updatedInput && context.args && typeof context.args === 'object') {
