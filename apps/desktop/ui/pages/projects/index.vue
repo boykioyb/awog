@@ -150,6 +150,14 @@
               <button
                 class="p-1.5 rounded transition"
                 :style="{ color: t.textDim }"
+                :title="tr('project.llm.title')"
+                @click="llmModalOpen = true"
+              >
+                <SlidersHorizontal :size="13" />
+              </button>
+              <button
+                class="p-1.5 rounded transition"
+                :style="{ color: t.textDim }"
                 @click="confirmDelete = selectedProject"
               >
                 <Trash2 :size="13" />
@@ -200,6 +208,31 @@
               :value="formatTime(selectedProject.createdAt)"
             />
           </div>
+
+          <!-- Per-project session LLM defaults. New sessions in this project
+               inherit provider/account/model/effort from here. -->
+          <button
+            class="w-full rounded p-3 mb-6 flex items-center gap-3 text-left transition"
+            :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+            @click="llmModalOpen = true"
+          >
+            <SlidersHorizontal :size="15" :style="{ color: t.textDim }" />
+            <div class="flex-1 min-w-0">
+              <div
+                class="text-[1em] uppercase tracking-wider font-medium"
+                :style="{ color: t.textDim }"
+              >
+                {{ tr('project.llm.title') }}
+              </div>
+              <div
+                class="text-[1em] mt-0.5 truncate"
+                :style="{ color: llmSummary.custom ? t.text : t.textDim }"
+              >
+                {{ llmSummary.text }}
+              </div>
+            </div>
+            <ChevronRight :size="15" :style="{ color: t.textDim }" />
+          </button>
 
           <div
             v-if="selectedProject.gitRemote"
@@ -399,6 +432,13 @@
     @installed="onTemplateInstalled"
   />
 
+  <ProjectLlmDefaultsModal
+    v-if="selectedProject"
+    :open="llmModalOpen"
+    :project-id="selectedProject.id"
+    @close="llmModalOpen = false"
+  />
+
   <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
     <div
       v-for="toast in toasts"
@@ -414,6 +454,7 @@
 <script setup lang="ts">
 import {
   AlertCircle,
+  ChevronRight,
   Circle,
   Clock,
   Code2,
@@ -427,10 +468,12 @@ import {
   Package,
   PackagePlus,
   Plus,
+  SlidersHorizontal,
   TerminalSquare,
   Trash2,
 } from 'lucide-vue-next'
 import type { Project, Session, Task } from '~/types'
+import { LEVEL_LABEL, PROVIDER_LABEL, modelById } from '~/utils/models'
 import ProjectTerminalDock from '~/components/workspace/ProjectTerminalDock.vue'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 import type { ProjectEditorSavePayload } from '~/components/project/types'
@@ -443,6 +486,7 @@ const { pill } = useGlass()
 const ws = useWorkspaceStore()
 const tasksStore = useTasksStore()
 const sessionsStore = useSessionsStore()
+const settingsStore = useSettingsStore()
 const templatesStore = useTemplatesStore()
 const sidecar = useSidecar()
 const { toasts, pushToast, toastStyle } = useToasts()
@@ -532,6 +576,23 @@ if (sidecar.available) {
 const selectedProject = computed<Project | null>(
   () => ws.projects.find((p) => p.id === selectedId.value) ?? null,
 )
+
+// ── Per-project session LLM defaults ──
+const llmModalOpen = ref(false)
+const llmSummary = computed<{ custom: boolean; text: string }>(() => {
+  const ld = selectedProject.value?.llmDefaults
+  if (!ld) return { custom: false, text: tr('project.llm.using_app_default') }
+  const parts = [
+    PROVIDER_LABEL[ld.provider],
+    modelById(ld.modelId)?.label ?? ld.modelId,
+    LEVEL_LABEL[ld.level],
+  ]
+  if (ld.accountId) {
+    const acc = settingsStore.providers[ld.provider]?.accounts.find((a) => a.id === ld.accountId)
+    if (acc) parts.push(acc.label)
+  }
+  return { custom: true, text: parts.join(' · ') }
+})
 
 // ── Per-project terminal ──
 const terminalPathOf = (id: string): string => ws.projects.find((p) => p.id === id)?.path ?? ''

@@ -130,6 +130,7 @@
               :style="{ background: pill(false, groupHover === group.key).background }"
               @mouseenter="groupHover = group.key"
               @mouseleave="groupHover = null"
+              @contextmenu="onGroupContextMenu($event, group)"
             >
               <button
                 class="flex items-center gap-1.5 flex-1 min-w-0 text-left transition"
@@ -320,6 +321,21 @@
     @close="contextMenu = null"
   />
 
+  <!-- Right-click on a project group header → quick LLM-defaults + new session. -->
+  <ContextMenu
+    v-if="projectMenu"
+    :x="projectMenu.x"
+    :y="projectMenu.y"
+    :items="projectMenuItems"
+    @close="projectMenu = null"
+  />
+
+  <ProjectLlmDefaultsModal
+    :open="!!llmModalProjectId"
+    :project-id="llmModalProjectId"
+    @close="llmModalProjectId = null"
+  />
+
   <SessionNewDialog
     :open="newDialogOpen"
     @close="newDialogOpen = false"
@@ -341,6 +357,7 @@ import {
   MoreHorizontal,
   Pin,
   Plus,
+  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-vue-next'
@@ -350,6 +367,7 @@ import { PROVIDER_LABEL, modelById } from '~/utils/models'
 import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const { pill } = useGlass()
 const store = useSessionsStore()
 const workspace = useWorkspaceStore()
@@ -549,6 +567,40 @@ const contextMenu = ref<{ x: number; y: number; id: string } | null>(null)
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
 const pendingDeleteId = ref<string | null>(null)
+
+// ── Project group context menu (quick LLM defaults + new session) ──
+// Only the project grouping carries a real projectId in `group.key`; the
+// provider/model groupings and the "_none" bucket have no project to configure.
+const projectMenu = ref<{ x: number; y: number; projectId: string } | null>(null)
+const llmModalProjectId = ref<string | null>(null)
+
+const onGroupContextMenu = (e: MouseEvent, group: Group) => {
+  if (groupBy.value !== 'project' || group.key === '_none') return
+  e.preventDefault()
+  projectMenu.value = { x: e.clientX, y: e.clientY, projectId: group.key }
+}
+
+const projectMenuItems = computed<ContextMenuItem[]>(() => {
+  const ctx = projectMenu.value
+  if (!ctx) return []
+  return [
+    {
+      label: tr('project.llm.menu_label'),
+      icon: SlidersHorizontal,
+      action: () => {
+        llmModalProjectId.value = ctx.projectId
+      },
+    },
+    {
+      label: tr('project.llm.new_session_in'),
+      icon: Plus,
+      action: () => {
+        store.createSession({ title: '', projectId: ctx.projectId })
+        mobilePane.value = 'detail'
+      },
+    },
+  ]
+})
 
 const setRenameInputRef = (el: unknown) => {
   if (el instanceof HTMLInputElement) {

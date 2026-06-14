@@ -279,6 +279,29 @@ export const useSessionsStore = defineStore('sessions', {
       this.selectedSessionId = id
     },
 
+    // Initial settings for a new session. When the session is scoped to a
+    // project that carries `llmDefaults`, inherit provider/account/model/effort
+    // from it (mode stays the global default). The stored account is dropped if
+    // it no longer exists, so the session falls back to the provider's active
+    // account instead of pinning a dangling id.
+    settingsForProject(projectId: string | null): SessionSettings {
+      const base: SessionSettings = { ...DEFAULT_SETTINGS }
+      if (!projectId) return base
+      const ld = useWorkspaceStore().projectById(projectId)?.llmDefaults
+      if (!ld) return base
+      const next: SessionSettings = {
+        ...base,
+        provider: ld.provider,
+        modelId: ld.modelId,
+        level: ld.level,
+      }
+      if (ld.accountId) {
+        const accounts = useSettingsStore().providers[ld.provider]?.accounts ?? []
+        if (accounts.some((a) => a.id === ld.accountId)) next.accountId = ld.accountId
+      }
+      return next
+    },
+
     createSession(data: CreateSessionInput): Session {
       const ts = nowIso()
       const session: Session = {
@@ -290,7 +313,7 @@ export const useSessionsStore = defineStore('sessions', {
         invitedAgentIds: [],
         messages: [],
         pendingAgentIds: [],
-        settings: { ...DEFAULT_SETTINGS },
+        settings: this.settingsForProject(data.projectId),
       }
       this.sessions.unshift(session)
       this.selectedSessionId = session.id

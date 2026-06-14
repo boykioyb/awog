@@ -328,6 +328,15 @@ export interface SessionStep {
 // Mirror of UI shape (apps/desktop/ui/types/index.ts). Stored as plain JSON
 // at ~/.awog/projects/<id>.json — see ADR 0012.
 
+// Per-project LLM defaults (mirror of UI ProjectLlmDefaults). New sessions in
+// this project inherit these instead of the global app defaults.
+export interface ProjectLlmDefaults {
+  provider: ProviderName
+  modelId: string
+  level: ThinkingLevel
+  accountId?: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -338,6 +347,7 @@ export interface Project {
   language: string
   createdAt: string
   color?: string
+  llmDefaults?: ProjectLlmDefaults
 }
 
 // ─── Skill ─────────────────────────────────────────────────────────────────

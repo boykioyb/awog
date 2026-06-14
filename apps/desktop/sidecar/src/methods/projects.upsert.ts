@@ -15,6 +15,18 @@ const ProjectIdSchema = z
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*$/, 'id must be lowercase alphanumeric and hyphens')
 
+// Per-project LLM defaults (mirror of UI ProjectLlmDefaults). Validated at the
+// boundary like the rest of the project payload; persisted as-is so new sessions
+// can inherit it. `accountId` references an account in credentials.json — left
+// unverified here (it may legitimately point at an account that gets removed
+// later; the UI falls back to the provider's active account at session create).
+const LlmDefaultsSchema = z.object({
+  provider: z.enum(['anthropic', 'openai', 'google']),
+  modelId: z.string().min(1).max(200),
+  level: z.enum(['low', 'medium', 'high', 'extra-high', 'max']),
+  accountId: z.string().max(200).optional(),
+})
+
 const ProjectSchema = z.object({
   id: ProjectIdSchema,
   name: z.string().min(1).max(120),
@@ -25,6 +37,7 @@ const ProjectSchema = z.object({
   language: z.string().max(80).default(''),
   createdAt: z.string().max(60),
   color: z.string().max(40).optional(),
+  llmDefaults: LlmDefaultsSchema.optional(),
 })
 
 const Params = z.object({
@@ -100,6 +113,18 @@ register('projects.upsert', async (raw) => {
     createdAt: incoming.createdAt,
   }
   if (incoming.color !== undefined) project.color = incoming.color
+  // Omitted on the incoming payload → dropped from the saved record (a "reset to
+  // app default" from the UI sends the project without this field).
+  if (incoming.llmDefaults !== undefined) {
+    project.llmDefaults = {
+      provider: incoming.llmDefaults.provider,
+      modelId: incoming.llmDefaults.modelId,
+      level: incoming.llmDefaults.level,
+    }
+    if (incoming.llmDefaults.accountId !== undefined) {
+      project.llmDefaults.accountId = incoming.llmDefaults.accountId
+    }
+  }
 
   await saveProject(project)
   return { project }

@@ -227,18 +227,23 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
 
     async updateProject(project: Project): Promise<Project> {
+      // Replace the array element wholesale (not Object.assign) so a removed
+      // optional field — e.g. clearing `llmDefaults` on "reset to app default" —
+      // actually disappears from the store, not just from disk.
+      const apply = (saved: Project) => {
+        const idx = this.projects.findIndex((p: Project) => p.id === saved.id)
+        if (idx >= 0) this.projects[idx] = saved
+      }
       const sidecar = useSidecar()
       if (sidecar.available) {
         const res = await sidecar.request<ProjectUpsertResponse>('projects.upsert', {
           project,
           mode: 'update',
         })
-        const existing = this.projects.find((p: Project) => p.id === res.project.id)
-        if (existing) Object.assign(existing, res.project)
+        apply(res.project)
         return res.project
       }
-      const existing = this.projects.find((p: Project) => p.id === project.id)
-      if (existing) Object.assign(existing, project)
+      apply(project)
       return project
     },
 

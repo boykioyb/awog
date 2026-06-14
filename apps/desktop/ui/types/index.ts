@@ -1,5 +1,16 @@
 // Entity types ported from prototype / docs/architecture/data-model.md
 
+// Per-project LLM defaults. A new session opened in this project starts from
+// these instead of the global app defaults (mode stays a separate global
+// preference). Optional fields mirror SessionSettings; `accountId` undefined =
+// follow the provider's active account at session-create time.
+export interface ProjectLlmDefaults {
+  provider: ProviderName
+  modelId: string
+  level: ThinkingLevel
+  accountId?: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -10,6 +21,9 @@ export interface Project {
   language: string
   createdAt: string
   color?: string
+  // Session LLM defaults (provider/account/model/effort) for this project. New
+  // sessions inherit these; undefined = use the global app defaults.
+  llmDefaults?: ProjectLlmDefaults
 }
 
 // Skill = a SKILL.md folder. The id IS the slug (folder name on disk).

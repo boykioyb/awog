@@ -747,5 +747,17 @@
   "templates.install_dialog.conflict_skip": "Bỏ qua mục đã có",
   "templates.install_dialog.conflict_overwrite": "Ghi đè mục đã có",
   "templates.install_dialog.hint": "Các thành phần được ghi vào thư mục .awog của project đích.",
-  "templates.install_dialog.confirm": "Cài đặt"
+  "templates.install_dialog.confirm": "Cài đặt",
+  "project.llm.title": "Mặc định cho session",
+  "project.llm.subtitle": "Session mới mở trong project này sẽ khởi tạo theo các thiết lập này.",
+  "project.llm.provider": "Nhà cung cấp",
+  "project.llm.account": "Tài khoản",
+  "project.llm.model": "Model",
+  "project.llm.effort": "Mức suy luận",
+  "project.llm.follow_active": "Theo tài khoản đang dùng",
+  "project.llm.not_connected": "chưa kết nối",
+  "project.llm.reset": "Đặt lại theo mặc định app",
+  "project.llm.using_app_default": "Đang dùng mặc định của app",
+  "project.llm.menu_label": "Mặc định cho session…",
+  "project.llm.new_session_in": "Session mới trong project"
 }

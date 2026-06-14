@@ -747,5 +747,17 @@
   "templates.install_dialog.conflict_skip": "Skip existing",
   "templates.install_dialog.conflict_overwrite": "Overwrite existing",
   "templates.install_dialog.hint": "Entities are written into the target project's .awog folder.",
-  "templates.install_dialog.confirm": "Install"
+  "templates.install_dialog.confirm": "Install",
+  "project.llm.title": "Session defaults",
+  "project.llm.subtitle": "New sessions opened in this project start with these settings.",
+  "project.llm.provider": "Provider",
+  "project.llm.account": "Account",
+  "project.llm.model": "Model",
+  "project.llm.effort": "Effort",
+  "project.llm.follow_active": "Follow active account",
+  "project.llm.not_connected": "not connected",
+  "project.llm.reset": "Reset to app default",
+  "project.llm.using_app_default": "Using app default",
+  "project.llm.menu_label": "Session defaults…",
+  "project.llm.new_session_in": "New session in project"
 }
