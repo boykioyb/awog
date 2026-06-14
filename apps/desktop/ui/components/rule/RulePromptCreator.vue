@@ -12,6 +12,10 @@
     @cancel="emit('cancel')"
     @regenerate="onRegenerate"
   >
+    <template #controls>
+      <CreatorScopePicker v-model="scope" :projects="projects" />
+    </template>
+
     <template #preview>
       <div
         v-if="draft"
@@ -41,7 +45,7 @@
       <button
         class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{ background: t.accent, color: t.accentText }"
-        @click="draft && emit('save', draft)"
+        @click="draft && emit('save', draft, scope)"
       >
         <Save :size="11" />
         {{ tr('rules.creator.save') }}
@@ -54,16 +58,24 @@
 import { Save, Sliders } from 'lucide-vue-next'
 import type { RuleDraft } from '~/composables/useRuleGenerator'
 
-defineProps<{ anchor?: { top: number; left: number } | null }>()
+withDefaults(
+  defineProps<{
+    anchor?: { top: number; left: number } | null
+    projects?: { id: string; name: string }[]
+  }>(),
+  { anchor: null, projects: () => [] },
+)
 
 const emit = defineEmits<{
-  save: [draft: RuleDraft]
+  // scope: 'global' or a projectId — where the rule is persisted.
+  save: [draft: RuleDraft, scope: string]
   'edit-manually': [draft: RuleDraft]
   cancel: []
 }>()
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
+const scope = ref('global')
 const { draft, isGenerating, error, onSubmit, onRegenerate } =
   usePromptCreator<RuleDraft>(useRuleGenerator())
 </script>

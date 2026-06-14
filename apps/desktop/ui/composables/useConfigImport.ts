@@ -5,7 +5,7 @@ import type { ConfigKind, ImportCandidate, ImportResult } from '~/types'
 // the chosen items into `.awog`, then re-hydrates the affected entity stores.
 //
 // Scoped per caller (banner + dialog each own one). The composable holds no
-// global state — pass a projectId to scope project + global, or omit for the
+// global state — pass a projectId for a project-only scan, or omit for the
 // global-only scan (Settings entry / page header).
 
 export type ImportSelection = {

@@ -206,7 +206,8 @@
   <HookPromptCreator
     v-if="showPromptModal"
     :anchor="anchor"
-    @save="onSave"
+    :projects="ws.projects"
+    @save="onSaveFromCreator"
     @edit-manually="onEditManually"
     @cancel="onCancelPromptModal"
   />
@@ -412,6 +413,15 @@ const onSave = (data: Hook) => {
   manualSeed.value = null
   showPromptModal.value = false
   mobilePane.value = 'detail'
+}
+
+// The creator's "Save to" picker → source/projectId before the shared onSave.
+const onSaveFromCreator = (hook: Hook, scope: string) => {
+  onSave({
+    ...hook,
+    source: scope === 'global' ? 'global' : 'project',
+    ...(scope !== 'global' ? { projectId: scope } : {}),
+  })
 }
 
 const onCancel = () => {

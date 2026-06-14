@@ -56,6 +56,7 @@
           class="rounded-2xl p-3 flex flex-col gap-2.5"
           :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
         >
+          <CreatorScopePicker v-model="scope" :projects="projects" />
           <textarea
             v-model="promptText"
             :rows="2"
@@ -140,6 +141,11 @@ const { t } = useTheme()
 const sidecar = useSidecar()
 const settings = useSettingsStore()
 const ws = useWorkspaceStore()
+
+// "Save to" scope: 'global' (→ ~/.awog/skills) or a projectId
+// (→ {project}/.awog/skills). The sidecar resolves it to the write dir + cwd.
+const scope = ref('global')
+const projects = computed(() => ws.projects.map((p) => ({ id: p.id, name: p.name })))
 
 const messages = ref<ChatMsg[]>([])
 const promptText = ref('')
@@ -255,7 +261,7 @@ const onSend = async () => {
   const account = settings.activeAccount('anthropic')
   if (!sidecar.available || !account) {
     error.value = !sidecar.available
-      ? 'Sidecar offline — chat unavailable. Run the Tauri app.'
+      ? 'Sidecar offline — chat unavailable. Run the desktop app.'
       : 'No active Anthropic account. Connect one in Settings.'
     return
   }
@@ -282,7 +288,7 @@ const onSend = async () => {
       history,
       userText: text,
       accountId: account.id,
-      projectIds: ws.projects.map((p: { id: string }) => p.id),
+      scope: scope.value,
     })
     // Finalise: move the streaming buffer into a permanent agent message.
     messages.value = [

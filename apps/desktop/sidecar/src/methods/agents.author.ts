@@ -9,7 +9,7 @@
 //   agents.author.step  { messageId, step }      — tool_use / tool_result
 //   agents.author.done  { messageId, text, ... } — terminal
 
-import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { stepFromToolResult, stepFromToolUse } from '../sessions/step-mapper.js'
@@ -33,9 +33,9 @@ const Params = z.object({
   userText: z.string().min(1).max(8_000),
   accountId: z.string().min(1).max(120).optional(),
   modelId: ModelSchema.optional(),
-  // Registered project paths the model may also write into (.claude/agents,
-  // .agents/agents). UI sends ws.projects.map(p => p.id).
-  projectIds: z.array(z.string().min(1).max(64)).max(50).optional(),
+  // Where to save: 'global' (→ ~/.awog/agents) or a registered projectId
+  // (→ {project}/.awog/agents). Chosen via the creator's "Save to" picker.
+  scope: z.string().min(1).max(64).default('global'),
 })
 
 function renderTranscript(
@@ -52,17 +52,7 @@ function renderTranscript(
   return turns.join('\n\n')
 }
 
-function buildSystemPrompt(projectPaths: string[]): string {
-  const userDirs = [
-    `${awogHome()}/agents/<slug>.md  (AWOG-native, default for personal agents)`,
-    `${homedir()}/.claude/agents/<slug>.md  (Claude Code SDK subagents — shared)`,
-    `${homedir()}/.agents/agents/<slug>.md  (Craft Agents shared)`,
-  ]
-  const projectLines = projectPaths.map(
-    (p) => `${p}/.claude/agents/<slug>.md  or  ${p}/.agents/agents/<slug>.md  (project-scoped)`,
-  )
-  const allPaths = [...userDirs, ...projectLines].map((l) => `  - ${l}`).join('\n')
-
+function buildSystemPrompt(agentsDir: string): string {
   return `You are an Agent designer working inside AWOG. Your job is to create a single AGENT.md file based on what the user describes — format-compatible with Claude Code SDK subagents.
 
 Output format on disk (YAML frontmatter + Markdown body):
@@ -82,15 +72,13 @@ mentioned. Be concrete.
 Workflow:
 1. Read the user's request. If genuinely vague, ASK ONE concise clarifying question (which role/persona? which task focus?). Do not interrogate.
 2. Decide on a slug (kebab-case, lowercase, matching ^[a-z0-9][a-z0-9-]*$).
-3. Pick a save location from this list. If the user didn't say, default to ${awogHome()}/agents/<slug>.md and mention briefly that you picked it (one line, no apologies).
-4. Use the Write tool to create the file. The frontmatter MUST include name and description; everything else is optional. Body = the system prompt.
-5. Finish with a one-sentence confirmation: which slug + which path you created. Nothing else.
-
-Allowed save paths:
-${allPaths}
+3. Use the Write tool to create the file at EXACTLY this path (create parent dirs as needed):
+     ${agentsDir}/<slug>.md
+   Replace <slug> with your chosen slug. Do not write any other file.
+4. Finish with a one-sentence confirmation: which slug + which path you created. Nothing else.
 
 Hard rules:
-- Never write outside the paths listed above.
+- Write ONLY under the path above. Never write or modify any other file.
 - Never modify or delete an existing agent unless the user explicitly asks.
 - Frontmatter MUST include name and description.
 - Body MUST be the system prompt itself (plain Markdown), not a description of the system prompt. No JSON wrapper, no code fences around the whole file.
@@ -98,41 +86,43 @@ Hard rules:
 - Keep mcpServerIds as an empty array unless the user explicitly mentions MCP servers — those are managed via the editor picker.`
 }
 
-async function resolveProjectPaths(projectIds: string[]): Promise<string[]> {
-  const paths: string[] = []
-  for (const id of projectIds) {
-    // eslint-disable-next-line no-await-in-loop
-    const project = await loadProject(id)
-    if (project) paths.push(project.path)
+// Resolve the chosen scope into the single agents dir to write into + the cwd
+// that bounds the Write tool (assertInsideWorkspace). Throws on an unknown
+// projectId so the UI surfaces a clear error instead of a silent global write.
+async function resolveTarget(scope: string): Promise<{ agentsDir: string; cwd: string }> {
+  if (scope === 'global') {
+    return { agentsDir: join(awogHome(), 'agents'), cwd: awogHome() }
   }
-  return paths
+  const project = await loadProject(scope)
+  if (!project) throw new Error(`Unknown project: ${scope}`)
+  return { agentsDir: join(project.path, '.awog', 'agents'), cwd: project.path }
 }
 
 register('agents.author', async (raw) => {
   const params = Params.parse(raw)
 
   const modelId = params.modelId ?? 'claude-sonnet-4-6'
-  const projectPaths = await resolveProjectPaths(params.projectIds ?? [])
-  const systemPrompt = buildSystemPrompt(projectPaths)
+  const { agentsDir, cwd } = await resolveTarget(params.scope)
+  const systemPrompt = buildSystemPrompt(agentsDir)
 
   log.info('agents.author start', {
     messageId: params.messageId,
     model: modelId,
     historyLen: params.history.length,
-    projectCount: projectPaths.length,
+    scope: params.scope,
   })
 
   const transcript = renderTranscript(params.history, params.userText)
 
-  // Author through the Pi runtime. Writes an AGENT.md via the Write tool, so
-  // authorPi drives an agentic loop with the full tool set (bypass permission)
-  // and forwards text/step events to the emitters below.
+  // Author through the Pi runtime. Writes an AGENT.md via the Write tool (cwd
+  // bounds it to the chosen scope's dir), forwarding text/step events below.
   const res = await authorPi(
     {
       accountId: params.accountId,
       modelId,
       systemPrompt,
       prompt: transcript,
+      cwd,
     },
     {
       onText: (delta) => emit('agents.author.chunk', { messageId: params.messageId, delta }),

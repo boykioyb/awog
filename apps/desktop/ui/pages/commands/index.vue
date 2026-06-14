@@ -165,6 +165,7 @@
   <CommandPromptCreator
     v-if="showPromptModal"
     :anchor="anchor"
+    :projects="ws.projects"
     @save="onSaveFromCreator"
     @edit-manually="onEditManually"
     @cancel="showPromptModal = false"
@@ -282,7 +283,9 @@ const grouped = computed<CommandGroup[]>(() => {
 
 const collapsedGroups = ref<Record<string, boolean>>({})
 const groupHover = ref<string | null>(null)
-const showHeaders = computed(() => grouped.value.length > 1)
+// Always show the project/group header so a single-project list still names its
+// owner (badge alone only says generic "project"). Header doubles as collapse toggle.
+const showHeaders = computed(() => grouped.value.length > 0)
 const toggleGroup = (key: string) => {
   collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
 }
@@ -308,11 +311,12 @@ const slugify = (s: string): string =>
     .replace(/[^a-z0-9:]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'new-command'
 
-const onSaveFromCreator = (draft: CommandDraft) => {
+const onSaveFromCreator = (draft: CommandDraft, scope: string) => {
   showPromptModal.value = false
   onSave({
     id: slugify(draft.name),
-    source: 'global',
+    source: scope === 'global' ? 'global' : 'project',
+    ...(scope !== 'global' ? { projectId: scope } : {}),
     name: draft.name,
     description: draft.description,
     argumentHint: draft.argumentHint,

@@ -14,7 +14,7 @@ Sau khi gộp mọi config-entity về `.awog` ([ADR 0035](../decisions/0035-con
 
 ## Functional Behavior
 
-- **Phát hiện (`migration.scan`):** quét nguồn import cho 1 project (và cho global `~/.claude`/`~/.agents`), trả danh sách item importable theo từng loại — bỏ qua item đã tồn tại cùng id trong `.awog` tier tương ứng.
+- **Phát hiện (`migration.scan`):** scope **loại trừ** — có `projectId` thì **chỉ** quét nguồn của project đó (`{p}/.claude`, `{p}/.agents`, `{p}/CLAUDE.md`…); không có `projectId` thì **chỉ** quét global (`~/.claude`/`~/.agents`). Trả danh sách item importable theo từng loại — bỏ qua item đã tồn tại cùng id trong `.awog` tier tương ứng. Banner trong Project vì vậy không lẫn config global; global import nằm ở entry riêng (Settings → Workspace).
   - Nguồn quét (tái dùng helper sẵn có — [ADR 0035](../decisions/0035-consolidate-config-tiers-to-awog.md)):
     | Loại | Nguồn project | Nguồn global |
     |---|---|---|

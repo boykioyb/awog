@@ -322,9 +322,30 @@ async function collectHooks(ctx: ScanContext): Promise<SourceItem[]> {
 
 // ─── Orchestration ───────────────────────────────────────────────────────────
 
+// Scope is exclusive: a projectId scans ONLY that project's legacy dirs; without
+// one we scan ONLY global (~/.claude, ~/.agents). Global config is imported from
+// its own entry (Settings → Workspace) so a project banner never surfaces
+// unrelated ~/.claude/.agents items.
 async function buildContexts(projectId?: string): Promise<ScanContext[]> {
+  if (projectId) {
+    const project = await loadProject(projectId)
+    if (!project) return []
+    return [
+      {
+        scope: 'project',
+        projectId,
+        projectPath: project.path,
+        legacyRoots: [
+          { dir: join(project.path, '.claude'), label: '.claude' },
+          { dir: join(project.path, '.agents'), label: '.agents' },
+        ],
+        claudeRoot: join(project.path, '.claude'),
+        claudeMd: join(project.path, 'CLAUDE.md'),
+      },
+    ]
+  }
   const home = homedir()
-  const contexts: ScanContext[] = [
+  return [
     {
       scope: 'global',
       legacyRoots: [
@@ -335,23 +356,6 @@ async function buildContexts(projectId?: string): Promise<ScanContext[]> {
       claudeMd: join(home, '.claude', 'CLAUDE.md'),
     },
   ]
-  if (projectId) {
-    const project = await loadProject(projectId)
-    if (project) {
-      contexts.push({
-        scope: 'project',
-        projectId,
-        projectPath: project.path,
-        legacyRoots: [
-          { dir: join(project.path, '.claude'), label: '.claude' },
-          { dir: join(project.path, '.agents'), label: '.agents' },
-        ],
-        claudeRoot: join(project.path, '.claude'),
-        claudeMd: join(project.path, 'CLAUDE.md'),
-      })
-    }
-  }
-  return contexts
 }
 
 async function collectSources(projectId?: string): Promise<SourceItem[]> {

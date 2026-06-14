@@ -15,15 +15,7 @@
     <!-- Scope picker shown BEFORE generation so it scopes which agents the LLM
          may wire (project agents only appear when a project is selected). -->
     <template #controls>
-      <div class="flex items-center gap-2">
-        <span class="text-[1em] flex-shrink-0" :style="{ color: t.textDim }">
-          {{ tr('workflows.creator.save_to') }}
-        </span>
-        <AppSelect v-model="scope" class="flex-1 min-w-0">
-          <option value="global">{{ tr('workflows.creator.scope_global') }}</option>
-          <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </AppSelect>
-      </div>
+      <CreatorScopePicker v-model="scope" :projects="projects" />
     </template>
 
     <template #preview>

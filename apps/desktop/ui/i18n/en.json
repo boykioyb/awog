@@ -614,6 +614,7 @@
   "common.enable": "Enable",
   "common.disable": "Disable",
   "common.user_global": "User & Global",
+  "creator.save_to": "Save to",
   "hooks.filter_all": "all",
   "hooks.editor.script": "Script · {path}",
   "hooks.editor.script_new": "File doesn't exist yet — saving will create it.",

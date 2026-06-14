@@ -165,6 +165,7 @@
 
   <RulePromptCreator
     v-if="showPromptModal"
+    :projects="ws.projects"
     @save="onSaveFromCreator"
     @edit-manually="onEditManually"
     @cancel="showPromptModal = false"
@@ -279,10 +280,11 @@ const grouped = computed<RuleGroup[]>(() => {
   return Array.from(map.values()).filter((g) => g.items.length > 0)
 })
 
-// Collapse state (mirrors Skills): one group reads as a flat list (no header).
+// Collapse state (mirrors Skills). Always show the project/group header so a
+// single-project list still names its owner (badge alone only says "project").
 const collapsedGroups = ref<Record<string, boolean>>({})
 const groupHover = ref<string | null>(null)
-const showHeaders = computed(() => grouped.value.length > 1)
+const showHeaders = computed(() => grouped.value.length > 0)
 const toggleGroup = (key: string) => {
   collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
 }
@@ -308,11 +310,12 @@ const slugify = (s: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'new-rule'
 
-const onSaveFromCreator = (draft: RuleDraft) => {
+const onSaveFromCreator = (draft: RuleDraft, scope: string) => {
   showPromptModal.value = false
   onSave({
     id: slugify(draft.name),
-    source: 'global',
+    source: scope === 'global' ? 'global' : 'project',
+    ...(scope !== 'global' ? { projectId: scope } : {}),
     name: draft.name,
     description: draft.description,
     body: draft.body,

@@ -12,6 +12,10 @@
     @cancel="emit('cancel')"
     @regenerate="onRegenerate"
   >
+    <template #controls>
+      <CreatorScopePicker v-model="scope" :projects="projects" />
+    </template>
+
     <template #preview>
       <div
         v-if="draft"
@@ -57,7 +61,7 @@
       <button
         class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
         :style="{ background: t.accent, color: t.accentText }"
-        @click="draft && emit('save', { ...(draft as Hook) })"
+        @click="draft && emit('save', { ...(draft as Hook) }, scope)"
       >
         <Save :size="11" />
         Save hook
@@ -71,15 +75,23 @@ import { Save, Sliders } from 'lucide-vue-next'
 import type { Hook } from '~/types'
 import type { HookDraft } from '~/composables/useHookGenerator'
 
-defineProps<{ anchor?: { top: number; left: number } | null }>()
+withDefaults(
+  defineProps<{
+    anchor?: { top: number; left: number } | null
+    projects?: { id: string; name: string }[]
+  }>(),
+  { anchor: null, projects: () => [] },
+)
 
 const emit = defineEmits<{
-  save: [hook: Hook]
+  // scope: 'global' or a projectId — where the hook is persisted.
+  save: [hook: Hook, scope: string]
   'edit-manually': [draft: HookDraft]
   cancel: []
 }>()
 
 const { t } = useTheme()
+const scope = ref('global')
 const { draft, isGenerating, error, onSubmit, onRegenerate } =
   usePromptCreator<HookDraft>(useHookGenerator())
 </script>

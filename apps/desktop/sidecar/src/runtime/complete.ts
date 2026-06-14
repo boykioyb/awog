@@ -155,8 +155,14 @@ export async function authorPi(args: AuthorArgs, cb: AuthorCallbacks): Promise<A
   const { account, settings, model, getApiKey } = await resolveForRun(args)
   const initialKey = await getApiKey(settings.provider)
 
-  // Full tool set: the author needs Write to materialise the file on disk.
-  const tools = createAwogToolDefinitions(args.cwd ?? process.cwd())
+  // Authoring only materialises a single config .md — Write/Read/Edit cover it
+  // (Write mkdir's parents itself). Withhold Bash/Grep/Glob/Web stubs: with the
+  // full set the model probes the shell (pwd/ls) in this headless one-shot env,
+  // the command fails, and it narrates "shell unavailable", derailing the author
+  // chat. The systemPrompt's allowed paths remain the write gate.
+  const tools = createAwogToolDefinitions(args.cwd ?? process.cwd(), {
+    allowedTools: ['Write', 'Read', 'Edit'],
+  })
 
   let text = ''
   let modelUsed = ''
