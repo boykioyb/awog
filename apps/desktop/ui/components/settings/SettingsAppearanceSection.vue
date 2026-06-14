@@ -46,6 +46,16 @@
         </AppSelect>
       </SettingsField>
 
+      <SettingsField :label="tr('settings.sendKey')" :hint="tr('settings.sendKey.hint')">
+        <AppSelect
+          :model-value="appearance.composerSendKey"
+          @update:model-value="(v) => onUpdate({ composerSendKey: v })"
+        >
+          <option value="enter">{{ tr('settings.sendKey.enter') }}</option>
+          <option value="shift-enter">{{ tr('settings.sendKey.shiftEnter') }}</option>
+        </AppSelect>
+      </SettingsField>
+
       <SettingsField label="Font size" :hint="`${appearance.fontSize}px`">
         <input
           v-model.number="appearance.fontSize"

@@ -3,6 +3,7 @@ import type {
   AccentPreset,
   AppearanceSettings,
   AppLocale,
+  ComposerSendKey,
   FontWeight,
   MonoFontFamily,
   SansFontFamily,
@@ -78,6 +79,7 @@ const THEME_COLOR_VALUES: readonly ThemeColor[] = [
 ]
 const DEPTH_VALUES: readonly SurfaceDepth[] = ['flat', 'standard', 'deep']
 const LOCALE_VALUES: readonly AppLocale[] = ['en', 'vi']
+const SEND_KEY_VALUES: readonly ComposerSendKey[] = ['enter', 'shift-enter']
 
 const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/
 
@@ -113,6 +115,7 @@ const coerceAppearance = (raw: unknown): AppearanceSettings => {
     liquidGlass:
       typeof v.liquidGlass === 'boolean' ? v.liquidGlass : DEFAULT_APPEARANCE.liquidGlass,
     locale: pick(v.locale, LOCALE_VALUES, DEFAULT_APPEARANCE.locale),
+    composerSendKey: pick(v.composerSendKey, SEND_KEY_VALUES, DEFAULT_APPEARANCE.composerSendKey),
   }
 }
 

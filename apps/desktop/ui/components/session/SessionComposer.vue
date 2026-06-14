@@ -288,6 +288,7 @@ const props = defineProps<{
 const { t } = useTheme()
 const store = useSessionsStore()
 const ws = useWorkspaceStore()
+const settings = useSettingsStore()
 
 const draft = ref('')
 const composerFocus = ref(false)
@@ -389,7 +390,18 @@ watch(
   },
 )
 
-const placeholder = computed(() => 'Type a message... (Enter to send)')
+const placeholder = computed(() =>
+  settings.appearance.composerSendKey === 'shift-enter'
+    ? 'Type a message... (Shift+Enter to send)'
+    : 'Type a message... (Enter to send)',
+)
+
+// Which Enter chord submits, per Settings → Appearance. 'enter': plain Enter
+// sends, Shift+Enter = newline. 'shift-enter': the inverse. The non-send chord
+// falls through to the textarea's default newline behavior.
+const isSendChord = (ev: KeyboardEvent) =>
+  ev.key === 'Enter' &&
+  (settings.appearance.composerSendKey === 'shift-enter' ? ev.shiftKey : !ev.shiftKey)
 
 const canSend = computed(
   () =>
@@ -442,7 +454,7 @@ const onComposerKeydown = (ev: KeyboardEvent) => {
       mention.moveUp()
       return
     }
-    if (ev.key === 'Enter' && !ev.shiftKey) {
+    if (isSendChord(ev)) {
       ev.preventDefault()
       mention.pickActive()
       return
@@ -453,7 +465,7 @@ const onComposerKeydown = (ev: KeyboardEvent) => {
       return
     }
   }
-  if (ev.key === 'Enter' && !ev.shiftKey) {
+  if (isSendChord(ev)) {
     ev.preventDefault()
     onSend()
   }

@@ -945,6 +945,11 @@ export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 
 export type AppLocale = 'en' | 'vi'
 
+// Which keyboard chord sends a message in the session composer.
+// 'enter' — Enter sends, Shift+Enter inserts a newline (default).
+// 'shift-enter' — Shift+Enter sends, Enter inserts a newline.
+export type ComposerSendKey = 'enter' | 'shift-enter'
+
 export interface AppearanceSettings {
   sansFamily: SansFontFamily
   monoFamily: MonoFontFamily
@@ -962,4 +967,6 @@ export interface AppearanceSettings {
   // the app. Toggle in Settings → Appearance; off falls back to solid surfaces.
   liquidGlass: boolean
   locale: AppLocale
+  // Keyboard chord that submits a message in the session composer.
+  composerSendKey: ComposerSendKey
 }

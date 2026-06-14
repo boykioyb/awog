@@ -164,6 +164,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   surfaceDepth: 'flat',
   liquidGlass: true,
   locale: 'en',
+  composerSendKey: 'enter',
 }
 
 interface AccountsListResponse {
