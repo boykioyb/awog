@@ -1,0 +1,12 @@
+{
+  "id": "format-after-write",
+  "name": "Format after artifact write",
+  "description": "Run the formatter on the workspace after an agent writes an artifact. Lands untrusted — review the command before enabling.",
+  "event": "artifact.after-write",
+  "matcher": {},
+  "command": "pnpm exec prettier --write .",
+  "cwd": "${workspace}",
+  "timeoutMs": 60000,
+  "runMode": "background",
+  "enabled": true
+}

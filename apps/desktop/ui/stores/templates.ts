@@ -1,5 +1,11 @@
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import type { ConfigKind, ProjectTemplate, TemplateEntityRef, TemplateInstallResult } from '~/types'
+import type {
+  ConfigKind,
+  ProjectTemplate,
+  TemplateEntityRef,
+  TemplateFetchResult,
+  TemplateInstallResult,
+} from '~/types'
 
 // Project Templates (ADR 0036). A bounded context wrapping the `templates.*`
 // RPC: bundles of project-tier config (agents/skills/hooks/rules/commands) that
@@ -113,6 +119,28 @@ export const useTemplatesStore = defineStore('templates', () => {
     return res.result
   }
 
+  // Import template bundle(s) from a public GitHub folder (ADR 0037). The
+  // sidecar fetches + writes each bundle into ~/.awog/templates/; imported
+  // bundles are merged to the front of the local list (replacing any same-id
+  // entry, e.g. an overwrite). Requires the sidecar — there is no browser-dev
+  // network path.
+  async function fetchRemote(url: string, overwrite = false): Promise<TemplateFetchResult> {
+    const sidecar = useSidecar()
+    if (!sidecar.available) {
+      throw new Error('Fetching from GitHub requires the desktop app (sidecar offline)')
+    }
+    const res = await sidecar.request<TemplateFetchResult>('templates.fetchRemote', {
+      url,
+      overwrite,
+    })
+    for (const tpl of res.imported) {
+      const idx = templates.value.findIndex((t) => t.id === tpl.id)
+      if (idx >= 0) templates.value.splice(idx, 1)
+      templates.value.unshift(tpl)
+    }
+    return res
+  }
+
   async function remove(id: string): Promise<void> {
     const sidecar = useSidecar()
     templates.value = templates.value.filter((tpl) => tpl.id !== id)
@@ -133,6 +161,7 @@ export const useTemplatesStore = defineStore('templates', () => {
     get,
     create,
     install,
+    fetchRemote,
     remove,
   }
 })

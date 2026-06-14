@@ -1,4 +1,4 @@
-import type { ConfigKind, ProjectTemplate, TemplateEntityRef } from '~/types'
+import type { ConfigKind, ProjectTemplate, TemplateEntityRef, TemplateFetchResult } from '~/types'
 import { KIND_ORDER } from '~/composables/useConfigImport'
 import { useTemplatesStore } from '~/stores/templates'
 
@@ -20,8 +20,9 @@ export function useTemplatesManager() {
   const mobilePane = ref<'list' | 'detail'>('list')
   const refreshing = ref(false)
 
-  // Dialog state — Save-from-project (export) + Install + Delete-confirm.
+  // Dialog state — Save-from-project (export) + Fetch-from-GitHub + Install + Delete-confirm.
   const saveDialogOpen = ref(false)
+  const fetchDialogOpen = ref(false)
   const installDialogOpen = ref(false)
   const pendingDelete = ref<ProjectTemplate | null>(null)
 
@@ -82,8 +83,29 @@ export function useTemplatesManager() {
     saveDialogOpen.value = true
   }
 
+  const openFetchDialog = () => {
+    fetchDialogOpen.value = true
+  }
+
   const openInstallDialog = () => {
     installDialogOpen.value = true
+  }
+
+  // After a GitHub fetch: imported bundles are already in the store list. Select
+  // the first imported template; if exactly one was imported, open Install right
+  // away (user chose "fetch + install"). Otherwise just summarise via toast.
+  const onFetched = (result: TemplateFetchResult) => {
+    const { imported, skipped } = result
+    const first = imported[0]
+    if (first) selectedId.value = first.id
+    if (imported.length === 1 && first) {
+      pushToast(`Fetched "${first.name}"`, 'success')
+      installDialogOpen.value = true
+    } else if (imported.length > 1) {
+      pushToast(`Fetched ${imported.length} templates (${skipped.length} skipped)`, 'success')
+    } else {
+      pushToast(`Nothing imported (${skipped.length} skipped)`, 'error')
+    }
   }
 
   const onSaved = (e: { name: string; count: number }) => {
@@ -136,10 +158,13 @@ export function useTemplatesManager() {
     refresh,
     // dialogs
     saveDialogOpen,
+    fetchDialogOpen,
     installDialogOpen,
     openSaveDialog,
+    openFetchDialog,
     openInstallDialog,
     onSaved,
+    onFetched,
     onInstalled,
     // delete
     pendingDelete,

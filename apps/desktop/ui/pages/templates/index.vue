@@ -28,6 +28,14 @@
         >
           <Plus :size="14" />
         </button>
+        <button
+          class="p-1.5 rounded transition"
+          :style="{ color: t.textDim }"
+          :title="tr('templates.fetch_dialog.title')"
+          @click="openFetchDialog"
+        >
+          <Github :size="14" />
+        </button>
       </div>
 
       <div class="flex-1 overflow-y-auto">
@@ -164,6 +172,12 @@
 
   <SaveAsTemplateDialog :open="saveDialogOpen" @close="saveDialogOpen = false" @saved="onSaved" />
 
+  <FetchFromGithubDialog
+    :open="fetchDialogOpen"
+    @close="fetchDialogOpen = false"
+    @fetched="onFetched"
+  />
+
   <InstallTemplateDialog
     v-if="selected"
     :open="installDialogOpen"
@@ -193,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { Package, PackagePlus, Plus, RotateCw, Trash2 } from 'lucide-vue-next'
+import { Github, Package, PackagePlus, Plus, RotateCw, Trash2 } from 'lucide-vue-next'
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
@@ -211,10 +225,13 @@ const {
   onBack,
   refresh,
   saveDialogOpen,
+  fetchDialogOpen,
   installDialogOpen,
   openSaveDialog,
+  openFetchDialog,
   openInstallDialog,
   onSaved,
+  onFetched,
   onInstalled,
   pendingDelete,
   askDelete,

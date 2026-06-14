@@ -40,11 +40,11 @@ function templatesRoot(): string {
   return join(awogHome(), 'templates')
 }
 
-function templateDir(id: string): string {
+export function templateDir(id: string): string {
   return join(templatesRoot(), sanitizeChild(id))
 }
 
-function manifestFile(id: string): string {
+export function manifestFile(id: string): string {
   return join(templateDir(id), 'template.json')
 }
 
@@ -66,7 +66,7 @@ async function isDir(p: string): Promise<boolean> {
 }
 
 // True iff `child` resolves to `root` or a path inside it (path-traversal guard).
-function isInside(child: string, root: string): boolean {
+export function isInside(child: string, root: string): boolean {
   const c = resolve(child)
   const r = resolve(root)
   return c === r || c.startsWith(r + sep)
@@ -83,7 +83,7 @@ async function awogKindDir(kind: ConfigKind, scope: Scope, projectId?: string): 
 }
 
 // Slug → unique template id (append -2, -3… if the dir already exists).
-function slugify(name: string): string {
+export function slugify(name: string): string {
   const base = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

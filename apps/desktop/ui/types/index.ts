@@ -784,6 +784,12 @@ export interface TemplateInstallResult {
   skipped: { kind: ConfigKind; id: string; reason: string }[]
 }
 
+// Result of fetching template bundles from a remote GitHub folder (ADR 0037).
+export interface TemplateFetchResult {
+  imported: ProjectTemplate[]
+  skipped: { id: string; reason: string }[]
+}
+
 // ─── Git Manager ───────────────────────────────────────────────────────────
 
 export type GitFileStatusCode =

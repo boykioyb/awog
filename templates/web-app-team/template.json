@@ -1,0 +1,19 @@
+{
+  "id": "web-app-team",
+  "name": "Web App Team",
+  "description": "Frontend feature delivery — tech-lead, developer, QA and reviewer with implement / review / test skills and Nuxt + TypeScript + lint conventions.",
+  "createdAt": "2026-06-12T09:05:00.000Z",
+  "entities": [
+    { "kind": "agent", "id": "tech-lead",     "file": "agents/tech-lead.md" },
+    { "kind": "agent", "id": "developer",     "file": "agents/developer.md" },
+    { "kind": "agent", "id": "qa-tester",     "file": "agents/qa-tester.md" },
+    { "kind": "agent", "id": "code-reviewer", "file": "agents/code-reviewer.md" },
+    { "kind": "skill", "id": "implement-feature", "file": "skills/implement-feature" },
+    { "kind": "skill", "id": "review-pr",         "file": "skills/review-pr" },
+    { "kind": "skill", "id": "write-test-cases",  "file": "skills/write-test-cases" },
+    { "kind": "rule", "id": "principles",  "file": "rules/principles.md" },
+    { "kind": "rule", "id": "typescript",  "file": "rules/typescript.md" },
+    { "kind": "rule", "id": "nuxt-vue",    "file": "rules/nuxt-vue.md" },
+    { "kind": "rule", "id": "lint-format", "file": "rules/lint-format.md" }
+  ]
+}

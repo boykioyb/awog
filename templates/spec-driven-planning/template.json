@@ -1,0 +1,15 @@
+{
+  "id": "spec-driven-planning",
+  "name": "Spec-Driven Planning",
+  "description": "Discovery to plan — product-owner, business-analyst and project-manager with feature-brief, requirements and task-decomposition skills. Turns an idea into a spec and a task plan before any code.",
+  "createdAt": "2026-06-12T09:00:00.000Z",
+  "entities": [
+    { "kind": "agent", "id": "product-owner",    "file": "agents/product-owner.md" },
+    { "kind": "agent", "id": "business-analyst", "file": "agents/business-analyst.md" },
+    { "kind": "agent", "id": "project-manager",  "file": "agents/project-manager.md" },
+    { "kind": "skill", "id": "write-feature-brief", "file": "skills/write-feature-brief" },
+    { "kind": "skill", "id": "elicit-requirements", "file": "skills/elicit-requirements" },
+    { "kind": "skill", "id": "decompose-tasks",     "file": "skills/decompose-tasks" },
+    { "kind": "rule", "id": "principles", "file": "rules/principles.md" }
+  ]
+}

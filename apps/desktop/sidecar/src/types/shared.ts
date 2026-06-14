@@ -816,3 +816,11 @@ export interface TemplateInstallResult {
   installed: { kind: ConfigKind; id: string }[]
   skipped: { kind: ConfigKind; id: string; reason: string }[]
 }
+
+// Result of fetching one or more template bundles from a remote GitHub folder
+// (ADR 0037). `imported` are the bundles written to ~/.awog/templates/;
+// `skipped` records bundles left untouched (already exist, duplicate id, etc.).
+export interface TemplateFetchResult {
+  imported: ProjectTemplate[]
+  skipped: { id: string; reason: string }[]
+}

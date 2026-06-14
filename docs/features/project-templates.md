@@ -1,6 +1,6 @@
 # Feature: Project Templates
 
-**Trạng thái:** v1 implemented (2026-06-12) — contract: [ADR 0036](../decisions/0036-project-templates.md) (nền: [ADR 0035](../decisions/0035-consolidate-config-tiers-to-awog.md))
+**Trạng thái:** v1 implemented (2026-06-12) + remote fetch (2026-06-13) — contract: [ADR 0036](../decisions/0036-project-templates.md) + [ADR 0037](../decisions/0037-remote-template-fetch-github.md) (nền: [ADR 0035](../decisions/0035-consolidate-config-tiers-to-awog.md))
 
 ## Overview
 
@@ -23,6 +23,9 @@ Template là **gói config tái dùng** (agents + skills + hooks + rules + comma
   - Đường ghi: hooks/rules/commands → `{project}/.awog/{kind}/`; agents/skills → `{project}/.awog/agents|skills/`.
 - **Conflict:** trùng id ở project đích → default **skip**, option **overwrite** ([ADR 0036](../decisions/0036-project-templates.md) D-6).
 - **Delete (`templates.delete`):** xoá bundle `~/.awog/templates/<id>/`.
+- **Fetch từ GitHub (`templates.fetchRemote`, [ADR 0037](../decisions/0037-remote-template-fetch-github.md)):** nhập 1 link folder GitHub **public** → tải bundle về `~/.awog/templates/`. Folder có thể là **1 bundle** hoặc **registry nhiều bundle con** (mỗi cái 1 `template.json`). Param `overwrite` (default false → trùng id thì skip). Import xong: lưu local **+** mở Install ngay (khi đúng 1 bundle). Report `{ imported[], skipped[] }`.
+  - Ví dụ URL: `https://github.com/<owner>/<repo>/tree/main/templates`.
+  - Bảo mật: chỉ host `api.github.com`/`raw.githubusercontent.com` (allowlist + SSRF guard); mọi path qua `sanitizeChild`/`isInside`; giới hạn file ≤ 1 MB, tổng ≤ 20 MB & ≤ 500 file; hook import vẫn untrusted.
 
 ## Data Model
 
@@ -55,7 +58,7 @@ commands/<id>.md
 
 `source`/`projectId` của entity **không** ghi vào bundle — suy ra khi install ([ADR 0036](../decisions/0036-project-templates.md) D-2).
 
-RPC: `templates.{list,get,create,install,delete}`. Store: [`stores/templates.ts`](../../apps/desktop/ui/stores/templates.ts).
+RPC: `templates.{list,get,create,install,fetchRemote,delete}`. Store: [`stores/templates.ts`](../../apps/desktop/ui/stores/templates.ts).
 
 ## Security (theo [ADR 0036](../decisions/0036-project-templates.md) D-7 + [security.md](../../.claude/rules/security.md))
 
@@ -76,7 +79,8 @@ RPC: `templates.{list,get,create,install,delete}`. Store: [`stores/templates.ts`
 
 ## Out of Scope (v1)
 
-- **Marketplace / template remote / share link** — bundle tự chứa mở đường, chưa làm distribution ([mvp-scope](../requirements/mvp-scope.md)).
+- **Marketplace tập trung / share link** — bundle tự chứa mở đường; fetch từ folder GitHub public đã có ([ADR 0037](../decisions/0037-remote-template-fetch-github.md)), nhưng chưa có distribution/registry tập trung ([mvp-scope](../requirements/mvp-scope.md)).
+- **Fetch private repo / token** — chỉ public ở v1 ([ADR 0037](../decisions/0037-remote-template-fetch-github.md) D-1).
 - **Kèm MCP/Connections** trong template ([ADR 0036](../decisions/0036-project-templates.md) D-3).
 - **Export bundle ra file `.awogtemplate` (zip)** — defer.
 - **Conflict merge/diff** — chỉ skip/overwrite.
