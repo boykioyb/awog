@@ -1,17 +1,62 @@
 <template>
   <div class="space-y-6">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Updates</h2>
+      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">About</h2>
       <div class="text-[1em]" :style="{ color: t.textDim }">
-        How AWOG checks for and installs new versions
+        About AWOG and how it stays up to date
       </div>
     </div>
 
-    <div class="space-y-4">
-      <SettingsField label="Current version" hint="The version of AWOG you're running now">
-        <div class="text-[1em] font-mono" :style="{ color: t.text }">
-          {{ update.currentVersion || '—' }}
+    <!-- App identity -->
+    <div
+      class="flex items-center gap-3 rounded-lg p-4"
+      :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+    >
+      <div
+        class="flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0"
+        :style="{ background: t.bgInput, border: `1px solid ${t.border}`, color: t.text }"
+      >
+        <svg viewBox="0 0 32 32" width="28" height="28" role="img" aria-label="AWOG">
+          <rect x="4" y="13" width="18" height="14" rx="2.5" fill="currentColor" opacity="0.4" />
+          <rect x="7" y="9" width="18" height="14" rx="2.5" fill="currentColor" opacity="0.7" />
+          <rect x="10" y="5" width="18" height="14" rx="2.5" fill="currentColor" />
+          <rect x="13" y="9.4" width="10" height="1.4" rx="0.7" fill="#60a5fa" />
+          <rect x="13" y="12.4" width="7" height="1.4" rx="0.7" fill="#60a5fa" opacity="0.65" />
+          <circle cx="25.5" cy="7.5" r="1.6" fill="#fbbf24" />
+        </svg>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-[1em] font-semibold" :style="{ color: t.text }">AWOG</span>
+          <span
+            class="font-mono text-[12px] leading-none px-1.5 py-0.5 rounded-full"
+            :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+          >
+            v{{ update.currentVersion || '—' }}
+          </span>
         </div>
+        <div class="text-[1em]" :style="{ color: t.textDim }">
+          Artifact Workflow Orchestrate Guild
+        </div>
+        <div class="text-[1em]" :style="{ color: t.textDim }">
+          Local-first AI Team Operating System
+        </div>
+      </div>
+    </div>
+
+    <!-- Repository + updates -->
+    <div class="space-y-4">
+      <SettingsField label="Repository" hint="Source code, issues, and releases on GitHub">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 text-[1em] font-mono transition hover:underline"
+          :style="{ color: t.accent }"
+          @click="openRepo"
+        >
+          <Github :size="13" />
+          {{ REPO_LABEL }}
+          <ExternalLink :size="12" />
+        </button>
       </SettingsField>
 
       <SettingsField
@@ -35,21 +80,6 @@
             Check now
           </button>
         </div>
-      </SettingsField>
-
-      <SettingsField
-        label="Diagnostics"
-        hint="Open the app log file — updater activity, engine output, and errors"
-      >
-        <button
-          type="button"
-          class="px-2.5 py-1 rounded text-[1em] transition flex items-center gap-1.5"
-          :style="{ border: `1px solid ${t.border}`, color: t.text }"
-          @click="onOpenLogs"
-        >
-          <ScrollText :size="13" />
-          Open logs
-        </button>
       </SettingsField>
 
       <div
@@ -76,12 +106,16 @@
 </template>
 
 <script setup lang="ts">
-import { RotateCw, ScrollText } from 'lucide-vue-next'
+import { ExternalLink, Github, RotateCw } from 'lucide-vue-next'
 import { useUpdateStore } from '~/stores/update'
+
+// Source repository. Matches the GitHub provider the auto-updater pulls releases
+// from (apps/desktop/electron/src/updater.ts) and `repository` in package.json.
+const REPO_URL = 'https://github.com/boykioyb/awog'
+const REPO_LABEL = 'github.com/boykioyb/awog'
 
 const { t } = useTheme()
 const update = useUpdateStore()
-const sidecar = useSidecar()
 const { autoUpdate, update: updateSettings } = useUpdateSettings()
 const { toasts, pushToast, toastStyle } = useToasts()
 
@@ -97,6 +131,16 @@ const onToggle = (enabled: boolean) => {
   updateSettings({ enabled })
 }
 
+// Open the repo in the OS browser (Electron); fall back to window.open in
+// browser-dev where the sidecar bridge isn't available.
+const openRepo = () => {
+  useSidecar()
+    .openExternal(REPO_URL)
+    .catch(() => {
+      if (typeof window !== 'undefined') window.open(REPO_URL, '_blank', 'noopener,noreferrer')
+    })
+}
+
 // A manual "Check now" surfaces its outcome as a toast (the up-to-date / error
 // cases have no banner). An update being available is handled by UpdateBanner.
 const manualPending = ref(false)
@@ -108,14 +152,6 @@ const onCheckNow = async () => {
   }
   manualPending.value = true
   await update.checkNow()
-}
-
-const onOpenLogs = async () => {
-  try {
-    await sidecar.openLogs()
-  } catch {
-    pushToast('Logs are only available in the installed app', 'info')
-  }
 }
 
 watch(

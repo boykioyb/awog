@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      class="mermaid-zoom-modal fixed inset-0 z-[120] flex flex-col"
+      class="mermaid-zoom-modal fixed inset-x-0 bottom-0 top-[var(--awog-chrome-top)] z-[120] flex flex-col"
       :style="{ background: t.overlay }"
       @click.self="emit('close')"
     >

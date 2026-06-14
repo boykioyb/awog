@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-[100] flex flex-col"
+      class="fixed inset-x-0 bottom-0 top-[var(--awog-chrome-top)] z-[100] flex flex-col"
       :style="{ background: t.overlay }"
       @click.self="emit('close')"
     >
@@ -76,7 +76,7 @@
           :path="path"
           :kind="isPdf ? 'pdf' : 'html'"
         />
-        <div v-else-if="isMarkdown && view === 'preview'" class="mx-auto max-w-3xl px-8 py-6">
+        <div v-else-if="isMarkdown && view === 'preview'" class="mx-auto max-w-5xl px-8 py-6">
           <MarkdownRenderer :content="content" />
         </div>
         <pre

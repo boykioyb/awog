@@ -55,6 +55,20 @@
           {{ tr('import.banner.check') }}
         </button>
       </SettingsField>
+      <SettingsField
+        label="Diagnostics"
+        hint="Open the app log file — updater activity, engine output, and errors"
+      >
+        <button
+          type="button"
+          class="px-2.5 py-1 rounded text-[1em] transition flex items-center gap-1.5"
+          :style="{ border: `1px solid ${t.border}`, color: t.text }"
+          @click="onOpenLogs"
+        >
+          <ScrollText :size="13" />
+          Open logs
+        </button>
+      </SettingsField>
     </div>
 
     <ConfigImportDialog
@@ -211,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { Download } from 'lucide-vue-next'
+import { Download, ScrollText } from 'lucide-vue-next'
 import {
   DEFAULT_COMMIT_MESSAGE_RULE,
   type AutoCommitScope,
@@ -222,6 +236,7 @@ import { useConfigImport, type ImportSelection } from '~/composables/useConfigIm
 const { t } = useTheme()
 const { t: tr } = useI18n()
 const settings = useSettingsStore()
+const sidecar = useSidecar()
 const { git, update } = useGitSettings()
 const { rtk, rtkStatus, update: updateRtk, sync: syncRtk } = useRtkSettings()
 const { toasts, pushToast, toastStyle } = useToasts()
@@ -283,6 +298,14 @@ const autoFetchSeconds = computed(() => Math.round(git.value.autoFetchIntervalMs
 const onTemplateInput = (e: Event) => {
   const { value } = e.target as HTMLTextAreaElement
   update({ autoCommitMessageTemplate: value })
+}
+
+const onOpenLogs = async () => {
+  try {
+    await sidecar.openLogs()
+  } catch {
+    pushToast('Logs are only available in the installed app', 'info')
+  }
 }
 
 const onFetchIntervalInput = (e: Event) => {

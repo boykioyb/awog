@@ -123,8 +123,8 @@ ui/
 │   ├── skills/index.vue
 │   ├── connections/index.vue # Connections (ADR 0025 — rename of MCP Servers, flat list; stdio + http + secret keychain + idle stop)
 │   ├── mcp-servers/index.vue # Redirect → /connections (back-compat)
-│   ├── settings/index.vue
 │   └── edit/[taskId].vue   # Fullscreen markdown editor (layout: false)
+│                           # Settings is a modal (components/settings/SettingsModal.vue), not a route
 ├── utils/
 │   ├── themes.ts           # THEMES dark + light, 20+ token
 │   ├── models.ts           # 12 model definition
@@ -189,8 +189,9 @@ Template bind inline style:
 - `/skills` → skills CRUD
 - `/templates` → Project Templates (master-detail: list/detail/install/delete + export "New from project…") — bundle reusable `.awog` config ([ADR 0036](../../../docs/decisions/0036-project-templates.md), [spec](../../../docs/features/project-templates.md)). Projects detail has **Save as template** / **Install template**; Settings → Workspace + Projects banner host the **Config Import Assistant** (`.claude`/`.agents` → `.awog`, [ADR 0035](../../../docs/decisions/0035-consolidate-config-tiers-to-awog.md))
 - `/git` → Git Manager (sidebar nav: Local Changes / All Commits / Branches / Remotes / Tags / Stashes / Submodules) — live IPC
-- `/settings` → 4-section settings
 - `/edit/:taskId?file=<filename>` → fullscreen markdown editor (no layout)
+
+Settings không còn là route — mở dưới dạng **modal** (`components/settings/SettingsModal.vue`, state qua `useSettingsModal`) từ nút bánh răng ở HeaderTabBar. 5 section: Appearance / Workspace / Defaults / Models & API Keys / About (app + repo info, version & updates).
 
 Click "Open in editor" trong PhaseOutputTab sẽ navigate sang `/edit/:taskId?file=...`.
 

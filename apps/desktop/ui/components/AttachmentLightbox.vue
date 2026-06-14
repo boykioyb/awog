@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-50 flex flex-col"
+      class="fixed inset-x-0 bottom-0 top-[var(--awog-chrome-top)] z-50 flex flex-col"
       :style="{ background: t.overlay }"
       @click.self="emit('close')"
     >

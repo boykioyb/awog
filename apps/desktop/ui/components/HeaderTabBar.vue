@@ -49,7 +49,7 @@
         @mouseenter="hoveredId = item.id"
       >
         <component :is="item.icon" :size="15" class="flex-shrink-0" />
-        <span v-if="!compact || isActive(item.to)">{{ item.label }}</span>
+        <span>{{ item.label }}</span>
 
         <!-- Live badges -->
         <span
@@ -106,15 +106,15 @@
         />
       </button>
 
-      <NuxtLink
-        to="/settings"
-        title="Settings"
+      <button
+        :title="tr('settings.title')"
         class="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150"
-        :style="pillStyle(isActive('/settings'), hoveredId === 'settings')"
+        :style="pillStyle(settingsOpen, hoveredId === 'settings')"
         @mouseenter="hoveredId = 'settings'"
+        @click="openSettings()"
       >
         <Settings :size="15" />
-      </NuxtLink>
+      </button>
 
       <button
         :title="themeName === 'dark' ? 'Switch to light' : 'Switch to dark'"
@@ -129,6 +129,7 @@
   </header>
 
   <WhatsNewModal :open="whatsNewOpen" :releases="releases" @close="closePanel" />
+  <SettingsModal />
 </template>
 
 <script setup lang="ts">
@@ -155,6 +156,7 @@ const { t, themeName, toggle } = useTheme()
 const { on, parts, pill } = useGlass()
 const { t: tr } = useI18n()
 const { open: whatsNewOpen, hasUnseen, releases, openPanel, closePanel } = useWhatsNew()
+const { open: settingsOpen, openSettings } = useSettingsModal()
 const route = useRoute()
 
 const gitStore = useGitStore()
@@ -170,26 +172,10 @@ const anyStreaming = computed(() => sessionsStore.anyStreaming)
 
 const hoveredId = ref<string | null>(null)
 
-// Tab strip overflow handling. Primary: when the labelled tabs don't fit, drop
-// to icon-only (the active tab keeps its label so you always see where you are;
-// titles give hover tooltips). Fallback: if even icon-only overflows (very
-// narrow window), map a mouse wheel's vertical delta onto horizontal scroll —
-// trackpads already emit deltaX natively.
+// Tab strip overflow handling. Labels always show (more legible than icon-only);
+// when the labelled tabs don't fit, map a mouse wheel's vertical delta onto
+// horizontal scroll — trackpads already emit deltaX natively.
 const strip = useTemplateRef<HTMLElement>('strip')
-const compact = ref(false)
-
-const recomputeCompact = async () => {
-  const el = strip.value
-  if (!el) return
-  // Always measure against the full-label layout, then decide. Both updates
-  // flush in the same microtask batch before paint, so no visible flicker.
-  if (compact.value) {
-    compact.value = false
-    await nextTick()
-  }
-  const overflowing = el.scrollWidth > el.clientWidth + 1
-  if (overflowing !== compact.value) compact.value = overflowing
-}
 
 const onWheel = (e: WheelEvent) => {
   const el = strip.value
@@ -198,21 +184,6 @@ const onWheel = (e: WheelEvent) => {
   el.scrollLeft += e.deltaY
   e.preventDefault()
 }
-
-let resizeObserver: ResizeObserver | null = null
-onMounted(() => {
-  void recomputeCompact()
-  if (typeof ResizeObserver !== 'undefined' && strip.value) {
-    resizeObserver = new ResizeObserver(() => {
-      void recomputeCompact()
-    })
-    resizeObserver.observe(strip.value)
-  }
-})
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-})
 
 interface NavItem {
   id: string

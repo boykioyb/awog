@@ -7,6 +7,10 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --font-size-base: 14px;
   --font-weight-base: 400;
+  /* Top app chrome height = HeaderTabBar (`h-12` = 3rem). Fullscreen overlays
+     (teleported to <body>) read this to sit below the top nav instead of
+     covering it. rem-based, so it tracks `--font-size-base` like `h-12` does. */
+  --awog-chrome-top: 3rem;
 }
 
 html,
