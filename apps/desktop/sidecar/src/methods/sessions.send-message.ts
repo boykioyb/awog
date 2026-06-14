@@ -26,6 +26,7 @@ import type {
   McpServersConfig,
 } from '../runtime/permission-types.js'
 import type {
+  SessionAttachment,
   SessionMessage,
   SessionMessagePart,
   SessionSettings,
@@ -56,10 +57,32 @@ const SessionSettingsSchema = z.object({
   accountId: z.string().optional(),
 })
 
+// User attachment on the outgoing message (L1: untrusted UI payload). Image
+// attachments carry an inline base64 `data:` URL in `url`; the runtime rebuilds
+// them into image content blocks for the model (buildContext). Non-image entries
+// are persisted for display but ignored by the model.
+const SessionAttachmentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(['file', 'image']),
+  size: z.string().optional(),
+  mime: z.string().optional(),
+  url: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+})
+
+// Cap the count to bound message bloat; per-image size is gated downstream in
+// buildContext (oversized images are dropped for the model, not rejected here).
+const MAX_ATTACHMENTS = 20
+
 const Params = z.object({
   sessionId: z.string().min(1),
   messageId: z.string().min(1),
-  text: z.string().min(1),
+  // May be empty when the turn carries only image attachments — the
+  // text-or-attachments invariant is enforced by the object-level .refine below.
+  text: z.string(),
+  attachments: z.array(SessionAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
   history: z.array(SessionMessageSchema).default([]),
   settings: SessionSettingsSchema,
   systemPrompt: z.string().optional(),
@@ -86,6 +109,16 @@ const Params = z.object({
     })
     .optional(),
 })
+  // A turn must carry text or at least one image attachment, so the model always
+  // gets non-empty content (a file-only message with no text has nothing for the
+  // model to act on). Fail-fast at the boundary — the UI guards too, but never
+  // trust the IPC payload.
+  .refine(
+    (p) =>
+      p.text.trim().length > 0 ||
+      (p.attachments?.some((a) => a.type === 'image' && !!a.url) ?? false),
+    { message: 'a message must have text or at least one image attachment' },
+  )
 
 // exactOptionalPropertyTypes: zod's .optional() yields `T | undefined`, but
 // SessionSettings.accountId is presence-only (`accountId?: string`). Rebuild
@@ -101,8 +134,24 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
   return base
 }
 
+// Same exactOptionalPropertyTypes dance as toSessionSettings: only attach
+// optional fields when defined so the result is a clean SessionAttachment.
+function toSessionAttachment(a: z.infer<typeof SessionAttachmentSchema>): SessionAttachment {
+  const base: SessionAttachment = { id: a.id, name: a.name, type: a.type }
+  if (a.size !== undefined) base.size = a.size
+  if (a.mime !== undefined) base.mime = a.mime
+  if (a.url !== undefined) base.url = a.url
+  if (a.width !== undefined) base.width = a.width
+  if (a.height !== undefined) base.height = a.height
+  return base
+}
+
 register('sessions.sendMessage', async (raw) => {
   const params = Params.parse(raw)
+
+  // Normalise attachments once (exactOptionalPropertyTypes). Reused for both the
+  // persisted user message and the runtime image-content rebuild.
+  const attachments = params.attachments?.map(toSessionAttachment)
 
   // One AbortController per turn. sessions.cancel resolves it by messageId.
   const abortController = new AbortController()
@@ -350,6 +399,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       role: 'user',
       text: params.text,
       at: new Date().toISOString(),
+      // Persist attachments so a JSONL reload keeps the image preview AND so the
+      // next turn's resume rebuilds the image content block (image lives with
+      // the session context, not just the turn that sent it).
+      ...(attachments && attachments.length ? { attachments } : {}),
     })
   } catch (err) {
     log.warn('failed to persist user message', {
@@ -423,6 +476,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       {
         sessionId: params.sessionId,
         pendingText: params.text,
+        ...(attachments && attachments.length ? { pendingAttachments: attachments } : {}),
         // Cast: zod .passthrough() yields a permissive shape; we only consume the
         // fields declared above (id/role/text/at) plus ignored extras. The runner
         // treats history as read-only SessionMessage[].

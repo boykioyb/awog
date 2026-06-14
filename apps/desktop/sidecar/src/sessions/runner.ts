@@ -6,6 +6,7 @@
 // preserved so sessions.send-message.ts + sessions.compact.ts are unaffected.
 
 import type {
+  SessionAttachment,
   SessionMessage,
   SessionSettings,
   SessionStep,
@@ -51,6 +52,10 @@ async function withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Prom
 export interface RunNonStreamArgs {
   sessionId: string
   pendingText: string
+  // Attachments on the pending user turn. Image attachments are bridged to Pi
+  // image content blocks by buildContext; non-image entries are ignored by the
+  // model (they're still persisted for UI display).
+  pendingAttachments?: SessionAttachment[]
   history: SessionMessage[]
   settings: SessionSettings
   systemPrompt?: string

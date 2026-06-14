@@ -174,6 +174,7 @@ export async function runStreamPi(
     args.systemPrompt,
     systemPromptAppend,
     tools,
+    args.pendingAttachments,
   )
 
   const reasoning = toReasoning(args.settings.level, model)

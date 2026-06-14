@@ -801,6 +801,10 @@ export const useSessionsStore = defineStore('sessions', {
           sessionId,
           messageId: placeholderId,
           text: trimmed,
+          // Attachments (image data URLs + file metadata). The sidecar persists
+          // them on the user message and rebuilds image content blocks for the
+          // model. Omitted when none so the legacy text-only path is unchanged.
+          ...(attachments && attachments.length ? { attachments } : {}),
           history,
           settings: session.settings,
           systemPrompt,

@@ -164,6 +164,21 @@ export interface SessionSettings {
 // no character offsets. Subagent steps nest under their parent step's `children`.
 export type SessionMessagePart = { kind: 'text'; text: string } | SessionStep
 
+// User-attached file/image on a message. Images carry an inline `url` (a
+// base64 `data:` URL) so the preview survives a JSONL reload and so the runtime
+// can rebuild an image content block for the model. Mirrors the UI
+// SessionAttachment (apps/desktop/ui/types/index.ts) — kept structurally in sync.
+export interface SessionAttachment {
+  id: string
+  name: string
+  type: 'file' | 'image'
+  size?: string
+  mime?: string
+  url?: string
+  width?: number
+  height?: number
+}
+
 export interface SessionMessage {
   id: string
   role: 'user' | 'agent' | 'system'
@@ -171,6 +186,10 @@ export interface SessionMessage {
   text: string
   at: string
   modeAtSend?: AgentMode
+  // User attachments on a `user` message. Persisted so a JSONL reload keeps the
+  // image preview, and so resume rebuilds the image content block for the model
+  // (ADR 0029 resume = rebuild Context from history each turn).
+  attachments?: SessionAttachment[]
   // Metadata persisted so UI re-hydrate from JSONL keeps assistant features
   // (markdown rendering, latency badge, model name, token counters).
   startedAt?: number
