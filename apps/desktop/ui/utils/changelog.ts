@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.13.0',
+    date: '2026-06-15',
+    highlight: {
+      en: 'Rewind conversations, search and branch sessions, an in-session Git panel, and file attachments.',
+      vi: 'Tua lại hội thoại, tìm kiếm & rẽ nhánh session, bảng Git ngay trong session, và đính kèm file.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Rewind a conversation to an earlier message — your files are restored to that point too.',
+        vi: 'Tua hội thoại về một tin nhắn trước đó — file cũng được khôi phục về đúng thời điểm đó.',
+      },
+      {
+        kind: 'added',
+        en: 'Search across all your sessions from a quick palette.',
+        vi: 'Tìm kiếm xuyên suốt mọi session bằng bảng lệnh nhanh.',
+      },
+      {
+        kind: 'added',
+        en: 'Branch a session to explore a different direction without losing the original.',
+        vi: 'Rẽ nhánh một session để thử hướng khác mà không mất bản gốc.',
+      },
+      {
+        kind: 'added',
+        en: 'Stage, commit, and push straight from a Git panel inside the session.',
+        vi: 'Stage, commit và push ngay từ bảng Git trong session.',
+      },
+      {
+        kind: 'added',
+        en: 'Attach files to a message, and paste large text as a file to keep the input clean.',
+        vi: 'Đính kèm file vào tin nhắn, và dán văn bản dài thành file để giữ ô nhập gọn.',
+      },
+      {
+        kind: 'improved',
+        en: 'Sessions get an auto-generated title, and you can retry a message with different settings.',
+        vi: 'Session tự sinh tiêu đề, và bạn có thể thử lại một tin nhắn với cấu hình khác.',
+      },
+      {
+        kind: 'improved',
+        en: 'MCP connections recover more gracefully when a server fails to load.',
+        vi: 'Kết nối MCP phục hồi mượt hơn khi một server tải lỗi.',
+      },
+      {
+        kind: 'changed',
+        en: 'Removed the experimental token-proxy (RTK).',
+        vi: 'Gỡ bộ token-proxy thử nghiệm (RTK).',
+      },
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2026-06-15',
     highlight: {
