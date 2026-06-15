@@ -28,6 +28,8 @@ import type { McpServersConfig } from '../permission-types.js'
 import { resolveModel } from '../model-resolver.js'
 import { buildContext } from '../context-builder.js'
 import { createRuntimeToolDefinitions } from './index.js'
+import { buildMcpUnavailableNote } from './mcp-tools.js'
+import { VERIFY_PROMPT } from '../prompts.js'
 import { toReasoning } from '../thinking.js'
 import type { BeforeToolCall } from '../permission.js'
 
@@ -181,7 +183,7 @@ async function spawnSubagent(
 
   // Subagent toolset: built-in + the merged MCP tools, filtered by the agent's
   // allowedTools and the session denylist. NO Task tool (depth = 1) and NO plan.
-  const tools = await createRuntimeToolDefinitions(
+  const { tools, failures: mcpFailures } = await createRuntimeToolDefinitions(
     deps.cwd,
     mcpServers,
     {
@@ -191,11 +193,19 @@ async function spawnSubagent(
     signal,
   )
 
+  // Surface attached-but-failed MCP servers to the subagent too, so a delegated
+  // review/fetch can't silently fabricate when its server is unreachable.
+  const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
+  const subAppend =
+    [agentCtx.systemPromptAppend, VERIFY_PROMPT, mcpUnavailable]
+      .filter((p): p is string => typeof p === 'string' && p.length > 0)
+      .join('\n\n') || undefined
+
   const { context, prompt: promptMsg } = buildContext(
     [],
     prompt,
     agentCtx.systemPrompt,
-    agentCtx.systemPromptAppend,
+    subAppend,
     tools,
   )
 

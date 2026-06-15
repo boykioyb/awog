@@ -8,6 +8,7 @@ import type {
   ThinkingLevel,
 } from '~/types'
 import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
+import { DEFAULT_PASTE_THRESHOLD } from '~/utils/attachment-intake'
 
 export type { ProviderAccount } from '~/types'
 
@@ -120,22 +121,18 @@ export const DEFAULT_AUTO_UPDATE_SETTINGS: AutoUpdateSettings = {
   lastCheckedAt: null,
 }
 
-// RTK token optimizer (ADR 0031). `enabled` is persisted via `useRtkSettings`
-// (same pattern as auto-update) and pushed to the sidecar's Bash tool through the
-// `settings.set-rtk` RPC. The binary is bundled with the app, so default ON.
-export interface RtkSettings {
-  enabled: boolean
+// Composer behaviour — client-only (no sidecar). `pasteAsFile` converts a large
+// plain-text paste into a `.txt` attachment instead of inlining it into the
+// input; `pasteThreshold` is the char count above which that kicks in. Persisted
+// via `useComposerSettings` (same localStorage pattern as git).
+export interface ComposerSettings {
+  pasteAsFile: boolean
+  pasteThreshold: number
 }
 
-export const DEFAULT_RTK_SETTINGS: RtkSettings = {
-  enabled: true,
-}
-
-// Runtime probe result from the engine (settings.set-rtk response) — whether the
-// bundled binary loaded on this platform + its version. NOT persisted.
-export interface RtkStatus {
-  available: boolean
-  version?: string
+export const DEFAULT_COMPOSER_SETTINGS: ComposerSettings = {
+  pasteAsFile: true,
+  pasteThreshold: DEFAULT_PASTE_THRESHOLD,
 }
 
 interface SettingsState {
@@ -147,8 +144,7 @@ interface SettingsState {
   appearance: AppearanceSettings
   git: GitSettings
   autoUpdate: AutoUpdateSettings
-  rtk: RtkSettings
-  rtkStatus: RtkStatus
+  composer: ComposerSettings
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -163,6 +159,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   themeColorStrength: 10,
   surfaceDepth: 'flat',
   liquidGlass: true,
+  assistantBubble: true,
   locale: 'en',
   composerSendKey: 'enter',
 }
@@ -207,8 +204,7 @@ export const useSettingsStore = defineStore('settings', {
     appearance: { ...DEFAULT_APPEARANCE },
     git: { ...DEFAULT_GIT_SETTINGS },
     autoUpdate: { ...DEFAULT_AUTO_UPDATE_SETTINGS },
-    rtk: { ...DEFAULT_RTK_SETTINGS },
-    rtkStatus: { available: false },
+    composer: { ...DEFAULT_COMPOSER_SETTINGS },
   }),
   getters: {
     activeAccount(state): (provider: ProviderName) => ProviderAccount | null {
@@ -406,11 +402,8 @@ export const useSettingsStore = defineStore('settings', {
     updateAutoUpdate(patch: Partial<AutoUpdateSettings>) {
       this.autoUpdate = { ...this.autoUpdate, ...patch }
     },
-    updateRtk(patch: Partial<RtkSettings>) {
-      this.rtk = { ...this.rtk, ...patch }
-    },
-    setRtkStatus(status: RtkStatus) {
-      this.rtkStatus = status
+    updateComposer(patch: Partial<ComposerSettings>) {
+      this.composer = { ...this.composer, ...patch }
     },
   },
 })

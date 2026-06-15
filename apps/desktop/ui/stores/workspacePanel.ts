@@ -96,6 +96,26 @@ export const useWorkspacePanelStore = defineStore('workspacePanel', () => {
     openDrawer(sessionId, 'files')
   }
 
+  // Consumed by WorkspaceFilesTab once it has handled the request, so it does not
+  // re-fire on every tab remount (e.g. returning from the full-screen editor).
+  const clearFileOpen = (sessionId: string): void => {
+    if (!fileOpenRequest.value[sessionId]) return
+    const next = { ...fileOpenRequest.value }
+    delete next[sessionId]
+    fileOpenRequest.value = next
+  }
+
+  // Per-session Files-tab view (folder cursor + open file + browser visibility) so
+  // it survives the tab unmounting — the full-screen code editor opens as a
+  // separate route and rebuilds the session page on return.
+  type FilesViewState = { cwd: string; selectedPath: string | null; showTree: boolean }
+  const filesViewBySession = ref<Record<string, FilesViewState>>({})
+  const filesView = (sessionId: string): FilesViewState | null =>
+    filesViewBySession.value[sessionId] ?? null
+  const setFilesView = (sessionId: string, state: FilesViewState): void => {
+    filesViewBySession.value = { ...filesViewBySession.value, [sessionId]: state }
+  }
+
   const setPosition = (pos: WorkspacePanelPosition): void => {
     position.value = pos
     persist(POSITION_KEY, pos)
@@ -128,5 +148,8 @@ export const useWorkspacePanelStore = defineStore('workspacePanel', () => {
     commitSize,
     pendingFileOpen,
     requestOpenFile,
+    clearFileOpen,
+    filesView,
+    setFilesView,
   }
 })

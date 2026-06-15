@@ -1,8 +1,16 @@
 # 0031 — Bundle RTK (Rust Token Killer) làm bộ nén output cho Bash tool
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Reverted (2026-06-15)
 - **Ngày:** 2026-06-11
 - **Người quyết định:** tech-lead (theo yêu cầu user)
+
+> **Đã gỡ (2026-06-15) — theo yêu cầu user.** RTK đã bị gỡ **hoàn toàn** khỏi code:
+> Bash tool không còn wrap lệnh qua RTK, không còn bundle binary (xóa
+> `scripts/fetch-rtk.mjs`, mục `extraResources`, env `AWOG_RTK_BIN`), không còn RPC
+> `settings.set-rtk` lẫn toggle Settings → Workspace. Spec feature
+> `docs/features/rtk-token-proxy.md` đã xóa. ADR này được **giữ lại làm hồ sơ lịch
+> sử**; nội dung bên dưới phản ánh trạng thái tại thời điểm Accepted, không còn áp
+> dụng cho code hiện tại.
 
 ## Bối cảnh
 

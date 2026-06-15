@@ -21,8 +21,9 @@ import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
 import { buildContext } from './context-builder.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
+import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
-import { TODO_USAGE_PROMPT } from './prompts.js'
+import { TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
 import { toReasoning } from './thinking.js'
 import { buildRulesPrompt } from '../rules/inject.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../sdk/invoke.js'
@@ -185,7 +186,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   // already-resolved args.mcpServers (agent.mcpServerIds ∩ enabled + secrets
   // expanded in tasks/agent-context.ts). Filters apply to both kinds. A failing
   // MCP server is skipped (warn) so it never blocks the task node.
-  const tools = await createRuntimeToolDefinitions(
+  const { tools, failures: mcpFailures } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
     {
@@ -251,9 +252,15 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   // Workspace rules (ADR 0033): enabled global + task-project rules, appended to
   // (not replacing) the node agent's own prompt.
   const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0])
+  // Tell the node agent — in-band — about any attached MCP server that failed to
+  // load, so it doesn't call its absent tools or fabricate their results.
+  const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
   const appendParts = [
     args.systemPromptAppend,
     rulesPrompt,
+    // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
+    VERIFY_PROMPT,
+    mcpUnavailable,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined

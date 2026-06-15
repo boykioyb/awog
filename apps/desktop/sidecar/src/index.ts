@@ -21,6 +21,11 @@ import './methods/sessions.permission.js'
 import './methods/sessions.answer-question.js'
 import './methods/sessions.list.js'
 import './methods/sessions.upsert.js'
+import './methods/sessions.truncate.js'
+import './methods/sessions.generate-title.js'
+import './methods/sessions.search.js'
+import './methods/sessions.rewind.js'
+import './methods/sessions.list-snapshots.js'
 import './methods/sessions.delete.js'
 import './methods/account.usage.js'
 import './methods/projects.list.js'
@@ -118,7 +123,6 @@ import './methods/terminal.write.js'
 import './methods/terminal.resize.js'
 import './methods/terminal.kill.js'
 import './methods/terminal.list.js'
-import './methods/settings.set-rtk.js'
 import './methods/hooks.list.js'
 import './methods/hooks.upsert.js'
 import './methods/hooks.delete.js'
@@ -148,8 +152,10 @@ import './methods/templates.fetch-remote.js'
 import './methods/templates.install.js'
 import './methods/templates.delete.js'
 import { mcpManager } from './mcp/manager.js'
+import { migrateMcpPlaintextSecrets } from './mcp/store.js'
 import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
+import { ensureUserPath } from './util/spawn-path.js'
 
 type JsonRpcRequest = {
   jsonrpc: '2.0'
@@ -210,8 +216,17 @@ const stdoutHandle = (process.stdout as unknown as {
 })._handle
 if (stdoutHandle?.setBlocking) stdoutHandle.setBlocking(true)
 
+// Augment PATH before anything spawns a child process (MCP `npx`, git, pty).
+// A GUI launch otherwise hands the sidecar a minimal PATH and these fail with
+// ENOENT — which, for MCP, silently registers zero tools (see spawn-path.ts).
+ensureUserPath()
+
 log.info('sidecar starting', { pid: process.pid, node: process.version })
 startStdioLoop(handleLine)
+
+// One-time: move any plaintext secret-looking MCP env/header values to the OS
+// keychain (ADR 0018, invariant 1). Idempotent — `secret:` refs are untouched.
+void migrateMcpPlaintextSecrets()
 
 // Auto-start enabled+autoStart MCP servers on sidecar boot (AC-3 restart-safe).
 void mcpManager.hydrateAutoStart()

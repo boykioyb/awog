@@ -18,7 +18,8 @@ import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
 import { buildContext } from './context-builder.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
-import { TODO_USAGE_PROMPT } from './prompts.js'
+import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
+import { TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { makeBeforeToolCall } from './permission.js'
 import { toReasoning } from './thinking.js'
@@ -83,7 +84,7 @@ export async function runStreamPi(
   // upstream). allowedTools/disabledTools filter both kinds uniformly. A failing
   // MCP server is skipped (warn) so it never blocks the turn.
   const inPlanMode = args.settings.mode === 'plan'
-  const tools = await createRuntimeToolDefinitions(
+  const { tools, failures: mcpFailures } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
     {
@@ -116,9 +117,15 @@ export async function runStreamPi(
   // Workspace rules (ADR 0033): enabled global + session-project rules, appended
   // to (not replacing) the agent's own prompt.
   const rulesPrompt = await buildRulesPrompt(args.projectId)
+  // Tell the model — in-band — about any attached MCP server that failed to
+  // load, so it doesn't call its absent tools or fabricate their results.
+  const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
   const appendParts = [
     args.systemPromptAppend,
     rulesPrompt,
+    // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
+    VERIFY_PROMPT,
+    mcpUnavailable,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
     inPlanMode ? PLAN_MODE_PROMPT : undefined,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)

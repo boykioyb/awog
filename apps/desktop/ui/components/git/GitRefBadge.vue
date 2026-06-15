@@ -1,11 +1,11 @@
 <template>
   <span
-    class="inline-flex items-center gap-1 text-[1em] px-1.5 py-0.5 rounded font-mono whitespace-nowrap"
+    class="inline-flex items-center gap-1 text-[1em] px-1.5 py-0.5 rounded font-mono min-w-0 max-w-[200px]"
     :style="style"
     :title="title"
   >
-    <component :is="icon" v-if="icon" :size="9" />
-    {{ refItem.name }}
+    <component :is="icon" v-if="icon" :size="9" class="flex-shrink-0" />
+    <span class="truncate">{{ refItem.name }}</span>
   </span>
 </template>
 

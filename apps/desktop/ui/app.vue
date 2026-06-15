@@ -17,8 +17,6 @@ import { useUpdateStore } from '~/stores/update'
 useAppearance()
 // Load the persisted auto-update toggle before the store schedules checks.
 useUpdateSettings()
-// Load + push the RTK token-optimizer toggle to the engine (ADR 0031).
-useRtkSettings()
 
 // Global hydration: every page (including /mcp-servers, /skills) needs the
 // active Anthropic account in the store, not just /settings and /sessions.

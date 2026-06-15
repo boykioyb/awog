@@ -36,7 +36,7 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0028](./0028-auto-update.md) | Auto-update | Accepted — Option A (electron-updater) |
 | [0029](./0029-migrate-llm-runtime-to-pi-sdk.md) | Migrate LLM runtime sang Pi SDK | Accepted |
 | [0030](./0030-subagent-task-tool.md) | Subagent `Task` tool | Accepted |
-| [0031](./0031-rtk-token-proxy.md) | Bundle RTK (Rust Token Killer) làm bộ nén output cho Bash tool | Accepted |
+| [0031](./0031-rtk-token-proxy.md) | Bundle RTK (Rust Token Killer) làm bộ nén output cho Bash tool | Reverted (2026-06-15) |
 | [0032](./0032-hook-execution-engine-ipc-contract.md) | Hook Execution Engine + IPC contract | Accepted |
 | [0033](./0033-rules-system-prompt-injection.md) | Rules — workspace instruction injection vào system prompt | Accepted |
 | [0034](./0034-slash-commands-markdown.md) | Slash Commands dưới dạng Markdown (Claude Code-aligned) | Accepted |

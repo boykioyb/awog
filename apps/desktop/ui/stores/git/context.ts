@@ -67,6 +67,9 @@ export function createGitContext() {
   const pendingPullDivergence = ref(false)
   // Push rejected as non-fast-forward — UI opens GitPushNonFfModal.
   const pendingPushNonFf = ref(false)
+  // Push confirm dialog (remote + tags + force-with-lease) — opened by the
+  // toolbar/remote-pane Push buttons, closed when push starts or is cancelled.
+  const pushDialogOpen = ref(false)
 
   // Conflict resolver state — live response from `git.readConflictFile` for
   // the file currently focused in the resolver. `null` when no file selected.
@@ -241,6 +244,7 @@ export function createGitContext() {
     pendingAuthError,
     pendingPullDivergence,
     pendingPushNonFf,
+    pushDialogOpen,
     currentConflictFile,
     isMerging,
     isDetached,

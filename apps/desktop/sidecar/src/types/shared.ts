@@ -175,6 +175,11 @@ export interface SessionAttachment {
   size?: string
   mime?: string
   url?: string
+  // UTF-8 text content of a text-based file (or a large pasted-text block). The
+  // runtime delivers this to the model as a delimited text block (buildContext);
+  // the UI also uses it for the in-app text preview. Absent for images (which use
+  // `url`) and for binary files (display-only).
+  preview?: string
   width?: number
   height?: number
 }

@@ -474,6 +474,12 @@ export interface SessionMessage {
   parts?: SessionMessagePart[]
   attachments?: SessionAttachment[]
   followUps?: SessionFollowUp[]
+  // Display-only: when this user turn was sent via a `/command`, the raw
+  // invocation the user typed (e.g. `/prs civilink-backend`). The transcript
+  // shows this compact form with an expand toggle; `text` holds the full
+  // expanded template the model actually received. In-memory like followUps —
+  // a reload (which rebuilds from JSONL) falls back to showing `text`.
+  commandInvocation?: string
   modeAtSend?: AgentMode
   startedAt?: number
   completedAt?: number
@@ -517,6 +523,18 @@ export interface Session {
   // to resume subsequent turns (ADR 0023). Owned/persisted by the sidecar; the
   // UI never sends it — it only hydrates it from the session JSONL.
   sdkSessionId?: string
+}
+
+// One hit from `sessions.search` (Cmd+K full-text search): a single matched
+// message with a snippet window around the match. Mirrors the sidecar shape.
+export interface SessionSearchResult {
+  sessionId: string
+  sessionTitle: string
+  projectId: string | null
+  messageId: string
+  role: 'user' | 'agent' | 'system'
+  at: string
+  snippet: string
 }
 
 // ─── Session Workspace Panel ─────────────────────────────────────────────────
@@ -986,6 +1004,9 @@ export interface AppearanceSettings {
   // Liquid Glass UI mode — translucent frosted surfaces + ambient backdrop across
   // the app. Toggle in Settings → Appearance; off falls back to solid surfaces.
   liquidGlass: boolean
+  // Wrap assistant (LLM) replies in a bubble card so the turn reads as a raised
+  // surface over the canvas. Off renders the reply as a plain inline document.
+  assistantBubble: boolean
   locale: AppLocale
   // Keyboard chord that submits a message in the session composer.
   composerSendKey: ComposerSendKey

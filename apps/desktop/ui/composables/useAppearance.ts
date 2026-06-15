@@ -114,6 +114,10 @@ const coerceAppearance = (raw: unknown): AppearanceSettings => {
     surfaceDepth: pick(v.surfaceDepth, DEPTH_VALUES, DEFAULT_APPEARANCE.surfaceDepth),
     liquidGlass:
       typeof v.liquidGlass === 'boolean' ? v.liquidGlass : DEFAULT_APPEARANCE.liquidGlass,
+    assistantBubble:
+      typeof v.assistantBubble === 'boolean'
+        ? v.assistantBubble
+        : DEFAULT_APPEARANCE.assistantBubble,
     locale: pick(v.locale, LOCALE_VALUES, DEFAULT_APPEARANCE.locale),
     composerSendKey: pick(v.composerSendKey, SEND_KEY_VALUES, DEFAULT_APPEARANCE.composerSendKey),
   }

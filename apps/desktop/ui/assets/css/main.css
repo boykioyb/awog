@@ -354,6 +354,32 @@ body,
   user-select: none;
 }
 
+/* The highlight over the quoted span itself — a translucent accent wash (color-mix
+   keeps the text readable on either theme). box-decoration-break paints it cleanly
+   when the quote wraps across lines. */
+.awog-md .awog-fu-highlight {
+  background: color-mix(in srgb, var(--awog-accent, #3b82f6) 22%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.1em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Brief pulse when the reader jumps to a quote via its chip (revealFollowUpAnchor). */
+.awog-md .awog-fu-flash {
+  animation: awog-fu-flash 1.1s ease-out;
+}
+@keyframes awog-fu-flash {
+  0%,
+  100% {
+    background: color-mix(in srgb, var(--awog-accent, #3b82f6) 22%, transparent);
+  }
+  25% {
+    background: color-mix(in srgb, var(--awog-accent, #3b82f6) 60%, transparent);
+  }
+}
+
 /* ─── Code blocks (.awog-code-block) ──────────────────────────────────────── */
 /* markdown.ts wraps every non-mermaid fence; SessionMessageList injects the
    copy + expand actions post-render. Position relative so the action bar can

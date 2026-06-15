@@ -50,6 +50,7 @@ export const useGitStore = defineStore('git', () => {
     pendingAuthError: ctx.pendingAuthError,
     pendingPullDivergence: ctx.pendingPullDivergence,
     pendingPushNonFf: ctx.pendingPushNonFf,
+    pushDialogOpen: ctx.pushDialogOpen,
     isLoadingHistoryMore: ctx.isLoadingHistoryMore,
     // ─── getters ───
     branches: ctx.branches,
@@ -58,6 +59,7 @@ export const useGitStore = defineStore('git', () => {
     remotes: ctx.remotes,
     statusFiles: ctx.statusFiles,
     currentBranch: ctx.currentBranch,
+    currentBranchInfo: ctx.currentBranchInfo,
     ahead: ctx.ahead,
     behind: ctx.behind,
     stagedFiles: ctx.stagedFiles,

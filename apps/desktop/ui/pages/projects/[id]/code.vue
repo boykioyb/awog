@@ -240,6 +240,9 @@ import {
 } from '~/composables/useProjectWorkspace'
 
 definePageMeta({ layout: false, keepalive: false })
+// Explicit name — the file is `code.vue`, but `code` is a reserved HTML element,
+// which Vue warns about when it becomes the page component id.
+defineOptions({ name: 'ProjectCodePage' })
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
@@ -279,7 +282,9 @@ const {
   toastStyle,
 } = ctx
 
-const goBack = () => navigateTo('/projects')
+// Return to wherever the editor was opened from: a session (selection is kept
+// in the store) or, by default, the project list.
+const goBack = () => navigateTo(route.query.from === 'session' ? '/sessions' : '/projects')
 
 // Deep-link: /projects/:id/code?file=<path> opens that file once Monaco is up
 // (the bridge from a session's Files tab / chat reference).

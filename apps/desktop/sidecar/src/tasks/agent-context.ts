@@ -90,6 +90,9 @@ async function buildMcpServers(
           command: s.command,
           ...(s.args ? { args: s.args } : {}),
           ...(Object.keys(env).length > 0 ? { env } : {}),
+          // Per-server handshake budget — `npx -y` cold starts can exceed the
+          // bridge default; honour the user's configured timeout.
+          timeoutMs: s.timeoutMs,
         }
       } else if (s.transport === 'http') {
         if (!s.url) continue
@@ -99,6 +102,7 @@ async function buildMcpServers(
           type: 'http' as const,
           url: s.url,
           ...(Object.keys(headers).length > 0 ? { headers } : {}),
+          timeoutMs: s.timeoutMs,
         }
       } else {
         continue

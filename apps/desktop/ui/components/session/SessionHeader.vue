@@ -37,6 +37,13 @@
           {{ project ? project.name : 'No project' }}
           <ChevronDown :size="10" />
         </button>
+        <!-- Branch chip renders nothing until a branch loads (project bound to a
+             real repo), so no separator dot — the row gap is enough. -->
+        <SessionBranchSwitcher
+          v-if="workspaceRoot"
+          :workspace-root="workspaceRoot"
+          @open-git="showGitModal = true"
+        />
       </div>
     </div>
     <button
@@ -46,6 +53,15 @@
       @click="toggleInfo"
     >
       <Info :size="14" />
+    </button>
+    <button
+      v-if="workspaceRoot"
+      class="p-1.5 rounded transition flex-shrink-0"
+      :style="{ color: showGitModal ? t.accent : t.textDim }"
+      :title="tr('session.git.open')"
+      @click="showGitModal = true"
+    >
+      <GitBranch :size="14" />
     </button>
     <button
       ref="wsBtnRef"
@@ -122,10 +138,16 @@
       </div>
     </div>
   </Teleport>
+
+  <SessionGitModal
+    :open="showGitModal"
+    :project-id="session.projectId ?? null"
+    @close="showGitModal = false"
+  />
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, FolderGit2, Info, PanelRight, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, FolderGit2, GitBranch, Info, PanelRight, Trash2 } from 'lucide-vue-next'
 import { nextTick, ref, computed, watch } from 'vue'
 import type { Session, WorkspaceTab } from '~/types'
 import { formatTime } from '~/utils/time'
@@ -187,6 +209,7 @@ watch(
     titleDraft.value = props.session.title
     showProjectMenu.value = false
     showWorkspaceMenu.value = false
+    showGitModal.value = false
   },
 )
 
@@ -208,6 +231,11 @@ watch(showWorkspaceMenu, async (open) => {
 const project = computed(() =>
   props.session.projectId ? workspace.projectById(props.session.projectId) : undefined,
 )
+
+// Absolute path of the bound project — drives the inline branch switcher and
+// the embedded Git manager. Null when no project (or no path) is bound.
+const workspaceRoot = computed<string | null>(() => project.value?.path ?? null)
+const showGitModal = ref(false)
 
 const selectProject = (projectId: string | null) => {
   sessionsStore.setSessionProject(props.session.id, projectId)

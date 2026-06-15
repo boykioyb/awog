@@ -76,6 +76,7 @@
           @click="mention.detect"
           @keyup="mention.detect"
           @keydown="onComposerKeydown"
+          @paste="onPaste"
         />
         <button
           class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
@@ -168,36 +169,45 @@
           <div
             class="inline-flex items-start gap-1.5 px-2 py-1 rounded text-[1em] w-full"
             :style="{
-              background: t.bgSubtle,
+              background: `${t.accent}14`,
               color: t.text,
-              border: `1px solid ${t.border}`,
+              border: `1px solid ${t.accent}40`,
             }"
           >
-            <!-- Number matches the ① anchor badge dropped into the source message. -->
-            <span
-              class="inline-flex items-center justify-center font-mono leading-none flex-shrink-0"
-              :style="{
-                minWidth: '16px',
-                height: '16px',
-                marginTop: '1px',
-                padding: '0 4px',
-                borderRadius: '8px',
-                fontSize: '11px',
-                fontWeight: 700,
-                background: t.accent,
-                color: t.accentText,
-              }"
+            <!-- Badge + quote text jump back to the highlighted source on click;
+                 the Note/remove buttons keep their own handlers beside it. -->
+            <button
+              type="button"
+              class="inline-flex items-start gap-1.5 flex-1 min-w-0 text-left"
+              :title="tr('session.followup.reveal')"
+              @click="revealFollowUpAnchor(fu.id)"
             >
-              {{ i + 1 }}
-            </span>
-            <div class="flex-1 min-w-0">
-              <div class="truncate italic" :style="{ color: t.textDim }">
-                {{ truncateForChip(fu.selectedText) }}
-              </div>
-              <div v-if="fu.note" class="truncate" :style="{ color: t.text }">
-                {{ fu.note }}
-              </div>
-            </div>
+              <!-- Number matches the ① anchor badge dropped into the source message. -->
+              <span
+                class="inline-flex items-center justify-center font-mono leading-none flex-shrink-0"
+                :style="{
+                  minWidth: '16px',
+                  height: '16px',
+                  marginTop: '1px',
+                  padding: '0 4px',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  background: t.accent,
+                  color: t.accentText,
+                }"
+              >
+                {{ i + 1 }}
+              </span>
+              <span class="flex-1 min-w-0">
+                <span class="block truncate italic" :style="{ color: t.textDim }">
+                  {{ truncateForChip(fu.selectedText) }}
+                </span>
+                <span v-if="fu.note" class="block truncate" :style="{ color: t.text }">
+                  {{ fu.note }}
+                </span>
+              </span>
+            </button>
             <button
               type="button"
               class="text-[1em] inline-flex items-center px-1 rounded"
@@ -270,8 +280,10 @@ import { FileText, Paperclip, Send, Square, X } from 'lucide-vue-next'
 import { computed, inject, onBeforeUnmount, ref, toRef, useTemplateRef, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
+import { revealFollowUpAnchor } from '~/utils/follow-up-anchor'
 import { composeOutgoingMessage, truncateForChip } from '~/utils/follow-up'
 import { findSessionCommand } from '~/utils/session-catalog'
+import { buildPastedTextAttachment, intakeFile } from '~/utils/attachment-intake'
 import {
   expandCommandBody,
   findInvocableCommand,
@@ -286,9 +298,11 @@ const props = defineProps<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const store = useSessionsStore()
 const ws = useWorkspaceStore()
 const settings = useSettingsStore()
+const { composer } = useComposerSettings()
 
 const draft = ref('')
 const composerFocus = ref(false)
@@ -419,10 +433,19 @@ const onSend = () => {
   // user command in scope, expand its template (substituting $ARGUMENTS / $1…)
   // and send that instead of the literal `/name`.
   let body = draft.value
+  // When a `/command` expands, keep the raw invocation for a compact transcript
+  // chip — the bubble shows `/prs …` with an expand toggle while the model
+  // receives the full expanded `body`.
+  let commandInvocation: string | undefined
   const invocation = parseSlashInvocation(draft.value)
   if (invocation) {
     const cmd = findInvocableCommand(ws.commands, invocation.name, props.session.projectId)
-    if (cmd) body = expandCommandBody(cmd.body, invocation.args)
+    if (cmd) {
+      body = expandCommandBody(cmd.body, invocation.args)
+      commandInvocation = invocation.args
+        ? `/${invocation.name} ${invocation.args}`
+        : `/${invocation.name}`
+    }
   }
   // Full quote is preserved here — chip truncation is purely visual.
   // See lukilabs/craft-agents-oss#580 for the rationale.
@@ -431,7 +454,13 @@ const onSend = () => {
   // Pass the structured follow-ups too: the store stores them on the user message
   // for the numbered-card render + anchor badges, while `text` (the serialized
   // quote markdown) is what the model and history receive.
-  store.sendMessage(props.session.id, text, attachments, followUps.length ? followUps : undefined)
+  store.sendMessage(
+    props.session.id,
+    text,
+    attachments,
+    followUps.length ? followUps : undefined,
+    commandInvocation,
+  )
   draft.value = ''
   pendingAttachments.value = []
   editingFollowUpId.value = null
@@ -477,41 +506,54 @@ const onBlur = () => {
   setTimeout(mention.close, 100)
 }
 
-const fmtSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+// Shared by the paperclip picker, drag-and-drop, and clipboard paste — turns
+// dropped/selected File objects into pending attachments. intakeFile decides
+// what reaches the model: images become inline image blocks, text-decodable
+// files carry their content in `preview` (sent as a text block by the sidecar),
+// other binary attaches display-only, and risky/executable types are rejected.
+const addFiles = async (files: FileList | File[]) => {
+  const outcomes = await Promise.all(Array.from(files).map(intakeFile))
+  const accepted: SessionAttachment[] = []
+  const rejected: string[] = []
+  let truncated = false
+  for (const outcome of outcomes) {
+    if (outcome.ok) {
+      accepted.push(outcome.attachment)
+      if (outcome.truncated) truncated = true
+    } else {
+      rejected.push(outcome.name)
+    }
+  }
+  if (accepted.length) pendingAttachments.value.push(...accepted)
+  if (rejected.length) {
+    showNotice(tr('session.composer.attach.risky_blocked', { names: rejected.join(', ') }))
+  } else if (truncated) {
+    showNotice(tr('session.composer.attach.truncated'))
+  }
 }
 
-// Read a File as a base64 data URL. Images are embedded inline (not as an
-// ephemeral blob: object URL) so the preview keeps working after the session is
-// persisted to JSONL and reloaded — a blob URL dies with the page that made it.
-const readDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'))
-    reader.readAsDataURL(file)
-  })
-
-// Shared by the paperclip picker and drag-and-drop — turns dropped/selected
-// File objects into pending attachments (metadata + an inline data URL for
-// images, so they preview reliably and survive a reload).
-const addFiles = async (files: FileList | File[]) => {
-  const built = await Promise.all(
-    Array.from(files).map(async (f): Promise<SessionAttachment> => {
-      const isImage = f.type.startsWith('image/')
-      return {
-        id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        name: f.name,
-        type: isImage ? 'image' : 'file',
-        size: fmtSize(f.size),
-        mime: f.type,
-        url: isImage ? await readDataUrl(f).catch(() => undefined) : undefined,
-      }
-    }),
-  )
-  pendingAttachments.value.push(...built)
+// Clipboard paste. Two cases beyond plain text:
+//   1) the clipboard carries files (a screenshot, a copied file) → attach them
+//      through the same intake path as the picker/drop.
+//   2) a large plain-text paste (≥ threshold, feature enabled) → convert it to a
+//      `pasted-text-N.txt` attachment instead of dumping it inline, keeping the
+//      input clean. Small pastes fall through to the textarea's default insert.
+const onPaste = (ev: ClipboardEvent) => {
+  const data = ev.clipboardData
+  if (!data) return
+  if (data.files && data.files.length > 0) {
+    ev.preventDefault()
+    void addFiles(data.files)
+    return
+  }
+  if (!composer.value.pasteAsFile) return
+  const text = data.getData('text/plain')
+  if (!text || text.length < composer.value.pasteThreshold) return
+  ev.preventDefault()
+  const index = pendingAttachments.value.filter((a) => a.name.startsWith('pasted-text-')).length + 1
+  const { attachment, truncated } = buildPastedTextAttachment(text, index)
+  pendingAttachments.value.push(attachment)
+  if (truncated) showNotice(tr('session.composer.attach.truncated'))
 }
 
 const onFileSelected = (ev: Event) => {

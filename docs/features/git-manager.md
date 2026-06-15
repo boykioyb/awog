@@ -1273,7 +1273,7 @@ interface WorkspaceSettings {
 | OQ-9 | **`gitnexus` semantic search**: liên quan gì tới Git Manager không? | Không — gitnexus là context provider (đọc code semantic), Git Manager chỉ thao tác `.git/`. Tách biệt hoàn toàn. |
 | OQ-10 | **Theme token cho conflict resolver**: thêm `diffOurs` / `diffTheirs` vào `utils/themes.ts`? | Yes, cần Designer chốt hex cho dark + light. |
 | OQ-11 | **Hỗ trợ commit message multi-line edit**: textarea plain hay Monaco với git-commit syntax highlight? | Plain textarea cho v1 (KISS); Monaco cho v2 nếu user feedback cần. |
-| OQ-12 | **Force push** có expose không? | Không ở v1 (DANGEROUS); user dùng CLI. Brief đã loại reset/rebase, mở rộng cùng nguyên tắc. |
+| OQ-12 | **Force push** có expose không? | ~~Không ở v1 (DANGEROUS); user dùng CLI.~~ **Cập nhật 2026-06-15:** đã expose qua `GitPushModal.vue` (dialog xác nhận remote + Push all tags + Force push). `force` map sang `--force-with-lease` (không bao giờ bare `--force`); `pushTags` → `--tags`. Xem [ADR 0017](../decisions/0017-git-manager-ipc-contract.md) OQ-12 (đã gỡ deferral). |
 
 ## Test scenarios (input cho QA)
 

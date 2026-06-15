@@ -126,10 +126,25 @@ export function useProjectWorkspace(projectId: string) {
     previewSource.value = liveContent.get(path) ?? ''
   })
 
+  // Expand every ancestor folder of `path` (loading each level lazily) so an
+  // opened file is revealed in the explorer tree — the row itself highlights via
+  // activePath, this just ensures its parents are expanded and rendered.
+  async function revealInTree(path: string): Promise<void> {
+    if (!childrenByPath['']) await loadDir('') // root may not be loaded yet (deep-link race)
+    const dirs = path.split('/').slice(0, -1)
+    let acc = ''
+    for (const name of dirs) {
+      acc = acc ? `${acc}/${name}` : name
+      if (!childrenByPath[acc]) await loadDir(acc)
+      expanded[acc] = true
+    }
+  }
+
   async function openFile(path: string): Promise<void> {
     if (!ready.value) return
     if (findTab(path)) {
       activePath.value = path
+      await revealInTree(path)
       await nextTick()
       editorRef.value?.focus()
       return
@@ -153,6 +168,7 @@ export function useProjectWorkspace(projectId: string) {
       liveContent.set(path, file.content)
       editorRef.value?.openFile(path, file.content, file.language)
       activePath.value = path
+      await revealInTree(path)
     } catch (err) {
       pushToast(errMsg(err, tr('code.toast.open_failed')), 'error')
     }

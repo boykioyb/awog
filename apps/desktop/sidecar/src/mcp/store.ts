@@ -7,6 +7,7 @@ import { basename as pathBasename, join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { McpServerConfigSchema } from './schema.js'
+import { keychainizeRecord } from './secrets.js'
 import type { McpServerConfig } from '../types/shared.js'
 
 const DIR_NAME = sanitizeChild('mcp-servers')
@@ -106,11 +107,60 @@ export async function listServers(): Promise<McpServerConfig[]> {
 
 export async function saveServer(server: McpServerConfig): Promise<void> {
   await ensureDir()
+  // Invariant 1 / ADR 0018: secret-looking env/header values must never reach
+  // disk in plaintext. Move them to the OS keychain and persist only the
+  // `secret:KEY` reference. Best-effort (keychain-unavailable leaves the value).
+  const env = await keychainizeRecord(server.id, server.env)
+  const headers = await keychainizeRecord(server.id, server.headers)
+  const safe: McpServerConfig = { ...server }
+  if (server.env) safe.env = env.record
+  if (server.headers) safe.headers = headers.record
+
   const file = fileFor(server.id)
   const tmp = `${file}.tmp.${process.pid}`
-  await writeFile(tmp, JSON.stringify(server, null, 2), 'utf8')
+  await writeFile(tmp, JSON.stringify(safe, null, 2), 'utf8')
   await chmod(tmp, 0o600)
   await rename(tmp, file)
+}
+
+// One-time boot migration: rewrite any existing config that still holds a
+// plaintext secret (legacy / hand-edited / imported) so the token lives in the
+// keychain and only a `secret:KEY` reference remains on disk. Idempotent — a
+// config that is already all-references triggers no write. Best-effort per
+// server; one failure never blocks the others. Called from index.ts at boot.
+export async function migrateMcpPlaintextSecrets(): Promise<void> {
+  let servers: McpServerConfig[]
+  try {
+    servers = await listServers()
+  } catch (err) {
+    log.warn('mcp: secret migration scan failed', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return
+  }
+  for (const server of servers) {
+    // This pass performs the actual keychain move and returns ref records; we
+    // write those directly so saveServer's own keychainize is a no-op (the
+    // values are already `secret:` references).
+    // eslint-disable-next-line no-await-in-loop
+    const env = await keychainizeRecord(server.id, server.env)
+    // eslint-disable-next-line no-await-in-loop
+    const headers = await keychainizeRecord(server.id, server.headers)
+    if (!env.changed && !headers.changed) continue
+    const migrated: McpServerConfig = { ...server }
+    if (server.env) migrated.env = env.record
+    if (server.headers) migrated.headers = headers.record
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await saveServer(migrated)
+      log.info('mcp: migrated plaintext secret(s) to keychain', { serverId: server.id })
+    } catch (err) {
+      log.warn('mcp: secret migration write failed', {
+        serverId: server.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 }
 
 export async function deleteServer(id: string): Promise<void> {

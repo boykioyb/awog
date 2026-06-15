@@ -52,9 +52,9 @@ async function withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Prom
 export interface RunNonStreamArgs {
   sessionId: string
   pendingText: string
-  // Attachments on the pending user turn. Image attachments are bridged to Pi
-  // image content blocks by buildContext; non-image entries are ignored by the
-  // model (they're still persisted for UI display).
+  // Attachments on the pending user turn. buildContext bridges images to Pi
+  // image content blocks and text-based files (content in `preview`) to text
+  // blocks; binary files without content are persisted for UI display only.
   pendingAttachments?: SessionAttachment[]
   history: SessionMessage[]
   settings: SessionSettings

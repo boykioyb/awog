@@ -71,6 +71,22 @@ jobs:
             exit 1
           fi
 
+      # The "What's New" changelog (apps/desktop/ui/utils/changelog.ts) is hand-
+      # maintained: CURRENT_VERSION derives from its top entry. v0.11.0 and v0.12.0
+      # shipped without their entries, leaving the panel stuck at 0.10.0. Fail the
+      # release if the newest changelog entry does not match the app version.
+      - name: Verify changelog is up to date
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TOP=$(node -e "const s=require('fs').readFileSync('apps/desktop/ui/utils/changelog.ts','utf8');const m=s.match(/version:\s*'([0-9]+\.[0-9]+\.[0-9]+)'/);process.stdout.write(m?m[1]:'')")
+          echo "changelog top=$TOP  package.json=$PKG"
+          if [ "$TOP" != "$PKG" ]; then
+            echo "::error::Changelog top entry ($TOP) does not match app version $PKG — add a '$PKG' release to apps/desktop/ui/utils/changelog.ts before tagging."
+            exit 1
+          fi
+
       - name: Set up pnpm
         # No `version` input — action-setup reads it from the root package.json
         # "packageManager" field (pnpm@10.33.0). Specifying both errors with

@@ -1,4 +1,4 @@
-import { useGitApi, type GitStreamingOp } from '~/composables/useGitApi'
+import { useGitApi, type GitStreamingOp, type PushParams } from '~/composables/useGitApi'
 import { authPayload, gitCodeOf, isUnavailable, wait } from './adapters'
 import type { GitActionCtx } from './data'
 
@@ -20,6 +20,7 @@ export function createGitSync(ctx: GitActionCtx) {
     pendingAuthError,
     pendingPullDivergence,
     pendingPushNonFf,
+    pushDialogOpen,
     pushToast,
     resolveWorkspaceRoot,
     loadStatus,
@@ -157,8 +158,11 @@ export function createGitSync(ctx: GitActionCtx) {
     }
   }
 
-  const push = async (setUpstream = false) => {
+  const push = async (
+    opts: { setUpstream?: boolean; force?: boolean; pushTags?: boolean; remote?: string } = {},
+  ) => {
     if (isPushing.value) return
+    pushDialogOpen.value = false
     isPushing.value = true
     progressOp.value = 'push'
     progressPct.value = null
@@ -172,7 +176,11 @@ export function createGitSync(ctx: GitActionCtx) {
         branchesAll.value = branchesAll.value.map((b) =>
           b.projectId === projectId && b.isCurrent && !b.isRemote ? { ...b, ahead: 0 } : b,
         )
-        pushToast(`Pushed ${pushed} commits to origin/${currentBranch.value} (mock)`, 'success')
+        const remoteLabel = opts.remote ?? 'origin'
+        pushToast(
+          `Pushed ${pushed} commits to ${remoteLabel}/${currentBranch.value} (mock)`,
+          'success',
+        )
       } finally {
         isPushing.value = false
         resetProgress()
@@ -180,8 +188,11 @@ export function createGitSync(ctx: GitActionCtx) {
       return
     }
     try {
-      const params: { setUpstream?: boolean } = {}
-      if (setUpstream) params.setUpstream = true
+      const params: PushParams = {}
+      if (opts.setUpstream) params.setUpstream = true
+      if (opts.force) params.force = true
+      if (opts.pushTags) params.pushTags = true
+      if (opts.remote) params.remote = opts.remote
       const result = await useGitApi().push(root, params)
       const n = result.pushed
       pushToast(n > 0 ? `Pushed ${n} ref${n === 1 ? '' : 's'}` : 'Push thành công', 'success')

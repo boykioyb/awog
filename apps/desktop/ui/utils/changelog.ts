@@ -30,6 +30,86 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.12.0',
+    date: '2026-06-15',
+    highlight: {
+      en: 'Settings in a modal, per-project session defaults, and image attachments in chat.',
+      vi: 'Settings trong modal, mặc định session theo từng project, và đính kèm ảnh vào hội thoại.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Attach images to a chat message and the model can see them — they stay in context across the rest of the conversation.',
+        vi: 'Đính kèm ảnh vào tin nhắn và model nhìn thấy được — ảnh sống trong ngữ cảnh suốt phần còn lại của hội thoại.',
+      },
+      {
+        kind: 'added',
+        en: 'Each project can set its own default LLM provider, model, and account for new sessions.',
+        vi: 'Mỗi project đặt được provider, model và account LLM mặc định riêng cho session mới.',
+      },
+      {
+        kind: 'added',
+        en: 'Choose whether Enter or Cmd/Ctrl+Enter sends a message in the composer.',
+        vi: 'Chọn phím gửi tin nhắn là Enter hay Cmd/Ctrl+Enter trong khung soạn.',
+      },
+      {
+        kind: 'changed',
+        en: 'Settings now open in a modal overlay instead of a separate page, so you keep your place in the app.',
+        vi: 'Settings giờ mở trong modal nổi thay vì trang riêng, nên bạn giữ nguyên chỗ đang làm trong app.',
+      },
+      {
+        kind: 'improved',
+        en: 'When creating an agent, skill, command, rule, or hook, pick where to save it — globally or in a project’s .awog folder.',
+        vi: 'Khi tạo agent, skill, command, rule hay hook, chọn nơi lưu — toàn cục hay trong thư mục .awog của project.',
+      },
+      {
+        kind: 'improved',
+        en: 'Project templates can now be fetched directly from a GitHub folder.',
+        vi: 'Project template giờ tải được trực tiếp từ một thư mục GitHub.',
+      },
+    ],
+  },
+  {
+    version: '0.11.0',
+    date: '2026-06-12',
+    highlight: {
+      en: 'Project templates and a config import assistant — scaffold projects and bring your Claude Code config in.',
+      vi: 'Project template và trợ lý nhập cấu hình — tạo project từ mẫu và mang cấu hình Claude Code vào.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Project templates: scaffold a new project from a reusable bundle of agents, skills, commands, rules, and hooks.',
+        vi: 'Project template: tạo project mới từ một bộ mẫu tái dùng gồm agent, skill, command, rule và hook.',
+      },
+      {
+        kind: 'added',
+        en: 'Config import assistant: bring your existing Claude Code configuration into AWOG, with the config tiers consolidated under a single .awog folder.',
+        vi: 'Trợ lý nhập cấu hình: mang cấu hình Claude Code sẵn có vào AWOG, gom các tầng cấu hình về một thư mục .awog duy nhất.',
+      },
+      {
+        kind: 'added',
+        en: 'Preview workspace files in fullscreen, with web pages rendered in an embedded frame.',
+        vi: 'Xem trước file workspace ở chế độ toàn màn hình, trang web hiển thị trong khung nhúng.',
+      },
+      {
+        kind: 'improved',
+        en: 'Sessions show a redesigned, Claude-Code-style step timeline that’s easier to follow.',
+        vi: 'Session hiển thị step timeline thiết kế lại theo kiểu Claude Code, dễ theo dõi hơn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Restored the “Always allow” button on permission prompts.',
+        vi: 'Khôi phục nút “Always allow” trên hộp xin quyền.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Mermaid diagram labels are now readable in dark mode.',
+        vi: 'Nhãn sơ đồ Mermaid giờ đọc được trong chế độ tối.',
+      },
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-06-11',
     highlight: {
@@ -61,11 +141,6 @@ export const CHANGELOG: Release[] = [
         kind: 'improved',
         en: 'Create and edit commands, rules, and hooks with AI; all three list pages group items by project with collapsible sections.',
         vi: 'Tạo và sửa command, rule, hook bằng AI; cả ba trang danh sách đều gom theo project với mục có thể thu gọn.',
-      },
-      {
-        kind: 'improved',
-        en: 'Token proxy (RTK) compresses shell-command output before it reaches the model — 60–90% fewer tokens on dev operations. Toggle in Settings → Workspace.',
-        vi: 'Token proxy (RTK) nén output lệnh shell trước khi vào model — giảm 60–90% token cho thao tác dev. Bật/tắt ở Settings → Workspace.',
       },
       {
         kind: 'added',

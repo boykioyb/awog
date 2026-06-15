@@ -209,6 +209,13 @@
                   :style="{ background: t.accent, boxShadow: `0 0 6px ${t.accent}` }"
                   title="Running"
                 />
+                <!-- Reply completed while the user wasn't viewing this session. -->
+                <span
+                  v-else-if="store.isUnread(ses.id)"
+                  class="flex-shrink-0 mt-1 w-2 h-2 rounded-full"
+                  :style="{ background: t.accent, boxShadow: `0 0 6px ${t.accent}` }"
+                  title="Unread reply"
+                />
                 <Pin
                   v-else-if="ses.pinned"
                   :size="10"
@@ -241,7 +248,7 @@
                   <div class="flex items-center gap-1">
                     <div
                       class="text-[1em] leading-tight truncate flex-1"
-                      :style="{ color: t.text }"
+                      :style="{ color: t.text, fontWeight: store.isUnread(ses.id) ? 600 : 400 }"
                       @dblclick.stop="startRename(ses.id, ses.title)"
                     >
                       {{ ses.title }}
@@ -374,6 +381,14 @@ const workspace = useWorkspaceStore()
 const settingsStore = useSettingsStore()
 const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
 
+// When the window regains visibility while this view is active, the user is
+// looking at the selected session again → clear its unread flag.
+const onVisibility = () => {
+  if (!document.hidden && store.sessionsViewActive && store.selectedSessionId) {
+    store.markRead(store.selectedSessionId)
+  }
+}
+
 onMounted(() => {
   store.hydrateFromSidecar()
   // Project list is needed by SessionNewDialog + group/filter chips; hydrate
@@ -384,6 +399,17 @@ onMounted(() => {
   // Agents (`$` mention) + skills (`/` mention) are hydrated per-session in
   // SessionChat, scoped to the selected session's project — so the composer
   // picker never offers other projects' entries.
+  store.setSessionsViewActive(true)
+  document.addEventListener('visibilitychange', onVisibility)
+})
+
+// Keep-alive transitions: this page stays mounted across tab switches, so track
+// activation so a reply landing while the user is on another tab marks unread.
+onActivated(() => store.setSessionsViewActive(true))
+onDeactivated(() => store.setSessionsViewActive(false))
+onBeforeUnmount(() => {
+  store.setSessionsViewActive(false)
+  document.removeEventListener('visibilitychange', onVisibility)
 })
 
 const searchQuery = ref('')
@@ -429,10 +455,13 @@ const filtered = computed(() => {
     }
     return true
   })
+  // Pinned float to the top, then most-recently-modified first. Within a project
+  // group this gives a recency-ordered list; the group order itself is decided in
+  // `grouped` (by each group's latest activity).
   list.sort((a, b) => {
     if (a.pinned && !b.pinned) return -1
     if (!a.pinned && b.pinned) return 1
-    return 0
+    return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
   })
   return list
 })
@@ -497,43 +526,43 @@ interface Group {
   sessions: Session[]
 }
 
+// The most-recent updatedAt among a group's sessions — used to order the groups
+// themselves (most recently active project on top). filtered is already sorted
+// recency-first, so the head session carries the group's latest activity.
+const latestActivity = (g: Group): number =>
+  g.sessions.reduce((max, s) => Math.max(max, Date.parse(s.updatedAt)), 0)
+
 const grouped = computed<Group[]>(() => {
   if (groupBy.value === 'none') {
     return [{ key: '_all', label: null, sessions: filtered.value }]
   }
-  if (groupBy.value === 'project') {
-    const map = new Map<string, Group>()
-    workspace.projects.forEach((p) => map.set(p.id, { key: p.id, label: p.name, sessions: [] }))
-    map.set('_none', { key: '_none', label: 'No project', sessions: [] })
-    filtered.value.forEach((s) => {
-      const target = s.projectId ? map.get(s.projectId) : map.get('_none')
-      ;(target ?? map.get('_none'))?.sessions.push(s)
-    })
-    return Array.from(map.values()).filter((g) => g.sessions.length > 0)
+  // Key + label per session for the active grouping. Groups are built from the
+  // (recency-sorted) session list — empty projects never show — then ordered by
+  // each group's latest activity below.
+  const keyLabel = (s: Session): { key: string; label: string } => {
+    if (groupBy.value === 'project') {
+      if (!s.projectId) return { key: '_none', label: 'No project' }
+      return {
+        key: s.projectId,
+        label: workspace.projects.find((p) => p.id === s.projectId)?.name ?? 'Unknown project',
+      }
+    }
+    if (groupBy.value === 'provider') {
+      return { key: s.settings.provider, label: PROVIDER_LABEL[s.settings.provider] }
+    }
+    return {
+      key: s.settings.modelId,
+      label: modelById(s.settings.modelId)?.label ?? s.settings.modelId,
+    }
   }
-  if (groupBy.value === 'provider') {
-    const map = new Map<string, Group>()
-    filtered.value.forEach((s) => {
-      const key = s.settings.provider
-      const label = PROVIDER_LABEL[s.settings.provider]
-      const existing = map.get(key) ?? { key, label, sessions: [] }
-      existing.sessions.push(s)
-      map.set(key, existing)
-    })
-    return Array.from(map.values())
-  }
-  if (groupBy.value === 'model') {
-    const map = new Map<string, Group>()
-    filtered.value.forEach((s) => {
-      const key = s.settings.modelId
-      const label = modelById(s.settings.modelId)?.label ?? s.settings.modelId
-      const existing = map.get(key) ?? { key, label, sessions: [] }
-      existing.sessions.push(s)
-      map.set(key, existing)
-    })
-    return Array.from(map.values())
-  }
-  return [{ key: '_all', label: null, sessions: filtered.value }]
+  const map = new Map<string, Group>()
+  filtered.value.forEach((s) => {
+    const { key, label } = keyLabel(s)
+    const existing = map.get(key)
+    if (existing) existing.sessions.push(s)
+    else map.set(key, { key, label, sessions: [s] })
+  })
+  return Array.from(map.values()).sort((a, b) => latestActivity(b) - latestActivity(a))
 })
 
 const toggleGroup = (key: string) => {

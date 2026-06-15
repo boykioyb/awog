@@ -8,6 +8,7 @@
     <main class="flex-1 flex flex-col overflow-hidden min-h-0">
       <slot />
     </main>
+    <SessionSearchPalette :open="searchOpen" @close="searchOpen = false" />
   </div>
 </template>
 
@@ -16,6 +17,15 @@ import type { Project } from '~/types'
 
 const { t } = useTheme()
 const { appBackground } = useGlass()
+
+// Cmd/Ctrl+K opens the cross-session search palette from anywhere in the app.
+const searchOpen = ref(false)
+const onGlobalKeydown = (e: KeyboardEvent) => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault()
+    searchOpen.value = !searchOpen.value
+  }
+}
 
 // HeaderTabBar dirty badge + ahead/behind chip need live `git.status` + `branches`
 // regardless of which page is mounted. The store defaults to mock id `'prj1'`
@@ -28,6 +38,7 @@ const workspace = useWorkspaceStore()
 let unsubscribe: (() => void) | null = null
 
 onMounted(async () => {
+  window.addEventListener('keydown', onGlobalKeydown)
   try {
     if (workspace.projects.length === 0) {
       await workspace.hydrateProjectsFromSidecar()
@@ -49,6 +60,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
   if (unsubscribe) {
     unsubscribe()
     unsubscribe = null

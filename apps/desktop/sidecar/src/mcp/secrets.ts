@@ -21,6 +21,15 @@ import { log } from '../util/logger.js'
 
 const PREFIX = 'secret:'
 
+// Env/header NAMES whose values must live in the keychain, never on disk.
+// Mirrors the masking pattern in util/logger.ts (SECRET_RE) so what we refuse
+// to log is the same set we refuse to persist in plaintext.
+const SECRET_KEY_RE = /token|key|credential|authorization|secret|password/i
+
+export function isSecretKey(name: string): boolean {
+  return SECRET_KEY_RE.test(name)
+}
+
 export function isSecretReference(value: string): boolean {
   return typeof value === 'string' && value.startsWith(PREFIX)
 }
@@ -109,6 +118,41 @@ export async function purgeServerSecrets(
       })
     })
   }
+}
+
+// Boundary enforcement (invariant 1 / ADR 0018): move any secret-looking
+// plaintext value in `record` into the OS keychain, replacing it with a
+// `secret:KEY` reference (key = the env/header name). Already-`secret:` values
+// and non-secret keys pass through untouched. Returns the rewritten record plus
+// whether anything moved (so callers can skip a needless re-write). Best-effort:
+// a keychain failure leaves that value as plaintext and logs — never throws, so
+// a save is never blocked.
+export async function keychainizeRecord(
+  serverId: string,
+  record: Record<string, string> | undefined,
+): Promise<{ record: Record<string, string> | undefined; changed: boolean }> {
+  if (!record) return { record, changed: false }
+  let changed = false
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(record)) {
+    if (!value || isSecretReference(value) || !isSecretKey(name)) {
+      out[name] = value
+      continue
+    }
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      out[name] = await persistSecret(serverId, name, value)
+      changed = true
+    } catch (err) {
+      log.warn('mcp/secrets: keychainize failed, leaving value as-is', {
+        serverId,
+        key: name,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      out[name] = value
+    }
+  }
+  return { record: out, changed }
 }
 
 // Migration helper: when user toggles a value from plaintext to secret in the

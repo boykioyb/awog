@@ -26,7 +26,7 @@
           <div
             class="rounded-md px-2.5 py-1.5 text-[1em] italic max-h-16 overflow-y-auto whitespace-pre-wrap"
             :style="{
-              background: t.bgSubtle,
+              background: `${t.accent}14`,
               color: t.textDim,
               borderLeft: `2px solid ${t.accent}`,
             }"

@@ -44,10 +44,6 @@ run('pnpm', ['--filter', '@awog/sidecar', 'build'], repoRoot)
 run('pnpm', ['exec', 'electron-rebuild', '-f', '-w', 'node-pty', '--module-dir', '../sidecar/dist'], electronDir, { optional: true })
 // 4. Electron main/preload
 run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], electronDir)
-// 4.5. Fetch + checksum-verify the bundled RTK binary for the host platform
-//      (ADR 0031). Shipped via extraResources (electron-builder.yml). NOT optional:
-//      a checksum mismatch or missing asset must abort the release.
-run('node', ['scripts/fetch-rtk.mjs'], electronDir)
 // 5. Package. Default to --publish never for local builds; CI passes
 //    --publish always. (With a `publish` config present, electron-builder would
 //    otherwise try to build update-info and crash when no repo/token is set.)

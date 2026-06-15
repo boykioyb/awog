@@ -4,16 +4,17 @@
 // terminal step. Permission gating happens upstream in beforeToolCall (mode
 // ask/plan blocks exec); this tool just runs + captures.
 //
-// Security: spawned via `sh -c <command>` with cwd = workspaceRoot. The command
-// string is opaque user/model input (input L1) but the permission gate
-// (beforeToolCall) is the control point — execute mode is the user's explicit
-// "full access" choice, matching the sdk branch's Bash behaviour. Output is
-// captured + capped; never logged with the command verbatim.
+// Security: spawned via a POSIX shell (`sh -c <command>`, or git-bash `bash -c`
+// on Windows — see resolveBashShell) with cwd = workspaceRoot. The command string
+// is opaque user/model input (input L1) but the permission gate (beforeToolCall)
+// is the control point — execute mode is the user's explicit "full access" choice,
+// matching the sdk branch's Bash behaviour. Output is captured + capped; never
+// logged with the command verbatim.
 
 import { spawn } from 'node:child_process'
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
-import { wrapCommand } from './rtk.js'
+import { resolveBashShell } from './shell.js'
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_TIMEOUT_MS = 600_000
@@ -29,15 +30,14 @@ function filteredEnv(): NodeJS.ProcessEnv {
     const v = process.env[k]
     if (v !== undefined) out[k] = v
   }
-  // Defense-in-depth for AWOG invariant #5 (no telemetry): RTK telemetry is
-  // opt-in and off by default, but we also set the widely-honored DO_NOT_TRACK
-  // standard so a bundled RTK can never phone home from the agent's shell.
+  // Defense-in-depth for AWOG invariant #5 (no telemetry): set the widely-honored
+  // DO_NOT_TRACK standard so any tool the agent shells out to can never phone home.
   out.DO_NOT_TRACK = '1'
   return out
 }
 
 const BashParams = Type.Object({
-  command: Type.String({ description: 'The shell command to run (executed via sh -c).' }),
+  command: Type.String({ description: 'The shell command to run (executed via a POSIX shell, e.g. sh/bash -c).' }),
   timeout: Type.Optional(
     Type.Number({ description: `Timeout in ms (default ${DEFAULT_TIMEOUT_MS}, max ${MAX_TIMEOUT_MS}).` }),
   ),
@@ -61,12 +61,11 @@ export function createBashTool(cwd: string): AgentTool<typeof BashParams, BashDe
     parameters: BashParams,
     async execute(_id, params, signal): Promise<AgentToolResult<BashDetails>> {
       const timeout = Math.min(params.timeout ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
-      // Route through RTK when enabled+available (ADR 0031) to compress output
-      // before it reaches the model. `details.command` keeps the ORIGINAL command
-      // so the trace/UI shows what the model asked for, not the rtk-wrapped form.
-      const command = await wrapCommand(params.command)
+      // Resolve the platform shell once (memoized): `sh -c` on POSIX, git-bash
+      // `bash -c` on Windows, `cmd.exe /c` as a last-resort Windows fallback.
+      const shell = await resolveBashShell()
       return new Promise<AgentToolResult<BashDetails>>((resolveResult) => {
-        const child = spawn('sh', ['-c', command], {
+        const child = spawn(shell.bin, [shell.flag, params.command], {
           cwd,
           env: filteredEnv(),
           windowsHide: true,

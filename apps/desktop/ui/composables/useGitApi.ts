@@ -203,6 +203,10 @@ export interface PushParams {
   remote?: string
   branch?: string
   setUpstream?: boolean
+  // `--force-with-lease` — gated behind the Push dialog's confirm checkbox.
+  force?: boolean
+  // `--tags` — push all local tags alongside the branch.
+  pushTags?: boolean
 }
 
 export interface PushResult {

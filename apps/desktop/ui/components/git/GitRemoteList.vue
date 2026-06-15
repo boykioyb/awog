@@ -46,7 +46,7 @@
             class="text-[1em] px-2 py-1 rounded transition"
             :style="{ background: t.accent, color: t.accentText }"
             :disabled="store.isPushing"
-            @click="store.push()"
+            @click="store.pushDialogOpen = true"
           >
             Push
           </button>

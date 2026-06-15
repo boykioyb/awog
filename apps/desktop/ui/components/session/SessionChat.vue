@@ -3,6 +3,7 @@
     <SessionHeader :session="session" @rename="onRename" @delete="emit('delete')" />
 
     <SessionMessageList
+      :session="session"
       :messages="session.messages"
       :pending-agent-ids="session.pendingAgentIds"
       @open-attachment="openAttachment"
@@ -67,18 +68,22 @@ const workspaceRoot = computed<string | null>(() => {
   return workspace.projects.find((p) => p.id === id)?.path ?? null
 })
 
-// The composer's `$` (agent) and `/` (skill) autocomplete read agents/skills
-// from the workspace store. Scope the hydration to THIS session's project so
-// the picker offers only the user/global tiers plus the bound project's — not
-// every other project's agents/skills. An empty id list ⇒ user/global only.
-// Re-runs only when the bound project changes, so switching between sessions of
-// the same project reuses the loaded set.
+// The composer's `$` (agent) and `/` (skill / slash-command) autocomplete read
+// agents/skills/commands from the workspace store. Scope the hydration to THIS
+// session's project so the picker offers only the user/global tiers plus the
+// bound project's — not every other project's. An empty id list ⇒ global only.
+// Commands are expanded client-side on send (SessionComposer), so the store
+// must be populated here too — otherwise a fresh session never sees the
+// project's `/commands` until the user visits the Commands page. Re-runs only
+// when the bound project changes, so switching between sessions of the same
+// project reuses the loaded set.
 watch(
   () => props.session.projectId,
   (projectId) => {
     const ids = projectId ? [projectId] : []
     workspace.hydrateAgentsFromSidecar(ids)
     workspace.hydrateSkillsFromSidecar(ids)
+    workspace.hydrateCommandsFromSidecar(ids)
   },
   { immediate: true },
 )
@@ -131,11 +136,14 @@ provide(FOLLOW_UP_KEY, {
 
 watch(
   () => props.session.id,
-  () => {
+  (id) => {
     selectedStep.value = null
     viewingAttachment.value = null
     pendingFollowUps.value = []
+    // Refresh which messages have a Rewind snapshot (ADR 0038) for this session.
+    void store.loadSnapshotIds(id)
   },
+  { immediate: true },
 )
 
 const onRename = (title: string) => {

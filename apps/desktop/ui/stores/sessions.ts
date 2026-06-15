@@ -7,6 +7,7 @@ import type {
   SessionMessage,
   SessionMessagePart,
   SessionQuestionAnswer,
+  SessionSearchResult,
   SessionSettings,
   SessionStep,
   SessionTokenKind,
@@ -15,6 +16,7 @@ import { useWorkspaceStore } from '~/stores/workspace'
 import { useSettingsStore } from '~/stores/settings'
 import { nowIso } from '~/utils/time'
 import { notify } from '~/utils/notify'
+import { composeOutgoingMessage } from '~/utils/follow-up'
 
 // Tag used in `pendingAgentIds` to mark a reply pending from the sidecar/provider
 // (no agent persona mapping yet — M7 will reintroduce agent personas).
@@ -203,6 +205,22 @@ export const useSessionsStore = defineStore('sessions', {
     // drawer re-renders when the underlying step transitions running → done
     // and its detail updates from prompt to reply.
     subagentDrawerRef: null as { sessionId: string; messageId: string; stepId: string } | null,
+    // Set by the Cmd+K search palette when opening a result: the message the
+    // message list should scroll to + flash once the target session renders.
+    // SessionMessageList watches this and clears it after scrolling.
+    pendingScrollMessageId: null as string | null,
+    // Message ids that have a workspace snapshot, per session (ADR 0038). Drives
+    // the Rewind affordance: a message with a snapshot offers a file-restoring
+    // rewind, otherwise rewind is conversation-only. Loaded lazily per session.
+    snapshotMessageIds: {} as Record<string, string[]>,
+    // Sessions whose latest reply finished while the user wasn't viewing them —
+    // drives the unread badge on the Sessions tab + list rows. Cleared when the
+    // session is opened / viewed.
+    unread: {} as Record<string, true>,
+    // True while the /sessions route is the active view (set by the page via
+    // keep-alive activated/deactivated). A reply that lands while this is false
+    // (user on another tab) marks the session unread even if it's the selected one.
+    sessionsViewActive: false,
     // True once sessions have been loaded from the sidecar. Guards
     // hydrateFromSidecar so navigating away and back never re-loads (and
     // clobbers) the store — the store is the live source of truth for the app
@@ -231,6 +249,19 @@ export const useSessionsStore = defineStore('sessions', {
     anyStreaming(state): boolean {
       return state.sessions.some((s) => (s.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG))
     },
+    // Whether a message has a workspace snapshot (→ rewind will restore files).
+    hasSnapshot:
+      (state) =>
+      (sessionId: string, messageId: string): boolean =>
+        (state.snapshotMessageIds[sessionId] ?? []).includes(messageId),
+    // Count of sessions with an unread completed reply (Sessions tab badge).
+    unreadCount(state): number {
+      return Object.keys(state.unread).length
+    },
+    isUnread:
+      (state) =>
+      (id: string): boolean =>
+        state.unread[id] === true,
     activeSubagentStep(state): SessionStep | null {
       const ref = state.subagentDrawerRef
       if (!ref) return null
@@ -277,6 +308,20 @@ export const useSessionsStore = defineStore('sessions', {
 
     selectSession(id: string | null) {
       this.selectedSessionId = id
+      // Opening a session clears its unread flag.
+      if (id) this.markRead(id)
+    },
+
+    // Clear a session's unread flag (it has been seen).
+    markRead(id: string) {
+      if (this.unread[id]) delete this.unread[id]
+    },
+
+    // The /sessions page reports whether it is the active view (keep-alive). On
+    // becoming active the currently-selected session is considered read.
+    setSessionsViewActive(active: boolean) {
+      this.sessionsViewActive = active
+      if (active && this.selectedSessionId) this.markRead(this.selectedSessionId)
     },
 
     // Initial settings for a new session. When the session is scoped to a
@@ -356,6 +401,79 @@ export const useSessionsStore = defineStore('sessions', {
       return branch.id
     },
 
+    // Re-run a user turn: drop that user message and everything after it, then
+    // send a fresh turn (optionally with edited text). Carries the original
+    // attachments AND quote follow-ups. Shared by editAndResend + regenerate. The
+    // dropped turns are truncated from the transcript first so the resend starts
+    // from the same history the original did.
+    async resendUserTurn(userMessageId: string, overrideText?: string): Promise<void> {
+      const session = this.sessions.find((s) => s.messages.some((m) => m.id === userMessageId))
+      if (!session) return
+      const idx = session.messages.findIndex((m) => m.id === userMessageId)
+      if (idx < 0) return
+      const userMsg = session.messages[idx]
+      if (!userMsg || userMsg.role !== 'user') return
+      // Streaming guard: never truncate under a live turn.
+      if ((session.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG)) return
+      const keepThroughId = idx > 0 ? (session.messages[idx - 1]?.id ?? null) : null
+      const followUps =
+        userMsg.followUps && userMsg.followUps.length ? [...userMsg.followUps] : undefined
+      // Preserve quotes across the resend. EDIT seeds the draft from the stripped
+      // body, so re-serialize the original quotes onto the new text (model input)
+      // and re-attach them (cards). REGENERATE reuses the original text, which
+      // already carries the serialized quote section.
+      const text =
+        overrideText !== undefined
+          ? composeOutgoingMessage(overrideText.trim(), followUps ?? [])
+          : userMsg.text
+      const attachments = userMsg.attachments ? [...userMsg.attachments] : undefined
+      if (!text.trim() && !(attachments && attachments.length)) return
+      // Drop the user message + everything after it (keep through the prior one).
+      session.messages = session.messages.slice(0, idx)
+      session.updatedAt = nowIso()
+      // Persist the truncate BEFORE the resend so the new turn's appended messages
+      // land after it in the JSONL — fire-and-forget would race sendMessage's
+      // user-message append and the truncate could drop it.
+      const sidecar = useSidecar()
+      if (sidecar.available) {
+        try {
+          await sidecar.request('sessions.truncate', { sessionId: session.id, keepThroughId })
+        } catch (err) {
+          console.warn('[sessions] truncate failed', err)
+        }
+      }
+      await this.sendMessage(session.id, text, attachments, followUps)
+    },
+
+    // Edit a user message and re-send the turn with the new text.
+    async editAndResend(userMessageId: string, newText: string): Promise<void> {
+      await this.resendUserTurn(userMessageId, newText)
+    },
+
+    // Regenerate an assistant reply: re-run the user turn that produced it (same
+    // text, same model). Walks back to the nearest preceding user message.
+    async regenerate(agentMessageId: string): Promise<void> {
+      const session = this.sessions.find((s) => s.messages.some((m) => m.id === agentMessageId))
+      if (!session) return
+      const idx = session.messages.findIndex((m) => m.id === agentMessageId)
+      if (idx < 0) return
+      let ui = idx - 1
+      while (ui >= 0 && session.messages[ui]?.role !== 'user') ui -= 1
+      const userMsg = ui >= 0 ? session.messages[ui] : undefined
+      if (!userMsg) return
+      await this.resendUserTurn(userMsg.id)
+    },
+
+    // Regenerate with a different model: switch the session model, then redo the
+    // turn. The UI only offers models valid for the current provider/account, so
+    // a plain modelId swap is enough (no provider/account change).
+    async retryWithModel(agentMessageId: string, modelId: string): Promise<void> {
+      const session = this.sessions.find((s) => s.messages.some((m) => m.id === agentMessageId))
+      if (!session) return
+      if (session.settings.modelId !== modelId) this.updateSettings(session.id, { modelId })
+      await this.regenerate(agentMessageId)
+    },
+
     updateSettings(sessionId: string, patch: Partial<SessionSettings>) {
       const session = this.sessions.find((s) => s.id === sessionId)
       if (!session) return
@@ -393,6 +511,7 @@ export const useSessionsStore = defineStore('sessions', {
 
     deleteSession(id: string) {
       this.sessions = this.sessions.filter((s) => s.id !== id)
+      this.markRead(id)
       if (this.selectedSessionId === id) {
         this.selectedSessionId = this.sessions[0]?.id ?? null
       }
@@ -455,6 +574,9 @@ export const useSessionsStore = defineStore('sessions', {
       text: string,
       attachments?: SessionAttachment[],
       followUps?: SessionFollowUp[],
+      // Raw `/command` invocation the user typed (display-only — `text` already
+      // holds the expanded template that the sidecar/model receives).
+      commandInvocation?: string,
     ) {
       const session = this.sessions.find((s) => s.id === sessionId)
       if (!session) return
@@ -465,7 +587,11 @@ export const useSessionsStore = defineStore('sessions', {
       // title. Strip newlines, cap at 60 chars with ellipsis so the sidebar
       // chip doesn't blow up.
       if (session.title === 'Untitled session' && session.messages.length === 0 && trimmed) {
-        const oneLine = trimmed.replace(/\s+/g, ' ').trim()
+        // Prefer the compact `/command` over the expanded template body so a
+        // command-launched session gets a readable crude title (the AI title
+        // generator still replaces it after the first reply lands).
+        const titleSource = commandInvocation || trimmed
+        const oneLine = titleSource.replace(/\s+/g, ' ').trim()
         session.title = oneLine.length > 60 ? `${oneLine.slice(0, 57)}…` : oneLine
         pushToSidecar('sessions.upsert', { session, mode: 'update-metadata' })
       }
@@ -481,6 +607,9 @@ export const useSessionsStore = defineStore('sessions', {
 
       // Snapshot history BEFORE pushing user + placeholder so sidecar receives only prior turns.
       const history: SessionMessage[] = [...session.messages]
+      // First real user turn? Used to trigger AI title generation once the reply
+      // lands (replaces the crude first-message-prefix title set above).
+      const isFirstUserTurn = !history.some((m) => m.role === 'user')
 
       const userMsg: SessionMessage = {
         id: newId('m'),
@@ -494,6 +623,7 @@ export const useSessionsStore = defineStore('sessions', {
         // instead of showing the raw `> quote` markdown that lives in `text`
         // (which stays intact for the model + history).
         followUps: followUps && followUps.length ? [...followUps] : undefined,
+        commandInvocation: commandInvocation || undefined,
         modeAtSend: session.settings.mode,
       }
       session.messages.push(userMsg)
@@ -863,6 +993,24 @@ export const useSessionsStore = defineStore('sessions', {
             return { agent: ref }
           })(),
         })
+        // First turn just completed (the assistant reply is now persisted in the
+        // JSONL): refine the crude placeholder title into a concise AI-generated
+        // one. Fire-and-forget so it never blocks the reply finalize.
+        if (isFirstUserTurn) void this.autoGenerateTitle(sessionId)
+
+        // The sidecar captures this turn's workspace snapshot fire-and-forget
+        // (ADR 0038); give it a moment, then refresh the rewind affordance set.
+        setTimeout(() => void this.loadSnapshotIds(sessionId), 1500)
+
+        // Unread badge: if the user isn't actively viewing this session when the
+        // reply lands (on another tab, another session, or window hidden), flag it
+        // so the Sessions tab + list row surface an unread indicator.
+        const viewingNow =
+          this.sessionsViewActive &&
+          this.selectedSessionId === sessionId &&
+          (typeof document === 'undefined' || !document.hidden)
+        if (!viewingNow) this.unread[sessionId] = true
+
         // result.text is the authoritative full reply. Finalize only once the
         // typewriter has revealed the trailing text run, so the tail types out
         // instead of snapping. Keep placeholderId as the final id — stable key for
@@ -1036,6 +1184,70 @@ export const useSessionsStore = defineStore('sessions', {
       })
     },
 
+    // Full-text search across every session's transcript (Cmd+K palette). Returns
+    // matched messages with a snippet; empty in browser dev (no sidecar).
+    async searchSessions(query: string): Promise<SessionSearchResult[]> {
+      const q = query.trim()
+      if (q.length < 2) return []
+      const sidecar = useSidecar()
+      if (!sidecar.available) return []
+      try {
+        const res = await sidecar.request<{ results: SessionSearchResult[] }>('sessions.search', {
+          query: q,
+        })
+        return Array.isArray(res.results) ? res.results : []
+      } catch (err) {
+        console.warn('[sessions] search failed', err)
+        return []
+      }
+    },
+
+    // Open a search result: select its session + flag the message for the list to
+    // scroll to. The caller navigates to /sessions.
+    openSearchResult(sessionId: string, messageId: string) {
+      this.selectedSessionId = sessionId
+      this.pendingScrollMessageId = messageId
+    },
+
+    // Refresh the set of messages that have a workspace snapshot (ADR 0038).
+    async loadSnapshotIds(sessionId: string): Promise<void> {
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const res = await sidecar.request<{ messageIds: string[] }>('sessions.listSnapshots', {
+          sessionId,
+        })
+        this.snapshotMessageIds[sessionId] = Array.isArray(res.messageIds) ? res.messageIds : []
+      } catch (err) {
+        console.warn('[sessions] listSnapshots failed', err)
+      }
+    },
+
+    // Rewind a session to a message: truncate the conversation back to it AND ask
+    // the sidecar to restore the workspace files to that turn's snapshot (if any
+    // — conversation-only otherwise). Optimistic local truncate for instant
+    // feedback; the sidecar persists the same truncate + does the file restore.
+    async rewindTo(messageId: string): Promise<void> {
+      const session = this.sessions.find((s) => s.messages.some((m) => m.id === messageId))
+      if (!session) return
+      const idx = session.messages.findIndex((m) => m.id === messageId)
+      if (idx < 0) return
+      if ((session.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG)) return
+      session.messages = session.messages.slice(0, idx + 1)
+      session.updatedAt = nowIso()
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        await sidecar.request('sessions.rewind', {
+          sessionId: session.id,
+          messageId,
+          ...(session.projectId ? { projectId: session.projectId } : {}),
+        })
+      } catch (err) {
+        console.warn('[sessions] rewind failed', err)
+      }
+    },
+
     openSubagentDrawer(sessionId: string, messageId: string, stepId: string) {
       this.subagentDrawerRef = { sessionId, messageId, stepId }
     },
@@ -1119,6 +1331,31 @@ export const useSessionsStore = defineStore('sessions', {
         if (n) n.text = 'Compact failed.'
 
         console.warn('[sessions] compact failed', err)
+      }
+    },
+
+    // Ask the sidecar to summarize the first exchange into a concise title and
+    // rename the session to it. Best-effort: on any failure the crude
+    // first-message title set in sendMessage stays. Fired once, after the first
+    // assistant reply has finalized + persisted.
+    async autoGenerateTitle(sessionId: string): Promise<void> {
+      const session = this.sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      const sidecar = useSidecar()
+      if (!sidecar.available) return
+      try {
+        const res = await sidecar.request<{ ok: boolean; title?: string }>(
+          'sessions.generateTitle',
+          {
+            sessionId,
+            provider: session.settings.provider,
+            modelId: session.settings.modelId,
+            ...(session.settings.accountId ? { accountId: session.settings.accountId } : {}),
+          },
+        )
+        if (res.ok && res.title) this.renameSession(sessionId, res.title)
+      } catch (err) {
+        console.warn('[sessions] generateTitle failed', err)
       }
     },
   },

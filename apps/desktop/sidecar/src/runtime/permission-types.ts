@@ -23,9 +23,18 @@ import type { SessionQuestion, SessionQuestionAnswer } from '../types/shared.js'
 // this map, so the runtime treats it as-is. Only stdio + http are bridged.
 //
 // Replaces every `Options['mcpServers']` reference.
+// `timeoutMs` (optional) is the user-configured per-server budget for the
+// initialize + tools/list handshake — `npx -y` cold starts can exceed the
+// default. Absent → the bridge falls back to its own default.
 export type McpServerConfig =
-  | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
-  | { type: 'http'; url: string; headers?: Record<string, string> }
+  | {
+      type: 'stdio'
+      command: string
+      args?: string[]
+      env?: Record<string, string>
+      timeoutMs?: number
+    }
+  | { type: 'http'; url: string; headers?: Record<string, string>; timeoutMs?: number }
 
 export type McpServersConfig = Record<string, McpServerConfig>
 

@@ -1,5 +1,7 @@
-// `git.push` — long-running. Per ADR 0017 (no force flag) + spec AC-21..AC-22
-// + Flow 2 (non-ff recovery).
+// `git.push` — long-running. Spec AC-21..AC-22 + Flow 2 (non-ff recovery).
+// Force push is exposed as `--force-with-lease` only (never bare `--force`),
+// gated behind the double-confirm Push dialog — the precondition ADR 0017
+// (OQ-12) set for lifting the original "no force flag" deferral.
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { withWorkspaceLock } from '../git/mutex.js'
@@ -19,6 +21,10 @@ const Params = z.object({
   remote: z.string().optional(),
   branch: z.string().optional(),
   setUpstream: z.boolean().optional(),
+  // `--force-with-lease` (safe force — aborts if the remote moved under us).
+  force: z.boolean().optional(),
+  // `--tags` — push all local tags alongside the branch.
+  pushTags: z.boolean().optional(),
 })
 
 interface Result {
@@ -57,8 +63,12 @@ register('git.push', async (raw): Promise<Result> => {
     suppressEchoFor(params.workspaceRoot)
     const args = ['push', '--progress']
     if (params.setUpstream) args.push('--set-upstream')
+    // Never bare `--force`: `--force-with-lease` refuses to clobber commits the
+    // remote gained since our last fetch (ADR 0017 OQ-12 safety constraint).
+    if (params.force) args.push('--force-with-lease')
     args.push(remote)
     if (params.branch) args.push(params.branch)
+    if (params.pushTags) args.push('--tags')
 
     const { stderr, code } = await runGitStreaming({
       workspaceRoot: params.workspaceRoot,

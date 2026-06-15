@@ -20,7 +20,7 @@ import {
   createWriteTool,
 } from './fs-tools.js'
 import { createBashTool } from './bash-tool.js'
-import { createMcpToolDefinitions } from './mcp-tools.js'
+import { createMcpToolDefinitions, type McpLoadFailure } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createTodoWriteTool, createWebSearchTool, createWebFetchTool } from './builtin-stubs.js'
@@ -92,11 +92,20 @@ export function createAwogToolDefinitions(
   return applyFilter(all, filter)
 }
 
+// The assembled turn toolset plus any MCP servers that failed to load. Callers
+// turn `failures` into a system-prompt note (buildMcpUnavailableNote) so the
+// model never silently calls absent tools or fabricates their results.
+export interface RuntimeToolset {
+  tools: AgentTool[]
+  failures: McpLoadFailure[]
+}
+
 // Assemble the COMPLETE tool set for a turn: built-in AWOG tools + the bridged
 // MCP tools (mcp__<serverId>__<tool>) from the already-resolved `mcpServers`
 // map. allowedTools/disabledTools filter both kinds uniformly. A failing MCP
-// server is skipped inside createMcpToolDefinitions (warn + skip), so this never
-// throws on MCP connectivity. Async because MCP needs a tools/list round-trip.
+// server is skipped inside createMcpToolDefinitions (warn + skip) and reported
+// via `failures`, so this never throws on MCP connectivity. Async because MCP
+// needs a tools/list round-trip.
 export async function createRuntimeToolDefinitions(
   cwd: string,
   mcpServers: McpServersConfig | undefined,
@@ -107,10 +116,10 @@ export async function createRuntimeToolDefinitions(
   // Hook anchor context (ADR 0032). When set, every tool's execute is wrapped so
   // tool.* / artifact.* hooks fire around it (sessions + tasks). Absent → no wrap.
   hookContext?: HookToolContext,
-): Promise<AgentTool[]> {
+): Promise<RuntimeToolset> {
   const builtIn = createAwogToolDefinitions(cwd, filter, askUser)
-  const mcp = await createMcpToolDefinitions(mcpServers, signal)
+  const { tools: mcpTools, failures } = await createMcpToolDefinitions(mcpServers, signal)
   // Built-in tools are already filtered; filter MCP tools by the same rules.
-  const tools = [...builtIn, ...applyFilter(mcp, filter)]
-  return hookContext ? wrapToolsWithHooks(tools, hookContext) : tools
+  const tools = [...builtIn, ...applyFilter(mcpTools, filter)]
+  return { tools: hookContext ? wrapToolsWithHooks(tools, hookContext) : tools, failures }
 }

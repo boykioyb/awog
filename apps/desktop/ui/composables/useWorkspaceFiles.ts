@@ -34,15 +34,40 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
 
   const close = () => panel.closeDrawer(props.session.id)
 
-  // '' key = workspace root. Lazy: a directory's children load on first expand.
+  // '' key = workspace root. Lazy: a directory's contents load on first visit.
   const childrenByPath = ref<Record<string, FsEntry[]>>({})
-  const expanded = ref<Record<string, boolean>>({})
+  // Finder-style cursor: the folder currently shown in the browser overlay.
+  const cwd = ref('')
   const selectedPath = ref<string | null>(null)
   const fileContent = ref<FsFileContent | null>(null)
   const loading = ref(false)
-  // Tree is an overlay, hidden by default — toggled from the header icon. Picking
-  // a file collapses it so the preview shows immediately at full size.
+  // Browser is an overlay, hidden by default — toggled from the header icon.
+  // Picking a file collapses it so the preview shows immediately at full size.
   const showTree = ref(false)
+
+  const currentEntries = computed<FsEntry[]>(() => childrenByPath.value[cwd.value] ?? [])
+  const atRoot = computed(() => cwd.value === '')
+
+  // Breadcrumb segments from root → path. `isFile` marks the final segment when
+  // the path points at a file (rendered as the non-clickable current item).
+  type Crumb = { name: string; path: string; isFile: boolean }
+  const crumbsFor = (path: string, isFile: boolean): Crumb[] => {
+    const crumbs: Crumb[] = [{ name: tr('workspace.files.root'), path: '', isFile: false }]
+    if (!path) return crumbs
+    const parts = path.split('/')
+    let acc = ''
+    parts.forEach((part, i) => {
+      acc = acc ? `${acc}/${part}` : part
+      crumbs.push({ name: part, path: acc, isFile: isFile && i === parts.length - 1 })
+    })
+    return crumbs
+  }
+  // Browser overlay breadcrumb (the folder cursor) and the file-preview
+  // breadcrumb (the open file's path) share the same shape so both views match.
+  const breadcrumbs = computed(() => crumbsFor(cwd.value, false))
+  const fileBreadcrumbs = computed(() =>
+    selectedPath.value ? crumbsFor(selectedPath.value, true) : [],
+  )
 
   // Read-only Monaco surface, shared with the Project Code Workspace. We open one
   // file at a time imperatively; pending state covers the gap before Monaco mounts.
@@ -73,13 +98,13 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     }
   }
 
-  const toggle = async (path: string) => {
-    if (expanded.value[path]) {
-      expanded.value = { ...expanded.value, [path]: false }
-      return
-    }
+  // Navigate the browser into a folder (load its contents on first visit).
+  const openDir = async (path: string) => {
+    cwd.value = path
     if (!childrenByPath.value[path]) await loadDir(path)
-    expanded.value = { ...expanded.value, [path]: true }
+  }
+  const goUp = () => {
+    if (cwd.value) openDir(dirName(cwd.value)).catch(() => {})
   }
 
   const loadInto = async (path: string, line: number | null, endLine: number | null) => {
@@ -101,6 +126,34 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     loadInto(entry.path, null, null).catch(() => {})
   }
 
+  // Row click in the browser: dirs navigate in, files open the preview.
+  const openEntry = (entry: FsEntry) => {
+    if (entry.kind === 'dir') openDir(entry.path).catch(() => {})
+    else select(entry)
+  }
+
+  // Open the browser overlay scoped to the current file's folder (so it lands
+  // where you are), or toggle it shut.
+  const toggleBrowser = async () => {
+    if (showTree.value) {
+      showTree.value = false
+      return
+    }
+    const dir = selectedPath.value ? dirName(selectedPath.value) : cwd.value
+    await openDir(dir).catch(() => {})
+    showTree.value = true
+  }
+
+  // Reopen the browser overlay focused on a folder — used by the file-preview
+  // breadcrumb (click a folder) and its back button (return to the listing).
+  const browseTo = async (path: string) => {
+    await openDir(path).catch(() => {})
+    showTree.value = true
+  }
+  const goBackToList = () => {
+    browseTo(selectedPath.value ? dirName(selectedPath.value) : cwd.value).catch(() => {})
+  }
+
   // Re-read the currently open file from disk (content + preview) without
   // touching the tree or selection — for the per-file "Reload" button.
   const reloadFile = async () => {
@@ -109,10 +162,18 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
 
   const openInEditor = () => {
     if (props.session.projectId && selectedPath.value) {
-      navigateTo(
-        `/projects/${props.session.projectId}/code?file=${encodeURIComponent(selectedPath.value)}`,
-      )
+      // `from=session` tells the code page's back button to return to the
+      // session (the store keeps the selection) instead of the project list.
+      const file = encodeURIComponent(selectedPath.value)
+      navigateTo(`/projects/${props.session.projectId}/code?file=${file}&from=session`)
     }
+  }
+
+  // Reveal the open file in the OS file manager (Finder / Explorer) — the
+  // preview-header twin of the tree's right-click "Reveal in OS".
+  const revealCurrent = () => {
+    if (selectedPath.value)
+      sidecar.revealPath(props.workspaceRoot, selectedPath.value).catch(() => {})
   }
 
   // Copy the workspace-relative path with a brief confirmation (matches the chat
@@ -260,11 +321,17 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     return items
   })
 
-  // Chat link `path#Lnn` → open + jump, driven by the workspacePanel store.
+  // Chat link `path#Lnn` → open + jump, driven by the workspacePanel store. A
+  // fresh request wins over the persisted view restore (see onMounted); clear it
+  // once consumed so it doesn't re-fire (and re-clobber) on every tab remount.
+  let openedFromRequest = false
   watch(
     () => panel.pendingFileOpen(props.session.id),
     (req) => {
-      if (req) loadInto(req.path, req.line, req.endLine).catch(() => {})
+      if (!req) return
+      openedFromRequest = true
+      loadInto(req.path, req.line, req.endLine).catch(() => {})
+      panel.clearFileOpen(props.session.id)
     },
     { immediate: true },
   )
@@ -286,7 +353,7 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
   // the user just clicked (the old "click twice" bug).
   const refresh = async () => {
     childrenByPath.value = {}
-    expanded.value = {}
+    cwd.value = ''
     selectedPath.value = null
     fileContent.value = null
     pendingRange.value = null
@@ -304,9 +371,34 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     }
   }
 
+  // Persist the view (folder cursor + open file + browser visibility) to the
+  // store so returning to the tab restores it — the full-screen code editor
+  // rebuilds the session page, so local state alone is lost on return.
+  watch([cwd, selectedPath, showTree], () => {
+    panel.setFilesView(props.session.id, {
+      cwd: cwd.value,
+      selectedPath: selectedPath.value,
+      showTree: showTree.value,
+    })
+  })
+
   watch(() => props.workspaceRoot, refresh)
-  onMounted(() => {
-    loadRoot()
+  onMounted(async () => {
+    // Restore the saved view unless a chat link just opened a specific file (that
+    // takes precedence). Set the cursor/visibility synchronously first so the UI
+    // shows the right folder immediately, then re-fetch the data behind it.
+    const saved = openedFromRequest ? null : panel.filesView(props.session.id)
+    if (saved) {
+      showTree.value = saved.showTree
+      cwd.value = saved.cwd
+    } else if (!openedFromRequest && !selectedPath.value) {
+      showTree.value = true // fresh tab → show the folder browser straight away
+    }
+    await loadRoot()
+    if (saved) {
+      if (saved.cwd) await loadDir(saved.cwd)
+      if (saved.selectedPath) await loadInto(saved.selectedPath, null, null)
+    }
     sidecar
       .isVscodeAvailable()
       .then((ok) => {
@@ -316,22 +408,29 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
   })
 
   return {
-    // tree + preview
-    childrenByPath,
-    expanded,
+    // browser + preview
+    currentEntries,
+    breadcrumbs,
+    fileBreadcrumbs,
+    atRoot,
     selectedPath,
     fileContent,
     loading,
     showTree,
     editorRef,
     onEditorReady,
-    toggle,
-    select,
+    openDir,
+    goUp,
+    openEntry,
+    toggleBrowser,
+    browseTo,
+    goBackToList,
     refresh,
     reloadFile,
     close,
     openInEditor,
     openInBrowser,
+    revealCurrent,
     copied,
     copyPath,
     // context menu

@@ -45,7 +45,7 @@
             class="text-[1em] px-3 py-1.5 rounded font-medium transition"
             :style="{ background: t.accent, color: t.accentText }"
             :disabled="store.isPushing"
-            @click="store.push()"
+            @click="store.pushDialogOpen = true"
           >
             {{ tr('git.remote.push') }}
           </button>

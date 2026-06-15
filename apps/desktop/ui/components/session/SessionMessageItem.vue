@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div :data-message-id="message.id">
     <div
       v-if="message.role === 'system'"
       class="text-center text-[1em] uppercase tracking-wider"
@@ -9,168 +9,277 @@
     </div>
 
     <div v-else>
-      <div v-if="message.role === 'user'" class="flex flex-col items-end gap-1.5">
-        <div
-          v-if="message.followUps?.length || bodyText"
-          class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed break-words"
-          :style="{
-            background: t.bgElevated,
-            color: t.text,
-            border: `1px solid ${t.border}`,
-            maxWidth: '78%',
-          }"
-        >
-          <!-- Quotes the user attached via "Quote & follow up": numbered cards,
-               not the raw `> …` markdown that the model still receives in text. -->
-          <SessionFollowUpQuotes
-            v-if="message.followUps?.length"
-            :follow-ups="message.followUps"
-            :class="bodyText ? 'mb-2' : ''"
+      <div v-if="message.role === 'user'" class="flex flex-col items-end gap-1.5 w-full">
+        <!-- Inline edit mode: swap the bubble for a composer-style textarea that
+             re-sends the turn (truncating everything after this message). -->
+        <div v-if="editing" class="w-full max-w-[78%] flex flex-col gap-1.5">
+          <textarea
+            ref="editRef"
+            v-model="editDraft"
+            class="w-full rounded-2xl px-4 py-2 text-[1em] leading-relaxed resize-y min-h-[3rem] outline-none"
+            :style="{ background: t.bgElevated, color: t.text, border: `1px solid ${t.accent}` }"
+            :placeholder="tr('session.msg.edit_placeholder')"
+            @keydown.escape="cancelEdit"
+            @keydown.meta.enter.prevent="saveEdit"
+            @keydown.ctrl.enter.prevent="saveEdit"
           />
-          <div v-if="bodyText" class="whitespace-pre-wrap break-words">
-            <template v-for="(seg, i) in tokenizeMessage(bodyText)" :key="i">
-              <span
-                v-if="seg.kind === 'token'"
-                :style="{ color: tokenColor(seg.tokenKind!), fontWeight: 500 }"
-              >
-                {{ seg.text }}
-              </span>
-              <template v-else>{{ seg.text }}</template>
-            </template>
+          <div class="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-[1em] transition"
+              :style="{ color: t.textDim }"
+              @click="cancelEdit"
+            >
+              {{ tr('session.msg.edit_cancel') }}
+            </button>
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-[1em] transition"
+              :style="{ background: t.accent, color: t.accentText }"
+              @click="saveEdit"
+            >
+              {{ tr('session.msg.edit_save') }}
+            </button>
           </div>
         </div>
-        <SessionMessageAttachments
-          v-if="message.attachments?.length"
-          :attachments="message.attachments"
-          @open="(att: SessionAttachment) => emit('openAttachment', att)"
-        />
-        <div class="text-[1em] flex items-center gap-1.5" :style="{ color: t.textFaint }">
-          <span>{{ fmt(message.at) }}</span>
-          <span v-if="message.modeAtSend">· sent in {{ message.modeAtSend }} mode</span>
-          <button
-            type="button"
-            class="awog-copy-btn"
-            :style="{ color: t.textFaint }"
-            title="Branch from this message"
-            @click="onBranch"
+
+        <template v-else>
+          <div
+            v-if="message.followUps?.length || bodyText"
+            class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed break-words"
+            :style="{
+              background: t.bgElevated,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+              maxWidth: '78%',
+            }"
           >
-            <GitBranch :size="11" />
-          </button>
-        </div>
+            <!-- Quotes the user attached via "Quote & follow up": numbered cards,
+                 not the raw `> …` markdown that the model still receives in text. -->
+            <SessionFollowUpQuotes
+              v-if="message.followUps?.length"
+              :follow-ups="message.followUps"
+              :class="bodyText ? 'mb-2' : ''"
+            />
+            <div v-if="bodyText" class="break-words">
+              <!-- Slash command: compact `/prs …` chip by default; the full
+                   expanded template (what the model received) toggles open. -->
+              <button
+                v-if="message.commandInvocation"
+                type="button"
+                class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[1em] font-mono transition"
+                :style="{
+                  background: t.bgSubtle,
+                  color: t.accent,
+                  border: `1px solid ${t.border}`,
+                }"
+                :title="
+                  commandExpanded
+                    ? tr('session.msg.command_collapse')
+                    : tr('session.msg.command_expand')
+                "
+                @click="commandExpanded = !commandExpanded"
+              >
+                <Slash :size="12" />
+                <span>{{ message.commandInvocation }}</span>
+                <ChevronDown
+                  :size="12"
+                  :style="{
+                    transform: commandExpanded ? 'none' : 'rotate(-90deg)',
+                    transition: 'transform 0.15s',
+                  }"
+                />
+              </button>
+              <div
+                v-if="!message.commandInvocation || commandExpanded"
+                class="whitespace-pre-wrap break-words"
+                :class="message.commandInvocation ? 'mt-1.5' : ''"
+                :style="message.commandInvocation ? { color: t.textDim } : undefined"
+              >
+                <template v-for="(seg, i) in tokenizeMessage(bodyText)" :key="i">
+                  <span
+                    v-if="seg.kind === 'token'"
+                    :style="{ color: tokenColor(seg.tokenKind!), fontWeight: 500 }"
+                  >
+                    {{ seg.text }}
+                  </span>
+                  <template v-else>{{ seg.text }}</template>
+                </template>
+              </div>
+            </div>
+          </div>
+          <SessionMessageAttachments
+            v-if="message.attachments?.length"
+            :attachments="message.attachments"
+            @open="(att: SessionAttachment) => emit('openAttachment', att)"
+          />
+          <div class="text-[1em] flex items-center gap-1.5" :style="{ color: t.textFaint }">
+            <span>{{ fmt(message.at) }}</span>
+            <span v-if="message.modeAtSend">· sent in {{ message.modeAtSend }} mode</span>
+            <button
+              v-if="!sessionStreaming"
+              type="button"
+              class="awog-copy-btn"
+              :style="{ color: t.textFaint }"
+              :title="tr('session.msg.edit')"
+              @click="startEdit"
+            >
+              <Pencil :size="11" />
+            </button>
+            <button
+              type="button"
+              class="awog-copy-btn"
+              :style="{ color: t.textFaint }"
+              :title="tr('session.msg.branch')"
+              @click="onBranch"
+            >
+              <GitBranch :size="11" />
+            </button>
+          </div>
+        </template>
       </div>
 
-      <!-- Agent reply renders as a plain document (no bubble, no ASSISTANT
-           header). Identity/model/time + copy & branch actions live in the
-           byline footer below the reply. -->
+      <!-- Agent reply: body wrapped in a bubble card (white bgElevated over the
+           gray canvas) so the assistant turn reads as a raised document, mirroring
+           the user bubble. Identity/model/time + copy & branch actions live in the
+           byline footer BELOW the bubble (outside it). -->
       <div v-if="message.role === 'agent'" class="text-[1em] leading-relaxed">
-        <!-- Steps summary + collapse toggle. Sits above the body so the
-             control reads before the interleaved command/text flow. -->
-        <button
-          v-if="clusterSteps.length"
-          type="button"
-          class="inline-flex items-center gap-1.5 text-[12px] py-0.5 px-1.5 -ml-1.5 mb-2 rounded transition hover:bg-white/5"
-          :style="{ color: t.textDim }"
-          @click="expanded = !expanded"
+        <div
+          :class="showBubble ? 'rounded-2xl px-4 py-3' : ''"
+          :style="
+            showBubble ? { background: t.bgElevated, border: `1px solid ${t.border}` } : undefined
+          "
         >
-          <Info :size="11" />
-          <span>{{ stepsSummary(clusterSteps) }}</span>
-          <Activity
-            v-if="hasRunningStep"
-            :size="10"
-            class="animate-pulse"
-            :style="{ color: t.accent }"
-          />
-          <ChevronDown
-            :size="10"
-            :style="{
-              transform: expanded ? 'none' : 'rotate(-90deg)',
-              transition: 'transform 0.15s',
-            }"
-          />
-        </button>
+          <!-- Steps summary + collapse toggle. Sits above the body so the
+             control reads before the interleaved command/text flow. -->
+          <button
+            v-if="clusterSteps.length"
+            type="button"
+            class="inline-flex items-center gap-1.5 text-[12px] py-0.5 px-1.5 -ml-1.5 mb-2 rounded transition hover:bg-white/5"
+            :style="{ color: t.textDim }"
+            @click="expanded = !expanded"
+          >
+            <Info :size="11" />
+            <span>{{ stepsSummary(clusterSteps) }}</span>
+            <Activity
+              v-if="hasRunningStep"
+              :size="10"
+              class="animate-pulse"
+              :style="{ color: t.accent }"
+            />
+            <ChevronDown
+              :size="10"
+              :style="{
+                transform: expanded ? 'none' : 'rotate(-90deg)',
+                transition: 'transform 0.15s',
+              }"
+            />
+          </button>
 
-        <!-- TODO checklist (TodoWrite). Lifted OUT of the collapsible task cluster
+          <!-- TODO checklist (TodoWrite). Lifted OUT of the collapsible task cluster
              so the agent's plan/progress stays visible even while the tool-call
              detail is collapsed. The sidecar upserts one 'todo-list' step per turn,
              so this normally renders a single evolving checklist. -->
-        <div
-          v-for="todo in todoSteps"
-          :key="todo.id"
-          class="mb-2 rounded-md px-3 py-2 text-[12px]"
-          :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
-        >
-          <StepItem :step="todo" />
-        </div>
+          <div
+            v-for="todo in todoSteps"
+            :key="todo.id"
+            class="mb-2 rounded-md px-3 py-2 text-[12px]"
+            :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
+          >
+            <StepItem :step="todo" />
+          </div>
 
-        <!-- Body. Reply text, AskUserQuestion cards, and step clusters interleave
+          <!-- Body. Reply text, AskUserQuestion cards, and step clusters interleave
              in chronological order. Question cards always render at their position
              (a pending question stays visible — the turn is blocked); step
              clusters render only when expanded. Collapsed merges the text around
              hidden steps so the reply still reads as one document. -->
-        <template v-for="(block, bi) in displayBlocks" :key="bi">
-          <MarkdownStreamBody
-            v-if="block.type === 'text'"
-            :text="block.text"
-            :streaming="isStreaming && bi === lastTextBlockIndex"
-            class="awog-md text-[1em]"
-            :class="bi > 0 ? 'mt-2' : ''"
-            :style="{ color: t.text, '--awog-accent': t.accent }"
-            :data-agent-message-id="message.id"
-          />
-          <SessionQuestionCard
-            v-else-if="block.type === 'question'"
-            :step="block.step"
-            class="mt-2"
-          />
-          <!-- Inline step timeline (Claude-Code style): flat vertical list, no
+          <template v-for="(block, bi) in displayBlocks" :key="bi">
+            <MarkdownStreamBody
+              v-if="block.type === 'text'"
+              :text="block.text"
+              :streaming="isStreaming && bi === lastTextBlockIndex"
+              class="awog-md text-[1em]"
+              :class="bi > 0 ? 'mt-2' : ''"
+              :style="{ color: t.text, '--awog-accent': t.accent }"
+              :data-agent-message-id="message.id"
+            />
+            <SessionQuestionCard
+              v-else-if="block.type === 'question'"
+              :step="block.step"
+              class="mt-2"
+            />
+            <!-- Inline step timeline (Claude-Code style): flat vertical list, no
                box — each step's own status icon is the bullet, a thin left rail
                groups the run. `timeline` tells StepItem to wrap long paths and
                show a one-line result summary instead of truncating. -->
-          <div
-            v-else
-            class="mt-2 space-y-1 text-[12px] pl-3"
-            :style="{ borderLeft: `2px solid ${t.border}` }"
-          >
-            <StepItem v-for="s in block.steps" :key="s.id" :step="s" timeline />
-          </div>
-        </template>
-
-        <SessionInlinePermission
-          v-if="store.pendingPermission?.messageId === message.id"
-          :message-id="message.id"
-          class="mt-2"
-        />
-
-        <div v-if="message.artifacts?.length" class="mt-2 space-y-1.5">
-          <div
-            v-for="art in message.artifacts"
-            :key="art.name"
-            class="rounded"
-            :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
-          >
             <div
-              class="px-2.5 py-1.5 flex items-center gap-1.5 text-[1em]"
-              :style="{ borderBottom: art.preview ? `1px solid ${t.border}` : 'none' }"
+              v-else
+              class="mt-2 space-y-1 text-[12px] pl-3"
+              :style="{ borderLeft: `2px solid ${t.border}` }"
             >
-              <FileText :size="11" :style="{ color: t.textDim }" />
-              <span class="font-mono" :style="{ color: t.text }">{{ art.name }}</span>
+              <StepItem v-for="s in block.steps" :key="s.id" :step="s" timeline />
             </div>
-            <pre
-              v-if="art.preview"
-              class="text-[1em] px-2.5 py-2 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap"
-              :style="{ color: t.textMuted, maxHeight: '160px' }"
-              >{{ art.preview }}</pre
+          </template>
+
+          <SessionInlinePermission
+            v-if="store.pendingPermission?.messageId === message.id"
+            :message-id="message.id"
+            class="mt-2"
+          />
+
+          <div v-if="message.artifacts?.length" class="mt-2 space-y-1.5">
+            <div
+              v-for="art in message.artifacts"
+              :key="art.name"
+              class="rounded"
+              :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
             >
+              <div
+                class="px-2.5 py-1.5 flex items-center gap-1.5 text-[1em]"
+                :style="{ borderBottom: art.preview ? `1px solid ${t.border}` : 'none' }"
+              >
+                <FileText :size="11" :style="{ color: t.textDim }" />
+                <span class="font-mono" :style="{ color: t.text }">{{ art.name }}</span>
+              </div>
+              <pre
+                v-if="art.preview"
+                class="text-[1em] px-2.5 py-2 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap"
+                :style="{ color: t.textMuted, maxHeight: '160px' }"
+                >{{ art.preview }}</pre
+              >
+            </div>
           </div>
         </div>
-
         <!-- Byline footer: copy + branch actions, timestamp, and run stats —
-             reads after the reply (replaces the removed ASSISTANT header).
+             reads after the reply, OUTSIDE the bubble (mirrors the user bubble).
              While streaming it shows a live ticker instead of the actions. -->
         <div class="mt-2 flex items-center gap-2 text-[12px]" :style="{ color: t.textFaint }">
           <template v-if="message.startedAt && !message.completedAt">
             <Activity :size="11" class="animate-pulse" />
             <span>Streaming… {{ formatElapsed(now - message.startedAt) }}</span>
+          </template>
+          <!-- Rewind confirm bar: replaces the action row until the user
+               confirms or cancels. Text differs when a workspace snapshot will
+               be restored vs a conversation-only rewind. -->
+          <template v-else-if="confirmingRewind">
+            <span :style="{ color: t.textDim }">{{ rewindConfirmText }}</span>
+            <button
+              type="button"
+              class="px-2 py-0.5 rounded transition ml-1"
+              :style="{ color: t.textDim }"
+              @click="confirmingRewind = false"
+            >
+              {{ tr('session.msg.edit_cancel') }}
+            </button>
+            <button
+              type="button"
+              class="px-2 py-0.5 rounded transition"
+              :style="{ background: t.dangerBg, color: t.danger }"
+              @click="doRewind"
+            >
+              {{ tr('session.msg.rewind') }}
+            </button>
           </template>
           <template v-else>
             <button
@@ -178,17 +287,42 @@
               type="button"
               class="awog-copy-btn"
               :style="{ color: copied ? t.success : t.textFaint }"
-              :title="copied ? 'Copied' : 'Copy message'"
+              :title="copied ? tr('session.msg.copied') : tr('session.msg.copy')"
               @click="copyMessage"
             >
               <Check v-if="copied" :size="12" />
               <Copy v-else :size="12" />
             </button>
             <button
+              v-if="!sessionStreaming"
               type="button"
               class="awog-copy-btn"
               :style="{ color: t.textFaint }"
-              title="Branch from this message"
+              :title="tr('session.msg.regenerate')"
+              @click="onRegenerate"
+            >
+              <RefreshCw :size="12" />
+            </button>
+            <MessageRetryMenu
+              v-if="!sessionStreaming && session"
+              :session="session"
+              :agent-message-id="message.id"
+            />
+            <button
+              v-if="!sessionStreaming"
+              type="button"
+              class="awog-copy-btn"
+              :style="{ color: t.textFaint }"
+              :title="tr('session.msg.rewind')"
+              @click="confirmingRewind = true"
+            >
+              <RotateCcw :size="12" />
+            </button>
+            <button
+              type="button"
+              class="awog-copy-btn"
+              :style="{ color: t.textFaint }"
+              :title="tr('session.msg.branch')"
               @click="onBranch"
             >
               <GitBranch :size="12" />
@@ -206,8 +340,22 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, Check, ChevronDown, Copy, FileText, GitBranch, Info } from 'lucide-vue-next'
+import {
+  Activity,
+  Check,
+  ChevronDown,
+  Copy,
+  FileText,
+  GitBranch,
+  Info,
+  Pencil,
+  RefreshCw,
+  RotateCcw,
+  Slash,
+} from 'lucide-vue-next'
+import { nextTick, useTemplateRef } from 'vue'
 import type {
+  Session,
   SessionAttachment,
   SessionMessage,
   SessionMessagePart,
@@ -220,6 +368,7 @@ import { formatTime } from '~/utils/time'
 
 const props = defineProps<{
   message: SessionMessage
+  session: Session
   now: number
 }>()
 
@@ -228,8 +377,19 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const settingsStore = useSettingsStore()
 const store = useSessionsStore()
+
+// True while this message's session has a live streaming turn — the edit /
+// regenerate / retry actions truncate the transcript, so they hide mid-turn to
+// avoid racing the in-flight reply.
+const sessionStreaming = computed(() => store.isSessionStreaming(props.session.id))
+
+// Toggle (Settings → Appearance): wrap the reply body in a bubble card vs render
+// it as a plain inline document. Default on; `!== false` keeps older persisted
+// appearance blobs (no field) bubbled.
+const assistantBubble = computed(() => settingsStore.appearance.assistantBubble !== false)
 
 const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
 
@@ -385,6 +545,20 @@ const todoSteps = computed<SessionStep[]>(
   () => props.message.steps?.filter((s: SessionStep) => s.kind === 'note') ?? [],
 )
 
+// Whether the reply has anything to render yet. Early in a streaming turn there's
+// no text/steps/artifacts — without this gate the bubble paints as an empty box
+// until the first token lands. The bubble chrome only shows once there's content;
+// the "Streaming…" ticker lives in the byline below, outside the bubble.
+const hasBubbleContent = computed(
+  () =>
+    displayBlocks.value.length > 0 ||
+    clusterSteps.value.length > 0 ||
+    todoSteps.value.length > 0 ||
+    (props.message.artifacts?.length ?? 0) > 0 ||
+    store.pendingPermission?.messageId === props.message.id,
+)
+const showBubble = computed(() => assistantBubble.value && hasBubbleContent.value)
+
 // Only the trailing text segment is still being typed — flag it so
 // MarkdownStreamBody throttles just that one and renders the rest immediately.
 const lastTextBlockIndex = computed(() => {
@@ -428,6 +602,62 @@ const stepsSummary = (steps: SessionStep[]): string => {
 // The original session is left untouched.
 const onBranch = () => {
   store.branchFromMessage(props.message.id)
+}
+
+// ── Edit & resend (user message) ────────────────────────────────────────────
+// Editing a user message truncates the transcript back to before it, then
+// re-sends the edited text as a fresh turn. The textarea seeds from bodyText
+// (the follow-up quote section is stripped), so an edited resend drops the
+// quote cards — accepted for v1.
+const editing = ref(false)
+const editDraft = ref('')
+const editRef = useTemplateRef<HTMLTextAreaElement>('editRef')
+
+// Slash-command turns render as a compact `/name …` chip; expanding reveals the
+// full template text (`bodyText`) that the model received. Collapsed by default.
+const commandExpanded = ref(false)
+
+const startEdit = () => {
+  editDraft.value = bodyText.value
+  editing.value = true
+  void nextTick(() => {
+    const el = editRef.value
+    if (el) {
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    }
+  })
+}
+
+const cancelEdit = () => {
+  editing.value = false
+  editDraft.value = ''
+}
+
+const saveEdit = () => {
+  const next = editDraft.value.trim()
+  editing.value = false
+  if (!next) return
+  void store.editAndResend(props.message.id, next)
+}
+
+// Regenerate this assistant reply (same model). Re-runs the user turn above it.
+const onRegenerate = () => {
+  void store.regenerate(props.message.id)
+}
+
+// ── Rewind (ADR 0038) ───────────────────────────────────────────────────────
+// Rewind truncates the conversation back to this message and (when a snapshot
+// exists for it) restores the workspace files to that turn's state.
+const confirmingRewind = ref(false)
+const rewindConfirmText = computed(() =>
+  store.hasSnapshot(props.session.id, props.message.id)
+    ? tr('session.msg.rewind_confirm_files')
+    : tr('session.msg.rewind_confirm_plain'),
+)
+const doRewind = () => {
+  confirmingRewind.value = false
+  void store.rewindTo(props.message.id)
 }
 
 const formatElapsed = (ms: number): string => {

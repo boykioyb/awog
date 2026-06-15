@@ -8,6 +8,7 @@ import {
   type RunStreamResult,
 } from '../sessions/runner.js'
 import { appendMessage, appendEvent } from '../sessions/store.js'
+import { captureSnapshot } from '../sessions/snapshots.js'
 import { loadProject } from '../projects/store.js'
 import {
   parkPermissionRequest,
@@ -59,8 +60,10 @@ const SessionSettingsSchema = z.object({
 
 // User attachment on the outgoing message (L1: untrusted UI payload). Image
 // attachments carry an inline base64 `data:` URL in `url`; the runtime rebuilds
-// them into image content blocks for the model (buildContext). Non-image entries
-// are persisted for display but ignored by the model.
+// them into image content blocks for the model (buildContext). Text-based files
+// (and large pasted text) carry their UTF-8 content in `preview`, delivered to
+// the model as a delimited text block. Binary files carry neither and are
+// persisted for display only.
 const SessionAttachmentSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -68,6 +71,9 @@ const SessionAttachmentSchema = z.object({
   size: z.string().optional(),
   mime: z.string().optional(),
   url: z.string().optional(),
+  // Bound the text payload so a hostile/oversized IPC message can't blow memory.
+  // The UI caps content at ~256k chars; this leaves generous headroom.
+  preview: z.string().max(2_000_000).optional(),
   width: z.number().optional(),
   height: z.number().optional(),
 })
@@ -109,15 +115,20 @@ const Params = z.object({
     })
     .optional(),
 })
-  // A turn must carry text or at least one image attachment, so the model always
-  // gets non-empty content (a file-only message with no text has nothing for the
-  // model to act on). Fail-fast at the boundary — the UI guards too, but never
-  // trust the IPC payload.
+  // A turn must carry something the model can act on: composer text, an image
+  // attachment, or a text/pasted-text attachment (content in `preview`). A
+  // file-only message with no readable content has nothing to act on. Fail-fast
+  // at the boundary — the UI guards too, but never trust the IPC payload.
   .refine(
     (p) =>
       p.text.trim().length > 0 ||
-      (p.attachments?.some((a) => a.type === 'image' && !!a.url) ?? false),
-    { message: 'a message must have text or at least one image attachment' },
+      (p.attachments?.some(
+        (a) =>
+          (a.type === 'image' && !!a.url) ||
+          (a.type === 'file' && !!a.preview && a.preview.trim().length > 0),
+      ) ??
+        false),
+    { message: 'a message must have text, an image, or a text attachment' },
   )
 
 // exactOptionalPropertyTypes: zod's .optional() yields `T | undefined`, but
@@ -141,6 +152,7 @@ function toSessionAttachment(a: z.infer<typeof SessionAttachmentSchema>): Sessio
   if (a.size !== undefined) base.size = a.size
   if (a.mime !== undefined) base.mime = a.mime
   if (a.url !== undefined) base.url = a.url
+  if (a.preview !== undefined) base.preview = a.preview
   if (a.width !== undefined) base.width = a.width
   if (a.height !== undefined) base.height = a.height
   return base
@@ -243,6 +255,9 @@ register('sessions.sendMessage', async (raw) => {
           command: s.command,
           ...(s.args ? { args: s.args } : {}),
           ...(Object.keys(expandedEnv).length > 0 ? { env: expandedEnv } : {}),
+          // Per-server handshake budget — `npx -y` cold starts can exceed the
+          // bridge default; honour the user's configured timeout.
+          timeoutMs: s.timeoutMs,
         }
       } else if (s.transport === 'http') {
         if (!s.url) continue
@@ -252,6 +267,7 @@ register('sessions.sendMessage', async (raw) => {
           type: 'http',
           url: s.url,
           ...(Object.keys(expandedHeaders).length > 0 ? { headers: expandedHeaders } : {}),
+          timeoutMs: s.timeoutMs,
         }
       } else {
         // sse not supported pha 2
@@ -555,6 +571,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     usage: result.usage,
     stopReason: result.stopReason,
   })
+
+  // Rewind snapshot (ADR 0038): capture the workspace state at the end of this
+  // turn, keyed to the assistant message id. Fire-and-forget + gated on a
+  // workspace; captureSnapshot never throws, so it can't disturb the reply, and
+  // not awaiting keeps the UI finalize snappy.
+  if (cwd) void captureSnapshot(params.sessionId, params.messageId, cwd)
 
   return {
     messageId: params.messageId,

@@ -60,33 +60,47 @@
           >
             <!-- Subject + refs -->
             <div class="flex-1 flex items-center gap-1.5 min-w-0">
-              <GitRefBadge v-for="r in visibleRefs(c)" :key="`${c.hash}-${r.name}`" :ref-item="r" />
-              <span
-                v-if="overflowCount(c) > 0"
-                class="text-[1em] px-1 py-0.5 rounded"
-                :style="{
-                  color: t.textDim,
-                  background: t.bgInput,
-                  border: `1px solid ${t.border}`,
-                }"
-                :title="overflowTitle(c)"
+              <!-- Ref cluster: capped at half the cell and shrinkable so long
+                   branch names truncate instead of squeezing the subject out. -->
+              <div
+                v-if="visibleRefs(c).length > 0 || overflowCount(c) > 0 || isLinkedPhase(c.phaseId)"
+                class="flex items-center gap-1.5 min-w-0"
+                :style="{ maxWidth: '50%' }"
               >
-                {{ tr('git.history.overflow_more', { count: overflowCount(c) }) }}
+                <GitRefBadge
+                  v-for="r in visibleRefs(c)"
+                  :key="`${c.hash}-${r.name}`"
+                  :ref-item="r"
+                />
+                <span
+                  v-if="overflowCount(c) > 0"
+                  class="text-[1em] px-1 py-0.5 rounded flex-shrink-0"
+                  :style="{
+                    color: t.textDim,
+                    background: t.bgInput,
+                    border: `1px solid ${t.border}`,
+                  }"
+                  :title="overflowTitle(c)"
+                >
+                  {{ tr('git.history.overflow_more', { count: overflowCount(c) }) }}
+                </span>
+                <span
+                  v-if="isLinkedPhase(c.phaseId)"
+                  class="text-[1em] px-1 py-0.5 rounded font-mono flex-shrink-0"
+                  :style="{
+                    background: t.infoBg,
+                    color: t.info,
+                    border: `1px solid ${t.infoBorder}`,
+                  }"
+                  :title="tr('git.history.linked_phase_tip', { phase: c.phaseId ?? '' })"
+                >
+                  <Link :size="9" class="inline-block mr-0.5" />
+                  {{ c.phaseId }}
+                </span>
+              </div>
+              <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.text }">
+                {{ c.subject }}
               </span>
-              <span
-                v-if="isLinkedPhase(c.phaseId)"
-                class="text-[1em] px-1 py-0.5 rounded font-mono"
-                :style="{
-                  background: t.infoBg,
-                  color: t.info,
-                  border: `1px solid ${t.infoBorder}`,
-                }"
-                :title="tr('git.history.linked_phase_tip', { phase: c.phaseId ?? '' })"
-              >
-                <Link :size="9" class="inline-block mr-0.5" />
-                {{ c.phaseId }}
-              </span>
-              <span class="text-[1em] truncate" :style="{ color: t.text }">{{ c.subject }}</span>
             </div>
 
             <!-- Author -->

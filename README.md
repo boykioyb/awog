@@ -23,7 +23,11 @@ device except for the model API calls you explicitly configure.
 - **Artifacts are the source of truth.** Agents collaborate through artifacts, not
   through chat history.
 - **Workflows** define how work flows between agents as a DAG.
-- **Skills** define capabilities; **MCP connections** provide dynamic context and tools.
+- **Skills, Rules, and Slash Commands** shape agent behavior — Skills add
+  capabilities, Rules inject workspace instructions into every system prompt, and
+  Commands are reusable prompt templates.
+- **MCP connections** provide dynamic context and tools; **Hooks** run shell commands
+  on lifecycle events.
 - **Humans stay in control** through explicit approval checkpoints.
 
 ## Architecture
@@ -33,8 +37,8 @@ device except for the model API calls you explicitly configure.
 | Desktop shell | **Electron** (main process runs Node) — window, system tray, single-instance lock, `app://` protocol, auto-update. See [ADR 0027](docs/decisions/0027-tauri-vs-electron-revisit.md) |
 | Engine (sidecar) | Node.js package `@awog/sidecar` — spawned via `ELECTRON_RUN_AS_NODE`, **stdio NDJSON JSON-RPC 2.0** |
 | Frontend | Nuxt 4 (SPA, `ssr: false`) + Vue 3 + TypeScript + Pinia + VueFlow + TailwindCSS 3 + Monaco |
-| LLM runtime | **Pi SDK** (`@earendil-works/pi-ai` + `pi-agent-core`) — single multi-provider runtime (Anthropic / OpenAI / Google / custom). See [ADR 0029](docs/decisions/0029-migrate-llm-runtime-to-pi-sdk.md) |
-| Storage | Local filesystem (JSON / YAML / Markdown) + Git + JSONL event log + OS keychain. Credentials at `~/.awog/credentials.json` (`chmod 600`); secrets never written to disk in plaintext |
+| LLM runtime | **Pi SDK** (`@earendil-works/pi-ai` + `pi-agent-core`) — single multi-provider runtime (Anthropic / OpenAI / Google / custom), with in-process MCP tools and a subagent **Task** tool for agent-to-agent delegation. See [ADR 0029](docs/decisions/0029-migrate-llm-runtime-to-pi-sdk.md), [ADR 0030](docs/decisions/0030-subagent-task-tool.md) |
+| Storage | Local filesystem (JSON / YAML / Markdown) + Git + JSONL event log + OS keychain. Per-user config and credentials live under `~/.awog/` (credentials `chmod 600`); secrets never written to disk in plaintext. See [ADR 0035](docs/decisions/0035-consolidate-config-tiers-to-awog.md) |
 | Auto-update | `electron-updater` via GitHub releases, `autoDownload=false`. See [ADR 0028](docs/decisions/0028-auto-update.md) |
 
 Details: [docs/architecture/system-overview.md](docs/architecture/system-overview.md),
@@ -132,17 +136,27 @@ Pages, stores, themes, and the current port status are documented in
 
 ## Status
 
-`v0.9.0` — the desktop app is fully wired on the Electron + Node.js sidecar stack:
+The desktop app is fully wired on the Electron + Node.js sidecar stack:
 
-- **Sessions** — multi-provider chat with streaming, plan mode, and the right-docked
-  Workspace Panel (Diff / Files / Plan / Terminal / Tasks / Preview).
+- **Sessions** — multi-provider chat with streaming, live extended-thinking, plan
+  mode, and image attachments that stay in context. Edit & resend, regenerate,
+  retry-with-another-model, **rewind** (restore the conversation *and* workspace files
+  from filesystem snapshots — [ADR 0038](docs/decisions/0038-session-rewind-fs-snapshots.md)),
+  and Cmd+K cross-session search. Right-docked Workspace Panel
+  (Diff / Files / Plan / Terminal / Tasks / Preview) plus a Session Info panel.
 - **Tasks & Workflows** — run for real through the Pi SDK runtime: a visual DAG
   builder, a parallel scheduler, per-node Git auto-commit, approve / rerun / discuss,
   and restart-safe resume from a JSONL event log.
-- **Agents / Skills / Connections (MCP)** — persisted as Markdown/JSON across a 5-tier
-  discovery scheme, with runtime injection of system prompt, tools, and MCP servers.
+- **Agents / Skills / Connections (MCP) / Rules / Slash Commands / Hooks** — persisted
+  as Markdown/JSON across the config tiers, with AI-assisted authoring and import from
+  an existing Claude Code config. Agents delegate to other agents via a built-in
+  **Task** tool; Rules inject into every system prompt; Hooks run shell commands on
+  lifecycle events (trust-gated).
+- **Projects & templates** — scaffold a project from a reusable template bundle (local
+  or fetched from a GitHub folder), with a per-project default LLM provider / model /
+  account.
 - **Git Manager** — a Sublime-Merge-style multi-repo client with staging, hunks,
-  branch tree, and background auto-fetch.
+  branch tree, bulk discard, and background auto-fetch.
 - **Auto-update** — wired via `electron-updater` (download-on-consent).
 
 Detailed roadmap and per-area status: [apps/desktop/ui/README.md](apps/desktop/ui/README.md#roadmap).

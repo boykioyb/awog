@@ -24,7 +24,7 @@
 | 16 | [slash-commands](./slash-commands.md) | Draft |
 | 17 | [git-manager](./git-manager.md) | Draft |
 | 18 | [auto-update](./auto-update.md) | In Review |
-| 19 | [rtk-token-proxy](./rtk-token-proxy.md) | Implemented |
+| 19 | rtk-token-proxy (đã gỡ — xem [ADR 0031](../decisions/0031-rtk-token-proxy.md)) | Reverted (2026-06-15) |
 | 20 | [rules](./rules.md) | v1 implemented (ADR 0033) |
 
 ## Template

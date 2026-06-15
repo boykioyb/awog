@@ -27,7 +27,7 @@
       class="flex items-center gap-1 text-[1em] px-2.5 py-1.5 rounded font-medium transition"
       :style="primaryBtnStyle"
       :disabled="store.isPushing"
-      @click="store.push()"
+      @click="store.pushDialogOpen = true"
     >
       <ArrowUpFromLine :size="11" />
       <span>Push</span>

@@ -74,20 +74,42 @@ function toImageContent(att: SessionAttachment): ImageContent | null {
   return { type: 'image', data, mimeType }
 }
 
+// Turn a text-based file attachment (or a pasted-text block) into a Pi text
+// content block. Only `file`-type attachments with non-empty `preview` qualify
+// (images use `url`, binary files carry neither). The content is wrapped in a
+// named delimiter so the model can tell attachments apart from the user's prose.
+function toFileTextContent(att: SessionAttachment): TextContent | null {
+  if (att.type !== 'file' || !att.preview || att.preview.trim().length === 0) return null
+  // Filenames are display strings; neutralise quotes so the attribute can't be
+  // broken out of (defence in depth — this is L1 UI input).
+  const name = (att.name || 'attachment.txt').replace(/["\r\n]/g, ' ')
+  return {
+    type: 'text',
+    text: `<attached-file name="${name}">\n${att.preview}\n</attached-file>`,
+  }
+}
+
 // Build a Pi UserMessage. Text-only turns keep the plain-string content shape;
-// when usable image attachments are present we switch to the block array
-// (text block first, then images) so the model actually receives them.
+// when usable attachments are present (images, or text-based files) we switch to
+// the block array — user text first, then file-text blocks, then images — so the
+// model actually receives them.
 function historyUser(
   text: string,
   attachments: SessionAttachment[] | undefined,
   timestamp: number,
 ): UserMessage {
+  const fileTexts = (attachments ?? [])
+    .map(toFileTextContent)
+    .filter((c): c is TextContent => c !== null)
   const images = (attachments ?? [])
     .map(toImageContent)
     .filter((c): c is ImageContent => c !== null)
-  if (images.length === 0) return { role: 'user', content: text, timestamp }
+  if (fileTexts.length === 0 && images.length === 0) {
+    return { role: 'user', content: text, timestamp }
+  }
   const content: (TextContent | ImageContent)[] = []
   if (text) content.push({ type: 'text', text })
+  content.push(...fileTexts)
   content.push(...images)
   return { role: 'user', content, timestamp }
 }

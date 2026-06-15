@@ -34,10 +34,25 @@
       >
         <AppToggle v-model="settings.notificationsEnabled" />
       </SettingsField>
-      <SettingsField label="Token optimizer (RTK)" :hint="rtkHint">
+      <SettingsField :label="tr('settings.pasteAsFile')" :hint="tr('settings.pasteAsFile.hint')">
         <AppToggle
-          :model-value="rtk.enabled"
-          @update:model-value="updateRtk({ enabled: $event })"
+          :model-value="composer.pasteAsFile"
+          @update:model-value="updateComposer({ pasteAsFile: $event })"
+        />
+      </SettingsField>
+      <SettingsField
+        v-if="composer.pasteAsFile"
+        :label="tr('settings.pasteThreshold')"
+        :hint="tr('settings.pasteThreshold.hint')"
+      >
+        <input
+          type="number"
+          min="200"
+          step="100"
+          :value="composer.pasteThreshold"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          :style="inputStyle"
+          @input="onPasteThresholdInput($event)"
         />
       </SettingsField>
       <SettingsField
@@ -238,7 +253,7 @@ const { t: tr } = useI18n()
 const settings = useSettingsStore()
 const sidecar = useSidecar()
 const { git, update } = useGitSettings()
-const { rtk, rtkStatus, update: updateRtk, sync: syncRtk } = useRtkSettings()
+const { composer, update: updateComposer } = useComposerSettings()
 const { toasts, pushToast, toastStyle } = useToasts()
 
 // Global config import (ADR 0035) — scans ~/.claude / ~/.agents (no projectId).
@@ -261,20 +276,6 @@ const onImportConfirm = async (items: ImportSelection[]) => {
     'success',
   )
 }
-
-// Re-probe when the panel opens so the detected-binary line is fresh.
-onMounted(() => {
-  void syncRtk()
-})
-
-const rtkHint = computed(() => {
-  const base =
-    'Compress shell command output to save tokens (bundled, applies to the agent Bash tool)'
-  if (rtkStatus.value.available) {
-    return `${base} · rtk ${rtkStatus.value.version ?? ''} detected`.trimEnd()
-  }
-  return `${base} · binary not available on this platform`
-})
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,
@@ -313,6 +314,11 @@ const onFetchIntervalInput = (e: Event) => {
   const parsed = Number.parseInt(raw, 10)
   const seconds = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
   update({ autoFetchIntervalMs: seconds * 1000 })
+}
+
+const onPasteThresholdInput = (e: Event) => {
+  const parsed = Number.parseInt((e.target as HTMLInputElement).value, 10)
+  if (Number.isFinite(parsed) && parsed >= 200) updateComposer({ pasteThreshold: parsed })
 }
 
 const onRuleInput = (e: Event) => {

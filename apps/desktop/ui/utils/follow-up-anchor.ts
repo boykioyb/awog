@@ -1,8 +1,10 @@
-// Follow-up anchors — the numbered superscript badge (①②③) injected into a
-// rendered agent message at the spot the user quoted, linking it to the matching
-// numbered quote card in their reply. The badge is plain DOM (lives inside the
-// v-html'd markdown, where Vue components can't), re-applied by SessionMessageList
-// on every content mutation — same resilience model as the mermaid re-scan.
+// Follow-up anchors — a highlight over the quoted span plus a numbered superscript
+// badge (①②③) injected into a rendered agent message at the spot the user quoted,
+// linking it to the matching numbered quote card in their reply. Both are plain DOM
+// (they live inside the v-html'd markdown, where Vue components can't), re-applied by
+// SessionMessageList on every content mutation — same resilience model as the
+// mermaid re-scan. The highlight background uses --awog-accent (set on the .awog-md
+// root by SessionMessageItem) so it tracks the active accent color.
 
 export type FollowUpAnchor = {
   // The originating follow-up id — used as the dedupe/cleanup key so the badge
@@ -14,6 +16,26 @@ export type FollowUpAnchor = {
 }
 
 const ANCHOR_CLASS = 'awog-fu-anchor'
+const HIGHLIGHT_CLASS = 'awog-fu-highlight'
+const FLASH_CLASS = 'awog-fu-flash'
+
+// Scroll the rendered message body to the highlight for `id` and flash it, so a
+// click on the matching quote chip jumps the reader back to where it was quoted.
+// Best-effort: a quote whose source can't be located on screen (text not matched,
+// or it lived in a collapsed step cluster) simply doesn't move the view.
+export const revealFollowUpAnchor = (id: string): void => {
+  const sel = `[data-fu-anchor="${CSS.escape(id)}"]`
+  const marks = Array.from(document.querySelectorAll<HTMLElement>(`.${HIGHLIGHT_CLASS}${sel}`))
+  const target = marks[0] ?? document.querySelector<HTMLElement>(`.${ANCHOR_CLASS}${sel}`)
+  if (!target) return
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  marks.forEach((el) => {
+    el.classList.remove(FLASH_CLASS)
+    void el.offsetWidth // restart the animation if the chip is clicked repeatedly
+    el.classList.add(FLASH_CLASS)
+    window.setTimeout(() => el.classList.remove(FLASH_CLASS), 1200)
+  })
+}
 
 const makeBadge = (anchor: FollowUpAnchor): HTMLElement => {
   const sup = document.createElement('sup')
@@ -71,6 +93,55 @@ const insertBadgeAfter = (pos: SourcePos, badge: HTMLElement): void => {
   tail.parentNode?.insertBefore(badge, tail)
 }
 
+// A run of the matched range that lives inside a single text node. Because the
+// walker visits a node's characters in document order before moving on, every
+// position the range maps into one node is contiguous — so the range yields at
+// most one segment per node.
+type Segment = { node: Text; start: number; end: number }
+
+const collectSegments = (map: SourcePos[], from: number, toInclusive: number): Segment[] => {
+  const segs: Segment[] = []
+  for (let i = from; i <= toInclusive; i += 1) {
+    const pos = map[i]
+    if (!pos) continue
+    const last = segs[segs.length - 1]
+    if (last && last.node === pos.node) last.end = pos.offset + 1
+    else segs.push({ node: pos.node, start: pos.offset, end: pos.offset + 1 })
+  }
+  return segs
+}
+
+// Wrap the quoted span in a <mark> per text node it spans. Runs AFTER the badge is
+// inserted: insertBadgeAfter only splits the END node (keeping it as the prefix), so
+// every segment offset stays valid. surroundContents never partially selects a
+// non-text node here (each range sits inside one text node), but stays best-effort —
+// a thrown range leaves the badge intact.
+const highlightRange = (map: SourcePos[], from: number, toInclusive: number, id: string): void => {
+  collectSegments(map, from, toInclusive).forEach((seg) => {
+    try {
+      const mark = document.createElement('mark')
+      mark.className = HIGHLIGHT_CLASS
+      mark.dataset.fuAnchor = id
+      const range = document.createRange()
+      range.setStart(seg.node, seg.start)
+      range.setEnd(seg.node, seg.end)
+      range.surroundContents(mark)
+    } catch {
+      // Range no longer valid (DOM shifted under us) — skip this segment.
+    }
+  })
+}
+
+// Unwrap a highlight: lift its children back out, drop the <mark>, then merge the
+// adjacent text nodes so the next normalized-index rebuild sees contiguous text.
+const unwrapHighlight = (mark: HTMLElement): void => {
+  const parent = mark.parentNode
+  if (!parent) return
+  while (mark.firstChild) parent.insertBefore(mark.firstChild, mark)
+  parent.removeChild(mark)
+  parent.normalize()
+}
+
 // Reconcile the badges in `roots` (the DOM blocks of one agent message) with the
 // desired anchor set: remove badges no longer wanted, inject the missing ones at
 // their quoted text. Idempotent — safe to call on every render pass.
@@ -91,6 +162,11 @@ export const applyFollowUpAnchors = (roots: HTMLElement[], anchors: FollowUpAnch
       if (el.textContent !== want.label) el.textContent = want.label
       present.add(id)
     })
+    // Unwrap highlights whose anchor is gone; leave wanted ones in place. Done
+    // after badge cleanup so `present` already reflects the surviving anchors.
+    root.querySelectorAll<HTMLElement>(`.${HIGHLIGHT_CLASS}`).forEach((el) => {
+      if (!wantById.has(el.dataset.fuAnchor ?? '')) unwrapHighlight(el)
+    })
   })
 
   // 2. Inject any wanted anchor not yet on screen. Iterate the deduped set (an id
@@ -103,7 +179,12 @@ export const applyFollowUpAnchors = (roots: HTMLElement[], anchors: FollowUpAnch
     const { norm, map } = buildNormalizedIndex(roots)
     const idx = norm.indexOf(needle)
     if (idx < 0) return // can't locate (e.g. selection crossed a step cluster) — skip
-    const endPos = map[idx + needle.length - 1]
-    if (endPos) insertBadgeAfter(endPos, makeBadge(anchor))
+    const end = idx + needle.length - 1
+    const endPos = map[end]
+    if (!endPos) return
+    // Badge first (splits only the end node, keeping it as the prefix), then the
+    // highlight — so the segment offsets the highlight uses stay valid.
+    insertBadgeAfter(endPos, makeBadge(anchor))
+    highlightRange(map, idx, end, anchor.id)
   })
 }

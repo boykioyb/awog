@@ -147,27 +147,33 @@
               class="w-full px-2 py-1.5 bg-transparent outline-none text-[1em]"
               :style="{ color: t.text, borderTop: `1px solid ${t.border}` }"
               :placeholder="tr('session.question.other_placeholder')"
-              @keydown.enter.prevent="submit"
+              @keydown.enter.prevent="confirmStep"
             />
           </div>
         </div>
       </div>
 
-      <!-- Footer -->
+      <!-- Footer — single-select auto-advances on pick, so the action button
+           only surfaces for multi-select, the "Other" path, or the last
+           question (where it becomes Submit). -->
       <div
-        v-if="canAnswer"
+        v-if="showFooter"
         class="px-3 py-2 flex items-center gap-2"
         :style="{ borderTop: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <button
           type="button"
-          :disabled="!canSubmit"
+          :disabled="!stepEnabled"
           class="inline-flex items-center gap-1 px-2.5 py-1 rounded font-medium transition"
-          :style="{ background: accent.accent, color: t.accentText, opacity: canSubmit ? 1 : 0.5 }"
-          @click="submit"
+          :style="{
+            background: accent.accent,
+            color: t.accentText,
+            opacity: stepEnabled ? 1 : 0.5,
+          }"
+          @click="confirmStep"
         >
-          <Check :size="11" />
-          {{ tr('session.question.submit') }}
+          <component :is="isLast ? Check : ArrowRight" :size="11" />
+          {{ isLast ? tr('session.question.submit') : tr('session.question.continue') }}
         </button>
         <span
           v-if="questions.length > 1"
@@ -183,6 +189,7 @@
 
 <script setup lang="ts">
 import {
+  ArrowRight,
   Check,
   ChevronDown,
   Circle,
@@ -253,6 +260,9 @@ const toggleOption = (qi: number, label: string): void => {
     set.clear()
     set.add(label)
     otherOn[qi] = false
+    // Single-select auto-advances to the next question; the last/only question
+    // still waits for an explicit Submit.
+    if (qi === activeTab.value && !isLast.value) advance()
   }
 }
 
@@ -276,6 +286,28 @@ const answeredCount = computed(
   () => questions.value.filter((_, qi) => selectedFor(qi).length > 0).length,
 )
 const canSubmit = computed(() => questions.value.every((_, qi) => selectedFor(qi).length > 0))
+
+const isLast = computed(() => activeTab.value >= questions.value.length - 1)
+const currentSelected = computed(() => selectedFor(activeTab.value).length > 0)
+
+// Footer action button: "Continue" (advance) on every question but the last,
+// where it becomes the final "Submit". Single-select questions auto-advance on
+// pick, so the button only surfaces for multi-select, the free-text "Other"
+// path, or the last question (always Submit).
+const showFooter = computed(
+  () => canAnswer.value && (active.value.multiSelect || !!otherOn[activeTab.value] || isLast.value),
+)
+const stepEnabled = computed(() => (isLast.value ? canSubmit.value : currentSelected.value))
+
+const advance = (): void => {
+  if (activeTab.value < questions.value.length - 1) activeTab.value += 1
+}
+
+const confirmStep = (): void => {
+  if (!stepEnabled.value) return
+  if (isLast.value) submit()
+  else advance()
+}
 
 const submit = (): void => {
   if (!answer || !canSubmit.value) return

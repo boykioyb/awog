@@ -10,7 +10,7 @@
             background: showTree ? t.bgActive : 'transparent',
           }"
           :title="tr('workspace.files.toggleTree')"
-          @click="showTree = !showTree"
+          @click="toggleBrowser"
         >
           <ListTree :size="13" />
         </button>
@@ -35,20 +35,53 @@
           type="button"
           class="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center transition"
           :style="{ color: t.textDim }"
-          @click="showTree = true"
+          @click="toggleBrowser"
         >
           <FolderTree :size="28" :stroke-width="1.5" :style="{ color: t.textFaint }" />
           <span class="text-[1em]">{{ tr('workspace.files.browse') }}</span>
         </button>
         <template v-else>
           <div
-            class="px-3 py-1.5 flex items-center gap-2 flex-shrink-0"
+            class="px-2 py-1.5 flex items-center gap-1 flex-shrink-0"
             :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
           >
-            <FileText :size="11" :style="{ color: t.textDim }" />
-            <span class="font-mono text-[1em] truncate" :style="{ color: t.text }">
-              {{ selectedPath }}
-            </span>
+            <!-- Back to the folder listing + breadcrumb — kept in sync with the
+                 browser overlay so navigation works from the file detail too. -->
+            <button
+              type="button"
+              class="p-1 rounded transition flex-shrink-0"
+              :style="{ color: t.textDim }"
+              :title="tr('workspace.files.back')"
+              @click="goBackToList"
+            >
+              <ArrowLeft :size="13" />
+            </button>
+            <nav class="flex-1 min-w-0 flex items-center gap-0.5 overflow-hidden">
+              <template v-for="(crumb, ci) in fileBreadcrumbs" :key="crumb.path">
+                <ChevronRight
+                  v-if="ci > 0"
+                  :size="12"
+                  class="flex-shrink-0"
+                  :style="{ color: t.textFaint }"
+                />
+                <span
+                  v-if="crumb.isFile"
+                  class="font-mono text-[1em] truncate"
+                  :style="{ color: t.text }"
+                >
+                  {{ crumb.name }}
+                </span>
+                <button
+                  v-else
+                  type="button"
+                  class="px-1 py-0.5 rounded text-[1em] whitespace-nowrap flex-shrink-0 transition hover:underline"
+                  :style="{ color: t.textDim }"
+                  @click="browseTo(crumb.path)"
+                >
+                  {{ crumb.name }}
+                </button>
+              </template>
+            </nav>
             <button
               type="button"
               class="p-1 rounded transition flex-shrink-0"
@@ -59,7 +92,11 @@
               <Check v-if="copied" :size="13" />
               <Copy v-else :size="13" />
             </button>
-            <span v-if="fileContent?.truncated" class="text-[12px]" :style="{ color: t.warning }">
+            <span
+              v-if="fileContent?.truncated"
+              class="text-[12px] flex-shrink-0"
+              :style="{ color: t.warning }"
+            >
               {{ tr('workspace.files.truncated') }}
             </span>
 
@@ -118,13 +155,15 @@
                 <Check v-if="copiedKind === 'raw'" :size="13" />
                 <Clipboard v-else :size="13" />
               </button>
-              <span
-                v-if="fileContent?.language"
-                class="text-[12px] uppercase tracking-wider"
+              <button
+                type="button"
+                class="p-1 rounded transition"
                 :style="{ color: t.textDim }"
+                :title="tr('code.menu.reveal_os')"
+                @click="revealCurrent"
               >
-                {{ fileContent.language }}
-              </span>
+                <FolderOpen :size="13" />
+              </button>
               <button
                 v-if="session.projectId"
                 type="button"
@@ -191,22 +230,48 @@
         </template>
       </div>
 
-      <!-- Tree overlay (hidden by default; toggle via the header icon) -->
+      <!-- Browser overlay (hidden by default; toggle via the header icon).
+           Finder-style: one folder at a time, breadcrumb + back to navigate. -->
       <div
         v-if="showTree"
         class="absolute inset-0 z-10 flex flex-col"
         :style="{ background: t.bg }"
       >
         <div
-          class="px-3 py-1.5 flex items-center justify-between flex-shrink-0"
+          class="px-2 py-1.5 flex items-center gap-1 flex-shrink-0"
           :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
         >
-          <span class="text-[1em] uppercase tracking-wide" :style="{ color: t.textDim }">
-            {{ tr('workspace.tab.files') }}
-          </span>
           <button
             type="button"
-            class="p-1 rounded transition"
+            class="p-1 rounded transition flex-shrink-0"
+            :style="{ color: t.textDim, opacity: atRoot ? 0.4 : 1 }"
+            :disabled="atRoot"
+            :title="tr('workspace.files.up')"
+            @click="goUp"
+          >
+            <ArrowLeft :size="13" />
+          </button>
+          <nav class="flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto">
+            <template v-for="(crumb, ci) in breadcrumbs" :key="crumb.path">
+              <ChevronRight
+                v-if="ci > 0"
+                :size="12"
+                class="flex-shrink-0"
+                :style="{ color: t.textFaint }"
+              />
+              <button
+                type="button"
+                class="px-1 py-0.5 rounded text-[1em] truncate transition hover:underline"
+                :style="{ color: ci === breadcrumbs.length - 1 ? t.text : t.textDim }"
+                @click="openDir(crumb.path)"
+              >
+                {{ crumb.name }}
+              </button>
+            </template>
+          </nav>
+          <button
+            type="button"
+            class="p-1 rounded transition flex-shrink-0"
             :style="{ color: t.textDim }"
             :title="tr('workspace.close')"
             @click="showTree = false"
@@ -215,21 +280,24 @@
           </button>
         </div>
         <div class="flex-1 overflow-y-auto py-1">
-          <WorkspaceFileTreeNode
-            v-for="entry in childrenByPath[''] ?? []"
+          <WorkspaceFileRow
+            v-for="entry in currentEntries"
             :key="entry.path"
             :entry="entry"
-            :depth="0"
-            :expanded="expanded"
-            :children-by-path="childrenByPath"
-            :selected-path="selectedPath"
-            :renaming-path="renamingPath"
-            :on-toggle="toggle"
-            :on-select="select"
+            :selected="selectedPath === entry.path"
+            :renaming="renamingPath === entry.path"
+            :on-open="openEntry"
             :on-context="onContext"
             :on-rename-submit="onRenameSubmit"
             :on-rename-cancel="onRenameCancel"
           />
+          <div
+            v-if="!currentEntries.length && !loading"
+            class="px-4 py-6 text-center text-[1em]"
+            :style="{ color: t.textFaint }"
+          >
+            {{ tr('workspace.files.empty') }}
+          </div>
         </div>
       </div>
     </div>
@@ -305,13 +373,15 @@
 
 <script setup lang="ts">
 import {
+  ArrowLeft,
   Check,
+  ChevronRight,
   Clipboard,
   Code,
   Code2,
   Copy,
   Eye,
-  FileText,
+  FolderOpen,
   FolderTree,
   Globe,
   ListTree,
@@ -328,7 +398,7 @@ import FileFullscreenModal from '~/components/workspace/FileFullscreenModal.vue'
 import FilePreviewFrame from '~/components/workspace/FilePreviewFrame.vue'
 import MonacoEditor from '~/components/editor/MonacoEditor.vue'
 import WorkspaceDrawerHeader from './WorkspaceDrawerHeader.vue'
-import WorkspaceFileTreeNode from './WorkspaceFileTreeNode.vue'
+import WorkspaceFileRow from './WorkspaceFileRow.vue'
 
 const props = defineProps<{
   session: Session
@@ -339,21 +409,28 @@ const { t } = useTheme()
 const { t: tr } = useI18n()
 
 const {
-  childrenByPath,
-  expanded,
+  currentEntries,
+  breadcrumbs,
+  fileBreadcrumbs,
+  atRoot,
   selectedPath,
   fileContent,
   loading,
   showTree,
   editorRef,
   onEditorReady,
-  toggle,
-  select,
+  openDir,
+  goUp,
+  openEntry,
+  toggleBrowser,
+  browseTo,
+  goBackToList,
   refresh,
   reloadFile,
   close,
   openInEditor,
   openInBrowser,
+  revealCurrent,
   copied,
   copyPath,
   menu,

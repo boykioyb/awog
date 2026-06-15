@@ -143,6 +143,16 @@
           @update:model-value="(v) => onUpdate({ liquidGlass: v })"
         />
       </SettingsField>
+
+      <SettingsField
+        :label="tr('settings.assistantBubble')"
+        :hint="tr('settings.assistantBubble.hint')"
+      >
+        <AppToggle
+          :model-value="appearance.assistantBubble"
+          @update:model-value="(v) => onUpdate({ assistantBubble: v })"
+        />
+      </SettingsField>
     </div>
 
     <div>

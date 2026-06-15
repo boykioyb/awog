@@ -40,10 +40,25 @@ type ResolvedMcpServer = McpServersConfig[string]
 // never forwarded.
 const ENV_WHITELIST = ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR'] as const
 
-// Per-call wall-clock limit for tools/list + tools/call. MCP servers that hang
-// must not stall the agent loop indefinitely.
-const MCP_LIST_TIMEOUT_MS = 10_000
+// Wall-clock limit for the initialize + tools/list handshake when the server
+// config doesn't specify one. Bumped well above the old 10s: `npx -y <pkg>`
+// cold starts (first-run download) routinely exceed 10s and were silently
+// timing out → zero tools registered. A configured `timeoutMs` overrides this,
+// clamped to MCP_LIST_TIMEOUT_MAX_MS.
+const MCP_LIST_TIMEOUT_DEFAULT_MS = 20_000
+const MCP_LIST_TIMEOUT_MAX_MS = 60_000
 const MCP_CALL_TIMEOUT_MS = 120_000
+
+// Resolve the handshake timeout for a server: its configured budget (clamped)
+// or the default. Keeps a hung server from stalling the loop while giving cold
+// `npx` starts room to finish.
+function listTimeoutFor(server: ResolvedMcpServer): number {
+  const configured = (server as { timeoutMs?: unknown }).timeoutMs
+  if (typeof configured !== 'number' || !Number.isFinite(configured)) {
+    return MCP_LIST_TIMEOUT_DEFAULT_MS
+  }
+  return Math.min(Math.max(configured, MCP_LIST_TIMEOUT_DEFAULT_MS), MCP_LIST_TIMEOUT_MAX_MS)
+}
 // Cap the text we hand back to the model from a single MCP tool result.
 const MCP_RESULT_MAX_CHARS = 64 * 1024
 
@@ -162,7 +177,7 @@ function connect(serverId: string, server: ResolvedMcpServer): ConnectedClient |
 
 // MCP initialize handshake. Mirrors mcp/manager.ts so a bridged client behaves
 // the same as a McpManager-started one.
-async function initialize(transport: McpTransport): Promise<void> {
+async function initialize(transport: McpTransport, timeoutMs: number): Promise<void> {
   await transport.request(
     'initialize',
     {
@@ -170,7 +185,7 @@ async function initialize(transport: McpTransport): Promise<void> {
       capabilities: {},
       clientInfo: { name: 'awog-sidecar', version: '0.1.0' },
     },
-    MCP_LIST_TIMEOUT_MS,
+    timeoutMs,
   )
   await transport.notify('notifications/initialized', {})
 }
@@ -224,47 +239,69 @@ function clip(text: string): string {
   return `${text.slice(0, MCP_RESULT_MAX_CHARS)}\n…(truncated)`
 }
 
+// A server that was attached but couldn't expose its tools this turn. Surfaced
+// to the model (buildMcpUnavailableNote) so it doesn't call absent
+// mcp__<serverId>__* tools or fabricate their results when the server is down.
+export interface McpLoadFailure {
+  serverId: string
+  reason: string
+}
+
+export interface McpToolset {
+  tools: AgentTool[]
+  failures: McpLoadFailure[]
+}
+
 // Build the AgentTool list for every reachable MCP server in `mcpServers`.
-// Defensive per-server: a connect/list failure logs a warning (no secrets) and
-// skips that server's tools — it never fails the whole turn. The returned tools
-// own their own short-lived client; the client is disposed after the tool's
-// tools/call completes (stdio child is killed). signal aborts in-flight work.
+// Defensive per-server: a connect/list failure is captured as an McpLoadFailure
+// (no secrets) and that server's tools are skipped — it never fails the whole
+// turn. The returned tools own their own short-lived client; the client is
+// disposed after the tool's tools/call completes (stdio child is killed).
+// signal aborts in-flight work.
 export async function createMcpToolDefinitions(
   mcpServers: McpServersConfig | undefined,
   signal?: AbortSignal,
-): Promise<AgentTool[]> {
-  if (!mcpServers) return []
+): Promise<McpToolset> {
+  if (!mcpServers) return { tools: [], failures: [] }
   const entries = Object.entries(mcpServers)
-  if (entries.length === 0) return []
+  if (entries.length === 0) return { tools: [], failures: [] }
 
   const perServer = await Promise.all(
     entries.map((entry) => listServerTools(entry[0], entry[1], signal)),
   )
-  return perServer.flat()
+  return {
+    tools: perServer.flatMap((r) => r.tools),
+    failures: perServer.flatMap((r) => (r.failure ? [r.failure] : [])),
+  }
 }
 
 // Connect to one server, list its tools, synthesize an AgentTool per MCP tool.
-// On any failure → [] (skip + warn). Each synthesized tool reconnects per call
-// for stdio (the listing client is disposed immediately) so a tool that's never
-// invoked leaves no lingering child; http clients are stateless.
+// On any failure → { tools: [], failure } (skip + warn + report). Each
+// synthesized tool reconnects per call for stdio (the listing client is
+// disposed immediately) so a tool that's never invoked leaves no lingering
+// child; http clients are stateless.
 async function listServerTools(
   serverId: string,
   server: ResolvedMcpServer,
   signal?: AbortSignal,
-): Promise<AgentTool[]> {
+): Promise<{ tools: AgentTool[]; failure?: McpLoadFailure }> {
   const conn = connect(serverId, server)
-  if (!conn) return []
+  if (!conn) {
+    return {
+      tools: [],
+      failure: { serverId, reason: 'could not start (command not found or unsupported transport)' },
+    }
+  }
   let rawTools: RawMcpTool[]
   try {
-    await initialize(conn.transport)
-    const listed = await conn.transport.request('tools/list', {}, MCP_LIST_TIMEOUT_MS)
+    const timeout = listTimeoutFor(server)
+    await initialize(conn.transport, timeout)
+    const listed = await conn.transport.request('tools/list', {}, timeout)
     rawTools = parseToolsList(listed)
   } catch (err) {
-    log.warn('mcp bridge: tools/list failed, skipping server', {
-      serverId,
-      err: err instanceof Error ? err.message : String(err),
-    })
-    return []
+    const reason = err instanceof Error ? err.message : String(err)
+    log.warn('mcp bridge: tools/list failed, skipping server', { serverId, err: reason })
+    return { tools: [], failure: { serverId, reason } }
   } finally {
     // The listing connection is short-lived; the per-call execute() opens a
     // fresh one. This keeps each tool self-contained and avoids holding a stdio
@@ -272,7 +309,24 @@ async function listServerTools(
     conn.dispose()
   }
 
-  return rawTools.map((t) => synthTool(serverId, server, t, signal))
+  return { tools: rawTools.map((t) => synthTool(serverId, server, t, signal)) }
+}
+
+// A system-prompt note listing servers that were attached but failed to load.
+// Returns undefined when nothing failed. Injected by run-stream.ts / invoke.ts
+// so the model is told — in-band — not to call these tools or invent their
+// output. This is the direct guard against the observed failure mode: a server
+// silently skipped, the model promised it via the mcp-preference nudge, then
+// fabricating results when every mcp__<serverId>__* call returned "not found".
+export function buildMcpUnavailableNote(failures: McpLoadFailure[]): string | undefined {
+  if (failures.length === 0) return undefined
+  const lines = failures.map((f) => `- mcp__${f.serverId}__* — ${f.reason}`).join('\n')
+  return `<mcp-unavailable>
+The following MCP servers were attached to this turn but FAILED to start, so their tools are NOT available:
+${lines}
+
+Do NOT call any \`mcp__<serverId>__*\` tool for these servers, and do NOT fabricate, guess, or infer their results. If you need data only these servers can provide, tell the user the server is unavailable (include the reason above) and stop — ask them to fix the connection or supply the data another way.
+</mcp-unavailable>`
 }
 
 // Synthesize one Pi AgentTool from an MCP tool descriptor.
@@ -319,7 +373,7 @@ function synthTool(
       sig?.addEventListener('abort', onAbort, { once: true })
       loopSignal?.addEventListener('abort', onAbort, { once: true })
       try {
-        await initialize(conn.transport)
+        await initialize(conn.transport, listTimeoutFor(server))
         const result = (await conn.transport.request(
           'tools/call',
           { name: tool.name, arguments: params ?? {} },

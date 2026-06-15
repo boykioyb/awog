@@ -30,6 +30,11 @@ export type SessionEvent =
   | { type: 'session.created'; at: string; session: Session }
   | { type: 'session.metadata.updated'; at: string; patch: SessionMetadataPatch }
   | { type: 'message.appended'; at: string; message: SessionMessage }
+  // Drop every message AFTER `keepThroughId` (inclusive of that message — it is
+  // kept). `null` empties the transcript. Backs edit-and-resend / regenerate
+  // (sessions.truncate RPC) and the conversation half of Rewind. Append-only:
+  // the dropped lines stay in the file but the fold rebuilds the shorter list.
+  | { type: 'session.truncated'; at: string; keepThroughId: string | null }
   | { type: 'session.deleted'; at: string }
 
 const SESSIONS_DIR_NAME = sanitizeChild('sessions')
@@ -112,6 +117,19 @@ function fold(events: SessionEvent[]): Session | null {
           ? current.messages.map((m, i) => (i === idx ? e.message : m))
           : [...current.messages, e.message]
       snapshot = { ...current, messages, updatedAt: e.at }
+    } else if (e.type === 'session.truncated') {
+      if (!snapshot) continue
+      const current: Session = snapshot
+      if (e.keepThroughId === null) {
+        snapshot = { ...current, messages: [], updatedAt: e.at }
+      } else {
+        const idx = current.messages.findIndex((m) => m.id === e.keepThroughId)
+        // Unknown id → no-op (never silently drop the whole transcript on a
+        // stale/garbage event). Found → keep up to and including it.
+        if (idx >= 0) {
+          snapshot = { ...current, messages: current.messages.slice(0, idx + 1), updatedAt: e.at }
+        }
+      }
     } else if (e.type === 'session.deleted') {
       deleted = true
     }
@@ -217,6 +235,25 @@ export async function appendMessage(sessionId: string, message: SessionMessage):
     type: 'message.appended',
     at: new Date().toISOString(),
     message,
+  }
+  await appendEvent(sessionId, evt)
+}
+
+export async function truncateSession(
+  sessionId: string,
+  keepThroughId: string | null,
+): Promise<void> {
+  // Soft guard like appendMessage: don't append a truncate for a session that
+  // was never created or is already tombstoned.
+  const existing = await loadSession(sessionId)
+  if (!existing) {
+    log.warn('truncateSession: session not found or deleted, skipping', { sessionId })
+    return
+  }
+  const evt: SessionEvent = {
+    type: 'session.truncated',
+    at: new Date().toISOString(),
+    keepThroughId,
   }
   await appendEvent(sessionId, evt)
 }

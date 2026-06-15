@@ -157,9 +157,15 @@ t.diffTheirs  // background block theirs
 
 `CommitMessageInput.vue` dùng `<textarea class="resize-y min-h-[8rem] ...">`. Hỗ trợ multi-line (Enter newline, Cmd+Enter submit). Không Monaco; không syntax highlight git-trailer ở v1.
 
-#### OQ-12 — Force push không expose
+#### OQ-12 — Force push không expose (v1)
 
 Method `git.push` không nhận `force` / `forceWithLease` argument. Nếu user thực sự cần → hướng dẫn dùng CLI trong docs.
+
+> **Cập nhật 2026-06-15 — đã gỡ deferral.** Điều kiện ở "Hệ quả → Cần follow-up"
+> (force-with-lease *chỉ khi* có user flow rõ ràng + double-confirm UI) nay đã thoả:
+> `GitPushModal.vue` là dialog xác nhận hai bước cho mọi push. `git.push` nhận
+> thêm `force?: boolean` → map sang **`--force-with-lease`** (không bao giờ bare
+> `--force`, để từ chối khi remote có commit mới) và `pushTags?: boolean` → `--tags`.
 
 ## Phương án đã cân nhắc
 

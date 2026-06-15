@@ -60,12 +60,22 @@
         >
           {{ runningCount }}
         </span>
-        <span
-          v-else-if="item.id === 'sessions' && anyStreaming"
-          class="w-1.5 h-1.5 rounded-full animate-pulse"
-          :style="{ background: t.accent, boxShadow: `0 0 6px ${t.accent}` }"
-          title="Streaming"
-        />
+        <template v-else-if="item.id === 'sessions'">
+          <span
+            v-if="unreadCount > 0"
+            class="inline-flex items-center justify-center font-mono text-[12px] leading-none px-1.5 py-0.5 rounded-full"
+            :style="badgeStyle"
+            :title="`${unreadCount} unread`"
+          >
+            {{ unreadCount }}
+          </span>
+          <span
+            v-else-if="anyStreaming"
+            class="w-1.5 h-1.5 rounded-full animate-pulse"
+            :style="{ background: t.accent, boxShadow: `0 0 6px ${t.accent}` }"
+            title="Streaming"
+          />
+        </template>
         <template v-else-if="item.id === 'git'">
           <span
             v-if="gitDirty"
@@ -169,6 +179,7 @@ const runningCount = computed(() => tasksStore.runningCount)
 
 const sessionsStore = useSessionsStore()
 const anyStreaming = computed(() => sessionsStore.anyStreaming)
+const unreadCount = computed(() => sessionsStore.unreadCount)
 
 const hoveredId = ref<string | null>(null)
 

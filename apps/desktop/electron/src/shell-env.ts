@@ -10,8 +10,8 @@ import { log } from './logger'
 // `/opt/homebrew/bin`. The engine (engine.ts) is spawned from this process, so
 // its child shells inherit that stripped PATH too: the agent's Bash tool, the
 // node-pty terminal and the git runner can't find Homebrew/nvm/pyenv tools
-// (node, ripgrep, the binaries RTK shells out to, …). The model then sees the
-// command fail and gives up on shell work.
+// (node, ripgrep, …). The model then sees the command fail and gives up on
+// shell work.
 //
 // Fix: before the engine spawns, recover the user's REAL environment by running
 // their login+interactive shell once and importing its env into process.env.

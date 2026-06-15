@@ -48,6 +48,7 @@
         <SessionMessageItem
           v-for="msg in messages"
           :key="msg.id"
+          :session="session"
           :message="msg"
           :now="now"
           @open-attachment="(att: SessionAttachment) => emit('openAttachment', att)"
@@ -126,7 +127,7 @@
 
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, AtSign, Bot, MessagesSquare, Quote, Slash } from 'lucide-vue-next'
-import type { SessionAttachment, SessionMessage, SessionStep } from '~/types'
+import type { Session, SessionAttachment, SessionMessage, SessionStep } from '~/types'
 import {
   ANSWER_QUESTION_KEY,
   RESOLVE_PLAN_KEY,
@@ -141,6 +142,7 @@ import { useWorkspacePanelStore } from '~/stores/workspacePanel'
 import { useSessionInfoPanelStore } from '~/stores/sessionInfoPanel'
 
 const props = defineProps<{
+  session: Session
   messages: SessionMessage[]
   pendingAgentIds: string[]
 }>()
@@ -211,6 +213,40 @@ onMounted(() =>
     scrollToBottom()
     updateScrollState()
   }),
+)
+
+// Cmd+K search palette deep-link: scroll to + briefly outline the requested
+// message once it lives in this list, then clear the request. nextTick because
+// the target session may have just been selected (this list re-rendering for
+// it). immediate so a request set before this list mounts is still honoured.
+watch(
+  () => store.pendingScrollMessageId,
+  (id) => {
+    if (!id || !props.messages.some((m) => m.id === id)) return
+    void nextTick(() => {
+      const el = scrollRef.value?.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(id)}"]`,
+      )
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        el.style.transition = 'outline-color 0.4s ease'
+        el.style.outline = `2px solid ${t.value.accent}`
+        el.style.outlineOffset = '3px'
+        el.style.borderRadius = '8px'
+        setTimeout(() => {
+          el.style.outline = '2px solid transparent'
+          setTimeout(() => {
+            el.style.removeProperty('outline')
+            el.style.removeProperty('outline-offset')
+            el.style.removeProperty('border-radius')
+            el.style.removeProperty('transition')
+          }, 400)
+        }, 1400)
+      }
+      store.pendingScrollMessageId = null
+    })
+  },
+  { immediate: true },
 )
 
 // Selection-driven "Quote & follow up" popup. We watch document selectionchange

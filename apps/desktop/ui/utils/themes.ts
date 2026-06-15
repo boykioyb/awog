@@ -154,7 +154,9 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     },
   },
   light: {
-    bg: '#ffffff',
+    // Off-white shell canvas so the white surfaces above (bgElevated cards,
+    // bgInput, message bubbles, chat/detail panes) read as raised and stand out.
+    bg: '#f5f6f8',
     bgPanel: '#fafaf9',
     bgCanvas: '#f5f5f4',
     bgElevated: '#ffffff',
@@ -203,7 +205,7 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     statusOk: '#16a34a',
     statusWarn: '#d97706',
     shadow: 'rgba(0, 0, 0, 0.08)',
-    glassBg: 'rgba(255, 255, 255, 0.72)',
+    glassBg: 'rgba(255, 255, 255, 0.88)',
     glassBorder: 'rgba(0, 0, 0, 0.08)',
     glassHighlight: 'rgba(255, 255, 255, 0.9)',
     glassActive: 'rgba(0, 0, 0, 0.06)',
