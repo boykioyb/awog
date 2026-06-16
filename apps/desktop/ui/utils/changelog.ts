@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.14.0',
+    date: '2026-06-16',
+    highlight: {
+      en: 'Steer a running response or queue messages, plus Git branch operations — merge, rebase, and open pull requests.',
+      vi: 'Chèn vào phản hồi đang chạy hoặc xếp hàng tin nhắn, cùng thao tác nhánh Git — merge, rebase và mở pull request.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Steer a running response: while the agent is working, type a message and Insert it into the current turn — the agent picks it up at its next step.',
+        vi: 'Chèn vào phản hồi đang chạy: trong khi agent làm việc, gõ một tin nhắn và Chèn vào lượt hiện tại — agent tiếp nhận ở bước kế tiếp.',
+      },
+      {
+        kind: 'added',
+        en: 'Queue messages: send a message to a queue while a turn is streaming and it auto-sends as a new turn once the current one finishes. The queue shows above the input.',
+        vi: 'Xếp hàng tin nhắn: đẩy tin nhắn vào hàng đợi khi một lượt đang chạy, nó tự gửi thành lượt mới khi lượt hiện tại kết thúc. Hàng đợi hiện ngay trên ô nhập.',
+      },
+      {
+        kind: 'added',
+        en: 'Git: merge and rebase branches (with continue/abort), and open a GitHub pull request straight from AWOG.',
+        vi: 'Git: merge và rebase nhánh (kèm continue/abort), và mở pull request GitHub ngay trong AWOG.',
+      },
+      {
+        kind: 'improved',
+        en: 'Git: a richer branch right-click menu for branch, remote, and history actions.',
+        vi: 'Git: menu chuột phải trên nhánh phong phú hơn cho các thao tác nhánh, remote và lịch sử.',
+      },
+      {
+        kind: 'improved',
+        en: 'When the agent is waiting on your answer or a permission, the session shows a “waiting” state instead of a ticking timer, notifies you if the window isn’t focused, and excludes the wait from the turn’s elapsed time.',
+        vi: 'Khi agent chờ bạn trả lời hoặc cấp quyền, session hiện trạng thái “đang chờ” thay vì đồng hồ chạy, báo cho bạn nếu cửa sổ không focus, và không tính thời gian chờ vào thời lượng của lượt.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Session list keeps project groups in a stable order — only the sessions inside each project are sorted by recency.',
+        vi: 'Danh sách session giữ thứ tự nhóm project cố định — chỉ các session bên trong mỗi project mới sắp theo thời gian gần nhất.',
+      },
+    ],
+  },
+  {
     version: '0.13.0',
     date: '2026-06-15',
     highlight: {
