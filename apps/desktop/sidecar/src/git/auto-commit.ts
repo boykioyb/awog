@@ -1,22 +1,23 @@
 // Auto-commit helper invoked by the Task Execution Engine when a phase
-// completes (Git Manager spec — "Auto-commit per phase" section, AC-37).
-//
-// STATUS: helper ready, not wired. The sidecar's session runner today is
-// chat-driven (`sessions/runner.ts`) and has no phase lifecycle anchor. Wiring
-// this into `runner.ts` requires a phase-complete hook from the Task Execution
-// Engine, which lands in a future milestone. Until then this module is
-// importable + tested in isolation and the UI flow records `task.started_dirty`
-// in console only (NewTaskModal).
+// completes (Git Manager spec — "Auto-commit per phase" section, AC-37). Wired
+// from `tasks/node-runner.ts`: after a node produces its artifact, this commits
+// the code the agent wrote to the project repo (ADR 0024 D-8 two-tree).
 //
 // Spawn invariant: all `git` calls go through `runGit` (cwd = workspaceRoot,
-// env whitelist). Mutex is acquired with `{ reentrant: true }` so callers that
-// already hold the workspace lock — typically the engine while it is finishing
-// a phase — don't deadlock.
+// env whitelist). The commit serializes through the per-workspace mutex like
+// every other mutator: the Task Engine runs up to 4 nodes of the same project in
+// parallel and the user can drive the Git Manager on the same repo, so two
+// unsynchronized `git add`/`commit` runs would otherwise collide on
+// `.git/index.lock`. A generous wait lets queued node-commits take their turn
+// rather than dropping (a later `add -A` would still capture the skipped
+// changes, but per-node commits keep history granular).
 import { runGit } from './runner.js'
 import { withWorkspaceLock } from './mutex.js'
 import { suppressEchoFor } from './watcher.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
+
+const AUTO_COMMIT_LOCK_TIMEOUT_MS = 30_000
 
 export interface AutoCommitPhaseOptions {
   workspaceRoot: string
@@ -153,6 +154,6 @@ export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<Aut
 
       return { committed: true, sha, sha7 }
     },
-    { reentrant: true },
+    { timeoutMs: AUTO_COMMIT_LOCK_TIMEOUT_MS },
   )
 }

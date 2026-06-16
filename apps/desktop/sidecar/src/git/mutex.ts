@@ -1,13 +1,11 @@
 // Per-workspace serialization queue. Read-only fast RPCs bypass; mutate RPCs
-// acquire. Reentrant flag bypasses the queue for engine-internal calls that
-// need to nest inside an already-held lock (e.g. auto-commit triggered while
-// the engine still owns the slot).
+// acquire so concurrent writers — parallel Task Engine nodes and the Git Manager
+// UI on the same repo — never collide on `.git/index.lock`.
 import { RpcError } from '../transport/rpc.js'
 import { GIT_RPC_CODE, GitErrorCode } from './error-map.js'
 
 interface MutexOptions {
   timeoutMs?: number
-  reentrant?: boolean
 }
 
 const DEFAULT_TIMEOUT = 5_000
@@ -19,8 +17,6 @@ export async function withWorkspaceLock<T>(
   fn: () => Promise<T>,
   opts: MutexOptions = {},
 ): Promise<T> {
-  if (opts.reentrant) return fn()
-
   const previous = queues.get(workspaceRoot) ?? Promise.resolve()
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT
 
