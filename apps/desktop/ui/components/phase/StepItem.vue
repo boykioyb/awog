@@ -267,13 +267,11 @@
 
       <span
         v-if="step.children?.length"
-        class="inline-flex items-center justify-center text-[1em] px-1.5 rounded-sm font-mono"
+        class="inline-flex items-center justify-center text-[12px] leading-none px-1.5 py-0.5 rounded-sm font-mono"
         :style="{
           background: t.bgInput,
           color: t.textDim,
-          border: `1px solid ${t.border}`,
-          minWidth: '20px',
-          height: '16px',
+          minWidth: '18px',
         }"
         :title="`${step.children.length} nested step(s)`"
       >
@@ -281,32 +279,40 @@
       </span>
 
       <span
-        v-if="step.additions !== undefined"
-        class="inline-flex items-center px-1 rounded-sm font-mono text-[1em]"
-        :style="{
-          background: 'rgba(34, 197, 94, 0.12)',
-          color: '#22c55e',
-          border: '1px solid rgba(34, 197, 94, 0.35)',
-        }"
+        v-if="step.additions !== undefined || step.deletions !== undefined"
+        class="inline-flex items-center gap-1 flex-shrink-0"
       >
-        {{ step.additions }}
-      </span>
-      <span
-        v-if="step.deletions !== undefined"
-        class="inline-flex items-center px-1 rounded-sm font-mono text-[1em]"
-        :style="{ background: t.dangerBg, color: t.danger, border: `1px solid ${t.dangerBorder}` }"
-      >
-        {{ step.deletions }}
+        <span
+          v-if="step.additions !== undefined"
+          class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm font-mono text-[12px] leading-none"
+          :style="{
+            background: 'rgba(34, 197, 94, 0.12)',
+            color: t.statusOk,
+            minWidth: '18px',
+          }"
+        >
+          +{{ step.additions }}
+        </span>
+        <span
+          v-if="step.deletions !== undefined"
+          class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm font-mono text-[12px] leading-none"
+          :style="{
+            background: t.dangerBg,
+            color: t.danger,
+            minWidth: '18px',
+          }"
+        >
+          −{{ step.deletions }}
+        </span>
       </span>
 
       <span
         v-if="step.target"
-        class="px-1.5 rounded-sm font-mono text-[1em] min-w-0"
+        class="px-1.5 py-0.5 rounded-sm font-mono text-[1em] leading-none min-w-0"
         :class="timeline ? 'break-all' : 'truncate'"
         :style="{
           background: t.bgInput,
           color: t.text,
-          border: `1px solid ${t.border}`,
           maxWidth: timeline ? '100%' : '50%',
         }"
       >
