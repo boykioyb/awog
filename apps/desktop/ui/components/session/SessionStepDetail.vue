@@ -72,14 +72,15 @@
           </button>
         </div>
       </div>
-      <button
-        class="p-1 rounded transition flex-shrink-0"
-        :style="{ color: t.textDim }"
+      <AppButton
+        variant="ghost"
+        size="icon"
+        class="flex-shrink-0"
         title="Close"
         @click="emit('close')"
       >
         <X :size="14" />
-      </button>
+      </AppButton>
     </div>
 
     <div class="flex-1 overflow-y-auto">
@@ -178,23 +179,25 @@
                 <component :is="m.icon" :size="12" />
               </button>
             </div>
-            <button
+            <AppButton
               v-if="isMarkdown"
-              class="p-1 rounded transition"
-              :style="{ color: copied === 'text' ? t.accent : t.textDim }"
+              variant="ghost"
+              size="icon"
+              :active="copied === 'text'"
               title="Copy as plain text"
               @click="copyText"
             >
               <component :is="copied === 'text' ? Check : Clipboard" :size="12" />
-            </button>
-            <button
-              class="p-1 rounded transition"
-              :style="{ color: copied === 'raw' ? t.accent : t.textDim }"
+            </AppButton>
+            <AppButton
+              variant="ghost"
+              size="icon"
+              :active="copied === 'raw'"
               :title="isMarkdown ? 'Copy raw markdown' : 'Copy content'"
               @click="copyRaw"
             >
               <component :is="copied === 'raw' ? Check : Code2" :size="12" />
-            </button>
+            </AppButton>
           </div>
         </div>
         <div

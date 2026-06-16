@@ -2,8 +2,8 @@
   <div class="relative flex-1 flex flex-col min-h-0">
     <div
       ref="scrollRef"
-      class="flex-1 overflow-y-auto px-4 md:px-6 py-4 min-h-0"
-      :class="isEmpty ? 'flex flex-col items-center justify-center' : 'space-y-3'"
+      class="flex-1 overflow-y-auto px-4 md:px-6 py-5 min-h-0"
+      :class="isEmpty ? 'flex flex-col items-center justify-center' : 'space-y-4'"
       @click="onContentClick"
       @scroll="updateScrollState"
     >

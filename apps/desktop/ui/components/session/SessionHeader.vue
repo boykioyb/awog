@@ -46,40 +46,47 @@
         />
       </div>
     </div>
-    <button
-      class="p-1.5 rounded transition flex-shrink-0"
-      :style="{ color: infoOpen ? t.accent : t.textDim }"
+    <AppButton
+      variant="ghost"
+      size="icon"
+      class="flex-shrink-0"
+      :active="infoOpen"
       :title="tr('sessionInfo.open')"
       @click="toggleInfo"
     >
       <Info :size="14" />
-    </button>
-    <button
+    </AppButton>
+    <AppButton
       v-if="workspaceRoot"
-      class="p-1.5 rounded transition flex-shrink-0"
-      :style="{ color: showGitModal ? t.accent : t.textDim }"
+      variant="ghost"
+      size="icon"
+      class="flex-shrink-0"
+      :active="showGitModal"
       :title="tr('session.git.open')"
       @click="showGitModal = true"
     >
       <GitBranch :size="14" />
-    </button>
-    <button
+    </AppButton>
+    <AppButton
       ref="wsBtnRef"
-      class="p-1.5 rounded transition flex-shrink-0"
-      :style="{ color: activeDrawer || showWorkspaceMenu ? t.accent : t.textDim }"
+      variant="ghost"
+      size="icon"
+      class="flex-shrink-0"
+      :active="!!activeDrawer || showWorkspaceMenu"
       :title="tr('workspace.toggle')"
       @click="showWorkspaceMenu = !showWorkspaceMenu"
     >
       <PanelRight :size="14" />
-    </button>
-    <button
-      class="p-1.5 rounded transition flex-shrink-0"
-      :style="{ color: t.textDim }"
+    </AppButton>
+    <AppButton
+      variant="ghostDanger"
+      size="icon"
+      class="flex-shrink-0"
       title="Delete session"
       @click="emit('delete')"
     >
       <Trash2 :size="14" />
-    </button>
+    </AppButton>
   </div>
 
   <WorkspaceMenu
@@ -182,7 +189,8 @@ const menuPos = ref({ top: 0, left: 0 })
 
 // Workspace tools dropdown (Diff / Files / Terminal / …).
 const showWorkspaceMenu = ref(false)
-const wsBtnRef = ref<HTMLElement | null>(null)
+// PanelRight is now an AppButton (component) → read the DOM via `.$el` to position the menu.
+const wsBtnRef = ref<{ $el: HTMLElement } | null>(null)
 const wsMenuPos = ref({ top: 0, left: 0 })
 const activeDrawer = computed(() => panel.activeDrawer(props.session.id))
 const infoOpen = computed(() => infoPanel.isOpen(props.session.id))
@@ -223,7 +231,7 @@ watch(showProjectMenu, async (open) => {
 watch(showWorkspaceMenu, async (open) => {
   if (!open) return
   await nextTick()
-  const r = wsBtnRef.value?.getBoundingClientRect()
+  const r = wsBtnRef.value?.$el?.getBoundingClientRect()
   // Right-align the 230px menu under the button, clamped to the viewport.
   if (r) wsMenuPos.value = { top: r.bottom + 4, left: Math.max(8, r.right - 230) }
 })

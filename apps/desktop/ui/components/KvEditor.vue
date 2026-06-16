@@ -21,9 +21,11 @@
           }"
           @input="(e: Event) => updateVal(i, (e.target as HTMLInputElement).value)"
         />
-        <button
+        <AppButton
           v-if="secretMode"
-          :style="{ color: isSecretRow(entry.value) ? t.success : t.textDim }"
+          variant="ghost"
+          size="xs"
+          :active="isSecretRow(entry.value)"
           :title="
             isSecretRow(entry.value)
               ? `Stored in OS keychain. Click to clear (re-enter value to update).`
@@ -35,15 +37,15 @@
           <Loader2 v-if="secretBusy === i" :size="11" class="animate-spin" />
           <Lock v-else-if="isSecretRow(entry.value)" :size="11" />
           <LockOpen v-else :size="11" />
-        </button>
-        <button :style="{ color: t.textDim }" @click="remove(i)">
+        </AppButton>
+        <AppButton variant="ghost" size="xs" title="Remove entry" @click="remove(i)">
           <X :size="11" />
-        </button>
+        </AppButton>
       </div>
-      <button class="text-[1em] flex items-center gap-1" :style="{ color: t.textDim }" @click="add">
+      <AppButton variant="ghost" size="xs" @click="add">
         <Plus :size="11" />
         Add entry
-      </button>
+      </AppButton>
       <div v-if="secretError" class="text-[1em] pt-1" :style="{ color: t.danger }">
         {{ secretError }}
       </div>

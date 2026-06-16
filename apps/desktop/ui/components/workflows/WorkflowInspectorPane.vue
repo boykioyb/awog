@@ -13,11 +13,12 @@
 -->
 <template>
   <div
-    class="w-72 flex-col flex-shrink-0 hidden md:flex"
+    class="w-72 flex-col flex-shrink-0 hidden md:flex rounded-xl overflow-hidden"
     :style="{
-      borderLeft: `1px solid ${parts.border}`,
+      border: `1px solid ${parts.border}`,
       background: parts.bg,
       backdropFilter: parts.blur,
+      boxShadow: `0 4px 16px -10px ${t.shadow}`,
     }"
   >
     <div class="px-3 py-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">

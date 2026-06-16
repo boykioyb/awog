@@ -53,26 +53,12 @@
       </div>
     </div>
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="emit('close')"
-      >
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.cancel') }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{
-          background: t.accent,
-          color: t.accentText,
-          opacity: canSubmit ? 1 : 0.6,
-          cursor: canSubmit ? 'pointer' : 'not-allowed',
-        }"
-        :disabled="!canSubmit"
-        @click="onSubmit"
-      >
+      </AppButton>
+      <AppButton :disabled="!canSubmit" @click="onSubmit">
         {{ tr('git.tag.confirm') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

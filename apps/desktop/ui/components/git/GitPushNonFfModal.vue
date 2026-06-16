@@ -5,20 +5,12 @@
       <div :style="{ color: t.textMuted }">{{ tr('git.push_nonff.sub') }}</div>
     </div>
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="emit('close')"
-      >
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.cancel') }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="emit('pull-then-push')"
-      >
+      </AppButton>
+      <AppButton @click="emit('pull-then-push')">
         {{ tr('git.push_nonff.confirm') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

@@ -82,26 +82,12 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="emit('close')"
-      >
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.cancel') }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{
-          background: force ? t.danger : t.accent,
-          color: t.accentText,
-          opacity: canPush ? 1 : 0.6,
-          cursor: canPush ? 'pointer' : 'not-allowed',
-        }"
-        :disabled="!canPush"
-        @click="onPush"
-      >
+      </AppButton>
+      <AppButton :variant="force ? 'danger' : 'default'" :disabled="!canPush" @click="onPush">
         {{ tr('git.push_dialog.submit') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

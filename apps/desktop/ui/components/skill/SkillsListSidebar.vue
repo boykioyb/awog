@@ -6,30 +6,24 @@
       placeholder="Search skills..."
       @update:model-value="(v: string) => $emit('update:search-query', v)"
     />
-    <button
-      class="flex items-center gap-1 px-2 py-1.5 text-[1em] rounded transition"
-      :style="{
-        background: 'transparent',
-        color: t.textMuted,
-        border: `1px solid ${t.border}`,
-      }"
+    <AppButton
+      variant="outline"
+      size="icon"
       :title="refreshTitle"
       :disabled="refreshing"
       @click="$emit('refresh')"
     >
       <RefreshCw :size="12" :class="refreshing ? 'animate-spin' : ''" />
-    </button>
-    <button
+    </AppButton>
+    <AppButton
       ref="newButtonRef"
-      class="p-1.5 rounded transition"
-      :style="{ color: t.textDim }"
+      variant="ghost"
+      size="icon"
       title="New skill"
       @click="$emit('new')"
-      @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-      @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
     >
       <Plus :size="14" />
-    </button>
+    </AppButton>
   </div>
   <div
     v-if="groups.length > 0"
@@ -199,7 +193,8 @@ const expandAll = () => {
   collapsedGroups.value = {}
 }
 
-const newButtonRef = ref<HTMLButtonElement | null>(null)
+// AppButton is a component → the template ref points at the instance; read the DOM via `.$el`.
+const newButtonRef = ref<{ $el: HTMLElement } | null>(null)
 
 defineExpose({ newButtonRef })
 </script>

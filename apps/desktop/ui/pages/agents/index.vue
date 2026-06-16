@@ -11,30 +11,24 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search agents..." />
-        <button
-          class="flex items-center gap-1 px-2 py-1.5 text-[1em] rounded transition"
-          :style="{
-            background: 'transparent',
-            color: t.textMuted,
-            border: `1px solid ${t.border}`,
-          }"
+        <AppButton
+          variant="outline"
+          size="icon"
           :title="refreshTitle"
           :disabled="refreshing"
           @click="onRefresh"
         >
           <RefreshCw :size="12" :class="refreshing ? 'animate-spin' : ''" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           ref="newButtonRef"
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
+          variant="ghost"
+          size="icon"
           title="New agent"
           @click="startCreate"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
           <Plus :size="14" />
-        </button>
+        </AppButton>
       </div>
       <div
         v-if="grouped.length > 0"

@@ -21,25 +21,13 @@
     </div>
 
     <div class="flex items-center gap-1.5 shrink-0">
-      <button
-        v-if="primaryAction"
-        type="button"
-        class="px-2.5 py-1 rounded text-[1em] font-medium transition flex items-center gap-1.5"
-        :style="{ background: t.accent, color: t.onAccent }"
-        @click="primaryAction.run"
-      >
+      <AppButton v-if="primaryAction" size="sm" @click="primaryAction.run">
         <component :is="primaryAction.icon" :size="13" />
         {{ primaryAction.label }}
-      </button>
-      <button
-        v-if="showDismiss"
-        type="button"
-        class="px-2.5 py-1 rounded text-[1em] transition"
-        :style="{ color: t.textDim }"
-        @click="update.dismiss()"
-      >
+      </AppButton>
+      <AppButton v-if="showDismiss" variant="ghost" size="sm" @click="update.dismiss()">
         {{ dismissLabel }}
-      </button>
+      </AppButton>
     </div>
   </div>
 </template>

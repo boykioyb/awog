@@ -59,26 +59,16 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="emit('close')"
-      >
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.cancel') }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{
-          background: selected === 'hard' ? t.danger : t.accent,
-          color: t.onAccent,
-          opacity: canConfirm ? 1 : 0.6,
-          cursor: canConfirm ? 'pointer' : 'not-allowed',
-        }"
+      </AppButton>
+      <AppButton
+        :variant="selected === 'hard' ? 'danger' : 'default'"
         :disabled="!canConfirm"
         @click="onConfirm"
       >
         {{ tr('git.reset.confirm') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

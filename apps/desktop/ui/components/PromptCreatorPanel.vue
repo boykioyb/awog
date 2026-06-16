@@ -37,14 +37,10 @@
             <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
               {{ generatedLabel }}
             </div>
-            <button
-              class="text-[1em] inline-flex items-center gap-1 transition"
-              :style="{ color: t.textDim }"
-              @click="emit('regenerate')"
-            >
+            <AppButton variant="ghost" size="xs" @click="emit('regenerate')">
               <RefreshCw :size="11" />
               Regenerate
-            </button>
+            </AppButton>
           </div>
           <slot name="preview" />
         </div>

@@ -19,31 +19,15 @@
       </ul>
     </div>
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="emit('close')"
-      >
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.cancel') }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{
-          background: t.bgInput,
-          color: t.text,
-          border: `1px solid ${t.border}`,
-        }"
-        @click="emit('choose-rebase')"
-      >
+      </AppButton>
+      <AppButton variant="secondary" @click="emit('choose-rebase')">
         {{ tr('git.pull_divergence.rebase_btn') }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="emit('choose-merge')"
-      >
+      </AppButton>
+      <AppButton @click="emit('choose-merge')">
         {{ tr('git.pull_divergence.merge_btn') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

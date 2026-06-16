@@ -11,6 +11,30 @@
      (teleported to <body>) read this to sit below the top nav instead of
      covering it. rem-based, so it tracks `--font-size-base` like `h-12` does. */
   --awog-chrome-top: 3rem;
+
+  /* shadcn-vue token bridge (ADR 0044) — RGB channels; useTheme overrides these
+     reactively from the live theme. Defaults match the emerald dark theme so the
+     first paint is correct before the client effect runs. */
+  --radius: 0.5rem;
+  --awog-background: 10 10 10;
+  --awog-foreground: 255 255 255;
+  --awog-card: 22 22 22;
+  --awog-card-foreground: 255 255 255;
+  --awog-popover: 14 14 14;
+  --awog-popover-foreground: 255 255 255;
+  --awog-primary: 16 185 129;
+  --awog-primary-foreground: 4 20 13;
+  --awog-secondary: 22 22 22;
+  --awog-secondary-foreground: 255 255 255;
+  --awog-muted: 22 22 22;
+  --awog-muted-foreground: 163 163 163;
+  --awog-accent: 26 26 26;
+  --awog-accent-foreground: 255 255 255;
+  --awog-destructive: 239 68 68;
+  --awog-destructive-foreground: 255 255 255;
+  --awog-border: 38 38 38;
+  --awog-input: 38 38 38;
+  --awog-ring: 16 185 129;
 }
 
 html,

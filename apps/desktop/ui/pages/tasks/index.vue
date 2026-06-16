@@ -28,16 +28,9 @@
             {{ activeFilterCount }}
           </div>
         </button>
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          title="New task"
-          @click="showNewModal = true"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
-        >
+        <AppButton variant="ghost" size="icon" title="New task" @click="showNewModal = true">
           <Plus :size="14" />
-        </button>
+        </AppButton>
       </div>
 
       <!-- Collapsible filters drawer -->

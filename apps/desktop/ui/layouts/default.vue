@@ -1,6 +1,6 @@
 <template>
   <div
-    class="h-screen w-full flex flex-col overflow-hidden"
+    class="h-screen w-full flex flex-col overflow-hidden gap-2 p-2"
     :style="{ background: appBackground, color: t.text, fontFamily: 'var(--font-sans)' }"
   >
     <HeaderTabBar />

@@ -64,7 +64,8 @@ export function useSkillsManager() {
   const mobilePane = ref<'list' | 'detail'>('list')
   const pendingDelete = ref<Skill | null>(null)
   const showPromptModal = ref(false)
-  const sidebarRef = ref<{ newButtonRef: HTMLButtonElement | null } | null>(null)
+  // SkillsListSidebar exposes its New AppButton instance; read the DOM via `.$el`.
+  const sidebarRef = ref<{ newButtonRef: { $el: HTMLElement } | null } | null>(null)
   const anchor = ref<{ top: number; left: number } | null>(null)
 
   const selectedSkill = computed<Skill | undefined>(() =>
@@ -236,7 +237,7 @@ export function useSkillsManager() {
 
   const onNew = () => {
     editing.value = false
-    const rect = sidebarRef.value?.newButtonRef?.getBoundingClientRect()
+    const rect = sidebarRef.value?.newButtonRef?.$el?.getBoundingClientRect()
     anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
     showPromptModal.value = true
   }

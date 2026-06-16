@@ -46,25 +46,11 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em]"
-        :style="{ color: t.textMuted }"
-        @click="emit('cancel')"
-      >
-        Cancel
-      </button>
-      <button
-        :disabled="!instruction.trim()"
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
-        :style="{
-          background: !instruction.trim() ? t.bgInput : t.accent,
-          color: !instruction.trim() ? t.textFaint : t.accentText,
-        }"
-        @click="emit('confirm', instruction)"
-      >
+      <AppButton variant="ghost" @click="emit('cancel')">Cancel</AppButton>
+      <AppButton :disabled="!instruction.trim()" @click="emit('confirm', instruction)">
         <RotateCcw :size="11" />
         Rerun phase
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

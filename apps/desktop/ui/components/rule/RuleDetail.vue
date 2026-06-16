@@ -35,23 +35,18 @@
         </div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          :title="tr('common.edit')"
-          @click="emit('edit')"
-        >
+        <AppButton variant="ghost" size="icon" :title="tr('common.edit')" @click="emit('edit')">
           <Edit3 :size="13" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           v-if="!isImported"
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
+          variant="ghostDanger"
+          size="icon"
           :title="tr('common.delete')"
           @click="emit('delete')"
         >
           <Trash2 :size="13" />
-        </button>
+        </AppButton>
       </div>
     </div>
 

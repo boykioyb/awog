@@ -67,32 +67,15 @@
     </div>
 
     <template #footer>
-      <button
-        v-if="hasCustomDefaults"
-        type="button"
-        class="mr-auto px-3 py-1.5 rounded text-[1em] transition"
-        :style="{ color: t.textDim, background: 'transparent' }"
-        @click="onReset"
-      >
+      <AppButton v-if="hasCustomDefaults" variant="ghost" class="mr-auto" @click="onReset">
         {{ tr('project.llm.reset') }}
-      </button>
-      <button
-        type="button"
-        class="px-3 py-1.5 rounded text-[1em] transition"
-        :style="{ color: t.textDim, background: 'transparent' }"
-        @click="emit('close')"
-      >
+      </AppButton>
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.cancel') }}
-      </button>
-      <button
-        type="button"
-        class="px-3 py-1.5 rounded text-[1em] font-medium transition disabled:opacity-50"
-        :style="{ background: t.accent, color: t.accentText }"
-        :disabled="saving"
-        @click="onSave"
-      >
+      </AppButton>
+      <AppButton :disabled="saving" @click="onSave">
         {{ tr('common.save') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

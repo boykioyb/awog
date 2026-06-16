@@ -1,14 +1,14 @@
 <template>
   <div ref="rootRef" class="relative inline-flex">
-    <button
-      type="button"
-      class="awog-copy-btn"
-      :style="{ color: open ? t.text : t.textFaint }"
+    <AppButton
+      variant="ghost"
+      size="xs"
+      :active="open"
       :title="tr('session.msg.retry_model')"
       @click="open = !open"
     >
       <Sparkles :size="12" />
-    </button>
+    </AppButton>
     <div
       v-if="open"
       class="absolute z-30 bottom-full mb-1 left-0 rounded-md py-1 max-h-72 overflow-y-auto"

@@ -16,31 +16,9 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="onContinueAnyway"
-      >
-        Continue anyway
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{
-          background: 'transparent',
-          color: t.text,
-          border: `1px solid ${t.border}`,
-        }"
-        @click="onStashAndContinue"
-      >
-        Stash &amp; continue
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="onCommitNow"
-      >
-        Commit changes
-      </button>
+      <AppButton variant="ghost" @click="onContinueAnyway">Continue anyway</AppButton>
+      <AppButton variant="secondary" @click="onStashAndContinue">Stash &amp; continue</AppButton>
+      <AppButton @click="onCommitNow">Commit changes</AppButton>
     </template>
   </BaseModal>
 </template>

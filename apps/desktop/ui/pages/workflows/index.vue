@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-1 overflow-hidden">
+  <div class="flex flex-1 overflow-hidden gap-2">
     <MasterDetailShell
       v-model:mobile-pane="mobilePane"
       :selected-id="selectedWorkflowId"
@@ -18,17 +18,15 @@
           >
             {{ tr('workflows.header') }}
           </div>
-          <button
+          <AppButton
             ref="newButtonRef"
-            class="transition"
-            :style="{ color: t.textDim }"
+            variant="ghost"
+            size="icon"
             :title="tr('workflows.new')"
             @click="openPromptModal"
-            @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-            @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
           >
             <Plus :size="13" />
-          </button>
+          </AppButton>
         </div>
 
         <!-- Scope: filters the list AND sets where a new workflow is saved
@@ -147,7 +145,8 @@ onBeforeUnmount(() => {
 const selectedWorkflowId = ref<string | null>(workflowsStore.workflows[0]?.id ?? null)
 const selectedNodeId = ref<string | null>(null)
 const showPromptModal = ref(false)
-const newButtonRef = ref<HTMLButtonElement | null>(null)
+// AppButton is a component → the template ref points at the instance; read the DOM via `.$el`.
+const newButtonRef = ref<{ $el: HTMLElement } | null>(null)
 const anchor = ref<{ top: number; left: number } | null>(null)
 const mobilePane = ref<'list' | 'detail'>('list')
 
@@ -205,7 +204,7 @@ const selectedSkill = computed(() =>
 const availableSkills = computed(() => store.skills)
 
 const openPromptModal = () => {
-  const rect = newButtonRef.value?.getBoundingClientRect()
+  const rect = newButtonRef.value?.$el?.getBoundingClientRect()
   anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
   showPromptModal.value = true
 }

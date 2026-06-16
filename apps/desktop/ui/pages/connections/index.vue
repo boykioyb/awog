@@ -11,17 +11,15 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <SearchInput v-model="searchQuery" class="flex-1" :placeholder="tr('connections.search')" />
-        <button
+        <AppButton
           ref="newButtonRef"
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
+          variant="ghost"
+          size="icon"
           :title="tr('connections.new')"
           @click="onNew"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
           <Plus :size="14" />
-        </button>
+        </AppButton>
       </div>
 
       <div
@@ -158,7 +156,8 @@ const selectedId = ref<string | null>(ws.mcpServers[0]?.id ?? null)
 const mobilePane = ref<'list' | 'detail'>('list')
 const pendingDeleteId = ref<string | null>(null)
 const showPromptModal = ref(false)
-const newButtonRef = ref<HTMLButtonElement | null>(null)
+// AppButton is a component → the template ref points at the instance; read the DOM via `.$el`.
+const newButtonRef = ref<{ $el: HTMLElement } | null>(null)
 const anchor = ref<{ top: number; left: number } | null>(null)
 
 const transportFilters: Array<'all' | MCPTransport> = ['all', 'stdio', 'http', 'sse']
@@ -197,7 +196,7 @@ const onSelect = (id: string) => {
 
 const onNew = () => {
   mode.value = 'view'
-  const rect = newButtonRef.value?.getBoundingClientRect()
+  const rect = newButtonRef.value?.$el?.getBoundingClientRect()
   anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
   showPromptModal.value = true
 }
