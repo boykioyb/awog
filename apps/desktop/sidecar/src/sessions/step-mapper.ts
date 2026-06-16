@@ -46,12 +46,14 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   Edit: 'edit',
   MultiEdit: 'edit',
   NotebookEdit: 'edit',
+  NotebookRead: 'read',
   Bash: 'terminal',
   BashOutput: 'terminal',
   Glob: 'find-files',
   Grep: 'search',
   WebSearch: 'search',
   WebFetch: 'search',
+  browser_tool: 'search',
   Task: 'task',
   TodoWrite: 'task',
   ExitPlanMode: 'task',
@@ -74,6 +76,8 @@ function pickTarget(toolName: string, input: Record<string, unknown>): string | 
   }
   const fp = input.file_path
   if (typeof fp === 'string' && fp.length > 0) return fp
+  const nb = input.notebook_path
+  if (typeof nb === 'string' && nb.length > 0) return nb
   const path = input.path
   if (typeof path === 'string' && path.length > 0) return path
   const pattern = input.pattern
@@ -144,6 +148,8 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Edit (multi)'
     case 'NotebookEdit':
       return 'Edit notebook'
+    case 'NotebookRead':
+      return 'Read notebook'
     case 'Bash':
       return 'Run'
     case 'BashOutput':
@@ -156,6 +162,10 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Web search'
     case 'WebFetch':
       return 'Fetch URL'
+    case 'browser_tool': {
+      const action = typeof input.action === 'string' ? input.action : ''
+      return action ? `Browser: ${action}` : 'Browser'
+    }
     case 'Task': {
       // Format: "Agent <subagent_type>" so the step row reads like Claude Code's
       // "Ran agent X" affordance. An omitted type runs the general-purpose

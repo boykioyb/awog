@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron'
 import { engine } from './engine'
+import { browser, registerBrowserHostHandlers } from './browser'
 import { registerIpc } from './ipc'
 import { setupLogging } from './logger'
 import { trayIconPath } from './paths'
@@ -52,6 +53,9 @@ if (!gotLock) {
     // (Finder/Dock) launch that strips the environment. No-op in dev + Windows.
     loadShellEnv()
     engine.start()
+    // Expose the browser.* reverse-channel handlers so the sidecar's browser_tool
+    // can drive the embedded Chromium (ADR 0043). The window itself is lazy.
+    registerBrowserHostHandlers()
     registerIpc(getWindow)
     setupUpdater(getWindow)
     openMainWindow()
@@ -69,6 +73,7 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    browser.close()
     engine.stop()
   })
 }
@@ -104,6 +109,13 @@ function setupTray(): void {
             mainWindow.show()
             mainWindow.focus()
           }
+        },
+      },
+      {
+        label: 'Toggle browser window',
+        click: () => {
+          if (browser.isVisible()) browser.hide()
+          else browser.show()
         },
       },
       { type: 'separator' },

@@ -34,12 +34,39 @@ export interface SsrfGuardResult {
   reason?: string
 }
 
-// Lightweight SSRF check. Doesn't do DNS resolution (would slow down every
-// call); relies on the URL.hostname being either a literal IP or a hostname.
-// Pha 2 acceptable trade-off: a malicious DNS record that resolves to a
-// private IP would slip through, but the user is the only one who can edit
-// MCP server configs (no UI surface for arbitrary URL injection) so the
-// blast radius is low.
+// Classify a host (literal hostname or IP string) against the private/loopback/
+// link-local policy. Returns a rejection reason, or null if the host is allowed.
+// Exported so callers that DNS-resolve a hostname (WebFetch tool) can re-run the
+// SAME policy on each resolved IP, not just the literal name.
+export function blockedHostReason(host: string): string | null {
+  const h = host.toLowerCase()
+  if (LOOPBACK_HOSTNAMES.has(h)) {
+    return 'loopback host not allowed'
+  }
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(h)) {
+      return `private/loopback IP ${h} not allowed`
+    }
+  }
+  // IPv6: reject any address starting with fc/fd (ULA) or fe80 (link-local).
+  if (h.includes(':')) {
+    if (/^fc[0-9a-f]{2}:/i.test(h) || /^fd[0-9a-f]{2}:/i.test(h)) {
+      return `IPv6 ULA ${h} not allowed`
+    }
+    if (/^fe80:/i.test(h)) {
+      return `IPv6 link-local ${h} not allowed`
+    }
+  }
+  return null
+}
+
+// Lightweight SSRF check on a URL string. Validates protocol + the LITERAL
+// hostname; does NOT do DNS resolution (would slow down every call). For the
+// MCP transport this is an acceptable trade-off: only the user can edit MCP
+// server configs (no UI surface for arbitrary URL injection) so a malicious DNS
+// record resolving to a private IP has a low blast radius. Callers handling
+// less-trusted URLs (model output) should additionally resolve + re-check the IP
+// via blockedHostReason.
 export function ssrfCheck(rawUrl: string): SsrfGuardResult {
   let url: URL
   try {
@@ -50,23 +77,9 @@ export function ssrfCheck(rawUrl: string): SsrfGuardResult {
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     return { ok: false, reason: `protocol ${url.protocol} not allowed (https/http only)` }
   }
-  const host = url.hostname.toLowerCase()
-  if (LOOPBACK_HOSTNAMES.has(host)) {
-    return { ok: false, reason: 'loopback host not allowed' }
-  }
-  for (const pattern of PRIVATE_IP_PATTERNS) {
-    if (pattern.test(host)) {
-      return { ok: false, reason: `private/loopback IP ${host} not allowed` }
-    }
-  }
-  // IPv6: reject any address starting with fc/fd (ULA) or fe80 (link-local).
-  if (host.includes(':')) {
-    if (/^fc[0-9a-f]{2}:/i.test(host) || /^fd[0-9a-f]{2}:/i.test(host)) {
-      return { ok: false, reason: `IPv6 ULA ${host} not allowed` }
-    }
-    if (/^fe80:/i.test(host)) {
-      return { ok: false, reason: `IPv6 link-local ${host} not allowed` }
-    }
+  const reason = blockedHostReason(url.hostname)
+  if (reason) {
+    return { ok: false, reason }
   }
   return { ok: true }
 }

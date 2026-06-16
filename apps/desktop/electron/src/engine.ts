@@ -42,6 +42,10 @@ class Engine {
 
   private readonly listeners = new Set<EngineEventListener>()
 
+  // Reverse channel: handlers the SIDECAR can invoke on the main process via a
+  // `host-request` frame (e.g. browser_tool driving Chromium). Keyed by method.
+  private readonly hostHandlers = new Map<string, (params: unknown) => Promise<unknown>>()
+
   start(): void {
     if (this.child) return
     const child = spawn(process.execPath, [enginePath()], {
@@ -95,9 +99,46 @@ class Engine {
       else pending.resolve(message.result ?? null)
       return
     }
+    if (message.method === 'host-request') {
+      void this.handleHostRequest(message.params)
+      return
+    }
     if (message.method === 'event') {
       const event = message.params as EngineEvent
       this.listeners.forEach((listener) => listener(event))
+    }
+  }
+
+  // Register a handler the sidecar can invoke via hostRequest(method, params).
+  registerHostHandler(method: string, fn: (params: unknown) => Promise<unknown>): void {
+    this.hostHandlers.set(method, fn)
+  }
+
+  // Run a sidecar→main request and write the `host-response` back on stdin.
+  // ALWAYS replies (unknown method / handler throw → error reply) so the
+  // sidecar's pending promise never dangles.
+  private async handleHostRequest(params: unknown): Promise<void> {
+    const p = (params ?? {}) as { rid?: unknown; hostMethod?: unknown; hostParams?: unknown }
+    if (typeof p.rid !== 'number') return // no rid → cannot reply
+    const rid = p.rid
+    const reply = (result: unknown, error?: RpcErrorShape): void => {
+      if (!this.child) return
+      const env = error
+        ? { jsonrpc: '2.0', method: 'host-response', params: { rid, error } }
+        : { jsonrpc: '2.0', method: 'host-response', params: { rid, result } }
+      this.child.stdin.write(`${JSON.stringify(env)}\n`)
+    }
+    const method = typeof p.hostMethod === 'string' ? p.hostMethod : ''
+    const handler = this.hostHandlers.get(method)
+    if (!handler) {
+      reply(null, { code: -32601, message: `unknown host method: ${method}` })
+      return
+    }
+    try {
+      const result = await handler(p.hostParams)
+      reply(result ?? null)
+    } catch (err) {
+      reply(null, { code: -32000, message: err instanceof Error ? err.message : String(err) })
     }
   }
 

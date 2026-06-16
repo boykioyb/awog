@@ -6,7 +6,7 @@
 
 import { readFile, writeFile, stat, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { Type, type Static } from '@earendil-works/pi-ai'
+import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { assertInsideWorkspace } from '../../git/path-sanitize.js'
 import { runGit } from '../../git/runner.js'
@@ -113,7 +113,10 @@ const EditParams = Type.Object({
   ),
 })
 
-function applyEdit(content: string, params: Static<typeof EditParams>): string {
+function applyEdit(
+  content: string,
+  params: { old_string: string; new_string: string; replace_all?: boolean },
+): string {
   if (params.old_string === params.new_string) {
     throw new Error('old_string and new_string are identical — no change')
   }
@@ -145,6 +148,56 @@ export function createEditTool(cwd: string): AgentTool<typeof EditParams> {
       const next = applyEdit(buf.toString('utf8'), params)
       await writeFile(abs, next, 'utf8')
       return textResult(`Edited ${params.file_path}`, { path: params.file_path })
+    },
+  }
+}
+
+// ─── MultiEdit ───────────────────────────────────────────────────────────────
+// Apply a sequence of exact-match edits to ONE file in a single call (Claude
+// Code MultiEdit). Each edit runs on the result of the previous one. Atomic:
+// we build the full new content in memory and only write once — if any edit
+// fails (old_string missing / not unique / no-op), nothing is written.
+const MultiEditParams = Type.Object({
+  file_path: Type.String({ description: 'Absolute or workspace-relative file path to edit.' }),
+  edits: Type.Array(
+    Type.Object({
+      old_string: Type.String({ description: 'Exact text to replace (must exist in the file).' }),
+      new_string: Type.String({ description: 'Replacement text.' }),
+      replace_all: Type.Optional(
+        Type.Boolean({ description: 'Replace every occurrence instead of requiring uniqueness.' }),
+      ),
+    }),
+    { description: 'Edits applied in order; each operates on the prior result.' },
+  ),
+})
+
+export function createMultiEditTool(cwd: string): AgentTool<typeof MultiEditParams> {
+  return {
+    name: 'MultiEdit',
+    label: 'Edit (multi)',
+    description:
+      'Apply multiple exact-string replacements to a single file in one atomic call. Edits run in order; each old_string must match verbatim and (unless replace_all) be unique at the time it is applied.',
+    parameters: MultiEditParams,
+    async execute(_id, params): Promise<TextResult> {
+      if (params.edits.length === 0) throw new Error('edits is empty — nothing to do')
+      const abs = assertInsideWorkspace(cwd, params.file_path)
+      const st = await stat(abs)
+      if (st.isDirectory()) throw new Error(`Path is a directory: ${params.file_path}`)
+      const buf = await readFile(abs)
+      if (buf.includes(0)) throw new Error('Cannot edit a binary file')
+      let content = buf.toString('utf8')
+      // Apply all edits in memory first; any throw aborts before the write.
+      params.edits.forEach((edit, i) => {
+        try {
+          content = applyEdit(content, edit)
+        } catch (err) {
+          throw new Error(`edit #${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      })
+      await writeFile(abs, content, 'utf8')
+      return textResult(`Applied ${params.edits.length} edit(s) to ${params.file_path}`, {
+        path: params.file_path,
+      })
     },
   }
 }
