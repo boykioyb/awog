@@ -172,7 +172,7 @@ register('sessions.sendMessage', async (raw) => {
   // and subagents — lift Node's 10-listener cap to silence the false-positive
   // MaxListenersExceededWarning (see runtime/turn-signal.ts).
   liftTurnSignalListenerCap(abortController.signal)
-  registerAborter(params.messageId, abortController)
+  registerAborter(params.sessionId, params.messageId, abortController)
   // Open the steer channel for this turn so sessions.steer can enqueue mid-turn
   // instructions; torn down in the finally below. Keyed by the assistant
   // messageId, same as the aborter registry.

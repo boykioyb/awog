@@ -19,12 +19,22 @@ import type {
 
 const PER_SESSION_LOCKS = new Map<string, Promise<unknown>>()
 
-// Registry of in-flight chat aborters keyed by messageId. sessions.cancel
-// looks up here; send-message owns the lifecycle (register → defer cleanup).
-const ACTIVE_ABORTERS = new Map<string, AbortController>()
+// Registry of in-flight chat aborters keyed by messageId, each tagged with its
+// sessionId. sessions.cancel looks up here; send-message owns the lifecycle
+// (register → defer cleanup). The sessionId lets us abort EVERY in-flight turn
+// on a session (abortSession), not just one messageId.
+interface ActiveTurn {
+  sessionId: string
+  controller: AbortController
+}
+const ACTIVE_ABORTERS = new Map<string, ActiveTurn>()
 
-export function registerAborter(messageId: string, controller: AbortController): void {
-  ACTIVE_ABORTERS.set(messageId, controller)
+export function registerAborter(
+  sessionId: string,
+  messageId: string,
+  controller: AbortController,
+): void {
+  ACTIVE_ABORTERS.set(messageId, { sessionId, controller })
 }
 
 export function unregisterAborter(messageId: string): void {
@@ -32,10 +42,31 @@ export function unregisterAborter(messageId: string): void {
 }
 
 export function abortMessage(messageId: string): boolean {
-  const controller = ACTIVE_ABORTERS.get(messageId)
-  if (!controller) return false
-  controller.abort()
+  const turn = ACTIVE_ABORTERS.get(messageId)
+  if (!turn) return false
+  turn.controller.abort()
   return true
+}
+
+// Abort EVERY in-flight turn on a session; returns how many were aborted.
+// Why session-wide and not just one messageId: a turn can hang (e.g. a stalled
+// provider stream that never yields another chunk) and hold the per-session
+// lock indefinitely. A later turn then queues behind that lock — its runtime
+// loop never starts, so aborting only its messageId is a no-op — while the UI's
+// "active" messageId points at the queued turn, orphaning the stuck one. The
+// Stop button can then never reach the turn that is actually running. Aborting
+// session-wide tears down whatever is in flight so Stop always unblocks the
+// session (the hung turn's signal-aware LLM request/tools unwind, releasing the
+// lock; the queued turn's already-aborted signal short-circuits its first call).
+export function abortSession(sessionId: string): number {
+  let aborted = 0
+  for (const turn of ACTIVE_ABORTERS.values()) {
+    if (turn.sessionId === sessionId) {
+      turn.controller.abort()
+      aborted += 1
+    }
+  }
+  return aborted
 }
 
 async function withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
