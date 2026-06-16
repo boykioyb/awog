@@ -39,6 +39,16 @@ export const CHANGELOG: Release[] = [
     items: [
       {
         kind: 'added',
+        en: 'Browser tool: the agent can drive an embedded Chromium browser — open a URL, click, fill forms, extract text, and take screenshots. Private/loopback addresses are blocked. Toggle the window from the tray.',
+        vi: 'Công cụ trình duyệt: agent điều khiển được một Chromium nhúng — mở URL, click, điền form, trích text và chụp màn hình. Địa chỉ nội bộ/loopback bị chặn. Bật/tắt cửa sổ từ khay hệ thống.',
+      },
+      {
+        kind: 'added',
+        en: 'More built-in tools: MultiEdit (several edits to one file in one step) and Jupyter notebook read/edit.',
+        vi: 'Thêm công cụ built-in: MultiEdit (sửa nhiều chỗ trong một file ở một bước) và đọc/sửa notebook Jupyter.',
+      },
+      {
+        kind: 'added',
         en: 'Steer a running response: while the agent is working, type a message and Insert it into the current turn — the agent picks it up at its next step.',
         vi: 'Chèn vào phản hồi đang chạy: trong khi agent làm việc, gõ một tin nhắn và Chèn vào lượt hiện tại — agent tiếp nhận ở bước kế tiếp.',
       },
