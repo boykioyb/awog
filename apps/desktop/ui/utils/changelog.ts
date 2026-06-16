@@ -67,6 +67,21 @@ export const CHANGELOG: Release[] = [
         en: 'Session list keeps project groups in a stable order — only the sessions inside each project are sorted by recency.',
         vi: 'Danh sách session giữ thứ tự nhóm project cố định — chỉ các session bên trong mỗi project mới sắp theo thời gian gần nhất.',
       },
+      {
+        kind: 'improved',
+        en: 'Session replies group the agent’s tool steps into collapsible runs with a one-line summary (“ran 3 commands · read 2 files”), so a long turn reads as a clean document you can expand.',
+        vi: 'Phản hồi trong session gom các bước công cụ của agent thành cụm thu gọn được, kèm tóm tắt một dòng (“chạy 3 lệnh · đọc 2 file”), nên một lượt dài đọc gọn như tài liệu và mở ra khi cần.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Stop now reliably ends a running session even when an earlier turn got stuck — it cancels every in-flight turn for that session instead of only the latest message.',
+        vi: 'Nút Stop giờ kết thúc đáng tin cậy một session đang chạy ngay cả khi một lượt trước đó bị treo — nó hủy mọi lượt đang chạy của session thay vì chỉ tin nhắn mới nhất.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Hook run history, enable, and rename now target the right hook when two projects share an imported hook id.',
+        vi: 'Lịch sử chạy, bật/tắt và đổi tên hook giờ nhắm đúng hook khi hai project trùng id hook nhập vào.',
+      },
     ],
   },
   {
