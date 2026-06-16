@@ -229,7 +229,7 @@ async function record(hook: Hook, outcome: SpawnOutcome, durationMs: number): Pr
     exitCode: outcome.exitCode,
     ...(outcome.stderr ? { stderr: outcome.stderr } : {}),
   }
-  await appendRunRecord(hook.id, rec)
+  await appendRunRecord(hook.id, hook.source ?? 'global', hook.projectId, rec)
   emit('hook.run', {
     hookId: hook.id,
     source: hook.source ?? 'global',

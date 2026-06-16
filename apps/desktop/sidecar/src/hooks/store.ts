@@ -3,13 +3,15 @@
 //   project → {project.path}/.awog/hooks/<id>.json (travels with the repo)
 //
 // source/projectId/trusted/recentRuns are location- or runtime-derived and NOT
-// part of the persisted JSON. Run audit log → ~/.awog/hooks/.runs/<id>.jsonl
-// (append-only, trimmed to RUN_LOG_MAX on read). Project-tier trust decisions →
+// part of the persisted JSON. Run audit log → ~/.awog/hooks/.runs/<id>.jsonl for
+// global hooks, ~/.awog/hooks/.runs/<projectId>/<id>.jsonl for project hooks
+// (project ids collide across projects — see runLogFile). Append-only, trimmed to
+// RUN_LOG_MAX on read. Project-tier trust decisions →
 // {project.path}/.awog/.trust.json (NOT inside the hook file — a config must not
 // vouch for itself, D-8). env `secret:KEY` refs reuse the MCP keychain helpers.
 
 import { mkdir, readdir, readFile, writeFile, chmod, rename, unlink, appendFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { RpcError } from '../transport/rpc.js'
@@ -189,7 +191,9 @@ export async function listHooks(
   // Attach recent runs (last N) for the detail view.
   await Promise.all(
     hooks.map(async (h) => {
-      h.recentRuns = (await listRunRecords(h.id)).slice(-RECENT_RUNS_SHOWN).reverse()
+      h.recentRuns = (await listRunRecords(h.id, h.source ?? 'global', h.projectId))
+        .slice(-RECENT_RUNS_SHOWN)
+        .reverse()
     }),
   )
   hooks.sort((a, b) => a.name.localeCompare(b.name))
@@ -285,23 +289,42 @@ function runsDir(): string {
   return join(globalHooksDir(), RUNS_DIR_NAME)
 }
 
-function runLogFile(id: string): string {
+// Run logs are scoped by tier. A project-tier id is only unique WITHIN its
+// project — two projects that import the same Claude Code settings.json both get
+// e.g. `imported-posttooluse-0-0`, so a flat `<id>.jsonl` would mix their runs
+// together (every project's "Recent runs" looks identical). Namespace project
+// runs by projectId; global ids are already unique → flat (back-compat).
+function runLogFile(id: string, source: HookSource, projectId: string | undefined): string {
+  if (source === 'project' && projectId) {
+    return join(runsDir(), sanitizeChild(projectId), `${sanitizeChild(id)}.jsonl`)
+  }
   return join(runsDir(), `${sanitizeChild(id)}.jsonl`)
 }
 
-export async function appendRunRecord(id: string, record: HookRunRecord): Promise<void> {
+export async function appendRunRecord(
+  id: string,
+  source: HookSource,
+  projectId: string | undefined,
+  record: HookRunRecord,
+): Promise<void> {
+  const file = runLogFile(id, source, projectId)
   try {
-    await mkdir(runsDir(), { recursive: true, mode: 0o700 })
-    await appendFile(runLogFile(id), `${JSON.stringify(record)}\n`, 'utf8')
+    await mkdir(dirname(file), { recursive: true, mode: 0o700 })
+    await appendFile(file, `${JSON.stringify(record)}\n`, 'utf8')
   } catch (err) {
     log.warn('hooks: failed to append run record', { id, err: err instanceof Error ? err.message : String(err) })
   }
 }
 
-export async function listRunRecords(id: string): Promise<HookRunRecord[]> {
+export async function listRunRecords(
+  id: string,
+  source: HookSource,
+  projectId: string | undefined,
+): Promise<HookRunRecord[]> {
+  const file = runLogFile(id, source, projectId)
   let raw: string
   try {
-    raw = await readFile(runLogFile(id), 'utf8')
+    raw = await readFile(file, 'utf8')
   } catch (err) {
     if (isMissing(err)) return []
     log.warn('hooks: failed to read run log', { id, err: err instanceof Error ? err.message : String(err) })
@@ -319,7 +342,6 @@ export async function listRunRecords(id: string): Promise<HookRunRecord[]> {
   // Trim the file lazily once it grows past the cap (keep the newest RUN_LOG_MAX).
   if (records.length > RUN_LOG_MAX) {
     const kept = records.slice(-RUN_LOG_MAX)
-    const file = runLogFile(id)
     const tmp = `${file}.tmp.${process.pid}`
     try {
       await writeFile(tmp, `${kept.map((r) => JSON.stringify(r)).join('\n')}\n`, 'utf8')

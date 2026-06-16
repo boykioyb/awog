@@ -109,7 +109,7 @@
               <div class="flex items-center gap-2 mb-0.5">
                 <Zap :size="11" :style="{ color: t.textDim }" />
                 <input
-                  v-if="renamingId === hook.id"
+                  v-if="renamingKey === hookKey(hook)"
                   :ref="setRenameInputRef"
                   v-model="renameValue"
                   class="text-[1em] flex-1 rounded px-1 py-0.5"
@@ -454,7 +454,7 @@ const confirmDelete = () => {
 }
 
 const contextMenu = ref<{ x: number; y: number; hook: Hook } | null>(null)
-const renamingId = ref<string | null>(null)
+const renamingKey = ref<string | null>(null)
 const renameValue = ref('')
 
 const setRenameInputRef = (el: unknown) => {
@@ -480,23 +480,23 @@ const openMenuFromButton = (e: MouseEvent, hook: Hook) => {
 
 const startRename = (hook: Hook) => {
   if (hook.readOnly) return
-  renamingId.value = hook.id
+  renamingKey.value = hookKey(hook)
   renameValue.value = hook.name
 }
 
 const commitRename = () => {
-  const id = renamingId.value
-  if (!id) return
+  const key = renamingKey.value
+  if (!key) return
   const trimmed = renameValue.value.trim()
-  const item = ws.hooks.find((h) => h.id === id)
+  const item = ws.hooks.find((h) => hookKey(h) === key)
   if (trimmed && item && trimmed !== item.name) {
     ws.saveHook({ ...item, name: trimmed })
   }
-  renamingId.value = null
+  renamingKey.value = null
 }
 
 const cancelRename = () => {
-  renamingId.value = null
+  renamingKey.value = null
 }
 
 const menuItems = computed<ContextMenuItem[]>(() => {

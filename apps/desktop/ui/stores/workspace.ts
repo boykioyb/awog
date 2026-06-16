@@ -7,6 +7,7 @@ import type {
   Hook,
   HookRunRecord,
   HookScanReport,
+  HookSource,
   MCPServer,
   Project,
   Rule,
@@ -534,9 +535,23 @@ export const useWorkspaceStore = defineStore('workspace', {
           // Live hook-run audit (ADR 0032): prepend the record to the matching
           // hook's recentRuns so the detail view updates without a refetch.
           if (evt.type === 'hook.run') {
-            const p = evt.payload as { hookId?: string; record?: HookRunRecord }
+            const p = evt.payload as {
+              hookId?: string
+              source?: HookSource
+              projectId?: string
+              record?: HookRunRecord
+            }
             if (typeof p.hookId !== 'string' || !p.record) return
-            const hook = this.hooks.find((h: Hook) => h.id === p.hookId)
+            // Match the full (id, source, projectId) — project-tier ids can
+            // collide across projects (imported CC hooks), so id-only would
+            // attach the record to the wrong hook instance.
+            const src = p.source ?? 'global'
+            const hook = this.hooks.find(
+              (h: Hook) =>
+                h.id === p.hookId &&
+                (h.source ?? 'global') === src &&
+                (h.projectId ?? undefined) === (p.projectId ?? undefined),
+            )
             if (!hook) return
             hook.recentRuns.unshift(p.record)
             hook.recentRuns = hook.recentRuns.slice(0, 20)
@@ -747,15 +762,26 @@ export const useWorkspaceStore = defineStore('workspace', {
       }
     },
 
-    async toggleHook(id: string): Promise<void> {
-      const h = this.hooks.find((x: Hook) => x.id === id)
+    // Match by the full (id, source, projectId) — project-tier ids collide
+    // across projects (imported CC hooks), so id-only finds the wrong instance.
+    findHook(hook: Hook): Hook | undefined {
+      return this.hooks.find(
+        (x: Hook) =>
+          x.id === hook.id &&
+          (x.source ?? 'global') === (hook.source ?? 'global') &&
+          (x.projectId ?? undefined) === (hook.projectId ?? undefined),
+      )
+    },
+
+    async toggleHook(hook: Hook): Promise<void> {
+      const h = this.findHook(hook)
       if (!h) return
       h.enabled = !h.enabled
       const sidecar = useSidecar()
       if (!sidecar.available) return
       try {
         const params: Record<string, unknown> = {
-          id,
+          id: h.id,
           source: h.source ?? 'global',
           enabled: h.enabled,
         }
@@ -766,8 +792,8 @@ export const useWorkspaceStore = defineStore('workspace', {
       }
     },
 
-    async runHookOnce(id: string): Promise<void> {
-      const h = this.hooks.find((x: Hook) => x.id === id)
+    async runHookOnce(hook: Hook): Promise<void> {
+      const h = this.findHook(hook)
       if (!h) return
       const sidecar = useSidecar()
       if (!sidecar.available) {
@@ -777,7 +803,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         return
       }
       try {
-        const params: Record<string, unknown> = { id, source: h.source ?? 'global' }
+        const params: Record<string, unknown> = { id: h.id, source: h.source ?? 'global' }
         if (h.projectId) params.projectId = h.projectId
         const res = await sidecar.request<{ record: HookRunRecord }>('hooks.run-once', params)
         if (res.record) {

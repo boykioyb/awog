@@ -54,7 +54,7 @@
           class="p-1.5 rounded transition"
           :style="{ color: t.textDim }"
           :title="tr('hooks.detail.run_once')"
-          @click="ws.runHookOnce(hook.id)"
+          @click="ws.runHookOnce(hook)"
         >
           <Play :size="13" />
         </button>
@@ -112,7 +112,7 @@
         v-if="!isImported"
         :label="tr('hooks.detail.enabled')"
         :value="hook.enabled"
-        @toggle="ws.toggleHook(hook.id)"
+        @toggle="ws.toggleHook(hook)"
       />
       <KeyValueCard
         v-else
