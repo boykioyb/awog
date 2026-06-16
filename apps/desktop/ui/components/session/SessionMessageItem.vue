@@ -150,32 +150,6 @@
             showBubble ? { background: t.bgElevated, border: `1px solid ${t.border}` } : undefined
           "
         >
-          <!-- Steps summary + collapse toggle. Sits above the body so the
-             control reads before the interleaved command/text flow. -->
-          <button
-            v-if="clusterSteps.length"
-            type="button"
-            class="inline-flex items-center gap-1.5 text-[12px] py-0.5 px-1.5 -ml-1.5 mb-2 rounded transition hover:bg-white/5"
-            :style="{ color: t.textDim }"
-            @click="expanded = !expanded"
-          >
-            <Info :size="11" />
-            <span>{{ stepsSummary(clusterSteps) }}</span>
-            <Activity
-              v-if="hasRunningStep"
-              :size="10"
-              class="animate-pulse"
-              :style="{ color: t.accent }"
-            />
-            <ChevronDown
-              :size="10"
-              :style="{
-                transform: expanded ? 'none' : 'rotate(-90deg)',
-                transition: 'transform 0.15s',
-              }"
-            />
-          </button>
-
           <!-- TODO checklist (TodoWrite). Lifted OUT of the collapsible task cluster
              so the agent's plan/progress stays visible even while the tool-call
              detail is collapsed. The sidecar upserts one 'todo-list' step per turn,
@@ -191,10 +165,11 @@
 
           <!-- Body. Reply text, AskUserQuestion cards, and step clusters interleave
              in chronological order. Question cards always render at their position
-             (a pending question stays visible — the turn is blocked); step
-             clusters render only when expanded. Collapsed merges the text around
-             hidden steps so the reply still reads as one document. -->
-          <template v-for="(block, bi) in displayBlocks" :key="bi">
+             (a pending question stays visible — the turn is blocked). Each step
+             cluster renders its own inline collapse toggle at its position
+             (SessionStepCluster), so consecutive reason→act runs fold/unfold
+             independently rather than via one shared switch. -->
+          <template v-for="(block, bi) in timelineBlocks" :key="bi">
             <MarkdownStreamBody
               v-if="block.type === 'text'"
               :text="block.text"
@@ -234,17 +209,10 @@
                 </span>
               </span>
             </div>
-            <!-- Inline step timeline (Claude-Code style): flat vertical list, no
-               box — each step's own status icon is the bullet, a thin left rail
-               groups the run. `timeline` tells StepItem to wrap long paths and
-               show a one-line result summary instead of truncating. -->
-            <div
-              v-else
-              class="mt-2 space-y-1 text-[12px] pl-3"
-              :style="{ borderLeft: `2px solid ${t.border}` }"
-            >
-              <StepItem v-for="s in block.steps" :key="s.id" :step="s" timeline />
-            </div>
+            <!-- Inline step cluster (Claude-Code style): its own collapse toggle
+               + summary, rendered at this run's position. Each instance keeps
+               independent expand state. -->
+            <SessionStepCluster v-else :steps="block.steps" />
           </template>
 
           <SessionInlinePermission
@@ -382,7 +350,6 @@ import {
   CornerDownRight,
   FileText,
   GitBranch,
-  Info,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -443,26 +410,9 @@ const tokenColor = (kind: SessionTokenKind) => {
   return t.value.success
 }
 
-// Inline step timeline — local state so multiple bubbles can stay
-// collapsed/expanded independently. Default state is COLLAPSED ("đóng sẵn"): a
-// turn reads as a clean document, with the summary line ("ran N commands…") as
-// the toggle. Expanding reveals the Claude-Code-style step timeline (each tool
-// call + interleaved reasoning, with ⎿ result summaries).
-const expanded = ref(false)
-
-// Steps that render inside the collapsible cluster: tool calls + thinking. TODO
-// (note) and question steps are lifted out and rendered standalone (always
-// visible), so they neither gate nor label the collapse toggle.
-const clusterSteps = computed<SessionStep[]>(
-  () =>
-    props.message.steps?.filter(
-      (s: SessionStep) => s.kind !== 'note' && s.kind !== 'question' && s.kind !== 'steer',
-    ) ?? [],
-)
-
-const hasRunningStep = computed((): boolean =>
-  clusterSteps.value.some((s: SessionStep) => s.status === 'running' || s.status === undefined),
-)
+// Each inline step cluster owns its collapse state (SessionStepCluster), default
+// COLLAPSED ("đóng sẵn") and independent per run — so the turn reads as a clean
+// document and consecutive reason→act runs fold/unfold on their own.
 
 const isStreaming = computed(() => !!(props.message.startedAt && !props.message.completedAt))
 
@@ -564,27 +514,6 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
   return body
 })
 
-// What actually renders. Expanded → the full interleaved timeline. Collapsed →
-// step clusters dropped and the text around them merged so the reply reads as
-// one document, but text and question cards stay inline at their position (a
-// pending question must remain visible even when the steps are tucked away).
-const displayBlocks = computed<TimelineBlock[]>(() => {
-  const blocks = timelineBlocks.value
-  if (expanded.value) return blocks
-  const out: TimelineBlock[] = []
-  for (const b of blocks) {
-    if (b.type === 'steps') continue
-    if (b.type === 'text') {
-      const last = out[out.length - 1]
-      if (last && last.type === 'text') last.text = `${last.text}\n\n${b.text}`
-      else out.push({ type: 'text', text: b.text })
-      continue
-    }
-    out.push(b)
-  }
-  return out
-})
-
 // TODO checklist steps (kind === 'note'), rendered standalone above the body and
 // outside the collapsible cluster so the agent's plan/progress is always visible.
 // The sidecar upserts one 'todo-list' step per turn, so this is normally a single
@@ -599,8 +528,7 @@ const todoSteps = computed<SessionStep[]>(
 // the "Streaming…" ticker lives in the byline below, outside the bubble.
 const hasBubbleContent = computed(
   () =>
-    displayBlocks.value.length > 0 ||
-    clusterSteps.value.length > 0 ||
+    timelineBlocks.value.length > 0 ||
     todoSteps.value.length > 0 ||
     (props.message.artifacts?.length ?? 0) > 0 ||
     store.pendingPermission?.messageId === props.message.id,
@@ -632,41 +560,12 @@ const workingElapsed = (end: number): number =>
 // Only the trailing text segment is still being typed — flag it so
 // MarkdownStreamBody throttles just that one and renders the rest immediately.
 const lastTextBlockIndex = computed(() => {
-  const blocks = displayBlocks.value
+  const blocks = timelineBlocks.value
   for (let i = blocks.length - 1; i >= 0; i -= 1) {
     if (blocks[i]?.type === 'text') return i
   }
   return -1
 })
-
-// Claude-Code-style summary for the collapse toggle label:
-// "ran 9 commands · read 3 files · used 6 tools". Aggregates steps by tool.
-const stepsSummary = (steps: SessionStep[]): string => {
-  let cmds = 0
-  let reads = 0
-  let writes = 0
-  let searches = 0
-  let subagents = 0
-  let others = 0
-  steps.forEach((s: SessionStep) => {
-    if (s.tool === 'terminal') cmds += 1
-    else if (s.tool === 'read') reads += 1
-    else if (s.tool === 'write' || s.tool === 'edit') writes += 1
-    else if (s.tool === 'search' || s.tool === 'find-files') searches += 1
-    else if (s.tool === 'task') subagents += 1
-    else others += 1
-  })
-  const parts: string[] = []
-  if (cmds) parts.push(`ran ${cmds} command${cmds === 1 ? '' : 's'}`)
-  if (reads) parts.push(`read ${reads} file${reads === 1 ? '' : 's'}`)
-  if (writes) parts.push(`edited ${writes} file${writes === 1 ? '' : 's'}`)
-  if (searches) parts.push(`${searches} search${searches === 1 ? '' : 'es'}`)
-  if (subagents) parts.push(`${subagents} subagent${subagents === 1 ? '' : 's'}`)
-  if (parts.length === 0 && others > 0) {
-    return `${others} step${others === 1 ? '' : 's'}`
-  }
-  return parts.join(' · ')
-}
 
 // Fork the conversation from this message into a new session and switch to it.
 // The original session is left untouched.
