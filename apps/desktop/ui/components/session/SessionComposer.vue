@@ -51,6 +51,10 @@
       <SessionChipsPopover :session="session" :only="['mode', 'mcp']" />
     </div>
 
+    <!-- Queued messages (Session steering/queue): sit directly atop the input,
+         auto-sent FIFO once the current turn finishes. -->
+    <SessionQueueList :session="session" />
+
     <!-- Input field: soft rounded with the send action inside. Connection /
          account / model chips live in the toolbar below it (lighter than a top
          chip header). The composer is resized via the top grip only (the
@@ -86,15 +90,92 @@
         >
           <Paperclip :size="14" />
         </button>
-        <button
-          v-if="isStreaming"
-          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
-          :style="{ background: t.danger, color: t.accentText, cursor: 'pointer' }"
-          title="Stop (interrupt response)"
-          @click="onStop"
-        >
-          <Square :size="11" fill="currentColor" />
-        </button>
+        <!-- While a turn streams: Stop (interrupt) + a split send button whose
+             primary action is Insert/steer (or Queue when the draft carries
+             attachments/quotes) and whose caret opens the alternate action. -->
+        <template v-if="isStreaming">
+          <button
+            class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
+            :style="{ background: t.danger, color: t.accentText, cursor: 'pointer' }"
+            title="Stop (interrupt response)"
+            @click="onStop"
+          >
+            <Square :size="11" fill="currentColor" />
+          </button>
+          <div class="relative flex items-stretch self-end flex-shrink-0">
+            <button
+              :disabled="!canSend"
+              class="inline-flex items-center justify-center w-7 h-7 rounded-l-lg transition"
+              :style="{
+                background: !canSend ? 'transparent' : t.accent,
+                color: !canSend ? t.textFaint : t.accentText,
+                cursor: !canSend ? 'not-allowed' : 'pointer',
+              }"
+              :title="
+                streamPrimaryAction === 'steer'
+                  ? tr('session.composer.steer.hint')
+                  : tr('session.composer.queue.hint')
+              "
+              @click="onStreamPrimary"
+            >
+              <Send v-if="streamPrimaryAction === 'steer'" :size="13" />
+              <Clock v-else :size="13" />
+            </button>
+            <button
+              class="inline-flex items-center justify-center w-4 h-7 rounded-r-lg transition"
+              :style="{ background: t.bgHover, color: t.textDim, borderLeft: `1px solid ${t.bg}` }"
+              :title="tr('session.composer.queue')"
+              @click="sendMenuOpen = !sendMenuOpen"
+            >
+              <ChevronUp :size="11" />
+            </button>
+
+            <!-- Backdrop closes the menu on any outside click. -->
+            <div v-if="sendMenuOpen" class="fixed inset-0 z-10" @click="sendMenuOpen = false" />
+            <div
+              v-if="sendMenuOpen"
+              class="absolute bottom-full right-0 mb-1 z-20 rounded-lg overflow-hidden"
+              :style="{
+                minWidth: '200px',
+                background: t.bgInput,
+                border: `1px solid ${t.border}`,
+                boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+              }"
+            >
+              <button
+                type="button"
+                :disabled="!canSteerText"
+                class="w-full text-left px-3 py-1.5 text-[1em] flex flex-col gap-0.5"
+                :style="{
+                  color: canSteerText ? t.text : t.textFaint,
+                  cursor: canSteerText ? 'pointer' : 'not-allowed',
+                }"
+                @click="pickSteer"
+              >
+                <span class="font-medium">{{ tr('session.composer.steer') }}</span>
+                <span class="text-[12px]" :style="{ color: t.textFaint }">
+                  {{ tr('session.composer.steer.hint') }}
+                </span>
+              </button>
+              <button
+                type="button"
+                :disabled="!canSend"
+                class="w-full text-left px-3 py-1.5 text-[1em] flex flex-col gap-0.5"
+                :style="{
+                  color: canSend ? t.text : t.textFaint,
+                  cursor: canSend ? 'pointer' : 'not-allowed',
+                  borderTop: `1px solid ${t.border}`,
+                }"
+                @click="pickQueue"
+              >
+                <span class="font-medium">{{ tr('session.composer.queue') }}</span>
+                <span class="text-[12px]" :style="{ color: t.textFaint }">
+                  {{ tr('session.composer.queue.hint') }}
+                </span>
+              </button>
+            </div>
+          </div>
+        </template>
         <button
           v-else
           :disabled="!canSend"
@@ -276,7 +357,7 @@
 </template>
 
 <script setup lang="ts">
-import { FileText, Paperclip, Send, Square, X } from 'lucide-vue-next'
+import { ChevronUp, Clock, FileText, Paperclip, Send, Square, X } from 'lucide-vue-next'
 import { computed, inject, onBeforeUnmount, ref, toRef, useTemplateRef, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
@@ -401,6 +482,7 @@ watch(
     mention.close()
     pendingAttachments.value = []
     commandNotice.value = null
+    sendMenuOpen.value = false
   },
 )
 
@@ -426,16 +508,15 @@ const canSend = computed(
 
 const isStreaming = computed(() => store.isSessionStreaming(props.session.id))
 
-const onSend = () => {
-  if (!canSend.value) return
+// Build the (text, attachments, followUps, commandInvocation) tuple from the
+// current draft — shared by Send (immediate) and Add-to-queue. Slash commands
+// expand here so a queued command stores its already-expanded body. The full
+// quote is preserved (chip truncation is purely visual — lukilabs/craft-agents-oss#580);
+// follow-ups go through alongside `text` so the store can render the numbered
+// cards + anchor badges while the model receives the serialized quote markdown.
+const composeSendArgs = () => {
   const followUps = pendingFollowUps.value
-  // Slash-command expansion: if the draft is `/name [args]` matching an enabled
-  // user command in scope, expand its template (substituting $ARGUMENTS / $1…)
-  // and send that instead of the literal `/name`.
   let body = draft.value
-  // When a `/command` expands, keep the raw invocation for a compact transcript
-  // chip — the bubble shows `/prs …` with an expand toggle while the model
-  // receives the full expanded `body`.
   let commandInvocation: string | undefined
   const invocation = parseSlashInvocation(draft.value)
   if (invocation) {
@@ -447,24 +528,86 @@ const onSend = () => {
         : `/${invocation.name}`
     }
   }
-  // Full quote is preserved here — chip truncation is purely visual.
-  // See lukilabs/craft-agents-oss#580 for the rationale.
   const text = composeOutgoingMessage(body, followUps)
   const attachments = pendingAttachments.value.length ? [...pendingAttachments.value] : undefined
-  // Pass the structured follow-ups too: the store stores them on the user message
-  // for the numbered-card render + anchor badges, while `text` (the serialized
-  // quote markdown) is what the model and history receive.
-  store.sendMessage(
-    props.session.id,
+  return {
     text,
     attachments,
-    followUps.length ? followUps : undefined,
+    followUps: followUps.length ? followUps : undefined,
     commandInvocation,
-  )
+  }
+}
+
+const clearComposer = () => {
   draft.value = ''
   pendingAttachments.value = []
   editingFollowUpId.value = null
   followUpController?.clear()
+}
+
+const onSend = () => {
+  if (!canSend.value) return
+  // Defensive: a tight race (Enter fires as a turn is still in flight) must never
+  // open a second concurrent turn — that would make Stop retarget the queued
+  // turn. Route to steer/queue instead, the intended in-flight behavior.
+  if (isStreaming.value) {
+    onStreamPrimary()
+    return
+  }
+  const { text, attachments, followUps, commandInvocation } = composeSendArgs()
+  store.sendMessage(props.session.id, text, attachments, followUps, commandInvocation)
+  clearComposer()
+}
+
+// ── Sending while a turn is streaming (Session steering/queue) ──────────────
+// Default action = Insert (steer the running turn, text only); the dropdown
+// also offers Add-to-queue. A draft carrying attachments or quotes can't be
+// steered (those need a full turn), so the primary action switches to Queue.
+const sendMenuOpen = ref(false)
+const canSteerText = computed(
+  () =>
+    draft.value.trim().length > 0 &&
+    pendingAttachments.value.length === 0 &&
+    pendingFollowUps.value.length === 0,
+)
+const streamPrimaryAction = computed<'steer' | 'queue'>(() =>
+  canSteerText.value ? 'steer' : 'queue',
+)
+
+// Steer: inject the draft text into the running turn (sidecar getSteeringMessages).
+// Text only — clears just the draft (canSteerText guarantees no attachments/quotes).
+const onSteer = async () => {
+  const text = draft.value
+  if (!text.trim()) return
+  draft.value = ''
+  mention.close()
+  await store.sendSteer(props.session.id, text)
+  showNotice(tr('session.composer.steer.done'))
+}
+
+// Queue: stash the full draft (text + attachments + quotes) to auto-send as a
+// fresh turn once the current one finishes.
+const onQueue = () => {
+  if (!canSend.value) return
+  const { text, attachments, followUps, commandInvocation } = composeSendArgs()
+  store.enqueueMessage(props.session.id, text, attachments, followUps, commandInvocation)
+  clearComposer()
+  showNotice(tr('session.composer.queue.done'))
+}
+
+const onStreamPrimary = () => {
+  if (!canSend.value) return
+  if (streamPrimaryAction.value === 'steer') void onSteer()
+  else onQueue()
+}
+
+const pickSteer = () => {
+  sendMenuOpen.value = false
+  void onSteer()
+}
+const pickQueue = () => {
+  sendMenuOpen.value = false
+  onQueue()
 }
 
 const onStop = () => {
@@ -496,7 +639,10 @@ const onComposerKeydown = (ev: KeyboardEvent) => {
   }
   if (isSendChord(ev)) {
     ev.preventDefault()
-    onSend()
+    // While a turn streams, the send chord steers (or queues) instead of being
+    // blocked; otherwise it sends normally.
+    if (isStreaming.value) onStreamPrimary()
+    else onSend()
   }
 }
 

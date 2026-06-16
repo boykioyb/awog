@@ -232,7 +232,14 @@ const modelLabel = computed(() => {
   return def?.label ?? props.session.settings.modelId
 })
 
-const lastInput = computed(() => lastAgentWithUsage.value?.usage?.inputTokens ?? 0)
+// Full prompt actually sent last turn = uncached input + cache read + cache
+// write. With prompt caching the bare `inputTokens` is only the uncached delta
+// (a few hundred), so showing it alone makes "in" look implausibly tiny.
+const lastInput = computed(() => {
+  const u = lastAgentWithUsage.value?.usage
+  if (!u) return 0
+  return u.inputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0)
+})
 const lastOutput = computed(() => lastAgentWithUsage.value?.usage?.outputTokens ?? 0)
 
 const limit = computed(() => contextLimitFor(lastModel.value))
@@ -247,11 +254,17 @@ const messagesTokens = computed(() =>
     .reduce((acc, m) => acc + estimateTokens(m.text), 0),
 )
 
-// Real total = last input_tokens (already includes history) + last output_tokens.
-// When no agent turn yet, fall back to estimate of pending text only.
+// Real total context occupancy = the full prompt last sent (uncached input +
+// cache-read history + cache-write) plus the reply tokens. The cache buckets are
+// essential: with prompt caching the conversation history is served from cache,
+// so `inputTokens` alone is just the uncached delta and `used` would collapse to
+// a few k no matter how long the chat gets (the original bug — Messages stuck at
+// 0). When no agent turn yet, fall back to an estimate of the pending text only.
 const used = computed(() => {
-  const last = lastAgentWithUsage.value
-  if (last?.usage) return last.usage.inputTokens + last.usage.outputTokens
+  const u = lastAgentWithUsage.value?.usage
+  if (u) {
+    return u.inputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0) + u.outputTokens
+  }
   return systemPromptTokens.value + messagesTokens.value
 })
 

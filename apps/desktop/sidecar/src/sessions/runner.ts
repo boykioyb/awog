@@ -90,6 +90,12 @@ export interface RunNonStreamArgs {
   // When set, `pendingText` is a slash command (e.g. '/compact') handled by the
   // runtime instead of a normal turn.
   slashCommand?: 'compact'
+  // Mid-turn steering (Session steering). When provided, the runtime wires it to
+  // Pi's getSteeringMessages: polled at each turn boundary, it returns the user
+  // instructions queued via the sessions.steer RPC so the loop injects them into
+  // the running conversation. Each drained item is also surfaced as a
+  // `kind:'steer'` step in the timeline. Tasks/subagents leave it undefined.
+  getSteeringMessages?: () => Promise<{ id: string; text: string }[]>
 }
 
 export interface StreamCallbacks {
@@ -103,7 +109,15 @@ export interface StreamCallbacks {
 export interface RunStreamResult {
   text: string
   modelUsed: string
-  usage: { input_tokens: number; output_tokens: number }
+  // cache_* are the Anthropic prompt-cache buckets (history served from cache).
+  // The context-window display sums all four — input alone undercounts a cached
+  // turn by the entire history.
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_read_tokens: number
+    cache_creation_tokens: number
+  }
   stopReason: string | null
 }
 

@@ -562,7 +562,23 @@ const grouped = computed<Group[]>(() => {
     if (existing) existing.sessions.push(s)
     else map.set(key, { key, label, sessions: [s] })
   })
-  return Array.from(map.values()).sort((a, b) => latestActivity(b) - latestActivity(a))
+  const groups = Array.from(map.values())
+  // Project grouping: keep the PROJECT order fixed (follows the workspace project
+  // list) so groups don't jump around as you chat — only the sessions inside each
+  // group are recency-sorted (via `filtered`). '_none' (No project) sinks last.
+  // Provider/model groupings have no natural fixed order, so they stay ordered by
+  // latest activity.
+  if (groupBy.value === 'project') {
+    const order = new Map(workspace.projects.map((p, i): [string, number] => [p.id, i]))
+    const rank = (g: Group): number => {
+      if (g.key === '_none') return Number.MAX_SAFE_INTEGER
+      // A session whose project was deleted (key not in the list) sorts just
+      // before '_none'.
+      return order.get(g.key) ?? Number.MAX_SAFE_INTEGER - 1
+    }
+    return groups.sort((a, b) => rank(a) - rank(b))
+  }
+  return groups.sort((a, b) => latestActivity(b) - latestActivity(a))
 })
 
 const toggleGroup = (key: string) => {

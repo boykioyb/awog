@@ -30,6 +30,7 @@ export function createGitData(ctx: GitContext) {
     selectedRepoPathByProject,
     repoStateByProject,
     isMerging,
+    isRebasing,
     isDetached,
     detachedAt,
     branchesLastFetchedAt,
@@ -94,6 +95,7 @@ export function createGitData(ctx: GitContext) {
         ...adapted,
       ]
       isMerging.value = result.isMerging
+      isRebasing.value = result.isRebasing
       isDetached.value = result.detached
       detachedAt.value = result.detachedAt ?? null
       // Clear no-repo cache flag if previously set — repo now reachable.
@@ -116,6 +118,7 @@ export function createGitData(ctx: GitContext) {
         // Wipe stale files from a previous repo at the same path.
         statusFilesAll.value = statusFilesAll.value.filter((f) => f.projectId !== projectId)
         isMerging.value = false
+        isRebasing.value = false
         isDetached.value = false
         detachedAt.value = null
         return

@@ -27,6 +27,9 @@ function filteredEnv(): NodeJS.ProcessEnv {
     const v = process.env[k]
     if (v !== undefined) out[k] = v
   }
+  // Match runner.ts: never take git's optional index lock (the required locks
+  // for fetch/pull/push are unaffected). Keeps background polling lock-free.
+  out.GIT_OPTIONAL_LOCKS = '0'
   return out
 }
 

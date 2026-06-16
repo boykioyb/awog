@@ -13,6 +13,13 @@ function filteredEnv(): NodeJS.ProcessEnv {
     const v = process.env[k]
     if (v !== undefined) out[k] = v
   }
+  // Read-only commands (`status`, `diff`) bypass the workspace mutex, but git
+  // would still grab `.git/index.lock` to persist an opportunistic index
+  // refresh — colliding with a concurrent mutex-held `add`/`reset` and failing
+  // with "Unable to create index.lock: File exists". Disabling optional locks
+  // (what IDEs do when polling git) keeps reads lock-free; the genuine mutators
+  // still take the required lock and are serialized by withWorkspaceLock.
+  out.GIT_OPTIONAL_LOCKS = '0'
   return out
 }
 

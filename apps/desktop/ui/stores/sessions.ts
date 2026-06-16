@@ -6,6 +6,7 @@ import type {
   SessionMention,
   SessionMessage,
   SessionMessagePart,
+  SessionQueuedMessage,
   SessionQuestionAnswer,
   SessionSearchResult,
   SessionSettings,
@@ -26,7 +27,13 @@ interface SidecarSendMessageResult {
   messageId: string
   text: string
   modelUsed: string
-  usage: { input_tokens: number; output_tokens: number }
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    // Prompt-cache buckets. Optional: a sidecar predating this field omits them.
+    cache_read_tokens?: number
+    cache_creation_tokens?: number
+  }
   stopReason: string | null
   // Ordered timeline built by the sidecar (ADR 0032). Stored as the authoritative
   // message.parts on finalize; absent for a non-streaming reply with no steps.
@@ -196,6 +203,16 @@ export const useSessionsStore = defineStore('sessions', {
     // Tracks the in-flight assistant messageId per session so the Stop button
     // can target it via `sessions.cancel`. Cleared in sendMessage's finally.
     activeMessageBySession: {} as Record<string, string>,
+    // Messages the user queued while a turn was streaming (Session steering/queue
+    // — docs/features/session-steer-queue.md). Ephemeral (not persisted): each
+    // session's queue auto-sends FIFO as a fresh turn once the current turn
+    // finalizes. A key exists only while that session has pending items.
+    queues: {} as Record<string, SessionQueuedMessage[]>,
+    // When a turn entered a human-input park (question/permission), keyed by its
+    // assistant messageId → the wall-clock it started waiting. On park exit the
+    // elapsed since is added to that message's `waitingMs` and the key cleared.
+    // Drives the "subtract park time from elapsed" display (item 1).
+    parkStartedAt: {} as Record<string, number>,
     // Pending tool-use permission prompt. Singleton because canUseTool serialises
     // per turn — at most one prompt is on screen at a time. SessionPermissionDialog
     // watches this and renders when non-null.
@@ -249,6 +266,33 @@ export const useSessionsStore = defineStore('sessions', {
     anyStreaming(state): boolean {
       return state.sessions.some((s) => (s.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG))
     },
+    // Whether a streaming session is PARKED on human input — it called
+    // AskUserQuestion (an unanswered `kind:'question'` step on its in-flight
+    // message) or is blocked on a permission prompt. The turn isn't really
+    // working; it's waiting for the user. Drives a distinct "waiting" tab dot +
+    // the per-message byline state.
+    isSessionAwaitingInput:
+      (state) =>
+      (id: string): boolean => {
+        const s = state.sessions.find((x) => x.id === id)
+        if (!s || !(s.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG)) return false
+        if (state.pendingPermission?.sessionId === id) return true
+        const activeId = state.activeMessageBySession[id]
+        if (!activeId) return false
+        const msg = s.messages.find((m) => m.id === activeId)
+        return !!msg?.steps?.some((st) => st.kind === 'question' && !st.answers)
+      },
+    // True when ANY session is parked on human input (Sessions tab dot).
+    anyAwaitingInput(state): boolean {
+      if (state.pendingPermission) return true
+      return state.sessions.some((s) => {
+        if (!(s.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG)) return false
+        const activeId = state.activeMessageBySession[s.id]
+        if (!activeId) return false
+        const msg = s.messages.find((m) => m.id === activeId)
+        return !!msg?.steps?.some((st) => st.kind === 'question' && !st.answers)
+      })
+    },
     // Whether a message has a workspace snapshot (→ rewind will restore files).
     hasSnapshot:
       (state) =>
@@ -262,6 +306,11 @@ export const useSessionsStore = defineStore('sessions', {
       (state) =>
       (id: string): boolean =>
         state.unread[id] === true,
+    // Messages queued for a session while a turn streams (FIFO, oldest first).
+    queuedMessages:
+      (state) =>
+      (id: string): SessionQueuedMessage[] =>
+        state.queues[id] ?? [],
     activeSubagentStep(state): SessionStep | null {
       const ref = state.subagentDrawerRef
       if (!ref) return null
@@ -512,6 +561,7 @@ export const useSessionsStore = defineStore('sessions', {
     deleteSession(id: string) {
       this.sessions = this.sessions.filter((s) => s.id !== id)
       this.markRead(id)
+      if (this.queues[id]) delete this.queues[id]
       if (this.selectedSessionId === id) {
         this.selectedSessionId = this.sessions[0]?.id ?? null
       }
@@ -887,6 +937,24 @@ export const useSessionsStore = defineStore('sessions', {
             if (evt.payload.sessionId !== sessionId) return
             if (evt.payload.messageId !== placeholderId) return
             upsertStep(evt.payload.step)
+            // Notify when the agent asks a question (AskUserQuestion) and the
+            // user isn't looking — mirrors the permission-request notification.
+            // The turn is parked until answered, so a missed question stalls
+            // silently otherwise. notify() suppresses itself when the window is
+            // focused; the tag de-dupes the running→answered re-emit.
+            const qStep = evt.payload.step
+            if (qStep.kind === 'question' && !qStep.answers) {
+              // Turn is now parked on the user — start counting wait time, and
+              // notify if the window isn't focused.
+              this.enterPark(placeholderId)
+              if (settingsStore.notificationsEnabled) {
+                notify({
+                  title: 'AWOG · Question',
+                  body: qStep.questions?.[0]?.question || 'The agent is asking for your input.',
+                  tag: `awog-question-${qStep.id}`,
+                })
+              }
+            }
             // Mirror LLM-driven plan-mode toggles into the composer chip so the
             // UI reflects what the model is doing. Labels come from the
             // sidecar's humanLabel mapper (sessions/step-mapper.ts) — keep in
@@ -926,6 +994,9 @@ export const useSessionsStore = defineStore('sessions', {
             if (p.decisionReason) next.decisionReason = p.decisionReason
             if (p.blockedPath) next.blockedPath = p.blockedPath
             this.pendingPermission = next
+            // Turn is now parked waiting on the allow/deny decision — count the
+            // wait so it's excluded from the turn's displayed elapsed.
+            this.enterPark(placeholderId)
             // OS notification while the user isn't looking at the app. The util
             // suppresses itself when the window is focused so we don't spam.
             if (settingsStore.notificationsEnabled) {
@@ -1027,6 +1098,8 @@ export const useSessionsStore = defineStore('sessions', {
             usage: {
               inputTokens: result.usage.input_tokens,
               outputTokens: result.usage.output_tokens,
+              cacheReadTokens: result.usage.cache_read_tokens ?? 0,
+              cacheWriteTokens: result.usage.cache_creation_tokens ?? 0,
             },
             // Authoritative ordered timeline (ADR 0032). Undefined → finalize keeps
             // the derive path (legacy / non-streaming reply with no steps).
@@ -1037,7 +1110,14 @@ export const useSessionsStore = defineStore('sessions', {
         // adopts the sidecar's authoritative parts + the full text, an invisible
         // swap since the revealed content already matches).
         textCompleted = true
-        onRevealDone = doFinalize
+        onRevealDone = () => {
+          doFinalize()
+          // Turn finished cleanly → auto-send the next queued message (FIFO) as a
+          // fresh turn. doFinalize cleared the streaming tag, so flushQueueHead
+          // sees the session idle. Cancel/error paths null out onRevealDone, so a
+          // stopped turn leaves the queue intact for the user to decide.
+          void this.flushQueueHead(sessionId)
+        }
         ensureReveal()
         tick()
       } catch (err) {
@@ -1090,6 +1170,9 @@ export const useSessionsStore = defineStore('sessions', {
         }
       } finally {
         if (unlisten) unlisten()
+        // Turn ended while still parked (cancel/error mid-question/permission):
+        // bank the final wait span so the elapsed excludes it, and drop the key.
+        this.exitPark(placeholderId)
         if (this.activeMessageBySession[sessionId] === placeholderId) {
           delete this.activeMessageBySession[sessionId]
         }
@@ -1117,6 +1200,9 @@ export const useSessionsStore = defineStore('sessions', {
       const pending = this.pendingPermission
       if (!pending) return
       this.pendingPermission = null
+      // Decision made → the turn resumes; bank the wait span (the tool now runs,
+      // which is working time, not waiting).
+      this.exitPark(pending.messageId)
       const sidecar = useSidecar()
       if (!sidecar.available) return
       try {
@@ -1176,6 +1262,10 @@ export const useSessionsStore = defineStore('sessions', {
       if (!target || target.answers) return
       target.answers = answers
       target.status = 'done'
+      // Answer submitted → the turn resumes; bank the wait span on the in-flight
+      // message so its elapsed excludes the time spent waiting on the user.
+      const activeId = this.activeMessageBySession[sessionId]
+      if (activeId) this.exitPark(activeId)
 
       const sidecar = useSidecar()
       if (!sidecar.available) return
@@ -1286,6 +1376,117 @@ export const useSessionsStore = defineStore('sessions', {
         // Race: stream may have settled between click and RPC. Either way the
         // finalize path will clean up; ignore the error.
       }
+    },
+
+    // Mid-turn steering (Session steering). Inject `text` into the session's
+    // in-flight turn so the agent picks it up at its next step boundary. The
+    // sidecar emits a `kind:'steer'` step that the running sendMessage's live
+    // subscription folds into the agent timeline, so no optimistic insert is
+    // needed here. Falls back to a normal send when no turn is in flight (the
+    // composer only routes here while streaming, but the turn can settle between
+    // the click and this call). Returns true when the steer landed on a turn.
+    async sendSteer(sessionId: string, text: string): Promise<boolean> {
+      const trimmed = text.trim()
+      if (!trimmed) return false
+      const messageId = this.activeMessageBySession[sessionId]
+      if (!messageId) {
+        await this.sendMessage(sessionId, trimmed)
+        return false
+      }
+      const sidecar = useSidecar()
+      if (!sidecar.available) return false
+      try {
+        const res = await sidecar.request<{ ok: boolean }>('sessions.steer', {
+          sessionId,
+          messageId,
+          text: trimmed,
+        })
+        // Lost the race (turn finalized first) → send it as a normal turn so the
+        // user's instruction isn't dropped.
+        if (!res.ok) {
+          await this.sendMessage(sessionId, trimmed)
+          return false
+        }
+        return true
+      } catch (err) {
+        console.warn('[sessions] steer failed', err)
+        return false
+      }
+    },
+
+    // Queue a message to auto-send after the current turn finishes (FIFO). The
+    // composer routes here via the send dropdown while a turn streams. Ephemeral
+    // — not persisted; a reload drops the queue.
+    enqueueMessage(
+      sessionId: string,
+      text: string,
+      attachments?: SessionAttachment[],
+      followUps?: SessionFollowUp[],
+      commandInvocation?: string,
+    ) {
+      const trimmed = text.trim()
+      if (!trimmed && !(attachments && attachments.length)) return
+      const item: SessionQueuedMessage = { id: newId('q'), text: trimmed }
+      if (attachments && attachments.length) item.attachments = [...attachments]
+      if (followUps && followUps.length) item.followUps = [...followUps]
+      if (commandInvocation) item.commandInvocation = commandInvocation
+      const queue = this.queues[sessionId] ?? []
+      this.queues[sessionId] = [...queue, item]
+    },
+
+    removeQueued(sessionId: string, id: string) {
+      const queue = this.queues[sessionId]
+      if (!queue) return
+      const next = queue.filter((q) => q.id !== id)
+      if (next.length) this.queues[sessionId] = next
+      else delete this.queues[sessionId]
+    },
+
+    clearQueue(sessionId: string) {
+      if (this.queues[sessionId]) delete this.queues[sessionId]
+    },
+
+    // ── Park-time tracking (item 1): exclude human-wait from displayed elapsed ─
+    // A turn that calls AskUserQuestion or hits a permission prompt blocks on the
+    // user. enterPark stamps the start; exitPark adds the waited span to the
+    // message's `waitingMs`, which SessionMessageItem subtracts from the elapsed.
+    // Mirrors the sidecar's own measurement (which persists waitingMs for reload).
+    enterPark(messageId: string) {
+      if (!this.parkStartedAt[messageId]) this.parkStartedAt[messageId] = Date.now()
+    },
+
+    exitPark(messageId: string) {
+      const start = this.parkStartedAt[messageId]
+      if (!start) return
+      delete this.parkStartedAt[messageId]
+      for (const s of this.sessions) {
+        const msg = s.messages.find((m) => m.id === messageId)
+        if (msg) {
+          msg.waitingMs = (msg.waitingMs ?? 0) + (Date.now() - start)
+          return
+        }
+      }
+    },
+
+    // Pop the oldest queued message and send it as a fresh turn. Called after a
+    // turn finalizes (sendMessage's onRevealDone); the recursive sendMessage
+    // flushes the next on its own completion, draining the queue FIFO. No-op
+    // while a turn is still streaming (defensive — never overlap turns).
+    flushQueueHead(sessionId: string) {
+      if (this.isSessionStreaming(sessionId)) return
+      const queue = this.queues[sessionId]
+      if (!queue || queue.length === 0) return
+      const [head, ...rest] = queue
+      if (rest.length) this.queues[sessionId] = rest
+      else delete this.queues[sessionId]
+      if (!head) return
+      void this.sendMessage(
+        sessionId,
+        head.text,
+        head.attachments,
+        head.followUps,
+        head.commandInvocation,
+      )
     },
 
     // `/compact` — ask the sidecar to run the SDK's context compaction on this

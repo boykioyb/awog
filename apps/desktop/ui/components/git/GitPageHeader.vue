@@ -197,17 +197,15 @@
     </div>
 
     <div class="ml-auto flex items-center gap-2">
-      <template v-if="isMerging">
+      <template v-if="isMerging || isRebasing">
         <button
           class="px-2.5 py-1 text-[1em] rounded font-medium transition"
           :style="completeMergeBtnStyle"
           :disabled="hasConflict"
-          :title="
-            hasConflict ? tr('git.header.complete_merge_disabled') : tr('git.header.complete_merge')
-          "
+          :title="completeTitle"
           @click="emit('complete-merge')"
         >
-          {{ tr('git.header.complete_merge') }}
+          {{ isRebasing ? tr('git.header.continue_rebase') : tr('git.header.complete_merge') }}
         </button>
         <button
           class="px-2.5 py-1 text-[1em] rounded transition"
@@ -216,10 +214,10 @@
             color: t.danger,
             border: `1px solid ${t.dangerBorder}`,
           }"
-          :title="tr('git.header.abort_merge')"
+          :title="isRebasing ? tr('git.header.abort_rebase') : tr('git.header.abort_merge')"
           @click="emit('request-abort-merge')"
         >
-          Abort merge
+          {{ isRebasing ? tr('git.header.abort_rebase') : tr('git.header.abort_merge') }}
         </button>
         <span class="w-px h-4" :style="{ background: t.border }" />
       </template>
@@ -255,6 +253,7 @@ type Props = {
   currentBranch: string | null
   hasConflict: boolean
   isMerging: boolean
+  isRebasing: boolean
 }
 
 const props = defineProps<Props>()
@@ -332,4 +331,17 @@ const completeMergeBtnStyle = computed(() => ({
   border: `1px solid ${props.hasConflict ? t.value.border : t.value.accent}`,
   cursor: props.hasConflict ? 'not-allowed' : 'pointer',
 }))
+
+// Title for the Complete/Continue button — explains why it's disabled while
+// conflicts remain, switching wording between merge and rebase.
+const completeTitle = computed(() => {
+  if (props.isRebasing) {
+    return props.hasConflict
+      ? tr('git.header.continue_rebase_disabled')
+      : tr('git.header.continue_rebase')
+  }
+  return props.hasConflict
+    ? tr('git.header.complete_merge_disabled')
+    : tr('git.header.complete_merge')
+})
 </script>

@@ -10,6 +10,7 @@ export function createGitConflicts(ctx: GitActionCtx) {
     statusFilesAll,
     currentConflictFile,
     isMerging,
+    isRebasing,
     pushToast,
     resolveWorkspaceRoot,
     loadStatus,
@@ -124,54 +125,80 @@ export function createGitConflicts(ctx: GitActionCtx) {
     }
   }
 
+  // Abort the in-progress operation. Dispatches by git state: a rebase aborts
+  // with `rebase --abort`, everything else (merge / cherry-pick / revert) with
+  // `merge --abort`. Per ADR 0040.
   const mergeAbort = async () => {
+    const rebasing = isRebasing.value
     const root = resolveWorkspaceRoot()
     if (!root) {
       await latency(200, 350)
       isMerging.value = false
+      isRebasing.value = false
       currentConflictFile.value = null
       statusFilesAll.value = statusFilesAll.value.filter(
         (f) => !(f.projectId === selectedProjectId.value && f.hasConflict),
       )
-      pushToast('Merge aborted (mock)', 'success')
+      pushToast(rebasing ? 'Rebase aborted (mock)' : 'Merge aborted (mock)', 'success')
       return
     }
     try {
-      await useGitApi().mergeAbort(root)
+      if (rebasing) await useGitApi().rebaseAbort(root)
+      else await useGitApi().mergeAbort(root)
       currentConflictFile.value = null
       await Promise.all([loadStatus(), loadHistory(), loadBranches({ force: true })])
-      pushToast('Merge aborted', 'success')
+      pushToast(rebasing ? 'Rebase aborted' : 'Merge aborted', 'success')
     } catch (err) {
       if (isUnavailable(err)) return
-      const msg = err instanceof Error ? err.message : 'Merge abort thất bại'
+      const msg =
+        err instanceof Error
+          ? err.message
+          : rebasing
+            ? 'Rebase abort thất bại'
+            : 'Merge abort thất bại'
       pushToast(msg, 'error')
       throw err
     }
   }
 
+  // Finalize the in-progress operation once conflicts are resolved. A rebase
+  // resumes with `rebase --continue`; a merge/cherry-pick/revert finishes with
+  // `git commit` (the optional message applies to merge only). Per ADR 0040.
   const completeMerge = async (message?: string) => {
+    const rebasing = isRebasing.value
     const root = resolveWorkspaceRoot()
     if (!root) {
       await latency(300, 500)
       isMerging.value = false
+      isRebasing.value = false
       currentConflictFile.value = null
-      pushToast('Merge completed (mock)', 'success')
+      pushToast(rebasing ? 'Rebase continued (mock)' : 'Merge completed (mock)', 'success')
       return
     }
     try {
-      const params: { message?: string } = {}
-      if (message && message.trim().length > 0) params.message = message.trim()
-      const result = await useGitApi().completeMerge(root, params)
+      let sha7: string
+      if (rebasing) {
+        sha7 = (await useGitApi().rebaseContinue(root)).sha7
+      } else {
+        const params: { message?: string } = {}
+        if (message && message.trim().length > 0) params.message = message.trim()
+        sha7 = (await useGitApi().completeMerge(root, params)).sha7
+      }
       currentConflictFile.value = null
       await Promise.all([loadStatus(), loadHistory(), loadBranches({ force: true })])
-      pushToast(`Merge completed (${result.sha7})`, 'success')
+      pushToast(rebasing ? `Rebase continued (${sha7})` : `Merge completed (${sha7})`, 'success')
     } catch (err) {
       if (isUnavailable(err)) return
       if (gitCodeOf(err) === 'MERGE_CONFLICT') {
         pushToast('Vẫn còn conflict chưa resolve', 'error')
         return
       }
-      const msg = err instanceof Error ? err.message : 'Complete merge thất bại'
+      const msg =
+        err instanceof Error
+          ? err.message
+          : rebasing
+            ? 'Rebase continue thất bại'
+            : 'Complete merge thất bại'
       pushToast(msg, 'error')
       throw err
     }

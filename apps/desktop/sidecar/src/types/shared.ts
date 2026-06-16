@@ -199,8 +199,21 @@ export interface SessionMessage {
   // (markdown rendering, latency badge, model name, token counters).
   startedAt?: number
   completedAt?: number
+  // Total ms this turn was PARKED on human input (AskUserQuestion / permission
+  // prompt). The UI subtracts it from the displayed elapsed so the figure
+  // reflects working time, not how long the user took. Persisted so a reload
+  // keeps the corrected number. See docs/features/session-steer-queue.md.
+  waitingMs?: number
   modelUsed?: string
-  usage?: { inputTokens: number; outputTokens: number }
+  // cacheReadTokens/cacheWriteTokens are the Anthropic prompt-cache buckets.
+  // Optional for back-compat: messages persisted before this field shipped reload
+  // without them (treated as 0 by the context-window display).
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+  }
   // True when the assistant turn was cut short (user Stop / error / crash) and
   // only a partial reply was persisted. Mirrors the UI SessionMessage.canceled.
   canceled?: boolean
@@ -286,7 +299,7 @@ export type SessionStepDetail =
 
 export interface SessionStep {
   id: string
-  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question'
+  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer'
   tool?: SessionStepTool
   label: string
   target?: string
@@ -316,6 +329,11 @@ export interface SessionStep {
   // then a read-only record. See docs/features/ask-user-question.md.
   questions?: SessionQuestion[]
   answers?: SessionQuestionAnswer[]
+  // Steer step (kind === 'steer'): the user's mid-turn instruction injected via
+  // getSteeringMessages. Holds the steered text so the UI renders it inline as a
+  // user-note in the agent timeline at the point it landed. See
+  // docs/features/session-steer-queue.md.
+  steerText?: string
   // Subagent grouping: when set, this step ran inside the Task step with this
   // tool_use_id. UI nests the step under that parent instead of rendering
   // top-level. Source: SDK's `parent_tool_use_id` on stream_event/assistant/user.

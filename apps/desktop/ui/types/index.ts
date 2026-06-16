@@ -373,6 +373,21 @@ export interface SessionFollowUp {
   note: string
 }
 
+// A message the user queued while a turn was streaming (Session steering/queue —
+// docs/features/session-steer-queue.md). Held in the sessions store per session
+// (ephemeral — not persisted) and auto-sent FIFO as a fresh turn once the
+// current one finishes. Mirrors the sendMessage signature so flushing is a
+// straight replay.
+export interface SessionQueuedMessage {
+  id: string
+  text: string
+  attachments?: SessionAttachment[]
+  followUps?: SessionFollowUp[]
+  // Raw `/command` invocation (display-only) when the queued draft was a slash
+  // command; `text` already holds the expanded body.
+  commandInvocation?: string
+}
+
 export type StepTool =
   | 'read'
   | 'write'
@@ -414,7 +429,7 @@ export interface SessionQuestionAnswer {
 
 export interface SessionStep {
   id: string
-  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question'
+  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer'
   tool?: StepTool
   label: string
   target?: string
@@ -439,6 +454,10 @@ export interface SessionStep {
   // renders the interactive form while `answers` is unset, then a read-only record.
   questions?: SessionQuestion[]
   answers?: SessionQuestionAnswer[]
+  // Steer step (kind === 'steer'): the user's mid-turn instruction injected via
+  // Session steering. Holds the steered text so SessionMessageItem renders it
+  // inline as a user-note at the point it landed in the agent timeline.
+  steerText?: string
   // tool_use_id of the parent Task step when this step ran inside a subagent.
   // Sidecar fills this from the SDK's parent_tool_use_id; UI store uses it to
   // attach the step under the parent's `children` array instead of top-level.
@@ -483,8 +502,23 @@ export interface SessionMessage {
   modeAtSend?: AgentMode
   startedAt?: number
   completedAt?: number
+  // Total ms this turn spent PARKED on human input (AskUserQuestion answer /
+  // permission prompt) — subtracted from the displayed elapsed so it reflects
+  // actual working time, not how long the user took to respond. Accumulated live
+  // by the store and persisted by the sidecar so a reload keeps the corrected
+  // figure. See docs/features/session-steer-queue.md.
+  waitingMs?: number
   modelUsed?: string
-  usage?: { inputTokens: number; outputTokens: number }
+  // cacheReadTokens/cacheWriteTokens are the Anthropic prompt-cache buckets — the
+  // conversation history is served from cache, so it lands here, not in
+  // inputTokens (uncached delta only). Context-window usage sums all four.
+  // Optional for back-compat with messages persisted before the field shipped.
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+  }
   canceled?: boolean
 }
 

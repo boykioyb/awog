@@ -209,6 +209,31 @@
               :step="block.step"
               class="mt-2"
             />
+            <!-- Mid-turn steer: a user-note injected into the running response.
+                 Always visible (it's the user's words) at the point it landed. -->
+            <div
+              v-else-if="block.type === 'steer'"
+              class="mt-2 flex items-start gap-1.5 rounded px-2 py-1 text-[1em]"
+              :style="{
+                background: `${t.accent}14`,
+                color: t.text,
+                border: `1px solid ${t.accent}40`,
+              }"
+            >
+              <CornerDownRight
+                :size="12"
+                class="flex-shrink-0"
+                :style="{ color: t.accent, marginTop: '2px' }"
+              />
+              <span class="flex-1 min-w-0">
+                <span class="text-[12px] font-medium" :style="{ color: t.accent }">
+                  {{ tr('session.steer.label') }}
+                </span>
+                <span class="block whitespace-pre-wrap" :style="{ color: t.textDim }">
+                  {{ block.step.steerText }}
+                </span>
+              </span>
+            </div>
             <!-- Inline step timeline (Claude-Code style): flat vertical list, no
                box — each step's own status icon is the bullet, a thin left rail
                groups the run. `timeline` tells StepItem to wrap long paths and
@@ -256,8 +281,16 @@
              While streaming it shows a live ticker instead of the actions. -->
         <div class="mt-2 flex items-center gap-2 text-[12px]" :style="{ color: t.textFaint }">
           <template v-if="message.startedAt && !message.completedAt">
-            <Activity :size="11" class="animate-pulse" />
-            <span>Streaming… {{ formatElapsed(now - message.startedAt) }}</span>
+            <!-- Parked on human input (a question or permission prompt): show a
+                 static "waiting" state, NOT the ticking elapsed timer. -->
+            <template v-if="awaitingInput">
+              <Clock :size="11" />
+              <span>{{ awaitingLabel }}</span>
+            </template>
+            <template v-else>
+              <Activity :size="11" class="animate-pulse" />
+              <span>Streaming… {{ formatElapsed(workingElapsed(now)) }}</span>
+            </template>
           </template>
           <!-- Rewind confirm bar: replaces the action row until the user
                confirms or cancels. Text differs when a workspace snapshot will
@@ -329,7 +362,7 @@
             </button>
             <span v-if="message.at" class="ml-0.5">{{ fmt(message.at) }}</span>
             <span v-if="message.startedAt && message.completedAt">
-              · {{ formatElapsed(message.completedAt - message.startedAt) }}
+              · {{ formatElapsed(workingElapsed(message.completedAt)) }}
             </span>
             <span v-if="message.usage">· {{ message.usage.outputTokens }} tok</span>
           </template>
@@ -344,7 +377,9 @@ import {
   Activity,
   Check,
   ChevronDown,
+  Clock,
   Copy,
+  CornerDownRight,
   FileText,
   GitBranch,
   Info,
@@ -420,8 +455,9 @@ const expanded = ref(false)
 // visible), so they neither gate nor label the collapse toggle.
 const clusterSteps = computed<SessionStep[]>(
   () =>
-    props.message.steps?.filter((s: SessionStep) => s.kind !== 'note' && s.kind !== 'question') ??
-    [],
+    props.message.steps?.filter(
+      (s: SessionStep) => s.kind !== 'note' && s.kind !== 'question' && s.kind !== 'steer',
+    ) ?? [],
 )
 
 const hasRunningStep = computed((): boolean =>
@@ -434,6 +470,9 @@ type TimelineBlock =
   | { type: 'text'; text: string }
   | { type: 'steps'; steps: SessionStep[] }
   | { type: 'question'; step: SessionStep }
+  // A mid-turn steer the user injected (kind: 'steer'). Always-visible inline
+  // user-note in the agent timeline at the point it landed.
+  | { type: 'steer'; step: SessionStep }
 
 // Coalesce the authoritative ordered parts (ADR 0032) into render blocks: each
 // text part is a text block; consecutive step parts collapse into one cluster.
@@ -449,6 +488,11 @@ const blocksFromParts = (parts: SessionMessagePart[]): TimelineBlock[] => {
     // it was asked (always visible — the turn is blocked until answered).
     if (p.kind === 'question') {
       body.push({ type: 'question', step: p })
+      continue
+    }
+    // Steer notes render inline (always visible) at the point they landed.
+    if (p.kind === 'steer') {
+      body.push({ type: 'steer', step: p })
       continue
     }
     if (p.kind === 'text') {
@@ -492,9 +536,13 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
   const body: TimelineBlock[] = []
   let cursor = 0
   const pushStep = (step: SessionStep) => {
-    // Questions are standalone blocks; tool/thinking steps coalesce into a cluster.
+    // Questions + steer notes are standalone blocks; tool/thinking steps coalesce.
     if (step.kind === 'question') {
       body.push({ type: 'question', step })
+      return
+    }
+    if (step.kind === 'steer') {
+      body.push({ type: 'steer', step })
       return
     }
     const last = body[body.length - 1]
@@ -558,6 +606,28 @@ const hasBubbleContent = computed(
     store.pendingPermission?.messageId === props.message.id,
 )
 const showBubble = computed(() => assistantBubble.value && hasBubbleContent.value)
+
+// The turn is parked on human input, not actually streaming: it called
+// AskUserQuestion (an unanswered `kind:'question'` step) or it is blocked on a
+// permission prompt. While parked the byline must NOT tick "Streaming… {elapsed}"
+// — the clock would run for as long as the user takes to answer (minutes). Show
+// a paused "waiting" state instead; it flips back to streaming once answered.
+const awaitingQuestion = computed(() =>
+  (props.message.steps ?? []).some((s: SessionStep) => s.kind === 'question' && !s.answers),
+)
+const awaitingPermission = computed(() => store.pendingPermission?.messageId === props.message.id)
+const awaitingInput = computed(() => awaitingQuestion.value || awaitingPermission.value)
+const awaitingLabel = computed(() =>
+  awaitingPermission.value
+    ? tr('session.msg.awaiting_permission')
+    : tr('session.msg.awaiting_answer'),
+)
+
+// Elapsed working time = wall-clock minus time PARKED on human input
+// (waitingMs), so a turn that waited 8m for an answer doesn't read as 8m of
+// work. Guarded ≥ 0 against clock skew. `end` is `now` (live) or completedAt.
+const workingElapsed = (end: number): number =>
+  Math.max(0, end - (props.message.startedAt ?? end) - (props.message.waitingMs ?? 0))
 
 // Only the trailing text segment is still being typed — flag it so
 // MarkdownStreamBody throttles just that one and renders the rest immediately.

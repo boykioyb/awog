@@ -8,6 +8,7 @@ import {
   type RunStreamResult,
 } from '../sessions/runner.js'
 import { appendMessage, appendEvent } from '../sessions/store.js'
+import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { loadProject } from '../projects/store.js'
 import {
@@ -172,6 +173,10 @@ register('sessions.sendMessage', async (raw) => {
   // MaxListenersExceededWarning (see runtime/turn-signal.ts).
   liftTurnSignalListenerCap(abortController.signal)
   registerAborter(params.messageId, abortController)
+  // Open the steer channel for this turn so sessions.steer can enqueue mid-turn
+  // instructions; torn down in the finally below. Keyed by the assistant
+  // messageId, same as the aborter registry.
+  beginSteerTurn(params.messageId)
 
   // Resolve cwd from project, if linked. Best-effort: missing project → no
   // cwd (the runtime falls back to process.cwd()). Don't error the chat for a
@@ -305,6 +310,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
 </mcp-preference>`
   }
 
+  // Total ms this turn spends PARKED on human input (permission prompt or
+  // AskUserQuestion answer). Measured around the park awaits below and persisted
+  // on the agent message so the UI can subtract it from the displayed elapsed
+  // (a turn shouldn't read as "8m" because the user took 8m to answer).
+  let waitingMs = 0
+
   // Track which permission requestIds belong to this turn so we can reject
   // them on abort/cancel (rather than leaking parked promises forever).
   const turnRequestIds = new Set<string>()
@@ -335,9 +346,11 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     const pending = parkPermissionRequest(requestId, opts.suggestions ?? [])
     emit('session.permission-request', payload)
 
+    const parkedAt = Date.now()
     try {
       return await pending
     } finally {
+      waitingMs += Date.now() - parkedAt
       turnRequestIds.delete(requestId)
     }
   }
@@ -352,9 +365,11 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   const askUserQuestion: AskUserQuestionFn = async (toolCallId) => {
     turnQuestionIds.add(toolCallId)
     const pending = parkQuestionRequest(toolCallId)
+    const parkedAt = Date.now()
     try {
       return await pending
     } finally {
+      waitingMs += Date.now() - parkedAt
       turnQuestionIds.delete(toolCallId)
     }
   }
@@ -444,6 +459,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       // Ordered timeline (ADR 0032). Authoritative when present — the UI renders
       // it directly instead of re-deriving from text + step offsets.
       ...(parts.length > 0 ? { parts } : {}),
+      // Park time (permission/question waits) so a reloaded turn keeps the
+      // working-time elapsed instead of full wall-clock.
+      ...(waitingMs > 0 ? { waitingMs } : {}),
     }
     if (opts.final) {
       message.completedAt = Date.now()
@@ -452,6 +470,8 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         message.usage = {
           inputTokens: opts.result.usage.input_tokens,
           outputTokens: opts.result.usage.output_tokens,
+          cacheReadTokens: opts.result.usage.cache_read_tokens,
+          cacheWriteTokens: opts.result.usage.cache_creation_tokens,
         }
       } else {
         // Reached on cancel/error: flag the truncated reply so the UI badges it.
@@ -510,6 +530,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         canUseTool,
         askUserQuestion,
         abortController,
+        // Mid-turn steering: hand the loop the steers queued via sessions.steer
+        // for this assistant turn. The drain clears them so each lands once.
+        getSteeringMessages: async () => drainSteer(params.messageId),
       },
       {
         onChunk: (delta) => {
@@ -559,6 +582,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     // without calling canUseTool back), reject so the Map doesn't leak.
     onAbort()
     unregisterAborter(params.messageId)
+    // Close the steer channel — any steer that arrived after the loop's last
+    // drain is discarded (the turn is over).
+    endSteerTurn(params.messageId)
   }
 
   // Terminal event so UI can clear "loading" state purely from the stream,

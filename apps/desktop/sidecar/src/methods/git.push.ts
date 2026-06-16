@@ -19,7 +19,12 @@ const NAME = /^[a-zA-Z0-9._/-]+$/
 const Params = z.object({
   workspaceRoot: z.string().min(1),
   remote: z.string().optional(),
+  // Local branch to push (the source side of the refspec).
   branch: z.string().optional(),
+  // Remote-side branch name when it differs from `branch` — builds a
+  // `branch:targetBranch` refspec so the current branch can push to a
+  // differently-named remote branch (the Push dialog's "To" picker).
+  targetBranch: z.string().optional(),
   setUpstream: z.boolean().optional(),
   // `--force-with-lease` (safe force — aborts if the remote moved under us).
   force: z.boolean().optional(),
@@ -58,6 +63,11 @@ register('git.push', async (raw): Promise<Result> => {
       gitCode: GitErrorCode.INVALID_REF,
     })
   }
+  if (params.targetBranch !== undefined && !NAME.test(params.targetBranch)) {
+    throw new RpcError(GIT_RPC_CODE, 'Target branch name không hợp lệ', {
+      gitCode: GitErrorCode.INVALID_REF,
+    })
+  }
 
   return withWorkspaceLock(params.workspaceRoot, async () => {
     suppressEchoFor(params.workspaceRoot)
@@ -67,7 +77,16 @@ register('git.push', async (raw): Promise<Result> => {
     // remote gained since our last fetch (ADR 0017 OQ-12 safety constraint).
     if (params.force) args.push('--force-with-lease')
     args.push(remote)
-    if (params.branch) args.push(params.branch)
+    // Build the refspec server-side so the `:` never arrives from the UI as a
+    // raw string (both sides are NAME-validated above). Same name → push the
+    // branch as-is; different name → `local:remote` refspec.
+    if (params.branch) {
+      const refspec =
+        params.targetBranch && params.targetBranch !== params.branch
+          ? `${params.branch}:${params.targetBranch}`
+          : params.branch
+      args.push(refspec)
+    }
     if (params.pushTags) args.push('--tags')
 
     const { stderr, code } = await runGitStreaming({

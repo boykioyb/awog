@@ -16,12 +16,15 @@ Tool `Task` nhận:
 |---|---|
 | `description` | Nhãn ngắn (3-5 từ) để hiển thị |
 | `prompt` | Toàn bộ việc giao cho subagent (self-contained — subagent chạy autonomous, không hỏi lại) |
-| `subagent_type` | Tên agent muốn gọi (model chọn từ menu liệt kê trong `description` của tool) |
+| `subagent_type` | **Tùy chọn.** Tên agent muốn gọi (model chọn từ menu trong `description`). **Bỏ trống** → chạy subagent **general-purpose** kế thừa cấu hình của turn cha |
 
 `description` của tool **liệt kê** các agent trong scope (tên + mô tả 1 dòng) để model chọn đúng `subagent_type`.
 
+`subagent_type` cố ý để `Type.Optional`: dưới OAuth model bị điều kiện hoá như Claude Code (luôn có `general-purpose` default) nên thỉnh thoảng bỏ field. Đánh `required` khiến Pi validator hard-fail trước `execute()` (lỗi khó hiểu). Thay vì bounce, AWOG mượn ngữ nghĩa craft `spawn_session` ("omitted fields **inherit from the spawning session**"): bỏ trống → subagent general-purpose kế thừa parent. Chỉ khi model **nêu tên cụ thể nhưng sai** mới trả lại danh sách để sửa typo.
+
 ### Resolve subagent
 
+0. **Bỏ trống `subagent_type`** → `agent = null`: dựng context general-purpose kế thừa `parentSystemPrompt` + `parentAllowedTools` + `parentSettings` (provider/model/account) + `parentMcpServers` của turn cha. Bỏ qua bước 1-2.
 1. Match `subagent_type` → AWOG Agent: ưu tiên `id`, rồi `name` (case-insensitive), rồi slug của name.
 2. `resolveAgentContext` (tái dùng từ Tasks) → `systemPrompt` + `allowedTools` + `mcpServers` (secret expand) + `provider/model/accountId`.
 3. **Settings subagent** = honor frontmatter AGENT.md khi có (`provider/model/accountId`), fallback về settings của turn cha. `level` + `mode` luôn kế thừa cha.
@@ -47,8 +50,8 @@ Tool `Task` nhận:
 
 `Task` luôn được đăng ký ở top-level (chat non-plan + task), tôn trọng `allowedTools/disabledTools`. Khi:
 
-- **0 agent trong workspace** → trả content "không có subagent, tự làm".
-- **`subagent_type` sai** → trả content liệt kê type hợp lệ để model retry.
+- **Bỏ trống `subagent_type`** (kể cả **0 agent** trong workspace) → chạy subagent general-purpose kế thừa parent (không còn lỗi "No subagent_type was provided").
+- **`subagent_type` sai** (nêu tên không khớp agent nào) → trả content liệt kê type hợp lệ + gợi ý bỏ trống để chạy general-purpose, cho model sửa.
 - **Vượt cap** (`MAX_SUBAGENTS_PER_TURN = 25` / turn) → trả content yêu cầu tự làm phần còn lại.
 - **Subagent lỗi** → trả content báo lỗi (non-fatal) để parent re-plan, không abort cả turn.
 

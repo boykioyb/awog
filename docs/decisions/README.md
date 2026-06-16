@@ -38,8 +38,17 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0030](./0030-subagent-task-tool.md) | Subagent `Task` tool | Accepted |
 | [0031](./0031-rtk-token-proxy.md) | Bundle RTK (Rust Token Killer) làm bộ nén output cho Bash tool | Reverted (2026-06-15) |
 | [0032](./0032-hook-execution-engine-ipc-contract.md) | Hook Execution Engine + IPC contract | Accepted |
+| [0032](./0032-session-message-parts-model.md) | Session message parts model | Accepted |
 | [0033](./0033-rules-system-prompt-injection.md) | Rules — workspace instruction injection vào system prompt | Accepted |
 | [0034](./0034-slash-commands-markdown.md) | Slash Commands dưới dạng Markdown (Claude Code-aligned) | Accepted |
+| [0035](./0035-consolidate-config-tiers-to-awog.md) | Quy hoạch lại lưu trữ config-entity về `.awog` (single editable tier) | Accepted |
+| [0036](./0036-project-templates.md) | Project Templates (bundle config tái dùng + install) | Accepted |
+| [0037](./0037-remote-template-fetch-github.md) | Fetch Project Templates từ folder GitHub (public) | Accepted |
+| [0038](./0038-session-rewind-fs-snapshots.md) | Rewind cho Session bằng filesystem snapshot | Accepted |
+| [0039](./0039-tray-account-usage-channel.md) | Tray account-usage state channel (`tray:setState`) + main-side notification | Accepted (phần kỹ thuật) |
+| [0040](./0040-git-branch-ops-merge-rebase-pr.md) | Git branch ops: merge/rebase trong sidecar, Create PR qua browser | Accepted |
+
+> Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần (hiện 0040).
 
 ## Template
 

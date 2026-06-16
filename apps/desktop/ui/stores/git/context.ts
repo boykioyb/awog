@@ -77,6 +77,10 @@ export function createGitContext() {
   // Track whether HEAD is in the middle of a merge (`.git/MERGE_HEAD` exists)
   // so the toolbar can offer Complete / Abort merge.
   const isMerging = ref(false)
+  // Track whether a rebase is in progress (`.git/rebase-merge|rebase-apply`).
+  // The conflict resolver finalizes a rebase via `rebase --continue|--abort`
+  // instead of `git commit`, so it must know which operation is mid-flight.
+  const isRebasing = ref(false)
   // Detached HEAD state (AC-42). When detached, branch picker shows the sha7
   // marker and Commit panel warns the user before creating a stranded commit.
   const isDetached = ref(false)
@@ -247,6 +251,7 @@ export function createGitContext() {
     pushDialogOpen,
     currentConflictFile,
     isMerging,
+    isRebasing,
     isDetached,
     detachedAt,
     branchesLastFetchedAt,

@@ -43,6 +43,7 @@ export const useGitStore = defineStore('git', () => {
     toasts: ctx.toasts,
     currentConflictFile: ctx.currentConflictFile,
     isMerging: ctx.isMerging,
+    isRebasing: ctx.isRebasing,
     isDetached: ctx.isDetached,
     detachedAt: ctx.detachedAt,
     pendingCheckoutError: ctx.pendingCheckoutError,
@@ -88,6 +89,7 @@ export const useGitStore = defineStore('git', () => {
     loadRemotes: data.loadRemotes,
     subscribe: data.subscribe,
     initRepo: data.initRepo,
+    pushToast: ctx.pushToast,
     // ─── actions: domain modules ───
     ...staging,
     ...sync,

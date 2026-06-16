@@ -29,6 +29,13 @@ interface Accumulator {
   modelUsed: string
   inputTokens: number
   outputTokens: number
+  // Prompt-cache tokens (Anthropic). The conversation history is served from the
+  // cache, so it lands in cacheRead — NOT inputTokens (which only counts the
+  // uncached delta). The true context-window occupancy is the sum of all four,
+  // so dropping these makes `used` collapse to a few k no matter how long the
+  // chat gets. See SessionContextStatus.
+  cacheReadTokens: number
+  cacheWriteTokens: number
   stopReason: string | null
 }
 
@@ -77,6 +84,8 @@ export function createEventAdapter(
     modelUsed: '',
     inputTokens: 0,
     outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
     stopReason: null,
   }
   const announcedTools = new Set<string>()
@@ -235,6 +244,8 @@ export function createEventAdapter(
           if (last.model) acc.modelUsed = last.model
           acc.inputTokens = last.usage.input
           acc.outputTokens = last.usage.output
+          acc.cacheReadTokens = last.usage.cacheRead
+          acc.cacheWriteTokens = last.usage.cacheWrite
           acc.stopReason = last.stopReason
         }
         break

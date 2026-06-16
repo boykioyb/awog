@@ -158,9 +158,10 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Fetch URL'
     case 'Task': {
       // Format: "Agent <subagent_type>" so the step row reads like Claude Code's
-      // "Ran agent X" affordance. Falls back to plain "Subagent" when unknown.
+      // "Ran agent X" affordance. An omitted type runs the general-purpose
+      // subagent (task-tool.ts), so reflect that rather than a vague "Subagent".
       const sub = typeof input.subagent_type === 'string' ? input.subagent_type : ''
-      return sub ? `Agent ${sub}` : 'Subagent'
+      return `Agent ${sub || 'general-purpose'}`
     }
     case 'TodoWrite':
       return 'Todos'

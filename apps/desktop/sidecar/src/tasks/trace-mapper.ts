@@ -99,7 +99,7 @@ export function traceFromToolUse(use: InvokeToolUse): TraceNode {
   }
   if (use.name === 'Task') {
     const sub = typeof use.input.subagent_type === 'string' ? use.input.subagent_type : ''
-    node.name = sub || 'subagent'
+    node.name = sub || 'general-purpose'
     const desc = typeof use.input.description === 'string' ? use.input.description : ''
     if (desc) node.purpose = desc
   } else {
@@ -119,7 +119,7 @@ export function traceFromToolResult(use: InvokeToolUse, result: InvokeToolResult
   }
   if (use.name === 'Task') {
     const sub = typeof use.input.subagent_type === 'string' ? use.input.subagent_type : ''
-    node.name = sub || 'subagent'
+    node.name = sub || 'general-purpose'
     const desc = typeof use.input.description === 'string' ? use.input.description : ''
     if (desc) node.purpose = desc
   } else {

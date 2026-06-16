@@ -420,6 +420,66 @@ export function createGitBranches(ctx: GitActionCtx) {
     }
   }
 
+  // ─── Merge / Rebase ────────────────────────────────────────────────────────
+
+  // Merge `branch` into the current HEAD. Conflicts route into the Conflict
+  // Resolver (same as cherry-pick): the next loadStatus surfaces `isMerging` +
+  // conflicted files so the resolver opens. Per ADR 0040.
+  const merge = async (branch: string) => {
+    const root = resolveWorkspaceRoot()
+    if (!root) {
+      await latency(200, 400)
+      pushToast(`Merged ${branch} (mock)`, 'success')
+      return
+    }
+    try {
+      const result = await useGitApi().merge(root, branch)
+      await Promise.all([loadStatus(), loadHistory(), loadBranches({ force: true })])
+      pushToast(
+        result.fastForward
+          ? `Fast-forwarded to ${branch} (${result.sha7})`
+          : `Merged ${branch} → ${result.sha7}`,
+        'success',
+      )
+    } catch (err) {
+      if (isUnavailable(err)) return
+      if (gitCodeOf(err) === 'MERGE_CONFLICT') {
+        await loadStatus().catch(() => undefined)
+        pushToast('Merge có conflict — mở Conflict Resolver', 'error')
+        return
+      }
+      const msg = err instanceof Error ? err.message : 'Merge thất bại'
+      pushToast(msg, 'error')
+      throw err
+    }
+  }
+
+  // Rebase the current branch onto `onto`. Conflicts route into the Conflict
+  // Resolver, which finalizes via `rebase --continue|--abort` (see conflicts.ts).
+  const rebase = async (onto: string) => {
+    const root = resolveWorkspaceRoot()
+    if (!root) {
+      await latency(200, 400)
+      pushToast(`Rebased onto ${onto} (mock)`, 'success')
+      return
+    }
+    try {
+      const result = await useGitApi().rebase(root, onto)
+      await Promise.all([loadStatus(), loadHistory(), loadBranches({ force: true })])
+      pushToast(`Rebased ${currentBranch.value} onto ${onto} → ${result.sha7}`, 'success')
+    } catch (err) {
+      if (isUnavailable(err)) return
+      if (gitCodeOf(err) === 'MERGE_CONFLICT') {
+        await loadStatus().catch(() => undefined)
+        pushToast('Rebase có conflict — mở Conflict Resolver', 'error')
+        return
+      }
+      const msg = err instanceof Error ? err.message : 'Rebase thất bại'
+      pushToast(msg, 'error')
+      throw err
+    }
+  }
+
   return {
     createBranch,
     checkoutBranch,
@@ -432,5 +492,7 @@ export function createGitBranches(ctx: GitActionCtx) {
     stashApply,
     stashDrop,
     createTag,
+    merge,
+    rebase,
   }
 }

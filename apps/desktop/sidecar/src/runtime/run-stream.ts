@@ -7,7 +7,12 @@
 //   - `/compact` = one-shot summarize over the rebuilt history (a graceful
 //     fallback ships here).
 
-import { runAgentLoop, generateSummary, type AgentEvent } from '@earendil-works/pi-agent-core'
+import {
+  runAgentLoop,
+  generateSummary,
+  type AgentEvent,
+  type AgentMessage,
+} from '@earendil-works/pi-agent-core'
 import type { Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
@@ -160,6 +165,10 @@ export async function runStreamPi(
         agents,
         cwd: args.cwd ?? process.cwd(),
         parentSettings: args.settings,
+        // Inherited by a general-purpose subagent when the model omits
+        // subagent_type (craft-style): parent base prompt + tool whitelist.
+        ...(args.systemPrompt ? { parentSystemPrompt: args.systemPrompt } : {}),
+        ...(args.allowedTools ? { parentAllowedTools: args.allowedTools } : {}),
         ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
         // Subagent inherits this turn's resolved MCP servers (session whitelist +
         // secrets already applied) so it can reach the same servers the session can.
@@ -187,6 +196,40 @@ export async function runStreamPi(
   const reasoning = toReasoning(args.settings.level, model)
   const adapter = createEventAdapter(cb)
 
+  // Mid-turn steering (Session steering). Pi polls this at each turn boundary
+  // (after the current assistant turn's tool calls finish, before the next LLM
+  // call). We drain the per-turn steer queue, surface each item as a
+  // `kind:'steer'` step so the user sees what they injected in the timeline (it
+  // gets stamped + persisted by the caller's onStep), and return them as user
+  // messages for the loop to inject. Contract: must not throw — a steer failure
+  // should never break the turn, so we swallow and return [].
+  const getSteeringMessages = args.getSteeringMessages
+    ? async (): Promise<AgentMessage[]> => {
+        try {
+          const items = await args.getSteeringMessages!()
+          if (items.length === 0) return []
+          for (const it of items) {
+            cb.onStep?.({
+              id: it.id,
+              kind: 'steer',
+              label: 'Steered',
+              status: 'done',
+              steerText: it.text,
+            })
+          }
+          return items.map(
+            (it): AgentMessage => ({ role: 'user', content: it.text, timestamp: Date.now() }),
+          )
+        } catch (err) {
+          log.warn('getSteeringMessages failed', {
+            sessionId: args.sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+          return []
+        }
+      }
+    : undefined
+
   log.info('chat stream request (pi)', {
     sessionId: args.sessionId,
     model: args.settings.modelId,
@@ -212,6 +255,9 @@ export async function runStreamPi(
         convertToLlm: (messages) => messages as Message[],
         ...(reasoning ? { reasoning } : {}),
         beforeToolCall,
+        // Mid-turn steering: inject user instructions queued via sessions.steer
+        // at each turn boundary (undefined for tasks/subagents → no-op).
+        ...(getSteeringMessages ? { getSteeringMessages } : {}),
         // Capture Codex plan-usage from response headers (no-op for non-Codex).
         onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
         // Sequential tool execution keeps step ordering deterministic for the UI
@@ -223,6 +269,17 @@ export async function runStreamPi(
     )
   } catch (err) {
     throw mapErrorToRpc(err)
+  }
+
+  // Pi swallows a mid-stream abort into a graceful stopReason 'aborted' instead
+  // of throwing (the provider catches the "Request was aborted" error and ends
+  // the stream cleanly), so runAgentLoop returns normally. Surface it as a
+  // CANCELED RpcError so sessions.send-message routes it through the cancel path
+  // (persist the partial reply flagged `canceled`, reject the RPC with -32023)
+  // — identical to a thrown abort — instead of persisting it as a normal
+  // completion the UI can't tell apart from a finished turn.
+  if (args.abortController?.signal.aborted) {
+    throw new RpcError(-32023, 'CANCELED')
   }
 
   const acc = adapter.result()
@@ -238,7 +295,12 @@ export async function runStreamPi(
   return {
     text: acc.text,
     modelUsed: acc.modelUsed || args.settings.modelId,
-    usage: { input_tokens: acc.inputTokens, output_tokens: acc.outputTokens },
+    usage: {
+      input_tokens: acc.inputTokens,
+      output_tokens: acc.outputTokens,
+      cache_read_tokens: acc.cacheReadTokens,
+      cache_creation_tokens: acc.cacheWriteTokens,
+    },
     stopReason: acc.stopReason,
   }
 }
@@ -258,7 +320,7 @@ async function runCompact(
     return {
       text: 'Compaction skipped: no credential available.',
       modelUsed: args.settings.modelId,
-      usage: { input_tokens: 0, output_tokens: 0 },
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
       stopReason: 'end_turn',
     }
   }
@@ -276,7 +338,7 @@ async function runCompact(
     return {
       text: summary,
       modelUsed: args.settings.modelId,
-      usage: { input_tokens: 0, output_tokens: 0 },
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
       stopReason: 'end_turn',
     }
   } catch (err) {
@@ -290,7 +352,7 @@ async function runCompact(
     return {
       text: 'Compaction is not available on this runtime yet.',
       modelUsed: args.settings.modelId,
-      usage: { input_tokens: 0, output_tokens: 0 },
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
       stopReason: 'end_turn',
     }
   }

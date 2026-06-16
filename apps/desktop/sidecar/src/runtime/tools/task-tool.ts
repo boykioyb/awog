@@ -21,7 +21,7 @@ import { runAgentLoop, type AgentEvent, type AgentTool } from '@earendil-works/p
 import { Type, type Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../../providers/openai/usage.js'
-import { resolveAgentContext } from '../../tasks/agent-context.js'
+import { resolveAgentContext, type ResolvedAgentContext } from '../../tasks/agent-context.js'
 import { log } from '../../util/logger.js'
 import type { Agent, SessionSettings } from '../../types/shared.js'
 import type { McpServersConfig } from '../permission-types.js'
@@ -50,10 +50,14 @@ const TaskParams = Type.Object({
   // where a `general-purpose` default always exists, so it occasionally omits
   // this field. Marking it required makes Pi's schema validator hard-fail before
   // execute() runs (cryptic "must have required properties" error). Keeping it
-  // optional lets execute() recover gracefully — same path as an unknown name.
+  // optional lets execute() resolve a sensible target instead: an omitted type
+  // runs a general-purpose subagent that inherits this turn's config (mirrors
+  // craft `spawn_session`, where omitted fields inherit from the spawning
+  // session) — only a *named but unknown* type bounces back for correction.
   subagent_type: Type.Optional(
     Type.String({
-      description: 'The name of the subagent to launch (see the list of available types above).',
+      description:
+        'The name of the subagent to launch (see the list of available types above). Omit to run a general-purpose subagent that inherits the current agent, tools, and model.',
     }),
   ),
 })
@@ -80,6 +84,12 @@ export interface TaskToolDeps {
   // The parent turn's settings — the subagent inherits level/mode and falls back
   // to the parent's provider/model/account when its AGENT.md doesn't specify one.
   parentSettings: SessionSettings
+  // The parent turn's base system prompt + tool whitelist. Used to build the
+  // general-purpose subagent when the model omits `subagent_type` (craft-style
+  // inherit-from-parent): it runs with the parent's prompt/tools/model instead
+  // of an AGENT.md.
+  parentSystemPrompt?: string
+  parentAllowedTools?: string[]
   // Session-scoped tool denylist, applied to the subagent toolset too.
   disabledTools?: string[]
   // Task source connection unioned into the subagent's MCP set (tasks only).
@@ -116,9 +126,10 @@ function describeTool(agents: Agent[]): string {
   const intro =
     'Launch a specialized AWOG subagent to handle a focused, multi-step task autonomously. ' +
     'The subagent runs to completion with its own system prompt, tools, and MCP servers, then returns its final message as the result. ' +
-    'It cannot launch further subagents. Provide a short `description`, the agent name as `subagent_type`, and a detailed self-contained `prompt`.'
+    'It cannot launch further subagents. Provide a short `description` and a detailed self-contained `prompt`. ' +
+    'Pass `subagent_type` to pick one of the agents below; omit it to run a general-purpose subagent that inherits the current agent, tools, and model.'
   if (agents.length === 0) {
-    return `${intro}\n\n(No subagents are currently configured in this workspace — if you call this, you will be told to complete the task yourself.)`
+    return `${intro}\n\n(No named subagents are configured in this workspace — calling this runs a general-purpose subagent that inherits the current agent, tools, and model.)`
   }
   const menu = agents
     .map((a) => `- ${a.name}: ${a.description?.split('\n')[0]?.trim() || a.role || 'general-purpose'}`)
@@ -161,15 +172,30 @@ function subagentSettings(
 async function spawnSubagent(
   deps: TaskToolDeps,
   parentToolCallId: string,
-  agent: Agent,
+  agent: Agent | null,
   prompt: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const agentCtx = await resolveAgentContext(
-    { id: agent.id, source: agent.source, ...(agent.projectId ? { projectId: agent.projectId } : {}) },
-    undefined,
-    deps.connectionId,
-  )
+  // A named agent resolves its AGENT.md context. A null agent (the model omitted
+  // `subagent_type`) builds a general-purpose context that inherits the parent
+  // turn: no provider/model/account (so subagentSettings falls back to the
+  // parent) and no own MCP whitelist (the parent's servers arrive via
+  // parentMcpServers below).
+  const label = agent ? agent.name : 'general-purpose'
+  const agentCtx: ResolvedAgentContext = agent
+    ? await resolveAgentContext(
+        {
+          id: agent.id,
+          source: agent.source,
+          ...(agent.projectId ? { projectId: agent.projectId } : {}),
+        },
+        undefined,
+        deps.connectionId,
+      )
+    : {
+        ...(deps.parentSystemPrompt ? { systemPrompt: deps.parentSystemPrompt } : {}),
+        ...(deps.parentAllowedTools ? { allowedTools: deps.parentAllowedTools } : {}),
+      }
 
   const settings = subagentSettings(deps.parentSettings, agentCtx)
   const { account } = await resolveCredential(settings.provider, settings.accountId)
@@ -214,7 +240,7 @@ async function spawnSubagent(
   const initialKey = await getApiKey(settings.provider)
 
   log.info('subagent spawn (pi)', {
-    subagent: agent.name,
+    subagent: label,
     parentToolCallId,
     model: settings.modelId,
     account: account.id,
@@ -257,47 +283,32 @@ export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams,
     async execute(toolCallId, params, signal) {
       const requested = params.subagent_type?.trim()
       const details: TaskDetails = {
-        subagentType: requested || '(unspecified)',
+        subagentType: requested || 'general-purpose',
         description: params.description,
       }
 
-      if (deps.agents.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'No subagents are configured in this workspace, so the Task tool cannot delegate. Complete the task yourself using your available tools.',
-            },
-          ],
-          details,
+      // Resolve the target. A *named* type must match an in-scope agent, else we
+      // bounce so the model can fix a typo'd name. An *omitted* type is not an
+      // error: `agent` stays null and spawnSubagent runs a general-purpose
+      // subagent inheriting this turn's config (craft `spawn_session` semantics).
+      let agent: Agent | null = null
+      if (requested && deps.agents.length > 0) {
+        const matched = matchAgent(deps.agents, requested)
+        if (!matched) {
+          const names = deps.agents.map((a) => a.name).join(', ')
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Unknown subagent_type "${requested}". Available subagents: ${names}. Retry with one of these, or omit subagent_type to run a general-purpose subagent.`,
+              },
+            ],
+            details,
+          }
         }
+        agent = matched
       }
-
-      // Resolve which agent to run. A missing subagent_type is tolerated: with
-      // exactly one agent in scope we pick it (the unambiguous default), else we
-      // ask the model to name one — the same recovery path as an unknown name.
-      let agent: Agent | undefined
-      if (requested) {
-        agent = matchAgent(deps.agents, requested)
-      } else if (deps.agents.length === 1) {
-        agent = deps.agents[0]
-      }
-      if (!agent) {
-        const names = deps.agents.map((a) => a.name).join(', ')
-        const reason = requested
-          ? `Unknown subagent_type "${requested}".`
-          : 'No subagent_type was provided.'
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `${reason} Available subagents: ${names}. Retry with one of these, or complete the task yourself.`,
-            },
-          ],
-          details,
-        }
-      }
-      details.subagentType = agent.name
+      details.subagentType = agent ? agent.name : 'general-purpose'
 
       if (spawned >= MAX_SUBAGENTS_PER_TURN) {
         return {
@@ -320,11 +331,12 @@ export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams,
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        log.warn('subagent run failed', { subagent: agent.name, err: message })
+        const who = agent ? agent.name : 'general-purpose'
+        log.warn('subagent run failed', { subagent: who, err: message })
         // Surface as a non-fatal tool error so the parent can recover (re-plan
         // or do the work itself) rather than aborting the whole turn.
         return {
-          content: [{ type: 'text', text: `Subagent "${agent.name}" failed: ${message}` }],
+          content: [{ type: 'text', text: `Subagent "${who}" failed: ${message}` }],
           details,
         }
       }

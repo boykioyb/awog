@@ -66,8 +66,14 @@
         </span>
         <span
           v-if="!isRemote && (row.branch.ahead > 0 || row.branch.behind > 0)"
-          class="text-[1em] font-mono"
+          class="text-[12px] font-mono leading-none"
           :style="{ color: t.textDim }"
+          :title="
+            tr('git.branches.ahead_behind_hint', {
+              ahead: row.branch.ahead,
+              behind: row.branch.behind,
+            })
+          "
         >
           {{ row.branch.ahead > 0 ? `↑${row.branch.ahead}` : ''
           }}{{ row.branch.behind > 0 ? ` ↓${row.branch.behind}` : '' }}
@@ -116,6 +122,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { t: tr } = useI18n()
 const hovered = ref<string | null>(null)
 
 const hoverPrefix = computed(() => (props.isRemote ? 'rbranch:' : 'branch:'))

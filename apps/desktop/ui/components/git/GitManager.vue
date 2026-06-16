@@ -32,6 +32,7 @@
           :current-branch="store.currentBranch"
           :has-conflict="store.hasConflict"
           :is-merging="store.isMerging"
+          :is-rebasing="store.isRebasing"
           @select-project="onSelectProject"
           @select-repo="onSelectRepo"
           @switch-branch="switchBranch"
@@ -72,8 +73,10 @@
       <!-- ─── Modals ───────────────────────────────────────────────────── -->
       <ConfirmDeleteModal
         v-if="pendingAbort"
-        :title="tr('git.abort_merge.title')"
-        :description="tr('git.abort_merge.description')"
+        :title="store.isRebasing ? tr('git.abort_rebase.title') : tr('git.abort_merge.title')"
+        :description="
+          store.isRebasing ? tr('git.abort_rebase.description') : tr('git.abort_merge.description')
+        "
         @confirm="onConfirmAbort"
         @cancel="pendingAbort = false"
       />
@@ -134,6 +137,11 @@
         :branch-name="branchMenu?.name ?? ''"
         :is-remote="branchMenu?.isRemote ?? false"
         :is-current="branchMenu?.isCurrent ?? false"
+        :current-branch="store.currentBranch ?? ''"
+        :has-upstream="!!branchMenu?.upstream"
+        :has-remote="store.remotes.length > 0"
+        :ahead="branchMenu?.ahead ?? 0"
+        :behind="branchMenu?.behind ?? 0"
         @close="branchMenu = null"
         @checkout="onMenuCheckout"
         @checkout-as-local="onMenuCheckoutAsLocal"
@@ -142,6 +150,30 @@
         @copy="copyToClipboard"
         @fetch="store.fetchRemote()"
         @delete="(name: string) => (pendingBranchDelete = name)"
+        @merge="onMenuMerge"
+        @rebase="onMenuRebase"
+        @create-tag="onMenuCreateTag"
+        @create-pr="onMenuCreatePr"
+        @pull="onMenuPull"
+        @push="onMenuPush"
+      />
+
+      <GitTagCreateModal
+        :open="tagModalOpen"
+        :target-sha="tagTargetSha"
+        :target-short-hash="tagTargetSha.slice(0, 7)"
+        @close="tagModalOpen = false"
+        @submit="onMenuTagSubmit"
+      />
+
+      <GitCreatePrModal
+        :open="prModal !== null"
+        :head="prModal?.head ?? ''"
+        :base-branches="prModal?.baseBranches ?? []"
+        :default-base="prModal?.defaultBase ?? ''"
+        :repo="prModal?.repo ?? null"
+        @close="prModal = null"
+        @submit="onPrSubmit"
       />
 
       <GitBranchNameModal
@@ -240,6 +272,7 @@ import type { GitBranch, GitCommit, GitFileDiff, GitFileStatus, Project } from '
 import type { CheckInstalledResult } from '~/composables/useGitApi'
 import type { GitSection } from '~/components/git/git-section'
 import { isValidGitRef } from '~/utils/branch-tree'
+import { parseRemoteUrl, type RemoteRepo } from '~/utils/git-remote-url'
 
 // Optional project to pin (modal mode opened from a Session). In page mode the
 // prop is absent and bootstrap falls back to the previously selected project /
@@ -364,12 +397,30 @@ type BranchMenu = {
   name: string
   isRemote: boolean
   isCurrent: boolean
+  upstream: string | null
+  ahead: number
+  behind: number
+  lastCommit: string
 }
 const branchMenu = ref<BranchMenu | null>(null)
 const renameTarget = ref<string | null>(null)
 const renameValue = ref('')
 const pendingBranchDelete = ref<string | null>(null)
 const deleteRemoteToo = ref(false)
+
+// Create-tag-from-branch modal (reuses the History tag modal; targets the
+// branch tip instead of a selected commit).
+const tagModalOpen = ref(false)
+const tagTargetSha = ref('')
+
+// Create-PR modal payload: the head branch + base candidates + parsed remote.
+type PrModal = {
+  head: string
+  baseBranches: string[]
+  defaultBase: string
+  repo: RemoteRepo
+}
+const prModal = ref<PrModal | null>(null)
 
 const MENU_WIDTH = 200
 const MENU_HEIGHT = 220
@@ -382,6 +433,10 @@ const onBranchContext = (e: MouseEvent, branch: GitBranch) => {
     name: branch.name,
     isRemote: branch.isRemote,
     isCurrent: branch.isCurrent,
+    upstream: branch.upstream ?? null,
+    ahead: branch.ahead,
+    behind: branch.behind,
+    lastCommit: branch.lastCommit,
   }
 }
 
@@ -402,6 +457,72 @@ const onMenuCreateFrom = (fromRef: string) => {
   branchMenu.value = null
   createFromRef.value = fromRef
   showCreateBranch.value = true
+}
+
+// Merge the picked branch into HEAD / rebase HEAD onto it. A dirty working tree
+// that would be overwritten makes git refuse with a DIRTY_TREE error, surfaced
+// as a toast by the store action — no extra pre-flight guard needed.
+const onMenuMerge = async (name: string) => {
+  branchMenu.value = null
+  await store.merge(name)
+}
+
+const onMenuRebase = async (name: string) => {
+  branchMenu.value = null
+  await store.rebase(name)
+}
+
+const onMenuCreateTag = () => {
+  const sha = branchMenu.value?.lastCommit ?? ''
+  branchMenu.value = null
+  if (!sha) return
+  tagTargetSha.value = sha
+  tagModalOpen.value = true
+}
+
+const onMenuTagSubmit = async (payload: { name: string; message: string; annotated: boolean }) => {
+  tagModalOpen.value = false
+  const opts: { message?: string; annotated?: boolean } = {}
+  if (payload.message) opts.message = payload.message
+  if (payload.annotated) opts.annotated = true
+  await store.createTag(payload.name, tagTargetSha.value, opts)
+}
+
+const onMenuPull = async () => {
+  branchMenu.value = null
+  await store.pull()
+}
+
+const onMenuPush = () => {
+  branchMenu.value = null
+  store.pushDialogOpen = true
+}
+
+// Build the Create-PR payload: parse the remote URL into host + owner/repo,
+// strip the remote prefix for a remote branch's head, and offer the local
+// branches as base candidates (default to main/master/develop when present).
+const onMenuCreatePr = (name: string) => {
+  const menu = branchMenu.value
+  branchMenu.value = null
+  const remote = store.remotes.find((r) => r.name === 'origin') ?? store.remotes[0]
+  if (!remote) return
+  const repo = parseRemoteUrl(remote.fetchUrl || remote.pushUrl)
+  if (!repo) {
+    store.pushToast(tr('git.pr.parse_failed'), 'error')
+    return
+  }
+  const head = menu?.isRemote ? name.replace(/^[^/]+\//, '') : name
+  const baseBranches = Array.from(
+    new Set(store.branches.filter((b: GitBranch) => !b.isRemote).map((b: GitBranch) => b.name)),
+  ).filter((b) => b !== head)
+  const defaultBase =
+    ['main', 'master', 'develop'].find((b) => baseBranches.includes(b)) ?? baseBranches[0] ?? ''
+  prModal.value = { head, baseBranches, defaultBase, repo }
+}
+
+const onPrSubmit = async (url: string) => {
+  prModal.value = null
+  await useSidecar().openExternal(url)
 }
 
 const onMenuRename = (name: string) => {

@@ -202,6 +202,9 @@ export interface PullResult {
 export interface PushParams {
   remote?: string
   branch?: string
+  // Remote-side branch name when pushing the current branch to a different
+  // name; the sidecar builds the `branch:targetBranch` refspec.
+  targetBranch?: string
   setUpstream?: boolean
   // `--force-with-lease` — gated behind the Push dialog's confirm checkbox.
   force?: boolean
@@ -272,6 +275,19 @@ export interface TagCreateParams {
 export type ResetMode = 'soft' | 'mixed' | 'hard'
 
 export interface CherryPickResult {
+  ok: true
+  sha: string
+  sha7: string
+}
+
+export interface MergeResult {
+  ok: true
+  fastForward: boolean
+  sha: string
+  sha7: string
+}
+
+export interface RebaseResult {
   ok: true
   sha: string
   sha7: string
@@ -356,6 +372,14 @@ export function useGitApi() {
       sidecar.request<{ ok: true }>('git.mergeAbort', { workspaceRoot }),
     completeMerge: (workspaceRoot: string, params: CompleteMergeParams = {}) =>
       sidecar.request<CommitResult>('git.completeMerge', { workspaceRoot, ...params }),
+    merge: (workspaceRoot: string, branch: string) =>
+      sidecar.request<MergeResult>('git.merge', { workspaceRoot, branch }),
+    rebase: (workspaceRoot: string, onto: string) =>
+      sidecar.request<RebaseResult>('git.rebase', { workspaceRoot, onto }),
+    rebaseContinue: (workspaceRoot: string) =>
+      sidecar.request<RebaseResult>('git.rebaseContinue', { workspaceRoot }),
+    rebaseAbort: (workspaceRoot: string) =>
+      sidecar.request<{ ok: true }>('git.rebaseAbort', { workspaceRoot }),
     tagCreate: (workspaceRoot: string, params: TagCreateParams) =>
       sidecar.request<{ ok: true }>('git.tagCreate', { workspaceRoot, ...params }),
     checkoutCommit: (workspaceRoot: string, sha: string) =>

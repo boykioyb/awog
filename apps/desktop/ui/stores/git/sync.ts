@@ -159,7 +159,14 @@ export function createGitSync(ctx: GitActionCtx) {
   }
 
   const push = async (
-    opts: { setUpstream?: boolean; force?: boolean; pushTags?: boolean; remote?: string } = {},
+    opts: {
+      setUpstream?: boolean
+      force?: boolean
+      pushTags?: boolean
+      remote?: string
+      branch?: string
+      targetBranch?: string
+    } = {},
   ) => {
     if (isPushing.value) return
     pushDialogOpen.value = false
@@ -177,10 +184,8 @@ export function createGitSync(ctx: GitActionCtx) {
           b.projectId === projectId && b.isCurrent && !b.isRemote ? { ...b, ahead: 0 } : b,
         )
         const remoteLabel = opts.remote ?? 'origin'
-        pushToast(
-          `Pushed ${pushed} commits to ${remoteLabel}/${currentBranch.value} (mock)`,
-          'success',
-        )
+        const targetLabel = opts.targetBranch ?? currentBranch.value
+        pushToast(`Pushed ${pushed} commits to ${remoteLabel}/${targetLabel} (mock)`, 'success')
       } finally {
         isPushing.value = false
         resetProgress()
@@ -193,6 +198,8 @@ export function createGitSync(ctx: GitActionCtx) {
       if (opts.force) params.force = true
       if (opts.pushTags) params.pushTags = true
       if (opts.remote) params.remote = opts.remote
+      if (opts.branch) params.branch = opts.branch
+      if (opts.targetBranch) params.targetBranch = opts.targetBranch
       const result = await useGitApi().push(root, params)
       const n = result.pushed
       pushToast(n > 0 ? `Pushed ${n} ref${n === 1 ? '' : 's'}` : 'Push thành công', 'success')

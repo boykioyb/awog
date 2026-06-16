@@ -69,6 +69,14 @@
           >
             {{ unreadCount }}
           </span>
+          <!-- Parked on human input (a question / permission prompt) — distinct
+               from "streaming": the turn is blocked waiting on the user. -->
+          <span
+            v-else-if="anyAwaitingInput"
+            class="w-1.5 h-1.5 rounded-full animate-pulse"
+            :style="{ background: t.warning, boxShadow: `0 0 6px ${t.warning}` }"
+            :title="tr('session.tab.awaiting')"
+          />
           <span
             v-else-if="anyStreaming"
             class="w-1.5 h-1.5 rounded-full animate-pulse"
@@ -179,6 +187,7 @@ const runningCount = computed(() => tasksStore.runningCount)
 
 const sessionsStore = useSessionsStore()
 const anyStreaming = computed(() => sessionsStore.anyStreaming)
+const anyAwaitingInput = computed(() => sessionsStore.anyAwaitingInput)
 const unreadCount = computed(() => sessionsStore.unreadCount)
 
 const hoveredId = ref<string | null>(null)
