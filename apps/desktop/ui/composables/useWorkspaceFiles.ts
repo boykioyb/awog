@@ -40,6 +40,9 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
   const cwd = ref('')
   const selectedPath = ref<string | null>(null)
   const fileContent = ref<FsFileContent | null>(null)
+  // Non-null when the last read failed — shown in the preview area instead of a
+  // blank pane (the old silent fallback hid path mismatches and read errors).
+  const loadError = ref<string | null>(null)
   const loading = ref(false)
   // Browser is an overlay, hidden by default — toggled from the header icon.
   // Picking a file collapses it so the preview shows immediately at full size.
@@ -107,15 +110,46 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     if (cwd.value) openDir(dirName(cwd.value)).catch(() => {})
   }
 
+  // The model sometimes anchors a chat-link path on an ANCESTOR of the workspace
+  // root (it worked from a parent dir in the terminal), so the path re-includes
+  // the root's own trailing segments — `src/147/api/x.md` when the workspace root
+  // already ends with `/src/147`. Returns the path with that duplicated prefix
+  // stripped, or null when there is no leading overlap to strip.
+  const dedupRootPrefix = (workspaceRoot: string, path: string): string | null => {
+    const rootSegs = workspaceRoot.split(/[\\/]+/).filter(Boolean)
+    const pathSegs = path.split('/').filter(Boolean)
+    for (let k = Math.min(rootSegs.length, pathSegs.length); k > 0; k--) {
+      const rootTail = rootSegs.slice(rootSegs.length - k).join('/')
+      const pathHead = pathSegs.slice(0, k).join('/')
+      if (rootTail === pathHead) return pathSegs.slice(k).join('/')
+    }
+    return null
+  }
+
   const loadInto = async (path: string, line: number | null, endLine: number | null) => {
     selectedPath.value = path
     fileContent.value = null
+    loadError.value = null
     pendingRange.value = line != null ? { start: line, end: endLine ?? line } : null
     try {
       fileContent.value = await api.readFile(props.workspaceRoot, path)
     } catch (err) {
       if (err instanceof SidecarUnavailableError) return
-      fileContent.value = { path, content: '', truncated: false, isBinary: false }
+      // Retry once with the duplicated root prefix stripped before giving up, so
+      // an over-qualified link still opens. Only reached on a genuine read
+      // failure — a valid path never lands here, so this can't hijack a good read.
+      const alt = dedupRootPrefix(props.workspaceRoot, path)
+      if (alt && alt !== path) {
+        try {
+          fileContent.value = await api.readFile(props.workspaceRoot, alt)
+          selectedPath.value = alt
+          pushToEditor()
+          return
+        } catch {
+          // recovery failed too — surface the original error below
+        }
+      }
+      loadError.value = errMsg(err, tr('workspace.files.openFailed'))
       return
     }
     pushToEditor()
@@ -415,6 +449,7 @@ export function useWorkspaceFiles(props: { session: Session; workspaceRoot: stri
     atRoot,
     selectedPath,
     fileContent,
+    loadError,
     loading,
     showTree,
     editorRef,
