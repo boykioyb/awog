@@ -17,12 +17,7 @@
         <div
           ref="cardRef"
           class="w-full max-w-[920px] h-[85vh] rounded-lg overflow-hidden flex flex-col"
-          :style="{
-            background: overlay.background,
-            border: `1px solid ${overlay.borderColor}`,
-            backdropFilter: overlay.backdropFilter,
-            boxShadow: overlay.boxShadow,
-          }"
+          :style="cardStyle"
         >
           <!-- Header -->
           <div
@@ -46,7 +41,7 @@
           <div class="flex-1 flex min-h-0">
             <nav
               class="w-[13rem] flex-shrink-0 overflow-y-auto py-3 px-2 space-y-0.5"
-              :style="{ borderRight: `1px solid ${t.border}`, background: parts.bg }"
+              :style="{ borderRight: `1px solid ${t.border}`, background: navBg }"
             >
               <button
                 v-for="s in sections"
@@ -63,7 +58,10 @@
               </button>
             </nav>
 
-            <div class="flex-1 overflow-y-auto p-4 md:p-6 min-w-0" :style="{ background: t.bg }">
+            <div
+              class="flex-1 overflow-y-auto p-4 md:p-6 min-w-0"
+              :style="{ background: contentBg }"
+            >
               <SettingsAppearanceSection v-if="section === 'appearance'" />
               <SettingsWorkspaceSection v-else-if="section === 'workspace'" />
               <SettingsDefaultsSection v-else-if="section === 'defaults'" />
@@ -85,6 +83,29 @@ import type { SettingsSectionId } from '~/composables/useSettingsModal'
 const { t } = useTheme()
 const { overlay, parts, pill } = useGlass()
 const { t: tr } = useI18n()
+const { isLight } = useSettingsSurface()
+
+// Light mode: flatten the whole settings surface to solid white (no glass tint /
+// off-white panel). Dark mode keeps the glass/elevated treatment untouched.
+const cardStyle = computed(() =>
+  isLight.value
+    ? {
+        background: t.value.bg,
+        border: `1px solid ${t.value.border}`,
+        boxShadow: overlay.value.boxShadow,
+      }
+    : {
+        background: overlay.value.background,
+        border: `1px solid ${overlay.value.borderColor}`,
+        backdropFilter: overlay.value.backdropFilter,
+        boxShadow: overlay.value.boxShadow,
+      },
+)
+
+const navBg = computed(() => (isLight.value ? t.value.bg : parts.value.bg))
+// `t.bg` is pure white in light (and the original canvas in dark) — same value the
+// content pane always used, so no light/dark branch needed here.
+const contentBg = computed(() => t.value.bg)
 const { open, section, closeSettings } = useSettingsModal()
 const settings = useSettingsStore()
 

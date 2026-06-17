@@ -1,5 +1,5 @@
 <template>
-  <div class="rounded p-3" :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }">
+  <div class="rounded p-3" :style="{ background: cardBg, border: `1px solid ${t.border}` }">
     <div class="flex items-center gap-3 mb-2">
       <div
         class="w-8 h-8 rounded flex items-center justify-center"
@@ -233,6 +233,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useTheme()
+const { cardBg } = useSettingsSurface()
 const settings = useSettingsStore()
 
 const formOpen = ref(false)
