@@ -6,12 +6,12 @@
 //   TodoWrite — the model's own scratch checklist. We ACK it (and surface the
 //               list as a 'note' step via event-adapter) so the model's planning
 //               loop works; AWOG has no separate todo store.
-//   WebSearch / WebFetch — no outbound network from the agent (SECURITY: this is
-//               deliberate — honours the no-SSRF invariant). We return a clear
-//               "not available" so the model proceeds or asks the user instead.
+//   WebSearch — no web-search backend wired (no API key / provider). We return a
+//               clear "not available" so the model proceeds or asks the user.
+//               (WebFetch is now a real tool — see web-fetch-tool.ts, ADR 0042.)
 //
-// All three are added to the BASE toolset (createAwogToolDefinitions) so they
-// exist for chat, tasks, AND subagents, and are filtered by allowedTools /
+// Both are added to the BASE toolset (createAwogToolDefinitions) so they exist
+// for chat, tasks, AND subagents, and are filtered by allowedTools /
 // disabledTools uniformly with every other tool.
 
 import { Type } from '@earendil-works/pi-ai'
@@ -73,35 +73,6 @@ export function createWebSearchTool(): AgentTool<typeof WebSearchParams, Record<
           {
             type: 'text',
             text: 'Web search is not available in this environment. Proceed using the workspace files and your knowledge, or ask the user to provide the information.',
-          },
-        ],
-        details: {},
-      }
-    },
-  }
-}
-
-const WebFetchParams = Type.Object(
-  {
-    url: Type.String({ description: 'The URL to fetch.' }),
-    prompt: Type.Optional(Type.String()),
-  },
-  { additionalProperties: true },
-)
-
-export function createWebFetchTool(): AgentTool<typeof WebFetchParams, Record<string, never>> {
-  return {
-    name: 'WebFetch',
-    label: 'Fetch URL',
-    description:
-      'Fetch a URL. NOTE: outbound network access is not available in this environment — calling this returns an unavailability notice, not content.',
-    parameters: WebFetchParams,
-    async execute(): Promise<AgentToolResult<Record<string, never>>> {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'Fetching URLs is not available in this environment (the agent has no outbound network access). Ask the user to paste the relevant content if you need it.',
           },
         ],
         details: {},

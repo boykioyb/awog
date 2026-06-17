@@ -41,66 +41,15 @@
         </div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          title="Duplicate"
-          @click="emit('duplicate')"
-          @mouseenter="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = t.bgHover
-              ;(e.currentTarget as HTMLElement).style.color = t.text
-            }
-          "
-          @mouseleave="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-              ;(e.currentTarget as HTMLElement).style.color = t.textDim
-            }
-          "
-        >
+        <AppButton variant="ghost" size="icon" title="Duplicate" @click="emit('duplicate')">
           <Copy :size="13" />
-        </button>
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          title="Edit"
-          @click="emit('edit')"
-          @mouseenter="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = t.bgHover
-              ;(e.currentTarget as HTMLElement).style.color = t.text
-            }
-          "
-          @mouseleave="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-              ;(e.currentTarget as HTMLElement).style.color = t.textDim
-            }
-          "
-        >
+        </AppButton>
+        <AppButton variant="ghost" size="icon" title="Edit" @click="emit('edit')">
           <Edit3 :size="13" />
-        </button>
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          title="Delete"
-          @click="emit('delete')"
-          @mouseenter="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = t.dangerBg
-              ;(e.currentTarget as HTMLElement).style.color = t.danger
-            }
-          "
-          @mouseleave="
-            (e) => {
-              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-              ;(e.currentTarget as HTMLElement).style.color = t.textDim
-            }
-          "
-        >
+        </AppButton>
+        <AppButton variant="ghostDanger" size="icon" title="Delete" @click="emit('delete')">
           <Trash2 :size="13" />
-        </button>
+        </AppButton>
       </div>
     </div>
 

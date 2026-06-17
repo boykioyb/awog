@@ -16,14 +16,18 @@ import {
   createEditTool,
   createGlobTool,
   createGrepTool,
+  createMultiEditTool,
   createReadTool,
   createWriteTool,
 } from './fs-tools.js'
+import { createNotebookEditTool, createNotebookReadTool } from './notebook-tools.js'
 import { createBashTool } from './bash-tool.js'
 import { createMcpToolDefinitions, type McpLoadFailure } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
-import { createTodoWriteTool, createWebSearchTool, createWebFetchTool } from './builtin-stubs.js'
+import { createTodoWriteTool, createWebSearchTool } from './builtin-stubs.js'
+import { createWebFetchTool } from './web-fetch-tool.js'
+import { createBrowserTool } from './browser-tool.js'
 import { wrapToolsWithHooks, type HookToolContext } from '../../hooks/tool-anchor.js'
 
 export interface ToolFilter {
@@ -74,14 +78,20 @@ export function createAwogToolDefinitions(
     createReadTool(cwd),
     createWriteTool(cwd),
     createEditTool(cwd),
+    createMultiEditTool(cwd),
     createBashTool(cwd),
     createGrepTool(cwd),
     createGlobTool(cwd),
+    createNotebookReadTool(cwd),
+    createNotebookEditTool(cwd),
     // Graceful stubs for Claude Code built-ins the OAuth model emits but AWOG
     // doesn't implement (ADR 0030) — avoids "Tool <name> not found".
     createTodoWriteTool(),
     createWebSearchTool(),
+    // Real fetch over the SSRF-guarded HTTP path (ADR 0042).
     createWebFetchTool(),
+    // Embedded-Chromium browser, driven via the reverse host channel (ADR 0043).
+    createBrowserTool(cwd),
     // AskUserQuestion: interactive in chat (askUser set), graceful no-op
     // elsewhere. Always present so the model can use it and a stray OAuth call
     // never errors out.
@@ -121,5 +131,14 @@ export async function createRuntimeToolDefinitions(
   const { tools: mcpTools, failures } = await createMcpToolDefinitions(mcpServers, signal)
   // Built-in tools are already filtered; filter MCP tools by the same rules.
   const tools = [...builtIn, ...applyFilter(mcpTools, filter)]
+  // Force sequential execution for EVERY built-in + MCP tool. Pi decides
+  // parallel vs sequential per BATCH: a batch runs parallel only when the loop's
+  // toolExecution is 'parallel' AND no tool in it is marked sequential
+  // (agent-loop.executeToolCalls). Marking all non-Task tools keeps regular tool
+  // batches ordered — deterministic UI steps, no interleaved permission prompts —
+  // while letting a pure-`Task` batch fan out in parallel (ADR 0030). The Task
+  // tool is added at the TOP LEVEL (run-stream / invoke), never here, so it stays
+  // unmarked and parallel-eligible. See those callers' `toolExecution: 'parallel'`.
+  for (const tool of tools) tool.executionMode = 'sequential'
   return { tools: hookContext ? wrapToolsWithHooks(tools, hookContext) : tools, failures }
 }

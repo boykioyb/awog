@@ -5,14 +5,10 @@
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
       <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">Stashes</div>
-      <button
-        class="flex items-center gap-1 px-2 py-1 text-[1em] rounded transition"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="showSave = true"
-      >
+      <AppButton size="sm" @click="showSave = true">
         <Plus :size="10" />
         Stash
-      </button>
+      </AppButton>
     </div>
 
     <div class="flex-1 overflow-y-auto">
@@ -34,39 +30,15 @@
           {{ entry.message }}
         </div>
         <div class="flex items-center gap-1 mt-2">
-          <button
-            class="text-[1em] px-2 py-1 rounded transition"
-            :style="{
-              background: t.bgInput,
-              color: t.text,
-              border: `1px solid ${t.border}`,
-            }"
-            @click="store.stashPop(entry.index)"
-          >
+          <AppButton variant="secondary" size="sm" @click="store.stashPop(entry.index)">
             Pop
-          </button>
-          <button
-            class="text-[1em] px-2 py-1 rounded transition"
-            :style="{
-              background: t.bgInput,
-              color: t.textMuted,
-              border: `1px solid ${t.border}`,
-            }"
-            @click="store.stashApply(entry.index)"
-          >
+          </AppButton>
+          <AppButton variant="secondary" size="sm" @click="store.stashApply(entry.index)">
             Apply
-          </button>
-          <button
-            class="text-[1em] px-2 py-1 rounded transition ml-auto"
-            :style="{
-              background: t.dangerBg,
-              color: t.danger,
-              border: `1px solid ${t.dangerBorder}`,
-            }"
-            @click="askDrop(entry.index)"
-          >
+          </AppButton>
+          <AppButton variant="danger" size="sm" class="ml-auto" @click="askDrop(entry.index)">
             Drop
-          </button>
+          </AppButton>
         </div>
       </div>
     </div>
@@ -92,20 +64,12 @@
         />
       </div>
       <template #footer>
-        <button
-          class="px-3 py-1.5 text-[1em] rounded transition"
-          :style="{ color: t.textMuted }"
-          @click="showSave = false"
-        >
+        <AppButton variant="ghost" @click="showSave = false">
           {{ tr('common.cancel') }}
-        </button>
-        <button
-          class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-          :style="{ background: t.accent, color: t.accentText }"
-          @click="onSave"
-        >
+        </AppButton>
+        <AppButton @click="onSave">
           {{ tr('common.save') }}
-        </button>
+        </AppButton>
       </template>
     </BaseModal>
 

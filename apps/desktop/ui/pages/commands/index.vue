@@ -11,27 +11,18 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <SearchInput v-model="searchQuery" class="flex-1" :placeholder="tr('commands.search')" />
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
+        <AppButton
+          variant="ghost"
+          size="icon"
           :title="tr('commands.refresh')"
           :disabled="refreshing"
           @click="onRefresh"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
           <RotateCw :size="14" :class="refreshing ? 'animate-spin' : ''" />
-        </button>
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          :title="tr('commands.new')"
-          @click="onNew"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
-        >
+        </AppButton>
+        <AppButton variant="ghost" size="icon" :title="tr('commands.new')" @click="onNew">
           <Plus :size="14" />
-        </button>
+        </AppButton>
       </div>
 
       <div class="flex-1 overflow-y-auto">

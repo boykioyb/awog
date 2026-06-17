@@ -13,6 +13,9 @@ import type {
 import { DEFAULT_APPEARANCE, useSettingsStore } from '~/stores/settings'
 
 const STORAGE_KEY = 'awog.appearance.v1'
+// One-time flag (ADR 0044): nudge installs still on the old monochrome/flat
+// defaults to the new emerald/standard look once, preserving explicit picks.
+const SHADCN_MIGRATION_KEY = 'awog.appearance.migrated.shadcn.v2'
 
 const SANS_STACKS: Record<SansFontFamily, string> = {
   system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -159,7 +162,23 @@ export const useAppearance = () => {
 
   if (import.meta.client && !initialized.value) {
     const persisted = loadFromStorage()
-    if (persisted) store.appearance = persisted
+    if (persisted) {
+      // One-time upgrade to the new emerald/standard defaults — only when still
+      // on the old defaults, so any explicit customisation is left untouched.
+      if (import.meta.client && !window.localStorage.getItem(SHADCN_MIGRATION_KEY)) {
+        if (persisted.accent === 'mono') persisted.accent = DEFAULT_APPEARANCE.accent
+        if (persisted.surfaceDepth === 'flat')
+          persisted.surfaceDepth = DEFAULT_APPEARANCE.surfaceDepth
+        // Surface tint now comes from the Theme-color picker: nudge it to emerald
+        // (with a visible strength) so the green look is configurable, not hardcoded.
+        if (persisted.themeColor === 'mono') {
+          persisted.themeColor = DEFAULT_APPEARANCE.themeColor
+          persisted.themeColorStrength = DEFAULT_APPEARANCE.themeColorStrength
+        }
+        window.localStorage.setItem(SHADCN_MIGRATION_KEY, '1')
+      }
+      store.appearance = persisted
+    }
     applyToDom(store.appearance)
     watch(
       appearance,

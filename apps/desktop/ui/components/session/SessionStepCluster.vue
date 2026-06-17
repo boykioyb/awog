@@ -30,14 +30,14 @@
     </button>
 
     <!-- Claude-Code-style timeline: flat vertical list, no box — each step's own
-         status icon is the bullet, a thin left rail groups the run. `timeline`
-         tells StepItem to wrap long paths and show a one-line result summary. -->
+         status icon is the bullet, a thin left rail groups the run. Each row is a
+         single truncated line; the full output is one click away in the detail. -->
     <div
       v-if="expanded"
       class="mt-1 space-y-1 text-[12px] pl-3"
       :style="{ borderLeft: `2px solid ${t.border}` }"
     >
-      <StepItem v-for="s in steps" :key="s.id" :step="s" timeline />
+      <StepItem v-for="s in steps" :key="s.id" :step="s" />
     </div>
   </div>
 </template>

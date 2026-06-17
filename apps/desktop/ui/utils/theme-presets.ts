@@ -139,7 +139,9 @@ const ACCENT_RECIPES_DARK: Record<ColorAccent, AccentRecipe> = {
     accent: '#10b981',
     accentHover: '#34d399',
     accentMuted: '#047857',
-    accentText: '#ffffff',
+    // Near-black reads ~6.5:1 on emerald-500 (white is ~2.3:1) and keeps the
+    // dirty-count badge (accentText on amber) legible.
+    accentText: '#04140d',
   },
   rose: {
     accent: '#f43f5e',
@@ -302,6 +304,8 @@ const buildAccentTokens = (recipe: AccentRecipe, themeName: ThemeName): AccentTo
 
 const SURFACE_DARK: Record<NonFlatDepth, SurfaceTokens> = {
   standard: {
+    // Neutral, lifted, higher-contrast dark ramp. Hue tint (if any) comes from
+    // the Theme-color picker via applyThemeColor — NOT hardcoded here.
     bg: '#0a0a0a',
     bgPanel: '#141414',
     bgCanvas: '#1a1a1a',
@@ -510,5 +514,23 @@ export const applyThemeColor = (
   SURFACE_KEYS.forEach((k) => {
     next[k] = mix(tokens[k], anchor, alpha)
   })
+  // Glass surfaces are translucent rgba (SURFACE_KEYS above only covers solid hex
+  // tokens). Tint the glass fills toward the anchor too — preserving each token's
+  // own alpha — so glass panels follow the Theme color. White sheen tokens
+  // (border/highlight) stay neutral. Glass mix is boosted since the tint shows
+  // through less than on an opaque surface.
+  const ar = parseInt(anchor.slice(1, 3), 16)
+  const ag = parseInt(anchor.slice(3, 5), 16)
+  const ab = parseInt(anchor.slice(5, 7), 16)
+  const glassMix = Math.min(0.5, alpha * 2.4)
+  const tintGlass = (val: string): string => {
+    const m = /rgba?\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\s*\)/.exec(val)
+    if (!m) return val
+    const ch = (c: number, anc: number) => Math.round(c * (1 - glassMix) + anc * glassMix)
+    return `rgba(${ch(+m[1]!, ar)}, ${ch(+m[2]!, ag)}, ${ch(+m[3]!, ab)}, ${m[4] ?? '1'})`
+  }
+  next.glassBg = tintGlass(next.glassBg)
+  next.glassActive = tintGlass(next.glassActive)
+  next.glassHover = tintGlass(next.glassHover)
   return next
 }

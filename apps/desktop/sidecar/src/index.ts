@@ -1,4 +1,4 @@
-import { startStdioLoop, send } from './transport/stdio.js'
+import { startStdioLoop, send, resolveHostResponse } from './transport/stdio.js'
 import { dispatch, RpcError } from './transport/rpc.js'
 import { log } from './util/logger.js'
 
@@ -182,6 +182,17 @@ async function handleLine(line: string): Promise<void> {
   } catch {
     log.warn('bad json on stdin', { line })
     return
+  }
+
+  // Reverse-channel reply from the host (Electron main) to a hostRequest(). Must
+  // be handled BEFORE the forward-request guard — it carries no numeric `id`.
+  if (typeof msg === 'object' && msg !== null) {
+    const m = msg as { method?: unknown; params?: unknown }
+    if (m.method === 'host-response' && typeof m.params === 'object' && m.params !== null) {
+      const p = m.params as { rid?: unknown; result?: unknown; error?: { code: number; message: string } }
+      if (typeof p.rid === 'number') resolveHostResponse(p.rid, p.result, p.error)
+      return
+    }
   }
 
   if (!isJsonRpcRequest(msg)) {

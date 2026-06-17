@@ -61,13 +61,15 @@ Tool `Task` nhận:
 
 Cùng họ lỗi với `Task`: dưới OAuth model còn gọi `TodoWrite`/`WebSearch`/`WebFetch`. Đăng ký stub graceful ([builtin-stubs.ts](../../apps/desktop/sidecar/src/runtime/tools/builtin-stubs.ts)) trong **base toolset** (`createAwogToolDefinitions` → có ở chat + task + subagent, filter theo allowedTools/disabledTools):
 
-| Tool | Hành vi stub |
+| Tool | Hành vi |
 |---|---|
 | `TodoWrite` | ACK + render checklist thành step `note` (`Todos · done/total`, click xem chi tiết ○/▸/✓). AWOG không có todo store riêng. |
-| `WebSearch` | Trả "không khả dụng" — không có truy cập mạng từ agent. |
-| `WebFetch` | Trả "không khả dụng". **Bảo mật:** cố ý KHÔNG fetch URL tùy ý → giữ invariant no-SSRF. |
+| `WebSearch` | Trả "không khả dụng" — chưa wire search backend / API key. |
+| `WebFetch` | **Tool thật** từ [ADR 0042](../decisions/0042-webfetch-tool-ssrf-guarded.md) ([web-fetch-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/web-fetch-tool.ts)): fetch URL http/https công khai → text (HTML→text). SSRF guard: protocol + hostname literal (`ssrfCheck`) + DNS resolve re-check + redirect re-check mỗi hop + timeout/size cap. Giữ invariant #7 vì chặn private/loopback/link-local. |
 
 → Hết "Tool ... not found" cho cả nhóm.
+
+Bộ built-in còn được mở rộng (in-process, gate write tools): **`MultiEdit`**, **`NotebookEdit`/`NotebookRead`**, và **`browser_tool`** (Chromium nhúng — [ADR 0043](../decisions/0043-browser-tool-embedded-chromium.md)). `WebSearch` vẫn stub.
 
 ## Phạm vi
 
@@ -87,8 +89,9 @@ Không đổi — hạ tầng đã có sẵn:
 | File | Thay đổi |
 |---|---|
 | [runtime/tools/task-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/task-tool.ts) | **Mới** — `createTaskTool` + `spawnSubagent` |
-| [runtime/tools/builtin-stubs.ts](../../apps/desktop/sidecar/src/runtime/tools/builtin-stubs.ts) | **Mới** — stub `TodoWrite`/`WebSearch`/`WebFetch` |
-| [runtime/tools/index.ts](../../apps/desktop/sidecar/src/runtime/tools/index.ts) | Export `isToolAllowed`; thêm 3 stub vào base toolset |
+| [runtime/tools/builtin-stubs.ts](../../apps/desktop/sidecar/src/runtime/tools/builtin-stubs.ts) | **Mới** — stub `TodoWrite`/`WebSearch` (WebFetch tách ra tool thật, [ADR 0042](../decisions/0042-webfetch-tool-ssrf-guarded.md)) |
+| [runtime/tools/web-fetch-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/web-fetch-tool.ts) | **Mới** ([ADR 0042](../decisions/0042-webfetch-tool-ssrf-guarded.md)) — `createWebFetchTool` thật, SSRF-guarded |
+| [runtime/tools/index.ts](../../apps/desktop/sidecar/src/runtime/tools/index.ts) | Export `isToolAllowed`; thêm stub + WebFetch vào base toolset |
 | [sessions/step-mapper.ts](../../apps/desktop/sidecar/src/sessions/step-mapper.ts) | Thêm `stepFromTodos` (TodoWrite → step `note`) |
 | [runtime/event-adapter.ts](../../apps/desktop/sidecar/src/runtime/event-adapter.ts) | Thêm `parentId` option (stamp step + nén onChunk khi child); special-case TodoWrite |
 | [runtime/invoke.ts](../../apps/desktop/sidecar/src/runtime/invoke.ts) | `createInvokeAdapter(cb, parentId)` + wire Task tool |
@@ -102,7 +105,7 @@ Không đổi — hạ tầng đã có sẵn:
 
 - **API key không rời sidecar:** subagent resolve credential trong sidecar; key không vào step/trace/IPC payload.
 - **Path/Git scope:** subagent fs/bash dùng cùng `cwd = workspaceRoot` + `assertInsideWorkspace`.
-- **Budget:** depth = 1 + sequential + cap 25 spawn/turn.
+- **Budget:** depth = 1 + cap 25 spawn/turn. Nhiều `Task` trong một turn fan-out **song song** (xem [ADR 0030 §Cập nhật 2026-06-17](../decisions/0030-subagent-task-tool.md#cập-nhật-2026-06-17--song-song-hoá-task)); tool **bên trong** mỗi subagent vẫn chạy tuần tự.
 - **IPC boundary / no eval / no SSRF:** không phát sinh surface mới (tái dùng tool + MCP hiện có).
 
 ## Việc còn lại

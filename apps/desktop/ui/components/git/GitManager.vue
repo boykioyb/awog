@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-1 overflow-hidden">
+  <div class="flex flex-1 overflow-hidden gap-2">
     <!-- Git not installed / unsupported version banner (M7) -->
     <GitNotInstalledBanner
       v-if="gitInstallStatus && (!gitInstallStatus.installed || !gitInstallStatus.supported)"
@@ -19,7 +19,7 @@
       />
 
       <!-- ─── Main pane ────────────────────────────────────────────────── -->
-      <div class="flex flex-col flex-1 overflow-hidden">
+      <div class="flex flex-col flex-1 overflow-hidden gap-2 min-w-0">
         <GitPageHeader
           :projects="projects"
           :current-project="currentProject"
@@ -114,20 +114,12 @@
           />
         </div>
         <template #footer>
-          <button
-            class="px-3 py-1.5 text-[1em] rounded transition"
-            :style="{ color: t.textMuted }"
-            @click="showSaveStash = false"
-          >
+          <AppButton variant="ghost" @click="showSaveStash = false">
             {{ tr('common.cancel') }}
-          </button>
-          <button
-            class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-            :style="{ background: t.accent, color: t.accentText }"
-            @click="onSaveStash"
-          >
+          </AppButton>
+          <AppButton @click="onSaveStash">
             {{ tr('common.save') }}
-          </button>
+          </AppButton>
         </template>
       </BaseModal>
 

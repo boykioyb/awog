@@ -1,14 +1,14 @@
 <template>
   <header
-    class="relative h-12 flex items-center gap-2.5 px-3 flex-shrink-0 z-30"
+    class="relative h-12 flex items-center gap-2.5 px-3 flex-shrink-0 z-30 rounded-xl"
     :style="{
       background: parts.bg,
       backdropFilter: parts.blur,
       WebkitBackdropFilter: parts.blur,
-      borderBottom: `1px solid ${parts.border}`,
+      border: `1px solid ${parts.border}`,
       boxShadow: parts.sheen
-        ? `${parts.sheen}, 0 8px 24px -16px ${parts.shadow}`
-        : `0 8px 24px -16px ${parts.shadow}`,
+        ? `${parts.sheen}, 0 6px 18px -10px ${parts.shadow}`
+        : `0 6px 18px -10px ${parts.shadow}`,
       color: t.text,
     }"
   >

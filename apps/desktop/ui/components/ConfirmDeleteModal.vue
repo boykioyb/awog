@@ -15,20 +15,12 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="emit('cancel')"
-      >
+      <AppButton variant="ghost" @click="emit('cancel')">
         {{ cancelLabel || 'Cancel' }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{ background: confirmBg, color: t.onAccent }"
-        @click="emit('confirm')"
-      >
+      </AppButton>
+      <AppButton :variant="kind === 'danger' ? 'danger' : 'default'" @click="emit('confirm')">
         {{ confirmLabel || (kind === 'danger' ? 'Delete' : 'Confirm') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>
@@ -40,7 +32,7 @@ import { AlertCircle } from 'lucide-vue-next'
 // background. Defaults to 'danger' so existing call sites stay red-Delete.
 // Non-destructive flows (checkout, cherry-pick, …) should pass `kind="primary"`
 // or override `confirmLabel`.
-const props = withDefaults(
+withDefaults(
   defineProps<{
     title: string
     description: string
@@ -57,6 +49,4 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
-
-const confirmBg = computed(() => (props.kind === 'danger' ? t.value.danger : t.value.accent))
 </script>

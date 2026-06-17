@@ -57,13 +57,9 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted }"
-        @click="emit('close')"
-      >
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.close') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

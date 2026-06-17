@@ -11,28 +11,24 @@
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <SearchInput v-model="searchQuery" class="flex-1" :placeholder="tr('hooks.search')" />
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
+        <AppButton
+          variant="ghost"
+          size="icon"
           :title="refreshTitle"
           :disabled="refreshing"
           @click="onRefresh"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
           <RotateCw :size="14" :class="refreshing ? 'animate-spin' : ''" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           ref="newButtonRef"
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
+          variant="ghost"
+          size="icon"
           :title="tr('hooks.new')"
           @click="onNew"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
           <Plus :size="14" />
-        </button>
+        </AppButton>
       </div>
 
       <div
@@ -327,7 +323,8 @@ const selectedKey = ref<string | null>(ws.hooks[0] ? hookKey(ws.hooks[0]) : null
 const mobilePane = ref<'list' | 'detail'>('list')
 const pendingDelete = ref<Hook | null>(null)
 const showPromptModal = ref(false)
-const newButtonRef = ref<HTMLButtonElement | null>(null)
+// AppButton is a component → the template ref points at the instance; read the DOM via `.$el`.
+const newButtonRef = ref<{ $el: HTMLElement } | null>(null)
 const anchor = ref<{ top: number; left: number } | null>(null)
 const manualSeed = ref<HookDraft | null>(null)
 
@@ -391,7 +388,7 @@ const onSelect = (hook: Hook) => {
 const onNew = () => {
   manualSeed.value = null
   mode.value = 'view'
-  const rect = newButtonRef.value?.getBoundingClientRect()
+  const rect = newButtonRef.value?.$el?.getBoundingClientRect()
   anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
   showPromptModal.value = true
 }

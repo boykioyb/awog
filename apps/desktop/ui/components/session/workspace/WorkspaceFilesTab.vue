@@ -112,7 +112,7 @@
               </button>
               <!-- Markdown/HTML default to a rendered preview; toggle to raw source. -->
               <div
-                v-if="(isMarkdown || isHtml) && !fileContent?.isBinary"
+                v-if="(isMarkdown || isHtml) && fileContent && !fileContent.isBinary"
                 class="inline-flex rounded overflow-hidden"
                 :style="{ border: `1px solid ${t.border}` }"
               >
@@ -132,7 +132,7 @@
                 </button>
               </div>
               <button
-                v-if="isMarkdown && !fileContent?.isBinary"
+                v-if="isMarkdown && fileContent && !fileContent.isBinary"
                 type="button"
                 class="p-1 rounded transition"
                 :style="{ color: copiedKind === 'text' ? t.success : t.textDim }"
@@ -143,7 +143,7 @@
                 <Type v-else :size="13" />
               </button>
               <button
-                v-if="!fileContent?.isBinary"
+                v-if="fileContent && !fileContent.isBinary"
                 type="button"
                 class="p-1 rounded transition"
                 :style="{ color: copiedKind === 'raw' ? t.success : t.textDim }"
@@ -185,7 +185,7 @@
                 <Globe :size="13" />
               </button>
               <button
-                v-if="!fileContent?.isBinary || isPdf"
+                v-if="(fileContent && !fileContent.isBinary) || isPdf"
                 type="button"
                 class="p-1 rounded transition"
                 :style="{ color: t.textDim }"
@@ -196,8 +196,29 @@
               </button>
             </div>
           </div>
+          <!-- Read failed (missing path / over-qualified link / sidecar error):
+               show the cause rather than a blank preview. -->
+          <div v-if="loadError" class="flex-1 min-h-0 overflow-y-auto p-4">
+            <div
+              class="rounded-lg px-3 py-2.5 flex items-start gap-2"
+              :style="{ background: t.dangerBg, border: `1px solid ${t.dangerBorder}` }"
+            >
+              <TriangleAlert :size="14" class="flex-shrink-0 mt-0.5" :style="{ color: t.danger }" />
+              <div class="flex-1 min-w-0">
+                <div class="text-[1em] font-medium" :style="{ color: t.danger }">
+                  {{ tr('workspace.files.openFailed') }}
+                </div>
+                <div
+                  class="mt-1 whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed"
+                  :style="{ color: t.textDim }"
+                >
+                  {{ loadError }}
+                </div>
+              </div>
+            </div>
+          </div>
           <FilePreviewFrame
-            v-if="showFramePreview"
+            v-else-if="showFramePreview"
             :key="`${selectedPath}-${previewKey}`"
             class="flex-1 min-h-0"
             :workspace-root="workspaceRoot"
@@ -388,6 +409,7 @@ import {
   Maximize2,
   RefreshCw,
   RotateCw,
+  TriangleAlert,
   Type,
   X,
 } from 'lucide-vue-next'
@@ -415,6 +437,7 @@ const {
   atRoot,
   selectedPath,
   fileContent,
+  loadError,
   loading,
   showTree,
   editorRef,

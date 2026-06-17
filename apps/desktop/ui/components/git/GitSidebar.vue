@@ -1,11 +1,12 @@
 <template>
   <div
-    class="relative flex flex-col h-full overflow-hidden flex-shrink-0"
+    class="relative flex flex-col h-full overflow-hidden flex-shrink-0 rounded-xl"
     :style="{
       width: collapsed ? '40px' : `${width}px`,
       background: parts.bg,
       backdropFilter: parts.blur,
-      borderRight: `1px solid ${parts.border}`,
+      border: `1px solid ${parts.border}`,
+      boxShadow: `0 4px 16px -10px ${t.shadow}`,
       transition: dragging ? 'none' : 'width 150ms ease',
     }"
   >
@@ -22,15 +23,15 @@
       >
         {{ tr('git.sidebar.title') }}
       </span>
-      <button
-        class="p-1 rounded transition"
+      <AppButton
+        variant="ghost"
+        size="icon"
         :title="collapsed ? tr('git.sidebar.expand') : tr('git.sidebar.collapse')"
-        :style="{ color: t.textDim }"
         @click="toggleCollapse"
       >
         <PanelLeftClose v-if="!collapsed" :size="14" />
         <PanelLeftOpen v-else :size="14" />
-      </button>
+      </AppButton>
     </div>
 
     <!-- Branch search (local + remote) -->

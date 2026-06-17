@@ -38,7 +38,8 @@ export function useAgentsManager() {
   const searchQuery = ref('')
   const confirmDelete = ref<Agent | null>(null)
   const showPromptModal = ref(false)
-  const newButtonRef = ref<HTMLButtonElement | null>(null)
+  // AppButton is a component → the template ref points at the instance; read the DOM via `.$el`.
+  const newButtonRef = ref<{ $el: HTMLElement } | null>(null)
   const anchor = ref<{ top: number; left: number } | null>(null)
   const mobilePane = ref<'list' | 'detail'>('list')
   const refreshing = ref(false)
@@ -225,7 +226,7 @@ export function useAgentsManager() {
 
   const startCreate = () => {
     editing.value = false
-    const rect = newButtonRef.value?.getBoundingClientRect()
+    const rect = newButtonRef.value?.$el?.getBoundingClientRect()
     anchor.value = rect ? { top: rect.bottom + 8, left: rect.left } : null
     showPromptModal.value = true
   }

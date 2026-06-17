@@ -116,13 +116,13 @@
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto py-1">
+      <div class="flex-1 overflow-y-auto py-2">
         <EmptyView v-if="filtered.length === 0" :icon="MessageSquare" title="No sessions yet" />
         <template v-else>
           <div
             v-for="(group, gi) in grouped"
             :key="group.key"
-            :style="{ marginTop: group.label && gi > 0 ? '4px' : '0' }"
+            :style="{ marginTop: group.label && gi > 0 ? '14px' : '0' }"
           >
             <div
               v-if="group.label"
@@ -178,10 +178,10 @@
               <div
                 v-for="ses in group.sessions"
                 :key="ses.id"
-                class="text-left rounded transition flex items-start gap-2 px-2.5 py-2 cursor-pointer"
+                class="text-left rounded-lg transition flex items-start gap-2.5 px-3 py-2.5 cursor-pointer"
                 :style="{
-                  margin: '0 6px 1px 6px',
-                  width: 'calc(100% - 12px)',
+                  margin: '0 8px 3px 8px',
+                  width: 'calc(100% - 16px)',
                   background: pill(store.selectedSessionId === ses.id, hoverId === ses.id)
                     .background,
                 }"

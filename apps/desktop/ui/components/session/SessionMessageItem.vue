@@ -24,22 +24,12 @@
             @keydown.ctrl.enter.prevent="saveEdit"
           />
           <div class="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              class="px-2.5 py-1 rounded-md text-[1em] transition"
-              :style="{ color: t.textDim }"
-              @click="cancelEdit"
-            >
+            <AppButton variant="ghost" size="sm" @click="cancelEdit">
               {{ tr('session.msg.edit_cancel') }}
-            </button>
-            <button
-              type="button"
-              class="px-2.5 py-1 rounded-md text-[1em] transition"
-              :style="{ background: t.accent, color: t.accentText }"
-              @click="saveEdit"
-            >
+            </AppButton>
+            <AppButton size="sm" @click="saveEdit">
               {{ tr('session.msg.edit_save') }}
-            </button>
+            </AppButton>
           </div>
         </div>
 
@@ -116,25 +106,23 @@
           <div class="text-[1em] flex items-center gap-1.5" :style="{ color: t.textFaint }">
             <span>{{ fmt(message.at) }}</span>
             <span v-if="message.modeAtSend">· sent in {{ message.modeAtSend }} mode</span>
-            <button
+            <AppButton
               v-if="!sessionStreaming"
-              type="button"
-              class="awog-copy-btn"
-              :style="{ color: t.textFaint }"
+              variant="ghost"
+              size="xs"
               :title="tr('session.msg.edit')"
               @click="startEdit"
             >
               <Pencil :size="11" />
-            </button>
-            <button
-              type="button"
-              class="awog-copy-btn"
-              :style="{ color: t.textFaint }"
+            </AppButton>
+            <AppButton
+              variant="ghost"
+              size="xs"
               :title="tr('session.msg.branch')"
               @click="onBranch"
             >
               <GitBranch :size="11" />
-            </button>
+            </AppButton>
           </div>
         </template>
       </div>
@@ -147,7 +135,7 @@
         <div
           :class="showBubble ? 'rounded-2xl px-4 py-3' : ''"
           :style="
-            showBubble ? { background: t.bgElevated, border: `1px solid ${t.border}` } : undefined
+            showBubble ? { background: t.bubbleBg, border: `1px solid ${t.border}` } : undefined
           "
         >
           <!-- TODO checklist (TodoWrite). Lifted OUT of the collapsible task cluster
@@ -244,6 +232,16 @@
             </div>
           </div>
         </div>
+        <!-- Turn failed (provider `error` stop or a thrown runtime/network error):
+             a prominent alert with the full cause + a retry button, OUTSIDE the
+             bubble so it reads even when nothing streamed. -->
+        <SessionErrorNotice
+          v-if="message.error"
+          :message-id="message.id"
+          :message="message.error.message"
+          :disabled="sessionStreaming"
+          class="mt-2"
+        />
         <!-- Byline footer: copy + branch actions, timestamp, and run stats —
              reads after the reply, OUTSIDE the bubble (mirrors the user bubble).
              While streaming it shows a live ticker instead of the actions. -->
@@ -265,69 +263,55 @@
                be restored vs a conversation-only rewind. -->
           <template v-else-if="confirmingRewind">
             <span :style="{ color: t.textDim }">{{ rewindConfirmText }}</span>
-            <button
-              type="button"
-              class="px-2 py-0.5 rounded transition ml-1"
-              :style="{ color: t.textDim }"
-              @click="confirmingRewind = false"
-            >
+            <AppButton variant="ghost" size="xs" class="ml-1" @click="confirmingRewind = false">
               {{ tr('session.msg.edit_cancel') }}
-            </button>
-            <button
-              type="button"
-              class="px-2 py-0.5 rounded transition"
-              :style="{ background: t.dangerBg, color: t.danger }"
-              @click="doRewind"
-            >
+            </AppButton>
+            <AppButton variant="danger" size="xs" @click="doRewind">
               {{ tr('session.msg.rewind') }}
-            </button>
+            </AppButton>
           </template>
           <template v-else>
-            <button
+            <AppButton
               v-if="message.text"
-              type="button"
-              class="awog-copy-btn"
-              :style="{ color: copied ? t.success : t.textFaint }"
+              variant="ghost"
+              size="xs"
               :title="copied ? tr('session.msg.copied') : tr('session.msg.copy')"
               @click="copyMessage"
             >
               <Check v-if="copied" :size="12" />
               <Copy v-else :size="12" />
-            </button>
-            <button
+            </AppButton>
+            <AppButton
               v-if="!sessionStreaming"
-              type="button"
-              class="awog-copy-btn"
-              :style="{ color: t.textFaint }"
+              variant="ghost"
+              size="xs"
               :title="tr('session.msg.regenerate')"
               @click="onRegenerate"
             >
               <RefreshCw :size="12" />
-            </button>
+            </AppButton>
             <MessageRetryMenu
               v-if="!sessionStreaming && session"
               :session="session"
               :agent-message-id="message.id"
             />
-            <button
+            <AppButton
               v-if="!sessionStreaming"
-              type="button"
-              class="awog-copy-btn"
-              :style="{ color: t.textFaint }"
+              variant="ghost"
+              size="xs"
               :title="tr('session.msg.rewind')"
               @click="confirmingRewind = true"
             >
               <RotateCcw :size="12" />
-            </button>
-            <button
-              type="button"
-              class="awog-copy-btn"
-              :style="{ color: t.textFaint }"
+            </AppButton>
+            <AppButton
+              variant="ghost"
+              size="xs"
               :title="tr('session.msg.branch')"
               @click="onBranch"
             >
               <GitBranch :size="12" />
-            </button>
+            </AppButton>
             <span v-if="message.at" class="ml-0.5">{{ fmt(message.at) }}</span>
             <span v-if="message.startedAt && message.completedAt">
               · {{ formatElapsed(workingElapsed(message.completedAt)) }}

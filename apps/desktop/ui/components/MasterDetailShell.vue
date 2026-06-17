@@ -28,14 +28,19 @@
       trong shell và để inspector ngoài shell ở root.
 -->
 <template>
-  <div class="md-shell flex flex-1 overflow-hidden" :style="{ '--list-width': effectiveListWidth }">
+  <div
+    class="md-shell flex flex-1 overflow-hidden"
+    :class="{ 'gap-2': !resizable }"
+    :style="{ '--list-width': effectiveListWidth }"
+  >
     <div
-      class="md-shell-list flex flex-col flex-shrink-0"
+      class="md-shell-list flex flex-col flex-shrink-0 rounded-xl overflow-hidden"
       :class="listPaneClass"
       :style="{
-        borderRight: resizable ? 'none' : `1px solid ${parts.border}`,
+        border: `1px solid ${parts.border}`,
         background: parts.bg,
         backdropFilter: parts.blur,
+        boxShadow: `0 4px 16px -10px ${t.shadow}`,
       }"
     >
       <slot name="list" />
@@ -45,19 +50,22 @@
       class="md-shell-resizer hidden md:block flex-shrink-0 group cursor-col-resize"
       :class="{ 'is-dragging': dragging }"
       :style="{
-        width: '6px',
-        background: dragging ? t.accent : t.border,
-        marginLeft: '-1px',
-        marginRight: '-1px',
+        width: '8px',
+        background: dragging ? t.accent : 'transparent',
+        '--md-shell-resizer-hover': t.accent,
         zIndex: 5,
       }"
       @mousedown="onDragStart"
       @dblclick="resetWidth"
     />
     <div
-      class="flex-1 overflow-hidden flex flex-col min-w-0"
+      class="flex-1 overflow-hidden flex flex-col min-w-0 rounded-xl"
       :class="detailPaneClass"
-      :style="{ background: t.bg }"
+      :style="{
+        background: t.bg,
+        border: `1px solid ${parts.border}`,
+        boxShadow: `0 4px 16px -10px ${t.shadow}`,
+      }"
     >
       <button
         v-if="showBackButton"
@@ -110,7 +118,7 @@ const props = withDefaults(defineProps<Props>(), {
   listWidth: '20rem',
   disableMobile: false,
   backLabel: 'Back',
-  resizable: false,
+  resizable: true,
   storageKey: '',
   minListWidth: 200,
   maxListWidth: 640,
@@ -122,6 +130,12 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const { parts } = useGlass()
+
+// All list-detail pages share this one skeleton; resizable is on by default so
+// every page behaves identically. Width persists per-route automatically (a
+// caller may still pass an explicit storageKey to override).
+const route = useRoute()
+const storageKeyFor = (): string => props.storageKey || `awog:mdshell:${route.path}`
 
 const listPaneClass = computed(() => {
   if (props.disableMobile) return 'flex'
@@ -139,8 +153,8 @@ const onBack = () => emit('update:mobilePane', 'list')
 
 // ── Resize support ────────────────────────────────────────────────────────
 const readStoredWidth = (): number | null => {
-  if (!props.storageKey || typeof window === 'undefined') return null
-  const raw = window.localStorage.getItem(props.storageKey)
+  if (typeof window === 'undefined') return null
+  const raw = window.localStorage.getItem(storageKeyFor())
   if (!raw) return null
   const n = Number(raw)
   return Number.isFinite(n) ? n : null
@@ -171,9 +185,9 @@ const onDragEnd = () => {
   document.body.style.userSelect = ''
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
-  if (props.storageKey && currentWidthPx.value !== null) {
+  if (currentWidthPx.value !== null) {
     try {
-      window.localStorage.setItem(props.storageKey, String(currentWidthPx.value))
+      window.localStorage.setItem(storageKeyFor(), String(currentWidthPx.value))
     } catch {
       // ignore quota / privacy errors
     }
@@ -197,12 +211,10 @@ const onDragStart = (e: MouseEvent) => {
 
 const resetWidth = () => {
   currentWidthPx.value = null
-  if (props.storageKey) {
-    try {
-      window.localStorage.removeItem(props.storageKey)
-    } catch {
-      // ignore
-    }
+  try {
+    window.localStorage.removeItem(storageKeyFor())
+  } catch {
+    // ignore
   }
 }
 

@@ -27,14 +27,18 @@ import type {
 import type { CanUseTool, PermissionUpdate } from './permission-types.js'
 import type { AgentMode } from '../types/shared.js'
 import { allowSessionTool, isSessionToolAllowed } from '../sessions/permissions.js'
+import { BROWSER_TOOL_NAME, isMutatingBrowserAction } from './tools/browser-tool.js'
 import { log } from '../util/logger.js'
 
 // Tools that mutate the workspace or execute code. Everything else is read-only
 // and runs without a permission prompt.
-const WRITE_TOOLS = new Set(['Write', 'Edit'])
+const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 const EXEC_TOOLS = new Set(['Bash'])
 
-function isGatedTool(name: string): boolean {
+// browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
+// screenshot/extract are read-only (don't gate). Decided per-call from args.
+function isGatedTool(name: string, args: unknown): boolean {
+  if (name === BROWSER_TOOL_NAME) return isMutatingBrowserAction(args)
   return WRITE_TOOLS.has(name) || EXEC_TOOLS.has(name)
 }
 
@@ -53,7 +57,7 @@ export function makeBeforeToolCall(
     const toolUseId = context.toolCall.id
 
     // Non-mutating tools: always allow.
-    if (!isGatedTool(toolName)) return undefined
+    if (!isGatedTool(toolName, context.args)) return undefined
 
     // execute mode: no gate (the user opted into full access).
     if (mode === 'execute') return undefined

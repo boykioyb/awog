@@ -10,7 +10,7 @@
     <!-- App identity -->
     <div
       class="flex items-center gap-3 rounded-lg p-4"
-      :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+      :style="{ background: cardBg, border: `1px solid ${t.border}` }"
     >
       <div
         class="flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0"
@@ -115,6 +115,7 @@ const REPO_URL = 'https://github.com/boykioyb/awog'
 const REPO_LABEL = 'github.com/boykioyb/awog'
 
 const { t } = useTheme()
+const { cardBg } = useSettingsSurface()
 const update = useUpdateStore()
 const { autoUpdate, update: updateSettings } = useUpdateSettings()
 const { toasts, pushToast, toastStyle } = useToasts()

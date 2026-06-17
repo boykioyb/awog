@@ -28,53 +28,49 @@
         </span>
 
         <div class="ml-auto flex items-center gap-1">
-          <button
+          <AppButton
             v-if="textViewer"
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
-            :style="actionBtnStyle"
+            variant="secondary"
+            size="sm"
             title="Toggle raw / rendered"
             @click="textViewer = textViewer === 'rendered' ? 'raw' : 'rendered'"
           >
             <Eye :size="12" />
             {{ textViewer === 'rendered' ? 'Raw' : 'Rendered' }}
-          </button>
-          <button
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
-            :style="copyBtnStyle"
+          </AppButton>
+          <AppButton
+            variant="secondary"
+            size="sm"
+            :active="copyState === 'copied'"
             :title="copyTitle"
             @click="onCopy"
           >
             <component :is="copyState === 'copied' ? CheckIcon : ClipboardIcon" :size="12" />
             {{ copyLabel }}
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             v-if="attachment.url"
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
-            :style="actionBtnStyle"
+            variant="secondary"
+            size="sm"
             title="Open in new tab"
             @click="openInNewTab"
           >
             <ExternalLink :size="12" />
             Open
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             v-if="attachment.url"
-            class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
-            :style="actionBtnStyle"
+            variant="secondary"
+            size="sm"
             title="Download"
             @click="onDownload"
           >
             <Download :size="12" />
             Download
-          </button>
-          <button
-            class="p-1.5 rounded transition"
-            :style="actionBtnStyle"
-            title="Close (Esc)"
-            @click="emit('close')"
-          >
+          </AppButton>
+          <AppButton variant="secondary" size="icon" title="Close (Esc)" @click="emit('close')">
             <X :size="14" />
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -198,22 +194,6 @@ const headerIcon = computed(() => {
 
 const lineCount = computed(() => props.attachment.preview?.split('\n').length ?? 0)
 const charCount = computed(() => props.attachment.preview?.length ?? 0)
-
-const actionBtnStyle = computed(() => ({
-  background: t.value.bgHover,
-  color: t.value.text,
-  border: `1px solid ${t.value.border}`,
-}))
-
-const copyBtnStyle = computed(() =>
-  copyState.value === 'copied'
-    ? {
-        background: t.value.warningBg,
-        color: t.value.statusOk,
-        border: `1px solid ${t.value.warningBorder}`,
-      }
-    : actionBtnStyle.value,
-)
 
 const copyLabel = computed(() => {
   if (copyState.value === 'copied') return 'Copied'

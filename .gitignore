@@ -33,3 +33,6 @@ Thumbs.db
 # AWOG local runtime state (dogfooding AWOG on its own repo).
 # .trust.json records per-machine hook trust grants — never share it.
 .awog/.trust.json
+
+# Playwright-MCP runtime artifacts (console logs, page snapshots)
+.playwright-mcp/

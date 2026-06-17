@@ -123,24 +123,8 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em]"
-        :style="{ color: t.textMuted }"
-        @click="emit('cancel')"
-      >
-        Cancel
-      </button>
-      <button
-        :disabled="!canSubmit"
-        class="px-3 py-1.5 text-[1em] rounded font-medium"
-        :style="{
-          background: !canSubmit ? t.bgInput : t.accent,
-          color: !canSubmit ? t.textFaint : t.accentText,
-        }"
-        @click="handleSubmit"
-      >
-        Create task
-      </button>
+      <AppButton variant="ghost" @click="emit('cancel')">Cancel</AppButton>
+      <AppButton :disabled="!canSubmit" @click="handleSubmit">Create task</AppButton>
     </template>
   </BaseModal>
 

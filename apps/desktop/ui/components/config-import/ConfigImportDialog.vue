@@ -70,21 +70,12 @@
     </div>
 
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
-        @click="emit('close')"
-      >
+      <AppButton variant="ghost" @click="emit('close')">
         {{ tr('common.cancel') }}
-      </button>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-        :style="{ background: t.accent, color: t.accentText }"
-        :disabled="selected.size === 0 || importing"
-        @click="onConfirm"
-      >
+      </AppButton>
+      <AppButton :disabled="selected.size === 0 || importing" @click="onConfirm">
         {{ tr('import.dialog.confirm', { count: selected.size }) }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

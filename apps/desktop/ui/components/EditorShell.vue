@@ -22,26 +22,11 @@
              having to re-implement Cancel + Save itself. -->
         <slot name="header-actions-extra" />
         <slot name="header-actions">
-          <button
-            class="px-3 py-1.5 text-[1em] rounded transition"
-            :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
-            @click="requestClose"
-          >
-            Cancel
-          </button>
-          <button
-            class="px-3 py-1.5 text-[1em] rounded font-medium transition disabled:cursor-not-allowed inline-flex items-center gap-1.5"
-            :disabled="saveDisabled"
-            :style="{
-              background: saveDisabled ? t.bgInput : t.accent,
-              color: saveDisabled ? t.textFaint : t.accentText,
-              border: `1px solid ${saveDisabled ? t.border : t.accent}`,
-            }"
-            @click="onSave"
-          >
+          <AppButton variant="ghost" @click="requestClose">Cancel</AppButton>
+          <AppButton :disabled="saveDisabled" @click="onSave">
             <Save :size="11" />
             {{ saving ? 'Saving…' : saveLabel }}
-          </button>
+          </AppButton>
         </slot>
       </div>
     </div>
@@ -62,20 +47,8 @@
         You have unsaved changes. Discard them and close the editor?
       </div>
       <template #footer>
-        <button
-          class="px-3 py-1.5 text-[1em] rounded transition"
-          :style="{ color: t.textMuted }"
-          @click="showDiscardConfirm = false"
-        >
-          Keep editing
-        </button>
-        <button
-          class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-          :style="{ background: t.danger, color: t.onAccent }"
-          @click="confirmDiscard"
-        >
-          Discard
-        </button>
+        <AppButton variant="ghost" @click="showDiscardConfirm = false">Keep editing</AppButton>
+        <AppButton variant="danger" @click="confirmDiscard">Discard</AppButton>
       </template>
     </BaseModal>
   </div>

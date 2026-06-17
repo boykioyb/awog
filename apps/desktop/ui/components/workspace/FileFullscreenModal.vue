@@ -36,6 +36,30 @@
           </button>
         </div>
 
+        <!-- Content width — only meaningful for the rendered markdown preview
+             (raw is fixed-width code; the iframe frame is full-bleed). Lets a wide
+             diagram/table use the whole screen instead of the reading column. -->
+        <div
+          v-if="isMarkdown && view === 'preview'"
+          class="inline-flex rounded overflow-hidden"
+          :style="{ border: `1px solid ${t.border}` }"
+        >
+          <button
+            v-for="w in widthModes"
+            :key="w.value"
+            type="button"
+            class="px-2 py-1 inline-flex items-center transition"
+            :style="{
+              background: contentWidth === w.value ? t.bgActive : 'transparent',
+              color: contentWidth === w.value ? t.text : t.textDim,
+            }"
+            :title="tr(w.labelKey)"
+            @click="contentWidth = w.value"
+          >
+            <component :is="w.icon" :size="13" />
+          </button>
+        </div>
+
         <span
           v-if="language"
           class="text-[12px] uppercase tracking-wider"
@@ -76,7 +100,11 @@
           :path="path"
           :kind="isPdf ? 'pdf' : 'html'"
         />
-        <div v-else-if="isMarkdown && view === 'preview'" class="mx-auto max-w-5xl px-8 py-6">
+        <div
+          v-else-if="isMarkdown && view === 'preview'"
+          class="mx-auto px-8 py-6"
+          :class="contentWidthClass"
+        >
           <MarkdownRenderer :content="content" />
         </div>
         <pre
@@ -91,7 +119,17 @@
 </template>
 
 <script setup lang="ts">
-import { Check, Code, Copy, Eye, FileText, X } from 'lucide-vue-next'
+import {
+  Check,
+  Code,
+  Copy,
+  Eye,
+  FileText,
+  RectangleHorizontal,
+  StretchHorizontal,
+  UnfoldHorizontal,
+  X,
+} from 'lucide-vue-next'
 import MarkdownRenderer from '~/components/markdown/MarkdownRenderer.vue'
 import FilePreviewFrame from '~/components/workspace/FilePreviewFrame.vue'
 
@@ -124,6 +162,22 @@ const viewModes = [
   { value: 'preview' as const, labelKey: 'workspace.files.preview', icon: Eye },
   { value: 'raw' as const, labelKey: 'workspace.files.raw', icon: Code },
 ]
+
+// Reading-column width for the rendered markdown preview. Persisted app-wide
+// (useState) so the choice sticks across opens. `full` lets wide diagrams/tables
+// span the whole screen; `normal` is the comfortable reading column.
+type ContentWidth = 'normal' | 'wide' | 'full'
+const contentWidth = useState<ContentWidth>('md-fullscreen-width', () => 'normal')
+const widthModes = [
+  { value: 'normal' as const, labelKey: 'workspace.files.widthNormal', icon: RectangleHorizontal },
+  { value: 'wide' as const, labelKey: 'workspace.files.widthWide', icon: UnfoldHorizontal },
+  { value: 'full' as const, labelKey: 'workspace.files.widthFull', icon: StretchHorizontal },
+]
+const contentWidthClass = computed(() => {
+  if (contentWidth.value === 'full') return 'max-w-none'
+  if (contentWidth.value === 'wide') return 'max-w-7xl'
+  return 'max-w-5xl'
+})
 
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null

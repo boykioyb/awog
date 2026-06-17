@@ -11,13 +11,9 @@
       >
     </div>
     <template #footer>
-      <button
-        class="px-3 py-1.5 text-[1em] rounded font-medium transition"
-        :style="{ background: t.accent, color: t.accentText }"
-        @click="emit('close')"
-      >
+      <AppButton @click="emit('close')">
         {{ tr('common.close') }}
-      </button>
+      </AppButton>
     </template>
   </BaseModal>
 </template>

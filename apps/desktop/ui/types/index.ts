@@ -401,7 +401,10 @@ export type StepTool =
 export type StepStatus = 'running' | 'done' | 'error'
 
 export type StepDetail =
-  | { kind: 'diff'; path: string; content: string }
+  // Edit/MultiEdit: `diff` is a unified diff (git-style) rendered in split/unified
+  // mode; `content` (optional) is the full file after the edit, shown via a File
+  // view toggle. Mirrors the sidecar SessionStepDetail.
+  | { kind: 'diff'; path: string; diff: string; content?: string; language?: string }
   | { kind: 'file'; path: string; content: string; language?: string }
   | { kind: 'list'; items: { label: string; path?: string; snippet?: string }[] }
   | { kind: 'terminal'; command: string; output?: string; exitCode?: number }
@@ -520,6 +523,11 @@ export interface SessionMessage {
     cacheWriteTokens?: number
   }
   canceled?: boolean
+  // Set when the turn failed: a provider `error` stop (the loop returned an
+  // error reply rather than throwing) or a thrown runtime/network error. The UI
+  // renders a prominent error alert with `message` as the detail + a retry
+  // action. Mutually exclusive with a clean completion. Persisted by the sidecar.
+  error?: { message: string }
 }
 
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'

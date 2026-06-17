@@ -34,7 +34,7 @@ function pickTarget(name: string, input: Record<string, unknown>): string | unde
     const desc = input.description
     if (typeof desc === 'string' && desc.length > 0) return clip(desc)
   }
-  const candidates = ['file_path', 'path', 'pattern', 'query', 'url', 'command', 'description']
+  const candidates = ['file_path', 'notebook_path', 'path', 'pattern', 'query', 'url', 'command', 'description']
   for (const key of candidates) {
     const v = input[key]
     if (typeof v === 'string' && v.length > 0) return clip(v)

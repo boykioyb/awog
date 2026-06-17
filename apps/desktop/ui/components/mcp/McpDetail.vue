@@ -39,98 +39,31 @@
         </div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
-        <button
-          class="p-1.5 rounded transition disabled:opacity-50"
-          :style="{ color: t.textDim }"
+        <AppButton
+          variant="ghost"
+          size="icon"
           :disabled="testing"
           :title="testing ? 'Testing…' : 'Test connection (spawn ephemeral MCP handshake)'"
           @click="onTest"
-          @mouseenter="
-            (e: MouseEvent) => {
-              if (testing) return
-              const el = e.currentTarget as HTMLElement
-              el.style.background = t.bgHover
-              el.style.color = t.text
-            }
-          "
-          @mouseleave="
-            (e: MouseEvent) => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'transparent'
-              el.style.color = t.textDim
-            }
-          "
         >
           <Loader2 v-if="testing" :size="13" class="animate-spin" />
           <CheckCircle2 v-else :size="13" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           v-if="server.enabled"
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
+          variant="ghost"
+          size="icon"
           title="Restart server"
           @click="ws.restartMCPServer(server.id)"
-          @mouseenter="
-            (e: MouseEvent) => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = t.bgHover
-              el.style.color = t.text
-            }
-          "
-          @mouseleave="
-            (e: MouseEvent) => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'transparent'
-              el.style.color = t.textDim
-            }
-          "
         >
           <RotateCw :size="13" />
-        </button>
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          title="Edit"
-          @click="emit('edit')"
-          @mouseenter="
-            (e: MouseEvent) => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = t.bgHover
-              el.style.color = t.text
-            }
-          "
-          @mouseleave="
-            (e: MouseEvent) => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'transparent'
-              el.style.color = t.textDim
-            }
-          "
-        >
+        </AppButton>
+        <AppButton variant="ghost" size="icon" title="Edit" @click="emit('edit')">
           <Edit3 :size="13" />
-        </button>
-        <button
-          class="p-1.5 rounded transition"
-          :style="{ color: t.textDim }"
-          title="Delete server"
-          @click="emit('delete')"
-          @mouseenter="
-            (e: MouseEvent) => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = t.dangerBg
-              el.style.color = t.danger
-            }
-          "
-          @mouseleave="
-            (e: MouseEvent) => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'transparent'
-              el.style.color = t.textDim
-            }
-          "
-        >
+        </AppButton>
+        <AppButton variant="ghostDanger" size="icon" title="Delete server" @click="emit('delete')">
           <Trash2 :size="13" />
-        </button>
+        </AppButton>
       </div>
     </div>
 

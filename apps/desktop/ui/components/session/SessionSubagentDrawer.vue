@@ -92,9 +92,10 @@
                 Steps · {{ childSteps.length }}
               </div>
               <!-- Flat timeline (Claude-Code style), matching the main session
-                   view: thin left rail + wrapped paths + ⎿ result summaries. -->
+                   view: thin left rail + single-line truncated rows (full output
+                   one click away in the step detail). -->
               <div class="space-y-1 pl-3" :style="{ borderLeft: `2px solid ${t.border}` }">
-                <StepItem v-for="child in childSteps" :key="child.id" :step="child" timeline />
+                <StepItem v-for="child in childSteps" :key="child.id" :step="child" />
               </div>
             </div>
 

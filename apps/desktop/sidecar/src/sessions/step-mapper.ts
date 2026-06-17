@@ -16,6 +16,7 @@ import type {
   SessionStepTool,
 } from '../types/shared.js'
 import { countDone, parseTodos } from '../runtime/todos.js'
+import { buildUnifiedDiff } from '../runtime/tools/text-diff.js'
 
 // Cap for inline previews and one-line labels — kept small so step payloads stay
 // light over stdio and the collapsed row never bloats.
@@ -46,12 +47,14 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   Edit: 'edit',
   MultiEdit: 'edit',
   NotebookEdit: 'edit',
+  NotebookRead: 'read',
   Bash: 'terminal',
   BashOutput: 'terminal',
   Glob: 'find-files',
   Grep: 'search',
   WebSearch: 'search',
   WebFetch: 'search',
+  browser_tool: 'search',
   Task: 'task',
   TodoWrite: 'task',
   ExitPlanMode: 'task',
@@ -74,6 +77,8 @@ function pickTarget(toolName: string, input: Record<string, unknown>): string | 
   }
   const fp = input.file_path
   if (typeof fp === 'string' && fp.length > 0) return fp
+  const nb = input.notebook_path
+  if (typeof nb === 'string' && nb.length > 0) return nb
   const path = input.path
   if (typeof path === 'string' && path.length > 0) return path
   const pattern = input.pattern
@@ -144,6 +149,8 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Edit (multi)'
     case 'NotebookEdit':
       return 'Edit notebook'
+    case 'NotebookRead':
+      return 'Read notebook'
     case 'Bash':
       return 'Run'
     case 'BashOutput':
@@ -156,6 +163,10 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Web search'
     case 'WebFetch':
       return 'Fetch URL'
+    case 'browser_tool': {
+      const action = typeof input.action === 'string' ? input.action : ''
+      return action ? `Browser: ${action}` : 'Browser'
+    }
     case 'Task': {
       // Format: "Agent <subagent_type>" so the step row reads like Claude Code's
       // "Ran agent X" affordance. An omitted type runs the general-purpose
@@ -259,7 +270,34 @@ export interface ToolResultInfo {
   toolName: string
   toolInput: Record<string, unknown>
   content: unknown
+  // AgentToolResult.details — side channel. Edit/MultiEdit stash `diff` (a
+  // unified diff) + `newContent` (the full file after the edit) here so the
+  // step detail can render a git-style diff and a full-file view.
+  details?: unknown
   isError: boolean
+}
+
+// Best-effort unified diff for an Edit/MultiEdit when the tool didn't attach one
+// (e.g. older flows): diff each edit's old_string → new_string in isolation.
+// No surrounding file context, so line numbers start at 1 — still renders the
+// change like git. The accurate, line-aligned diff comes from `details.diff`.
+function fallbackEditDiff(toolName: string, input: Record<string, unknown>): string {
+  if (toolName === 'Edit') {
+    const oldStr = typeof input.old_string === 'string' ? input.old_string : ''
+    const newStr = typeof input.new_string === 'string' ? input.new_string : ''
+    return buildUnifiedDiff(oldStr, newStr)
+  }
+  const edits = Array.isArray(input.edits) ? input.edits : []
+  const parts: string[] = []
+  for (const e of edits) {
+    if (typeof e !== 'object' || e === null) continue
+    const rec = e as Record<string, unknown>
+    const o = typeof rec.old_string === 'string' ? rec.old_string : ''
+    const n = typeof rec.new_string === 'string' ? rec.new_string : ''
+    const d = buildUnifiedDiff(o, n)
+    if (d) parts.push(d)
+  }
+  return parts.join('\n')
 }
 
 export function stepFromToolResult(info: ToolResultInfo): SessionStep {
@@ -269,12 +307,36 @@ export function stepFromToolResult(info: ToolResultInfo): SessionStep {
   const stats = pickDiffStats(info.toolName, info.toolInput)
   const preview = previewToolResult(info.content)
 
-  // Detail panel: terminal output for Bash, file dump for Read/Write, otherwise
-  // a plain text panel so the user can drill in for context. We don't render
-  // 'diff' here (UI's diff viewer needs a real unified-diff string we don't
-  // have); StepItem still shows additions/deletions counters inline.
+  // Detail panel: terminal output for Bash, file dump for Read/Write, a
+  // git-style diff (+ full-file view) for Edit/MultiEdit, otherwise a plain text
+  // panel so the user can drill in for context.
   let detail: SessionStepDetail | undefined
-  if (info.toolName === 'Bash') {
+  if ((info.toolName === 'Edit' || info.toolName === 'MultiEdit') && !info.isError) {
+    // A failed Edit (e.g. "old_string not found in file") changed nothing, so we
+    // skip the diff entirely and let it fall through to the error-text panel —
+    // rendering a diff of an edit that never applied would be misleading.
+    //
+    // The accurate, line-aligned diff + full new file ride on the tool result
+    // `details` (computed in fs-tools where both before/after are in hand).
+    // Fall back to an isolated old→new diff if absent. The UI infers the
+    // language for the file view from the path extension.
+    const path = typeof info.toolInput.file_path === 'string' ? info.toolInput.file_path : ''
+    const d =
+      typeof info.details === 'object' && info.details !== null
+        ? (info.details as Record<string, unknown>)
+        : {}
+    const diffText =
+      typeof d.diff === 'string' && d.diff.length > 0
+        ? d.diff
+        : fallbackEditDiff(info.toolName, info.toolInput)
+    const after = typeof d.newContent === 'string' ? d.newContent : undefined
+    if (diffText.length > 0) {
+      detail = { kind: 'diff', path, diff: clip(diffText, FILE_DETAIL_MAX) }
+      if (after !== undefined) detail.content = clip(after, FILE_DETAIL_MAX)
+    } else if (preview.length > 0) {
+      detail = { kind: 'text', content: preview }
+    }
+  } else if (info.toolName === 'Bash') {
     const command = typeof info.toolInput.command === 'string' ? info.toolInput.command : ''
     detail = { kind: 'terminal', command, output: preview }
   } else if (info.toolName === 'Read') {

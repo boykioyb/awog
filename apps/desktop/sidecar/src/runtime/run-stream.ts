@@ -260,9 +260,12 @@ export async function runStreamPi(
         ...(getSteeringMessages ? { getSteeringMessages } : {}),
         // Capture Codex plan-usage from response headers (no-op for non-Codex).
         onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
-        // Sequential tool execution keeps step ordering deterministic for the UI
-        // and avoids interleaving permission prompts across concurrent tools.
-        toolExecution: 'sequential',
+        // Parallel at the batch level so several `Task` subagents spawned in one
+        // turn run concurrently (ADR 0030). Every non-Task tool is marked
+        // executionMode: 'sequential' (createRuntimeToolDefinitions), so a batch
+        // touching any regular tool still executes one-by-one — deterministic UI
+        // steps, no interleaved permission prompts. Only a pure-Task batch fans out.
+        toolExecution: 'parallel',
       },
       emit,
       args.abortController?.signal,
@@ -302,6 +305,9 @@ export async function runStreamPi(
       cache_creation_tokens: acc.cacheWriteTokens,
     },
     stopReason: acc.stopReason,
+    // Forward the provider error cause on a graceful `error` stop so the caller
+    // can persist + surface it (the run did NOT throw, so this is the only signal).
+    ...(acc.errorMessage !== undefined ? { errorMessage: acc.errorMessage } : {}),
   }
 }
 

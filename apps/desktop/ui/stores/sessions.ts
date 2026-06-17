@@ -35,6 +35,10 @@ interface SidecarSendMessageResult {
     cache_creation_tokens?: number
   }
   stopReason: string | null
+  // Provider error cause when stopReason === 'error'. The run completed normally
+  // (Pi reports a mid-stream provider failure as a graceful `error` stop, not a
+  // throw), so this is the only signal the turn actually failed.
+  errorMessage?: string
   // Ordered timeline built by the sidecar (ADR 0032). Stored as the authoritative
   // message.parts on finalize; absent for a non-streaming reply with no steps.
   parts?: SessionMessagePart[]
@@ -741,6 +745,7 @@ export const useSessionsStore = defineStore('sessions', {
         if (next.modelUsed !== undefined) slot.modelUsed = next.modelUsed
         if (next.usage !== undefined) slot.usage = next.usage
         if (next.canceled !== undefined) slot.canceled = next.canceled
+        if (next.error !== undefined) slot.error = next.error
         // Steps: prefer caller-supplied; otherwise re-attach streamed ones.
         if (next.steps !== undefined) slot.steps = next.steps
         else if (streamedSteps !== undefined) slot.steps = streamedSteps
@@ -1082,6 +1087,16 @@ export const useSessionsStore = defineStore('sessions', {
           (typeof document === 'undefined' || !document.hidden)
         if (!viewingNow) this.unread[sessionId] = true
 
+        // Graceful provider `error` stop: the loop returned normally but the model
+        // failed mid-turn (Pi reports this as stopReason 'error', not a throw). The
+        // reply text is partial/empty — finalize the agent bubble with the error
+        // attached so the UI shows a prominent alert + retry, keeping whatever
+        // streamed. Don't flush the queue (mirror cancel: a failed turn leaves
+        // queued messages for the user to decide on).
+        const turnError =
+          result.stopReason === 'error'
+            ? { message: result.errorMessage || 'The model returned an error.' }
+            : undefined
         // result.text is the authoritative full reply. Finalize only once the
         // typewriter has revealed the trailing text run, so the tail types out
         // instead of snapping. Keep placeholderId as the final id — stable key for
@@ -1104,6 +1119,7 @@ export const useSessionsStore = defineStore('sessions', {
             // Authoritative ordered timeline (ADR 0032). Undefined → finalize keeps
             // the derive path (legacy / non-streaming reply with no steps).
             ...(result.parts ? { parts: result.parts } : {}),
+            ...(turnError ? { error: turnError } : {}),
           })
         // All deltas have streamed into the live parts by now — just let the
         // typewriter finish revealing the trailing text run, then finalize (which
@@ -1112,11 +1128,11 @@ export const useSessionsStore = defineStore('sessions', {
         textCompleted = true
         onRevealDone = () => {
           doFinalize()
-          // Turn finished cleanly → auto-send the next queued message (FIFO) as a
-          // fresh turn. doFinalize cleared the streaming tag, so flushQueueHead
-          // sees the session idle. Cancel/error paths null out onRevealDone, so a
-          // stopped turn leaves the queue intact for the user to decide.
-          void this.flushQueueHead(sessionId)
+          // Failed turn → leave the queue intact (the next message would likely
+          // hit the same error). Clean finish → auto-send the next queued message
+          // (FIFO) as a fresh turn; doFinalize cleared the streaming tag, so
+          // flushQueueHead sees the session idle.
+          if (!turnError) void this.flushQueueHead(sessionId)
         }
         ensureReveal()
         tick()
@@ -1151,21 +1167,41 @@ export const useSessionsStore = defineStore('sessions', {
             canceled: true,
           })
         } else {
+          // A thrown runtime/network/RPC failure. Surface the real cause on the
+          // agent bubble (role stays 'agent') as a structured error so the UI shows
+          // a prominent alert + retry — not a faint, easy-to-miss system divider.
           let message: string
           if (err instanceof SidecarUnavailableError) {
             message = 'Sidecar unavailable — running in browser dev'
           } else if (err instanceof SidecarError) {
-            message = err.message
+            // Include the RPC code so a bare provider error is still identifiable.
+            message = err.code ? `${err.message} (code ${err.code})` : err.message
           } else if (err instanceof Error) {
             message = err.message
           } else {
             message = 'Unknown error'
           }
+          // Keep whatever partial reply streamed before the throw — snap the
+          // trailing text run to all received deltas, then attach the error.
+          const s = this.sessions.find((x) => x.id === sessionId)
+          const slot = s?.messages[placeholderIdx]
+          let partialText = ''
+          if (slot?.id === placeholderId) {
+            const last = slot.parts?.[slot.parts.length - 1]
+            if (last && last.kind === 'text') last.text = trailingTarget
+            partialText = (slot.parts ?? []).reduce(
+              (acc, p) => (p.kind === 'text' ? acc + p.text : acc),
+              '',
+            )
+          }
           finalize({
             id: placeholderId,
-            role: 'system',
-            text: `[error] ${message}`,
+            role: 'agent',
+            text: partialText,
             at: nowIso(),
+            startedAt,
+            completedAt: Date.now(),
+            error: { message },
           })
         }
       } finally {
