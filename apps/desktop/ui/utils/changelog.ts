@@ -30,6 +30,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.16.1',
+    date: '2026-06-17',
+    highlight: {
+      en: 'The Git diff is readable again — syntax-highlighted code instead of same-hue text on tint — and new files now show their contents.',
+      vi: 'Diff trong Git đọc được trở lại — code có tô màu cú pháp thay vì chữ trùng tông với nền — và file mới giờ hiển thị đầy đủ nội dung.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Git diff colors: code lines were colored text over a same-hue tint (green-on-green, red-on-red) and hard to read. Code now uses the normal foreground with syntax highlighting; only the +/- markers carry the add/delete color.',
+        vi: 'Màu diff trong Git: dòng code trước đây là chữ màu trên nền cùng tông (xanh trên xanh, đỏ trên đỏ) nên khó đọc. Code giờ dùng màu chữ thường kèm tô màu cú pháp; chỉ dấu +/- mang màu thêm/xóa.',
+      },
+      {
+        kind: 'fixed',
+        en: 'New (untracked) files showed “No changes” in the diff view; they now render their full contents as added lines.',
+        vi: 'File mới (chưa theo dõi) trước đây hiện “No changes” ở khung diff; giờ hiển thị toàn bộ nội dung dưới dạng dòng được thêm.',
+      },
+    ],
+  },
+  {
     version: '0.16.0',
     date: '2026-06-17',
     highlight: {
