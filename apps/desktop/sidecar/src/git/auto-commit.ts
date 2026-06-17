@@ -35,7 +35,14 @@ export interface AutoCommitPhaseOptions {
   // v2 once the engine carries explicit per-phase artifact pathspecs; we
   // accept the value here so call sites are stable across versions.
   scope: 'workspace' | 'artifacts-only'
+  // Append the `Co-Authored-By: AWOG …` trailer (Git setting `commitCoAuthor`,
+  // snapshotted on the task). Defaults to true when omitted.
+  coAuthor?: boolean
 }
+
+// Mirrors the UI-side GIT_COAUTHOR_PROMPT trailer (utils/system-prompt.ts). The
+// two runtimes can't share the literal, so keep them in sync by hand.
+const CO_AUTHOR_TRAILER = 'Co-Authored-By: AWOG <noreply@awog.local>'
 
 export interface AutoCommitResult {
   committed: boolean
@@ -72,7 +79,7 @@ export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<Aut
   }
 
   const summary = normalizeSummary(opts.summary)
-  const message = renderTemplate(opts.template, {
+  const subject = renderTemplate(opts.template, {
     phaseId: opts.phaseId,
     agentName: opts.agentName,
     agentRole: opts.agentRole ?? '',
@@ -82,6 +89,10 @@ export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<Aut
     summary,
     timestamp: new Date().toISOString(),
   })
+  // Co-author trailer is opt-in (default on). Standard git trailer placement:
+  // a blank line after the subject, then the trailer line.
+  const message =
+    opts.coAuthor === false ? subject : `${subject}\n\n${CO_AUTHOR_TRAILER}`
 
   return withWorkspaceLock(
     opts.workspaceRoot,

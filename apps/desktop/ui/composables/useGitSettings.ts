@@ -19,7 +19,7 @@ const POLICY_VALUES: readonly DirtyTaskPolicy[] = ['warn', 'auto-stash']
 const pick = <T>(value: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value as T) ? (value as T) : fallback
 
-const coerce = (raw: unknown): GitSettings => {
+export const coerceGitSettings = (raw: unknown): GitSettings => {
   const v = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const interval =
     typeof v.autoFetchIntervalMs === 'number' && v.autoFetchIntervalMs >= 0
@@ -45,6 +45,10 @@ const coerce = (raw: unknown): GitSettings => {
       typeof v.commitMessageRule === 'string' && v.commitMessageRule.trim().length > 0
         ? v.commitMessageRule
         : DEFAULT_GIT_SETTINGS.commitMessageRule,
+    commitCoAuthor:
+      typeof v.commitCoAuthor === 'boolean'
+        ? v.commitCoAuthor
+        : DEFAULT_GIT_SETTINGS.commitCoAuthor,
   }
 }
 
@@ -53,7 +57,7 @@ const loadFromStorage = (): GitSettings | null => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return coerce(JSON.parse(raw))
+    return coerceGitSettings(JSON.parse(raw))
   } catch {
     return null
   }

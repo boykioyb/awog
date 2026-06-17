@@ -631,6 +631,10 @@ export interface Task {
   // Snapshot of the workflow DAG at creation time so editing the workflow later
   // never mutates a running task (ADR 0024 risk #4). Optional for legacy reads.
   workflowSnapshot?: Workflow
+  // Snapshot of the `commitCoAuthor` Git setting (UI) at creation time. When
+  // true the per-phase auto-commit appends `Co-Authored-By: AWOG …`. Optional
+  // for legacy tasks — undefined is treated as enabled.
+  commitCoAuthor?: boolean
   phases: Record<string, TaskPhase>
 }
 

@@ -62,9 +62,40 @@ Settings panel cung cấp cấu hình workspace, model API key, connector và ap
 }
 ```
 
-## Lưu trữ dữ liệu
+## Lưu trữ dữ liệu / Persistence (ADR 0045)
 
-`workspace/settings.json` (loại trừ khỏi Git qua `.gitignore` để tránh leak API key).
+App settings (trừ accounts/API key) persist vào **`~/.awog/settings.json`** —
+đọc/ghi **qua sidecar** (UI không `import fs`, invariant #4). localStorage giữ vai
+trò **cache đọc-nhanh** (chống FOUC theme/appearance); **file là source of truth**.
+
+**Scope file** (toàn bộ trừ accounts): `themeMode`, `appearance`, `defaults`,
+`git`, `autoUpdate`, `composer`, `quotaWarning`, `workspacePath`, `autoApprove`,
+`notificationsEnabled`. **Accounts / API key KHÔNG vào đây** — vẫn ở
+`credentials.json` + OS keychain (invariant #1).
+
+**RPC (sidecar):**
+
+| Method | Vai trò |
+|---|---|
+| `settings.get` | Trả object JSON đã lưu (hoặc `{}` nếu chưa có file). Sidecar **dumb** — không coerce/áp default; UI sở hữu schema. |
+| `settings.set({ patch })` | Shallow-merge `patch` (mỗi nhóm = 1 top-level key) → ghi atomic (`.tmp` → `chmod 600` → `rename`), serialize qua mutex. Trả object đã merge. |
+
+**Đồng bộ (`useSettingsSync`):**
+
+1. **Boot** — seed store từ localStorage (sync, không FOUC) → `settings.get` (async).
+   File có data → coerce + distribute vào store (cascade ra localStorage + DOM qua
+   watcher sẵn có) ⇒ **file thắng** khi user sửa tay. File rỗng → seed từ snapshot.
+2. **Ghi** — một deep-watch trên snapshot → debounce 400ms → `settings.set`.
+
+> File là input **L1** (user có thể sửa tay) → mỗi slice coerce ở biên trước khi
+> đưa vào store. Sidecar/Task có thể đọc thẳng `settings.json` (vd git auto-commit
+> per-phase đang deferred).
+
+Sidecar: [`settings/store.ts`](../../apps/desktop/sidecar/src/settings/store.ts),
+[`methods/settings.get.ts`](../../apps/desktop/sidecar/src/methods/settings.get.ts),
+[`methods/settings.set.ts`](../../apps/desktop/sidecar/src/methods/settings.set.ts).
+UI: [`composables/useSettingsSync.ts`](../../apps/desktop/ui/composables/useSettingsSync.ts)
++ các `coerce*` trong từng `useXxxSettings`.
 
 ## Bảo mật
 

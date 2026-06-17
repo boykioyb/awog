@@ -16,7 +16,7 @@ const STORAGE_KEY = 'awog.composer.v1'
 const PASTE_THRESHOLD_MIN = 200
 const PASTE_THRESHOLD_MAX = 100_000
 
-const coerce = (raw: unknown): ComposerSettings => {
+export const coerceComposerSettings = (raw: unknown): ComposerSettings => {
   const v = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const threshold =
     typeof v.pasteThreshold === 'number' && Number.isFinite(v.pasteThreshold)
@@ -34,7 +34,7 @@ const loadFromStorage = (): ComposerSettings | null => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return coerce(JSON.parse(raw))
+    return coerceComposerSettings(JSON.parse(raw))
   } catch {
     return null
   }

@@ -63,9 +63,11 @@
               :style="{ background: contentBg }"
             >
               <SettingsAppearanceSection v-if="section === 'appearance'" />
-              <SettingsWorkspaceSection v-else-if="section === 'workspace'" />
               <SettingsDefaultsSection v-else-if="section === 'defaults'" />
               <SettingsModelsSection v-else-if="section === 'models'" />
+              <SettingsWorkspaceSection v-else-if="section === 'workspace'" />
+              <SettingsGitSection v-else-if="section === 'git'" />
+              <SettingsSessionsSection v-else-if="section === 'sessions'" />
               <SettingsAboutSection v-else-if="section === 'about'" />
             </div>
           </div>
@@ -76,7 +78,16 @@
 </template>
 
 <script setup lang="ts">
-import { FolderGit2, Info, Key, Palette, Sliders, X } from 'lucide-vue-next'
+import {
+  FolderGit2,
+  GitBranch,
+  Info,
+  Key,
+  MessagesSquare,
+  Palette,
+  Sliders,
+  X,
+} from 'lucide-vue-next'
 import type { Component } from 'vue'
 import type { SettingsSectionId } from '~/composables/useSettingsModal'
 
@@ -113,9 +124,11 @@ const cardRef = useTemplateRef<HTMLElement>('cardRef')
 
 const sections: { id: SettingsSectionId; labelKey: string; icon: Component }[] = [
   { id: 'appearance', labelKey: 'settings.section.appearance', icon: Palette },
-  { id: 'workspace', labelKey: 'settings.section.workspace', icon: FolderGit2 },
   { id: 'defaults', labelKey: 'settings.section.defaults', icon: Sliders },
   { id: 'models', labelKey: 'settings.section.models', icon: Key },
+  { id: 'workspace', labelKey: 'settings.section.workspace', icon: FolderGit2 },
+  { id: 'git', labelKey: 'settings.section.git', icon: GitBranch },
+  { id: 'sessions', labelKey: 'settings.section.sessions', icon: MessagesSquare },
   { id: 'about', labelKey: 'settings.section.about', icon: Info },
 ]
 

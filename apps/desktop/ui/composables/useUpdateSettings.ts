@@ -11,7 +11,7 @@ import {
 
 const STORAGE_KEY = 'awog.autoUpdate.v1'
 
-const coerce = (raw: unknown): AutoUpdateSettings => {
+export const coerceAutoUpdateSettings = (raw: unknown): AutoUpdateSettings => {
   const v = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   return {
     enabled: typeof v.enabled === 'boolean' ? v.enabled : DEFAULT_AUTO_UPDATE_SETTINGS.enabled,
@@ -24,7 +24,7 @@ const loadFromStorage = (): AutoUpdateSettings | null => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return coerce(JSON.parse(raw))
+    return coerceAutoUpdateSettings(JSON.parse(raw))
   } catch {
     return null
   }

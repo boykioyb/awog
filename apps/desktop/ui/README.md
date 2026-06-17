@@ -61,6 +61,7 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ✅ **Header tab-bar shell** — navigation chuyển từ NavRail (sidebar trái) sang **thanh tab ngang trên header** (`HeaderTabBar.vue`): 10 mục cố định icon+label (cuộn ngang khi tràn) + cụm tiện ích phải (What's New / Settings / theme toggle). Mỗi trang section bật **keep-alive** (`<NuxtPage :keepalive>`) → đổi tab giữ nguyên state + tab đã ghé chạy nền song song. **Badge sống** trên tab: Tasks `N` (running count), Sessions chấm pulsing (đang stream), Git chấm dirty + chip `↑/↓`. Trang fullscreen (`edit/[taskId]`, `projects/[id]/code`, `__sidecar-debug`) opt-out keep-alive (`definePageMeta({ keepalive: false })`). Xem [docs/features/header-tab-shell.md](../../../docs/features/header-tab-shell.md).
 ✅ **Liquid Glass (toàn app)** — giao diện kính mờ macOS qua composable mode-aware `useGlass()` (panel/overlay/menu/input/pill + ambient backdrop), dẫn xuất từ `useTheme()` token. **Công tắc** Settings → Appearance ("Liquid Glass", mặc định BẬT); tắt = giao diện solid cũ. List item/tab = glass pill; sidebar/list-pane/modal/menu/popover frosted; input giữ gần đặc cho dễ đọc; list row không blur (perf). CSS-only (chưa dùng Electron vibrancy). Xem [docs/features/liquid-glass.md](../../../docs/features/liquid-glass.md).
 ✅ **What's New** — nút trên header tab-bar (cụm tiện ích phải) mở `WhatsNewModal` liệt kê release note (changelog tĩnh `utils/changelog.ts`, song ngữ en/vi). Dot "unseen" khi version mới nhất khác version đã xem; lưu last-seen trong localStorage (`useWhatsNew`). Local-first, không fetch remote.
+✅ **Quota usage warning** — watcher app-lifetime (store `quota`, subscribe ở `app.vue`) poll `account.usage` của active OAuth account (Anthropic/Codex) mỗi 5 phút + on focus; vượt **ngưỡng cấu hình (mặc định 80%)** → `QuotaBanner` (mount cạnh `UpdateBanner`) + native notification (rising-edge de-dupe). 2 hành động opt-in khi chạm ngưỡng: **dừng toàn bộ session** đang chạy (`sessions.cancelAllRunning()`) và **chặn tạo session mới** (`createSession` → `null`, pre-flight gate, mọi call site handle null). Config ở Settings → Workspace (`useQuotaWarningSettings`, localStorage). Xem [docs/features/quota-usage-warning.md](../../../docs/features/quota-usage-warning.md).
 ⏳ **System tray + native notification** — đặc tả ở docs, chưa implement.
 ⏳ **Agents engine wiring** — agent CRUD đã wire (sidecar `agents.*`); engine injection cho session/task đã dùng AGENT.md runtime. (Tasks/Workflows nay đã wire — xem trên.)
 
@@ -70,7 +71,7 @@ Chi tiết rule, override khác Airbnb: xem [docs/coding/nuxt-frontend.md#lint--
 ui/
 ├── app.vue                 # Root, <NuxtLayout><NuxtPage :keepalive /></NuxtLayout>
 ├── layouts/
-│   └── default.vue         # Shell: HeaderTabBar (top) + UpdateBanner + content slot
+│   └── default.vue         # Shell: HeaderTabBar (top) + UpdateBanner + QuotaBanner + content slot
 ├── components/
 │   │
 │   │ # Primitive + layout (dùng chéo, giữ ở root) — auto-import dùng pathPrefix:false

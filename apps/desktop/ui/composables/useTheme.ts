@@ -30,8 +30,32 @@ const toChannels = (color: string, baseHex: string): string => {
   return '0 0 0'
 }
 
+// Theme mode (dark/light) is persisted in localStorage (same pattern as
+// `useAppearance`) so the pick survives a reload. Separate from the theme
+// *color* (which lives in `appearance.themeColor`).
+const THEME_STORAGE_KEY = 'awog.theme.v1'
+
+const loadThemeName = (): ThemeName => {
+  if (!import.meta.client) return 'dark'
+  try {
+    const raw = window.localStorage.getItem(THEME_STORAGE_KEY)
+    return raw === 'light' || raw === 'dark' ? raw : 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
+const saveThemeName = (name: ThemeName) => {
+  if (!import.meta.client) return
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, name)
+  } catch {
+    // Storage full or disabled — non-fatal, runtime value still applies.
+  }
+}
+
 export const useTheme = () => {
-  const themeName = useState<ThemeName>('themeName', () => 'dark')
+  const themeName = useState<ThemeName>('themeName', loadThemeName)
   const { appearance } = storeToRefs(useSettingsStore())
 
   const t = computed<ThemeTokens>(() => {
@@ -55,10 +79,12 @@ export const useTheme = () => {
 
   const toggle = () => {
     themeName.value = themeName.value === 'dark' ? 'light' : 'dark'
+    saveThemeName(themeName.value)
   }
 
   const setTheme = (name: ThemeName) => {
     themeName.value = name
+    saveThemeName(name)
   }
 
   if (import.meta.client) {

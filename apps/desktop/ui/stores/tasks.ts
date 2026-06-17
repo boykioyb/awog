@@ -12,6 +12,7 @@ import type {
   TaskRunDoneEvent,
   TaskMessageEvent,
 } from '~/types'
+import { useSettingsStore } from '~/stores/settings'
 import { useWorkflowsStore } from '~/stores/workflows'
 import { useWorkspaceStore } from '~/stores/workspace'
 import { topoSort } from '~/utils/graph'
@@ -350,6 +351,9 @@ export const useTasksStore = defineStore('tasks', {
         }
       })
       const id = `tsk-${Date.now().toString(36)}`
+      // Snapshot the co-author preference at creation time (like workflowSnapshot)
+      // so the engine's per-phase auto-commit honours it restart/rerun-safe.
+      const commitCoAuthor = useSettingsStore().git.commitCoAuthor
       const task: Task = {
         id,
         title: data.title,
@@ -362,6 +366,7 @@ export const useTasksStore = defineStore('tasks', {
         waitingApproval: null,
         waitingConnection: null,
         createdAt: nowIso(),
+        commitCoAuthor,
         phases,
       }
       this.tasks.unshift(task)
@@ -373,6 +378,7 @@ export const useTasksStore = defineStore('tasks', {
         source: data.source,
         description: data.description,
         workflowId: data.workflowId,
+        commitCoAuthor,
       })
       return task
     },

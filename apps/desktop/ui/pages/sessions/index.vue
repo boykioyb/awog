@@ -592,7 +592,9 @@ const onNewSession = () => {
 }
 
 const onCreateSession = (payload: { title: string; projectId: string | null }) => {
-  store.createSession(payload)
+  // null = quota gate refused (over threshold). Keep the dialog open so the
+  // re-surfaced quota banner / notification explains why nothing happened.
+  if (!store.createSession(payload)) return
   newDialogOpen.value = false
   mobilePane.value = 'detail'
 }
@@ -600,7 +602,11 @@ const onCreateSession = (payload: { title: string; projectId: string | null }) =
 // Group-header "+" — create + select a session straight into the group's
 // project, no dialog. Only wired for project grouping; '_none' → projectless.
 const quickNewSession = (group: Group) => {
-  store.createSession({ title: '', projectId: group.key === '_none' ? null : group.key })
+  const created = store.createSession({
+    title: '',
+    projectId: group.key === '_none' ? null : group.key,
+  })
+  if (!created) return // quota gate refused
   // Reveal it if the group was collapsed, so the new (selected) session shows.
   if (collapsedGroups.value[group.key]) {
     collapsedGroups.value = { ...collapsedGroups.value, [group.key]: false }
@@ -640,7 +646,7 @@ const projectMenuItems = computed<ContextMenuItem[]>(() => {
       label: tr('project.llm.new_session_in'),
       icon: Plus,
       action: () => {
-        store.createSession({ title: '', projectId: ctx.projectId })
+        if (!store.createSession({ title: '', projectId: ctx.projectId })) return
         mobilePane.value = 'detail'
       },
     },

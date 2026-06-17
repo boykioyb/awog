@@ -253,6 +253,8 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
         summary: firstLine(text) || node.skillId,
         template: COMMIT_TEMPLATE,
         scope: 'workspace',
+        // Snapshotted on the task at creation; undefined (legacy) → enabled.
+        coAuthor: task.commitCoAuthor ?? true,
       })
       if (commit.committed) commitSha = commit.sha
     } catch (err) {

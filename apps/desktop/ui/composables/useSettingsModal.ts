@@ -3,7 +3,14 @@
 // pattern as `useWhatsNew`). Settings moved from a dedicated `/settings` route
 // to a modal so it overlays the current page instead of replacing it.
 
-export type SettingsSectionId = 'appearance' | 'workspace' | 'defaults' | 'models' | 'about'
+export type SettingsSectionId =
+  | 'appearance'
+  | 'workspace'
+  | 'git'
+  | 'sessions'
+  | 'defaults'
+  | 'models'
+  | 'about'
 
 export const useSettingsModal = () => {
   const open = useState<boolean>('settings:open', () => false)

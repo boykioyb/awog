@@ -92,7 +92,7 @@ const pick = <T>(value: unknown, allowed: readonly T[], fallback: T): T =>
 const pickHex = (value: unknown, fallback: string): string =>
   typeof value === 'string' && HEX_COLOR_RE.test(value) ? value.toLowerCase() : fallback
 
-const coerceAppearance = (raw: unknown): AppearanceSettings => {
+export const coerceAppearance = (raw: unknown): AppearanceSettings => {
   const v = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const fontSize =
     typeof v.fontSize === 'number' && v.fontSize >= FONT_SIZE_MIN && v.fontSize <= FONT_SIZE_MAX

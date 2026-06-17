@@ -15,6 +15,8 @@ import type {
 } from '~/types'
 import { useWorkspaceStore } from '~/stores/workspace'
 import { useSettingsStore } from '~/stores/settings'
+import { useQuotaStore } from '~/stores/quota'
+import { GIT_COAUTHOR_PROMPT } from '~/utils/system-prompt'
 import { nowIso } from '~/utils/time'
 import { notify } from '~/utils/notify'
 import { composeOutgoingMessage } from '~/utils/follow-up'
@@ -400,7 +402,15 @@ export const useSessionsStore = defineStore('sessions', {
       return next
     },
 
-    createSession(data: CreateSessionInput): Session {
+    // Returns null when the quota gate refuses a new session (plan usage over the
+    // user threshold + "block new sessions" opt-in). Callers must handle null and
+    // skip any navigate/select that assumes a session was created.
+    createSession(data: CreateSessionInput): Session | null {
+      const quota = useQuotaStore()
+      if (quota.blockNewSessions) {
+        quota.notifyBlockedNewSession()
+        return null
+      }
       const ts = nowIso()
       const session: Session = {
         id: newId('ses'),
@@ -709,7 +719,15 @@ export const useSessionsStore = defineStore('sessions', {
 
       const sidecar = useSidecar()
       const settingsStore = useSettingsStore()
-      const systemPrompt = settingsStore.defaults?.systemPrompt || undefined
+      const basePrompt = settingsStore.defaults?.systemPrompt || undefined
+      // Co-author trailer convention is opt-in (Git setting). Append the block
+      // only when enabled so the model commits with `Co-Authored-By: AWOG …`;
+      // off → the model leaves commits unattributed (matches Task auto-commit).
+      const systemPrompt = settingsStore.git.commitCoAuthor
+        ? basePrompt
+          ? `${basePrompt}\n\n${GIT_COAUTHOR_PROMPT}`
+          : GIT_COAUTHOR_PROMPT
+        : basePrompt
 
       // Update placeholder in-place so the reactive proxy keeps tracking the
       // same object identity (replacing s.messages[i] is also reactive, but
@@ -1412,6 +1430,15 @@ export const useSessionsStore = defineStore('sessions', {
         // Race: stream may have settled between click and RPC. Either way the
         // finalize path will clean up; ignore the error.
       }
+    },
+
+    // Cancel every session that currently has an in-flight turn. Used by the
+    // quota guard (auto-abort on threshold). Returns the count of turns it
+    // targeted so the caller can tell the user how many were stopped.
+    async cancelAllRunning(): Promise<number> {
+      const ids = Object.keys(this.activeMessageBySession)
+      await Promise.all(ids.map((id) => this.cancelMessage(id)))
+      return ids.length
     },
 
     // Mid-turn steering (Session steering). Inject `text` into the session's

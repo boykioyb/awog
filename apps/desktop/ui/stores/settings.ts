@@ -72,6 +72,10 @@ export interface GitSettings {
   // panel. User-editable nên team có thể chốt convention riêng (Conventional
   // Commits, Vietnamese tone, custom scopes…) mà không phải sửa code.
   commitMessageRule: string
+  // Chèn trailer `Co-Authored-By: AWOG <noreply@awog.local>` vào commit AWOG tự
+  // tạo. Bật → (1) thêm khối Git Conventions vào system prompt của Session để
+  // model commit kèm co-author, (2) auto-commit per-phase của Tasks nối trailer.
+  commitCoAuthor: boolean
 }
 
 export const DEFAULT_COMMIT_MESSAGE_RULE = `You write git commit messages following Conventional Commits.
@@ -106,6 +110,7 @@ export const DEFAULT_GIT_SETTINGS: GitSettings = {
   // Set to 0 in Settings → Workspace to disable.
   autoFetchIntervalMs: 300_000,
   commitMessageRule: DEFAULT_COMMIT_MESSAGE_RULE,
+  commitCoAuthor: true,
 }
 
 // Auto-update (ADR 0028). Persisted in localStorage via `useUpdateSettings`
@@ -135,6 +140,45 @@ export const DEFAULT_COMPOSER_SETTINGS: ComposerSettings = {
   pasteThreshold: DEFAULT_PASTE_THRESHOLD,
 }
 
+// Quota warning — proactive alert when a plan rate-limit (Anthropic / OpenAI
+// subscription usage) crosses a threshold. `enabled` gates the in-app banner +
+// native notification; `threshold` is the utilization percent that trips it;
+// `abortSessionsOnThreshold` additionally cancels every running session turn
+// when the threshold is hit; `blockNewSessionsOnThreshold` refuses to create a
+// new session while over the threshold. Both actions are destructive — opt-in,
+// off by default. Persisted via `useQuotaWarningSettings` (same localStorage
+// pattern as git/composer).
+export interface QuotaWarningSettings {
+  enabled: boolean
+  threshold: number
+  abortSessionsOnThreshold: boolean
+  blockNewSessionsOnThreshold: boolean
+}
+
+// Clamp range for the threshold. Below 50% the warning is noise; at/above 100%
+// the plan already rejects calls, so 99 is the practical ceiling.
+export const QUOTA_THRESHOLD_MIN = 50
+export const QUOTA_THRESHOLD_MAX = 99
+
+export const DEFAULT_QUOTA_WARNING_SETTINGS: QuotaWarningSettings = {
+  enabled: true,
+  threshold: 80,
+  abortSessionsOnThreshold: false,
+  blockNewSessionsOnThreshold: false,
+}
+
+// Session launch defaults. Persisted in localStorage via `useSessionDefaults`
+// (same pattern as git/appearance) so the user's picks survive a reload.
+export const DEFAULT_SESSION_DEFAULTS: SessionDefaults = {
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  instructions: '',
+  provider: 'anthropic',
+  modelId: 'claude-opus-4-8',
+  mode: 'ask',
+  thinkingLevel: 'high',
+  timezone: 'Asia/Ho_Chi_Minh',
+}
+
 interface SettingsState {
   workspacePath: string
   autoApprove: boolean
@@ -145,6 +189,7 @@ interface SettingsState {
   git: GitSettings
   autoUpdate: AutoUpdateSettings
   composer: ComposerSettings
+  quotaWarning: QuotaWarningSettings
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -192,19 +237,12 @@ export const useSettingsStore = defineStore('settings', {
       openai: { accounts: [], activeAccountId: null },
       google: { accounts: [], activeAccountId: null },
     },
-    defaults: {
-      systemPrompt: DEFAULT_SYSTEM_PROMPT,
-      instructions: '',
-      provider: 'anthropic',
-      modelId: 'claude-opus-4-8',
-      mode: 'ask',
-      thinkingLevel: 'high',
-      timezone: 'Asia/Ho_Chi_Minh',
-    },
+    defaults: { ...DEFAULT_SESSION_DEFAULTS },
     appearance: { ...DEFAULT_APPEARANCE },
     git: { ...DEFAULT_GIT_SETTINGS },
     autoUpdate: { ...DEFAULT_AUTO_UPDATE_SETTINGS },
     composer: { ...DEFAULT_COMPOSER_SETTINGS },
+    quotaWarning: { ...DEFAULT_QUOTA_WARNING_SETTINGS },
   }),
   getters: {
     activeAccount(state): (provider: ProviderName) => ProviderAccount | null {
@@ -387,6 +425,9 @@ export const useSettingsStore = defineStore('settings', {
     updateDefaults(patch: Partial<SessionDefaults>) {
       this.defaults = { ...this.defaults, ...patch }
     },
+    resetDefaults() {
+      this.defaults = { ...DEFAULT_SESSION_DEFAULTS }
+    },
     updateAppearance(patch: Partial<AppearanceSettings>) {
       this.appearance = { ...this.appearance, ...patch }
     },
@@ -404,6 +445,9 @@ export const useSettingsStore = defineStore('settings', {
     },
     updateComposer(patch: Partial<ComposerSettings>) {
       this.composer = { ...this.composer, ...patch }
+    },
+    updateQuotaWarning(patch: Partial<QuotaWarningSettings>) {
+      this.quotaWarning = { ...this.quotaWarning, ...patch }
     },
   },
 })

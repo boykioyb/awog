@@ -5,6 +5,7 @@
   >
     <HeaderTabBar />
     <UpdateBanner />
+    <QuotaBanner />
     <main class="flex-1 flex flex-col overflow-hidden min-h-0">
       <slot />
     </main>

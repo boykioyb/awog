@@ -748,7 +748,9 @@ const startSessionForProject = async () => {
   const proj = selectedProject.value
   if (!proj) return
   await sessionsStore.hydrateFromSidecar()
-  sessionsStore.createSession({ title: '', projectId: proj.id })
+  // null = quota gate refused (over threshold); skip navigation so the user
+  // stays put and the re-surfaced quota banner / notification explains why.
+  if (!sessionsStore.createSession({ title: '', projectId: proj.id })) return
   navigateTo('/sessions')
 }
 

@@ -26,6 +26,9 @@ const Params = z.object({
   source: TaskSourceSchema,
   description: z.string(),
   workflowId: z.string().min(1),
+  // Snapshot of the UI's `commitCoAuthor` Git setting. Omitted by legacy/older
+  // callers → defaults to enabled (matches the UI default).
+  commitCoAuthor: z.boolean().optional(),
 })
 
 register('tasks.create', async (raw) => {
@@ -62,6 +65,9 @@ register('tasks.create', async (raw) => {
     createdAt: new Date().toISOString(),
     // Snapshot the DAG so editing the workflow later never mutates this task.
     workflowSnapshot: workflow,
+    // Snapshot the co-author preference so per-phase auto-commit is consistent
+    // across restart/rerun (default enabled when the caller omits it).
+    commitCoAuthor: params.commitCoAuthor ?? true,
     phases,
   }
 
