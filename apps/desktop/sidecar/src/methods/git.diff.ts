@@ -19,6 +19,14 @@ const Staged = z.object({
   workspaceRoot: z.string().min(1),
   path: z.string().optional(),
 })
+// Untracked file: `git diff` ignores it (the path is not in the index), so the
+// UI would show "No changes". Diff against the null device instead — the whole
+// file renders as additions. Requires a concrete path.
+const Untracked = z.object({
+  kind: z.literal('untracked'),
+  workspaceRoot: z.string().min(1),
+  path: z.string().min(1),
+})
 const Commit = z.object({
   kind: z.literal('commit'),
   workspaceRoot: z.string().min(1),
@@ -41,6 +49,7 @@ const CommitVsWorkingTree = z.object({
 const Params = z.discriminatedUnion('kind', [
   WorkingTree,
   Staged,
+  Untracked,
   Commit,
   CommitRange,
   CommitVsWorkingTree,
@@ -67,6 +76,18 @@ register('git.diff', async (raw): Promise<GitDiff> => {
       args = ['diff', '--cached', '--no-color', '--find-renames']
       if (params.path) args.push('--', params.path)
       break
+    }
+    case 'untracked': {
+      assertInsideWorkspace(params.workspaceRoot, params.path)
+      // --no-index returns exit code 1 when content differs (it always does
+      // for a new file vs /dev/null) — that is the documented "differences
+      // found" signal, not a failure, so don't throw on non-zero.
+      const r = await runGit(
+        params.workspaceRoot,
+        ['diff', '--no-index', '--no-color', '--', '/dev/null', params.path],
+        { throwOnNonZero: false },
+      )
+      return { files: parseUnifiedDiff(r.stdout) }
     }
     case 'commit': {
       assertSha(params.sha)

@@ -256,6 +256,67 @@ body,
 .awog-md .hljs-strong {
   font-weight: 600;
 }
+
+/* ─── highlight.js tokens (Git diff viewer) ────────────────────────────────── */
+/* Mirrors the markdown palette above. Kept as a separate `.awog-diff-code`
+   scope so diff lines get syntax colors WITHOUT inheriting the `.awog-md`
+   block-element rules (p/h1/ul margins). Change both palettes together. The
+   base color is the readable foreground so code shows clearly over the subtle
+   add/del row tints (the +/- sign + tint carry the change signal). */
+.awog-diff-code {
+  color: light-dark(#1f2328, #c9d1d9);
+}
+.awog-diff-code .hljs-comment,
+.awog-diff-code .hljs-quote {
+  color: light-dark(#6e7781, #8b949e);
+  font-style: italic;
+}
+.awog-diff-code .hljs-keyword,
+.awog-diff-code .hljs-selector-tag,
+.awog-diff-code .hljs-literal,
+.awog-diff-code .hljs-doctag,
+.awog-diff-code .hljs-section,
+.awog-diff-code .hljs-type,
+.awog-diff-code .hljs-name {
+  color: light-dark(#cf222e, #ff7b72);
+}
+.awog-diff-code .hljs-string,
+.awog-diff-code .hljs-attr,
+.awog-diff-code .hljs-symbol,
+.awog-diff-code .hljs-bullet,
+.awog-diff-code .hljs-addition {
+  color: light-dark(#0a3069, #a5d6ff);
+}
+.awog-diff-code .hljs-number,
+.awog-diff-code .hljs-meta,
+.awog-diff-code .hljs-link {
+  color: light-dark(#0550ae, #79c0ff);
+}
+.awog-diff-code .hljs-title,
+.awog-diff-code .hljs-title.function_,
+.awog-diff-code .hljs-built_in {
+  color: light-dark(#8250df, #d2a8ff);
+}
+.awog-diff-code .hljs-variable,
+.awog-diff-code .hljs-template-variable,
+.awog-diff-code .hljs-property,
+.awog-diff-code .hljs-params,
+.awog-diff-code .hljs-attribute {
+  color: light-dark(#953800, #ffa657);
+}
+.awog-diff-code .hljs-tag {
+  color: light-dark(#116329, #7ee787);
+}
+.awog-diff-code .hljs-deletion {
+  color: light-dark(#82071e, #ffa198);
+}
+.awog-diff-code .hljs-emphasis {
+  font-style: italic;
+}
+.awog-diff-code .hljs-strong {
+  font-weight: 600;
+}
+
 .awog-md blockquote {
   margin: 0.6em 0;
   padding: 0.2em 0.8em;

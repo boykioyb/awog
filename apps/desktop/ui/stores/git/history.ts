@@ -171,9 +171,18 @@ export function createGitHistory(ctx: GitActionCtx) {
         const file = statusFilesAll.value.find(
           (f) => f.path === path && f.projectId === selectedProjectId.value,
         )
-        // Staged files diff differently from working-tree changes.
-        const kind = file?.isStaged ? 'staged' : 'workingTree'
-        const result = await api.diff({ kind, workspaceRoot: root, path })
+        // Untracked files aren't in the index — `git diff` shows nothing, so the
+        // sidecar diffs them against /dev/null. Staged files diff differently
+        // from working-tree changes.
+        const params =
+          file?.workTree === 'untracked'
+            ? ({ kind: 'untracked', workspaceRoot: root, path } as const)
+            : ({
+                kind: file?.isStaged ? 'staged' : 'workingTree',
+                workspaceRoot: root,
+                path,
+              } as const)
+        const result = await api.diff(params)
         const first = result.files[0]
         if (first) return adaptDiff(first)
         return { path, isBinary: false, hunks: [] }

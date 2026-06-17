@@ -69,7 +69,7 @@
       <span>Binary file — no inline diff</span>
     </div>
     <div
-      v-else-if="diff.hunks.length === 0"
+      v-else-if="renderedHunks.length === 0"
       class="flex-1 flex items-center justify-center text-[1em]"
       :style="{ color: t.textDim }"
     >
@@ -81,7 +81,7 @@
       v-else-if="viewMode === 'unified'"
       class="flex-1 overflow-auto font-mono text-[1em] leading-[1.55]"
     >
-      <div v-for="(hunk, hi) in diff.hunks" :key="hi">
+      <div v-for="(hunk, hi) in renderedHunks" :key="hi">
         <div
           class="px-3 py-1 sticky top-0 z-10 flex items-center gap-2"
           :style="{
@@ -136,16 +136,16 @@
           <div
             class="pl-3 pr-3 flex-1 min-w-0"
             :style="{
-              color: colorFor(line.kind),
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               overflowWrap: 'anywhere',
             }"
           >
-            <span class="select-none" :style="{ color: t.textFaint }">
+            <span class="select-none" :style="{ color: signColor(line.kind) }">
               {{ prefixFor(line.kind) }}
             </span>
-            {{ line.text || ' ' }}
+            <!-- eslint-disable-next-line vue/no-v-html -- hljs output is HTML-escaped -->
+            <span class="awog-diff-code" v-html="line.html" />
           </div>
         </div>
       </div>
@@ -153,7 +153,7 @@
 
     <!-- Split (side-by-side) view -->
     <div v-else class="flex-1 overflow-auto font-mono text-[1em] leading-[1.55]">
-      <div v-for="(hunk, hi) in diff.hunks" :key="hi">
+      <div v-for="(hunk, hi) in renderedHunks" :key="hi">
         <div
           class="px-3 py-1 sticky top-0 z-10"
           :style="{
@@ -189,17 +189,17 @@
             <div
               class="pl-3 pr-3 flex-1 min-w-0"
               :style="{
-                color: row.left ? colorFor(row.left.kind) : t.textFaint,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere',
               }"
             >
               <template v-if="row.left">
-                <span class="select-none" :style="{ color: t.textFaint }">
-                  {{ prefixFor(row.left.kind === 'add' ? 'context' : row.left.kind) }}
+                <span class="select-none" :style="{ color: signColor(row.left.kind) }">
+                  {{ prefixFor(row.left.kind) }}
                 </span>
-                {{ row.left.text || ' ' }}
+                <!-- eslint-disable-next-line vue/no-v-html -- hljs output is HTML-escaped -->
+                <span class="awog-diff-code" v-html="row.left.html" />
               </template>
             </div>
           </div>
@@ -225,17 +225,17 @@
             <div
               class="pl-3 pr-3 flex-1 min-w-0"
               :style="{
-                color: row.right ? colorFor(row.right.kind) : t.textFaint,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere',
               }"
             >
               <template v-if="row.right">
-                <span class="select-none" :style="{ color: t.textFaint }">
-                  {{ prefixFor(row.right.kind === 'del' ? 'context' : row.right.kind) }}
+                <span class="select-none" :style="{ color: signColor(row.right.kind) }">
+                  {{ prefixFor(row.right.kind) }}
                 </span>
-                {{ row.right.text || ' ' }}
+                <!-- eslint-disable-next-line vue/no-v-html -- hljs output is HTML-escaped -->
+                <span class="awog-diff-code" v-html="row.right.html" />
               </template>
             </div>
           </div>
@@ -247,9 +247,10 @@
 
 <script setup lang="ts">
 import { AlignJustify, Columns2, FileImage, FileText } from 'lucide-vue-next'
-import type { GitDiffHunk, GitDiffLine, GitDiffLineKind, GitFileDiff } from '~/types'
+import type { GitDiffHunk, GitDiffLineKind, GitFileDiff } from '~/types'
+import { highlightLine } from '~/utils/markdown'
 
-defineProps<{
+const props = defineProps<{
   diff: GitFileDiff | null
   // When true the file shown is unstaged (or partially staged) — render
   // per-hunk Stage buttons. Caller decides; component just emits.
@@ -260,16 +261,48 @@ const emit = defineEmits<{ stageHunk: [hunkIndex: number] }>()
 const { t } = useTheme()
 const viewMode = ref<'unified' | 'split'>('unified')
 
+// A diff line plus its syntax-highlighted HTML. Highlighting is per-line (no
+// cross-line context) — good enough for a diff view and cheap to memoize.
+type RenderedLine = { kind: GitDiffLineKind; html: string }
+type RenderedHunk = Omit<GitDiffHunk, 'lines'> & { lines: RenderedLine[] }
+
+// File extension → hljs language id. hljs resolves common aliases itself
+// (py, ts, js, rs, kt, yml…); anything it doesn't know falls back to plain
+// escaped text inside highlightLine.
+const fileLang = computed(() => {
+  const p = props.diff?.path ?? ''
+  const dot = p.lastIndexOf('.')
+  if (dot < 0) return ''
+  return p.slice(dot + 1).toLowerCase()
+})
+
+// Precompute highlighted HTML once per diff load (not per render). Empty lines
+// keep a single space so the row preserves its height.
+const renderedHunks = computed<RenderedHunk[]>(() => {
+  const d = props.diff
+  if (!d || d.isBinary) return []
+  const lang = fileLang.value
+  return d.hunks.map((h) => ({
+    ...h,
+    lines: h.lines.map((ln) => ({
+      kind: ln.kind,
+      html: highlightLine(ln.text, lang) || ' ',
+    })),
+  }))
+})
+
 const bgFor = (k: GitDiffLineKind) => {
   if (k === 'add') return 'rgba(34, 197, 94, 0.10)'
   if (k === 'del') return 'rgba(239, 68, 68, 0.10)'
   return 'transparent'
 }
 
-const colorFor = (k: GitDiffLineKind) => {
+// Only the +/- gutter sign is tinted — the code text uses the readable
+// foreground (via `.awog-diff-code`) so it stays legible over the row tint.
+const signColor = (k: GitDiffLineKind) => {
   if (k === 'add') return t.value.gitAdded
   if (k === 'del') return t.value.gitDeleted
-  return t.value.textMuted
+  return t.value.textFaint
 }
 
 const prefixFor = (k: GitDiffLineKind) => {
@@ -284,7 +317,7 @@ const toggleStyle = (mode: 'unified' | 'split') => ({
   cursor: 'pointer',
 })
 
-const oldLineNum = (hunk: GitDiffHunk, li: number): string => {
+const oldLineNum = (hunk: RenderedHunk, li: number): string => {
   let count = hunk.oldStart
   for (let i = 0; i < li; i += 1) {
     const prev = hunk.lines[i]
@@ -295,7 +328,7 @@ const oldLineNum = (hunk: GitDiffHunk, li: number): string => {
   return String(count)
 }
 
-const newLineNum = (hunk: GitDiffHunk, li: number): string => {
+const newLineNum = (hunk: RenderedHunk, li: number): string => {
   let count = hunk.newStart
   for (let i = 0; i < li; i += 1) {
     const prev = hunk.lines[i]
@@ -307,14 +340,14 @@ const newLineNum = (hunk: GitDiffHunk, li: number): string => {
 }
 
 type SplitRow = {
-  left: GitDiffLine | null
-  right: GitDiffLine | null
+  left: RenderedLine | null
+  right: RenderedLine | null
   oldNum: string
   newNum: string
 }
 
 // Ghép del/add liên tiếp thành cùng row. Context line đặt cả 2 phía.
-const splitRows = (hunk: GitDiffHunk): SplitRow[] => {
+const splitRows = (hunk: RenderedHunk): SplitRow[] => {
   const rows: SplitRow[] = []
   let oldCount = hunk.oldStart
   let newCount = hunk.newStart
@@ -338,14 +371,14 @@ const splitRows = (hunk: GitDiffHunk): SplitRow[] => {
       continue
     }
     // Gom block del + add liên tiếp
-    const dels: GitDiffLine[] = []
-    const adds: GitDiffLine[] = []
+    const dels: RenderedLine[] = []
+    const adds: RenderedLine[] = []
     while (i < hunk.lines.length && hunk.lines[i]?.kind === 'del') {
-      dels.push(hunk.lines[i] as GitDiffLine)
+      dels.push(hunk.lines[i] as RenderedLine)
       i += 1
     }
     while (i < hunk.lines.length && hunk.lines[i]?.kind === 'add') {
-      adds.push(hunk.lines[i] as GitDiffLine)
+      adds.push(hunk.lines[i] as RenderedLine)
       i += 1
     }
     const pairCount = Math.max(dels.length, adds.length)

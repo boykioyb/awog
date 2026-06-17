@@ -121,6 +121,7 @@ export interface CheckInstalledResult {
 export type DiffParams =
   | { kind: 'workingTree'; workspaceRoot: string; path?: string }
   | { kind: 'staged'; workspaceRoot: string; path?: string }
+  | { kind: 'untracked'; workspaceRoot: string; path: string }
   | { kind: 'commit'; workspaceRoot: string; sha: string }
   | { kind: 'commitRange'; workspaceRoot: string; from: string; to: string }
   | { kind: 'commitVsWorkingTree'; workspaceRoot: string; sha: string }

@@ -39,6 +39,18 @@ export function highlightCode(source: string, lang?: string): { html: string; la
   return { html, language }
 }
 
+// Highlight a single line of code for a known language. Used by the Git diff
+// viewer, which highlights line-by-line (no cross-line context). Unknown /
+// empty language → just HTML-escape: per-line auto-detect is slow and
+// unreliable, so we don't attempt it. Output is HTML-safe (hljs escapes the
+// source; escapeHtml covers the no-highlight path).
+export function highlightLine(source: string, lang: string): string {
+  if (lang && hljs.getLanguage(lang)) {
+    return hljs.highlight(source, { language: lang, ignoreIllegals: true }).value
+  }
+  return escapeHtml(source)
+}
+
 // Use a dedicated instance so we don't mutate the global parser if other code uses marked.
 const md = new Marked({
   // `gfm` + `breaks` give the most natural rendering for LLM replies (line breaks preserved,
