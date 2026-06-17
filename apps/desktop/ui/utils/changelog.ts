@@ -30,6 +30,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.16.0',
+    date: '2026-06-17',
+    highlight: {
+      en: 'Settings now save to a file and survive restarts, a tidier Settings layout, a plan-usage warning, and optional co-authored commits.',
+      vi: 'Cài đặt giờ được lưu ra file và giữ qua khởi động lại, bố cục Settings gọn hơn, cảnh báo mức dùng gói, và tùy chọn commit ghi đồng tác giả.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Settings persist to a file (~/.awog/settings.json): theme mode, session defaults, and every preference now survive a reload and an app restart — and the file can be inspected or backed up.',
+        vi: 'Cài đặt được lưu ra file (~/.awog/settings.json): chế độ theme, mặc định phiên và mọi tùy chọn giờ giữ nguyên qua reload và khởi động lại — file có thể xem hoặc sao lưu.',
+      },
+      {
+        kind: 'changed',
+        en: 'Settings reorganized: the crowded Workspace section is split into clear Workspace, Git, and Sessions sections.',
+        vi: 'Sắp xếp lại Settings: mục Workspace lộn xộn được tách thành Workspace, Git và Sessions rõ ràng.',
+      },
+      {
+        kind: 'added',
+        en: 'Plan-usage warning: a banner and notification when your provider plan crosses a usage threshold, with optional auto-stop of running sessions and blocking of new ones.',
+        vi: 'Cảnh báo mức dùng gói: banner và thông báo khi gói nhà cung cấp vượt ngưỡng sử dụng, kèm tùy chọn tự dừng phiên đang chạy và chặn tạo phiên mới.',
+      },
+      {
+        kind: 'added',
+        en: 'Co-authored commits: an optional “Co-Authored-By: AWOG” trailer on commits AWOG makes (toggle in Settings → Git).',
+        vi: 'Commit ghi đồng tác giả: tùy chọn thêm trailer “Co-Authored-By: AWOG” vào commit do AWOG tạo (bật ở Settings → Git).',
+      },
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2026-06-17',
     highlight: {
