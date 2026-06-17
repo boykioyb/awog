@@ -30,17 +30,17 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
-    version: '0.14.0',
-    date: '2026-06-16',
+    version: '0.15.0',
+    date: '2026-06-17',
     highlight: {
-      en: 'Steer a running response or queue messages, plus Git branch operations — merge, rebase, and open pull requests.',
-      vi: 'Chèn vào phản hồi đang chạy hoặc xếp hàng tin nhắn, cùng thao tác nhánh Git — merge, rebase và mở pull request.',
+      en: 'A redesigned interface, an embedded browser tool, parallel subagents, and clearer error handling.',
+      vi: 'Giao diện được thiết kế lại, công cụ trình duyệt nhúng, subagent chạy song song, và xử lý lỗi rõ ràng hơn.',
     },
     items: [
       {
-        kind: 'improved',
-        en: 'Edit step details now show the change as a git-style diff (split or unified), with a toggle to view the full file content — the same viewer used for reads/writes.',
-        vi: 'Chi tiết bước Edit giờ hiện thay đổi dưới dạng diff kiểu git (split hoặc unified), kèm nút chuyển sang xem toàn bộ nội dung file — cùng trình xem dùng cho đọc/ghi.',
+        kind: 'changed',
+        en: 'Refreshed interface: a new design system with an emerald theme and a floating-card layout.',
+        vi: 'Giao diện làm mới: hệ design system mới với theme emerald và bố cục thẻ nổi.',
       },
       {
         kind: 'added',
@@ -52,6 +52,46 @@ export const CHANGELOG: Release[] = [
         en: 'More built-in tools: MultiEdit (several edits to one file in one step) and Jupyter notebook read/edit.',
         vi: 'Thêm công cụ built-in: MultiEdit (sửa nhiều chỗ trong một file ở một bước) và đọc/sửa notebook Jupyter.',
       },
+      {
+        kind: 'improved',
+        en: 'Parallel subagents: multiple Task subagents spawned in one turn now run concurrently instead of one after another.',
+        vi: 'Subagent song song: nhiều subagent Task được tạo trong cùng một lượt giờ chạy đồng thời thay vì lần lượt.',
+      },
+      {
+        kind: 'improved',
+        en: 'Edit step details now show the change as a git-style diff (split or unified), with a toggle to view the full file content — the same viewer used for reads/writes.',
+        vi: 'Chi tiết bước Edit giờ hiện thay đổi dưới dạng diff kiểu git (split hoặc unified), kèm nút chuyển sang xem toàn bộ nội dung file — cùng trình xem dùng cho đọc/ghi.',
+      },
+      {
+        kind: 'added',
+        en: 'Failed responses now show a clear error alert with the cause and a Retry button — instead of an empty or finished-looking reply.',
+        vi: 'Phản hồi lỗi giờ hiện cảnh báo rõ ràng kèm nguyên nhân và nút Thử lại — thay vì một câu trả lời trống hoặc trông như đã xong.',
+      },
+      {
+        kind: 'added',
+        en: 'Full-screen markdown preview gets a content-width toggle (comfortable, wide, or full) so wide diagrams and tables can use the whole screen.',
+        vi: 'Xem markdown toàn màn hình có thêm nút chỉnh độ rộng (vừa, rộng, hoặc full) để sơ đồ và bảng lớn dùng được cả màn hình.',
+      },
+      {
+        kind: 'fixed',
+        en: 'File links opened from chat that over-qualify the path now still open, and a failed file read shows the cause instead of a blank pane.',
+        vi: 'Link file mở từ chat bị dư đường dẫn giờ vẫn mở được, và lỗi đọc file hiện nguyên nhân thay vì pane trống.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Git auto-commit is serialized per workspace and recovers automatically from a stale lock file.',
+        vi: 'Git auto-commit được tuần tự hoá theo workspace và tự phục hồi khi gặp file khoá cũ.',
+      },
+    ],
+  },
+  {
+    version: '0.14.0',
+    date: '2026-06-16',
+    highlight: {
+      en: 'Steer a running response or queue messages, plus Git branch operations — merge, rebase, and open pull requests.',
+      vi: 'Chèn vào phản hồi đang chạy hoặc xếp hàng tin nhắn, cùng thao tác nhánh Git — merge, rebase và mở pull request.',
+    },
+    items: [
       {
         kind: 'added',
         en: 'Steer a running response: while the agent is working, type a message and Insert it into the current turn — the agent picks it up at its next step.',
