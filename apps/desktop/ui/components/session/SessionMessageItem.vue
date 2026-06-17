@@ -135,7 +135,7 @@
         <div
           :class="showBubble ? 'rounded-2xl px-4 py-3' : ''"
           :style="
-            showBubble ? { background: t.bgElevated, border: `1px solid ${t.border}` } : undefined
+            showBubble ? { background: t.bubbleBg, border: `1px solid ${t.border}` } : undefined
           "
         >
           <!-- TODO checklist (TodoWrite). Lifted OUT of the collapsible task cluster
@@ -232,6 +232,16 @@
             </div>
           </div>
         </div>
+        <!-- Turn failed (provider `error` stop or a thrown runtime/network error):
+             a prominent alert with the full cause + a retry button, OUTSIDE the
+             bubble so it reads even when nothing streamed. -->
+        <SessionErrorNotice
+          v-if="message.error"
+          :message-id="message.id"
+          :message="message.error.message"
+          :disabled="sessionStreaming"
+          class="mt-2"
+        />
         <!-- Byline footer: copy + branch actions, timestamp, and run stats —
              reads after the reply, OUTSIDE the bubble (mirrors the user bubble).
              While streaming it shows a live ticker instead of the actions. -->

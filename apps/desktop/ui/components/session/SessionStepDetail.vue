@@ -90,18 +90,16 @@
         </div>
       </template>
 
-      <template v-else-if="detail.kind === 'diff'">
+      <template v-else-if="detail.kind === 'diff' || detail.kind === 'file'">
         <div
           class="px-4 py-2 flex items-center gap-2 text-[1em] sticky top-0 z-10"
           :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
         >
-          <span class="inline-flex items-center gap-1 font-mono" :style="{ color: t.text }">
-            <FileText :size="11" />
-            {{ detail.path }}
-          </span>
+          <FileText :size="11" class="flex-shrink-0" :style="{ color: t.textDim }" />
+          <span class="font-mono truncate" :style="{ color: t.text }">{{ fileLikePath }}</span>
           <span
-            v-if="step.additions !== undefined"
-            class="inline-flex items-center px-1 rounded-sm font-mono text-[1em]"
+            v-if="detail.kind === 'diff' && step.additions !== undefined"
+            class="inline-flex items-center px-1 rounded-sm font-mono text-[12px] leading-none"
             :style="{
               background: 'rgba(34, 197, 94, 0.12)',
               color: t.statusOk,
@@ -111,8 +109,8 @@
             +{{ step.additions }}
           </span>
           <span
-            v-if="step.deletions !== undefined"
-            class="inline-flex items-center px-1 rounded-sm font-mono text-[1em]"
+            v-if="detail.kind === 'diff' && step.deletions !== undefined"
+            class="inline-flex items-center px-1 rounded-sm font-mono text-[12px] leading-none"
             :style="{
               background: t.dangerBg,
               color: t.danger,
@@ -121,47 +119,61 @@
           >
             -{{ step.deletions }}
           </span>
-          <div
-            class="ml-auto inline-flex rounded overflow-hidden"
-            :style="{ border: `1px solid ${t.border}` }"
-          >
-            <button
-              v-for="m in diffModes"
-              :key="m.value"
-              class="px-2 py-0.5 text-[1em] inline-flex items-center gap-1 transition"
-              :style="{
-                background: diffMode === m.value ? t.bgActive : 'transparent',
-                color: diffMode === m.value ? t.text : t.textDim,
-              }"
-              @click="diffMode = m.value"
-            >
-              <component :is="m.icon" :size="10" />
-              {{ m.label }}
-            </button>
-          </div>
-        </div>
-        <SideDiffViewer v-if="diffMode === 'split'" :content="detail.content" />
-        <DiffViewer v-else :content="detail.content" />
-      </template>
-
-      <template v-else-if="detail.kind === 'file'">
-        <div
-          class="px-4 py-2 flex items-center gap-2 text-[1em] sticky top-0 z-10"
-          :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
-        >
-          <FileText :size="11" class="flex-shrink-0" :style="{ color: t.textDim }" />
-          <span class="font-mono truncate" :style="{ color: t.text }">{{ detail.path }}</span>
           <span
-            v-if="detail.language"
+            v-if="detail.kind === 'file' && detail.language"
             class="text-[1em] uppercase tracking-wider flex-shrink-0"
             :style="{ color: t.textDim }"
           >
             {{ detail.language }}
           </span>
+
           <div class="ml-auto flex items-center gap-1 flex-shrink-0">
-            <!-- Markdown defaults to a rendered preview; toggle to the raw source. -->
+            <!-- An Edit carries both the change and the resulting file: toggle
+                 between the git-style diff and the full file content. -->
             <div
-              v-if="isMarkdown"
+              v-if="canToggleFile"
+              class="inline-flex rounded overflow-hidden"
+              :style="{ border: `1px solid ${t.border}` }"
+            >
+              <button
+                v-for="m in editViewModes"
+                :key="m.value"
+                class="px-2 py-0.5 text-[1em] inline-flex items-center gap-1 transition"
+                :style="{
+                  background: editView === m.value ? t.bgActive : 'transparent',
+                  color: editView === m.value ? t.text : t.textDim,
+                }"
+                @click="editView = m.value"
+              >
+                <component :is="m.icon" :size="10" />
+                {{ m.label }}
+              </button>
+            </div>
+
+            <!-- Diff view: unified ↔ split. -->
+            <div
+              v-if="showingDiff"
+              class="inline-flex rounded overflow-hidden"
+              :style="{ border: `1px solid ${t.border}` }"
+            >
+              <button
+                v-for="m in diffModes"
+                :key="m.value"
+                class="px-2 py-0.5 text-[1em] inline-flex items-center gap-1 transition"
+                :style="{
+                  background: diffMode === m.value ? t.bgActive : 'transparent',
+                  color: diffMode === m.value ? t.text : t.textDim,
+                }"
+                @click="diffMode = m.value"
+              >
+                <component :is="m.icon" :size="10" />
+                {{ m.label }}
+              </button>
+            </div>
+
+            <!-- File view: markdown preview ↔ raw + copy. -->
+            <div
+              v-if="showingFile && isMarkdown"
               class="inline-flex rounded overflow-hidden"
               :style="{ border: `1px solid ${t.border}` }"
             >
@@ -180,7 +192,7 @@
               </button>
             </div>
             <AppButton
-              v-if="isMarkdown"
+              v-if="showingFile && isMarkdown"
               variant="ghost"
               size="icon"
               :active="copied === 'text'"
@@ -190,6 +202,7 @@
               <component :is="copied === 'text' ? Check : Clipboard" :size="12" />
             </AppButton>
             <AppButton
+              v-if="showingFile"
               variant="ghost"
               size="icon"
               :active="copied === 'raw'"
@@ -200,19 +213,25 @@
             </AppButton>
           </div>
         </div>
+
+        <!-- Diff body (git-style change). -->
+        <SideDiffViewer v-if="showingDiff && diffMode === 'split'" :content="diffText" />
+        <DiffViewer v-else-if="showingDiff" :content="diffText" />
+
+        <!-- File body (full content, same form as Read/Write). -->
         <div
-          v-if="isMarkdown && fileView === 'preview'"
+          v-else-if="showingFile && isMarkdown && fileView === 'preview'"
           ref="previewRef"
           class="px-4 py-3"
           :style="{ color: t.text }"
         >
-          <MarkdownRenderer :content="detail.content" />
+          <MarkdownRenderer :content="fileLikeContent" />
         </div>
         <pre
-          v-else
+          v-else-if="showingFile"
           class="font-mono text-[1em] leading-[1.55] px-4 py-3 whitespace-pre-wrap"
           :style="{ color: t.text }"
-          >{{ detail.content }}</pre
+          >{{ fileLikeContent }}</pre
         >
       </template>
 
@@ -297,6 +316,7 @@ import {
   Eye,
   FileText,
   FolderSearch,
+  GitCompare,
   Rows,
   Save,
   Search,
@@ -344,6 +364,16 @@ const diffMode = ref<DiffMode>('split')
 const diffModes = [
   { value: 'split' as const, label: 'Split', icon: Columns2 },
   { value: 'unified' as const, label: 'Unified', icon: Rows },
+]
+
+// An Edit/MultiEdit detail (kind 'diff') carries both the git-style diff AND the
+// full file after the edit, so the user can flip between the change and the
+// resulting file. Defaults to the diff — that's the point of an edit.
+type EditView = 'diff' | 'file'
+const editView = ref<EditView>('diff')
+const editViewModes = [
+  { value: 'diff' as const, label: 'Diff', icon: GitCompare },
+  { value: 'file' as const, label: 'File', icon: FileText },
 ]
 const openMenuOpen = ref(false)
 const openMenuRef = ref<HTMLElement | null>(null)
@@ -408,12 +438,39 @@ const TOOL_ICONS = {
 const toolIcon = computed(() => (props.step.tool ? TOOL_ICONS[props.step.tool] : FileText))
 const detail = computed(() => props.step.detail)
 
-// Markdown file detail renders as a preview by default (toggle to raw source).
+// The unified diff string (Edit/MultiEdit only); '' otherwise.
+const diffText = computed(() => (detail.value?.kind === 'diff' ? detail.value.diff : ''))
+// A 'diff' detail also offers a File view only when it carries the after-content.
+const canToggleFile = computed(
+  () => detail.value?.kind === 'diff' && (detail.value.content ?? '').length > 0,
+)
+const showingDiff = computed(() => detail.value?.kind === 'diff' && editView.value === 'diff')
+const showingFile = computed(
+  () =>
+    detail.value?.kind === 'file' || (detail.value?.kind === 'diff' && editView.value === 'file'),
+)
+
+// File-view source, unified across 'file' (Read/Write) and 'diff' (Edit) details
+// so the markdown/raw rendering + copy work the same for both.
+const fileLikePath = computed(() => {
+  const d = detail.value
+  return d?.kind === 'file' || d?.kind === 'diff' ? d.path : ''
+})
+const fileLikeContent = computed(() => {
+  const d = detail.value
+  if (d?.kind === 'file') return d.content
+  if (d?.kind === 'diff') return d.content ?? ''
+  return ''
+})
+const fileLikeLanguage = computed(() => {
+  const d = detail.value
+  return d?.kind === 'file' || d?.kind === 'diff' ? d.language : undefined
+})
+
+// Markdown content renders as a preview by default (toggle to raw source).
 const isMarkdown = computed(() => {
-  const d = props.step.detail
-  if (!d || d.kind !== 'file') return false
-  const lang = (d.language ?? '').toLowerCase()
-  return lang === 'markdown' || lang === 'md' || /\.(md|markdown|mdx)$/i.test(d.path ?? '')
+  const lang = (fileLikeLanguage.value ?? '').toLowerCase()
+  return lang === 'markdown' || lang === 'md' || /\.(md|markdown|mdx)$/i.test(fileLikePath.value)
 })
 
 type FileView = 'preview' | 'raw'
@@ -424,8 +481,7 @@ const fileViewModes = [
 ]
 
 const previewRef = useTemplateRef<HTMLElement>('previewRef')
-const fileContent = (): string =>
-  props.step.detail?.kind === 'file' ? props.step.detail.content : ''
+const fileContent = (): string => fileLikeContent.value
 
 // Transient ✓ feedback per copy button.
 const copied = ref<'text' | 'raw' | null>(null)

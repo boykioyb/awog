@@ -473,6 +473,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
           cacheReadTokens: opts.result.usage.cache_read_tokens,
           cacheWriteTokens: opts.result.usage.cache_creation_tokens,
         }
+        // Graceful `error` stop: the loop returned normally but the provider
+        // failed mid-turn. Persist the cause so a reload shows the error alert
+        // (+ retry) instead of an empty/finished-looking reply.
+        if (opts.result.stopReason === 'error') {
+          message.error = { message: opts.result.errorMessage ?? 'The model returned an error.' }
+        }
       } else {
         // Reached on cancel/error: flag the truncated reply so the UI badges it.
         message.canceled = true
@@ -610,6 +616,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     modelUsed: result.modelUsed,
     usage: result.usage,
     stopReason: result.stopReason,
+    // Provider error cause on a graceful `error` stop — UI shows it in the turn's
+    // error alert with a retry button.
+    ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
     // Ordered timeline (ADR 0032). UI finalize stores this as the authoritative
     // message.parts; empty for a non-streaming reply with no steps (UI derives).
     ...(parts.length > 0 ? { parts } : {}),

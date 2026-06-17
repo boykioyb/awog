@@ -217,6 +217,11 @@ export interface SessionMessage {
   // True when the assistant turn was cut short (user Stop / error / crash) and
   // only a partial reply was persisted. Mirrors the UI SessionMessage.canceled.
   canceled?: boolean
+  // Set when the turn failed (provider `error` stop or a thrown runtime/network
+  // error). `message` is the human-readable cause shown in the UI error alert.
+  // Persisted so a reload still surfaces the failure (+ retry) instead of an
+  // empty reply. Mutually exclusive with a successful completion.
+  error?: { message: string }
   // Tool/plan/thinking/todo steps of an assistant turn. Persisted so a re-hydrate
   // from JSONL restores the plan card, the "ran N commands…" cluster, etc. — they
   // were live-only before and vanished on app restart. Stored flat as emitted
@@ -292,6 +297,10 @@ export interface SessionQuestionAnswer {
 }
 
 export type SessionStepDetail =
+  // Edit/MultiEdit: `diff` is a unified diff (git-style) the UI renders in
+  // split/unified mode; `content` (optional) is the full file after the edit,
+  // shown in a File view toggle.
+  | { kind: 'diff'; path: string; diff: string; content?: string; language?: string }
   | { kind: 'file'; path: string; content: string; language?: string }
   | { kind: 'list'; items: { label: string; path?: string; snippet?: string }[] }
   | { kind: 'terminal'; command: string; output?: string; exitCode?: number }

@@ -37,6 +37,11 @@ interface Accumulator {
   cacheReadTokens: number
   cacheWriteTokens: number
   stopReason: string | null
+  // Provider-supplied error detail when stopReason === 'error'. Pi swallows a
+  // mid-stream provider failure into a graceful `error` stop (it does NOT throw),
+  // carrying the human-readable cause here. Surfaced to the UI so the turn shows a
+  // real error alert + retry instead of an empty/finished-looking reply.
+  errorMessage?: string
 }
 
 function isAssistant(m: AgentMessage): m is AssistantMessage {
@@ -203,18 +208,21 @@ export function createEventAdapter(
         if (event.toolName === 'ExitPlanMode' || event.toolName === 'TodoWrite') break
         const meta = toolInputs.get(event.toolCallId) ?? { name: event.toolName, input: {} }
         // event.result is the AgentToolResult { content, details, terminate }.
-        // step-mapper's previewToolResult understands the content array shape.
-        const content =
+        // step-mapper's previewToolResult understands the content array shape;
+        // `details` is the side channel where Edit/MultiEdit stash their diff +
+        // new file content for the step detail's git-style view.
+        const result =
           event.result && typeof event.result === 'object'
-            ? (event.result as { content?: unknown }).content
-            : event.result
+            ? (event.result as { content?: unknown; details?: unknown })
+            : undefined
         cb.onStep(
           withParent(
             stepFromToolResult({
               toolUseId: event.toolCallId,
               toolName: meta.name,
               toolInput: meta.input,
-              content,
+              content: result ? result.content : event.result,
+              details: result ? result.details : undefined,
               isError: event.isError === true,
             }),
           ),
@@ -247,6 +255,9 @@ export function createEventAdapter(
           acc.cacheReadTokens = last.usage.cacheRead
           acc.cacheWriteTokens = last.usage.cacheWrite
           acc.stopReason = last.stopReason
+          // Provider error cause (present only on stopReason 'error'). Kept so the
+          // caller can surface it instead of finalizing an empty reply.
+          if (last.errorMessage !== undefined) acc.errorMessage = last.errorMessage
         }
         break
       }

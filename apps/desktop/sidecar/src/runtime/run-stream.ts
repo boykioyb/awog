@@ -305,6 +305,9 @@ export async function runStreamPi(
       cache_creation_tokens: acc.cacheWriteTokens,
     },
     stopReason: acc.stopReason,
+    // Forward the provider error cause on a graceful `error` stop so the caller
+    // can persist + surface it (the run did NOT throw, so this is the only signal).
+    ...(acc.errorMessage !== undefined ? { errorMessage: acc.errorMessage } : {}),
   }
 }
 

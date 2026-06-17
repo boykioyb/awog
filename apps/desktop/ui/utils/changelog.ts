@@ -38,6 +38,11 @@ export const CHANGELOG: Release[] = [
     },
     items: [
       {
+        kind: 'improved',
+        en: 'Edit step details now show the change as a git-style diff (split or unified), with a toggle to view the full file content — the same viewer used for reads/writes.',
+        vi: 'Chi tiết bước Edit giờ hiện thay đổi dưới dạng diff kiểu git (split hoặc unified), kèm nút chuyển sang xem toàn bộ nội dung file — cùng trình xem dùng cho đọc/ghi.',
+      },
+      {
         kind: 'added',
         en: 'Browser tool: the agent can drive an embedded Chromium browser — open a URL, click, fill forms, extract text, and take screenshots. Private/loopback addresses are blocked. Toggle the window from the tray.',
         vi: 'Công cụ trình duyệt: agent điều khiển được một Chromium nhúng — mở URL, click, điền form, trích text và chụp màn hình. Địa chỉ nội bộ/loopback bị chặn. Bật/tắt cửa sổ từ khay hệ thống.',

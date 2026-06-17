@@ -23,6 +23,10 @@ export interface ThemeTokens {
   bgInput: string
   bgRail: string
   bgSubtle: string
+  // Assistant reply bubble fill — tuned per theme to read as a pale, clean card
+  // (white in light; a touch lighter than bgElevated in dark) instead of a gray
+  // slab. Scoped to the chat bubble so the rest of the card surfaces are untouched.
+  bubbleBg: string
   // Border
   border: string
   borderStrong: string
@@ -93,6 +97,7 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     bgInput: '#161616',
     bgRail: '#080808',
     bgSubtle: '#131313',
+    bubbleBg: '#1e1e1e',
     border: '#222222',
     borderStrong: '#2e2e2e',
     borderFocus: '#525252',
@@ -165,6 +170,7 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     bgInput: '#ffffff',
     bgRail: '#f5f5f4',
     bgSubtle: '#fafaf9',
+    bubbleBg: '#ffffff',
     border: '#e7e5e4',
     borderStrong: '#d6d3d1',
     borderFocus: '#78716c',

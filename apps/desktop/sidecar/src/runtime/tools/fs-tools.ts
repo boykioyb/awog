@@ -10,6 +10,7 @@ import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { assertInsideWorkspace } from '../../git/path-sanitize.js'
 import { runGit } from '../../git/runner.js'
+import { buildUnifiedDiff } from './text-diff.js'
 
 // Caps mirror the fs.* RPC methods so the runtime can't push pathological
 // payloads through the model/IPC path.
@@ -20,9 +21,18 @@ const GLOB_TIMEOUT_MS = 15_000
 const GREP_MAX_LINES = 500
 const GLOB_MAX_FILES = 500
 
-type TextResult = AgentToolResult<{ path?: string; command?: string }>
+// `diff`/`newContent` ride on Edit/MultiEdit results as a side channel (NOT in
+// the model-facing `content` text) so step-mapper can render a git-style diff +
+// full-file view in the step detail. See runtime/event-adapter.ts.
+type ToolDetails = {
+  path?: string
+  command?: string
+  diff?: string
+  newContent?: string
+}
+type TextResult = AgentToolResult<ToolDetails>
 
-function textResult(text: string, details: { path?: string; command?: string }): TextResult {
+function textResult(text: string, details: ToolDetails): TextResult {
   return { content: [{ type: 'text', text }], details }
 }
 
@@ -145,9 +155,14 @@ export function createEditTool(cwd: string): AgentTool<typeof EditParams> {
       if (st.isDirectory()) throw new Error(`Path is a directory: ${params.file_path}`)
       const buf = await readFile(abs)
       if (buf.includes(0)) throw new Error('Cannot edit a binary file')
-      const next = applyEdit(buf.toString('utf8'), params)
+      const before = buf.toString('utf8')
+      const next = applyEdit(before, params)
       await writeFile(abs, next, 'utf8')
-      return textResult(`Edited ${params.file_path}`, { path: params.file_path })
+      return textResult(`Edited ${params.file_path}`, {
+        path: params.file_path,
+        diff: buildUnifiedDiff(before, next),
+        newContent: next,
+      })
     },
   }
 }
@@ -185,7 +200,8 @@ export function createMultiEditTool(cwd: string): AgentTool<typeof MultiEditPara
       if (st.isDirectory()) throw new Error(`Path is a directory: ${params.file_path}`)
       const buf = await readFile(abs)
       if (buf.includes(0)) throw new Error('Cannot edit a binary file')
-      let content = buf.toString('utf8')
+      const before = buf.toString('utf8')
+      let content = before
       // Apply all edits in memory first; any throw aborts before the write.
       params.edits.forEach((edit, i) => {
         try {
@@ -197,6 +213,8 @@ export function createMultiEditTool(cwd: string): AgentTool<typeof MultiEditPara
       await writeFile(abs, content, 'utf8')
       return textResult(`Applied ${params.edits.length} edit(s) to ${params.file_path}`, {
         path: params.file_path,
+        diff: buildUnifiedDiff(before, content),
+        newContent: content,
       })
     },
   }
