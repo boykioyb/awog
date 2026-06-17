@@ -105,7 +105,7 @@ Không đổi — hạ tầng đã có sẵn:
 
 - **API key không rời sidecar:** subagent resolve credential trong sidecar; key không vào step/trace/IPC payload.
 - **Path/Git scope:** subagent fs/bash dùng cùng `cwd = workspaceRoot` + `assertInsideWorkspace`.
-- **Budget:** depth = 1 + sequential + cap 25 spawn/turn.
+- **Budget:** depth = 1 + cap 25 spawn/turn. Nhiều `Task` trong một turn fan-out **song song** (xem [ADR 0030 §Cập nhật 2026-06-17](../decisions/0030-subagent-task-tool.md#cập-nhật-2026-06-17--song-song-hoá-task)); tool **bên trong** mỗi subagent vẫn chạy tuần tự.
 - **IPC boundary / no eval / no SSRF:** không phát sinh surface mới (tái dùng tool + MCP hiện có).
 
 ## Việc còn lại

@@ -277,9 +277,11 @@ export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams,
     label: 'Task',
     description: describeTool(deps.agents),
     parameters: TaskParams,
-    // Never run concurrently with other tools — keeps nested step ordering and
-    // permission prompts deterministic.
-    executionMode: 'sequential',
+    // Intentionally NOT marked sequential: when the model spawns several Task
+    // calls in one turn they fan out in parallel (the parent loop runs with
+    // toolExecution: 'parallel', and every other tool is marked sequential so
+    // only a pure-Task batch parallelises — ADR 0030). Each subagent streams
+    // under its own parentId, so nested steps stay grouped per Task card.
     async execute(toolCallId, params, signal) {
       const requested = params.subagent_type?.trim()
       const details: TaskDetails = {

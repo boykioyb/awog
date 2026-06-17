@@ -298,8 +298,12 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         beforeToolCall: async () => undefined,
         // Capture Codex plan-usage from response headers (no-op for non-Codex).
         onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
-        // Sequential execution keeps trace step ordering deterministic.
-        toolExecution: 'sequential',
+        // Parallel at the batch level so several `Task` subagents in one turn run
+        // concurrently (ADR 0030). Every non-Task tool is marked sequential
+        // (createRuntimeToolDefinitions), so any batch with a regular tool still
+        // runs one-by-one — trace step ordering stays deterministic. Only a
+        // pure-Task batch fans out.
+        toolExecution: 'parallel',
       },
       emit,
       args.abortController?.signal,

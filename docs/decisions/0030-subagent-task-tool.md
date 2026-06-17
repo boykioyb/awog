@@ -17,7 +17,7 @@ Hạ tầng UI đã **sẵn sàng** cho subagent từ thời SDK cũ: `SessionSt
 
 Implement tool `Task` thật cho **cả Sessions (chat) lẫn Tasks (workflow node)** dưới Pi runtime:
 
-1. **Tool mới** [runtime/tools/task-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/task-tool.ts) — `createTaskTool(deps)` trả một `AgentTool` tên đúng `Task`, schema `{ description, prompt, subagent_type }` (khớp convention Claude Code). `executionMode: 'sequential'`.
+1. **Tool mới** [runtime/tools/task-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/task-tool.ts) — `createTaskTool(deps)` trả một `AgentTool` tên đúng `Task`, schema `{ description, prompt, subagent_type }` (khớp convention Claude Code). Tool **không** đặt `executionMode: 'sequential'` (xem [Cập nhật 2026-06-17](#cập-nhật-2026-06-17--song-song-hoá-task) — nhiều `Task` trong một turn fan-out song song).
 
 2. **subagent_type → AWOG Agent.** Tool nhận sẵn danh sách agent (`listAgents(projectIds)`) để (a) liệt kê trong `description` cho model chọn đúng, (b) resolve theo `id` rồi `name` (case-insensitive). Resolve config qua `resolveAgentContext` ([tasks/agent-context.ts](../../apps/desktop/sidecar/src/tasks/agent-context.ts)) → `systemPrompt` + `allowedTools` + `mcpServers` (secrets expand) + `provider/model/accountId`.
 
@@ -49,13 +49,26 @@ Implement tool `Task` thật cho **cả Sessions (chat) lẫn Tasks (workflow no
   - Model delegate được sang AWOG agent chuyên trách (đúng tầm nhìn guild). Subagent có systemPrompt/tools/MCP/model riêng theo AGENT.md.
   - Reuse tối đa: `resolveAgentContext`, `createRuntimeToolDefinitions`, `buildContext`, `resolveModel` + adapter sẵn có (chỉ thêm tham số `parentId`). UI không đổi (parentId nesting đã có).
 - **Tiêu cố / Trade-off:**
-  - Mỗi `Task` là một vòng `runAgentLoop` lồng → tốn token/thời gian; chạy `sequential` nên không song song. Có guard số lần spawn / turn (soft cap) để chặn runaway.
+  - Mỗi `Task` là một vòng `runAgentLoop` lồng → tốn token/thời gian. ~~Chạy `sequential` nên không song song.~~ **Cập nhật:** nhiều `Task` trong cùng một turn nay chạy **song song** ([Cập nhật 2026-06-17](#cập-nhật-2026-06-17--song-song-hoá-task)). Vẫn có guard số lần spawn / turn (soft cap) để chặn runaway.
   - Session 'ask' mode: subagent có thể sinh nhiều permission prompt nested — đánh đổi cho an toàn.
   - Cross-provider subagent chạm vùng credential mà [ADR 0026](./0026-per-agent-multi-provider-llm.md) vẫn còn mở; ở đây chỉ tái dùng `resolveCredential` per-account hiện hữu, không mở rộng gateway.
 - **Việc cần làm tiếp:**
   - ~~Cập nhật chú thích `<mcp-preference>`~~ ✅ subagent **nay kế thừa** MCP của session (union với MCP riêng AGENT.md); nudge trong [sessions.send-message.ts](../../apps/desktop/sidecar/src/methods/sessions.send-message.ts) đã đổi sang "subagent inherits these MCP servers automatically".
   - Cân nhắc surface text/summary của subagent thành 1 step `note` nested (hiện chỉ trả về model + hiện ở result của step `Task`).
   - infosec review path mới (spawn loop lồng + credential per-subagent).
+
+## Cập nhật 2026-06-17 — song song hoá `Task`
+
+Bản đầu chạy `Task` **tuần tự** (`executionMode: 'sequential'` trên tool + `toolExecution: 'sequential'` ở vòng lặp cha) cho ổn định thứ tự step. Thực tế: khi model spawn nhiều subagent trong một turn, chúng chạy lần lượt (agent đầu xong mới sang agent sau) → mất lợi thế wall-clock của fan-out.
+
+**Đổi:** cho **nhiều `Task` trong cùng một turn fan-out song song**, giữ mọi tool khác tuần tự như cũ.
+
+- Pi quyết định parallel/sequential ở **mức cả batch** ([agent-loop `executeToolCalls`](../../apps/desktop/sidecar/src/runtime/tools/index.ts)): batch chạy song song chỉ khi `toolExecution: 'parallel'` **và** không tool nào trong batch mang `executionMode: 'sequential'`.
+- [run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts) + [invoke.ts](../../apps/desktop/sidecar/src/runtime/invoke.ts): vòng lặp cha đổi sang `toolExecution: 'parallel'`.
+- [createRuntimeToolDefinitions](../../apps/desktop/sidecar/src/runtime/tools/index.ts): đánh dấu **mọi** tool non-Task (built-in + MCP) là `executionMode: 'sequential'`. `Task` thêm ở top-level (ngoài hàm này) nên **không** bị đánh dấu → parallel-eligible.
+- [task-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/task-tool.ts): bỏ `executionMode: 'sequential'` khỏi tool `Task`. **Giữ** `toolExecution: 'sequential'` cho vòng lặp **nội bộ** mỗi subagent (tool bên trong một subagent vẫn chạy tuần tự).
+
+**Hệ quả:** batch chỉ-`Task` → song song; batch chạm bất kỳ tool thường nào → vẫn tuần tự (step/permission deterministic). Mỗi subagent stream dưới `parentId` riêng nên nested step vẫn gom đúng card. **Lưu ý:** Session `ask` mode — hai subagent song song có thể cùng park permission một lúc (prompt resolve tuần tự ở `prepare` phase nhưng phần thực thi đan xen); Tasks bypass permission nên không ảnh hưởng.
 
 ## Tham chiếu
 
