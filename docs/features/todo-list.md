@@ -15,7 +15,7 @@ Hiển thị **checklist công việc trực tiếp** của agent (tool `TodoWri
 | Tầng | Thay đổi |
 |---|---|
 | **System prompt** | `TODO_USAGE_PROMPT` ([runtime/prompts.ts](../../apps/desktop/sidecar/src/runtime/prompts.ts)) được append vào systemPrompt khi tool `TodoWrite` còn trong toolset (không bị `disabledTools`/lọc qua `allowedTools`). Áp dụng cho **Sessions** ([run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts)) lẫn **Tasks** ([invoke.ts](../../apps/desktop/sidecar/src/runtime/invoke.ts)). |
-| **Sessions UI** | `stepFromTodos` ([step-mapper.ts](../../apps/desktop/sidecar/src/sessions/step-mapper.ts)) tạo step `kind: 'note'` mang `todos: TodoItem[]` có cấu trúc. [StepItem.vue](../../apps/desktop/ui/components/phase/StepItem.vue) render checklist **inline, luôn bung** (icon trạng thái ✓/▸/○, completed gạch ngang + mờ). Dùng **id ổn định `todo-list`** ([event-adapter.ts](../../apps/desktop/sidecar/src/runtime/event-adapter.ts)) → các lần gọi TodoWrite trong cùng lượt **upsert một panel tiến hóa**, không xếp chồng nhiều dòng. |
+| **Sessions UI** | `stepFromTodos` ([step-mapper.ts](../../apps/desktop/sidecar/src/sessions/step-mapper.ts)) tạo step `kind: 'note'` mang `todos: TodoItem[]` có cấu trúc; dùng **id ổn định `todo-list`** ([event-adapter.ts](../../apps/desktop/sidecar/src/runtime/event-adapter.ts)) → các lần gọi TodoWrite trong cùng lượt **upsert một panel tiến hóa**. Checklist **KHÔNG** render inline trong từng message — thay vào đó một **panel cấp session ghim trên composer** ([SessionTodoPanel.vue](../../apps/desktop/ui/components/session/SessionTodoPanel.vue), gắn trong [SessionChat.vue](../../apps/desktop/ui/components/session/SessionChat.vue)) derive todos từ note step `todos` **mới nhất trên toàn bộ messages**, render một checklist duy nhất (icon ✓/▸/○, completed gạch ngang + mờ), thu/mở được, tự ẩn khi rỗng hoặc đã xong hết. |
 | **Tasks engine** | `traceFromToolUse`/`traceFromToolResult` ([trace-mapper.ts](../../apps/desktop/sidecar/src/tasks/trace-mapper.ts)) đặc biệt hóa TodoWrite → `TraceNode` `type: 'todo'` mang `todos`. [TraceNodeItem.vue](../../apps/desktop/ui/components/phase/TraceNodeItem.vue) render checklist trong cây trace. |
 
 Parse dùng chung qua [runtime/todos.ts](../../apps/desktop/sidecar/src/runtime/todos.ts) (`parseTodos` + `countDone`) — input là model response (L1) nên validate phòng thủ, không throw.
@@ -26,9 +26,9 @@ Parse dùng chung qua [runtime/todos.ts](../../apps/desktop/sidecar/src/runtime/
 
 ## Hành vi
 
-- **Sessions**: một panel "TODOS" bung sẵn trong cụm steps của message (steps mặc định expanded), cập nhật tại chỗ khi model gọi lại TodoWrite.
+- **Sessions**: một panel "TODOS" ghim cố định trên composer (ngoài vùng cuộn message), hiển thị checklist TodoWrite **mới nhất** của cả phiên. Vì bám note step mới nhất trên toàn bộ messages (không phải một bubble cố định), nó **luôn thấy khi cuộn message dài** và **vẫn cập nhật sau khi cancel rồi tiếp tục** (lượt mới ghi todos vào message mới, panel tự bắt). Tự ẩn khi không có todo hoặc đã hoàn thành hết.
 - **Tasks**: mỗi lần gọi TodoWrite là một node `todo` trong trace (trace là log thời gian, giữ từng lần gọi).
-- **Legacy**: note step cũ (chỉ có `detail.text`, chưa có `todos`) vẫn hiển thị qua nhánh fallback trong StepItem.
+- **Legacy**: note step cũ chỉ có `detail.text` (chưa có `todos`) không còn surface trong Sessions (panel ghim chỉ đọc `todos`); nhánh fallback text trong StepItem vẫn giữ cho các nơi khác render note step trực tiếp.
 
 ## Ngoài phạm vi
 

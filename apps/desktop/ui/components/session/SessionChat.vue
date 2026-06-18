@@ -3,7 +3,7 @@
        it (right / left / bottom), pushing the conversation aside instead of
        floating over it. Direction follows the panel position. -->
   <div class="flex-1 flex overflow-hidden relative" :class="layoutClass">
-    <!-- Chat column — info panel / step drawer / lightbox float over THIS only.
+    <!-- Chat column — step drawer / lightbox float over THIS only.
          min-w-0 / min-h-0 let it shrink in the row / bottom split directions. -->
     <div class="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0 relative">
       <SessionHeader :session="session" @rename="onRename" @delete="emit('delete')" />
@@ -15,13 +15,9 @@
         @open-attachment="openAttachment"
       />
 
-      <SessionComposer :session="session" :workspace-root="workspaceRoot" />
+      <SessionTodoPanel :session="session" />
 
-      <SessionInfoPanel
-        v-if="infoPanel.isOpen(session.id)"
-        :session="session"
-        @open-attachment="openAttachment"
-      />
+      <SessionComposer :session="session" :workspace-root="workspaceRoot" />
 
       <SessionDrawer
         :open="selectedStep !== null"
@@ -49,11 +45,10 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import type { Session, SessionAttachment, SessionFollowUp, SessionStep } from '~/types'
 import { SELECT_STEP_KEY, SELECTED_STEP_ID_KEY } from '~/utils/step-context'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
+import { OPEN_ATTACHMENT_KEY } from '~/utils/attachment-context'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
-import { useSessionInfoPanelStore } from '~/stores/sessionInfoPanel'
 import { WORKSPACE_TOOLS, matchesShortcut } from '~/utils/workspace-tools'
 import SessionWorkspacePanel from './workspace/SessionWorkspacePanel.vue'
-import SessionInfoPanel from './info/SessionInfoPanel.vue'
 
 const props = defineProps<{
   session: Session
@@ -63,7 +58,6 @@ const emit = defineEmits<{ delete: [] }>()
 
 const store = useSessionsStore()
 const panel = useWorkspacePanelStore()
-const infoPanel = useSessionInfoPanelStore()
 const workspace = useWorkspaceStore()
 
 // Absolute path of the session's bound project — every workspace tab operates
@@ -173,4 +167,7 @@ const openAttachment = (att: SessionAttachment) => {
   }
   viewingAttachment.value = att
 }
+
+// The Info workspace tab opens context files in the lightbox through this.
+provide(OPEN_ATTACHMENT_KEY, openAttachment)
 </script>

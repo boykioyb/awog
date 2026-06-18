@@ -138,18 +138,10 @@
             showBubble ? { background: t.bubbleBg, border: `1px solid ${t.border}` } : undefined
           "
         >
-          <!-- TODO checklist (TodoWrite). Lifted OUT of the collapsible task cluster
-             so the agent's plan/progress stays visible even while the tool-call
-             detail is collapsed. The sidecar upserts one 'todo-list' step per turn,
-             so this normally renders a single evolving checklist. -->
-          <div
-            v-for="todo in todoSteps"
-            :key="todo.id"
-            class="mb-2 rounded-md px-3 py-2 text-[12px]"
-            :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
-          >
-            <StepItem :step="todo" />
-          </div>
+          <!-- TodoWrite checklists are NOT rendered inline per-message. They surface
+             once in the session-level SessionTodoPanel (docked above the composer),
+             which tracks the latest TodoWrite across turns so it stays visible and
+             keeps updating across cancel/resume. -->
 
           <!-- Body. Reply text, AskUserQuestion cards, and step clusters interleave
              in chronological order. Question cards always render at their position
@@ -498,22 +490,14 @@ const timelineBlocks = computed<TimelineBlock[]>(() => {
   return body
 })
 
-// TODO checklist steps (kind === 'note'), rendered standalone above the body and
-// outside the collapsible cluster so the agent's plan/progress is always visible.
-// The sidecar upserts one 'todo-list' step per turn, so this is normally a single
-// evolving checklist.
-const todoSteps = computed<SessionStep[]>(
-  () => props.message.steps?.filter((s: SessionStep) => s.kind === 'note') ?? [],
-)
-
 // Whether the reply has anything to render yet. Early in a streaming turn there's
 // no text/steps/artifacts — without this gate the bubble paints as an empty box
 // until the first token lands. The bubble chrome only shows once there's content;
 // the "Streaming…" ticker lives in the byline below, outside the bubble.
+// (TodoWrite `note` steps don't count — they render in SessionTodoPanel, not here.)
 const hasBubbleContent = computed(
   () =>
     timelineBlocks.value.length > 0 ||
-    todoSteps.value.length > 0 ||
     (props.message.artifacts?.length ?? 0) > 0 ||
     store.pendingPermission?.messageId === props.message.id,
 )

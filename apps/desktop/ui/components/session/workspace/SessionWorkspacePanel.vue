@@ -53,7 +53,7 @@
       </div>
 
       <div
-        v-if="!workspaceRoot"
+        v-if="showNoProject"
         class="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center"
       >
         <FolderGit2 :size="28" :stroke-width="1.5" :style="{ color: t.textFaint }" />
@@ -65,7 +65,7 @@
       <div v-else class="flex-1 min-h-0">
         <component
           :is="TAB_COMPONENTS[tab]"
-          v-for="tab in tabs"
+          v-for="tab in renderableTabs"
           v-show="tab === active"
           :key="tab"
           :session="session"
@@ -98,6 +98,7 @@ import WorkspacePlanTab from './WorkspacePlanTab.vue'
 import WorkspaceTerminalTab from './WorkspaceTerminalTab.vue'
 import WorkspaceTasksTab from './WorkspaceTasksTab.vue'
 import WorkspacePreviewTab from './WorkspacePreviewTab.vue'
+import SessionInfoPanel from '../info/SessionInfoPanel.vue'
 
 const props = defineProps<{
   session: Session
@@ -115,6 +116,7 @@ const TAB_COMPONENTS = {
   terminal: WorkspaceTerminalTab,
   tasks: WorkspaceTasksTab,
   preview: WorkspacePreviewTab,
+  info: SessionInfoPanel,
 } as const
 
 // Open tabs + the visible one (falls back to the first if the store hasn't
@@ -124,6 +126,14 @@ const active = computed<WorkspaceTab | null>(
   () => panel.activeDrawer(props.session.id) ?? tabs.value[0] ?? null,
 )
 const toolOf = (tab: WorkspaceTab) => workspaceTool(tab)
+
+// Info is the only tab that works without a bound project. So the "no project"
+// empty state shows only for a root-requiring active tab, and root-requiring
+// tabs aren't mounted at all until a project is bound.
+const showNoProject = computed(() => active.value !== 'info' && !props.workspaceRoot)
+const renderableTabs = computed<WorkspaceTab[]>(() =>
+  props.workspaceRoot ? tabs.value : tabs.value.filter((tab) => tab === 'info'),
+)
 
 const tabChipStyle = (tab: WorkspaceTab): CSSProperties =>
   tab === active.value

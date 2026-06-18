@@ -60,7 +60,7 @@
       class="flex-shrink-0"
       :active="infoOpen"
       :title="tr('sessionInfo.open')"
-      @click="toggleInfo"
+      @click="panel.toggleDrawer(session.id, 'info')"
     >
       <Info :size="14" />
     </AppButton>
@@ -167,13 +167,11 @@ import { nextTick, ref, computed, watch } from 'vue'
 import type { Session, WorkspaceTab } from '~/types'
 import { formatTime } from '~/utils/time'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
-import { useSessionInfoPanelStore } from '~/stores/sessionInfoPanel'
 import WorkspaceMenu from './workspace/WorkspaceMenu.vue'
 
 const settingsStore = useSettingsStore()
 const sessionsStore = useSessionsStore()
 const panel = useWorkspacePanelStore()
-const infoPanel = useSessionInfoPanelStore()
 const { t: tr } = useI18n()
 const fmt = (at: string | undefined) => formatTime(at, settingsStore.defaults?.timezone)
 
@@ -201,22 +199,12 @@ const showWorkspaceMenu = ref(false)
 const wsBtnRef = ref<{ $el: HTMLElement } | null>(null)
 const wsMenuPos = ref({ top: 0, left: 0 })
 const activeDrawer = computed(() => panel.activeDrawer(props.session.id))
-const infoOpen = computed(() => infoPanel.isOpen(props.session.id))
+// Info is a workspace tab now — highlight the button while its tab is open.
+const infoOpen = computed(() => panel.openTabs(props.session.id).includes('info'))
 
-// The Info panel and the workspace drawer both dock right — keep one open at a
-// time so they never stack on the same edge.
 const onSelectWorkspace = (tab: WorkspaceTab) => {
   panel.openDrawer(props.session.id, tab)
-  infoPanel.close(props.session.id)
   showWorkspaceMenu.value = false
-}
-
-const toggleInfo = () => {
-  infoPanel.toggle(props.session.id)
-  if (infoOpen.value) {
-    panel.closePanel(props.session.id)
-    showWorkspaceMenu.value = false
-  }
 }
 
 watch(

@@ -147,7 +147,6 @@ import { decodeMermaidSource, renderMermaidIn } from '~/utils/mermaid'
 import { applyFollowUpAnchors, type FollowUpAnchor } from '~/utils/follow-up-anchor'
 import { decodeSource } from '~/utils/markdown'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
-import { useSessionInfoPanelStore } from '~/stores/sessionInfoPanel'
 
 const props = defineProps<{
   session: Session
@@ -181,7 +180,6 @@ const hints = [
 ]
 const store = useSessionsStore()
 const panel = useWorkspacePanelStore()
-const infoPanel = useSessionInfoPanelStore()
 const sidecar = useSidecar()
 
 const scrollRef = useTemplateRef<HTMLElement>('scrollRef')
@@ -669,9 +667,8 @@ const onContentClick = (ev: MouseEvent) => {
     }
   }
   if (path) {
-    // Opening the Files drawer — close the Info panel so they don't stack on
-    // the right edge.
-    infoPanel.close(sessionId)
+    // Open (or focus) the Files tab in the shared workspace panel; the Info tab,
+    // if open, stays put alongside it.
     panel.requestOpenFile(sessionId, path, line, endLine)
   }
 }

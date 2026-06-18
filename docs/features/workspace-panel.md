@@ -54,6 +54,9 @@ SessionChat (flex, relative) — layoutClass theo position (flex-row / flex-row-
 | **Tasks** | Step `tool:'terminal'`/`'task'` đang/đã chạy, running float top | inject `SELECT_STEP_KEY` mở drawer | — |
 | **Preview** | `session.messages[].artifacts[]` (markdown) | `MarkdownBodyView` | — |
 | **Terminal** | PTY tương tác qua `terminal.*` RPC/event | xterm | **node-pty + @xterm/xterm** |
+| **Info** | Metadata session (meta + project + context files) qua `useSessionInfo` | `SessionInfoSection`, `SessionInfoFileRow` | — |
+
+> **Info** là tab duy nhất chạy **không cần project** (`tabNeedsRoot=false`). Trước đây là overlay riêng (`stores/sessionInfoPanel.ts`); nay gộp vào panel chung như một tab. Nút Info ở `SessionHeader` `toggleDrawer('info')`; mở context file dùng inject `OPEN_ATTACHMENT_KEY` (SessionChat cấp lightbox).
 
 ### Diff
 **Session-scoped:** chỉ hiện file mà session này đã ghi/sửa (step `tool` ∈ write/edit/save,

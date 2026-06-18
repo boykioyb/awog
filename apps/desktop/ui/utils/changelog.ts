@@ -44,6 +44,11 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'changed',
+        en: 'Session Info is now a tab in the same workspace panel instead of a separate floating panel, so it can sit alongside Files, Terminal, and the rest.',
+        vi: 'Session Info giờ là một tab trong cùng bảng workspace thay vì panel nổi riêng, nên có thể mở cạnh Files, Terminal và các tab khác.',
+      },
+      {
+        kind: 'changed',
         en: 'The workspace panel is now a split pane that docks beside the chat and pushes it aside (right, left, or bottom) instead of floating on top — the chat always keeps a readable minimum width.',
         vi: 'Bảng workspace giờ là split pane ghim cạnh khung chat và đẩy chat sang bên (phải, trái hoặc dưới) thay vì nổi đè lên — chat luôn giữ một độ rộng tối thiểu để đọc được.',
       },

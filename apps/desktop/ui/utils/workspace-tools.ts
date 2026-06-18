@@ -1,4 +1,12 @@
-import { Eye, FolderTree, GitCompare, ListChecks, ListTodo, TerminalSquare } from 'lucide-vue-next'
+import {
+  Eye,
+  FolderTree,
+  GitCompare,
+  Info,
+  ListChecks,
+  ListTodo,
+  TerminalSquare,
+} from 'lucide-vue-next'
 import type { Component } from 'vue'
 import type { WorkspaceTab } from '~/types'
 
@@ -47,6 +55,8 @@ export const WORKSPACE_TOOLS: WorkspaceToolDef[] = [
   },
   { id: 'tasks', icon: ListTodo, labelKey: 'workspace.tab.tasks' },
   { id: 'plan', icon: ListChecks, labelKey: 'workspace.tab.plan' },
+  // Session metadata — the only tool that works without a bound project.
+  { id: 'info', icon: Info, labelKey: 'workspace.tab.info' },
 ]
 
 export const workspaceTool = (id: WorkspaceTab): WorkspaceToolDef =>

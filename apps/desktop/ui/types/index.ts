@@ -615,7 +615,7 @@ export interface SessionSearchResult {
 // Right-docked panel in the Session detail view exposing workspace tools that
 // run alongside the chat. Mirrors Claude Code's workspace switcher.
 
-export type WorkspaceTab = 'diff' | 'files' | 'plan' | 'terminal' | 'tasks' | 'preview'
+export type WorkspaceTab = 'diff' | 'files' | 'plan' | 'terminal' | 'tasks' | 'preview' | 'info'
 
 // Where the workspace drawer docks (overlay on top of the chat).
 export type WorkspacePanelPosition = 'right' | 'left' | 'bottom'
