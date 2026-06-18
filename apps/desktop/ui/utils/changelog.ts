@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.17.0',
+    date: '2026-06-18',
+    highlight: {
+      en: 'Sessions auto-compact before they run out of context, /compact now really frees up context with a summary you can read, response styles, and per-project model defaults.',
+      vi: 'Phiên tự động tóm tắt trước khi cạn ngữ cảnh, /compact giờ thực sự giải phóng ngữ cảnh kèm bản tóm tắt xem được, thêm phong cách trả lời, và mặc định model theo từng dự án.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Auto-compact: when a session nears its context limit, AWOG summarizes the older turns before the next message so the chat keeps working. Toggle it in Settings → Sessions.',
+        vi: 'Tự động tóm tắt: khi một phiên sắp đầy ngữ cảnh, AWOG tóm tắt các lượt cũ trước tin nhắn kế tiếp để cuộc trò chuyện chạy tiếp. Bật/tắt ở Settings → Sessions.',
+      },
+      {
+        kind: 'fixed',
+        en: '/compact now actually reduces the context: it summarizes older turns and shows a readable summary marker in the transcript (with a running state and Stop), instead of just printing a note while the context stayed full.',
+        vi: '/compact giờ thực sự giảm ngữ cảnh: tóm tắt các lượt cũ và hiện một thẻ tóm tắt xem được trong khung chat (kèm trạng thái đang chạy và nút Dừng), thay vì chỉ in một dòng thông báo mà ngữ cảnh vẫn đầy.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The 1M context window no longer collapses to 200k after the first reply — the indicator follows the model you selected.',
+        vi: 'Cửa sổ ngữ cảnh 1M không còn tụt về 200k sau câu trả lời đầu tiên — chỉ báo bám theo đúng model bạn chọn.',
+      },
+      {
+        kind: 'added',
+        en: 'Response styles for a session: pick a tone/format (or plain text) from the composer chip or with /style — applied to every reply until you change it.',
+        vi: 'Phong cách trả lời cho phiên: chọn giọng văn/định dạng (hoặc văn bản thuần) từ chip ở khung soạn hoặc bằng /style — áp dụng cho mọi câu trả lời tới khi bạn đổi.',
+      },
+      {
+        kind: 'added',
+        en: 'Per-project LLM defaults: set the default provider/model for a project so new sessions start with the right model.',
+        vi: 'Mặc định LLM theo dự án: đặt provider/model mặc định cho một dự án để phiên mới khởi tạo đúng model.',
+      },
+    ],
+  },
+  {
     version: '0.16.1',
     date: '2026-06-17',
     highlight: {
