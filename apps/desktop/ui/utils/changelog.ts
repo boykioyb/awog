@@ -59,8 +59,18 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'changed',
+        en: "The agent's todo checklist is now a single panel pinned above the composer instead of inline in each reply — it stays visible while you scroll a long reply, keeps updating across cancel/resume, and hides itself when there are no todos or all are done.",
+        vi: 'Checklist todo của agent giờ là một panel ghim trên ô soạn thay vì nằm trong từng câu trả lời — luôn thấy khi cuộn câu trả lời dài, vẫn cập nhật sau khi hủy rồi tiếp tục, và tự ẩn khi không có todo hoặc đã xong hết.',
+      },
+      {
+        kind: 'changed',
         en: 'Refreshed interface for Git, modals, and drawers, rebuilt on a new shadcn-style component set (cards, badges, inputs, menus) with the Geist typeface.',
         vi: 'Giao diện làm mới cho Git, modal và drawer, dựng lại trên bộ component kiểu shadcn (card, badge, input, menu) cùng phông chữ Geist.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Staging or unstaging many files at once (stage-all, a folder) is now a single batched operation, so it no longer intermittently fails with a “workspace busy” / index.lock error.',
+        vi: 'Stage hoặc unstage nhiều file cùng lúc (stage-all, theo thư mục) giờ gộp thành một thao tác, nên không còn thỉnh thoảng lỗi “workspace busy” / index.lock.',
       },
     ],
   },
