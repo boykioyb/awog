@@ -1,39 +1,45 @@
 <template>
-  <div class="flex-1 flex flex-col overflow-hidden relative">
-    <SessionHeader :session="session" @rename="onRename" @delete="emit('delete')" />
+  <!-- Split layout: the chat column flexes and the workspace panel docks beside
+       it (right / left / bottom), pushing the conversation aside instead of
+       floating over it. Direction follows the panel position. -->
+  <div class="flex-1 flex overflow-hidden relative" :class="layoutClass">
+    <!-- Chat column — info panel / step drawer / lightbox float over THIS only.
+         min-w-0 / min-h-0 let it shrink in the row / bottom split directions. -->
+    <div class="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0 relative">
+      <SessionHeader :session="session" @rename="onRename" @delete="emit('delete')" />
 
-    <SessionMessageList
-      :session="session"
-      :messages="session.messages"
-      :pending-agent-ids="session.pendingAgentIds"
-      @open-attachment="openAttachment"
-    />
+      <SessionMessageList
+        :session="session"
+        :messages="session.messages"
+        :pending-agent-ids="session.pendingAgentIds"
+        @open-attachment="openAttachment"
+      />
 
-    <SessionComposer :session="session" :workspace-root="workspaceRoot" />
+      <SessionComposer :session="session" :workspace-root="workspaceRoot" />
+
+      <SessionInfoPanel
+        v-if="infoPanel.isOpen(session.id)"
+        :session="session"
+        @open-attachment="openAttachment"
+      />
+
+      <SessionDrawer
+        :open="selectedStep !== null"
+        :step="selectedStep"
+        @close="selectedStep = null"
+      />
+
+      <AttachmentLightbox
+        v-if="viewingAttachment"
+        :attachment="viewingAttachment"
+        @close="viewingAttachment = null"
+      />
+    </div>
 
     <SessionWorkspacePanel
-      v-if="activeDrawer"
+      v-if="hasWorkspacePanel"
       :session="session"
-      :active="activeDrawer"
       :workspace-root="workspaceRoot"
-    />
-
-    <SessionInfoPanel
-      v-if="infoPanel.isOpen(session.id)"
-      :session="session"
-      @open-attachment="openAttachment"
-    />
-
-    <SessionDrawer
-      :open="selectedStep !== null"
-      :step="selectedStep"
-      @close="selectedStep = null"
-    />
-
-    <AttachmentLightbox
-      v-if="viewingAttachment"
-      :attachment="viewingAttachment"
-      @close="viewingAttachment = null"
     />
   </div>
 </template>
@@ -88,7 +94,16 @@ watch(
   { immediate: true },
 )
 
-const activeDrawer = computed(() => panel.activeDrawer(props.session.id))
+// The workspace split renders whenever at least one tool tab is open.
+const hasWorkspacePanel = computed(() => panel.openTabs(props.session.id).length > 0)
+
+// Flex direction for the chat ↔ workspace split. The panel is the second DOM
+// child, so `flex-row-reverse` floats it to the left, `flex-col` to the bottom.
+const layoutClass = computed(() => {
+  if (panel.position === 'bottom') return 'flex-col'
+  if (panel.position === 'left') return 'flex-row-reverse'
+  return 'flex-row'
+})
 
 // Keyboard shortcuts open/toggle a workspace drawer (⇧⌘D diff, ⌃` terminal…).
 const onShortcut = (e: KeyboardEvent) => {

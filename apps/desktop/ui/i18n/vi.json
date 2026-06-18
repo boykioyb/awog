@@ -366,6 +366,7 @@
   "git.toast.auto_commit": "Auto-commit {sha} từ phase {phase}",
   "git.toast.tag_renamed": "Renamed '{old}' → '{new}'",
   "workspace.toggle": "Công cụ workspace",
+  "workspace.addTab": "Thêm panel",
   "workspace.close": "Đóng",
   "workspace.position": "Vị trí panel",
   "workspace.position.right": "Dock phải",

@@ -24,22 +24,23 @@ Mọi tab thao tác trên đường dẫn tuyệt đối của project gắn ses
 
 ## Kiến trúc
 
-**Không phải tab bar.** Nút `PanelRight` ở header mở **dropdown menu** ([WorkspaceMenu.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceMenu.vue), giống ảnh Claude Code: Preview/Diff/Terminal/Files/Background tasks/Plan + phím tắt). Chọn 1 mục → mở **đúng 1 drawer** đó ở panel phải. Mỗi công cụ là 1 drawer riêng (có header title + nút close).
+**Split pane + tab bar (multi-tab).** Nút `PanelRight` ở header mở **dropdown menu** ([WorkspaceMenu.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceMenu.vue): Preview/Diff/Terminal/Files/Background tasks/Plan + phím tắt). Chọn 1 mục → **mở thêm 1 tab** ở panel; **nhiều tab mở đồng thời** (vd Files + Terminal cùng lúc), strip tab ở đầu panel để chuyển/đóng từng tab + nút `+` mở tab mới. Panel là **split pane inline** — đẩy chat sang bên, **không** phủ đè.
 
 ```
-SessionChat (flex-col, relative)
-├── SessionHeader → nút PanelRight → WorkspaceMenu (dropdown)
-├── SessionMessageList
-├── SessionComposer
-└── SessionWorkspacePanel (v-if activeDrawer)      ← OVERLAY: absolute inset-y-0 right-0
-    ├── (absolute, z-30, box-shadow trái) — phủ LÊN chat, KHÔNG co layout main
-    ├── resizer (kéo trái = rộng ra) — mirror MasterDetailShell
-    └── <KeepAlive> drawer đang active </KeepAlive>  ← giữ Terminal sống khi đổi drawer
+SessionChat (flex, relative) — layoutClass theo position (flex-row / flex-row-reverse / flex-col)
+├── Chat column (flex-1 min-w-0 min-h-0 relative)   ← info panel / step drawer / lightbox float LÊN cột này
+│   ├── SessionHeader → nút PanelRight → WorkspaceMenu (dropdown)
+│   ├── SessionMessageList
+│   └── SessionComposer
+└── SessionWorkspacePanel (v-if openTabs.length)     ← SPLIT PANE: flex-shrink-0, co chat lại (không overlay)
+    ├── resizer (kéo = rộng/cao ra, cap = chừa MIN_CHAT_PX cho chat)
+    ├── tab strip (chip mỗi tab: icon + label + ✕; nút + = WorkspaceMenu thêm tab)
+    └── mỗi open tab mount đồng thời (v-show tab active) ← giữ Terminal/Files sống khi đổi tab
 ```
 
-- State: [stores/workspacePanel.ts](../../apps/desktop/ui/stores/workspacePanel.ts) — `position` (right/left/bottom) + `widthPx` + `heightPx` global (localStorage), `activeDrawerBySession[id]` per-session (null = đóng). `openDrawer`/`closeDrawer`/`toggleDrawer`/`setPosition`.
-- Mỗi tool dùng [WorkspaceDrawerHeader.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceDrawerHeader.vue) (title + actions slot + **position picker** dock phải/trái/dưới + close).
-- **Vị trí dock:** overlay neo `right` (mặc định) / `left` / `bottom`; resizer đổi trục theo vị trí (kéo rộng/cao); double-click resizer = reset.
+- State: [stores/workspacePanel.ts](../../apps/desktop/ui/stores/workspacePanel.ts) — `position` (right/left/bottom) + `widthPx` + `heightPx` global (localStorage); per-session: `openTabsBySession[id]` (mảng tab mở, có thứ tự) + `activeTabBySession[id]` (tab đang hiện, null = panel đóng). Actions: `openDrawer` (thêm+active), `setActiveTab` (đổi tab hiện), `closeTab` (đóng 1 tab → active fallback sang neighbor), `closeDrawer` (đóng tab active — giữ cho call-site cũ), `closePanel` (đóng cả panel — khi Info panel chiếm dock), `toggleDrawer` (phím tắt), `setPosition`.
+- Mỗi tool dùng [WorkspaceDrawerHeader.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceDrawerHeader.vue) (title + actions slot + **position picker** dock phải/trái/dưới + close tab active).
+- **Vị trí dock:** split pane neo `right` (mặc định) / `left` / `bottom`; resizer đổi trục theo vị trí (kéo rộng/cao), clamp để chat luôn còn ≥ `MIN_CHAT_PX`; double-click resizer = reset.
 - **Phím tắt** ([utils/workspace-tools.ts](../../apps/desktop/ui/utils/workspace-tools.ts), đăng ký ở SessionChat): ⇧⌘P Preview, ⇧⌘D Diff, ⌃\` Terminal, ⇧⌘F Files (toggle open/close). Background tasks + Plan: không phím tắt (như ảnh).
 - Component: [components/session/workspace/](../../apps/desktop/ui/components/session/workspace/).
 

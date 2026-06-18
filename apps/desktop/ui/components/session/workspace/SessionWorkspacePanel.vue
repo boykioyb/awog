@@ -1,7 +1,7 @@
 <template>
-  <!-- Overlay layer floating on top of the chat (never consumes main layout).
+  <!-- Inline split pane (consumes layout, pushes the chat aside — not an overlay).
        Docks right / left / bottom per the position picker in the drawer header. -->
-  <div ref="rootEl" class="absolute z-30 flex" :class="containerClass" :style="containerStyle">
+  <div ref="rootEl" class="flex-shrink-0 flex" :class="containerClass" :style="containerStyle">
     <div
       class="flex-shrink-0 ws-resizer"
       :class="position === 'bottom' ? 'cursor-row-resize' : 'cursor-col-resize hidden md:block'"
@@ -10,6 +10,48 @@
       @dblclick="resetSize"
     />
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden" :style="contentStyle">
+      <!-- Tab strip: one chip per open tool, click to switch, X to close. The +
+           button opens the tool menu to add another tab alongside the rest. -->
+      <div
+        class="flex items-stretch gap-0.5 px-1 flex-shrink-0 overflow-x-auto ws-tabstrip"
+        :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
+      >
+        <button
+          v-for="tab in tabs"
+          :key="tab"
+          type="button"
+          class="group inline-flex items-center gap-1.5 pl-2 pr-1 py-1.5 transition flex-shrink-0 border-b-2"
+          :style="tabChipStyle(tab)"
+          :title="tr(toolOf(tab).labelKey)"
+          @click="panel.setActiveTab(session.id, tab)"
+        >
+          <component :is="toolOf(tab).icon" :size="13" />
+          <span class="text-[1em] leading-none whitespace-nowrap">
+            {{ tr(toolOf(tab).labelKey) }}
+          </span>
+          <span
+            class="inline-flex items-center justify-center w-4 h-4 rounded transition hover:opacity-100"
+            :class="tab === active ? 'opacity-70' : 'opacity-0 group-hover:opacity-60'"
+            :style="{ color: t.textDim }"
+            :title="tr('workspace.close')"
+            @click.stop="panel.closeTab(session.id, tab)"
+          >
+            <X :size="12" />
+          </span>
+        </button>
+
+        <button
+          ref="addBtnRef"
+          type="button"
+          class="inline-flex items-center justify-center w-7 my-1 ml-0.5 rounded transition flex-shrink-0"
+          :style="{ color: showAddMenu ? t.accent : t.textDim }"
+          :title="tr('workspace.addTab')"
+          @click="toggleAddMenu"
+        >
+          <Plus :size="15" />
+        </button>
+      </div>
+
       <div
         v-if="!workspaceRoot"
         class="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center"
@@ -18,24 +60,38 @@
         <p class="text-[1em]" :style="{ color: t.textDim }">{{ tr('workspace.no_project') }}</p>
       </div>
 
-      <KeepAlive v-else>
+      <!-- Every open tab stays mounted (terminal keeps running, Files keeps its
+           cursor); only the active one is shown. -->
+      <div v-else class="flex-1 min-h-0">
         <component
-          :is="activeComponent"
-          :key="active"
+          :is="TAB_COMPONENTS[tab]"
+          v-for="tab in tabs"
+          v-show="tab === active"
+          :key="tab"
           :session="session"
           :workspace-root="workspaceRoot"
         />
-      </KeepAlive>
+      </div>
     </div>
   </div>
+
+  <WorkspaceMenu
+    :open="showAddMenu"
+    :anchor="addMenuPos"
+    :active="active"
+    @select="onAddSelect"
+    @close="showAddMenu = false"
+  />
 </template>
 
 <script setup lang="ts">
-import { FolderGit2 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { FolderGit2, Plus, X } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { Session, WorkspaceTab } from '~/types'
 import { useWorkspacePanelStore } from '~/stores/workspacePanel'
+import { workspaceTool } from '~/utils/workspace-tools'
+import WorkspaceMenu from './WorkspaceMenu.vue'
 import WorkspaceDiffTab from './WorkspaceDiffTab.vue'
 import WorkspaceFilesTab from './WorkspaceFilesTab.vue'
 import WorkspacePlanTab from './WorkspacePlanTab.vue'
@@ -45,7 +101,6 @@ import WorkspacePreviewTab from './WorkspacePreviewTab.vue'
 
 const props = defineProps<{
   session: Session
-  active: WorkspaceTab
   workspaceRoot: string | null
 }>()
 
@@ -62,31 +117,64 @@ const TAB_COMPONENTS = {
   preview: WorkspacePreviewTab,
 } as const
 
-const activeComponent = computed(() => TAB_COMPONENTS[props.active])
+// Open tabs + the visible one (falls back to the first if the store hasn't
+// pinned an active tab yet).
+const tabs = computed<WorkspaceTab[]>(() => panel.openTabs(props.session.id))
+const active = computed<WorkspaceTab | null>(
+  () => panel.activeDrawer(props.session.id) ?? tabs.value[0] ?? null,
+)
+const toolOf = (tab: WorkspaceTab) => workspaceTool(tab)
+
+const tabChipStyle = (tab: WorkspaceTab): CSSProperties =>
+  tab === active.value
+    ? { color: t.value.text, background: t.value.bg, borderBottomColor: t.value.accent }
+    : { color: t.value.textDim, background: 'transparent', borderBottomColor: 'transparent' }
+
+// ── Add-tab menu ────────────────────────────────────────────────────────────
+const showAddMenu = ref(false)
+const addBtnRef = ref<HTMLElement | null>(null)
+const addMenuPos = ref({ top: 0, left: 0 })
+
+const toggleAddMenu = () => {
+  showAddMenu.value = !showAddMenu.value
+}
+
+const onAddSelect = (tab: WorkspaceTab) => {
+  panel.openDrawer(props.session.id, tab)
+  showAddMenu.value = false
+}
+
+watch(showAddMenu, async (open) => {
+  if (!open) return
+  await nextTick()
+  const r = addBtnRef.value?.getBoundingClientRect()
+  // Left-align the 230px menu under the + button, clamped to the viewport.
+  if (r) addMenuPos.value = { top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 238) }
+})
+
 const position = computed(() => panel.position)
 const dragging = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
 
+// Minimum room left for the chat column when the pane is at its largest, so
+// dragging / a persisted-too-large size can never collapse the conversation.
+const MIN_CHAT_PX = 320
+
 // ── Position-aware geometry ─────────────────────────────────────────────────
+// Direction places the resizer (first child) on the chat-facing edge: left edge
+// for a right-docked pane, right edge for left-docked, top edge for bottom.
 const containerClass = computed(() => {
-  if (position.value === 'left') return 'inset-y-0 left-0 flex-row-reverse'
-  if (position.value === 'bottom') return 'inset-x-0 bottom-0 flex-col'
-  return 'inset-y-0 right-0' // right (default)
+  if (position.value === 'left') return 'flex-row-reverse'
+  if (position.value === 'bottom') return 'flex-col'
+  return 'flex-row' // right (default)
 })
 
-const SHADOW = {
-  right: (c: string) => `-12px 0 32px ${c}`,
-  left: (c: string) => `12px 0 32px ${c}`,
-  bottom: (c: string) => `0 -12px 32px ${c}`,
-}
-
 const containerStyle = computed<CSSProperties>(() => {
-  const shadow = SHADOW[position.value](t.value.shadow)
-  // max-*: 100% caps the drawer to the chat area (its positioned ancestor) so a
-  // persisted-too-large size never overflows under the NavRail / off-screen.
+  // max-*: leaves MIN_CHAT_PX for the chat column so a persisted-too-large size
+  // never squeezes the conversation to nothing.
   if (position.value === 'bottom')
-    return { height: `${panel.heightPx}px`, maxHeight: '100%', boxShadow: shadow }
-  return { width: `${panel.widthPx}px`, maxWidth: '100%', boxShadow: shadow }
+    return { height: `${panel.heightPx}px`, maxHeight: `calc(100% - ${MIN_CHAT_PX}px)` }
+  return { width: `${panel.widthPx}px`, maxWidth: `calc(100% - ${MIN_CHAT_PX}px)` }
 })
 
 const resizerStyle = computed<CSSProperties>(() => {
@@ -110,13 +198,15 @@ let dragStartY = 0
 let dragStartWidth = 0
 let dragStartHeight = 0
 
-// Live cap = the chat area (the drawer's positioned ancestor). Keeps the drawer
-// from being dragged wider/taller than the main chat (it would otherwise slide
-// under the NavRail). Falls back to the viewport if the ancestor is unknown.
+// Live cap = the split container size minus the chat's minimum, so dragging
+// stops while the conversation still has MIN_CHAT_PX of room. Falls back to the
+// viewport if the ancestor is unknown.
 const availableSize = (): number => {
   const parent = rootEl.value?.offsetParent as HTMLElement | null
-  if (position.value === 'bottom') return parent?.clientHeight ?? window.innerHeight
-  return parent?.clientWidth ?? window.innerWidth
+  const total = position.value === 'bottom' ? parent?.clientHeight : parent?.clientWidth
+  return (
+    (total ?? (position.value === 'bottom' ? window.innerHeight : window.innerWidth)) - MIN_CHAT_PX
+  )
 }
 
 const onDragMove = (e: MouseEvent) => {
@@ -175,5 +265,16 @@ onBeforeUnmount(() => {
 .ws-resizer:hover,
 .ws-resizer.is-dragging {
   background-color: var(--ws-resizer-hover, currentColor);
+}
+/* Slim, unobtrusive scrollbar when the tab strip overflows horizontally. */
+.ws-tabstrip {
+  scrollbar-width: thin;
+}
+.ws-tabstrip::-webkit-scrollbar {
+  height: 4px;
+}
+.ws-tabstrip::-webkit-scrollbar-thumb {
+  background-color: var(--ws-resizer-hover, currentColor);
+  border-radius: 2px;
 }
 </style>

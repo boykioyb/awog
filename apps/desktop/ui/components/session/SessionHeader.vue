@@ -15,17 +15,24 @@
         @blur="commitTitle"
         @keydown.enter="($event.target as HTMLInputElement).blur()"
       />
-      <div class="text-[1em] mt-0.5 flex items-center gap-1.5" :style="{ color: t.textDim }">
-        <span class="font-mono">{{ session.id }}</span>
-        <span :style="{ color: t.textFaint }">·</span>
-        <span>{{ session.messages.length }} messages</span>
-        <span :style="{ color: t.textFaint }">·</span>
-        <span>Updated {{ fmt(session.updatedAt) }}</span>
-        <span :style="{ color: t.textFaint }">·</span>
+      <div
+        class="text-[1em] mt-0.5 flex items-center gap-1.5 min-w-0 overflow-hidden"
+        :style="{ color: t.textDim }"
+      >
+        <!-- Low-priority meta: ellipsizes first when the chat column is squeezed
+             by the workspace split, so the project + branch chips stay legible. -->
+        <span class="truncate min-w-0">
+          <span class="font-mono">{{ session.id }}</span>
+          <span :style="{ color: t.textFaint }">·</span>
+          <span>{{ session.messages.length }} messages</span>
+          <span :style="{ color: t.textFaint }">·</span>
+          <span>Updated {{ fmt(session.updatedAt) }}</span>
+        </span>
+        <span class="flex-shrink-0" :style="{ color: t.textFaint }">·</span>
         <button
           ref="projectBtnRef"
           type="button"
-          class="inline-flex items-center gap-1 px-1.5 py-0.5 -my-0.5 rounded transition"
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 -my-0.5 rounded transition flex-shrink-0 max-w-[40%] whitespace-nowrap"
           :style="{
             color: project ? t.text : t.textFaint,
             background: showProjectMenu ? t.bgSubtle : 'transparent',
@@ -33,14 +40,15 @@
           :title="project ? 'Change project' : 'Assign to project'"
           @click="showProjectMenu = !showProjectMenu"
         >
-          <FolderGit2 :size="10" />
-          {{ project ? project.name : 'No project' }}
-          <ChevronDown :size="10" />
+          <FolderGit2 :size="10" class="flex-shrink-0" />
+          <span class="truncate">{{ project ? project.name : 'No project' }}</span>
+          <ChevronDown :size="10" class="flex-shrink-0" />
         </button>
         <!-- Branch chip renders nothing until a branch loads (project bound to a
              real repo), so no separator dot — the row gap is enough. -->
         <SessionBranchSwitcher
           v-if="workspaceRoot"
+          class="flex-shrink-0"
           :workspace-root="workspaceRoot"
           @open-git="showGitModal = true"
         />
@@ -206,7 +214,7 @@ const onSelectWorkspace = (tab: WorkspaceTab) => {
 const toggleInfo = () => {
   infoPanel.toggle(props.session.id)
   if (infoOpen.value) {
-    panel.closeDrawer(props.session.id)
+    panel.closePanel(props.session.id)
     showWorkspaceMenu.value = false
   }
 }

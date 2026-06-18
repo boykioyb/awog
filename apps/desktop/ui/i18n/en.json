@@ -366,6 +366,7 @@
   "git.toast.auto_commit": "Auto-commit {sha} from phase {phase}",
   "git.toast.tag_renamed": "Renamed '{old}' → '{new}'",
   "workspace.toggle": "Workspace tools",
+  "workspace.addTab": "Add panel",
   "workspace.close": "Close",
   "workspace.position": "Panel position",
   "workspace.position.right": "Dock right",

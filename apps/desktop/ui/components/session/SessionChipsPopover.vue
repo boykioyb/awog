@@ -131,18 +131,22 @@
 
     <!-- Model + Effort chip. Effort lives under the model popover (Claude Code
          pattern) since the supported level range is model-dependent. -->
-    <div v-if="shows('model')" class="relative">
+    <div v-if="shows('model')" class="relative min-w-0">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition max-w-full min-w-0"
         :style="chipStyle(openPop === 'model')"
         @click="togglePop('model')"
       >
-        <Sparkles :size="10" />
-        {{ currentModelLabel }}
-        <span v-if="currentModel?.supportsThinking" :style="{ color: t.textDim }">
+        <Sparkles :size="10" class="flex-shrink-0" />
+        <span class="truncate">{{ currentModelLabel }}</span>
+        <span
+          v-if="currentModel?.supportsThinking"
+          class="flex-shrink-0"
+          :style="{ color: t.textDim }"
+        >
           · {{ LEVEL_LABEL[session.settings.level] }}
         </span>
-        <ChevronDown :size="9" :style="{ color: t.textDim }" />
+        <ChevronDown :size="9" class="flex-shrink-0" :style="{ color: t.textDim }" />
       </button>
       <div
         v-if="openPop === 'model'"

@@ -2,11 +2,13 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { WorkspacePanelPosition, WorkspaceTab } from '~/types'
 
-// Session workspace tools. The header exposes a dropdown switcher (Preview /
-// Diff / Terminal / Files / Background tasks / Plan, mirroring Claude Code);
-// picking one opens it as a single overlay drawer floating over the chat. One
-// drawer is active per session at a time — `activeDrawerBySession[id]` is the
-// open tool (null = closed). `position`, `widthPx`, `heightPx` are global
+// Session workspace tools (Preview / Diff / Terminal / Files / Background tasks
+// / Plan, mirroring Claude Code) dock as an inline split pane beside the chat.
+// MULTI-TAB: several tools can be open at once per session —
+// `openTabsBySession[id]` is the ordered open set (the tab strip), and
+// `activeTabBySession[id]` is the visible one (null = panel closed). Opening
+// Terminal no longer evicts Files; each open tab stays mounted (alive) and the
+// user switches between them. `position`, `widthPx`, `heightPx` are global
 // ergonomics persisted to localStorage (like MasterDetailShell list widths).
 
 const POSITION_KEY = 'awog.workspacePanel.position'
@@ -52,23 +54,62 @@ export const useWorkspacePanelStore = defineStore('workspacePanel', () => {
   const position = ref<WorkspacePanelPosition>(readPosition())
   const widthPx = ref<number>(clamp(readNum(WIDTH_KEY, DEFAULT_WIDTH), MIN_WIDTH, MAX_WIDTH))
   const heightPx = ref<number>(clamp(readNum(HEIGHT_KEY, DEFAULT_HEIGHT), MIN_HEIGHT, MAX_HEIGHT))
-  // null = no drawer open for that session.
-  const activeDrawerBySession = ref<Record<string, WorkspaceTab | null>>({})
+  // Ordered open tabs per session (the tab strip) + the visible one. Empty list
+  // / null active = panel closed.
+  const openTabsBySession = ref<Record<string, WorkspaceTab[]>>({})
+  const activeTabBySession = ref<Record<string, WorkspaceTab | null>>({})
+
+  const openTabs = (sessionId: string): WorkspaceTab[] => openTabsBySession.value[sessionId] ?? []
 
   const activeDrawer = (sessionId: string): WorkspaceTab | null =>
-    activeDrawerBySession.value[sessionId] ?? null
+    activeTabBySession.value[sessionId] ?? null
 
+  // Open a tool: append to the strip if not already there, then make it active.
   const openDrawer = (sessionId: string, tab: WorkspaceTab): void => {
-    activeDrawerBySession.value = { ...activeDrawerBySession.value, [sessionId]: tab }
+    const tabs = openTabs(sessionId)
+    if (!tabs.includes(tab)) {
+      openTabsBySession.value = { ...openTabsBySession.value, [sessionId]: [...tabs, tab] }
+    }
+    activeTabBySession.value = { ...activeTabBySession.value, [sessionId]: tab }
   }
 
+  // Switch the visible tab without opening/closing anything.
+  const setActiveTab = (sessionId: string, tab: WorkspaceTab): void => {
+    if (!openTabs(sessionId).includes(tab)) return
+    activeTabBySession.value = { ...activeTabBySession.value, [sessionId]: tab }
+  }
+
+  // Close one tab. If it was active, fall back to its left neighbour (else the
+  // new first tab); when the strip empties the panel closes.
+  const closeTab = (sessionId: string, tab: WorkspaceTab): void => {
+    const tabs = openTabs(sessionId)
+    const idx = tabs.indexOf(tab)
+    if (idx === -1) return
+    const next = tabs.filter((t) => t !== tab)
+    openTabsBySession.value = { ...openTabsBySession.value, [sessionId]: next }
+    if (activeDrawer(sessionId) === tab) {
+      const fallback = next[idx - 1] ?? next[idx] ?? null
+      activeTabBySession.value = { ...activeTabBySession.value, [sessionId]: fallback }
+    }
+  }
+
+  // Close the currently active tab — the per-tab header X and the toggle
+  // shortcut both route here (kept for call-site compatibility).
   const closeDrawer = (sessionId: string): void => {
-    activeDrawerBySession.value = { ...activeDrawerBySession.value, [sessionId]: null }
+    const active = activeDrawer(sessionId)
+    if (active) closeTab(sessionId, active)
   }
 
-  // Shortcut / re-click behaviour: same tool toggles closed, else switches.
+  // Close the whole panel (all tabs) — used when the Info panel takes the dock.
+  const closePanel = (sessionId: string): void => {
+    openTabsBySession.value = { ...openTabsBySession.value, [sessionId]: [] }
+    activeTabBySession.value = { ...activeTabBySession.value, [sessionId]: null }
+  }
+
+  // Shortcut behaviour: re-pressing the active tool's key closes it, otherwise
+  // open-or-switch to it.
   const toggleDrawer = (sessionId: string, tab: WorkspaceTab): void => {
-    if (activeDrawer(sessionId) === tab) closeDrawer(sessionId)
+    if (activeDrawer(sessionId) === tab) closeTab(sessionId, tab)
     else openDrawer(sessionId, tab)
   }
 
@@ -138,9 +179,13 @@ export const useWorkspacePanelStore = defineStore('workspacePanel', () => {
     position,
     widthPx,
     heightPx,
+    openTabs,
     activeDrawer,
     openDrawer,
+    setActiveTab,
+    closeTab,
     closeDrawer,
+    closePanel,
     toggleDrawer,
     setPosition,
     setWidth,
