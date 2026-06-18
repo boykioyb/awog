@@ -215,19 +215,19 @@ const confirmDiscard = () => {
 }
 
 const stageAll = () => {
-  ;[...store.unstagedFiles, ...store.untrackedFiles].forEach((f: GitFileStatus) =>
-    store.stageFile(f.path),
+  store.stagePaths(
+    [...store.unstagedFiles, ...store.untrackedFiles].map((f: GitFileStatus) => f.path),
   )
 }
 
 const unstageAll = () => {
-  store.stagedFiles.forEach((f: GitFileStatus) => store.unstageFile(f.path))
+  store.unstagePaths(store.stagedFiles.map((f: GitFileStatus) => f.path))
 }
 
-// Stage / unstage every file under a folder (tree-view folder checkbox). Loops
-// the per-file actions — same pattern as stage all, reuses optimistic logic.
-const stageFolder = (paths: string[]) => paths.forEach((p) => store.stageFile(p))
-const unstageFolder = (paths: string[]) => paths.forEach((p) => store.unstageFile(p))
+// Stage / unstage every file under a folder (tree-view folder checkbox). Single
+// batched IPC — one `git add`/`reset` instead of N racing on `.git/index.lock`.
+const stageFolder = (paths: string[]) => store.stagePaths(paths)
+const unstageFolder = (paths: string[]) => store.unstagePaths(paths)
 
 // ─── Context menu ──────────────────────────────────────────────────────────
 const contextMenu = ref<{ x: number; y: number; file: GitFileStatus } | null>(null)

@@ -25,15 +25,8 @@ export function createGitStaging(ctx: GitActionCtx) {
     loadHistory,
   } = ctx
 
-  // Snapshot a file's current state so we can roll back the optimistic update
-  // if the IPC call fails.
-  const snapshotFile = (path: string): GitFileStatus | null => {
-    const file = statusFilesAll.value.find(
-      (f) => f.path === path && f.projectId === selectedProjectId.value,
-    )
-    return file ? { ...file } : null
-  }
-
+  // Restore a snapshotted file so we can roll back the optimistic update if the
+  // IPC call fails.
   const restoreFile = (snapshot: GitFileStatus): void => {
     const idx = statusFilesAll.value.findIndex(
       (f) => f.path === snapshot.path && f.projectId === snapshot.projectId,
@@ -42,19 +35,28 @@ export function createGitStaging(ctx: GitActionCtx) {
     else statusFilesAll.value = [...statusFilesAll.value, { ...snapshot }]
   }
 
-  const stageFile = async (path: string) => {
-    const file = statusFilesAll.value.find(
-      (f) => f.path === path && f.projectId === selectedProjectId.value,
+  // Stage one or more paths in a single IPC round-trip. `git.stageFile` already
+  // batches (`git add -- <paths>`), so bulk stage (stage-all, folder stage)
+  // reuses it — one subprocess + one mutex acquisition instead of N parallel
+  // `git add` racing on `.git/index.lock`.
+  const stagePaths = async (paths: string[]) => {
+    if (paths.length === 0) return
+    const projectId = selectedProjectId.value
+    const pathSet = new Set(paths)
+    const targets = statusFilesAll.value.filter(
+      (f) => pathSet.has(f.path) && f.projectId === projectId && !f.hasConflict,
     )
-    if (!file || file.hasConflict) return
-    const snapshot = snapshotFile(path)
-    // Optimistic — mirror what git add will produce.
-    file.isStaged = true
-    if (file.workTree === 'untracked') {
-      file.index = 'added'
-      file.workTree = 'clean'
-    } else if (file.workTree !== 'clean') {
-      file.index = file.workTree
+    if (targets.length === 0) return
+    const snapshots = targets.map((f) => ({ ...f }))
+    // Optimistic — mirror what `git add` will produce, per file.
+    for (const file of targets) {
+      file.isStaged = true
+      if (file.workTree === 'untracked') {
+        file.index = 'added'
+        file.workTree = 'clean'
+      } else if (file.workTree !== 'clean') {
+        file.index = file.workTree
+      }
     }
 
     const root = resolveWorkspaceRoot()
@@ -63,28 +65,39 @@ export function createGitStaging(ctx: GitActionCtx) {
       return
     }
     try {
-      await useGitApi().stageFile(root, [path])
+      await useGitApi().stageFile(
+        root,
+        targets.map((f) => f.path),
+      )
     } catch (err) {
       if (isUnavailable(err)) return
-      if (snapshot) restoreFile(snapshot)
-      pushToast(`Stage thất bại: ${path}`, 'error')
+      snapshots.forEach(restoreFile)
+      pushToast(
+        paths.length === 1 ? `Stage thất bại: ${paths[0]}` : `Stage thất bại: ${paths.length} file`,
+        'error',
+      )
       throw err
     }
   }
 
-  const unstageFile = async (path: string) => {
-    const file = statusFilesAll.value.find(
-      (f) => f.path === path && f.projectId === selectedProjectId.value,
+  const unstagePaths = async (paths: string[]) => {
+    if (paths.length === 0) return
+    const projectId = selectedProjectId.value
+    const pathSet = new Set(paths)
+    const targets = statusFilesAll.value.filter(
+      (f) => pathSet.has(f.path) && f.projectId === projectId,
     )
-    if (!file) return
-    const snapshot = snapshotFile(path)
-    file.isStaged = false
-    if (file.index === 'added') {
-      file.workTree = 'untracked'
-      file.index = 'clean'
-    } else if (file.index !== 'clean') {
-      file.workTree = file.index
-      file.index = 'clean'
+    if (targets.length === 0) return
+    const snapshots = targets.map((f) => ({ ...f }))
+    for (const file of targets) {
+      file.isStaged = false
+      if (file.index === 'added') {
+        file.workTree = 'untracked'
+        file.index = 'clean'
+      } else if (file.index !== 'clean') {
+        file.workTree = file.index
+        file.index = 'clean'
+      }
     }
 
     const root = resolveWorkspaceRoot()
@@ -93,14 +106,25 @@ export function createGitStaging(ctx: GitActionCtx) {
       return
     }
     try {
-      await useGitApi().unstageFile(root, [path])
+      await useGitApi().unstageFile(
+        root,
+        targets.map((f) => f.path),
+      )
     } catch (err) {
       if (isUnavailable(err)) return
-      if (snapshot) restoreFile(snapshot)
-      pushToast(`Unstage thất bại: ${path}`, 'error')
+      snapshots.forEach(restoreFile)
+      pushToast(
+        paths.length === 1
+          ? `Unstage thất bại: ${paths[0]}`
+          : `Unstage thất bại: ${paths.length} file`,
+        'error',
+      )
       throw err
     }
   }
+
+  const stageFile = (path: string) => stagePaths([path])
+  const unstageFile = (path: string) => unstagePaths([path])
 
   // Discard one or more paths in a single IPC round-trip. `git.discardFile`
   // already batches (checkout tracked + unlink untracked), so bulk discard
@@ -324,6 +348,8 @@ export function createGitStaging(ctx: GitActionCtx) {
   return {
     stageFile,
     unstageFile,
+    stagePaths,
+    unstagePaths,
     discardFile,
     discardPaths,
     selectFile,
