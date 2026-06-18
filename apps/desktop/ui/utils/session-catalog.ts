@@ -1,4 +1,4 @@
-import { BookOpen, type LucideIcon } from 'lucide-vue-next'
+import { BookOpen, Palette, type LucideIcon } from 'lucide-vue-next'
 import type { AgentMode } from '~/types'
 import { MODE_OPTIONS } from './session-modes'
 
@@ -11,7 +11,10 @@ import { MODE_OPTIONS } from './session-modes'
 // What picking a command does. Mode commands flip the session's permission mode
 // (same set as the composer mode chip); `compact` summarizes the conversation to
 // free token budget — wired to the SDK once the runner adopts session resume.
-export type SessionCommandAction = { type: 'mode'; mode: AgentMode } | { type: 'compact' }
+export type SessionCommandAction =
+  | { type: 'mode'; mode: AgentMode }
+  | { type: 'compact' }
+  | { type: 'style' }
 
 export interface SessionCommand {
   // Stable id consumed by the composer dispatcher (e.g. 'mode:plan', 'compact').
@@ -41,6 +44,13 @@ export const SESSION_COMMANDS: SessionCommand[] = [
     description: 'Summarize the conversation to free up token budget',
     icon: BookOpen,
     action: { type: 'compact' },
+  },
+  {
+    id: 'style',
+    name: 'style',
+    description: 'Pick a response style for this session',
+    icon: Palette,
+    action: { type: 'style' },
   },
 ]
 

@@ -183,6 +183,8 @@ interface SettingsState {
   workspacePath: string
   autoApprove: boolean
   notificationsEnabled: boolean
+  // Auto-compact sessions when context is near full (ADR 0047). Default on.
+  autoCompact: boolean
   providers: ProviderRecord<ProviderConfig>
   defaults: SessionDefaults
   appearance: AppearanceSettings
@@ -232,6 +234,7 @@ export const useSettingsStore = defineStore('settings', {
     workspacePath: '~/.awog/workspaces/home',
     autoApprove: false,
     notificationsEnabled: true,
+    autoCompact: true,
     providers: {
       anthropic: { accounts: [], activeAccountId: null },
       openai: { accounts: [], activeAccountId: null },

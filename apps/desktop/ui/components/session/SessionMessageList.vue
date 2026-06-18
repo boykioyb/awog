@@ -45,14 +45,22 @@
       </div>
 
       <template v-else>
-        <SessionMessageItem
-          v-for="msg in messages"
-          :key="msg.id"
-          :session="session"
-          :message="msg"
-          :now="now"
-          @open-attachment="(att: SessionAttachment) => emit('openAttachment', att)"
-        />
+        <template v-for="msg in messages" :key="msg.id">
+          <!-- Compaction marker (ADR 0047): rendered just before the first kept
+               message. The full transcript stays visible; the model only sees the
+               summary + messages from here on. -->
+          <SessionCompactionMarker
+            v-if="session.compaction && session.compaction.firstKeptMessageId === msg.id"
+            :compaction="session.compaction"
+            :folded-count="foldedCount"
+          />
+          <SessionMessageItem
+            :session="session"
+            :message="msg"
+            :now="now"
+            @open-attachment="(att: SessionAttachment) => emit('openAttachment', att)"
+          />
+        </template>
       </template>
     </div>
 
@@ -156,6 +164,15 @@ const { t: tr } = useI18n()
 
 // Empty state: no messages and nothing streaming yet.
 const isEmpty = computed(() => props.messages.length === 0 && props.pendingAgentIds.length === 0)
+
+// How many messages were folded behind the compaction marker (everything before
+// the first kept message). Drives the marker's "Summarized N messages" count.
+const foldedCount = computed(() => {
+  const cut = props.session.compaction?.firstKeptMessageId
+  if (!cut) return 0
+  const idx = props.messages.findIndex((m) => m.id === cut)
+  return idx > 0 ? idx : 0
+})
 
 const hints = [
   { token: '@file', icon: AtSign },

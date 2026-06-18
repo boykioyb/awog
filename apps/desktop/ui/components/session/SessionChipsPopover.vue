@@ -474,8 +474,8 @@ import {
   LEVEL_LABEL,
   PROVIDER_LABEL,
   levelsForModel,
-  modelById,
   modelsForProvider,
+  resolveModelDef,
   type ModelDef,
 } from '~/utils/models'
 import { TOOLS_CATALOG, TOOL_GROUP_LABEL, type ToolGroup } from '~/utils/tools-catalog'
@@ -528,24 +528,20 @@ const effectiveAccountModels = computed<string[]>(() => {
 const availableModels = computed<ModelDef[]>(() => {
   if (effectiveAccountModels.value.length) {
     // The list is either a custom endpoint's ids OR a curated built-in subset.
-    // Keep catalog metadata (label + thinking levels) for ids we know; fall back
-    // to a bare entry for genuinely-custom ids.
-    return effectiveAccountModels.value.map(
-      (id) =>
-        modelById(id) ?? {
-          id,
-          label: id,
-          vendor: 'Custom endpoint',
-          tier: 'Custom',
-          provider: props.session.settings.provider,
-          supportsThinking: false,
-          maxLevel: 'low' as ThinkingLevel,
-        },
+    // Keep catalog metadata (label + thinking levels) for ids we know; synthesize
+    // a reasoning-capable entry for genuinely-custom ids (runtime clamps effort).
+    return effectiveAccountModels.value.map((id) =>
+      resolveModelDef(id, props.session.settings.provider),
     )
   }
   return modelsForProvider(props.session.settings.provider)
 })
-const currentModel = computed(() => modelById(props.session.settings.modelId))
+// Resolve against availableModels (catalog OR the account's custom ids), not
+// modelById alone — else a curated/custom id would collapse the effort picker to
+// Low because it isn't in the static catalog.
+const currentModel = computed(() =>
+  availableModels.value.find((m) => m.id === props.session.settings.modelId),
+)
 // Custom model ids aren't in the catalog → fall back to the raw id for display.
 const currentModelLabel = computed(
   () => currentModel.value?.label ?? props.session.settings.modelId,

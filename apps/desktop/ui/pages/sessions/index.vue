@@ -617,6 +617,7 @@ const quickNewSession = (group: Group) => {
 const contextMenu = ref<{ x: number; y: number; id: string } | null>(null)
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
+const renameInputEl = ref<HTMLInputElement | null>(null)
 const pendingDeleteId = ref<string | null>(null)
 
 // ── Project group context menu (quick LLM defaults + new session) ──
@@ -653,13 +654,12 @@ const projectMenuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
+// Side-effect-free: function refs inside v-for re-run on every patch, so
+// focusing/selecting here would re-select on each keystroke (only the last
+// char survives). We just capture the element; focus/select happens once in
+// startRename.
 const setRenameInputRef = (el: unknown) => {
-  if (el instanceof HTMLInputElement) {
-    nextTick(() => {
-      el.focus()
-      el.select()
-    })
-  }
+  renameInputEl.value = el instanceof HTMLInputElement ? el : null
 }
 
 const onContextMenu = (e: MouseEvent, id: string) => {
@@ -675,6 +675,10 @@ const openMenuFromButton = (e: MouseEvent, id: string) => {
 const startRename = (id: string, current: string) => {
   renamingId.value = id
   renameValue.value = current
+  nextTick(() => {
+    renameInputEl.value?.focus()
+    renameInputEl.value?.select()
+  })
 }
 
 const commitRename = () => {

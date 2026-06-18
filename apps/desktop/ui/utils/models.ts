@@ -12,26 +12,6 @@ export interface ModelDef {
 
 export const MODELS: ModelDef[] = [
   {
-    id: 'claude-fable-5',
-    label: 'Claude Fable 5',
-    vendor: 'Anthropic',
-    tier: 'Frontier',
-    provider: 'anthropic',
-    supportsThinking: true,
-    maxLevel: 'max',
-  },
-  {
-    // AWOG-internal id (not a real API name). Sidecar maps it to claude-fable-5
-    // + the context-1m beta header — see resolveModelRequest in models-map.ts.
-    id: 'claude-fable-5-1m',
-    label: 'Claude Fable 5 (1M context)',
-    vendor: 'Anthropic',
-    tier: 'Frontier',
-    provider: 'anthropic',
-    supportsThinking: true,
-    maxLevel: 'max',
-  },
-  {
     id: 'claude-opus-4-8',
     label: 'Claude Opus 4.8',
     vendor: 'Anthropic',
@@ -194,6 +174,28 @@ export const modelById = (id: string) => MODELS.find((m) => m.id === id)
 
 export const modelsForProvider = (provider: ProviderName) =>
   MODELS.filter((m) => m.provider === provider)
+
+// Resolve a model id to a ModelDef. Catalog ids return their static entry; ids
+// served only by a custom/curated account (e.g. an OpenAI Codex id like
+// `gpt-5.1-codex`, or a custom endpoint) aren't in the catalog, so synthesize an
+// entry. Such ids are assumed reasoning-capable up to 'extra-high' — the sidecar
+// clamps the effort down to what the concrete model actually supports at runtime
+// (runtime/thinking.ts), so exposing the full range here is safe and lets curated
+// reasoning models show the effort picker instead of collapsing to Low.
+export const resolveModelDef = (
+  id: string,
+  provider: ProviderName,
+  vendor = 'Custom endpoint',
+): ModelDef =>
+  modelById(id) ?? {
+    id,
+    label: id,
+    vendor,
+    tier: 'Custom',
+    provider,
+    supportsThinking: true,
+    maxLevel: 'extra-high',
+  }
 
 export const levelsForModel = (model: ModelDef | undefined): ThinkingLevel[] => {
   if (!model || !model.supportsThinking) return ['low']

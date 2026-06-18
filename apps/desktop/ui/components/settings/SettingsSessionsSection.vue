@@ -22,6 +22,10 @@
         <AppToggle v-model="settings.notificationsEnabled" />
       </SettingsField>
 
+      <SettingsField :label="tr('settings.autoCompact')" :hint="tr('settings.autoCompact.hint')">
+        <AppToggle v-model="settings.autoCompact" />
+      </SettingsField>
+
       <SettingsField :label="tr('settings.quotaWarning')" :hint="tr('settings.quotaWarning.hint')">
         <AppToggle
           :model-value="quotaWarning.enabled"

@@ -29,13 +29,17 @@ export function decodeSource(s: string): string {
 // Highlight a code source with highlight.js. Shared by the markdown `code`
 // renderer and the full-screen code viewer so both produce identical markup
 // (hljs escapes the source itself and wraps tokens in <span class="hljs-*">,
-// themed by main.css). Unknown / missing language falls back to auto-detect.
+// themed by main.css). Unknown / missing language → HTML-escape only, NO
+// auto-detect: LLM replies routinely put plain prose (PR titles, branch names,
+// shell snippets) in unlabeled fences, and hljs.highlightAuto guesses a wrong
+// language → bogus token colors + spurious italics (e.g. `#…` read as a
+// comment). Escaping keeps such blocks neutral; real code blocks tag their lang.
 export function highlightCode(source: string, lang?: string): { html: string; language: string } {
   const language = typeof lang === 'string' ? lang.toLowerCase().replace(/[^a-z0-9+#.-]/g, '') : ''
   const html =
     language && hljs.getLanguage(language)
       ? hljs.highlight(source, { language, ignoreIllegals: true }).value
-      : hljs.highlightAuto(source).value
+      : escapeHtml(source)
   return { html, language }
 }
 

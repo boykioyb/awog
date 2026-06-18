@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
-import type { Session, ThinkingLevel } from '~/types'
-import { modelById, modelsForProvider, type ModelDef } from '~/utils/models'
+import type { Session } from '~/types'
+import { modelById, modelsForProvider, resolveModelDef, type ModelDef } from '~/utils/models'
 
 // Models a session can switch to, derived from its provider + effective account.
 // A custom-endpoint / curated account carries its own model ids (overriding the
@@ -19,17 +19,8 @@ export function useSessionModels(session: Ref<Session>) {
 
   const availableModels = computed<ModelDef[]>(() => {
     if (effectiveAccountModels.value.length) {
-      return effectiveAccountModels.value.map(
-        (id) =>
-          modelById(id) ?? {
-            id,
-            label: id,
-            vendor: 'Custom endpoint',
-            tier: 'Custom',
-            provider: session.value.settings.provider,
-            supportsThinking: false,
-            maxLevel: 'low' as ThinkingLevel,
-          },
+      return effectiveAccountModels.value.map((id) =>
+        resolveModelDef(id, session.value.settings.provider),
       )
     }
     return modelsForProvider(session.value.settings.provider)

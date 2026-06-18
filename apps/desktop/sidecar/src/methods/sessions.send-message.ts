@@ -57,6 +57,9 @@ const SessionSettingsSchema = z.object({
   level: ThinkingLevelSchema,
   mode: z.enum(['ask', 'accept-edits', 'plan', 'execute']),
   accountId: z.string().optional(),
+  // Response style (ADR 0046) — built-in style id + no-markdown modifier.
+  responseStyle: z.string().optional(),
+  responseStyleNoMarkdown: z.boolean().optional(),
 })
 
 // User attachment on the outgoing message (L1: untrusted UI payload). Image
@@ -104,6 +107,17 @@ const Params = z.object({
   // all globally-enabled servers. `[]` = explicitly none. `[ids]` = only these
   // (intersected with the globally-enabled set).
   mcpServerIds: z.array(z.string()).optional(),
+  // Active compaction checkpoint (ADR 0047), forwarded by the UI alongside
+  // `history` (same trust model). When present, the runtime feeds the model the
+  // summary + messages from `firstKeptMessageId` onward instead of full history.
+  compaction: z
+    .object({
+      summary: z.string(),
+      firstKeptMessageId: z.string(),
+      tokensBefore: z.number(),
+      at: z.string(),
+    })
+    .optional(),
   // Active agent for this turn. Identifies the AGENT.md by (id, source,
   // projectId?) tuple because the same slug can exist in multiple tiers.
   // When present + resolves to an agent with non-empty systemPrompt, that
@@ -143,6 +157,10 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
     mode: parsed.mode,
   }
   if (parsed.accountId !== undefined) base.accountId = parsed.accountId
+  if (parsed.responseStyle !== undefined) base.responseStyle = parsed.responseStyle
+  if (parsed.responseStyleNoMarkdown !== undefined) {
+    base.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown
+  }
   return base
 }
 
@@ -533,6 +551,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...(mcpServersForRuntime ? { mcpServers: mcpServersForRuntime } : {}),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
+        ...(params.compaction ? { compaction: params.compaction } : {}),
         canUseTool,
         askUserQuestion,
         abortController,

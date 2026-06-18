@@ -185,7 +185,7 @@ import { ChevronDown, RefreshCw } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import type { Session } from '~/types'
 import { modelById } from '~/utils/models'
-import { contextLimitFor, formatTokenCount } from '~/utils/context-window'
+import { contextUsage, formatTokenCount } from '~/utils/context-window'
 
 type RateLimitType = 'five_hour' | 'seven_day' | 'seven_day_opus' | 'seven_day_sonnet' | 'overage'
 
@@ -223,10 +223,6 @@ const lastAgentWithUsage = computed(() => {
   return null
 })
 
-const lastModel = computed(
-  () => lastAgentWithUsage.value?.modelUsed ?? props.session.settings.modelId,
-)
-
 const modelLabel = computed(() => {
   const def = modelById(props.session.settings.modelId)
   return def?.label ?? props.session.settings.modelId
@@ -242,8 +238,6 @@ const lastInput = computed(() => {
 })
 const lastOutput = computed(() => lastAgentWithUsage.value?.usage?.outputTokens ?? 0)
 
-const limit = computed(() => contextLimitFor(lastModel.value))
-
 const settingsStore = useSettingsStore()
 
 const systemPromptTokens = computed(() => estimateTokens(settingsStore.defaults?.systemPrompt))
@@ -254,24 +248,13 @@ const messagesTokens = computed(() =>
     .reduce((acc, m) => acc + estimateTokens(m.text), 0),
 )
 
-// Real total context occupancy = the full prompt last sent (uncached input +
-// cache-read history + cache-write) plus the reply tokens. The cache buckets are
-// essential: with prompt caching the conversation history is served from cache,
-// so `inputTokens` alone is just the uncached delta and `used` would collapse to
-// a few k no matter how long the chat gets (the original bug — Messages stuck at
-// 0). When no agent turn yet, fall back to an estimate of the pending text only.
-const used = computed(() => {
-  const u = lastAgentWithUsage.value?.usage
-  if (u) {
-    return u.inputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0) + u.outputTokens
-  }
-  return systemPromptTokens.value + messagesTokens.value
-})
-
-const percent = computed(() => {
-  if (limit.value <= 0) return 0
-  return Math.min(100, Math.round((used.value / limit.value) * 100))
-})
+// used/limit/percent come from the shared util so the widget and the auto-compact
+// trigger never diverge (ADR 0047). `used` sums the full prompt last sent +
+// reply (cache buckets included); see contextUsage for the rationale.
+const ctxUsage = computed(() => contextUsage(props.session, settingsStore.defaults?.systemPrompt))
+const used = computed(() => ctxUsage.value.used)
+const limit = computed(() => ctxUsage.value.limit)
+const percent = computed(() => ctxUsage.value.percent)
 
 const usageColor = computed(() => {
   const p = percent.value

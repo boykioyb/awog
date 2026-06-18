@@ -25,6 +25,11 @@ const LlmDefaultsSchema = z.object({
   modelId: z.string().min(1).max(200),
   level: z.enum(['low', 'medium', 'high', 'extra-high', 'max']),
   accountId: z.string().max(200).optional(),
+  // MCP server whitelist new sessions inherit. undefined = all enabled servers.
+  mcpServerIds: z.array(z.string().max(200)).max(200).optional(),
+  // Response style (ADR 0046) new sessions inherit. undefined = "Normal".
+  responseStyle: z.string().max(120).optional(),
+  responseStyleNoMarkdown: z.boolean().optional(),
 })
 
 const ProjectSchema = z.object({
@@ -123,6 +128,15 @@ register('projects.upsert', async (raw) => {
     }
     if (incoming.llmDefaults.accountId !== undefined) {
       project.llmDefaults.accountId = incoming.llmDefaults.accountId
+    }
+    if (incoming.llmDefaults.mcpServerIds !== undefined) {
+      project.llmDefaults.mcpServerIds = incoming.llmDefaults.mcpServerIds
+    }
+    if (incoming.llmDefaults.responseStyle !== undefined) {
+      project.llmDefaults.responseStyle = incoming.llmDefaults.responseStyle
+    }
+    if (incoming.llmDefaults.responseStyleNoMarkdown !== undefined) {
+      project.llmDefaults.responseStyleNoMarkdown = incoming.llmDefaults.responseStyleNoMarkdown
     }
   }
 

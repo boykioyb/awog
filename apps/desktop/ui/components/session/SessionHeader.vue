@@ -221,6 +221,16 @@ watch(
   },
 )
 
+// Keep the header in sync when the title is renamed elsewhere (e.g. from the
+// session list) for the *same* session — the id watcher above never fires in
+// that case. Title only commits on blur here, so this won't clobber typing.
+watch(
+  () => props.session.title,
+  (title) => {
+    titleDraft.value = title
+  },
+)
+
 watch(showProjectMenu, async (open) => {
   if (!open) return
   await nextTick()

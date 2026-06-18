@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import type { ProjectLlmDefaults, ProviderAccount, ProviderName, ThinkingLevel } from '~/types'
-import { levelsForModel, modelById, modelsForProvider, type ModelDef } from '~/utils/models'
+import { levelsForModel, modelsForProvider, resolveModelDef, type ModelDef } from '~/utils/models'
 
 // Editable draft for a project's session LLM defaults. `accountId` undefined =
 // follow the provider's active account (no per-project pin).
@@ -9,6 +9,11 @@ export interface LlmDefaultsDraft {
   accountId: string | undefined
   modelId: string
   level: ThinkingLevel
+  // MCP whitelist for new sessions. undefined = all enabled servers (default).
+  mcpServerIds: string[] | undefined
+  // Response style (ADR 0046) for new sessions. undefined = "Normal" (no style).
+  responseStyle: string | undefined
+  responseStyleNoMarkdown: boolean
 }
 
 const PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'google']
@@ -37,6 +42,9 @@ export const useProjectLlmDefaults = (
     accountId: undefined,
     modelId: settings.defaults.modelId,
     level: settings.defaults.thinkingLevel,
+    mcpServerIds: undefined,
+    responseStyle: undefined,
+    responseStyleNoMarkdown: false,
   })
 
   const draft = ref<LlmDefaultsDraft>(appDefault())
@@ -49,7 +57,15 @@ export const useProjectLlmDefaults = (
       if (!open) return
       const ld = project.value?.llmDefaults
       draft.value = ld
-        ? { provider: ld.provider, accountId: ld.accountId, modelId: ld.modelId, level: ld.level }
+        ? {
+            provider: ld.provider,
+            accountId: ld.accountId,
+            modelId: ld.modelId,
+            level: ld.level,
+            mcpServerIds: ld.mcpServerIds ? [...ld.mcpServerIds] : undefined,
+            responseStyle: ld.responseStyle,
+            responseStyleNoMarkdown: ld.responseStyleNoMarkdown ?? false,
+          }
         : appDefault()
     },
     { immediate: true },
@@ -71,18 +87,7 @@ export const useProjectLlmDefaults = (
 
   const availableModels = computed<ModelDef[]>(() => {
     if (accountModels.value.length) {
-      return accountModels.value.map(
-        (id) =>
-          modelById(id) ?? {
-            id,
-            label: id,
-            vendor: 'Custom endpoint',
-            tier: 'Custom',
-            provider: draft.value.provider,
-            supportsThinking: false,
-            maxLevel: 'low' as ThinkingLevel,
-          },
-      )
+      return accountModels.value.map((id) => resolveModelDef(id, draft.value.provider))
     }
     return modelsForProvider(draft.value.provider)
   })
@@ -128,6 +133,37 @@ export const useProjectLlmDefaults = (
     draft.value.level = lv
   }
 
+  // ─── MCP whitelist ──────────────────────────────────────────────────────
+  // Same semantics as the per-session chip: undefined = all enabled servers,
+  // explicit array = whitelist (first toggle materialises the full list so a
+  // tick reads as include and an untick as exclude).
+  const mcpEnabledServers = computed(() => ws.mcpServers.filter((s) => s.enabled))
+  const isMcpCustomized = computed(() => draft.value.mcpServerIds !== undefined)
+  const isMcpActive = (id: string): boolean => {
+    const list = draft.value.mcpServerIds
+    return list === undefined ? true : list.includes(id)
+  }
+  const toggleMcp = (id: string) => {
+    const current = draft.value.mcpServerIds ?? mcpEnabledServers.value.map((s) => s.id)
+    const set = new Set(current)
+    if (set.has(id)) set.delete(id)
+    else set.add(id)
+    draft.value.mcpServerIds = [...set]
+  }
+  const resetMcp = () => {
+    draft.value.mcpServerIds = undefined
+  }
+
+  // ─── Response style (ADR 0046) ──────────────────────────────────────────
+  // undefined = "Normal" (no style directive). The no-markdown modifier is
+  // orthogonal — it can apply on its own.
+  const setResponseStyle = (id: string | undefined) => {
+    draft.value.responseStyle = id
+  }
+  const setNoMarkdown = (v: boolean) => {
+    draft.value.responseStyleNoMarkdown = v
+  }
+
   const save = async () => {
     const p = project.value
     if (!p) return
@@ -137,6 +173,10 @@ export const useProjectLlmDefaults = (
       level: draft.value.level,
     }
     if (draft.value.accountId) llmDefaults.accountId = draft.value.accountId
+    if (draft.value.mcpServerIds !== undefined)
+      llmDefaults.mcpServerIds = [...draft.value.mcpServerIds]
+    if (draft.value.responseStyle) llmDefaults.responseStyle = draft.value.responseStyle
+    if (draft.value.responseStyleNoMarkdown) llmDefaults.responseStyleNoMarkdown = true
     await ws.updateProject({ ...p, llmDefaults })
   }
 
@@ -159,10 +199,17 @@ export const useProjectLlmDefaults = (
     currentModel,
     isProviderConnected,
     hasCustomDefaults,
+    mcpEnabledServers,
+    isMcpCustomized,
+    isMcpActive,
+    toggleMcp,
+    resetMcp,
     setProvider,
     setAccount,
     setModel,
     setLevel,
+    setResponseStyle,
+    setNoMarkdown,
     save,
     resetToAppDefault,
   }

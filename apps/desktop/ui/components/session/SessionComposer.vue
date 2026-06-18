@@ -349,6 +349,7 @@
          row above the input; the attach button sits next to Send. -->
     <div class="flex items-center gap-1 mt-1.5">
       <SessionChipsPopover :session="session" :only="['account', 'model']" />
+      <SessionStylePicker ref="stylePickerRef" :session="session" />
       <div class="ml-auto flex items-center gap-1">
         <SessionContextStatus :session="session" />
       </div>
@@ -389,6 +390,8 @@ const draft = ref('')
 const composerFocus = ref(false)
 const textareaRef = useTemplateRef<HTMLTextAreaElement>('textareaRef')
 const fileInputRef = ref<HTMLInputElement | null>(null)
+// Response-style popover (ADR 0046) — opened by the `/style` command dispatch.
+const stylePickerRef = useTemplateRef<{ open: () => void }>('stylePickerRef')
 const pendingAttachments = ref<SessionAttachment[]>([])
 
 // Drag the top grip to resize the whole composer block. Writes the textarea's
@@ -466,9 +469,16 @@ const onCommand = (commandId: string) => {
     store.updateSettings(props.session.id, { mode: cmd.action.mode })
     showNotice(`Mode → ${cmd.name}`)
   } else if (cmd.action.type === 'compact') {
-    // Runs the SDK context compaction (ADR 0023). Feedback lands as a system
-    // note in the transcript, so no composer notice is needed here.
-    store.compactSession(props.session.id)
+    // Manual /compact (ADR 0047) is aggressive: keepRecentTokens 0 → keep only
+    // the last turn so it compacts even a short conversation. The store shows the
+    // running state (spinner + Stop); we surface the outcome as a composer notice.
+    void store
+      .compactSession(props.session.id, { keepRecentTokens: 0 })
+      .then((result) => showNotice(tr(`session.compaction.notice.${result}`)))
+  } else if (cmd.action.type === 'style') {
+    // `/style` opens the response-style popover (ADR 0046) — the same picker as
+    // the toolbar chip, not a text expansion.
+    stylePickerRef.value?.open()
   }
 }
 

@@ -23,6 +23,7 @@ export const useSettingsSync = () => {
     workspacePath: store.workspacePath,
     autoApprove: store.autoApprove,
     notificationsEnabled: store.notificationsEnabled,
+    autoCompact: store.autoCompact,
   })
 
   // Suppress the write-back the deep-watch would fire while we apply file values.
@@ -42,6 +43,7 @@ export const useSettingsSync = () => {
       if (typeof raw.autoApprove === 'boolean') store.autoApprove = raw.autoApprove
       if (typeof raw.notificationsEnabled === 'boolean')
         store.notificationsEnabled = raw.notificationsEnabled
+      if (typeof raw.autoCompact === 'boolean') store.autoCompact = raw.autoCompact
       if (raw.themeMode === 'dark' || raw.themeMode === 'light') setTheme(raw.themeMode)
     } finally {
       // Release after the watcher flush so the applied values don't echo back.

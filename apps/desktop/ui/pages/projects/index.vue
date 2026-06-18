@@ -591,6 +591,9 @@ const llmSummary = computed<{ custom: boolean; text: string }>(() => {
     const acc = settingsStore.providers[ld.provider]?.accounts.find((a) => a.id === ld.accountId)
     if (acc) parts.push(acc.label)
   }
+  if (ld.mcpServerIds !== undefined) {
+    parts.push(tr('project.llm.mcp_count', { n: ld.mcpServerIds.length }))
+  }
   return { custom: true, text: parts.join(' · ') }
 })
 
