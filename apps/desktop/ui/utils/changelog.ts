@@ -30,6 +30,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.18.0',
+    date: '2026-06-18',
+    highlight: {
+      en: 'Open several workspace panels at once and dock them beside the chat, plus a refreshed interface.',
+      vi: 'Mở nhiều bảng workspace cùng lúc và ghim cạnh khung chat, cùng giao diện làm mới.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Multi-tab workspace panel: open Files, Terminal, Diff, and the other tools side by side and switch between them with a tab strip — opening Terminal no longer closes Files, and each tab stays alive (the terminal keeps running) while hidden.',
+        vi: 'Bảng workspace đa tab: mở Files, Terminal, Diff và các công cụ khác cùng lúc rồi chuyển qua lại bằng thanh tab — mở Terminal không còn đóng Files, và mỗi tab vẫn sống (terminal vẫn chạy) khi bị ẩn.',
+      },
+      {
+        kind: 'changed',
+        en: 'The workspace panel is now a split pane that docks beside the chat and pushes it aside (right, left, or bottom) instead of floating on top — the chat always keeps a readable minimum width.',
+        vi: 'Bảng workspace giờ là split pane ghim cạnh khung chat và đẩy chat sang bên (phải, trái hoặc dưới) thay vì nổi đè lên — chat luôn giữ một độ rộng tối thiểu để đọc được.',
+      },
+      {
+        kind: 'improved',
+        en: 'When the chat column is narrow, the session header and the model chip shrink to an ellipsis instead of wrapping onto extra lines.',
+        vi: 'Khi cột chat hẹp, header của phiên và chip model co lại bằng dấu “…” thay vì xuống thêm dòng.',
+      },
+      {
+        kind: 'changed',
+        en: 'Refreshed interface for Git, modals, and drawers, rebuilt on a new shadcn-style component set (cards, badges, inputs, menus) with the Geist typeface.',
+        vi: 'Giao diện làm mới cho Git, modal và drawer, dựng lại trên bộ component kiểu shadcn (card, badge, input, menu) cùng phông chữ Geist.',
+      },
+    ],
+  },
+  {
     version: '0.17.0',
     date: '2026-06-18',
     highlight: {
