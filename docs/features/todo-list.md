@@ -26,7 +26,7 @@ Parse dùng chung qua [runtime/todos.ts](../../apps/desktop/sidecar/src/runtime/
 
 ## Hành vi
 
-- **Sessions**: một panel "TODOS" ghim cố định trên composer (ngoài vùng cuộn message), hiển thị checklist TodoWrite **mới nhất** của cả phiên. Vì bám note step mới nhất trên toàn bộ messages (không phải một bubble cố định), nó **luôn thấy khi cuộn message dài** và **vẫn cập nhật sau khi cancel rồi tiếp tục** (lượt mới ghi todos vào message mới, panel tự bắt). Tự ẩn khi không có todo hoặc đã hoàn thành hết.
+- **Sessions**: một panel "TODOS" ghim cố định trên composer (ngoài vùng cuộn message), hiển thị checklist TodoWrite **mới nhất** của cả phiên. Vì bám note step mới nhất trên toàn bộ messages (không phải một bubble cố định), nó **luôn thấy khi cuộn message dài** và **vẫn cập nhật sau khi cancel rồi tiếp tục** (lượt mới ghi todos vào message mới, panel tự bắt). Panel là chỉ báo tiến độ **đang chạy**: chỉ hiện khi turn còn in-flight (kể cả đang park hỏi/permission, qua `isSessionStreaming`), tự ẩn khi session idle hoặc đã hoàn thành hết. Lý do gate theo trạng thái chạy: model thường kết thúc lượt mà để item cuối ở `in_progress` (không gọi TodoWrite chốt `completed`) — nếu chỉ dựa `done < total` thì panel kẹt mãi ở kiểu "3/4".
 - **Tasks**: mỗi lần gọi TodoWrite là một node `todo` trong trace (trace là log thời gian, giữ từng lần gọi).
 - **Legacy**: note step cũ chỉ có `detail.text` (chưa có `todos`) không còn surface trong Sessions (panel ghim chỉ đọc `todos`); nhánh fallback text trong StepItem vẫn giữ cho các nơi khác render note step trực tiếp.
 

@@ -83,9 +83,18 @@ const latestTodos = computed<TodoItem[]>(() => {
 
 const total = computed(() => latestTodos.value.length)
 const done = computed(() => latestTodos.value.filter((todo) => todo.status === 'completed').length)
-// Hidden once there's nothing to do or every item is checked — the panel is for
-// in-progress plans, not a permanent fixture.
-const visible = computed(() => total.value > 0 && done.value < total.value)
+
+// The panel is a LIVE progress affordance: shown only while a turn is in flight
+// (including parked on a question/permission), and hidden once the session goes
+// idle. This matters because the model frequently ends a turn leaving the last
+// item at `in_progress` instead of emitting a final TodoWrite that marks it
+// `completed` — gating on `done < total` alone would strand the panel at e.g.
+// "3/4" forever. When idle, the reply text already carries the conclusion, so
+// the checklist has no live role; the next turn re-shows it when todos update.
+const store = useSessionsStore()
+const isRunning = computed(() => store.isSessionStreaming(props.session.id))
+// Also hidden when there's nothing to do or every item is already checked.
+const visible = computed(() => isRunning.value && total.value > 0 && done.value < total.value)
 
 const collapsed = ref(false)
 
