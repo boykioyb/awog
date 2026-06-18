@@ -90,9 +90,11 @@ const bgFor = (kind: DiffLineKind) => {
   return 'transparent'
 }
 
+// Add/del rows carry the change signal via the row tint (green/del red), so the
+// text itself uses the normal readable foreground — black on light, white on dark
+// — instead of a low-contrast green/red that washes out over the tint.
 const colorFor = (kind: DiffLineKind) => {
-  if (kind === 'add') return '#86efac'
-  if (kind === 'del') return '#fca5a5'
+  if (kind === 'add' || kind === 'del') return t.value.text
   return t.value.textMuted
 }
 

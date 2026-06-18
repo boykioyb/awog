@@ -58,11 +58,13 @@ const rows = computed<Row[]>(() => {
       color = t.value.info
       isMeta = true
     } else if (line.startsWith('+')) {
+      // Row tint signals the change; text stays the readable foreground
+      // (black on light / white on dark) instead of low-contrast green-on-green.
       bg = 'rgba(34, 197, 94, 0.08)'
-      color = '#86efac'
+      color = t.value.text
     } else if (line.startsWith('-')) {
       bg = 'rgba(239, 68, 68, 0.08)'
-      color = '#fca5a5'
+      color = t.value.text
     } else {
       color = t.value.textMuted
     }

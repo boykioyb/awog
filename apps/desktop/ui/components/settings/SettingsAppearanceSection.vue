@@ -14,6 +14,17 @@
         </div>
       </SettingsField>
 
+      <SettingsField label="Style" hint="AWOG palette or authentic shadcn.com slate">
+        <AppSelect
+          :model-value="appearance.themeFamily"
+          @update:model-value="(v) => onUpdate({ themeFamily: v })"
+        >
+          <option v-for="o in THEME_FAMILY_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </option>
+        </AppSelect>
+      </SettingsField>
+
       <SettingsField label="Sans font" hint="Body and UI typography">
         <AppSelect
           :model-value="appearance.sansFamily"
@@ -76,66 +87,68 @@
         </AppSelect>
       </SettingsField>
 
-      <SettingsField
-        label="Theme color"
-        hint="Hue tint or full background base across surfaces"
-        block
-      >
-        <ColorSwatchPicker
-          :presets="themeColorPresets"
-          :selected="appearance.themeColor"
-          :custom-hex="appearance.themeColorCustom"
-          @pick="onThemeColorPick"
-          @pick-custom="onThemeColorCustom"
-        />
-        <div
-          class="mt-3 space-y-1 transition-opacity"
-          :style="{ opacity: themeColorTints ? 1 : 0.4 }"
-          :title="themeColorTints ? undefined : 'Not applicable for this color'"
+      <template v-if="appearance.themeFamily === 'awog'">
+        <SettingsField
+          label="Theme color"
+          hint="Hue tint or full background base across surfaces"
+          block
         >
-          <div class="flex items-center justify-between" :style="{ color: t.textDim }">
-            <span class="text-[1em]">Tint strength</span>
-            <span class="text-[12px] font-mono leading-none" :style="{ color: t.textMuted }">
-              {{ appearance.themeColorStrength }}%
-            </span>
-          </div>
-          <input
-            v-model.number="appearance.themeColorStrength"
-            type="range"
-            :min="THEME_STRENGTH_MIN"
-            :max="THEME_STRENGTH_MAX"
-            step="1"
-            :disabled="!themeColorTints"
-            class="w-full disabled:cursor-not-allowed"
-            @input="onUpdate({ themeColorStrength: appearance.themeColorStrength })"
+          <ColorSwatchPicker
+            :presets="themeColorPresets"
+            :selected="appearance.themeColor"
+            :custom-hex="appearance.themeColorCustom"
+            @pick="onThemeColorPick"
+            @pick-custom="onThemeColorCustom"
           />
-        </div>
-      </SettingsField>
-
-      <SettingsField label="Accent color" hint="Buttons, links, focus rings, active items" block>
-        <ColorSwatchPicker
-          :presets="ACCENT_PRESETS"
-          :selected="appearance.accent"
-          :custom-hex="appearance.accentCustom"
-          @pick="onAccentPick"
-          @pick-custom="onAccentCustom"
-        />
-      </SettingsField>
-
-      <SettingsField label="Surface depth" hint="Layer contrast between panels">
-        <div class="flex rounded overflow-hidden" :style="{ border: `1px solid ${t.border}` }">
-          <button
-            v-for="o in SURFACE_DEPTH_OPTIONS"
-            :key="o.value"
-            class="flex-1 px-3 py-1.5 text-[1em] transition-colors"
-            :style="depthStyle(o.value)"
-            :title="o.hint"
-            @click="onUpdate({ surfaceDepth: o.value })"
+          <div
+            class="mt-3 space-y-1 transition-opacity"
+            :style="{ opacity: themeColorTints ? 1 : 0.4 }"
+            :title="themeColorTints ? undefined : 'Not applicable for this color'"
           >
-            {{ o.label }}
-          </button>
-        </div>
-      </SettingsField>
+            <div class="flex items-center justify-between" :style="{ color: t.textDim }">
+              <span class="text-[1em]">Tint strength</span>
+              <span class="text-[12px] font-mono leading-none" :style="{ color: t.textMuted }">
+                {{ appearance.themeColorStrength }}%
+              </span>
+            </div>
+            <input
+              v-model.number="appearance.themeColorStrength"
+              type="range"
+              :min="THEME_STRENGTH_MIN"
+              :max="THEME_STRENGTH_MAX"
+              step="1"
+              :disabled="!themeColorTints"
+              class="w-full disabled:cursor-not-allowed"
+              @input="onUpdate({ themeColorStrength: appearance.themeColorStrength })"
+            />
+          </div>
+        </SettingsField>
+
+        <SettingsField label="Accent color" hint="Buttons, links, focus rings, active items" block>
+          <ColorSwatchPicker
+            :presets="ACCENT_PRESETS"
+            :selected="appearance.accent"
+            :custom-hex="appearance.accentCustom"
+            @pick="onAccentPick"
+            @pick-custom="onAccentCustom"
+          />
+        </SettingsField>
+
+        <SettingsField label="Surface depth" hint="Layer contrast between panels">
+          <div class="flex rounded overflow-hidden" :style="{ border: `1px solid ${t.border}` }">
+            <button
+              v-for="o in SURFACE_DEPTH_OPTIONS"
+              :key="o.value"
+              class="flex-1 px-3 py-1.5 text-[1em] transition-colors"
+              :style="depthStyle(o.value)"
+              :title="o.hint"
+              @click="onUpdate({ surfaceDepth: o.value })"
+            >
+              {{ o.label }}
+            </button>
+          </div>
+        </SettingsField>
+      </template>
 
       <SettingsField label="Liquid Glass" hint="Translucent frosted surfaces + ambient backdrop">
         <AppToggle
@@ -231,6 +244,7 @@ import {
   FONT_SIZE_MIN,
   MONO_OPTIONS,
   SANS_OPTIONS,
+  THEME_FAMILY_OPTIONS,
   THEME_STRENGTH_MAX,
   THEME_STRENGTH_MIN,
   WEIGHT_OPTIONS,

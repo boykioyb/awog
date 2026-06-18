@@ -1031,7 +1031,7 @@ export type EditorDiffStats = {
 }
 
 export type SansFontFamily = 'system' | 'inter' | 'geist'
-export type MonoFontFamily = 'system' | 'jetbrains-mono' | 'fira-code'
+export type MonoFontFamily = 'system' | 'jetbrains-mono' | 'fira-code' | 'geist-mono'
 export type FontWeight = 300 | 400 | 500 | 600 | 700
 export type AccentPreset =
   | 'mono'
@@ -1055,6 +1055,14 @@ export type BackgroundPreset = 'github-dark' | 'subtle-purple'
 export type ThemeColor = AccentPreset | BackgroundPreset | 'custom'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 
+/**
+ * Theme family = the base neutral palette + design language.
+ * - 'awog'  — the AWOG palette (accent presets, surface-depth, theme-color tint).
+ * - 'shadcn' — authentic shadcn.com slate palette (dark + light); ignores the
+ *   accent/theme-color/surface-depth controls (uses its own neutral relationships).
+ */
+export type ThemeFamily = 'awog' | 'shadcn'
+
 export type AppLocale = 'en' | 'vi'
 
 // Which keyboard chord sends a message in the session composer.
@@ -1063,6 +1071,9 @@ export type AppLocale = 'en' | 'vi'
 export type ComposerSendKey = 'enter' | 'shift-enter'
 
 export interface AppearanceSettings {
+  // Base neutral palette / design language. 'shadcn' switches to the authentic
+  // shadcn.com slate look (dark + light) and ignores accent/themeColor/depth.
+  themeFamily: ThemeFamily
   sansFamily: SansFontFamily
   monoFamily: MonoFontFamily
   fontSize: number

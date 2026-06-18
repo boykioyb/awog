@@ -9,6 +9,7 @@ import type {
   SansFontFamily,
   SurfaceDepth,
   ThemeColor,
+  ThemeFamily,
 } from '~/types'
 import { DEFAULT_APPEARANCE, useSettingsStore } from '~/stores/settings'
 
@@ -16,17 +17,22 @@ const STORAGE_KEY = 'awog.appearance.v1'
 // One-time flag (ADR 0044): nudge installs still on the old monochrome/flat
 // defaults to the new emerald/standard look once, preserving explicit picks.
 const SHADCN_MIGRATION_KEY = 'awog.appearance.migrated.shadcn.v2'
+// One-time nudge to the bundled Geist fonts (ADR 0044 follow-up).
+const FONT_MIGRATION_KEY = 'awog.appearance.migrated.geist.v1'
 
 const SANS_STACKS: Record<SansFontFamily, string> = {
   system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  geist: "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  // Self-hosted via @fontsource-variable/geist (the shadcn.com typeface).
+  geist: "'Geist Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 }
 
 const MONO_STACKS: Record<MonoFontFamily, string> = {
   system: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
   'jetbrains-mono': "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
   'fira-code': "'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace",
+  // Self-hosted via @fontsource-variable/geist-mono.
+  'geist-mono': "'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace",
 }
 
 export const SANS_OPTIONS: { value: SansFontFamily; label: string }[] = [
@@ -36,9 +42,15 @@ export const SANS_OPTIONS: { value: SansFontFamily; label: string }[] = [
 ]
 
 export const MONO_OPTIONS: { value: MonoFontFamily; label: string }[] = [
+  { value: 'geist-mono', label: 'Geist Mono' },
   { value: 'system', label: 'System mono' },
   { value: 'jetbrains-mono', label: 'JetBrains Mono' },
   { value: 'fira-code', label: 'Fira Code' },
+]
+
+export const THEME_FAMILY_OPTIONS: { value: ThemeFamily; label: string }[] = [
+  { value: 'awog', label: 'AWOG' },
+  { value: 'shadcn', label: 'Shadcn (slate)' },
 ]
 
 export const WEIGHT_OPTIONS: { value: FontWeight; label: string }[] = [
@@ -56,7 +68,13 @@ export const THEME_STRENGTH_MIN = 0
 export const THEME_STRENGTH_MAX = 50
 
 const SANS_VALUES: readonly SansFontFamily[] = ['system', 'inter', 'geist']
-const MONO_VALUES: readonly MonoFontFamily[] = ['system', 'jetbrains-mono', 'fira-code']
+const MONO_VALUES: readonly MonoFontFamily[] = [
+  'system',
+  'jetbrains-mono',
+  'fira-code',
+  'geist-mono',
+]
+const THEME_FAMILY_VALUES: readonly ThemeFamily[] = ['awog', 'shadcn']
 const WEIGHT_VALUES: readonly FontWeight[] = [300, 400, 500, 600, 700]
 const ACCENT_VALUES: readonly AccentPreset[] = [
   'mono',
@@ -105,6 +123,7 @@ export const coerceAppearance = (raw: unknown): AppearanceSettings => {
       ? v.themeColorStrength
       : DEFAULT_APPEARANCE.themeColorStrength
   return {
+    themeFamily: pick(v.themeFamily, THEME_FAMILY_VALUES, DEFAULT_APPEARANCE.themeFamily),
     sansFamily: pick(v.sansFamily, SANS_VALUES, DEFAULT_APPEARANCE.sansFamily),
     monoFamily: pick(v.monoFamily, MONO_VALUES, DEFAULT_APPEARANCE.monoFamily),
     fontSize,
@@ -176,6 +195,14 @@ export const useAppearance = () => {
           persisted.themeColorStrength = DEFAULT_APPEARANCE.themeColorStrength
         }
         window.localStorage.setItem(SHADCN_MIGRATION_KEY, '1')
+      }
+      // One-time nudge to the bundled Geist fonts (the shadcn.com typeface) — only
+      // when still on the previous system/JetBrains defaults, leaving explicit picks.
+      if (import.meta.client && !window.localStorage.getItem(FONT_MIGRATION_KEY)) {
+        if (persisted.sansFamily === 'system') persisted.sansFamily = DEFAULT_APPEARANCE.sansFamily
+        if (persisted.monoFamily === 'jetbrains-mono')
+          persisted.monoFamily = DEFAULT_APPEARANCE.monoFamily
+        window.localStorage.setItem(FONT_MIGRATION_KEY, '1')
       }
       store.appearance = persisted
     }

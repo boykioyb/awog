@@ -229,3 +229,84 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     },
   },
 }
+
+// ─── Shadcn (slate) theme family ─────────────────────────────────────────────
+// Authentic shadcn.com "slate" palette mapped onto AWOG's token shape. Selected
+// via `appearance.themeFamily === 'shadcn'`; useTheme returns these as-is (the
+// accent/theme-color/surface-depth controls don't apply — slate defines its own
+// neutral relationships). The shadcn token bridge derives correctly from these
+// (card = bg, separated by a visible border; secondary/muted/accent = one slate
+// gray distinct from card; primary = slate-900/50). Semantic/git/syntax tokens
+// inherit from the matching AWOG base theme.
+//
+// shadcn slate scale: 50 #f8fafc · 100 #f1f5f9 · 200 #e2e8f0 · 300 #cbd5e1 ·
+// 400 #94a3b8 · 500 #64748b · 600 #475569 · 700 #334155 · 800 #1e293b ·
+// 900 #0f172a · 950 #020817.
+const SHADCN_DARK: Partial<ThemeTokens> = {
+  bg: '#020817',
+  bgPanel: '#020817',
+  bgCanvas: '#0b1220',
+  bgElevated: '#020817', // card == background; separated by border (shadcn way)
+  bgHover: '#1e293b', // → accent (hover/selected fill)
+  bgActive: '#1e293b', // → secondary
+  bgInput: '#1e293b', // → muted
+  bgRail: '#020817',
+  bgSubtle: '#0b1220',
+  bubbleBg: '#0f172a',
+  border: '#1e293b', // slate-800 — clearly visible (the shadcn signature)
+  borderStrong: '#334155',
+  borderFocus: '#cbd5e1',
+  text: '#f8fafc',
+  textMuted: '#94a3b8', // slate-400 → muted-foreground
+  textDim: '#64748b',
+  textFaint: '#475569',
+  accent: '#f8fafc', // → primary (near-white)
+  accentHover: '#e2e8f0',
+  accentText: '#0f172a',
+  accentMuted: '#94a3b8',
+  onAccent: '#0f172a',
+  dotPattern: '#1e293b',
+  edge: '#475569',
+  glassBg: 'rgba(2, 8, 23, 0.72)',
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  glassHighlight: 'rgba(255, 255, 255, 0.06)',
+  glassActive: 'rgba(255, 255, 255, 0.10)',
+  glassHover: 'rgba(255, 255, 255, 0.05)',
+}
+
+const SHADCN_LIGHT: Partial<ThemeTokens> = {
+  bg: '#ffffff',
+  bgPanel: '#ffffff',
+  bgCanvas: '#f8fafc',
+  bgElevated: '#ffffff', // card == background; border does the separation
+  bgHover: '#f1f5f9', // → accent
+  bgActive: '#f1f5f9', // → secondary
+  bgInput: '#f1f5f9', // → muted (slate-100)
+  bgRail: '#f8fafc',
+  bgSubtle: '#f8fafc',
+  bubbleBg: '#ffffff',
+  border: '#e2e8f0', // slate-200 — visible hairline on white
+  borderStrong: '#cbd5e1',
+  borderFocus: '#020817',
+  text: '#020817', // slate-950
+  textMuted: '#64748b', // slate-500 → muted-foreground
+  textDim: '#64748b',
+  textFaint: '#94a3b8',
+  accent: '#0f172a', // → primary (slate-900 dark button)
+  accentHover: '#1e293b',
+  accentText: '#f8fafc',
+  accentMuted: '#64748b',
+  onAccent: '#ffffff',
+  dotPattern: '#e2e8f0',
+  edge: '#94a3b8',
+  glassBg: 'rgba(255, 255, 255, 0.85)',
+  glassBorder: 'rgba(2, 8, 23, 0.08)',
+  glassHighlight: 'rgba(255, 255, 255, 0.9)',
+  glassActive: 'rgba(2, 8, 23, 0.06)',
+  glassHover: 'rgba(2, 8, 23, 0.04)',
+}
+
+export const SHADCN_THEMES: Record<ThemeName, ThemeTokens> = {
+  dark: { ...THEMES.dark, ...SHADCN_DARK },
+  light: { ...THEMES.light, ...SHADCN_LIGHT },
+}

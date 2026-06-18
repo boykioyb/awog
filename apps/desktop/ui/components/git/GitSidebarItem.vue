@@ -1,37 +1,46 @@
 <template>
   <button
-    class="group flex items-center gap-2 w-full px-2 py-1 transition select-none"
-    :style="rowStyle"
+    class="group flex w-full items-center gap-2 rounded-md py-1 pr-2 text-[1em] transition-colors"
+    :class="
+      active
+        ? 'bg-accent text-accent-foreground'
+        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+    "
+    :style="{ paddingLeft: `${basePaddingLeft}px` }"
     @click="emit('select')"
     @contextmenu.prevent="(ev: MouseEvent) => emit('context', ev)"
   >
-    <component :is="icon" v-if="icon" :size="12" :style="{ color: iconColor, flexShrink: 0 }" />
+    <component
+      :is="icon"
+      v-if="icon"
+      :size="12"
+      class="shrink-0"
+      :class="iconTone === 'accent' ? 'text-primary' : ''"
+    />
     <span
-      class="text-[1em] flex-1 truncate text-left"
-      :class="[mono ? 'font-mono' : '', highlight ? 'font-medium' : '']"
-      :style="{ color: labelColor }"
+      class="flex-1 truncate text-left"
+      :class="[mono ? 'font-mono' : '', highlight ? 'font-medium text-primary' : '']"
     >
       {{ label }}
     </span>
-    <span
-      v-if="hint"
-      class="text-[12px] flex-shrink-0 font-mono leading-none"
-      :style="{ color: hintColor }"
-    >
+    <span v-if="hint" class="shrink-0 font-mono text-[12px] leading-none text-muted-foreground">
       {{ hint }}
     </span>
-    <span
+    <Badge
       v-if="badge !== null && badge !== undefined"
-      class="text-[12px] flex-shrink-0 px-1.5 py-0.5 rounded font-medium font-mono leading-none inline-flex items-center justify-center"
-      :style="{ ...badgeStyle, minWidth: '18px' }"
+      :variant="badgeVariant"
+      size="sm"
+      class="font-mono"
     >
       {{ badge }}
-    </span>
+    </Badge>
   </button>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Component } from 'vue'
+import { Badge } from '~/components/ui/badge'
 
 type IconTone = 'normal' | 'dim' | 'accent'
 type BadgeTone = 'warning' | 'danger' | 'accent'
@@ -67,47 +76,14 @@ const emit = defineEmits<{
   context: [event: MouseEvent]
 }>()
 
-const { t } = useTheme()
-const { pill } = useGlass()
-
 const basePaddingLeft = computed(() => 8 + props.indent * 14)
 
-const rowStyle = computed(() => ({
-  paddingLeft: `${basePaddingLeft.value}px`,
-  paddingRight: '8px',
-  background: pill(props.active).background,
-  borderLeft: `2px solid ${props.active ? t.value.accent : 'transparent'}`,
-  cursor: 'pointer',
-}))
-
-const iconColor = computed(() => {
-  if (props.iconTone === 'accent') return t.value.accent
-  if (props.iconTone === 'dim') return t.value.textDim
-  return props.active ? t.value.text : t.value.textDim
-})
-
-const labelColor = computed(() => {
-  if (props.highlight) return t.value.accent
-  return props.active ? t.value.text : t.value.textMuted
-})
-const hintColor = computed(() => t.value.textDim)
-
-const badgeStyle = computed(() => {
-  if (props.badgeTone === 'warning') {
-    return {
-      background: t.value.warningBg,
-      color: t.value.warning,
-    }
-  }
-  if (props.badgeTone === 'danger') {
-    return {
-      background: t.value.dangerBg,
-      color: t.value.danger,
-    }
-  }
-  return {
-    background: t.value.bgInput,
-    color: t.value.textMuted,
-  }
+// AWOG badge tone → shadcn Badge variant. Neutral (accent) → `outline`: filled
+// neutral chips (secondary/muted) are invisible on a card in this theme (card ≈
+// secondary ≈ #161616), so a hairline border is what reads.
+const badgeVariant = computed<'warning' | 'destructive' | 'outline'>(() => {
+  if (props.badgeTone === 'warning') return 'warning'
+  if (props.badgeTone === 'danger') return 'destructive'
+  return 'outline'
 })
 </script>

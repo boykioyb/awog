@@ -1,5 +1,5 @@
 import { storeToRefs } from 'pinia'
-import { THEMES, type ThemeName, type ThemeTokens } from '~/utils/themes'
+import { SHADCN_THEMES, THEMES, type ThemeName, type ThemeTokens } from '~/utils/themes'
 import { applyThemeColor, getAccentOverride, getSurfaceOverride } from '~/utils/theme-presets'
 import { useSettingsStore } from '~/stores/settings'
 
@@ -59,6 +59,10 @@ export const useTheme = () => {
   const { appearance } = storeToRefs(useSettingsStore())
 
   const t = computed<ThemeTokens>(() => {
+    // Shadcn family uses its own authentic slate palette — the accent / theme-color
+    // / surface-depth controls don't apply (it defines its own neutral relationships).
+    if (appearance.value.themeFamily === 'shadcn') return SHADCN_THEMES[themeName.value]
+
     const base = THEMES[themeName.value]
     const surface = getSurfaceOverride(themeName.value, appearance.value.surfaceDepth)
     const withSurface: ThemeTokens = { ...base, ...surface }
@@ -108,7 +112,10 @@ export const useTheme = () => {
       setTok('popover-foreground', c.text)
       setTok('primary', c.accent)
       setTok('primary-foreground', c.accentText)
-      setTok('secondary', c.bgElevated)
+      // secondary ← bgActive (NOT bgElevated): bgElevated == card, so deriving
+      // secondary from it makes filled neutral chips invisible on a card. bgActive
+      // is a distinct surface → secondary/muted/accent read as one gray vs card.
+      setTok('secondary', c.bgActive)
       setTok('secondary-foreground', c.text)
       setTok('muted', c.bgInput)
       setTok('muted-foreground', c.textMuted)

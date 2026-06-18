@@ -100,16 +100,9 @@
         @close="showSaveStash = false"
       >
         <div class="p-4">
-          <input
+          <Input
             v-model="newStashMessage"
             :placeholder="tr('git.stash.placeholder')"
-            class="w-full rounded text-[1em] px-2 py-1.5"
-            :style="{
-              background: t.bgInput,
-              color: t.text,
-              border: `1px solid ${t.border}`,
-              outline: 'none',
-            }"
             @keydown.enter="onSaveStash"
           />
         </div>
@@ -265,6 +258,7 @@ import type { CheckInstalledResult } from '~/composables/useGitApi'
 import type { GitSection } from '~/components/git/git-section'
 import { isValidGitRef } from '~/utils/branch-tree'
 import { parseRemoteUrl, type RemoteRepo } from '~/utils/git-remote-url'
+import { Input } from '~/components/ui/input'
 
 // Optional project to pin (modal mode opened from a Session). In page mode the
 // prop is absent and bootstrap falls back to the previously selected project /

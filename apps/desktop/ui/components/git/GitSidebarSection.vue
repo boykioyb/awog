@@ -1,28 +1,31 @@
 <template>
   <div class="flex flex-col">
     <div
-      class="group flex items-center gap-1 px-2 py-1 cursor-pointer select-none"
-      :style="{ color: t.textDim }"
+      class="group flex cursor-pointer select-none items-center gap-1 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
       @click="emit('toggle')"
     >
       <ChevronRight v-if="!open" :size="11" />
       <ChevronDown v-else :size="11" />
-      <component :is="icon" v-if="icon" :size="12" :style="{ marginLeft: '2px' }" />
-      <span class="text-[1em] uppercase tracking-wider font-medium ml-1 flex-1 truncate">
+      <component :is="icon" v-if="icon" :size="12" class="ml-0.5" />
+      <span class="ml-1 flex-1 truncate text-[1em] font-medium uppercase tracking-wider">
         {{ label }}
       </span>
-      <span v-if="count !== undefined && count > 0" class="text-[12px] font-mono leading-none">
-        ({{ count }})
+      <span
+        v-if="count !== undefined && count > 0"
+        class="font-mono text-[12px] leading-none text-muted-foreground"
+      >
+        {{ count }}
       </span>
-      <button
+      <AppButton
         v-if="actionIcon"
-        class="opacity-0 group-hover:opacity-100 p-0.5 rounded transition"
+        variant="ghost"
+        size="icon"
+        class="opacity-0 transition group-hover:opacity-100"
         :title="actionTitle ?? ''"
-        :style="{ color: t.textDim }"
         @click.stop="emit('action')"
       >
         <component :is="actionIcon" :size="11" />
-      </button>
+      </AppButton>
     </div>
     <div v-if="open" class="flex flex-col">
       <slot />
@@ -54,6 +57,4 @@ const emit = defineEmits<{
   toggle: []
   action: []
 }>()
-
-const { t } = useTheme()
 </script>

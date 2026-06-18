@@ -195,8 +195,9 @@ interface SettingsState {
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
-  sansFamily: 'system',
-  monoFamily: 'jetbrains-mono',
+  themeFamily: 'awog',
+  sansFamily: 'geist',
+  monoFamily: 'geist-mono',
   fontSize: 12,
   fontWeight: 400,
   accent: 'emerald',

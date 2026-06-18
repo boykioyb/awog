@@ -1,25 +1,20 @@
 <template>
-  <div
-    class="relative flex flex-col h-full overflow-hidden flex-shrink-0 rounded-xl"
+  <Card
+    variant="flat"
+    class="relative flex h-full flex-col overflow-hidden shrink-0"
     :style="{
       width: collapsed ? '40px' : `${width}px`,
-      background: parts.bg,
-      backdropFilter: parts.blur,
-      border: `1px solid ${parts.border}`,
-      boxShadow: `0 4px 16px -10px ${t.shadow}`,
       transition: dragging ? 'none' : 'width 150ms ease',
     }"
   >
     <!-- Collapse toggle -->
     <div
-      class="flex items-center px-2 py-2 flex-shrink-0"
-      :style="{ borderBottom: `1px solid ${t.border}` }"
+      class="flex flex-shrink-0 items-center border-b border-border px-2 py-2"
       :class="collapsed ? 'justify-center' : 'justify-between'"
     >
       <span
         v-if="!collapsed"
-        class="text-[1em] uppercase tracking-wider px-2"
-        :style="{ color: t.textDim }"
+        class="px-2 text-[1em] uppercase tracking-wider text-muted-foreground"
       >
         {{ tr('git.sidebar.title') }}
       </span>
@@ -35,11 +30,7 @@
     </div>
 
     <!-- Branch search (local + remote) -->
-    <div
-      v-if="!collapsed"
-      class="px-2 py-2 flex-shrink-0"
-      :style="{ borderBottom: `1px solid ${t.border}` }"
-    >
+    <div v-if="!collapsed" class="flex-shrink-0 border-b border-border px-2 py-2">
       <SearchInput v-model="branchQuery" :placeholder="tr('git.sidebar.search_branches')" />
     </div>
 
@@ -74,8 +65,8 @@
       >
         <template v-if="branchRows.length === 0">
           <div
-            class="px-3 py-1.5 text-[1em] italic"
-            :style="{ color: t.textFaint, paddingLeft: '28px' }"
+            class="px-3 py-1.5 text-[1em] italic text-muted-foreground"
+            :style="{ paddingLeft: '28px' }"
           >
             {{ hasBranchQuery ? tr('git.sidebar.no_match') : tr('git.sidebar.empty') }}
           </div>
@@ -84,30 +75,20 @@
           <!-- Folder row: groups branches sharing a `/` prefix (sora-hoa/…) -->
           <button
             v-if="row.kind === 'folder'"
-            class="flex items-center gap-1.5 w-full py-1 pr-2 transition select-none"
-            :style="{
-              paddingLeft: `${8 + (row.depth + 1) * 14}px`,
-              cursor: 'pointer',
-              background: 'transparent',
-            }"
+            class="flex w-full select-none items-center gap-1.5 rounded-md py-1 pr-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            :style="{ paddingLeft: `${8 + (row.depth + 1) * 14}px` }"
             @click="toggleBranchFolder(row.id)"
           >
             <component
               :is="collapsedBranchFolders.has(row.id) ? ChevronRight : ChevronDown"
               :size="11"
-              :style="{ color: t.textDim, flexShrink: 0 }"
+              class="shrink-0"
             />
-            <Folder :size="12" :style="{ color: t.textDim, flexShrink: 0 }" />
-            <span
-              class="text-[1em] flex-1 truncate text-left font-mono"
-              :style="{ color: t.textMuted }"
-            >
+            <Folder :size="12" class="shrink-0" />
+            <span class="flex-1 truncate text-left font-mono text-[1em]">
               {{ row.displayName }}
             </span>
-            <span
-              class="text-[12px] flex-shrink-0 font-mono leading-none"
-              :style="{ color: t.textFaint }"
-            >
+            <span class="shrink-0 font-mono text-[12px] leading-none">
               {{ row.leafCount }}
             </span>
           </button>
@@ -138,8 +119,8 @@
       >
         <template v-if="visibleRemotes.length === 0">
           <div
-            class="px-3 py-1.5 text-[1em] italic"
-            :style="{ color: t.textFaint, paddingLeft: '28px' }"
+            class="px-3 py-1.5 text-[1em] italic text-muted-foreground"
+            :style="{ paddingLeft: '28px' }"
           >
             {{ hasBranchQuery ? tr('git.sidebar.no_match') : tr('git.sidebar.empty') }}
           </div>
@@ -176,8 +157,8 @@
         @toggle="open.tags = !open.tags"
       >
         <div
-          class="px-3 py-1.5 text-[1em] italic"
-          :style="{ color: t.textFaint, paddingLeft: '28px' }"
+          class="px-3 py-1.5 text-[1em] italic text-muted-foreground"
+          :style="{ paddingLeft: '28px' }"
         >
           {{ tr('git.sidebar.empty') }}
         </div>
@@ -196,8 +177,8 @@
       >
         <template v-if="store.stashes.length === 0">
           <div
-            class="px-3 py-1.5 text-[1em] italic"
-            :style="{ color: t.textFaint, paddingLeft: '28px' }"
+            class="px-3 py-1.5 text-[1em] italic text-muted-foreground"
+            :style="{ paddingLeft: '28px' }"
           >
             {{ tr('git.sidebar.empty') }}
           </div>
@@ -222,8 +203,8 @@
         @toggle="open.submodules = !open.submodules"
       >
         <div
-          class="px-3 py-1.5 text-[1em] italic"
-          :style="{ color: t.textFaint, paddingLeft: '28px' }"
+          class="px-3 py-1.5 text-[1em] italic text-muted-foreground"
+          :style="{ paddingLeft: '28px' }"
         >
           {{ tr('git.sidebar.empty') }}
         </div>
@@ -231,16 +212,17 @@
     </div>
 
     <!-- Collapsed quick icons -->
-    <div v-else class="flex-1 overflow-hidden flex flex-col items-center py-2 gap-1">
+    <div v-else class="flex flex-1 flex-col items-center gap-1 overflow-hidden py-2">
       <button
         v-for="quick in quickIcons"
         :key="quick.key"
-        class="p-2 rounded transition"
+        class="rounded-md p-2 transition-colors"
+        :class="
+          isActive(quick.section)
+            ? 'bg-accent text-accent-foreground'
+            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+        "
         :title="quick.title"
-        :style="{
-          color: isActive(quick.section) ? t.accent : t.textDim,
-          background: isActive(quick.section) ? t.bgHover : 'transparent',
-        }"
         @click="select(quick.section)"
       >
         <component :is="quick.icon" :size="14" />
@@ -250,12 +232,12 @@
     <!-- Resize handle (right edge) -->
     <div
       v-if="!collapsed"
-      class="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:opacity-100 opacity-0 transition"
-      :style="{ background: dragging ? t.accent : t.borderStrong, marginRight: '-2px' }"
-      :class="{ 'opacity-100': dragging }"
+      class="absolute right-0 top-0 h-full w-1 cursor-col-resize opacity-0 transition hover:opacity-100"
+      :class="dragging ? 'bg-primary opacity-100' : 'bg-border'"
+      :style="{ marginRight: '-2px' }"
       @mousedown="onDragStart"
     />
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -277,6 +259,7 @@ import {
 } from 'lucide-vue-next'
 import type { GitBranch as GitBranchType, GitStashEntry } from '~/types'
 import { buildBranchTree, flattenTree } from '~/utils/branch-tree'
+import { Card } from '~/components/ui/card'
 import type { GitSection } from './git-section'
 import { sectionKey } from './git-section'
 
@@ -294,8 +277,6 @@ const emit = defineEmits<{
   'context-branch': [event: MouseEvent, branch: GitBranchType]
 }>()
 
-const { t } = useTheme()
-const { parts } = useGlass()
 const { t: tr } = useI18n()
 const store = useGitStore()
 

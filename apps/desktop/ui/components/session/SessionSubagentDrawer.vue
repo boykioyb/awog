@@ -1,125 +1,114 @@
 <template>
-  <Teleport to="body">
-    <Transition name="drawer-slide">
-      <div
-        v-if="step"
-        class="fixed inset-y-0 right-0 z-40 flex"
-        :style="{ width: 'min(520px, 90vw)' }"
-      >
+  <Sheet :open="!!step" @update:open="onOpenChange">
+    <SheetContent side="right">
+      <template v-if="step">
         <div
-          class="flex-1 flex flex-col shadow-2xl"
-          :style="{ background: t.bgElevated, borderLeft: `1px solid ${t.border}` }"
-          role="dialog"
-          aria-modal="true"
+          class="px-4 py-3 flex items-center gap-2"
+          :style="{ borderBottom: `1px solid ${t.border}` }"
         >
-          <div
-            class="px-4 py-3 flex items-center gap-2"
-            :style="{ borderBottom: `1px solid ${t.border}` }"
+          <button
+            type="button"
+            class="p-1 rounded transition flex items-center"
+            :style="{ color: t.textDim }"
+            aria-label="Close"
+            @click="onClose"
           >
-            <button
-              type="button"
-              class="p-1 rounded transition flex items-center"
-              :style="{ color: t.textDim }"
-              aria-label="Close"
-              @click="onClose"
-            >
-              <ChevronRight :size="14" />
-            </button>
-            <div class="flex-1 min-w-0">
-              <div class="text-[1em] font-semibold truncate" :style="{ color: t.text }">
-                {{ step.label }}
-              </div>
-              <div v-if="step.target" class="text-[1em] truncate" :style="{ color: t.textDim }">
-                {{ step.target }}
-              </div>
+            <ChevronRight :size="14" />
+          </button>
+          <div class="flex-1 min-w-0">
+            <SheetTitle class="text-[1em] font-semibold truncate" :style="{ color: t.text }">
+              {{ step.label }}
+            </SheetTitle>
+            <div v-if="step.target" class="text-[1em] truncate" :style="{ color: t.textDim }">
+              {{ step.target }}
             </div>
-            <component
-              :is="statusIcon"
-              :size="14"
-              :class="step.status === 'running' ? 'animate-pulse' : ''"
-              :style="{ color: statusColor }"
-            />
+          </div>
+          <component
+            :is="statusIcon"
+            :size="14"
+            :class="step.status === 'running' ? 'animate-pulse' : ''"
+            :style="{ color: statusColor }"
+          />
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <div v-if="promptText" class="space-y-1">
+            <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
+              Prompt
+            </div>
+            <details
+              class="rounded text-[1em]"
+              :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
+            >
+              <summary
+                class="px-2.5 py-1.5 cursor-pointer flex items-center gap-1.5 select-none"
+                :style="{ color: t.textDim }"
+              >
+                <ChevronDown :size="11" />
+                {{ promptSnippet }}
+              </summary>
+              <pre
+                class="px-2.5 py-2 whitespace-pre-wrap break-words leading-relaxed"
+                :style="{ color: t.textMuted, maxHeight: '40vh', overflowY: 'auto' }"
+                >{{ promptText }}</pre
+              >
+            </details>
           </div>
 
-          <div class="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-            <div v-if="promptText" class="space-y-1">
-              <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
-                Prompt
-              </div>
-              <details
-                class="rounded text-[1em]"
-                :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
-              >
-                <summary
-                  class="px-2.5 py-1.5 cursor-pointer flex items-center gap-1.5 select-none"
-                  :style="{ color: t.textDim }"
-                >
-                  <ChevronDown :size="11" />
-                  {{ promptSnippet }}
-                </summary>
-                <pre
-                  class="px-2.5 py-2 whitespace-pre-wrap break-words leading-relaxed"
-                  :style="{ color: t.textMuted, maxHeight: '40vh', overflowY: 'auto' }"
-                  >{{ promptText }}</pre
-                >
-              </details>
+          <div v-if="replyText" class="space-y-1">
+            <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
+              Reply
             </div>
+            <!-- eslint-disable vue/no-v-html — renderedReply qua renderMarkdown (marked html:false, escape HTML thô) -->
+            <div
+              class="awog-md text-[1em] rounded px-3 py-2.5"
+              :style="{
+                color: t.text,
+                background: t.bgSubtle,
+                border: `1px solid ${t.border}`,
+                '--awog-accent': t.accent,
+              }"
+              v-html="renderedReply"
+            />
+            <!-- eslint-enable vue/no-v-html -->
+          </div>
 
-            <div v-if="replyText" class="space-y-1">
-              <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
-                Reply
-              </div>
-              <!-- eslint-disable vue/no-v-html — renderedReply qua renderMarkdown (marked html:false, escape HTML thô) -->
-              <div
-                class="awog-md text-[1em] rounded px-3 py-2.5"
-                :style="{
-                  color: t.text,
-                  background: t.bgSubtle,
-                  border: `1px solid ${t.border}`,
-                  '--awog-accent': t.accent,
-                }"
-                v-html="renderedReply"
-              />
-              <!-- eslint-enable vue/no-v-html -->
-            </div>
-
-            <!-- Steps the subagent ran. `step.children` is populated when the
+          <!-- Steps the subagent ran. `step.children` is populated when the
                  sidecar groups nested tool_use events under the parent Task
                  (TODO). Today this section is empty until that wiring lands —
                  keeping the UI ready avoids a follow-up component change. -->
-            <div v-if="childSteps.length > 0" class="space-y-1">
-              <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
-                Steps · {{ childSteps.length }}
-              </div>
-              <!-- Flat timeline (Claude-Code style), matching the main session
+          <div v-if="childSteps.length > 0" class="space-y-1">
+            <div class="text-[1em] uppercase tracking-wider" :style="{ color: t.textDim }">
+              Steps · {{ childSteps.length }}
+            </div>
+            <!-- Flat timeline (Claude-Code style), matching the main session
                    view: thin left rail + single-line truncated rows (full output
                    one click away in the step detail). -->
-              <div class="space-y-1 pl-3" :style="{ borderLeft: `2px solid ${t.border}` }">
-                <StepItem v-for="child in childSteps" :key="child.id" :step="child" />
-              </div>
-            </div>
-
-            <div
-              v-else-if="step.status === 'running'"
-              class="text-[1em] flex items-center gap-1.5"
-              :style="{ color: t.textDim }"
-            >
-              <Activity :size="11" class="animate-pulse" />
-              <span>Subagent running…</span>
-            </div>
-
-            <div
-              v-if="!promptText && !replyText && step.status !== 'running'"
-              class="text-[1em]"
-              :style="{ color: t.textFaint }"
-            >
-              No payload captured for this step.
+            <div class="space-y-1 pl-3" :style="{ borderLeft: `2px solid ${t.border}` }">
+              <StepItem v-for="child in childSteps" :key="child.id" :step="child" />
             </div>
           </div>
+
+          <div
+            v-else-if="step.status === 'running'"
+            class="text-[1em] flex items-center gap-1.5"
+            :style="{ color: t.textDim }"
+          >
+            <Activity :size="11" class="animate-pulse" />
+            <span>Subagent running…</span>
+          </div>
+
+          <div
+            v-if="!promptText && !replyText && step.status !== 'running'"
+            class="text-[1em]"
+            :style="{ color: t.textFaint }"
+          >
+            No payload captured for this step.
+          </div>
         </div>
-      </div>
-    </Transition>
-  </Teleport>
+      </template>
+    </SheetContent>
+  </Sheet>
 </template>
 
 <script setup lang="ts">
@@ -131,8 +120,9 @@ import {
   ChevronRight,
   Loader2,
 } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
 import { renderMarkdown } from '~/utils/markdown'
+import { Sheet, SheetContent, SheetTitle } from '~/components/ui/sheet'
 
 const { t } = useTheme()
 const store = useSessionsStore()
@@ -183,27 +173,8 @@ const statusColor = computed(() => {
 })
 
 const onClose = () => store.closeSubagentDrawer()
-
-// ESC closes the drawer. Captured globally because the body element may not
-// have keyboard focus when the drawer slides in.
-const onKey = (e: KeyboardEvent) => {
-  if (!step.value) return
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    onClose()
-  }
+// reka-ui Sheet handles escape/scroll-lock/focus; just relay close on dismiss.
+const onOpenChange = (next: boolean) => {
+  if (!next) onClose()
 }
-onMounted(() => document.addEventListener('keydown', onKey))
-onUnmounted(() => document.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-.drawer-slide-enter-active,
-.drawer-slide-leave-active {
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.drawer-slide-enter-from,
-.drawer-slide-leave-to {
-  transform: translateX(100%);
-}
-</style>

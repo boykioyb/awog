@@ -1,16 +1,10 @@
 <template>
   <div class="px-1 pb-1">
     <div
-      class="group w-full px-3 py-1.5 flex items-center gap-1.5 transition"
-      :style="{
-        color: t.textDim,
-        background: hover ? t.bgHover : 'transparent',
-      }"
-      @mouseenter="hover = true"
-      @mouseleave="hover = false"
+      class="group flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
     >
       <button
-        class="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+        class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         @click="collapsed = !collapsed"
       >
         <ChevronDown
@@ -20,18 +14,17 @@
             transition: 'transform 0.15s',
           }"
         />
-        <span class="text-[1em] uppercase tracking-wider font-medium truncate">
+        <span class="truncate text-[1em] font-medium uppercase tracking-wider">
           {{ label }}
         </span>
       </button>
-      <span class="text-[1em] flex-shrink-0" :style="{ color: t.textFaint }">
+      <span class="flex-shrink-0 font-mono text-[12px] leading-none text-muted-foreground">
         {{ files.length }}
       </span>
       <button
         v-if="!isStagedSection && files.length > 0"
-        class="opacity-0 group-hover:opacity-100 transition p-1 rounded flex-shrink-0"
+        class="flex-shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
         :title="tr('git.status.discard_all')"
-        :style="{ color: t.textDim }"
         @click.stop="emit('discard-all', allPaths, label)"
       >
         <Trash2 :size="11" />
@@ -84,11 +77,13 @@
           </div>
           <div
             v-else
-            class="group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition"
-            :style="{
-              paddingLeft: `${12 + row.depth * 12}px`,
-              background: selectedPath === row.item.path ? t.bgActive : 'transparent',
-            }"
+            class="group flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 transition-colors"
+            :class="
+              selectedPath === row.item.path
+                ? 'bg-accent text-accent-foreground'
+                : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+            "
+            :style="{ paddingLeft: `${12 + row.depth * 12}px` }"
             @click="emit('select', row.item.path)"
             @contextmenu.prevent="emit('context-menu', $event, row.item)"
           >
@@ -127,10 +122,12 @@
         <div
           v-for="file in files"
           :key="file.path"
-          class="group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition"
-          :style="{
-            background: selectedPath === file.path ? t.bgActive : 'transparent',
-          }"
+          class="group flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 transition-colors"
+          :class="
+            selectedPath === file.path
+              ? 'bg-accent text-accent-foreground'
+              : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+          "
           @click="emit('select', file.path)"
           @contextmenu.prevent="emit('context-menu', $event, file)"
         >
@@ -181,11 +178,13 @@
             <div
               v-for="i in visibleRange"
               :key="files[i]?.path ?? i"
-              class="group flex items-center gap-2 px-3 cursor-pointer transition"
-              :style="{
-                height: `${ROW_HEIGHT}px`,
-                background: selectedPath === files[i]?.path ? t.bgActive : 'transparent',
-              }"
+              class="group flex cursor-pointer items-center gap-2 px-3 transition-colors"
+              :class="
+                selectedPath === files[i]?.path
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+              "
+              :style="{ height: `${ROW_HEIGHT}px` }"
               @click="files[i] && emit('select', files[i]!.path)"
               @contextmenu.prevent="files[i] && emit('context-menu', $event, files[i]!)"
             >
@@ -261,7 +260,6 @@ const emit = defineEmits<{
 const { t } = useTheme()
 const { t: tr } = useI18n()
 const collapsed = ref(false)
-const hover = ref(false)
 
 // Paths owned by this whole section (used by the header "discard all" button).
 const allPaths = computed(() => props.files.map((f) => f.path))

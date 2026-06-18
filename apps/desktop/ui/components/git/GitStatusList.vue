@@ -1,43 +1,42 @@
 <template>
   <div class="flex flex-col h-full overflow-hidden">
-    <div
-      class="flex items-center justify-between px-3 py-2"
-      :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
-    >
+    <div class="flex items-center justify-between border-b border-border px-3 py-2">
       <div
-        class="text-[1em] uppercase tracking-wider whitespace-nowrap truncate"
-        :style="{ color: t.textDim }"
+        class="truncate whitespace-nowrap text-[1em] uppercase tracking-wider text-muted-foreground"
       >
         {{ tr('git.status.working_tree') }}
       </div>
-      <div class="flex items-center gap-1 flex-shrink-0">
-        <button
+      <div class="flex flex-shrink-0 items-center gap-1">
+        <AppButton
           v-if="store.unstagedFiles.length > 0 || store.untrackedFiles.length > 0"
-          class="p-1.5 rounded transition"
-          :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
+          variant="ghost"
+          size="icon"
           :title="tr('git.status.stage_all')"
           @click="stageAll"
         >
           <Plus :size="13" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           v-if="store.stagedFiles.length > 0"
-          class="p-1.5 rounded transition"
-          :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
+          variant="ghost"
+          size="icon"
           :title="tr('git.status.unstage_all')"
           @click="unstageAll"
         >
           <Undo2 :size="13" />
-        </button>
+        </AppButton>
         <!-- Tree / flat view toggle -->
         <div
-          class="flex items-center rounded overflow-hidden flex-shrink-0 ml-1"
-          :style="{ border: `1px solid ${t.border}` }"
+          class="ml-1 flex flex-shrink-0 items-center overflow-hidden rounded-md border border-border"
         >
           <button
             type="button"
-            class="px-1.5 py-1 transition"
-            :style="modeBtnStyle('tree')"
+            class="px-1.5 py-1 transition-colors"
+            :class="
+              viewMode === 'tree'
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            "
             :title="tr('git.changes.tree_view')"
             @click="setViewMode('tree')"
           >
@@ -45,8 +44,12 @@
           </button>
           <button
             type="button"
-            class="px-1.5 py-1 transition"
-            :style="modeBtnStyle('flat')"
+            class="px-1.5 py-1 transition-colors"
+            :class="
+              viewMode === 'flat'
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            "
             :title="tr('git.changes.flat_view')"
             @click="setViewMode('flat')"
           >
@@ -177,7 +180,6 @@ import {
 import type { GitFileStatus } from '~/types'
 import type { ContextMenuItem } from '~/components/ContextMenu.vue'
 
-const { t } = useTheme()
 const { t: tr } = useI18n()
 const store = useGitStore()
 
@@ -194,11 +196,6 @@ const setViewMode = (mode: ChangesView) => {
   viewMode.value = mode
   if (typeof window !== 'undefined') window.localStorage.setItem(VIEW_KEY, mode)
 }
-const modeBtnStyle = (mode: ChangesView) => ({
-  background: viewMode.value === mode ? t.value.accent : t.value.bgPanel,
-  color: viewMode.value === mode ? t.value.accentText : t.value.textMuted,
-  cursor: 'pointer',
-})
 
 // Discard confirmation — single file, a section ("discard all") or a folder all
 // flow through one modal. `target` labels what is being discarded in the prompt.

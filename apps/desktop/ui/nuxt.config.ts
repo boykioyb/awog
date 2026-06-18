@@ -7,8 +7,16 @@ export default defineNuxtConfig({
     config: { stylistic: false },
     checker: false,
   },
-  components: [{ path: '~/components', pathPrefix: false }],
+  // `ignore` keeps the shadcn-vue `ui/<x>/index.ts` barrels out of component
+  // auto-scan — each barrel re-exports a same-named `<X>.vue`, so registering
+  // both collides on one name (the "Two component files…" warning). The barrels
+  // stay importable as modules (cva variants + grouped exports) untouched.
+  components: [{ path: '~/components', pathPrefix: false, ignore: ['ui/**/index.ts'] }],
   css: [
+    // Self-hosted variable fonts (no CDN — local-first). Geist = the shadcn.com
+    // typeface; selectable via Appearance → font, default for a readable look.
+    '@fontsource-variable/geist',
+    '@fontsource-variable/geist-mono',
     '~/assets/css/main.css',
     '@vue-flow/core/dist/style.css',
     '@vue-flow/core/dist/theme-default.css',

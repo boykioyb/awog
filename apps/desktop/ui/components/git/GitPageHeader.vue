@@ -1,184 +1,100 @@
 <template>
-  <div
-    class="relative px-3 py-2 flex items-center gap-3 flex-shrink-0 rounded-xl"
-    :style="{
-      border: `1px solid ${parts.border}`,
-      background: parts.bg,
-      backdropFilter: parts.blur,
-      boxShadow: `0 4px 16px -10px ${t.shadow}`,
-    }"
-  >
+  <Card variant="flat" class="relative flex flex-shrink-0 items-center gap-3 px-3 py-2">
     <!-- Project selector -->
-    <div class="relative">
-      <button
-        class="flex items-center gap-1.5 px-2 py-1.5 rounded text-[1em] transition whitespace-nowrap max-w-[200px]"
-        :style="{
-          background: projectOpen ? t.bgActive : t.bgInput,
-          color: t.text,
-          border: `1px solid ${t.border}`,
-        }"
-        @click="projectOpen = !projectOpen"
-      >
-        <FolderGit2
-          :size="12"
-          class="flex-shrink-0"
-          :style="{ color: currentProject?.color || t.textDim }"
-        />
-        <span class="font-medium truncate">{{ currentProject?.name ?? 'No project' }}</span>
-        <span
-          v-if="currentDirtyCount > 0"
-          class="text-[12px] px-1.5 py-0.5 rounded font-mono font-medium leading-none inline-flex items-center justify-center flex-shrink-0"
-          :style="{
-            background: t.warning,
-            color: t.accentText,
-            minWidth: '18px',
-          }"
-        >
-          {{ currentDirtyCount }}
-        </span>
-        <ChevronDown :size="10" class="flex-shrink-0" />
-      </button>
-      <div
-        v-if="projectOpen"
-        class="absolute left-0 top-full mt-1 z-30 min-w-[260px] rounded shadow-lg overflow-hidden"
-        :style="{
-          background: t.bgPanel,
-          border: `1px solid ${t.borderStrong}`,
-          boxShadow: `0 10px 30px ${t.shadow}`,
-        }"
-      >
-        <div
+    <DropdownMenu>
+      <DropdownMenuTrigger as-child>
+        <button :class="[triggerClass, 'max-w-[200px]']">
+          <FolderGit2
+            :size="12"
+            class="flex-shrink-0"
+            :style="currentProject?.color ? { color: currentProject.color } : undefined"
+          />
+          <span class="truncate font-medium">{{ currentProject?.name ?? 'No project' }}</span>
+          <Badge v-if="currentDirtyCount > 0" variant="warning" size="sm" class="font-mono">
+            {{ currentDirtyCount }}
+          </Badge>
+          <ChevronDown :size="10" class="flex-shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent class="min-w-[260px]">
+        <DropdownMenuItem
           v-for="p in projects"
           :key="p.id"
-          class="flex items-center gap-2 px-3 py-2 cursor-pointer transition"
-          :style="{
-            background: projectHover === p.id ? t.bgHover : 'transparent',
-            borderLeft:
-              p.id === selectedProjectId ? `2px solid ${t.accent}` : '2px solid transparent',
-          }"
-          @mouseenter="projectHover = p.id"
-          @mouseleave="projectHover = null"
-          @click="onSelectProject(p.id)"
+          class="items-start"
+          @select="onSelectProject(p.id)"
         >
-          <FolderGit2 :size="12" :style="{ color: p.color || t.textDim }" />
-          <div class="flex-1 min-w-0">
+          <FolderGit2
+            :size="12"
+            class="mt-0.5 flex-shrink-0"
+            :style="p.color ? { color: p.color } : undefined"
+          />
+          <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span class="text-[1em] font-medium truncate" :style="{ color: t.text }">
-                {{ p.name }}
-              </span>
-              <span
+              <span class="truncate font-medium">{{ p.name }}</span>
+              <Badge
                 v-if="(dirtyCountByProject[p.id] ?? 0) > 0"
-                class="text-[12px] px-1.5 py-0.5 rounded font-mono font-medium leading-none inline-flex items-center justify-center flex-shrink-0"
-                :style="{
-                  background: t.warning,
-                  color: t.accentText,
-                  minWidth: '18px',
-                }"
+                variant="warning"
+                size="sm"
+                class="font-mono"
               >
                 {{ dirtyCountByProject[p.id] }}
-              </span>
+              </Badge>
               <Check
                 v-if="p.id === selectedProjectId"
                 :size="11"
-                class="flex-shrink-0"
-                :style="{ color: t.accent }"
+                class="flex-shrink-0 text-primary"
               />
             </div>
-            <div class="text-[1em] font-mono truncate" :style="{ color: t.textFaint }">
-              {{ p.path }}
-            </div>
+            <div class="truncate font-mono text-[12px] text-muted-foreground">{{ p.path }}</div>
           </div>
-        </div>
-      </div>
-    </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
 
-    <span :style="{ color: t.textFaint }">/</span>
+    <Separator orientation="vertical" class="h-4" />
 
     <!-- Repo selector — only when the project holds more than one git repo -->
     <template v-if="repos.length > 1">
-      <div class="relative min-w-0">
-        <button
-          class="flex items-center gap-1.5 px-2 py-1.5 rounded text-[1em] transition whitespace-nowrap min-w-0 max-w-[220px]"
-          :style="{
-            background: repoOpen ? t.bgActive : t.bgInput,
-            color: t.text,
-            border: `1px solid ${t.border}`,
-          }"
-          :title="currentRepoLabel || tr('git.header.repo_select')"
-          @click="repoOpen = !repoOpen"
-        >
-          <GitFork :size="12" class="flex-shrink-0" :style="{ color: t.textDim }" />
-          <span class="font-mono truncate">{{ currentRepoLabel }}</span>
-          <ChevronDown :size="10" class="flex-shrink-0" />
-        </button>
-        <div
-          v-if="repoOpen"
-          class="absolute left-0 top-full mt-1 z-30 min-w-[260px] rounded shadow-lg overflow-hidden"
-          :style="{
-            background: t.bgPanel,
-            border: `1px solid ${t.borderStrong}`,
-            boxShadow: `0 10px 30px ${t.shadow}`,
-          }"
-        >
-          <div
-            v-for="r in repos"
-            :key="r.path"
-            class="flex items-center gap-2 px-3 py-2 cursor-pointer transition"
-            :style="{
-              background: repoHover === r.path ? t.bgHover : 'transparent',
-              borderLeft:
-                r.path === selectedRepoPath ? `2px solid ${t.accent}` : '2px solid transparent',
-            }"
-            @mouseenter="repoHover = r.path"
-            @mouseleave="repoHover = null"
-            @click="onSelectRepo(r.path)"
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <button
+            :class="[triggerClass, 'min-w-0 max-w-[220px]']"
+            :title="currentRepoLabel || tr('git.header.repo_select')"
           >
-            <GitFork :size="12" :style="{ color: t.textDim }" />
-            <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
-              {{ repoLabel(r) }}
-            </span>
+            <GitFork :size="12" class="flex-shrink-0 text-muted-foreground" />
+            <span class="truncate font-mono">{{ currentRepoLabel }}</span>
+            <ChevronDown :size="10" class="flex-shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent class="min-w-[260px]">
+          <DropdownMenuItem v-for="r in repos" :key="r.path" @select="onSelectRepo(r.path)">
+            <GitFork :size="12" class="flex-shrink-0 text-muted-foreground" />
+            <span class="flex-1 truncate font-mono">{{ repoLabel(r) }}</span>
             <Check
               v-if="r.path === selectedRepoPath"
               :size="11"
-              class="flex-shrink-0"
-              :style="{ color: t.accent }"
+              class="flex-shrink-0 text-primary"
             />
-          </div>
-        </div>
-      </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      <span :style="{ color: t.textFaint }">/</span>
+      <Separator orientation="vertical" class="h-4" />
     </template>
 
-    <div class="relative">
-      <button
-        class="flex items-center gap-1.5 px-2 py-1.5 rounded text-[1em] transition whitespace-nowrap max-w-[200px]"
-        :style="{
-          background: branchOpen ? t.bgActive : t.bgInput,
-          color: t.text,
-          border: `1px solid ${t.border}`,
-        }"
-        @click="branchOpen = !branchOpen"
-      >
-        <GitBranchIcon :size="12" class="flex-shrink-0" />
-        <span class="font-mono truncate">{{ currentBranch }}</span>
-        <ChevronDown :size="10" class="flex-shrink-0" />
-      </button>
-      <div
-        v-if="branchOpen"
-        class="absolute left-0 top-full mt-1 z-30 min-w-[260px] rounded shadow-lg overflow-hidden flex flex-col"
-        :style="{
-          background: menu.background,
-          border: `1px solid ${menu.borderColor}`,
-          backdropFilter: menu.backdropFilter,
-          boxShadow: menu.boxShadow,
-          maxHeight: 'min(70vh, 440px)',
-        }"
-      >
-        <div class="p-2 flex-shrink-0" :style="{ borderBottom: `1px solid ${t.border}` }">
+    <Popover v-model:open="branchOpen">
+      <PopoverTrigger as-child>
+        <button :class="[triggerClass, 'max-w-[200px]']">
+          <GitBranchIcon :size="12" class="flex-shrink-0" />
+          <span class="truncate font-mono">{{ currentBranch }}</span>
+          <ChevronDown :size="10" class="flex-shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent class="flex max-h-[min(70vh,440px)] w-[260px] flex-col p-0">
+        <div class="flex-shrink-0 border-b border-border p-2">
           <SearchInput v-model="branchQuery" placeholder="Filter branches…" autofocus />
         </div>
-        <div class="flex-1 overflow-y-auto py-1 min-h-0">
+        <div class="min-h-0 flex-1 overflow-y-auto py-1">
           <GitBranchTree
             :rows="branchRows"
             :collapsed-folders="collapsedBranchFolders"
@@ -188,39 +104,33 @@
           />
           <div
             v-if="branchRows.length === 0"
-            class="px-3 py-4 text-center text-[1em]"
-            :style="{ color: t.textFaint }"
+            class="px-3 py-4 text-center text-[1em] text-muted-foreground"
           >
             {{ branchQuery ? 'No matching branches' : 'No branches' }}
           </div>
         </div>
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
 
     <div class="ml-auto flex items-center gap-2">
       <template v-if="isMerging || isRebasing">
-        <button
-          class="px-2.5 py-1 text-[1em] rounded font-medium transition"
-          :style="completeMergeBtnStyle"
+        <AppButton
+          size="sm"
           :disabled="hasConflict"
           :title="completeTitle"
           @click="emit('complete-merge')"
         >
           {{ isRebasing ? tr('git.header.continue_rebase') : tr('git.header.complete_merge') }}
-        </button>
-        <button
-          class="px-2.5 py-1 text-[1em] rounded transition"
-          :style="{
-            background: t.dangerBg,
-            color: t.danger,
-            border: `1px solid ${t.dangerBorder}`,
-          }"
+        </AppButton>
+        <AppButton
+          variant="ghostDanger"
+          size="sm"
           :title="isRebasing ? tr('git.header.abort_rebase') : tr('git.header.abort_merge')"
           @click="emit('request-abort-merge')"
         >
           {{ isRebasing ? tr('git.header.abort_rebase') : tr('git.header.abort_merge') }}
-        </button>
-        <span class="w-px h-4" :style="{ background: t.border }" />
+        </AppButton>
+        <Separator orientation="vertical" class="h-4" />
       </template>
       <GitOpsToolbar />
     </div>
@@ -228,7 +138,7 @@
     <!-- Floating progress strip — anchored to header bottom border so it
          doesn't push the toolbar wider while pull/push/fetch run. -->
     <GitOpsProgressStrip />
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -241,6 +151,16 @@ import {
 } from 'lucide-vue-next'
 import type { GitBranch, GitRepoEntry, Project } from '~/types'
 import { buildBranchTree, flattenTree } from '~/utils/branch-tree'
+import { Card } from '~/components/ui/card'
+import { Badge } from '~/components/ui/badge'
+import { Separator } from '~/components/ui/separator'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover'
 
 type Props = {
   projects: Project[]
@@ -267,14 +187,12 @@ const emit = defineEmits<{
   'request-abort-merge': []
 }>()
 
-const { t } = useTheme()
-const { parts, menu } = useGlass()
 const { t: tr } = useI18n()
 
-const projectOpen = ref(false)
-const projectHover = ref<string | null>(null)
-const repoOpen = ref(false)
-const repoHover = ref<string | null>(null)
+// Shared "select trigger" look for the project / repo / branch pickers.
+const triggerClass =
+  'flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-transparent px-2 text-[1em] text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-accent'
+
 const branchOpen = ref(false)
 
 // Branch picker: filter + tree grouping (reuses the sidebar's branch-tree logic).
@@ -311,27 +229,14 @@ const currentRepoLabel = computed(() => {
   return active ? repoLabel(active) : ''
 })
 
-const onSelectProject = (id: string) => {
-  projectOpen.value = false
-  emit('select-project', id)
-}
+const onSelectProject = (id: string) => emit('select-project', id)
 
-const onSelectRepo = (path: string) => {
-  repoOpen.value = false
-  emit('select-repo', path)
-}
+const onSelectRepo = (path: string) => emit('select-repo', path)
 
 const onSwitchBranch = (name: string, isCurrent: boolean) => {
   branchOpen.value = false
   emit('switch-branch', name, isCurrent)
 }
-
-const completeMergeBtnStyle = computed(() => ({
-  background: props.hasConflict ? t.value.bgInput : t.value.accent,
-  color: props.hasConflict ? t.value.textDim : t.value.accentText,
-  border: `1px solid ${props.hasConflict ? t.value.border : t.value.accent}`,
-  cursor: props.hasConflict ? 'not-allowed' : 'pointer',
-}))
 
 // Title for the Complete/Continue button — explains why it's disabled while
 // conflicts remain, switching wording between merge and rebase.

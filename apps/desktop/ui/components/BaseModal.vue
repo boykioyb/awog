@@ -1,59 +1,50 @@
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
+  <Dialog :open="open" @update:open="onOpenChange">
+    <DialogContent
+      :size="size"
+      @escape-key-down="onEscapeKeyDown"
+      @interact-outside="onInteractOutside"
+    >
+      <!-- Header: `title` prop or a custom `#header` slot, plus the close button. -->
       <div
-        v-if="open"
-        class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-3"
-        :style="{ background: t.overlay }"
+        v-if="$slots.header || title"
+        class="flex items-center gap-2 border-b border-border px-4 py-3"
       >
-        <div
-          ref="cardRef"
-          class="w-full rounded-lg overflow-hidden flex flex-col max-h-[85vh]"
-          :class="sizeClass"
-          :style="{
-            background: overlay.background,
-            border: `1px solid ${overlay.borderColor}`,
-            backdropFilter: overlay.backdropFilter,
-            boxShadow: overlay.boxShadow,
-          }"
+        <slot name="header">
+          <DialogTitle>{{ title }}</DialogTitle>
+        </slot>
+        <DialogClose
+          class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="Close"
         >
-          <div
-            v-if="$slots.header || title"
-            class="px-4 py-3 flex items-center gap-2"
-            :style="{ borderBottom: `1px solid ${t.border}` }"
-          >
-            <slot name="header">
-              <div class="text-[1em] font-medium" :style="{ color: t.text }">{{ title }}</div>
-            </slot>
-            <button
-              class="ml-auto"
-              :style="{ color: t.textDim }"
-              :aria-label="'Close'"
-              @click="emit('close')"
-            >
-              <X :size="15" />
-            </button>
-          </div>
-          <div class="flex-1 overflow-y-auto">
-            <slot />
-          </div>
-          <div
-            v-if="$slots.footer"
-            class="px-4 py-3 flex justify-end gap-2"
-            :style="{ borderTop: `1px solid ${t.border}` }"
-          >
-            <slot name="footer" />
-          </div>
-        </div>
+          <X :size="15" />
+        </DialogClose>
       </div>
-    </Transition>
-  </Teleport>
+      <!-- a11y: guarantee exactly one DialogTitle even with a custom header / no title. -->
+      <DialogTitle v-if="$slots.header || !title" class="sr-only">
+        {{ title || 'Dialog' }}
+      </DialogTitle>
+
+      <div class="flex-1 overflow-y-auto">
+        <slot />
+      </div>
+
+      <div v-if="$slots.footer" class="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <slot name="footer" />
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
-import { computed, watch, onBeforeUnmount, useTemplateRef } from 'vue'
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '~/components/ui/dialog'
 
+// Rebuilt on the shadcn-vue Dialog primitive (ADR 0044) so every modal in the app
+// shares one form + a11y (reka-ui handles focus-trap, escape, scroll-lock, aria).
+// The public API (open / title / size / closeOnBackdrop / closeOnEscape + `close`
+// emit + header/footer/default slots) is unchanged — all ~23 call sites and the
+// git/confirm modals keep working untouched.
 type Props = {
   open: boolean
   title?: string
@@ -69,52 +60,15 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<{ close: [] }>()
 
-const { t } = useTheme()
-const { overlay } = useGlass()
-const cardRef = useTemplateRef<HTMLElement>('cardRef')
-
-const SIZE_MAP = {
-  sm: 'max-w-[420px]',
-  md: 'max-w-[560px]',
-  lg: 'max-w-[720px]',
-  xl: 'max-w-[960px]',
-} as const
-const sizeClass = computed(() => SIZE_MAP[props.size])
-
-// Body scroll lock — restore previous value khi đóng / unmount để không kẹt overflow
-let previousOverflow: string | null = null
-const lockScroll = () => {
-  if (typeof document === 'undefined') return
-  previousOverflow = document.body.style.overflow
-  document.body.style.overflow = 'hidden'
+const onOpenChange = (next: boolean) => {
+  if (!next) emit('close')
 }
-const unlockScroll = () => {
-  if (typeof document === 'undefined') return
-  document.body.style.overflow = previousOverflow ?? ''
-  previousOverflow = null
+const onEscapeKeyDown = (e: KeyboardEvent) => {
+  if (!props.closeOnEscape) e.preventDefault()
 }
-
-watch(
-  () => props.open,
-  (next) => (next ? lockScroll() : unlockScroll()),
-  { immediate: true },
-)
-onBeforeUnmount(unlockScroll)
-
-const escapeEnabled = computed(() => props.open && props.closeOnEscape)
-useEscape(() => emit('close'), { enabled: escapeEnabled })
-useClickOutside(cardRef, () => {
-  if (props.open && props.closeOnBackdrop) emit('close')
-})
+// Fires for both pointer-down and focus moving outside — one guard covers backdrop
+// clicks and tab-out, mirroring the old useClickOutside behaviour.
+const onInteractOutside = (e: Event) => {
+  if (!props.closeOnBackdrop) e.preventDefault()
+}
 </script>
-
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 150ms ease;
-}
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-</style>
