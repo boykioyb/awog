@@ -222,10 +222,15 @@ export const useMentionAutocomplete = (
       mentionToken.value = null
       return
     }
+    // Reset the highlight only when the query/trigger changes. detect() also
+    // runs on keyup (incl. ArrowUp/ArrowDown), so resetting unconditionally
+    // would snap the selection back to the first item right after moveDown/Up.
+    if (token !== mentionToken.value || triggerChar !== mentionTrigger.value) {
+      activeIndex.value = 0
+    }
     mentionToken.value = token
     mentionTrigger.value = triggerChar
     mentionStart.value = triggerIdx
-    activeIndex.value = 0
   }
 
   const apply = (item: AutoItem) => {

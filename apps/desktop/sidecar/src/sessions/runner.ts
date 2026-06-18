@@ -7,6 +7,7 @@
 
 import type {
   SessionAttachment,
+  SessionCompaction,
   SessionMessage,
   SessionSettings,
   SessionStep,
@@ -121,6 +122,15 @@ export interface RunNonStreamArgs {
   // When set, `pendingText` is a slash command (e.g. '/compact') handled by the
   // runtime instead of a normal turn.
   slashCommand?: 'compact'
+  // Recent-context budget kept verbatim by `/compact` (ADR 0047). Manual compact
+  // passes 0 (keep only the last turn — most aggressive); auto-compact omits it
+  // to use Pi's DEFAULT_COMPACTION_SETTINGS.keepRecentTokens (20k).
+  keepRecentTokens?: number
+  // Active compaction checkpoint (ADR 0047). When present, the runtime feeds the
+  // model `summary` + every message from `firstKeptMessageId` onward instead of
+  // the full history. On a `/compact` run it is the PRIOR checkpoint (so the cut
+  // only advances); on a normal turn it cuts the context the model sees.
+  compaction?: SessionCompaction
   // Mid-turn steering (Session steering). When provided, the runtime wires it to
   // Pi's getSteeringMessages: polled at each turn boundary, it returns the user
   // instructions queued via the sessions.steer RPC so the loop injects them into
@@ -154,6 +164,9 @@ export interface RunStreamResult {
   // (Pi reports a mid-stream failure as a graceful `error` stop rather than
   // throwing). Lets the UI render a real error alert + retry for the turn.
   errorMessage?: string
+  // New compaction checkpoint produced by a `/compact` run (ADR 0047). Absent on
+  // normal turns and when there was nothing to summarise; the caller persists it.
+  compaction?: SessionCompaction
 }
 
 export async function runStream(

@@ -1,26 +1,30 @@
-import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { runStream } from '../sessions/runner.js'
-import { loadSession, appendMessage } from '../sessions/store.js'
+import { runStream, registerAborter, unregisterAborter } from '../sessions/runner.js'
+import { loadSession, compactSession } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
 import { log } from '../util/logger.js'
-import type { SessionMessage, SessionSettings } from '../types/shared.js'
+import type { SessionSettings } from '../types/shared.js'
 
-// `/compact` — summarize the conversation to free up token budget (ADR 0023,
-// amended by ADR 0029). The Pi runtime reimplements compaction as a one-shot
-// summarize over the rebuilt history (no opaque SDK session). We load the
-// session's messages and hand them to the runtime via slashCommand: 'compact'.
+// `/compact` — summarise older turns to free up token budget (ADR 0047, amends
+// ADR 0023). The Pi runtime re-summarises the transcript prefix and returns a
+// compaction checkpoint { summary, firstKeptMessageId, tokensBefore }; we persist
+// it as a `session.compacted` event. The full transcript is left intact (the UI
+// keeps showing it); only the model context is cut, in buildContext.
 //
-// Separate from sessions.sendMessage so it never pushes a `/compact` user
-// bubble; the UI shows a system note instead. No agent / MCP / tool resolution
-// — compaction is a pure context operation.
+// Separate from sessions.sendMessage so it never pushes a `/compact` user bubble;
+// the UI drives a normal running state (placeholder + Stop) and renders a summary
+// marker on success. `messageId` lets the UI's Stop button abort mid-compaction.
 const Params = z.object({
   sessionId: z.string().min(1),
+  messageId: z.string().min(1),
   provider: z.enum(['anthropic', 'openai', 'google']),
   modelId: z.string().min(1),
   accountId: z.string().optional(),
   projectId: z.string().optional(),
+  // Recent-context budget kept verbatim (ADR 0047). Manual /compact sends 0
+  // (keep only the last turn); omitted → Pi default (20k). Clamped ≥ 0.
+  keepRecentTokens: z.number().int().min(0).optional(),
 })
 
 register('sessions.compact', async (raw) => {
@@ -43,8 +47,8 @@ register('sessions.compact', async (raw) => {
     }
   }
 
-  // Compaction is a context op: defaults for level/mode are irrelevant to the
-  // result, so use the cheapest, no-prompt combo.
+  // Compaction is a context op: level/mode don't affect the result, so use the
+  // cheapest, no-prompt combo.
   const settings: SessionSettings = {
     provider: params.provider,
     modelId: params.modelId,
@@ -53,33 +57,46 @@ register('sessions.compact', async (raw) => {
     ...(params.accountId ? { accountId: params.accountId } : {}),
   }
 
-  await runStream(
-    {
-      sessionId: params.sessionId,
-      pendingText: '/compact',
-      history: session.messages,
-      settings,
-      slashCommand: 'compact',
-      ...(cwd ? { cwd } : {}),
-    },
-    { onChunk: () => {} },
-  )
+  // One AbortController for the run; sessions.cancel resolves it by messageId so
+  // the Stop button aborts mid-compaction (mirrors sessions.send-message).
+  const abortController = new AbortController()
+  registerAborter(params.sessionId, params.messageId, abortController)
 
-  // Leave a system breadcrumb in the transcript so the user sees compaction ran.
-  const note: SessionMessage = {
-    id: `msg_sys_${randomBytes(8).toString('hex')}`,
-    role: 'system',
-    text: 'Context compacted to free up token budget.',
-    at: new Date().toISOString(),
-  }
   try {
-    await appendMessage(params.sessionId, note)
+    const result = await runStream(
+      {
+        sessionId: params.sessionId,
+        pendingText: '/compact',
+        history: session.messages,
+        settings,
+        slashCommand: 'compact',
+        abortController,
+        ...(params.keepRecentTokens !== undefined
+          ? { keepRecentTokens: params.keepRecentTokens }
+          : {}),
+        // Prior checkpoint: lets runCompact skip a no-op re-compact and keeps the
+        // cut monotonic.
+        ...(session.compaction ? { compaction: session.compaction } : {}),
+        ...(cwd ? { cwd } : {}),
+      },
+      { onChunk: () => {} },
+    )
+
+    if (!result.compaction) {
+      // Nothing was summarised (too short / already compacted / failed). The UI
+      // clears its running state without adding a checkpoint.
+      return { ok: false, reason: 'nothing-to-compact' }
+    }
+
+    await compactSession(params.sessionId, result.compaction)
+    return { ok: true, compaction: result.compaction }
   } catch (err) {
-    log.warn('failed to persist compact note', {
+    log.warn('sessions.compact failed', {
       sessionId: params.sessionId,
       err: err instanceof Error ? err.message : String(err),
     })
+    return { ok: false, reason: 'error' }
+  } finally {
+    unregisterAborter(params.messageId)
   }
-
-  return { ok: true, note }
 })

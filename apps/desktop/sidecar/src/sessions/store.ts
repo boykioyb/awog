@@ -11,7 +11,7 @@ import { mkdir, readdir, readFile, appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
-import type { Session, SessionMessage } from '../types/shared.js'
+import type { Session, SessionCompaction, SessionMessage } from '../types/shared.js'
 
 type SessionMetadataPatch = Partial<
   Pick<
@@ -35,6 +35,11 @@ export type SessionEvent =
   // (sessions.truncate RPC) and the conversation half of Rewind. Append-only:
   // the dropped lines stay in the file but the fold rebuilds the shorter list.
   | { type: 'session.truncated'; at: string; keepThroughId: string | null }
+  // Context-compaction checkpoint (ADR 0047). Records the summary of older turns
+  // and the id of the first message kept verbatim. Does NOT touch `messages` —
+  // the full transcript stays for the UI; only the model context is cut (in
+  // buildContext). Latest event wins (a later compaction subsumes the prior).
+  | { type: 'session.compacted'; at: string; compaction: SessionCompaction }
   | { type: 'session.deleted'; at: string }
 
 const SESSIONS_DIR_NAME = sanitizeChild('sessions')
@@ -130,6 +135,14 @@ function fold(events: SessionEvent[]): Session | null {
           snapshot = { ...current, messages: current.messages.slice(0, idx + 1), updatedAt: e.at }
         }
       }
+    } else if (e.type === 'session.compacted') {
+      if (!snapshot) continue
+      const current: Session = snapshot
+      // Defence: only accept a checkpoint whose cut point still exists in the
+      // transcript (never strand the runtime on a dangling id). Messages stay
+      // untouched — the cut is applied in buildContext, not here.
+      const known = current.messages.some((m) => m.id === e.compaction.firstKeptMessageId)
+      if (known) snapshot = { ...current, compaction: e.compaction, updatedAt: e.at }
     } else if (e.type === 'session.deleted') {
       deleted = true
     }
@@ -254,6 +267,26 @@ export async function truncateSession(
     type: 'session.truncated',
     at: new Date().toISOString(),
     keepThroughId,
+  }
+  await appendEvent(sessionId, evt)
+}
+
+// Persist a context-compaction checkpoint (ADR 0047). `at` is taken from the
+// caller-supplied compaction so the event time and the snapshot field agree.
+export async function compactSession(
+  sessionId: string,
+  compaction: SessionCompaction,
+): Promise<void> {
+  // Soft guard like appendMessage / truncateSession.
+  const existing = await loadSession(sessionId)
+  if (!existing) {
+    log.warn('compactSession: session not found or deleted, skipping', { sessionId })
+    return
+  }
+  const evt: SessionEvent = {
+    type: 'session.compacted',
+    at: compaction.at,
+    compaction,
   }
   await appendEvent(sessionId, evt)
 }

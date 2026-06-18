@@ -22,7 +22,7 @@ import type {
   TextContent,
   UserMessage,
 } from '@earendil-works/pi-ai'
-import type { SessionAttachment, SessionMessage } from '../types/shared.js'
+import type { SessionAttachment, SessionCompaction, SessionMessage } from '../types/shared.js'
 import { log } from '../util/logger.js'
 
 // Minimal AssistantMessage stub for replayed history. Pi's convertToLlm passes
@@ -153,16 +153,11 @@ function resolveSystemPrompt(
   return systemPromptAppend ?? ''
 }
 
-export function buildContext(
-  history: SessionMessage[],
-  pendingText: string,
-  systemPrompt: string | undefined,
-  systemPromptAppend: string | undefined,
-  tools: AgentTool[],
-  // Attachments on the pending user turn. Image attachments are rebuilt into Pi
-  // image content blocks; non-image / oversized ones are silently dropped.
-  pendingAttachments?: SessionAttachment[],
-): BuiltContext {
+// Map AWOG SessionMessage history → Pi AgentMessage[]: system skipped (lives in
+// systemPrompt), agent → assistant, user → user (with rebuilt image/file blocks).
+// Empty turns are dropped. Shared by buildContext and the compaction summary
+// input (ADR 0047), so both see the exact same replay shape.
+export function historyToAgentMessages(history: SessionMessage[]): AgentMessage[] {
   const messages: AgentMessage[] = []
   for (const m of history) {
     if (m.role === 'system') continue
@@ -181,9 +176,54 @@ export function buildContext(
     if (isEmptyUserMessage(userMsg)) continue
     messages.push(userMsg)
   }
+  return messages
+}
+
+// Frame the compaction summary as a labelled system-prompt section rather than a
+// replayed message. This keeps the message list user-first and well-alternated
+// (no synthetic leading assistant turn), and the model reads it as the prior
+// conversation. Cut applied in buildContext (ADR 0047).
+function compactionPromptSection(summary: string): string {
+  return [
+    '## Summary of earlier conversation',
+    'Older messages in this session were compacted to free up context.',
+    'Treat the following summary as the prior conversation:',
+    '',
+    summary,
+  ].join('\n')
+}
+
+export function buildContext(
+  history: SessionMessage[],
+  pendingText: string,
+  systemPrompt: string | undefined,
+  systemPromptAppend: string | undefined,
+  tools: AgentTool[],
+  // Attachments on the pending user turn. Image attachments are rebuilt into Pi
+  // image content blocks; non-image / oversized ones are silently dropped.
+  pendingAttachments?: SessionAttachment[],
+  // Active compaction checkpoint (ADR 0047). When present, only messages from
+  // `firstKeptMessageId` onward are replayed; the summary is injected into the
+  // system prompt. Older turns remain in the transcript (UI) but not the context.
+  compaction?: Pick<SessionCompaction, 'summary' | 'firstKeptMessageId'>,
+): BuiltContext {
+  let effective = history
+  let appended = systemPromptAppend
+  if (compaction) {
+    const cutIdx = history.findIndex((m) => m.id === compaction.firstKeptMessageId)
+    // Unknown id → ignore the checkpoint (never strand the model on a dangling
+    // cut; replay the full history instead). Mirrors the store fold guard.
+    if (cutIdx >= 0) {
+      effective = history.slice(cutIdx)
+      const section = compactionPromptSection(compaction.summary)
+      appended = appended ? `${appended}\n\n${section}` : section
+    }
+  }
+
+  const messages = historyToAgentMessages(effective)
 
   const context: AgentContext = {
-    systemPrompt: resolveSystemPrompt(systemPrompt, systemPromptAppend),
+    systemPrompt: resolveSystemPrompt(systemPrompt, appended),
     messages,
     ...(tools.length > 0 ? { tools } : {}),
   }

@@ -2,6 +2,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import type {
   Session,
   SessionAttachment,
+  SessionCompaction,
   SessionFollowUp,
   SessionMention,
   SessionMessage,
@@ -163,6 +164,9 @@ const DEFAULT_SETTINGS: SessionSettings = {
   modelId: 'claude-opus-4-8',
   level: 'high',
   mode: 'ask',
+  // Response style (ADR 0046): no `responseStyle` id = "Normal" (no directive
+  // injected); markdown output on by default.
+  responseStyleNoMarkdown: false,
 }
 
 interface CreateSessionInput {
@@ -399,7 +403,20 @@ export const useSessionsStore = defineStore('sessions', {
         const accounts = useSettingsStore().providers[ld.provider]?.accounts ?? []
         if (accounts.some((a) => a.id === ld.accountId)) next.accountId = ld.accountId
       }
+      // Response style (ADR 0046): inherit the project's default style + modifier.
+      // Omitted style = Normal, so only set when the project pinned one.
+      if (ld.responseStyle) next.responseStyle = ld.responseStyle
+      if (ld.responseStyleNoMarkdown) next.responseStyleNoMarkdown = true
       return next
+    },
+
+    // MCP whitelist for a new session in this project. Returns a copy of the
+    // project's `llmDefaults.mcpServerIds`; undefined = all enabled servers (the
+    // default), so callers leave `session.mcpServerIds` unset in that case.
+    mcpDefaultsForProject(projectId: string | null): string[] | undefined {
+      if (!projectId) return undefined
+      const ld = useWorkspaceStore().projectById(projectId)?.llmDefaults
+      return ld?.mcpServerIds ? [...ld.mcpServerIds] : undefined
     },
 
     // Returns null when the quota gate refuses a new session (plan usage over the
@@ -423,6 +440,8 @@ export const useSessionsStore = defineStore('sessions', {
         pendingAgentIds: [],
         settings: this.settingsForProject(data.projectId),
       }
+      const mcpDefaults = this.mcpDefaultsForProject(data.projectId)
+      if (mcpDefaults !== undefined) session.mcpServerIds = mcpDefaults
       this.sessions.unshift(session)
       this.selectedSessionId = session.id
       pushToSidecar('sessions.upsert', { session, mode: 'create' })
@@ -646,6 +665,18 @@ export const useSessionsStore = defineStore('sessions', {
       if (!session) return
       const trimmed = text.trim()
       if (!trimmed && !(attachments && attachments.length)) return
+
+      // Auto-compact (ADR 0047): when the context is near full, summarise older
+      // turns BEFORE this turn so it runs on a cut context. Reuses the /compact
+      // path (running state + Stop). After it lands, session.compaction is set
+      // and forwarded with this turn below. Skipped when off or nothing to fold.
+      const settingsForCompact = useSettingsStore()
+      if (
+        settingsForCompact.autoCompact &&
+        shouldAutoCompact(session, settingsForCompact.defaults?.systemPrompt)
+      ) {
+        await this.compactSession(sessionId)
+      }
 
       // Auto-title: first user message in a still-default session becomes the
       // title. Strip newlines, cap at 60 chars with ellipsis so the sidebar
@@ -1067,6 +1098,9 @@ export const useSessionsStore = defineStore('sessions', {
           // globally-enabled servers (legacy). Empty array sent intentionally
           // so user can opt out of every MCP for this session.
           ...(session.mcpServerIds !== undefined ? { mcpServerIds: session.mcpServerIds } : {}),
+          // Active compaction checkpoint (ADR 0047). Sidecar feeds the model the
+          // summary + messages after the cut instead of the full history.
+          ...(session.compaction ? { compaction: session.compaction } : {}),
           // Active agent for this turn. Pha 1 (ADR 0015): we only pass an
           // agent tuple when exactly one agent is invited — sidecar then uses
           // that agent's systemPrompt for the turn. Multi-agent collab deferred.
@@ -1552,49 +1586,81 @@ export const useSessionsStore = defineStore('sessions', {
       )
     },
 
-    // `/compact` — ask the sidecar to run the SDK's context compaction on this
-    // session (ADR 0023). Dedicated path (not sendMessage) so no `/compact` user
-    // bubble appears; we show a transient system note instead. The sidecar also
-    // appends a canonical note to the JSONL, which replaces ours on next hydrate.
-    async compactSession(sessionId: string): Promise<void> {
+    // `/compact` — summarise older turns to free context (ADR 0047). Runs through
+    // the SAME running-state machinery as a normal turn (placeholder bubble +
+    // pending tag + active message id) so the composer shows the spinner + Stop,
+    // and the Stop button can abort the compaction RPC. On success the summary
+    // surfaces as a marker via session.compaction (not a reply bubble) and the
+    // full transcript stays visible.
+    async compactSession(
+      sessionId: string,
+      opts?: { keepRecentTokens?: number },
+    ): Promise<'compacted' | 'nothing' | 'busy' | 'unavailable' | 'error'> {
       const session = this.sessions.find((s) => s.id === sessionId)
-      if (!session) return
-      const noteId = newId('m')
-      session.messages.push({
-        id: noteId,
-        role: 'system',
-        text: 'Compacting context…',
-        at: nowIso(),
-      })
-      session.updatedAt = nowIso()
-      const noteById = (): SessionMessage | undefined =>
-        this.sessions.find((s) => s.id === sessionId)?.messages.find((m) => m.id === noteId)
+      if (!session) return 'error'
+      // Don't stack onto an in-flight turn / compaction.
+      if ((session.pendingAgentIds ?? []).includes(SIDECAR_PENDING_TAG)) return 'busy'
 
       const sidecar = useSidecar()
-      if (!sidecar.available) {
-        const n = noteById()
-        if (n) n.text = 'Compact requires the desktop app.'
-        return
+      if (!sidecar.available) return 'unavailable'
+
+      // Drive the normal running state. The placeholder is an empty agent bubble
+      // (same shape sendMessage uses) → the UI renders the loading spinner. We
+      // remove it on completion; the summary is rendered from session.compaction.
+      const placeholderId = newId('m')
+      session.messages.push({
+        id: placeholderId,
+        role: 'agent',
+        text: '',
+        at: nowIso(),
+        startedAt: Date.now(),
+      })
+      session.pendingAgentIds = [
+        ...new Set([...(session.pendingAgentIds ?? []), SIDECAR_PENDING_TAG]),
+      ]
+      session.updatedAt = nowIso()
+      this.activeMessageBySession[sessionId] = placeholderId
+
+      const cleanup = () => {
+        const s = this.sessions.find((x) => x.id === sessionId)
+        if (!s) return
+        const idx = s.messages.findIndex((m) => m.id === placeholderId)
+        if (idx >= 0) s.messages.splice(idx, 1)
+        s.pendingAgentIds = (s.pendingAgentIds ?? []).filter((a) => a !== SIDECAR_PENDING_TAG)
+        if (this.activeMessageBySession[sessionId] === placeholderId) {
+          delete this.activeMessageBySession[sessionId]
+        }
+        s.updatedAt = nowIso()
       }
+
       try {
-        const res = await sidecar.request<{ ok: boolean; reason?: string }>('sessions.compact', {
+        const res = await sidecar.request<{
+          ok: boolean
+          reason?: string
+          compaction?: SessionCompaction
+        }>('sessions.compact', {
           sessionId,
+          // Lets sessions.cancel abort this compaction (Stop button).
+          messageId: placeholderId,
           provider: session.settings.provider,
           modelId: session.settings.modelId,
           ...(session.settings.accountId ? { accountId: session.settings.accountId } : {}),
           ...(session.projectId ? { projectId: session.projectId } : {}),
+          ...(opts?.keepRecentTokens !== undefined
+            ? { keepRecentTokens: opts.keepRecentTokens }
+            : {}),
         })
-        const n = noteById()
-        if (n) {
-          n.text = res.ok
-            ? 'Context compacted to free up token budget.'
-            : 'Nothing to compact yet — send a message first.'
+        if (res.ok && res.compaction) {
+          const s = this.sessions.find((x) => x.id === sessionId)
+          if (s) s.compaction = res.compaction
+          return 'compacted'
         }
+        return 'nothing'
       } catch (err) {
-        const n = noteById()
-        if (n) n.text = 'Compact failed.'
-
         console.warn('[sessions] compact failed', err)
+        return 'error'
+      } finally {
+        cleanup()
       }
     },
 

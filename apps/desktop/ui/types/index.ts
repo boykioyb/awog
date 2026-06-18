@@ -9,6 +9,14 @@ export interface ProjectLlmDefaults {
   modelId: string
   level: ThinkingLevel
   accountId?: string
+  // MCP server ids new sessions opt into. Mirrors `Session.mcpServerIds`:
+  // undefined = all currently enabled servers (default); [] = none; [id…] =
+  // whitelist.
+  mcpServerIds?: string[]
+  // Response style (ADR 0046) new sessions inherit. Mirrors SessionSettings:
+  // undefined = "Normal" (no style). `responseStyleNoMarkdown` strips markdown.
+  responseStyle?: string
+  responseStyleNoMarkdown?: boolean
 }
 
 export interface Project {
@@ -544,6 +552,11 @@ export interface SessionSettings {
   level: ThinkingLevel
   mode: AgentMode
   accountId?: string
+  // Response style (ADR 0046). Built-in style id (utils/response-styles.ts) the
+  // session replies in; undefined = default. `responseStyleNoMarkdown` strips
+  // markdown from output (stacks on a style or applies on its own). Sessions only.
+  responseStyle?: string
+  responseStyleNoMarkdown?: boolean
 }
 
 export interface Session {
@@ -569,6 +582,21 @@ export interface Session {
   // to resume subsequent turns (ADR 0023). Owned/persisted by the sidecar; the
   // UI never sends it — it only hydrates it from the session JSONL.
   sdkSessionId?: string
+  // Latest context-compaction checkpoint (ADR 0047). When set, the model context
+  // is the summary + messages from `firstKeptMessageId` onward; the UI keeps the
+  // full transcript and renders a summary marker at the cut. Hydrated from the
+  // session JSONL + applied locally after a /compact run.
+  compaction?: SessionCompaction
+}
+
+// Context-compaction checkpoint (ADR 0047). Mirrors the sidecar SessionCompaction
+// shape. Only the latest checkpoint is kept (a later compaction subsumes prior).
+export interface SessionCompaction {
+  summary: string
+  firstKeptMessageId: string
+  // Estimated context tokens before compaction (marker hint).
+  tokensBefore: number
+  at: string
 }
 
 // One hit from `sessions.search` (Cmd+K full-text search): a single matched

@@ -39,6 +39,12 @@ export interface ToolFilter {
   // Include the ExitPlanMode tool. Only the chat runtime sets this (when the
   // session is in plan mode) so the model can present a plan; tasks never plan.
   includePlanTool?: boolean
+  // MCP server ids whose `mcp__<id>__*` tools bypass the allowedTools whitelist
+  // (disabledTools STILL applies). Set by the subagent Task path to the parent's
+  // inherited servers: the session/task attached them, not the agent, so an
+  // agent's narrower `tools:` list must not strip them (ADR 0030 inheritance).
+  // Has no effect on built-in tools (their names never match `mcp__<id>__`).
+  bypassAllowlistMcpServerIds?: string[]
 }
 
 // Whether a tool name survives the filter: allowedTools (intersect when set) +
@@ -61,6 +67,39 @@ export function isToolAllowed(name: string, filter: ToolFilter): boolean {
 // gates MCP tool names too).
 function applyFilter(tools: AgentTool[], filter: ToolFilter): AgentTool[] {
   return tools.filter((t) => isToolAllowed(t.name, filter))
+}
+
+// Parse the server id out of an MCP tool name (`mcp__<serverId>__<tool>`).
+// Returns undefined for non-MCP names. The server id is the segment between the
+// `mcp__` prefix and the first following `__` (server ids are slugs, no `__`).
+function mcpServerIdOf(toolName: string): string | undefined {
+  if (!toolName.startsWith('mcp__')) return undefined
+  const rest = toolName.slice('mcp__'.length)
+  const sep = rest.indexOf('__')
+  return sep === -1 ? undefined : rest.slice(0, sep)
+}
+
+// Filter MCP tools by name like applyFilter, EXCEPT tools whose server id is in
+// `filter.bypassAllowlistMcpServerIds` skip the allowedTools whitelist (they were
+// attached at the session/turn level, not by the agent). disabledTools always
+// applies. Built-in tools go through applyFilter, not this.
+function applyMcpFilter(tools: AgentTool[], filter: ToolFilter): AgentTool[] {
+  const bypass =
+    filter.bypassAllowlistMcpServerIds && filter.bypassAllowlistMcpServerIds.length > 0
+      ? new Set(filter.bypassAllowlistMcpServerIds)
+      : null
+  if (!bypass) return applyFilter(tools, filter)
+  return tools.filter((t) => {
+    const serverId = mcpServerIdOf(t.name)
+    if (serverId && bypass.has(serverId)) {
+      // Bypass allowedTools for this server; still honour the session denylist.
+      return isToolAllowed(
+        t.name,
+        filter.disabledTools ? { disabledTools: filter.disabledTools } : {},
+      )
+    }
+    return isToolAllowed(t.name, filter)
+  })
 }
 
 export function createAwogToolDefinitions(
@@ -129,8 +168,10 @@ export async function createRuntimeToolDefinitions(
 ): Promise<RuntimeToolset> {
   const builtIn = createAwogToolDefinitions(cwd, filter, askUser)
   const { tools: mcpTools, failures } = await createMcpToolDefinitions(mcpServers, signal)
-  // Built-in tools are already filtered; filter MCP tools by the same rules.
-  const tools = [...builtIn, ...applyFilter(mcpTools, filter)]
+  // Built-in tools are already filtered; filter MCP tools by the same rules,
+  // except parent-inherited servers (bypassAllowlistMcpServerIds) skip the
+  // allowedTools whitelist.
+  const tools = [...builtIn, ...applyMcpFilter(mcpTools, filter)]
   // Force sequential execution for EVERY built-in + MCP tool. Pi decides
   // parallel vs sequential per BATCH: a batch runs parallel only when the loop's
   // toolExecution is 'parallel' AND no tool in it is marked sequential

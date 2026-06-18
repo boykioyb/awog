@@ -157,6 +157,11 @@ export interface SessionSettings {
   level: ThinkingLevel
   mode: AgentMode
   accountId?: string
+  // Response style (ADR 0046). Built-in style id (style/styles.ts) the session
+  // replies in; undefined = default. `responseStyleNoMarkdown` strips markdown
+  // from output (stacks on a style or applies alone). Sessions only.
+  responseStyle?: string
+  responseStyleNoMarkdown?: boolean
 }
 
 // One ordered slice of an assistant turn (ADR 0032). Either a run of reply text
@@ -235,6 +240,19 @@ export interface SessionMessage {
   parts?: SessionMessagePart[]
 }
 
+// Context-compaction checkpoint (ADR 0047). Mirrors Pi's CompactionResult shape.
+// When set, the runtime feeds the model `summary` + every message from
+// `firstKeptMessageId` onward (older turns are summarised, not replayed). The UI
+// keeps the full transcript visible and renders a summary marker at the cut.
+// Only the LATEST checkpoint is kept (a later compaction subsumes the prior one).
+export interface SessionCompaction {
+  summary: string
+  firstKeptMessageId: string
+  // Estimated context tokens before this compaction (for the marker hint).
+  tokensBefore: number
+  at: string
+}
+
 export interface Session {
   id: string
   title: string
@@ -248,6 +266,8 @@ export interface Session {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Latest context-compaction checkpoint (ADR 0047), or absent if never compacted.
+  compaction?: SessionCompaction
 }
 
 // ─── Session steps (tool use / thinking) ───────────────────────────────────
@@ -367,6 +387,13 @@ export interface ProjectLlmDefaults {
   modelId: string
   level: ThinkingLevel
   accountId?: string
+  // MCP server whitelist new sessions inherit (mirror of Session.mcpServerIds).
+  // undefined = all currently enabled servers.
+  mcpServerIds?: string[]
+  // Response style (ADR 0046) new sessions inherit (mirror of SessionSettings).
+  // undefined = "Normal" (no style). `responseStyleNoMarkdown` strips markdown.
+  responseStyle?: string
+  responseStyleNoMarkdown?: boolean
 }
 
 export interface Project {

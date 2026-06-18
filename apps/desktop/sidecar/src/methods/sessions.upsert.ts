@@ -15,6 +15,9 @@ const SessionSettingsSchema = z.object({
   level: ThinkingLevelSchema,
   mode: z.enum(['ask', 'accept-edits', 'plan', 'execute']),
   accountId: z.string().optional(),
+  // Response style (ADR 0046) — persisted per session so it survives restart.
+  responseStyle: z.string().optional(),
+  responseStyleNoMarkdown: z.boolean().optional(),
 })
 
 const SessionMessageSchema = z
@@ -56,6 +59,10 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
     mode: parsed.mode,
   }
   if (parsed.accountId !== undefined) base.accountId = parsed.accountId
+  if (parsed.responseStyle !== undefined) base.responseStyle = parsed.responseStyle
+  if (parsed.responseStyleNoMarkdown !== undefined) {
+    base.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown
+  }
   return base
 }
 

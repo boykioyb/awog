@@ -132,7 +132,9 @@ function describeTool(agents: Agent[]): string {
     return `${intro}\n\n(No named subagents are configured in this workspace — calling this runs a general-purpose subagent that inherits the current agent, tools, and model.)`
   }
   const menu = agents
-    .map((a) => `- ${a.name}: ${a.description?.split('\n')[0]?.trim() || a.role || 'general-purpose'}`)
+    .map(
+      (a) => `- ${a.name}: ${a.description?.split('\n')[0]?.trim() || a.role || 'general-purpose'}`,
+    )
     .join('\n')
   return `${intro}\n\nAvailable subagent_type values:\n${menu}`
 }
@@ -207,6 +209,13 @@ async function spawnSubagent(
   // inherits every server the parent could reach, regardless of its own whitelist.
   const mcpServers = mergeMcpServers(deps.parentMcpServers, agentCtx.mcpServers)
 
+  // Parent-inherited servers' `mcp__<id>__*` tools must bypass the agent's
+  // `tools:` whitelist — the session/task attached them, not the agent, so a
+  // narrow allowedTools list (e.g. just Read/Write/Bash) must not silently strip
+  // them (the merge comment above promises the subagent reaches every parent
+  // server). The agent's OWN AGENT.md MCP servers still respect allowedTools.
+  const parentMcpIds = deps.parentMcpServers ? Object.keys(deps.parentMcpServers) : []
+
   // Subagent toolset: built-in + the merged MCP tools, filtered by the agent's
   // allowedTools and the session denylist. NO Task tool (depth = 1) and NO plan.
   const { tools, failures: mcpFailures } = await createRuntimeToolDefinitions(
@@ -215,6 +224,7 @@ async function spawnSubagent(
     {
       ...(agentCtx.allowedTools ? { allowedTools: agentCtx.allowedTools } : {}),
       ...(deps.disabledTools ? { disabledTools: deps.disabledTools } : {}),
+      ...(parentMcpIds.length > 0 ? { bypassAllowlistMcpServerIds: parentMcpIds } : {}),
     },
     signal,
   )

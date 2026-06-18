@@ -10,6 +10,7 @@
 import {
   runAgentLoop,
   generateSummary,
+  DEFAULT_COMPACTION_SETTINGS,
   type AgentEvent,
   type AgentMessage,
 } from '@earendil-works/pi-agent-core'
@@ -21,7 +22,8 @@ import { log } from '../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../sessions/runner.js'
 import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
-import { buildContext } from './context-builder.js'
+import { buildContext, historyToAgentMessages } from './context-builder.js'
+import { computeCutPoint } from './compaction.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
@@ -30,6 +32,7 @@ import { makeBeforeToolCall } from './permission.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
 import { buildRulesPrompt } from '../rules/inject.js'
+import { buildStylePrompt } from '../style/styles.js'
 
 // Plan-mode system-prompt nudge. The model is read-only here (permission.ts
 // blocks Write/Edit/Bash); it should investigate, then present a concrete plan
@@ -122,12 +125,19 @@ export async function runStreamPi(
   // Workspace rules (ADR 0033): enabled global + session-project rules, appended
   // to (not replacing) the agent's own prompt.
   const rulesPrompt = await buildRulesPrompt(args.projectId)
+  // Response style (ADR 0046, sessions only): user-picked tone/format directive,
+  // appended after rules (rules outrank style semantically) and before VERIFY.
+  const stylePrompt = buildStylePrompt(
+    args.settings.responseStyle,
+    args.settings.responseStyleNoMarkdown,
+  )
   // Tell the model — in-band — about any attached MCP server that failed to
   // load, so it doesn't call its absent tools or fabricate their results.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
   const appendParts = [
     args.systemPromptAppend,
     rulesPrompt,
+    stylePrompt,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
     mcpUnavailable,
@@ -191,6 +201,9 @@ export async function runStreamPi(
     systemPromptAppend,
     tools,
     args.pendingAttachments,
+    // Active compaction checkpoint (ADR 0047): feed the model summary + recent
+    // turns instead of the full transcript.
+    args.compaction,
   )
 
   const reasoning = toReasoning(args.settings.level, model)
@@ -311,55 +324,69 @@ export async function runStreamPi(
   }
 }
 
-// `/compact` via generateSummary. Builds a tools-free context from history and
-// asks the model to summarise; returns the summary as the turn text so the
-// caller can persist it. Failure → a non-fatal notice (parity goal is not to
-// block on compaction).
+// `/compact` (ADR 0047). Re-summarises the older transcript prefix (the JSONL is
+// the source of truth — ADR 0029) and returns a compaction checkpoint the caller
+// persists; the model context is cut in buildContext on subsequent turns. We
+// keep ~`keepRecentTokens` of recent turns verbatim and reserve `reserveTokens`
+// for the summary prompt + output — both from Pi's DEFAULT_COMPACTION_SETTINGS.
+// Failure / nothing-to-do → a notice with no `compaction` (never blocks).
 async function runCompact(
   args: RunNonStreamArgs,
   model: ReturnType<typeof resolveModel>['model'],
   getApiKey: ReturnType<typeof resolveModel>['getApiKey'],
 ): Promise<RunStreamResult> {
-  const { context } = buildContext(args.history, args.pendingText, args.systemPrompt, undefined, [])
-  const apiKey = await getApiKey(args.settings.provider)
-  if (!apiKey) {
-    return {
-      text: 'Compaction skipped: no credential available.',
-      modelUsed: args.settings.modelId,
-      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
-      stopReason: 'end_turn',
-    }
+  const notice = (text: string): RunStreamResult => ({
+    text,
+    modelUsed: args.settings.modelId,
+    usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
+    stopReason: 'end_turn',
+  })
+
+  // Manual /compact passes keepRecentTokens: 0 (keep only the last turn) so it
+  // compacts even a short conversation; auto-compact omits it → Pi's 20k default.
+  const keepRecentTokens = args.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens
+  const cut = computeCutPoint(args.history, keepRecentTokens)
+  if (!cut) return notice('Nothing to compact yet — the conversation is still short.')
+  // Already compacted through this exact point with nothing new to fold → skip
+  // (prevents a no-op re-compact when /compact runs twice in a row).
+  if (args.compaction && args.compaction.firstKeptMessageId === cut.firstKeptMessageId) {
+    return notice('Already compacted — no new messages to summarize.')
   }
+
+  const apiKey = await getApiKey(args.settings.provider)
+  if (!apiKey) return notice('Compaction skipped: no credential available.')
+
   try {
-    const reserveTokens = Math.floor(model.contextWindow / 4)
+    const summaryMessages = historyToAgentMessages(cut.toSummarize)
     const res = await generateSummary(
-      context.messages,
+      summaryMessages,
       model,
-      reserveTokens,
+      DEFAULT_COMPACTION_SETTINGS.reserveTokens,
       apiKey,
       model.headers,
       args.abortController?.signal,
     )
-    const summary = res.ok ? res.value : `Compaction failed: ${String(res.error)}`
+    if (!res.ok) {
+      log.warn('runtime /compact: generateSummary failed', {
+        sessionId: args.sessionId,
+        err: String(res.error),
+      })
+      return notice('Compaction failed — the conversation is unchanged.')
+    }
     return {
-      text: summary,
-      modelUsed: args.settings.modelId,
-      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
-      stopReason: 'end_turn',
+      ...notice('Context compacted.'),
+      compaction: {
+        summary: res.value,
+        firstKeptMessageId: cut.firstKeptMessageId,
+        tokensBefore: cut.tokensBefore,
+        at: new Date().toISOString(),
+      },
     }
   } catch (err) {
-    // TODO (ADR 0029 C1): verify generateSummary parity vs SDK /compact (it
-    // produces a summary string but does NOT overwrite JSONL here — the caller
-    // owns persistence). Graceful fallback keeps the turn from failing.
     log.warn('runtime /compact failed', {
       sessionId: args.sessionId,
       err: err instanceof Error ? err.message : String(err),
     })
-    return {
-      text: 'Compaction is not available on this runtime yet.',
-      modelUsed: args.settings.modelId,
-      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
-      stopReason: 'end_turn',
-    }
+    return notice('Compaction is not available right now.')
   }
 }
