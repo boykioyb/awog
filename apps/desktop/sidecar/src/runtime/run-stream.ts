@@ -112,6 +112,10 @@ export async function runStreamPi(
       workspace: args.cwd ?? process.cwd(),
       ...(args.projectId ? { projectId: args.projectId } : {}),
     },
+    // Session MCP pool key: reuse one child per attached server across this
+    // session's turns so stateful servers (Playwright) keep their browser open
+    // between tool calls instead of reopening/closing each call.
+    args.sessionId,
   )
 
   // Append system-prompt nudges after the agent's own prompt (+ any existing

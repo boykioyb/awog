@@ -10,15 +10,21 @@
 // So this bridge does NOT re-do whitelist or secret expansion — it consumes the
 // map as-is. It DOES honour the http SSRF guard and never logs secrets/headers.
 //
-// Reuse decision: PER-TURN short-lived clients built from `mcpServers`, reusing
-// AWOG's existing client classes — `StdioMcpClient` (exported from mcp/manager
-// .ts) for stdio and `HttpMcpClient` + `ssrfCheck` (mcp/http-client.ts) for http.
-// McpManager keeps no warm client references after its handshake (it retains the
-// child process, not the JSON-RPC client), so there is nothing to reuse from it;
-// per-turn clients from the already-resolved config are the cleanest fit and
-// avoid coupling the runtime to McpManager's lifecycle/idle-stop machinery. The
-// stdio child spawned here is killed when the turn ends (no idle window needed —
-// it lives only for the duration of one agent loop).
+// Reuse decision: short-lived clients built from `mcpServers`, reusing AWOG's
+// existing client classes — `StdioMcpClient` (mcp/manager.ts) for stdio and
+// `HttpMcpClient` + `ssrfCheck` (mcp/http-client.ts) for http. McpManager keeps
+// no warm client references after its handshake (it retains the child process,
+// not the JSON-RPC client), so there is nothing to reuse from it.
+//
+// Connection lifetime depends on `poolKey`:
+//   - No poolKey (tasks / one-shot / subagents): a fresh stdio child per tool
+//     call, killed when the call returns. Correct for STATELESS servers.
+//   - poolKey set (Sessions pass their sessionId): ONE long-lived child per
+//     server, reused across every turn of the session via the session pool
+//     below — so STATEFUL servers (Playwright keeps its browser inside the
+//     server process) survive `browser_navigate` → snapshot → click instead of
+//     the browser closing the instant the first call returns. Torn down on
+//     session delete, idle timeout, child death, or sidecar shutdown.
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Type } from '@earendil-works/pi-ai'
@@ -69,10 +75,13 @@ interface McpTransport {
   notify: (method: string, params: unknown) => void | Promise<void>
 }
 
-// A connected per-turn client plus an optional disposer (stdio child kill).
+// A connected client: its transport, a disposer (stdio child kill / http no-op),
+// and a liveness probe. `alive()` lets the session pool detect a dead child
+// (browser crashed / window closed) and respawn instead of reusing a broken one.
 interface ConnectedClient {
   transport: McpTransport
   dispose: () => void
+  alive: () => boolean
 }
 
 // Raw MCP tool descriptor from tools/list. `inputSchema` is a JSON Schema object
@@ -131,7 +140,7 @@ function connect(serverId: string, server: ResolvedMcpServer): ConnectedClient |
       return null
     }
     const client = new HttpMcpClient(server.url, server.headers ?? {})
-    return { transport: client, dispose: () => {} }
+    return { transport: client, dispose: () => {}, alive: () => true }
   }
   if (isStdioServer(server)) {
     let child: ChildProcessWithoutNullStreams
@@ -161,6 +170,16 @@ function connect(serverId: string, server: ResolvedMcpServer): ConnectedClient |
         err: err instanceof Error ? err.message : String(err),
       })
     })
+    // Liveness flag for the session pool: flip on exit/close so a pooled
+    // connection whose child died (browser closed/crashed) is detected on the
+    // next acquire and respawned instead of reused.
+    let alive = true
+    child.once('exit', () => {
+      alive = false
+    })
+    child.once('close', () => {
+      alive = false
+    })
     const client = new StdioMcpClient(child)
     const dispose = (): void => {
       try {
@@ -169,7 +188,7 @@ function connect(serverId: string, server: ResolvedMcpServer): ConnectedClient |
         // ignore — best effort cleanup
       }
     }
-    return { transport: client, dispose }
+    return { transport: client, dispose, alive: () => alive }
   }
   log.warn('mcp bridge: unsupported server kind, skipping', { serverId })
   return null
@@ -188,6 +207,224 @@ async function initialize(transport: McpTransport, timeoutMs: number): Promise<v
     timeoutMs,
   )
   await transport.notify('notifications/initialized', {})
+}
+
+// ─── Session MCP connection pool (per-session reuse for stateful servers) ──────
+//
+// Keyed by poolKey (a session's sessionId) → serverId → one long-lived,
+// already-initialized client that survives across turns. Lets a Session keep a
+// Playwright browser open between `browser_navigate` → snapshot → click instead
+// of the per-call kill closing it. Tasks / one-shot / subagents pass no poolKey
+// and never touch this pool.
+
+interface PoolEntry {
+  client: ConnectedClient
+  // initialize() runs exactly once per connection; every caller awaits this.
+  ready: Promise<void>
+  // Redacted config fingerprint (no secret VALUES) — respawn when it drifts.
+  configKey: string
+  lastActivityAt: number
+}
+
+// poolKey (sessionId) → serverId → entry.
+const POOL = new Map<string, Map<string, PoolEntry>>()
+
+// Idle backstop: a session's MCP child is stopped after this long with no tool
+// activity, freeing a lingering browser. Longer than McpManager's 5 min because a
+// user may pause between turns mid-task and still expect the browser to be there.
+const SESSION_MCP_IDLE_MS = 15 * 60_000
+const SESSION_MCP_SWEEP_MS = 60_000
+let sweepTimer: ReturnType<typeof setInterval> | undefined
+
+// A redacted fingerprint of the resolved config — command/url + arg list + the
+// NAMES (not values) of env/header secrets. Secret values never enter this string
+// (invariant 1). A drift (different command / swapped server) evicts the pooled
+// child so the next acquire respawns with the new config.
+function configKeyOf(server: ResolvedMcpServer): string {
+  if (isHttpServer(server)) {
+    return `http:${server.url}:${Object.keys(server.headers ?? {}).sort().join(',')}`
+  }
+  if (isStdioServer(server)) {
+    const args = (server.args ?? []).join(' ')
+    const envKeys = Object.keys(server.env ?? {}).sort().join(',')
+    return `stdio:${server.command}:${args}:${envKeys}`
+  }
+  return 'unknown'
+}
+
+function evict(servers: Map<string, PoolEntry>, serverId: string, entry: PoolEntry): void {
+  if (servers.get(serverId) === entry) servers.delete(serverId)
+  try {
+    entry.client.dispose()
+  } catch {
+    // best effort — the child may already be gone
+  }
+}
+
+// Get-or-create a pooled, initialized client for (poolKey, serverId). Recreates
+// when the prior child died or the config drifted. Returns null only when
+// connect() itself fails (unsupported transport / spawn error). Callers MUST
+// await the returned entry's `ready` before issuing requests.
+function acquireSessionMcp(
+  poolKey: string,
+  serverId: string,
+  server: ResolvedMcpServer,
+): PoolEntry | null {
+  const servers = POOL.get(poolKey) ?? new Map<string, PoolEntry>()
+  POOL.set(poolKey, servers)
+  const configKey = configKeyOf(server)
+  const existing = servers.get(serverId)
+  if (existing) {
+    if (existing.configKey === configKey && existing.client.alive()) {
+      existing.lastActivityAt = Date.now()
+      return existing
+    }
+    // Stale (config changed or child dead) → drop and respawn below.
+    evict(servers, serverId, existing)
+  }
+  const conn = connect(serverId, server)
+  if (!conn) return null
+  const entry: PoolEntry = {
+    client: conn,
+    configKey,
+    lastActivityAt: Date.now(),
+    ready: Promise.resolve(),
+  }
+  // Initialize once; on failure evict so the next turn retries with a fresh child.
+  entry.ready = initialize(conn.transport, listTimeoutFor(server)).catch((err: unknown) => {
+    evict(servers, serverId, entry)
+    throw err
+  })
+  servers.set(serverId, entry)
+  startSessionMcpSweep()
+  return entry
+}
+
+// Dispose every pooled MCP child for a session. Called from sessions.delete so a
+// closed session leaves no orphan browser running for the sidecar lifetime.
+export function releaseSessionMcp(poolKey: string): void {
+  const servers = POOL.get(poolKey)
+  if (!servers) return
+  POOL.delete(poolKey)
+  for (const [serverId, entry] of servers) {
+    log.info('mcp pool: releasing session server', { poolKey, serverId })
+    try {
+      entry.client.dispose()
+    } catch {
+      // best effort
+    }
+  }
+}
+
+function startSessionMcpSweep(): void {
+  if (sweepTimer) return
+  sweepTimer = setInterval(() => {
+    const now = Date.now()
+    for (const [poolKey, servers] of POOL) {
+      for (const [serverId, entry] of servers) {
+        if (entry.client.alive() && now - entry.lastActivityAt < SESSION_MCP_IDLE_MS) continue
+        log.info('mcp pool: idle-stopping session server', {
+          poolKey,
+          serverId,
+          idleMs: now - entry.lastActivityAt,
+        })
+        evict(servers, serverId, entry)
+      }
+      if (servers.size === 0) POOL.delete(poolKey)
+    }
+  }, SESSION_MCP_SWEEP_MS)
+  // Don't keep the event loop alive just for the sweep.
+  sweepTimer.unref()
+}
+
+function shutdownSessionMcpPool(): void {
+  for (const servers of POOL.values()) {
+    for (const entry of servers.values()) {
+      try {
+        entry.client.dispose()
+      } catch {
+        // best effort
+      }
+    }
+  }
+  POOL.clear()
+}
+
+process.once('SIGTERM', shutdownSessionMcpPool)
+process.once('SIGINT', shutdownSessionMcpPool)
+
+// A leased transport for one tools/list or tools/call round-trip. Pooled leases
+// reuse the session's long-lived client (release = no-op, child survives); plain
+// leases own a fresh per-call child (release = dispose/kill).
+type Lease =
+  | { ok: true; transport: McpTransport; needsInit: boolean; release: () => void }
+  | { ok: false; reason: string }
+
+// Obtain a transport for (poolKey?, serverId, server). With a poolKey it returns
+// the session-pooled, already-initialized client (needsInit:false). Without one
+// it connects a fresh per-call client (needsInit:true) the caller disposes.
+async function leaseTransport(
+  poolKey: string | undefined,
+  serverId: string,
+  server: ResolvedMcpServer,
+): Promise<Lease> {
+  const notReachable = 'could not start (command not found or unsupported transport)'
+  if (poolKey) {
+    const entry = acquireSessionMcp(poolKey, serverId, server)
+    if (!entry) return { ok: false, reason: notReachable }
+    try {
+      await entry.ready
+    } catch (err) {
+      return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+    }
+    return { ok: true, transport: entry.client.transport, needsInit: false, release: () => {} }
+  }
+  const conn = connect(serverId, server)
+  if (!conn) return { ok: false, reason: notReachable }
+  return { ok: true, transport: conn.transport, needsInit: true, release: () => conn.dispose() }
+}
+
+// Issue a JSON-RPC request that rejects promptly if either signal aborts, while
+// leaving the underlying connection INTACT — critical for pooled clients: a turn
+// cancel must abandon this call without closing the session's browser. The
+// orphaned request settles later via the transport's own timeout (no-op then).
+function requestWithAbort(
+  transport: McpTransport,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  signals: (AbortSignal | undefined)[],
+): Promise<unknown> {
+  for (const s of signals) {
+    if (s?.aborted) return Promise.reject(new Error('aborted'))
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const cleanup = (): void => {
+      for (const s of signals) s?.removeEventListener('abort', onAbort)
+    }
+    const onAbort = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error('aborted'))
+    }
+    for (const s of signals) s?.addEventListener('abort', onAbort, { once: true })
+    transport.request(method, params, timeoutMs).then(
+      (v) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve(v)
+      },
+      (e: unknown) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(e instanceof Error ? e : new Error(String(e)))
+      },
+    )
+  })
 }
 
 function parseToolsList(raw: unknown): RawMcpTool[] {
@@ -261,13 +498,17 @@ export interface McpToolset {
 export async function createMcpToolDefinitions(
   mcpServers: McpServersConfig | undefined,
   signal?: AbortSignal,
+  // Session pool key (sessionId). When set, every server's child is reused across
+  // turns and survives until session delete / idle / shutdown (stateful servers
+  // like Playwright keep their browser open). Absent → per-call spawn (default).
+  poolKey?: string,
 ): Promise<McpToolset> {
   if (!mcpServers) return { tools: [], failures: [] }
   const entries = Object.entries(mcpServers)
   if (entries.length === 0) return { tools: [], failures: [] }
 
   const perServer = await Promise.all(
-    entries.map((entry) => listServerTools(entry[0], entry[1], signal)),
+    entries.map((entry) => listServerTools(entry[0], entry[1], signal, poolKey)),
   )
   return {
     tools: perServer.flatMap((r) => r.tools),
@@ -284,32 +525,31 @@ async function listServerTools(
   serverId: string,
   server: ResolvedMcpServer,
   signal?: AbortSignal,
+  poolKey?: string,
 ): Promise<{ tools: AgentTool[]; failure?: McpLoadFailure }> {
-  const conn = connect(serverId, server)
-  if (!conn) {
-    return {
-      tools: [],
-      failure: { serverId, reason: 'could not start (command not found or unsupported transport)' },
-    }
+  const lease = await leaseTransport(poolKey, serverId, server)
+  if (!lease.ok) {
+    return { tools: [], failure: { serverId, reason: lease.reason } }
   }
   let rawTools: RawMcpTool[]
   try {
     const timeout = listTimeoutFor(server)
-    await initialize(conn.transport, timeout)
-    const listed = await conn.transport.request('tools/list', {}, timeout)
+    // Pooled leases are already initialized once per connection; only a fresh
+    // per-call client needs the handshake here.
+    if (lease.needsInit) await initialize(lease.transport, timeout)
+    const listed = await requestWithAbort(lease.transport, 'tools/list', {}, timeout, [signal])
     rawTools = parseToolsList(listed)
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     log.warn('mcp bridge: tools/list failed, skipping server', { serverId, err: reason })
     return { tools: [], failure: { serverId, reason } }
   } finally {
-    // The listing connection is short-lived; the per-call execute() opens a
-    // fresh one. This keeps each tool self-contained and avoids holding a stdio
-    // child open for the whole turn when the tool may never be called.
-    conn.dispose()
+    // Pooled: no-op (the session keeps the child). Per-call: disposes the
+    // short-lived listing child; execute() opens its own.
+    lease.release()
   }
 
-  return { tools: rawTools.map((t) => synthTool(serverId, server, t, signal)) }
+  return { tools: rawTools.map((t) => synthTool(serverId, server, t, signal, poolKey)) }
 }
 
 // A system-prompt note listing servers that were attached but failed to load.
@@ -335,6 +575,7 @@ function synthTool(
   server: ResolvedMcpServer,
   tool: RawMcpTool,
   loopSignal?: AbortSignal,
+  poolKey?: string,
 ): AgentTool {
   // EXACT name format `mcp__<serverId>__<toolName>` — trace-mapper.ts's scalar
   // fallback, step-mapper, and the system-prompt MCP nudge in
@@ -356,28 +597,27 @@ function synthTool(
     parameters,
     async execute(_toolCallId, params, sig): Promise<AgentToolResult<unknown>> {
       // Honour both the per-call signal and the loop-level signal: if either is
-      // already aborted, fail fast before spawning anything.
+      // already aborted, fail fast before connecting anything.
       if (sig?.aborted || loopSignal?.aborted) {
         throw new Error(`MCP tool ${tool.name} aborted`)
       }
-      // Reconnect per call (stdio child is per-call; http is stateless). A
-      // connection failure here is a real tool failure → throw (the loop turns it
-      // into an error tool result). Error messages never include secrets/headers.
-      const conn = connect(serverId, server)
-      if (!conn) {
+      // Pooled: reuse the session's long-lived client (browser stays open).
+      // Per-call: connect a fresh stdio child. A connection failure here is a real
+      // tool failure → throw. Error messages never include secrets/headers.
+      const lease = await leaseTransport(poolKey, serverId, server)
+      if (!lease.ok) {
         throw new Error(`MCP server "${serverId}" is not reachable`)
       }
-      // Kill the stdio child / abandon the http call if the turn is aborted while
-      // the tool is in flight (the JSON-RPC client also has a per-request timeout).
-      const onAbort = (): void => conn.dispose()
-      sig?.addEventListener('abort', onAbort, { once: true })
-      loopSignal?.addEventListener('abort', onAbort, { once: true })
       try {
-        await initialize(conn.transport, listTimeoutFor(server))
-        const result = (await conn.transport.request(
+        if (lease.needsInit) await initialize(lease.transport, listTimeoutFor(server))
+        // requestWithAbort rejects promptly on cancel but never disposes the
+        // connection — a pooled session's browser must survive a turn cancel.
+        const result = (await requestWithAbort(
+          lease.transport,
           'tools/call',
           { name: tool.name, arguments: params ?? {} },
           MCP_CALL_TIMEOUT_MS,
+          [sig, loopSignal],
         )) as ToolCallResult
         const content = mapResultContent(result?.content)
         // An MCP tool that returns isError:true is a NORMAL result (the model
@@ -396,9 +636,9 @@ function synthTool(
         const message = err instanceof Error ? err.message : String(err)
         throw new Error(`MCP tool ${tool.name} failed: ${message}`)
       } finally {
-        sig?.removeEventListener('abort', onAbort)
-        loopSignal?.removeEventListener('abort', onAbort)
-        conn.dispose()
+        // Pooled: no-op (keep the child alive for the next turn). Per-call: kills
+        // the stdio child.
+        lease.release()
       }
     },
   }

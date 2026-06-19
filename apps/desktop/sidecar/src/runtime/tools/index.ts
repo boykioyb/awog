@@ -165,9 +165,18 @@ export async function createRuntimeToolDefinitions(
   // Hook anchor context (ADR 0032). When set, every tool's execute is wrapped so
   // tool.* / artifact.* hooks fire around it (sessions + tasks). Absent → no wrap.
   hookContext?: HookToolContext,
+  // Session MCP pool key (sessionId). Forwarded to the MCP bridge so a session's
+  // stateful servers (e.g. Playwright) keep one child across turns — the browser
+  // stays open between tool calls. Only the chat runtime (sessions) sets it;
+  // tasks / subagents / one-shot omit it → per-call spawn (unchanged).
+  mcpPoolKey?: string,
 ): Promise<RuntimeToolset> {
   const builtIn = createAwogToolDefinitions(cwd, filter, askUser)
-  const { tools: mcpTools, failures } = await createMcpToolDefinitions(mcpServers, signal)
+  const { tools: mcpTools, failures } = await createMcpToolDefinitions(
+    mcpServers,
+    signal,
+    mcpPoolKey,
+  )
   // Built-in tools are already filtered; filter MCP tools by the same rules,
   // except parent-inherited servers (bypassAllowlistMcpServerIds) skip the
   // allowedTools whitelist.
