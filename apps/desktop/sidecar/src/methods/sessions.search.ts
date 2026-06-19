@@ -1,15 +1,16 @@
 // Full-text search across every session's message transcript.
 //
-// Local-first: folds each session JSONL (via listSessions) and scans message
+// Local-first: folds each session JSONL (via listFullSessions) and scans message
 // text for a case-insensitive substring match, returning one result per matched
 // message with a snippet window. Backs the UI's Cmd+K search palette. Sessions
-// come back newest-first (listSessions sorts by updatedAt), so results are
-// already in recency order. No index — fine for the modest local session count;
-// a future optimisation can cache folded snapshots if this gets slow.
+// come back newest-first (listFullSessions sorts by updatedAt), so results are
+// already in recency order. This is the one path that still needs full
+// transcripts (ADR 0048); it runs on-demand when the user searches, not at
+// startup, so folding all files here is acceptable.
 
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { listSessions } from '../sessions/store.js'
+import { listFullSessions } from '../sessions/store.js'
 
 const Params = z.object({
   query: z.string().min(2).max(200),
@@ -42,7 +43,7 @@ register('sessions.search', async (raw) => {
   const needle = q.toLowerCase()
   const limit = params.limit ?? 50
 
-  const sessions = await listSessions()
+  const sessions = await listFullSessions()
   const results: SessionSearchResult[] = []
 
   outer: for (const session of sessions) {

@@ -270,6 +270,32 @@ export interface Session {
   compaction?: SessionCompaction
 }
 
+// Lightweight list-row projection of a Session WITHOUT `messages` (ADR 0048).
+// `sessions.list` returns these from sessions/index.json so app startup reads KB
+// instead of folding every transcript into RAM. Open a session → `sessions.get`
+// for the full Session with messages.
+export interface SessionSummary {
+  id: string
+  title: string
+  projectId: string | null
+  createdAt: string
+  updatedAt: string
+  pinned?: boolean
+  invitedAgentIds: string[]
+  pendingAgentIds: string[]
+  settings: SessionSettings
+  disabledTools?: string[]
+  mcpServerIds?: string[]
+  // True when a compaction checkpoint exists — lets the UI badge it without
+  // loading the transcript.
+  hasCompaction?: boolean
+  // Count for the list badge ("N msg"). Maintained incrementally on the index;
+  // exact after a fold-based rebuild.
+  messageCount: number
+  // Trimmed preview of the last message text, for list subtitles.
+  lastPreview?: string
+}
+
 // ─── Session steps (tool use / thinking) ───────────────────────────────────
 // Mirrors apps/desktop/ui/types/index.ts SessionStep. Sidecar emits these via
 // session.step notifications when the SDK reports tool_use / tool_result.

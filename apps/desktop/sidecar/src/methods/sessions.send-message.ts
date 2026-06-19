@@ -418,6 +418,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // re-nests on hydrate.
   let accumulatedText = ''
   const collectedSteps = new Map<string, SessionStep>()
+  // High-water marks for the byte-minimal progress deltas (see persistProgress):
+  // each throttled write appends only the text + steps added since the last one.
+  let persistedTextLen = 0
+  let persistedStepCount = 0
 
   // Ordered timeline parts (ADR 0032): reply-text runs interleaved with steps in
   // arrival order. This is the minimalist-agent `applyEvent` reducer — a tool/step
@@ -460,13 +464,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     })
   }
 
-  // Append a snapshot of the assistant message. Idempotent by message id: the
-  // JSONL fold upserts `message.appended` by id, so repeated snapshots (partial
-  // → partial → final) collapse to last-write-wins. Partial snapshots omit
-  // startedAt so a crash-loaded partial renders static, not stuck "streaming".
-  // appendEvent (no re-fold guard) keeps throttled writes cheap; if the session
-  // was deleted mid-turn the fold tombstones these anyway.
-  const persistAgent = async (opts: { final: boolean; result?: RunStreamResult }) => {
+  // Append the authoritative FINAL snapshot of the assistant turn (full text +
+  // steps + parts + usage). Upserts by message id over any mid-stream
+  // `message.progress` deltas — last write wins. Called once per turn at every
+  // exit (success, cancel, error). appendEvent has no re-fold guard; if the
+  // session was deleted mid-turn the fold tombstones this anyway.
+  const persistAgent = async (opts: { result?: RunStreamResult }) => {
     const steps = [...collectedSteps.values()]
     const message: SessionMessage = {
       id: params.messageId,
@@ -480,27 +483,25 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       // Park time (permission/question waits) so a reloaded turn keeps the
       // working-time elapsed instead of full wall-clock.
       ...(waitingMs > 0 ? { waitingMs } : {}),
+      completedAt: Date.now(),
     }
-    if (opts.final) {
-      message.completedAt = Date.now()
-      if (opts.result) {
-        message.modelUsed = opts.result.modelUsed
-        message.usage = {
-          inputTokens: opts.result.usage.input_tokens,
-          outputTokens: opts.result.usage.output_tokens,
-          cacheReadTokens: opts.result.usage.cache_read_tokens,
-          cacheWriteTokens: opts.result.usage.cache_creation_tokens,
-        }
-        // Graceful `error` stop: the loop returned normally but the provider
-        // failed mid-turn. Persist the cause so a reload shows the error alert
-        // (+ retry) instead of an empty/finished-looking reply.
-        if (opts.result.stopReason === 'error') {
-          message.error = { message: opts.result.errorMessage ?? 'The model returned an error.' }
-        }
-      } else {
-        // Reached on cancel/error: flag the truncated reply so the UI badges it.
-        message.canceled = true
+    if (opts.result) {
+      message.modelUsed = opts.result.modelUsed
+      message.usage = {
+        inputTokens: opts.result.usage.input_tokens,
+        outputTokens: opts.result.usage.output_tokens,
+        cacheReadTokens: opts.result.usage.cache_read_tokens,
+        cacheWriteTokens: opts.result.usage.cache_creation_tokens,
       }
+      // Graceful `error` stop: the loop returned normally but the provider
+      // failed mid-turn. Persist the cause so a reload shows the error alert
+      // (+ retry) instead of an empty/finished-looking reply.
+      if (opts.result.stopReason === 'error') {
+        message.error = { message: opts.result.errorMessage ?? 'The model returned an error.' }
+      }
+    } else {
+      // Reached on cancel/error: flag the truncated reply so the UI badges it.
+      message.canceled = true
     }
     try {
       await appendEvent(params.sessionId, {
@@ -511,23 +512,48 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     } catch (err) {
       log.warn('failed to persist agent message', {
         sessionId: params.sessionId,
-        final: opts.final,
         err: err instanceof Error ? err.message : String(err),
       })
     }
   }
 
-  // Throttle mid-stream snapshots so a hard kill loses at most ~1s of reply, not
-  // the whole turn, without writing a JSONL line per token. Fire-and-forget: the
-  // per-session append lock serialises writes in call order, and the guaranteed
-  // final snapshot (below) always lands last.
+  // Append a byte-minimal progress delta: ONLY the text + steps added since the
+  // previous call, never the whole growing message. This is the root fix for the
+  // O(steps²) JSONL bloat — pre-fix each throttled snapshot re-serialised the
+  // full accumulated steps[], so a long turn could balloon a session file into
+  // the gigabytes. The final `message.appended` snapshot (below) supersedes these
+  // deltas by id; a hard kill mid-turn leaves them so the fold still rebuilds the
+  // partial reply. Fire-and-forget: the per-session append lock serialises writes.
+  const persistProgress = () => {
+    const steps = [...collectedSteps.values()]
+    const newSteps = steps.slice(persistedStepCount)
+    const textDelta = accumulatedText.slice(persistedTextLen)
+    if (!newSteps.length && !textDelta) return
+    persistedTextLen = accumulatedText.length
+    persistedStepCount = steps.length
+    void appendEvent(params.sessionId, {
+      type: 'message.progress',
+      at: new Date().toISOString(),
+      id: params.messageId,
+      ...(textDelta ? { textDelta } : {}),
+      ...(newSteps.length ? { steps: newSteps } : {}),
+    }).catch((err) => {
+      log.warn('failed to persist progress delta', {
+        sessionId: params.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    })
+  }
+
+  // Throttle mid-stream deltas so a hard kill loses at most ~1s of reply, without
+  // writing a JSONL line per token.
   const PARTIAL_PERSIST_THROTTLE_MS = 1200
   let lastPartialPersistAt = 0
   const schedulePartialPersist = () => {
     const now = Date.now()
     if (now - lastPartialPersistAt < PARTIAL_PERSIST_THROTTLE_MS) return
     lastPartialPersistAt = now
-    void persistAgent({ final: false })
+    persistProgress()
   }
 
   let result
@@ -594,12 +620,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       },
     )
     // Success → persist the authoritative final reply (full text + usage + steps).
-    await persistAgent({ final: true, result })
+    await persistAgent({ result })
   } catch (err) {
     // Cancel / error / runtime failure: runStreamPi throws here. Persist whatever
     // text + steps streamed so the partial reply survives reload, then re-throw
     // so the UI keeps its cancel/error handling.
-    await persistAgent({ final: true })
+    await persistAgent({})
     throw err
   } finally {
     abortController.signal.removeEventListener('abort', onAbort)
