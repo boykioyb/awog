@@ -47,8 +47,31 @@ interface SidecarSendMessageResult {
   parts?: SessionMessagePart[]
 }
 
+// Lightweight list projection returned by sessions.list (ADR 0048) — mirrors the
+// sidecar SessionSummary. No `messages`; the transcript loads on open.
+interface SessionSummaryDto {
+  id: string
+  title: string
+  projectId: string | null
+  createdAt: string
+  updatedAt: string
+  pinned?: boolean
+  invitedAgentIds: string[]
+  pendingAgentIds: string[]
+  settings: SessionSettings
+  disabledTools?: string[]
+  mcpServerIds?: string[]
+  hasCompaction?: boolean
+  messageCount: number
+  lastPreview?: string
+}
+
 interface SessionsListResponse {
-  sessions: Session[]
+  sessions: SessionSummaryDto[]
+}
+
+interface SessionGetResponse {
+  session: Session | null
 }
 
 // Fire-and-forget persistence helper. UI state remains optimistic — sidecar errors
@@ -254,6 +277,12 @@ export const useSessionsStore = defineStore('sessions', {
     // lifetime, including any in-flight streaming turn that keeps running while
     // the user is on another page.
     hydrated: false,
+    // Lazy-load (ADR 0048): which sessions have had their transcript fetched via
+    // sessions.get. The list hydrates from summaries (messages:[] + messageCount);
+    // opening a session fills its messages once. A freshly-created/branched or
+    // streaming session counts as loaded (its messages already live in memory) so
+    // ensureSessionMessages never clobbers them with a stale fetch.
+    messagesLoaded: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -345,30 +374,93 @@ export const useSessionsStore = defineStore('sessions', {
       }
       try {
         const res = await sidecar.request<SessionsListResponse>('sessions.list')
-        const list = Array.isArray(res.sessions) ? res.sessions : []
-        // Persisted steps come back flat (subagent children carry `parentId`).
-        // Re-nest before the data goes reactive so the live and reloaded views
-        // render identically. Mutates the fresh-from-RPC objects in place.
-        for (const session of list) {
-          for (const message of session.messages) {
-            if (message.steps?.length) message.steps = normalizeSteps(message.steps)
-            // Parts persist flat too (subagent steps carry parentId) — re-nest so
-            // the reloaded timeline renders identically to the live turn (ADR 0032).
-            if (message.parts?.length) message.parts = normalizeParts(message.parts)
+        const summaries = Array.isArray(res.sessions) ? res.sessions : []
+        // ADR 0048: the list hydrates from lightweight summaries (no messages).
+        // Map each to a Session shell with `messages: []` + `messageCount`; the
+        // transcript is fetched on open via ensureSessionMessages. This keeps
+        // startup at KB instead of folding every transcript into RAM.
+        this.sessions = summaries.map((s) => {
+          const session: Session = {
+            id: s.id,
+            title: s.title,
+            projectId: s.projectId,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+            invitedAgentIds: s.invitedAgentIds ?? [],
+            messages: [],
+            pendingAgentIds: s.pendingAgentIds ?? [],
+            settings: s.settings,
+            messageCount: s.messageCount,
           }
-        }
-        this.sessions = list
-        this.selectedSessionId = list[0]?.id ?? null
+          if (s.pinned !== undefined) session.pinned = s.pinned
+          if (s.disabledTools !== undefined) session.disabledTools = s.disabledTools
+          if (s.mcpServerIds !== undefined) session.mcpServerIds = s.mcpServerIds
+          return session
+        })
+        this.messagesLoaded = {}
+        this.selectedSessionId = this.sessions[0]?.id ?? null
         this.hydrated = true
+        // Eagerly fetch the initially-selected session's transcript.
+        if (this.selectedSessionId) void this.ensureSessionMessages(this.selectedSessionId)
       } catch (err) {
         console.warn('[sessions] hydrateFromSidecar failed', err)
       }
     },
 
+    // Lazy-load a session's full transcript on open (ADR 0048). No-op if already
+    // loaded, freshly created/branched, or streaming — those keep their messages
+    // in memory and a fetch would clobber an in-flight turn. The guard is checked
+    // BOTH before and after the RPC (a turn may start while it's in flight).
+    async ensureSessionMessages(id: string): Promise<void> {
+      if (this.messagesLoaded[id]) return
+      const session = this.sessions.find((s) => s.id === id)
+      if (!session) return
+      if (session.messages.length > 0 || this.activeMessageBySession[id]) {
+        this.messagesLoaded[id] = true
+        return
+      }
+      const sidecar = useSidecar()
+      if (!sidecar.available) {
+        this.messagesLoaded[id] = true
+        return
+      }
+      try {
+        const res = await sidecar.request<SessionGetResponse>('sessions.get', { sessionId: id })
+        const target = this.sessions.find((s) => s.id === id)
+        if (!target) return
+        // Re-check: a streaming turn may have begun (or messages otherwise
+        // populated) while the RPC was in flight — the live in-memory transcript
+        // wins, never overwrite it.
+        if (target.messages.length > 0 || this.activeMessageBySession[id]) {
+          this.messagesLoaded[id] = true
+          return
+        }
+        const full = res.session
+        if (full) {
+          // Re-nest flat persisted steps/parts so reloaded turns render like live
+          // ones (ADR 0032) — same normalization hydrateFromSidecar used to do.
+          for (const message of full.messages) {
+            if (message.steps?.length) message.steps = normalizeSteps(message.steps)
+            if (message.parts?.length) message.parts = normalizeParts(message.parts)
+          }
+          target.messages = full.messages
+          target.messageCount = full.messages.length
+          if (full.compaction) target.compaction = full.compaction
+          if (full.sdkSessionId) target.sdkSessionId = full.sdkSessionId
+        }
+        this.messagesLoaded[id] = true
+      } catch (err) {
+        console.warn('[sessions] ensureSessionMessages failed', id, err)
+      }
+    },
+
     selectSession(id: string | null) {
       this.selectedSessionId = id
-      // Opening a session clears its unread flag.
-      if (id) this.markRead(id)
+      // Opening a session clears its unread flag + lazy-loads its transcript.
+      if (id) {
+        this.markRead(id)
+        void this.ensureSessionMessages(id)
+      }
     },
 
     // Clear a session's unread flag (it has been seen).
@@ -443,6 +535,8 @@ export const useSessionsStore = defineStore('sessions', {
       const mcpDefaults = this.mcpDefaultsForProject(data.projectId)
       if (mcpDefaults !== undefined) session.mcpServerIds = mcpDefaults
       this.sessions.unshift(session)
+      // A fresh session's (empty) transcript already lives in memory — no fetch.
+      this.messagesLoaded[session.id] = true
       this.selectedSessionId = session.id
       pushToSidecar('sessions.upsert', { session, mode: 'create' })
       return session
@@ -478,6 +572,8 @@ export const useSessionsStore = defineStore('sessions', {
       if (source.disabledTools) branch.disabledTools = [...source.disabledTools]
       if (source.mcpServerIds) branch.mcpServerIds = [...source.mcpServerIds]
       this.sessions.unshift(branch)
+      // The branch's copied transcript is already in memory — no fetch needed.
+      this.messagesLoaded[branch.id] = true
       this.selectedSessionId = branch.id
       pushToSidecar('sessions.upsert', { session: branch, mode: 'create' })
       return branch.id
@@ -595,8 +691,11 @@ export const useSessionsStore = defineStore('sessions', {
       this.sessions = this.sessions.filter((s) => s.id !== id)
       this.markRead(id)
       if (this.queues[id]) delete this.queues[id]
+      if (this.messagesLoaded[id]) delete this.messagesLoaded[id]
       if (this.selectedSessionId === id) {
         this.selectedSessionId = this.sessions[0]?.id ?? null
+        // Lazy-load the transcript of whatever session we fell back to.
+        if (this.selectedSessionId) void this.ensureSessionMessages(this.selectedSessionId)
       }
       pushToSidecar('sessions.delete', { id })
     },
@@ -1385,6 +1484,9 @@ export const useSessionsStore = defineStore('sessions', {
     openSearchResult(sessionId: string, messageId: string) {
       this.selectedSessionId = sessionId
       this.pendingScrollMessageId = messageId
+      // Ensure the transcript is loaded so the target message renders and the
+      // list can scroll to it (the session may not have been opened before).
+      void this.ensureSessionMessages(sessionId)
     },
 
     // Refresh the set of messages that have a workspace snapshot (ADR 0038).

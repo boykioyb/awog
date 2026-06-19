@@ -3,12 +3,21 @@
     <div
       ref="scrollRef"
       class="flex-1 overflow-y-auto px-4 md:px-6 py-5 min-h-0"
-      :class="isEmpty ? 'flex flex-col items-center justify-center' : 'space-y-4'"
+      :class="isEmpty || showLoading ? 'flex flex-col items-center justify-center' : 'space-y-4'"
       @click="onContentClick"
       @scroll="updateScrollState"
     >
       <div
-        v-if="isEmpty"
+        v-if="showLoading"
+        class="flex flex-col items-center gap-3 select-none"
+        :style="{ color: t.textDim }"
+      >
+        <Loader2 :size="22" class="animate-spin" :style="{ color: t.accent }" />
+        <span class="text-[1em]">{{ tr('common.loading') }}</span>
+      </div>
+
+      <div
+        v-else-if="isEmpty"
         class="flex flex-col items-center gap-5 max-w-md text-center select-none px-6"
       >
         <div
@@ -134,7 +143,16 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, AtSign, Bot, MessagesSquare, Quote, Slash } from 'lucide-vue-next'
+import {
+  ArrowDown,
+  ArrowUp,
+  AtSign,
+  Bot,
+  Loader2,
+  MessagesSquare,
+  Quote,
+  Slash,
+} from 'lucide-vue-next'
 import type { Session, SessionAttachment, SessionMessage, SessionStep } from '~/types'
 import {
   ANSWER_QUESTION_KEY,
@@ -152,6 +170,10 @@ const props = defineProps<{
   session: Session
   messages: SessionMessage[]
   pendingAgentIds: string[]
+  // True while the transcript is being lazy-loaded on open (ADR 0048) — shows a
+  // spinner instead of the empty-state so an existing conversation never flashes
+  // "no messages" before its messages arrive.
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -161,8 +183,12 @@ const emit = defineEmits<{
 const { t, themeName } = useTheme()
 const { t: tr } = useI18n()
 
-// Empty state: no messages and nothing streaming yet.
-const isEmpty = computed(() => props.messages.length === 0 && props.pendingAgentIds.length === 0)
+// Spinner while the transcript loads (only when there is nothing to show yet).
+const showLoading = computed(() => !!props.loading && props.messages.length === 0)
+// Empty state: no messages, nothing streaming, and not mid-load.
+const isEmpty = computed(
+  () => props.messages.length === 0 && props.pendingAgentIds.length === 0 && !showLoading.value,
+)
 
 // How many messages were folded behind the compaction marker (everything before
 // the first kept message). Drives the marker's "Summarized N messages" count.

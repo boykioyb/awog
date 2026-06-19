@@ -275,7 +275,7 @@
                     >
                       Running…
                     </span>
-                    <span v-else>{{ ses.messages.length }} msg</span>
+                    <span v-else>{{ ses.messages.length || ses.messageCount || 0 }} msg</span>
                   </div>
                 </div>
               </div>

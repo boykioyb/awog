@@ -12,6 +12,7 @@
         :session="session"
         :messages="session.messages"
         :pending-agent-ids="session.pendingAgentIds"
+        :loading="messagesLoading"
         @open-attachment="openAttachment"
       />
 
@@ -86,6 +87,13 @@ watch(
     workspace.hydrateCommandsFromSidecar(ids)
   },
   { immediate: true },
+)
+
+// True while this session's transcript is being lazy-loaded on open (ADR 0048):
+// not yet loaded AND the summary reports it has messages. Drives the message
+// list's loading spinner so an existing conversation never flashes "empty".
+const messagesLoading = computed(
+  () => !store.messagesLoaded[props.session.id] && (props.session.messageCount ?? 0) > 0,
 )
 
 // The workspace split renders whenever at least one tool tab is open.

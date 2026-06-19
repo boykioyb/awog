@@ -302,7 +302,7 @@
                 >
                   <span>{{ formatTime(ses.updatedAt) }}</span>
                   <span :style="{ color: t.textFaint }">·</span>
-                  <span>{{ ses.messages.length }} msg</span>
+                  <span>{{ ses.messages.length || ses.messageCount || 0 }} msg</span>
                   <template v-if="ses.invitedAgentIds.length">
                     <span :style="{ color: t.textFaint }">·</span>
                     <span>

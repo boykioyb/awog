@@ -587,6 +587,12 @@ export interface Session {
   // full transcript and renders a summary marker at the cut. Hydrated from the
   // session JSONL + applied locally after a /compact run.
   compaction?: SessionCompaction
+  // Lazy-load (ADR 0048): the list hydrates from lightweight summaries with
+  // `messages: []` and `messageCount` set from the index; the transcript is
+  // fetched on open via sessions.get. `messageCount` backs the list "N msg"
+  // badge while `messages` is still empty; once loaded, `messages.length` is
+  // authoritative (badge falls back: `messages.length || messageCount`).
+  messageCount?: number
 }
 
 // Context-compaction checkpoint (ADR 0047). Mirrors the sidecar SessionCompaction
