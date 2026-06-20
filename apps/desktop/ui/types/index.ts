@@ -793,6 +793,9 @@ export interface Rule {
   // The instruction text injected into the system prompt.
   body: string
   enabled: boolean
+  // Glob patterns scoping the rule (ADR 0050). Non-empty → inject only when a path
+  // referenced in the turn matches; empty/absent → always inject.
+  globs?: string[]
   // Location tags — set by the sidecar on list/load; default to global tier.
   source?: RuleSource
   projectId?: string
@@ -1101,4 +1104,52 @@ export interface AppearanceSettings {
   locale: AppLocale
   // Keyboard chord that submits a message in the session composer.
   composerSendKey: ComposerSendKey
+}
+
+// Project GitHub (ADR 0049) — Issues + Pull Requests read via the `gh` CLI in the
+// sidecar. Issue and PR share one shape, discriminated by `kind`. Token never
+// reaches the UI; these types carry only display data parsed from `gh --json`.
+
+export interface GhAccount {
+  login: string
+  active: boolean
+  scopes: string
+}
+
+export type GhThreadKind = 'issue' | 'pr'
+
+// GitHub returns uppercase states; PR adds MERGED.
+export type GhThreadState = 'OPEN' | 'CLOSED' | 'MERGED'
+
+export interface GhThreadLabel {
+  name: string
+  color: string
+}
+
+export interface GhThreadComment {
+  author: { login: string }
+  body: string
+  createdAt: string
+}
+
+export interface GhThreadSummary {
+  kind: GhThreadKind
+  number: number
+  title: string
+  state: GhThreadState
+  author: { login: string }
+  assignees: { login: string }[]
+  labels: GhThreadLabel[]
+  createdAt: string
+  updatedAt: string
+  // PR-only.
+  isDraft?: boolean
+  baseRefName?: string
+  headRefName?: string
+}
+
+export interface GhThread extends GhThreadSummary {
+  body: string
+  url: string
+  comments: GhThreadComment[]
 }

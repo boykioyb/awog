@@ -802,6 +802,10 @@ export interface Rule {
   // The instruction text injected into the system prompt.
   body: string
   enabled: boolean
+  // Glob patterns scoping the rule (ADR 0050). When non-empty, the rule injects
+  // only when a path referenced in the current turn matches one of these; empty/
+  // absent → always inject (backward-compatible).
+  globs?: string[]
   // Location tags — set when listing/loading; stripped before writing.
   source?: RuleSource
   projectId?: string

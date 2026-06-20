@@ -68,6 +68,17 @@ function listTimeoutFor(server: ResolvedMcpServer): number {
 // Cap the text we hand back to the model from a single MCP tool result.
 const MCP_RESULT_MAX_CHARS = 64 * 1024
 
+// Progressive disclosure (ADR 0051). Proxy meta-tool names — exported so the
+// trace/step mappers (unwrapMcpToolCall) key off the same strings.
+export const MCP_DESCRIBE_TOOL = 'mcp_describe'
+export const MCP_CALL_TOOL = 'mcp_call'
+
+// Switch from direct typed MCP tools to the proxy meta-tools once a turn's ALLOWED
+// MCP schemas would add more than this many bytes to context (name + description +
+// JSON schema, summed). ~6KB ≈ 1.5–2k tokens. Below it, direct tools' better
+// ergonomics win; at/over it, progressive disclosure saves the per-turn cost.
+const MCP_PROXY_THRESHOLD_BYTES = 6_000
+
 // Minimal transport contract both StdioMcpClient and HttpMcpClient satisfy —
 // lets handshake/list/call work without branching on transport.
 interface McpTransport {
@@ -229,6 +240,13 @@ interface PoolEntry {
 // poolKey (sessionId) → serverId → entry.
 const POOL = new Map<string, Map<string, PoolEntry>>()
 
+// tools/list cache (ADR 0051): listed RawMcpTool[] per pooled (poolKey, serverId,
+// configKey), reused across a session's turns so we don't re-issue tools/list
+// every turn (the pool reuses the connection; this reuses the listing). Only
+// populated when poolKey is set (sessions); tasks/one-shot re-list per call.
+// Cleared on releaseSessionMcp; a configKey drift misses naturally (key has it).
+const LIST_CACHE = new Map<string, RawMcpTool[]>()
+
 // Idle backstop: a session's MCP child is stopped after this long with no tool
 // activity, freeing a lingering browser. Longer than McpManager's 5 min because a
 // user may pause between turns mid-task and still expect the browser to be there.
@@ -303,6 +321,10 @@ function acquireSessionMcp(
 // Dispose every pooled MCP child for a session. Called from sessions.delete so a
 // closed session leaves no orphan browser running for the sidecar lifetime.
 export function releaseSessionMcp(poolKey: string): void {
+  // Drop this session's cached tool listings (ADR 0051) alongside its children.
+  for (const key of LIST_CACHE.keys()) {
+    if (key.startsWith(`${poolKey}::`)) LIST_CACHE.delete(key)
+  }
   const servers = POOL.get(poolKey)
   if (!servers) return
   POOL.delete(poolKey)
@@ -487,49 +509,114 @@ export interface McpLoadFailure {
 export interface McpToolset {
   tools: AgentTool[]
   failures: McpLoadFailure[]
+  // Proxy mode only (ADR 0051): the <mcp-tools> catalog block to append to the
+  // system prompt (lists allowed tools by name, no schemas; the model fetches a
+  // schema via mcp_describe then calls mcp_call). Undefined in direct mode.
+  catalog?: string
 }
 
-// Build the AgentTool list for every reachable MCP server in `mcpServers`.
+// Predicate: is (serverId, toolName) allowed this turn? Built by the runtime
+// assembler from the agent allowedTools / session disabledTools / parent-inherited
+// bypass (runtime/tools/index.ts). Centralized here so BOTH the direct path (which
+// tools to synthesize) and the proxy path (which to list + accept in mcp_call)
+// honour the same rule.
+export type McpToolAllowed = (serverId: string, toolName: string) => boolean
+
+// One server's listed-and-allowed tools (post-filter), retained so the proxy
+// meta-tools can describe/validate a call without re-listing.
+interface ServerTools {
+  serverId: string
+  server: ResolvedMcpServer
+  tools: RawMcpTool[]
+}
+
+// Build the MCP toolset for a turn (ADR 0051). Lists every reachable server's
+// tools (cached across a session's turns when poolKey is set), filters by
+// `allowed`, then picks ONE of two shapes:
+//   - under MCP_PROXY_THRESHOLD_BYTES of allowed schema → synthesize direct typed
+//     tools (mcp__<id>__<tool>) exactly as before. Common case, best ergonomics.
+//   - at/over the threshold → expose two meta-tools (mcp_describe + mcp_call) and
+//     return a compact `catalog` string for the system prompt, so N full schemas
+//     don't sit in context every turn (progressive disclosure).
 // Defensive per-server: a connect/list failure is captured as an McpLoadFailure
-// (no secrets) and that server's tools are skipped — it never fails the whole
-// turn. The returned tools own their own short-lived client; the client is
-// disposed after the tool's tools/call completes (stdio child is killed).
-// signal aborts in-flight work.
+// (no secrets) and that server is skipped — never fails the whole turn.
 export async function createMcpToolDefinitions(
   mcpServers: McpServersConfig | undefined,
+  allowed: McpToolAllowed,
   signal?: AbortSignal,
-  // Session pool key (sessionId). When set, every server's child is reused across
-  // turns and survives until session delete / idle / shutdown (stateful servers
-  // like Playwright keep their browser open). Absent → per-call spawn (default).
+  // Session pool key (sessionId). When set, every server's child + tool listing is
+  // reused across turns (stateful servers like Playwright keep their browser open).
+  // Absent → per-call spawn + fresh listing (default for tasks/one-shot).
   poolKey?: string,
 ): Promise<McpToolset> {
   if (!mcpServers) return { tools: [], failures: [] }
   const entries = Object.entries(mcpServers)
   if (entries.length === 0) return { tools: [], failures: [] }
 
-  const perServer = await Promise.all(
-    entries.map((entry) => listServerTools(entry[0], entry[1], signal, poolKey)),
+  const listed = await Promise.all(
+    entries.map((entry) => listServerToolsRaw(entry[0], entry[1], signal, poolKey)),
   )
+  const failures = listed.flatMap((r) => (r.failure ? [r.failure] : []))
+
+  // Keep only allowed tools per server — the same allowedTools/disabledTools/
+  // bypass rule the direct path used to apply (now centralized in `allowed`).
+  const perServer: ServerTools[] = []
+  for (const r of listed) {
+    const tools = r.tools.filter((t) => allowed(r.serverId, t.name))
+    if (tools.length > 0) perServer.push({ serverId: r.serverId, server: r.server, tools })
+  }
+
+  const totalBytes = perServer.reduce(
+    (sum, s) => sum + s.tools.reduce((n, t) => n + schemaBytes(t), 0),
+    0,
+  )
+
+  // Under threshold: direct typed tools — unchanged behaviour, no catalog.
+  if (totalBytes < MCP_PROXY_THRESHOLD_BYTES) {
+    const tools = perServer.flatMap((s) =>
+      s.tools.map((t) => synthTool(s.serverId, s.server, t, signal, poolKey)),
+    )
+    return { tools, failures }
+  }
+
+  // At/over threshold: progressive disclosure via meta-tools + a catalog block.
   return {
-    tools: perServer.flatMap((r) => r.tools),
-    failures: perServer.flatMap((r) => (r.failure ? [r.failure] : [])),
+    tools: createMcpProxyTools(perServer, allowed, signal, poolKey),
+    failures,
+    catalog: buildMcpCatalog(perServer),
   }
 }
 
-// Connect to one server, list its tools, synthesize an AgentTool per MCP tool.
-// On any failure → { tools: [], failure } (skip + warn + report). Each
-// synthesized tool reconnects per call for stdio (the listing client is
-// disposed immediately) so a tool that's never invoked leaves no lingering
-// child; http clients are stateless.
-async function listServerTools(
+// Approx per-turn context cost of one MCP tool (name + description + JSON schema)
+// — what the direct path would spend. Drives the direct-vs-proxy threshold only.
+function schemaBytes(tool: RawMcpTool): number {
+  const schema = tool.inputSchema ? JSON.stringify(tool.inputSchema).length : 2
+  const desc = typeof tool.description === 'string' ? tool.description.length : 0
+  return tool.name.length + desc + schema
+}
+
+// List one server's tools (no synthesis). Cached per (poolKey, serverId, config)
+// across a session's turns. On any failure → { tools: [], failure } (skip + warn
+// + report) so a down server never fails the whole turn.
+async function listServerToolsRaw(
   serverId: string,
   server: ResolvedMcpServer,
   signal?: AbortSignal,
   poolKey?: string,
-): Promise<{ tools: AgentTool[]; failure?: McpLoadFailure }> {
+): Promise<{
+  serverId: string
+  server: ResolvedMcpServer
+  tools: RawMcpTool[]
+  failure?: McpLoadFailure
+}> {
+  const cacheKey = poolKey ? `${poolKey}::${serverId}::${configKeyOf(server)}` : undefined
+  if (cacheKey) {
+    const hit = LIST_CACHE.get(cacheKey)
+    if (hit) return { serverId, server, tools: hit }
+  }
   const lease = await leaseTransport(poolKey, serverId, server)
   if (!lease.ok) {
-    return { tools: [], failure: { serverId, reason: lease.reason } }
+    return { serverId, server, tools: [], failure: { serverId, reason: lease.reason } }
   }
   let rawTools: RawMcpTool[]
   try {
@@ -537,19 +624,19 @@ async function listServerTools(
     // Pooled leases are already initialized once per connection; only a fresh
     // per-call client needs the handshake here.
     if (lease.needsInit) await initialize(lease.transport, timeout)
-    const listed = await requestWithAbort(lease.transport, 'tools/list', {}, timeout, [signal])
-    rawTools = parseToolsList(listed)
+    const result = await requestWithAbort(lease.transport, 'tools/list', {}, timeout, [signal])
+    rawTools = parseToolsList(result)
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     log.warn('mcp bridge: tools/list failed, skipping server', { serverId, err: reason })
-    return { tools: [], failure: { serverId, reason } }
+    return { serverId, server, tools: [], failure: { serverId, reason } }
   } finally {
     // Pooled: no-op (the session keeps the child). Per-call: disposes the
     // short-lived listing child; execute() opens its own.
     lease.release()
   }
-
-  return { tools: rawTools.map((t) => synthTool(serverId, server, t, signal, poolKey)) }
+  if (cacheKey) LIST_CACHE.set(cacheKey, rawTools)
+  return { serverId, server, tools: rawTools }
 }
 
 // A system-prompt note listing servers that were attached but failed to load.
@@ -569,7 +656,54 @@ Do NOT call any \`mcp__<serverId>__*\` tool for these servers, and do NOT fabric
 </mcp-unavailable>`
 }
 
-// Synthesize one Pi AgentTool from an MCP tool descriptor.
+// Execute one MCP tools/call over a (pooled or per-call) lease. Shared by the
+// direct synthesized tool and the proxy mcp_call so both honour the same pool,
+// abort, clip, and isError semantics. Throws (→ error tool result) only on a real
+// transport/connection failure; an MCP isError:true comes back as normal content.
+async function executeMcpCall(
+  serverId: string,
+  server: ResolvedMcpServer,
+  toolName: string,
+  params: unknown,
+  signals: (AbortSignal | undefined)[],
+  poolKey: string | undefined,
+): Promise<AgentToolResult<unknown>> {
+  // Pooled: reuse the session's long-lived client (browser stays open). Per-call:
+  // connect a fresh stdio child. Error messages never include secrets/headers.
+  const lease = await leaseTransport(poolKey, serverId, server)
+  if (!lease.ok) {
+    throw new Error(`MCP server "${serverId}" is not reachable`)
+  }
+  try {
+    if (lease.needsInit) await initialize(lease.transport, listTimeoutFor(server))
+    // requestWithAbort rejects promptly on cancel but never disposes the
+    // connection — a pooled session's browser must survive a turn cancel.
+    const result = (await requestWithAbort(
+      lease.transport,
+      'tools/call',
+      { name: toolName, arguments: params ?? {} },
+      MCP_CALL_TIMEOUT_MS,
+      signals,
+    )) as ToolCallResult
+    const content = mapResultContent(result?.content)
+    // isError:true is a NORMAL result (the model sees it and decides); we only
+    // THROW on a real call failure (the catch below).
+    return {
+      content,
+      details: { serverId, toolName, isError: result?.isError === true, raw: result },
+    }
+  } catch (err) {
+    // Real call failure (transport down, timeout, JSON-RPC error). Sanitized
+    // message — never leak secrets/headers/args (params may be sensitive).
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`MCP tool ${toolName} failed: ${message}`)
+  } finally {
+    // Pooled: no-op (keep the child). Per-call: kills the stdio child.
+    lease.release()
+  }
+}
+
+// Synthesize one Pi AgentTool from an MCP tool descriptor (direct path).
 function synthTool(
   serverId: string,
   server: ResolvedMcpServer,
@@ -577,14 +711,12 @@ function synthTool(
   loopSignal?: AbortSignal,
   poolKey?: string,
 ): AgentTool {
-  // EXACT name format `mcp__<serverId>__<toolName>` — trace-mapper.ts's scalar
-  // fallback, step-mapper, and the system-prompt MCP nudge in
-  // sessions.send-message.ts all key off this (matches Claude Code's naming).
+  // EXACT name format `mcp__<serverId>__<toolName>` — trace-mapper / step-mapper
+  // and the system-prompt MCP nudge key off this (matches Claude Code's naming).
   const name = `mcp__${serverId}__${tool.name}`
   const description = typeof tool.description === 'string' ? tool.description : `MCP tool ${tool.name}`
   // pi AgentTool.parameters expects a TypeBox TSchema. Wrap the raw JSON Schema
-  // with Type.Unsafe so pi forwards it to the provider verbatim (no re-encoding).
-  // Missing schema → empty object schema.
+  // with Type.Unsafe so pi forwards it verbatim. Missing schema → empty object.
   const parameters =
     tool.inputSchema && typeof tool.inputSchema === 'object'
       ? Type.Unsafe(tool.inputSchema)
@@ -596,50 +728,152 @@ function synthTool(
     description,
     parameters,
     async execute(_toolCallId, params, sig): Promise<AgentToolResult<unknown>> {
-      // Honour both the per-call signal and the loop-level signal: if either is
-      // already aborted, fail fast before connecting anything.
+      // Fail fast if either the per-call or loop signal is already aborted.
       if (sig?.aborted || loopSignal?.aborted) {
         throw new Error(`MCP tool ${tool.name} aborted`)
       }
-      // Pooled: reuse the session's long-lived client (browser stays open).
-      // Per-call: connect a fresh stdio child. A connection failure here is a real
-      // tool failure → throw. Error messages never include secrets/headers.
-      const lease = await leaseTransport(poolKey, serverId, server)
-      if (!lease.ok) {
-        throw new Error(`MCP server "${serverId}" is not reachable`)
-      }
-      try {
-        if (lease.needsInit) await initialize(lease.transport, listTimeoutFor(server))
-        // requestWithAbort rejects promptly on cancel but never disposes the
-        // connection — a pooled session's browser must survive a turn cancel.
-        const result = (await requestWithAbort(
-          lease.transport,
-          'tools/call',
-          { name: tool.name, arguments: params ?? {} },
-          MCP_CALL_TIMEOUT_MS,
-          [sig, loopSignal],
-        )) as ToolCallResult
-        const content = mapResultContent(result?.content)
-        // An MCP tool that returns isError:true is a NORMAL result (the model
-        // should see the error text and decide). Per pi's AgentTool.execute
-        // contract we only THROW on a real call failure (transport/connection) —
-        // which is the catch below. Surface isError via the result content +
-        // details; pi-agent-core records it without aborting the loop.
-        return {
-          content,
-          details: { serverId, toolName: tool.name, isError: result?.isError === true, raw: result },
-        }
-      } catch (err) {
-        // Real call failure (transport down, timeout, JSON-RPC error). Throw a
-        // sanitized message — pi maps a thrown execute() to an error tool result.
-        // Do NOT leak secrets/headers/args (params may contain sensitive input).
-        const message = err instanceof Error ? err.message : String(err)
-        throw new Error(`MCP tool ${tool.name} failed: ${message}`)
-      } finally {
-        // Pooled: no-op (keep the child alive for the next turn). Per-call: kills
-        // the stdio child.
-        lease.release()
-      }
+      return executeMcpCall(serverId, server, tool.name, params, [sig, loopSignal], poolKey)
     },
   }
+}
+
+// ─── Proxy meta-tools (ADR 0051 progressive disclosure) ───────────────────────
+
+const describeParams = Type.Object({
+  server: Type.String({ description: 'MCP server id (from the <mcp-tools> catalog)' }),
+  tool: Type.String({ description: 'MCP tool name, without the mcp__<server>__ prefix' }),
+})
+
+const callParams = Type.Object({
+  server: Type.String({ description: 'MCP server id (from the <mcp-tools> catalog)' }),
+  tool: Type.String({ description: 'MCP tool name, without the mcp__<server>__ prefix' }),
+  arguments: Type.Optional(
+    Type.Unsafe<Record<string, unknown>>({
+      type: 'object',
+      description: 'Arguments matching the tool input schema (fetch it via mcp_describe first)',
+    }),
+  ),
+})
+
+// Compact <mcp-tools> catalog: server + tool names + one-line descriptions, NO
+// schemas. Appended to the system prompt so the model knows what exists and how to
+// reach it (mcp_describe → mcp_call) without paying for every schema each turn.
+function buildMcpCatalog(perServer: ServerTools[]): string {
+  const lines = perServer.map((s) => {
+    const tools = s.tools
+      .map((t) => {
+        const d = typeof t.description === 'string' ? t.description.replace(/\s+/g, ' ').trim() : ''
+        const short = d.length > 80 ? `${d.slice(0, 79)}…` : d
+        return short ? `${t.name} — ${short}` : t.name
+      })
+      .join('; ')
+    return `- ${s.serverId}: ${tools}`
+  })
+  return `<mcp-tools>
+These MCP tools are available, but their full input schemas are NOT shown inline to save context. To use one:
+1. Call \`${MCP_DESCRIBE_TOOL}\` with { server, tool } to get its JSON input schema.
+2. Call \`${MCP_CALL_TOOL}\` with { server, tool, arguments } to run it.
+
+${lines.join('\n')}
+</mcp-tools>`
+}
+
+// The two proxy meta-tools over the already-listed, already-filtered set.
+// mcp_describe returns one tool's schema; mcp_call validates (server,tool) is in
+// the allowed set then runs it via executeMcpCall. Both reject a (server,tool) not
+// in `perServer` so the model can't reach a filtered-out tool.
+function createMcpProxyTools(
+  perServer: ServerTools[],
+  allowed: McpToolAllowed,
+  loopSignal: AbortSignal | undefined,
+  poolKey: string | undefined,
+): AgentTool[] {
+  const byServer = new Map<string, ServerTools>()
+  for (const s of perServer) byServer.set(s.serverId, s)
+
+  const lookup = (
+    server: string,
+    tool: string,
+  ): { entry: ServerTools; raw: RawMcpTool } | undefined => {
+    const entry = byServer.get(server)
+    if (!entry || !allowed(server, tool)) return undefined
+    const raw = entry.tools.find((t) => t.name === tool)
+    return raw ? { entry, raw } : undefined
+  }
+
+  const describe: AgentTool<typeof describeParams> = {
+    name: MCP_DESCRIBE_TOOL,
+    label: MCP_DESCRIBE_TOOL,
+    description:
+      'Get the JSON input schema + description for one MCP tool listed in <mcp-tools>. Call this before mcp_call so you can build valid arguments.',
+    parameters: describeParams,
+    async execute(_id, params): Promise<AgentToolResult<unknown>> {
+      const found = lookup(params.server, params.tool)
+      if (!found) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Unknown or not-permitted MCP tool: ${params.server}/${params.tool}. See <mcp-tools> for valid names.`,
+            },
+          ],
+          details: { isError: true },
+        }
+      }
+      const schema = found.raw.inputSchema ?? { type: 'object' }
+      const desc = typeof found.raw.description === 'string' ? found.raw.description : ''
+      const text = `mcp__${params.server}__${params.tool}${desc ? `\n${desc}` : ''}
+
+Input schema (JSON):
+${JSON.stringify(schema, null, 2)}
+
+Run it with ${MCP_CALL_TOOL}({ server: "${params.server}", tool: "${params.tool}", arguments: { … } }).`
+      return { content: [{ type: 'text', text: clip(text) }], details: {} }
+    },
+  }
+
+  const call: AgentTool<typeof callParams> = {
+    name: MCP_CALL_TOOL,
+    label: MCP_CALL_TOOL,
+    description:
+      'Invoke an MCP tool listed in <mcp-tools>. Fetch its schema with mcp_describe first to build valid arguments.',
+    parameters: callParams,
+    async execute(_id, params, sig): Promise<AgentToolResult<unknown>> {
+      if (sig?.aborted || loopSignal?.aborted) throw new Error(`${MCP_CALL_TOOL} aborted`)
+      const found = lookup(params.server, params.tool)
+      if (!found) {
+        throw new Error(`Unknown or not-permitted MCP tool: ${params.server}/${params.tool}`)
+      }
+      const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {}
+      return executeMcpCall(
+        found.entry.serverId,
+        found.entry.server,
+        params.tool,
+        args,
+        [sig, loopSignal],
+        poolKey,
+      )
+    },
+  }
+
+  return [describe, call] as AgentTool[]
+}
+
+// Unwrap a proxy mcp_call into the underlying direct MCP identity (name +
+// arguments) so the trace/step mappers render "mcp__server__tool" + real args
+// instead of a bare "mcp_call". A non-proxy name passes through unchanged. Single
+// source of truth for the proxy contract — imported by step-mapper + trace-mapper.
+export function unwrapMcpToolCall(
+  name: string,
+  input: Record<string, unknown>,
+): { name: string; input: Record<string, unknown> } {
+  if (name !== MCP_CALL_TOOL) return { name, input }
+  const server = typeof input.server === 'string' ? input.server : ''
+  const tool = typeof input.tool === 'string' ? input.tool : ''
+  if (!server || !tool) return { name, input }
+  const args =
+    typeof input.arguments === 'object' && input.arguments !== null
+      ? (input.arguments as Record<string, unknown>)
+      : {}
+  return { name: `mcp__${server}__${tool}`, input: args }
 }

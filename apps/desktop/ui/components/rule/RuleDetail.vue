@@ -64,6 +64,22 @@
       />
     </div>
 
+    <div v-if="rule.globs && rule.globs.length" class="mb-6">
+      <div class="text-[1em] uppercase tracking-wider mb-1.5" :style="{ color: t.textDim }">
+        {{ tr('rules.detail.globs') }}
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        <span
+          v-for="g in rule.globs"
+          :key="g"
+          class="text-[12px] px-1.5 py-0.5 rounded font-mono leading-none"
+          :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
+        >
+          {{ g }}
+        </span>
+      </div>
+    </div>
+
     <MarkdownBodyView
       :title="tr('rules.detail.instructions')"
       :content="rule.body ?? ''"

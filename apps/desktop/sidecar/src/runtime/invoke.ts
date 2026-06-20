@@ -25,7 +25,7 @@ import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
 import { toReasoning } from './thinking.js'
-import { buildRulesPrompt } from '../rules/inject.js'
+import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../sdk/invoke.js'
 
 // Map a thrown error to RPC codes so the UI treats CANCELED / AUTH_EXPIRED /
@@ -186,7 +186,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   // already-resolved args.mcpServers (agent.mcpServerIds ∩ enabled + secrets
   // expanded in tasks/agent-context.ts). Filters apply to both kinds. A failing
   // MCP server is skipped (warn) so it never blocks the task node.
-  const { tools, failures: mcpFailures } = await createRuntimeToolDefinitions(
+  const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
     {
@@ -251,7 +251,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   })
   // Workspace rules (ADR 0033): enabled global + task-project rules, appended to
   // (not replacing) the node agent's own prompt.
-  const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0])
+  const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0], extractTurnPaths(args.prompt))
   // Tell the node agent — in-band — about any attached MCP server that failed to
   // load, so it doesn't call its absent tools or fabricate their results.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
@@ -261,6 +261,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
     mcpUnavailable,
+    // MCP catalog (ADR 0051): present only when the MCP toolset is in proxy mode.
+    mcpCatalog,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined

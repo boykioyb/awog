@@ -63,6 +63,18 @@
         />
       </Field>
 
+      <Field v-if="!isImported" :label="tr('rules.editor.globs')">
+        <input
+          v-model="globsText"
+          :placeholder="tr('rules.editor.globs_placeholder')"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          :style="inputStyle"
+        />
+        <div class="text-[1em] mt-1.5" :style="{ color: t.textDim }">
+          {{ tr('rules.editor.globs_hint') }}
+        </div>
+      </Field>
+
       <Field :label="tr('rules.editor.body')">
         <textarea
           v-model="draft.body"
@@ -114,6 +126,7 @@ const makeDefaults = (): Draft => ({
   description: '',
   body: '',
   enabled: true,
+  globs: [],
   source: 'global',
   projectId: '',
 })
@@ -134,6 +147,17 @@ const initDraft = (r: Rule | null, seed?: RuleDraft | null): Draft => {
 
 const draft = ref<Draft>(initDraft(props.rule, props.initialDraft))
 const original = ref<Draft>(initDraft(props.rule, props.initialDraft))
+
+// Glob patterns (ADR 0050) edit as a comma-separated string; stored as string[].
+const globsText = computed<string>({
+  get: () => (draft.value.globs ?? []).join(', '),
+  set: (v) => {
+    draft.value.globs = v
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+  },
+})
 
 // Auto-derive the slug from the name only while creating a fresh rule and the
 // user hasn't typed a custom slug.

@@ -11,6 +11,8 @@ const Params = z.object({
     description: z.string().default(''),
     body: z.string().default(''),
     enabled: z.boolean().default(true),
+    // ADR 0050: glob scoping. Without this, zod would strip it before saveRule.
+    globs: z.array(z.string()).optional(),
     source: z.enum(['global', 'project']).optional(),
     projectId: z.string().optional(),
   }),

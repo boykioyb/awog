@@ -218,7 +218,7 @@ async function spawnSubagent(
 
   // Subagent toolset: built-in + the merged MCP tools, filtered by the agent's
   // allowedTools and the session denylist. NO Task tool (depth = 1) and NO plan.
-  const { tools, failures: mcpFailures } = await createRuntimeToolDefinitions(
+  const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     deps.cwd,
     mcpServers,
     {
@@ -230,10 +230,11 @@ async function spawnSubagent(
   )
 
   // Surface attached-but-failed MCP servers to the subagent too, so a delegated
-  // review/fetch can't silently fabricate when its server is unreachable.
+  // review/fetch can't silently fabricate when its server is unreachable. The MCP
+  // catalog (ADR 0051) rides along when the inherited toolset is in proxy mode.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
   const subAppend =
-    [agentCtx.systemPromptAppend, VERIFY_PROMPT, mcpUnavailable]
+    [agentCtx.systemPromptAppend, VERIFY_PROMPT, mcpUnavailable, mcpCatalog]
       .filter((p): p is string => typeof p === 'string' && p.length > 0)
       .join('\n\n') || undefined
 

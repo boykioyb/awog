@@ -52,8 +52,16 @@ function asString(value: string | string[] | undefined, fallback = ''): string {
   return value ?? fallback
 }
 
+// Frontmatter `globs` may be a YAML list (string[]) or a comma-separated string.
+// Normalize both to a trimmed, non-empty string[].
+function asStringArray(value: string | string[] | undefined): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  return raw.map((s) => s.trim()).filter((s) => s.length > 0)
+}
+
 function parse(raw: string, id: string, source: RuleSource, projectId: string | undefined): Rule {
   const { data, body } = parseFrontmatter(raw)
+  const globs = asStringArray(data.globs)
   return {
     id,
     name: asString(data.name, id),
@@ -61,6 +69,7 @@ function parse(raw: string, id: string, source: RuleSource, projectId: string | 
     body: body.trim(),
     // enabled defaults true; only an explicit "false" disables.
     enabled: asString(data.enabled, 'true').toLowerCase() !== 'false',
+    ...(globs.length > 0 ? { globs } : {}),
     source,
     ...(projectId ? { projectId } : {}),
   }
@@ -159,6 +168,8 @@ export async function saveRule(rule: Rule): Promise<void> {
       name: rule.name,
       description: rule.description,
       enabled: rule.enabled ? 'true' : 'false',
+      // ADR 0050: persist as a YAML list when set; omitted entirely when empty.
+      ...(rule.globs && rule.globs.length > 0 ? { globs: rule.globs } : {}),
     },
     rule.body ?? '',
   )

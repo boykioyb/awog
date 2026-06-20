@@ -22,7 +22,7 @@ import {
 } from './fs-tools.js'
 import { createNotebookEditTool, createNotebookReadTool } from './notebook-tools.js'
 import { createBashTool } from './bash-tool.js'
-import { createMcpToolDefinitions, type McpLoadFailure } from './mcp-tools.js'
+import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createTodoWriteTool, createWebSearchTool } from './builtin-stubs.js'
@@ -69,37 +69,26 @@ function applyFilter(tools: AgentTool[], filter: ToolFilter): AgentTool[] {
   return tools.filter((t) => isToolAllowed(t.name, filter))
 }
 
-// Parse the server id out of an MCP tool name (`mcp__<serverId>__<tool>`).
-// Returns undefined for non-MCP names. The server id is the segment between the
-// `mcp__` prefix and the first following `__` (server ids are slugs, no `__`).
-function mcpServerIdOf(toolName: string): string | undefined {
-  if (!toolName.startsWith('mcp__')) return undefined
-  const rest = toolName.slice('mcp__'.length)
-  const sep = rest.indexOf('__')
-  return sep === -1 ? undefined : rest.slice(0, sep)
-}
-
-// Filter MCP tools by name like applyFilter, EXCEPT tools whose server id is in
-// `filter.bypassAllowlistMcpServerIds` skip the allowedTools whitelist (they were
-// attached at the session/turn level, not by the agent). disabledTools always
-// applies. Built-in tools go through applyFilter, not this.
-function applyMcpFilter(tools: AgentTool[], filter: ToolFilter): AgentTool[] {
+// Build the MCP allow predicate handed to createMcpToolDefinitions: a (serverId,
+// toolName) passes the agent allowedTools (intersect) + session disabledTools
+// (subtract), EXCEPT servers in bypassAllowlistMcpServerIds skip the allowedTools
+// whitelist (they were attached at the session/turn level, not by the agent —
+// ADR 0030 inheritance); disabledTools still applies. The MCP bridge uses this
+// for BOTH the direct path (which tools to synthesize) and the proxy path (which
+// to list in the catalog + accept in mcp_call) — ADR 0051.
+function buildMcpAllowed(filter: ToolFilter): McpToolAllowed {
   const bypass =
     filter.bypassAllowlistMcpServerIds && filter.bypassAllowlistMcpServerIds.length > 0
       ? new Set(filter.bypassAllowlistMcpServerIds)
       : null
-  if (!bypass) return applyFilter(tools, filter)
-  return tools.filter((t) => {
-    const serverId = mcpServerIdOf(t.name)
-    if (serverId && bypass.has(serverId)) {
+  return (serverId, toolName) => {
+    const name = `mcp__${serverId}__${toolName}`
+    if (bypass && bypass.has(serverId)) {
       // Bypass allowedTools for this server; still honour the session denylist.
-      return isToolAllowed(
-        t.name,
-        filter.disabledTools ? { disabledTools: filter.disabledTools } : {},
-      )
+      return isToolAllowed(name, filter.disabledTools ? { disabledTools: filter.disabledTools } : {})
     }
-    return isToolAllowed(t.name, filter)
-  })
+    return isToolAllowed(name, filter)
+  }
 }
 
 export function createAwogToolDefinitions(
@@ -147,6 +136,9 @@ export function createAwogToolDefinitions(
 export interface RuntimeToolset {
   tools: AgentTool[]
   failures: McpLoadFailure[]
+  // Proxy mode only (ADR 0051): the <mcp-tools> catalog block for the system
+  // prompt. Callers append it to systemPromptAppend. Undefined in direct mode.
+  mcpCatalog?: string
 }
 
 // Assemble the COMPLETE tool set for a turn: built-in AWOG tools + the bridged
@@ -172,15 +164,17 @@ export async function createRuntimeToolDefinitions(
   mcpPoolKey?: string,
 ): Promise<RuntimeToolset> {
   const builtIn = createAwogToolDefinitions(cwd, filter, askUser)
-  const { tools: mcpTools, failures } = await createMcpToolDefinitions(
+  // MCP filtering lives inside the bridge now (buildMcpAllowed predicate) so the
+  // direct AND proxy paths apply the same allowedTools/disabledTools/bypass rule.
+  // Returns direct typed tools under the schema-size threshold, or proxy meta-
+  // tools (mcp_describe + mcp_call) + a `catalog` block at/over it (ADR 0051).
+  const { tools: mcpTools, failures, catalog } = await createMcpToolDefinitions(
     mcpServers,
+    buildMcpAllowed(filter),
     signal,
     mcpPoolKey,
   )
-  // Built-in tools are already filtered; filter MCP tools by the same rules,
-  // except parent-inherited servers (bypassAllowlistMcpServerIds) skip the
-  // allowedTools whitelist.
-  const tools = [...builtIn, ...applyMcpFilter(mcpTools, filter)]
+  const tools = [...builtIn, ...mcpTools]
   // Force sequential execution for EVERY built-in + MCP tool. Pi decides
   // parallel vs sequential per BATCH: a batch runs parallel only when the loop's
   // toolExecution is 'parallel' AND no tool in it is marked sequential
@@ -190,5 +184,9 @@ export async function createRuntimeToolDefinitions(
   // tool is added at the TOP LEVEL (run-stream / invoke), never here, so it stays
   // unmarked and parallel-eligible. See those callers' `toolExecution: 'parallel'`.
   for (const tool of tools) tool.executionMode = 'sequential'
-  return { tools: hookContext ? wrapToolsWithHooks(tools, hookContext) : tools, failures }
+  return {
+    tools: hookContext ? wrapToolsWithHooks(tools, hookContext) : tools,
+    failures,
+    ...(catalog ? { mcpCatalog: catalog } : {}),
+  }
 }

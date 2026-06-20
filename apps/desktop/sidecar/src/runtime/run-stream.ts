@@ -31,7 +31,7 @@ import { createTaskTool } from './tools/task-tool.js'
 import { makeBeforeToolCall } from './permission.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
-import { buildRulesPrompt } from '../rules/inject.js'
+import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
 import { buildStylePrompt } from '../style/styles.js'
 
 // Plan-mode system-prompt nudge. The model is read-only here (permission.ts
@@ -92,7 +92,7 @@ export async function runStreamPi(
   // upstream). allowedTools/disabledTools filter both kinds uniformly. A failing
   // MCP server is skipped (warn) so it never blocks the turn.
   const inPlanMode = args.settings.mode === 'plan'
-  const { tools, failures: mcpFailures } = await createRuntimeToolDefinitions(
+  const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
     {
@@ -128,7 +128,7 @@ export async function runStreamPi(
   })
   // Workspace rules (ADR 0033): enabled global + session-project rules, appended
   // to (not replacing) the agent's own prompt.
-  const rulesPrompt = await buildRulesPrompt(args.projectId)
+  const rulesPrompt = await buildRulesPrompt(args.projectId, extractTurnPaths(args.pendingText))
   // Response style (ADR 0046, sessions only): user-picked tone/format directive,
   // appended after rules (rules outrank style semantically) and before VERIFY.
   const stylePrompt = buildStylePrompt(
@@ -145,6 +145,8 @@ export async function runStreamPi(
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
     mcpUnavailable,
+    // MCP catalog (ADR 0051): present only when the MCP toolset is in proxy mode.
+    mcpCatalog,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
     inPlanMode ? PLAN_MODE_PROMPT : undefined,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)

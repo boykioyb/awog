@@ -5,6 +5,7 @@
 import type { TraceNode } from '../types/shared.js'
 import type { InvokeToolResult, InvokeToolUse } from '../sdk/invoke.js'
 import { countDone, parseTodos } from '../runtime/todos.js'
+import { unwrapMcpToolCall } from '../runtime/tools/mcp-tools.js'
 
 // TodoWrite → a 'todo' trace node carrying the live checklist (built from the
 // call input). Both the start and result events route here (node-runner emits
@@ -87,7 +88,11 @@ export function traceAgentNode(id: string, agentName: string, agentId: string): 
   }
 }
 
-export function traceFromToolUse(use: InvokeToolUse): TraceNode {
+export function traceFromToolUse(rawUse: InvokeToolUse): TraceNode {
+  // Unwrap a proxy mcp_call into mcp__server__tool + real args so it renders like
+  // a direct MCP call, not a bare "mcp_call" (ADR 0051).
+  const { name, input } = unwrapMcpToolCall(rawUse.name, rawUse.input)
+  const use: InvokeToolUse = { ...rawUse, name, input }
   if (use.name === 'TodoWrite') return traceFromTodos(use.id, use.input, null)
   const node: TraceNode = {
     id: use.id,
@@ -110,7 +115,10 @@ export function traceFromToolUse(use: InvokeToolUse): TraceNode {
   return node
 }
 
-export function traceFromToolResult(use: InvokeToolUse, result: InvokeToolResult, elapsedMs: number): TraceNode {
+export function traceFromToolResult(rawUse: InvokeToolUse, result: InvokeToolResult, elapsedMs: number): TraceNode {
+  // Same proxy unwrap as traceFromToolUse (ADR 0051).
+  const { name, input } = unwrapMcpToolCall(rawUse.name, rawUse.input)
+  const use: InvokeToolUse = { ...rawUse, name, input }
   if (use.name === 'TodoWrite') return traceFromTodos(use.id, use.input, formatDuration(elapsedMs))
   const node: TraceNode = {
     id: use.id,

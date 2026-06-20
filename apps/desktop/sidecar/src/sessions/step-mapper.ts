@@ -17,6 +17,7 @@ import type {
 } from '../types/shared.js'
 import { countDone, parseTodos } from '../runtime/todos.js'
 import { buildUnifiedDiff } from '../runtime/tools/text-diff.js'
+import { unwrapMcpToolCall, MCP_DESCRIBE_TOOL } from '../runtime/tools/mcp-tools.js'
 
 // Cap for inline previews and one-line labels — kept small so step payloads stay
 // light over stdio and the collapsed row never bloats.
@@ -180,8 +181,17 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Exit plan'
     case 'EnterPlanMode':
       return 'Enter plan'
-    default:
+    case MCP_DESCRIBE_TOOL:
+      return 'MCP: describe'
+    default: {
+      // MCP tool (direct mcp__<server>__<tool>, or an unwrapped proxy mcp_call)
+      // → "server: tool" instead of the raw double-underscore name (ADR 0051).
+      if (toolName.startsWith('mcp__')) {
+        const parts = toolName.slice('mcp__'.length).split('__')
+        if (parts.length >= 2) return `${parts[0]}: ${parts.slice(1).join('__')}`
+      }
       return toolName
+    }
   }
 }
 
@@ -209,7 +219,11 @@ export interface ToolUseInfo {
   input: Record<string, unknown>
 }
 
-export function stepFromToolUse(info: ToolUseInfo): SessionStep {
+export function stepFromToolUse(rawInfo: ToolUseInfo): SessionStep {
+  // Unwrap a proxy mcp_call into its underlying mcp__server__tool identity + real
+  // args so it renders like a direct MCP call, not a bare "mcp_call" (ADR 0051).
+  const { name, input } = unwrapMcpToolCall(rawInfo.name, rawInfo.input)
+  const info: ToolUseInfo = { ...rawInfo, name, input }
   const tool = pickStepTool(info.name)
   const target = pickTarget(info.name, info.input)
   const stats = pickDiffStats(info.name, info.input)
@@ -300,7 +314,11 @@ function fallbackEditDiff(toolName: string, input: Record<string, unknown>): str
   return parts.join('\n')
 }
 
-export function stepFromToolResult(info: ToolResultInfo): SessionStep {
+export function stepFromToolResult(rawInfo: ToolResultInfo): SessionStep {
+  // Same proxy unwrap as stepFromToolUse (ADR 0051): render mcp_call as its
+  // underlying mcp__server__tool with real args.
+  const { name, input } = unwrapMcpToolCall(rawInfo.toolName, rawInfo.toolInput)
+  const info: ToolResultInfo = { ...rawInfo, toolName: name, toolInput: input }
   const status: SessionStepStatus = info.isError ? 'error' : 'done'
   const tool = pickStepTool(info.toolName)
   const target = pickTarget(info.toolName, info.toolInput)
