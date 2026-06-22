@@ -20,7 +20,7 @@
 // — see `pnpm --filter @awog/desktop rebuild` (engine.ts loads it lazily, so the
 // app boots either way; only the terminal panel needs the rebuild).
 
-import { mkdir, rm, cp, writeFile, readdir, stat } from 'node:fs/promises'
+import { mkdir, rm, cp, writeFile, readdir, stat, chmod } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -103,6 +103,21 @@ async function pruneBundle() {
       dirs.filter((d) => d !== keep).map((d) => rm(join(prebuilds, d), { recursive: true, force: true })),
     )
     console.error(`[build] node-pty prebuilds: kept ${keep}, dropped ${dirs.length - 1} others`)
+
+    // node-pty's published prebuild ships `spawn-helper` WITHOUT the executable
+    // bit (and pnpm's content-addressable store does not restore it on deploy).
+    // The deployed bundle has only `prebuilds/` — no locally-rebuilt
+    // `build/Release/` — so node-pty loads the prebuild's helper and `pty.fork`
+    // fails at runtime with `posix_spawnp failed` (surfaced to the UI as a
+    // generic "Internal error" when opening a terminal). Restore +x here so the
+    // shipped bundle can spawn shells on Unix.
+    if (process.platform !== 'win32') {
+      const helper = join(prebuilds, keep, 'spawn-helper')
+      if (existsSync(helper)) {
+        await chmod(helper, 0o755)
+        console.error('[build] node-pty: chmod +x prebuilds spawn-helper')
+      }
+    }
   }
 
   // Drop node_modules/.bin — package-executable symlinks the engine never uses
