@@ -117,16 +117,50 @@ const init = async () => {
     fontSize: 13,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     cursorBlink: true,
+    // ⌥-drag forces local selection even when a TUI (vim/htop/tmux) has mouse
+    // reporting on; right-click selects the word under the cursor.
+    macOptionClickForcesSelection: true,
+    rightClickSelectsWord: true,
     theme: {
       background: t.value.bg,
       foreground: t.value.text,
       cursor: t.value.accent,
+      // xterm keeps its own selection model (separate from the browser's), so an
+      // unset selection color renders nearly invisible on a dark surface. Use the
+      // accent as an opaque inverse highlight — visible + readable on every theme.
+      selectionBackground: t.value.accent,
+      selectionForeground: t.value.accentText,
     },
   })
   fit = new FitAddon()
   instance.loadAddon(fit)
   instance.open(container)
   term.value = instance
+
+  // Copy/paste: xterm doesn't bind these by default and its selection never
+  // reaches the browser clipboard, so Cmd/Ctrl+C alone copies nothing. Wire both
+  // Cmd+C/V (mac) and Ctrl+Shift+C/V (win/linux); plain Ctrl+C stays SIGINT.
+  instance.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown') return true
+    const wantsCopy =
+      (e.metaKey && e.code === 'KeyC') || (e.ctrlKey && e.shiftKey && e.code === 'KeyC')
+    if (wantsCopy && instance.hasSelection()) {
+      navigator.clipboard.writeText(instance.getSelection()).catch(() => undefined)
+      return false
+    }
+    const wantsPaste =
+      (e.metaKey && e.code === 'KeyV') || (e.ctrlKey && e.shiftKey && e.code === 'KeyV')
+    if (wantsPaste) {
+      navigator.clipboard
+        .readText()
+        .then((text) => {
+          if (terminalId && text) api.write(terminalId, text).catch(() => undefined)
+        })
+        .catch(() => undefined)
+      return false
+    }
+    return true
+  })
 
   // Attach the data listener BEFORE the PTY can exist. Buffers until we know
   // our terminalId, then routes live.

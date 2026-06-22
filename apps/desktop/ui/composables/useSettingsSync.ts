@@ -24,6 +24,8 @@ export const useSettingsSync = () => {
     autoApprove: store.autoApprove,
     notificationsEnabled: store.notificationsEnabled,
     autoCompact: store.autoCompact,
+    githubAccount: store.githubAccount,
+    githubAutoFetchMs: store.githubAutoFetchMs,
   })
 
   // Suppress the write-back the deep-watch would fire while we apply file values.
@@ -44,6 +46,9 @@ export const useSettingsSync = () => {
       if (typeof raw.notificationsEnabled === 'boolean')
         store.notificationsEnabled = raw.notificationsEnabled
       if (typeof raw.autoCompact === 'boolean') store.autoCompact = raw.autoCompact
+      if (typeof raw.githubAccount === 'string') store.githubAccount = raw.githubAccount
+      if (typeof raw.githubAutoFetchMs === 'number' && raw.githubAutoFetchMs >= 0)
+        store.githubAutoFetchMs = raw.githubAutoFetchMs
       if (raw.themeMode === 'dark' || raw.themeMode === 'light') setTheme(raw.themeMode)
     } finally {
       // Release after the watcher flush so the applied values don't echo back.

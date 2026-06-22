@@ -117,6 +117,20 @@
       </SettingsField>
 
       <SettingsField
+        label="GitHub Issues/PR refresh interval (minutes)"
+        hint="How often the Project → Issues / Pull Requests tabs silently re-fetch the cached list. Set to 0 to refresh manually only."
+      >
+        <input
+          type="number"
+          min="0"
+          :value="githubFetchMinutes"
+          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          :style="inputStyle"
+          @input="onGithubIntervalInput($event)"
+        />
+      </SettingsField>
+
+      <SettingsField
         label="Commit message rule (AI prompt)"
         hint="System prompt sent to Claude when you click 'Generate AI' in the commit panel. Edit to lock in your team's convention."
         block
@@ -152,6 +166,7 @@ import {
 
 const { t } = useTheme()
 const { git, update } = useGitSettings()
+const settingsStore = useSettingsStore()
 
 const inputStyle = computed(() => ({
   background: t.value.bgInput,
@@ -171,6 +186,14 @@ const policyOptions: { value: DirtyTaskPolicy; label: string }[] = [
 ]
 
 const autoFetchSeconds = computed(() => Math.round(git.value.autoFetchIntervalMs / 1000))
+
+const githubFetchMinutes = computed(() => Math.round(settingsStore.githubAutoFetchMs / 60_000))
+
+const onGithubIntervalInput = (e: Event) => {
+  const parsed = Number.parseInt((e.target as HTMLInputElement).value, 10)
+  const minutes = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  settingsStore.setGithubAutoFetchMs(minutes * 60_000)
+}
 
 const onTemplateInput = (e: Event) => {
   const { value } = e.target as HTMLTextAreaElement

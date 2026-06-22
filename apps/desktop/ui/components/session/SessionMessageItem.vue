@@ -599,7 +599,13 @@ const doRewind = () => {
 
 const formatElapsed = (ms: number): string => {
   if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
+  const totalSeconds = ms / 1000
+  if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = Math.round(totalSeconds - minutes * 60)
+  // round may push seconds to 60 (e.g. 119.7s) — carry into the minute
+  if (seconds === 60) return `${minutes + 1}m 0s`
+  return `${minutes}m ${seconds}s`
 }
 
 // Local copy state per item — independent so concurrent copies don't clobber.

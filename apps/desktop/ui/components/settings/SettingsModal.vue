@@ -13,9 +13,9 @@
         v-if="open"
         class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-3"
         :style="{ background: t.overlay }"
+        @mousedown.self="closeSettings"
       >
         <div
-          ref="cardRef"
           class="w-full max-w-[920px] h-[85vh] rounded-lg overflow-hidden flex flex-col"
           :style="cardStyle"
         >
@@ -120,8 +120,6 @@ const contentBg = computed(() => t.value.bg)
 const { open, section, closeSettings } = useSettingsModal()
 const settings = useSettingsStore()
 
-const cardRef = useTemplateRef<HTMLElement>('cardRef')
-
 const sections: { id: SettingsSectionId; labelKey: string; icon: Component }[] = [
   { id: 'appearance', labelKey: 'settings.section.appearance', icon: Palette },
   { id: 'defaults', labelKey: 'settings.section.defaults', icon: Sliders },
@@ -141,9 +139,11 @@ watch(open, (isOpen) => {
 
 const escapeEnabled = computed(() => open.value)
 useEscape(closeSettings, { enabled: escapeEnabled })
-useClickOutside(cardRef, () => {
-  if (open.value) closeSettings()
-})
+// Backdrop dismiss qua `@mousedown.self` trên chính overlay (KHÔNG dùng
+// useClickOutside ở document): các dialog con (OAuth/Codex/Edit account) đều
+// Teleport ra body — nằm NGOÀI cardRef — nên một listener document-level sẽ coi
+// click bên trong chúng là "click ra ngoài" và đóng nhầm cả Settings. Dialog con
+// render overlay riêng đè lên trên nên mousedown không bao giờ chạm overlay này.
 
 // Body scroll lock while open — restore on close/unmount so overflow never sticks.
 let previousOverflow: string | null = null

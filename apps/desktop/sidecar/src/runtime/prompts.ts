@@ -22,4 +22,6 @@ When you cannot verify something the user needs, tell them what is blocking you 
 // own prompt for trivial requests.
 export const TODO_USAGE_PROMPT = `<todo-list>
 For any request that takes more than a couple of steps, use the \`TodoWrite\` tool to plan and track your work: lay out a checklist up front, keep exactly one item \`in_progress\` while you work it, and mark items \`completed\` the moment they are done. The list is shown live to the user as your progress — keep it current. Skip it only for trivial single-step requests.
+
+Before you end your turn, reconcile the checklist with what you actually did: mark every item you have genuinely finished as \`completed\`, and do not leave an already-finished item stuck at \`in_progress\`. NEVER mark an item \`completed\` that you did not actually finish — if you stop with work still remaining, leave those items \`pending\` or \`in_progress\` and say what is left. When you pause to wait for the user (a question or an approval gate), leave that item \`in_progress\` until you resume, then mark it \`completed\` once you continue.
 </todo-list>`

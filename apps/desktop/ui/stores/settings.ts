@@ -192,6 +192,14 @@ interface SettingsState {
   autoUpdate: AutoUpdateSettings
   composer: ComposerSettings
   quotaWarning: QuotaWarningSettings
+  // Selected GitHub account login for the Project GitHub tabs (ADR 0049).
+  // App-level, not per-project; passed as `account` to gh.list/gh.get. Empty =
+  // follow gh's active account. Persisted in settings.json.
+  githubAccount: string
+  // Auto-refresh interval (ms) for the Project GitHub tabs' Issues/PR list.
+  // The list is cached; this is how often a mounted tab silently revalidates.
+  // Default 30 min; 0 = manual refresh only. Configurable in Settings.
+  githubAutoFetchMs: number
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -247,6 +255,8 @@ export const useSettingsStore = defineStore('settings', {
     autoUpdate: { ...DEFAULT_AUTO_UPDATE_SETTINGS },
     composer: { ...DEFAULT_COMPOSER_SETTINGS },
     quotaWarning: { ...DEFAULT_QUOTA_WARNING_SETTINGS },
+    githubAccount: '',
+    githubAutoFetchMs: 1_800_000,
   }),
   getters: {
     activeAccount(state): (provider: ProviderName) => ProviderAccount | null {
@@ -452,6 +462,16 @@ export const useSettingsStore = defineStore('settings', {
     },
     updateQuotaWarning(patch: Partial<QuotaWarningSettings>) {
       this.quotaWarning = { ...this.quotaWarning, ...patch }
+    },
+    // Select the GitHub account (login) the Project GitHub tabs run gh as.
+    // Empty string = follow gh's active account.
+    setGithubAccount(login: string) {
+      this.githubAccount = login
+    },
+    // Auto-refresh interval (ms) for the Project GitHub Issues/PR lists. Clamp
+    // negatives to 0 (manual only).
+    setGithubAutoFetchMs(ms: number) {
+      this.githubAutoFetchMs = Number.isFinite(ms) && ms > 0 ? Math.round(ms) : 0
     },
   },
 })

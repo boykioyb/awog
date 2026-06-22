@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { ChevronDown, ChevronRight, ListChecks } from 'lucide-vue-next'
 import type { Session, SessionStep, TodoItem, TodoStatus } from '~/types'
 
@@ -84,17 +84,51 @@ const latestTodos = computed<TodoItem[]>(() => {
 const total = computed(() => latestTodos.value.length)
 const done = computed(() => latestTodos.value.filter((todo) => todo.status === 'completed').length)
 
-// The panel is a LIVE progress affordance: shown only while a turn is in flight
-// (including parked on a question/permission), and hidden once the session goes
-// idle. This matters because the model frequently ends a turn leaving the last
-// item at `in_progress` instead of emitting a final TodoWrite that marks it
-// `completed` — gating on `done < total` alone would strand the panel at e.g.
-// "3/4" forever. When idle, the reply text already carries the conclusion, so
-// the checklist has no live role; the next turn re-shows it when todos update.
+// The panel is a LIVE progress affordance: shown while a turn is in flight
+// (including parked on a question/permission). Gating on `isRunning` (not just
+// `done < total`) is what keeps a turn that ends with the last item still
+// `in_progress` from stranding the panel forever. While running we ALSO hide it
+// once every item is checked — a mid-turn "all done" has no live role and would
+// read as stale if the model keeps working.
 const store = useSessionsStore()
 const isRunning = computed(() => store.isSessionStreaming(props.session.id))
-// Also hidden when there's nothing to do or every item is already checked.
-const visible = computed(() => isRunning.value && total.value > 0 && done.value < total.value)
+const allDone = computed(() => total.value > 0 && done.value === total.value)
+
+// Linger: when a turn ENDS with every item checked, the panel would otherwise
+// vanish in the same tick it reaches n/n — the user never sees the completed
+// checklist (the model emits its final TodoWrite, then the turn goes idle
+// immediately). So on the running→idle transition with all items done, keep it
+// visible briefly (showing every ✓) before it auto-hides. A new turn cancels it.
+const LINGER_MS = 4000
+const lingering = ref(false)
+let lingerTimer: ReturnType<typeof setTimeout> | null = null
+function clearLinger() {
+  if (lingerTimer) {
+    clearTimeout(lingerTimer)
+    lingerTimer = null
+  }
+}
+watch(isRunning, (running, wasRunning) => {
+  if (wasRunning && !running && allDone.value) {
+    lingering.value = true
+    clearLinger()
+    lingerTimer = setTimeout(() => {
+      lingering.value = false
+      lingerTimer = null
+    }, LINGER_MS)
+  } else if (running && lingering.value) {
+    lingering.value = false
+    clearLinger()
+  }
+})
+onUnmounted(clearLinger)
+
+// Visible while lingering (turn just finished, all checked) OR while a turn is
+// running with at least one item still open.
+const visible = computed(() => {
+  if (lingering.value) return true
+  return isRunning.value && total.value > 0 && done.value < total.value
+})
 
 const collapsed = ref(false)
 

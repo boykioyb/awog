@@ -1790,6 +1790,24 @@ export const useSessionsStore = defineStore('sessions', {
         console.warn('[sessions] generateTitle failed', err)
       }
     },
+
+    // Ask the sidecar to rewrite the composer draft into a clearer, more
+    // specific prompt (one-shot, no turn created). Returns the enhanced text;
+    // the composer keeps the original for one-click undo. Throws on failure so
+    // the composer can surface a notice and keep the draft untouched.
+    async enhancePrompt(sessionId: string, text: string): Promise<string> {
+      const session = this.sessions.find((s) => s.id === sessionId)
+      if (!session) throw new Error('Session not found')
+      const sidecar = useSidecar()
+      if (!sidecar.available) throw new Error('Sidecar not available')
+      const res = await sidecar.request<{ text: string }>('sessions.enhancePrompt', {
+        text,
+        provider: session.settings.provider,
+        modelId: session.settings.modelId,
+        ...(session.settings.accountId ? { accountId: session.settings.accountId } : {}),
+      })
+      return res.text
+    },
   },
 })
 
