@@ -76,7 +76,7 @@
           :style="{ color: t.text }"
           @focus="composerFocus = true"
           @blur="onBlur"
-          @input="mention.detect"
+          @input="onComposerInput"
           @click="mention.detect"
           @keyup="mention.detect"
           @keydown="onComposerKeydown"
@@ -89,6 +89,23 @@
           @click="fileInputRef?.click()"
         >
           <Paperclip :size="14" />
+        </button>
+        <!-- Enhance: rewrite the draft into a clearer prompt via a one-shot
+             model call. Independent of streaming — it only transforms the draft. -->
+        <button
+          :disabled="!canEnhance"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
+          :style="{
+            color: canEnhance ? t.textDim : t.textFaint,
+            cursor: canEnhance ? 'pointer' : 'not-allowed',
+          }"
+          :title="
+            enhancing ? tr('session.composer.enhance.enhancing') : tr('session.composer.enhance')
+          "
+          @click="onEnhance"
+        >
+          <Loader2 v-if="enhancing" :size="14" class="animate-spin" />
+          <Sparkles v-else :size="14" />
         </button>
         <!-- While a turn streams: Stop (interrupt) + a split send button whose
              primary action is Insert/steer (or Queue when the draft carries
@@ -343,6 +360,20 @@
       {{ commandNotice }}
     </div>
 
+    <!-- Undo affordance after an enhance: revert the draft to the original. -->
+    <div
+      v-if="preEnhanceDraft !== null"
+      class="mt-1 px-1 text-[12px] leading-none flex items-center gap-1.5"
+      :style="{ color: t.textDim }"
+    >
+      <Sparkles :size="11" />
+      <span>{{ tr('session.composer.enhance.done') }}</span>
+      <span aria-hidden="true">·</span>
+      <button type="button" class="underline" :style="{ color: t.accent }" @click="onUndoEnhance">
+        {{ tr('session.composer.enhance.undo') }}
+      </button>
+    </div>
+
     <!-- Toolbar: account / model / effort chips + context usage. Sits under the
          input (Claude Code style). The provider/connection chip is dropped —
          the account chip already implies the provider. Mode + MCP live in the
@@ -358,7 +389,17 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronUp, Clock, FileText, Paperclip, Send, Square, X } from 'lucide-vue-next'
+import {
+  ChevronUp,
+  Clock,
+  FileText,
+  Loader2,
+  Paperclip,
+  Send,
+  Sparkles,
+  Square,
+  X,
+} from 'lucide-vue-next'
 import { computed, inject, onBeforeUnmount, ref, toRef, useTemplateRef, watch } from 'vue'
 import type { Session, SessionAttachment } from '~/types'
 import { FOLLOW_UP_KEY } from '~/utils/follow-up-context'
@@ -393,6 +434,11 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 // Response-style popover (ADR 0046) — opened by the `/style` command dispatch.
 const stylePickerRef = useTemplateRef<{ open: () => void }>('stylePickerRef')
 const pendingAttachments = ref<SessionAttachment[]>([])
+
+// Enhance-prompt: rewrite the draft into a clearer prompt via a one-shot model
+// call. The original is stashed so the user can revert with one click.
+const enhancing = ref(false)
+const preEnhanceDraft = ref<string | null>(null)
 
 // Drag the top grip to resize the whole composer block. Writes the textarea's
 // inline height imperatively (same channel as the native resize-y grip, so the
@@ -491,6 +537,7 @@ watch(
     draft.value = ''
     mention.close()
     pendingAttachments.value = []
+    preEnhanceDraft.value = null
     commandNotice.value = null
     sendMenuOpen.value = false
   },
@@ -515,6 +562,8 @@ const canSend = computed(
     pendingAttachments.value.length > 0 ||
     pendingFollowUps.value.length > 0,
 )
+
+const canEnhance = computed(() => draft.value.trim().length > 0 && !enhancing.value)
 
 const isStreaming = computed(() => store.isSessionStreaming(props.session.id))
 
@@ -552,7 +601,42 @@ const clearComposer = () => {
   draft.value = ''
   pendingAttachments.value = []
   editingFollowUpId.value = null
+  preEnhanceDraft.value = null
   followUpController?.clear()
+}
+
+// Enhance the current draft into a clearer prompt (one-shot, no turn created).
+// Stash the original so the user can revert; on any failure keep the draft.
+const onEnhance = async () => {
+  if (!canEnhance.value) return
+  const original = draft.value
+  enhancing.value = true
+  try {
+    const enhanced = await store.enhancePrompt(props.session.id, original)
+    if (enhanced.trim() && enhanced.trim() !== original.trim()) {
+      preEnhanceDraft.value = original
+      draft.value = enhanced
+    }
+  } catch (err) {
+    console.warn('[session] enhancePrompt failed', err)
+    showNotice(tr('session.composer.enhance.error'))
+  } finally {
+    enhancing.value = false
+  }
+}
+
+// Revert to the pre-enhance draft (one-click undo).
+const onUndoEnhance = () => {
+  if (preEnhanceDraft.value === null) return
+  draft.value = preEnhanceDraft.value
+  preEnhanceDraft.value = null
+}
+
+// Textarea @input: clear the undo affordance once the user edits (the
+// enhancement is implicitly accepted), then run mention detection.
+const onComposerInput = () => {
+  preEnhanceDraft.value = null
+  mention.detect()
 }
 
 const onSend = () => {
