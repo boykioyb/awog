@@ -97,8 +97,8 @@
         @cancel="editing = false"
       />
       <div v-else-if="selectedProject" class="flex flex-col h-full min-h-0">
-        <div class="flex-1 overflow-y-auto p-4 md:p-6">
-          <div class="flex items-start gap-3 mb-6">
+        <div class="flex-shrink-0 px-4 md:px-6 pt-4 md:pt-6">
+          <div class="flex items-start gap-3 mb-4">
             <div
               class="w-12 h-12 rounded flex items-center justify-center"
               :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
@@ -165,6 +165,27 @@
             </div>
           </div>
 
+          <!-- Tab bar (Overview always; Issues + Pull Requests only for GitHub
+               remotes per ADR 0049). -->
+          <div class="flex items-center gap-1" :style="{ borderBottom: `1px solid ${t.border}` }">
+            <button
+              v-for="tab in projectTabs"
+              :key="tab.id"
+              class="flex items-center gap-1.5 px-3 py-2 text-[1em] transition"
+              :style="projectTabStyle(tab.id)"
+              @click="activeProjectTab = tab.id"
+            >
+              <component :is="tab.icon" :size="12" />
+              <span>{{ tab.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Overview tab: the existing project detail body. -->
+        <div
+          v-if="activeProjectTab === 'overview'"
+          class="flex-1 overflow-y-auto p-4 md:p-6 min-h-0"
+        >
           <div class="mb-6 flex items-center gap-2 flex-wrap">
             <button
               class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
@@ -381,6 +402,24 @@
             </button>
           </div>
         </div>
+
+        <!-- Issues / Pull Requests tabs (GitHub remotes only). Keyed by tab so
+             switching remounts the controller with a fresh kind. -->
+        <ProjectGhTab
+          v-else-if="activeProjectTab === 'issues'"
+          :key="`issues-${selectedProject.id}`"
+          class="flex-1 min-h-0 p-4 md:p-6"
+          :project="selectedProject"
+          kind="issue"
+        />
+        <ProjectGhTab
+          v-else-if="activeProjectTab === 'pr'"
+          :key="`pr-${selectedProject.id}`"
+          class="flex-1 min-h-0 p-4 md:p-6"
+          :project="selectedProject"
+          kind="pr"
+        />
+
         <!-- One dock per project with an open terminal, kept mounted so its
              shell + content persist across project switches; only the selected
              project's dock is shown. -->
@@ -455,14 +494,17 @@
 import {
   AlertCircle,
   ChevronRight,
+  CircleDot,
   Circle,
   Clock,
   Code2,
   Edit3,
   ExternalLink,
+  FileText,
   FolderGit2,
   GitBranch,
   GitFork,
+  GitPullRequest,
   MessageSquare,
   MoreHorizontal,
   Package,
@@ -472,6 +514,7 @@ import {
   TerminalSquare,
   Trash2,
 } from 'lucide-vue-next'
+import type { Component } from 'vue'
 import type { Project, Session, Task } from '~/types'
 import { LEVEL_LABEL, PROVIDER_LABEL, modelById } from '~/utils/models'
 import ProjectTerminalDock from '~/components/workspace/ProjectTerminalDock.vue'
@@ -576,6 +619,40 @@ if (sidecar.available) {
 const selectedProject = computed<Project | null>(
   () => ws.projects.find((p) => p.id === selectedId.value) ?? null,
 )
+
+// ── Project detail tabs (Overview / Issues / Pull Requests) ──
+// Issues + PR tabs only appear when the project's remote points at GitHub
+// (ADR 0049). Repo with no GitHub remote → just Overview.
+type ProjectTab = 'overview' | 'issues' | 'pr'
+const activeProjectTab = ref<ProjectTab>('overview')
+const isGithubProject = computed(() => /github\.com/.test(selectedProject.value?.gitRemote ?? ''))
+const projectTabs = computed<{ id: ProjectTab; label: string; icon: Component }[]>(() => {
+  const tabs: { id: ProjectTab; label: string; icon: Component }[] = [
+    { id: 'overview', label: tr('project.github.tab_overview'), icon: FileText },
+  ]
+  if (isGithubProject.value) {
+    tabs.push({ id: 'issues', label: tr('project.github.tab_issues'), icon: CircleDot })
+    tabs.push({ id: 'pr', label: tr('project.github.tab_prs'), icon: GitPullRequest })
+  }
+  return tabs
+})
+const projectTabStyle = (id: ProjectTab) => {
+  const active = activeProjectTab.value === id
+  return {
+    background: 'transparent',
+    color: active ? t.value.text : t.value.textDim,
+    borderBottom: `2px solid ${active ? t.value.accent : 'transparent'}`,
+    marginBottom: '-1px',
+  }
+}
+// Reset to Overview when switching projects, or when the active tab is no longer
+// available (e.g. moved to a non-GitHub project).
+watch(selectedId, () => {
+  activeProjectTab.value = 'overview'
+})
+watch(isGithubProject, (isGh) => {
+  if (!isGh && activeProjectTab.value !== 'overview') activeProjectTab.value = 'overview'
+})
 
 // ── Per-project session LLM defaults ──
 const llmModalOpen = ref(false)
