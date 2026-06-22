@@ -70,8 +70,16 @@ const MCP_RESULT_MAX_CHARS = 64 * 1024
 
 // Progressive disclosure (ADR 0051). Proxy meta-tool names — exported so the
 // trace/step mappers (unwrapMcpToolCall) key off the same strings.
-export const MCP_DESCRIBE_TOOL = 'mcp_describe'
-export const MCP_CALL_TOOL = 'mcp_call'
+//
+// MUST NOT start with the `mcp_` prefix: Anthropic reserves that tool-name
+// namespace for the MCP connector (a metered/paid feature), so a request that
+// declares a custom tool named `mcp_*` is billed against the extra-usage bucket
+// — under an OAuth subscription with extra usage disabled it hard-fails the WHOLE
+// turn with `400 invalid_request_error: "You're out of extra usage."`. camelCase
+// (no underscore) avoids the reservation while keeping the "mcp" hint. The trace/
+// step mappers reference these constants, so renaming here is sufficient.
+export const MCP_DESCRIBE_TOOL = 'mcpDescribe'
+export const MCP_CALL_TOOL = 'mcpCall'
 
 // Switch from direct typed MCP tools to the proxy meta-tools once a turn's ALLOWED
 // MCP schemas would add more than this many bytes to context (name + description +

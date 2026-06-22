@@ -184,9 +184,36 @@ export async function createRuntimeToolDefinitions(
   // tool is added at the TOP LEVEL (run-stream / invoke), never here, so it stays
   // unmarked and parallel-eligible. See those callers' `toolExecution: 'parallel'`.
   for (const tool of tools) tool.executionMode = 'sequential'
+  assertNoReservedToolNames(tools)
   return {
     tools: hookContext ? wrapToolsWithHooks(tools, hookContext) : tools,
     failures,
     ...(catalog ? { mcpCatalog: catalog } : {}),
+  }
+}
+
+// Anthropic reserves the `mcp_<word>` tool-name namespace — lowercase `mcp_`
+// followed by a NON-underscore char (e.g. `mcp_call`, `mcp_describe`) — for its
+// MCP connector, a metered/paid feature. A custom tool whose name matches is
+// billed to the extra-usage bucket: under an OAuth subscription it hard-400s
+// "You're out of extra usage" when extra usage is off, and — far worse —
+// SILENTLY bills real money on accounts with unlimited extra usage (no error, no
+// signal). The double-underscore bridge convention `mcp__<serverId>__<tool>` is
+// EXEMPT (4th char is `_`, so it never matches `^mcp_[^_]`) and is how every
+// external MCP tool is named here — so this guard can only ever trip on an
+// AWOG-authored built-in/proxy name, i.e. a programming bug. We fail fast (the
+// turn errors visibly) rather than let a colliding name reach the API and bill
+// silently. Empirically mapped 2026-06-22; see ADR 0051 + mcp-tools.ts.
+const RESERVED_MCP_TOOL_NAME_RE = /^mcp_[^_]/
+
+function assertNoReservedToolNames(tools: AgentTool[]): void {
+  const offending = tools.map((t) => t.name).filter((n) => RESERVED_MCP_TOOL_NAME_RE.test(n))
+  if (offending.length > 0) {
+    throw new Error(
+      `Tool name(s) collide with Anthropic's reserved mcp_ connector namespace ` +
+        `(would be billed as extra usage): ${offending.join(', ')}. Rename to a ` +
+        `non-"mcp_<word>" form (e.g. mcpCall). The mcp__<server>__<tool> bridge ` +
+        `convention is exempt.`,
+    )
   }
 }
