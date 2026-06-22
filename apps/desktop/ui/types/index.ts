@@ -533,6 +533,10 @@ export interface SessionMessage {
     outputTokens: number
     cacheReadTokens?: number
     cacheWriteTokens?: number
+    // Per-segment char sizes of the turn's assembled prompt (system / tools /
+    // history incl. tool I/O). Lets the usage panel itemise the context window
+    // instead of one opaque "Other". char/4 ≈ tokens. Absent on old messages.
+    contextChars?: { system: number; tools: number; history: number }
   }
   canceled?: boolean
   // Set when the turn failed: a provider `error` stop (the loop returned an

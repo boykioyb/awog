@@ -492,6 +492,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         outputTokens: opts.result.usage.output_tokens,
         cacheReadTokens: opts.result.usage.cache_read_tokens,
         cacheWriteTokens: opts.result.usage.cache_creation_tokens,
+        ...(opts.result.contextChars ? { contextChars: opts.result.contextChars } : {}),
       }
       // Graceful `error` stop: the loop returned normally but the provider
       // failed mid-turn. Persist the cause so a reload shows the error alert

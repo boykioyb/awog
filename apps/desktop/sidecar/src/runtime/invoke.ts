@@ -14,6 +14,7 @@ import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
+import { confirmOverageOrStop } from './overage-guard.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { SessionSettings } from '../types/shared.js'
@@ -298,8 +299,17 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         // gating is the workflow author's job via the agent's allowedTools (the
         // tool set is already filtered in createRuntimeToolDefinitions above).
         beforeToolCall: async () => undefined,
-        // Capture Codex plan-usage from response headers (no-op for non-Codex).
-        onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
+        // Capture Codex plan-usage from response headers (no-op for non-Codex),
+        // then fail closed on Anthropic extra-usage: a headless task cannot prompt,
+        // so if a response consumed PAID overage we STOP rather than silently bill.
+        onResponse: async (resp) => {
+          recordCodexUsageFromHeaders(account.id, resp.headers)
+          if (args.settings.provider === 'anthropic') {
+            await confirmOverageOrStop(resp.headers, 'task', undefined, args.abortController?.signal, () =>
+              args.abortController?.abort(),
+            )
+          }
+        },
         // Parallel at the batch level so several `Task` subagents in one turn run
         // concurrently (ADR 0030). Every non-Task tool is marked sequential
         // (createRuntimeToolDefinitions), so any batch with a regular tool still

@@ -160,6 +160,11 @@ export interface RunStreamResult {
     cache_creation_tokens: number
   }
   stopReason: string | null
+  // Per-segment char sizes of the turn's assembled prompt (system prompt / tool
+  // definitions / replayed history incl. tool I/O + thinking). Lets the usage
+  // panel itemise the context window instead of one opaque "Other". char/4 ≈
+  // tokens (UI heuristic). Absent on /compact-only runs.
+  contextChars?: { system: number; tools: number; history: number }
   // Human-readable provider error cause, present only when stopReason === 'error'
   // (Pi reports a mid-stream failure as a graceful `error` stop rather than
   // throwing). Lets the UI render a real error alert + retry for the turn.

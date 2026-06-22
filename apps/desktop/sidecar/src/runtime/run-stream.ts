@@ -17,6 +17,7 @@ import {
 import type { Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
+import { confirmOverageOrStop } from './overage-guard.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../sessions/runner.js'
@@ -212,6 +213,18 @@ export async function runStreamPi(
     args.compaction,
   )
 
+  // Context-window breakdown for the UI usage panel: measure each segment's size
+  // at build time so the panel can itemise System prompt / Tools / Messages (like
+  // Claude Code) instead of dumping everything the UI can't see into one opaque
+  // "Other" bucket. Char counts (÷4 in the UI = the same rough heuristic it
+  // already uses); JSON size over-approximates structure but, crucially, captures
+  // the tool_use / tool_result / thinking content the visible-text estimate omits.
+  const contextChars = {
+    system: (context.systemPrompt ?? '').length,
+    tools: JSON.stringify(tools).length,
+    history: JSON.stringify(context.messages).length + JSON.stringify(prompt).length,
+  }
+
   const reasoning = toReasoning(args.settings.level, model)
   const adapter = createEventAdapter(cb)
 
@@ -253,6 +266,8 @@ export async function runStreamPi(
     sessionId: args.sessionId,
     model: args.settings.modelId,
     account: account.id,
+    accountLabel: account.label,
+    ...(account.account?.email ? { accountEmail: account.account.email } : {}),
     historyTurns: args.history.length,
   })
 
@@ -277,8 +292,23 @@ export async function runStreamPi(
         // Mid-turn steering: inject user instructions queued via sessions.steer
         // at each turn boundary (undefined for tasks/subagents → no-op).
         ...(getSteeringMessages ? { getSteeringMessages } : {}),
-        // Capture Codex plan-usage from response headers (no-op for non-Codex).
-        onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
+        // Capture Codex plan-usage from response headers (no-op for non-Codex),
+        // then gate on Anthropic extra-usage (overage): if a response consumed
+        // PAID overage, park and ask the user to confirm before continuing — Pi
+        // awaits onResponse, so this halts the loop in place (chat only; headless
+        // warns). Inert when overage is off (claim never resolves to 'overage').
+        onResponse: async (resp) => {
+          recordCodexUsageFromHeaders(account.id, resp.headers)
+          if (args.settings.provider === 'anthropic') {
+            await confirmOverageOrStop(
+              resp.headers,
+              args.sessionId,
+              args.askUserQuestion,
+              args.abortController?.signal,
+              () => args.abortController?.abort(),
+            )
+          }
+        },
         // Parallel at the batch level so several `Task` subagents spawned in one
         // turn run concurrently (ADR 0030). Every non-Task tool is marked
         // executionMode: 'sequential' (createRuntimeToolDefinitions), so a batch
@@ -305,13 +335,22 @@ export async function runStreamPi(
   }
 
   const acc = adapter.result()
-  log.info('chat stream done (pi)', {
+  const doneMeta = {
     sessionId: args.sessionId,
     model: acc.modelUsed,
     inputTokens: acc.inputTokens,
     outputTokens: acc.outputTokens,
     stopReason: acc.stopReason,
-  })
+    // Provider error cause on a graceful `error` stop — without it the log just
+    // reads stopReason:error with no clue why (e.g. a 400 "out of extra usage").
+    ...(acc.errorMessage !== undefined ? { errorMessage: acc.errorMessage } : {}),
+  }
+  // Escalate to warn on a graceful error stop so it surfaces above info noise.
+  if (acc.stopReason === 'error') {
+    log.warn('chat stream done (pi)', doneMeta)
+  } else {
+    log.info('chat stream done (pi)', doneMeta)
+  }
 
   // No opaque session id: resume rebuilds Context from JSONL each turn.
   return {
@@ -324,6 +363,7 @@ export async function runStreamPi(
       cache_creation_tokens: acc.cacheWriteTokens,
     },
     stopReason: acc.stopReason,
+    contextChars,
     // Forward the provider error cause on a graceful `error` stop so the caller
     // can persist + surface it (the run did NOT throw, so this is the only signal).
     ...(acc.errorMessage !== undefined ? { errorMessage: acc.errorMessage } : {}),

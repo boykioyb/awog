@@ -218,6 +218,10 @@ export interface SessionMessage {
     outputTokens: number
     cacheReadTokens?: number
     cacheWriteTokens?: number
+    // Per-segment char sizes of the turn's assembled prompt — lets the usage
+    // panel itemise System prompt / Tools / Messages instead of one opaque
+    // "Other". char/4 ≈ tokens. Absent on messages persisted before this shipped.
+    contextChars?: { system: number; tools: number; history: number }
   }
   // True when the assistant turn was cut short (user Stop / error / crash) and
   // only a partial reply was persisted. Mirrors the UI SessionMessage.canceled.

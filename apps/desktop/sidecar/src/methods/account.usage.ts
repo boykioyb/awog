@@ -32,7 +32,7 @@ register('account.usage', async (raw) => {
   try {
     account = await resolveAccount(params.provider, params.accountId)
   } catch {
-    return { profile: null, usage: [], cachedAt: Date.now() }
+    return { profile: null, usage: [], cachedAt: Date.now(), accountId: null }
   }
 
   // OpenAI Codex (ChatGPT subscription): usage isn't fetched — it's captured from
@@ -40,14 +40,19 @@ register('account.usage', async (raw) => {
   // snapshot; null (no turn yet) ⇒ empty. API-key openai accounts have none.
   if (params.provider === 'openai') {
     const snap = account.authMode === 'oauth' ? getCodexUsage(account.id) : null
-    return { profile: null, usage: snap?.usage ?? [], cachedAt: snap?.cachedAt ?? Date.now() }
+    return {
+      profile: null,
+      usage: snap?.usage ?? [],
+      cachedAt: snap?.cachedAt ?? Date.now(),
+      accountId: account.id,
+    }
   }
 
   // Profile + usage come from claude.ai OAuth endpoints — only meaningful for
   // OAuth (subscription) accounts. API-key accounts (incl. custom endpoints)
   // have no usage surface, so report it as unavailable rather than throwing.
   if (account.authMode !== 'oauth') {
-    return { profile: null, usage: [], cachedAt: Date.now() }
+    return { profile: null, usage: [], cachedAt: Date.now(), accountId: account.id }
   }
 
   const cached = cache.get(account.id)
@@ -56,6 +61,7 @@ register('account.usage', async (raw) => {
       profile: cached.profile,
       usage: cached.usage,
       cachedAt: cached.fetchedAt,
+      accountId: account.id,
     }
   }
 
@@ -67,7 +73,7 @@ register('account.usage', async (raw) => {
     ])
     const entry: CachedEntry = { fetchedAt: Date.now(), profile, usage }
     cache.set(account.id, entry)
-    return { profile, usage, cachedAt: entry.fetchedAt }
+    return { profile, usage, cachedAt: entry.fetchedAt, accountId: account.id }
   } catch (err) {
     log.warn('account.usage fetch failed', {
       account: account.id,

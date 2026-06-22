@@ -21,6 +21,7 @@ import { runAgentLoop, type AgentEvent, type AgentTool } from '@earendil-works/p
 import { Type, type Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../../providers/openai/usage.js'
+import { confirmOverageOrStop } from '../overage-guard.js'
 import { resolveAgentContext, type ResolvedAgentContext } from '../../tasks/agent-context.js'
 import { log } from '../../util/logger.js'
 import type { Agent, SessionSettings } from '../../types/shared.js'
@@ -268,7 +269,14 @@ async function spawnSubagent(
       convertToLlm: (messages) => messages as Message[],
       ...(reasoning ? { reasoning } : {}),
       beforeToolCall: deps.beforeToolCall,
-      onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers),
+      // Capture Codex usage, then fail closed on Anthropic extra-usage: a subagent
+      // is headless (no askUser) so it STOPS rather than silently bill overage.
+      onResponse: async (resp) => {
+        recordCodexUsageFromHeaders(account.id, resp.headers)
+        if (settings.provider === 'anthropic') {
+          await confirmOverageOrStop(resp.headers, 'subagent', undefined, signal, undefined)
+        }
+      },
       toolExecution: 'sequential',
     },
     sink.emit,

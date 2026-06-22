@@ -118,6 +118,17 @@
           </button>
         </div>
 
+        <!-- Which account these numbers belong to — resolved by the sidecar, the
+             same account the next turn will run on (not the UI's active guess). -->
+        <div
+          v-if="resolvedAccountLabel"
+          class="text-[12px] mb-2 truncate"
+          :style="{ color: t.textDim }"
+          title="Usage account (the account this session's next turn will use)"
+        >
+          {{ resolvedAccountLabel }}
+        </div>
+
         <div v-if="usageError" class="text-[1em] mb-1.5" :style="{ color: t.danger ?? '#ef4444' }">
           {{ usageError }}
         </div>
@@ -276,11 +287,28 @@ interface Segment {
 
 const breakdown = computed(() => {
   const cap = Math.max(used.value, 1)
+  // Preferred: sidecar-reported per-segment char sizes (system prompt / tools /
+  // history incl. tool I/O + thinking), ÷4 ≈ tokens. Itemises the window like
+  // Claude Code instead of dumping everything the UI can't see into "Other".
+  const cc = lastAgentWithUsage.value?.usage?.contextChars
+  if (cc) {
+    const sys = Math.round(cc.system / 4)
+    const tools = Math.round(cc.tools / 4)
+    const msgs = Math.round(cc.history / 4)
+    const est = sys + tools + msgs
+    // Scale to the real total: overshoot → fit to `used` (Other 0); undershoot →
+    // the deficit is the genuine unattributed remainder.
+    if (est > cap) {
+      const k = cap / est
+      return { sys: sys * k, tools: tools * k, msgs: msgs * k, other: 0 }
+    }
+    return { sys, tools, msgs, other: Math.max(0, used.value - est) }
+  }
+  // Fallback for messages persisted before contextChars shipped: rough estimate
+  // (visible text only), everything else lumped into Other.
   const sys = Math.min(systemPromptTokens.value, cap)
   const msgs = Math.max(0, Math.min(messagesTokens.value, cap - sys))
-  const accounted = sys + msgs
-  const other = Math.max(0, used.value - accounted)
-  return { sys, msgs, other }
+  return { sys, tools: 0, msgs, other: Math.max(0, used.value - sys - msgs) }
 })
 
 const segments = computed<Segment[]>(() => {
@@ -288,6 +316,7 @@ const segments = computed<Segment[]>(() => {
   const total = limit.value || 1
   const parts: { label: string; tokens: number; color: string }[] = [
     { label: 'System prompt', tokens: b.sys, color: '#60a5fa' },
+    { label: 'Tools', tokens: b.tools, color: '#34d399' },
     { label: 'Messages', tokens: b.msgs, color: '#a78bfa' },
     { label: 'Other (overhead)', tokens: b.other, color: '#f472b6' },
   ]
@@ -329,10 +358,19 @@ const usageLoading = ref(false)
 const usageError = ref<string | null>(null)
 const usageFetchedAt = ref(0)
 
-// Usage must follow the account picked for THIS session (the account chip),
-// not the global active one. Effective = explicit per-session override, else
-// the provider's global active account.
-const effectiveAccountId = computed<string | null>(
+// Single source of truth for "which account" = the SIDECAR. We send the
+// per-session pin verbatim (undefined ⇒ "follow the active account") to
+// account.usage and let the sidecar resolve the fallback through the exact same
+// path send-message uses (credential-resolver → activeAccountId on disk). The
+// panel then labels whatever account the sidecar actually resolved, so it can
+// never show a different account than the next turn runs on.
+const pinnedAccountId = computed<string | undefined>(() => props.session.settings.accountId)
+
+// UI-side hint for cache invalidation + the openai support gate ONLY. The UI's
+// copy of activeAccountId may lag the disk, so it is never used as the account's
+// identity (that comes from the sidecar response) — only to decide when to
+// refetch.
+const accountHint = computed<string | null>(
   () =>
     props.session.settings.accountId ??
     settingsStore.providers[props.session.settings.provider]?.activeAccountId ??
@@ -346,22 +384,35 @@ const usageSupported = computed(() => {
   const provider = props.session.settings.provider
   if (provider === 'anthropic') return true
   if (provider === 'openai') {
-    const acc = settingsStore.providers.openai?.accounts.find(
-      (a) => a.id === effectiveAccountId.value,
-    )
+    const acc = settingsStore.providers.openai?.accounts.find((a) => a.id === accountHint.value)
     return acc?.authMode === 'oauth'
   }
   return false
 })
-// Which account the loaded usage belongs to, so switching account forces a
-// refetch even inside the 60s client window (else we'd show the old account's
-// numbers). The sidecar cache is keyed per-account, so the refetch is cheap.
+// Cache-bust key: when the account hint changes, force a refetch even inside the
+// 60s client window (else we'd show the old account's numbers). The sidecar
+// cache is keyed per-account, so the refetch is cheap.
 const usageAccountId = ref<string | null>(null)
+
+// The account the sidecar actually resolved usage for (from the response), so
+// the panel labels exactly whose numbers these are — never the UI's guess.
+const resolvedAccountId = ref<string | null>(null)
+const resolvedAccountLabel = computed<string | null>(() => {
+  const fromProfile = profile.value?.organizationName || profile.value?.email
+  if (fromProfile) return fromProfile
+  const id = resolvedAccountId.value
+  if (!id) return null
+  const acc = settingsStore.providers[props.session.settings.provider]?.accounts.find(
+    (a) => a.id === id,
+  )
+  return acc?.label ?? null
+})
 
 interface UsageResponse {
   profile: ProfileShape | null
   usage: UsageEntry[]
   cachedAt: number
+  accountId: string | null
 }
 
 const refreshUsage = async (force = false) => {
@@ -377,8 +428,7 @@ const refreshUsage = async (force = false) => {
     return
   }
   if (usageLoading.value) return
-  const accountId = effectiveAccountId.value ?? undefined
-  const accountChanged = usageAccountId.value !== (accountId ?? null)
+  const accountChanged = usageAccountId.value !== accountHint.value
   // 60s client-side cache to mirror sidecar TTL; force or an account switch
   // bypasses it (the sidecar cache is per-account, so a switch is still cheap).
   const withinTtl = usageFetchedAt.value > 0 && Date.now() - usageFetchedAt.value < 60_000
@@ -387,15 +437,19 @@ const refreshUsage = async (force = false) => {
   usageLoading.value = true
   usageError.value = null
   try {
+    // Send the per-session pin verbatim (undefined ⇒ follow active); the sidecar
+    // resolves the fallback identically to the LLM turn and echoes the account it
+    // landed on, so the panel always reflects the account the next turn will use.
     const res = await sidecar.request<UsageResponse>('account.usage', {
       provider: props.session.settings.provider,
-      accountId,
+      accountId: pinnedAccountId.value,
       force,
     })
     usage.value = res.usage ?? []
     profile.value = res.profile
     usageFetchedAt.value = res.cachedAt ?? Date.now()
-    usageAccountId.value = accountId ?? null
+    usageAccountId.value = accountHint.value
+    resolvedAccountId.value = res.accountId
   } catch (err) {
     usageError.value = err instanceof Error ? err.message : 'Failed to load usage'
   } finally {
@@ -406,7 +460,7 @@ const refreshUsage = async (force = false) => {
 // Fetch when the popover opens, and re-fetch if the selected account changes
 // while it's open. Subsequent opens reuse cached data unless the account
 // changed or the user clicks refresh.
-watch([open, effectiveAccountId, usageSupported], ([isOpen]) => {
+watch([open, accountHint, usageSupported], ([isOpen]) => {
   if (isOpen) refreshUsage(false)
 })
 
