@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.19.0',
+    date: '2026-06-23',
+    highlight: {
+      en: 'Work with GitHub issues and PRs inside AWOG, rewrite a prompt in one tap, and an accurate usage panel that pauses before any surprise charge — plus sessions that open faster and stay reliable.',
+      vi: 'Làm việc với issue và PR GitHub ngay trong AWOG, viết lại prompt chỉ với một chạm, và bảng usage chính xác tạm dừng trước mọi khoản phí bất ngờ — cùng các phiên mở nhanh hơn và ổn định hơn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'GitHub issues & pull requests: list, open, and create a project’s issues and PRs directly inside AWOG (via the gh CLI) without leaving the app.',
+        vi: 'Issue & pull request GitHub: xem, mở và tạo issue/PR của một dự án ngay trong AWOG (qua gh CLI) mà không cần rời khỏi app.',
+      },
+      {
+        kind: 'added',
+        en: 'Enhance prompt: a one-tap button in the composer rewrites your draft into a clearer, more complete prompt before you send it.',
+        vi: 'Tinh chỉnh prompt: một nút trong ô soạn viết lại bản nháp thành prompt rõ ràng, đầy đủ hơn trước khi gửi.',
+      },
+      {
+        kind: 'added',
+        en: 'Rules can now be scoped to file globs, so a rule is only added to the conversation when the turn touches a matching path — rules without a glob still always apply.',
+        vi: 'Rule giờ có thể giới hạn theo glob đường dẫn, nên chỉ được thêm vào cuộc trò chuyện khi lượt nói chạm tới path khớp — rule không có glob vẫn luôn áp dụng.',
+      },
+      {
+        kind: 'improved',
+        en: 'The usage panel now reflects the exact account the next turn will use and itemizes the context window (system / tools / history) like Claude Code. If a turn would spill into paid extra usage, the chat pauses and asks you to confirm first, while headless tasks fail safely instead of silently spending.',
+        vi: 'Bảng usage giờ phản ánh đúng tài khoản mà lượt kế tiếp sẽ dùng và bóc tách cửa sổ ngữ cảnh (system / tools / history) như Claude Code. Nếu một lượt sắp dùng tới extra-usage tính phí, chat sẽ tạm dừng và hỏi xác nhận trước, còn task chạy ngầm sẽ dừng an toàn thay vì âm thầm tiêu tiền.',
+      },
+      {
+        kind: 'improved',
+        en: 'Sessions load lazily: AWOG no longer pulls every message of every session into memory at startup, so the app opens faster and a session’s transcript loads only when you open it.',
+        vi: 'Phiên được nạp lười: AWOG không còn kéo toàn bộ tin nhắn của mọi phiên vào bộ nhớ khi khởi động, nên app mở nhanh hơn và nội dung một phiên chỉ nạp khi bạn mở nó.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Fixed a long turn growing a session’s file to gigabytes and making the session vanish from the list — transcripts are now written incrementally and loaded by streaming, so large sessions stay fast and reliable.',
+        vi: 'Sửa lỗi một lượt dài làm file phiên phình tới hàng gigabyte và khiến phiên biến mất khỏi danh sách — nội dung giờ được ghi tăng dần và nạp theo luồng, nên phiên lớn vẫn nhanh và ổn định.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Stateful MCP servers (like a Playwright browser) now keep their state across tool calls within a session — navigating, then taking a snapshot or clicking, all share the same browser instead of a fresh one each call, and pressing Stop no longer closes it.',
+        vi: 'MCP server có trạng thái (như trình duyệt Playwright) giờ giữ nguyên trạng thái qua các lần gọi tool trong cùng phiên — điều hướng rồi chụp snapshot hay click đều dùng chung một trình duyệt thay vì tạo mới mỗi lần, và nhấn Dừng cũng không còn đóng nó.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Fixed custom tools whose names start with “mcp_” triggering an “out of extra usage” error on Claude subscription accounts.',
+        vi: 'Sửa lỗi các custom tool có tên bắt đầu bằng “mcp_” gây lỗi “out of extra usage” trên tài khoản Claude subscription.',
+      },
+    ],
+  },
+  {
     version: '0.18.0',
     date: '2026-06-18',
     highlight: {
