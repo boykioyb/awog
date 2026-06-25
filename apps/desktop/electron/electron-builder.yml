@@ -23,7 +23,7 @@ files:
 #    node_modules (incl. native node-pty) must be real files on disk;
 #  - the SPA is served via the app:// protocol from resources/ui.
 extraResources:
-  - from: ../ui/.output/public
+  - from: ../ui-next/.output/public
     to: ui
   - from: ../sidecar/dist
     to: sidecar

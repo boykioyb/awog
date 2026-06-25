@@ -1,6 +1,6 @@
 // Packaging orchestrator for the Electron app.
 //
-// 1. Build the Nuxt SPA (nuxt generate → ../ui/.output/public).
+// 1. Build the Nuxt SPA (nuxt generate → ../ui-next/.output/public).
 // 2. Build the engine bundle (../sidecar/dist: lib + flat node_modules, pure JS).
 // 3. Rebuild node-pty (native) for Electron's ABI inside the engine bundle.
 // 4. Compile the Electron main/preload (tsc → dist).
@@ -34,8 +34,8 @@ function run(cmd, args, cwd, { optional = false } = {}) {
   }
 }
 
-// 1. UI SPA
-run('pnpm', ['--filter', 'awog-ui', 'generate'], repoRoot)
+// 1. UI SPA (ui-next is the shipping UI; the legacy ui stays in the workspace).
+run('pnpm', ['--filter', 'awog-ui-next', 'generate'], repoRoot)
 // 2. Engine bundle
 run('pnpm', ['--filter', '@awog/sidecar', 'build'], repoRoot)
 // 3. node-pty → Electron ABI (engine bundle lives at ../sidecar/dist).
