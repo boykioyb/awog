@@ -1,0 +1,13 @@
+{
+  "settingsDefaults.systemPrompt.name": "Lời nhắc hệ thống",
+  "settingsDefaults.systemPrompt.desc": "Persona nền cho session/agent mới chưa tự định nghĩa",
+  "settingsDefaults.systemPrompt.placeholder": "Bạn là một AI teammate trong AWOG…",
+  "settingsDefaults.instructions.name": "Chỉ dẫn",
+  "settingsDefaults.instructions.desc": "Chỉ dẫn luôn-bật, chèn vào mọi request (style guide, quy ước dự án)",
+  "settingsDefaults.instructions.placeholder": "- Trả lời bằng tiếng Việt\n- Ưu tiên KISS / YAGNI\n- Không thêm dependency mới khi chưa có ADR",
+  "settingsDefaults.provider.name": "Provider mặc định",
+  "settingsDefaults.provider.desc": "Connection mà session mới khởi tạo cùng",
+  "settingsDefaults.model.name": "Model mặc định",
+  "settingsDefaults.model.desc": "Lọc theo provider đã chọn",
+  "settingsDefaults.mode.acceptEdits": "Tự áp dụng sửa"
+}

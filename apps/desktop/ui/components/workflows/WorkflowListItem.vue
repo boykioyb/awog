@@ -19,28 +19,27 @@
 -->
 <template>
   <div
-    class="w-full text-left px-2 py-1.5 rounded transition cursor-pointer"
+    class="w-full text-left px-2.5 py-2 rounded-lg transition cursor-pointer"
     :style="{
       background: pill(selected).background,
-      borderLeft: `2px solid ${selected ? t.accent : 'transparent'}`,
+      border: `1px solid ${selected ? t.accent : 'transparent'}`,
     }"
     @click="emit('select')"
     @contextmenu="onContextMenu"
     @mouseenter="onHoverEnter"
     @mouseleave="onHoverLeave"
   >
-    <div class="flex items-center gap-1.5">
-      <Workflow :size="11" :style="{ color: t.textDim }" />
+    <div class="flex items-center gap-2">
+      <Workflow :size="13" :style="{ color: selected ? t.accent : t.textDim }" />
       <input
         v-if="renaming"
         ref="inputEl"
         :value="renameValue"
-        class="text-[1em] flex-1 rounded px-1 py-0.5"
+        class="text-[1em] flex-1 rounded-lg px-1.5 py-0.5 outline-none"
         :style="{
           background: t.bgInput,
-          border: `1px solid ${t.borderStrong}`,
+          border: `1px solid ${t.borderFocus}`,
           color: t.text,
-          outline: 'none',
         }"
         @click.stop
         @input="(e) => emit('update:renameValue', (e.target as HTMLInputElement).value)"
@@ -50,30 +49,30 @@
       />
       <div
         v-else
-        class="text-[1em] truncate flex-1"
+        class="text-[1em] truncate flex-1 font-medium"
         :style="{ color: t.text }"
         @dblclick.stop="emit('start-rename')"
       >
         {{ workflow.name }}
       </div>
       <button
-        class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
-        :style="{ color: t.textMuted }"
+        class="p-1.5 rounded-lg flex-shrink-0 transition opacity-60 hover:opacity-100"
+        :style="{ color: t.textDim }"
         title="Actions"
         @click.stop="onMenuButton"
       >
         <MoreHorizontal :size="13" />
       </button>
     </div>
-    <div class="flex items-center gap-1.5 mt-0.5 ml-5">
+    <div class="flex items-center gap-2 mt-1 ml-[21px]">
       <span class="text-[1em]" :style="{ color: t.textDim }">
         {{
           tr('workflows.item.meta', { steps: workflow.nodes.length, edges: workflow.edges.length })
         }}
       </span>
       <span
-        class="text-[12px] font-mono leading-none px-1 py-0.5 rounded flex-shrink-0"
-        :style="{ color: t.textFaint, background: t.bgInput }"
+        class="text-[12px] font-mono leading-none px-1.5 py-0.5 rounded-full flex-shrink-0"
+        :style="{ color: t.textFaint, background: t.bgInput, border: `1px solid ${t.border}` }"
         :title="scopeLabel"
       >
         {{ scopeLabel }}

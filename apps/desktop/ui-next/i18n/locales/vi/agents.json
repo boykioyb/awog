@@ -1,0 +1,9 @@
+{
+  "agents.search": "Tìm agent…",
+  "agents.editAgentMd": "Mở trình soạn AGENT.md",
+  "agents.providerModel": "Nhà cung cấp · Model",
+  "agents.temp": "temp {temp}",
+  "agents.systemPrompt": "System prompt (AGENT.md)",
+  "agents.toolsWhitelist": "Danh sách tool cho phép",
+  "agents.delete": "Xoá agent"
+}

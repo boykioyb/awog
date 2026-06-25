@@ -1,0 +1,8 @@
+{
+  "rules.search": "Tìm rule…",
+  "rules.new": "Thêm mới",
+  "rules.autoInject": "tự nạp",
+  "rules.enableToggle": "Bật/tắt rule",
+  "rules.sech.body": "Nội dung (nạp vào system prompt)",
+  "rules.delete": "Xoá rule"
+}

@@ -1,0 +1,15 @@
+{
+  "sessions.sidebar.pin": "Ghim",
+  "sessions.sidebar.unpin": "Bỏ ghim",
+  "sessions.sidebar.pinned": "Đã ghim",
+  "sessions.sidebar.select": "Chọn",
+  "sessions.sidebar.selectMode": "Chế độ chọn",
+  "sessions.sidebar.selectExit": "Thoát chế độ chọn",
+  "sessions.sidebar.selected": "Đã chọn {n}",
+  "sessions.sidebar.selectAll": "Chọn tất cả",
+  "sessions.sidebar.clearSelection": "Bỏ chọn",
+  "sessions.sidebar.deleteSelected": "Xoá các session đã chọn",
+  "sessions.sidebar.attachments": "{n} tệp đính kèm",
+  "sessions.sidebar.followups": "{n} trích dẫn chờ",
+  "sessions.sidebar.queued": "{n} chờ gửi"
+}

@@ -12,7 +12,7 @@
         <button
           v-for="m in importOptions"
           :key="m.id"
-          class="text-left rounded p-3 transition"
+          class="text-left rounded-lg p-3 transition"
           :style="{
             background: importMode === m.id ? t.bgActive : t.bgInput,
             border: `1px solid ${importMode === m.id ? t.borderFocus : t.border}`,
@@ -39,7 +39,7 @@
           <input
             v-model="draft.name"
             placeholder="e.g. payment-service"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em]"
             :style="inputStyle"
             :disabled="busy"
           />
@@ -48,7 +48,7 @@
           <input
             v-model="draft.language"
             placeholder="Python"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em]"
             :style="inputStyle"
             :disabled="busy"
           />
@@ -60,13 +60,13 @@
           <input
             v-model="draft.path"
             placeholder="~/code/my-project"
-            class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+            class="flex-1 rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             :disabled="busy"
             @blur="onPathBlur"
           />
           <button
-            class="px-3 py-1.5 text-[1em] rounded transition inline-flex items-center gap-1.5 disabled:opacity-50"
+            class="px-3 py-1.5 text-[1em] rounded-lg transition inline-flex items-center gap-1.5 disabled:opacity-50"
             :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
             :disabled="busy || !canBrowse"
             :title="canBrowse ? 'Pick folder' : 'Native dialog unavailable (browser dev)'"
@@ -90,7 +90,7 @@
           <input
             v-model="draft.gitRemote"
             placeholder="git@github.com:org/repo.git"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             :disabled="busy"
           />
@@ -99,7 +99,7 @@
           <input
             v-model="draft.gitBranch"
             placeholder="main"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             :disabled="busy || importMode === 'clone'"
           />
@@ -111,7 +111,7 @@
           v-model="draft.description"
           :rows="3"
           placeholder="What does this project do?"
-          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[4rem]"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[4rem]"
           :style="inputStyle"
           :disabled="busy"
         />
@@ -119,7 +119,7 @@
 
       <div
         v-if="busy || error"
-        class="rounded p-3 text-[1em]"
+        class="rounded-lg p-3 text-[1em]"
         :style="{
           background: t.bgElevated,
           border: `1px solid ${error ? t.danger : t.border}`,

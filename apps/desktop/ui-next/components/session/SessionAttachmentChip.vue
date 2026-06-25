@@ -1,0 +1,79 @@
+<template>
+  <span
+    v-if="att.img"
+    class="a1 imgchip"
+    role="button"
+    tabindex="0"
+    :title="t('sessions.attachment.viewImage')"
+    style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer"
+    @click="openPreview"
+    @keydown.enter="openPreview"
+  >
+    <img v-if="att.src" :src="att.src" class="a1thumb" :alt="att.name" />
+    <span v-else class="thumb" />
+    {{ att.name }}
+  </span>
+  <span
+    v-else
+    class="a1"
+    role="button"
+    tabindex="0"
+    :title="t('sessions.preview.openAttachment')"
+    style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer"
+    @click="openPreview"
+    @keydown.enter="openPreview"
+  >
+    <Icon name="rules" style="width: 11px; height: 11px" />
+    {{ att.name }}
+  </span>
+</template>
+
+<script setup lang="ts">
+// attChip (~1743): file vs image attachment chip inside a user bubble (.uatt).
+// Clicking opens the shared full-window PreviewModal (§7) via usePreview() — the
+// single modal instance (mounted in SessionDetail) reads the shared store.
+import type { SessionAttachment } from '~/composables/useSessionsMock'
+import type { PreviewRef } from '~/composables/usePreview'
+
+const props = defineProps<{ att: SessionAttachment }>()
+const { t } = useI18n()
+const { open } = usePreview()
+
+// Map a SessionAttachment → generic PreviewRef. Mirrors SessionDetail.kindOf so a
+// sent-message chip previews the same way as a pending composer attachment.
+function kindOf(a: SessionAttachment): PreviewRef['kind'] {
+  if (a.img) return 'image'
+  if (a.src && (a.mime === 'application/pdf' || /\.pdf$/i.test(a.name))) return 'pdf'
+  if (a.text != null && /\.(md|markdown)$/i.test(a.name)) return 'markdown'
+  if (a.text != null) return 'text'
+  return 'file'
+}
+
+function openPreview() {
+  const a = props.att
+  const item: PreviewRef = { name: a.name, kind: kindOf(a) }
+  if (a.src) item.src = a.src
+  if (a.text != null) item.text = a.text
+  if (a.size != null) item.size = a.size
+  if (a.mime) item.mime = a.mime
+  open(item)
+}
+</script>
+
+<style scoped>
+/* prototype `thumb` is an inline gradient swatch (no class) */
+.thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  background: linear-gradient(135deg, var(--blue), var(--violet));
+}
+.a1thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+</style>

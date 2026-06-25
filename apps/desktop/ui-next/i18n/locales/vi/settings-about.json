@@ -1,0 +1,18 @@
+{
+  "settings.about.tagline2": "Hệ điều hành đội ngũ AI, ưu tiên local",
+  "settings.about.versionFallback": "v0.18.0 · Electron · Pi SDK runtime",
+  "settings.about.repo.name": "Mã nguồn",
+  "settings.about.repo.desc": "Mã nguồn, issue và release trên GitHub",
+  "settings.about.repo.open": "Mở repository",
+  "settings.about.autoUpdate.name": "Tự kiểm tra cập nhật",
+  "settings.about.autoUpdate.desc": "Kiểm tra phiên bản mới ở chế độ nền (khi khởi động và khi focus cửa sổ)",
+  "settings.about.lastChecked.name": "Kiểm tra lần cuối",
+  "settings.about.lastChecked.desc": "Thời điểm AWOG kiểm tra phiên bản mới gần nhất",
+  "settings.about.lastChecked.never": "Chưa bao giờ",
+  "settings.about.checkNow": "Kiểm tra ngay",
+  "settings.about.checking": "Đang kiểm tra…",
+  "settings.about.status.latest": "Bạn đang dùng bản mới nhất",
+  "settings.about.status.available": "Có bản cập nhật: v{version}",
+  "settings.about.status.error": "Không kiểm tra được cập nhật",
+  "settings.about.manualInstallNote": "Trên nền tảng này AWOG chỉ thông báo phiên bản mới và mở trang tải về — việc cài đặt phải làm thủ công."
+}

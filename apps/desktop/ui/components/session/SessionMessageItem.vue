@@ -9,15 +9,15 @@
     </div>
 
     <div v-else>
-      <div v-if="message.role === 'user'" class="flex flex-col items-end gap-1.5 w-full">
+      <div class="group/msg flex flex-col items-end gap-1.5 w-full">
         <!-- Inline edit mode: swap the bubble for a composer-style textarea that
              re-sends the turn (truncating everything after this message). -->
-        <div v-if="editing" class="w-full max-w-[78%] flex flex-col gap-1.5">
+        <div v-if="editing" class="w-full max-w-[80%] flex flex-col gap-1.5">
           <textarea
             ref="editRef"
             v-model="editDraft"
             class="w-full rounded-2xl px-4 py-2 text-[1em] leading-relaxed resize-y min-h-[3rem] outline-none"
-            :style="{ background: t.bgElevated, color: t.text, border: `1px solid ${t.accent}` }"
+            :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.accent}` }"
             :placeholder="tr('session.msg.edit_placeholder')"
             @keydown.escape="cancelEdit"
             @keydown.meta.enter.prevent="saveEdit"
@@ -36,12 +36,14 @@
         <template v-else>
           <div
             v-if="message.followUps?.length || bodyText"
-            class="rounded-2xl px-4 py-2 text-[1em] leading-relaxed break-words"
+            class="px-3.5 py-2 text-[1em] leading-relaxed break-words"
             :style="{
               background: t.bgElevated,
               color: t.text,
               border: `1px solid ${t.border}`,
-              maxWidth: '78%',
+              maxWidth: '80%',
+              borderRadius: '16px',
+              borderBottomRightRadius: '5px',
             }"
           >
             <!-- Quotes the user attached via "Quote & follow up": numbered cards,
@@ -103,26 +105,37 @@
             :attachments="message.attachments"
             @open="(att: SessionAttachment) => emit('openAttachment', att)"
           />
-          <div class="text-[1em] flex items-center gap-1.5" :style="{ color: t.textFaint }">
+          <div class="text-[1em] flex items-center gap-2" :style="{ color: t.textFaint }">
             <span>{{ fmt(message.at) }}</span>
             <span v-if="message.modeAtSend">· sent in {{ message.modeAtSend }} mode</span>
-            <AppButton
-              v-if="!sessionStreaming"
-              variant="ghost"
-              size="xs"
-              :title="tr('session.msg.edit')"
-              @click="startEdit"
+            <!-- Action row: icon-only, revealed on hover over the message. -->
+            <div
+              class="flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity"
             >
-              <Pencil :size="11" />
-            </AppButton>
-            <AppButton
-              variant="ghost"
-              size="xs"
-              :title="tr('session.msg.branch')"
-              @click="onBranch"
-            >
-              <GitBranch :size="11" />
-            </AppButton>
+              <button
+                v-if="!sessionStreaming"
+                type="button"
+                class="p-1.5 rounded-lg transition"
+                :style="actionStyle('edit')"
+                :title="tr('session.msg.edit')"
+                @mouseenter="hoverAction = 'edit'"
+                @mouseleave="hoverAction = null"
+                @click="startEdit"
+              >
+                <Pencil :size="13" />
+              </button>
+              <button
+                type="button"
+                class="p-1.5 rounded-lg transition"
+                :style="actionStyle('branch-user')"
+                :title="tr('session.msg.branch')"
+                @mouseenter="hoverAction = 'branch-user'"
+                @mouseleave="hoverAction = null"
+                @click="onBranch"
+              >
+                <GitBranch :size="13" />
+              </button>
+            </div>
           </div>
         </template>
       </div>
@@ -131,7 +144,11 @@
            gray canvas) so the assistant turn reads as a raised document, mirroring
            the user bubble. Identity/model/time + copy & branch actions live in the
            byline footer BELOW the bubble (outside it). -->
-      <div v-if="message.role === 'agent'" class="text-[1em] leading-relaxed">
+      <div
+        v-if="message.role === 'agent'"
+        class="group/msg text-[1em] leading-relaxed"
+        :style="{ maxWidth: '92%' }"
+      >
         <div
           :class="showBubble ? 'rounded-2xl px-4 py-3' : ''"
           :style="
@@ -168,7 +185,7 @@
                  Always visible (it's the user's words) at the point it landed. -->
             <div
               v-else-if="block.type === 'steer'"
-              class="mt-2 flex items-start gap-1.5 rounded px-2 py-1 text-[1em]"
+              class="mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[1em]"
               :style="{
                 background: `${t.accent}14`,
                 color: t.text,
@@ -205,7 +222,7 @@
             <div
               v-for="art in message.artifacts"
               :key="art.name"
-              class="rounded"
+              class="rounded-lg overflow-hidden"
               :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
             >
               <div
@@ -263,52 +280,71 @@
             </AppButton>
           </template>
           <template v-else>
-            <AppButton
-              v-if="message.text"
-              variant="ghost"
-              size="xs"
-              :title="copied ? tr('session.msg.copied') : tr('session.msg.copy')"
-              @click="copyMessage"
+            <!-- Action row: icon-only, revealed on hover over the message. -->
+            <div
+              class="flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity"
             >
-              <Check v-if="copied" :size="12" />
-              <Copy v-else :size="12" />
-            </AppButton>
-            <AppButton
-              v-if="!sessionStreaming"
-              variant="ghost"
-              size="xs"
-              :title="tr('session.msg.regenerate')"
-              @click="onRegenerate"
-            >
-              <RefreshCw :size="12" />
-            </AppButton>
-            <MessageRetryMenu
-              v-if="!sessionStreaming && session"
-              :session="session"
-              :agent-message-id="message.id"
-            />
-            <AppButton
-              v-if="!sessionStreaming"
-              variant="ghost"
-              size="xs"
-              :title="tr('session.msg.rewind')"
-              @click="confirmingRewind = true"
-            >
-              <RotateCcw :size="12" />
-            </AppButton>
-            <AppButton
-              variant="ghost"
-              size="xs"
-              :title="tr('session.msg.branch')"
-              @click="onBranch"
-            >
-              <GitBranch :size="12" />
-            </AppButton>
+              <button
+                v-if="message.text"
+                type="button"
+                class="p-1.5 rounded-lg transition"
+                :style="actionStyle('copy')"
+                :title="copied ? tr('session.msg.copied') : tr('session.msg.copy')"
+                @mouseenter="hoverAction = 'copy'"
+                @mouseleave="hoverAction = null"
+                @click="copyMessage"
+              >
+                <Check v-if="copied" :size="13" />
+                <Copy v-else :size="13" />
+              </button>
+              <button
+                v-if="!sessionStreaming"
+                type="button"
+                class="p-1.5 rounded-lg transition"
+                :style="actionStyle('regenerate')"
+                :title="tr('session.msg.regenerate')"
+                @mouseenter="hoverAction = 'regenerate'"
+                @mouseleave="hoverAction = null"
+                @click="onRegenerate"
+              >
+                <RefreshCw :size="13" />
+              </button>
+              <MessageRetryMenu
+                v-if="!sessionStreaming && session"
+                :session="session"
+                :agent-message-id="message.id"
+              />
+              <button
+                v-if="!sessionStreaming"
+                type="button"
+                class="p-1.5 rounded-lg transition"
+                :style="actionStyle('rewind')"
+                :title="tr('session.msg.rewind')"
+                @mouseenter="hoverAction = 'rewind'"
+                @mouseleave="hoverAction = null"
+                @click="confirmingRewind = true"
+              >
+                <RotateCcw :size="13" />
+              </button>
+              <button
+                type="button"
+                class="p-1.5 rounded-lg transition"
+                :style="actionStyle('branch')"
+                :title="tr('session.msg.branch')"
+                @mouseenter="hoverAction = 'branch'"
+                @mouseleave="hoverAction = null"
+                @click="onBranch"
+              >
+                <GitBranch :size="13" />
+              </button>
+            </div>
             <span v-if="message.at" class="ml-0.5">{{ fmt(message.at) }}</span>
             <span v-if="message.startedAt && message.completedAt">
               · {{ formatElapsed(workingElapsed(message.completedAt)) }}
             </span>
-            <span v-if="message.usage">· {{ message.usage.outputTokens }} tok</span>
+            <span v-if="message.usage" class="font-mono">
+              · {{ message.usage.outputTokens }} tok
+            </span>
           </template>
         </div>
       </div>
@@ -363,6 +399,19 @@ const store = useSessionsStore()
 // regenerate / retry actions truncate the transcript, so they hide mid-turn to
 // avoid racing the in-flight reply.
 const sessionStreaming = computed(() => store.isSessionStreaming(props.session.id))
+
+// Hover state for the icon-only action buttons in the byline. Resting fg =
+// textDim; on hover the button lifts to bgHover + text (rewind is destructive →
+// dangerBg + danger). One ref drives every action since only one is hovered.
+const hoverAction = ref<string | null>(null)
+const actionStyle = (id: string) => {
+  const hovered = hoverAction.value === id
+  const destructive = id === 'rewind'
+  if (!hovered) return { background: 'transparent', color: t.value.textDim }
+  return destructive
+    ? { background: t.value.dangerBg, color: t.value.danger }
+    : { background: t.value.bgHover, color: t.value.text }
+}
 
 // Toggle (Settings → Appearance): wrap the reply body in a bubble card vs render
 // it as a plain inline document. Default on; `!== false` keeps older persisted

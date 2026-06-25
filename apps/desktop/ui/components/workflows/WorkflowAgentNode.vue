@@ -1,38 +1,40 @@
 <template>
   <div
-    class="rounded-md select-none relative"
+    class="rounded-xl select-none relative overflow-hidden"
     :style="{
-      width: '200px',
+      width: '210px',
       background: t.bgElevated,
-      border: `1px solid ${selected ? t.borderFocus : t.border}`,
-      boxShadow: selected ? `0 4px 16px ${t.shadow}` : `0 1px 2px ${t.shadow}`,
+      border: `1px solid ${selected ? t.accent : t.border}`,
+      boxShadow: selected
+        ? `0 0 0 1px ${t.accent}, 0 8px 24px -8px ${t.shadow}`
+        : `0 2px 8px -4px ${t.shadow}`,
     }"
   >
     <Handle type="target" :position="Position.Top" :style="handleStyle" />
     <Handle type="target" :position="Position.Left" :style="handleStyle" />
 
-    <div class="px-2.5 py-2 flex items-center gap-2">
+    <div class="px-3 py-2.5 flex items-center gap-2">
       <RoleBadge v-if="data.agent" :role="agentRoleLabel(data.agent)" />
       <div class="min-w-0 flex-1">
-        <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">
+        <div class="text-[1em] font-semibold truncate" :style="{ color: t.text }">
           {{ data.agent?.name ?? tr('workflows.node.unknown_agent') }}
         </div>
-        <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
+        <div class="text-[12px] font-mono leading-none truncate mt-1" :style="{ color: t.textDim }">
           {{ data.skill?.name || tr('workflows.no_skill') }}
         </div>
       </div>
     </div>
     <div
-      class="px-2.5 py-1.5 text-[1em] flex items-center justify-between"
-      :style="{ borderTop: `1px solid ${t.border}`, color: t.textDim }"
+      class="px-3 py-1.5 text-[12px] flex items-center justify-between gap-2"
+      :style="{ borderTop: `1px solid ${t.border}`, background: t.bgSubtle, color: t.textDim }"
     >
-      <div class="flex items-center gap-1 truncate">
-        <FileText :size="9" />
+      <div class="flex items-center gap-1.5 truncate font-mono leading-none">
+        <FileText :size="11" :style="{ color: t.textFaint }" />
         <span class="truncate">{{ data.outputs?.[0] ?? '' }}</span>
       </div>
       <AlertCircle
         v-if="data.approval"
-        :size="10"
+        :size="12"
         :style="{ color: t.warning }"
         :title="tr('workflows.node.approval_gate')"
       />
@@ -43,7 +45,7 @@
 
     <button
       v-if="selected"
-      class="absolute -top-2 -left-2 w-4 h-4 rounded-full flex items-center justify-center transition z-10"
+      class="absolute top-1.5 right-1.5 w-5 h-5 rounded-lg flex items-center justify-center transition z-10"
       :style="{
         background: t.bgElevated,
         border: `1px solid ${t.borderStrong}`,
@@ -65,7 +67,7 @@
         }
       "
     >
-      <Trash2 :size="9" />
+      <Trash2 :size="11" />
     </button>
   </div>
 </template>

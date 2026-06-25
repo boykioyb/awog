@@ -1,5 +1,6 @@
 packages:
   - apps/desktop/ui
+  - apps/desktop/ui-next
   - apps/desktop/sidecar
   - apps/desktop/electron
 

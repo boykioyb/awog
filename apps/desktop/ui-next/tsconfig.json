@@ -1,0 +1,10 @@
+{
+  "extends": "./.nuxt/tsconfig.json",
+  // Nuxt 4 writes `vueCompilerOptions.plugins: ["vue-router/volar/sfc-route-blocks"]`
+  // into .nuxt/tsconfig*.json, but vue-router 4.x doesn't export that subpath →
+  // @vue/language-core crashes vue-tsc ("plugin is not a function"). AWOG uses no
+  // <route> SFC blocks, so override to empty to let vue-tsc run.
+  "vueCompilerOptions": {
+    "plugins": []
+  }
+}

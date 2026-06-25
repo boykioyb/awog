@@ -16,8 +16,8 @@
     class="absolute top-0 right-0 bottom-0 flex flex-col z-20"
     :style="{
       width: `${width}px`,
-      background: t.bgPanel,
-      borderLeft: `1px solid ${t.border}`,
+      background: parts.bg,
+      borderLeft: `1px solid ${parts.border}`,
       boxShadow: `-8px 0 24px ${t.shadow}`,
     }"
   >
@@ -141,12 +141,9 @@
       </div>
 
       <template v-else-if="thread">
-        <div
-          class="rounded p-3"
-          :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
-        >
+        <div class="rounded-lg p-3.5" :style="elevated">
           <div
-            class="text-[12px] uppercase tracking-wider font-medium mb-2"
+            class="text-[12px] uppercase tracking-wider font-mono font-medium mb-2"
             :style="{ color: t.textDim }"
           >
             {{ tr('project.github.description') }}
@@ -160,7 +157,7 @@
 
         <div v-if="thread.comments.length">
           <div
-            class="text-[12px] uppercase tracking-wider font-medium mb-2"
+            class="text-[12px] uppercase tracking-wider font-mono font-medium mb-2"
             :style="{ color: t.textDim }"
           >
             {{ tr('project.github.comments', { n: thread.comments.length }) }}
@@ -169,8 +166,8 @@
             <div
               v-for="(c, i) in thread.comments"
               :key="i"
-              class="rounded p-3"
-              :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+              class="rounded-lg p-3.5"
+              :style="elevated"
             >
               <div class="flex items-center gap-2 mb-1.5">
                 <span class="text-[12px] leading-none font-medium" :style="{ color: t.text }">
@@ -215,6 +212,7 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
+const { parts, elevated } = useGlass()
 const sidecar = useSidecar()
 
 const langTabs = computed<{ value: ViewLang; label: string }[]>(() => [

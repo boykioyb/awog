@@ -1,0 +1,21 @@
+{
+  "settings.git.coAuthor.name": "Co-authored commits",
+  "settings.git.coAuthor.desc": "Add a Co-Authored-By trailer to commits AWOG creates (session commits and task auto-commits)",
+  "settings.git.template.name": "Commit message template",
+  "settings.git.template.desc": "Commit subject used when AWOG auto-commits after each phase",
+  "settings.git.template.placeholder": "[{phaseId}] {agentName}: {summary}",
+  "settings.git.template.tokens": "Supported tokens: {phaseId} {agentName} {summary}",
+  "settings.git.scope.name": "Commit scope",
+  "settings.git.scope.desc": "Which files auto-commit picks up",
+  "settings.git.scope.workspace": "Workspace",
+  "settings.git.scope.artifacts": "Artifacts only",
+  "settings.git.autoStash.name": "Auto-stash dirty tree before task",
+  "settings.git.autoStash.desc": "Stash your uncommitted changes before the engine starts a task",
+  "settings.git.dirtyPolicy.name": "Dirty task policy",
+  "settings.git.dirtyPolicy.desc": "When a task starts with a dirty workspace: prompt a warning, or auto-stash silently",
+  "settings.git.dirtyPolicy.warn": "Warn",
+  "settings.git.dirtyPolicy.autoStash": "Auto-stash",
+  "settings.git.commitRule.name": "Commit message rule (AI prompt)",
+  "settings.git.commitRule.desc": "System prompt sent to the model when generating a commit message — edit to match your team's convention",
+  "settings.git.commitRule.reset": "Reset to default"
+}

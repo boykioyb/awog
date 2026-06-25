@@ -19,14 +19,14 @@
       <div class="ml-auto flex items-center gap-1">
         <span
           v-if="diff.isBinary"
-          class="text-[1em] px-1.5 py-0.5 rounded"
+          class="text-[12px] leading-none px-2 py-0.5 rounded-full"
           :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
         >
           binary
         </span>
         <div
           v-else
-          class="flex items-center rounded overflow-hidden"
+          class="flex items-center rounded-lg overflow-hidden"
           :style="{ border: `1px solid ${t.border}` }"
         >
           <button

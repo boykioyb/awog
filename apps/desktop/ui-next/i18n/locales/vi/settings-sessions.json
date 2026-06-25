@@ -1,0 +1,20 @@
+{
+  "settingsSessions.autoApprove.name": "Tự duyệt bước đơn giản",
+  "settingsSessions.autoApprove.desc": "Bỏ qua bước duyệt cho các phase rủi ro thấp",
+  "settingsSessions.notifications.name": "Thông báo",
+  "settingsSessions.notifications.desc": "Hiện thông báo hệ thống khi task cần được duyệt",
+  "settingsSessions.pasteAsFile.name": "Dán thành file",
+  "settingsSessions.pasteAsFile.desc": "Đoạn dán dài sẽ thành tệp đính kèm thay vì nội dung inline",
+  "settingsSessions.pasteThreshold.name": "Ngưỡng dán (ký tự)",
+  "settingsSessions.pasteThreshold.desc": "Đoạn dán dài hơn mức này sẽ thành file (tối thiểu 200)",
+
+  "settingsSessions.quota.heading": "Hạn mức sử dụng",
+  "settingsSessions.quota.warning.name": "Cảnh báo hạn mức",
+  "settingsSessions.quota.warning.desc": "Cảnh báo khi mức sử dụng chạm ngưỡng",
+  "settingsSessions.quota.threshold.name": "Ngưỡng (%)",
+  "settingsSessions.quota.threshold.desc": "Cảnh báo ở phần trăm này của hạn mức (50–99)",
+  "settingsSessions.quota.abort.name": "Hủy session khi chạm ngưỡng",
+  "settingsSessions.quota.abort.desc": "Nguy hiểm: hủy các session đang chạy khi chạm ngưỡng",
+  "settingsSessions.quota.blockNew.name": "Chặn session mới khi chạm ngưỡng",
+  "settingsSessions.quota.blockNew.desc": "Không cho khởi tạo session mới khi đã chạm ngưỡng"
+}

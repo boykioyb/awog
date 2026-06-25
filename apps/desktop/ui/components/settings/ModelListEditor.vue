@@ -4,14 +4,14 @@
     <div v-for="(m, i) in models" :key="i" class="flex items-center gap-2">
       <input
         :value="m"
-        class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+        class="flex-1 rounded-lg px-2.5 py-2 text-[1em] font-mono"
         :style="inputStyle"
         :placeholder="placeholder"
         @input="updateAt(i, ($event.target as HTMLInputElement).value)"
       />
       <button
         type="button"
-        class="p-1.5 rounded transition flex items-center shrink-0"
+        class="p-2 rounded-lg transition flex items-center shrink-0"
         :style="dangerBtnStyle"
         title="Remove model"
         @click="removeAt(i)"
@@ -23,7 +23,7 @@
     <!-- Append a new (empty) row -->
     <button
       type="button"
-      class="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[1em] transition"
+      class="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-[1em] transition"
       :style="addBtnStyle"
       @click="addRow"
     >
@@ -38,7 +38,7 @@
         v-for="id in freshSuggestions"
         :key="id"
         type="button"
-        class="px-1.5 py-0.5 rounded font-mono text-[12px] leading-none transition"
+        class="px-1.5 py-0.5 rounded-md font-mono text-[12px] leading-none transition"
         :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
         title="Add this model"
         @click="add(id)"

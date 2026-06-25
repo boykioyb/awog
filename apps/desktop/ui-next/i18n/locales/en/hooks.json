@@ -1,0 +1,8 @@
+{
+  "hooks.search": "Search hooks…",
+  "hooks.new": "Add new",
+  "hooks.enableToggle": "Toggle hook",
+  "hooks.sech.desc": "Description",
+  "hooks.sech.command": "Action / command",
+  "hooks.delete": "Delete hook"
+}

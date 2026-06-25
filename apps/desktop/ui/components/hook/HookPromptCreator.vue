@@ -22,16 +22,16 @@
         class="rounded-xl p-3"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
-        <div class="flex items-center gap-2 mb-1.5">
+        <div class="flex items-center gap-2 mb-1.5 flex-wrap">
           <span class="text-[1em]" :style="{ color: t.text }">{{ draft.name }}</span>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[12px] px-2 py-0.5 rounded-full font-mono leading-none"
             :style="{ background: t.bgPanel, color: t.textMuted, border: `1px solid ${t.border}` }"
           >
             {{ draft.event }}
           </span>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded uppercase"
+            class="text-[12px] px-2 py-0.5 rounded-full uppercase leading-none"
             :style="{ background: t.bgPanel, color: t.textMuted, border: `1px solid ${t.border}` }"
           >
             {{ draft.runMode }}
@@ -41,7 +41,7 @@
           {{ draft.description }}
         </div>
         <div
-          class="text-[1em] font-mono p-2 rounded whitespace-pre-wrap"
+          class="text-[1em] font-mono p-2 rounded-lg whitespace-pre-wrap"
           :style="{ background: t.bgPanel, color: t.textDim, border: `1px solid ${t.border}` }"
         >
           {{ draft.command }}
@@ -51,7 +51,7 @@
 
     <template #actions>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded"
+        class="text-[1em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
         :style="{ color: t.textMuted }"
         @click="draft && emit('edit-manually', draft)"
       >
@@ -59,7 +59,7 @@
         Edit details
       </button>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium"
         :style="{ background: t.accent, color: t.accentText }"
         @click="draft && emit('save', { ...(draft as Hook) }, scope)"
       >

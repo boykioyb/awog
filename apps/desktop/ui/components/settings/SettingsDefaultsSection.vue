@@ -1,24 +1,27 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-7">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Defaults</h2>
-      <div class="text-[1em]" :style="{ color: t.textDim }">
+      <h2 class="text-lg font-semibold tracking-tight" :style="{ color: t.text }">Defaults</h2>
+      <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
         Default system prompt, instructions, model, and mode used when starting a new session or
         agent
       </div>
     </div>
-    <div class="space-y-4">
-      <div class="py-3 space-y-2" :style="{ borderBottom: `1px solid ${t.border}` }">
+    <div
+      class="rounded-xl px-4 [&>*:last-child]:border-b-0"
+      :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+    >
+      <div class="py-3.5 space-y-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">
         <div>
           <div class="text-[1em] font-medium" :style="{ color: t.text }">System prompt</div>
-          <div class="text-[1em] mt-0.5" :style="{ color: t.textDim }">
+          <div class="text-[1em] mt-1 leading-snug" :style="{ color: t.textDim }">
             Applied as the base persona for new sessions and agents that don't define their own
           </div>
         </div>
         <textarea
           :value="defaults.systemPrompt"
           rows="5"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono leading-relaxed resize-y min-h-[6rem]"
           :style="inputStyle"
           placeholder="You are an AI teammate in AWOG…"
           @input="
@@ -28,10 +31,10 @@
           "
         />
       </div>
-      <div class="py-3 space-y-2" :style="{ borderBottom: `1px solid ${t.border}` }">
+      <div class="py-3.5 space-y-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">
         <div>
           <div class="text-[1em] font-medium" :style="{ color: t.text }">Instructions</div>
-          <div class="text-[1em] mt-0.5" :style="{ color: t.textDim }">
+          <div class="text-[1em] mt-1 leading-snug" :style="{ color: t.textDim }">
             Always-on user instructions prepended to every request (style guides, project
             conventions)
           </div>
@@ -39,7 +42,7 @@
         <textarea
           :value="defaults.instructions"
           rows="6"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono leading-relaxed resize-y min-h-[7rem]"
           :style="inputStyle"
           placeholder="- Reply in English
 - Prefer KISS / YAGNI
@@ -100,6 +103,7 @@ import type { AgentMode, ProviderName } from '~/types'
 import { LEVEL_LABEL, MODELS, levelsForModel, modelById, modelsForProvider } from '~/utils/models'
 
 const { t } = useTheme()
+const { cardBg } = useSettingsSurface()
 const settings = useSettingsStore()
 
 const MODE_OPTIONS: { value: AgentMode; label: string; hint: string }[] = [

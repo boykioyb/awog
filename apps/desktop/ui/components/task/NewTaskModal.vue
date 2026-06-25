@@ -17,7 +17,7 @@
           <button
             v-for="s in sourceOptions"
             :key="s.id"
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded text-[1em] transition"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[1em] font-medium transition"
             :style="{
               background: sourceType === s.id ? t.accent : t.bgInput,
               color: sourceType === s.id ? t.accentText : t.textMuted,
@@ -34,7 +34,7 @@
         <input
           v-model="githubUrl"
           placeholder="https://github.com/org/repo/pull/123"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
           @input="onGithubUrlInput"
         />
@@ -43,7 +43,7 @@
         <input
           :value="jiraKey"
           placeholder="PROJ-1234"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
           @input="jiraKey = ($event.target as HTMLInputElement).value.toUpperCase()"
         />
@@ -56,7 +56,7 @@
             {{ tr('connections.picker.empty') }}
           </span>
           <button
-            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[1em] rounded font-medium transition"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[1em] rounded-lg font-medium transition"
             :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
             @click="onAddConnection"
           >
@@ -75,13 +75,17 @@
         </template>
       </Field>
       <Field label="Title">
-        <input v-model="title" class="w-full rounded px-2 py-1.5 text-[1em]" :style="inputStyle" />
+        <input
+          v-model="title"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em]"
+          :style="inputStyle"
+        />
       </Field>
       <Field label="Description">
         <textarea
           v-model="description"
           :rows="4"
-          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[5rem]"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] resize-y min-h-[5rem]"
           :style="inputStyle"
         />
       </Field>
@@ -90,7 +94,7 @@
           <button
             v-for="wf in workflows"
             :key="wf.id"
-            class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
+            class="w-full text-left rounded-lg px-3 py-2 transition flex items-start gap-2.5"
             :style="{
               background: workflowId === wf.id ? t.bgActive : t.bgInput,
               border: `1px solid ${workflowId === wf.id ? t.borderFocus : t.border}`,

@@ -1,0 +1,8 @@
+{
+  "rules.search": "Search rules…",
+  "rules.new": "Add new",
+  "rules.autoInject": "auto-inject",
+  "rules.enableToggle": "Toggle rule",
+  "rules.sech.body": "Content (injected into systemPrompt)",
+  "rules.delete": "Delete rule"
+}

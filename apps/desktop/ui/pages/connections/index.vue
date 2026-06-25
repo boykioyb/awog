@@ -29,11 +29,11 @@
         <button
           v-for="f in transportFilters"
           :key="f"
-          class="px-2 py-0.5 text-[1em] rounded transition flex-shrink-0 capitalize"
+          class="px-2.5 py-0.5 text-[12px] rounded-full transition flex-shrink-0 capitalize font-medium"
           :style="{
-            background: pill(transportFilter === f).background,
+            background: transportFilter === f ? t.bgActive : 'transparent',
             color: transportFilter === f ? t.text : t.textDim,
-            border: `1px solid ${transportFilter === f ? t.borderStrong : 'transparent'}`,
+            border: `1px solid ${transportFilter === f ? t.borderStrong : t.border}`,
           }"
           @click="transportFilter = f"
         >
@@ -41,60 +41,89 @@
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto p-2 space-y-1">
         <div
           v-for="srv in filtered"
           :key="srv.id"
-          class="w-full px-3 py-2 cursor-pointer transition"
+          class="group w-full px-2.5 py-2 cursor-pointer transition rounded-lg"
           :style="{
-            background: pill(selectedId === srv.id).background,
-            borderBottom: `1px solid ${t.border}`,
+            background:
+              selectedId === srv.id ? t.bgActive : pill(false, hoverId === srv.id).background,
+            border: `1px solid ${selectedId === srv.id ? t.border : 'transparent'}`,
             borderLeft: `2px solid ${selectedId === srv.id ? t.accent : 'transparent'}`,
           }"
+          @mouseenter="hoverId = srv.id"
+          @mouseleave="hoverId = null"
           @click="onSelect(srv.id)"
           @contextmenu="onContextMenu($event, srv.id)"
         >
-          <div class="flex items-center gap-2 mb-0.5">
-            <Plug :size="11" :style="{ color: t.textDim }" />
-            <input
-              v-if="renamingId === srv.id"
-              :ref="setRenameInputRef"
-              v-model="renameValue"
-              class="text-[1em] flex-1 rounded px-1 py-0.5"
+          <div class="flex items-center gap-2.5">
+            <div
+              class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
               :style="{
                 background: t.bgInput,
-                border: `1px solid ${t.borderStrong}`,
-                color: t.text,
-                outline: 'none',
+                border: `1px solid ${t.border}`,
+                color: t.textMuted,
               }"
-              @click.stop
-              @keydown.enter="commitRename"
-              @keydown.escape="cancelRename"
-              @blur="commitRename"
-            />
-            <span
-              v-else
-              class="text-[1em] flex-1 truncate"
-              :style="{ color: t.text }"
-              @dblclick.stop="startRename(srv.id, srv.name)"
             >
-              {{ srv.name }}
-            </span>
+              <Plug :size="12" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <input
+                  v-if="renamingId === srv.id"
+                  :ref="setRenameInputRef"
+                  v-model="renameValue"
+                  class="text-[1em] flex-1 rounded px-1 py-0.5 min-w-0"
+                  :style="{
+                    background: t.bgInput,
+                    border: `1px solid ${t.borderStrong}`,
+                    color: t.text,
+                    outline: 'none',
+                  }"
+                  @click.stop
+                  @keydown.enter="commitRename"
+                  @keydown.escape="cancelRename"
+                  @blur="commitRename"
+                />
+                <template v-else>
+                  <span
+                    class="text-[1em] font-medium truncate"
+                    :style="{ color: t.text }"
+                    @dblclick.stop="startRename(srv.id, srv.name)"
+                  >
+                    {{ srv.name }}
+                  </span>
+                  <span
+                    class="text-[12px] px-1.5 rounded-full font-mono leading-none flex-shrink-0 capitalize inline-flex items-center"
+                    :style="{
+                      color: t.textDim,
+                      border: `1px solid ${t.border}`,
+                      paddingTop: '2px',
+                      paddingBottom: '2px',
+                    }"
+                  >
+                    {{ srv.transport }}
+                  </span>
+                </template>
+              </div>
+              <div class="text-[1em] truncate" :style="{ color: t.textDim }">
+                {{ srv.id }} · {{ srv.tools.length }} tools
+              </div>
+            </div>
             <span
               class="w-1.5 h-1.5 rounded-full flex-shrink-0"
               :style="{ background: statusDot(srv.status) }"
+              :title="srv.status"
             />
             <button
-              class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
+              class="p-1 rounded flex-shrink-0 transition opacity-0 group-hover:opacity-100"
               :style="{ color: t.textMuted }"
               :title="tr('connections.actions')"
               @click.stop="openMenuFromButton($event, srv.id)"
             >
               <MoreHorizontal :size="13" />
             </button>
-          </div>
-          <div class="text-[1em] truncate pl-5 font-mono" :style="{ color: t.textDim }">
-            {{ srv.id }} · {{ srv.transport }} · {{ srv.tools.length }} tools
           </div>
         </div>
       </div>
@@ -150,6 +179,7 @@ const { t: tr } = useI18n()
 const ws = useWorkspaceStore()
 
 const searchQuery = ref('')
+const hoverId = ref<string | null>(null)
 const transportFilter = ref<'all' | MCPTransport>('all')
 const mode = ref<'view' | 'edit'>('view')
 const selectedId = ref<string | null>(ws.mcpServers[0]?.id ?? null)

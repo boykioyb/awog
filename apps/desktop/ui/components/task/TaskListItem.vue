@@ -1,8 +1,9 @@
 <template>
   <div
-    class="cursor-pointer transition mx-1.5 my-px rounded"
+    class="cursor-pointer transition mx-1.5 my-0.5 rounded-lg"
     :style="{
       background: pill(selected, hovered).background,
+      border: `1px solid ${selected ? t.borderStrong : 'transparent'}`,
       padding: '8px 10px',
     }"
     @click="emit('click')"
@@ -13,7 +14,7 @@
     <div class="flex items-center gap-2.5">
       <component
         :is="StatusIcon"
-        :size="12"
+        :size="13"
         :class="task.status === 'running' ? 'animate-pulse' : ''"
         :style="{
           color: statusColor,
@@ -26,7 +27,7 @@
           v-if="renaming"
           :ref="setRenameInputRef"
           :value="renameValue"
-          class="text-[1em] leading-tight w-full rounded px-1 py-0.5"
+          class="text-[1em] leading-tight w-full rounded-lg px-1.5 py-0.5"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.borderStrong}`,
@@ -53,18 +54,20 @@
       </div>
       <div
         v-if="isActive && totalCount > 0"
-        class="text-[1em] font-mono flex-shrink-0"
+        class="text-[12px] font-mono leading-none flex-shrink-0"
         :style="{ color: t.textDim }"
       >
         {{ completedCount }}/{{ totalCount }}
       </div>
       <button
-        class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
-        :style="{ color: t.textMuted }"
+        class="p-1 rounded-lg flex-shrink-0 transition opacity-60 hover:opacity-100"
+        :style="{ color: t.textDim }"
         title="Actions"
         @click.stop="emit('open-menu', $event)"
+        @mouseenter="menuHover = true"
+        @mouseleave="menuHover = false"
       >
-        <MoreHorizontal :size="13" />
+        <MoreHorizontal :size="13" :style="{ color: menuHover ? t.text : t.textDim }" />
       </button>
     </div>
     <div
@@ -115,6 +118,7 @@ const store = useWorkspaceStore()
 const workflowsStore = useWorkflowsStore()
 
 const hovered = ref(false)
+const menuHover = ref(false)
 
 const workflow = computed(
   () => props.task.workflowSnapshot ?? workflowsStore.workflowById(props.task.workflowId),

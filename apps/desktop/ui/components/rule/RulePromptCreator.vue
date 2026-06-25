@@ -35,7 +35,7 @@
 
     <template #actions>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded"
+        class="text-[1em] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
         :style="{ color: t.textMuted }"
         @click="draft && emit('edit-manually', draft)"
       >
@@ -43,7 +43,7 @@
         {{ tr('rules.creator.edit_details') }}
       </button>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium"
         :style="{ background: t.accent, color: t.accentText }"
         @click="draft && emit('save', draft, scope)"
       >

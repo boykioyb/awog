@@ -14,7 +14,7 @@
             :key="opt.value"
             type="button"
             :disabled="isExistingSkill"
-            class="text-[1em] px-2 py-1 rounded font-mono transition"
+            class="text-[1em] px-3 py-1 rounded-full font-mono transition"
             :style="sourceButtonStyle(opt.value === draft.source)"
             @click="draft.source = opt.value"
           >
@@ -39,7 +39,7 @@
           <input
             :value="draft.id"
             placeholder="e.g. code-review"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             @input="
               (e: Event) =>
@@ -58,7 +58,7 @@
           <input
             v-model="draft.icon"
             placeholder="e.g. 🔍"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -68,7 +68,7 @@
         <input
           v-model="draft.name"
           placeholder="Display name shown in the skill list"
-          class="w-full rounded px-2 py-1.5 text-[1em]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em]"
           :style="inputStyle"
         />
       </Field>
@@ -78,7 +78,7 @@
           v-model="draft.description"
           :rows="2"
           placeholder="One-sentence summary used in the picker"
-          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -88,7 +88,7 @@
           v-model="draft.body"
           :rows="12"
           placeholder="Markdown instructions injected into the agent's system prompt when this skill is active"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[12rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[12rem]"
           :style="inputStyle"
         />
       </Field>
@@ -99,7 +99,7 @@
             <span
               v-for="g in draft.globs"
               :key="g"
-              class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1 font-mono"
+              class="text-[1em] px-2 py-0.5 rounded-full inline-flex items-center gap-1 font-mono"
               :style="chipStyle"
             >
               {{ g }}
@@ -114,7 +114,7 @@
           <input
             v-model="globInput"
             placeholder="e.g. *.test.ts (Enter to add)"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             @keydown.enter.prevent="addChip('globs', globInput, () => (globInput = ''))"
           />
@@ -124,7 +124,7 @@
             <span
               v-for="tool in draft.alwaysAllow"
               :key="tool"
-              class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+              class="text-[1em] px-2 py-0.5 rounded-full inline-flex items-center gap-1"
               :style="chipStyle"
             >
               {{ tool }}
@@ -139,7 +139,7 @@
           <input
             v-model="allowInput"
             placeholder="e.g. Bash (Enter to add)"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em]"
             :style="inputStyle"
             @keydown.enter.prevent="addChip('alwaysAllow', allowInput, () => (allowInput = ''))"
           />
@@ -151,7 +151,7 @@
           <span
             v-for="src in draft.requiredSources"
             :key="src"
-            class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+            class="text-[1em] px-2 py-0.5 rounded-full inline-flex items-center gap-1"
             :style="chipStyle"
           >
             {{ src }}
@@ -166,7 +166,7 @@
         <input
           v-model="sourceInput"
           placeholder="e.g. github (Enter to add)"
-          class="w-full rounded px-2 py-1.5 text-[1em]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em]"
           :style="inputStyle"
           @keydown.enter.prevent="addChip('requiredSources', sourceInput, () => (sourceInput = ''))"
         />

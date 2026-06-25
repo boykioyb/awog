@@ -1,0 +1,23 @@
+{
+  "sessions.workspace.refresh": "Refresh",
+  "sessions.workspace.unavailable": "Workspace not available — open this session inside the AWOG desktop app",
+  "sessions.workspace.noProject": "No project bound to this session",
+  "sessions.workspace.diff.none": "No changes in the working tree",
+  "sessions.workspace.diff.noRepo": "Not a git repository",
+  "sessions.workspace.diff.changes": "Changes",
+  "sessions.workspace.diff.binary": "Binary file — diff not shown",
+  "sessions.workspace.files.empty": "Empty folder",
+  "sessions.workspace.files.loading": "Loading…",
+  "sessions.workspace.files.browse": "Browse the project files",
+  "sessions.workspace.files.binary": "Binary file — preview not available",
+  "sessions.workspace.files.truncated": "Truncated — file is too large to show in full",
+  "sessions.workspace.files.openFailed": "Could not open file",
+  "sessions.workspace.files.back": "Back to file tree",
+  "sessions.workspace.plan.empty": "No plan in this session yet",
+  "sessions.workspace.plan.approved": "approved",
+  "sessions.workspace.plan.pending": "pending",
+  "sessions.workspace.terminal.unavailable": "Terminal unavailable",
+  "sessions.workspace.terminal.exited": "process exited",
+  "sessions.workspace.tasks.empty": "No background tasks in this session",
+  "sessions.workspace.tasks.placeholder": "Background tasks (terminal / sub-agents) from the session appear here"
+}

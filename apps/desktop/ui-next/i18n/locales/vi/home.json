@@ -1,0 +1,19 @@
+{
+  "home.attention.title": "Cần bạn xử lý",
+  "home.attention.count": "{n} đang chờ",
+  "home.reply": "Trả lời →",
+  "home.review": "Duyệt →",
+  "home.running.label": "Đang chạy",
+  "home.running.title": "Đang chạy",
+  "home.openTasks": "Mở Tasks →",
+  "home.activity.title": "Hoạt động · 24h",
+  "home.activity.unit": "token",
+  "home.activity.today": "token hôm nay",
+  "home.open": "Mở →",
+  "home.git.clean": "sạch",
+  "home.agents.active": "{n} hoạt động",
+  "home.agents.working": "● đang làm",
+  "home.connections.count": "{n} MCP",
+  "home.recent.title": "Session gần đây",
+  "home.all": "Tất cả →"
+}

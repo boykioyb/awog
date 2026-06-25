@@ -14,7 +14,7 @@
             :key="opt.value"
             type="button"
             :disabled="isExisting"
-            class="text-[1em] px-2 py-1 rounded font-mono transition"
+            class="text-[1em] px-3 py-1.5 rounded-lg font-mono transition"
             :style="sourceButtonStyle(opt.value === draft.source)"
             @click="draft.source = opt.value"
           >
@@ -40,7 +40,7 @@
               :value="draft.id"
               :disabled="isExisting"
               :placeholder="tr('commands.editor.slug_placeholder')"
-              class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+              class="flex-1 rounded-lg px-2 py-1.5 text-[1em] font-mono"
               :style="inputStyle"
               @input="onSlugInput"
             />
@@ -51,7 +51,7 @@
             v-model="draft.name"
             :disabled="isImported"
             :placeholder="tr('commands.editor.name_placeholder')"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -61,7 +61,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -71,7 +71,7 @@
           <input
             v-model="draft.argumentHint"
             :placeholder="tr('commands.editor.argument_hint_placeholder')"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -79,7 +79,7 @@
           <input
             v-model="draft.model"
             :placeholder="tr('commands.editor.model_placeholder')"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -89,7 +89,7 @@
         <input
           v-model="draft.allowedTools"
           :placeholder="tr('commands.editor.allowed_tools_placeholder')"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
         />
       </Field>
@@ -99,7 +99,7 @@
           v-model="draft.body"
           :rows="8"
           :placeholder="tr('commands.editor.template_placeholder')"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[10rem]"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[10rem]"
           :style="inputStyle"
         />
         <div class="text-[1em] mt-1" :style="{ color: t.textFaint }">

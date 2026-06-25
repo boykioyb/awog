@@ -15,8 +15,13 @@
         <RoleBadge v-if="msg.role === 'agent'" :role="agent.role" size="sm" />
         <div
           v-else
-          class="w-5 h-5 rounded flex items-center justify-center text-[1em] font-semibold flex-shrink-0"
-          :style="{ background: t.accent, color: t.accentText }"
+          class="rounded-full flex items-center justify-center text-[12px] leading-none font-semibold uppercase tracking-wide flex-shrink-0"
+          :style="{
+            height: '20px',
+            padding: '0 9px',
+            background: t.accent,
+            color: t.accentText,
+          }"
         >
           You
         </div>
@@ -34,11 +39,12 @@
       </div>
     </div>
     <div class="flex items-end gap-2">
+      <!-- Single-purpose chat composer → resize-none per UI patterns. -->
       <textarea
         v-model="chatInput"
         :rows="2"
         placeholder="Ask a question or provide feedback..."
-        class="flex-1 rounded px-2 py-1.5 text-[1em] resize-none"
+        class="flex-1 rounded-lg px-2.5 py-1.5 text-[1em] resize-none"
         :style="{
           background: t.bgInput,
           border: `1px solid ${t.border}`,
@@ -49,7 +55,7 @@
       />
       <button
         :disabled="!chatInput.trim()"
-        class="p-2 rounded transition disabled:opacity-40"
+        class="p-2 rounded-lg transition disabled:opacity-40"
         :style="{ background: t.accent, color: t.accentText }"
         @click="send"
       >

@@ -1,5 +1,5 @@
 <template>
-  <div class="font-mono text-[1em]">
+  <div class="font-mono text-[1em] space-y-0.5">
     <TraceNodeItem v-for="item in trace" :key="item.id" :item="item" :depth="0" />
   </div>
 </template>

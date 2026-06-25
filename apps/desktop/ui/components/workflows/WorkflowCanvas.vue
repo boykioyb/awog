@@ -24,19 +24,28 @@
   <div
     ref="canvasContainer"
     class="flex-1 relative overflow-hidden"
-    :style="{ background: t.bgCanvas }"
+    :style="{
+      background: t.bgCanvas,
+      '--vf-controls-bg': t.bgElevated,
+      '--vf-controls-border': t.border,
+      '--vf-controls-fg': t.textDim,
+      '--vf-controls-hover-bg': t.bgHover,
+      '--vf-controls-hover-fg': t.text,
+    }"
     @drop="onCanvasDrop"
     @dragover.prevent
   >
     <div class="absolute top-3 left-3 z-10 flex items-center gap-2 text-[1em] pointer-events-none">
       <div
-        class="flex items-center gap-1.5 px-2.5 py-1 rounded backdrop-blur"
+        class="flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur"
         :style="{ background: panelOverlayBg, border: `1px solid ${t.border}` }"
       >
-        <GitBranch :size="11" :style="{ color: t.textDim }" />
-        <span :style="{ color: t.text }">{{ workflow.name }}</span>
-        <span :style="{ color: t.textFaint }" class="mx-1">·</span>
-        <span :style="{ color: t.textDim }">
+        <GitBranch :size="13" :style="{ color: t.textDim }" />
+        <span class="font-medium" :style="{ color: t.text }">{{ workflow.name }}</span>
+        <span
+          class="text-[12px] font-mono leading-none px-1.5 py-0.5 rounded-full"
+          :style="{ color: t.textDim, background: t.bgInput, border: `1px solid ${t.border}` }"
+        >
           {{
             tr('workflows.canvas.meta', {
               agents: workflow.nodes.length,
@@ -175,12 +184,12 @@ const defaultEdgeOptions = computed(() => ({
   type: 'default',
   animated: false,
   style: {
-    stroke: t.value.textDim,
+    stroke: t.value.edge,
     strokeWidth: 2,
   },
   markerEnd: {
     type: MarkerType.ArrowClosed,
-    color: t.value.textDim,
+    color: t.value.edge,
     width: 18,
     height: 18,
   },
@@ -288,7 +297,7 @@ const onCanvasDrop = (e: DragEvent) => {
 }
 .vue-flow__controls {
   box-shadow: none;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
 .vue-flow__controls button {
@@ -304,7 +313,7 @@ const onCanvasDrop = (e: DragEvent) => {
   fill: currentColor;
 }
 .vue-flow__minimap {
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
 </style>

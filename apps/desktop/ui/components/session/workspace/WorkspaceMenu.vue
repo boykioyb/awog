@@ -3,11 +3,12 @@
     <div v-if="open" class="fixed inset-0 z-40" @click="emit('close')" />
     <div
       v-if="open"
-      class="fixed z-50 rounded-md shadow-lg overflow-hidden py-1 min-w-[230px]"
+      class="fixed z-50 rounded-lg overflow-hidden py-1 min-w-[230px]"
       :style="{
-        background: t.bgPanel,
-        border: `1px solid ${t.borderStrong}`,
-        boxShadow: `0 8px 24px ${t.shadow}`,
+        background: menu.background,
+        border: `1px solid ${menu.borderColor}`,
+        backdropFilter: menu.backdropFilter,
+        boxShadow: menu.boxShadow,
         top: `${anchor.top}px`,
         left: `${anchor.left}px`,
       }"
@@ -19,7 +20,7 @@
         class="w-full text-left px-3 py-1.5 flex items-center gap-2 text-[1em] transition"
         :style="{
           color: active === tool.id ? t.accent : t.text,
-          background: active === tool.id ? t.bgSubtle : 'transparent',
+          background: active === tool.id ? t.bgActive : 'transparent',
         }"
         @click="emit('select', tool.id)"
       >
@@ -54,4 +55,5 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
+const { menu } = useGlass()
 </script>

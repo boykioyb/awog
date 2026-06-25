@@ -1,0 +1,7 @@
+{
+  "commands.search": "Search commands…",
+  "commands.new": "Add new",
+  "commands.sech.desc": "Description",
+  "commands.sech.template": "Prompt template",
+  "commands.delete": "Delete"
+}

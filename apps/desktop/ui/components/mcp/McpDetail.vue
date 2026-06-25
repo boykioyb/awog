@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
-        class="w-10 h-10 rounded flex items-center justify-center"
+        class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
         <Plug :size="18" :style="{ color: t.textMuted }" />
@@ -14,17 +14,16 @@
             {{ server.id }}
           </h1>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded uppercase"
+            class="text-[12px] px-2 py-0.5 rounded-full uppercase font-mono leading-none"
             :style="{
-              background: t.bgInput,
-              color: t.textMuted,
+              color: t.textDim,
               border: `1px solid ${t.border}`,
             }"
           >
             {{ server.transport }}
           </span>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+            class="text-[12px] px-2 py-0.5 rounded-full inline-flex items-center gap-1.5 font-mono leading-none capitalize"
             :style="statusStyle"
           >
             <span class="w-1.5 h-1.5 rounded-full" :style="{ background: statusColor }" />
@@ -68,7 +67,7 @@
     </div>
 
     <!-- Test result banner -->
-    <div v-if="testResult" class="rounded p-3 mb-4 text-[1em]" :style="testBannerStyle">
+    <div v-if="testResult" class="rounded-lg p-3 mb-4 text-[1em]" :style="testBannerStyle">
       <div class="flex items-start gap-2">
         <component
           :is="testResult.ok ? CheckCircle2 : AlertCircle"
@@ -82,7 +81,7 @@
           <div class="font-mono break-words">{{ testResult.summary }}</div>
           <pre
             v-if="testResult.stderr && testResult.stderr.length > 0"
-            class="text-[1em] font-mono mt-2 p-2 rounded max-h-28 overflow-y-auto"
+            class="text-[1em] font-mono mt-2 p-2 rounded-lg max-h-28 overflow-y-auto"
             :style="{ background: t.bgPanel, color: t.textDim }"
             >{{ testResult.stderr.join('\n') }}</pre
           >
@@ -93,7 +92,7 @@
     <!-- Last error banner -->
     <div
       v-if="server.lastError"
-      class="rounded p-3 mb-4 text-[1em]"
+      class="rounded-lg p-3 mb-4 text-[1em]"
       :style="{
         background: t.dangerBg,
         border: `1px solid ${t.dangerBorder}`,
@@ -154,10 +153,10 @@
       <template v-else>
         <div class="mb-2 flex items-center gap-2">
           <div
-            class="flex-1 flex items-center gap-2 rounded px-2 py-1.5"
-            :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+            class="flex-1 flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+            :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
           >
-            <Search :size="11" :style="{ color: t.textDim }" />
+            <Search :size="13" :style="{ color: t.textDim }" />
             <input
               v-model="toolFilter"
               type="text"
@@ -168,11 +167,12 @@
             <button
               v-if="toolFilter"
               type="button"
-              class="text-[1em]"
+              class="p-0.5 rounded transition"
               :style="{ color: t.textDim }"
+              title="Clear filter"
               @click="toolFilter = ''"
             >
-              clear
+              <X :size="13" />
             </button>
           </div>
         </div>
@@ -189,7 +189,7 @@
           <div
             v-for="tool in filteredTools"
             :key="tool.name"
-            class="flex items-start gap-2.5 p-2.5 rounded transition"
+            class="flex items-start gap-2.5 p-2.5 rounded-lg transition"
             :style="{
               background: t.bgElevated,
               border: `1px solid ${isToolDenied(tool.name) ? t.dangerBorder : t.border}`,
@@ -208,7 +208,7 @@
                 </div>
                 <span
                   v-if="isToolDenied(tool.name)"
-                  class="text-[1em] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded"
+                  class="text-[12px] uppercase tracking-wider font-medium px-2 py-0.5 rounded-full leading-none"
                   :style="{
                     background: t.dangerBg,
                     color: t.danger,
@@ -224,7 +224,7 @@
             </div>
             <button
               type="button"
-              class="flex-shrink-0 p-1.5 rounded transition"
+              class="flex-shrink-0 p-1.5 rounded-lg transition"
               :style="{
                 background: isToolDenied(tool.name) ? t.dangerBg : 'transparent',
                 color: isToolDenied(tool.name) ? t.danger : t.textDim,
@@ -247,7 +247,7 @@
         <div
           v-for="res in server.resources"
           :key="res.uri"
-          class="flex items-center gap-2.5 p-2 rounded"
+          class="flex items-center gap-2.5 p-2 rounded-lg"
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <FileText :size="11" :style="{ color: t.textDim }" />
@@ -262,7 +262,7 @@
     <!-- Logs (stderr ring buffer) -->
     <Section v-if="stderrLines.length > 0" :title="`Logs · ${stderrLines.length} line(s)`">
       <pre
-        class="text-[1em] font-mono p-2.5 rounded max-h-48 overflow-y-auto"
+        class="text-[1em] font-mono p-2.5 rounded-lg max-h-48 overflow-y-auto"
         :style="{ background: t.bgElevated, color: t.textDim, border: `1px solid ${t.border}` }"
         >{{ stderrLines.join('\n') }}</pre
       >
@@ -277,7 +277,7 @@
         <span
           v-for="ag in agentsUsing"
           :key="ag.id"
-          class="text-[1em] px-2 py-1 rounded"
+          class="text-[1em] px-2.5 py-1 rounded-full"
           :style="{
             background: t.bgInput,
             color: t.text,
@@ -305,6 +305,7 @@ import {
   Search,
   Shield,
   ShieldOff,
+  X,
 } from 'lucide-vue-next'
 import type { Agent, MCPServer, MCPStatus, MCPTool, MCPResource } from '~/types'
 
@@ -407,8 +408,7 @@ const statusColor = computed<string>(() => {
 })
 
 const statusStyle = computed(() => ({
-  background: t.value.bgInput,
-  color: t.value.textMuted,
+  color: t.value.textDim,
   border: `1px solid ${t.value.border}`,
 }))
 

@@ -7,9 +7,10 @@
         left: `${cardPos.left}px`,
         width: `${cardPos.width}px`,
         maxHeight: `${cardPos.maxHeight}px`,
-        background: t.bgPanel,
-        border: `1px solid ${t.border}`,
-        boxShadow: `0 24px 60px ${t.shadow}`,
+        background: overlay.background,
+        border: `1px solid ${overlay.borderColor}`,
+        backdropFilter: overlay.backdropFilter,
+        boxShadow: overlay.boxShadow,
       }"
       @click.stop
     >
@@ -26,7 +27,7 @@
         </span>
         <span class="flex-1" />
         <button
-          class="p-1 rounded transition"
+          class="p-1.5 rounded-lg transition"
           :style="{ color: t.textDim }"
           title="Close"
           @click="onClose"
@@ -142,6 +143,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useTheme()
+const { overlay } = useGlass()
 const { t: tr } = useI18n()
 const sidecar = useSidecar()
 const settings = useSettingsStore()

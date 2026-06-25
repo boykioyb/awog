@@ -53,7 +53,7 @@
       <div v-if="canDecide" class="flex items-center gap-2 pt-1">
         <button
           type="button"
-          class="px-3 py-1.5 rounded text-[1em] inline-flex items-center gap-1.5 transition"
+          class="px-3 py-1.5 rounded-lg text-[1em] inline-flex items-center gap-1.5 transition"
           :style="{ background: t.accent, color: t.accentText }"
           @click="approve"
         >
@@ -62,7 +62,7 @@
         </button>
         <button
           type="button"
-          class="px-3 py-1.5 rounded text-[1em] inline-flex items-center gap-1.5 transition"
+          class="px-3 py-1.5 rounded-lg text-[1em] inline-flex items-center gap-1.5 transition"
           :style="{
             background: t.dangerBg,
             color: t.danger,

@@ -1,10 +1,10 @@
 <template>
   <span
-    class="inline-flex items-center gap-1 text-[1em] px-1.5 py-0.5 rounded font-mono min-w-0 max-w-[200px]"
+    class="inline-flex items-center gap-1 text-[12px] leading-none px-2 py-0.5 rounded-full font-mono min-w-0 max-w-[200px]"
     :style="style"
     :title="title"
   >
-    <component :is="icon" v-if="icon" :size="9" class="flex-shrink-0" />
+    <component :is="icon" v-if="icon" :size="10" class="flex-shrink-0" />
     <span class="truncate">{{ refItem.name }}</span>
   </span>
 </template>
@@ -18,33 +18,33 @@ const props = defineProps<Props>()
 
 const { t } = useTheme()
 
-// Map each ref kind to a styled chip:
-//   HEAD          → accent fill + bold (current commit marker)
-//   branch        → success/green tint (local head)
-//   remote-branch → info/blue tint with Cloud icon
-//   tag           → warning/yellow tint with Tag icon
-//   stash         → muted gray with Archive icon
+// Map each ref kind to a styled chip (prototype `.ghref` look — pill, flat):
+//   HEAD          → filled accent + accentText (current branch marker)
+//   branch        → outline neutral (bgElevated + border)
+//   remote-branch → outline neutral, dimmer text, Cloud icon
+//   tag           → amber/warning outline with Tag icon
+//   stash         → muted neutral with Archive icon
 const style = computed(() => {
   const tk = t.value
   switch (props.refItem.kind) {
     case 'HEAD':
       return {
         background: tk.accent,
-        color: tk.onAccent,
+        color: tk.accentText,
         border: `1px solid ${tk.accent}`,
         fontWeight: 600,
       }
     case 'branch':
       return {
-        background: 'rgba(34, 197, 94, 0.12)',
-        color: tk.success,
-        border: `1px solid rgba(34, 197, 94, 0.35)`,
+        background: tk.bgElevated,
+        color: tk.textMuted,
+        border: `1px solid ${tk.border}`,
       }
     case 'remote-branch':
       return {
-        background: tk.infoBg,
-        color: tk.info,
-        border: `1px solid ${tk.infoBorder}`,
+        background: tk.bgElevated,
+        color: tk.textDim,
+        border: `1px solid ${tk.border}`,
       }
     case 'tag':
       return {

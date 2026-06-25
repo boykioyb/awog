@@ -1,49 +1,44 @@
 <template>
-  <div class="mt-2">
-    <!-- Per-cluster collapse toggle, rendered inline at this run's position in
-         the reply. The summary ("ran N commands · read N files") doubles as the
-         toggle; each cluster holds its own expand state (one ref per component
-         instance), so a turn with several reason→act runs toggles each run
-         independently instead of one shared switch. Default COLLAPSED so the
-         turn reads as a clean document. -->
+  <!-- Step cluster (Claude-Code style): a compact card that folds a reason→act
+       run behind a one-line "N steps · …" summary. COLLAPSED by default so the
+       turn reads as a clean document; each instance owns its expand state so a
+       turn with several runs toggles each independently. -->
+  <div class="mt-2 overflow-hidden rounded-xl" :style="{ border: `1px solid ${t.border}` }">
+    <!-- Summary header doubles as the toggle. -->
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 text-[12px] py-0.5 px-1.5 -ml-1.5 rounded transition hover:bg-white/5"
-      :style="{ color: t.textDim }"
+      class="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-mono transition"
+      :style="{ background: t.bgSubtle, color: t.textDim }"
       @click="expanded = !expanded"
     >
-      <Info :size="11" />
-      <span>{{ summary }}</span>
-      <Activity
-        v-if="hasRunningStep"
-        :size="10"
-        class="animate-pulse"
-        :style="{ color: t.accent }"
-      />
       <ChevronDown
-        :size="10"
+        :size="13"
+        class="flex-shrink-0"
         :style="{
+          color: t.textFaint,
           transform: expanded ? 'none' : 'rotate(-90deg)',
           transition: 'transform 0.15s',
         }"
       />
+      <span class="min-w-0 truncate text-left">{{ summary }}</span>
+      <Activity
+        v-if="hasRunningStep"
+        :size="10"
+        class="flex-shrink-0 animate-pulse"
+        :style="{ color: t.accent }"
+      />
     </button>
 
-    <!-- Claude-Code-style timeline: flat vertical list, no box — each step's own
-         status icon is the bullet, a thin left rail groups the run. Each row is a
-         single truncated line; the full output is one click away in the detail. -->
-    <div
-      v-if="expanded"
-      class="mt-1 space-y-1 text-[12px] pl-3"
-      :style="{ borderLeft: `2px solid ${t.border}` }"
-    >
+    <!-- Body: flat list of one-line step rows. Full output is one click away in
+         the step detail drawer. -->
+    <div v-if="expanded" class="px-2 pb-2 pt-0.5 space-y-1 text-[12px]">
       <StepItem v-for="s in steps" :key="s.id" :step="s" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Activity, ChevronDown, Info } from 'lucide-vue-next'
+import { Activity, ChevronDown } from 'lucide-vue-next'
 import type { SessionStep } from '~/types'
 import { stepsSummary } from '~/utils/steps-summary'
 

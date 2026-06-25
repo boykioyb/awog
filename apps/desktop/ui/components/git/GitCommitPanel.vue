@@ -11,7 +11,7 @@
       @click.self="pendingDetachedCommit = false"
     >
       <div
-        class="w-full max-w-md rounded p-4 flex flex-col gap-3"
+        class="w-full max-w-md rounded-xl p-4 flex flex-col gap-3"
         :style="{
           background: t.bgPanel,
           border: `1px solid ${t.borderStrong}`,
@@ -32,7 +32,7 @@
         </div>
         <div class="flex items-center gap-2 justify-end pt-1">
           <button
-            class="text-[1em] px-3 py-1.5 rounded transition"
+            class="text-[1em] px-3 py-1.5 rounded-lg transition"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -43,7 +43,7 @@
             {{ tr('common.cancel') }}
           </button>
           <button
-            class="text-[1em] px-3 py-1.5 rounded transition"
+            class="text-[1em] px-3 py-1.5 rounded-lg transition"
             :style="{
               background: t.bgInput,
               color: t.accent,
@@ -54,7 +54,7 @@
             {{ tr('git.commit_panel.create_branch_then_commit') }}
           </button>
           <button
-            class="text-[1em] px-3 py-1.5 rounded transition font-medium"
+            class="text-[1em] px-3 py-1.5 rounded-lg transition font-medium"
             :style="{
               background: t.warning,
               color: t.accentText,
@@ -74,7 +74,7 @@
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="flex items-center gap-1 text-[1em] px-2 py-1 rounded transition"
+          class="flex items-center gap-1 text-[1em] px-2 py-1 rounded-lg transition"
           :style="generateBtnStyle"
           :disabled="generateDisabled"
           :title="
@@ -104,7 +104,7 @@
         :value="store.commitMessage"
         rows="3"
         :placeholder="tr('git.commit_panel.message_placeholder')"
-        class="w-full rounded text-[1em] px-2 py-1.5 font-mono resize-y min-h-[5rem]"
+        class="w-full rounded-lg text-[1em] px-2.5 py-2 font-mono resize-y min-h-[5rem]"
         :style="{
           background: t.bgInput,
           color: t.text,
@@ -121,7 +121,7 @@
     </div>
     <div class="px-3 py-2 flex items-center gap-2" :style="{ borderTop: `1px solid ${t.border}` }">
       <button
-        class="flex-1 text-[1em] font-medium px-3 py-1.5 rounded transition"
+        class="flex-1 text-[1em] font-medium px-3 py-1.5 rounded-lg transition"
         :style="commitBtnStyle"
         :disabled="commitDisabled"
         @click="doCommit"
@@ -129,7 +129,7 @@
         {{ tr('git.commit_panel.commit') }}
       </button>
       <button
-        class="text-[1em] px-3 py-1.5 rounded transition"
+        class="text-[1em] px-3 py-1.5 rounded-lg transition"
         :style="{
           background: t.bgInput,
           color: t.textMuted,

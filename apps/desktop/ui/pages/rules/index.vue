@@ -25,7 +25,7 @@
         </AppButton>
       </div>
 
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto p-2">
         <div
           v-if="filtered.length === 0"
           class="px-4 py-8 text-center text-[1em]"
@@ -36,11 +36,11 @@
         <template v-for="(group, gi) in grouped" :key="group.key">
           <button
             v-if="showHeaders"
-            class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
+            class="w-full px-2 py-1.5 flex items-center gap-1.5 rounded-lg transition"
             :style="{
               color: t.textDim,
               background: groupHover === group.key ? t.bgHover : 'transparent',
-              marginTop: gi > 0 ? '4px' : '0',
+              marginTop: gi > 0 ? '8px' : '0',
             }"
             @click="toggleGroup(group.key)"
             @mouseenter="groupHover = group.key"
@@ -67,19 +67,25 @@
             <div
               v-for="rule in group.items"
               :key="ruleKey(rule)"
-              class="w-full px-3 py-2 cursor-pointer transition"
+              class="w-full px-2.5 py-2 mb-1 rounded-lg cursor-pointer transition"
               :style="{
                 background: pill(selectedKey === ruleKey(rule)).background,
-                borderBottom: `1px solid ${t.border}`,
-                borderLeft: `2px solid ${selectedKey === ruleKey(rule) ? t.accent : 'transparent'}`,
+                border: `1px solid ${selectedKey === ruleKey(rule) ? t.border : 'transparent'}`,
                 opacity: rule.enabled ? 1 : 0.55,
               }"
               @click="onSelect(rule)"
               @contextmenu="onContextMenu($event, rule)"
+              @mouseenter="(e) => onRowHover(e, rule)"
+              @mouseleave="(e) => onRowLeave(e, rule)"
             >
-              <div class="flex items-center gap-2 mb-0.5">
-                <ScrollText :size="11" :style="{ color: t.textDim }" />
-                <span class="text-[1em] flex-1 truncate" :style="{ color: t.text }">
+              <div class="flex items-center gap-2 mb-1">
+                <div
+                  class="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                  :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
+                >
+                  <ScrollText :size="11" :style="{ color: t.textDim }" />
+                </div>
+                <span class="text-[1em] flex-1 truncate font-medium" :style="{ color: t.text }">
                   {{ rule.name }}
                 </span>
                 <Lock
@@ -105,13 +111,13 @@
                   <MoreHorizontal :size="13" />
                 </button>
               </div>
-              <div class="flex items-center gap-1.5 pl-5">
-                <span class="text-[1em] truncate" :style="{ color: t.textDim }">
+              <div class="flex items-center gap-1.5 pl-7">
+                <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.textDim }">
                   {{ rule.description || '—' }}
                 </span>
                 <span
                   v-if="rule.source && rule.source !== 'global'"
-                  class="text-[12px] px-1 rounded font-mono leading-none flex-shrink-0"
+                  class="text-[12px] px-1.5 py-0.5 rounded-full font-mono leading-none flex-shrink-0"
                   :style="sourceBadgeStyle(rule)"
                   :title="sourceLabel(rule)"
                 >
@@ -185,7 +191,7 @@
     <div
       v-for="toast in toasts"
       :key="toast.id"
-      class="px-3 py-2 rounded text-[1em] shadow-lg"
+      class="px-3 py-2 rounded-lg text-[1em] shadow-lg"
       :style="toastStyle(toast.kind)"
     >
       {{ toast.text }}
@@ -284,6 +290,17 @@ const onSelect = (rule: Rule) => {
   selectedKey.value = ruleKey(rule)
   mode.value = 'view'
   mobilePane.value = 'detail'
+}
+
+// Rounded rows tint on hover (mirrors AgentListItem) — selected rows keep their
+// active fill so we only repaint the unselected ones.
+const onRowHover = (e: MouseEvent, rule: Rule) => {
+  if (selectedKey.value !== ruleKey(rule))
+    (e.currentTarget as HTMLElement).style.background = pill(false, true).background
+}
+const onRowLeave = (e: MouseEvent, rule: Rule) => {
+  if (selectedKey.value !== ruleKey(rule))
+    (e.currentTarget as HTMLElement).style.background = 'transparent'
 }
 
 // "New" opens the LLM creator (Create with AI); "Edit details" falls through to

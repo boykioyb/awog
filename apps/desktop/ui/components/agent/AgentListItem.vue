@@ -1,10 +1,10 @@
 <template>
   <div
-    class="w-full px-3 py-2.5 text-left cursor-pointer transition"
+    class="px-2.5 py-2 mx-1 my-0.5 rounded-lg text-left cursor-pointer transition"
     :style="{
       background: pill(selected).background,
-      borderBottom: `1px solid ${t.border}`,
-      borderLeft: `2px solid ${selected ? t.accent : 'transparent'}`,
+      border: `1px solid ${selected ? t.border : 'transparent'}`,
+      width: 'calc(100% - 8px)',
     }"
     @click="emit('select')"
     @contextmenu="emit('context-menu', $event)"
@@ -25,7 +25,7 @@
           v-if="renaming"
           ref="inputEl"
           v-model="draftName"
-          class="text-[1em] font-medium flex-1 min-w-0 rounded px-1 py-0.5"
+          class="text-[1em] font-medium flex-1 min-w-0 rounded-lg px-1.5 py-0.5"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.borderStrong}`,
@@ -47,7 +47,7 @@
         </div>
         <span
           v-if="agent.role"
-          class="text-[1em] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
+          class="text-[12px] leading-none uppercase tracking-wider font-semibold flex-shrink-0 px-1.5 py-0.5 rounded-full font-mono"
           :style="{
             color: t.textMuted,
             background: t.bgInput,
@@ -57,7 +57,7 @@
           {{ agent.role }}
         </span>
         <button
-          class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
+          class="p-1 rounded-lg flex-shrink-0 transition opacity-60 hover:opacity-100"
           :style="{ color: t.textMuted }"
           title="Actions"
           @click.stop="emit('open-menu', $event)"
@@ -71,7 +71,7 @@
         </span>
         <span
           v-if="showSourceBadge"
-          class="text-[12px] leading-none px-1 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
+          class="text-[12px] leading-none px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
           :style="sourceBadgeStyle"
         >
           {{ sourceLabel }}

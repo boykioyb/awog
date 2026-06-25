@@ -1,0 +1,18 @@
+{
+  "sessions.composer.enhancing": "Đang tinh chỉnh…",
+  "sessions.composer.enhanceFailed": "Không tinh chỉnh được prompt",
+  "sessions.composer.queueSend": "Gửi sau (chạy sau lượt hiện tại)",
+  "sessions.composer.queued": "Đã xếp hàng",
+  "sessions.composer.queuedRemove": "Bỏ khỏi hàng đợi",
+  "sessions.composer.slashCommands": "Lệnh",
+  "sessions.composer.slashHint": "mock — chưa nối backend lệnh",
+  "sessions.composer.mentionTitle": "Nhắc đến",
+  "sessions.composer.mentionHint": "mock — agent / file cục bộ",
+  "sessions.composer.mentionFile": "file",
+  "sessions.composer.mentionAgent": "agent",
+  "sessions.command.plan.desc": "Lập kế hoạch trước, duyệt rồi chạy",
+  "sessions.command.clear.desc": "Xoá hội thoại",
+  "sessions.command.compact.desc": "Nén ngữ cảnh để tiết kiệm token",
+  "sessions.command.model.desc": "Đổi model",
+  "sessions.command.help.desc": "Xem danh sách lệnh"
+}

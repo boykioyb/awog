@@ -2,7 +2,7 @@
   <div class="flex-1 overflow-y-auto p-4 md:p-6 w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
-        class="w-10 h-10 rounded flex items-center justify-center"
+        class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
         <Slash :size="18" :style="{ color: t.textMuted }" />
@@ -13,9 +13,9 @@
             /{{ command.name }}
           </h1>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
+            class="text-[12px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wider leading-none"
             :style="{
-              background: isProjectScoped ? t.accent : t.bgInput,
+              background: isProjectScoped ? t.accent : 'transparent',
               color: isProjectScoped ? t.accentText : t.textDim,
               border: `1px solid ${isProjectScoped ? t.accent : t.border}`,
             }"
@@ -25,8 +25,8 @@
           </span>
           <span
             v-if="isImported"
-            class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
-            :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+            class="text-[12px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 leading-none"
+            :style="{ color: t.textDim, border: `1px solid ${t.border}` }"
           >
             <Lock :size="10" />
             {{ tr('commands.detail.imported') }}

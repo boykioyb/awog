@@ -30,25 +30,28 @@
     </div>
 
     <div v-else class="flex-1 flex flex-col overflow-hidden">
-      <div class="flex-shrink-0 overflow-y-auto" :style="{ maxHeight: '40%' }">
+      <div class="flex-shrink-0 overflow-y-auto py-1" :style="{ maxHeight: '40%' }">
         <button
           v-for="f in files"
           :key="f.path"
           type="button"
-          class="w-full text-left px-3 py-1 flex items-center gap-2 transition"
+          class="w-full text-left px-2 py-1 mx-1.5 rounded-lg flex items-center gap-2 transition"
           :style="{
             background: f.path === selectedPath ? t.bgActive : 'transparent',
             color: t.text,
+            width: 'calc(100% - 0.75rem)',
           }"
           @click="selectFile(f.path)"
         >
           <span
-            class="font-mono text-[12px] w-3.5 text-center flex-shrink-0"
+            class="font-mono text-[12px] w-3.5 text-center flex-shrink-0 font-bold"
             :style="{ color: statusColor(f.changeType) }"
           >
             {{ statusLetter(f.changeType) }}
           </span>
-          <span class="font-mono text-[1em] truncate">{{ f.path }}</span>
+          <span class="font-mono text-[1em] truncate" :style="{ color: t.textMuted }">
+            {{ f.path }}
+          </span>
           <span
             v-if="f.additions || f.deletions"
             class="ml-auto font-mono text-[12px] flex-shrink-0"

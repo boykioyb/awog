@@ -1,19 +1,23 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-7">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Workspace</h2>
-      <div class="text-[1em]" :style="{ color: t.textDim }">
+      <h2 class="text-lg font-semibold tracking-tight" :style="{ color: t.text }">Workspace</h2>
+      <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
         Local storage location and workspace tools
       </div>
     </div>
-    <div class="space-y-4">
+    <div
+      class="rounded-xl px-4 [&>*:last-child]:border-b-0"
+      :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+    >
       <SettingsField
         label="Workspace path"
         hint="Filesystem location for agents, workflows, artifacts, and sessions"
+        block
       >
         <input
           v-model="settings.workspacePath"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono"
           :style="inputStyle"
         />
       </SettingsField>
@@ -28,8 +32,8 @@
       >
         <button
           type="button"
-          class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-          :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+          class="px-3 py-1.5 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition"
+          :style="{ color: t.text, border: `1px solid ${t.borderStrong}`, background: t.bgSubtle }"
           :disabled="scanning"
           @click="openGlobalImport"
         >
@@ -43,8 +47,8 @@
       >
         <button
           type="button"
-          class="px-2.5 py-1 rounded text-[1em] transition flex items-center gap-1.5"
-          :style="{ border: `1px solid ${t.border}`, color: t.text }"
+          class="px-3 py-1.5 rounded-lg text-[1em] transition flex items-center gap-1.5"
+          :style="{ border: `1px solid ${t.border}`, color: t.text, background: t.bgSubtle }"
           @click="onOpenLogs"
         >
           <ScrollText :size="13" />
@@ -65,7 +69,7 @@
       <div
         v-for="toast in toasts"
         :key="toast.id"
-        class="px-3 py-2 rounded text-[1em] shadow-lg"
+        class="px-3 py-2 rounded-lg text-[1em] shadow-lg"
         :style="toastStyle(toast.kind)"
       >
         {{ toast.text }}
@@ -79,6 +83,7 @@ import { Download, ScrollText } from 'lucide-vue-next'
 import { useConfigImport, type ImportSelection } from '~/composables/useConfigImport'
 
 const { t } = useTheme()
+const { cardBg } = useSettingsSurface()
 const { t: tr } = useI18n()
 const settings = useSettingsStore()
 const sidecar = useSidecar()

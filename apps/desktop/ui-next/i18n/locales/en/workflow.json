@@ -1,0 +1,12 @@
+{
+  "workflow.toolbar.scope": "global ▾",
+  "workflow.toolbar.dag": "DAG · {n} node",
+  "workflow.toolbar.run": "Run",
+  "workflow.inspector.node": "Node",
+  "workflow.inspector.dependsOn": "depends on {dep}",
+  "workflow.inspector.agent": "Agent",
+  "workflow.inspector.model": "Model",
+  "workflow.inspector.modelValue": "{model} · Anthropic",
+  "workflow.inspector.skill": "Skill",
+  "workflow.inspector.prompt": "Prompt"
+}

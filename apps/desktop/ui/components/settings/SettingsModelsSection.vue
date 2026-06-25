@@ -1,19 +1,24 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-7">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Models & API Keys</h2>
-      <div class="text-[1em]" :style="{ color: t.textDim }">
+      <h2 class="text-lg font-semibold tracking-tight" :style="{ color: t.text }">
+        Models & API Keys
+      </h2>
+      <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
         Sign in to your model providers. Credentials stay on this device and never leave the
         sidecar.
       </div>
     </div>
 
-    <div class="space-y-2">
+    <div class="space-y-2.5">
       <!-- Anthropic card (OAuth) -->
-      <div class="rounded p-3" :style="{ background: cardBg, border: `1px solid ${t.border}` }">
+      <div
+        class="rounded-xl p-3.5"
+        :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+      >
         <div class="flex items-center gap-3 mb-2">
           <div
-            class="w-8 h-8 rounded flex items-center justify-center"
+            class="w-8 h-8 rounded-lg flex items-center justify-center"
             :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
           >
             <Sparkles :size="14" :style="{ color: t.textMuted }" />
@@ -40,7 +45,7 @@
         <div v-if="anthropicAccounts.length === 0" class="space-y-2">
           <button
             type="button"
-            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded text-[1em] font-medium transition"
+            class="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-[1em] font-medium transition"
             :style="{ background: t.accent, color: t.accentText, border: 'none' }"
             @click="onOpenOAuthDialog"
           >
@@ -57,7 +62,7 @@
           <div
             v-for="acc in anthropicAccounts"
             :key="acc.id"
-            class="rounded p-2 space-y-1.5"
+            class="rounded-lg p-2.5 space-y-1.5"
             :style="{
               background: t.bgInput,
               border: `1px solid ${anthropicActiveId === acc.id ? t.borderStrong : t.border}`,
@@ -95,7 +100,7 @@
               </div>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                class="px-2 py-1 text-[1em] rounded-md transition flex items-center"
                 :style="iconBtnStyle"
                 title="Edit"
                 @click="onEdit(acc)"
@@ -104,7 +109,7 @@
               </button>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                class="px-2 py-1 text-[1em] rounded-md transition flex items-center"
                 :style="iconBtnStyle"
                 :disabled="isTesting(acc.id)"
                 title="Test connection"
@@ -115,7 +120,7 @@
               </button>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                class="px-2 py-1 text-[1em] rounded-md transition flex items-center"
                 :style="iconBtnStyle"
                 title="Disconnect"
                 @click="onDisconnect('anthropic', acc.id)"
@@ -128,7 +133,7 @@
               <span
                 v-for="m in acc.models"
                 :key="m"
-                class="px-1.5 py-0.5 rounded font-mono text-[12px] leading-none"
+                class="px-1.5 py-0.5 rounded-md font-mono text-[12px] leading-none"
                 :style="{ background: t.bg, color: t.textDim, border: `1px solid ${t.border}` }"
               >
                 {{ m }}
@@ -136,7 +141,7 @@
             </div>
             <div
               v-if="testResults[acc.id]"
-              class="text-[1em] px-2 py-1 rounded"
+              class="text-[1em] px-2 py-1 rounded-lg"
               :style="testResultStyle(testResults[acc.id]!)"
             >
               {{ formatTestResult(testResults[acc.id]!) }}
@@ -145,7 +150,7 @@
 
           <button
             type="button"
-            class="w-full rounded px-2 py-1.5 text-[1em] flex items-center justify-center gap-1.5 transition"
+            class="w-full rounded-lg px-2 py-2 text-[1em] flex items-center justify-center gap-1.5 transition"
             :style="{
               color: t.textDim,
               border: `1px dashed ${t.border}`,
@@ -179,7 +184,7 @@
             </div>
             <input
               v-model="apiKeyLabel"
-              class="w-full rounded px-2 py-1.5 text-[1em]"
+              class="w-full rounded-lg px-2.5 py-2 text-[1em]"
               :style="inputStyle"
               placeholder="Label (optional)"
             />
@@ -187,14 +192,14 @@
               <input
                 v-model="apiKeyValue"
                 :type="apiKeyReveal ? 'text' : 'password'"
-                class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+                class="flex-1 rounded-lg px-2.5 py-2 text-[1em] font-mono"
                 :style="inputStyle"
                 placeholder="sk-ant-…"
                 @keydown.enter="onAddApiKey"
               />
               <button
                 type="button"
-                class="px-2 py-1.5 rounded text-[1em] flex items-center"
+                class="px-2 py-2 rounded-lg text-[1em] flex items-center"
                 :style="iconBtnStyle"
                 :title="apiKeyReveal ? 'Hide' : 'Show'"
                 @click="apiKeyReveal = !apiKeyReveal"
@@ -203,7 +208,7 @@
               </button>
               <button
                 type="button"
-                class="px-3 py-1.5 rounded text-[1em] inline-flex items-center gap-1.5 transition"
+                class="px-3 py-2 rounded-lg text-[1em] inline-flex items-center gap-1.5 transition"
                 :style="{ background: t.accent, color: t.accentText, border: 'none' }"
                 :disabled="!apiKeyValue.trim() || apiKeyBusy"
                 @click="onAddApiKey"
@@ -214,7 +219,7 @@
             </div>
             <div
               v-if="apiKeyError"
-              class="text-[1em] px-2 py-1 rounded"
+              class="text-[1em] px-2 py-1 rounded-lg"
               :style="{
                 background: t.dangerBg,
                 color: t.danger,
@@ -240,10 +245,13 @@
       />
 
       <!-- Custom endpoints — Anthropic- or OpenAI-compatible (ADR 0029 C3) -->
-      <div class="rounded p-3" :style="{ background: cardBg, border: `1px solid ${t.border}` }">
+      <div
+        class="rounded-xl p-3.5"
+        :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+      >
         <div class="flex items-center gap-3 mb-2">
           <div
-            class="w-8 h-8 rounded flex items-center justify-center"
+            class="w-8 h-8 rounded-lg flex items-center justify-center"
             :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
           >
             <Server :size="14" :style="{ color: t.textMuted }" />
@@ -261,7 +269,7 @@
           <div
             v-for="acc in customAccounts"
             :key="acc.id"
-            class="rounded p-2 space-y-1.5"
+            class="rounded-lg p-2.5 space-y-1.5"
             :style="{
               background: t.bgInput,
               border: `1px solid ${anthropicActiveId === acc.id ? t.borderStrong : t.border}`,
@@ -299,7 +307,7 @@
               </div>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                class="px-2 py-1 text-[1em] rounded-md transition flex items-center"
                 :style="iconBtnStyle"
                 title="Edit"
                 @click="onEdit(acc)"
@@ -308,7 +316,7 @@
               </button>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                class="px-2 py-1 text-[1em] rounded-md transition flex items-center"
                 :style="iconBtnStyle"
                 :disabled="isTesting(acc.id)"
                 title="Test connection"
@@ -319,7 +327,7 @@
               </button>
               <button
                 type="button"
-                class="px-2 py-1 text-[1em] rounded transition flex items-center"
+                class="px-2 py-1 text-[1em] rounded-md transition flex items-center"
                 :style="iconBtnStyle"
                 title="Remove"
                 @click="onDisconnect('anthropic', acc.id)"
@@ -329,7 +337,7 @@
             </div>
             <div
               v-if="testResults[acc.id]"
-              class="text-[1em] px-2 py-1 rounded"
+              class="text-[1em] px-2 py-1 rounded-lg"
               :style="testResultStyle(testResults[acc.id]!)"
             >
               {{ formatTestResult(testResults[acc.id]!) }}
@@ -346,7 +354,7 @@
           />
           <div
             v-if="customError"
-            class="mt-2 text-[1em] px-2 py-1 rounded"
+            class="mt-2 text-[1em] px-2 py-1 rounded-lg"
             :style="{
               background: t.dangerBg,
               color: t.danger,
@@ -359,7 +367,7 @@
         <button
           v-else
           type="button"
-          class="w-full rounded px-2 py-1.5 text-[1em] flex items-center justify-center gap-1.5 transition"
+          class="w-full rounded-lg px-2 py-2 text-[1em] flex items-center justify-center gap-1.5 transition"
           :style="{ color: t.textDim, border: `1px dashed ${t.border}`, background: 'transparent' }"
           @click="customFormOpen = true"
         >

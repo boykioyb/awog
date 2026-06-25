@@ -46,7 +46,7 @@
     <span class="flex-1" />
     <template v-if="showHeaders">
       <button
-        class="p-1 rounded transition opacity-60 hover:opacity-100"
+        class="p-1 rounded-lg transition opacity-60 hover:opacity-100"
         :style="{ color: t.textDim }"
         title="Collapse all groups"
         @click="collapseAll"
@@ -54,7 +54,7 @@
         <ChevronsDownUp :size="13" />
       </button>
       <button
-        class="p-1 rounded transition opacity-60 hover:opacity-100"
+        class="p-1 rounded-lg transition opacity-60 hover:opacity-100"
         :style="{ color: t.textDim }"
         title="Expand all groups"
         @click="expandAll"
@@ -64,7 +64,7 @@
     </template>
     <button
       v-if="bulkSelection.size > 0"
-      class="text-[1em] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition"
+      class="text-[1em] inline-flex items-center gap-1 px-2 py-0.5 rounded-full transition"
       :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
       @click="$emit('clear-bulk')"
     >
@@ -79,7 +79,7 @@
     >
       <button
         v-if="showHeaders"
-        class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
+        class="w-[calc(100%-8px)] mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition"
         :style="{
           color: t.textDim,
           background: groupHover === group.key ? t.bgHover : 'transparent',

@@ -1,0 +1,7 @@
+{
+  "templates.tag.agents": "{n} agents",
+  "templates.tag.agent": "{n} agent",
+  "templates.tag.workflow": "workflow",
+  "templates.new.title": "Create new template",
+  "templates.new.desc": "Package agents + workflow into a template"
+}

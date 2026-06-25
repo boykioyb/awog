@@ -34,13 +34,19 @@
         />
       </div>
       <button
-        class="p-1.5 rounded transition flex-shrink-0"
+        class="p-1.5 rounded transition flex-shrink-0 disabled:opacity-50"
         :style="{ color: t.textDim }"
         :title="tr('project.github.refresh')"
         :disabled="loading"
         @click="emit('refresh')"
+        @mouseenter="
+          (e) => {
+            if (!loading) (e.currentTarget as HTMLElement).style.color = t.text
+          }
+        "
+        @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
       >
-        <RefreshCw :size="14" :class="loading ? 'animate-spin' : ''" />
+        <RefreshCw :size="13" :class="loading ? 'animate-spin' : ''" />
       </button>
     </div>
 
@@ -83,44 +89,36 @@
         <button
           v-for="it in items"
           :key="it.number"
-          class="w-full text-left rounded px-3 py-2.5 transition flex items-start gap-3"
-          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+          class="w-full text-left rounded-lg px-3 py-2.5 transition flex items-start gap-3"
+          :style="elevated"
           @click="emit('select', it.number)"
           @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.borderColor = t.borderStrong)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.borderColor = t.border)"
+          @mouseleave="
+            (e) => ((e.currentTarget as HTMLElement).style.borderColor = elevated.borderColor ?? '')
+          "
         >
           <span
-            class="text-[12px] font-mono leading-none mt-1 flex-shrink-0"
-            :style="{ color: t.textFaint }"
-          >
-            #{{ it.number }}
-          </span>
+            class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5"
+            :style="{ background: stateDotColor(it.state) }"
+          />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap mb-1">
               <span
-                class="text-[12px] font-medium leading-none px-1.5 py-0.5 rounded"
-                :style="stateBadgeStyle(it.state)"
+                class="text-[12px] font-mono leading-none flex-shrink-0"
+                :style="{ color: t.textFaint }"
               >
-                {{ stateLabel(it.state) }}
+                #{{ it.number }}
               </span>
+              <span class="text-[1em] truncate" :style="{ color: t.text }">{{ it.title }}</span>
               <span
                 v-if="it.isDraft"
-                class="text-[12px] leading-none px-1.5 py-0.5 rounded"
+                class="text-[12px] leading-none px-2 py-0.5 rounded-full flex-shrink-0"
                 :style="{ background: t.bgActive, color: t.textDim }"
               >
                 {{ tr('project.github.draft') }}
               </span>
-              <span class="text-[1em] truncate" :style="{ color: t.text }">{{ it.title }}</span>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-              <span
-                v-for="lb in it.labels"
-                :key="lb.name"
-                class="text-[12px] leading-none px-1.5 py-0.5 rounded"
-                :style="labelStyle(lb.color)"
-              >
-                {{ lb.name }}
-              </span>
               <span
                 v-if="kind === 'pr' && it.baseRefName && it.headRefName"
                 class="text-[12px] font-mono leading-none inline-flex items-center gap-1"
@@ -130,10 +128,21 @@
                 <ArrowLeft :size="10" />
                 {{ it.headRefName }}
               </span>
-              <span class="text-[12px] leading-none" :style="{ color: t.textDim }">
+              <span
+                v-for="lb in it.labels"
+                :key="lb.name"
+                class="text-[12px] leading-none px-2 py-0.5 rounded-full"
+                :style="labelStyle(lb.color)"
+              >
+                {{ lb.name }}
+              </span>
+              <span
+                class="text-[12px] leading-none ml-auto font-mono"
+                :style="{ color: t.textDim }"
+              >
                 @{{ it.author.login }}
               </span>
-              <span class="text-[12px] leading-none" :style="{ color: t.textFaint }">
+              <span class="text-[12px] leading-none font-mono" :style="{ color: t.textFaint }">
                 {{ formatTime(it.updatedAt) }}
               </span>
             </div>
@@ -172,6 +181,7 @@ const emit = defineEmits<{
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
+const { elevated } = useGlass()
 const sidecar = useSidecar()
 
 const stateOptions = computed(() => {
@@ -214,19 +224,12 @@ const errorHint = computed(() => {
   }
 })
 
-const stateLabel = (state: GhThreadState): string => {
-  if (state === 'MERGED') return tr('project.github.state_merged')
-  if (state === 'CLOSED') return tr('project.github.state_closed')
-  return tr('project.github.state_open')
-}
-
-// Closed = danger (red), Merged = info (distinct color so it reads apart from
-// Open). Open uses the success accent on a neutral chip — the AWOG palette is
-// monochrome and has no success-tinted background token.
-const stateBadgeStyle = (state: GhThreadState): CSSProperties => {
-  if (state === 'MERGED') return { background: t.value.infoBg, color: t.value.info }
-  if (state === 'CLOSED') return { background: t.value.dangerBg, color: t.value.danger }
-  return { background: t.value.bgActive, color: t.value.success }
+// Leading state dot: Open = success (green), Closed = danger (red), Merged =
+// info. Mirrors the prototype's `ghSc` state-color mapping.
+const stateDotColor = (state: GhThreadState): string => {
+  if (state === 'MERGED') return t.value.info
+  if (state === 'CLOSED') return t.value.danger
+  return t.value.success
 }
 
 // GitHub label colors are 6-hex (no #). They come from the gh API, not user UI

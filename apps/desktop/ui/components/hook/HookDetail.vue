@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
-        class="w-10 h-10 rounded flex items-center justify-center"
+        class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
         <Zap :size="18" :style="{ color: t.textMuted }" />
@@ -12,7 +12,7 @@
         <div class="flex items-center gap-2 mb-1 flex-wrap">
           <h1 class="text-lg font-semibold" :style="{ color: t.text }">{{ hook.name }}</h1>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[12px] px-2 py-0.5 rounded-full font-mono leading-none"
             :style="{
               background: t.bgInput,
               color: t.textMuted,
@@ -21,12 +21,15 @@
           >
             {{ hook.event }}
           </span>
-          <span class="text-[1em] px-1.5 py-0.5 rounded uppercase" :style="modeBadgeStyle">
+          <span
+            class="text-[12px] px-2 py-0.5 rounded-full uppercase leading-none"
+            :style="modeBadgeStyle"
+          >
             {{ hook.runMode }}
           </span>
           <span
             v-if="hook.source && hook.source !== 'global'"
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[12px] px-2 py-0.5 rounded-full font-mono leading-none"
             :style="{
               background: t.bgInput,
               color: isProjectScoped ? t.accent : t.textDim,
@@ -37,7 +40,7 @@
           </span>
           <span
             v-if="isImported"
-            class="text-[1em] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+            class="text-[12px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 leading-none"
             :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
           >
             <Lock :size="10" />
@@ -77,7 +80,7 @@
          explicitly trusted before it can spawn. -->
     <div
       v-if="isProjectScoped && hook.trusted === false"
-      class="mb-6 p-3 rounded flex items-start gap-3"
+      class="mb-6 p-3 rounded-xl flex items-start gap-3"
       :style="{ background: t.warningBg, border: `1px solid ${t.warningBorder}` }"
     >
       <ShieldAlert :size="16" :style="{ color: t.warning }" class="flex-shrink-0 mt-0.5" />
@@ -91,7 +94,7 @@
           }}
         </div>
         <button
-          class="mt-2 px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+          class="mt-2 px-3 py-1.5 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition"
           :style="{ background: t.warning, color: t.bg }"
           @click="onTrust"
         >
@@ -141,7 +144,7 @@
     <!-- Command -->
     <Section :title="tr('hooks.detail.command')">
       <pre
-        class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
+        class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded-lg"
         :style="{
           color: t.textMuted,
           background: t.bgInput,
@@ -168,12 +171,12 @@
         <div
           v-for="(run, i) in hook.recentRuns"
           :key="i"
-          class="flex items-center gap-3 p-2 rounded text-[1em] flex-wrap"
+          class="flex items-center gap-3 p-2 rounded-lg text-[1em] flex-wrap"
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <span
             class="w-1.5 h-1.5 rounded-full flex-shrink-0"
-            :style="{ background: run.exitCode === 0 ? '#22c55e' : '#ef4444' }"
+            :style="{ background: run.exitCode === 0 ? t.statusOk : t.danger }"
           />
           <span class="font-mono" :style="{ color: t.text, minWidth: '50px' }">
             {{ run.exitCode === 0 ? 'OK' : `EXIT ${run.exitCode}` }}

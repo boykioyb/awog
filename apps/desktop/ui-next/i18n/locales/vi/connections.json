@@ -1,0 +1,14 @@
+{
+  "connections.search": "Tìm connection…",
+  "connections.new": "Thêm mới",
+  "connections.tools": "{n} tool",
+  "connections.toolsStatus": "{n} tool · {status}",
+  "connections.enableToggle": "Bật/tắt connection",
+  "connections.sech.command": "Command / URL",
+  "connections.sech.tools": "Tool",
+  "connections.sech.whitelist": "Whitelist theo agent",
+  "connections.sech.secret": "Khoá bí mật",
+  "connections.secretNoteBefore": "🔒 token tham chiếu",
+  "connections.secretNoteAfter": "→ OS keychain, không vào file/git.",
+  "connections.delete": "Xoá connection"
+}

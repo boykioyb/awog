@@ -1,0 +1,7 @@
+{
+  "templates.tag.agents": "{n} agent",
+  "templates.tag.agent": "{n} agent",
+  "templates.tag.workflow": "workflow",
+  "templates.new.title": "Tạo template mới",
+  "templates.new.desc": "Đóng gói agent + workflow thành mẫu"
+}

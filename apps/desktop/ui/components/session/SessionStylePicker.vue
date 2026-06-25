@@ -1,19 +1,20 @@
 <template>
   <div ref="rootRef" class="relative">
     <button
-      class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
+      class="inline-flex items-center gap-[5px] font-mono text-[12px] px-2 py-[3px] rounded-lg transition"
       :style="chipStyle"
       :title="chipTitle"
       @click="toggle"
     >
-      <Palette :size="10" />
+      <Palette :size="12" class="flex-shrink-0" />
       {{ chipLabel }}
-      <ChevronDown :size="9" :style="{ color: t.textDim }" />
+      <ChevronDown :size="11" class="flex-shrink-0 opacity-70" />
     </button>
 
     <div
       v-if="isOpen"
-      class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20 max-h-[60vh] overflow-y-auto"
+      class="absolute left-0 rounded-md py-1 z-20 max-h-[60vh] overflow-y-auto"
+      :class="placement === 'down' ? 'top-full mt-1' : 'bottom-full mb-1'"
       :style="popStyle"
     >
       <!-- Normal = the default: no style directive wired into the prompt. -->
@@ -86,11 +87,20 @@
 
 <script setup lang="ts">
 import { Check, ChevronDown, Palette } from 'lucide-vue-next'
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import type { Session } from '~/types'
 import { RESPONSE_STYLE_GROUPS, findResponseStyle } from '~/utils/response-styles'
+import { registerStylePicker } from '~/utils/style-picker-bus'
 
-const props = defineProps<{ session: Session }>()
+const props = withDefaults(
+  defineProps<{
+    session: Session
+    // Popover open direction. 'up' (default) suits the bottom composer; 'down'
+    // suits the top session header where this chip now lives.
+    placement?: 'up' | 'down'
+  }>(),
+  { placement: 'up' },
+)
 
 const { t } = useTheme()
 const { menu } = useGlass()
@@ -121,12 +131,17 @@ const popStyle = computed(() => ({
   minWidth: '280px',
 }))
 
-// Borderless chip (matches SessionChipsPopover): brightness carries the open /
-// active state, not a box outline.
-const chipStyle = computed(() => ({
-  background: 'transparent',
-  color: isOpen.value || activeStyle.value || noMarkdown.value ? t.value.text : t.value.textDim,
-}))
+// Outline chip (matches SessionChipsPopover `.chip.sm` recipe): transparent fill
+// + hairline border; active/open lifts to a neutral highlight (bgActive +
+// stronger border + full text), never an accent wash.
+const chipStyle = computed(() => {
+  const active = isOpen.value || !!activeStyle.value || noMarkdown.value
+  return {
+    background: active ? t.value.bgActive : 'transparent',
+    border: `1px solid ${active ? t.value.borderStrong : t.value.border}`,
+    color: active ? t.value.text : t.value.textDim,
+  }
+})
 
 const toggle = () => {
   isOpen.value = !isOpen.value
@@ -151,6 +166,26 @@ const selectNormal = () => {
   isOpen.value = false
 }
 
-// Opened by the `/style` session command (composer dispatch).
-defineExpose({ open: () => (isOpen.value = true) })
+const open = () => {
+  isOpen.value = true
+}
+
+// Opened by the `/style` session command. The composer dispatches it through
+// the per-session registry (the picker now lives in the header, a sibling, so a
+// template ref no longer reaches it). Register under the current session id and
+// keep it pointed at the live session if the header is reused across switches.
+watch(
+  () => props.session.id,
+  (id, prev) => {
+    if (prev) registerStylePicker(prev, null)
+    registerStylePicker(id, open)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  registerStylePicker(props.session.id, null)
+})
+
+// Kept for backward compat with any caller still holding a template ref.
+defineExpose({ open })
 </script>

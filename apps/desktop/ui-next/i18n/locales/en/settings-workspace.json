@@ -1,0 +1,9 @@
+{
+  "settings.workspace.git.name": "Git versioning",
+  "settings.workspace.git.desc": "All artifacts are committed to Git automatically",
+  "settings.workspace.git.enabled": "Enabled",
+  "settings.workspace.diagnostics.name": "Diagnostics",
+  "settings.workspace.diagnostics.desc": "Open the app log file — updater activity, engine output, and errors",
+  "settings.workspace.diagnostics.openLogs": "Open logs",
+  "settings.workspace.diagnostics.unavailable": "Logs are only available in the installed app"
+}

@@ -1,0 +1,7 @@
+/* Tailwind layers only. The design system lives in prototype.css (ported from
+   the UI spec); app-shell.css applies full-window overrides on top. This file is
+   prepended by @nuxtjs/tailwindcss (cssPath), so it loads first — Tailwind base
+   resets sit underneath the prototype design system. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -12,7 +12,7 @@
           <input
             :value="draft.id"
             placeholder="e.g. gitnexus"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             @input="(e: Event) => (draft.id = slugify((e.target as HTMLInputElement).value))"
           />
@@ -20,7 +20,7 @@
         <Field label="Display name">
           <input
             v-model="draft.name"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -30,7 +30,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
+          class="w-full rounded-lg px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -54,7 +54,7 @@
           <input
             v-model.number="draft.timeoutMs"
             type="number"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -66,7 +66,7 @@
           <input
             v-model="draft.command"
             placeholder="npx, uvx, /path/to/bin"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -74,7 +74,7 @@
           <textarea
             v-model="argsText"
             :rows="3"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[4rem]"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono resize-y min-h-[4rem]"
             :style="inputStyle"
           />
         </Field>
@@ -82,7 +82,7 @@
           <input
             v-model="draft.cwd"
             placeholder="${workspace}"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -99,7 +99,7 @@
           <input
             v-model="draft.url"
             placeholder="https://mcp.example.com/v1"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -117,7 +117,7 @@
 
       <div class="flex items-center gap-2 pt-2" :style="{ borderTop: `1px solid ${t.border}` }">
         <button
-          class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[1em] rounded font-medium transition disabled:opacity-50"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-[1em] rounded-lg font-medium transition disabled:opacity-50"
           :style="{
             background: t.bgInput,
             color: t.text,
@@ -136,7 +136,7 @@
       </div>
       <pre
         v-if="verifyResult && verifyResult.stderr && verifyResult.stderr.length > 0"
-        class="text-[1em] font-mono p-2 rounded max-h-32 overflow-y-auto"
+        class="text-[1em] font-mono p-2 rounded-lg max-h-32 overflow-y-auto"
         :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
         >{{ verifyResult.stderr.join('\n') }}</pre
       >

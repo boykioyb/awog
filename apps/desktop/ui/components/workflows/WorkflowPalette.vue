@@ -12,42 +12,34 @@
 <template>
   <div class="flex-1 overflow-y-auto" :style="{ borderTop: `1px solid ${t.border}` }">
     <div
-      class="px-3 py-2 sticky top-0"
+      class="px-3 py-2.5 sticky top-0 z-10"
       :style="{ background: t.bgPanel, borderBottom: `1px solid ${t.border}` }"
     >
-      <div class="text-[14px] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
+      <div class="text-[1em] uppercase tracking-wider font-medium" :style="{ color: t.textDim }">
         {{ tr('workflows.palette.title') }}
       </div>
     </div>
-    <div class="p-2 space-y-0.5">
+    <div class="p-2 space-y-1">
       <div
         v-for="agent in agents"
         :key="agent.id"
         :draggable="true"
-        class="px-2 py-1.5 rounded cursor-grab active:cursor-grabbing transition"
+        class="px-2.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition"
+        :style="{ border: `1px solid ${t.border}`, background: t.bgElevated }"
         @dragstart="(e) => onDragStart(e, agent.id)"
-        @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.background = t.bgHover)"
-        @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.background = 'transparent')"
+        @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.borderColor = t.borderStrong)"
+        @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.borderColor = t.border)"
       >
-        <div class="flex items-center gap-1.5 min-w-0">
-          <div class="text-[1em] truncate" :style="{ color: t.text }">
+        <div class="flex items-center gap-2 min-w-0">
+          <RoleBadge :role="agentRoleLabel(agent)" size="sm" />
+          <div class="text-[1em] truncate flex-1" :style="{ color: t.text }">
             {{ agent.name }}
           </div>
-          <span
-            class="text-[1em] uppercase tracking-wider font-semibold flex-shrink-0 px-1 py-0.5 rounded"
-            :style="{
-              color: t.textMuted,
-              background: t.bgInput,
-              border: `1px solid ${t.border}`,
-            }"
-          >
-            {{ agentRoleLabel(agent) }}
-          </span>
         </div>
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1.5 mt-1 ml-[28px]">
           <span
-            class="text-[12px] font-mono leading-none px-1 py-0.5 rounded flex-shrink-0 truncate"
-            :style="{ color: t.textFaint, background: t.bgInput }"
+            class="text-[12px] font-mono leading-none px-1.5 py-0.5 rounded-full flex-shrink-0 truncate"
+            :style="{ color: t.textFaint, background: t.bgInput, border: `1px solid ${t.border}` }"
             :title="scopeLabel(agent)"
           >
             {{ scopeLabel(agent) }}

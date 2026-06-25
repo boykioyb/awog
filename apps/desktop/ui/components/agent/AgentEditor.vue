@@ -10,7 +10,7 @@
     <template v-if="agent" #header-actions-extra>
       <button
         type="button"
-        class="px-2.5 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+        class="px-2.5 py-1.5 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition"
         :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
         title="Revise the whole agent (name / description / model / role / system prompt) via an LLM prompt"
         @click="onEditWithLlm"
@@ -37,7 +37,7 @@
             v-for="opt in sourceOptions"
             :key="opt.value"
             type="button"
-            class="text-[1em] px-2 py-1 rounded font-mono transition"
+            class="text-[1em] px-3 py-1 rounded-full font-mono transition"
             :style="sourceButtonStyle(opt.value === draft.source)"
             @click="setSource(opt.value)"
           >
@@ -60,7 +60,7 @@
           <input
             v-model="draft.name"
             placeholder="e.g. Tax Consultant, SEO Specialist"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -68,7 +68,7 @@
           <input
             v-model="draft.role"
             placeholder="DevOps, BA, Security..."
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
           <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
@@ -82,7 +82,7 @@
           v-model="draft.description"
           :rows="2"
           placeholder="When to use this agent — one sentence shown in pickers."
-          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[3rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] leading-relaxed resize-y min-h-[3rem]"
           :style="inputStyle"
         />
         <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
@@ -97,7 +97,7 @@
             :key="p.id"
             type="button"
             :disabled="!isProviderConnected(p.id)"
-            class="px-3 py-1.5 rounded text-[1em] transition disabled:cursor-not-allowed"
+            class="px-3 py-1.5 rounded-full text-[1em] transition disabled:cursor-not-allowed"
             :style="providerBtnStyle(p.id)"
             :title="isProviderConnected(p.id) ? '' : 'Connect this provider in Settings first'"
             @click="selectProvider(p.id)"
@@ -128,7 +128,7 @@
           <button
             v-for="m in modelOptions"
             :key="m.id"
-            class="text-left px-3 py-2 rounded transition"
+            class="text-left px-3 py-2 rounded-lg transition"
             :style="{
               background: draft.model === m.id ? t.bgActive : t.bgInput,
               border: `1px solid ${draft.model === m.id ? t.borderFocus : t.border}`,
@@ -170,7 +170,7 @@
           v-model="draft.systemPrompt"
           :rows="4"
           placeholder="You are a... Define the agent's role, personality, and how it should approach tasks."
-          class="w-full rounded px-2 py-1.5 text-[1em] leading-relaxed resize-y min-h-[6rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] leading-relaxed resize-y min-h-[6rem]"
           :style="inputStyle"
         />
       </div>
@@ -194,13 +194,13 @@
           </label>
         </div>
         <div
-          class="rounded p-2 space-y-0.5"
+          class="rounded-xl p-2 space-y-0.5"
           :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
         >
           <label
             v-for="s in ws.mcpServers"
             :key="s.id"
-            class="flex items-start gap-2 px-1.5 py-1.5 rounded cursor-pointer transition"
+            class="flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition"
             :style="{
               background: isMcpAllowed(s.id) ? t.bgActive : 'transparent',
               opacity: s.enabled ? 1 : 0.55,
@@ -217,7 +217,7 @@
                 <span class="text-[1em] font-mono" :style="{ color: t.text }">{{ s.name }}</span>
                 <span
                   v-if="!s.enabled"
-                  class="text-[1em] uppercase tracking-wider px-1 py-0.5 rounded"
+                  class="text-[12px] leading-none uppercase tracking-wider px-1.5 py-0.5 rounded-full font-mono"
                   :style="{
                     color: t.textFaint,
                     background: t.bgPanel,

@@ -10,89 +10,90 @@
     <template v-else>
       <!-- Tab strip -->
       <div
-        class="flex items-center gap-1 px-2 py-1.5 flex-shrink-0"
+        class="flex items-center gap-0.5 px-3 py-1.5 flex-shrink-0"
         :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <button
           v-for="tab in TABS"
           :key="tab.id"
           type="button"
-          class="px-3 py-1 text-[1em] uppercase tracking-wider rounded transition"
+          class="px-3 py-1 text-[1em] font-semibold uppercase tracking-wider rounded-lg transition"
           :style="{
             background: activeTab === tab.id ? t.bgActive : 'transparent',
             color: activeTab === tab.id ? t.text : t.textDim,
-            border: `1px solid ${activeTab === tab.id ? t.border : 'transparent'}`,
           }"
           @click="activeTab = tab.id"
         >
           {{ tab.label }}
         </button>
         <span class="flex-1" />
-        <span class="text-[1em] font-mono" :style="{ color: t.accent }">
+        <span class="text-[12px] leading-none font-mono" :style="{ color: t.accent }">
           {{ detail.commit.shortHash }}
         </span>
       </div>
 
       <!-- Commit tab -->
-      <div v-if="activeTab === 'commit'" class="flex-1 overflow-y-auto p-4 space-y-3">
+      <div v-if="activeTab === 'commit'" class="flex-1 overflow-y-auto p-4 space-y-3.5">
         <!-- Author card -->
         <div
-          class="rounded px-3 py-2"
-          :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
+          class="rounded-xl px-3.5 py-3"
+          :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
-          <div class="text-[1em] uppercase tracking-wider mb-1" :style="{ color: t.textFaint }">
+          <div
+            class="text-[12px] leading-none uppercase tracking-wider mb-2.5"
+            :style="{ color: t.textDim }"
+          >
             Author
           </div>
-          <div class="flex items-center gap-2">
-            <span
-              class="inline-flex items-center justify-center text-[1em] rounded-full"
-              :style="{
-                width: '24px',
-                height: '24px',
-                background: t.bgPanel,
-                color: t.textMuted,
-                border: `1px solid ${t.border}`,
-              }"
-            >
-              {{ initials(detail.commit.authorName) }}
-            </span>
+          <div class="flex items-center gap-2.5">
+            <GitAuthorAvatar
+              :name="detail.commit.authorName"
+              :email="detail.commit.authorEmail"
+              :size="30"
+            />
             <div class="flex-1 min-w-0">
-              <div class="text-[1em] truncate" :style="{ color: t.text }">
+              <div class="text-[1em] font-semibold truncate" :style="{ color: t.text }">
                 {{ detail.commit.authorName }}
               </div>
-              <div class="text-[1em] truncate" :style="{ color: t.textDim }">
+              <div
+                class="text-[12px] leading-none font-mono mt-0.5 truncate"
+                :style="{ color: t.textMuted }"
+              >
                 {{ detail.commit.authorEmail }}
               </div>
             </div>
-            <div class="text-[1em] text-right" :style="{ color: t.textDim }">
+            <div
+              class="text-[12px] leading-none flex-shrink-0 text-right"
+              :style="{ color: t.textDim }"
+            >
               {{ formatDateTime(detail.commit.date) }}
             </div>
           </div>
         </div>
 
         <!-- SHA + parents -->
-        <div class="flex flex-wrap items-center gap-2 text-[1em]">
-          <span :style="{ color: t.textFaint }">SHA</span>
+        <div class="flex flex-wrap items-center gap-3 text-[1em]">
+          <span class="w-[46px] flex-shrink-0" :style="{ color: t.textDim }">SHA</span>
           <button
             type="button"
-            class="font-mono px-2 py-0.5 rounded transition"
-            :style="{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }"
+            class="font-mono text-[1em] px-2.5 py-1 rounded-lg transition select-all"
+            :style="{ background: t.bgElevated, color: t.text, border: `1px solid ${t.border}` }"
             title="Click to copy full SHA"
             @click="onCopyHash(detail.commit.hash)"
           >
             {{ detail.commit.hash }}
           </button>
         </div>
-        <div v-if="detail.commit.parents.length > 0" class="flex flex-wrap items-center gap-2">
-          <span class="text-[1em]" :style="{ color: t.textFaint }">
+        <div v-if="detail.commit.parents.length > 0" class="flex flex-wrap items-center gap-3">
+          <span class="text-[1em] w-[46px] flex-shrink-0" :style="{ color: t.textDim }">
             Parent{{ detail.commit.parents.length > 1 ? 's' : '' }}
           </span>
           <button
             v-for="p in detail.commit.parents"
             :key="p"
             type="button"
-            class="font-mono text-[1em] px-2 py-0.5 rounded transition"
-            :style="{ background: t.bgInput, color: t.accent, border: `1px solid ${t.border}` }"
+            class="font-mono text-[12px] leading-none px-2 py-1 rounded-full transition"
+            :style="{ background: t.bgElevated, color: t.accent, border: `1px solid ${t.border}` }"
             @click="emit('select-parent', p)"
           >
             {{ p.slice(0, 7) }}
@@ -101,12 +102,12 @@
 
         <!-- Message -->
         <div>
-          <div class="text-[1em] font-medium" :style="{ color: t.text }">
+          <div class="text-[1em] font-semibold leading-relaxed" :style="{ color: t.text }">
             {{ detail.commit.subject }}
           </div>
           <div
             v-if="detail.commit.body"
-            class="text-[1em] mt-2 whitespace-pre-wrap"
+            class="text-[1em] mt-2 whitespace-pre-wrap leading-relaxed"
             :style="{ color: t.textMuted }"
           >
             {{ detail.commit.body }}
@@ -121,30 +122,24 @@
           class="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
           :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
         >
-          <span
-            class="inline-flex items-center justify-center text-[1em] rounded-full flex-shrink-0 font-medium"
-            :style="{
-              width: '22px',
-              height: '22px',
-              background: t.accent,
-              color: t.accentText,
-            }"
-          >
-            {{ initials(detail.commit.authorName) }}
-          </span>
+          <GitAuthorAvatar
+            :name="detail.commit.authorName"
+            :email="detail.commit.authorEmail"
+            :size="20"
+          />
           <span class="text-[1em] truncate flex-shrink-0 max-w-[10rem]" :style="{ color: t.text }">
             {{ detail.commit.authorName }}
           </span>
           <button
             type="button"
-            class="text-[1em] font-mono px-1.5 py-0.5 rounded transition flex-shrink-0"
-            :style="{ background: t.bgInput, color: t.accent, border: `1px solid ${t.border}` }"
+            class="text-[12px] leading-none font-mono px-2 py-0.5 rounded-full transition flex-shrink-0"
+            :style="{ background: t.bgElevated, color: t.accent, border: `1px solid ${t.border}` }"
             title="Copy short hash"
             @click="onCopyHash(detail.commit.shortHash)"
           >
             {{ detail.commit.shortHash }}
           </button>
-          <span class="text-[1em] flex-shrink-0" :style="{ color: t.textDim }">
+          <span class="text-[12px] leading-none flex-shrink-0" :style="{ color: t.textDim }">
             {{ relativeDate(detail.commit.date) }}
           </span>
           <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.textMuted }">
@@ -234,29 +229,39 @@
         >
           No files in this commit
         </div>
-        <div v-else class="flex-1 overflow-y-auto py-1">
-          <!-- v1 fallback: flat list-by-path. A real nested tree component can
-               replace this once the rest of History UX settles. -->
-          <button
-            v-for="(f, i) in detail.files"
-            :key="f.path"
-            type="button"
-            class="w-full flex items-center gap-2 px-3 py-1 text-left text-[1em] font-mono transition"
-            :style="{
-              background: activeFileIndex === i ? t.bgActive : 'transparent',
-              color: t.text,
-            }"
-            @click="onSelectTreeFile(i, f.path)"
-          >
-            <span
-              class="inline-flex items-center justify-center w-4 h-4 text-[1em] rounded"
-              :style="fileStatusStyle(f)"
-              :title="fileStatusLabel(f)"
+        <div v-else class="flex-1 overflow-y-auto py-1.5">
+          <!-- Simple indented tree of changed files. Directory header rows give
+               the prototype's `.ftree` indented look; files nest one level in. -->
+          <template v-for="row in fileTreeRows" :key="row.id">
+            <div
+              v-if="row.kind === 'dir'"
+              class="flex items-center gap-1.5 px-3 py-1 text-[1em] font-mono select-none"
+              :style="{ color: t.textDim, paddingLeft: `${12 + row.depth * 14}px` }"
             >
-              {{ fileStatusLetter(f) }}
-            </span>
-            <span class="truncate" :style="{ color: t.textMuted }">{{ f.path }}</span>
-          </button>
+              <Folder :size="12" class="flex-shrink-0" :style="{ color: t.textFaint }" />
+              <span class="truncate">{{ row.label }}/</span>
+            </div>
+            <button
+              v-else
+              type="button"
+              class="w-full flex items-center gap-2 px-3 py-1 text-left text-[1em] font-mono transition"
+              :style="{
+                background: activeFileIndex === row.fileIndex ? t.bgActive : 'transparent',
+                borderLeft: `2px solid ${activeFileIndex === row.fileIndex ? t.accent : 'transparent'}`,
+                paddingLeft: `${12 + (row.depth + 1) * 14}px`,
+              }"
+              @click="onSelectTreeFile(row.fileIndex, detail.files[row.fileIndex]!.path)"
+            >
+              <span
+                class="inline-flex items-center justify-center w-4 h-4 text-[12px] leading-none rounded flex-shrink-0"
+                :style="fileStatusStyle(detail.files[row.fileIndex]!)"
+                :title="fileStatusLabel(detail.files[row.fileIndex]!)"
+              >
+                {{ fileStatusLetter(detail.files[row.fileIndex]!) }}
+              </span>
+              <span class="truncate" :style="{ color: t.text }">{{ row.label }}</span>
+            </button>
+          </template>
         </div>
       </div>
     </template>
@@ -264,7 +269,7 @@
 </template>
 
 <script setup lang="ts">
-import { Copy } from 'lucide-vue-next'
+import { Copy, Folder } from 'lucide-vue-next'
 import type { GitCommit, GitFileDiff } from '~/types'
 
 type Props = {
@@ -292,6 +297,42 @@ const activeFile = computed<GitFileDiff | null>(
   () => props.detail?.files[activeFileIndex.value] ?? null,
 )
 
+// FILE TREE tab — a simple indented tree derived from the changed-file paths.
+// Pure presentation grouping of `detail.files` by directory; files keep their
+// original index so selection maps straight back into the flat list.
+type FileTreeRow =
+  | { kind: 'dir'; id: string; label: string; depth: number }
+  | { kind: 'file'; id: string; label: string; depth: number; fileIndex: number }
+
+const fileTreeRows = computed<FileTreeRow[]>(() => {
+  const files = props.detail?.files ?? []
+  const sorted = files
+    .map((f, i) => ({ path: f.path, idx: i }))
+    .sort((a, b) => a.path.localeCompare(b.path))
+  const rows: FileTreeRow[] = []
+  let prevDirs: string[] = []
+  for (const { path, idx } of sorted) {
+    const segs = path.split('/')
+    const dirs = segs.slice(0, -1)
+    const leaf = segs.at(-1) ?? path
+    // Find the first depth where this row's directory chain diverges from the
+    // previous one — emit a header for that level and everything deeper.
+    let firstDiff = 0
+    while (firstDiff < dirs.length && prevDirs[firstDiff] === dirs[firstDiff]) firstDiff += 1
+    for (let depth = firstDiff; depth < dirs.length; depth += 1) {
+      rows.push({
+        kind: 'dir',
+        id: `d:${dirs.slice(0, depth + 1).join('/')}`,
+        label: dirs[depth]!,
+        depth,
+      })
+    }
+    prevDirs = dirs
+    rows.push({ kind: 'file', id: `f:${path}`, label: leaf, depth: dirs.length, fileIndex: idx })
+  }
+  return rows
+})
+
 // Heuristic A/M/D/R classifier — sidecar's `GitFileDiff` doesn't carry an
 // explicit status field for commits, so we infer from the parse result.
 // File Tree shows the marker for at-a-glance UX; if the marker is wrong the
@@ -314,14 +355,6 @@ const fileStatusStyle = (f: GitFileDiff) => {
     return { background: tk.infoBg, color: tk.info, border: `1px solid ${tk.infoBorder}` }
   }
   return { background: tk.bgInput, color: tk.gitModified, border: `1px solid ${tk.border}` }
-}
-
-const initials = (name: string): string => {
-  const trimmed = name.trim()
-  if (!trimmed) return '?'
-  const parts = trimmed.split(/\s+/)
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
-  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase()
 }
 
 const formatDateTime = (iso: string): string => {

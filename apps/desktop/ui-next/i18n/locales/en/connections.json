@@ -1,0 +1,14 @@
+{
+  "connections.search": "Search connections…",
+  "connections.new": "Add new",
+  "connections.tools": "{n} tools",
+  "connections.toolsStatus": "{n} tools · {status}",
+  "connections.enableToggle": "Toggle connection",
+  "connections.sech.command": "Command / URL",
+  "connections.sech.tools": "Tools",
+  "connections.sech.whitelist": "Per-agent whitelist",
+  "connections.sech.secret": "Secret",
+  "connections.secretNoteBefore": "🔒 token references",
+  "connections.secretNoteAfter": "→ OS keychain, never written to file/git.",
+  "connections.delete": "Delete connection"
+}

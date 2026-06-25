@@ -1,0 +1,9 @@
+{
+  "settings.workspace.git.name": "Quản lý phiên bản Git",
+  "settings.workspace.git.desc": "Mọi artifact được tự động commit vào Git",
+  "settings.workspace.git.enabled": "Đang bật",
+  "settings.workspace.diagnostics.name": "Chẩn đoán",
+  "settings.workspace.diagnostics.desc": "Mở file log của app — hoạt động cập nhật, output engine và lỗi",
+  "settings.workspace.diagnostics.openLogs": "Mở log",
+  "settings.workspace.diagnostics.unavailable": "Log chỉ có ở bản app đã cài"
+}

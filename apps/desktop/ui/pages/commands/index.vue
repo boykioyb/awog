@@ -25,7 +25,7 @@
         </AppButton>
       </div>
 
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto p-2">
         <div
           v-if="filtered.length === 0"
           class="px-4 py-8 text-center text-[1em]"
@@ -36,86 +36,110 @@
         <template v-for="(group, gi) in grouped" :key="group.key">
           <button
             v-if="showHeaders"
-            class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
+            class="w-full px-2 py-1.5 flex items-center gap-1.5 transition rounded-lg"
             :style="{
               color: t.textDim,
               background: groupHover === group.key ? t.bgHover : 'transparent',
-              marginTop: gi > 0 ? '4px' : '0',
+              marginTop: gi > 0 ? '8px' : '0',
             }"
             @click="toggleGroup(group.key)"
             @mouseenter="groupHover = group.key"
             @mouseleave="groupHover = null"
           >
             <ChevronDown
-              :size="10"
+              :size="12"
               :style="{
                 transform: collapsedGroups[group.key] ? 'rotate(-90deg)' : 'none',
                 transition: 'transform 0.15s',
               }"
             />
             <span
-              class="text-[12px] uppercase tracking-wider font-semibold flex-1 text-left truncate"
+              class="text-[1em] uppercase tracking-wider font-semibold flex-1 text-left truncate"
               :style="{ color: t.text }"
             >
               {{ group.label }}
             </span>
-            <span class="text-[12px] font-mono leading-none" :style="{ color: t.textFaint }">
+            <span
+              class="text-[12px] font-mono leading-none px-1.5 py-0.5 rounded-full"
+              :style="{ color: t.textFaint, border: `1px solid ${t.border}` }"
+            >
               {{ group.items.length }}
             </span>
           </button>
           <template v-if="!showHeaders || !collapsedGroups[group.key]">
-            <div
-              v-for="cmd in group.items"
-              :key="commandKey(cmd)"
-              class="w-full px-3 py-2 cursor-pointer transition"
-              :style="{
-                background: pill(selectedKey === commandKey(cmd)).background,
-                borderBottom: `1px solid ${t.border}`,
-                borderLeft: `2px solid ${selectedKey === commandKey(cmd) ? t.accent : 'transparent'}`,
-                opacity: cmd.enabled ? 1 : 0.55,
-              }"
-              @click="onSelect(cmd)"
-              @contextmenu="onContextMenu($event, cmd)"
-            >
-              <div class="flex items-center gap-2 mb-0.5">
-                <Slash :size="11" :style="{ color: t.textDim }" />
-                <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
-                  /{{ cmd.name }}
-                </span>
-                <Lock
-                  v-if="cmd.readOnly"
-                  :size="11"
-                  class="flex-shrink-0"
-                  :style="{ color: t.textFaint }"
-                  :title="tr('common.imported_readonly')"
-                />
-                <span
-                  v-else-if="!cmd.enabled"
-                  class="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  :style="{ background: t.textFaint }"
-                  :title="tr('common.disabled')"
-                />
-                <button
-                  class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
-                  :style="{ color: t.textMuted }"
-                  :title="tr('common.actions', { name: cmd.name })"
-                  @click.stop="openMenuFromButton($event, cmd)"
-                >
-                  <MoreHorizontal :size="13" />
-                </button>
-              </div>
-              <div class="flex items-center gap-1.5 pl-5">
-                <span class="text-[1em] truncate" :style="{ color: t.textDim }">
-                  {{ cmd.description || '—' }}
-                </span>
-                <span
-                  v-if="cmd.source && cmd.source !== 'global'"
-                  class="text-[12px] px-1 rounded font-mono leading-none flex-shrink-0"
-                  :style="sourceBadgeStyle(cmd)"
-                  :title="sourceLabel(cmd)"
-                >
-                  {{ sourceLabel(cmd) }}
-                </span>
+            <div class="space-y-1" :class="showHeaders ? 'mt-1' : ''">
+              <div
+                v-for="cmd in group.items"
+                :key="commandKey(cmd)"
+                class="group/row w-full px-2.5 py-2 cursor-pointer transition rounded-lg"
+                :style="{
+                  background:
+                    selectedKey === commandKey(cmd)
+                      ? t.bgActive
+                      : pill(false, hoverKey === commandKey(cmd)).background,
+                  border: `1px solid ${selectedKey === commandKey(cmd) ? t.border : 'transparent'}`,
+                  borderLeft: `2px solid ${selectedKey === commandKey(cmd) ? t.accent : 'transparent'}`,
+                  opacity: cmd.enabled ? 1 : 0.55,
+                }"
+                @mouseenter="hoverKey = commandKey(cmd)"
+                @mouseleave="hoverKey = null"
+                @click="onSelect(cmd)"
+                @contextmenu="onContextMenu($event, cmd)"
+              >
+                <div class="flex items-center gap-2.5">
+                  <div
+                    class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+                    :style="{
+                      background: t.bgInput,
+                      border: `1px solid ${t.border}`,
+                      color: t.textMuted,
+                    }"
+                  >
+                    <Slash :size="12" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span
+                        class="text-[1em] font-mono font-medium truncate"
+                        :style="{ color: t.text }"
+                      >
+                        /{{ cmd.name }}
+                      </span>
+                      <span
+                        v-if="cmd.source && cmd.source !== 'global'"
+                        class="text-[12px] px-1.5 rounded-full font-mono leading-none flex-shrink-0 inline-flex items-center"
+                        :style="sourceBadgeStyle(cmd)"
+                        :title="sourceLabel(cmd)"
+                      >
+                        {{ sourceLabel(cmd) }}
+                      </span>
+                    </div>
+                    <div class="text-[1em] truncate" :style="{ color: t.textDim }">
+                      {{ cmd.description || '—' }}
+                    </div>
+                  </div>
+                  <Lock
+                    v-if="cmd.readOnly"
+                    :size="12"
+                    class="flex-shrink-0"
+                    :style="{ color: t.textFaint }"
+                    :title="tr('common.imported_readonly')"
+                  />
+                  <span
+                    v-else-if="!cmd.enabled"
+                    class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    :style="{ background: t.textFaint }"
+                    :title="tr('common.disabled')"
+                  />
+                  <button
+                    class="p-1 rounded flex-shrink-0 transition opacity-0 group-hover/row:opacity-100"
+                    :style="{ color: t.textMuted }"
+                    :title="tr('common.actions', { name: cmd.name })"
+                    @click.stop="openMenuFromButton($event, cmd)"
+                  >
+                    <MoreHorizontal :size="13" />
+                  </button>
+                </div>
               </div>
             </div>
           </template>
@@ -225,13 +249,15 @@ const sourceLabel = (c: Command): string => tr(SOURCE_KEY[c.source ?? 'global'])
 const sourceBadgeStyle = (c: Command): CSSProperties => {
   const accent = c.source === 'project'
   return {
-    background: t.value.bgInput,
+    paddingTop: '2px',
+    paddingBottom: '2px',
     color: accent ? t.value.accent : t.value.textDim,
     border: `1px solid ${accent ? t.value.accent : t.value.border}`,
   }
 }
 
 const searchQuery = ref('')
+const hoverKey = ref<string | null>(null)
 const mode = ref<'view' | 'edit'>('view')
 const selectedKey = ref<string | null>(null)
 const bodyEditing = ref(false)

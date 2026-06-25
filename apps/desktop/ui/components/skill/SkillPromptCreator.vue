@@ -24,7 +24,7 @@
         </span>
         <span class="flex-1" />
         <button
-          class="p-1 rounded transition"
+          class="p-1 rounded-lg transition"
           :style="{ color: t.textDim }"
           title="Close"
           @click="onClose"

@@ -24,7 +24,7 @@
       </div>
       <div v-if="detailPath" ref="openMenuRef" class="relative flex-shrink-0">
         <button
-          class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
+          class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[1em] transition"
           :style="{
             background: openMenuOpen ? t.bgActive : t.bgInput,
             color: t.text,
@@ -132,7 +132,7 @@
                  between the git-style diff and the full file content. -->
             <div
               v-if="canToggleFile"
-              class="inline-flex rounded overflow-hidden"
+              class="inline-flex rounded-lg overflow-hidden"
               :style="{ border: `1px solid ${t.border}` }"
             >
               <button
@@ -153,7 +153,7 @@
             <!-- Diff view: unified ↔ split. -->
             <div
               v-if="showingDiff"
-              class="inline-flex rounded overflow-hidden"
+              class="inline-flex rounded-lg overflow-hidden"
               :style="{ border: `1px solid ${t.border}` }"
             >
               <button
@@ -174,7 +174,7 @@
             <!-- File view: markdown preview ↔ raw + copy. -->
             <div
               v-if="showingFile && isMarkdown"
-              class="inline-flex rounded overflow-hidden"
+              class="inline-flex rounded-lg overflow-hidden"
               :style="{ border: `1px solid ${t.border}` }"
             >
               <button
@@ -281,7 +281,7 @@
           </div>
           <pre
             v-if="detail.output"
-            class="font-mono text-[1em] leading-[1.55] whitespace-pre-wrap px-3 py-2 rounded"
+            class="font-mono text-[1em] leading-[1.55] whitespace-pre-wrap px-3 py-2 rounded-lg"
             :style="{
               color: t.textMuted,
               background: t.bgInput,

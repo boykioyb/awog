@@ -6,13 +6,16 @@ import { app } from 'electron'
 // Dev layout (compiled main lives at apps/desktop/electron/dist/main.js):
 //   __dirname = apps/desktop/electron/dist
 //   engine    = apps/desktop/sidecar/dist/lib/src/index.js  (tsc output)
-//   ui        = served by Nuxt dev server at http://localhost:3030
+//   ui        = served by Nuxt dev server (ui-next on :3031 by default)
 //
 // Packaged layout (electron-builder, engine + UI shipped as extraResources):
 //   engine    = <resources>/sidecar/lib/src/index.js
 //   ui        = <resources>/ui/index.html
 
-export const DEV_URL = 'http://localhost:3030'
+// Dev UI dev-server URL. Defaults to the ui-next rebuild (:3031); override with
+// AWOG_DEV_URL to point at the legacy ui (http://localhost:3030) or another host.
+// See tasks/session-screen-checklist.md §10 (Electron → ui-next).
+export const DEV_URL = process.env.AWOG_DEV_URL ?? 'http://localhost:3031'
 
 export function enginePath(): string {
   if (app.isPackaged) {

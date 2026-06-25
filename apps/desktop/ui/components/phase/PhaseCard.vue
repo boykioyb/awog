@@ -1,13 +1,10 @@
 <template>
   <div
-    class="rounded-md"
+    class="rounded-xl overflow-hidden transition"
     :style="{
       background: t.bgElevated,
-      border: `1px solid ${
-        phase.status === 'running' || phase.status === 'waiting_approval'
-          ? t.borderStrong
-          : t.border
-      }`,
+      border: `1px solid ${isActive ? t.accent : t.border}`,
+      boxShadow: isActive ? `0 0 0 1px ${t.accent}` : 'none',
     }"
   >
     <button
@@ -20,18 +17,26 @@
       @mouseenter="headerHover = true"
       @mouseleave="headerHover = false"
     >
-      <div class="flex items-center gap-2 flex-shrink-0" :style="{ minWidth: '32px' }">
-        <span class="text-[1em] font-mono" :style="{ color: t.textFaint }">
-          {{ String(index).padStart(2, '0') }}
-        </span>
+      <span
+        class="text-[12px] font-mono flex-shrink-0 leading-none"
+        :style="{ color: t.textFaint, minWidth: '16px' }"
+      >
+        {{ String(index).padStart(2, '0') }}
+      </span>
+      <div
+        class="flex items-center justify-center rounded-lg flex-shrink-0"
+        :style="{
+          width: '24px',
+          height: '24px',
+          background: statusBox.bg,
+          color: statusBox.fg,
+        }"
+      >
         <component
           :is="StatusIcon"
           :size="13"
           :class="phase.status === 'running' ? 'animate-pulse' : ''"
-          :style="{
-            color: statusColor,
-            fill: phase.status === 'completed' ? statusColor : 'none',
-          }"
+          :style="{ fill: phase.status === 'completed' ? 'currentColor' : 'none' }"
         />
       </div>
       <div class="flex-1 min-w-0">
@@ -40,13 +45,13 @@
             {{ agent.name }}
           </span>
         </div>
-        <div class="text-[1em] font-mono" :style="{ color: t.textDim }">
+        <div class="text-[1em] font-mono truncate" :style="{ color: t.textDim }">
           {{ phase.skillName }}
         </div>
       </div>
       <span
         v-if="phase.runs.length > 1"
-        class="text-[1em] px-1.5 py-0.5 rounded"
+        class="text-[12px] leading-none px-2 py-0.5 rounded-full font-mono flex-shrink-0"
         :style="{
           background: t.bgInput,
           color: t.textDim,
@@ -57,7 +62,7 @@
       </span>
       <span
         v-if="phase.status === 'waiting_approval'"
-        class="text-[1em] px-1.5 py-0.5 rounded"
+        class="text-[12px] leading-none px-2 py-0.5 rounded-full font-medium flex-shrink-0"
         :style="{
           background: t.warningBg,
           color: t.warning,
@@ -68,19 +73,23 @@
       </span>
       <span
         v-if="phase.status === 'running' && currentRun"
-        class="text-[1em] inline-flex items-center gap-1"
+        class="text-[12px] leading-none inline-flex items-center gap-1 flex-shrink-0"
         :style="{ color: t.textDim }"
       >
         <Activity :size="10" class="animate-pulse" />
         Live
       </span>
-      <span v-if="currentRun?.duration" class="text-[1em] font-mono" :style="{ color: t.textDim }">
+      <span
+        v-if="currentRun?.duration"
+        class="text-[12px] leading-none font-mono flex-shrink-0"
+        :style="{ color: t.textDim }"
+      >
         {{ currentRun.duration }}
       </span>
       <ChevronDown
         v-if="isInteractive"
         :size="14"
-        class="transition-transform"
+        class="transition-transform flex-shrink-0"
         :style="{
           color: t.textDim,
           transform: expanded ? 'rotate(180deg)' : 'none',
@@ -107,7 +116,7 @@
         <button
           v-for="r in phase.runs"
           :key="r.version"
-          class="text-[1em] px-2 py-0.5 rounded transition flex items-center gap-1 flex-shrink-0"
+          class="text-[12px] leading-none px-2 py-0.5 rounded-full font-mono transition flex items-center gap-1 flex-shrink-0"
           :style="{
             background:
               (selectedRunVersion || latestRun!.version) === r.version ? t.bgActive : 'transparent',
@@ -139,7 +148,7 @@
           class="py-2 flex items-center gap-1.5 text-[1em] transition"
           :style="{
             color: activeTab === tab.id ? t.text : t.textDim,
-            borderBottom: `1.5px solid ${activeTab === tab.id ? t.text : 'transparent'}`,
+            borderBottom: `1.5px solid ${activeTab === tab.id ? t.accent : 'transparent'}`,
             marginBottom: '-1px',
           }"
           @click.stop="activeTab = tab.id"
@@ -148,31 +157,33 @@
           {{ tab.label }}
           <span
             v-if="tab.badge != null"
-            class="px-1 py-0 text-[1em] rounded"
+            class="px-1.5 py-0.5 text-[12px] leading-none rounded-full font-mono"
             :style="{
               background: t.bgInput,
               color: t.textDim,
               border: `1px solid ${t.border}`,
+              minWidth: '18px',
             }"
           >
             {{ tab.badge }}
           </span>
         </button>
-        <div class="ml-auto flex items-center gap-1">
+        <div class="ml-auto flex items-center gap-1.5 py-1">
           <button
             v-if="phase.status === 'waiting_approval'"
-            class="px-2 py-1 text-[1em] rounded font-medium transition"
+            class="px-2.5 py-1 text-[1em] rounded-lg font-medium transition inline-flex items-center gap-1"
             :style="{ background: t.accent, color: t.accentText }"
             @click.stop="emit('approve')"
           >
+            <Check :size="11" />
             Approve
           </button>
           <button
             v-if="canRerun"
-            class="px-2 py-1 text-[1em] rounded transition inline-flex items-center gap-1"
+            class="px-2.5 py-1 text-[1em] rounded-lg transition inline-flex items-center gap-1"
             :style="{
               color: t.text,
-              border: `1px solid ${t.borderStrong}`,
+              border: `1px solid ${t.border}`,
               background: rerunHover ? t.bgHover : 'transparent',
             }"
             @click.stop="showRerunModal = true"
@@ -214,7 +225,15 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, ChevronDown, History, RotateCcw, FileText, MessageSquare } from 'lucide-vue-next'
+import {
+  Activity,
+  Check,
+  ChevronDown,
+  History,
+  RotateCcw,
+  FileText,
+  MessageSquare,
+} from 'lucide-vue-next'
 import type { Phase, WorkflowNode, Agent, Skill, TaskStatus } from '~/types'
 import { STATUS_META } from '~/utils/status-meta'
 import { countTraceItems } from '~/utils/mock-output'
@@ -270,12 +289,21 @@ const currentRun = computed(() =>
 const meta = computed(() => STATUS_META[props.phase.status])
 const StatusIcon = computed(() => meta.value.icon)
 
-const statusColor = computed(() => {
-  if (props.phase.status === 'running') return t.value.text
-  if (props.phase.status === 'waiting_approval') return t.value.warning
-  if (props.phase.status === 'completed') return t.value.success
-  return t.value.textFaint
+// Status icon box: ✓ done + running read as accent (active work), waiting →
+// warning, idle/pending → neutral bgActive. Tinted square mirrors the prototype
+// `.node .nx` pipeline node chip.
+const statusBox = computed(() => {
+  if (props.phase.status === 'completed') return { bg: t.value.bgActive, fg: t.value.accent }
+  if (props.phase.status === 'running') return { bg: t.value.bgActive, fg: t.value.accent }
+  if (props.phase.status === 'waiting_approval')
+    return { bg: t.value.warningBg, fg: t.value.warning }
+  return { bg: t.value.bgActive, fg: t.value.textDim }
 })
+
+// Accent ring/border when the node is the live focus (running or awaiting input).
+const isActive = computed(
+  () => props.phase.status === 'running' || props.phase.status === 'waiting_approval',
+)
 
 const isInteractive = computed(() => props.phase.runs.length > 0)
 const canRerun = computed(

@@ -5,7 +5,7 @@
         <span class="text-[1em]" :style="{ color: t.textDim }">Label</span>
         <input
           v-model="draft.label"
-          class="mt-1 w-full rounded px-2 py-1.5 text-[1em]"
+          class="mt-1 w-full rounded-lg px-2.5 py-2 text-[1em]"
           :style="inputStyle"
           placeholder="OpenRouter"
           required
@@ -39,7 +39,7 @@
       </span>
       <input
         v-model="draft.baseUrl"
-        class="mt-1 w-full rounded px-2 py-1.5 text-[1em] font-mono"
+        class="mt-1 w-full rounded-lg px-2.5 py-2 text-[1em] font-mono"
         :style="inputStyle"
         :placeholder="baseUrlPlaceholder"
         required
@@ -52,13 +52,13 @@
         <input
           v-model="draft.apiKey"
           :type="reveal ? 'text' : 'password'"
-          class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+          class="flex-1 rounded-lg px-2.5 py-2 text-[1em] font-mono"
           :style="inputStyle"
           :placeholder="editing ? 'Enter a new key to replace' : 'sk-…'"
         />
         <button
           type="button"
-          class="px-2 py-1.5 rounded text-[1em] flex items-center"
+          class="px-2 py-2 rounded-lg text-[1em] flex items-center"
           :style="iconBtnStyle"
           :title="reveal ? 'Hide' : 'Show'"
           @click="reveal = !reveal"
@@ -90,15 +90,15 @@
     <div class="flex items-center justify-end gap-2 pt-1">
       <button
         type="button"
-        class="px-3 py-1.5 text-[1em] rounded transition"
-        :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+        class="px-3 py-1.5 text-[1em] rounded-lg transition"
+        :style="{ color: t.text, border: `1px solid ${t.borderStrong}`, background: t.bgSubtle }"
         @click="emit('cancel')"
       >
         Cancel
       </button>
       <button
         type="submit"
-        class="px-3 py-1.5 text-[1em] rounded transition"
+        class="px-3 py-1.5 text-[1em] rounded-lg transition"
         :style="{ background: t.accent, color: t.accentText, border: 'none' }"
         :disabled="!canSubmit"
       >

@@ -8,7 +8,7 @@
           {{ formatTime(task.createdAt) }}
         </span>
         <div
-          class="ml-auto inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[1em]"
+          class="ml-auto inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[12px] font-medium leading-none"
           :style="{ background: statusBg, color: statusColor, border: `1px solid ${statusBorder}` }"
         >
           <component
@@ -21,7 +21,7 @@
         </div>
         <button
           v-if="task.status === 'running'"
-          class="p-1 rounded transition"
+          class="p-1.5 rounded-lg transition"
           :style="{
             background: actionHover ? t.bgHover : 'transparent',
             color: actionHover ? t.text : t.textDim,
@@ -35,7 +35,7 @@
         </button>
         <button
           v-if="task.status === 'paused'"
-          class="p-1 rounded transition"
+          class="p-1.5 rounded-lg transition"
           :style="{
             background: actionHover ? t.bgHover : 'transparent',
             color: actionHover ? t.text : t.textDim,
@@ -49,7 +49,7 @@
         </button>
         <button
           v-if="isActive"
-          class="p-1 rounded transition"
+          class="p-1.5 rounded-lg transition"
           :style="{
             background: stopHover ? t.dangerBg : 'transparent',
             color: stopHover ? t.danger : t.textDim,
@@ -62,7 +62,7 @@
           <CircleStop :size="13" />
         </button>
         <button
-          class="p-1 rounded transition"
+          class="p-1.5 rounded-lg transition"
           :style="{
             background: deleteHover ? t.dangerBg : 'transparent',
             color: deleteHover ? t.danger : t.textDim,

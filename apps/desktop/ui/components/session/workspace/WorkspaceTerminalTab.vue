@@ -8,13 +8,13 @@
 
     <!-- Tab strip: switch / rename (double-click) / close, plus new. -->
     <div
-      class="flex items-center gap-1 px-2 py-1 flex-shrink-0 overflow-x-auto"
+      class="flex items-center gap-1 px-1.5 py-1.5 flex-shrink-0 overflow-x-auto"
       :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
     >
       <div
         v-for="tab in tabs"
         :key="tab.id"
-        class="flex items-center rounded flex-shrink-0 pl-2 pr-1 transition"
+        class="group flex items-center rounded-lg flex-shrink-0 pl-2.5 pr-1.5 py-1 transition"
         :style="{
           background: tab.id === activeId ? t.bgActive : 'transparent',
           color: tab.id === activeId ? t.text : t.textDim,
@@ -32,7 +32,7 @@
         <button
           v-else
           type="button"
-          class="text-[1em] py-0.5"
+          class="text-[1em] leading-none"
           @click="activeId = tab.id"
           @dblclick="startRename(tab)"
         >
@@ -40,8 +40,9 @@
         </button>
         <button
           type="button"
-          class="p-0.5 ml-1 rounded transition"
-          :style="{ color: t.textFaint }"
+          class="inline-flex items-center justify-center w-4 h-4 ml-1 rounded transition hover:opacity-100"
+          :class="tab.id === activeId ? 'opacity-70' : 'opacity-0 group-hover:opacity-60'"
+          :style="{ color: t.textDim }"
           :title="tr('workspace.close')"
           @click="closeTab(tab.id)"
         >
@@ -50,7 +51,7 @@
       </div>
       <button
         type="button"
-        class="p-1 rounded transition flex-shrink-0"
+        class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0"
         :style="{ color: t.textDim }"
         :title="tr('workspace.terminal.new')"
         @click="addTab"

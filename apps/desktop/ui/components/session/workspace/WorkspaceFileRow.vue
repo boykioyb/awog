@@ -1,7 +1,7 @@
 <template>
   <div
-    class="w-full flex items-center gap-2 py-1 px-3 transition cursor-pointer"
-    :style="{ background: rowBg, color: t.text }"
+    class="w-full flex items-center gap-2 py-1 px-2 mx-1.5 rounded-lg transition cursor-pointer"
+    :style="{ background: rowBg, color: t.text, width: 'calc(100% - 0.75rem)' }"
     @click="onOpen(entry)"
     @contextmenu.prevent="onContext(entry, $event)"
     @mouseenter="hovered = true"
@@ -24,10 +24,16 @@
       @keydown.esc.prevent="onRenameCancel"
       @blur="onRenameCancel"
     />
-    <span v-else class="flex-1 min-w-0 text-[1em] truncate">{{ entry.name }}</span>
+    <span
+      v-else
+      class="flex-1 min-w-0 text-[1em] truncate"
+      :style="{ color: entry.kind === 'dir' ? t.text : t.textMuted }"
+    >
+      {{ entry.name }}
+    </span>
     <ChevronRight
       v-if="entry.kind === 'dir' && !renaming"
-      :size="13"
+      :size="12"
       class="flex-shrink-0"
       :style="{ color: t.textFaint }"
     />

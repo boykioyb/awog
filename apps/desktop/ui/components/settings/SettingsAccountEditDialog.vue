@@ -10,7 +10,7 @@
       @click.self="onCancel"
     >
       <div
-        class="w-full max-w-md rounded-lg shadow-xl"
+        class="w-full max-w-md rounded-xl shadow-xl"
         :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         role="dialog"
         aria-modal="true"
@@ -22,7 +22,7 @@
           <div class="text-[1em] font-semibold" :style="{ color: t.text }">Edit connection</div>
           <button
             type="button"
-            class="p-1 rounded transition flex items-center"
+            class="p-1.5 rounded-md transition flex items-center"
             :style="{ color: t.textDim }"
             aria-label="Close"
             @click="onCancel"
@@ -43,7 +43,7 @@
           />
           <div
             v-if="error"
-            class="mt-2 text-[1em] px-2 py-1 rounded"
+            class="mt-2 text-[1em] px-2 py-1 rounded-lg"
             :style="{
               background: t.dangerBg,
               color: t.danger,
@@ -61,7 +61,7 @@
               <span class="text-[1em]" :style="{ color: t.textDim }">Label</span>
               <input
                 v-model="label"
-                class="mt-1 w-full rounded px-2 py-1.5 text-[1em]"
+                class="mt-1 w-full rounded-lg px-2.5 py-2 text-[1em]"
                 :style="inputStyle"
                 placeholder="Label"
               />
@@ -74,13 +74,13 @@
                 <input
                   v-model="apiKey"
                   :type="reveal ? 'text' : 'password'"
-                  class="flex-1 rounded px-2 py-1.5 text-[1em] font-mono"
+                  class="flex-1 rounded-lg px-2.5 py-2 text-[1em] font-mono"
                   :style="inputStyle"
                   placeholder="Enter a new key to replace"
                 />
                 <button
                   type="button"
-                  class="px-2 py-1.5 rounded text-[1em] flex items-center"
+                  class="px-2 py-2 rounded-lg text-[1em] flex items-center"
                   :style="iconBtnStyle"
                   :title="reveal ? 'Hide' : 'Show'"
                   @click="reveal = !reveal"
@@ -111,7 +111,7 @@
 
             <div
               v-if="error"
-              class="text-[1em] px-2 py-1 rounded"
+              class="text-[1em] px-2 py-1 rounded-lg"
               :style="{
                 background: t.dangerBg,
                 color: t.danger,
@@ -128,7 +128,7 @@
           >
             <button
               type="button"
-              class="px-3 py-1.5 text-[1em] rounded transition"
+              class="px-3 py-1.5 text-[1em] rounded-lg transition"
               :style="{
                 background: 'transparent',
                 border: `1px solid ${t.borderStrong}`,
@@ -140,7 +140,7 @@
             </button>
             <button
               type="submit"
-              class="px-3 py-1.5 text-[1em] rounded transition inline-flex items-center gap-1.5"
+              class="px-3 py-1.5 text-[1em] rounded-lg transition inline-flex items-center gap-1.5"
               :style="{ background: t.accent, color: t.accentText, border: 'none' }"
               :disabled="!canSave || busy"
             >

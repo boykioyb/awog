@@ -27,7 +27,7 @@
 
     <!-- Hex code text input — typing a 6-digit value selects the custom color -->
     <div
-      class="inline-flex items-center rounded overflow-hidden w-fit"
+      class="inline-flex items-center rounded-lg overflow-hidden w-fit"
       :style="{
         background: t.bgInput,
         border: `1px solid ${selected === 'custom' ? t.borderFocus : t.border}`,

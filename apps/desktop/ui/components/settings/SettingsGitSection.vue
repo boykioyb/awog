@@ -1,13 +1,16 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-7">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Git</h2>
-      <div class="text-[1em]" :style="{ color: t.textDim }">
+      <h2 class="text-lg font-semibold tracking-tight" :style="{ color: t.text }">Git</h2>
+      <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
         How AWOG commits when the engine finishes a phase, and how dirty trees are handled before a
         new task.
       </div>
     </div>
-    <div class="space-y-4">
+    <div
+      class="rounded-xl px-4 [&>*:last-child]:border-b-0"
+      :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+    >
       <SettingsField
         label="Auto-commit per phase"
         hint="Engine commits artifacts automatically each time a phase completes"
@@ -37,7 +40,7 @@
           :value="git.autoCommitMessageTemplate"
           rows="1"
           placeholder="[{phaseId}] {agentName}: {summary}"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[2.25rem]"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono resize-y min-h-[2.5rem]"
           :style="inputStyle"
           @input="onTemplateInput($event)"
         />
@@ -62,6 +65,7 @@
               :value="opt.value"
               :checked="git.autoCommitScope === opt.value"
               :disabled="opt.disabled"
+              :style="{ accentColor: t.accent }"
               @change="update({ autoCommitScope: opt.value })"
             />
             <span>{{ opt.label }}</span>
@@ -95,6 +99,7 @@
               name="git-dirty-policy"
               :value="opt.value"
               :checked="git.dirtyTaskPolicy === opt.value"
+              :style="{ accentColor: t.accent }"
               @change="update({ dirtyTaskPolicy: opt.value })"
             />
             <span>{{ opt.label }}</span>
@@ -110,7 +115,7 @@
           type="number"
           min="0"
           :value="autoFetchSeconds"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono"
           :style="inputStyle"
           @input="onFetchIntervalInput($event)"
         />
@@ -124,7 +129,7 @@
           type="number"
           min="0"
           :value="githubFetchMinutes"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono"
           :style="inputStyle"
           @input="onGithubIntervalInput($event)"
         />
@@ -138,11 +143,11 @@
         <textarea
           :value="git.commitMessageRule"
           rows="30"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono resize-y min-h-[70vh]"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono resize-y min-h-[70vh]"
           :style="inputStyle"
           @input="onRuleInput($event)"
         />
-        <div class="mt-1 flex justify-end">
+        <div class="mt-1.5 flex justify-end">
           <button
             type="button"
             class="text-[1em] underline"
@@ -165,6 +170,7 @@ import {
 } from '~/stores/settings'
 
 const { t } = useTheme()
+const { cardBg } = useSettingsSurface()
 const { git, update } = useGitSettings()
 const settingsStore = useSettingsStore()
 

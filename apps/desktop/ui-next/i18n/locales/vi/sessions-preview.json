@@ -1,0 +1,8 @@
+{
+  "sessions.preview.loading": "Đang tải…",
+  "sessions.preview.loadError": "Không thể tải tệp này",
+  "sessions.preview.tooLarge": "Tệp quá lớn để xem trước tại đây",
+  "sessions.preview.binary": "Tệp nhị phân — mở bằng ứng dụng ngoài để xem",
+  "sessions.preview.openAttachment": "Mở xem trước",
+  "sessions.preview.pdfNote": "Trình xem nhúng không hỗ trợ điều hướng PDF nhiều trang"
+}

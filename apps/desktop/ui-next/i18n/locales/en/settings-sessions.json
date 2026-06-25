@@ -1,0 +1,20 @@
+{
+  "settingsSessions.autoApprove.name": "Auto-approve trivial steps",
+  "settingsSessions.autoApprove.desc": "Skip approval gates for low-risk phases",
+  "settingsSessions.notifications.name": "Notifications",
+  "settingsSessions.notifications.desc": "Show a system notification when a task needs approval",
+  "settingsSessions.pasteAsFile.name": "Paste as file",
+  "settingsSessions.pasteAsFile.desc": "Long pasted text becomes an attachment instead of inline content",
+  "settingsSessions.pasteThreshold.name": "Paste threshold (chars)",
+  "settingsSessions.pasteThreshold.desc": "Paste longer than this becomes a file (min 200)",
+
+  "settingsSessions.quota.heading": "Usage quota",
+  "settingsSessions.quota.warning.name": "Quota warning",
+  "settingsSessions.quota.warning.desc": "Warn when usage reaches the threshold",
+  "settingsSessions.quota.threshold.name": "Threshold (%)",
+  "settingsSessions.quota.threshold.desc": "Warn at this percentage of the quota (50–99)",
+  "settingsSessions.quota.abort.name": "Abort sessions on threshold",
+  "settingsSessions.quota.abort.desc": "Destructive: cancels running sessions when the threshold is hit",
+  "settingsSessions.quota.blockNew.name": "Block new sessions on threshold",
+  "settingsSessions.quota.blockNew.desc": "Prevent starting new sessions once the threshold is hit"
+}

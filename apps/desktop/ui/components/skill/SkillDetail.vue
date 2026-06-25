@@ -2,7 +2,7 @@
   <div class="flex-1 overflow-y-auto p-4 md:p-6 w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
-        class="w-10 h-10 rounded flex items-center justify-center text-lg"
+        class="w-11 h-11 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
         <span v-if="skill.icon">{{ skill.icon }}</span>
@@ -14,7 +14,7 @@
             {{ skill.name }}
           </h1>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-2 py-0.5 rounded-full font-mono"
             :style="{
               background: t.bgInput,
               color: t.textDim,
@@ -24,10 +24,10 @@
             /{{ skill.id }}
           </span>
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
+            class="text-[12px] leading-none px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider"
             :style="{
-              background: isProjectScoped ? t.accent : t.bgInput,
-              color: isProjectScoped ? t.accentText : t.textDim,
+              background: t.bgInput,
+              color: isProjectScoped ? t.accent : t.textDim,
               border: `1px solid ${isProjectScoped ? t.accent : t.border}`,
             }"
             :title="sourcePath"
@@ -53,7 +53,7 @@
       <span
         v-for="g in skill.globs ?? []"
         :key="`g-${g}`"
-        class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+        class="text-[1em] px-2.5 py-1 rounded-full font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         glob: {{ g }}
@@ -61,7 +61,7 @@
       <span
         v-for="tool in skill.alwaysAllow ?? []"
         :key="`a-${tool}`"
-        class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+        class="text-[1em] px-2.5 py-1 rounded-full font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         allow: {{ tool }}
@@ -69,7 +69,7 @@
       <span
         v-for="src in skill.requiredSources ?? []"
         :key="`s-${src}`"
-        class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+        class="text-[1em] px-2.5 py-1 rounded-full font-mono"
         :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
       >
         source: {{ src }}

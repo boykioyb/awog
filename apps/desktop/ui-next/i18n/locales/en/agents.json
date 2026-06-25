@@ -1,0 +1,9 @@
+{
+  "agents.search": "Search agents…",
+  "agents.editAgentMd": "Open AGENT.md editor",
+  "agents.providerModel": "Provider · Model",
+  "agents.temp": "temp {temp}",
+  "agents.systemPrompt": "System prompt (AGENT.md)",
+  "agents.toolsWhitelist": "Tools whitelist",
+  "agents.delete": "Delete agent"
+}

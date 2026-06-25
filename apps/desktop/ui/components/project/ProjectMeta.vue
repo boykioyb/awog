@@ -1,14 +1,14 @@
 <template>
-  <div class="rounded p-2.5" :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }">
+  <div class="rounded-xl px-3.5 py-3" :style="elevated">
     <div
-      class="text-[1em] uppercase tracking-wider font-medium mb-1 inline-flex items-center gap-1"
+      class="text-[12px] uppercase tracking-wider font-mono font-medium mb-1.5 inline-flex items-center gap-1.5"
       :style="{ color: t.textDim }"
     >
-      <component :is="icon" :size="10" />
+      <component :is="icon" :size="12" />
       {{ label }}
     </div>
     <div
-      class="text-[1em]"
+      class="text-[1em] truncate"
       :style="{
         color: t.text,
         fontFamily: mono ? 'ui-monospace, monospace' : 'inherit',
@@ -34,4 +34,5 @@ withDefaults(
 )
 
 const { t } = useTheme()
+const { elevated } = useGlass()
 </script>

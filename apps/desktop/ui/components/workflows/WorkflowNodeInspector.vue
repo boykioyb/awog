@@ -7,11 +7,21 @@
       >
         {{ tr('workflows.node.title') }}
       </div>
-      <div class="flex items-center gap-2.5">
+      <div
+        class="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
+        :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+      >
         <RoleBadge :role="agentRoleLabel(agent)" />
         <div class="flex-1 min-w-0">
-          <div class="text-[1em] truncate" :style="{ color: t.text }">{{ agent.name }}</div>
-          <div class="text-[1em] font-mono" :style="{ color: t.textDim }">{{ node.id }}</div>
+          <div class="text-[1em] font-medium truncate" :style="{ color: t.text }">
+            {{ agent.name }}
+          </div>
+          <div
+            class="text-[12px] font-mono leading-none truncate mt-1"
+            :style="{ color: t.textDim }"
+          >
+            {{ node.id }}
+          </div>
         </div>
       </div>
     </div>
@@ -29,32 +39,56 @@
     </Field>
 
     <Field :label="tr('workflows.node.outputs')">
-      <div class="space-y-1">
-        <div v-for="(out, i) in node.outputs" :key="i" class="flex items-center gap-1">
+      <div class="space-y-1.5">
+        <div v-for="(out, i) in node.outputs" :key="i" class="flex items-center gap-1.5">
           <input
             :value="out"
-            class="flex-1 rounded px-2 py-1 text-[1em] font-mono"
+            class="flex-1 rounded-lg px-2.5 py-1.5 text-[1em] font-mono outline-none"
             :style="inputStyle"
             @input="updateOutput(i, ($event.target as HTMLInputElement).value)"
           />
           <button
-            class="p-1 transition"
+            class="p-1.5 rounded-lg transition"
             :style="{ color: t.textDim }"
-            @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-            @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
+            @mouseenter="
+              (e) => {
+                const el = e.currentTarget as HTMLElement
+                el.style.background = t.dangerBg
+                el.style.color = t.danger
+              }
+            "
+            @mouseleave="
+              (e) => {
+                const el = e.currentTarget as HTMLElement
+                el.style.background = 'transparent'
+                el.style.color = t.textDim
+              }
+            "
             @click="removeOutput(i)"
           >
-            <X :size="11" />
+            <X :size="13" />
           </button>
         </div>
         <button
-          class="text-[1em] flex items-center gap-1 mt-1 transition"
+          class="text-[1em] flex items-center gap-1.5 mt-1 px-2 py-1 rounded-lg transition"
           :style="{ color: t.textDim }"
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
+          @mouseenter="
+            (e) => {
+              const el = e.currentTarget as HTMLElement
+              el.style.background = t.bgHover
+              el.style.color = t.text
+            }
+          "
+          @mouseleave="
+            (e) => {
+              const el = e.currentTarget as HTMLElement
+              el.style.background = 'transparent'
+              el.style.color = t.textDim
+            }
+          "
           @click="addOutput"
         >
-          <Plus :size="11" />
+          <Plus :size="13" />
           {{ tr('workflows.node.add_output') }}
         </button>
       </div>

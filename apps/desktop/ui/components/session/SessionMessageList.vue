@@ -44,7 +44,7 @@
           <span
             v-for="hint in hints"
             :key="hint.token"
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[1em]"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[1em]"
             :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
           >
             <component :is="hint.icon" :size="12" :style="{ color: t.accent }" />
@@ -103,7 +103,7 @@
     <button
       v-if="quotePopup"
       type="button"
-      class="fixed z-50 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[1em] shadow-lg transition"
+      class="fixed z-50 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[1em] shadow-lg transition"
       :style="{
         top: `${quotePopup.top}px`,
         left: `${quotePopup.left}px`,

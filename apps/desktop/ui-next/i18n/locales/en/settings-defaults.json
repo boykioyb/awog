@@ -1,0 +1,13 @@
+{
+  "settingsDefaults.systemPrompt.name": "System prompt",
+  "settingsDefaults.systemPrompt.desc": "Base persona for new sessions/agents that don't define their own",
+  "settingsDefaults.systemPrompt.placeholder": "You are an AI teammate in AWOG…",
+  "settingsDefaults.instructions.name": "Instructions",
+  "settingsDefaults.instructions.desc": "Always-on instructions prepended to every request (style guides, project conventions)",
+  "settingsDefaults.instructions.placeholder": "- Reply in English\n- Prefer KISS / YAGNI\n- Do not add new dependencies without an ADR",
+  "settingsDefaults.provider.name": "Default provider",
+  "settingsDefaults.provider.desc": "Which connection a new session starts with",
+  "settingsDefaults.model.name": "Default model",
+  "settingsDefaults.model.desc": "Filtered by the selected provider",
+  "settingsDefaults.mode.acceptEdits": "Accept edits"
+}

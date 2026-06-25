@@ -1,30 +1,31 @@
 <template>
   <div
-    class="px-3 py-1.5 flex items-center gap-2 flex-shrink-0"
-    :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
+    class="px-3 py-2 flex items-center gap-2 flex-shrink-0"
+    :style="{ borderBottom: `1px solid ${parts.border}`, background: parts.bg }"
   >
     <component :is="icon" v-if="icon" :size="13" :style="{ color: t.textDim }" />
-    <span class="text-[1em] font-medium" :style="{ color: t.text }">{{ title }}</span>
+    <span class="text-[1em] font-medium truncate" :style="{ color: t.text }">{{ title }}</span>
     <div class="ml-auto flex items-center gap-1">
       <slot name="actions" />
 
       <div ref="posRef" class="relative">
         <button
           type="button"
-          class="p-1 rounded transition"
+          class="p-1.5 rounded transition"
           :style="{ color: showPosMenu ? t.accent : t.textDim }"
           :title="tr('workspace.position')"
           @click="showPosMenu = !showPosMenu"
         >
-          <component :is="POSITION_ICONS[panel.position]" :size="14" />
+          <component :is="POSITION_ICONS[panel.position]" :size="13" />
         </button>
         <div
           v-if="showPosMenu"
-          class="absolute right-0 top-full mt-1 rounded-md py-1 z-30"
+          class="absolute right-0 top-full mt-1 rounded-lg py-1 z-30 overflow-hidden"
           :style="{
-            background: t.bgPanel,
-            border: `1px solid ${t.borderStrong}`,
-            boxShadow: `0 8px 24px ${t.shadow}`,
+            background: menu.background,
+            border: `1px solid ${menu.borderColor}`,
+            backdropFilter: menu.backdropFilter,
+            boxShadow: menu.boxShadow,
             minWidth: '150px',
           }"
         >
@@ -35,7 +36,7 @@
             class="w-full text-left px-3 py-1.5 flex items-center gap-2 text-[1em] transition"
             :style="{
               color: panel.position === opt.id ? t.accent : t.text,
-              background: panel.position === opt.id ? t.bgSubtle : 'transparent',
+              background: panel.position === opt.id ? t.bgActive : 'transparent',
             }"
             @click="selectPosition(opt.id)"
           >
@@ -47,12 +48,12 @@
 
       <button
         type="button"
-        class="p-1 rounded transition"
+        class="p-1.5 rounded transition"
         :style="{ color: t.textDim }"
         :title="tr('workspace.close')"
         @click="emit('close')"
       >
-        <X :size="14" />
+        <X :size="13" />
       </button>
     </div>
   </div>
@@ -74,6 +75,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
+const { parts, menu } = useGlass()
 const panel = useWorkspacePanelStore()
 
 const POSITIONS: { id: WorkspacePanelPosition; icon: Component; labelKey: string }[] = [

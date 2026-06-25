@@ -1,17 +1,17 @@
 <template>
   <div>
     <div
-      class="flex items-start gap-2 py-1 px-1 rounded transition"
+      class="flex items-center gap-2 py-1 px-2 rounded-lg transition min-w-0"
       :style="{
-        paddingLeft: depth * 16 + 4 + 'px',
-        cursor: hasChildren ? 'pointer' : 'default',
-        background: hovered ? t.bgHover : 'transparent',
+        marginLeft: depth * 14 + 'px',
+        cursor: canToggle ? 'pointer' : 'default',
+        background: hovered && canToggle ? t.bgHover : 'transparent',
       }"
       @click="canToggle && (open = !open)"
       @mouseenter="hovered = true"
       @mouseleave="hovered = false"
     >
-      <div :style="{ width: '12px', paddingTop: '2px' }">
+      <div class="flex-shrink-0" :style="{ width: '10px' }">
         <ChevronRight
           v-if="canToggle"
           :size="10"
@@ -22,101 +22,113 @@
           }"
         />
       </div>
-      <div :style="{ color: typeColor, paddingTop: '1px' }">
+      <div class="flex-shrink-0 flex items-center" :style="{ color: typeColor }">
         <Cpu v-if="item.type === 'agent'" :size="11" />
         <Zap v-else-if="item.type === 'subagent'" :size="11" />
         <Wrench v-else-if="item.type === 'tool'" :size="11" />
         <Sparkles v-else-if="item.type === 'thinking'" :size="11" />
         <ListChecks v-else-if="item.type === 'todo'" :size="11" />
       </div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span
-            class="text-[1em] uppercase tracking-wider font-semibold flex-shrink-0"
-            :style="{ color: typeColor }"
-          >
-            {{ typeLabel }}
-          </span>
-          <template v-if="item.type === 'agent'">
-            <span :style="{ color: t.text }">{{ item.name }}</span>
-            <span :style="{ color: t.textFaint }">·</span>
-            <span :style="{ color: t.textDim }">{{ item.model }}</span>
-          </template>
-          <template v-else-if="item.type === 'subagent'">
-            <span :style="{ color: t.text }">{{ item.agentName }}</span>
-            <span :style="{ color: t.textFaint }">·</span>
-            <span :style="{ color: t.textDim }">{{ item.model }}</span>
-          </template>
-          <template v-else-if="item.type === 'tool'">
-            <span :style="{ color: t.text }">{{ item.tool }}</span>
-            <span :style="{ color: t.textFaint }">(</span>
-            <span class="min-w-0 break-all" :style="{ color: t.textMuted }">{{ item.input }}</span>
-            <span :style="{ color: t.textFaint }">)</span>
-          </template>
-          <template v-else-if="item.type === 'todo'">
-            <span :style="{ color: t.text }">{{ item.name }}</span>
-          </template>
-          <span class="ml-auto text-[1em] font-mono flex-shrink-0" :style="{ color: t.textDim }">
-            <span
-              v-if="isRunning"
-              class="inline-flex items-center gap-1"
-              :style="{ color: t.text }"
-            >
-              <Circle :size="6" class="animate-pulse" :style="{ fill: 'currentColor' }" />
-              running
-            </span>
-            <template v-else>{{ item.duration }}</template>
-          </span>
-        </div>
-        <div
-          v-if="item.type === 'subagent' && item.purpose"
-          class="text-[1em] mt-0.5"
-          :style="{ color: t.textDim }"
+      <span
+        class="text-[12px] leading-none uppercase tracking-wider font-semibold flex-shrink-0"
+        :style="{ color: typeColor }"
+      >
+        {{ typeLabel }}
+      </span>
+      <template v-if="item.type === 'agent'">
+        <span class="text-[1em] truncate flex-shrink-0" :style="{ color: t.text }">
+          {{ item.name }}
+        </span>
+        <span class="text-[1em] flex-shrink-0" :style="{ color: t.textFaint }">·</span>
+        <span class="text-[1em] truncate" :style="{ color: t.textDim }">{{ item.model }}</span>
+      </template>
+      <template v-else-if="item.type === 'subagent'">
+        <span class="text-[1em] truncate flex-shrink-0" :style="{ color: t.text }">
+          {{ item.agentName }}
+        </span>
+        <span class="text-[1em] flex-shrink-0" :style="{ color: t.textFaint }">·</span>
+        <span class="text-[1em] truncate" :style="{ color: t.textDim }">{{ item.model }}</span>
+      </template>
+      <template v-else-if="item.type === 'tool'">
+        <span class="text-[1em] font-mono flex-shrink-0" :style="{ color: t.text }">
+          {{ item.tool }}
+        </span>
+        <span class="text-[1em] font-mono truncate min-w-0" :style="{ color: t.textMuted }">
+          {{ item.input }}
+        </span>
+      </template>
+      <template v-else-if="item.type === 'todo'">
+        <span class="text-[1em] truncate" :style="{ color: t.text }">{{ item.name }}</span>
+      </template>
+      <span
+        v-else-if="item.type === 'thinking' && detailText"
+        class="text-[1em] italic truncate min-w-0"
+        :style="{ color: t.textMuted }"
+      >
+        {{ detailText }}
+      </span>
+      <span
+        class="ml-auto text-[12px] leading-none font-mono flex-shrink-0"
+        :style="{ color: t.textDim }"
+      >
+        <span v-if="isRunning" class="inline-flex items-center gap-1" :style="{ color: t.text }">
+          <Circle :size="6" class="animate-pulse" :style="{ fill: 'currentColor' }" />
+          running
+        </span>
+        <template v-else>{{ item.duration }}</template>
+      </span>
+    </div>
+
+    <!-- Expanded detail: subagent purpose, tool result, or full reasoning text.
+         One-line rows stay collapsed by default; expanding reveals the full body. -->
+    <div
+      v-if="open && (item.purpose || detailText)"
+      :style="{ marginLeft: depth * 14 + 22 + 'px' }"
+    >
+      <div
+        v-if="item.type === 'subagent' && item.purpose"
+        class="text-[1em] py-0.5"
+        :style="{ color: t.textDim }"
+      >
+        {{ item.purpose }}
+      </div>
+      <div
+        v-if="detailText && item.type !== 'thinking'"
+        class="text-[1em] py-0.5 whitespace-pre-wrap break-words"
+        :style="{ color: detailColor }"
+      >
+        {{ detailText }}
+      </div>
+      <div
+        v-if="detailText && item.type === 'thinking'"
+        class="text-[1em] py-0.5 italic whitespace-pre-wrap break-words"
+        :style="{ color: detailColor }"
+      >
+        {{ detailText }}
+      </div>
+    </div>
+
+    <div
+      v-if="item.type === 'todo' && item.todos?.length"
+      class="mt-0.5 space-y-0.5"
+      :style="{ marginLeft: depth * 14 + 22 + 'px' }"
+    >
+      <div v-for="(todo, i) in item.todos" :key="i" class="flex items-start gap-1.5 text-[1em]">
+        <span
+          class="font-mono flex-shrink-0"
+          :style="{ color: todoColor(todo.status), paddingTop: '1px' }"
         >
-          {{ item.purpose }}
-        </div>
-        <!-- Collapsible detail: tool result (⎿) or reasoning text. Shows a 1-line
-             preview when closed ("đóng chi tiết") and the full text — newlines
-             preserved — when the node is expanded. ⎿ marker + faint style match
-             the session timeline. -->
-        <div v-if="detailText" class="flex items-start gap-1.5 text-[1em] mt-0.5 min-w-0">
-          <span
-            v-if="item.type === 'tool'"
-            class="flex-shrink-0 font-mono"
-            :style="{ color: t.textDim }"
-          >
-            ⎿
-          </span>
-          <span
-            class="min-w-0"
-            :class="[
-              open ? 'whitespace-pre-wrap break-words' : 'truncate',
-              item.type === 'thinking' ? 'italic' : '',
-            ]"
-            :style="{ color: detailColor }"
-          >
-            {{ detailText }}
-          </span>
-        </div>
-        <div v-if="item.type === 'todo' && item.todos?.length" class="mt-1 space-y-0.5">
-          <div v-for="(todo, i) in item.todos" :key="i" class="flex items-start gap-1.5 text-[1em]">
-            <span
-              class="font-mono flex-shrink-0"
-              :style="{ color: todoColor(todo.status), paddingTop: '1px' }"
-            >
-              {{ todoMark(todo.status) }}
-            </span>
-            <span
-              class="min-w-0 break-words"
-              :style="{
-                color: todo.status === 'completed' ? t.textFaint : t.text,
-                textDecoration: todo.status === 'completed' ? 'line-through' : 'none',
-              }"
-            >
-              {{ todo.content }}
-            </span>
-          </div>
-        </div>
+          {{ todoMark(todo.status) }}
+        </span>
+        <span
+          class="min-w-0 break-words"
+          :style="{
+            color: todo.status === 'completed' ? t.textFaint : t.text,
+            textDecoration: todo.status === 'completed' ? 'line-through' : 'none',
+          }"
+        >
+          {{ todo.content }}
+        </span>
       </div>
     </div>
     <div v-if="hasChildren && open">

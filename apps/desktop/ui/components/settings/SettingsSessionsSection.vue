@@ -1,13 +1,16 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-7">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Sessions</h2>
-      <div class="text-[1em]" :style="{ color: t.textDim }">
+      <h2 class="text-lg font-semibold tracking-tight" :style="{ color: t.text }">Sessions</h2>
+      <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
         How sessions and tasks behave while they run — approvals, notifications, usage limits, and
         the composer.
       </div>
     </div>
-    <div class="space-y-4">
+    <div
+      class="rounded-xl px-4 [&>*:last-child]:border-b-0"
+      :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+    >
       <SettingsField
         label="Auto-approve trivial steps"
         hint="Skip approval gates for low-risk phases"
@@ -44,7 +47,7 @@
           :max="thresholdMax"
           step="5"
           :value="quotaWarning.threshold"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono"
           :style="inputStyle"
           @input="onQuotaThresholdInput($event)"
         />
@@ -89,7 +92,7 @@
           min="200"
           step="100"
           :value="composer.pasteThreshold"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2.5 py-2 text-[1em] font-mono"
           :style="inputStyle"
           @input="onPasteThresholdInput($event)"
         />
@@ -100,6 +103,7 @@
 
 <script setup lang="ts">
 const { t } = useTheme()
+const { cardBg } = useSettingsSurface()
 const { t: tr } = useI18n()
 const settings = useSettingsStore()
 const { composer, update: updateComposer } = useComposerSettings()

@@ -28,7 +28,7 @@
           <span class="text-[1em] font-medium" :style="{ color: t.text }">{{ draft.name }}</span>
           <span
             v-if="draft.role"
-            class="text-[1em] px-1.5 py-0.5 rounded uppercase tracking-wider"
+            class="text-[12px] leading-none px-1.5 py-0.5 rounded-full uppercase tracking-wider font-mono"
             :style="{
               background: t.bgPanel,
               color: t.textMuted,
@@ -39,7 +39,7 @@
           </span>
           <span
             v-if="draft.id"
-            class="text-[1em] px-1.5 py-0.5 rounded font-mono"
+            class="text-[1em] px-2 py-0.5 rounded-full font-mono"
             :style="{
               background: t.bgPanel,
               color: t.textMuted,
@@ -53,7 +53,7 @@
           {{ draft.description }}
         </div>
         <div
-          class="rounded p-2 max-h-[40vh] overflow-y-auto text-[1em] leading-relaxed"
+          class="rounded-lg p-2.5 max-h-[40vh] overflow-y-auto text-[1em] leading-relaxed"
           :style="{
             background: t.bgPanel,
             border: `1px solid ${t.border}`,
@@ -67,7 +67,7 @@
 
     <template #actions>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium"
         :style="{
           background: canApply ? t.accent : t.bgInput,
           color: canApply ? t.accentText : t.textDim,

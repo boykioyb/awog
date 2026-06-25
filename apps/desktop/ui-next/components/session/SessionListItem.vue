@@ -1,0 +1,214 @@
+<template>
+  <div
+    class="li"
+    :class="{ on: active, sel: selected }"
+    :data-sid="session.id"
+    @click="onRowClick"
+    @contextmenu.prevent="onCtx"
+  >
+    <div class="lrow">
+      <!-- Checkbox shows ONLY in select mode (or when already selected) — NOT on
+           hover (Select now lives in the right-click context menu). Hidden during
+           inline rename so the rename input gets the full row. -->
+      <span
+        v-if="(selecting || selected) && !editing"
+        class="lcbox"
+        :class="{ on: selected }"
+        :title="t('sessions.sidebar.select')"
+        @click.stop="store.toggleSelect(session.id)"
+      >
+        <Icon v-if="selected" name="check" style="width: 11px; height: 11px" />
+      </span>
+      <span
+        v-if="session.pinned && !editing"
+        class="pinmark"
+        :title="t('sessions.sidebar.pinned')"
+        @click.stop="store.togglePin(session.id)"
+      >
+        <Icon name="pin" style="width: 11px; height: 11px" />
+      </span>
+      <span
+        class="sdot"
+        :class="{ pulse: session.status === 'streaming' }"
+        :style="{ background: statusColor }"
+      />
+      <input
+        v-if="editing"
+        ref="renameInput"
+        v-model="draft"
+        class="ttl"
+        @click.stop
+        @keydown.enter.prevent="commitRename"
+        @keydown.esc.prevent="cancelRename"
+        @blur="commitRename"
+      />
+      <span
+        v-else
+        class="ttl"
+        :class="{ unread: session.unread }"
+        :title="t('sessions.item.rename')"
+        @dblclick.stop="startRename"
+      >
+        {{ session.title }}
+      </span>
+      <span v-if="session.unread && !editing" class="undot" :title="t('sessions.item.unread')" />
+      <span v-if="!editing" class="tm">{{ session.when }}</span>
+    </div>
+    <div class="sub">
+      <span class="tag" style="padding: 1px 6px">{{ projName }}</span>
+      <span>{{ session.model }} · {{ statusLabel }}</span>
+      <span v-if="indicators.length" class="lind">
+        <span v-for="ind in indicators" :key="ind.key" class="lindchip" :title="ind.title">
+          <Icon :name="ind.icon" style="width: 11px; height: 11px" />
+          {{ ind.count }}
+        </span>
+      </span>
+    </div>
+    <div v-if="!editing" class="liact">
+      <span
+        class="del"
+        :title="session.pinned ? t('sessions.sidebar.unpin') : t('sessions.sidebar.pin')"
+        @click.stop="store.togglePin(session.id)"
+      >
+        <Icon name="pin" style="width: 12px; height: 12px" />
+      </span>
+      <span class="del" :title="t('sessions.item.delete')" @click.stop="store.remove(session.id)">
+        <Icon name="trash" style="width: 13px; height: 13px" />
+      </span>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+// One session row in the list (liHtml ~1243): selection checkbox, pin mark,
+// status dot, title, unread mark, time, project tag + model · status, and
+// compact indicator chips (attachments / pending follow-ups / queued). Hover
+// reveals pin + delete actions. Title supports inline rename (double-click →
+// input). Pin / delete / select route to the store; in select mode a row click
+// toggles selection instead of opening the session.
+import type { Session } from '~/composables/useSessionsMock'
+
+const props = defineProps<{
+  session: Session
+  active: boolean
+  selecting: boolean
+  // Rename signal from the parent context menu: when `.id` matches this row, the
+  // inline rename starts. `n` (nonce) lets the same row be re-triggered.
+  renameReq?: { id: number; n: number }
+}>()
+const emit = defineEmits<{
+  // Right-click → ask the parent to open the session context menu at the cursor.
+  ctxmenu: [payload: { id: number; x: number; y: number }]
+}>()
+
+const { t } = useI18n()
+const { STATUS_COLOR } = useSessionsMock()
+const { projectName } = useProjects()
+const store = useSessionsStore()
+
+const statusColor = computed(() => STATUS_COLOR[props.session.status])
+const statusLabel = computed(() => t(`sessions.status.${props.session.status}`))
+// session.project holds the engine projectId; show the resolved display name.
+const projName = computed(() => projectName(props.session.project))
+const selected = computed(() => store.selectedIds.has(props.session.id))
+
+// Compact item indicators (§1): attachment / pending follow-up / queued counts.
+// Only chips with count > 0 are rendered.
+type Indicator = { key: string; icon: string; count: number; title: string }
+const indicators = computed<Indicator[]>(() => {
+  const out: Indicator[] = []
+  const att = props.session.msgs.reduce(
+    (sum, m) => sum + (m.role === 'user' && m.att ? m.att.length : 0),
+    0,
+  )
+  if (att > 0)
+    out.push({
+      key: 'att',
+      icon: 'clip',
+      count: att,
+      title: t('sessions.sidebar.attachments', { n: att }),
+    })
+  const fu = props.session.followups?.length ?? 0
+  if (fu > 0)
+    out.push({
+      key: 'fu',
+      icon: 'quote',
+      count: fu,
+      title: t('sessions.sidebar.followups', { n: fu }),
+    })
+  const qd = props.session.queue?.length ?? 0
+  if (qd > 0)
+    out.push({
+      key: 'qd',
+      icon: 'clock',
+      count: qd,
+      title: t('sessions.sidebar.queued', { n: qd }),
+    })
+  return out
+})
+
+// Row click: in select mode toggle selection (and swallow the click so the
+// parent's `select` handler doesn't also open the session). Outside select mode
+// the click bubbles to the parent which emits `select`.
+function onRowClick(e: MouseEvent) {
+  if (props.selecting) {
+    e.stopPropagation()
+    store.toggleSelect(props.session.id)
+  }
+}
+
+// Inline rename: local UI state; the renamed value is committed to the store.
+const editing = ref(false)
+const draft = ref('')
+const renameInput = useTemplateRef<HTMLInputElement>('renameInput')
+
+function startRename() {
+  draft.value = props.session.title
+  editing.value = true
+  nextTick(() => renameInput.value?.focus())
+}
+function commitRename() {
+  if (!editing.value) return
+  editing.value = false
+  store.rename(props.session.id, draft.value)
+}
+function cancelRename() {
+  editing.value = false
+}
+
+// Right-click → bubble the cursor position up so the parent shows one shared menu.
+function onCtx(e: MouseEvent) {
+  emit('ctxmenu', { id: props.session.id, x: e.clientX, y: e.clientY })
+}
+// Parent context menu "Rename" → start this row's inline edit when targeted.
+watch(
+  () => props.renameReq,
+  (r) => {
+    if (r && r.id === props.session.id) startRename()
+  },
+)
+</script>
+
+<style scoped>
+/* Indicator chips: small mono count pills, subtle (§1). Color tokens only — no
+   hardcoded hex. Numeric counts use a fixed 12px mono per the badge rule. */
+.lind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.lindchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--code);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--textFaint);
+}
+/* Pin mark is interactive (toggles pin); keep the pointer affordance. */
+.pinmark {
+  cursor: pointer;
+}
+</style>

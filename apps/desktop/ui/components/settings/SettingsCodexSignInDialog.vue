@@ -10,7 +10,7 @@
       @click.self="onCancel"
     >
       <div
-        class="w-full max-w-md rounded-lg shadow-xl"
+        class="w-full max-w-md rounded-xl shadow-xl"
         :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         role="dialog"
         aria-modal="true"
@@ -24,7 +24,7 @@
           </div>
           <button
             type="button"
-            class="p-1 rounded transition flex items-center"
+            class="p-1.5 rounded-md transition flex items-center"
             :style="{ color: t.textDim }"
             aria-label="Close"
             @click="onCancel"
@@ -53,7 +53,7 @@
             <button
               v-if="authUrl"
               type="button"
-              class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded text-[1em] font-medium transition"
+              class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[1em] font-medium transition"
               :style="{ background: t.accent, color: t.accentText, border: 'none' }"
               @click="onOpen"
             >
@@ -68,7 +68,7 @@
 
           <div
             v-if="error"
-            class="rounded px-3 py-2 text-[1em]"
+            class="rounded-lg px-3 py-2 text-[1em]"
             :style="{
               background: t.dangerBg,
               border: `1px solid ${t.dangerBorder}`,
@@ -85,7 +85,7 @@
         >
           <button
             type="button"
-            class="px-3 py-1.5 text-[1em] rounded transition"
+            class="px-3 py-1.5 text-[1em] rounded-lg transition"
             :style="{
               background: 'transparent',
               border: `1px solid ${t.borderStrong}`,

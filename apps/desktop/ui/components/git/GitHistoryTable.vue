@@ -74,10 +74,10 @@
                 />
                 <span
                   v-if="overflowCount(c) > 0"
-                  class="text-[1em] px-1 py-0.5 rounded flex-shrink-0"
+                  class="text-[12px] leading-none px-2 py-0.5 rounded-full flex-shrink-0"
                   :style="{
                     color: t.textDim,
-                    background: t.bgInput,
+                    background: t.bgElevated,
                     border: `1px solid ${t.border}`,
                   }"
                   :title="overflowTitle(c)"
@@ -86,7 +86,7 @@
                 </span>
                 <span
                   v-if="isLinkedPhase(c.phaseId)"
-                  class="text-[1em] px-1 py-0.5 rounded font-mono flex-shrink-0"
+                  class="text-[12px] leading-none px-2 py-0.5 rounded-full font-mono flex-shrink-0"
                   :style="{
                     background: t.infoBg,
                     color: t.info,
@@ -104,7 +104,7 @@
             </div>
 
             <!-- Author -->
-            <div class="flex items-center gap-1.5 flex-shrink-0 w-[140px]">
+            <div class="flex items-center gap-1.5 flex-shrink-0 w-[138px]">
               <GitAuthorAvatar :name="c.authorName" :email="c.authorEmail" :size="18" />
               <span class="text-[1em] truncate flex-1 min-w-0" :style="{ color: t.textMuted }">
                 {{ c.authorName }}
@@ -114,7 +114,7 @@
             <!-- Hash -->
             <button
               type="button"
-              class="font-mono text-[1em] flex-shrink-0 w-[70px] text-left transition"
+              class="font-mono text-[12px] leading-none flex-shrink-0 w-[62px] text-left transition"
               :style="{ color: t.accent }"
               :title="tr('git.header.copy_hash', { hash: c.hash })"
               @click.stop="onCopyHash(c.hash)"
@@ -124,7 +124,7 @@
 
             <!-- Date -->
             <span
-              class="text-[1em] flex-shrink-0 w-[140px] text-right"
+              class="text-[12px] leading-none flex-shrink-0 w-[118px] text-right"
               :style="{ color: t.textDim }"
               :title="new Date(c.date).toLocaleString()"
             >
@@ -279,7 +279,7 @@ const { t } = useTheme()
 const { t: tr } = useI18n()
 const hovered = ref<string | null>(null)
 
-const ROW_HEIGHT = 28
+const ROW_HEIGHT = 38
 const LANE_WIDTH = 16
 const MAX_VISIBLE_REFS = 3
 const GRAPH_LEFT_PAD = 8

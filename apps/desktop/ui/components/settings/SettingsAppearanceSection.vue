@@ -1,13 +1,16 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-7">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">Appearance</h2>
-      <div class="text-[1em]" :style="{ color: t.textDim }">
+      <h2 class="text-lg font-semibold tracking-tight" :style="{ color: t.text }">Appearance</h2>
+      <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
         Customize fonts and theme used across the app
       </div>
     </div>
 
-    <div :style="{ borderTop: `1px solid ${t.border}` }">
+    <div
+      class="rounded-xl px-4 [&>*:last-child]:border-b-0"
+      :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+    >
       <SettingsField label="Theme" hint="Toggle via moon/sun icon in the sidebar">
         <div class="text-[1em]" :style="{ color: t.textMuted }">
           {{ themeName === 'dark' ? 'Dark' : 'Light' }}
@@ -74,7 +77,8 @@
           :min="FONT_SIZE_MIN"
           :max="FONT_SIZE_MAX"
           step="1"
-          class="w-full"
+          class="w-full cursor-pointer"
+          :style="{ accentColor: t.accent }"
           @input="onUpdate({ fontSize: appearance.fontSize })"
         />
       </SettingsField>
@@ -118,7 +122,8 @@
               :max="THEME_STRENGTH_MAX"
               step="1"
               :disabled="!themeColorTints"
-              class="w-full disabled:cursor-not-allowed"
+              class="w-full cursor-pointer disabled:cursor-not-allowed"
+              :style="{ accentColor: t.accent }"
               @input="onUpdate({ themeColorStrength: appearance.themeColorStrength })"
             />
           </div>
@@ -135,7 +140,7 @@
         </SettingsField>
 
         <SettingsField label="Surface depth" hint="Layer contrast between panels">
-          <div class="flex rounded overflow-hidden" :style="{ border: `1px solid ${t.border}` }">
+          <div class="flex rounded-lg overflow-hidden" :style="{ border: `1px solid ${t.border}` }">
             <button
               v-for="o in SURFACE_DEPTH_OPTIONS"
               :key="o.value"
@@ -169,11 +174,14 @@
     </div>
 
     <div>
-      <div class="text-[1em] mb-2 uppercase tracking-wider" :style="{ color: t.textDim }">
+      <div
+        class="text-[1em] mb-2.5 uppercase tracking-wider font-medium"
+        :style="{ color: t.textDim }"
+      >
         Preview
       </div>
       <div
-        class="rounded overflow-hidden"
+        class="rounded-xl overflow-hidden"
         :style="{ background: t.bg, border: `1px solid ${t.border}` }"
       >
         <div class="p-4 space-y-3" :style="{ background: t.bgPanel }">
@@ -188,7 +196,7 @@
             .
           </div>
           <div
-            class="p-3 rounded"
+            class="p-3 rounded-lg"
             :style="{ background: t.bgCanvas, border: `1px solid ${t.border}`, color: t.text }"
           >
             Nested canvas surface ·
@@ -196,13 +204,13 @@
           </div>
           <div class="flex gap-2 items-center">
             <button
-              class="px-3 py-1.5 rounded text-[1em] font-medium"
+              class="px-3 py-1.5 rounded-lg text-[1em] font-medium"
               :style="{ background: t.accent, color: t.accentText }"
             >
               Primary action
             </button>
             <button
-              class="px-3 py-1.5 rounded text-[1em]"
+              class="px-3 py-1.5 rounded-lg text-[1em]"
               :style="{ background: t.bgHover, color: t.text, border: `1px solid ${t.border}` }"
             >
               Secondary
@@ -210,7 +218,7 @@
             <a class="text-[1em]" :style="{ color: t.accent }">Link</a>
           </div>
           <pre
-            class="font-mono text-[1em] p-2 rounded"
+            class="font-mono text-[1em] p-2 rounded-lg"
             :style="{ background: t.bgElevated, border: `1px solid ${t.border}`, color: t.textDim }"
           >
 const sum = (a: number, b: number) =&gt; a + b</pre
@@ -221,8 +229,8 @@ const sum = (a: number, b: number) =&gt; a + b</pre
 
     <div class="flex justify-end">
       <button
-        class="px-3 py-1.5 rounded text-[1em]"
-        :style="{ border: `1px solid ${t.border}`, color: t.textDim }"
+        class="px-3 py-1.5 rounded-lg text-[1em] transition"
+        :style="{ border: `1px solid ${t.border}`, color: t.textDim, background: t.bgSubtle }"
         @click="reset"
       >
         Reset to defaults
@@ -260,6 +268,7 @@ import {
 const { t, themeName } = useTheme()
 const { t: tr } = useI18n()
 const { appearance, update, reset } = useAppearance()
+const { cardBg } = useSettingsSurface()
 
 const onUpdate = (patch: Partial<AppearanceSettings>) => {
   update(patch)

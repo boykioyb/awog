@@ -39,7 +39,7 @@
 
     <template #actions>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium"
         :style="{
           background: draft ? t.accent : t.bgInput,
           color: draft ? t.accentText : t.textDim,

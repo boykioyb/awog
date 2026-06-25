@@ -9,11 +9,11 @@
     >
       <template #list>
         <div
-          class="px-3 py-2.5 flex items-center justify-between"
+          class="px-3 py-3 flex items-center justify-between gap-2"
           :style="{ borderBottom: `1px solid ${t.border}` }"
         >
           <div
-            class="text-[14px] uppercase tracking-wider font-medium"
+            class="text-[1em] uppercase tracking-wider font-medium"
             :style="{ color: t.textDim }"
           >
             {{ tr('workflows.header') }}
@@ -25,19 +25,19 @@
             :title="tr('workflows.new')"
             @click="openPromptModal"
           >
-            <Plus :size="13" />
+            <Plus :size="14" />
           </AppButton>
         </div>
 
         <!-- Scope: filters the list AND sets where a new workflow is saved
              (Global = shared; a project = lives in that repo). -->
-        <div class="px-3 py-2" :style="{ borderBottom: `1px solid ${t.border}` }">
+        <div class="px-3 py-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">
           <AppSelect v-model="scopeFilter">
             <option v-for="o in scopeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </AppSelect>
         </div>
 
-        <div class="overflow-y-auto p-2 space-y-0.5" style="max-height: 40%">
+        <div class="overflow-y-auto p-2 space-y-1" style="max-height: 40%">
           <WorkflowListItem
             v-for="wf in displayedWorkflows"
             :key="`${wf.source ?? 'global'}:${wf.projectId ?? ''}:${wf.id}`"

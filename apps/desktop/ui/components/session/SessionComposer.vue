@@ -1,7 +1,7 @@
 <template>
   <div
     class="px-4 md:px-6 py-2 relative"
-    :style="{ background: t.bg, borderTop: `1px solid ${t.border}` }"
+    :style="{ background: t.bgPanel, borderTop: `1px solid ${t.border}` }"
     @dragenter="onDragEnter"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
@@ -16,7 +16,7 @@
     >
       <div class="flex items-center gap-2 text-[1em] font-medium" :style="{ color: t.accent }">
         <Paperclip :size="16" />
-        <span>Drop files to attach</span>
+        <span>{{ tr('session.composer.drop') }}</span>
       </div>
     </div>
 
@@ -45,58 +45,187 @@
       />
     </div>
 
-    <!-- Mode + MCP promoted to their own row above the input (user preference).
-         The remaining connection/account/model chips stay in the toolbar below. -->
-    <div class="flex items-center gap-1 mb-1.5">
-      <SessionChipsPopover :session="session" :only="['mode', 'mcp']" />
-    </div>
-
-    <!-- Queued messages (Session steering/queue): sit directly atop the input,
-         auto-sent FIFO once the current turn finishes. -->
-    <SessionQueueList :session="session" />
-
-    <!-- Input field: soft rounded with the send action inside. Connection /
-         account / model chips live in the toolbar below it (lighter than a top
-         chip header). The composer is resized via the top grip only (the
-         textarea's native corner grip is disabled — resize-none). -->
+    <!-- Composer card (prototype `.cbox`): a single rounded card holding the
+         follow-up/queue cards, the clean textarea, attachment chips, and one
+         bottom toolbar (`.cbar`). The card is resized via the top grip only (the
+         textarea's native corner grip is disabled — resize-none). Surface goes
+         through useGlass().input so the app-wide glass toggle reaches it too. -->
     <div
-      class="rounded-xl"
+      class="rounded-xl px-3 py-2.5"
       :style="{
-        background: t.bgInput,
-        border: `1px solid ${composerFocus ? t.borderFocus : t.border}`,
+        background: glassInput.background,
+        border: `1px solid ${composerFocus ? t.borderFocus : glassInput.borderColor}`,
       }"
     >
-      <div class="flex items-end gap-2 pl-3 pr-2 py-1.5">
-        <textarea
-          ref="textareaRef"
-          v-model="draft"
-          rows="2"
-          :placeholder="placeholder"
-          class="flex-1 bg-transparent py-1 text-[1em] resize-none min-h-[2.75rem] max-h-[50vh] outline-none"
-          :style="{ color: t.text }"
-          @focus="composerFocus = true"
-          @blur="onBlur"
-          @input="onComposerInput"
-          @click="mention.detect"
-          @keyup="mention.detect"
-          @keydown="onComposerKeydown"
-          @paste="onPaste"
-        />
-        <button
-          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
-          :style="{ color: t.textDim }"
-          title="Attach file or image"
-          @click="fileInputRef?.click()"
-        >
-          <Paperclip :size="14" />
-        </button>
+      <!-- Follow-up quote cards + queued messages sit above the textarea
+           (prototype `#sfollow` / `#squeue`). -->
+      <div v-if="pendingFollowUps.length > 0" class="mb-2 flex flex-col gap-1.5">
+        <div v-for="(fu, i) in pendingFollowUps" :key="fu.id" class="flex flex-col gap-1">
+          <div
+            class="inline-flex items-start gap-1.5 px-2 py-1 rounded-lg text-[1em] w-full"
+            :style="{
+              background: t.bgSubtle,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+              borderLeft: `2px solid ${t.accent}`,
+            }"
+          >
+            <!-- Badge + quote text jump back to the highlighted source on click;
+                 the Note/remove buttons keep their own handlers beside it. -->
+            <button
+              type="button"
+              class="inline-flex items-start gap-1.5 flex-1 min-w-0 text-left"
+              :title="tr('session.followup.reveal')"
+              @click="revealFollowUpAnchor(fu.id)"
+            >
+              <!-- Number matches the ① anchor badge dropped into the source message. -->
+              <span
+                class="inline-flex items-center justify-center font-mono leading-none flex-shrink-0"
+                :style="{
+                  minWidth: '16px',
+                  height: '16px',
+                  marginTop: '1px',
+                  padding: '0 4px',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  background: t.accent,
+                  color: t.accentText,
+                }"
+              >
+                {{ i + 1 }}
+              </span>
+              <span class="flex-1 min-w-0">
+                <span class="block truncate italic" :style="{ color: t.textDim }">
+                  {{ truncateForChip(fu.selectedText) }}
+                </span>
+                <span v-if="fu.note" class="block truncate" :style="{ color: t.text }">
+                  {{ fu.note }}
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="text-[12px] inline-flex items-center px-1.5 py-0.5 rounded-full transition opacity-80 hover:opacity-100 flex-shrink-0"
+              :style="{
+                color: editingFollowUpId === fu.id ? t.accent : t.textDim,
+                border: `1px solid ${editingFollowUpId === fu.id ? t.accent : t.border}`,
+              }"
+              :title="editingFollowUpId === fu.id ? 'Close note editor' : 'Edit note'"
+              @click="toggleEditFollowUp(fu.id)"
+            >
+              {{ editingFollowUpId === fu.id ? 'Done' : 'Note' }}
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center p-1 rounded transition opacity-70 hover:opacity-100 flex-shrink-0"
+              :style="{ color: t.textDim }"
+              title="Remove follow-up"
+              @click="removeFollowUp(fu.id)"
+            >
+              <X :size="11" />
+            </button>
+          </div>
+          <textarea
+            v-if="editingFollowUpId === fu.id"
+            rows="2"
+            :value="fu.note"
+            placeholder="Instruction for this quote (e.g. rewrite, expand, keep only this)"
+            class="w-full rounded-lg px-2 py-1 text-[1em] resize-y min-h-[3rem] outline-none"
+            :style="{
+              background: t.bgInput,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+            }"
+            @input="updateFollowUpNote(fu.id, ($event.target as HTMLTextAreaElement).value)"
+          />
+        </div>
+      </div>
+
+      <!-- Queued messages (Session steering/queue): sit directly atop the input,
+           auto-sent FIFO once the current turn finishes. Self-hides + carries its
+           own bottom margin when populated. -->
+      <SessionQueueList :session="session" />
+
+      <!-- Clean textarea — no icons inside (prototype `textarea.ci`). -->
+      <textarea
+        ref="textareaRef"
+        v-model="draft"
+        rows="2"
+        :placeholder="placeholder"
+        class="block w-full bg-transparent text-[1em] resize-none min-h-[2.75rem] max-h-[50vh] outline-none leading-relaxed"
+        :style="{ color: t.text }"
+        @focus="composerFocus = true"
+        @blur="onBlur"
+        @input="onComposerInput"
+        @click="mention.detect"
+        @keyup="mention.detect"
+        @keydown="onComposerKeydown"
+        @paste="onPaste"
+      />
+
+      <!-- Attachment chips (prototype `.attc`). -->
+      <div v-if="pendingAttachments.length > 0" class="mt-2 flex flex-wrap gap-1.5 items-end">
+        <template v-for="att in pendingAttachments" :key="att.id">
+          <div
+            v-if="att.type === 'image' && att.url"
+            class="relative group rounded-lg overflow-hidden"
+            :style="{
+              width: '72px',
+              height: '54px',
+              border: `1px solid ${t.border}`,
+              background: t.bgSubtle,
+            }"
+            :title="att.name"
+          >
+            <img :src="att.url" :alt="att.name" class="w-full h-full object-cover" />
+            <button
+              class="absolute top-0.5 right-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full"
+              :style="{ background: t.overlay, color: t.onAccent }"
+              @click="removeAttachment(att.id)"
+            >
+              <X :size="9" />
+            </button>
+          </div>
+          <div
+            v-else
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[1em]"
+            :style="{
+              background: t.bgSubtle,
+              color: t.text,
+              border: `1px solid ${t.border}`,
+            }"
+          >
+            <FileText :size="11" :style="{ color: t.textDim }" />
+            <span class="font-mono truncate" :style="{ maxWidth: '180px' }">{{ att.name }}</span>
+            <span v-if="att.size" :style="{ color: t.textFaint }">{{ att.size }}</span>
+            <button
+              class="inline-flex items-center p-0.5 rounded transition opacity-70 hover:opacity-100"
+              :style="{ color: t.textDim }"
+              title="Remove attachment"
+              @click="removeAttachment(att.id)"
+            >
+              <X :size="11" />
+            </button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Bottom toolbar (prototype `.cbar`): exactly 3 config chips left
+           (mode · model · account), then action buttons right. Usage + style +
+           MCP moved to the session header (prototype layout). -->
+      <div class="flex items-center gap-1.5 mt-2.5 flex-wrap">
+        <SessionChipsPopover :session="session" :only="['mode', 'model', 'account']" />
+
+        <span class="flex-1" />
+
         <!-- Enhance: rewrite the draft into a clearer prompt via a one-shot
              model call. Independent of streaming — it only transforms the draft. -->
         <button
           :disabled="!canEnhance"
-          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 disabled:opacity-100 opacity-70 hover:opacity-100"
           :style="{
-            color: canEnhance ? t.textDim : t.textFaint,
+            color: enhancing ? t.accent : canEnhance ? t.textDim : t.textFaint,
             cursor: canEnhance ? 'pointer' : 'not-allowed',
           }"
           :title="
@@ -107,19 +236,28 @@
           <Loader2 v-if="enhancing" :size="14" class="animate-spin" />
           <Sparkles v-else :size="14" />
         </button>
+        <button
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 opacity-70 hover:opacity-100"
+          :style="{ color: t.textDim }"
+          title="Attach file or image"
+          @click="fileInputRef?.click()"
+        >
+          <Paperclip :size="14" />
+        </button>
+
         <!-- While a turn streams: Stop (interrupt) + a split send button whose
              primary action is Insert/steer (or Queue when the draft carries
              attachments/quotes) and whose caret opens the alternate action. -->
         <template v-if="isStreaming">
           <button
-            class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
+            class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0"
             :style="{ background: t.danger, color: t.accentText, cursor: 'pointer' }"
             title="Stop (interrupt response)"
             @click="onStop"
           >
             <Square :size="11" fill="currentColor" />
           </button>
-          <div class="relative flex items-stretch self-end flex-shrink-0">
+          <div class="relative flex items-stretch flex-shrink-0">
             <button
               :disabled="!canSend"
               class="inline-flex items-center justify-center w-7 h-7 rounded-l-lg transition"
@@ -140,7 +278,11 @@
             </button>
             <button
               class="inline-flex items-center justify-center w-4 h-7 rounded-r-lg transition"
-              :style="{ background: t.bgHover, color: t.textDim, borderLeft: `1px solid ${t.bg}` }"
+              :style="{
+                background: !canSend ? t.bgHover : `${t.accent}cc`,
+                color: !canSend ? t.textDim : t.accentText,
+                borderLeft: `1px solid ${!canSend ? t.border : t.bg}`,
+              }"
               :title="tr('session.composer.queue')"
               @click="sendMenuOpen = !sendMenuOpen"
             >
@@ -151,12 +293,13 @@
             <div v-if="sendMenuOpen" class="fixed inset-0 z-10" @click="sendMenuOpen = false" />
             <div
               v-if="sendMenuOpen"
-              class="absolute bottom-full right-0 mb-1 z-20 rounded-lg overflow-hidden"
+              class="absolute bottom-full right-0 mb-1 z-20 rounded-xl overflow-hidden"
               :style="{
                 minWidth: '200px',
-                background: t.bgInput,
-                border: `1px solid ${t.border}`,
-                boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+                background: glassMenu.background,
+                border: `1px solid ${glassMenu.borderColor}`,
+                backdropFilter: glassMenu.backdropFilter,
+                boxShadow: glassMenu.boxShadow,
               }"
             >
               <button
@@ -196,149 +339,19 @@
         <button
           v-else
           :disabled="!canSend"
-          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0 self-end"
+          class="inline-flex items-center gap-1.5 px-3 h-7 rounded-lg text-[1em] font-medium transition flex-shrink-0"
           :style="{
             background: !canSend ? 'transparent' : t.accent,
             color: !canSend ? t.textFaint : t.accentText,
+            border: !canSend ? `1px solid ${t.border}` : 'none',
             cursor: !canSend ? 'not-allowed' : 'pointer',
           }"
           title="Send (Enter)"
           @click="onSend"
         >
           <Send :size="13" />
+          {{ tr('session.composer.send') }}
         </button>
-      </div>
-
-      <div
-        v-if="pendingAttachments.length > 0"
-        class="px-2 py-1.5 flex flex-wrap gap-1.5 items-end"
-        :style="{ borderTop: `1px solid ${t.border}` }"
-      >
-        <template v-for="att in pendingAttachments" :key="att.id">
-          <div
-            v-if="att.type === 'image' && att.url"
-            class="relative group rounded overflow-hidden"
-            :style="{
-              width: '72px',
-              height: '54px',
-              border: `1px solid ${t.border}`,
-              background: t.bgSubtle,
-            }"
-            :title="att.name"
-          >
-            <img :src="att.url" :alt="att.name" class="w-full h-full object-cover" />
-            <button
-              class="absolute top-0.5 right-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full"
-              :style="{ background: t.overlay, color: t.onAccent }"
-              @click="removeAttachment(att.id)"
-            >
-              <X :size="9" />
-            </button>
-          </div>
-          <div
-            v-else
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[1em]"
-            :style="{
-              background: t.bgSubtle,
-              color: t.text,
-              border: `1px solid ${t.border}`,
-            }"
-          >
-            <FileText :size="11" :style="{ color: t.textDim }" />
-            <span class="font-mono truncate" :style="{ maxWidth: '180px' }">{{ att.name }}</span>
-            <span v-if="att.size" :style="{ color: t.textFaint }">{{ att.size }}</span>
-            <button
-              class="text-[1em] inline-flex items-center"
-              :style="{ color: t.textDim }"
-              @click="removeAttachment(att.id)"
-            >
-              <X :size="10" />
-            </button>
-          </div>
-        </template>
-      </div>
-
-      <div
-        v-if="pendingFollowUps.length > 0"
-        class="px-2 py-1.5 flex flex-col gap-1.5"
-        :style="{ borderTop: `1px solid ${t.border}` }"
-      >
-        <div v-for="(fu, i) in pendingFollowUps" :key="fu.id" class="flex flex-col gap-1">
-          <div
-            class="inline-flex items-start gap-1.5 px-2 py-1 rounded text-[1em] w-full"
-            :style="{
-              background: `${t.accent}14`,
-              color: t.text,
-              border: `1px solid ${t.accent}40`,
-            }"
-          >
-            <!-- Badge + quote text jump back to the highlighted source on click;
-                 the Note/remove buttons keep their own handlers beside it. -->
-            <button
-              type="button"
-              class="inline-flex items-start gap-1.5 flex-1 min-w-0 text-left"
-              :title="tr('session.followup.reveal')"
-              @click="revealFollowUpAnchor(fu.id)"
-            >
-              <!-- Number matches the ① anchor badge dropped into the source message. -->
-              <span
-                class="inline-flex items-center justify-center font-mono leading-none flex-shrink-0"
-                :style="{
-                  minWidth: '16px',
-                  height: '16px',
-                  marginTop: '1px',
-                  padding: '0 4px',
-                  borderRadius: '8px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  background: t.accent,
-                  color: t.accentText,
-                }"
-              >
-                {{ i + 1 }}
-              </span>
-              <span class="flex-1 min-w-0">
-                <span class="block truncate italic" :style="{ color: t.textDim }">
-                  {{ truncateForChip(fu.selectedText) }}
-                </span>
-                <span v-if="fu.note" class="block truncate" :style="{ color: t.text }">
-                  {{ fu.note }}
-                </span>
-              </span>
-            </button>
-            <button
-              type="button"
-              class="text-[1em] inline-flex items-center px-1 rounded"
-              :style="{ color: t.textDim }"
-              :title="editingFollowUpId === fu.id ? 'Close note editor' : 'Edit note'"
-              @click="toggleEditFollowUp(fu.id)"
-            >
-              {{ editingFollowUpId === fu.id ? 'Done' : 'Note' }}
-            </button>
-            <button
-              type="button"
-              class="text-[1em] inline-flex items-center"
-              :style="{ color: t.textDim }"
-              title="Remove follow-up"
-              @click="removeFollowUp(fu.id)"
-            >
-              <X :size="10" />
-            </button>
-          </div>
-          <textarea
-            v-if="editingFollowUpId === fu.id"
-            rows="2"
-            :value="fu.note"
-            placeholder="Instruction for this quote (e.g. rewrite, expand, keep only this)"
-            class="w-full rounded px-2 py-1 text-[1em] resize-none outline-none"
-            :style="{
-              background: t.bgInput,
-              color: t.text,
-              border: `1px solid ${t.border}`,
-            }"
-            @input="updateFollowUpNote(fu.id, ($event.target as HTMLTextAreaElement).value)"
-          />
-        </div>
       </div>
 
       <input
@@ -373,18 +386,6 @@
         {{ tr('session.composer.enhance.undo') }}
       </button>
     </div>
-
-    <!-- Toolbar: account / model / effort chips + context usage. Sits under the
-         input (Claude Code style). The provider/connection chip is dropped —
-         the account chip already implies the provider. Mode + MCP live in the
-         row above the input; the attach button sits next to Send. -->
-    <div class="flex items-center gap-1 mt-1.5">
-      <SessionChipsPopover :session="session" :only="['account', 'model']" />
-      <SessionStylePicker ref="stylePickerRef" :session="session" />
-      <div class="ml-auto flex items-center gap-1">
-        <SessionContextStatus :session="session" />
-      </div>
-    </div>
   </div>
 </template>
 
@@ -412,6 +413,7 @@ import {
   findInvocableCommand,
   parseSlashInvocation,
 } from '~/utils/slash-command'
+import { openSessionStylePicker } from '~/utils/style-picker-bus'
 
 const props = defineProps<{
   session: Session
@@ -422,6 +424,7 @@ const props = defineProps<{
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
+const { input: glassInput, menu: glassMenu } = useGlass()
 const store = useSessionsStore()
 const ws = useWorkspaceStore()
 const settings = useSettingsStore()
@@ -431,8 +434,6 @@ const draft = ref('')
 const composerFocus = ref(false)
 const textareaRef = useTemplateRef<HTMLTextAreaElement>('textareaRef')
 const fileInputRef = ref<HTMLInputElement | null>(null)
-// Response-style popover (ADR 0046) — opened by the `/style` command dispatch.
-const stylePickerRef = useTemplateRef<{ open: () => void }>('stylePickerRef')
 const pendingAttachments = ref<SessionAttachment[]>([])
 
 // Enhance-prompt: rewrite the draft into a clearer prompt via a one-shot model
@@ -522,9 +523,10 @@ const onCommand = (commandId: string) => {
       .compactSession(props.session.id, { keepRecentTokens: 0 })
       .then((result) => showNotice(tr(`session.compaction.notice.${result}`)))
   } else if (cmd.action.type === 'style') {
-    // `/style` opens the response-style popover (ADR 0046) — the same picker as
-    // the toolbar chip, not a text expansion.
-    stylePickerRef.value?.open()
+    // `/style` opens the response-style popover (ADR 0046). The picker chip now
+    // lives in the session header (a sibling), so we open it through its
+    // per-session registry instead of a template ref.
+    openSessionStylePicker(props.session.id)
   }
 }
 

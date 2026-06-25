@@ -11,7 +11,7 @@
 
     <div class="p-4 space-y-4">
       <div
-        class="text-[1em] p-2.5 rounded flex items-start gap-2"
+        class="text-[1em] p-2.5 rounded-lg flex items-start gap-2"
         :style="{
           background: t.warningBg,
           border: `1px solid ${t.warningBorder}`,
@@ -29,12 +29,13 @@
         </div>
       </div>
       <Field label="What needs to change?">
+        <!-- Single-purpose modal input → resize-none per UI patterns. -->
         <textarea
           v-model="instruction"
           :rows="5"
           autofocus
           placeholder="Example: The implementation doesn't handle the partitioned worker case..."
-          class="w-full rounded px-2 py-1.5 text-[1em] resize-none leading-relaxed"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] resize-none leading-relaxed"
           :style="{
             background: t.bgInput,
             border: `1px solid ${t.border}`,

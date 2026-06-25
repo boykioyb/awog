@@ -1,0 +1,15 @@
+{
+  "sessions.sidebar.pin": "Pin",
+  "sessions.sidebar.unpin": "Unpin",
+  "sessions.sidebar.pinned": "Pinned",
+  "sessions.sidebar.select": "Select",
+  "sessions.sidebar.selectMode": "Select mode",
+  "sessions.sidebar.selectExit": "Exit select mode",
+  "sessions.sidebar.selected": "{n} selected",
+  "sessions.sidebar.selectAll": "Select all",
+  "sessions.sidebar.clearSelection": "Clear selection",
+  "sessions.sidebar.deleteSelected": "Delete selected",
+  "sessions.sidebar.attachments": "{n} attachments",
+  "sessions.sidebar.followups": "{n} pending follow-ups",
+  "sessions.sidebar.queued": "{n} queued"
+}

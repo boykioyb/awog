@@ -1,13 +1,20 @@
 <template>
-  <div v-if="items.length > 0" class="mb-1.5 flex flex-col gap-1">
-    <div class="flex items-center gap-1.5 px-1">
+  <div
+    v-if="items.length > 0"
+    class="mb-2 rounded-xl overflow-hidden"
+    :style="{ background: t.bgSubtle, border: `1px solid ${t.border}` }"
+  >
+    <div
+      class="flex items-center gap-1.5 px-3 py-2"
+      :style="{ borderBottom: `1px solid ${t.border}` }"
+    >
       <Clock :size="11" :style="{ color: t.textDim }" />
-      <span class="text-[12px] font-medium" :style="{ color: t.textDim }">
+      <span class="text-[12px] font-medium uppercase tracking-wider" :style="{ color: t.textDim }">
         {{ tr('session.queue.title') }} ({{ items.length }})
       </span>
       <button
         type="button"
-        class="ml-auto text-[12px] px-1 rounded transition"
+        class="ml-auto text-[12px] px-2 py-0.5 rounded-full transition"
         :style="{ color: t.textDim }"
         :title="tr('session.queue.clear')"
         @click="store.clearQueue(session.id)"
@@ -16,50 +23,53 @@
       </button>
     </div>
 
-    <div
-      v-for="(item, i) in items"
-      :key="item.id"
-      class="inline-flex items-start gap-1.5 px-2 py-1 rounded w-full"
-      :style="{ background: t.bgSubtle, color: t.text, border: `1px solid ${t.border}` }"
-    >
-      <!-- FIFO position — matches the auto-send order. -->
-      <span
-        class="inline-flex items-center justify-center font-mono leading-none flex-shrink-0"
-        :style="{
-          minWidth: '16px',
-          height: '16px',
-          marginTop: '1px',
-          padding: '0 4px',
-          borderRadius: '8px',
-          fontSize: '11px',
-          fontWeight: 700,
-          background: t.border,
-          color: t.textDim,
-        }"
+    <div class="px-2 py-1.5 flex flex-col gap-0.5">
+      <div
+        v-for="(item, i) in items"
+        :key="item.id"
+        class="group flex items-start gap-2 px-1.5 py-1 rounded-lg transition w-full"
+        :style="{ color: t.text }"
       >
-        {{ i + 1 }}
-      </span>
-      <span class="flex-1 min-w-0">
-        <span class="block truncate" :style="{ color: t.text }">
-          {{ item.commandInvocation || truncateForChip(item.text) || '—' }}
-        </span>
+        <!-- FIFO position — matches the auto-send order. -->
         <span
-          v-if="metaLine(item)"
-          class="block text-[12px] truncate"
-          :style="{ color: t.textFaint }"
+          class="inline-flex items-center justify-center font-mono leading-none flex-shrink-0"
+          :style="{
+            minWidth: '18px',
+            height: '18px',
+            marginTop: '1px',
+            padding: '0 5px',
+            borderRadius: '9999px',
+            fontSize: '11px',
+            fontWeight: 700,
+            background: t.bgElevated,
+            border: `1px solid ${t.border}`,
+            color: t.textDim,
+          }"
         >
-          {{ metaLine(item) }}
+          {{ i + 1 }}
         </span>
-      </span>
-      <button
-        type="button"
-        class="text-[1em] inline-flex items-center flex-shrink-0"
-        :style="{ color: t.textDim }"
-        :title="tr('session.queue.remove')"
-        @click="store.removeQueued(session.id, item.id)"
-      >
-        <X :size="10" />
-      </button>
+        <span class="flex-1 min-w-0">
+          <span class="block truncate text-[1em]" :style="{ color: t.text }">
+            {{ item.commandInvocation || truncateForChip(item.text) || '—' }}
+          </span>
+          <span
+            v-if="metaLine(item)"
+            class="block text-[12px] truncate"
+            :style="{ color: t.textFaint }"
+          >
+            {{ metaLine(item) }}
+          </span>
+        </span>
+        <button
+          type="button"
+          class="p-1 rounded transition flex-shrink-0 opacity-50 group-hover:opacity-100"
+          :style="{ color: t.textDim }"
+          :title="tr('session.queue.remove')"
+          @click="store.removeQueued(session.id, item.id)"
+        >
+          <X :size="11" />
+        </button>
+      </div>
     </div>
   </div>
 </template>

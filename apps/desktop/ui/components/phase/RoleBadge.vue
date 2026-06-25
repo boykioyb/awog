@@ -1,14 +1,14 @@
 <template>
   <div
-    class="rounded font-semibold flex-shrink-0 inline-flex items-center justify-center uppercase tracking-wide"
+    class="rounded-full font-semibold flex-shrink-0 inline-flex items-center justify-center uppercase tracking-wide"
     :style="{
       height: height + 'px',
       minWidth: height + 'px',
-      padding: isShort ? '0' : '0 8px',
+      padding: isShort ? '0' : '0 9px',
       fontSize: fontSize + 'px',
       lineHeight: '1',
-      letterSpacing: '0.02em',
-      background: t.bgInput,
+      letterSpacing: '0.04em',
+      background: t.bgActive,
       border: `1px solid ${t.border}`,
       color: t.textMuted,
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',

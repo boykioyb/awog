@@ -1,0 +1,8 @@
+{
+  "sessions.preview.loading": "Loading…",
+  "sessions.preview.loadError": "Could not load this file",
+  "sessions.preview.tooLarge": "File too large to preview here",
+  "sessions.preview.binary": "Binary file — open externally to view",
+  "sessions.preview.openAttachment": "Open preview",
+  "sessions.preview.pdfNote": "Multi-page PDF navigation isn't available in the embedded viewer"
+}

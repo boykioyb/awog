@@ -53,7 +53,7 @@
           class="mt-auto"
           :style="{
             padding: '8px',
-            borderRadius: '6px',
+            borderRadius: '8px',
             color: terminalOpen ? t.accent : t.textDim,
             background: terminalOpen ? t.bgActive : 'transparent',
           }"
@@ -160,7 +160,7 @@
         :style="{ background: 'rgba(0,0,0,0.5)' }"
       >
         <div
-          class="w-80 rounded-lg p-4"
+          class="w-80 rounded-xl p-4"
           :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
         >
           <p class="text-[1em] font-medium mb-1" :style="{ color: t.text }">
@@ -170,7 +170,7 @@
           <div class="flex justify-end gap-2">
             <button
               type="button"
-              class="px-3 py-1.5 rounded text-[1em]"
+              class="px-3 py-1.5 rounded-lg text-[1em]"
               :style="{ background: t.bgHover, color: t.textDim }"
               @click="closeConfirm = null"
             >
@@ -178,7 +178,7 @@
             </button>
             <button
               type="button"
-              class="px-3 py-1.5 rounded text-[1em]"
+              class="px-3 py-1.5 rounded-lg text-[1em]"
               :style="{ background: t.dangerBg, color: t.danger }"
               @click="confirmCloseDiscard"
             >
@@ -186,7 +186,7 @@
             </button>
             <button
               type="button"
-              class="px-3 py-1.5 rounded text-[1em]"
+              class="px-3 py-1.5 rounded-lg text-[1em]"
               :style="{ background: t.accent, color: t.accentText }"
               @click="confirmCloseSave"
             >
@@ -203,7 +203,7 @@
         <div
           v-for="toast in toasts"
           :key="toast.id"
-          class="px-3 py-2 rounded-md text-[1em] shadow-lg"
+          class="px-3 py-2 rounded-lg text-[1em] shadow-lg"
           :style="toastStyle(toast.kind)"
         >
           {{ toast.text }}
@@ -295,14 +295,14 @@ const handleEditorReady = () => {
 
 const iconBtn = computed<CSSProperties>(() => ({
   padding: '6px',
-  borderRadius: '4px',
+  borderRadius: '8px',
   color: t.value.textDim,
   transition: 'all 0.15s',
 }))
 
 const activityBtn = (view: ActivityView): CSSProperties => ({
   padding: '8px',
-  borderRadius: '6px',
+  borderRadius: '8px',
   color: activity.value === view ? t.value.accent : t.value.textDim,
   background: activity.value === view ? t.value.bgActive : 'transparent',
   transition: 'all 0.15s',

@@ -36,3 +36,6 @@ Thumbs.db
 
 # Playwright-MCP runtime artifacts (console logs, page snapshots)
 .playwright-mcp/
+
+# Local work checklists (personal, not shared)
+tasks/

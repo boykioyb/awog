@@ -12,17 +12,17 @@
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search..." />
         <button
-          class="p-1.5 rounded transition relative"
+          class="p-1.5 rounded-lg transition relative"
           :style="filterBtnStyle"
           title="Filters"
           @click="showFilters = !showFilters"
           @mouseenter="filterHover = true"
           @mouseleave="filterHover = false"
         >
-          <ListFilter :size="12" />
+          <ListFilter :size="13" />
           <div
             v-if="activeFilterCount > 0"
-            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[1em] font-semibold"
+            class="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center text-[12px] font-mono font-semibold leading-none"
             :style="{ background: t.accent, color: t.accentText }"
           >
             {{ activeFilterCount }}
@@ -85,8 +85,9 @@
           >
             <button
               v-if="group.label"
-              class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
+              class="w-full mx-1.5 px-2 py-1.5 flex items-center gap-1.5 rounded-lg transition"
               :style="{
+                width: 'calc(100% - 12px)',
                 color: t.textDim,
                 background: pill(false, groupHover === group.key).background,
               }"
@@ -95,7 +96,7 @@
               @mouseleave="groupHover = null"
             >
               <ChevronDown
-                :size="10"
+                :size="11"
                 :style="{
                   transform: collapsedGroups[group.key] ? 'rotate(-90deg)' : 'none',
                   transition: 'transform 0.15s',
@@ -107,7 +108,10 @@
               >
                 {{ group.label }}
               </span>
-              <span class="text-[1em]" :style="{ color: t.textFaint }">
+              <span
+                class="text-[12px] font-mono leading-none px-1.5 py-0.5 rounded-full"
+                :style="{ color: t.textDim, background: t.bgInput }"
+              >
                 {{ group.tasks.length }}
               </span>
             </button>

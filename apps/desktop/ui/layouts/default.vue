@@ -1,15 +1,19 @@
 <template>
   <div
-    class="h-screen w-full flex flex-col overflow-hidden gap-2 p-2"
+    class="h-screen w-full flex flex-row overflow-hidden gap-2 p-2"
     :style="{ background: appBackground, color: t.text, fontFamily: 'var(--font-sans)' }"
   >
-    <HeaderTabBar />
-    <UpdateBanner />
-    <QuotaBanner />
-    <main class="flex-1 flex flex-col overflow-hidden min-h-0">
-      <slot />
-    </main>
+    <NavRail />
+    <div class="flex-1 flex flex-col overflow-hidden min-h-0 gap-2">
+      <AppTopBar @open-search="searchOpen = true" />
+      <UpdateBanner />
+      <QuotaBanner />
+      <main class="flex-1 flex flex-col overflow-hidden min-h-0">
+        <slot />
+      </main>
+    </div>
     <SessionSearchPalette :open="searchOpen" @close="searchOpen = false" />
+    <SettingsModal />
   </div>
 </template>
 
@@ -28,7 +32,7 @@ const onGlobalKeydown = (e: KeyboardEvent) => {
   }
 }
 
-// HeaderTabBar dirty badge + ahead/behind chip need live `git.status` + `branches`
+// NavRail dirty badge + ahead/behind chip need live `git.status` + `branches`
 // regardless of which page is mounted. The store defaults to mock id `'prj1'`
 // which matches the INITIAL_BRANCHES seed (one with ahead=2) — without
 // selecting a real project first, the chip would show "↑2" everywhere until

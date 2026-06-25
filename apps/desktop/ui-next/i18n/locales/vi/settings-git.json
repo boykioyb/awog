@@ -1,0 +1,21 @@
+{
+  "settings.git.coAuthor.name": "Commit kèm co-author",
+  "settings.git.coAuthor.desc": "Thêm trailer Co-Authored-By cho commit do AWOG tạo (commit session và auto-commit của task)",
+  "settings.git.template.name": "Mẫu commit message",
+  "settings.git.template.desc": "Tiêu đề commit khi AWOG tự commit sau mỗi phase",
+  "settings.git.template.placeholder": "[{phaseId}] {agentName}: {summary}",
+  "settings.git.template.tokens": "Token hỗ trợ: {phaseId} {agentName} {summary}",
+  "settings.git.scope.name": "Phạm vi commit",
+  "settings.git.scope.desc": "File mà auto-commit gom vào",
+  "settings.git.scope.workspace": "Workspace",
+  "settings.git.scope.artifacts": "Chỉ artifact",
+  "settings.git.autoStash.name": "Tự stash cây bẩn trước task",
+  "settings.git.autoStash.desc": "Stash thay đổi chưa commit của bạn trước khi engine bắt đầu task",
+  "settings.git.dirtyPolicy.name": "Xử lý cây bẩn khi chạy task",
+  "settings.git.dirtyPolicy.desc": "Khi task khởi động với workspace còn thay đổi: cảnh báo hỏi trước, hoặc tự stash im lặng",
+  "settings.git.dirtyPolicy.warn": "Cảnh báo",
+  "settings.git.dirtyPolicy.autoStash": "Tự stash",
+  "settings.git.commitRule.name": "Quy tắc commit message (prompt AI)",
+  "settings.git.commitRule.desc": "System prompt gửi cho model khi sinh commit message tự động — chỉnh để khớp quy ước của nhóm",
+  "settings.git.commitRule.reset": "Khôi phục mặc định"
+}

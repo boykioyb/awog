@@ -1,15 +1,15 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-7">
     <div>
-      <h2 class="text-lg font-semibold mb-1" :style="{ color: t.text }">About</h2>
-      <div class="text-[1em]" :style="{ color: t.textDim }">
+      <h2 class="text-lg font-semibold tracking-tight" :style="{ color: t.text }">About</h2>
+      <div class="text-[1em] mt-1" :style="{ color: t.textDim }">
         About AWOG and how it stays up to date
       </div>
     </div>
 
     <!-- App identity -->
     <div
-      class="flex items-center gap-3 rounded-lg p-4"
+      class="flex items-center gap-3.5 rounded-xl p-4"
       :style="{ background: cardBg, border: `1px solid ${t.border}` }"
     >
       <div
@@ -45,7 +45,10 @@
     </div>
 
     <!-- Repository + updates -->
-    <div class="space-y-4">
+    <div
+      class="rounded-xl px-4 [&>*:last-child]:border-b-0"
+      :style="{ background: cardBg, border: `1px solid ${t.border}` }"
+    >
       <SettingsField label="Repository" hint="Source code, issues, and releases on GitHub">
         <button
           type="button"
@@ -71,8 +74,8 @@
           <span class="text-[1em]" :style="{ color: t.textDim }">{{ lastCheckedLabel }}</span>
           <button
             type="button"
-            class="px-2.5 py-1 rounded text-[1em] transition flex items-center gap-1.5 disabled:opacity-50"
-            :style="{ border: `1px solid ${t.border}`, color: t.text }"
+            class="px-3 py-1.5 rounded-lg text-[1em] transition flex items-center gap-1.5 disabled:opacity-50"
+            :style="{ border: `1px solid ${t.border}`, color: t.text, background: t.bgSubtle }"
             :disabled="checking"
             @click="onCheckNow"
           >
@@ -81,22 +84,22 @@
           </button>
         </div>
       </SettingsField>
+    </div>
 
-      <div
-        v-if="!update.canAutoInstall"
-        class="text-[1em] rounded px-3 py-2"
-        :style="{ background: t.infoBg, color: t.textDim, border: `1px solid ${t.infoBorder}` }"
-      >
-        On this platform AWOG notifies you of new versions and opens the download page — installing
-        the update is manual.
-      </div>
+    <div
+      v-if="!update.canAutoInstall"
+      class="text-[1em] rounded-lg px-3 py-2"
+      :style="{ background: t.infoBg, color: t.textDim, border: `1px solid ${t.infoBorder}` }"
+    >
+      On this platform AWOG notifies you of new versions and opens the download page — installing
+      the update is manual.
     </div>
 
     <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
       <div
         v-for="toast in toasts"
         :key="toast.id"
-        class="px-3 py-2 rounded text-[1em] shadow"
+        class="px-3 py-2 rounded-lg text-[1em] shadow"
         :style="toastStyle(toast.kind)"
       >
         {{ toast.text }}

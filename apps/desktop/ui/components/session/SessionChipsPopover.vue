@@ -1,130 +1,71 @@
 <template>
   <div ref="rootRef" class="flex items-center gap-1 flex-wrap">
-    <!-- Provider chip -->
-    <div v-if="shows('provider')" class="relative">
-      <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
-        :style="chipStyle(openPop === 'provider')"
-        @click="togglePop('provider')"
-      >
-        <Cable :size="10" />
-        {{ providerLabel }}
-        <ChevronDown :size="9" :style="{ color: t.textDim }" />
+    <!-- Mode + Tools chip (tools live under the mode popover since the enabled
+         tool set is what makes the mode meaningful in practice). Renders first so
+         `:only=['mode','model','account']` reads mode → model → account L→R,
+         matching the prototype composer (`Ask · Opus 4.8 · Anthropic`). -->
+    <div v-if="shows('mode')" class="relative">
+      <button :class="chipClass" :style="modeChipStyle" @click="togglePop('mode')">
+        <component :is="currentModeDef.icon" :size="12" class="flex-shrink-0" />
+        {{ currentModeDef.label }}
+        <span
+          v-if="hasAnyDisabled"
+          class="opacity-80"
+          :title="`${enabledToolCount} of ${TOOLS_CATALOG.length} tools enabled`"
+        >
+          · {{ enabledToolCount }}/{{ TOOLS_CATALOG.length }}
+        </span>
+        <ChevronDown :size="11" class="flex-shrink-0 opacity-70" />
       </button>
-      <div
-        v-if="openPop === 'provider'"
-        class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20"
-        :style="popStyle"
-      >
+      <div v-if="openPop === 'mode'" :class="popClass" :style="popStyle">
         <div
           class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
         >
-          Connection
+          Mode
         </div>
         <button
-          v-for="p in availableProviders"
-          :key="p"
-          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
+          v-for="m in MODE_OPTIONS"
+          :key="m.value"
+          class="w-full text-left px-2.5 py-1.5 flex items-start gap-2 text-[1em] transition"
           :style="{
-            background: session.settings.provider === p ? t.bgActive : 'transparent',
+            background: session.settings.mode === m.value ? t.bgActive : 'transparent',
             color: t.text,
+            minWidth: '300px',
           }"
-          @click="onPickProvider(p)"
+          @click="onPickMode(m.value)"
         >
-          <span
-            class="inline-block w-1.5 h-1.5 rounded-full"
-            :style="{
-              background: settings.isProviderConnected(p) ? t.success : t.textFaint,
-            }"
-          />
-          {{ PROVIDER_LABEL[p] }}
-          <span
-            v-if="!settings.isProviderConnected(p)"
-            class="ml-auto text-[12px] uppercase tracking-wider"
+          <component
+            :is="m.icon"
+            :size="11"
+            class="mt-0.5 flex-shrink-0"
             :style="{ color: t.textDim }"
-          >
-            Not connected
-          </span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Account chip — spans ALL connected providers (the provider chip is dropped
-         from the composer). Picking an account switches the session's provider +
-         account together, and pins it for this session (concurrent sessions can
-         each use a different account). Hidden when there are no accounts at all. -->
-    <div v-if="shows('account') && totalAccountCount > 0" class="relative">
-      <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
-        :style="chipStyle(openPop === 'account')"
-        :title="accountChipTitle"
-        @click="togglePop('account')"
-      >
-        <UserRound :size="10" class="flex-shrink-0" />
-        <span class="truncate" :style="{ maxWidth: '120px' }">{{ currentAccountLabel }}</span>
-        <ChevronDown :size="9" class="flex-shrink-0" :style="{ color: t.textDim }" />
-      </button>
-      <div
-        v-if="openPop === 'account'"
-        class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20"
-        :style="accountPopStyle"
-      >
-        <template v-for="group in accountGroups" :key="group.provider">
-          <div
-            class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
-            :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
-          >
-            {{ PROVIDER_LABEL[group.provider] }} · Account
-          </div>
-          <button
-            v-for="acc in group.accounts"
-            :key="acc.id"
-            class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
-            :style="{
-              background: isAccountActive(group.provider, acc.id) ? t.bgActive : 'transparent',
-              color: t.text,
-              minWidth: '260px',
-            }"
-            @click="onPickAccount(group.provider, acc.id)"
-          >
-            <span
-              class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-              :style="{ background: acc.status === 'connected' ? t.success : t.textFaint }"
-              :title="acc.status"
-            />
-            <div class="flex-1 min-w-0">
-              <div class="truncate" :style="{ color: t.text }">{{ acc.label }}</div>
-              <div
-                v-if="acc.account?.email"
-                class="text-[12px] font-mono truncate"
-                :style="{ color: t.textDim }"
-              >
-                {{ acc.account.email }}
-              </div>
+          />
+          <div class="flex-1 min-w-0">
+            <div :style="{ color: t.text }">{{ m.label }}</div>
+            <div class="text-[1em] leading-snug" :style="{ color: t.textDim }">
+              {{ m.desc }}
             </div>
-            <span
-              v-if="acc.id === group.activeAccountId"
-              class="text-[12px] uppercase tracking-wider flex-shrink-0"
-              :style="{ color: t.textDim }"
-            >
-              default
-            </span>
-            <Check
-              v-if="isAccountActive(group.provider, acc.id)"
-              :size="11"
-              :style="{ color: t.success }"
-            />
-          </button>
-        </template>
+          </div>
+        </button>
+
+        <!-- Tools row: opens the second-level modal. -->
         <button
-          v-if="session.settings.accountId !== undefined"
           type="button"
-          class="w-full text-left px-2.5 py-1.5 text-[1em] transition"
-          :style="{ color: t.textDim, borderTop: `1px solid ${t.border}` }"
-          @click="resetAccount"
+          class="w-full text-left px-2.5 py-2 flex items-center gap-2 text-[1em] transition"
+          :style="{
+            color: t.text,
+            background: 'transparent',
+            borderTop: `1px solid ${t.border}`,
+          }"
+          @click="openToolsModal"
         >
-          Follow active account
+          <Info :size="11" :style="{ color: t.textDim }" />
+          <span class="flex-1">Tools</span>
+          <span class="font-mono text-[1em]" :style="{ color: t.textDim }">
+            {{ enabledToolCount }}/{{ TOOLS_CATALOG.length }}
+          </span>
+          <ChevronRight :size="11" :style="{ color: t.textDim }" />
         </button>
       </div>
     </div>
@@ -133,26 +74,18 @@
          pattern) since the supported level range is model-dependent. -->
     <div v-if="shows('model')" class="relative min-w-0">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition max-w-full min-w-0"
+        :class="[chipClass, 'max-w-full min-w-0']"
         :style="chipStyle(openPop === 'model')"
         @click="togglePop('model')"
       >
-        <Sparkles :size="10" class="flex-shrink-0" />
+        <Sparkles :size="12" class="flex-shrink-0" />
         <span class="truncate">{{ currentModelLabel }}</span>
-        <span
-          v-if="currentModel?.supportsThinking"
-          class="flex-shrink-0"
-          :style="{ color: t.textDim }"
-        >
+        <span v-if="currentModel?.supportsThinking" class="flex-shrink-0 opacity-70">
           · {{ LEVEL_LABEL[session.settings.level] }}
         </span>
-        <ChevronDown :size="9" class="flex-shrink-0" :style="{ color: t.textDim }" />
+        <ChevronDown :size="11" class="flex-shrink-0 opacity-70" />
       </button>
-      <div
-        v-if="openPop === 'model'"
-        class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20"
-        :style="popStyle"
-      >
+      <div v-if="openPop === 'model'" :class="popClass" :style="popStyle">
         <div
           class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
@@ -213,79 +146,123 @@
       </div>
     </div>
 
-    <!-- Mode + Tools chip (tools live under the mode popover since the enabled
-         tool set is what makes the mode meaningful in practice). -->
-    <div v-if="shows('mode')" class="relative">
+    <!-- Account chip — spans ALL connected providers (the provider chip is dropped
+         from the composer). Picking an account switches the session's provider +
+         account together, and pins it for this session (concurrent sessions can
+         each use a different account). Hidden when there are no accounts at all. -->
+    <div v-if="shows('account') && totalAccountCount > 0" class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
-        :style="chipStyle(openPop === 'mode')"
-        @click="togglePop('mode')"
+        :class="chipClass"
+        :style="chipStyle(openPop === 'account')"
+        :title="accountChipTitle"
+        @click="togglePop('account')"
       >
-        <component :is="currentModeDef.icon" :size="10" />
-        {{ currentModeDef.label }}
-        <span
-          v-if="hasAnyDisabled"
-          class="font-mono text-[1em]"
-          :style="{ color: t.textDim }"
-          :title="`${enabledToolCount} of ${TOOLS_CATALOG.length} tools enabled`"
-        >
-          · {{ enabledToolCount }}/{{ TOOLS_CATALOG.length }}
-        </span>
-        <ChevronDown :size="9" :style="{ color: t.textDim }" />
+        <UserRound :size="12" class="flex-shrink-0" />
+        <span class="truncate" :style="{ maxWidth: '120px' }">{{ currentAccountLabel }}</span>
+        <ChevronDown :size="11" class="flex-shrink-0 opacity-70" />
       </button>
-      <div
-        v-if="openPop === 'mode'"
-        class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20"
-        :style="popStyle"
+      <div v-if="openPop === 'account'" :class="popClass" :style="accountPopStyle">
+        <template v-for="group in accountGroups" :key="group.provider">
+          <div
+            class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
+            :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
+          >
+            {{ PROVIDER_LABEL[group.provider] }} · Account
+          </div>
+          <button
+            v-for="acc in group.accounts"
+            :key="acc.id"
+            class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
+            :style="{
+              background: isAccountActive(group.provider, acc.id) ? t.bgActive : 'transparent',
+              color: t.text,
+              minWidth: '260px',
+            }"
+            @click="onPickAccount(group.provider, acc.id)"
+          >
+            <span
+              class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+              :style="{ background: acc.status === 'connected' ? t.success : t.textFaint }"
+              :title="acc.status"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="truncate" :style="{ color: t.text }">{{ acc.label }}</div>
+              <div
+                v-if="acc.account?.email"
+                class="text-[12px] font-mono truncate"
+                :style="{ color: t.textDim }"
+              >
+                {{ acc.account.email }}
+              </div>
+            </div>
+            <span
+              v-if="acc.id === group.activeAccountId"
+              class="text-[12px] uppercase tracking-wider flex-shrink-0"
+              :style="{ color: t.textDim }"
+            >
+              default
+            </span>
+            <Check
+              v-if="isAccountActive(group.provider, acc.id)"
+              :size="11"
+              :style="{ color: t.success }"
+            />
+          </button>
+        </template>
+        <button
+          v-if="session.settings.accountId !== undefined"
+          type="button"
+          class="w-full text-left px-2.5 py-1.5 text-[1em] transition"
+          :style="{ color: t.textDim, borderTop: `1px solid ${t.border}` }"
+          @click="resetAccount"
+        >
+          Follow active account
+        </button>
+      </div>
+    </div>
+
+    <!-- Provider chip -->
+    <div v-if="shows('provider')" class="relative">
+      <button
+        :class="chipClass"
+        :style="chipStyle(openPop === 'provider')"
+        @click="togglePop('provider')"
       >
+        <Cable :size="12" class="flex-shrink-0" />
+        {{ providerLabel }}
+        <ChevronDown :size="11" class="flex-shrink-0 opacity-70" />
+      </button>
+      <div v-if="openPop === 'provider'" :class="popClass" :style="popStyle">
         <div
           class="px-2.5 py-1 text-[1em] uppercase tracking-wider"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
         >
-          Mode
+          Connection
         </div>
         <button
-          v-for="m in MODE_OPTIONS"
-          :key="m.value"
-          class="w-full text-left px-2.5 py-1.5 flex items-start gap-2 text-[1em] transition"
+          v-for="p in availableProviders"
+          :key="p"
+          class="w-full text-left px-2.5 py-1.5 flex items-center gap-2 text-[1em] transition"
           :style="{
-            background: session.settings.mode === m.value ? t.bgActive : 'transparent',
+            background: session.settings.provider === p ? t.bgActive : 'transparent',
             color: t.text,
-            minWidth: '300px',
           }"
-          @click="onPickMode(m.value)"
+          @click="onPickProvider(p)"
         >
-          <component
-            :is="m.icon"
-            :size="11"
-            class="mt-0.5 flex-shrink-0"
-            :style="{ color: t.textDim }"
+          <span
+            class="inline-block w-1.5 h-1.5 rounded-full"
+            :style="{
+              background: settings.isProviderConnected(p) ? t.success : t.textFaint,
+            }"
           />
-          <div class="flex-1 min-w-0">
-            <div :style="{ color: t.text }">{{ m.label }}</div>
-            <div class="text-[1em] leading-snug" :style="{ color: t.textDim }">
-              {{ m.desc }}
-            </div>
-          </div>
-        </button>
-
-        <!-- Tools row: opens the second-level modal. -->
-        <button
-          type="button"
-          class="w-full text-left px-2.5 py-2 flex items-center gap-2 text-[1em] transition"
-          :style="{
-            color: t.text,
-            background: 'transparent',
-            borderTop: `1px solid ${t.border}`,
-          }"
-          @click="openToolsModal"
-        >
-          <Info :size="11" :style="{ color: t.textDim }" />
-          <span class="flex-1">Tools</span>
-          <span class="font-mono text-[1em]" :style="{ color: t.textDim }">
-            {{ enabledToolCount }}/{{ TOOLS_CATALOG.length }}
+          {{ PROVIDER_LABEL[p] }}
+          <span
+            v-if="!settings.isProviderConnected(p)"
+            class="ml-auto text-[12px] uppercase tracking-wider"
+            :style="{ color: t.textDim }"
+          >
+            Not connected
           </span>
-          <ChevronRight :size="11" :style="{ color: t.textDim }" />
         </button>
       </div>
     </div>
@@ -294,23 +271,17 @@
          MCP servers exist in the workspace (nothing to pick). -->
     <div v-if="shows('mcp') && mcpEnabledServers.length > 0" class="relative">
       <button
-        class="inline-flex items-center gap-1 px-2 py-1 rounded text-[1em] transition"
+        :class="chipClass"
         :style="chipStyle(openPop === 'mcp')"
         :title="mcpChipTitle"
         @click="togglePop('mcp')"
       >
-        <Plug :size="10" />
+        <Plug :size="12" class="flex-shrink-0" />
         MCP
-        <span class="font-mono text-[1em]" :style="{ color: t.textDim }">
-          · {{ activeMcpCount }}/{{ mcpEnabledServers.length }}
-        </span>
-        <ChevronDown :size="9" :style="{ color: t.textDim }" />
+        <span class="opacity-80">· {{ activeMcpCount }}/{{ mcpEnabledServers.length }}</span>
+        <ChevronDown :size="11" class="flex-shrink-0 opacity-70" />
       </button>
-      <div
-        v-if="openPop === 'mcp'"
-        class="absolute left-0 bottom-full mb-1 rounded-md py-1 z-20"
-        :style="mcpPopStyle"
-      >
+      <div v-if="openPop === 'mcp'" :class="popClass" :style="mcpPopStyle">
         <div
           class="px-2.5 py-1 text-[1em] uppercase tracking-wider flex items-center gap-2"
           :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
@@ -374,10 +345,12 @@
       @click.self="closeToolsModal"
     >
       <div
-        class="w-full max-w-md rounded-lg shadow-xl flex flex-col"
+        class="w-full max-w-md rounded-xl flex flex-col overflow-hidden"
         :style="{
-          background: t.bgElevated,
-          border: `1px solid ${t.border}`,
+          background: overlay.background,
+          border: `1px solid ${overlay.borderColor}`,
+          backdropFilter: overlay.backdropFilter,
+          boxShadow: overlay.boxShadow,
           maxHeight: '80vh',
         }"
         role="dialog"
@@ -402,12 +375,12 @@
           </button>
           <button
             type="button"
-            class="p-1 rounded transition flex items-center"
+            class="p-1.5 rounded transition flex items-center hover:opacity-100 opacity-70"
             :style="{ color: t.textDim }"
             aria-label="Close"
             @click="closeToolsModal"
           >
-            <X :size="14" />
+            <X :size="13" />
           </button>
         </div>
         <div class="overflow-y-auto py-1">
@@ -496,15 +469,29 @@ const ALL_LEVELS: ThinkingLevel[] = ['low', 'medium', 'high', 'extra-high', 'max
 // rows (e.g. Mode + MCP above the input, the rest below). Undefined = show all.
 type ChipKind = 'provider' | 'account' | 'model' | 'mode' | 'mcp'
 
-const props = defineProps<{
-  session: Session
-  only?: ChipKind[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    session: Session
+    only?: ChipKind[]
+    // Popover open direction. 'up' (default) suits the bottom composer; 'down'
+    // suits the top session header.
+    placement?: 'up' | 'down'
+  }>(),
+  { only: undefined, placement: 'up' },
+)
 
 const shows = (kind: ChipKind): boolean => !props.only || props.only.includes(kind)
 
+// Shared popover positioning. All chip popovers anchor to the chip's left edge;
+// `placement` only flips the vertical direction (bottom-full opens upward for
+// the composer, top-full opens downward for the header).
+const popClass = computed(() => [
+  'absolute left-0 rounded-xl py-1 z-20 overflow-hidden',
+  props.placement === 'down' ? 'top-full mt-1' : 'bottom-full mb-1',
+])
+
 const { t } = useTheme()
-const { menu } = useGlass()
+const { menu, overlay } = useGlass()
 const settings = useSettingsStore()
 const store = useSessionsStore()
 const ws = useWorkspaceStore()
@@ -561,11 +548,19 @@ const popStyle = computed(() => ({
   minWidth: '200px',
 }))
 
-// Borderless chips (user preference): no background, no border. The open/closed
-// state is carried by text brightness (active = full text, idle = dimmed) and
-// the chevron + the popover itself — not a box outline.
+// Shared chip layout (prototype `.chip.sm.chipbtn`): mono font, 12px text,
+// 3px×9px padding, radius 7 (= rounded-lg), small gap for the leading icon +
+// trailing chevron. Color/border come from `chipStyle` (theme-driven).
+const chipClass =
+  'inline-flex items-center gap-[5px] font-mono text-[12px] px-2 py-[3px] rounded-lg transition'
+
+// Outline chips (prototype `.chip.chipbtn`, radius 7 = rounded-lg): hairline
+// border, transparent fill, dim text. Open = neutral highlight (bgActive +
+// stronger border + full text) — the popover signals "active", not an accent
+// wash on the chip itself (keeps the row calm, per the flat/outline-chip rule).
 const chipStyle = (active: boolean) => ({
-  background: 'transparent',
+  background: active ? t.value.bgActive : 'transparent',
+  border: `1px solid ${active ? t.value.borderStrong : t.value.border}`,
   color: active ? t.value.text : t.value.textDim,
 })
 
@@ -576,6 +571,20 @@ const togglePop = (name: NonNullable<PopoverName>) => {
 const currentModeDef = computed(
   () => MODE_OPTIONS.find((m) => m.value === props.session.settings.mode) ?? MODE_OPTIONS[0]!,
 )
+
+// The mode chip is the most consequential control in the row, so it carries a
+// standing tint by mode even when closed (prototype `.mode-Plan`/`.mode-Execute`):
+// Plan = warning (read-only), Execute = accent (bypass). Ask / Accept-Edits stay
+// neutral. Open always wins with the accent-open state for consistency.
+const modeChipStyle = computed(() => {
+  if (openPop.value === 'mode') return chipStyle(true)
+  const mode = props.session.settings.mode
+  const tone = mode === 'plan' ? t.value.warning : mode === 'execute' ? t.value.accent : null
+  if (!tone) return chipStyle(false)
+  // Outline tint only (transparent fill) — mirrors prototype `.mode-Plan`
+  // (amber border+text) / `.mode-Execute` (accent border+text).
+  return { background: 'transparent', border: `1px solid ${tone}`, color: tone }
+})
 
 const resolveLevel = (levels: ThinkingLevel[]) =>
   (levels.includes(props.session.settings.level) ? props.session.settings.level : levels[0])!

@@ -22,21 +22,20 @@
           <Plus :size="14" />
         </button>
       </div>
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto p-2 space-y-1">
         <div
           v-for="p in filtered"
           :key="p.id"
-          class="w-full px-3 py-2.5 text-left cursor-pointer transition"
+          class="group w-full px-2.5 py-2 text-left cursor-pointer transition rounded-lg"
           :style="{
             background: pill(isActive(p.id)).background,
-            borderBottom: `1px solid ${t.border}`,
-            borderLeft: `2px solid ${isActive(p.id) ? t.accent : 'transparent'}`,
+            border: `1px solid ${isActive(p.id) ? t.border : 'transparent'}`,
           }"
           @click="selectProject(p.id)"
           @contextmenu="onContextMenu($event, p.id)"
         >
           <div class="flex items-center gap-2 mb-0.5">
-            <FolderGit2 :size="12" :style="{ color: t.textDim }" />
+            <FolderGit2 :size="13" :style="{ color: isActive(p.id) ? t.accent : t.textDim }" />
             <input
               v-if="renamingId === p.id"
               :ref="setRenameInputRef"
@@ -62,7 +61,7 @@
               {{ p.name }}
             </div>
             <button
-              class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
+              class="p-1 rounded flex-shrink-0 transition opacity-0 group-hover:opacity-100"
               :style="{ color: t.textMuted }"
               title="Actions"
               @click.stop="openMenuFromButton($event, p.id)"
@@ -100,10 +99,10 @@
         <div class="flex-shrink-0 px-4 md:px-6 pt-4 md:pt-6">
           <div class="flex items-start gap-3 mb-4">
             <div
-              class="w-12 h-12 rounded flex items-center justify-center"
-              :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
+              class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              :style="elevated"
             >
-              <FolderGit2 :size="20" :style="{ color: t.textMuted }" />
+              <FolderGit2 :size="20" :style="{ color: t.accent }" />
             </div>
             <div class="flex-1 min-w-0">
               <h1 class="text-lg font-semibold mb-1" :style="{ color: t.text }">
@@ -115,7 +114,7 @@
             </div>
             <div class="flex items-center gap-1 flex-shrink-0">
               <button
-                class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+                class="px-3 py-1.5 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition"
                 :style="{ background: t.accent, color: t.accentText }"
                 @click="openInEditor(selectedProject.id)"
               >
@@ -123,42 +122,47 @@
                 Open in Editor
               </button>
               <button
-                class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-                :style="
-                  isTerminalOpen
-                    ? {
-                        background: t.bgActive,
-                        color: t.accent,
-                        border: `1px solid ${t.borderStrong}`,
-                      }
-                    : { color: t.text, border: `1px solid ${t.borderStrong}` }
-                "
+                class="p-1.5 rounded transition"
+                :style="{
+                  color: isTerminalOpen ? t.accent : t.textDim,
+                  background: isTerminalOpen ? t.bgActive : 'transparent',
+                }"
                 title="Terminal"
                 @click="toggleTerminal"
+                @mouseenter="hoverBtn"
+                @mouseleave="
+                  (e) => restoreToggleBtn(e, isTerminalOpen, t.accent, t.bgActive, t.textDim)
+                "
               >
                 <TerminalSquare :size="13" />
-                Terminal
               </button>
               <button
-                class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
-                :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
+                class="p-1.5 rounded transition"
+                :style="{ color: t.textDim }"
+                title="Edit project"
                 @click="editing = true"
+                @mouseenter="hoverBtn"
+                @mouseleave="(e) => unhoverBtn(e, t.textDim)"
               >
-                <Edit3 :size="11" />
-                Edit
+                <Edit3 :size="13" />
               </button>
               <button
                 class="p-1.5 rounded transition"
                 :style="{ color: t.textDim }"
                 :title="tr('project.llm.title')"
                 @click="llmModalOpen = true"
+                @mouseenter="hoverBtn"
+                @mouseleave="(e) => unhoverBtn(e, t.textDim)"
               >
                 <SlidersHorizontal :size="13" />
               </button>
               <button
                 class="p-1.5 rounded transition"
                 :style="{ color: t.textDim }"
+                title="Remove project"
                 @click="confirmDelete = selectedProject"
+                @mouseenter="hoverDangerBtn"
+                @mouseleave="(e) => unhoverBtn(e, t.textDim)"
               >
                 <Trash2 :size="13" />
               </button>
@@ -167,15 +171,15 @@
 
           <!-- Tab bar (Overview always; Issues + Pull Requests only for GitHub
                remotes per ADR 0049). -->
-          <div class="flex items-center gap-1" :style="{ borderBottom: `1px solid ${t.border}` }">
+          <div class="flex items-center gap-1 pb-2">
             <button
               v-for="tab in projectTabs"
               :key="tab.id"
-              class="flex items-center gap-1.5 px-3 py-2 text-[1em] transition"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-[1em] rounded-lg transition"
               :style="projectTabStyle(tab.id)"
               @click="activeProjectTab = tab.id"
             >
-              <component :is="tab.icon" :size="12" />
+              <component :is="tab.icon" :size="13" />
               <span>{{ tab.label }}</span>
             </button>
           </div>
@@ -188,7 +192,7 @@
         >
           <div class="mb-6 flex items-center gap-2 flex-wrap">
             <button
-              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+              class="px-3 py-1.5 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition"
               :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
               @click="openSaveAsTemplate"
             >
@@ -196,7 +200,7 @@
               {{ tr('templates.projects.save_as') }}
             </button>
             <button
-              class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition disabled:opacity-50 disabled:cursor-not-allowed"
               :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
               :disabled="templatesStore.templates.length === 0"
               @click="openInstallTemplate"
@@ -220,7 +224,31 @@
             {{ selectedProject.description }}
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-6">
+          <!-- Metrics strip -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+            <div
+              v-for="m in projectMetrics"
+              :key="m.label"
+              class="rounded-xl px-3.5 py-3"
+              :style="elevated"
+            >
+              <div
+                class="text-[22px] font-bold leading-none tracking-tight"
+                :style="{ color: m.color ?? t.text }"
+              >
+                {{ m.value }}
+              </div>
+              <div
+                class="text-[12px] uppercase tracking-wider font-mono mt-2"
+                :style="{ color: t.textDim }"
+              >
+                {{ m.label }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Project meta -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-6">
             <ProjectMeta :icon="GitBranch" label="Branch" :value="selectedProject.gitBranch" mono />
             <ProjectMeta :icon="Code2" label="Language" :value="selectedProject.language" />
             <ProjectMeta
@@ -233,20 +261,20 @@
           <!-- Per-project session LLM defaults. New sessions in this project
                inherit provider/account/model/effort from here. -->
           <button
-            class="w-full rounded p-3 mb-6 flex items-center gap-3 text-left transition"
-            :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+            class="w-full rounded-xl p-3.5 mb-6 flex items-center gap-3 text-left transition"
+            :style="elevated"
             @click="llmModalOpen = true"
           >
             <SlidersHorizontal :size="15" :style="{ color: t.textDim }" />
             <div class="flex-1 min-w-0">
               <div
-                class="text-[1em] uppercase tracking-wider font-medium"
+                class="text-[12px] uppercase tracking-wider font-mono font-medium"
                 :style="{ color: t.textDim }"
               >
                 {{ tr('project.llm.title') }}
               </div>
               <div
-                class="text-[1em] mt-0.5 truncate"
+                class="text-[1em] mt-1 truncate"
                 :style="{ color: llmSummary.custom ? t.text : t.textDim }"
               >
                 {{ llmSummary.text }}
@@ -255,40 +283,70 @@
             <ChevronRight :size="15" :style="{ color: t.textDim }" />
           </button>
 
-          <div
-            v-if="selectedProject.gitRemote"
-            class="mb-6 rounded p-3"
-            :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
-          >
+          <!-- Configuration card: path / remote / .awog tiers as key→value rows. -->
+          <div class="mb-6 rounded-xl overflow-hidden" :style="elevated">
             <div
-              class="text-[1em] uppercase tracking-wider font-medium mb-2"
-              :style="{ color: t.textDim }"
+              class="flex items-center gap-2 px-3.5 py-2.5 text-[12px] uppercase tracking-wider font-mono font-medium"
+              :style="{ color: t.textDim, borderBottom: `1px solid ${t.border}` }"
             >
-              Git Remote
+              <FolderGit2 :size="13" />
+              {{ tr('project.config.title') }}
             </div>
-            <div class="flex items-center gap-2">
-              <GitFork :size="12" :style="{ color: t.textDim }" />
-              <span class="text-[1em] font-mono flex-1 truncate" :style="{ color: t.text }">
-                {{ selectedProject.gitRemote }}
-              </span>
-              <button
-                class="px-2 py-0.5 text-[1em] rounded transition"
-                :style="{ color: t.textDim }"
+            <div class="px-3.5 py-1">
+              <div class="flex gap-3.5 py-2.5" :style="{ borderBottom: `1px solid ${t.border}` }">
+                <span class="text-[1em] flex-shrink-0 w-16" :style="{ color: t.textDim }">
+                  {{ tr('project.config.path') }}
+                </span>
+                <span
+                  class="text-[1em] font-mono flex-1 min-w-0 break-all"
+                  :style="{ color: t.text }"
+                >
+                  {{ selectedProject.path }}
+                </span>
+              </div>
+              <div
+                v-if="selectedProject.gitRemote"
+                class="flex gap-3.5 py-2.5"
+                :style="{ borderBottom: `1px solid ${t.border}` }"
               >
-                Open
-              </button>
+                <span class="text-[1em] flex-shrink-0 w-16" :style="{ color: t.textDim }">
+                  {{ tr('project.config.remote') }}
+                </span>
+                <span
+                  class="text-[1em] font-mono flex-1 min-w-0 truncate inline-flex items-center gap-1.5"
+                  :style="{ color: isGithubProject ? t.info : t.text }"
+                >
+                  <GitFork :size="12" :style="{ color: t.textDim }" />
+                  {{ selectedProject.gitRemote }}
+                </span>
+              </div>
+              <div class="flex gap-3.5 py-2.5 items-start">
+                <span class="text-[1em] flex-shrink-0 w-16 pt-0.5" :style="{ color: t.textDim }">
+                  .awog/
+                </span>
+                <span class="flex-1 min-w-0 flex flex-wrap gap-1.5">
+                  <span
+                    v-for="dir in awogTiers"
+                    :key="dir"
+                    class="text-[12px] font-mono px-2 py-0.5 rounded-full"
+                    :style="{ background: t.bgActive, color: t.textMuted }"
+                  >
+                    {{ dir }}/
+                  </span>
+                </span>
+              </div>
             </div>
           </div>
 
-          <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
+          <div class="mb-2.5 flex items-center justify-between flex-wrap gap-2">
             <div
-              class="text-[1em] uppercase tracking-wider font-medium"
+              class="text-[12px] uppercase tracking-wider font-mono font-medium"
               :style="{ color: t.textDim }"
             >
               Sessions · {{ projectSessions.length }}
             </div>
             <button
-              class="px-2.5 py-1 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+              class="px-2.5 py-1 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition"
               :style="{ color: t.text, border: `1px solid ${t.borderStrong}` }"
               title="New session for this project"
               @click="startSessionForProject"
@@ -308,9 +366,16 @@
             <button
               v-for="ses in projectSessions"
               :key="ses.id"
-              class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
-              :style="{ background: t.bgElevated, border: `1px solid ${t.border}` }"
+              class="w-full text-left rounded-lg px-3 py-2.5 transition flex items-start gap-2.5"
+              :style="elevated"
               @click="openSession(ses.id)"
+              @mouseenter="
+                (e) => ((e.currentTarget as HTMLElement).style.borderColor = t.borderStrong)
+              "
+              @mouseleave="
+                (e) =>
+                  ((e.currentTarget as HTMLElement).style.borderColor = elevated.borderColor ?? '')
+              "
             >
               <MessageSquare :size="12" :style="{ color: t.textDim, marginTop: '2px' }" />
               <div class="flex-1 min-w-0">
@@ -338,9 +403,9 @@
             </button>
           </div>
 
-          <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
+          <div class="mb-2.5 flex items-center justify-between flex-wrap gap-2">
             <div
-              class="text-[1em] uppercase tracking-wider font-medium"
+              class="text-[12px] uppercase tracking-wider font-mono font-medium"
               :style="{ color: t.textDim }"
             >
               Tasks · {{ projectTaskStats.total }}
@@ -370,12 +435,16 @@
             <button
               v-for="tk in projectTasks"
               :key="tk.id"
-              class="w-full text-left rounded px-3 py-2 transition flex items-start gap-2.5"
-              :style="{
-                background: t.bgElevated,
-                border: `1px solid ${t.border}`,
-              }"
+              class="w-full text-left rounded-lg px-3 py-2.5 transition flex items-start gap-2.5"
+              :style="elevated"
               @click="openTask(tk.id)"
+              @mouseenter="
+                (e) => ((e.currentTarget as HTMLElement).style.borderColor = t.borderStrong)
+              "
+              @mouseleave="
+                (e) =>
+                  ((e.currentTarget as HTMLElement).style.borderColor = elevated.borderColor ?? '')
+              "
             >
               <component
                 :is="STATUS_META[tk.status].icon"
@@ -482,7 +551,7 @@
     <div
       v-for="toast in toasts"
       :key="toast.id"
-      class="px-3 py-2 rounded text-[1em] shadow-lg"
+      class="px-3 py-2 rounded-lg text-[1em] shadow-lg"
       :style="toastStyle(toast.kind)"
     >
       {{ toast.text }}
@@ -525,7 +594,37 @@ import { formatTime } from '~/utils/time'
 
 const { t } = useTheme()
 const { t: tr } = useI18n()
-const { pill } = useGlass()
+const { pill, elevated } = useGlass()
+
+// Icon-only button hover helpers (per .claude/rules/nuxt-vue.md detail-header
+// pattern): neutral hover = bgHover + text; destructive = dangerBg + danger.
+const hoverBtn = (e: MouseEvent) => {
+  const el = e.currentTarget as HTMLElement
+  el.style.background = t.value.bgHover
+  el.style.color = t.value.text
+}
+const hoverDangerBtn = (e: MouseEvent) => {
+  const el = e.currentTarget as HTMLElement
+  el.style.background = t.value.dangerBg
+  el.style.color = t.value.danger
+}
+const unhoverBtn = (e: MouseEvent, color: string) => {
+  const el = e.currentTarget as HTMLElement
+  el.style.background = 'transparent'
+  el.style.color = color
+}
+// Toggle buttons (e.g. Terminal) keep their active tint on mouseleave.
+const restoreToggleBtn = (
+  e: MouseEvent,
+  active: boolean,
+  activeColor: string,
+  activeBg: string,
+  idleColor: string,
+) => {
+  const el = e.currentTarget as HTMLElement
+  el.style.background = active ? activeBg : 'transparent'
+  el.style.color = active ? activeColor : idleColor
+}
 const ws = useWorkspaceStore()
 const tasksStore = useTasksStore()
 const sessionsStore = useSessionsStore()
@@ -639,10 +738,9 @@ const projectTabs = computed<{ id: ProjectTab; label: string; icon: Component }[
 const projectTabStyle = (id: ProjectTab) => {
   const active = activeProjectTab.value === id
   return {
-    background: 'transparent',
+    background: active ? t.value.bgActive : 'transparent',
     color: active ? t.value.text : t.value.textDim,
-    borderBottom: `2px solid ${active ? t.value.accent : 'transparent'}`,
-    marginBottom: '-1px',
+    border: `1px solid ${active ? t.value.border : 'transparent'}`,
   }
 }
 // Reset to Overview when switching projects, or when the active tab is no longer
@@ -721,6 +819,22 @@ const projectTaskStats = computed(() => ({
   waiting: projectTasks.value.filter((tk) => tk.status === 'waiting_approval').length,
   completed: projectTasks.value.filter((tk) => tk.status === 'completed').length,
 }))
+
+// Overview metrics strip — derived from data already loaded in this page
+// (sessions + tasks). Running tasks get the accent to draw the eye.
+const projectMetrics = computed<{ value: number; label: string; color?: string }[]>(() => [
+  { value: projectSessions.value.length, label: tr('project.metrics.sessions') },
+  { value: projectTaskStats.value.total, label: tr('project.metrics.tasks') },
+  {
+    value: projectTaskStats.value.running,
+    label: tr('project.metrics.running'),
+    color: projectTaskStats.value.running > 0 ? t.value.accent : undefined,
+  },
+  { value: projectTaskStats.value.completed, label: tr('project.metrics.done') },
+])
+
+// Per-project config directory tiers under .awog/ (display-only).
+const awogTiers = ['agents', 'skills', 'rules', 'workflows', 'commands', 'hooks'] as const
 
 const statusColor = (tk: Task) => {
   if (tk.status === 'running') return t.value.text

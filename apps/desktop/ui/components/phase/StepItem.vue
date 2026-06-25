@@ -15,12 +15,12 @@
       />
       <span
         v-if="step.children?.length"
-        class="inline-flex items-center justify-center text-[1em] px-1.5 rounded-sm font-mono"
+        class="inline-flex items-center justify-center text-[12px] leading-none px-1.5 rounded-full font-mono"
         :style="{
           background: t.bgInput,
           color: t.textDim,
           border: `1px solid ${t.border}`,
-          minWidth: '20px',
+          minWidth: '18px',
           height: '16px',
         }"
       >
@@ -124,7 +124,7 @@
 
   <div
     v-else-if="step.kind === 'plan'"
-    class="rounded-md"
+    class="rounded-xl overflow-hidden"
     :style="{
       background: t.bgSubtle,
       border: `1px solid ${planAccent.border}`,
@@ -140,7 +140,7 @@
         <div class="text-[1em] font-semibold flex items-center gap-1.5" :style="{ color: t.text }">
           Proposed plan
           <span
-            class="text-[1em] px-1.5 py-0.5 rounded uppercase tracking-wider font-medium"
+            class="text-[12px] leading-none px-2 py-0.5 rounded-full uppercase tracking-wider font-medium"
             :style="{
               background: planAccent.bg,
               color: planAccent.accent,
@@ -198,7 +198,7 @@
     >
       <button
         type="button"
-        class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[1em] font-medium transition"
+        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[1em] font-medium transition"
         :style="{ background: t.accent, color: t.accentText }"
         @click="resolvePlan(step.id, 'approve')"
       >
@@ -207,7 +207,7 @@
       </button>
       <button
         type="button"
-        class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[1em] transition"
+        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[1em] transition"
         :style="{
           background: 'transparent',
           color: t.textDim,
@@ -262,7 +262,7 @@
 
       <span
         v-if="step.children?.length"
-        class="inline-flex items-center justify-center text-[12px] leading-none px-1.5 py-0.5 rounded-sm font-mono"
+        class="inline-flex items-center justify-center text-[12px] leading-none px-1.5 py-0.5 rounded-full font-mono"
         :style="{
           background: t.bgInput,
           color: t.textDim,
@@ -279,7 +279,7 @@
       >
         <span
           v-if="step.additions !== undefined"
-          class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm font-mono text-[12px] leading-none"
+          class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full font-mono text-[12px] leading-none"
           :style="{
             background: 'rgba(34, 197, 94, 0.12)',
             color: t.statusOk,
@@ -290,7 +290,7 @@
         </span>
         <span
           v-if="step.deletions !== undefined"
-          class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm font-mono text-[12px] leading-none"
+          class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full font-mono text-[12px] leading-none"
           :style="{
             background: t.dangerBg,
             color: t.danger,
@@ -303,7 +303,7 @@
 
       <span
         v-if="step.target"
-        class="px-1.5 py-0.5 rounded-sm font-mono text-[1em] leading-none min-w-0 truncate"
+        class="px-2 py-0.5 rounded-full font-mono text-[1em] leading-none min-w-0 truncate"
         :style="{
           background: t.bgInput,
           color: t.text,

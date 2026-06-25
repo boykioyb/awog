@@ -9,45 +9,45 @@
     :max-list-width="560"
   >
     <template #list>
-      <!-- Single-row toolbar -->
+      <!-- Single-row toolbar: search · filter (with active-count badge) · new -->
       <div
-        class="px-3 py-3 flex items-center gap-2"
+        class="px-3 py-2.5 flex items-center gap-2"
         :style="{ borderBottom: `1px solid ${t.border}` }"
       >
         <SearchInput v-model="searchQuery" class="flex-1" placeholder="Search..." />
         <button
-          class="p-1.5 rounded transition relative"
+          class="p-1.5 rounded-lg transition relative flex-shrink-0"
           :style="filterBtnStyle"
           title="Filters"
           @click="showFilters = !showFilters"
           @mouseenter="filterHover = true"
           @mouseleave="filterHover = false"
         >
-          <ListFilter :size="12" />
-          <div
+          <ListFilter :size="13" />
+          <span
             v-if="activeFilterCount > 0"
-            class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[1em] font-semibold"
-            :style="{ background: t.accent, color: t.accentText }"
+            class="absolute -top-1 -right-1 px-1 h-[14px] rounded-full flex items-center justify-center text-[12px] font-mono font-semibold leading-none"
+            :style="{ background: t.accent, color: t.accentText, minWidth: '14px' }"
           >
             {{ activeFilterCount }}
-          </div>
+          </span>
         </button>
         <button
-          class="p-1.5 rounded transition"
+          class="p-1.5 rounded-lg transition flex-shrink-0"
           :style="{ color: t.textDim }"
           title="New session"
           @click="onNewSession"
           @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
           @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
         >
-          <Plus :size="14" />
+          <Plus :size="15" />
         </button>
       </div>
 
-      <!-- Collapsible filters drawer -->
+      <!-- Collapsible filters drawer (group-by + project filter on bgSubtle) -->
       <div
         v-if="showFilters"
-        class="px-3 py-2.5 space-y-2"
+        class="px-3 py-3 flex flex-col gap-2.5"
         :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle }"
       >
         <CompactSelect
@@ -63,7 +63,7 @@
         <CompactSelect v-model="projectFilter" label="Project" :options="projectOptions" />
         <button
           v-if="activeFilterCount > 0"
-          class="text-[1em] transition"
+          class="self-start text-[1em] transition"
           :style="{ color: clearHover ? t.text : t.textDim }"
           @click="clearFilters"
           @mouseenter="clearHover = true"
@@ -79,8 +79,8 @@
            it never covers the chat composer in the detail pane. -->
       <div
         v-if="bulkSelection.size > 0"
-        class="px-3 py-1.5 flex items-center gap-2 text-[1em]"
-        :style="{ borderBottom: `1px solid ${t.border}`, color: t.textDim }"
+        class="px-3 py-2 flex items-center gap-2.5 text-[1em]"
+        :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgSubtle, color: t.textDim }"
       >
         <input
           type="checkbox"
@@ -126,7 +126,7 @@
           >
             <div
               v-if="group.label"
-              class="w-full px-3 py-1.5 flex items-center gap-1.5 transition"
+              class="mx-2 px-2 py-1.5 rounded-lg flex items-center gap-2 transition"
               :style="{ background: pill(false, groupHover === group.key).background }"
               @mouseenter="groupHover = group.key"
               @mouseleave="groupHover = null"
@@ -138,21 +138,25 @@
                 @click="toggleGroup(group.key)"
               >
                 <ChevronDown
-                  :size="10"
+                  :size="12"
                   class="flex-shrink-0"
                   :style="{
+                    color: t.textFaint,
                     transform: collapsedGroups[group.key] ? 'rotate(-90deg)' : 'none',
                     transition: 'transform 0.15s',
                   }"
                 />
                 <span
-                  class="text-[0.857em] uppercase tracking-wider font-semibold truncate"
-                  :style="{ color: t.text }"
+                  class="text-[1em] uppercase tracking-wider font-semibold truncate"
+                  :style="{ color: t.textDim }"
                 >
                   {{ group.label }}
                 </span>
               </button>
-              <span class="text-[0.857em] flex-shrink-0" :style="{ color: t.textFaint }">
+              <span
+                class="text-[12px] font-mono leading-none flex items-center justify-center flex-shrink-0"
+                :style="{ color: t.textFaint, minWidth: '18px' }"
+              >
                 {{ group.sessions.length }}
               </span>
               <!-- Quick-add a session into this project. Only meaningful when
@@ -160,7 +164,7 @@
                    provider/model views. Fades in on row hover. -->
               <button
                 v-if="groupBy === 'project'"
-                class="p-0.5 rounded transition flex-shrink-0"
+                class="p-1 rounded transition flex-shrink-0"
                 :style="{
                   color: t.textDim,
                   opacity: groupHover === group.key ? 1 : 0,
@@ -171,16 +175,16 @@
                 @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
                 @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.color = t.textDim)"
               >
-                <Plus :size="12" />
+                <Plus :size="13" />
               </button>
             </div>
             <template v-if="!collapsedGroups[group.key]">
               <div
                 v-for="ses in group.sessions"
                 :key="ses.id"
-                class="text-left rounded-lg transition flex items-start gap-2.5 px-3 py-2.5 cursor-pointer"
+                class="text-left rounded-lg transition flex items-start gap-2.5 px-2.5 py-2 cursor-pointer"
                 :style="{
-                  margin: '0 8px 3px 8px',
+                  margin: '0 8px 2px 8px',
                   width: 'calc(100% - 16px)',
                   background: pill(store.selectedSessionId === ses.id, hoverId === ses.id)
                     .background,
@@ -196,36 +200,44 @@
                   v-if="bulkSelection.size > 0"
                   type="checkbox"
                   :checked="bulkSelection.has(ses.id)"
-                  class="cursor-pointer flex-shrink-0 mt-0.5"
+                  class="cursor-pointer flex-shrink-0 mt-1"
                   :style="{ accentColor: t.accent }"
                   :title="bulkSelection.has(ses.id) ? 'Remove from selection' : 'Add to selection'"
                   @click.stop="toggleBulk(ses.id)"
                 />
-                <!-- Streaming takes visual priority over pin: the running state is
-                     transient and more important to surface at a glance. -->
+                <!-- Leading status indicator. Priority (most transient/urgent
+                     first): running > awaiting input > unread reply > pinned >
+                     plain. Running + unread use the accent dot; awaiting uses the
+                     warning dot; running additionally pulses with a soft ring. -->
                 <span
                   v-if="streamingIds.has(ses.id)"
-                  class="flex-shrink-0 mt-1 w-2 h-2 rounded-full animate-pulse"
-                  :style="{ background: t.accent, boxShadow: `0 0 6px ${t.accent}` }"
+                  class="flex-shrink-0 mt-[5px] w-2 h-2 rounded-full animate-pulse"
+                  :style="{ background: t.accent, boxShadow: `0 0 0 3px ${t.accent}33` }"
                   title="Running"
+                />
+                <span
+                  v-else-if="store.isSessionAwaitingInput(ses.id)"
+                  class="flex-shrink-0 mt-[5px] w-2 h-2 rounded-full"
+                  :style="{ background: t.warning, boxShadow: `0 0 6px ${t.warning}` }"
+                  title="Awaiting input"
                 />
                 <!-- Reply completed while the user wasn't viewing this session. -->
                 <span
                   v-else-if="store.isUnread(ses.id)"
-                  class="flex-shrink-0 mt-1 w-2 h-2 rounded-full"
+                  class="flex-shrink-0 mt-[5px] w-2 h-2 rounded-full"
                   :style="{ background: t.accent, boxShadow: `0 0 6px ${t.accent}` }"
                   title="Unread reply"
                 />
                 <Pin
                   v-else-if="ses.pinned"
-                  :size="10"
-                  class="flex-shrink-0 mt-1"
+                  :size="11"
+                  class="flex-shrink-0 mt-[3px]"
                   :style="{ color: t.textDim }"
                 />
                 <MessageSquare
                   v-else
-                  :size="10"
-                  class="flex-shrink-0 mt-1"
+                  :size="11"
+                  class="flex-shrink-0 mt-[3px]"
                   :style="{ color: t.textFaint }"
                 />
                 <div class="flex-1 min-w-0">
@@ -248,16 +260,27 @@
                   <div class="flex items-center gap-1">
                     <div
                       class="text-[1em] leading-tight truncate flex-1"
-                      :style="{ color: t.text, fontWeight: store.isUnread(ses.id) ? 600 : 400 }"
+                      :style="{ color: t.text, fontWeight: store.isUnread(ses.id) ? 650 : 450 }"
                       @dblclick.stop="startRename(ses.id, ses.title)"
                     >
                       {{ ses.title }}
                     </div>
+                    <!-- Context-menu button: only on row hover (or while its menu
+                         is open) to keep the resting row clean. -->
                     <button
-                      class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
-                      :style="{ color: t.textMuted }"
+                      class="p-1 rounded flex-shrink-0 transition"
+                      :style="{
+                        color: t.textMuted,
+                        opacity: hoverId === ses.id || contextMenu?.id === ses.id ? 1 : 0,
+                        pointerEvents:
+                          hoverId === ses.id || contextMenu?.id === ses.id ? 'auto' : 'none',
+                      }"
                       title="Actions"
                       @click.stop="openMenuFromButton($event, ses.id)"
+                      @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.color = t.text)"
+                      @mouseleave="
+                        (e) => ((e.currentTarget as HTMLElement).style.color = t.textMuted)
+                      "
                     >
                       <MoreHorizontal :size="13" />
                     </button>
@@ -274,6 +297,12 @@
                       :style="{ color: t.accent }"
                     >
                       Running…
+                    </span>
+                    <span
+                      v-else-if="store.isSessionAwaitingInput(ses.id)"
+                      :style="{ color: t.warning }"
+                    >
+                      Awaiting…
                     </span>
                     <span v-else>{{ ses.messages.length || ses.messageCount || 0 }} msg</span>
                   </div>

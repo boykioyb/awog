@@ -16,13 +16,18 @@
       <p class="text-[1em]" :style="{ color: t.textDim }">{{ tr('workspace.tasks.empty') }}</p>
     </div>
 
-    <div v-else class="flex-1 overflow-y-auto">
+    <div v-else class="flex-1 overflow-y-auto py-1 space-y-0.5">
       <button
         v-for="entry in entries"
         :key="entry.key"
         type="button"
-        class="w-full text-left px-3 py-2 flex items-center gap-2 transition"
-        :style="{ borderBottom: `1px solid ${t.border}`, color: t.text }"
+        class="text-left px-2.5 py-2 mx-1.5 rounded-lg flex items-center gap-2.5 transition hover:opacity-100"
+        :style="{
+          background: t.bgSubtle,
+          border: `1px solid ${t.border}`,
+          color: t.text,
+          width: 'calc(100% - 0.75rem)',
+        }"
         @click="open(entry.step)"
       >
         <component

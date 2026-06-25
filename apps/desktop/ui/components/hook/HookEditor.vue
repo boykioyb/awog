@@ -8,7 +8,7 @@
   >
     <template #header-actions-extra>
       <button
-        class="px-3 py-1.5 text-[1em] rounded inline-flex items-center gap-1.5 transition"
+        class="px-3 py-1.5 text-[1em] rounded-lg inline-flex items-center gap-1.5 transition"
         :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
         @click="openConfigLlm"
       >
@@ -25,7 +25,7 @@
             :key="opt.value"
             type="button"
             :disabled="isExistingHook"
-            class="text-[1em] px-2 py-1 rounded font-mono transition"
+            class="text-[12px] leading-none px-2.5 py-1.5 rounded-full font-mono transition"
             :style="sourceButtonStyle(opt.value === draft.source)"
             @click="draft.source = opt.value"
           >
@@ -47,7 +47,7 @@
         <input
           v-model="draft.name"
           :placeholder="tr('hooks.editor.name_placeholder')"
-          class="w-full rounded px-2 py-1.5 text-[1em]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em]"
           :style="inputStyle"
         />
       </Field>
@@ -56,7 +56,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -82,7 +82,7 @@
           v-model="draft.command"
           :rows="3"
           placeholder="pnpm exec prettier --write {{event.payload.path}}"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[4rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[4rem]"
           :style="inputStyle"
         />
       </Field>
@@ -93,7 +93,7 @@
       <Field v-if="script" :label="tr('hooks.editor.script', { path: script.path })">
         <div class="flex justify-end mb-1.5">
           <button
-            class="text-[1em] inline-flex items-center gap-1 px-2 py-0.5 rounded transition"
+            class="text-[1em] inline-flex items-center gap-1 px-2 py-0.5 rounded-lg transition"
             :style="{ color: t.textMuted, border: `1px solid ${t.border}` }"
             :title="tr('hooks.editor.script_edit_llm')"
             @click="openScriptLlm"
@@ -105,7 +105,7 @@
         <textarea
           v-model="script.content"
           :rows="14"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[16rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[16rem]"
           :style="inputStyle"
         />
         <div v-if="!script.exists" class="text-[1em] mt-1" :style="{ color: t.textDim }">
@@ -118,7 +118,7 @@
           <input
             v-model="draft.cwd"
             placeholder="${workspace}"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>
@@ -126,7 +126,7 @@
           <input
             v-model.number="draft.timeoutMs"
             type="number"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
           />
         </Field>

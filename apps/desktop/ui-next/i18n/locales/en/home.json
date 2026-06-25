@@ -1,0 +1,19 @@
+{
+  "home.attention.title": "Needs your attention",
+  "home.attention.count": "{n} waiting",
+  "home.reply": "Reply →",
+  "home.review": "Review →",
+  "home.running.label": "Running",
+  "home.running.title": "Running",
+  "home.openTasks": "Open Tasks →",
+  "home.activity.title": "Activity · 24h",
+  "home.activity.unit": "tokens",
+  "home.activity.today": "tok today",
+  "home.open": "Open →",
+  "home.git.clean": "clean",
+  "home.agents.active": "{n} active",
+  "home.agents.working": "● working",
+  "home.connections.count": "{n} MCP",
+  "home.recent.title": "Recent sessions",
+  "home.all": "All →"
+}

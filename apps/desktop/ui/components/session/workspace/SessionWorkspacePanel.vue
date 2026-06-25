@@ -11,21 +11,22 @@
     />
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden" :style="contentStyle">
       <!-- Tab strip: one chip per open tool, click to switch, X to close. The +
-           button opens the tool menu to add another tab alongside the rest. -->
+           button opens the tool menu to add another tab alongside the rest.
+           Active tab = bgActive fill + accent underline mark. -->
       <div
-        class="flex items-stretch gap-0.5 px-1 flex-shrink-0 overflow-x-auto ws-tabstrip"
+        class="flex items-center gap-1 px-1.5 py-1.5 flex-shrink-0 overflow-x-auto ws-tabstrip"
         :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <button
           v-for="tab in tabs"
           :key="tab"
           type="button"
-          class="group inline-flex items-center gap-1.5 pl-2 pr-1 py-1.5 transition flex-shrink-0 border-b-2"
+          class="group relative inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg transition flex-shrink-0"
           :style="tabChipStyle(tab)"
           :title="tr(toolOf(tab).labelKey)"
           @click="panel.setActiveTab(session.id, tab)"
         >
-          <component :is="toolOf(tab).icon" :size="13" />
+          <component :is="toolOf(tab).icon" :size="13" class="flex-shrink-0" />
           <span class="text-[1em] leading-none whitespace-nowrap">
             {{ tr(toolOf(tab).labelKey) }}
           </span>
@@ -38,13 +39,19 @@
           >
             <X :size="12" />
           </span>
+          <!-- Accent underline mark on the active tab. -->
+          <span
+            v-if="tab === active"
+            class="absolute left-2.5 right-2.5 bottom-0 h-0.5 rounded-full"
+            :style="{ background: t.accent }"
+          />
         </button>
 
         <button
           ref="addBtnRef"
           type="button"
-          class="inline-flex items-center justify-center w-7 my-1 ml-0.5 rounded transition flex-shrink-0"
-          :style="{ color: showAddMenu ? t.accent : t.textDim }"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg transition flex-shrink-0"
+          :style="addBtnStyle"
           :title="tr('workspace.addTab')"
           @click="toggleAddMenu"
         >
@@ -137,13 +144,19 @@ const renderableTabs = computed<WorkspaceTab[]>(() =>
 
 const tabChipStyle = (tab: WorkspaceTab): CSSProperties =>
   tab === active.value
-    ? { color: t.value.text, background: t.value.bg, borderBottomColor: t.value.accent }
-    : { color: t.value.textDim, background: 'transparent', borderBottomColor: 'transparent' }
+    ? { color: t.value.text, background: t.value.bgActive }
+    : { color: t.value.textDim, background: 'transparent' }
 
 // ── Add-tab menu ────────────────────────────────────────────────────────────
 const showAddMenu = ref(false)
 const addBtnRef = ref<HTMLElement | null>(null)
 const addMenuPos = ref({ top: 0, left: 0 })
+
+const addBtnStyle = computed<CSSProperties>(() =>
+  showAddMenu.value
+    ? { color: t.value.accent, background: t.value.bgActive }
+    : { color: t.value.textDim, background: 'transparent' },
+)
 
 const toggleAddMenu = () => {
   showAddMenu.value = !showAddMenu.value

@@ -1,0 +1,18 @@
+{
+  "sessions.composer.enhancing": "Enhancing…",
+  "sessions.composer.enhanceFailed": "Could not enhance the prompt",
+  "sessions.composer.queueSend": "Queue (sends after the current turn)",
+  "sessions.composer.queued": "Queued",
+  "sessions.composer.queuedRemove": "Remove from queue",
+  "sessions.composer.slashCommands": "Commands",
+  "sessions.composer.slashHint": "mock — no command backend yet",
+  "sessions.composer.mentionTitle": "Mention",
+  "sessions.composer.mentionHint": "mock — local agents / files",
+  "sessions.composer.mentionFile": "file",
+  "sessions.composer.mentionAgent": "agent",
+  "sessions.command.plan.desc": "Plan first, then execute on approval",
+  "sessions.command.clear.desc": "Clear the conversation",
+  "sessions.command.compact.desc": "Compact the context to save tokens",
+  "sessions.command.model.desc": "Switch the model",
+  "sessions.command.help.desc": "Show available commands"
+}

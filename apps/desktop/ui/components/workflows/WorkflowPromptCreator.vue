@@ -72,11 +72,13 @@
 
     <template #actions>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition"
         :style="{ background: t.accent, color: t.accentText }"
+        @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.background = t.accentHover)"
+        @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.background = t.accent)"
         @click="draft && emit('save', { ...draft }, scope)"
       >
-        <Save :size="11" />
+        <Save :size="13" />
         {{ tr('workflows.creator.create') }}
       </button>
     </template>

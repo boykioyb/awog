@@ -1,0 +1,23 @@
+{
+  "sessions.workspace.refresh": "Tải lại",
+  "sessions.workspace.unavailable": "Workspace không khả dụng — mở session này trong app desktop AWOG",
+  "sessions.workspace.noProject": "Session chưa gắn project nào",
+  "sessions.workspace.diff.none": "Không có thay đổi nào trong working tree",
+  "sessions.workspace.diff.noRepo": "Không phải repo git",
+  "sessions.workspace.diff.changes": "Thay đổi",
+  "sessions.workspace.diff.binary": "File nhị phân — không hiển thị diff",
+  "sessions.workspace.files.empty": "Thư mục rỗng",
+  "sessions.workspace.files.loading": "Đang tải…",
+  "sessions.workspace.files.browse": "Duyệt file của project",
+  "sessions.workspace.files.binary": "File nhị phân — không xem trước được",
+  "sessions.workspace.files.truncated": "Đã cắt bớt — file quá lớn để hiển thị đầy đủ",
+  "sessions.workspace.files.openFailed": "Không mở được file",
+  "sessions.workspace.files.back": "Quay lại cây file",
+  "sessions.workspace.plan.empty": "Session này chưa có kế hoạch nào",
+  "sessions.workspace.plan.approved": "đã duyệt",
+  "sessions.workspace.plan.pending": "chờ duyệt",
+  "sessions.workspace.terminal.unavailable": "Terminal không khả dụng",
+  "sessions.workspace.terminal.exited": "tiến trình đã thoát",
+  "sessions.workspace.tasks.empty": "Session này không có tác vụ nền nào",
+  "sessions.workspace.tasks.placeholder": "Tác vụ nền (terminal / sub-agent) của session sẽ hiển thị ở đây"
+}

@@ -27,7 +27,7 @@
         </AppButton>
         <!-- Tree / flat view toggle -->
         <div
-          class="ml-1 flex flex-shrink-0 items-center overflow-hidden rounded-md border border-border"
+          class="ml-1 flex flex-shrink-0 items-center overflow-hidden rounded-lg border border-border"
         >
           <button
             type="button"

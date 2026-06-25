@@ -9,14 +9,14 @@
     <div v-else class="flex-1 flex flex-col overflow-hidden">
       <div
         v-if="artifacts.length > 1"
-        class="flex items-center gap-1 px-2 py-1 overflow-x-auto flex-shrink-0"
-        :style="{ borderBottom: `1px solid ${t.border}` }"
+        class="flex items-center gap-1 px-1.5 py-1.5 overflow-x-auto flex-shrink-0"
+        :style="{ borderBottom: `1px solid ${t.border}`, background: t.bgPanel }"
       >
         <button
           v-for="(a, i) in artifacts"
           :key="a.name"
           type="button"
-          class="px-2 py-1 rounded text-[1em] truncate transition flex-shrink-0"
+          class="px-2.5 py-1 rounded-lg text-[1em] truncate transition flex-shrink-0"
           :style="{
             background: i === selectedIdx ? t.bgActive : 'transparent',
             color: i === selectedIdx ? t.text : t.textDim,

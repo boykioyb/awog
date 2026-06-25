@@ -1,0 +1,11 @@
+{
+  "tasks.search": "Tìm task…",
+  "tasks.status.running": "đang chạy",
+  "tasks.status.awaiting": "đang chờ",
+  "tasks.status.done": "xong",
+  "tasks.discuss": "Thảo luận",
+  "tasks.rerun": "Chạy lại",
+  "tasks.approve": "Duyệt",
+  "tasks.pipeline": "Pipeline · {done}/{total} node",
+  "tasks.trace": "Trace · node hiện tại"
+}

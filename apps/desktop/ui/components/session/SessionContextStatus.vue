@@ -2,10 +2,11 @@
   <div class="relative">
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[1em] transition"
+      class="inline-flex items-center gap-1.5 font-mono text-[12px] px-2 py-[3px] rounded-lg transition"
       :style="{
-        color: t.textDim,
-        background: open ? t.bgSubtle : 'transparent',
+        color: open ? t.text : t.textDim,
+        background: open ? t.bgActive : 'transparent',
+        border: `1px solid ${open ? t.borderStrong : t.border}`,
       }"
       :title="`${modelLabel} · context ${formatTokenCount(used)} / ${formatTokenCount(limit)} (${percent}%)`"
       @click="open = !open"
@@ -18,12 +19,17 @@
           background: `conic-gradient(${usageColor} ${percent * 3.6}deg, ${t.border} 0)`,
         }"
       />
-      <span :style="{ color: usageColor }" class="font-mono">{{ percent }}%</span>
+      <!-- Usage as used/limit tokens (e.g. 239/200k) — matches the prototype
+           header usage display. The percent still drives the dot + title. -->
+      <span :style="{ color: usageColor }" class="font-mono">
+        {{ formatTokenCount(used) }}/{{ formatTokenCount(limit) }}
+      </span>
     </button>
 
     <div
       v-if="open"
-      class="absolute right-0 bottom-full mb-1.5 w-[400px] rounded-md shadow-xl text-[1em] z-30"
+      class="absolute right-0 w-[400px] rounded-md shadow-xl text-[1em] z-30"
+      :class="placement === 'down' ? 'top-full mt-1.5' : 'bottom-full mb-1.5'"
       :style="{
         background: t.bgPanel,
         border: `1px solid ${t.border}`,
@@ -214,9 +220,15 @@ interface ProfileShape {
   rateLimitTier?: string
 }
 
-const props = defineProps<{
-  session: Session
-}>()
+const props = withDefaults(
+  defineProps<{
+    session: Session
+    // Detail-popover open direction. 'up' (default) suits the bottom composer;
+    // 'down' suits the top session header where this chip now lives.
+    placement?: 'up' | 'down'
+  }>(),
+  { placement: 'up' },
+)
 
 const { t } = useTheme()
 const open = ref(false)

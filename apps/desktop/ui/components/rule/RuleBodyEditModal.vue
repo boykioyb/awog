@@ -20,7 +20,7 @@
       >
         <div class="text-[1em] font-medium" :style="{ color: t.text }">{{ draft.name }}</div>
         <div
-          class="rounded p-2 max-h-[40vh] overflow-y-auto text-[1em] leading-relaxed"
+          class="rounded-lg p-2 max-h-[40vh] overflow-y-auto text-[1em] leading-relaxed"
           :style="{ background: t.bgPanel, border: `1px solid ${t.border}`, color: t.textMuted }"
         >
           <MarkdownRenderer :content="draft.body || '(empty body)'" />
@@ -30,7 +30,7 @@
 
     <template #actions>
       <button
-        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-medium"
+        class="text-[1em] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium"
         :style="{
           background: draft ? t.accent : t.bgInput,
           color: draft ? t.accentText : t.textDim,

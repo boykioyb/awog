@@ -10,17 +10,17 @@
   <div v-else>
     <div class="flex items-center gap-2 mb-2 text-[1em]" :style="{ color: t.textDim }">
       <FileText :size="11" />
-      <span class="font-mono">{{ node.outputs.join(', ') }}</span>
+      <span class="font-mono truncate">{{ node.outputs.join(', ') }}</span>
       <template v-if="run.approvedBy">
         <span :style="{ color: t.textFaint }">·</span>
-        <span>Approved by {{ run.approvedBy }} {{ run.approvedAt }}</span>
+        <span class="truncate">Approved by {{ run.approvedBy }} {{ run.approvedAt }}</span>
       </template>
       <button
         v-if="isEditable"
-        class="ml-auto flex items-center gap-1 px-2 py-0.5 text-[1em] rounded transition"
+        class="ml-auto flex-shrink-0 flex items-center gap-1 px-2.5 py-1 text-[1em] rounded-lg transition"
         :style="{
           color: t.text,
-          border: `1px solid ${t.borderStrong}`,
+          border: `1px solid ${t.border}`,
           background: openHover ? t.bgHover : 'transparent',
         }"
         @click="emit('open-file', fileName, displayContent)"
@@ -33,14 +33,14 @@
     </div>
     <div
       v-if="isMarkdown"
-      class="rounded p-4"
+      class="rounded-xl p-4"
       :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
     >
       <MarkdownRenderer :content="displayContent" />
     </div>
     <pre
       v-else
-      class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded"
+      class="text-[1em] font-mono whitespace-pre-wrap leading-relaxed p-3 rounded-xl"
       :style="{
         color: t.textMuted,
         background: t.bgInput,

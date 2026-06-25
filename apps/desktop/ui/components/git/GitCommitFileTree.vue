@@ -13,7 +13,7 @@
       :style="{ borderBottom: `1px solid ${t.border}` }"
     >
       <div
-        class="flex-1 flex items-center gap-1 px-2 rounded"
+        class="flex-1 flex items-center gap-1 px-2 rounded-lg"
         :style="{ background: t.bgInput, border: `1px solid ${t.border}` }"
       >
         <Search :size="11" :style="{ color: t.textFaint }" />
@@ -36,7 +36,7 @@
         </button>
       </div>
       <div
-        class="flex items-center rounded overflow-hidden flex-shrink-0"
+        class="flex items-center rounded-lg overflow-hidden flex-shrink-0"
         :style="{ border: `1px solid ${t.border}` }"
       >
         <button
@@ -107,7 +107,7 @@
             @click="onSelectFile(row.fileIndex)"
           >
             <span
-              class="inline-flex items-center justify-center text-[1em] rounded flex-shrink-0 font-mono"
+              class="inline-flex items-center justify-center text-[12px] leading-none rounded flex-shrink-0 font-mono"
               :style="{
                 width: '14px',
                 height: '14px',
@@ -135,7 +135,7 @@
           @click="onSelectFile(idx)"
         >
           <span
-            class="inline-flex items-center justify-center text-[1em] rounded flex-shrink-0 font-mono"
+            class="inline-flex items-center justify-center text-[12px] leading-none rounded flex-shrink-0 font-mono"
             :style="{ width: '14px', height: '14px', ...statusBadgeStyle(detail.files[idx]!) }"
             :title="statusLabel(detail.files[idx]!)"
           >

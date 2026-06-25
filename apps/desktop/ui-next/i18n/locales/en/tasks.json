@@ -1,0 +1,11 @@
+{
+  "tasks.search": "Search tasks…",
+  "tasks.status.running": "running",
+  "tasks.status.awaiting": "awaiting",
+  "tasks.status.done": "done",
+  "tasks.discuss": "Discuss",
+  "tasks.rerun": "Rerun",
+  "tasks.approve": "Approve",
+  "tasks.pipeline": "Pipeline · {done}/{total} nodes",
+  "tasks.trace": "Trace · current node"
+}

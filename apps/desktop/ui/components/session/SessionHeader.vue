@@ -54,6 +54,16 @@
         />
       </div>
     </div>
+    <!-- Usage + response style + MCP live in the header (prototype layout), not
+         the composer. Open downward since the header sits at the top. -->
+    <SessionContextStatus :session="session" placement="down" class="flex-shrink-0" />
+    <SessionStylePicker :session="session" placement="down" class="flex-shrink-0" />
+    <SessionChipsPopover
+      :session="session"
+      :only="['mcp']"
+      placement="down"
+      class="flex-shrink-0"
+    />
     <AppButton
       variant="ghost"
       size="icon"
@@ -109,7 +119,7 @@
     <div v-if="showProjectMenu" class="fixed inset-0 z-40" @click="showProjectMenu = false" />
     <div
       v-if="showProjectMenu"
-      class="fixed z-50 rounded-md shadow-lg overflow-hidden text-[1em] min-w-[180px]"
+      class="fixed z-50 rounded-xl shadow-lg overflow-hidden text-[1em] min-w-[180px]"
       :style="{
         background: t.bgPanel,
         border: `1px solid ${t.border}`,

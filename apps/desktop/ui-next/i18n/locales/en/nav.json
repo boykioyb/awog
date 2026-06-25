@@ -1,0 +1,21 @@
+{
+  "nav.brandSuffix": "guild",
+  "nav.group.work": "Work",
+  "nav.group.library": "Library",
+  "nav.group.system": "System",
+  "nav.home": "Home",
+  "nav.sessions": "Sessions",
+  "nav.tasks": "Tasks",
+  "nav.workflows": "Workflows",
+  "nav.agents": "Agents",
+  "nav.skills": "Skills",
+  "nav.commands": "Commands",
+  "nav.rules": "Rules",
+  "nav.templates": "Templates",
+  "nav.projects": "Projects",
+  "nav.git": "Git",
+  "nav.connections": "Connections",
+  "nav.hooks": "Hooks",
+  "nav.settings": "Settings",
+  "nav.collapse": "Collapse / expand sidebar"
+}

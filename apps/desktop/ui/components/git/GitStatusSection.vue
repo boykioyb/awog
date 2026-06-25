@@ -97,7 +97,7 @@
               @change="onToggle(row.item)"
             />
             <span
-              class="text-[1em] font-mono w-3.5 text-center flex-shrink-0"
+              class="text-[12px] leading-none font-mono font-bold w-3.5 text-center flex-shrink-0"
               :style="{ color: badgeColor(row.item) }"
             >
               {{ badgeChar(row.item) }}
@@ -141,7 +141,7 @@
             @change="onToggle(file)"
           />
           <span
-            class="text-[1em] font-mono w-3.5 text-center flex-shrink-0"
+            class="text-[12px] leading-none font-mono font-bold w-3.5 text-center flex-shrink-0"
             :style="{ color: badgeColor(file) }"
           >
             {{ badgeChar(file) }}
@@ -199,7 +199,7 @@
               />
               <span
                 v-if="files[i]"
-                class="text-[1em] font-mono w-3.5 text-center flex-shrink-0"
+                class="text-[12px] leading-none font-mono font-bold w-3.5 text-center flex-shrink-0"
                 :style="{ color: badgeColor(files[i]!) }"
               >
                 {{ badgeChar(files[i]!) }}

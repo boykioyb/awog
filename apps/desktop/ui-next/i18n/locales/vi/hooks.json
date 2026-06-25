@@ -1,0 +1,8 @@
+{
+  "hooks.search": "Tìm hook…",
+  "hooks.new": "Thêm mới",
+  "hooks.enableToggle": "Bật/tắt hook",
+  "hooks.sech.desc": "Mô tả",
+  "hooks.sech.command": "Hành động / lệnh",
+  "hooks.delete": "Xoá hook"
+}

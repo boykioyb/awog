@@ -1,10 +1,10 @@
 <template>
   <div
-    class="w-full px-3 py-2 cursor-pointer transition"
+    class="px-2.5 py-2 mx-1 my-0.5 rounded-lg cursor-pointer transition"
     :style="{
       background: pill(selected).background,
-      borderBottom: `1px solid ${t.border}`,
-      borderLeft: `2px solid ${selected ? t.accent : 'transparent'}`,
+      border: `1px solid ${selected ? t.border : 'transparent'}`,
+      width: 'calc(100% - 8px)',
     }"
     @click="$emit('select', skill)"
     @contextmenu="$emit('context-menu', $event, skill)"
@@ -35,7 +35,7 @@
         v-if="renaming"
         :ref="onRenameInputMounted"
         :value="renameValue"
-        class="text-[1em] font-mono flex-1 rounded px-1 py-0.5"
+        class="text-[1em] font-mono flex-1 rounded-lg px-1.5 py-0.5"
         :style="{
           background: t.bgInput,
           border: `1px solid ${t.borderStrong}`,
@@ -57,7 +57,7 @@
         {{ skill.name }}
       </span>
       <button
-        class="p-1 rounded flex-shrink-0 transition opacity-60 hover:opacity-100"
+        class="p-1 rounded-lg flex-shrink-0 transition opacity-60 hover:opacity-100"
         :style="{ color: t.textMuted }"
         title="Actions"
         @click.stop="$emit('open-menu', $event, skill)"
@@ -71,7 +71,7 @@
       </span>
       <span
         v-if="showSourceBadge"
-        class="text-[0.7em] px-1 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
+        class="text-[12px] leading-none px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider whitespace-nowrap flex-shrink-0"
         :style="sourceBadgeStyle"
       >
         {{ sourceLabel }}

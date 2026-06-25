@@ -2,7 +2,7 @@
   <div class="flex-1 overflow-y-auto p-4 md:p-6 w-full">
     <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
       <div
-        class="rounded flex items-center justify-center text-[1em] font-bold flex-shrink-0"
+        class="rounded-xl flex items-center justify-center text-[1em] font-bold flex-shrink-0"
         :style="{
           minWidth: '48px',
           height: '48px',
@@ -19,24 +19,36 @@
         <div class="flex items-center gap-2 mb-1 flex-wrap">
           <h1 class="text-lg font-semibold" :style="{ color: t.text }">{{ agent.name }}</h1>
           <span
-            class="text-[0.7em] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider whitespace-nowrap"
+            class="text-[12px] leading-none px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider whitespace-nowrap"
             :style="sourceBadgeStyle"
             :title="sourcePath"
           >
             {{ sourceBadgeLabel }}
           </span>
         </div>
-        <div class="text-[1em] inline-flex items-center gap-1.5" :style="{ color: t.textDim }">
-          <Sparkles :size="11" />
-          <span>{{ modelLabel }}</span>
-          <template v-if="model?.vendor">
-            <span :style="{ color: t.textFaint }">·</span>
-            <span>{{ model.vendor }}</span>
-          </template>
-          <span :style="{ color: t.textFaint }">·</span>
-          <span class="font-mono">{{ agent.id }}</span>
+        <div class="flex items-center gap-1.5 flex-wrap mt-0.5">
+          <span
+            class="text-[1em] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-mono"
+            :style="{ background: t.bgInput, color: t.textMuted, border: `1px solid ${t.border}` }"
+          >
+            <Sparkles :size="11" />
+            {{ modelLabel }}
+          </span>
+          <span
+            v-if="model?.vendor"
+            class="text-[1em] inline-flex items-center px-2 py-0.5 rounded-full font-mono"
+            :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+          >
+            {{ model.vendor }}
+          </span>
+          <span
+            class="text-[1em] inline-flex items-center px-2 py-0.5 rounded-full font-mono"
+            :style="{ background: t.bgInput, color: t.textDim, border: `1px solid ${t.border}` }"
+          >
+            {{ agent.id }}
+          </span>
         </div>
-        <div class="text-[1em] font-mono mt-1 truncate" :style="{ color: t.textFaint }">
+        <div class="text-[1em] font-mono mt-1.5 truncate" :style="{ color: t.textFaint }">
           {{ sourcePath }}
         </div>
       </div>
@@ -75,7 +87,7 @@
         <span
           v-for="id in agent.mcpServerIds"
           :key="id"
-          class="inline-flex items-center gap-1.5 text-[1em] px-2 py-1 rounded font-mono"
+          class="inline-flex items-center gap-1.5 text-[1em] px-2.5 py-1 rounded-full font-mono"
           :style="mcpPillStyle(id)"
         >
           <Plug :size="10" />
@@ -99,7 +111,7 @@
         <span
           v-for="tool in agent.tools"
           :key="tool"
-          class="text-[1em] px-2 py-1 rounded font-mono"
+          class="text-[1em] px-2.5 py-1 rounded-full font-mono"
           :style="{
             background: t.bgInput,
             color: t.textMuted,

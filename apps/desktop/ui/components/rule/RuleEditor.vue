@@ -14,7 +14,7 @@
             :key="opt.value"
             type="button"
             :disabled="isExistingRule"
-            class="text-[1em] px-2 py-1 rounded font-mono transition"
+            class="text-[12px] leading-none px-2.5 py-1.5 rounded-full font-mono transition"
             :style="sourceButtonStyle(opt.value === draft.source)"
             @click="draft.source = opt.value"
           >
@@ -38,7 +38,7 @@
             :value="draft.id"
             :disabled="isExistingRule"
             :placeholder="tr('rules.editor.slug_placeholder')"
-            class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono"
             :style="inputStyle"
             @input="onSlugInput"
           />
@@ -48,7 +48,7 @@
             v-model="draft.name"
             :disabled="isImported"
             :placeholder="tr('rules.editor.name_placeholder')"
-            class="w-full rounded px-2 py-1.5 text-[1em]"
+            class="w-full rounded-lg px-2.5 py-1.5 text-[1em]"
             :style="inputStyle"
           />
         </Field>
@@ -58,7 +58,7 @@
         <textarea
           v-model="draft.description"
           :rows="2"
-          class="w-full rounded px-2 py-1.5 text-[1em] resize-y min-h-[3rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] resize-y min-h-[3rem]"
           :style="inputStyle"
         />
       </Field>
@@ -67,7 +67,7 @@
         <input
           v-model="globsText"
           :placeholder="tr('rules.editor.globs_placeholder')"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono"
           :style="inputStyle"
         />
         <div class="text-[1em] mt-1.5" :style="{ color: t.textDim }">
@@ -80,7 +80,7 @@
           v-model="draft.body"
           :rows="10"
           :placeholder="tr('rules.editor.body_placeholder')"
-          class="w-full rounded px-2 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[12rem]"
+          class="w-full rounded-lg px-2.5 py-1.5 text-[1em] font-mono leading-relaxed resize-y min-h-[12rem]"
           :style="inputStyle"
         />
       </Field>
