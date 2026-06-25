@@ -11,6 +11,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { assertInsideWorkspace } from '../../git/path-sanitize.js'
 import { runGit } from '../../git/runner.js'
 import { buildUnifiedDiff } from './text-diff.js'
+import { clampForLlm } from './output-budget.js'
 
 // Caps mirror the fs.* RPC methods so the runtime can't push pathological
 // payloads through the model/IPC path.
@@ -20,6 +21,29 @@ const GREP_TIMEOUT_MS = 15_000
 const GLOB_TIMEOUT_MS = 15_000
 const GREP_MAX_LINES = 500
 const GLOB_MAX_FILES = 500
+// rtk mindset (output-budget.ts): cap grep/glob output by BYTES, not just lines.
+// A single minified/vendored line can be megabytes — the 500-line cap alone let a
+// `Grep` over a non-repo's node_modules return ~8MB and blow a turn to 5.1M tokens.
+const GREP_MAX_LINE_CHARS = 1_000
+const GREP_MAX_OUTPUT_CHARS = 64 * 1024
+const GLOB_MAX_OUTPUT_CHARS = 32 * 1024
+// Dependency / build / VCS noise never carries signal worth searching. We exclude
+// it at the git level so it isn't even read — critical in the `--no-index`
+// fallback, where .gitignore does NOT apply (a non-repo project), which is how a
+// nested `node_modules/` of minified bundles got scanned in the first place.
+const GREP_EXCLUDE_PATHSPECS = [
+  ':(exclude)**/node_modules/**',
+  ':(exclude)**/.git/**',
+  ':(exclude)**/dist/**',
+  ':(exclude)**/build/**',
+  ':(exclude)**/.next/**',
+  ':(exclude)**/.nuxt/**',
+  ':(exclude)**/.output/**',
+  ':(exclude)**/vendor/**',
+  ':(exclude)**/*.min.js',
+  ':(exclude)**/*.min.css',
+  ':(exclude)**/*.map',
+] as const
 
 // `diff`/`newContent` ride on Edit/MultiEdit results as a side channel (NOT in
 // the model-facing `content` text) so step-mapper can render a git-style diff +
@@ -229,11 +253,37 @@ const GrepParams = Type.Object({
   glob: Type.Optional(Type.String({ description: 'Pathspec glob to include (e.g. "*.ts").' })),
 })
 
-async function gitGrep(cwd: string, pattern: string, glob: string | undefined, noIndex: boolean): Promise<string | null> {
+// Normalise a workspace-relative subdir scope into a clean git pathspec prefix:
+// strip a leading `./` and trailing slashes. Returns '' when the input collapses
+// to the workspace root (treated as "no scope" by callers).
+function normalizeDir(path: string): string {
+  return path.replace(/^\.\/+/, '').replace(/\/+$/, '')
+}
+
+async function gitGrep(
+  cwd: string,
+  pattern: string,
+  glob: string | undefined,
+  path: string | undefined,
+  noIndex: boolean,
+): Promise<string | null> {
+  const dir = path ? normalizeDir(path) : ''
   const args = ['grep', '--no-color', '-I', '-n', '-E']
   args.push(noIndex ? '--no-index' : '--untracked')
   args.push('-e', pattern, '--')
-  if (glob) args.push(`:(glob)${glob}`)
+  if (glob) {
+    // Caller scoped the search deliberately — trust their pathspec verbatim and
+    // don't second-guess it with noise excludes (a `glob` of `dist/**` must still
+    // match). When a `path` is also given, scope the glob WITHIN that subdir. The
+    // byte cap downstream is the safety net regardless.
+    args.push(`:(glob)${dir ? `${dir}/${glob}` : glob}`)
+  } else {
+    // Broad search: a positive pathspec (the `path` subdir, else `.`) must precede
+    // the `:(exclude)` ones (an exclude-only pathspec matches nothing), then strip
+    // dependency/build/VCS noise — this is the path that scanned a non-repo's
+    // node_modules and blew the context to 5.1M tokens.
+    args.push(dir || '.', ...GREP_EXCLUDE_PATHSPECS)
+  }
   let res
   try {
     res = await runGit(cwd, args, { throwOnNonZero: false, timeoutMs: GREP_TIMEOUT_MS })
@@ -255,11 +305,18 @@ export function createGrepTool(cwd: string): AgentTool<typeof GrepParams> {
       // Validate optional subdir scope (defence-in-depth; git also rejects ../).
       if (params.path) assertInsideWorkspace(cwd, params.path)
       const out =
-        (await gitGrep(cwd, params.pattern, params.glob, false)) ??
-        (await gitGrep(cwd, params.pattern, params.glob, true)) ??
+        (await gitGrep(cwd, params.pattern, params.glob, params.path, false)) ??
+        (await gitGrep(cwd, params.pattern, params.glob, params.path, true)) ??
         ''
-      const lines = out.split('\n').filter((l) => l.length > 0).slice(0, GREP_MAX_LINES)
-      const text = lines.length > 0 ? lines.join('\n') : 'No matches found.'
+      const matches = out.split('\n').filter((l) => l.length > 0)
+      if (matches.length === 0) return textResult('No matches found.', {})
+      // rtk: cap by bytes + clamp giant (minified) lines, not just line count.
+      const { text } = clampForLlm(matches, {
+        maxLines: GREP_MAX_LINES,
+        maxLineChars: GREP_MAX_LINE_CHARS,
+        maxTotalChars: GREP_MAX_OUTPUT_CHARS,
+        hint: 'narrow the pattern, pass a `glob`/`path`, or Read a specific file',
+      })
       return textResult(text, {})
     },
   }
@@ -273,9 +330,12 @@ const GlobParams = Type.Object({
   path: Type.Optional(Type.String({ description: 'Workspace-relative subdirectory to search.' })),
 })
 
-async function gitGlob(cwd: string, pattern: string): Promise<string | null> {
+async function gitGlob(cwd: string, pattern: string, path: string | undefined): Promise<string | null> {
+  const dir = path ? normalizeDir(path) : ''
+  // Scope the glob WITHIN the subdir when `path` is given (else match repo-wide).
+  const spec = `:(glob)${dir ? `${dir}/${pattern}` : pattern}`
   try {
-    const res = await runGit(cwd, ['ls-files', '--cached', '--others', '--exclude-standard', '--', `:(glob)${pattern}`], {
+    const res = await runGit(cwd, ['ls-files', '--cached', '--others', '--exclude-standard', '--', spec], {
       throwOnNonZero: false,
       timeoutMs: GLOB_TIMEOUT_MS,
     })
@@ -294,12 +354,17 @@ export function createGlobTool(cwd: string): AgentTool<typeof GlobParams> {
     parameters: GlobParams,
     async execute(_id, params): Promise<TextResult> {
       if (params.path) assertInsideWorkspace(cwd, params.path)
-      const out = await gitGlob(cwd, params.pattern)
+      const out = await gitGlob(cwd, params.pattern, params.path)
       if (out === null) {
         return textResult('Glob unavailable (not a git repo).', {})
       }
-      const files = out.split('\n').filter((l) => l.length > 0).slice(0, GLOB_MAX_FILES)
-      const text = files.length > 0 ? files.join('\n') : 'No files matched.'
+      const files = out.split('\n').filter((l) => l.length > 0)
+      if (files.length === 0) return textResult('No files matched.', {})
+      const { text } = clampForLlm(files, {
+        maxLines: GLOB_MAX_FILES,
+        maxTotalChars: GLOB_MAX_OUTPUT_CHARS,
+        hint: 'narrow the glob pattern or `path` scope',
+      })
       return textResult(text, {})
     },
   }
