@@ -30,6 +30,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.20.0',
+    date: '2026-06-26',
+    highlight: {
+      en: 'A completely rebuilt interface, a Home dashboard that shows your guild at a glance, a new Activity page with token usage and estimated cost, and a richer file preview with editor themes and one-tap file actions.',
+      vi: 'Giao diện được dựng lại hoàn toàn, một Home dashboard nhìn tổng quan cả guild trong một màn, trang Activity mới thống kê token và chi phí ước lượng, cùng khung xem file phong phú hơn với theme editor và thao tác file chỉ một chạm.',
+    },
+    items: [
+      {
+        kind: 'changed',
+        en: 'Rebuilt interface: the entire desktop app has been rebuilt on a new design — a cleaner, faster layout across every page.',
+        vi: 'Giao diện dựng lại: toàn bộ app desktop được dựng lại trên một thiết kế mới — bố cục gọn và nhanh hơn trên mọi trang.',
+      },
+      {
+        kind: 'added',
+        en: 'Home dashboard: an at-a-glance control tower showing what needs your attention (replies & approvals), what’s running, today’s token activity, Git status, your agents, connections, and recent sessions — all updating live.',
+        vi: 'Home dashboard: một bảng điều khiển nhìn-một-phát hiển thị việc cần bạn xử lý (trả lời & phê duyệt), thứ đang chạy, hoạt động token hôm nay, trạng thái Git, agent, connection và session gần đây — tất cả cập nhật trực tiếp.',
+      },
+      {
+        kind: 'added',
+        en: 'Activity page: see your token usage and estimated cost over time (1d / 7d / 30d / 90d / all), broken down by model and by account, alongside a provider rate-limit panel. Set or override model prices in Settings; usage rolls up per day so long ranges stay fast.',
+        vi: 'Trang Activity: xem lượng token dùng và chi phí ước lượng theo thời gian (1d / 7d / 30d / 90d / tất cả), bóc tách theo model và theo account, cạnh panel rate-limit của nhà cung cấp. Khai hoặc ghi đè giá model ở Settings; usage được gộp theo ngày nên khoảng thời gian dài vẫn nhanh.',
+      },
+      {
+        kind: 'added',
+        en: 'File preview: pick a code-editor theme — “Follow app” or one of ~16 curated themes (Dracula, Nord, Night Owl, Monokai, and more) — and act on the file right from the preview: edit & save, rename, move, delete, copy path, open in Finder or browser, or add it to a chat.',
+        vi: 'Khung xem file: chọn theme cho code editor — “Theo app” hoặc một trong ~16 theme tuyển chọn (Dracula, Nord, Night Owl, Monokai…) — và thao tác file ngay trong khung xem: sửa & lưu, đổi tên, di chuyển, xóa, sao chép đường dẫn, mở trong Finder hoặc trình duyệt, hoặc thêm vào một cuộc trò chuyện.',
+      },
+    ],
+  },
+  {
     version: '0.19.0',
     date: '2026-06-23',
     highlight: {
