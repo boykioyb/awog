@@ -7,7 +7,7 @@
       {{ t('topbar.search') }}
       <span class="kk">⌘K</span>
     </div>
-    <button class="btn pri">
+    <button class="btn pri" :title="t('topbar.new')" @click="onNew">
       <Icon name="plus" />
       <span>{{ t('topbar.new') }}</span>
     </button>
@@ -44,4 +44,12 @@ const title = computed(() => {
   const titleKey = key ? TITLE_KEYS[key] : undefined
   return titleKey ? t(titleKey) : 'AWOG'
 })
+
+// Global "New" → start a fresh session (the primary work entity; create() also
+// selects it) and land on the Sessions page.
+const sessions = useSessionsStore()
+function onNew() {
+  sessions.create()
+  if (!route.path.startsWith('/sessions')) navigateTo('/sessions')
+}
 </script>

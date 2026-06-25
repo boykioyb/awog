@@ -16,7 +16,15 @@ export type ProjectDto = { id: string; name: string; path: string }
 let cache: ProjectDto[] | null = null
 let inflight: Promise<ProjectDto[]> | null = null
 
-// Shared loader (also reused by useProjects) — one cached round-trip per process.
+// Overwrite the shared process cache with a fresh roster. Called by the projects
+// store after a hydrate / CRUD round-trip so every name→path consumer (git,
+// sessions, workspace tabs) sees the same truth without an extra projects.list.
+export function primeProjectsCache(list: ProjectDto[]): void {
+  cache = list
+}
+
+// Shared loader (git + workspace tabs) — one cached round-trip per process. The
+// projects store keeps this cache in sync via primeProjectsCache on hydrate/CRUD.
 export async function loadProjects(): Promise<ProjectDto[]> {
   const sc = useSidecar()
   if (!sc.available) return []

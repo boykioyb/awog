@@ -68,63 +68,57 @@
         {{ a.label }}
       </span>
     </div>
-    <template v-for="(g, gi) in grouped" :key="g.key">
-      <SessionCluster v-if="g.type === 'cluster'" :steps="g.steps" />
-      <SessionStepItem v-else-if="g.type === 'step'" :block="g.step" />
-      <SessionTextBlock
-        v-else-if="g.type === 'text'"
-        :text="g.text"
-        :highlights="highlightsForBlock(g.blockIndex)"
-      />
-      <div
-        v-else-if="g.type === 'thinking'"
-        class="blk think"
-        :class="{ col: !thinkExpanded.has(gi) }"
-      >
-        <div class="thh" @click="toggleThink(gi)">
-          <Icon name="chev" style="width: 12px; height: 12px" />
-          <Icon name="brain" class="thinkic" style="width: 13px; height: 13px" />
-          {{ t('sessions.thinking') }}
+    <div class="abody" :class="{ bubble: showBubble }">
+      <template v-for="(g, gi) in grouped" :key="g.key">
+        <SessionCluster v-if="g.type === 'cluster'" :steps="g.steps" />
+        <SessionStepItem v-else-if="g.type === 'step'" :block="g.step" />
+        <SessionTextBlock
+          v-else-if="g.type === 'text'"
+          :text="g.text"
+          :highlights="highlightsForBlock(g.blockIndex)"
+        />
+        <div
+          v-else-if="g.type === 'thinking'"
+          class="blk think"
+          :class="{ col: !thinkExpanded.has(gi) }"
+        >
+          <div class="thh" @click="toggleThink(gi)">
+            <Icon name="chev" style="width: 12px; height: 12px" />
+            <Icon name="brain" class="thinkic" style="width: 13px; height: 13px" />
+            {{ t('sessions.thinking') }}
+          </div>
+          <div class="thb">{{ g.text }}</div>
         </div>
-        <div class="thb">{{ g.text }}</div>
-      </div>
-      <SessionGateCard v-else :block="g.gate" />
-    </template>
-    <div class="mmeta">
-      <template v-if="streaming">
-        <span class="strdot" :class="{ pulse: streamingActive }" />
-        <template v-if="streamingActive">
-          {{ t('sessions.message.streaming') }} {{ elapsedLabel }}
-        </template>
-        <template v-else>{{ t('sessions.message.waiting') }}</template>
-      </template>
-      <template v-else>
-        {{ fmt(message.at) }} · {{ tokLabel }} tok
-        <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
+        <SessionGateCard v-else :block="g.gate" />
       </template>
     </div>
-    <div class="hoveract">
-      <span class="ha" :title="t('sessions.message.copy')" @click="copyText">
-        <Icon name="copy" style="width: 13px; height: 13px" />
+    <!-- Floating pill at the top-right of the reply (quick access while reading the head). -->
+    <div class="hoveract top">
+      <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
+        <Icon :name="a.icon" style="width: 13px; height: 13px" />
       </span>
-      <span class="ha" :title="t('sessions.message.quote')" @click="quote">
-        <Icon name="quote" style="width: 13px; height: 13px" />
+    </div>
+    <!-- Meta row at the bottom: timestamp/byline on the left, the same actions inline
+         on the right — reachable at the end of a long reply without scrolling up. -->
+    <div class="mmeta mmetarow">
+      <span class="mmetatxt">
+        <template v-if="streaming">
+          <span class="strdot" :class="{ pulse: streamingActive }" />
+          <template v-if="streamingActive">
+            {{ t('sessions.message.streaming') }} {{ elapsedLabel }}
+          </template>
+          <template v-else>{{ t('sessions.message.waiting') }}</template>
+        </template>
+        <template v-else>
+          {{ fmt(message.at) }} · {{ tokLabel }} tok
+          <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
+        </template>
       </span>
-      <span class="ha" :title="t('sessions.message.regen')" @click="regen">
-        <Icon name="refresh" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.retryModel')" @click="retry">
-        <Icon name="settings" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.rewind')" @click="rewind">
-        <Icon name="rewind" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.branch')" @click="branch">
-        <Icon name="branch" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.forkShort')" @click="fork">
-        <Icon name="fork" style="width: 13px; height: 13px" />
-      </span>
+      <div class="hoveract bottom">
+        <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
+          <Icon :name="a.icon" style="width: 13px; height: 13px" />
+        </span>
+      </div>
     </div>
   </div>
 </template>
@@ -143,6 +137,16 @@ import type { BlockHighlight } from './SessionTextBlock.vue'
 
 const props = defineProps<{ message: SessionMessage; fallbackWhen: string }>()
 const { t } = useI18n()
+const settings = useSettingsStore()
+
+// Assistant-bubble pref (Settings → Sessions): wrap the reply body in an elevated
+// bubble card. Only when there's content (don't paint an empty box mid-stream).
+const showBubble = computed(
+  () =>
+    settings.sessions.assistantBubble &&
+    props.message.role === 'assistant' &&
+    grouped.value.length > 0,
+)
 
 // Pre-narrowed render units so the template never narrows a union via property
 // access (vue-tsc friendly): each variant carries its concrete block type. `key`
@@ -229,7 +233,19 @@ const msgIndex = computed(() => store.active?.msgs.indexOf(props.message) ?? -1)
 // clock time + total elapsed.
 const asAssistant = computed(() => (props.message.role === 'assistant' ? props.message : null))
 const streaming = computed(() => asAssistant.value?.streaming ?? false)
-const streamingActive = computed(() => streaming.value && store.active?.status === 'streaming')
+// Parked on a real gate = an unanswered question or a pending permission in THIS
+// message. Only then do we show the static "Waiting…"; otherwise a streaming turn
+// is actively generating (incl. tool calls) → "Streaming…". Deriving this from the
+// message's own blocks (not the laggy session status) avoids a stuck "Waiting…"
+// after a tool/gate auto-resolves and the model is working again.
+const parkedOnGate = computed(() => {
+  const m = asAssistant.value
+  if (!m) return false
+  return m.blocks.some(
+    (b) => (b.kind === 'question' && !b.answer) || (b.kind === 'perm' && b.status === 'pending'),
+  )
+})
+const streamingActive = computed(() => streaming.value && !parkedOnGate.value)
 
 const nowTick = ref(Date.now())
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
@@ -332,9 +348,98 @@ const retry = () => act(store.retryModel)
 const rewind = () => act(store.rewind)
 const fork = () => act((id, i) => store.fork(id, i, 'fork'))
 const branch = () => act((id, i) => store.fork(id, i, 'branch'))
+
+// One action set, rendered twice (floating pill at the top + inline on the meta
+// row at the bottom) so the actions are reachable without scrolling a long reply.
+const msgActions = computed(() => [
+  { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
+  { icon: 'quote', title: t('sessions.message.quote'), run: quote },
+  { icon: 'refresh', title: t('sessions.message.regen'), run: regen },
+  { icon: 'settings', title: t('sessions.message.retryModel'), run: retry },
+  { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind },
+  { icon: 'branch', title: t('sessions.message.branch'), run: branch },
+  { icon: 'fork', title: t('sessions.message.forkShort'), run: fork },
+])
 </script>
 
 <style scoped>
+/* Hover actions: a cohesive floating toolbar (pill) overlaying the message's top
+   corner on hover — no reserved row below every message (the old invisible 26px row
+   was the big inter-message gap). Position-relative host + absolute toolbar. */
+.maw,
+.urow {
+  position: relative;
+}
+.hoveract {
+  position: absolute;
+  top: -9px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px 3px;
+  background: var(--bgEl);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+.maw .hoveract {
+  right: 0;
+}
+.urow .hoveract {
+  left: 0;
+}
+/* The bottom copy (assistant only) sits inline on the meta row — same actions, no
+   floating pill chrome, right-aligned next to the byline so it hugs the reply end. */
+.maw .hoveract.bottom {
+  position: static;
+  top: auto;
+  right: auto;
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+/* Meta row holds the byline (left) + inline action set (right). */
+.mmetarow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mmetatxt {
+  min-width: 0;
+}
+/* Ghost icon buttons inside the toolbar: borderless, fill on hover. */
+.hoveract .ha {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--textDim);
+}
+.hoveract .ha:hover {
+  background: var(--bgHover);
+  color: var(--text);
+}
+/* Assistant reply body. Always a flex column (keeps the per-block gap); the
+   `bubble` variant (Settings → Sessions · Assistant bubble) wraps it in an
+   elevated card mirroring the user bubble, left-tailed. */
+.abody {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.abody.bubble {
+  background: var(--bgEl);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+  padding: 11px 14px;
+}
 /* Brain glyph on the Thinking header — subtle, consistent with the step icons. */
 .thinkic {
   flex: 0 0 auto;

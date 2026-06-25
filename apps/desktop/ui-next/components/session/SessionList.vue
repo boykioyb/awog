@@ -14,38 +14,38 @@
         class="iconbtn"
         :title="selecting ? t('sessions.sidebar.selectExit') : t('sessions.sidebar.selectMode')"
         :style="{
-          width: '32px',
-          height: '32px',
+          width: '28px',
+          height: '28px',
           ...(selecting ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}),
         }"
         @click="toggleSelectMode"
       >
-        <Icon name="check" style="width: 14px; height: 14px" />
+        <Icon name="check" style="width: 13px; height: 13px" />
       </button>
       <button
         class="iconbtn"
         :title="t('sessions.filter.tooltip')"
-        style="width: 32px; height: 32px; position: relative"
+        style="width: 28px; height: 28px; position: relative"
         @click="showFilters = !showFilters"
       >
-        <Icon name="filter" style="width: 14px; height: 14px" />
+        <Icon name="filter" style="width: 13px; height: 13px" />
         <span v-if="activeFilters" class="fbadge">{{ activeFilters }}</span>
       </button>
       <button
         class="iconbtn"
         :title="t('sessions.foldAll.tooltip')"
-        style="width: 32px; height: 32px"
+        style="width: 28px; height: 28px"
         @click="toggleFoldAll"
       >
-        <Icon name="foldv" style="width: 14px; height: 14px" />
+        <Icon name="foldv" style="width: 13px; height: 13px" />
       </button>
       <button
-        class="iconbtn"
+        class="iconbtn pri"
         :title="t('sessions.new.tooltip')"
-        style="width: 32px; height: 32px"
+        style="width: 28px; height: 28px"
         @click="store.create()"
       >
-        <Icon name="plus" />
+        <Icon name="plus" style="width: 14px; height: 14px" />
       </button>
     </div>
 
@@ -156,7 +156,11 @@
             :class="{ col: collapsed[grp.key] }"
             :data-grp="grp.key"
           >
-            <div class="grph" @click="toggleGroup(grp.key)">
+            <div
+              class="grph"
+              @click="toggleGroup(grp.key)"
+              @contextmenu.prevent="openProjectCtx(grp, $event)"
+            >
               <Icon name="chev" class="gchv" />
               <span class="pdot" :style="{ background: grp.dot }" />
               <span class="gnm">{{ grp.label }}</span>
@@ -235,6 +239,40 @@
         <div class="mi danger" @click="ctxDelete">
           <Icon name="trash" style="width: 13px; height: 13px" />
           {{ t('sessions.ctx.delete') }}
+        </div>
+      </div>
+    </template>
+
+    <!-- Right-click a group header → project-scoped actions. -->
+    <template v-if="pctx">
+      <div
+        class="ctxbackdrop"
+        @click="pctx = null"
+        @contextmenu.prevent="pctx = null"
+        @wheel="pctx = null"
+      />
+      <div class="smenu ctxmenu" :style="{ left: `${pctx.x}px`, top: `${pctx.y}px` }">
+        <div class="mi" @click="pNewSession">
+          <Icon name="plus" style="width: 13px; height: 13px" />
+          {{ t('sessions.pctx.newSession') }}
+        </div>
+        <div class="ctxsep" />
+        <div class="mi" @click="pSelectAll">
+          <Icon name="check" style="width: 13px; height: 13px" />
+          {{ t('sessions.pctx.selectAll', { n: pctx.grp.items.length }) }}
+        </div>
+        <div class="mi" @click="pDeselectAll">
+          <Icon name="x" style="width: 13px; height: 13px" />
+          {{ t('sessions.pctx.deselectAll') }}
+        </div>
+        <div v-if="pctxPath" class="mi" @click="pOpenFinder">
+          <Icon name="folder" style="width: 13px; height: 13px" />
+          {{ t('sessions.pctx.openFinder') }}
+        </div>
+        <div class="ctxsep" />
+        <div class="mi danger" @click="pDeleteAll">
+          <Icon name="trash" style="width: 13px; height: 13px" />
+          {{ t('sessions.pctx.deleteAll', { n: pctx.grp.items.length }) }}
         </div>
       </div>
     </template>
@@ -415,6 +453,51 @@ function ctxDelete() {
   ctx.value = null
 }
 
+// ── Project group context menu ─────────────────────────────────────────────────
+// Right-click a group header → actions scoped to that group's sessions (new in
+// project, (de)select all, delete all, open folder). Same menu chrome as `ctx`.
+type GroupRef = { key: string; items: Session[] }
+const pctx = ref<{ x: number; y: number; grp: GroupRef } | null>(null)
+
+function openProjectCtx(grp: GroupRef, e: MouseEvent) {
+  const x = Math.min(e.clientX, window.innerWidth - 184)
+  const y = Math.min(e.clientY, window.innerHeight - 200)
+  pctx.value = { x: Math.max(8, x), y: Math.max(8, y), grp }
+}
+// Open-folder only when grouping by project (other groupings carry no path).
+const pctxPath = computed<string | null>(() =>
+  pctx.value && groupBy.value === 'project' ? projectPath(pctx.value.grp.key) : null,
+)
+function pNewSession() {
+  if (pctx.value) store.create(groupBy.value === 'project' ? pctx.value.grp.key : undefined)
+  pctx.value = null
+}
+function pSelectAll() {
+  if (pctx.value) {
+    selecting.value = true
+    pctx.value.grp.items.forEach((s) => {
+      if (!store.selectedIds.has(s.id)) store.toggleSelect(s.id)
+    })
+  }
+  pctx.value = null
+}
+function pDeselectAll() {
+  if (pctx.value)
+    pctx.value.grp.items.forEach((s) => {
+      if (store.selectedIds.has(s.id)) store.toggleSelect(s.id)
+    })
+  pctx.value = null
+}
+function pDeleteAll() {
+  if (pctx.value) store.bulkRemove(pctx.value.grp.items.map((s) => s.id))
+  pctx.value = null
+}
+function pOpenFinder() {
+  const path = pctxPath.value
+  if (path && sc.available) sc.openPath(path, '.').catch(() => undefined)
+  pctx.value = null
+}
+
 function toggleGroup(key: string) {
   collapsed.value[key] = !collapsed.value[key]
 }
@@ -502,5 +585,23 @@ function toggleFoldAll() {
 }
 .ctxmenu .mi.danger:hover {
   background: var(--dangerDim, color-mix(in srgb, var(--danger) 14%, transparent));
+}
+/* Toolbar icon buttons sit beside the ~28px-tall search field — the global 32px
+   .iconbtn reads oversized here, so scope them down to match the search box. */
+.ltop .iconbtn {
+  width: 28px;
+  height: 28px;
+}
+/* Toolbar: "New session" is the one primary CTA on this surface (filled accent);
+   select / filter / fold-all stay subordinate ghost icon buttons (design §4). */
+.ltop .iconbtn.pri {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accentText);
+}
+.ltop .iconbtn.pri:hover {
+  border-color: transparent;
+  color: var(--accentText);
+  filter: brightness(1.07);
 }
 </style>

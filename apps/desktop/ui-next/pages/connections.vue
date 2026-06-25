@@ -1,125 +1,137 @@
 <template>
   <section class="page on" data-page="connections">
     <LibraryView
-      :items="connections"
-      :item-key="(c) => c.name"
-      :search-text="(c) => c.name + c.cmd"
+      :items="servers"
+      :item-key="(c) => c.id"
+      :search-text="(c) => c.id + c.name + c.description + c.transport"
       :placeholder="t('connections.search')"
       show-new
+      @new="openCreator"
     >
       <template #row="{ item }">
         <div class="lrow">
           <span
             class="sdot"
-            :style="{ background: item.status === 'running' ? 'var(--green)' : 'var(--textFaint)' }"
+            :style="{
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              flex: '0 0 auto',
+              background: statusColor(item.status),
+            }"
           />
-          <span class="ttl">{{ item.name }}</span>
-          <span class="tag" style="padding: 1px 6px">{{ item.transport }}</span>
+          <span class="ttl">{{ item.name || item.id }}</span>
+          <span class="tag mono" style="padding: 1px 6px">{{ item.transport }}</span>
         </div>
         <div class="sub">
-          {{ t('connections.toolsStatus', { n: item.tools, status: item.status }) }}
+          {{ t('connections.toolsStatus', { n: item.tools.length, status: item.status }) }}
         </div>
       </template>
 
       <template #detail="{ item }">
-        <div class="dh">
-          <div class="dt">{{ item.name }}</div>
-          <span class="tag">{{ item.transport }}</span>
-          <span style="flex: 1" />
-          <span class="chip">
-            <span
-              style="width: 6px; height: 6px; border-radius: 50%; display: inline-block"
-              :style="{
-                background: item.status === 'running' ? 'var(--green)' : 'var(--textFaint)',
-              }"
-            />
-            {{ item.status }}
-          </span>
-          <span
-            class="tog2"
-            :class="{ off: !item.enabled }"
-            :title="t('connections.enableToggle')"
-            @click="item.enabled = !item.enabled"
-          />
-        </div>
-        <div class="dscroll">
-          <div class="sech">{{ t('connections.sech.command') }}</div>
-          <div class="codeblk" style="font-size: 0.9231rem">{{ item.cmd }}</div>
-          <div class="sech">{{ t('connections.sech.tools') }}</div>
-          <span class="chip">{{ t('connections.tools', { n: item.tools }) }}</span>
-          <div class="sech">{{ t('connections.sech.whitelist') }}</div>
-          <span class="chip">{{ item.wl }}</span>
-          <div class="sech">{{ t('connections.sech.secret') }}</div>
-          <div class="fd">
-            {{ t('connections.secretNoteBefore') }}
-            <span class="mono">secret:KEY</span>
-            {{ t('connections.secretNoteAfter') }}
-          </div>
-          <div style="margin-top: 16px">
-            <button class="btn sm" style="color: var(--danger)">
-              <Icon name="trash" />
-              {{ t('connections.delete') }}
-            </button>
-          </div>
-        </div>
+        <ConnectionDetail
+          :server="item"
+          :stderr="stderrOf(item.id)"
+          @edit="openEditor(item)"
+          @delete="askDelete(item)"
+          @toggle="onToggle(item)"
+          @restart="onRestart(item)"
+          @toggle-tool="(tool) => onToggleTool(item, tool)"
+          @test="(done) => runTest(item, done)"
+        />
       </template>
     </LibraryView>
+
+    <!-- create (chat-driven config authoring) -->
+    <ConnectionPromptCreator
+      :open="creatorOpen"
+      :account-id="accountId"
+      @close="onCreatorClose"
+      @turn="onCreatorTurn"
+    />
+
+    <!-- edit (form) -->
+    <ConnectionEditor
+      :open="editorOpen"
+      :server="editTarget"
+      :test="testServer"
+      @save="onSave"
+      @cancel="closeEditor"
+    />
+
+    <!-- delete confirm -->
+    <LibraryConfirmDelete
+      :open="!!pendingDelete"
+      :title="t('connections.delete')"
+      :description="deleteDescription"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
+
+    <!-- transient toasts -->
+    <div
+      v-for="tt in toasts"
+      :key="tt.id"
+      class="toast"
+      :style="{ borderColor: toastColor(tt.kind) }"
+    >
+      {{ tt.text }}
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+// Connections (MCP) library — live store + full CRUD + chat-driven creation
+// (ADR 0025, flat global "Sources" list). Replaces the static mock from the
+// prototype port. Shell from <LibraryView>; all state + handlers live in
+// useConnectionsPage (page-controller). Mirrors the skills reference slice.
+import ConnectionDetail from '~/components/connection/ConnectionDetail.vue'
+import ConnectionEditor from '~/components/connection/ConnectionEditor.vue'
+import ConnectionPromptCreator from '~/components/connection/ConnectionPromptCreator.vue'
+import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
+import { useConnectionsPage } from '~/composables/useConnectionsPage'
+import type { ConnectionStatus, McpServer, McpTestResult } from '~/stores/connections'
 
-// Connections (MCP) — visual port of mountLib('connections', …) from
-// awog-prototype.html. Static mock; the enable toggle flips a local field.
 const { t } = useI18n()
 
-type Connection = {
-  name: string
-  transport: 'stdio' | 'http'
-  cmd: string
-  tools: number
-  status: 'running' | 'idle'
-  enabled: boolean
-  wl: string
-}
+const {
+  servers,
+  stderrOf,
+  accountId,
+  creatorOpen,
+  openCreator,
+  onCreatorTurn,
+  onCreatorClose,
+  editorOpen,
+  editTarget,
+  openEditor,
+  closeEditor,
+  onSave,
+  onToggle,
+  onRestart,
+  onToggleTool,
+  testServer,
+  pendingDelete,
+  askDelete,
+  cancelDelete,
+  deleteDescription,
+  confirmDelete,
+  toasts,
+  toastColor,
+} = useConnectionsPage()
 
-const connections = ref<Connection[]>([
-  {
-    name: 'github',
-    transport: 'stdio',
-    cmd: 'npx @modelcontextprotocol/server-github',
-    tools: 14,
-    status: 'running',
-    enabled: true,
-    wl: 'all agents',
-  },
-  {
-    name: 'filesystem',
-    transport: 'stdio',
-    cmd: 'secret:FS_ROOT',
-    tools: 9,
-    status: 'running',
-    enabled: true,
-    wl: 'all agents',
-  },
-  {
-    name: 'linear',
-    transport: 'http',
-    cmd: 'https://mcp.linear.app/sse · header secret:LINEAR_KEY',
-    tools: 6,
-    status: 'idle',
-    enabled: true,
-    wl: 'tech-lead, product-owner',
-  },
-  {
-    name: 'notion',
-    transport: 'http',
-    cmd: 'https://mcp.notion.com',
-    tools: 5,
-    status: 'idle',
-    enabled: false,
-    wl: 'tech-lead',
-  },
-])
+const STATUS_COLORS: Record<ConnectionStatus, string> = {
+  running: 'var(--green)',
+  starting: 'var(--amber)',
+  idle: 'var(--textDim)',
+  error: 'var(--danger)',
+  disabled: 'var(--textFaint)',
+}
+const statusColor = (status: ConnectionStatus): string => STATUS_COLORS[status]
+
+// Bridge the detail's `test` emit (which carries a done-callback) to the store's
+// async testServer — keeps ConnectionDetail store-free (SoC).
+const runTest = (server: McpServer, done: (result: McpTestResult) => void) => {
+  void testServer(server).then(done)
+}
 </script>

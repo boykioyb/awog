@@ -158,8 +158,6 @@
       </button>
     </div>
 
-    <div class="fd smnote">{{ t('settingsModels.note') }}</div>
-
     <SettingsOAuthDialog
       :open="oauthOpen"
       @close="oauthOpen = false"
@@ -358,9 +356,6 @@ const onEditSaved = (account: ProviderAccount) => {
 .smintro {
   margin-top: -4px;
   margin-bottom: 4px;
-}
-.smnote {
-  margin-top: 4px;
 }
 
 /* Card surface (shared visual with SettingsProviderCard) */

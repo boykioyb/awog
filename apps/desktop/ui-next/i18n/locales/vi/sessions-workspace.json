@@ -18,6 +18,13 @@
   "sessions.workspace.plan.pending": "chờ duyệt",
   "sessions.workspace.terminal.unavailable": "Terminal không khả dụng",
   "sessions.workspace.terminal.exited": "tiến trình đã thoát",
+  "sessions.workspace.terminal.newTab": "Terminal mới",
+  "sessions.workspace.terminal.closeTab": "Đóng terminal",
+  "sessions.workspace.terminal.tabTitle": "Terminal {n}",
   "sessions.workspace.tasks.empty": "Session này không có tác vụ nền nào",
-  "sessions.workspace.tasks.placeholder": "Tác vụ nền (terminal / sub-agent) của session sẽ hiển thị ở đây"
+  "sessions.workspace.tasks.placeholder": "Tác vụ nền (terminal / sub-agent) của session sẽ hiển thị ở đây",
+  "sessions.workspace.dock.change": "Đổi vị trí panel",
+  "sessions.workspace.dock.left": "Dock trái",
+  "sessions.workspace.dock.right": "Dock phải",
+  "sessions.workspace.dock.bottom": "Dock đáy"
 }

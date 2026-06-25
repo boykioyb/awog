@@ -81,6 +81,8 @@ function createInvokeAdapter(
   let modelUsed = ''
   let inputTokens = 0
   let outputTokens = 0
+  let cacheReadTokens = 0
+  let cacheWriteTokens = 0
   let stopReason: string | null = null
 
   // Remember each tool's name + parsed args from its start event so the end
@@ -150,6 +152,8 @@ function createInvokeAdapter(
           if (last.model) modelUsed = last.model
           inputTokens = last.usage.input
           outputTokens = last.usage.output
+          cacheReadTokens = last.usage.cacheRead
+          cacheWriteTokens = last.usage.cacheWrite
           stopReason = last.stopReason
         }
         break
@@ -164,7 +168,12 @@ function createInvokeAdapter(
     result: () => ({
       text,
       modelUsed,
-      usage: { input_tokens: inputTokens, output_tokens: outputTokens },
+      usage: {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cache_read_tokens: cacheReadTokens,
+        cache_creation_tokens: cacheWriteTokens,
+      },
       stopReason,
     }),
   }

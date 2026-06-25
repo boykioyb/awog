@@ -1,161 +1,163 @@
 <template>
   <section class="page on" data-page="agents">
     <LibraryView
-      :items="AGENTS"
-      :item-key="(a) => a.name"
-      :search-text="(a) => a.name + a.model"
+      :items="agents"
+      :item-key="agentKey"
+      :search-text="(a) => a.name + a.id + a.role + a.model"
       :placeholder="t('agents.search')"
+      :group-by="groupKey"
+      :group-label="groupLabel"
+      :group-dot="groupDot"
       show-new
+      @new="openCreator()"
+      @new-in-group="openCreator"
     >
       <template #row="{ item: a }">
         <div class="lrow">
-          <span class="lav" :style="{ background: a.c, color: a.cf }">{{ a.ini }}</span>
+          <span class="lav" :style="avatarStyleFor(a)">{{ initialsFor(a) }}</span>
           <span class="ttl">{{ a.name }}</span>
+          <span v-if="a.source === 'project'" class="tag acc" style="padding: 1px 6px">
+            {{ t('agents.tier.project') }}
+          </span>
         </div>
-        <div class="sub" style="margin-left: 30px">{{ a.model }} · {{ a.prov }}</div>
+        <div class="sub" style="margin-left: 30px">{{ subFor(a) }}</div>
       </template>
 
       <template #detail="{ item: a }">
-        <div class="dh">
-          <span
-            class="lav"
-            :style="{
-              background: a.c,
-              color: a.cf,
-              width: '26px',
-              height: '26px',
-              marginRight: '8px',
-            }"
-          >
-            {{ a.ini }}
-          </span>
-          <div class="dt">{{ a.name }}</div>
-          <span style="flex: 1" />
-          <span class="chip">{{ a.model }}</span>
-          <button
-            class="iconbtn"
-            style="width: 28px; height: 28px"
-            :title="t('agents.editAgentMd')"
-          >
-            <Icon name="edit" style="width: 14px; height: 14px" />
-          </button>
-        </div>
-        <div class="dscroll">
-          <div class="sech">{{ t('agents.providerModel') }}</div>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap">
-            <span class="chip">{{ a.prov }}</span>
-            <span class="chip">{{ a.model }}</span>
-            <span class="chip">{{ t('agents.temp', { temp: a.temp }) }}</span>
-          </div>
-          <div class="sech">{{ t('agents.systemPrompt') }}</div>
-          <div class="codeblk">{{ a.prompt }}</div>
-          <div class="sech">{{ t('agents.toolsWhitelist') }}</div>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap">
-            <span
-              v-for="(tool, i) in a.tools"
-              :key="i"
-              class="chip"
-              :class="{ mono: tool.startsWith('mcp') }"
-              :style="
-                tool.startsWith('mcp')
-                  ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
-                  : undefined
-              "
-            >
-              {{ tool.startsWith('mcp') ? `${tool}__*` : tool }}
-            </span>
-          </div>
-          <div style="margin-top: 16px">
-            <button class="btn sm" style="color: var(--danger)">
-              <Icon name="trash" />
-              {{ t('agents.delete') }}
-            </button>
-          </div>
-        </div>
+        <AgentDetail
+          :agent="a"
+          :projects="projectListWithPath"
+          :mcp-servers="mcpServers"
+          @edit="openEditor(a)"
+          @duplicate="onDuplicate(a)"
+          @delete="askDelete(a)"
+          @edit-body="openBodyEdit(a)"
+        />
       </template>
     </LibraryView>
+
+    <!-- create (chat-driven AGENT.md authoring) -->
+    <AgentPromptCreator
+      :open="creatorOpen"
+      :account-id="accountId"
+      :projects="projectList"
+      :initial-scope="creatorScope"
+      @close="onCreatorClose"
+      @turn="onCreatorTurn"
+    />
+
+    <!-- edit (form) -->
+    <AgentEditor
+      :open="editorOpen"
+      :agent="editTarget"
+      :projects="projectListWithPath"
+      :mcp-servers="mcpServers"
+      @save="onSave"
+      @cancel="closeEditor"
+    />
+
+    <!-- edit system prompt (LLM revise) -->
+    <AgentBodyEditModal
+      v-if="bodyEditTarget"
+      :open="bodyEditOpen"
+      :agent="bodyEditTarget"
+      :account-id="accountId"
+      @apply="onApplyBodyEdit"
+      @cancel="closeBodyEdit"
+    />
+
+    <!-- delete confirm -->
+    <LibraryConfirmDelete
+      :open="!!pendingDelete"
+      :title="t('agents.delete')"
+      :description="deleteDescription"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
+
+    <!-- transient toasts -->
+    <div
+      v-for="tt in toasts"
+      :key="tt.id"
+      class="toast"
+      :style="{ borderColor: toastColor(tt.kind) }"
+    >
+      {{ tt.text }}
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-// Agents library — faithful port of awog-prototype.html (data-page="agents").
-// Floating-card rows with color/initials avatar (AGCOL), provider/model chips,
-// system-prompt block + tools whitelist (mcp__* chips accent-styled). Static mock;
-// shell from <LibraryView>. Visual only.
+// Agents library — live store + full CRUD + chat-driven creation. Replaces the
+// static mock from the prototype port. Shell from <LibraryView>; all state +
+// handlers live in useAgentsPage (page-controller), mirroring pages/skills.vue.
+import { computed, type CSSProperties } from 'vue'
+import AgentBodyEditModal from '~/components/agent/AgentBodyEditModal.vue'
+import AgentDetail from '~/components/agent/AgentDetail.vue'
+import AgentEditor from '~/components/agent/AgentEditor.vue'
+import AgentPromptCreator from '~/components/agent/AgentPromptCreator.vue'
+import {
+  agentAvatar,
+  agentInitials,
+  modelDisplayName,
+  providerDisplayName,
+} from '~/components/agent/agent-display'
+import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
+import { useAgentsPage } from '~/composables/useAgentsPage'
+import { useProjects } from '~/composables/useProjects'
+import type { Agent } from '~/stores/agents'
 
 const { t } = useI18n()
+const { projects, projectPath, projectName } = useProjects()
 
-type AgentItem = {
-  name: string
-  ini: string
-  c: string
-  cf: string
-  model: string
-  prov: string
-  temp: string
-  prompt: string
-  tools: string[]
+const {
+  agents,
+  agentKey,
+  projectList,
+  accountId,
+  mcpServers,
+  creatorOpen,
+  creatorScope,
+  openCreator,
+  onCreatorTurn,
+  onCreatorClose,
+  editorOpen,
+  editTarget,
+  openEditor,
+  closeEditor,
+  onSave,
+  bodyEditOpen,
+  bodyEditTarget,
+  openBodyEdit,
+  closeBodyEdit,
+  onApplyBodyEdit,
+  onDuplicate,
+  pendingDelete,
+  askDelete,
+  cancelDelete,
+  deleteDescription,
+  confirmDelete,
+  toasts,
+  toastColor,
+} = useAgentsPage()
+
+// Project list enriched with the on-disk path (for tier hints in editor/detail).
+const projectListWithPath = computed(() =>
+  projects.value.map((p) => ({ id: p.id, name: p.name, path: projectPath(p.id) ?? undefined })),
+)
+
+// Row avatar / initials / sub-label (provider · model display).
+const avatarStyleFor = (a: Agent): CSSProperties => {
+  const av = agentAvatar(a)
+  return { background: av.bg, color: av.fg }
 }
+const initialsFor = (a: Agent): string => agentInitials(a)
+const subFor = (a: Agent): string =>
+  `${modelDisplayName(a.model)} · ${providerDisplayName(a.provider)}`
 
-const AGENTS: AgentItem[] = [
-  {
-    name: 'tech-lead',
-    ini: 'TL',
-    c: 'rgba(167,139,250,.15)',
-    cf: '#c4b5fd',
-    model: 'Opus 4.8',
-    prov: 'Anthropic',
-    temp: '0.3',
-    prompt:
-      'Bạn là Tech Lead của AWOG. Quyết định kiến trúc, viết ADR (Context/Decision/Consequences), thiết kế ranh giới module qua UI/sidecar/storage. Output là ADR/design note, KHÔNG phải code.',
-    tools: ['Read', 'Grep', 'Glob', 'Write', 'mcp__github'],
-  },
-  {
-    name: 'developer',
-    ini: 'DV',
-    c: 'rgba(16,185,129,.15)',
-    cf: '#6ee7b7',
-    model: 'Opus 4.8',
-    prov: 'Anthropic',
-    temp: '0.2',
-    prompt:
-      'Bạn là Developer. Implement một task end-to-end theo coding-guide, chạy lint+typecheck trước khi báo xong.',
-    tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'],
-  },
-  {
-    name: 'infosec',
-    ini: 'IS',
-    c: 'rgba(239,68,68,.13)',
-    cf: '#fca5a5',
-    model: 'Sonnet 4.6',
-    prov: 'Anthropic',
-    temp: '0.1',
-    prompt:
-      'Bạn là Infosec. Audit theo 21-rule + 8 invariant AWOG. Read-only; xuất finding report (severity / file:line / fix).',
-    tools: ['Read', 'Grep', 'Glob', 'Bash'],
-  },
-  {
-    name: 'product-owner',
-    ini: 'PO',
-    c: 'rgba(96,165,250,.15)',
-    cf: '#93c5fd',
-    model: 'Opus 4.8',
-    prov: 'Anthropic',
-    temp: '0.4',
-    prompt:
-      'Bạn là Product Owner. Đánh giá feature idea vs VISION, ưu tiên roadmap, viết feature brief.',
-    tools: ['Read', 'Grep', 'Glob'],
-  },
-  {
-    name: 'qa-tester',
-    ini: 'QA',
-    c: 'rgba(245,158,11,.15)',
-    cf: '#fcd34d',
-    model: 'Sonnet 4.6',
-    prov: 'Anthropic',
-    temp: '0.2',
-    prompt: 'Bạn là QA. Viết test case (manual+auto), verify AC, surface edge case + regression.',
-    tools: ['Read', 'Grep', 'Glob', 'Bash', 'Write'],
-  },
-]
+// Group the list by tier (global vs each project) — like the Sessions list.
+const groupKey = (a: Agent) => (a.source === 'project' && a.projectId ? a.projectId : 'global')
+const groupLabel = (key: string) =>
+  key === 'global' ? t('library.group.global') : projectName(key)
+const groupDot = (key: string) => (key === 'global' ? 'var(--textDim)' : 'var(--accent)')
 </script>

@@ -6,6 +6,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'appearance', labelKey: 'settings.nav.appearance', icon: 'settings' },
   { id: 'defaults', labelKey: 'settings.nav.defaults', icon: 'rules' },
   { id: 'models', labelKey: 'settings.nav.models', icon: 'agents' },
+  { id: 'pricing', labelKey: 'settings.nav.pricing', icon: 'act' },
   { id: 'workspace', labelKey: 'settings.nav.workspace', icon: 'folder' },
   { id: 'git', labelKey: 'settings.nav.git', icon: 'git' },
   { id: 'sessions', labelKey: 'settings.nav.sessions', icon: 'sessions' },

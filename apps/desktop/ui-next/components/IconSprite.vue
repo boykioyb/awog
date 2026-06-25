@@ -120,6 +120,20 @@
         <rect x="3" y="4" width="18" height="16" rx="2" />
         <path d="M15 4v16" />
       </symbol>
+      <!-- dock-position icons: rect frame + a divider biased to the docked edge
+           (lucide panel-left/right/bottom style). -->
+      <symbol id="i-dock-left" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M9 4v16" />
+      </symbol>
+      <symbol id="i-dock-right" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M15 4v16" />
+      </symbol>
+      <symbol id="i-dock-bottom" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 14h18" />
+      </symbol>
       <symbol id="i-copy" viewBox="0 0 24 24">
         <rect x="9" y="9" width="11" height="11" rx="2" />
         <path d="M5 15V5a2 2 0 0 1 2-2h10" />
@@ -170,6 +184,80 @@
         <path
           d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"
         />
+      </symbol>
+      <!-- preview-modal actions (ADR 0053 / preview-modal-actions) -->
+      <symbol id="i-save" viewBox="0 0 24 24">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+        <path d="M17 21v-8H7v8M7 3v5h8" />
+      </symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18" />
+        <path d="M12 3c2.5 2.5 3.7 6 3.7 9s-1.2 6.5-3.7 9c-2.5-2.5-3.7-6-3.7-9s1.2-6.5 3.7-9z" />
+      </symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24">
+        <path d="M12 3s6 5.5 6 10a6 6 0 0 1-12 0c0-4.5 6-10 6-10z" />
+      </symbol>
+      <symbol id="i-move" viewBox="0 0 24 24">
+        <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
+      </symbol>
+      <symbol id="i-dots" viewBox="0 0 24 24">
+        <circle cx="5" cy="12" r="1" />
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
+      </symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24">
+        <path d="M5 12h14" />
+      </symbol>
+      <symbol id="i-maximize" viewBox="0 0 24 24">
+        <path
+          d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+        />
+      </symbol>
+      <symbol id="i-minimize" viewBox="0 0 24 24">
+        <path
+          d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+        />
+      </symbol>
+      <!-- Response-style glyphs (SessionComposer style picker) — lucide outlines. -->
+      <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14" /></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </symbol>
+      <symbol id="i-help" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24">
+        <path
+          d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"
+        />
+        <path d="M20 3v4M22 5h-4M4 17v2M5 18H3" />
+      </symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24">
+        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+        <line x1="4" x2="4" y1="22" y2="15" />
+      </symbol>
+      <symbol id="i-smile" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+        <line x1="9" x2="9.01" y1="9" y2="9" />
+        <line x1="15" x2="15.01" y1="9" y2="9" />
+      </symbol>
+      <symbol id="i-message" viewBox="0 0 24 24">
+        <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+      </symbol>
+      <symbol id="i-bulb" viewBox="0 0 24 24">
+        <path
+          d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+        />
+        <path d="M9 18h6M10 22h4" />
+      </symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24">
+        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+        <polyline points="2 17 12 22 22 17" />
+        <polyline points="2 12 12 17 22 12" />
       </symbol>
     </defs>
   </svg>

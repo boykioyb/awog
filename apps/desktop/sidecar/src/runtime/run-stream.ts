@@ -214,15 +214,49 @@ export async function runStreamPi(
   )
 
   // Context-window breakdown for the UI usage panel: measure each segment's size
-  // at build time so the panel can itemise System prompt / Tools / Messages (like
-  // Claude Code) instead of dumping everything the UI can't see into one opaque
-  // "Other" bucket. Char counts (÷4 in the UI = the same rough heuristic it
-  // already uses); JSON size over-approximates structure but, crucially, captures
-  // the tool_use / tool_result / thinking content the visible-text estimate omits.
+  // at build time so the panel can itemise the window the way Claude Code's
+  // `/context` does (System prompt / Instructions / System tools / MCP tools /
+  // Custom agents / Skills / Memory files / Messages) instead of dumping
+  // everything the UI can't see into one opaque "Other" bucket. Char counts (÷4
+  // in the UI = the same rough heuristic it already uses); JSON size over-
+  // approximates structure but, crucially, captures the tool_use / tool_result /
+  // thinking content the visible-text estimate omits.
+  //
+  // Split the toolset by name prefix: bridged MCP tools are `mcp__<id>__*`,
+  // everything else is a built-in/system tool.
+  const mcpToolsArr = tools.filter((t) => t.name.startsWith('mcp__'))
+  const systemToolsArr = tools.filter((t) => !t.name.startsWith('mcp__'))
+  // The itemised bulk-load sections (memory files / custom agents / skills) were
+  // folded into args.systemPromptAppend upstream (send-message) and then joined
+  // with the runtime's own append nudges (rules / style / VERIFY / plan / MCP)
+  // into `systemPromptAppend` above. `instructions` is the REMAINDER of the joined
+  // append after subtracting both the base prompt and those itemised sections:
+  //   context.systemPrompt = systemPrompt + "\n\n" + systemPromptAppend
+  const items = args.contextItems
+  const systemPromptLen = (args.systemPrompt ?? '').length
+  const memoryFilesLen = items?.memoryFilesChars ?? 0
+  const customAgentsLen = items?.customAgentsChars ?? 0
+  const skillsLen = items?.skillsChars ?? 0
+  const instructionsLen = Math.max(
+    0,
+    (context.systemPrompt ?? '').length -
+      systemPromptLen -
+      memoryFilesLen -
+      customAgentsLen -
+      skillsLen,
+  )
   const contextChars = {
-    system: (context.systemPrompt ?? '').length,
-    tools: JSON.stringify(tools).length,
+    systemPrompt: systemPromptLen,
+    instructions: instructionsLen,
+    systemTools: JSON.stringify(systemToolsArr).length,
+    mcpTools: mcpToolsArr.length > 0 ? JSON.stringify(mcpToolsArr).length : 0,
+    customAgents: customAgentsLen,
+    skills: skillsLen,
+    memoryFiles: memoryFilesLen,
     history: JSON.stringify(context.messages).length + JSON.stringify(prompt).length,
+    ...(items?.memoryFilesList.length ? { memoryFilesList: items.memoryFilesList } : {}),
+    ...(items?.customAgentsList.length ? { customAgentsList: items.customAgentsList } : {}),
+    ...(items?.skillsList.length ? { skillsList: items.skillsList } : {}),
   }
 
   const reasoning = toReasoning(args.settings.level, model)

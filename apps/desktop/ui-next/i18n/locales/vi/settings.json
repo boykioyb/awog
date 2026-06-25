@@ -2,6 +2,7 @@
   "settings.nav.appearance": "Giao diện",
   "settings.nav.defaults": "Mặc định",
   "settings.nav.models": "Model & Key",
+  "settings.nav.pricing": "Giá model",
   "settings.nav.workspace": "Workspace",
   "settings.nav.git": "Git",
   "settings.nav.sessions": "Session",
@@ -101,5 +102,24 @@
   "settings.about.appName": "AWOG",
   "settings.about.version": "v0.18.0 · Electron · Pi SDK runtime",
   "settings.about.checkUpdate": "Kiểm tra cập nhật",
-  "settings.about.tagline": "Artifact Workflow Orchestrate Guild — AI Team Operating System, local-first."
+  "settings.about.tagline": "Artifact Workflow Orchestrate Guild — AI Team Operating System, local-first.",
+
+  "settings.pricing.heading": "Giá model",
+  "settings.pricing.intro": "Ghi đè giá token theo từng model để tính chi phí ở trang Hoạt động. Thay đổi chỉ áp dụng cho bản cài này.",
+  "settings.pricing.loading": "Đang tải bảng giá…",
+  "settings.pricing.empty": "Chưa có model nào để định giá.",
+  "settings.pricing.col.model": "Model",
+  "settings.pricing.col.input": "Input",
+  "settings.pricing.col.output": "Output",
+  "settings.pricing.col.cacheRead": "Cache đọc",
+  "settings.pricing.col.cacheWrite": "Cache ghi",
+  "settings.pricing.overridden": "đã ghi đè",
+  "settings.pricing.remote": "đã fetch",
+  "settings.pricing.reset": "Khôi phục mặc định",
+  "settings.pricing.unit": "Giá tính bằng USD trên 1M token.",
+  "settings.pricing.unsaved": "Có thay đổi chưa lưu",
+  "settings.pricing.save": "Lưu giá",
+  "settings.pricing.fetch": "Cập nhật từ nguồn",
+  "settings.pricing.fetchedAt": "Cập nhật {when}",
+  "settings.pricing.neverFetched": "Đang dùng giá đóng gói sẵn — fetch bản mới nhất từ nguồn"
 }

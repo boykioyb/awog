@@ -7,6 +7,25 @@
           <input v-model="q" :placeholder="placeholder ?? t('common.search')" />
         </div>
         <button
+          v-if="groupBy"
+          class="iconbtn"
+          :title="t('library.filter.tooltip')"
+          style="width: 32px; height: 32px; position: relative"
+          @click="showFilters = !showFilters"
+        >
+          <Icon name="filter" style="width: 13px; height: 13px" />
+          <span v-if="activeFilters" class="fbadge">{{ activeFilters }}</span>
+        </button>
+        <button
+          v-if="groupBy"
+          class="iconbtn"
+          :title="t('library.foldAll.tooltip')"
+          style="width: 32px; height: 32px"
+          @click="toggleFoldAll"
+        >
+          <Icon name="foldv" style="width: 13px; height: 13px" />
+        </button>
+        <button
           v-if="showNew"
           class="iconbtn"
           :title="t('common.add')"
@@ -16,17 +35,105 @@
           <Icon name="plus" />
         </button>
       </div>
-      <div class="lscroll">
-        <div
-          v-for="it in filtered"
-          :key="itemKey(it)"
-          class="libli"
-          :class="{ on: !!selected && itemKey(it) === itemKey(selected) }"
-          @click="selectedKey = itemKey(it)"
-        >
-          <slot name="row" :item="it" />
+
+      <!-- Filter drawer (grouped lists only) — project tier filter, mirrors Sessions. -->
+      <div v-if="groupBy && showFilters" class="sfdrawer">
+        <div class="csrow">
+          <span class="cslbl">{{ t('library.filter.project') }}</span>
+          <div class="csval" style="position: relative" @click.stop="projMenu = !projMenu">
+            {{ groupFilter === 'all' ? t('library.filter.all') : filterLabel }}
+            <Icon name="chev" style="width: 13px; height: 13px" />
+            <div
+              v-if="projMenu"
+              class="smenu"
+              style="position: absolute; top: 116%; left: 0; right: 0; z-index: 50"
+              @click.stop
+            >
+              <div class="mi" @click="selectFilter('all')">
+                {{ t('library.filter.all') }}
+                <Icon
+                  v-if="groupFilter === 'all'"
+                  name="check"
+                  class="ck"
+                  style="width: 13px; height: 13px"
+                />
+              </div>
+              <div v-for="o in groupOptions" :key="o.key" class="mi" @click="selectFilter(o.key)">
+                {{ o.label }}
+                <Icon
+                  v-if="o.key === groupFilter"
+                  name="check"
+                  class="ck"
+                  style="width: 13px; height: 13px"
+                />
+              </div>
+            </div>
+          </div>
         </div>
-        <div v-if="!filtered.length" class="listempty">{{ t('common.empty.none') }}</div>
+        <span v-if="activeFilters" class="clearf" @click="groupFilter = 'all'">
+          {{ t('library.filter.clear') }}
+        </span>
+      </div>
+
+      <!-- Close the filter dropdown on outside click. -->
+      <div
+        v-if="projMenu"
+        style="position: fixed; inset: 0; z-index: 40"
+        @click="projMenu = false"
+      />
+
+      <div class="lscroll">
+        <!-- Flat list — used when no groupBy is provided. -->
+        <template v-if="!groupBy">
+          <div
+            v-for="it in filtered"
+            :key="itemKey(it)"
+            class="libli"
+            :class="{ on: !!selected && itemKey(it) === itemKey(selected) }"
+            @click="selectedKey = itemKey(it)"
+          >
+            <slot name="row" :item="it" />
+          </div>
+          <div v-if="!filtered.length" class="listempty">{{ t('common.empty.none') }}</div>
+        </template>
+
+        <!-- Grouped by project tier — collapsible headers (mirrors the Sessions list). -->
+        <template v-else>
+          <div
+            v-for="grp in groups"
+            :key="grp.key"
+            class="grp"
+            :class="{ col: collapsed[grp.key] }"
+            :data-grp="grp.key"
+          >
+            <div class="grph" @click="toggleGroup(grp.key)">
+              <Icon name="chev" class="gchv" />
+              <span class="pdot" :style="{ background: grp.dot }" />
+              <span class="gnm">{{ grp.label }}</span>
+              <span class="gct">{{ grp.items.length }}</span>
+              <span
+                v-if="showNew"
+                class="grpadd"
+                :title="t('common.add')"
+                @click.stop="emit('new-in-group', grp.key)"
+              >
+                <Icon name="plus" style="width: 13px; height: 13px" />
+              </span>
+            </div>
+            <div class="grpitems">
+              <div
+                v-for="it in grp.items"
+                :key="itemKey(it)"
+                class="libli"
+                :class="{ on: !!selected && itemKey(it) === itemKey(selected) }"
+                @click="selectedKey = itemKey(it)"
+              >
+                <slot name="row" :item="it" />
+              </div>
+            </div>
+          </div>
+          <div v-if="!filtered.length" class="listempty">{{ t('common.empty.none') }}</div>
+        </template>
       </div>
     </div>
     <div class="detail">
@@ -42,9 +149,14 @@
 <script setup lang="ts" generic="T">
 import { computed, ref } from 'vue'
 
-// Shared master-detail shell — faithful port of the prototype's mountLib(): a
-// searchable list (.list/.ltop/.lscroll/.libli) beside a detail pane (.detail).
-// Pages supply per-entity #row and #detail slots + an itemKey. Visual only.
+// Shared master-detail shell — a searchable list (.list/.ltop/.lscroll/.libli)
+// beside a detail pane (.detail). Pages supply per-entity #row and #detail slots
+// + an itemKey.
+//
+// Optional project grouping: pass `groupBy` (→ a stable group key per item, e.g.
+// 'global' or a projectId) and the list renders collapsible group headers with a
+// color dot + count + per-group add button — mirroring the Sessions list. Omit
+// `groupBy` to keep the flat list (unchanged behaviour for non-tiered features).
 const props = defineProps<{
   items: T[]
   itemKey: (it: T) => string
@@ -52,24 +164,113 @@ const props = defineProps<{
   searchText?: (it: T) => string
   placeholder?: string
   showNew?: boolean
+  // ── Grouping (optional) ──
+  // Stable group key per item (e.g. project tier). When set → grouped render.
+  groupBy?: (it: T) => string
+  // Display label for a group key (e.g. 'global' → "Global", projectId → name).
+  groupLabel?: (key: string) => string
+  // Dot color for a group key (defaults to a neutral token).
+  groupDot?: (key: string) => string
+  // Group sorted first (e.g. the global tier). Defaults to 'global'.
+  primaryGroupKey?: string
 }>()
 
-const emit = defineEmits<{ (e: 'new'): void }>()
+const emit = defineEmits<{
+  (e: 'new'): void
+  // Per-group add button (only rendered when grouped + showNew).
+  (e: 'new-in-group', key: string): void
+}>()
 
 const { t } = useI18n()
 
 const q = ref('')
 const selectedKey = ref<string | null>(null)
+// Per-group collapse state, keyed by the group key. Default expanded.
+const collapsed = ref<Record<string, boolean>>({})
+// Filter drawer (grouped lists): show/hide + the active project-tier filter.
+const showFilters = ref(false)
+const groupFilter = ref<string>('all')
+const projMenu = ref(false)
+
+function toggleGroup(key: string): void {
+  collapsed.value[key] = !collapsed.value[key]
+}
+
+// Collapse every group if any is open; otherwise expand all (mirrors Sessions).
+function toggleFoldAll(): void {
+  const keys = groups.value.map((g) => g.key)
+  const collapseAll = keys.some((k) => !collapsed.value[k])
+  const next: Record<string, boolean> = {}
+  for (const k of keys) next[k] = collapseAll
+  collapsed.value = next
+}
+
+function selectFilter(key: string): void {
+  groupFilter.value = key
+  projMenu.value = false
+}
 
 const filtered = computed(() => {
+  let list = props.items
+  const by = props.groupBy
+  // Project-tier filter (grouped lists only).
+  if (by && groupFilter.value !== 'all') list = list.filter((it) => by(it) === groupFilter.value)
   const query = q.value.trim().toLowerCase()
-  if (!query) return props.items
+  if (!query) return list
   const text = props.searchText ?? props.itemKey
-  return props.items.filter((it) => text(it).toLowerCase().includes(query))
+  return list.filter((it) => text(it).toLowerCase().includes(query))
+})
+
+// All group keys present across the items (the filter dropdown's options) —
+// derived from the full item set so every tier stays selectable while filtered.
+const groupOptions = computed<{ key: string; label: string }[]>(() => {
+  const by = props.groupBy
+  if (!by) return []
+  const keys = new Set<string>()
+  for (const it of props.items) keys.add(by(it))
+  const primary = props.primaryGroupKey ?? 'global'
+  const label = (key: string) => props.groupLabel?.(key) ?? key
+  return [...keys]
+    .map((key) => ({ key, label: label(key) }))
+    .sort((a, b) => {
+      if (a.key === primary) return -1
+      if (b.key === primary) return 1
+      return a.label.localeCompare(b.label)
+    })
+})
+
+const filterLabel = computed(
+  () => groupOptions.value.find((o) => o.key === groupFilter.value)?.label ?? groupFilter.value,
+)
+const activeFilters = computed(() => (groupFilter.value !== 'all' ? 1 : 0))
+
+// Buckets for the grouped render. Insertion order from `filtered`, then the
+// primary group (global tier) floated to the top and the rest sorted by label.
+const groups = computed<{ key: string; label: string; items: T[]; dot: string }[]>(() => {
+  const by = props.groupBy
+  if (!by) return []
+  const map = new Map<string, T[]>()
+  for (const it of filtered.value) {
+    const k = by(it)
+    const bucket = map.get(k)
+    if (bucket) bucket.push(it)
+    else map.set(k, [it])
+  }
+  const primary = props.primaryGroupKey ?? 'global'
+  const label = (key: string) => props.groupLabel?.(key) ?? key
+  const dot = (key: string) => props.groupDot?.(key) ?? 'var(--textDim)'
+  return [...map.entries()]
+    .map(([key, items]) => ({ key, label: label(key), items, dot: dot(key) }))
+    .sort((a, b) => {
+      if (a.key === primary) return -1
+      if (b.key === primary) return 1
+      return a.label.localeCompare(b.label)
+    })
 })
 
 // Effective selection: the chosen item if still visible, else the first row
-// (matches the prototype auto-selecting the top item).
+// (matches the prototype auto-selecting the top item). Uses the flat filtered
+// list so it works the same in grouped and flat modes.
 const selected = computed<T | null>(() => {
   const list = filtered.value
   if (!list.length) return null

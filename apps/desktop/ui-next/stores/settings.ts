@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
 
 // Settings store (ui-next) — ports apps/desktop/ui/stores/settings.ts to the
 // rebuild. Two kinds of state:
@@ -109,6 +110,20 @@ export interface AutoUpdateSettings {
   lastCheckedAt: string | null
 }
 
+// Where the Session workspace panel docks, configured PER VIEW (Diff/Files/…).
+// 'right' = column to the right of the chat (default); 'bottom' = full-width row
+// below the chat. Resize sizes are kept per orientation so switching dock keeps a
+// sensible width / height for each.
+export type WorkspaceDockSide = 'left' | 'right' | 'bottom'
+export type WorkspaceDock = Record<string, WorkspaceDockSide>
+
+export interface WorkspacePanelLayout {
+  dock: WorkspaceDock
+  leftWidth: number
+  rightWidth: number
+  bottomHeight: number
+}
+
 export type ThemeFamily = 'awog' | 'shadcn'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 export type SansFamily = 'geist' | 'inter' | 'system'
@@ -151,7 +166,7 @@ Rules:
 `
 
 const DEFAULT_DEFAULTS: SessionDefaults = {
-  systemPrompt: '',
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
   instructions: '',
   provider: 'anthropic',
   modelId: 'claude-opus-4-8',
@@ -203,6 +218,22 @@ const DEFAULT_APPEARANCE: AppearanceExtras = {
   composerSendKey: 'enter',
 }
 
+// Workspace panel: per-view dock side. Default every view to the right column;
+// Terminal docks at the bottom (full-width under the chat) by default.
+const DEFAULT_WORKSPACE_PANEL: WorkspacePanelLayout = {
+  dock: {
+    Diff: 'right',
+    Files: 'right',
+    Terminal: 'bottom',
+    Plan: 'right',
+    Tasks: 'right',
+    Preview: 'right',
+  },
+  leftWidth: 322,
+  rightWidth: 322,
+  bottomHeight: 260,
+}
+
 const DEFAULT_WORKSPACE_PATH = '/Users/kyro/.awog'
 
 // --- persistence (single key; providers excluded — sidecar is their truth) ---
@@ -216,6 +247,7 @@ interface PersistShape {
   quota: QuotaWarningSettings
   autoUpdate: AutoUpdateSettings
   appearance: AppearanceExtras
+  workspacePanel: WorkspacePanelLayout
   githubAccount: string
   githubAutoFetchMs: number
 }
@@ -258,6 +290,10 @@ export const useSettingsStore = defineStore('settings', () => {
   // Persisted preference slices (merge over defaults so new fields appear).
   const workspacePath = ref(persisted.workspacePath ?? DEFAULT_WORKSPACE_PATH)
   const defaults = reactive<SessionDefaults>({ ...DEFAULT_DEFAULTS, ...persisted.defaults })
+  // Seed the default system prompt when the persisted value is empty/missing — an
+  // earlier build defaulted it to '' and may have saved that blank. (A user who
+  // truly wants it empty can clear it; it only re-seeds when blank.)
+  if (!defaults.systemPrompt) defaults.systemPrompt = DEFAULT_SYSTEM_PROMPT
   const git = reactive<GitSettings>({ ...DEFAULT_GIT, ...persisted.git })
   const sessions = reactive<SessionSettings>({ ...DEFAULT_SESSIONS, ...persisted.sessions })
   const quota = reactive<QuotaWarningSettings>({ ...DEFAULT_QUOTA, ...persisted.quota })
@@ -266,6 +302,13 @@ export const useSettingsStore = defineStore('settings', () => {
     ...persisted.autoUpdate,
   })
   const appearance = reactive<AppearanceExtras>({ ...DEFAULT_APPEARANCE, ...persisted.appearance })
+  // Merge dock map field-by-field so a newly-added view inherits its default side
+  // even when an older persisted blob only listed the original views.
+  const workspacePanel = reactive<WorkspacePanelLayout>({
+    ...DEFAULT_WORKSPACE_PANEL,
+    ...persisted.workspacePanel,
+    dock: { ...DEFAULT_WORKSPACE_PANEL.dock, ...persisted.workspacePanel?.dock },
+  })
   const githubAccount = ref(persisted.githubAccount ?? '')
   const githubAutoFetchMs = ref(persisted.githubAutoFetchMs ?? 1_800_000)
 
@@ -279,6 +322,7 @@ export const useSettingsStore = defineStore('settings', () => {
       quota,
       autoUpdate,
       appearance,
+      workspacePanel,
       githubAccount,
       githubAutoFetchMs,
     ],
@@ -292,6 +336,7 @@ export const useSettingsStore = defineStore('settings', () => {
         quota,
         autoUpdate,
         appearance,
+        workspacePanel,
         githubAccount: githubAccount.value,
         githubAutoFetchMs: githubAutoFetchMs.value,
       }
@@ -454,6 +499,21 @@ export const useSettingsStore = defineStore('settings', () => {
     workspacePath.value = path
   }
 
+  // Resolve the dock side for a view, falling back to 'right' for unknown views.
+  const workspaceDockOf = (view: string): WorkspaceDockSide => workspacePanel.dock[view] ?? 'right'
+  const setWorkspaceDock = (view: string, side: WorkspaceDockSide) => {
+    workspacePanel.dock[view] = side
+  }
+  const setWorkspaceLeftWidth = (width: number) => {
+    workspacePanel.leftWidth = width
+  }
+  const setWorkspaceRightWidth = (width: number) => {
+    workspacePanel.rightWidth = width
+  }
+  const setWorkspaceBottomHeight = (height: number) => {
+    workspacePanel.bottomHeight = height
+  }
+
   return {
     // state
     providers,
@@ -464,12 +524,14 @@ export const useSettingsStore = defineStore('settings', () => {
     quota,
     autoUpdate,
     appearance,
+    workspacePanel,
     githubAccount,
     githubAutoFetchMs,
     // getters
     activeAccount,
     isProviderConnected,
     keyFingerprint,
+    workspaceDockOf,
     // account/auth actions
     hydrateFromSidecar,
     connectAnthropicOAuth,
@@ -491,5 +553,9 @@ export const useSettingsStore = defineStore('settings', () => {
     updateAutoUpdate,
     updateAppearance,
     setWorkspacePath,
+    setWorkspaceDock,
+    setWorkspaceLeftWidth,
+    setWorkspaceRightWidth,
+    setWorkspaceBottomHeight,
   }
 })

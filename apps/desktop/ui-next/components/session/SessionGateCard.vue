@@ -45,6 +45,14 @@
         {{ t('sessions.gate.chose', { answer }) }}
       </div>
     </div>
+    <div v-else-if="cancelled" class="gcard">
+      <div class="gh">
+        <Icon name="alert" />
+        {{ t('sessions.gate.question') }}
+      </div>
+      <div class="qp">{{ block.prompt }}</div>
+      <div class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
+    </div>
     <div v-else-if="block.multi" class="gcard gate">
       <div class="gh">
         <Icon name="alert" />
@@ -103,7 +111,11 @@
   </template>
 
   <!-- perm -->
-  <div v-else-if="block.kind === 'perm'" class="gcard" :class="{ gate: permStatus === 'pending' }">
+  <div
+    v-else-if="block.kind === 'perm'"
+    class="gcard"
+    :class="{ gate: permStatus === 'pending' && !cancelled }"
+  >
     <div class="gh">
       <Icon name="shield" />
       {{ t('sessions.gate.permission') }}
@@ -115,7 +127,8 @@
       <span class="permcode">{{ block.target }}</span>
       ?
     </div>
-    <div v-if="permStatus === 'pending'" class="cact">
+    <div v-if="cancelled" class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
+    <div v-else-if="permStatus === 'pending'" class="cact">
       <button class="btn sm" @click="onDeny">{{ t('sessions.gate.deny') }}</button>
       <button class="btn sm" @click="onAllowAlways">{{ t('sessions.gate.allowAlways') }}</button>
       <button class="btn pri sm" @click="onAllow">
@@ -234,6 +247,13 @@ const onContinue = (): void => {
 // allowed/denied/pending derived from the block (store flips it on resolve).
 const permStatus = computed<'pending' | 'allowed' | 'denied'>(() =>
   props.block.kind === 'perm' ? (props.block.status ?? 'pending') : 'pending',
+)
+// A parked gate (question/perm) abandoned by a turn cancel → render as cancelled,
+// not interactive (the store sets `cancelled` and stops counting it as awaiting).
+const cancelled = computed(
+  () =>
+    (props.block.kind === 'question' || props.block.kind === 'perm') &&
+    props.block.cancelled === true,
 )
 const onAllow = (): void => {
   if (!located.value || sessionId.value == null) return

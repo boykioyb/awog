@@ -1,0 +1,8 @@
+{
+  "settings.appearance.preview.heading": "Preview",
+  "settings.appearance.preview.body": "Body text in the selected font, weight & size.",
+  "settings.appearance.preview.nested": "Nested surface",
+  "settings.appearance.preview.muted": "muted text",
+  "settings.appearance.preview.primary": "Primary",
+  "settings.appearance.preview.secondary": "Secondary"
+}

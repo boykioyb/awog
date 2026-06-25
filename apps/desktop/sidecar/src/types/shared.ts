@@ -169,6 +169,49 @@ export interface SessionSettings {
 // no character offsets. Subagent steps nest under their parent step's `children`.
 export type SessionMessagePart = { kind: 'text'; text: string } | SessionStep
 
+// One bulk-loaded memory file or custom agent in the context-window breakdown.
+// `chars` is the raw char length the engine measured for that item so the UI can
+// list it (÷4 ≈ tokens). Used for the expandable MEMORY FILES / CUSTOM AGENTS
+// sections of the usage panel (Claude Code `/context` style).
+export interface ContextItemSize {
+  // Workspace-relative path (memory file) or agent/skill name.
+  label: string
+  chars: number
+}
+
+// Per-segment char sizes of the turn's assembled prompt (char/4 ≈ tokens),
+// itemised the way Claude Code's `/context` reports it. All fields are OPTIONAL:
+// the legacy shape was `{ system, tools, history }`, so a reloaded message may
+// carry only those — the UI reads each field defensively. `system`/`tools` are
+// kept for that backward-compat read; the new runs populate the richer fields.
+export interface ContextChars {
+  // Base resolved system prompt (agent body or params.systemPrompt), no append.
+  systemPrompt?: number
+  // Appended instruction blocks OTHER than the itemised bulk-load sections
+  // (MCP preference nudge, rules, response style, VERIFY, plan-mode, …).
+  instructions?: number
+  // JSON size of the built-in tool definitions (everything not `mcp__*`).
+  systemTools?: number
+  // JSON size of the bridged MCP tool definitions (`mcp__<id>__*`).
+  mcpTools?: number
+  // Bulk-loaded `<available_agents>` block (name + description per agent).
+  customAgents?: number
+  // Bulk-loaded `<available_skills>` block (name + description per skill).
+  skills?: number
+  // Bulk-loaded `<project_context_files>` block (CLAUDE.md / AGENTS.md content).
+  memoryFiles?: number
+  // Replayed history (prior messages + the pending prompt, incl. tool I/O).
+  history?: number
+  // Legacy aggregate fields (pre-itemisation). Kept so a message persisted with
+  // the old `{ system, tools, history }` shape still type-checks on reload.
+  system?: number
+  tools?: number
+  // Itemised lists for the expandable usage-panel sections.
+  memoryFilesList?: ContextItemSize[]
+  customAgentsList?: ContextItemSize[]
+  skillsList?: ContextItemSize[]
+}
+
 // User-attached file/image on a message. Images carry an inline `url` (a
 // base64 `data:` URL) so the preview survives a JSONL reload and so the runtime
 // can rebuild an image content block for the model. Mirrors the UI
@@ -210,6 +253,12 @@ export interface SessionMessage {
   // keeps the corrected number. See docs/features/session-steer-queue.md.
   waitingMs?: number
   modelUsed?: string
+  // Account that ran this assistant turn (ADR 0054 — Activity cost attribution).
+  // ONLY the account id (no token/secret). Optional + back-compat: legacy turns
+  // persisted before this field reload without it; the Activity rollup then falls
+  // back to the session's current accountId. Written at finalize from the run's
+  // resolved SessionSettings.accountId.
+  accountId?: string
   // cacheReadTokens/cacheWriteTokens are the Anthropic prompt-cache buckets.
   // Optional for back-compat: messages persisted before this field shipped reload
   // without them (treated as 0 by the context-window display).
@@ -219,9 +268,13 @@ export interface SessionMessage {
     cacheReadTokens?: number
     cacheWriteTokens?: number
     // Per-segment char sizes of the turn's assembled prompt — lets the usage
-    // panel itemise System prompt / Tools / Messages instead of one opaque
-    // "Other". char/4 ≈ tokens. Absent on messages persisted before this shipped.
-    contextChars?: { system: number; tools: number; history: number }
+    // panel itemise the context window the way Claude Code's `/context` does
+    // (System prompt / Instructions / System tools / MCP tools / Custom agents /
+    // Skills / Memory files / Messages) instead of one opaque "Other". char/4 ≈
+    // tokens. Every field is OPTIONAL so a JSONL reload of a message persisted
+    // before this richer shape shipped (legacy `{ system, tools, history }`)
+    // still parses — the UI falls back per-field.
+    contextChars?: ContextChars
   }
   // True when the assistant turn was cut short (user Stop / error / crash) and
   // only a partial reply was persisted. Mirrors the UI SessionMessage.canceled.
@@ -651,6 +704,21 @@ export interface TaskMessage {
   at: string
 }
 
+// Token usage + cost-attribution metadata for one task node-run (ADR 0054).
+// Persisted so the Activity rollup can attribute a task's spend to the right
+// account/model without re-running it. accountId is ONLY the id (no secret).
+// Optional for back-compat: runs persisted before this shipped reload without it
+// and are skipped by the rollup (task usage is best-effort).
+export interface TaskRunUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  model: string
+  provider: ProviderName
+  accountId?: string
+}
+
 export interface TaskRun {
   version: number
   status: RunStatus
@@ -661,6 +729,10 @@ export interface TaskRun {
   approvedBy?: 'human' | 'auto'
   approvedAt?: string
   triggeredBy?: 'rerun' | 'resume-connection'
+  // Token usage of this run (ADR 0054). Absent until the run finishes (or for
+  // legacy runs). The completion time for the Activity day-bucket is the run's
+  // run.status='completed' event timestamp.
+  usage?: TaskRunUsage
 }
 
 export interface TaskPhase {
@@ -920,4 +992,116 @@ export interface TemplateInstallResult {
 export interface TemplateFetchResult {
   imported: ProjectTemplate[]
   skipped: { id: string; reason: string }[]
+}
+
+// ─── Dashboard usage (Home tile "Activity") ─────────────────────────────────
+// Aggregate token-usage figures derived from session JSONL logs for the Home
+// dashboard. "Token" per turn = inputTokens + outputTokens + cacheRead + cacheWrite
+// (context usage counts cache buckets too). Computed on demand by `dashboard.usage`.
+export interface DashboardUsage {
+  // Total tokens since local midnight today.
+  today: number
+  // Total tokens for all of yesterday (local day), for the ↑% delta vs today.
+  yesterday: number
+  // 12 buckets of 2 hours each over the last 24h, oldest → newest (sparkline).
+  buckets: number[]
+  // Approximate tokens/minute over the most recent active window.
+  ratePerMin: number
+}
+
+// ─── Activity (usage + cost) — ADR 0054 ──────────────────────────────────────
+// `activity.summary` aggregates token usage across Sessions + Tasks for a time
+// range, applies effective per-model prices → cost (USD), and groups by model /
+// account / day. Built from the daily usage rollup cache (~/.awog/usage/daily/).
+// Provider fields are DISPLAY labels (e.g. "Anthropic"), not the internal id.
+
+export type ActivityRange = '1d' | '7d' | '30d' | '90d' | 'all'
+
+export interface ActivityTotals {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  costUsd: number
+  turns: number
+}
+
+export interface ActivityByModel {
+  model: string
+  provider: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  costUsd: number
+  turns: number
+}
+
+export interface ActivityByAccount {
+  accountId: string
+  label: string
+  provider: string
+  totalTokens: number
+  costUsd: number
+  turns: number
+}
+
+export interface ActivityByDay {
+  // Local-day YYYY-MM-DD.
+  date: string
+  totalTokens: number
+  costUsd: number
+}
+
+export interface ActivitySummary {
+  range: ActivityRange
+  // ISO range bounds [from, to] actually covered by the response.
+  from: string
+  to: string
+  totals: ActivityTotals
+  byModel: ActivityByModel[]
+  byAccount: ActivityByAccount[]
+  // Oldest → newest, one per local day in range.
+  byDay: ActivityByDay[]
+  // Model ids referenced in the period that have no effective price → their cost
+  // is omitted from the totals + flagged so the UI can warn.
+  missingPrices: string[]
+}
+
+// Which pricing layer supplied the effective rates of a model row.
+// Priority (highest wins): override > remote > default.
+export type ModelPriceSource = 'default' | 'remote' | 'override'
+
+// One row of `activity.pricing` — the effective USD/1M-token rates for a model.
+export interface ModelPrice {
+  model: string
+  provider: string
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  // True when a user override (Settings `modelPricing`) is in effect for any
+  // bucket of this model.
+  isOverride: boolean
+  // Highest-priority layer that contributed to the effective rates.
+  source: ModelPriceSource
+}
+
+export interface ActivityPricing {
+  models: ModelPrice[]
+  // ISO timestamp of the last successful `activity.pricing.fetch` (when the
+  // remote layer file exists). Absent if the catalog was never refreshed.
+  fetchedAt?: string
+}
+
+// Return of `activity.pricing.fetch` — refresh the remote pricing layer.
+export interface ActivityPricingFetch {
+  fetchedAt: string
+  source: string
+  // Number of AWOG models matched from the remote source.
+  updated: number
+  // Effective catalog after merge (same shape/order as `activity.pricing`).
+  models: ModelPrice[]
 }

@@ -29,6 +29,58 @@ body {
   display: block;
   background: var(--bg);
   overflow: hidden;
+  /* Appearance → Font weight. Base body weight; element-specific weights (headings,
+     buttons) keep their own. Driven by SettingsAppearance (--font-weight-base). */
+  font-weight: var(--font-weight-base, 400);
+}
+
+/* Appearance → Surface depth. Re-tints the layer tokens so panels/cards sit at a
+   different contrast vs the base background. `standard` = the prototype defaults
+   (no override). Set by SettingsAppearance via body[data-surface]. */
+body[data-surface='flat'] {
+  --bgPanel: #0a0a0a;
+  --bgEl: #101010;
+  --bgHover: #161616;
+  --bgActive: #1a1a1a;
+  --bgSubtle: #0d0d0d;
+  --bgInput: #101010;
+  --bgCanvas: #0c0c0c;
+  --border: #1a1a1a;
+  --borderStrong: #262626;
+}
+body[data-surface='deep'] {
+  --bgPanel: #0d0d0d;
+  --bgEl: #1e1e1e;
+  --bgHover: #242424;
+  --bgActive: #2a2a2a;
+  --bgSubtle: #181818;
+  --bgInput: #1e1e1e;
+  --bgCanvas: #161616;
+  --border: #2e2e2e;
+  --borderStrong: #3c3c3c;
+}
+body.light[data-surface='flat'] {
+  --bgPanel: #f5f6f8;
+  --bgEl: #f6f6f5;
+  --bgHover: #efeeed;
+  --bgActive: #e9e7e5;
+  --bgSubtle: #f6f6f5;
+  --bgInput: #f6f6f5;
+  --bgCanvas: #f1f1f0;
+  --border: #ececea;
+  --borderStrong: #dedcd9;
+}
+body.light[data-surface='deep'] {
+  --bg: #eceef1;
+  --bgPanel: #fbfbfa;
+  --bgEl: #ffffff;
+  --bgHover: #f1f0ef;
+  --bgActive: #e7e5e4;
+  --bgSubtle: #f3f3f1;
+  --bgInput: #ffffff;
+  --bgCanvas: #f0f0ee;
+  --border: #dcd9d6;
+  --borderStrong: #c4c0bc;
 }
 
 /* full-window app frame: drop the card max-width / radius / shadow */
@@ -146,8 +198,9 @@ body {
   white-space: nowrap;
 }
 
-/* Selection-quote marker injected into the message DOM (global — it lives inside the
-   SessionMessageItem subtree, so a scoped rule wouldn't reach it). */
+/* Selection-quote marker (§8): SessionTextBlock wraps the quoted span in <mark.qmark>
+   with a circled <sup.qnum> number. Global (not scoped) because the wraps are created
+   imperatively (document.createElement), so they carry no scoped-style attribute. */
 .qmark {
   background: var(--accentDim, rgba(16, 185, 129, 0.18));
   border-radius: 3px;

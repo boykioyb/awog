@@ -1,99 +1,133 @@
 <template>
-  <!-- Highlighted path: state-derived <mark> segments (plain text, XSS-safe via
-       mustache escaping). Used only when this block carries follow-up ranges so the
-       highlight stays correct without injecting into sanitized markdown HTML. -->
-  <div v-if="marked.length" class="blk txt mdinline">
-    <template v-for="(seg, i) in marked" :key="i">
-      <mark
-        v-if="seg.kind === 'mark'"
-        class="qmark"
-        :title="t('sessions.transcript.mark.tooltip', { n: seg.label })"
-      >
-        <span style="white-space: pre-wrap">{{ seg.text }}</span>
-        <sup class="qnum">{{ seg.label }}</sup>
-      </mark>
-      <span v-else style="white-space: pre-wrap">{{ seg.text }}</span>
-    </template>
-  </div>
-  <!-- Default path: sanitized inline markdown. `html` comes from useMarkdown(), which
-       drops raw HTML tokens + sanitizes link/image hrefs at the AST level, so binding
-       it via v-html is safe (no author HTML reaches the DOM). Mermaid is left to the
-       PreviewModal — here mermaid segments degrade to their plain code text. -->
-  <div v-else class="blk txt mdinline">
-    <template v-for="(seg, i) in segments" :key="i">
-      <!-- eslint-disable-next-line vue/no-v-html -- sanitized by useMarkdown() -->
-      <div v-if="seg.type === 'html'" v-html="seg.html" />
-      <pre v-else class="hljs"><code>{{ seg.code }}</code></pre>
-    </template>
-  </div>
+  <!-- The sanitized markdown segments are rendered into this element imperatively (see
+       below) so we can wrap quoted excerpts in numbered <mark>s AFTER render without
+       dropping the markdown. The container is Vue-rendered (carries the scoped style
+       attribute → :deep(...) rules below still apply to the imperative children). -->
+  <div ref="root" class="blk txt mdinline" />
 </template>
 
 <script setup lang="ts">
 // Assistant text block: renders sanitized inline markdown (§3) and, when the block
-// carries follow-up ranges, a state-derived numbered highlight (§8).
+// carries follow-up ranges, a numbered quote highlight (§8).
 //
-// Highlight mapping (§8): a follow-up is matched to this block either by exact char
-// range (its `start`/`end` offsets into `text`) or, when no range is present, by
-// substring-matching its `excerpt`. We deliberately DO NOT inject <mark> into the
-// sanitized markdown HTML — splicing tags into escaped HTML risks landing inside a
-// tag/entity and breaking the sanitization guarantee. Instead, when ANY highlight
-// applies we render the block as escaped plain text split into [before][marked][after]
-// segments (markdown styling is dropped for that block only). Highlights are rare
-// (selection quotes), so the readability tradeoff is acceptable and correctness wins.
+// Highlight mapping (§8): a follow-up is matched to this block by substring-matching its
+// `excerpt` against the RENDERED text (utils/quote-highlight), then the matched span is
+// wrapped in a `<mark class="qmark">` carrying a circled `<sup>` number. The wrapping is
+// done on the PARSED DOM after render (not by splicing tags into the HTML string), so it
+// keeps both the markdown formatting AND the inline number — and stays XSS-safe (the
+// segment HTML is already sanitized by useMarkdown). We render the segments imperatively
+// (rather than v-html) so we own the subtree and can rebuild it cleanly — markdown first,
+// then re-apply the marks — on every content/highlight change.
 import type { Followup } from '~/composables/useSessionsMock'
+import { locateMarks, type QuoteMark } from '~/utils/quote-highlight'
 
 // A follow-up plus its index in `active.followups` (used for the circled label).
 export type BlockHighlight = { fu: Followup; label: string }
 
 const props = defineProps<{ text: string; highlights?: BlockHighlight[] }>()
-const { t } = useI18n()
 const { renderMarkdown } = useMarkdown()
+const root = useTemplateRef<HTMLElement>('root')
 
-// Default render: sanitized markdown segments (html runs + mermaid code).
-const segments = computed(() => renderMarkdown(props.text))
+// While the trailing block streams, `text` mutates every typewriter frame (~16ms).
+// Re-lexing + highlighting the FULL markdown and swapping the v-html subtree each
+// frame is the main cause of choppy streaming, so coalesce parses to ~30fps with a
+// trailing pass that always renders the settled text. Finalized blocks never change
+// `text`, so the watch is idle and they parse exactly once.
+const RENDER_THROTTLE = 33
+const renderSrc = ref(props.text)
+let lastRender = 0
+let trailing: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => props.text,
+  (txt) => {
+    const wait = RENDER_THROTTLE - (performance.now() - lastRender)
+    if (trailing) {
+      clearTimeout(trailing)
+      trailing = null
+    }
+    if (wait <= 0) {
+      lastRender = performance.now()
+      renderSrc.value = txt
+    } else {
+      trailing = setTimeout(() => {
+        lastRender = performance.now()
+        trailing = null
+        renderSrc.value = props.text
+      }, wait)
+    }
+  },
+)
+// Sanitized markdown segments (html runs + mermaid code).
+const segments = computed(() => renderMarkdown(renderSrc.value))
 
-type MarkSeg = { kind: 'text' | 'mark'; text: string; label: string }
-
-// Resolve each highlight to a [start, end) char range in `text`. Prefer the explicit
-// range when present + sane; otherwise fall back to locating the excerpt substring.
-function resolveRange(fu: Followup): { start: number; end: number; label: string } | null {
-  const len = props.text.length
-  if (fu.start != null && fu.end != null && fu.start >= 0 && fu.end <= len && fu.start < fu.end) {
-    return { start: fu.start, end: fu.end, label: '' }
+// Render the segments into `root`. HTML runs go in via innerHTML (already sanitized by
+// useMarkdown — same trust boundary as v-html); mermaid degrades to plain code text
+// (textContent, so it's escaped). PreviewModal still owns full mermaid rendering.
+function renderInto(el: HTMLElement) {
+  el.replaceChildren()
+  for (const seg of segments.value) {
+    if (seg.type === 'html') {
+      const div = document.createElement('div')
+      div.innerHTML = seg.html
+      el.appendChild(div)
+    } else {
+      const pre = document.createElement('pre')
+      pre.className = 'hljs'
+      const code = document.createElement('code')
+      code.textContent = seg.code
+      pre.appendChild(code)
+      el.appendChild(pre)
+    }
   }
-  const needle = (fu.excerpt || '').trim()
-  if (!needle) return null
-  const idx = props.text.indexOf(needle)
-  if (idx < 0) return null
-  return { start: idx, end: idx + needle.length, label: '' }
 }
 
-// State-derived marked segments. Non-overlapping ranges sorted by start; overlapping
-// ranges (rare) are skipped to keep slicing simple + safe.
-const marked = computed<MarkSeg[]>(() => {
+// Wrap each quoted excerpt in a numbered <mark>. Overlapping matches (rare) are dropped;
+// the rest are wrapped LAST-first so wrapping a later span can't shift the offsets/nodes
+// of an earlier one. extractContents preserves any inline formatting inside the span.
+function applyMarks(el: HTMLElement) {
   const hs = props.highlights ?? []
-  if (!hs.length) return []
-  const ranges = hs
-    .map((h) => {
-      const r = resolveRange(h.fu)
-      return r ? { ...r, label: h.label } : null
-    })
-    .filter((r): r is { start: number; end: number; label: string } => r != null)
-    .sort((a, b) => a.start - b.start)
-  if (!ranges.length) return []
-
-  const out: MarkSeg[] = []
-  let cursor = 0
-  for (const r of ranges) {
-    if (r.start < cursor) continue // skip overlap
-    if (r.start > cursor)
-      out.push({ kind: 'text', text: props.text.slice(cursor, r.start), label: '' })
-    out.push({ kind: 'mark', text: props.text.slice(r.start, r.end), label: r.label })
-    cursor = r.end
+  if (!hs.length) return
+  const found = locateMarks(
+    el,
+    hs.map((h) => ({ needle: h.fu.excerpt || '', label: h.label })),
+  ).sort((a, b) => a.start - b.start)
+  const kept: QuoteMark[] = []
+  let lastEnd = 0
+  for (const m of found) {
+    if (m.start < lastEnd) continue // skip overlap
+    kept.push(m)
+    lastEnd = m.end
   }
-  if (cursor < props.text.length)
-    out.push({ kind: 'text', text: props.text.slice(cursor), label: '' })
-  return out
+  kept.sort((a, b) => b.start - a.start)
+  for (const m of kept) {
+    try {
+      const mark = document.createElement('mark')
+      mark.className = 'qmark'
+      mark.appendChild(m.range.extractContents())
+      const sup = document.createElement('sup')
+      sup.className = 'qnum'
+      sup.textContent = m.label
+      mark.appendChild(sup)
+      m.range.insertNode(mark)
+    } catch {
+      // Selection crossed element boundaries we can't cleanly wrap — skip this mark.
+    }
+  }
+}
+
+// Rebuild the subtree from scratch (clean markdown) then re-apply marks. Runs on mount
+// and after the markdown DOM settles whenever the content or highlights change
+// (flush:'post' so the freshly rendered DOM is in place before we mark it).
+function rerender() {
+  const el = root.value
+  if (!el) return
+  renderInto(el)
+  applyMarks(el)
+}
+onMounted(rerender)
+watch([segments, () => props.highlights], rerender, { flush: 'post' })
+onBeforeUnmount(() => {
+  if (trailing) clearTimeout(trailing)
 })
 </script>
 
@@ -148,6 +182,13 @@ const marked = computed<MarkSeg[]>(() => {
 .mdinline :deep(ol) {
   margin: 0 0 10px;
   padding-left: 22px;
+}
+/* Tailwind Preflight resets list-style to none — restore markers for prose lists. */
+.mdinline :deep(ul) {
+  list-style: disc;
+}
+.mdinline :deep(ol) {
+  list-style: decimal;
 }
 .mdinline :deep(li) {
   margin: 3px 0;

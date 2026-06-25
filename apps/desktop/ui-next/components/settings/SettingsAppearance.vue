@@ -86,6 +86,23 @@
     >
       <SettingsSeg v-model="fontWeight" :options="['300', '400', '500']" />
     </SettingsField>
+
+    <!-- Live preview — reflects accent / surface depth / font / weight / size. -->
+    <div class="sech">{{ t('settings.appearance.preview.heading') }}</div>
+    <div class="apv">
+      <div class="apv-h">The quick brown fox · 0123456789</div>
+      <div class="apv-b">{{ t('settings.appearance.preview.body') }}</div>
+      <div class="apv-card">
+        {{ t('settings.appearance.preview.nested') }} ·
+        <span style="color: var(--textMuted)">{{ t('settings.appearance.preview.muted') }}</span>
+      </div>
+      <div class="apv-row">
+        <button class="btn pri">{{ t('settings.appearance.preview.primary') }}</button>
+        <button class="btn">{{ t('settings.appearance.preview.secondary') }}</button>
+        <a class="apv-link">Link</a>
+      </div>
+      <pre class="codeblk apv-code">const sum = (a, b) =&gt; a + b</pre>
+    </div>
   </div>
 </template>
 
@@ -93,6 +110,7 @@
 import { computed, onMounted } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import type { FontWeight, SansFamily, SurfaceDepth, ThemeFamily } from '~/stores/settings'
+import { useAppearanceDom } from '~/composables/useAppearanceDom'
 
 // Appearance panel — ports setSecHtml('appearance') and wires it to real state.
 // Mode/accent/font-size + locale live in useTheme()/useI18n(); theme family, sans
@@ -106,28 +124,9 @@ const store = useSettingsStore()
 const accents = ['#10b981', '#60a5fa', '#a78bfa', '#f59e0b', '#f43f5e', '#22d3ee', '#fafafa']
 const FONT_SIZES = [12, 13, 14, 15, 16, 18]
 
-// --- font family stacks (drive --font-sans) ---
-const SANS_STACKS: Record<SansFamily, string> = {
-  geist: "'Geist', system-ui, sans-serif",
-  inter: "'Inter', system-ui, sans-serif",
-  system: 'system-ui, sans-serif',
-}
-
-function applySansFamily(value: SansFamily) {
-  document.documentElement.style.setProperty('--font-sans', SANS_STACKS[value])
-}
-function applyFontWeight(value: FontWeight) {
-  document.documentElement.style.setProperty('--font-weight-base', String(value))
-}
-function applyGlass(value: boolean) {
-  document.body.classList.toggle('glass', value)
-}
-function applySurfaceDepth(value: SurfaceDepth) {
-  document.body.dataset.surface = value
-}
-function applyThemeFamily(value: ThemeFamily) {
-  document.body.dataset.themeFamily = value
-}
+// DOM appliers (shared with app.vue boot paint) — sans/weight/surface/family/glass.
+const { applySansFamily, applyFontWeight, applySurfaceDepth, applyThemeFamily, applyGlass } =
+  useAppearanceDom()
 
 // Mode seg: visible label === stored value (Dark/Light); flip the theme when the
 // chosen label differs from the current one.
@@ -210,3 +209,45 @@ onMounted(() => {
   applyFontWeight(store.appearance.fontWeight)
 })
 </script>
+
+<style scoped>
+/* Live preview card — uses theme tokens so it reflects accent / surface depth /
+   font / weight / size changes immediately. */
+.apv {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bgEl);
+}
+.apv-h {
+  font-size: 1.3em;
+  font-weight: 650;
+  color: var(--text);
+}
+.apv-b {
+  color: var(--text);
+}
+.apv-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bgCanvas);
+  color: var(--text);
+}
+.apv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.apv-link {
+  color: var(--accent);
+  cursor: pointer;
+}
+.apv-code {
+  margin: 0;
+}
+</style>

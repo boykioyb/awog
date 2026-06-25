@@ -2,45 +2,45 @@
   <section class="page on" data-page="home">
     <div class="scroll">
       <div class="bento">
+        <!-- Needs attention (sessions awaiting reply/permission + tasks awaiting approval) -->
         <div class="tile c8">
           <div class="th">
             <Icon name="clock" />
             <span class="tt">{{ t('home.attention.title') }}</span>
-            <span class="ct">{{ t('home.attention.count', { n: 2 }) }}</span>
+            <span class="ct">{{ t('home.attention.count', { n: attentionItems.length }) }}</span>
           </div>
-          <div class="await">
-            <div class="acard hot">
-              <span class="aic"><Icon name="alert" /></span>
+          <div v-if="!attentionReady" class="hmHint" :style="hintStyle">{{ loadingLabel }}</div>
+          <div v-else-if="!attentionItems.length" class="hmHint" :style="hintStyle">
+            {{ t('home.attention.empty') }}
+          </div>
+          <div v-else class="await">
+            <div v-for="item in attentionItems" :key="item.id" class="acard hot">
+              <span class="aic"><Icon :name="attentionIcon(item.kind)" /></span>
               <div class="bd">
-                <div class="t1">Migrate session store sang MCP pool</div>
-                <div class="t2">
-                  <b>developer</b>
-                  hỏi: "worktree isolation hay shared lock?" · Opus 4.8
-                </div>
+                <div class="t1">{{ item.title }}</div>
+                <div class="t2">{{ item.sub }}</div>
               </div>
-              <span class="act" @click="navigateTo('/sessions')">{{ t('home.reply') }}</span>
-            </div>
-            <div class="acard hot">
-              <span class="aic"><Icon name="shield" /></span>
-              <div class="bd">
-                <div class="t1">Refactor SessionComposer.vue</div>
-                <div class="t2">
-                  Permission: cho phép
-                  <b>writeFile</b>
-                  apps/desktop/ui/components/session/…
-                </div>
-              </div>
-              <span class="act" @click="navigateTo('/sessions')">{{ t('home.review') }}</span>
+              <span class="act" @click="navigateTo(item.to)">{{ actionLabel(item.action) }}</span>
             </div>
           </div>
         </div>
 
+        <!-- Running stat -->
         <div class="tile c4 stat">
           <div class="lbl">{{ t('home.running.label') }}</div>
-          <div class="big" style="color: var(--accent)">3</div>
-          <div class="sub">2 task · 1 session · ~14k tok/min</div>
+          <div class="big" style="color: var(--accent)">{{ runningCount.total }}</div>
+          <div class="sub">
+            {{
+              t('home.running.summary', {
+                tasks: runningCount.tasks,
+                sessions: runningCount.sessions,
+                rate: formatTokens(usage.ratePerMin),
+              })
+            }}
+          </div>
         </div>
 
+        <!-- Running tasks -->
         <div class="tile c7">
           <div class="th">
             <Icon name="play" />
@@ -49,164 +49,89 @@
               <a @click="navigateTo('/tasks')">{{ t('home.openTasks') }}</a>
             </span>
           </div>
-          <div class="run">
-            <div class="ritem">
+          <div v-if="!tasks.loaded" class="hmHint" :style="hintStyle">{{ loadingLabel }}</div>
+          <div v-else-if="!runningTaskRows.length" class="hmHint" :style="hintStyle">
+            {{ t('home.running.empty') }}
+          </div>
+          <div v-else class="run">
+            <div v-for="row in runningTaskRows" :key="row.task.id" class="ritem">
               <div class="rh">
                 <span class="pulse" />
-                <span class="nm">Lazy-load transcripts (ADR 0048)</span>
-                <span class="who">tech-lead · Opus 4.8</span>
+                <span class="nm">{{ row.task.title }}</span>
+                <span class="who">{{ row.progress.currentAgentId ?? '' }}</span>
               </div>
               <div class="ph">
-                Node
-                <b>3/5</b>
-                · "Write ADR + IPC contract"
+                {{ t('home.running.node') }}
+                <b>{{ row.progress.doneNodes }}/{{ row.progress.totalNodes }}</b>
+                <template v-if="row.progress.currentSkill">
+                  · "{{ row.progress.currentSkill }}"
+                </template>
               </div>
-              <div class="bar"><i style="width: 62%" /></div>
+              <div class="bar"><i :style="{ width: row.progress.pct + '%' }" /></div>
               <div class="mt">
-                <span>elapsed 4m 12s</span>
-                <span>62%</span>
-              </div>
-            </div>
-            <div class="ritem">
-              <div class="rh">
-                <span class="pulse" />
-                <span class="nm">Audit fs.* path sanitize</span>
-                <span class="who">infosec · Sonnet 4.6</span>
-              </div>
-              <div class="ph">
-                Node
-                <b>1/3</b>
-                · "Scan workspace I/O sinks"
-              </div>
-              <div class="bar"><i style="width: 28%" /></div>
-              <div class="mt">
-                <span>elapsed 1m 03s</span>
-                <span>28%</span>
+                <span>{{ t('home.running.elapsed', { time: elapsed(row.task.createdAt) }) }}</span>
+                <span>{{ row.progress.pct }}%</span>
               </div>
             </div>
           </div>
         </div>
 
+        <!-- Activity sparkline -->
         <div class="tile c5">
           <div class="th">
             <Icon name="act" />
             <span class="tt">{{ t('home.activity.title') }}</span>
-            <span class="ct">{{ t('home.activity.unit') }}</span>
-          </div>
-          <div class="spark">
-            <i style="height: 22%" />
-            <i style="height: 38%" />
-            <i style="height: 18%" />
-            <i style="height: 46%" />
-            <i style="height: 60%" />
-            <i style="height: 34%" />
-            <i style="height: 72%" />
-            <i class="hi" style="height: 88%" />
-            <i style="height: 50%" />
-            <i style="height: 64%" />
-            <i class="hi" style="height: 95%" />
-            <i style="height: 40%" />
-          </div>
-          <div class="usage">
-            <span class="u1">
-              2.4M
-              <span style="font-size: 0.8462rem; color: var(--textDim); font-weight: 400">
-                {{ t('home.activity.today') }}
-              </span>
-            </span>
-            <span class="u2">↑ 18% vs hôm qua</span>
-          </div>
-        </div>
-
-        <div class="tile c4">
-          <div class="th">
-            <Icon name="git" />
-            <span class="tt">Git</span>
             <span class="ct">
-              <a @click="navigateTo('/git')">{{ t('home.open') }}</a>
+              <a @click="navigateTo('/activity')">{{ t('home.open') }}</a>
             </span>
           </div>
-          <div class="grow">
-            <div>
-              <div class="rn">awog</div>
-              <div class="br">fix/session-mcp-pool</div>
-            </div>
-            <div style="margin-left: auto; display: flex; gap: 6px">
-              <span class="gchip m">7 M</span>
-              <span class="gchip a">↑2</span>
-            </div>
+          <div v-if="!sparkline.length" class="hmHint" :style="hintStyle">
+            {{ t('home.activity.empty') }}
           </div>
-          <div class="grow">
-            <div>
-              <div class="rn">sidecar</div>
-              <div class="br">main</div>
+          <template v-else>
+            <div class="spark">
+              <i
+                v-for="(bar, i) in sparkline"
+                :key="i"
+                :class="{ hi: bar.hi }"
+                :style="{ height: bar.height + '%' }"
+              />
             </div>
-            <span class="gchip" style="margin-left: auto">{{ t('home.git.clean') }}</span>
-          </div>
+            <div class="usage">
+              <span class="u1">
+                {{ formatTokens(usage.today) }}
+                <span style="font-size: 0.8462rem; color: var(--textDim); font-weight: 400">
+                  {{ t('home.activity.today') }}
+                </span>
+              </span>
+              <span class="u2">{{ deltaLabel }}</span>
+            </div>
+          </template>
         </div>
 
-        <div class="tile c4">
+        <!-- Provider rate limits (real % quota from account.usage; empty accounts hide themselves) -->
+        <div class="tile c12">
           <div class="th">
-            <Icon name="agents" />
-            <span class="tt">Agents</span>
-            <span class="ct">{{ t('home.agents.active', { n: 8 }) }}</span>
+            <Icon name="act" />
+            <span class="tt">{{ t('home.rateLimit.title') }}</span>
+            <span class="ct">
+              <a @click="navigateTo('/activity')">{{ t('home.open') }}</a>
+            </span>
           </div>
-          <div class="ag">
-            <span class="ab" style="background: rgba(96, 165, 250, 0.15); color: #93c5fd">TL</span>
-            <div>
-              <div class="an">tech-lead</div>
-              <div class="am">Opus 4.8</div>
-            </div>
-            <span class="as live">{{ t('home.agents.working') }}</span>
+          <div v-if="!rateLimitAccounts.length" class="hmHint" :style="hintStyle">
+            {{ t('home.rateLimit.empty') }}
           </div>
-          <div class="ag">
-            <span class="ab" style="background: rgba(239, 68, 68, 0.13); color: #fca5a5">IS</span>
-            <div>
-              <div class="an">infosec</div>
-              <div class="am">Sonnet 4.6</div>
-            </div>
-            <span class="as live">{{ t('home.agents.working') }}</span>
-          </div>
-          <div class="ag">
-            <span class="ab" style="background: rgba(167, 139, 250, 0.15); color: #c4b5fd">DV</span>
-            <div>
-              <div class="an">developer</div>
-              <div class="am">Opus 4.8</div>
-            </div>
-            <span class="as">2m ago</span>
+          <div v-else>
+            <ActivityRateLimit
+              v-for="acc in rateLimitAccounts"
+              :key="acc.id"
+              :account="acc"
+              compact
+            />
           </div>
         </div>
 
-        <div class="tile c4">
-          <div class="th">
-            <Icon name="conn" />
-            <span class="tt">Connections</span>
-            <span class="ct">{{ t('home.connections.count', { n: 5 }) }}</span>
-          </div>
-          <div class="conn">
-            <div class="cn">
-              <span class="cdot" style="background: var(--green)" />
-              github
-              <span class="cm">running</span>
-            </div>
-            <div class="cn">
-              <span class="cdot" style="background: var(--green)" />
-              filesystem
-              <span class="cm">running</span>
-            </div>
-            <div class="cn">
-              <span class="cdot" style="background: var(--textFaint)" />
-              linear
-              <span class="cm">idle 8m</span>
-            </div>
-            <div class="cn">
-              <span class="cdot" style="background: var(--textFaint)" />
-              notion
-              <span class="cm">idle</span>
-            </div>
-          </div>
-        </div>
-
+        <!-- Recent sessions -->
         <div class="tile c12">
           <div class="th">
             <Icon name="sessions" />
@@ -215,26 +140,15 @@
               <a @click="navigateTo('/sessions')">{{ t('home.all') }}</a>
             </span>
           </div>
-          <div class="rs">
-            <span class="si" style="background: var(--amber)" />
-            <span class="st1">Sửa SessionComposer — gộp model/token control</span>
-            <span class="tag">awog</span>
-            <span class="tag">Opus 4.8</span>
-            <span class="sw">đang chờ · 3m</span>
+          <div v-if="!recentSessions.length" class="hmHint" :style="hintStyle">
+            {{ t('home.recent.empty') }}
           </div>
-          <div class="rs">
-            <span class="si" style="background: var(--accent)" />
-            <span class="st1">Byte-minimal JSONL persist + stream loader</span>
-            <span class="tag">awog</span>
-            <span class="tag">Opus 4.8</span>
-            <span class="sw">đang chạy · 12m</span>
-          </div>
-          <div class="rs">
-            <span class="si" style="background: var(--textFaint)" />
-            <span class="st1">Reuse one MCP server child per session</span>
-            <span class="tag">awog</span>
-            <span class="tag">Sonnet 4.6</span>
-            <span class="sw">xong · 2h</span>
+          <div v-for="s in recentSessions" v-else :key="s.id" class="rs" @click="openSession(s.id)">
+            <span class="si" :style="{ background: sessionDot(s.status) }" />
+            <span class="st1">{{ s.title }}</span>
+            <span class="tag">{{ s.project }}</span>
+            <span class="tag">{{ s.model }}</span>
+            <span class="sw">{{ sessionStatusLabel(s.status, s.when) }}</span>
           </div>
         </div>
       </div>
@@ -243,9 +157,104 @@
 </template>
 
 <script setup lang="ts">
-// Home — bento dashboard ported from awog-prototype.html (data-page="home").
-// Chrome strings go through i18n (t); mock entity content (session/agent names,
-// counts) stays literal until wired to live stores. navigateTo + useI18n are
-// Nuxt auto-imports.
+// Home — bento dashboard wired to the live stores (Phase B–E). All chrome +
+// dynamic strings go through i18n (t); entity content comes from the sessions /
+// tasks / connections / agents / git stores via useHomeDashboard. Browser-dev
+// (no Electron bridge) renders the per-store mock seeds, so the bento never
+// empties out during dev. navigateTo + useI18n are Nuxt auto-imports.
+import { computed } from 'vue'
+import { useHomeDashboard } from '~/composables/useHomeDashboard'
+import { useAccounts } from '~/composables/useAccounts'
+import type { SessionStatus } from '~/composables/useSessionsMock'
+
 const { t } = useI18n()
+
+// Provider rate-limit accounts — only providers with a usage surface (Anthropic
+// subscription / OpenAI Codex). Each ActivityRateLimit self-hides if its account
+// reports no rate-limit data, so the tile shows only accounts that have a quota.
+const { accounts } = useAccounts()
+const rateLimitAccounts = computed(() =>
+  accounts.value.filter((a) => a.provider === 'Anthropic' || a.provider === 'OpenAI'),
+)
+const {
+  attentionItems,
+  runningCount,
+  runningTaskRows,
+  usage,
+  deltaPct,
+  sparkline,
+  sessions,
+  tasks,
+} = useHomeDashboard()
+
+const loadingLabel = computed(() => t('home.time.now'))
+
+// Muted inline hint (loading / empty) — theme-driven, no new CSS class.
+const hintStyle = {
+  color: 'var(--textFaint)',
+  fontSize: '0.9231rem',
+  padding: '6px 0',
+} as const
+
+// Attention queue is "ready" once both source stores have a first load. Sessions
+// seed synchronously (mock) / hydrate async (IPC); tasks gate on `loaded`.
+const attentionReady = computed(() => tasks.loaded)
+
+const attentionIcon = (kind: 'reply' | 'permission' | 'approval'): string =>
+  kind === 'permission' ? 'shield' : kind === 'approval' ? 'check' : 'alert'
+
+const actionLabel = (action: 'reply' | 'review' | 'approve'): string =>
+  action === 'review'
+    ? t('home.review')
+    : action === 'approve'
+      ? t('home.approve')
+      : t('home.reply')
+
+// Recent sessions: newest first (sessions list is already recency-ordered), cap 6.
+const recentSessions = computed(() => sessions.sessions.slice(0, 6))
+
+// Open a session from the recent list — set it active in the shared sessions
+// store (singleton), then route to /sessions which renders `store.active`.
+// Mirrors the sessions page's own `store.setActive` select.
+function openSession(id: number) {
+  sessions.setActive(id)
+  navigateTo('/sessions')
+}
+
+const deltaLabel = computed(() => {
+  const pct = Math.round(Math.abs(deltaPct.value) * 100)
+  if (pct === 0) return t('home.activity.deltaFlat')
+  return deltaPct.value > 0
+    ? t('home.activity.deltaUp', { pct })
+    : t('home.activity.deltaDown', { pct })
+})
+
+// Compact token formatting: 2_400_000 → "2.4M", 14_000 → "14k".
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`
+  return String(n)
+}
+
+// Elapsed time from an ISO createdAt → short "Xm Ys" label.
+function elapsed(iso: string): string {
+  const start = Date.parse(iso)
+  if (Number.isNaN(start)) return '—'
+  const sec = Math.max(0, Math.floor((Date.now() - start) / 1000))
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return m > 0 ? `${m}m ${s}s` : `${s}s`
+}
+
+const sessionDot = (status: SessionStatus): string =>
+  status === 'streaming'
+    ? 'var(--accent)'
+    : status === 'awaiting'
+      ? 'var(--amber)'
+      : status === 'error'
+        ? 'var(--amber)'
+        : 'var(--textFaint)'
+
+const sessionStatusLabel = (status: SessionStatus, when: string): string =>
+  t(`home.recent.status.${status}`, { when })
 </script>

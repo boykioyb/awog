@@ -3,16 +3,12 @@
     <div class="ghdwrsz" />
     <div class="ghdwin">
       <div class="ghdwhd">
-        <span v-if="item.repo" class="ghrepo">
-          <Icon name="git" style="width: 10px; height: 10px" />
-          {{ item.repo }}
-        </span>
-        <span class="ghnum">#{{ item.n }}</span>
-        <span class="ghstate" :style="{ color: stateColor, borderColor: stateColor }">
-          {{ t('projects.gh.state.' + item.state) }}
+        <span class="ghnum">#{{ thread?.number ?? '' }}</span>
+        <span v-if="thread" class="ghstate" :style="{ color: stateColor, borderColor: stateColor }">
+          {{ t('projects.gh.state.' + thread.state.toLowerCase()) }}
         </span>
         <span
-          v-if="kind === 'pr' && item.draft"
+          v-if="kind === 'pr' && thread?.isDraft"
           class="ghstate"
           style="color: var(--textDim); border-color: var(--border)"
         >
@@ -20,20 +16,27 @@
         </span>
         <span style="flex: 1" />
         <button
+          v-for="lang in LANGS"
+          :key="lang"
           class="iconbtn"
-          :title="t('projects.drawer.translate')"
+          :title="t('projects.drawer.viewLang.' + lang)"
           :style="{
-            width: '28px',
+            width: 'auto',
             height: '28px',
-            ...(translated ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}),
+            padding: '0 8px',
+            fontSize: '0.8462rem',
+            ...(viewLang === lang
+              ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
+              : {}),
           }"
-          @click="translated = !translated"
+          @click="emit('set-lang', lang)"
         >
-          <Icon name="skills" style="width: 14px; height: 14px" />
+          {{ t('projects.drawer.viewLang.' + lang) }}
         </button>
         <a
+          v-if="thread?.url"
           class="iconbtn"
-          :href="ghHref"
+          :href="thread.url"
           target="_blank"
           rel="noopener"
           :title="t('projects.drawer.openOnGithub')"
@@ -51,93 +54,126 @@
         </button>
       </div>
       <div class="ghdwbody">
-        <div class="ghdwtitle">{{ tr(item.title, item.titleVi) }}</div>
-        <div class="ghdwmeta">
-          <span class="mono">{{ remote }}</span>
-          ·
-          <span class="mono">{{ item.author }}</span>
-          {{ t('projects.drawer.opened') }} · {{ item.up }}
-          <template v-if="kind === 'pr'">
-            ·
-            <span class="mono">{{ item.base }} ← {{ item.head }}</span>
-          </template>
+        <div v-if="loading" class="fd" style="padding: 24px; text-align: center">
+          {{ t('projects.gh.loading') }}
         </div>
-        <div
-          v-if="(item.labels ?? []).length"
-          style="display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px"
-        >
-          <span
-            v-for="l in item.labels"
-            :key="l.n"
-            class="ghlabel"
-            :style="{ color: l.c, borderColor: l.c }"
-          >
-            {{ l.n }}
-          </span>
-        </div>
-        <div v-if="translated" class="trbadge">
-          {{ t('projects.drawer.translatedBadge') }}
-        </div>
-        <div class="ghmd">
-          <p v-for="(par, i) in bodyParagraphs" :key="i">{{ par }}</p>
-        </div>
-        <div class="sech">{{ t('projects.drawer.comments', { n: item.comments.length }) }}</div>
-        <template v-if="item.comments.length">
-          <div v-for="(c, i) in item.comments" :key="i" class="ghcomment">
-            <div class="ghchd">
-              <span class="mono">{{ c.a }}</span>
-              · {{ c.w }}
-            </div>
-            <div class="ghmd">
-              <p v-for="(par, j) in paragraphs(tr(c.b, c.bVi))" :key="j">{{ par }}</p>
-            </div>
+        <template v-else-if="thread">
+          <div class="ghdwtitle">{{ segText('title', thread.title) }}</div>
+          <div class="ghdwmeta">
+            <span class="mono">{{ thread.author.login }}</span>
+            {{ t('projects.drawer.opened') }} · {{ relativeWhen(thread.createdAt) }}
+            <template v-if="kind === 'pr' && thread.baseRefName">
+              ·
+              <span class="mono">{{ thread.baseRefName }} ← {{ thread.headRefName }}</span>
+            </template>
           </div>
+          <div
+            v-if="thread.labels.length"
+            style="display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px"
+          >
+            <span
+              v-for="l in thread.labels"
+              :key="l.name"
+              class="ghlabel"
+              :style="labelStyle(l.color)"
+            >
+              {{ l.name }}
+            </span>
+          </div>
+          <div v-if="viewLang !== 'orig'" class="trbadge">
+            {{ t('projects.drawer.translatedBadge') }}
+          </div>
+          <div class="ghmd">
+            <p v-for="(par, i) in bodyParagraphs" :key="i">{{ par }}</p>
+          </div>
+          <div class="sech">{{ t('projects.drawer.comments', { n: thread.comments.length }) }}</div>
+          <template v-if="thread.comments.length">
+            <div v-for="(c, i) in thread.comments" :key="i" class="ghcomment">
+              <div class="ghchd">
+                <span class="mono">{{ c.author.login }}</span>
+                · {{ relativeWhen(c.createdAt) }}
+              </div>
+              <div class="ghmd">
+                <p v-for="(par, j) in paragraphs(segText(i, c.body))" :key="j">{{ par }}</p>
+              </div>
+            </div>
+          </template>
+          <div v-else class="fd">{{ t('projects.drawer.noComment') }}</div>
         </template>
-        <div v-else class="fd">{{ t('projects.drawer.noComment') }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import type { GhItem, Project } from './data'
+// Right-docked issue/PR detail — binds a live gh.get thread. Per-segment
+// translation: each block (title / body / comment-by-index) renders its cached
+// translation when a language tab is active (orig/vi/en), or the original prose.
+// Markdown renders as plain paragraphs (no v-html). The parent (ProjectGh) owns
+// the useProjectGh controller and forwards thread + segment lookups.
+import { computed } from 'vue'
+import type {
+  GhKind,
+  GhSegmentId,
+  GhSegmentState,
+  GhThread,
+  ViewLang,
+} from '~/composables/useProjectGh'
 
-// Right-docked issue/PR detail — port of ghDrawer() (~2269): header (state/draft/
-// translate/open/close), body, labels, comments. Markdown is rendered as plain
-// paragraphs (no v-html) — fenced/inline-md richness is deferred. Resize handle is
-// visual only (drag wiring deferred). Translate toggle (tr) is local.
-const props = defineProps<{ project: Project; item: GhItem; kind: 'issue' | 'pr'; width: number }>()
-const emit = defineEmits<{ (e: 'close'): void }>()
+const props = defineProps<{
+  thread: GhThread | null
+  kind: GhKind
+  loading: boolean
+  width: number
+  viewLang: ViewLang
+  segment: (id: GhSegmentId) => GhSegmentState | null
+}>()
+
+const emit = defineEmits<{ (e: 'close'): void; (e: 'set-lang', lang: ViewLang): void }>()
+
 const { t } = useI18n()
 
-const translated = ref(false)
+const LANGS: ViewLang[] = ['orig', 'vi', 'en']
 
-function tr(original: string, vi?: string): string {
-  return translated.value && vi ? vi : original
+// Resolve a segment's display text: the cached translation when the active lang
+// tab has one (and isn't erroring), else the original.
+function segText(id: GhSegmentId, original: string): string {
+  const s = props.segment(id)
+  if (!s) return original
+  if (s.error || s.translated === undefined) return original
+  return s.translated
 }
 
-const stateColor = computed(() =>
-  props.item.state === 'open'
-    ? 'var(--green)'
-    : props.item.state === 'merged'
-      ? 'var(--violet)'
-      : 'var(--textDim)',
-)
-
-const remote = computed(() => {
-  const r = props.project.repos.find((x) => x.n === props.item.repo)
-  return (r && r.gh) || props.project.gh || ''
+const stateColor = computed(() => {
+  const st = props.thread?.state
+  return st === 'OPEN' ? 'var(--green)' : st === 'MERGED' ? 'var(--violet)' : 'var(--textDim)'
 })
-
-const ghHref = computed(
-  () =>
-    `https://github.com/${remote.value}/${props.kind === 'pr' ? 'pull' : 'issues'}/${props.item.n}`,
-)
 
 function paragraphs(text: string): string[] {
   return String(text).split('\n\n')
 }
 
-const bodyParagraphs = computed(() => paragraphs(tr(props.item.body, props.item.bodyVi)))
+const bodyParagraphs = computed(() => {
+  if (!props.thread) return []
+  return paragraphs(segText('body', props.thread.body))
+})
+
+function labelStyle(color: string): Record<string, string> {
+  const c = color ? `#${color}` : 'var(--textDim)'
+  return { color: c, borderColor: c }
+}
+
+function relativeWhen(iso: string): string {
+  const ms = Date.parse(iso)
+  if (Number.isNaN(ms)) return ''
+  const diff = Date.now() - ms
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return 'now'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return new Date(ms).toLocaleDateString()
+}
 </script>

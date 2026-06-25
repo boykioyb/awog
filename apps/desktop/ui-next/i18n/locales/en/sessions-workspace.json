@@ -18,6 +18,13 @@
   "sessions.workspace.plan.pending": "pending",
   "sessions.workspace.terminal.unavailable": "Terminal unavailable",
   "sessions.workspace.terminal.exited": "process exited",
+  "sessions.workspace.terminal.newTab": "New terminal",
+  "sessions.workspace.terminal.closeTab": "Close terminal",
+  "sessions.workspace.terminal.tabTitle": "Terminal {n}",
   "sessions.workspace.tasks.empty": "No background tasks in this session",
-  "sessions.workspace.tasks.placeholder": "Background tasks (terminal / sub-agents) from the session appear here"
+  "sessions.workspace.tasks.placeholder": "Background tasks (terminal / sub-agents) from the session appear here",
+  "sessions.workspace.dock.change": "Move panel",
+  "sessions.workspace.dock.left": "Dock left",
+  "sessions.workspace.dock.right": "Dock right",
+  "sessions.workspace.dock.bottom": "Dock bottom"
 }

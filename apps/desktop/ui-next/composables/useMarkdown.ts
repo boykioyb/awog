@@ -24,6 +24,16 @@ function sanitizeHref(href: string | null | undefined): string {
   return h
 }
 
+// Strip a leading YAML front-matter block (--- … ---) so config docs (agents,
+// skills, rules, commands, ADRs) don't render their metadata as a stray horizontal
+// rule + setext heading. Only triggers when the very first line is a `---` fence
+// with a matching closing fence below; the raw/code view still shows it verbatim.
+function stripFrontMatter(src: string): string {
+  if (!src.startsWith('---')) return src
+  const m = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(src)
+  return m ? src.slice(m[0].length) : src
+}
+
 let configured = false
 function configure() {
   if (configured) return
@@ -63,7 +73,7 @@ export function useMarkdown() {
   // Split into HTML runs + mermaid blocks, preserving order.
   function renderMarkdown(src: string): MdSegment[] {
     configure()
-    const tokens = marked.lexer(src)
+    const tokens = marked.lexer(stripFrontMatter(src))
     const segments: MdSegment[] = []
     let buf: Tokens.Generic[] = []
 

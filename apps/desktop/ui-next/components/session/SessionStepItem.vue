@@ -8,8 +8,8 @@
       <Icon name="chev" style="width: 13px; height: 13px" />
     </div>
     <div class="stepd">
-      <!-- subagent (Task) -->
-      <div v-if="block.tool === 'Task' && block.sub" class="substep">
+      <!-- subagent (has children) -->
+      <div v-if="block.sub" class="substep">
         <div class="subhd">
           <Icon name="agents" style="width: 12px; height: 12px" />
           {{ block.sub.agent }}
@@ -28,47 +28,32 @@
             <Icon name="chev" style="width: 13px; height: 13px" />
           </div>
           <div class="stepd">
-            <SessionCodeView
-              v-if="st.tool === 'Edit' || st.tool === 'Write'"
-              mode="diff"
-              :fname="st.target"
-              :lines="DEMO_DIFF"
+            <SessionStepBody
+              :tool="st.tool"
+              :target="st.target"
+              :detail="st.detail"
+              :detail-kind="st.detailKind"
             />
-            <SessionCodeView
-              v-else-if="st.tool === 'Read'"
-              :fname="st.target"
-              :code="st.detail || '// ...'"
-            />
-            <pre v-else class="cvcode plain">{{ st.detail || '(no output)' }}</pre>
           </div>
         </div>
       </div>
 
       <!-- skill -->
       <div
-        v-else-if="block.tool === 'Skill'"
+        v-else-if="isSkill"
         style="font-size: 0.9231rem; color: var(--textMuted); line-height: 1.6"
       >
         {{ block.detail || t('sessions.step.skillRunning') }}
       </div>
 
-      <!-- edit / write → diff -->
-      <SessionCodeView
-        v-else-if="block.tool === 'Edit' || block.tool === 'Write'"
-        mode="diff"
-        :fname="block.target"
-        :lines="DEMO_DIFF"
+      <!-- diff / file / output — real detail (mock DEMO_DIFF fallback inside) -->
+      <SessionStepBody
+        v-else
+        :tool="block.tool"
+        :target="block.target"
+        :detail="block.detail"
+        :detail-kind="block.detailKind"
       />
-
-      <!-- read → code -->
-      <SessionCodeView
-        v-else-if="block.tool === 'Read'"
-        :fname="block.target"
-        :code="block.detail || '// (empty)'"
-      />
-
-      <!-- everything else → raw output -->
-      <pre v-else class="cvcode plain">{{ block.detail || '(no output)' }}</pre>
     </div>
   </div>
 </template>
@@ -78,10 +63,12 @@
 // Collapsed-by-default styling comes from .step.col in the prototype CSS.
 import type { StepBlock } from '~/composables/useSessionsMock'
 
-defineProps<{ block: StepBlock }>()
+const props = defineProps<{ block: StepBlock }>()
 const { t } = useI18n()
 
-const { DEMO_DIFF } = useSessionsMock()
+// Subagent steps render via the sub-step loop (when `block.sub` is set); a Skill
+// step shows its description text; everything else delegates to SessionStepBody.
+const isSkill = computed(() => /skill/i.test(props.block.tool))
 
 // Per-tool glyph for the step header. Matches both canonical tool names (mock:
 // Read/Edit/Bash/…) and the engine's human labels ("Run", "Search", "Update", …)
@@ -122,6 +109,20 @@ const collapsed = ref(true)
 
 // Nested sub-steps collapse independently; track expanded indices in a reactive Set.
 const subExpanded = reactive(new Set<number>())
+
+// Transcript-wide collapse-all / expand-all: follow the broadcast signal, mirroring
+// the body's open state across every nested sub-step too. Manual clicks still work
+// (they just set local state until the next broadcast).
+const fold = useStepFold()
+watch(
+  () => fold.signal.seq,
+  () => {
+    const expand = fold.signal.mode === 'expand'
+    collapsed.value = !expand
+    subExpanded.clear()
+    if (expand && props.block.sub) props.block.sub.steps.forEach((_, i) => subExpanded.add(i))
+  },
+)
 const toggleSub = (i: number) => {
   if (subExpanded.has(i)) subExpanded.delete(i)
   else subExpanded.add(i)
@@ -129,17 +130,22 @@ const toggleSub = (i: number) => {
 </script>
 
 <style scoped>
-/* Match the prototype's inline `border:none;background:transparent;padding:4px 0;
-   white-space:pre-wrap` on the raw-output <pre> (no dedicated class exists). */
-.cvcode.plain {
-  border: none;
+/* Flat steps: drop the grey fill (prototype .step uses var(--bgSubtle)); keep the
+   hairline border so the row still reads as a discrete unit on the message bg. */
+.step {
   background: transparent;
-  padding: 4px 0;
-  white-space: pre-wrap;
 }
 /* Per-tool step glyph — subtle, consistent with the row's muted chrome. */
 .stepic {
   flex: 0 0 auto;
   color: var(--textDim);
+}
+/* Sharper, more interactive step cards: hover feedback on the header (the whole
+   row is the clickable expand toggle), with a tidy accent on the open state. */
+.step > .steph {
+  transition: background 0.12s ease;
+}
+.step > .steph:hover {
+  background: var(--bgHover);
 }
 </style>

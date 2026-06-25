@@ -49,7 +49,37 @@ function parseFlatYaml(lines: string[]): Record<string, string | string[]> {
     const key = line.slice(0, colon).trim()
     const rest = line.slice(colon + 1).trim()
 
-    if (rest === '' || rest === '|' || rest === '>') {
+    // Block scalar — literal (`|`) preserves newlines, folded (`>`) joins lines
+    // with spaces. Optional chomping indicator (`-`/`+`) is accepted (we always
+    // trim, so it has no effect). Continuation = blank lines or lines indented
+    // deeper than the key, e.g.
+    //   description: >
+    //     First sentence.
+    //     Second sentence.
+    const scalar = /^([|>])[+-]?$/.exec(rest)
+    if (scalar) {
+      const folded = scalar[1] === '>'
+      const collected: string[] = []
+      let j = i + 1
+      while (j < lines.length && (lines[j].trim() === '' || /^\s/.test(lines[j]))) {
+        collected.push(lines[j])
+        j += 1
+      }
+      const nonBlank = collected.filter((l) => l.trim() !== '')
+      if (nonBlank.length === 0) {
+        out[key] = ''
+        i = j
+        continue
+      }
+      const indent = Math.min(...nonBlank.map((l) => l.length - l.trimStart().length))
+      const textLines = collected.map((l) => l.slice(indent))
+      while (textLines.length > 0 && textLines[textLines.length - 1].trim() === '') textLines.pop()
+      out[key] = folded ? foldBlockScalar(textLines) : textLines.join('\n')
+      i = j
+      continue
+    }
+
+    if (rest === '') {
       // Block array on following lines, e.g.
       //   globs:
       //     - "*.ts"
@@ -81,6 +111,24 @@ function parseFlatYaml(lines: string[]): Record<string, string | string[]> {
     i += 1
   }
   return out
+}
+
+function foldBlockScalar(lines: string[]): string {
+  // YAML folded scalar (`>`): consecutive non-empty lines join with a single
+  // space; a blank line becomes a newline (paragraph break). Good enough for the
+  // single-paragraph descriptions SKILL.md uses.
+  let out = ''
+  let prevBlank = true
+  for (const line of lines) {
+    if (line.trim() === '') {
+      out += '\n'
+      prevBlank = true
+    } else {
+      out += (prevBlank ? '' : ' ') + line.trim()
+      prevBlank = false
+    }
+  }
+  return out.trim()
 }
 
 function splitFlowList(inner: string): string[] {

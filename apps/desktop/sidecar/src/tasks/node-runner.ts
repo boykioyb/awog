@@ -32,10 +32,17 @@ import {
   emitRunDone,
   emitRunOutput,
   emitRunOutputDelta,
+  emitRunUsage,
   emitTrace,
 } from './emit.js'
 import type { InvokeToolUse } from '../sdk/invoke.js'
-import type { SessionSettings, Task, TraceNode, WorkflowNode } from '../types/shared.js'
+import type {
+  SessionSettings,
+  Task,
+  TaskRunUsage,
+  TraceNode,
+  WorkflowNode,
+} from '../types/shared.js'
 
 const DEFAULT_MODEL = 'claude-opus-4-8'
 const COMMIT_TEMPLATE = '[{phaseId}] {agentName}: {summary}'
@@ -239,6 +246,29 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
 
     // Persist the artifact body + write the artifact file(s).
     await emitRunOutput(taskId, node.id, version, text)
+
+    // Persist token usage for the Activity cost rollup (ADR 0054). Model = the
+    // model the run actually resolved to (capturedModel) or the agent default;
+    // provider/account come from the run settings. accountId is id-only (no
+    // secret). Skip when the turn produced no tokens (e.g. immediate failure).
+    const runUsage: TaskRunUsage = {
+      inputTokens: result.usage.input_tokens,
+      outputTokens: result.usage.output_tokens,
+      cacheReadTokens: result.usage.cache_read_tokens,
+      cacheWriteTokens: result.usage.cache_creation_tokens,
+      model: finalModel || settings.modelId,
+      provider: settings.provider,
+      ...(settings.accountId ? { accountId: settings.accountId } : {}),
+    }
+    if (
+      runUsage.inputTokens +
+        runUsage.outputTokens +
+        runUsage.cacheReadTokens +
+        runUsage.cacheWriteTokens >
+      0
+    ) {
+      await emitRunUsage(taskId, node.id, version, runUsage)
+    }
 
     // Git auto-commit the project repo (captures code the agent wrote).
     let commitSha: string | undefined

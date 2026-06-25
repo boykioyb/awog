@@ -1,123 +1,176 @@
 <template>
   <div class="ghpane">
     <div class="ghhead">
-      <span v-if="multiRepo" class="chip chipbtn" :title="t('projects.gh.filterRepo')">
-        <Icon name="git" style="width: 12px; height: 12px" />
-        {{ repo === 'all' ? t('projects.gh.allRepos') : repo }}
-        <Icon name="chev" style="width: 11px; height: 11px" />
-      </span>
-      <span class="chip chipbtn" :title="t('projects.gh.account')">
-        <Icon name="agents" style="width: 12px; height: 12px" />
-        {{ acc }}
-        <Icon name="chev" style="width: 11px; height: 11px" />
-      </span>
-      <span class="chip chipbtn">
-        {{ t('projects.gh.state.' + stateFilter) }}
-        <Icon name="chev" style="width: 11px; height: 11px" />
-      </span>
-      <span class="chip chipbtn">
-        @{{
-          assignee === '@me'
-            ? t('projects.gh.assigneeMe')
-            : assignee || t('projects.gh.assigneeAnyone')
-        }}
-        <Icon name="chev" style="width: 11px; height: 11px" />
-      </span>
+      <AppSelect
+        :model-value="account || '__active'"
+        :options="accountOptions"
+        width="170px"
+        @update:model-value="onAccount"
+      />
+      <AppSelect
+        :model-value="stateFilter"
+        :options="stateOptions"
+        width="120px"
+        @update:model-value="onState"
+      />
+      <AppSelect
+        :model-value="assignee || '__any'"
+        :options="assigneeOptions"
+        width="150px"
+        @update:model-value="onAssignee"
+      />
       <div class="srch" style="flex: 1; min-width: 120px; max-width: 220px">
         <Icon name="search" style="width: 13px; height: 13px" />
-        <input v-model="query" :placeholder="t('projects.gh.search')" />
+        <input :value="search" :placeholder="t('projects.gh.search')" @input="onSearch" />
       </div>
-      <button class="iconbtn" :title="t('projects.gh.refresh')" style="width: 30px; height: 30px">
+      <button
+        class="iconbtn"
+        :title="t('projects.gh.refresh')"
+        style="width: 30px; height: 30px"
+        :disabled="loading"
+        @click="emit('refresh')"
+      >
         <Icon name="refresh" style="width: 14px; height: 14px" />
       </button>
     </div>
 
     <div class="ghlist">
-      <div v-for="it in items" :key="it.n" class="ghrow" @click="emit('open', it.n)">
-        <div class="ghr1">
-          <Icon :name="kind === 'pr' ? 'fork' : 'alert'" style="width: 13px; height: 13px" />
-          <span class="ghnum">#{{ it.n }}</span>
-          <span class="ghtitle">{{ it.title }}</span>
-          <span v-if="it.repo && multiRepo" class="ghrepo">
-            <Icon name="git" style="width: 10px; height: 10px" />
-            {{ it.repo }}
-          </span>
-          <span
-            class="ghstate"
-            :style="{ color: stateColor(it.state), borderColor: stateColor(it.state) }"
-          >
-            {{ t('projects.gh.state.' + it.state) }}
-          </span>
-          <span
-            v-if="kind === 'pr' && it.draft"
-            class="ghstate"
-            style="color: var(--textDim); border-color: var(--border)"
-          >
-            {{ t('projects.gh.state.draft') }}
-          </span>
-        </div>
-        <div class="ghr2">
-          <span v-if="kind === 'pr' && it.base" class="mono">{{ it.base }} ← {{ it.head }}</span>
-          <span
-            v-for="l in it.labels ?? []"
-            :key="l.n"
-            class="ghlabel"
-            :style="{ color: l.c, borderColor: l.c }"
-          >
-            {{ l.n }}
-          </span>
-          <span style="margin-left: auto; font-family: var(--code)">
-            {{ it.author }} · {{ it.up }}
-          </span>
-        </div>
+      <div v-if="loading && !items.length" class="fd" style="padding: 28px; text-align: center">
+        {{ t('projects.gh.loading') }}
       </div>
-      <div v-if="!items.length" class="empty" style="padding: 36px">
-        <span class="ei"><Icon name="git" style="width: 20px; height: 20px" /></span>
-        <div class="et">
-          {{
-            t(kind === 'pr' ? 'projects.gh.emptyPr' : 'projects.gh.emptyIssue', {
-              repo: repo !== 'all' ? t('projects.gh.inRepo', { repo }) : '',
-              state: stateFilter,
-            })
-          }}
+      <template v-else>
+        <div v-for="it in items" :key="it.number" class="ghrow" @click="emit('open', it.number)">
+          <div class="ghr1">
+            <Icon :name="kind === 'pr' ? 'fork' : 'alert'" style="width: 13px; height: 13px" />
+            <span class="ghnum">#{{ it.number }}</span>
+            <span class="ghtitle">{{ it.title }}</span>
+            <span
+              class="ghstate"
+              :style="{ color: stateColor(it.state), borderColor: stateColor(it.state) }"
+            >
+              {{ t('projects.gh.state.' + it.state.toLowerCase()) }}
+            </span>
+            <span
+              v-if="kind === 'pr' && it.isDraft"
+              class="ghstate"
+              style="color: var(--textDim); border-color: var(--border)"
+            >
+              {{ t('projects.gh.state.draft') }}
+            </span>
+          </div>
+          <div class="ghr2">
+            <span v-if="kind === 'pr' && it.baseRefName" class="mono">
+              {{ it.baseRefName }} ← {{ it.headRefName }}
+            </span>
+            <span v-for="l in it.labels" :key="l.name" class="ghlabel" :style="labelStyle(l.color)">
+              {{ l.name }}
+            </span>
+            <span style="margin-left: auto; font-family: var(--code)">
+              {{ it.author.login }} · {{ relativeWhen(it.createdAt) }}
+            </span>
+          </div>
         </div>
-      </div>
+        <div v-if="!items.length" class="empty" style="padding: 36px">
+          <span class="ei"><Icon name="git" style="width: 20px; height: 20px" /></span>
+          <div class="et">{{ emptyText }}</div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import type { GhItem, Project } from './data'
+// Issues / Pull Requests tab — presentational. Filter chips drive the parent's
+// useProjectGh controller via emits; rows bind the live gh.list summaries. The
+// account/state/assignee dropdowns are themed AppSelects (WKWebView-safe).
+import { computed } from 'vue'
+import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
+import type {
+  GhKind,
+  GhListState,
+  GhThreadState,
+  GhThreadSummary,
+} from '~/composables/useProjectGh'
 
-// Issues / Pull Requests tab — port of ghTabHtml()/ghRow() (~2256–2268): filter
-// chips + state-dot rows. Filter chips are display-only for now (the listMenu
-// popovers are deferred); the search box + state/repo/assignee refs drive filtering.
-const props = defineProps<{ project: Project; kind: 'issue' | 'pr' }>()
-const emit = defineEmits<{ (e: 'open', n: number): void }>()
+const props = defineProps<{
+  kind: GhKind
+  items: GhThreadSummary[]
+  loading: boolean
+  errorCode: string | null
+  stateFilter: GhListState
+  assignee: string
+  search: string
+  account: string
+  accounts: string[]
+  knownAssignees: string[]
+}>()
+
+const emit = defineEmits<{
+  (e: 'open', n: number): void
+  (e: 'refresh'): void
+  (e: 'set-state', v: GhListState): void
+  (e: 'set-assignee', v: string): void
+  (e: 'set-account', v: string): void
+  (e: 'set-search', v: string): void
+}>()
+
 const { t } = useI18n()
 
-const query = ref('')
-const repo = ref('all')
-const stateFilter = ref('open')
-const assignee = ref('')
-const acc = ref('hoatq')
+const STATES: GhListState[] = ['open', 'closed', 'merged', 'all']
+const stateOptions = computed<AppSelectOption[]>(() =>
+  STATES.filter((s) => props.kind === 'pr' || s !== 'merged').map((s) => ({
+    value: s,
+    label: t('projects.gh.state.' + s),
+  })),
+)
 
-const ghRepos = computed(() => props.project.repos.filter((r) => r.gh))
-const multiRepo = computed(() => ghRepos.value.length > 1)
+const assigneeOptions = computed<AppSelectOption[]>(() => [
+  { value: '__any', label: t('projects.gh.assigneeAnyone') },
+  { value: '@me', label: t('projects.gh.assigneeMe') },
+  ...props.knownAssignees.map((a) => ({ value: a, label: a })),
+])
 
-const items = computed<GhItem[]>(() => {
-  let a = (props.kind === 'pr' ? props.project.prs : props.project.issues).slice()
-  if (repo.value !== 'all') a = a.filter((it) => it.repo === repo.value)
-  if (stateFilter.value !== 'all') a = a.filter((it) => it.state === stateFilter.value)
-  if (assignee.value === '@me') a = a.filter((it) => (it.assignees ?? []).includes(acc.value))
-  else if (assignee.value) a = a.filter((it) => (it.assignees ?? []).includes(assignee.value))
-  const q = query.value.trim().toLowerCase()
-  if (q) a = a.filter((it) => `${it.title} #${it.n}`.toLowerCase().includes(q))
-  return a
+const accountOptions = computed<AppSelectOption[]>(() => [
+  { value: '__active', label: t('projects.gh.accountActive') },
+  ...props.accounts.map((a) => ({ value: a, label: a })),
+])
+
+const emptyText = computed(() => {
+  if (props.errorCode === 'GH_NOT_AUTH') return t('projects.gh.errAuth')
+  if (props.errorCode === 'GH_NO_REPO') return t('projects.gh.errNoRepo')
+  if (props.errorCode && props.errorCode !== 'UNKNOWN' && props.errorCode !== 'GH_NOT_FOUND')
+    return t('projects.gh.errGeneric')
+  if (props.errorCode === 'GH_NOT_FOUND') return t('projects.gh.errNoGh')
+  const key = props.kind === 'pr' ? 'projects.gh.emptyPr' : 'projects.gh.emptyIssue'
+  return t(key, { state: props.stateFilter })
 })
 
-function stateColor(s: GhItem['state']): string {
-  return s === 'open' ? 'var(--green)' : s === 'merged' ? 'var(--violet)' : 'var(--textDim)'
+function stateColor(s: GhThreadState): string {
+  return s === 'OPEN' ? 'var(--green)' : s === 'MERGED' ? 'var(--violet)' : 'var(--textDim)'
+}
+
+function labelStyle(color: string): Record<string, string> {
+  const c = color ? `#${color}` : 'var(--textDim)'
+  return { color: c, borderColor: c }
+}
+
+const onState = (v: string) => emit('set-state', v as GhListState)
+const onAssignee = (v: string) => emit('set-assignee', v === '__any' ? '' : v)
+const onAccount = (v: string) => emit('set-account', v === '__active' ? '' : v)
+const onSearch = (e: Event) => emit('set-search', (e.target as HTMLInputElement).value)
+
+// Short relative time for an ISO timestamp: <1h Nm, <24h Nh, <7d Nd, else date.
+function relativeWhen(iso: string): string {
+  const ms = Date.parse(iso)
+  if (Number.isNaN(ms)) return ''
+  const diff = Date.now() - ms
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return 'now'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return new Date(ms).toLocaleDateString()
 }
 </script>

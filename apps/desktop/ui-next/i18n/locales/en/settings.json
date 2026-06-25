@@ -2,6 +2,7 @@
   "settings.nav.appearance": "Appearance",
   "settings.nav.defaults": "Defaults",
   "settings.nav.models": "Models & Keys",
+  "settings.nav.pricing": "Model Pricing",
   "settings.nav.workspace": "Workspace",
   "settings.nav.git": "Git",
   "settings.nav.sessions": "Sessions",
@@ -101,5 +102,24 @@
   "settings.about.appName": "AWOG",
   "settings.about.version": "v0.18.0 · Electron · Pi SDK runtime",
   "settings.about.checkUpdate": "Check for updates",
-  "settings.about.tagline": "Artifact Workflow Orchestrate Guild — AI Team Operating System, local-first."
+  "settings.about.tagline": "Artifact Workflow Orchestrate Guild — AI Team Operating System, local-first.",
+
+  "settings.pricing.heading": "Model Pricing",
+  "settings.pricing.intro": "Override per-model token prices used to compute cost on the Activity page. Edits apply only to this install.",
+  "settings.pricing.loading": "Loading prices…",
+  "settings.pricing.empty": "No models to price yet.",
+  "settings.pricing.col.model": "Model",
+  "settings.pricing.col.input": "Input",
+  "settings.pricing.col.output": "Output",
+  "settings.pricing.col.cacheRead": "Cache read",
+  "settings.pricing.col.cacheWrite": "Cache write",
+  "settings.pricing.overridden": "override",
+  "settings.pricing.remote": "fetched",
+  "settings.pricing.reset": "Reset to default",
+  "settings.pricing.unit": "Prices are USD per 1M tokens.",
+  "settings.pricing.unsaved": "Unsaved changes",
+  "settings.pricing.save": "Save prices",
+  "settings.pricing.fetch": "Update from source",
+  "settings.pricing.fetchedAt": "Updated {when}",
+  "settings.pricing.neverFetched": "Using bundled prices — fetch the latest from the source"
 }

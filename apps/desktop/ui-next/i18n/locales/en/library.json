@@ -1,0 +1,30 @@
+{
+  "library.saveTo": "Save to",
+  "library.userGlobal": "User · ~/.awog",
+
+  "library.group.global": "Global · ~/.awog",
+
+  "library.filter.tooltip": "Filter",
+  "library.filter.project": "Project",
+  "library.filter.all": "All projects",
+  "library.filter.clear": "Clear filter",
+  "library.foldAll.tooltip": "Collapse / expand all",
+
+  "library.kv.key": "key",
+  "library.kv.value": "value",
+  "library.kv.add": "Add entry",
+  "library.kv.remove": "Remove entry",
+  "library.kv.secretStored": "Stored in OS keychain. Click to clear (re-enter value to update).",
+  "library.kv.secretMove": "Move this value into the OS keychain (recommended for tokens/passwords).",
+  "library.kv.secretNeedsBoth": "Both key and value must be filled before saving as secret.",
+  "library.kv.secretOffline": "Engine offline — cannot store secret.",
+
+  "library.md.copied": "Copied",
+  "library.md.edit": "Edit",
+  "library.md.empty": "(empty — click Edit to add content)",
+
+  "library.creator.send": "Send",
+  "library.creator.generating": "Generating…",
+  "library.creator.sendHint": "Enter to send · Shift+Enter for newline",
+  "library.creator.turns": "{n} turn(s) · list auto-refreshes"
+}

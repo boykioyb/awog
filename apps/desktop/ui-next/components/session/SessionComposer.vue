@@ -8,7 +8,7 @@
     />
     <div class="cbox">
       <!-- follow-up quote cards (carried into the next turn) -->
-      <div v-if="followups.length" class="sfollow">
+      <div v-if="followups.length" class="sfollow" :class="{ scroll: followups.length > 3 }">
         <div v-for="(q, i) in followups" :key="i" class="fwcard">
           <div class="fwh">
             <span class="fwn">{{ CIRCLED[i] }}</span>
@@ -48,7 +48,7 @@
         </span>
       </div>
 
-      <!-- slash `/` + `@`-mention autocomplete (mock-sourced) -->
+      <!-- slash `/` (commands + skills) + `@`-mention (agents + files) autocomplete -->
       <SessionSlashMenu
         v-if="autocomplete === 'slash'"
         :items="slashMatches"
@@ -63,6 +63,9 @@
         @select="applyMention"
         @hover="(i) => (acIndex = i)"
       />
+
+      <!-- transient feedback for a dispatched built-in command (mode / compact) -->
+      <div v-if="commandNotice" class="cmdnotice">{{ commandNotice }}</div>
 
       <!-- textarea is single-purpose composer input → resize handled by .cresize handle -->
       <textarea
@@ -191,13 +194,13 @@
           </div>
         </span>
         <span
-          class="chip sm chipbtn"
-          :title="t('sessions.composer.accountTooltip')"
+          class="chip sm chipbtn acct"
+          :title="selectedAccountDisplay || t('sessions.composer.accountTooltip')"
           style="position: relative"
           @click.stop="toggle('account')"
         >
           <Icon name="agents" style="width: 12px; height: 12px" />
-          {{ accountShort }}
+          <span class="chiplbl">{{ accountShort }}</span>
           <Icon name="chev" style="width: 11px; height: 11px" />
           <div
             v-if="open === 'account'"
@@ -231,16 +234,23 @@
             style="position: absolute; bottom: 130%; left: 0; z-index: 50"
             @click.stop
           >
-            <template v-for="[group, arr] in RESPONSE_STYLES" :key="group">
-              <div class="palg">{{ group }}</div>
+            <template v-for="(grp, gi) in RESPONSE_STYLES" :key="grp.key">
+              <div class="palg" :class="{ first: gi === 0 }">
+                {{ t(`sessions.style.group.${grp.key}`) }}
+              </div>
               <div
-                v-for="[sid, name, hint] in arr"
-                :key="sid"
+                v-for="row in grp.rows"
+                :key="row.id"
                 class="mi sty"
-                @click="selectStyle(sid)"
+                :class="{ cur: row.id === activeStyleId }"
+                @click="selectStyle(row.id)"
               >
-                <div class="nm2">{{ name }}</div>
-                <div class="sd2">{{ hint }}</div>
+                <Icon :name="row.icon" class="styicon" />
+                <div class="stytext">
+                  <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
+                  <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
+                </div>
+                <Icon v-if="row.id === activeStyleId" name="check" class="styck" />
               </div>
             </template>
             <label class="nmk" style="padding: 0 11px 9px" @click.stop="toggleNoMd">
@@ -293,14 +303,27 @@
 // Composer (renderDetail composer block ~1358 + renderSendArea ~1659). Four chips
 // (mode → model → account → style) each open a `.smenu` popover (upward), textarea
 // with Enter-to-send / Shift+Enter newline, enhance (one-shot rewrite via the store)
-// and slash `/` + `@`-mention autocomplete (mock sources). When the active session
+// and slash `/` + `@`-mention autocomplete (real engine sources via useComposerData:
+// commands/skills/agents/files). When the active session
 // is busy the Send action queues (gửi sau) instead of sending. Chip selections drive
 // the STORE (read `store.active`, write via store actions) so they persist + take
 // effect on the next turn. The model chip popover also folds the Thinking selector;
 // the style chip carries the response-style catalog + the no-markdown toggle.
 import type { AccountOption } from '~/composables/useAccounts'
 import type { SessionAttachment, ThinkingLevel } from '~/composables/useSessionsMock'
-import { SLASH_COMMANDS, MENTION_SOURCE } from './session-composer-mocks'
+import { useComposerData } from '~/composables/useComposerData'
+import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
+import {
+  BUILTIN_COMMANDS,
+  findBuiltin,
+  type SlashItem,
+  type MentionRow,
+} from './session-composer-commands'
+import {
+  parseSlashInvocation,
+  findInvocableCommand,
+  expandCommandBody,
+} from '~/utils/slash-command'
 
 const props = withDefaults(
   defineProps<{
@@ -319,6 +342,7 @@ const emit = defineEmits<{
   'open-more': []
 }>()
 const { t } = useI18n()
+const settings = useSettingsStore()
 const { providerOf, CIRCLED } = useSessionsMock()
 const { accounts, accountById, modelsForAccount } = useAccounts()
 const { scrollToMessage } = useSessionScroll()
@@ -347,43 +371,102 @@ const THINK: [ThinkingLevel, string][] = [
 ]
 const NO_THINK = new Set(['Haiku 4.5', 'GPT-4.1'])
 
-// Response-style catalog (VN labels, ported from SessionConfigPopover). Each row is
-// [id, display name, hint]; the style chip popover renders these grouped.
-const RESPONSE_STYLES: [string, [string, string, string][]][] = [
-  ['Mặc định', [['Normal', 'Normal', 'Có markdown, mặc định']]],
-  [
-    '⚡ Nhanh & gọn',
-    [
-      ['Military', '🪖 Military', 'Fix ngay, không giải thích'],
-      ['Caveman', '🪨 Caveman', 'Code nhanh, trao đổi liên tục'],
-      ['Reality Check', '🔍 Reality Check', 'Ý tưởng có đáng làm?'],
-      ['git log', '📋 git log', 'Từng bước paste vào ticket'],
-      ['Socratic', '❓ Socratic', 'Hiểu sâu, không chỉ copy'],
-      ['BLUF', '📌 BLUF', 'So sánh — kết luận trước'],
+// Response-style catalog. `id` is the engine contract (sent via store.setStyle —
+// never translate it); `slug` derives the i18n name/hint keys; `icon` is a lucide
+// sprite glyph (no emoji — AWOG renders icons as SVG). Group titles + names + hints
+// resolve through i18n at render (see `styleGroupTitle` / `styleName` / template).
+type StyleRow = { id: string; slug: string; icon: string }
+type StyleGroup = { key: string; rows: StyleRow[] }
+const RESPONSE_STYLES: StyleGroup[] = [
+  { key: 'default', rows: [{ id: 'Normal', slug: 'normal', icon: 'text' }] },
+  {
+    key: 'fast',
+    rows: [
+      { id: 'Military', slug: 'military', icon: 'shield' },
+      { id: 'Caveman', slug: 'caveman', icon: 'zap' },
+      { id: 'Reality Check', slug: 'reality-check', icon: 'search' },
+      { id: 'git log', slug: 'git-log', icon: 'git' },
+      { id: 'Socratic', slug: 'socratic', icon: 'help' },
+      { id: 'BLUF', slug: 'bluf', icon: 'pin' },
     ],
-  ],
-  [
-    '😄 Cho vui',
-    [
-      ['Yoda', '🧙 Yoda', 'Thêm năng lượng khi debug'],
-      ['Pirate', '🏴‍☠️ Pirate', 'Demo cho team, cần meme'],
-      ['80s Hacker', '💾 80s Hacker', 'Screencast, kịch tính'],
-      ['Dad Joke', '👨 Dad Joke', 'Dạy junior cho nhớ'],
+  },
+  {
+    key: 'fun',
+    rows: [
+      { id: 'Yoda', slug: 'yoda', icon: 'sparkles' },
+      { id: 'Pirate', slug: 'pirate', icon: 'flag' },
+      { id: '80s Hacker', slug: 'hacker-80s', icon: 'save' },
+      { id: 'Dad Joke', slug: 'dad-joke', icon: 'smile' },
     ],
-  ],
-  [
-    '🧠 Hiểu sâu',
-    [
-      ['Rubber Duck', '🦆 Rubber Duck', 'Khái niệm mới, từ số 0'],
-      ['Feynman', '🔬 Feynman', 'Onboard junior / tự học'],
-      ['First Principles', '🧱 First Principles', 'Chọn stack / kiến trúc'],
+  },
+  {
+    key: 'deep',
+    rows: [
+      { id: 'Rubber Duck', slug: 'rubber-duck', icon: 'message' },
+      { id: 'Feynman', slug: 'feynman', icon: 'bulb' },
+      { id: 'First Principles', slug: 'first-principles', icon: 'layers' },
     ],
-  ],
+  },
 ]
+// id → slug lookup so the chip label can resolve the localized name of the active
+// style (store holds the id; 'Default' maps back to the Normal row).
+const STYLE_SLUG = new Map(RESPONSE_STYLES.flatMap((g) => g.rows).map((r) => [r.id, r.slug]))
 
-const draft = ref('')
 const store = useSessionsStore()
 const ta = useTemplateRef<HTMLTextAreaElement>('ta')
+
+// Draft text is held PER SESSION in the store (not a local ref): SessionDetail is
+// keyed by session id, so without this a half-typed message would die when the
+// user switches sessions. Reads/writes go through the active session's `draft`.
+const draft = computed<string>({
+  get: () => store.active?.draft ?? '',
+  set: (v) => {
+    if (store.activeId != null) store.setDraft(store.activeId, v)
+  },
+})
+
+// Real autocomplete sources — agents/files/user-commands/skills for the active
+// session's project (lazy-loaded + cached, see useComposerData). Built-in slash
+// commands (mode/compact/style) come from the static BUILTIN_COMMANDS catalog.
+const projectIdRef = computed(() => store.active?.project ?? null)
+const data = useComposerData(projectIdRef)
+const agentHandle = (name: string) => name.toLowerCase().replace(/\s+/g, '-')
+
+// Transient command feedback line (e.g. "/compact running…", "Mode → Plan") shown
+// above the textarea — built-in commands are actions with no chat bubble.
+const commandNotice = ref<string | null>(null)
+let noticeTimer: ReturnType<typeof setTimeout> | null = null
+function showNotice(msg: string) {
+  commandNotice.value = msg
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => {
+    commandNotice.value = null
+  }, 4000)
+}
+onBeforeUnmount(() => {
+  if (noticeTimer) clearTimeout(noticeTimer)
+})
+
+// Dispatch a built-in `/command` picked from the menu. Mode flips the session's
+// permission mode; compact summarises older turns (real RPC, applies next turn);
+// style opens the response-style popover. These are ACTIONS — never sent as text.
+function onCommand(builtinId: string) {
+  const cmd = findBuiltin(builtinId)
+  if (!cmd || store.activeId == null) return
+  if (cmd.action.type === 'mode') {
+    store.setMode(store.activeId, cmd.action.mode)
+    showNotice(t('sessions.command.notice.mode', { mode: t(`sessions.mode.${cmd.action.mode}`) }))
+  } else if (cmd.action.type === 'compact') {
+    showNotice(t('sessions.command.notice.compacting'))
+    void store.compactSession(store.activeId).then((ok) => {
+      showNotice(
+        ok ? t('sessions.command.notice.compacted') : t('sessions.command.notice.compactFailed'),
+      )
+    })
+  } else if (cmd.action.type === 'style') {
+    open.value = 'style'
+  }
+}
 
 // Composer height: `composerH` is the floor the user drags to; `grow` auto-sizes the
 // textarea to its content between that floor and a max (mirrors the prototype handle).
@@ -489,7 +572,17 @@ function selectAccount(a: AccountOption) {
 const modeIcon = computed(
   () => MODES_UI.find((m) => m.id === selectedMode.value)?.icon ?? 'sessions',
 )
-const accountShort = computed(() => providerOf(selectedAccountDisplay.value))
+// Account chip shows the concise account LABEL (e.g. "Malme Co (tran.quang_hoa)")
+// rather than the provider — with several accounts on the same provider, the
+// provider name alone can't tell you which one is active. Prefer the resolved
+// account's label; fall back to the part of the display string before " · Provider".
+const accountShort = computed(() => {
+  const opt = selectedAccountId.value ? accountById(selectedAccountId.value) : undefined
+  if (opt?.label) return opt.label
+  const disp = selectedAccountDisplay.value
+  const idx = disp.lastIndexOf(' · ')
+  return (idx > 0 ? disp.slice(0, idx) : disp) || providerOf(disp)
+})
 
 // ── Thinking (folded under the model chip) ─────────────────────────────────────
 const thinkSupported = computed(() => !NO_THINK.has(selectedModel.value))
@@ -502,6 +595,13 @@ function selectThink(v: ThinkingLevel) {
 
 // ── Response style (style chip) ────────────────────────────────────────────────
 const styleName = computed(() => {
+  const st = store.active?.style
+  const slug = st && st !== 'Default' ? (STYLE_SLUG.get(st) ?? null) : 'normal'
+  // Unknown/legacy id → show it raw rather than a missing-key string.
+  return slug ? t(`sessions.style.${slug}.name`) : (st ?? t('sessions.style.normal.name'))
+})
+// The currently-selected style id ('Default' in the store ↔ 'Normal' row).
+const activeStyleId = computed(() => {
   const st = store.active?.style
   return st && st !== 'Default' ? st : 'Normal'
 })
@@ -570,14 +670,17 @@ function send() {
   // so indices don't shift). We deliberately do NOT emit `send` here: the parent's
   // onSend always calls store.sendMessage, which has no busy-guard — emitting it
   // would start a second concurrent turn instead of queueing.
+  // Expand a `/command` invocation into its body before sending/queueing so the
+  // model receives the prompt template, not the literal `/name`.
+  const outgoing = outgoingText(draft.value)
   if (busy.value && store.activeId != null) {
-    store.enqueue(store.activeId, draft.value, props.attachments)
+    store.enqueue(store.activeId, outgoing, props.attachments)
     for (let i = props.attachments.length - 1; i >= 0; i--) emit('remove-att', i)
     draft.value = ''
     nextTick(grow)
     return
   }
-  emit('send', draft.value)
+  emit('send', outgoing)
   draft.value = ''
   nextTick(grow)
 }
@@ -613,12 +716,13 @@ async function onEnhance() {
   }
 }
 
-// ── Autocomplete: slash `/` + `@`-mention (mock-sourced) ───────────────────────
+// ── Autocomplete: slash `/` (commands + skills) + `@`-mention (agents + files) ──
 type Autocomplete = 'slash' | 'mention' | null
 const autocomplete = ref<Autocomplete>(null)
 const acIndex = ref(0)
 // The caret-anchored query token (the word the user is typing) for `@`-mentions.
 const mentionQuery = ref('')
+const RESULT_CAP = 50
 
 function caretText(): string {
   const el = ta.value
@@ -628,21 +732,84 @@ function caretText(): string {
   return v.slice(0, pos)
 }
 
-const slashMatches = computed(() => {
+// In-scope check: global always; project entries only when bound to that project.
+function inScope(source: 'global' | 'project' | undefined, projId: string | undefined): boolean {
+  if ((source ?? 'global') === 'global') return true
+  return !!projectIdRef.value && projId === projectIdRef.value
+}
+
+// `/` results: built-in commands (dispatched) + user commands + skills (inserted).
+const slashMatches = computed<SlashItem[]>(() => {
   if (autocomplete.value !== 'slash') return []
   const q = draft.value.slice(1).toLowerCase().split(/\s/)[0] ?? ''
-  return SLASH_COMMANDS.filter((c) => c.name.slice(1).startsWith(q))
+  const builtins: SlashItem[] = BUILTIN_COMMANDS.filter(
+    (c) => q === '' || c.name.startsWith(q),
+  ).map((c) => ({
+    key: `b:${c.id}`,
+    label: c.name,
+    desc: t(c.descKey),
+    kind: 'builtin',
+    builtinId: c.id,
+  }))
+  const cmds: SlashItem[] = data.userCommands.value
+    .filter(
+      (c) =>
+        c.enabled !== false &&
+        inScope(c.source, c.projectId) &&
+        (q === '' || c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q)),
+    )
+    .map((c) => ({ key: `c:${c.id}`, label: c.id, desc: c.description, kind: 'command' }))
+  const sk: SlashItem[] = data.skills.value
+    .filter(
+      (s) =>
+        inScope(s.source, s.projectId) &&
+        (q === '' || s.id.toLowerCase().startsWith(q) || s.name.toLowerCase().includes(q)),
+    )
+    .map((s) => ({ key: `s:${s.id}`, label: s.id, desc: s.description, kind: 'skill' }))
+  return [...builtins, ...cmds, ...sk].slice(0, RESULT_CAP)
 })
-const mentionMatches = computed(() => {
+
+// `@` results: enabled agents (by handle) first, then workspace files (filename
+// matches ranked above path-only matches). Capped — the list scrolls + user narrows.
+const mentionMatches = computed<MentionRow[]>(() => {
   if (autocomplete.value !== 'mention') return []
   const q = mentionQuery.value.toLowerCase()
-  return MENTION_SOURCE.filter((m) => m.value.toLowerCase().includes(q)).slice(0, 6)
+  const agents: MentionRow[] = data.agents.value
+    .filter(
+      (a) => q === '' || agentHandle(a.name).startsWith(q) || a.name.toLowerCase().includes(q),
+    )
+    .map((a) => ({
+      key: `a:${a.id}`,
+      kind: 'agent',
+      insert: agentHandle(a.name),
+      label: a.name,
+      hint: a.source === 'project' ? t('sessions.composer.kind.project') : undefined,
+    }))
+  const matched = data.files.value.filter(
+    (f) => q === '' || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
+  )
+  const ranked = q
+    ? [...matched].sort((a, b) => {
+        const an = a.name.toLowerCase().includes(q) ? 0 : 1
+        const bn = b.name.toLowerCase().includes(q) ? 0 : 1
+        return an - bn || a.path.localeCompare(b.path)
+      })
+    : matched
+  const files: MentionRow[] = ranked.map((f) => ({
+    key: `f:${f.path}`,
+    kind: 'file',
+    insert: f.path,
+    label: f.name,
+    hint: f.path,
+  }))
+  return [...agents, ...files].slice(0, RESULT_CAP)
 })
 
 function refreshAutocomplete() {
   const v = draft.value
   // Slash: only when the whole draft starts with `/` (a leading command token).
   if (v.startsWith('/')) {
+    data.ensureCatalogs() // lazy-load user commands + skills on first `/`
     autocomplete.value = 'slash'
     if (acIndex.value >= slashMatches.value.length) acIndex.value = 0
     if (!slashMatches.value.length) autocomplete.value = null
@@ -651,6 +818,8 @@ function refreshAutocomplete() {
   // Mention: the caret word starts with `@` (preceded by start-of-line or space).
   const m = /(^|\s)@([\w./-]*)$/.exec(caretText())
   if (m) {
+    data.ensureCatalogs() // agents
+    data.ensureFiles() // workspace file index
     mentionQuery.value = m[2] ?? ''
     autocomplete.value = 'mention'
     if (acIndex.value >= mentionMatches.value.length) acIndex.value = 0
@@ -681,27 +850,36 @@ function onAcArrow(e: KeyboardEvent, dir: 1 | -1) {
   acIndex.value = (acIndex.value + dir + len) % len
 }
 function acceptActive() {
-  if (autocomplete.value === 'slash') {
-    const c = slashMatches.value[acIndex.value]
-    if (c) applySlash(c.name)
-  } else if (autocomplete.value === 'mention') {
-    const m = mentionMatches.value[acIndex.value]
-    if (m) applyMention(m.value)
-  }
+  if (autocomplete.value === 'slash') applySlash(acIndex.value)
+  else if (autocomplete.value === 'mention') applyMention(acIndex.value)
 }
-function applySlash(name: string) {
-  // A leading command token replaces the whole draft prefix; keep any trailing args.
+function applySlash(i: number) {
+  const item = slashMatches.value[i]
+  if (!item) return
   const rest = draft.value.replace(/^\/\S*\s?/, '')
-  draft.value = `${name} ${rest}`.trimEnd() + (rest ? '' : ' ')
-  closeAutocomplete()
+  if (item.kind === 'builtin' && item.builtinId) {
+    // Built-ins are actions: strip the typed token and dispatch (no text insert).
+    draft.value = rest
+    closeAutocomplete()
+    onCommand(item.builtinId)
+  } else {
+    // User command / skill → insert `/id ` (expanded into the prompt on send).
+    draft.value = `/${item.label} ${rest}`.trimEnd() + (rest ? '' : ' ')
+    closeAutocomplete()
+  }
   nextTick(() => {
     ta.value?.focus()
     grow()
   })
 }
-function applyMention(value: string) {
-  // Replace the caret's `@query` word with the full `@value` token + a trailing space.
-  draft.value = draft.value.replace(/(^|\s)@([\w./-]*)$/, (_m, pre: string) => `${pre}@${value} `)
+function applyMention(i: number) {
+  const item = mentionMatches.value[i]
+  if (!item) return
+  // Replace the caret's `@query` word with the full `@insert` token + trailing space.
+  draft.value = draft.value.replace(
+    /(^|\s)@([\w./-]*)$/,
+    (_m, pre: string) => `${pre}@${item.insert} `,
+  )
   closeAutocomplete()
   nextTick(() => {
     ta.value?.focus()
@@ -709,14 +887,36 @@ function applyMention(value: string) {
   })
 }
 
-// ── Paste image from clipboard → attachment ───────────────────────────────────
+// Expand a `/command args` draft into the user command's body on send (built-ins
+// are dispatched via the menu, never sent as text). Non-invocations pass through.
+function outgoingText(raw: string): string {
+  const inv = parseSlashInvocation(raw)
+  if (!inv) return raw
+  const cmd = findInvocableCommand(data.userCommands.value, inv.name, projectIdRef.value)
+  return cmd ? expandCommandBody(cmd.body, inv.args) : raw
+}
+
+// Byte length of a string (chip size meta) — mirrors the dropped/picked file path.
+const byteLen = (s: string): number => new TextEncoder().encode(s).length
+
+// ── Clipboard paste → attachment ──────────────────────────────────────────────
+// Two cases beyond plain text (small pastes fall through to the textarea insert):
+//   1) clipboard images (screenshots, copied image files) → inline image
+//      attachment (data URL, re-fed each turn — see memory image-attachments).
+//   2) a large plain-text paste (≥ threshold, when "paste as file" is enabled) →
+//      a `pasted-text-N.txt` attachment instead of dumping it inline, keeping the
+//      input clean. Capped to ATTACHMENT_TEXT_MAX like dropped/picked text files.
 function onPaste(e: ClipboardEvent) {
-  const items = e.clipboardData?.items
-  if (!items) return
-  for (const item of Array.from(items)) {
+  const data = e.clipboardData
+  if (!data) return
+
+  // (1) Images on the clipboard.
+  let handledImage = false
+  for (const item of Array.from(data.items)) {
     if (item.kind !== 'file' || !item.type.startsWith('image/')) continue
     const file = item.getAsFile()
     if (!file) continue
+    handledImage = true
     e.preventDefault() // keep the data URL out of the textarea text
     const reader = new FileReader()
     reader.onload = () => {
@@ -735,10 +935,90 @@ function onPaste(e: ClipboardEvent) {
     }
     reader.readAsDataURL(file)
   }
+  if (handledImage) return
+
+  // (2) Large plain-text paste → a .txt attachment (gated by the user setting).
+  if (!settings.sessions.pasteAsFile) return
+  const text = data.getData('text/plain')
+  if (!text || text.length < settings.sessions.pasteThreshold) return
+  e.preventDefault()
+  const value = text.slice(0, ATTACHMENT_TEXT_MAX)
+  const truncated = value.length < text.length
+  const index = props.attachments.filter((a) => a.name.startsWith('pasted-text-')).length + 1
+  const att: SessionAttachment = {
+    name: `pasted-text-${index}.txt`,
+    img: false,
+    text: value,
+    mime: 'text/plain',
+    size: byteLen(value),
+  }
+  emit('add-att', att)
+  if (truncated) showNotice(t('sessions.composer.pasteTruncated'))
 }
 </script>
 
 <style scoped>
+/* Keep the composer toolbar on ONE line. The prototype's .cbar sets flex-wrap:wrap
+   "for responsiveness", but a long account name then pushed the Send/Stop button
+   onto a second row. Disable wrap and make the account chip the single flexible
+   item: it shrinks + ellipsises its label while the fixed chips + action buttons
+   keep their natural size. */
+.cbar {
+  flex-wrap: nowrap;
+}
+.cbar > .chip,
+.cbar > .iconbtn,
+.cbar > span:last-child {
+  flex: 0 0 auto;
+}
+/* The account chip is the one that flexes (it carries the variable-length label). */
+.cbar > .chip.acct {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* Account chip label: cap width + ellipsis so a long account name (e.g.
+   "Malme Co (tran.quang_hoa)") stays a concise chip; the full "label · Provider"
+   is in the chip's title. min-width:0 lets it shrink below the cap when the row is
+   tight so the chip never forces a wrap/overflow. */
+.chiplbl {
+  display: inline-block;
+  min-width: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+/* Outlined attachment chips: drop the grey fill (prototype .att uses
+   var(--bgActive)) to match the transcript chips + flat step rows; keep the border,
+   add a subtle hover since the chip opens a preview. Covers pending, queued (.qatt)
+   and the "+N more" (.attmore) chips. */
+.att {
+  background: transparent;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.att:hover {
+  background: var(--bgHover);
+  border-color: var(--borderStrong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .att {
+    transition: none;
+  }
+}
+/* Transient built-in command feedback (Mode → Plan, /compact running…). Sits just
+   above the textarea; auto-dismisses (showNotice). */
+.cmdnotice {
+  margin: 0 2px 6px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: var(--bgActive);
+  border: 1px solid var(--border);
+  color: var(--textDim);
+  font-size: 0.9231rem;
+}
 /* Composer attachment thumbnail (image chips) — matches SessionAttachmentChip's
    inline gradient swatch from the prototype. */
 .thumb {
@@ -774,6 +1054,20 @@ function onPaste(e: ClipboardEvent) {
   flex-direction: column;
   gap: 7px;
   margin-bottom: 9px;
+}
+/* Drop the grey fill (prototype .fwcard uses var(--bgSubtle)) — the accent left-border
+   + outline already mark these as quote cards, matching the flat composer chips. */
+.fwcard {
+  background: transparent;
+}
+/* Cap the visible quote stack at ~3 cards; beyond that the box scrolls so a long
+   stack of follow-up quotes can't push the textarea + toolbar off-screen. The
+   partial 4th card peeks to hint there's more. padding-right keeps the scrollbar
+   off the card borders. */
+.sfollow.scroll {
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 /* Clickable follow-up excerpt → jump to the quoted message (§8). */
 .fwlink {

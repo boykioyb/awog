@@ -5,45 +5,48 @@
         <Icon name="search" style="width: 13px; height: 13px" />
         <input v-model="query" :placeholder="t('projects.list.search')" />
       </div>
-      <button class="iconbtn" :title="t('projects.list.new')" style="width: 32px; height: 32px">
+      <button
+        class="iconbtn"
+        :title="t('projects.list.new')"
+        style="width: 32px; height: 32px"
+        @click="emit('new')"
+      >
         <Icon name="plus" />
       </button>
     </div>
     <div class="lscroll">
       <div
         v-for="p in filtered"
-        :key="p.name"
+        :key="p.id"
         class="libli"
-        :class="{ on: p.name === selected }"
-        @click="emit('select', p.name)"
+        :class="{ on: p.id === selectedId }"
+        @click="emit('select', p.id)"
       >
         <div class="lrow">
-          <span
-            class="sdot"
-            :class="{ pulse: p.status === 'active' }"
-            :style="{ background: p.status === 'active' ? 'var(--accent)' : 'var(--textFaint)' }"
-          />
           <span class="ttl">{{ p.name }}</span>
           <span class="tag" style="padding: 1px 6px">
-            {{ t('projects.list.repoCount', { n: p.repos.length }) }}
+            {{ p.language || t('projects.list.noLang') }}
           </span>
         </div>
         <div class="sub">
-          <span class="mono" style="font-size: 0.8462rem; color: var(--textDim)">{{ p.path }}</span>
+          <span class="mono" style="color: var(--textDim)">{{ p.path }}</span>
         </div>
+      </div>
+      <div v-if="!filtered.length" class="empty" style="padding: 28px">
+        <div class="et">{{ query ? t('projects.list.noMatch') : t('projects.list.none') }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+// Left master list — searchable project rows (status-less; the language tag +
+// mono path). Binds the real Project entities; selection emits the project id.
 import { computed, ref } from 'vue'
-import type { Project } from './data'
+import type { Project } from '~/types'
 
-// Left master list — faithful port of renderProj()'s list block (~2284): searchable
-// project rows with a status dot, repo-count tag and mono path. Visual only.
-const props = defineProps<{ projects: Project[]; selected: string | null }>()
-const emit = defineEmits<{ (e: 'select', name: string): void }>()
+const props = defineProps<{ projects: Project[]; selectedId: string | null }>()
+const emit = defineEmits<{ (e: 'select', id: string): void; (e: 'new'): void }>()
 
 const { t } = useI18n()
 
@@ -51,6 +54,8 @@ const query = ref('')
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return props.projects
-  return props.projects.filter((p) => p.name.toLowerCase().includes(q))
+  return props.projects.filter(
+    (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q),
+  )
 })
 </script>

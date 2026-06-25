@@ -6,6 +6,8 @@
 // preserved so sessions.send-message.ts + sessions.compact.ts are unaffected.
 
 import type {
+  ContextChars,
+  ContextItemSize,
   SessionAttachment,
   SessionCompaction,
   SessionMessage,
@@ -114,8 +116,23 @@ export interface RunNonStreamArgs {
   // Bridged to in-process Pi AgentTools (ADR 0029 §4 / ADR 0014 Q4).
   mcpServers?: McpServersConfig
   // Extra system prompt appended to (not replacing) the agent/base prompt. Used
-  // to nudge the model toward MCP tools when the user attached MCP servers.
+  // to nudge the model toward MCP tools when the user attached MCP servers, and
+  // (Claude-Code-style bulk load) the project memory files / available agents /
+  // available skills blocks built in sessions.send-message.
   systemPromptAppend?: string
+  // Char sizes + lists of the bulk-loaded context sections (memory files /
+  // custom agents / skills) that send-message already folded into
+  // systemPromptAppend. The runtime forwards these into contextChars so the UI
+  // usage panel can itemise them; it can't re-derive them from the joined append
+  // string alone. Absent when nothing was bulk-loaded.
+  contextItems?: {
+    memoryFilesChars: number
+    customAgentsChars: number
+    skillsChars: number
+    memoryFilesList: ContextItemSize[]
+    customAgentsList: ContextItemSize[]
+    skillsList: ContextItemSize[]
+  }
   // Claude Code subagent `tools` field from the active agent. When set,
   // restricts the runtime toolset to this whitelist.
   allowedTools?: string[]
@@ -160,11 +177,12 @@ export interface RunStreamResult {
     cache_creation_tokens: number
   }
   stopReason: string | null
-  // Per-segment char sizes of the turn's assembled prompt (system prompt / tool
-  // definitions / replayed history incl. tool I/O + thinking). Lets the usage
-  // panel itemise the context window instead of one opaque "Other". char/4 ≈
-  // tokens (UI heuristic). Absent on /compact-only runs.
-  contextChars?: { system: number; tools: number; history: number }
+  // Per-segment char sizes of the turn's assembled prompt, itemised the way
+  // Claude Code's `/context` reports it (system prompt / instructions / system
+  // tools / MCP tools / custom agents / skills / memory files / history). Lets
+  // the usage panel break the window down instead of one opaque "Other". char/4
+  // ≈ tokens (UI heuristic). Absent on /compact-only runs.
+  contextChars?: ContextChars
   // Human-readable provider error cause, present only when stopReason === 'error'
   // (Pi reports a mid-stream failure as a graceful `error` stop rather than
   // throwing). Lets the UI render a real error alert + retry for the turn.

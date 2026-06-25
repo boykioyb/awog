@@ -61,6 +61,24 @@ function openPreview() {
 </script>
 
 <style scoped>
+/* Outlined attachment chip: drop the grey fill (prototype .a1 uses var(--bgActive))
+   to match the flat step/cluster rows; keep the border, and add a subtle hover so
+   the clickable chip still gives feedback (it opens the preview). */
+.a1 {
+  background: transparent;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.a1:hover {
+  background: var(--bgHover);
+  border-color: var(--borderStrong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .a1 {
+    transition: none;
+  }
+}
 /* prototype `thumb` is an inline gradient swatch (no class) */
 .thumb {
   width: 15px;

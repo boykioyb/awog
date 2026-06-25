@@ -2,41 +2,35 @@
   <div class="dscroll">
     <div class="pstats">
       <div class="pstat">
-        <div class="pv">{{ project.repos.length }}</div>
+        <div class="pv">{{ view.repos.length }}</div>
         <div class="pl2">{{ t('projects.overview.repos') }}</div>
       </div>
       <div class="pstat">
-        <div class="pv">{{ project.agents.length }}</div>
+        <div class="pv">{{ view.agents.length }}</div>
         <div class="pl2">{{ t('projects.overview.agents') }}</div>
       </div>
       <div class="pstat">
-        <div class="pv">{{ project.ses.length }}</div>
+        <div class="pv">{{ view.ses.length }}</div>
         <div class="pl2">{{ t('projects.overview.sessions') }}</div>
       </div>
-      <template v-if="project.gh">
-        <div class="pstat">
-          <div class="pv" style="color: var(--green)">{{ openIssues }}</div>
-          <div class="pl2">{{ t('projects.overview.openIssues') }}</div>
-        </div>
-        <div class="pstat">
-          <div class="pv" style="color: var(--green)">{{ openPrs }}</div>
-          <div class="pl2">{{ t('projects.overview.openPr') }}</div>
-        </div>
-      </template>
+      <div class="pstat">
+        <div class="pv">{{ view.tasks.length }}</div>
+        <div class="pl2">{{ t('projects.overview.tasksCard') }}</div>
+      </div>
     </div>
 
     <div class="pcard">
       <div class="pcardh">
         <Icon name="git" style="width: 13px; height: 13px" />
-        <span>{{ t('projects.overview.reposCard', { n: project.repos.length }) }}</span>
+        <span>{{ t('projects.overview.reposCard', { n: view.repos.length }) }}</span>
         <span v-if="totalDirty" class="gchip m" style="margin-left: auto">{{ totalDirty }} M</span>
-        <span v-else class="gchip" style="margin-left: auto">
+        <span v-else-if="view.repos.length" class="gchip" style="margin-left: auto">
           {{ t('projects.overview.clean') }}
         </span>
         <span v-if="totalAhead" class="gchip a">↑{{ totalAhead }}</span>
       </div>
-      <template v-if="project.repos.length">
-        <div v-for="r in project.repos" :key="r.n" class="prepo">
+      <template v-if="view.repos.length">
+        <div v-for="r in view.repos" :key="r.n" class="prepo">
           <span class="prepo-ic"><Icon name="git" style="width: 14px; height: 14px" /></span>
           <div style="min-width: 0">
             <div class="prepo-n">{{ r.n }}</div>
@@ -58,16 +52,16 @@
     <div class="pcard">
       <div class="pcardh">
         <Icon name="agents" style="width: 13px; height: 13px" />
-        <span>{{ t('projects.overview.agentsCard', { n: project.agents.length }) }}</span>
+        <span>{{ t('projects.overview.agentsCard', { n: view.agents.length }) }}</span>
       </div>
       <div class="pagents">
-        <span v-for="a in project.agents" :key="a" class="pagent">
+        <span v-for="a in view.agents" :key="a" class="pagent">
           <span class="pav" :style="{ color: agBadge(a)[0], background: avatarBg(agBadge(a)[0]) }">
             {{ agBadge(a)[1] }}
           </span>
           {{ a }}
         </span>
-        <span v-if="!project.agents.length" class="fd">{{ t('projects.overview.dash') }}</span>
+        <span v-if="!view.agents.length" class="fd">{{ t('projects.overview.noAgent') }}</span>
       </div>
     </div>
 
@@ -78,7 +72,7 @@
           <span>{{ t('projects.overview.sessionsCard') }}</span>
         </div>
         <div
-          v-for="s in project.ses"
+          v-for="s in view.ses"
           :key="s.t"
           class="rs"
           style="padding: 7px 0; border-top: 1px solid var(--border)"
@@ -87,7 +81,7 @@
           <span class="st1">{{ s.t }}</span>
           <span class="sw">{{ s.w }}</span>
         </div>
-        <div v-if="!project.ses.length" class="fd">{{ t('projects.overview.noSession') }}</div>
+        <div v-if="!view.ses.length" class="fd">{{ t('projects.overview.noSession') }}</div>
       </div>
       <div class="pcard">
         <div class="pcardh">
@@ -95,7 +89,7 @@
           <span>{{ t('projects.overview.tasksCard') }}</span>
         </div>
         <div
-          v-for="task in project.tasks"
+          v-for="task in view.tasks"
           :key="task.t"
           class="rs"
           style="padding: 7px 0; border-top: 1px solid var(--border)"
@@ -104,7 +98,7 @@
           <span class="st1">{{ task.t }}</span>
           <span class="tag acc">{{ task.s }}</span>
         </div>
-        <div v-if="!project.tasks.length" class="fd">{{ t('projects.overview.noTask') }}</div>
+        <div v-if="!view.tasks.length" class="fd">{{ t('projects.overview.noTask') }}</div>
       </div>
     </div>
 
@@ -113,24 +107,42 @@
         <Icon name="folder" style="width: 13px; height: 13px" />
         <span>{{ t('projects.overview.configCard') }}</span>
       </div>
+      <div v-if="project.description" class="kvrow" style="align-items: flex-start">
+        <span class="kvk">{{ t('projects.overview.description') }}</span>
+        <span class="kvv">{{ project.description }}</span>
+      </div>
       <div class="kvrow">
         <span class="kvk">{{ t('projects.overview.path') }}</span>
         <span class="kvv mono">{{ project.path }}</span>
       </div>
+      <div v-if="project.language" class="kvrow">
+        <span class="kvk">{{ t('projects.overview.language') }}</span>
+        <span class="kvv">{{ project.language }}</span>
+      </div>
       <div class="kvrow">
         <span class="kvk">{{ t('projects.overview.remote') }}</span>
         <a
-          v-if="project.gh"
+          v-if="view.gh"
           class="kvv link"
-          :href="`https://github.com/${project.gh}`"
+          :href="`https://github.com/${view.gh}`"
           target="_blank"
           rel="noopener"
         >
           <Icon name="git" style="width: 12px; height: 12px" />
-          github.com/{{ project.gh }}
+          github.com/{{ view.gh }}
         </a>
+        <span v-else-if="project.gitRemote" class="kvv mono">{{ project.gitRemote }}</span>
         <span v-else class="kvv" style="color: var(--textDim)">
           {{ t('projects.overview.noRemote') }}
+        </span>
+      </div>
+      <div class="kvrow">
+        <span class="kvk">{{ t('projects.overview.llm') }}</span>
+        <span class="kvv">
+          <button class="btn sm" @click="emit('open-llm')">
+            <Icon name="brain" />
+            {{ llmLabel }}
+          </button>
         </span>
       </div>
       <div class="kvrow" style="align-items: flex-start">
@@ -149,7 +161,7 @@
     </div>
 
     <div style="display: flex; justify-content: flex-end; margin-top: 6px">
-      <button class="btn sm" style="color: var(--danger)">
+      <button class="btn sm" style="color: var(--danger)" @click="emit('delete')">
         <Icon name="trash" />
         {{ t('projects.overview.removeProject') }}
       </button>
@@ -158,24 +170,29 @@
 </template>
 
 <script setup lang="ts">
+// Overview tab — metrics strip + Repos / Agents / Sessions / Tasks / Config cards.
+// Binds the derived ProjectView (live counts) for the cards and the real Project
+// entity for the config block (description / path / language / remote / LLM).
+// Edit / delete / LLM defaults are emitted up to the page-controller.
 import { computed } from 'vue'
-import { agBadge } from './data'
-import type { Project } from './data'
+import { agBadge, avatarBg, type ProjectView } from './data'
+import { modelDisplayName } from '~/composables/useSessionsMock'
+import type { Project } from '~/types'
 
-// Overview tab — port of overviewHtml() (~2226): metrics strip + Repos / Agents /
-// Sessions / Tasks / Cấu hình cards. Static; mutations (delete/edit) are deferred.
+const props = defineProps<{ project: Project; view: ProjectView }>()
+const emit = defineEmits<{ (e: 'delete'): void; (e: 'open-llm'): void }>()
+
 const { t } = useI18n()
-const props = defineProps<{ project: Project }>()
 
 const TIERS = ['agents', 'skills', 'rules', 'workflows', 'commands', 'hooks'] as const
 
-const totalDirty = computed(() => props.project.repos.reduce((a, r) => a + (r.dirty ?? 0), 0))
-const totalAhead = computed(() => props.project.repos.reduce((a, r) => a + (r.ahead ?? 0), 0))
-const openIssues = computed(() => props.project.issues.filter((i) => i.state === 'open').length)
-const openPrs = computed(() => props.project.prs.filter((i) => i.state === 'open').length)
+const totalDirty = computed(() => props.view.repos.reduce((a, r) => a + (r.dirty ?? 0), 0))
+const totalAhead = computed(() => props.view.repos.reduce((a, r) => a + (r.ahead ?? 0), 0))
 
-// agChip's color-mix(in srgb, <c> 16%, transparent) for the avatar background.
-function avatarBg(color: string): string {
-  return `color-mix(in srgb, ${color} 16%, transparent)`
-}
+// LLM defaults summary chip: model name when set, else "App default".
+const llmLabel = computed(() => {
+  const ld = props.project.llmDefaults
+  if (!ld) return t('projects.overview.llmAppDefault')
+  return modelDisplayName(ld.modelId)
+})
 </script>

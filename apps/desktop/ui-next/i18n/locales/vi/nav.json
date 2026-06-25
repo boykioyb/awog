@@ -1,5 +1,5 @@
 {
-  "nav.brandSuffix": "guild",
+  "nav.brandSuffix": "",
   "nav.group.work": "Work",
   "nav.group.library": "Library",
   "nav.group.system": "System",
@@ -12,6 +12,7 @@
   "nav.commands": "Commands",
   "nav.rules": "Rules",
   "nav.templates": "Templates",
+  "nav.activity": "Hoạt động",
   "nav.projects": "Projects",
   "nav.git": "Git",
   "nav.connections": "Connections",

@@ -1,93 +1,145 @@
 <template>
   <section class="page on" data-page="skills">
     <LibraryView
-      :items="SKILLS"
-      :item-key="(s) => s.name"
-      :search-text="(s) => s.name + s.desc"
+      :items="skills"
+      :item-key="skillKey"
+      :search-text="(s) => s.id + s.name + s.description"
       :placeholder="t('skills.search')"
+      :group-by="groupKey"
+      :group-label="groupLabel"
+      :group-dot="groupDot"
       show-new
+      @new="openCreator()"
+      @new-in-group="openCreator"
     >
       <template #row="{ item: s }">
         <div class="lrow">
           <span class="ttl">{{ s.name }}</span>
-          <span class="tag" :class="{ acc: s.tier === 'project' }" style="padding: 1px 6px">
-            {{ t('skills.tier.' + s.tier) }}
+          <span class="tag" :class="{ acc: s.source === 'project' }" style="padding: 1px 6px">
+            {{ t('skills.tier.' + s.source) }}
           </span>
         </div>
-        <div class="sub">{{ s.desc }}</div>
+        <div class="sub">{{ s.description }}</div>
       </template>
 
       <template #detail="{ item: s }">
-        <div class="dh">
-          <div class="dt">{{ s.name }}</div>
-          <span class="tag" :class="{ acc: s.tier === 'project' }">
-            {{ t('skills.tierBadge', { tier: t('skills.tier.' + s.tier) }) }}
-          </span>
-          <span style="flex: 1" />
-          <button class="btn sm">{{ t('skills.preview') }}</button>
-        </div>
-        <div class="dscroll">
-          <div class="sech">{{ t('skills.description') }}</div>
-          <p style="font-size: 1rem; color: var(--textMuted); margin: 0">{{ s.desc }}</p>
-          <div class="sech">{{ t('skills.skillMd') }}</div>
-          <div class="codeblk">{{ s.body }}</div>
-          <div style="margin-top: 16px">
-            <button class="btn sm" style="color: var(--danger)">
-              <Icon name="trash" />
-              {{ t('skills.delete') }}
-            </button>
-          </div>
-        </div>
+        <SkillDetail
+          :skill="s"
+          :projects="projectListWithPath"
+          @edit="openEditor(s)"
+          @duplicate="onDuplicate(s)"
+          @delete="askDelete(s)"
+          @edit-body="openBodyEdit(s)"
+        />
       </template>
     </LibraryView>
+
+    <!-- create (chat-driven SKILL.md authoring) -->
+    <SkillPromptCreator
+      :open="creatorOpen"
+      :account-id="accountId"
+      :projects="projectList"
+      :initial-scope="creatorScope"
+      @close="onCreatorClose"
+      @turn="onCreatorTurn"
+    />
+
+    <!-- edit (form) -->
+    <SkillEditor
+      :open="editorOpen"
+      :skill="editTarget"
+      :projects="projectListWithPath"
+      @save="onSave"
+      @cancel="closeEditor"
+    />
+
+    <!-- edit body (LLM revise) -->
+    <SkillBodyEditModal
+      v-if="bodyEditTarget"
+      :open="bodyEditOpen"
+      :skill="bodyEditTarget"
+      :account-id="accountId"
+      @apply="onApplyBodyEdit"
+      @cancel="closeBodyEdit"
+    />
+
+    <!-- delete confirm -->
+    <LibraryConfirmDelete
+      :open="!!pendingDelete"
+      :title="t('skills.delete')"
+      :description="deleteDescription"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
+
+    <!-- transient toasts -->
+    <div
+      v-for="tt in toasts"
+      :key="tt.id"
+      class="toast"
+      :style="{ borderColor: toastColor(tt.kind) }"
+    >
+      {{ tt.text }}
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-// Skills library — faithful port of awog-prototype.html (data-page="skills").
-// Tier badge (project=accent) + description + SKILL.md body block. Static mock;
-// shell from <LibraryView>. Visual only.
+// Skills library — live store + full CRUD + chat-driven creation. Replaces the
+// static mock from the prototype port. Shell from <LibraryView>; all state +
+// handlers live in useSkillsPage (page-controller). This is the REFERENCE
+// vertical slice the sibling library features mirror.
+import { computed } from 'vue'
+import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
+import SkillBodyEditModal from '~/components/skill/SkillBodyEditModal.vue'
+import SkillDetail from '~/components/skill/SkillDetail.vue'
+import SkillEditor from '~/components/skill/SkillEditor.vue'
+import SkillPromptCreator from '~/components/skill/SkillPromptCreator.vue'
+import { useProjects } from '~/composables/useProjects'
+import { useSkillsPage } from '~/composables/useSkillsPage'
+import type { Skill } from '~/stores/skills'
+
 const { t } = useI18n()
+const { projects, projectPath, projectName } = useProjects()
 
-type SkillTier = 'project' | 'global'
+const {
+  skills,
+  skillKey,
+  projectList,
+  accountId,
+  creatorOpen,
+  creatorScope,
+  openCreator,
+  onCreatorTurn,
+  onCreatorClose,
+  editorOpen,
+  editTarget,
+  openEditor,
+  closeEditor,
+  onSave,
+  bodyEditOpen,
+  bodyEditTarget,
+  openBodyEdit,
+  closeBodyEdit,
+  onApplyBodyEdit,
+  onDuplicate,
+  pendingDelete,
+  askDelete,
+  cancelDelete,
+  deleteDescription,
+  confirmDelete,
+  toasts,
+  toastColor,
+} = useSkillsPage()
 
-type SkillItem = {
-  name: string
-  tier: SkillTier
-  desc: string
-  body: string
-}
+// Project list enriched with the on-disk path (for tier hints in editor/detail).
+const projectListWithPath = computed(() =>
+  projects.value.map((p) => ({ id: p.id, name: p.name, path: projectPath(p.id) ?? undefined })),
+)
 
-const SKILLS: SkillItem[] = [
-  {
-    name: 'design-ui-ux',
-    tier: 'project',
-    desc: 'UI/UX design intelligence cho AWOG',
-    body: '# Skill: Design UI/UX (AWOG desktop)\n\nDesign intelligence — chọn style/màu/typography, dựng component, tự review.\n\n## Khi nào dùng\nBắt buộc khi task chạm bố cục, quyết định thị giác, pattern tương tác, chất lượng UX.',
-  },
-  {
-    name: 'write-adr',
-    tier: 'global',
-    desc: 'Author Architecture Decision Record',
-    body: '# write-adr\n\nAuthor an ADR with Context / Decision / Consequences.',
-  },
-  {
-    name: 'security-audit',
-    tier: 'global',
-    desc: '21-rule vulnerability catalog',
-    body: '# security-audit\n\nApply 21-rule catalog + AWOG invariants. Output findings.',
-  },
-  {
-    name: 'implement-feature',
-    tier: 'global',
-    desc: 'Implement một dev task end-to-end',
-    body: '# implement-feature\n\nRead spec/ADR → code theo coding-guide → lint + typecheck.',
-  },
-  {
-    name: 'review-pr',
-    tier: 'global',
-    desc: 'Code review trên diff/PR',
-    body: '# review-pr\n\nVerify architecture fit, AWOG invariants, security, perf.',
-  },
-]
+// Group the list by tier (global vs each project) — like the Sessions list.
+const groupKey = (s: Skill) => (s.source === 'project' && s.projectId ? s.projectId : 'global')
+const groupLabel = (key: string) =>
+  key === 'global' ? t('library.group.global') : projectName(key)
+const groupDot = (key: string) => (key === 'global' ? 'var(--textDim)' : 'var(--accent)')
 </script>

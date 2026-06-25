@@ -3,6 +3,7 @@
     <SettingsAppearance v-if="active === 'appearance'" />
     <SettingsDefaults v-else-if="active === 'defaults'" />
     <SettingsModels v-else-if="active === 'models'" />
+    <SettingsPricing v-else-if="active === 'pricing'" />
     <SettingsWorkspace v-else-if="active === 'workspace'" />
     <SettingsGit v-else-if="active === 'git'" />
     <SettingsSessions v-else-if="active === 'sessions'" />

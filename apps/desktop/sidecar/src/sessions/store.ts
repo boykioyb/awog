@@ -7,7 +7,7 @@
 // but the file itself is preserved for forensics. A future `sessions.purge`
 // command can physically remove tombstoned files.
 
-import { mkdir, readdir, appendFile, readFile, writeFile, rename } from 'node:fs/promises'
+import { mkdir, readdir, appendFile, readFile, writeFile, rename, open } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
@@ -524,4 +524,215 @@ export async function deleteSession(id: string): Promise<void> {
     at: new Date().toISOString(),
   }
   await appendEvent(id, evt)
+}
+
+// ─── Bounded token-usage aggregation (dashboard.usage) ──────────────────────
+// One token-bearing assistant turn extracted from a session log: the timestamp
+// it completed and the summed tokens of its `usage` bucket.
+export interface UsageEntry {
+  // ms epoch — `completedAt` if present, else parsed from the event `at`.
+  at: number
+  // inputTokens + outputTokens + cacheRead + cacheWrite of the turn.
+  tokens: number
+}
+
+// Sum the four token buckets of a SessionMessage.usage. Cache buckets count
+// toward context usage too, so they are included (see CLAUDE memory note).
+function sumUsageTokens(usage: SessionMessage['usage']): number {
+  if (!usage) return 0
+  return (
+    (usage.inputTokens || 0) +
+    (usage.outputTokens || 0) +
+    (usage.cacheReadTokens || 0) +
+    (usage.cacheWriteTokens || 0)
+  )
+}
+
+// How far back to read each JSONL file from its end before giving up. The
+// dashboard window is at most ~48h, and a turn writes one `message.appended`
+// line; this caps the tail read so we never walk a multi-GB transcript from the
+// front. Sized generously to absorb very chatty days.
+const USAGE_TAIL_CHUNK = 256 * 1024
+const USAGE_MAX_TAIL_BYTES = 8 * 1024 * 1024
+
+// Read a JSONL file backwards from EOF in chunks, yielding parsed events newest
+// line first. We never load the whole file (a session log can reach GBs); we
+// stop as soon as `shouldStop(evt)` returns true or the tail budget is spent.
+// Partial line handling: a chunk boundary may split a line, so we keep the
+// leftover head and prepend it to the next (earlier) chunk.
+async function* readEventsBackwards(
+  file: string,
+  shouldStop: (evt: SessionEvent) => boolean,
+): AsyncGenerator<SessionEvent> {
+  const handle = await open(file, 'r')
+  try {
+    const { size } = await handle.stat()
+    let pos = size
+    let carry = '' // bytes after the last newline of the chunk just read
+    let bytesRead = 0
+    while (pos > 0) {
+      const chunkSize = Math.min(USAGE_TAIL_CHUNK, pos)
+      pos -= chunkSize
+      bytesRead += chunkSize
+      const buf = Buffer.alloc(chunkSize)
+      // eslint-disable-next-line no-await-in-loop
+      await handle.read(buf, 0, chunkSize, pos)
+      const text = buf.toString('utf8') + carry
+      const lines = text.split('\n')
+      // The first element is a (possibly partial) head line that continues into
+      // the previous chunk — defer it unless we've reached the file start.
+      carry = pos > 0 ? (lines.shift() ?? '') : ''
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const evt = parseLine(lines[i], file, -1)
+        if (!evt) continue
+        if (shouldStop(evt)) return
+        yield evt
+      }
+      if (bytesRead >= USAGE_MAX_TAIL_BYTES) return
+    }
+    if (carry) {
+      const evt = parseLine(carry, file, -1)
+      if (evt && !shouldStop(evt)) yield evt
+    }
+  } finally {
+    await handle.close()
+  }
+}
+
+// Collect every token-bearing assistant turn whose timestamp is >= windowStartMs
+// across all sessions, reading each JSONL tail-first and stopping at the window
+// edge. Bounded by ~recent activity, not total history. Dedupes by message id
+// (a turn may be re-appended partial → final; reading backwards, the first hit
+// is the newest/authoritative snapshot).
+export async function collectUsageSince(windowStartMs: number): Promise<UsageEntry[]> {
+  // Use the lightweight index to skip sessions untouched since the window start
+  // (updatedAt is ISO-8601 → Date.parse). The index is a derived cache; if a
+  // session is missing from it the worst case is we under-count, which is fine
+  // for a best-effort dashboard.
+  const summaries = await listSessionSummaries()
+  const entries: UsageEntry[] = []
+  for (const s of summaries) {
+    const updatedMs = Date.parse(s.updatedAt || s.createdAt)
+    if (Number.isFinite(updatedMs) && updatedMs < windowStartMs) continue
+    const file = sessionFile(s.id)
+    const seen = new Set<string>()
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      for await (const evt of readEventsBackwards(file, (e) => {
+        // Stop once we cross below the window: events are append-only in time
+        // order, so the first too-old event means everything earlier is too old.
+        const t = Date.parse(e.at)
+        return Number.isFinite(t) && t < windowStartMs
+      })) {
+        if (evt.type !== 'message.appended') continue
+        const msg = evt.message
+        if (msg.role !== 'agent' || !msg.usage) continue
+        if (seen.has(msg.id)) continue // newest snapshot already counted
+        seen.add(msg.id)
+        const tokens = sumUsageTokens(msg.usage)
+        if (tokens <= 0) continue
+        // Prefer the turn's own completedAt (ms epoch) over the event `at`.
+        const at =
+          typeof msg.completedAt === 'number' && Number.isFinite(msg.completedAt)
+            ? msg.completedAt
+            : Date.parse(evt.at)
+        if (!Number.isFinite(at) || at < windowStartMs) continue
+        entries.push({ at, tokens })
+      }
+    } catch (err) {
+      if (isMissing(err)) continue
+      log.warn('usage: failed to read session tail', {
+        sessionId: s.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  return entries
+}
+
+// ─── Detailed per-turn usage for the Activity rollup (ADR 0054) ──────────────
+// One assistant turn with its 4 token buckets + cost-attribution metadata
+// (provider / model / accountId). Heavier than UsageEntry (the dashboard tile),
+// but the Activity page needs the per-model + per-account breakdown.
+export interface SessionTurnUsage {
+  at: number // ms epoch — completedAt if present, else event `at`
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  provider: string
+  model: string
+  accountId: string
+}
+
+// Stable sentinel for a turn whose account id was never recorded (legacy turn +
+// a session whose settings carry no explicit accountId — i.e. it ran on the
+// provider's active account). The Activity method resolves it to the active
+// account label so the row still appears.
+export const UNKNOWN_ACCOUNT_ID = 'unknown'
+
+// Collect detailed per-turn usage for every session touched in [windowStartMs,
+// windowEndMs]. Reads each JSONL tail-first and stops at the window edge (bounded
+// by recent activity, not total history — same strategy as collectUsageSince).
+// Per-turn provider/model/accountId fall back to the session's current settings
+// when a legacy turn omits them (back-compat). Dedupes by message id.
+export async function collectSessionTurnsSince(
+  windowStartMs: number,
+  windowEndMs: number,
+): Promise<SessionTurnUsage[]> {
+  const summaries = await listSessionSummaries()
+  const out: SessionTurnUsage[] = []
+  for (const s of summaries) {
+    const updatedMs = Date.parse(s.updatedAt || s.createdAt)
+    // Skip sessions untouched since the window start (the index is a derived
+    // cache; a miss only under-counts, acceptable for a best-effort report).
+    if (Number.isFinite(updatedMs) && updatedMs < windowStartMs) continue
+    const file = sessionFile(s.id)
+    // Fallbacks from the session's current settings (a legacy turn omits the
+    // per-turn fields). provider/accountId are non-secret ids only.
+    const fallbackProvider = s.settings?.provider ?? 'anthropic'
+    const fallbackModel = s.settings?.modelId ?? ''
+    const fallbackAccountId = s.settings?.accountId ?? UNKNOWN_ACCOUNT_ID
+    const seen = new Set<string>()
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      for await (const evt of readEventsBackwards(file, (e) => {
+        const t = Date.parse(e.at)
+        return Number.isFinite(t) && t < windowStartMs
+      })) {
+        if (evt.type !== 'message.appended') continue
+        const msg = evt.message
+        if (msg.role !== 'agent' || !msg.usage) continue
+        if (seen.has(msg.id)) continue
+        seen.add(msg.id)
+        const at =
+          typeof msg.completedAt === 'number' && Number.isFinite(msg.completedAt)
+            ? msg.completedAt
+            : Date.parse(evt.at)
+        if (!Number.isFinite(at) || at < windowStartMs || at > windowEndMs) continue
+        const inputTokens = msg.usage.inputTokens || 0
+        const outputTokens = msg.usage.outputTokens || 0
+        const cacheReadTokens = msg.usage.cacheReadTokens || 0
+        const cacheWriteTokens = msg.usage.cacheWriteTokens || 0
+        if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens <= 0) continue
+        out.push({
+          at,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens,
+          cacheWriteTokens,
+          provider: fallbackProvider,
+          model: msg.modelUsed || fallbackModel,
+          accountId: msg.accountId ?? fallbackAccountId,
+        })
+      }
+    } catch (err) {
+      if (isMissing(err)) continue
+      log.warn('activity: failed to read session tail', {
+        sessionId: s.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  return out
 }

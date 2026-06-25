@@ -11,61 +11,26 @@
       </div>
     </div>
 
-    <template v-else>
-      <!-- File viewer (open file) -->
-      <template v-if="selectedPath">
-        <div class="wsfiles-vhead">
-          <button
-            class="wsfiles-back"
-            :title="t('sessions.workspace.files.back')"
-            @click="closeFile"
-          >
-            <Icon name="chev" style="width: 13px; height: 13px; transform: rotate(90deg)" />
-          </button>
-          <span class="wsfiles-vpath">{{ selectedPath }}</span>
-          <button
-            class="wsfiles-back"
-            :title="t('sessions.workspace.files.loading')"
-            @click="reload"
-          >
-            <Icon name="refresh" :class="{ spin: fileLoading }" style="width: 12px; height: 12px" />
-          </button>
-        </div>
-        <div class="wsfiles-vbody">
-          <div v-if="fileError" class="empty" style="padding: 20px">
-            <div class="et">{{ fileError }}</div>
-          </div>
-          <div v-else-if="fileBinary" class="empty" style="padding: 20px">
-            <div class="et">{{ t('sessions.workspace.files.binary') }}</div>
-          </div>
-          <template v-else>
-            <SessionCodeView mode="code" :fname="fileName" :code="fileContent" />
-            <div v-if="fileTruncated" class="wsfiles-trunc">
-              {{ t('sessions.workspace.files.truncated') }}
-            </div>
-          </template>
-        </div>
-      </template>
-
-      <!-- File tree -->
-      <div v-else class="ftree2">
-        <SessionFileTree :nodes="rootNodes" :ctrl="ctrl" />
-        <div v-if="!rootNodes.length && !treeLoading" class="empty" style="padding: 24px">
-          <div class="et">{{ t('sessions.workspace.files.empty') }}</div>
-        </div>
+    <!-- File tree. Clicking a file opens the SHARED PreviewModal (same as attachment
+         preview) via usePreview — there is exactly ONE file-preview surface. -->
+    <div v-else class="ftree2">
+      <SessionFileTree :nodes="rootNodes" :ctrl="ctrl" />
+      <div v-if="!rootNodes.length && !treeLoading" class="empty" style="padding: 24px">
+        <div class="et">{{ t('sessions.workspace.files.empty') }}</div>
       </div>
-    </template>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Files tab (§5/§10) — real lazy file tree via fs.listDir + a read-only viewer
-// (fs.readFile) rendered through SessionCodeView. Drives SessionFileTree with real
-// data when a workspace root resolves; in browser-dev (no engine) it falls back to
-// the static mock tree. SoC: orchestrates fs IPC only.
+// Files tab (§5/§10) — real lazy file tree via fs.listDir. Opening a file routes to
+// the shared PreviewModal (usePreview) — the SAME modal used for attachment preview,
+// so there's a single file-preview surface (the modal reads content via fs.readFile
+// when given workspaceRoot + path). Browser-dev (no engine) → static mock tree.
 import type { Session, TreeNode } from '~/composables/useSessionsMock'
 import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
-import { SidecarError, useSidecar } from '~/composables/useSidecar'
+import { useSidecar } from '~/composables/useSidecar'
+import { usePreview, type PreviewRef } from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 
 const props = defineProps<{ session: Session }>()
@@ -73,23 +38,19 @@ const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
 const { FTREE } = useSessionsMock()
 const sc = useSidecar()
+const preview = usePreview()
 const { root, ready, available } = useWorkspaceData(() => props.session.project)
 
 // ── Sidecar fs shapes ────────────────────────────────────────────────────────
 type FsEntry = { name: string; path: string; kind: 'file' | 'dir'; size?: number }
-type FsFileContent = {
-  path: string
-  content: string
-  truncated: boolean
-  isBinary: boolean
-  language?: string
-}
 
 // Lazy tree state: children + expanded set keyed by workspace-relative dir path
 // ('' = root). Reactive so the recursive tree re-renders on load/expand.
 const childrenByPath = reactive<Record<string, FsEntry[]>>({})
 const expanded = reactive<Set<string>>(new Set())
 const treeLoading = ref(false)
+// Highlight the opened file in the tree (no inline viewer — preview is the modal).
+const selectedPath = ref<string | null>(null)
 
 // Convert loaded FsEntry[] for a dir into the mock TreeNode shape SessionFileTree
 // renders (dirs as { d }, files as { f }).
@@ -115,51 +76,24 @@ async function loadDir(dir: string): Promise<void> {
   }
 }
 
-// ── File viewer ──────────────────────────────────────────────────────────────
-const selectedPath = ref<string | null>(null)
-const fileContent = ref('')
-const fileBinary = ref(false)
-const fileTruncated = ref(false)
-const fileLoading = ref(false)
-const fileError = ref<string | null>(null)
+// Preview kind from the file extension (the modal reads the real content itself).
+function kindOf(path: string): PreviewRef['kind'] {
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(path)) return 'image'
+  if (/\.pdf$/i.test(path)) return 'pdf'
+  if (/\.(md|markdown)$/i.test(path)) return 'markdown'
+  return 'text'
+}
 
-const fileName = computed(() => {
-  const p = selectedPath.value ?? ''
-  const i = p.lastIndexOf('/')
-  return i === -1 ? p : p.slice(i + 1)
-})
-
-async function openFile(path: string): Promise<void> {
+// Open a file in the shared PreviewModal (workspaceRoot + path → fs.readFile).
+function openFile(path: string): void {
   if (!root.value) return
   selectedPath.value = path
-  fileLoading.value = true
-  fileError.value = null
-  try {
-    const res = await sc.request<FsFileContent>('fs.readFile', {
-      workspaceRoot: root.value,
-      path,
-    })
-    fileBinary.value = res.isBinary
-    fileTruncated.value = res.truncated
-    fileContent.value = res.isBinary ? '' : res.content
-  } catch (err) {
-    fileBinary.value = false
-    fileTruncated.value = false
-    fileContent.value = ''
-    fileError.value =
-      err instanceof SidecarError && err.message
-        ? err.message
-        : t('sessions.workspace.files.openFailed')
-  } finally {
-    fileLoading.value = false
-  }
-}
-
-function closeFile(): void {
-  selectedPath.value = null
-}
-function reload(): void {
-  if (selectedPath.value) void openFile(selectedPath.value)
+  preview.open({
+    name: path.split('/').pop() || path,
+    kind: kindOf(path),
+    workspaceRoot: root.value,
+    path,
+  })
 }
 
 // Controller handed to SessionFileTree for real-data expand/select + lazy load.
@@ -174,7 +108,7 @@ const ctrl: FileTreeController = {
     }
   },
   selectedPath,
-  selectFile: (p) => void openFile(p),
+  selectFile: (p) => openFile(p),
   childrenFor: (p) => nodesFor(p),
 }
 
@@ -201,53 +135,13 @@ onMounted(() => {
 .wsfiles-fallback {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
-.wsfiles-vhead {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 6px 8px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.wsfiles-vpath {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--code);
-  font-size: 0.8846rem;
-  color: var(--text);
-}
-.wsfiles-back {
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  padding: 2px;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-.wsfiles-back:hover {
-  color: var(--text);
-}
-.wsfiles-vbody {
+/* The tree fills the panel body and scrolls on its own (the file list overflows). */
+.wsfiles > .ftree2 {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-}
-.wsfiles-trunc {
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--amber);
-}
-.spin {
-  animation: wsfiles-spin 1s linear infinite;
-}
-@keyframes wsfiles-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  overflow-y: auto;
+  padding-bottom: 8px;
 }
 </style>

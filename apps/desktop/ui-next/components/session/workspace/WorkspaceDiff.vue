@@ -1,17 +1,22 @@
 <template>
   <div class="wsdiff">
-    <!-- Git link header — branch + ahead/changed counts, plus PR/issue refs
-         carried by the session's mock git meta (kept from the original panel). -->
-    <div v-if="session.git" class="gitlink">
+    <!-- Git link header — real current branch + ahead / session-changed counts,
+         plus a quick action to open the full Git Manager over the session. -->
+    <div v-if="ready && !noRepo" class="gitlink">
       <div class="gl1">
         <Icon name="branch" />
-        <span class="brn">{{ session.git.branch }}</span>
+        <span class="brn">{{ branch || '—' }}</span>
         <span style="font-family: var(--code); font-size: 0.8462rem; color: var(--textDim)">
-          {{ t('sessions.workspace.changed', { ahead: session.git.ahead, changed: changedCount }) }}
+          {{ t('sessions.workspace.changed', { ahead, changed: changedCount }) }}
         </span>
-        <button class="wsdiff-refresh" :title="t('sessions.workspace.refresh')" @click="load">
-          <Icon name="refresh" :class="{ spin: loading }" style="width: 12px; height: 12px" />
-        </button>
+        <span style="margin-left: auto; display: inline-flex; gap: 2px">
+          <button class="wsdiff-refresh" :title="t('sessions.workspace.openGit')" @click="openGit">
+            <Icon name="git" style="width: 12px; height: 12px" />
+          </button>
+          <button class="wsdiff-refresh" :title="t('sessions.workspace.refresh')" @click="load">
+            <Icon name="refresh" :class="{ spin: loading }" style="width: 12px; height: 12px" />
+          </button>
+        </span>
       </div>
     </div>
 
@@ -78,12 +83,18 @@ import {
   type UnlistenFn,
 } from '~/composables/useSidecar'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
+import { useGitModal } from '~/composables/useGitModal'
 
 const props = defineProps<{ session: Session }>()
 
 const { t } = useI18n()
 const sc = useSidecar()
+const gitModal = useGitModal()
 const { root, ready } = useWorkspaceData(() => props.session.project)
+
+function openGit(): void {
+  gitModal.open(props.session.project)
+}
 
 // ── Sidecar git shapes (mirror sidecar/src/git/types.ts) ─────────────────────
 type GitFileChangeType =
@@ -106,7 +117,12 @@ type SidecarGitFileStatus = {
   additions?: number
   deletions?: number
 }
-type SidecarGitStatus = { files: SidecarGitFileStatus[] }
+type SidecarGitStatus = {
+  files: SidecarGitFileStatus[]
+  branch: string
+  ahead: number
+  behind: number
+}
 type GitDiffLineKind = 'context' | 'add' | 'del' | 'noeol'
 type SidecarGitDiffLine = {
   kind: GitDiffLineKind
@@ -118,12 +134,69 @@ type SidecarGitDiffHunk = { header: string; lines: SidecarGitDiffLine[] }
 type SidecarGitFileDiff = { path: string; isBinary: boolean; hunks: SidecarGitDiffHunk[] }
 type SidecarGitDiff = { files: SidecarGitFileDiff[] }
 
-const files = ref<SidecarGitFileStatus[]>([])
+// Raw working-tree status from git.status (whole repo); `files` narrows it to the
+// paths THIS session touched (see touchedPaths) so the Diff tab shows the
+// session's changes, not the repo's.
+const rawFiles = ref<SidecarGitFileStatus[]>([])
 const selectedPath = ref<string | null>(null)
 const currentLines = ref<DiffLine[]>([])
 const currentBinary = ref(false)
 const loading = ref(false)
 const noRepo = ref(false)
+// Real current branch + ahead count for the gitlink header (replaces mock meta).
+const branch = ref('')
+const ahead = ref(0)
+
+// ── Session-scoped change filter ─────────────────────────────────────────────
+// A session "touched" a file when one of its file-writing tool steps (Write /
+// Edit / MultiEdit / NotebookEdit — incl. subagent steps) named it. These labels
+// are emitted verbatim by the sidecar step-mapper (humanLabel), so matching on the
+// label is stable; Read/search/terminal don't reliably name an edited path.
+const WRITE_LABELS = new Set(['Write', 'Edit', 'Edit (multi)', 'Edit notebook'])
+
+// Normalise a step target (absolute or workspace-relative, possibly anchored to an
+// ancestor cwd — see memory session-file-link-path-base) toward a repo-relative
+// path comparable to git.status output.
+function normalizeTouched(target: string): string {
+  let p = target.trim().replace(/\\/g, '/')
+  const r = root.value
+  if (p.startsWith('/') && r && p.startsWith(r)) p = p.slice(r.length)
+  return p.replace(/^\.\//, '').replace(/^\/+/, '')
+}
+
+const touchedPaths = computed<string[]>(() => {
+  const out = new Set<string>()
+  const add = (tool: string, target: string): void => {
+    if (target && WRITE_LABELS.has(tool)) {
+      const n = normalizeTouched(target)
+      if (n) out.add(n)
+    }
+  }
+  for (const m of props.session.msgs) {
+    if (m.role !== 'assistant') continue
+    for (const b of m.blocks) {
+      if (b.kind !== 'step') continue
+      add(b.tool, b.target)
+      if (b.sub) for (const s of b.sub.steps) add(s.tool, s.target)
+    }
+  }
+  return [...out]
+})
+
+// Bidirectional suffix match tolerates a base-path mismatch in either direction
+// (the step path carrying an extra ancestor prefix, or a multi-repo subfolder
+// prefix on the git.status path).
+function isTouched(statusPath: string): boolean {
+  const sp = statusPath.replace(/\\/g, '/')
+  return touchedPaths.value.some(
+    (tp) => sp === tp || tp.endsWith('/' + sp) || sp.endsWith('/' + tp),
+  )
+}
+
+const files = computed<SidecarGitFileStatus[]>(() =>
+  // Skip ignored entries — they aren't "changes" — then keep only session-touched.
+  rawFiles.value.filter((f) => f.changeType !== 'ignored' && isTouched(f.path)),
+)
 
 const changedCount = computed(() => files.value.length)
 const unavailableMsg = computed(() =>
@@ -202,17 +275,18 @@ async function load(): Promise<void> {
   try {
     const res = await sc.request<SidecarGitStatus>('git.status', { workspaceRoot: root.value })
     noRepo.value = false
-    // Skip ignored entries — they aren't "changes".
-    files.value = res.files.filter((f) => f.changeType !== 'ignored')
+    rawFiles.value = res.files
+    branch.value = res.branch
+    ahead.value = res.ahead
   } catch (err) {
     if (err instanceof SidecarUnavailableError) return
     if (gitCodeOf(err) === 'NO_REPO') {
       noRepo.value = true
-      files.value = []
+      rawFiles.value = []
       return
     }
     // Other failures → treat as empty rather than crash the tab.
-    files.value = []
+    rawFiles.value = []
   } finally {
     loading.value = false
   }
@@ -301,7 +375,6 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 .wsdiff-refresh {
-  margin-left: auto;
   background: transparent;
   border: none;
   color: var(--textDim);

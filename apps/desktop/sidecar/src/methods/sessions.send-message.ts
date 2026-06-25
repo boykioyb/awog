@@ -20,14 +20,18 @@ import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { liftTurnSignalListenerCap } from '../runtime/turn-signal.js'
 import { listServers as listMcpServers } from '../mcp/store.js'
-import { loadAgent } from '../agents/store.js'
+import { loadAgent, listAgents } from '../agents/store.js'
+import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
+import { assertInsideWorkspace } from '../git/path-sanitize.js'
+import { readFile as fsReadFile } from 'node:fs/promises'
 import type {
   AskUserQuestionFn,
   CanUseTool,
   McpServersConfig,
 } from '../runtime/permission-types.js'
 import type {
+  ContextItemSize,
   SessionAttachment,
   SessionMessage,
   SessionMessagePart,
@@ -175,6 +179,126 @@ function toSessionAttachment(a: z.infer<typeof SessionAttachmentSchema>): Sessio
   if (a.width !== undefined) base.width = a.width
   if (a.height !== undefined) base.height = a.height
   return base
+}
+
+// Claude-Code-style bulk load. Like the CLI, we preload a compact catalogue of
+// what is available — the project's memory files (CLAUDE.md / AGENTS.md), the
+// in-scope custom agents, and the in-scope skills — so the model knows it can
+// invoke them. Each section is wrapped in a labelled block and folded into the
+// turn's systemPromptAppend; per-section char sizes + itemised lists are
+// returned so the runtime can report them in contextChars (UI usage panel).
+//
+// Char counts are measured on the EXACT injected block text so the breakdown
+// matches what the model actually receives.
+const CONTEXT_FILE_NAMES = ['CLAUDE.md', 'AGENTS.md'] as const
+// Cap per memory file so a giant CLAUDE.md can't blow the prompt; the breakdown
+// reflects the truncated content actually injected.
+const MAX_MEMORY_FILE_CHARS = 64_000
+// Compact one-line description for the agent/skill catalogue (the model reads
+// name + intent, not the full body — it loads those on demand).
+function compactLine(name: string, description: string): string {
+  const desc = description.replace(/\s+/g, ' ').trim().slice(0, 200)
+  return desc ? `- ${name}: ${desc}` : `- ${name}`
+}
+
+interface BulkLoadResult {
+  // Appended to systemPromptAppend (joined blocks), or undefined when empty.
+  block?: string
+  memoryFilesChars: number
+  customAgentsChars: number
+  skillsChars: number
+  memoryFilesList: ContextItemSize[]
+  customAgentsList: ContextItemSize[]
+  skillsList: ContextItemSize[]
+}
+
+async function buildBulkLoad(
+  projectId: string | undefined,
+  cwd: string | undefined,
+): Promise<BulkLoadResult> {
+  const result: BulkLoadResult = {
+    memoryFilesChars: 0,
+    customAgentsChars: 0,
+    skillsChars: 0,
+    memoryFilesList: [],
+    customAgentsList: [],
+    skillsList: [],
+  }
+  const blocks: string[] = []
+
+  // Memory files — read project-root CLAUDE.md / AGENTS.md (when a project is
+  // linked). Path is gated by assertInsideWorkspace (security invariant #2);
+  // missing files are skipped. No project → nothing to bulk-load here.
+  if (cwd) {
+    const fileBlocks: string[] = []
+    for (const name of CONTEXT_FILE_NAMES) {
+      let abs: string
+      try {
+        abs = assertInsideWorkspace(cwd, name)
+      } catch {
+        continue
+      }
+      let content: string
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        content = await fsReadFile(abs, 'utf8')
+      } catch {
+        continue // missing / unreadable → skip
+      }
+      const trimmed = content.slice(0, MAX_MEMORY_FILE_CHARS)
+      const fileBlock = `<file path="${name}">\n${trimmed}\n</file>`
+      fileBlocks.push(fileBlock)
+      result.memoryFilesList.push({ label: name, chars: fileBlock.length })
+    }
+    if (fileBlocks.length > 0) {
+      const block = `<project_context_files>\n${fileBlocks.join('\n')}\n</project_context_files>`
+      blocks.push(block)
+      result.memoryFilesChars = block.length
+    }
+  }
+
+  // Custom agents — name + compact description of the in-scope agents (Task
+  // tool's subagent menu). Best-effort: a listing failure just omits the block.
+  const projectIds = projectId ? [projectId] : []
+  try {
+    const { agents } = await listAgents(projectIds)
+    if (agents.length > 0) {
+      const lines = agents.map((a) => {
+        const line = compactLine(a.name, a.description)
+        result.customAgentsList.push({ label: a.name, chars: line.length })
+        return line
+      })
+      const block = `<available_agents>\n${lines.join('\n')}\n</available_agents>`
+      blocks.push(block)
+      result.customAgentsChars = block.length
+    }
+  } catch (err) {
+    log.warn('failed to list agents for bulk load', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // Skills — name + compact description of the in-scope skills.
+  try {
+    const { skills } = await listSkills(projectIds)
+    if (skills.length > 0) {
+      const lines = skills.map((s) => {
+        const line = compactLine(s.name, s.description)
+        result.skillsList.push({ label: s.name, chars: line.length })
+        return line
+      })
+      const block = `<available_skills>\n${lines.join('\n')}\n</available_skills>`
+      blocks.push(block)
+      result.skillsChars = block.length
+    }
+  } catch (err) {
+    log.warn('failed to list skills for bulk load', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  if (blocks.length > 0) result.block = blocks.join('\n\n')
+  return result
 }
 
 register('sessions.sendMessage', async (raw) => {
@@ -326,6 +450,17 @@ When you need to interact with these services, **prefer the corresponding \`mcp_
 
 When delegating work via the Task tool, the subagent inherits these MCP servers automatically — instruct it in the prompt to use the same \`mcp__<serverId>__<toolName>\` tools rather than CLI alternatives.
 </mcp-preference>`
+  }
+
+  // Claude-Code-style bulk load (memory files / available agents / available
+  // skills). Folded into systemPromptAppend so the model sees the catalogue; the
+  // per-section char sizes ride along to the runtime for the usage-panel
+  // breakdown. Best-effort — buildBulkLoad never throws.
+  const bulkLoad = await buildBulkLoad(params.projectId, cwd)
+  if (bulkLoad.block) {
+    systemPromptAppend = systemPromptAppend
+      ? `${systemPromptAppend}\n\n${bulkLoad.block}`
+      : bulkLoad.block
   }
 
   // Total ms this turn spends PARKED on human input (permission prompt or
@@ -485,6 +620,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       ...(waitingMs > 0 ? { waitingMs } : {}),
       completedAt: Date.now(),
     }
+    // Cost-attribution account (ADR 0054). Persist ONLY the id the turn ran on
+    // (from the resolved run settings) — never a token/secret. Absent ⇒ the
+    // Activity rollup falls back to the session's current accountId.
+    if (params.settings.accountId !== undefined) message.accountId = params.settings.accountId
     if (opts.result) {
       message.modelUsed = opts.result.modelUsed
       message.usage = {
@@ -577,6 +716,17 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
           : {}),
         ...(mcpServersForRuntime ? { mcpServers: mcpServersForRuntime } : {}),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
+        // Bulk-load section sizes for the context-window breakdown (the runtime
+        // folds these into contextChars; it can't re-derive them from the joined
+        // systemPromptAppend string).
+        contextItems: {
+          memoryFilesChars: bulkLoad.memoryFilesChars,
+          customAgentsChars: bulkLoad.customAgentsChars,
+          skillsChars: bulkLoad.skillsChars,
+          memoryFilesList: bulkLoad.memoryFilesList,
+          customAgentsList: bulkLoad.customAgentsList,
+          skillsList: bulkLoad.skillsList,
+        },
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
         ...(params.compaction ? { compaction: params.compaction } : {}),
         canUseTool,
@@ -662,6 +812,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     modelUsed: result.modelUsed,
     usage: result.usage,
     stopReason: result.stopReason,
+    // Context-window breakdown (System prompt / Tools / Messages char sizes) so
+    // the UI usage panel can itemise the window instead of showing token totals
+    // only. Persisted on the message too (see persistAgent); forwarded live here.
+    ...(result.contextChars ? { contextChars: result.contextChars } : {}),
     // Provider error cause on a graceful `error` stop — UI shows it in the turn's
     // error alert with a retry button.
     ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),

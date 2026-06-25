@@ -13,6 +13,7 @@
     <SessionPromptEditOverlay />
     <SettingsModal />
     <WhatsNewModal />
+    <SessionGitModal />
   </div>
 </template>
 

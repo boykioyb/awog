@@ -1,0 +1,30 @@
+{
+  "library.saveTo": "Lưu vào",
+  "library.userGlobal": "Người dùng · ~/.awog",
+
+  "library.group.global": "Toàn cục · ~/.awog",
+
+  "library.filter.tooltip": "Lọc",
+  "library.filter.project": "Dự án",
+  "library.filter.all": "Tất cả dự án",
+  "library.filter.clear": "Xoá lọc",
+  "library.foldAll.tooltip": "Thu gọn / mở rộng tất cả",
+
+  "library.kv.key": "khoá",
+  "library.kv.value": "giá trị",
+  "library.kv.add": "Thêm dòng",
+  "library.kv.remove": "Xoá dòng",
+  "library.kv.secretStored": "Đã lưu trong keychain OS. Bấm để xoá (nhập lại giá trị để cập nhật).",
+  "library.kv.secretMove": "Chuyển giá trị này vào keychain OS (khuyến nghị cho token/mật khẩu).",
+  "library.kv.secretNeedsBoth": "Phải nhập cả khoá lẫn giá trị trước khi lưu dạng secret.",
+  "library.kv.secretOffline": "Engine offline — không lưu được secret.",
+
+  "library.md.copied": "Đã chép",
+  "library.md.edit": "Sửa",
+  "library.md.empty": "(trống — bấm Sửa để thêm nội dung)",
+
+  "library.creator.send": "Gửi",
+  "library.creator.generating": "Đang tạo…",
+  "library.creator.sendHint": "Enter để gửi · Shift+Enter xuống dòng",
+  "library.creator.turns": "{n} lượt · danh sách tự cập nhật"
+}

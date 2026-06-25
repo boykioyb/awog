@@ -1,6 +1,8 @@
 <template>
-  <div class="codeview">
-    <div class="cvhead">
+  <div class="codeview" :class="{ embedded }">
+    <!-- When embedded inside a step body the filename header is redundant (the step
+         header already names the tool + file), so it's hidden + the card flattens. -->
+    <div v-if="!embedded" class="cvhead">
       <Icon :name="mode === 'diff' ? 'git' : 'commands'" style="width: 12px; height: 12px" />
       <span>{{ fname }}</span>
       <span class="cvlang">{{ mode === 'diff' ? 'diff' : 'ts' }}</span>
@@ -38,8 +40,11 @@ const props = withDefaults(
     mode?: 'code' | 'diff'
     code?: string
     lines?: DiffLine[]
+    // Flatten for use inside a step body: hide the filename header + drop the
+    // card border/background so it reads as part of the step (no card-in-card).
+    embedded?: boolean
   }>(),
-  { mode: 'code', code: '', lines: () => [] },
+  { mode: 'code', code: '', lines: () => [], embedded: false },
 )
 
 const gutter = computed(() =>
@@ -70,5 +75,12 @@ const SIGN: Record<DiffLine['t'], string> = { '+': '+', '-': '−', ' ': '', '@'
 .dl.del .dsign,
 .dl.del .dc {
   color: var(--del);
+}
+/* Embedded (inside a step body): flush — no card border/bg/radius, no margin. */
+.codeview.embedded {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
 }
 </style>

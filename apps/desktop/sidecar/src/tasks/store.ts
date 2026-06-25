@@ -20,6 +20,7 @@ import type {
   TaskMessage,
   TaskPhase,
   TaskRun,
+  TaskRunUsage,
   TaskStatus,
   PhaseStatus,
   RunStatus,
@@ -34,6 +35,9 @@ export type TaskEvent =
   | { type: 'run.started'; at: string; nodeId: string; version: number; triggeredBy?: TaskRun['triggeredBy'] }
   | { type: 'run.status'; at: string; nodeId: string; version: number; status: RunStatus; duration?: string | null }
   | { type: 'run.output'; at: string; nodeId: string; version: number; output: string }
+  // Token usage + cost-attribution metadata of a finished run (ADR 0054). `at`
+  // is the run completion time → the Activity day-bucket key.
+  | { type: 'run.usage'; at: string; nodeId: string; version: number; usage: TaskRunUsage }
   | { type: 'run.approved'; at: string; nodeId: string; version: number; approvedBy: 'human' | 'auto'; approvedAt: string }
   | { type: 'trace.node'; at: string; nodeId: string; version: number; node: TraceNode; parentId?: string | null }
   | { type: 'message.appended'; at: string; nodeId: string; version: number; message: TaskMessage }
@@ -192,6 +196,11 @@ function applyEvent(snapshot: Task | null, e: TaskEvent): Task | null {
     case 'run.output': {
       const run = findRun(snapshot.phases[e.nodeId], e.version)
       if (run) run.output = e.output
+      break
+    }
+    case 'run.usage': {
+      const run = findRun(snapshot.phases[e.nodeId], e.version)
+      if (run) run.usage = e.usage
       break
     }
     case 'run.approved': {
@@ -370,4 +379,82 @@ export async function listTasks(): Promise<Task[]> {
     return a.createdAt < b.createdAt ? 1 : -1
   })
   return tasks
+}
+
+// ─── Per-run usage for the Activity rollup (ADR 0054) ────────────────────────
+// One task node-run's token usage + cost-attribution metadata. Mirrors the
+// SessionTurnUsage shape so the Activity method can bucket sessions + tasks
+// uniformly. accountId is id-only (never a secret).
+export interface TaskRunUsageRecord {
+  at: number // ms epoch — the run's completion time (run.usage event `at`)
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  provider: string
+  model: string
+  accountId: string
+}
+
+const TASK_UNKNOWN_ACCOUNT_ID = 'unknown'
+
+// Read each task's events.log tail-first and emit a TaskRunUsageRecord per
+// `run.usage` event whose timestamp falls in [windowStartMs, windowEndMs].
+// Bounded by the per-day rollup caller (which freezes past days), but we still
+// stream the log line-by-line and stop early once events predate the window
+// (events.log is append-only in time order). Only runs that finished AFTER the
+// `run.usage` event shipped (ADR 0054) carry usage; older runs are silently
+// absent (logged once at the call site as a known gap, not per-task spam).
+export async function collectTaskRunsSince(
+  windowStartMs: number,
+  windowEndMs: number,
+): Promise<TaskRunUsageRecord[]> {
+  let entries: string[]
+  try {
+    entries = await readdir(tasksDir())
+  } catch (err) {
+    if (isMissing(err)) return []
+    throw err
+  }
+  const out: TaskRunUsageRecord[] = []
+  for (const id of entries) {
+    const file = eventsFile(id)
+    let raw: string
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      raw = await readFile(file, 'utf8')
+    } catch (err) {
+      if (isMissing(err)) continue
+      log.warn('activity: failed to read task events.log', {
+        id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      continue
+    }
+    const lines = raw.split('\n')
+    for (let i = 0; i < lines.length; i += 1) {
+      const evt = parseLine(lines[i] ?? '', file, i + 1)
+      if (!evt || evt.type !== 'run.usage') continue
+      const at = Date.parse(evt.at)
+      if (!Number.isFinite(at) || at < windowStartMs || at > windowEndMs) continue
+      const u = evt.usage
+      const total =
+        (u.inputTokens || 0) +
+        (u.outputTokens || 0) +
+        (u.cacheReadTokens || 0) +
+        (u.cacheWriteTokens || 0)
+      if (total <= 0) continue
+      out.push({
+        at,
+        inputTokens: u.inputTokens || 0,
+        outputTokens: u.outputTokens || 0,
+        cacheReadTokens: u.cacheReadTokens || 0,
+        cacheWriteTokens: u.cacheWriteTokens || 0,
+        provider: u.provider,
+        model: u.model,
+        accountId: u.accountId ?? TASK_UNKNOWN_ACCOUNT_ID,
+      })
+    }
+  }
+  return out
 }

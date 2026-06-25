@@ -2,88 +2,156 @@
   <section class="page on" data-page="commands">
     <LibraryView
       :items="commands"
-      :item-key="(c) => c.name"
-      :search-text="(c) => c.name + c.desc"
+      :item-key="commandKey"
+      :search-text="(c) => c.name + c.id + c.description"
       :placeholder="t('commands.search')"
+      :group-by="groupKey"
+      :group-label="groupLabel"
+      :group-dot="groupDot"
       show-new
+      @new="openCreator()"
+      @new-in-group="openCreator"
     >
-      <template #row="{ item }">
-        <div class="lrow">
-          <span class="ttl mono">{{ item.name }}</span>
-          <span class="tag" :class="{ acc: item.tier === 'project' }" style="padding: 1px 6px">
-            {{ item.tier }}
+      <template #row="{ item: c }">
+        <div class="lrow" :style="{ opacity: c.enabled ? 1 : 0.55 }">
+          <span class="ttl mono">/{{ c.name }}</span>
+          <span
+            class="tag"
+            :class="{ acc: (c.source ?? 'global') === 'project' }"
+            style="padding: 1px 6px"
+          >
+            {{ t('commands.tier.' + (c.source ?? 'global')) }}
+          </span>
+          <span v-if="c.readOnly" class="tag mono" style="padding: 1px 6px">
+            <Icon name="lock" style="width: 9px; height: 9px" />
           </span>
         </div>
-        <div class="sub">{{ item.desc }}</div>
+        <div class="sub">{{ c.description || '—' }}</div>
       </template>
 
-      <template #detail="{ item }">
-        <div class="dh">
-          <div class="dt mono">{{ item.name }}</div>
-          <span style="flex: 1" />
-          <span class="tag" :class="{ acc: item.tier === 'project' }">{{ item.tier }}</span>
-        </div>
-        <div class="dscroll">
-          <div class="sech">{{ t('commands.sech.desc') }}</div>
-          <p style="font-size: 1rem; color: var(--textMuted); margin: 0">{{ item.desc }}</p>
-          <div class="sech">{{ t('commands.sech.template') }}</div>
-          <div class="codeblk">{{ item.body }}</div>
-          <div style="margin-top: 16px">
-            <button class="btn sm" style="color: var(--danger)">
-              <Icon name="trash" />
-              {{ t('commands.delete') }}
-            </button>
-          </div>
-        </div>
+      <template #detail="{ item: c }">
+        <CommandDetail
+          :command="c"
+          :projects="projectListWithPath"
+          @edit="openEditor(c)"
+          @duplicate="onDuplicate(c)"
+          @delete="askDelete(c)"
+          @toggle="onToggle(c)"
+          @edit-body="openBodyEdit(c)"
+        />
       </template>
     </LibraryView>
+
+    <!-- create (AI prompt → draft → save or edit details) -->
+    <CommandPromptCreator
+      :open="creatorOpen"
+      :account-id="accountId"
+      :projects="projectList"
+      :initial-scope="creatorScope"
+      @close="closeCreator"
+      @save="onCreatorSave"
+      @edit-details="onEditDetails"
+    />
+
+    <!-- edit (form) -->
+    <CommandEditor
+      :open="editorOpen"
+      :command="editTarget"
+      :seed="editorSeed"
+      :projects="projectListWithPath"
+      @save="onSave"
+      @cancel="closeEditor"
+    />
+
+    <!-- edit body (LLM revise) -->
+    <CommandBodyEditModal
+      v-if="bodyEditTarget"
+      :open="bodyEditOpen"
+      :command="bodyEditTarget"
+      :account-id="accountId"
+      @apply="onApplyBodyEdit"
+      @cancel="closeBodyEdit"
+    />
+
+    <!-- delete confirm -->
+    <LibraryConfirmDelete
+      :open="!!pendingDelete"
+      :title="t('commands.delete')"
+      :description="deleteDescription"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
+
+    <!-- transient toasts -->
+    <div
+      v-for="tt in toasts"
+      :key="tt.id"
+      class="toast"
+      :style="{ borderColor: toastColor(tt.kind) }"
+    >
+      {{ tt.text }}
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+// Commands library — live store + full CRUD + AI-drafted creation. Replaces the
+// static mock from the prototype port. Shell from <LibraryView>; all state +
+// handlers live in useCommandsPage (page-controller), mirroring pages/skills.vue.
+import { computed } from 'vue'
+import CommandBodyEditModal from '~/components/command/CommandBodyEditModal.vue'
+import CommandDetail from '~/components/command/CommandDetail.vue'
+import CommandEditor from '~/components/command/CommandEditor.vue'
+import CommandPromptCreator from '~/components/command/CommandPromptCreator.vue'
+import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
+import { useCommandsPage } from '~/composables/useCommandsPage'
+import { useProjects } from '~/composables/useProjects'
+import type { Command } from '~/stores/commands'
 
-// Commands — visual port of mountLib('commands', …) from awog-prototype.html.
-// Slash-name prompt templates with a global/project tier badge. Static mock.
 const { t } = useI18n()
+const { projects, projectPath, projectName } = useProjects()
 
-type Command = {
-  name: string
-  desc: string
-  tier: 'global' | 'project'
-  body: string
-}
+const {
+  commands,
+  commandKey,
+  projectList,
+  accountId,
+  creatorOpen,
+  creatorScope,
+  openCreator,
+  closeCreator,
+  onCreatorSave,
+  onEditDetails,
+  editorOpen,
+  editTarget,
+  editorSeed,
+  openEditor,
+  closeEditor,
+  onSave,
+  bodyEditOpen,
+  bodyEditTarget,
+  openBodyEdit,
+  closeBodyEdit,
+  onApplyBodyEdit,
+  onToggle,
+  onDuplicate,
+  pendingDelete,
+  askDelete,
+  cancelDelete,
+  deleteDescription,
+  confirmDelete,
+  toasts,
+  toastColor,
+} = useCommandsPage()
 
-const commands = ref<Command[]>([
-  {
-    name: '/compact',
-    desc: 'Nén ngữ cảnh để tiết kiệm token',
-    tier: 'global',
-    body: 'Tóm tắt hội thoại, giữ 8 lượt gần nhất.',
-  },
-  {
-    name: '/review',
-    desc: 'Review diff hiện tại',
-    tier: 'global',
-    body: 'Review the current diff for correctness + cleanup.',
-  },
-  {
-    name: '/commit',
-    desc: 'Tạo commit theo convention · $ARGUMENTS',
-    tier: 'project',
-    body: 'Create a well-structured git commit. Args: $ARGUMENTS',
-  },
-  {
-    name: '/design-ui-ux',
-    desc: 'Gọi skill thiết kế UI/UX',
-    tier: 'project',
-    body: 'Invoke design-ui-ux skill cho trang/component.',
-  },
-  {
-    name: '/security-review',
-    desc: 'Audit bảo mật branch',
-    tier: 'global',
-    body: 'Security review pending changes on branch.',
-  },
-])
+// Project list enriched with the on-disk path (for tier hints in editor/detail).
+const projectListWithPath = computed(() =>
+  projects.value.map((p) => ({ id: p.id, name: p.name, path: projectPath(p.id) ?? undefined })),
+)
+
+// Group the list by tier (global vs each project) — like the Sessions list.
+const groupKey = (c: Command) => (c.source === 'project' && c.projectId ? c.projectId : 'global')
+const groupLabel = (key: string) =>
+  key === 'global' ? t('library.group.global') : projectName(key)
+const groupDot = (key: string) => (key === 'global' ? 'var(--textDim)' : 'var(--accent)')
 </script>

@@ -9,6 +9,7 @@ import type {
   PhaseStatus,
   RunStatus,
   TaskMessage,
+  TaskRunUsage,
   TaskStatus,
   TraceNode,
 } from '../types/shared.js'
@@ -75,6 +76,18 @@ export async function emitRunOutput(
 ): Promise<void> {
   await appendTaskEvent(taskId, { type: 'run.output', at: now(), nodeId, version, output })
   emit('task.run.output', { taskId, nodeId, version, output })
+}
+
+// Persist + emit the run's token usage (ADR 0054 — Activity cost attribution).
+// `at` (the run completion time) becomes the Activity day-bucket key.
+export async function emitRunUsage(
+  taskId: string,
+  nodeId: string,
+  version: number,
+  usage: TaskRunUsage,
+): Promise<void> {
+  await appendTaskEvent(taskId, { type: 'run.usage', at: now(), nodeId, version, usage })
+  emit('task.run.usage', { taskId, nodeId, version, usage })
 }
 
 export async function emitTrace(

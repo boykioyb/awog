@@ -10,6 +10,7 @@ import { useAccounts } from '~/composables/useAccounts'
 import type {
   AssistantBlock,
   AssistantMessage,
+  ContextChars,
   Followup,
   PermBlock,
   QuestionBlock,
@@ -165,6 +166,10 @@ interface SendMessageResult {
     cache_read_tokens?: number
     cache_creation_tokens?: number
   }
+  // Char sizes of each context segment of the last prompt (itemised the way
+  // Claude Code's `/context` reports it), forwarded so the usage panel can break
+  // the window down. See ContextChars.
+  contextChars?: ContextChars
   stopReason: string | null
   errorMessage?: string
 }
@@ -224,8 +229,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (last && last.role === 'assistant') {
       if (last.streaming) return 'streaming'
       if (last.blocks.some((b) => b.kind === 'error')) return 'error'
-      if (last.blocks.some((b) => b.kind === 'question' && !b.answer)) return 'awaiting'
-      if (last.blocks.some((b) => b.kind === 'perm' && b.status === 'pending')) return 'awaiting'
+      if (last.blocks.some((b) => b.kind === 'question' && !b.answer && !b.cancelled))
+        return 'awaiting'
+      if (last.blocks.some((b) => b.kind === 'perm' && b.status === 'pending' && !b.cancelled))
+        return 'awaiting'
       return 'done'
     }
     return msgs.length ? 'done' : 'idle'
@@ -278,6 +285,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
     if (result) block.result = result
     if (detail) block.detail = detail
+    if (detail && step.detail?.kind) block.detailKind = step.detail.kind
     if (step.status) block.status = step.status
     if (step.children?.length) block.sub = engineSubAgent(step)
     return block
@@ -319,6 +327,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         const det = engineStepDetail(c)
         if (res) sub.result = res
         if (det) sub.detail = det
+        if (det && c.detail?.kind) sub.detailKind = c.detail.kind
         return sub
       }),
     }
@@ -632,6 +641,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     s.queue.splice(i, 1)
     if (!s.queue.length) delete s.queue
   }
+
+  // Persist the composer's unsent text per session (in-memory) so switching
+  // sessions doesn't drop a half-typed draft. No IPC: this is transient UI state.
+  function setDraft(id: number, text: string) {
+    const s = byId(id)
+    if (!s) return
+    if (text) s.draft = text
+    else delete s.draft
+  }
   // Drain the head of the queue as a fresh turn (FIFO). Called once a turn settles
   // and the session is idle/done.
   function drainQueue(id: number) {
@@ -685,6 +703,15 @@ export const useSessionsStore = defineStore('sessions', () => {
   function ensureReveal(eid: string, messageId: string) {
     const tw = typers.get(messageId)
     if (!tw || tw.timer) return
+    // Even, time-based reveal: holding the gap fraction constant per tick (the old
+    // ceil(gap/6)) dumps a big chunk on the first frame of a burst then trickles —
+    // reads as a lurch. Instead reveal `chars/sec · elapsed`, where the speed scales
+    // with the backlog (so we keep up with fast bursts) but is capped (so catch-up
+    // stays a smooth fast scroll, not a jump). dt-scaling also absorbs timer jitter.
+    const BASE_CPS = 220 // steady pace ≈ typical token output
+    const GAP_GAIN = 16 // +cps per char of backlog
+    const MAX_CPS = 3000 // ceiling so catch-up never lurches
+    let last = performance.now()
     tw.timer = setInterval(() => {
       const m = findStreamingMsg(eid, messageId)
       const t = typers.get(messageId)
@@ -693,9 +720,14 @@ export const useSessionsStore = defineStore('sessions', () => {
         return
       }
       const tp = trailingText(m)
-      if (!tp || tp.text.length >= t.target.length) return
-      // Adaptive: reveal ~1/6 of the remaining gap per tick (min 2 chars).
-      const take = Math.max(2, Math.ceil((t.target.length - tp.text.length) / 6))
+      const now = performance.now()
+      const dt = Math.min(64, now - last) // clamp jitter (tab refocus / GC pause)
+      last = now
+      if (!tp) return
+      const gap = t.target.length - tp.text.length
+      if (gap <= 0) return
+      const cps = Math.min(MAX_CPS, BASE_CPS + gap * GAP_GAIN)
+      const take = Math.max(1, Math.min(gap, Math.round((cps * dt) / 1000)))
       tp.text = t.target.slice(0, tp.text.length + take)
     }, 16)
   }
@@ -785,6 +817,11 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (evt.type === 'session.chunk') {
           if (!isChunk(evt.payload)) return
           appendDelta(evt.payload.sessionId, evt.payload.messageId, evt.payload.delta)
+          // A delta means the model is actively generating again — clear any stale
+          // 'awaiting' left by an auto-resolved gate so the indicator + composer
+          // don't get stuck on "Waiting…"/busy while output is streaming.
+          const sc2 = byEngineId(evt.payload.sessionId)
+          if (sc2 && sc2.status === 'awaiting') sc2.status = 'streaming'
           return
         }
         if (evt.type === 'session.step') {
@@ -921,6 +958,9 @@ export const useSessionsStore = defineStore('sessions', () => {
   async function runEngineTurn(s: Session, text: string, atts: SessionAttachment[]) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     const messageId = `m-${Date.now().toString(36)}-${(seq++).toString(36)}`
+    // First exchange? (no prior assistant reply) → auto-generate a title after it
+    // finalizes. Captured before the placeholder is pushed.
+    const isFirstTurn = !s.msgs.some((m) => m.role === 'assistant')
     const placeholder: AssistantMessage = {
       role: 'assistant',
       at: new Date().toISOString(),
@@ -979,11 +1019,26 @@ export const useSessionsStore = defineStore('sessions', () => {
           text: result.errorMessage || 'The model returned an error.',
         })
       }
-      s.usage = mergeUsage(s.usage, result.usage)
-      s.model = modelDisplay(result.modelUsed) || s.model
+      s.usage = mergeUsage(s.usage, result.usage, result.contextChars)
+      // Reflect the actually-used model, but DON'T collapse a 1M variant: the
+      // engine reports the API base id (`claude-opus-4-8`) for the AWOG-internal
+      // `claude-opus-4-8-1m`, so overwriting unconditionally would snap the
+      // selected 1M model back to the 200k base after the first reply. Only
+      // update when the base genuinely differs (a real model substitution).
+      const usedDisplay = modelDisplay(result.modelUsed)
+      const selectedBase = modelIdFromDisplay(s.model).replace(/-1m$/, '')
+      if (usedDisplay && result.modelUsed && result.modelUsed !== selectedBase) {
+        s.model = usedDisplay
+      }
       s.status = statusFromMessages(s.msgs)
       // Clean finish → drain the next queued message FIFO.
       if (result.stopReason !== 'error') drainQueue(s.id)
+      // First exchange finalized (user + agent now persisted) → refine the default
+      // "New session" title into a concise AI title. Fire-and-forget; a manual
+      // rename (title ≠ default) is left untouched.
+      if (isFirstTurn && result.stopReason !== 'error' && s.title === 'New session') {
+        void autoGenerateTitle(s)
+      }
     } catch (err) {
       flushText(s.engineId, messageId)
       placeholder.streaming = false
@@ -1036,7 +1091,38 @@ export const useSessionsStore = defineStore('sessions', () => {
     return settings
   }
 
-  function mergeUsage(prev: SessionUsage | undefined, u: SendMessageResult['usage']): SessionUsage {
+  // `/compact` (ADR 0047): summarise older turns to free token budget. Fires the
+  // real RPC with the session's engine settings; the sidecar persists a
+  // `session.compacted` checkpoint and trims model context on the NEXT turn (the
+  // transcript is left intact). Returns false in browser-dev / on error / when
+  // there is nothing to compact. keepRecentTokens 0 = keep only the last turn.
+  async function compactSession(id: number): Promise<boolean> {
+    const s = byId(id)
+    if (!s || !useIpc || !s.engineId) return false
+    const es = engineSettings(s)
+    const messageId = `compact-${Date.now().toString(36)}`
+    try {
+      const res = await sc.request<{ ok?: boolean; reason?: string }>('sessions.compact', {
+        sessionId: s.engineId,
+        messageId,
+        provider: es.provider,
+        modelId: es.modelId,
+        ...(es.accountId ? { accountId: es.accountId } : {}),
+        ...(s.project ? { projectId: s.project } : {}),
+        keepRecentTokens: 0,
+      })
+      return res?.ok !== false
+    } catch (err) {
+      console.warn('[sessions] compact failed', err)
+      return false
+    }
+  }
+
+  function mergeUsage(
+    prev: SessionUsage | undefined,
+    u: SendMessageResult['usage'],
+    contextChars?: SendMessageResult['contextChars'],
+  ): SessionUsage {
     const input = u.input_tokens ?? 0
     const output = u.output_tokens ?? 0
     const cacheRead = u.cache_read_tokens ?? 0
@@ -1044,6 +1130,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     const total = input + output + cacheRead + cacheWrite
     const usage: SessionUsage = { input, output, cacheRead, cacheWrite, total }
     if (prev?.max != null) usage.max = prev.max
+    // Carry the latest engine breakdown (fall back to the previous turn's so the
+    // panel keeps itemising if a later result omits it).
+    const cc = contextChars ?? prev?.contextChars
+    if (cc) usage.contextChars = cc
     return usage
   }
 
@@ -1067,6 +1157,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       requestId: block.eid,
       answers: [{ header: block.header ?? '', selected }],
     })
+    // Turn resumes generating → flip status back to streaming (else it stays
+    // "awaiting" / shows "Waiting…" even though the model is working again).
+    if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) s.status = 'streaming'
   }
 
   // Allow / deny the pending permission prompt. msgIndex optional (the singleton
@@ -1096,6 +1189,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       decision,
       ...(alwaysAllow ? { alwaysAllow: true } : {}),
     })
+    // Turn resumes generating → flip status back to streaming (else it stays
+    // "awaiting" / shows "Waiting…" even though the model is working again).
+    const ss = byId(id)
+    if (ss && ss.msgs.some((m) => m.role === 'assistant' && m.streaming)) ss.status = 'streaming'
   }
 
   // Approve a proposed plan: flip the block to approved + (IPC) send a continuation
@@ -1139,16 +1236,53 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
-  // Cancel the in-flight turn (session-scoped). The finalize path cleans up.
+  // Cancel the in-flight turn. `sessions.cancel` aborts session-wide
+  // (sessionAborted), so optimistically end EVERY in-flight indicator + parked gate
+  // in this session — clearing only the latest left the composer stuck on "Stop"
+  // when a turn parked on a gate (its pending question/perm still read as
+  // "awaiting") or a stale `streaming` flag lingered on another message.
   async function cancel(id: number): Promise<void> {
     const s = byId(id)
-    if (!s) return
-    const streamingMsg = s.msgs.find((m) => m.role === 'assistant' && m.streaming)
-    if (!useIpc || !s.engineId || !streamingMsg || streamingMsg.role !== 'assistant') return
+    if (!s || !useIpc || !s.engineId) return
+    let target: AssistantMessage | null = null
+    for (const m of s.msgs) {
+      if (m.role !== 'assistant') continue
+      const pendingGate = m.blocks.some(
+        (b) =>
+          (b.kind === 'question' && !b.answer && !b.cancelled) ||
+          (b.kind === 'perm' && b.status === 'pending' && !b.cancelled),
+      )
+      if (!m.streaming && !pendingGate) continue
+      // Optimistically end the streaming indicator NOW — don't wait for the abort
+      // round-trip (which could be slow or, if eid is missing, never land). The
+      // pending sendMessage RPC's reject/resolve still finalizes the same bubble.
+      if (m.streaming) {
+        flushText(s.engineId, m.eid ?? '')
+        m.streaming = false
+      }
+      if (m.completedAt == null) m.completedAt = Date.now()
+      if (m.eid) stopReveal(m.eid)
+      // A parked gate is dead once the turn is aborted — mark it cancelled so it
+      // stops counting as "awaiting" and renders as cancelled rather than an
+      // interactive prompt that would now no-op.
+      for (const b of m.blocks) {
+        if (b.kind === 'question' && !b.answer) b.cancelled = true
+        if (b.kind === 'perm' && b.status === 'pending') b.cancelled = true
+      }
+      target = m // keep the latest matched message for the RPC messageId
+    }
+    if (!target) return
+    if (pendingPermission.value) pendingPermission.value = null
+    s.status = statusFromMessages(s.msgs)
     try {
-      await sc.request('sessions.cancel', { sessionId: s.engineId, messageId: streamingMsg.eid })
+      // messageId is required by the RPC; fall back to the engine session id when
+      // the eid is missing so the session-wide abort still fires (abortSession).
+      await sc.request('sessions.cancel', {
+        sessionId: s.engineId,
+        messageId: target.eid || s.engineId,
+      })
     } catch {
-      // Race: the stream may have settled between click and RPC. finalize cleans up.
+      // Race: the stream may have settled between click and RPC. Already finalized.
     }
   }
 
@@ -1169,6 +1303,25 @@ export const useSessionsStore = defineStore('sessions', () => {
       modelId: settings.modelId,
     })
     return res.text
+  }
+
+  // Summarize the first exchange into a concise title + rename. Best-effort: any
+  // failure keeps the "New session" placeholder. Reads persisted messages on the
+  // sidecar, so call only after the first turn has finalized.
+  async function autoGenerateTitle(s: Session): Promise<void> {
+    if (!useIpc || !s.engineId) return
+    const settings = engineSettings(s)
+    try {
+      const res = await sc.request<{ ok: boolean; title?: string }>('sessions.generateTitle', {
+        sessionId: s.engineId,
+        provider: settings.provider,
+        modelId: settings.modelId,
+        ...(s.accountId ? { accountId: s.accountId } : {}),
+      })
+      if (res.ok && res.title) rename(s.id, res.title)
+    } catch (err) {
+      console.warn('[sessions] generateTitle failed', err)
+    }
   }
 
   // ── Existing local actions (preserved 1:1) ──────────────────────────────────
@@ -1348,6 +1501,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setNoMarkdown,
     setDisabledTools,
     setMcpServerIds,
+    compactSession,
     // pin / bulk
     togglePin,
     toggleSelect,
@@ -1357,6 +1511,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     enqueue,
     dequeue,
     drainQueue,
+    setDraft,
     // turn runner + gates
     sendMessage,
     answerQuestion,

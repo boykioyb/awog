@@ -22,6 +22,16 @@ const { t } = useI18n()
 // Collapsed-by-default: header click toggles the cluster body (.cluster.col hides .clbody).
 const collapsed = ref(true)
 
+// Follow the transcript-wide collapse-all / expand-all broadcast (manual clicks
+// still toggle locally until the next broadcast).
+const fold = useStepFold()
+watch(
+  () => fold.signal.seq,
+  () => {
+    collapsed.value = fold.signal.mode !== 'expand'
+  },
+)
+
 const summary = computed(() => {
   const c: Record<string, number> = {}
   props.steps.forEach((s) => (c[s.tool] = (c[s.tool] || 0) + 1))
@@ -37,3 +47,11 @@ const summary = computed(() => {
   return p.join(' · ')
 })
 </script>
+
+<style scoped>
+/* Flat clusters: drop the grey fill (prototype .cluster uses var(--bgSubtle));
+   keep the hairline border so the grouped run still reads as one unit. */
+.cluster {
+  background: transparent;
+}
+</style>

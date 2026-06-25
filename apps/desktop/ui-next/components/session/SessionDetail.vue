@@ -45,11 +45,13 @@
         @click.stop="openMenu('usage')"
       >
         <span class="ctxbar">
-          <i class="i2" :style="{ width: `${cache}%` }" />
-          <i class="i1" :style="{ width: `${inp}%` }" />
-          <i class="i3" :style="{ width: `${out}%` }" />
+          <i
+            v-for="s in barSegments"
+            :key="s.key"
+            :style="{ width: `${s.pct}%`, background: s.color }"
+          />
         </span>
-        <span class="ctxn">{{ tokLabel }}/200k</span>
+        <span class="ctxn">{{ tokLabel }}/{{ limitLabel }}</span>
 
         <div
           v-if="menu === 'usage'"
@@ -58,35 +60,85 @@
           @click.stop
         >
           <div class="pr2">
-            <div class="pl">
-              <span>{{ t('sessions.detail.contextUsage') }}</span>
-              <span class="ctxn">{{ tokLabel }}/200k</span>
+            <div class="pl plnowrap">
+              <span>{{ t('sessions.detail.contextWindow') }}</span>
+              <span class="ctxn">{{ tokLabel }} / {{ limitLabel }} · {{ Math.round(pct) }}%</span>
             </div>
+            <div class="ctxmodel">{{ session.model }}</div>
             <span class="ctxbar" style="width: 100%; height: 8px">
-              <i class="i1" :style="{ width: `${pct * 0.12}%` }" />
-              <i class="i2" :style="{ width: `${pct * 0.66}%` }" />
-              <i class="i3" :style="{ width: `${pct * 0.22}%` }" />
+              <i
+                v-for="s in barSegments"
+                :key="s.key"
+                :style="{ width: `${s.pct}%`, background: s.color }"
+              />
             </span>
-            <div style="margin-top: 9px; display: flex; flex-direction: column; gap: 5px">
-              <div
-                v-for="row in usageRows"
-                :key="row.label"
-                style="display: flex; align-items: center; gap: 7px; font-size: 0.8846rem"
-              >
-                <span
-                  style="width: 8px; height: 8px; border-radius: 2px"
-                  :style="{ background: row.color }"
+            <div class="cattbl">
+              <div class="cathead">
+                <span class="catlbl">{{ t('sessions.detail.cat.category') }}</span>
+                <span class="catnum">{{ t('sessions.detail.cat.tokens') }}</span>
+                <span class="catpct">{{ t('sessions.detail.cat.usage') }}</span>
+              </div>
+              <div v-for="row in catRows" :key="row.key" class="catrow">
+                <span class="catsq" :style="{ background: row.color }" />
+                <span class="catlbl">{{ row.label }}</span>
+                <span class="catnum">{{ kfmt(row.tokens) }}</span>
+                <span class="catpct">{{ row.pct < 0.05 ? '0%' : `${row.pct.toFixed(1)}%` }}</span>
+              </div>
+            </div>
+
+            <!-- Expandable detail: bulk-loaded memory files + custom agents. -->
+            <div v-if="memoryFilesList.length" class="ctxsec">
+              <button class="ctxsechead" @click.stop="memoryFilesOpen = !memoryFilesOpen">
+                <Icon
+                  name="chev"
+                  class="ctxchev"
+                  :class="{ open: memoryFilesOpen }"
+                  style="width: 11px; height: 11px"
                 />
-                {{ row.label }}
-                <span style="margin-left: auto; font-family: var(--code); color: var(--textDim)">
-                  {{ kfmt(row.tok) }}
-                </span>
+                {{ t('sessions.detail.cat.memoryFilesSection') }}
+                <span class="ctxcount">{{ memoryFilesList.length }}</span>
+              </button>
+              <div v-if="memoryFilesOpen" class="ctxitems">
+                <div v-for="it in memoryFilesList" :key="it.label" class="ctxitem">
+                  <span class="ctxipath">{{ it.label }}</span>
+                  <span class="ctxinum">{{ kfmt(it.tokens) }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="agentsList.length" class="ctxsec">
+              <button class="ctxsechead" @click.stop="agentsOpen = !agentsOpen">
+                <Icon
+                  name="chev"
+                  class="ctxchev"
+                  :class="{ open: agentsOpen }"
+                  style="width: 11px; height: 11px"
+                />
+                {{ t('sessions.detail.cat.agentsSection') }}
+                <span class="ctxcount">{{ agentsList.length }}</span>
+              </button>
+              <div v-if="agentsOpen" class="ctxitems">
+                <div v-for="it in agentsList" :key="it.label" class="ctxitem">
+                  <span class="ctxipath">{{ it.label }}</span>
+                  <span class="ctxinum">{{ kfmt(it.tokens) }}</span>
+                </div>
               </div>
             </div>
           </div>
           <div class="pr2">
             <div class="pl">
               <span>Plan usage · {{ provider }}</span>
+              <button
+                class="rlreload"
+                :title="t('sessions.detail.refreshUsage')"
+                :disabled="usageLoading"
+                @click.stop="refreshUsage(true)"
+              >
+                <Icon
+                  name="refresh"
+                  :class="{ spin: usageLoading }"
+                  style="width: 12px; height: 12px"
+                />
+              </button>
             </div>
             <div v-for="rl in rateLimits" :key="rl.label" class="rlrow">
               <span class="rln">{{ rl.label }}</span>
@@ -136,27 +188,88 @@
       </button>
     </div>
 
+    <!-- chat + right-docked panel share a row (.wptop); the bottom-docked panel
+         stacks full-width beneath them. Right and bottom are independent panel
+         instances so e.g. Terminal (bottom) and Files (right) coexist. -->
     <div class="chatwrap">
-      <div class="chat" @mouseup="onSelectQuote" @mousedown="quoteSel = null">
-        <SessionTodoPanel
-          v-if="session.todos && session.todos.length"
-          :todos="session.todos"
-          @toggle="(i) => store.toggleTodo(session.id, i)"
-        />
-        <SessionTranscript :messages="session.msgs" :fallback-when="session.when" />
-        <SessionComposer
-          :attachments="pendingAtt"
-          @send="onSend"
-          @pick="openPicker"
-          @remove-att="removeAtt"
-          @add-att="onAddAtt"
-          @preview="previewAtt"
-          @open-more="moreOpen = true"
-        />
+      <div class="wptop">
+        <template v-if="wpOpen && leftTabs.length">
+          <SessionWorkspacePanel
+            :session="session"
+            dock="left"
+            :tabs="leftTabs"
+            :active="activeLeft"
+            :size="wpLeftWidth"
+            :addable-views="addableViews"
+            @close="closeSide('left')"
+            @set-active="activeLeft = $event"
+            @close-tab="closeTab"
+            @add-view="(v) => addView(v, 'left')"
+            @move-dock="moveDock"
+          />
+          <div
+            class="rszwp"
+            :class="{ drag: wpDragging }"
+            @pointerdown="(e) => onWpResize(e, 'left')"
+          />
+        </template>
+        <div class="chat" @mouseup="onSelectQuote" @mousedown="quoteSel = null">
+          <SessionTodoPanel
+            v-if="session.todos && session.todos.length"
+            :todos="session.todos"
+            @toggle="(i) => store.toggleTodo(session.id, i)"
+          />
+          <SessionTranscript :messages="session.msgs" :fallback-when="session.when" />
+          <SessionComposer
+            :attachments="pendingAtt"
+            @send="onSend"
+            @pick="openPicker"
+            @remove-att="removeAtt"
+            @add-att="onAddAtt"
+            @preview="previewAtt"
+            @open-more="moreOpen = true"
+          />
+        </div>
+        <template v-if="wpOpen && rightTabs.length">
+          <div
+            class="rszwp"
+            :class="{ drag: wpDragging }"
+            @pointerdown="(e) => onWpResize(e, 'right')"
+          />
+          <SessionWorkspacePanel
+            :session="session"
+            dock="right"
+            :tabs="rightTabs"
+            :active="activeRight"
+            :size="wpWidth"
+            :addable-views="addableViews"
+            @close="closeSide('right')"
+            @set-active="activeRight = $event"
+            @close-tab="closeTab"
+            @add-view="(v) => addView(v, 'right')"
+            @move-dock="moveDock"
+          />
+        </template>
       </div>
-      <template v-if="wpOpen">
-        <div class="rszwp" :class="{ drag: wpDragging }" @pointerdown="onWpResize" />
-        <SessionWorkspacePanel :session="session" :width="wpWidth" @close="wpOpen = false" />
+      <template v-if="wpOpen && bottomTabs.length">
+        <div
+          class="rszwp vert"
+          :class="{ drag: wpDragging }"
+          @pointerdown="(e) => onWpResize(e, 'bottom')"
+        />
+        <SessionWorkspacePanel
+          :session="session"
+          dock="bottom"
+          :tabs="bottomTabs"
+          :active="activeBottom"
+          :size="wpHeight"
+          :addable-views="addableViews"
+          @close="closeSide('bottom')"
+          @set-active="activeBottom = $event"
+          @close-tab="closeTab"
+          @add-view="(v) => addView(v, 'bottom')"
+          @move-dock="moveDock"
+        />
       </template>
     </div>
 
@@ -227,11 +340,15 @@
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are mock.
 import type { Session, SessionAttachment } from '~/composables/useSessionsMock'
+import { modelIdFromDisplay } from '~/composables/useSessionsMock'
+import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
+import { contextLimitFor, formatTokenCount } from '~/utils/context-window'
+import type { WorkspaceDockSide } from '~/stores/settings'
 import PreviewModal, { type PreviewItem } from '~/components/common/PreviewModal.vue'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
-const { providerOf, CIRCLED } = useSessionsMock()
+const { providerOf } = useSessionsMock()
 const { projects, projectName } = useProjects()
 const store = useSessionsStore()
 
@@ -281,7 +398,7 @@ function addFiles(files: FileList | File[]) {
     if (!img && isTextLike(f)) {
       void f.text().then((tx) => {
         const a = pendingAtt.value[idx]
-        if (a) a.text = tx.slice(0, 20000)
+        if (a) a.text = tx.slice(0, ATTACHMENT_TEXT_MAX)
       })
     }
   }
@@ -296,6 +413,26 @@ function removeAtt(i: number) {
 function onAddAtt(a: SessionAttachment) {
   pendingAtt.value.push(a)
 }
+
+// "Add file to chat" from the global PreviewModal arrives via the decoupled
+// useChatAttach channel (the modal must not know about sessions — SoC). Register
+// this open session view as the consumer and drain queued attachments into the
+// composer's pending list.
+const chatAttach = useChatAttach()
+let unregisterChatAttach: (() => void) | null = null
+onMounted(() => {
+  unregisterChatAttach = chatAttach.registerConsumer()
+})
+onBeforeUnmount(() => {
+  unregisterChatAttach?.()
+  unregisterChatAttach = null
+})
+watch(
+  () => chatAttach.queue.value.length,
+  (n) => {
+    if (n > 0) pendingAtt.value.push(...chatAttach.drain())
+  },
+)
 function openPicker() {
   fileInput.value?.click()
 }
@@ -310,10 +447,9 @@ const moreOpen = ref(false)
 
 // Selection-to-quote: highlight text in a message → floating Quote button → a note
 // popover; on Save the selection is marked (coloured + numbered) in place.
-type SelQuote = { text: string; src: number; x: number; y: number; range: Range }
-// shallowRef so the DOM Range isn't deep-unwrapped by reactivity (keeps it a Range).
-const quoteSel = shallowRef<SelQuote | null>(null)
-const notePop = shallowRef<SelQuote | null>(null)
+type SelQuote = { text: string; src: number; x: number; y: number }
+const quoteSel = ref<SelQuote | null>(null)
+const notePop = ref<SelQuote | null>(null)
 const noteText = ref('')
 
 function onSelectQuote() {
@@ -337,7 +473,6 @@ function onSelectQuote() {
     src: Number(msgEl.dataset.mi),
     x: rect.left + rect.width / 2,
     y: rect.top - 8,
-    range: range.cloneRange(),
   }
 }
 // Quote button → open the note popover at the same spot (keeps the captured range).
@@ -347,31 +482,16 @@ function openNote() {
   noteText.value = ''
   quoteSel.value = null
 }
-// Save → add the follow-up (with note) + mark the selection in place with its number.
+// Save → add the follow-up (with note). The in-place highlight is painted reactively by
+// SessionTextBlock via the CSS Custom Highlight API once the follow-up lands in state, so
+// there's no DOM mutation here (which would otherwise strip the rendered markdown).
 function saveQuote() {
   const np = notePop.value
   if (!np) return
-  const idx = store.active?.followups?.length ?? 0
   store.addQuote(props.session.id, np.src, np.text, noteText.value.trim())
-  markRange(np.range, idx)
   window.getSelection()?.removeAllRanges()
   notePop.value = null
   noteText.value = ''
-}
-// Wrap the saved range in a coloured <mark> + a circled number (visual marker).
-function markRange(range: Range, idx: number) {
-  try {
-    const mark = document.createElement('mark')
-    mark.className = 'qmark'
-    mark.appendChild(range.extractContents())
-    const sup = document.createElement('sup')
-    sup.className = 'qnum'
-    sup.textContent = CIRCLED[idx] ?? `${idx + 1}`
-    mark.appendChild(sup)
-    range.insertNode(mark)
-  } catch {
-    // Selection crossed element boundaries we can't cleanly wrap — skip the mark.
-  }
 }
 
 // Shared preview modal — map an attachment into the generic PreviewItem shape.
@@ -416,15 +536,137 @@ function onDrop(e: DragEvent) {
   if (e.dataTransfer?.files.length) addFiles(e.dataTransfer.files)
 }
 
+// Workspace panel: dock side is configured per VIEW (Settings store). Open views
+// are partitioned by their dock side into two independent panel instances — a
+// right-docked one (resizes horizontally) and a bottom-docked one (vertically) —
+// which coexist, so e.g. Terminal (bottom) stays put while you browse Files
+// (right). Sizes persist per orientation in the store.
+const settings = useSettingsStore()
 const wpOpen = ref(false)
-const {
-  width: wpWidth,
-  dragging: wpDragging,
-  onPointerDown: onWpResize,
-} = useResizable(322, { min: 240, max: 560, edge: 'left' })
 
-// tokN (~1235): chars/3 over messages; pct against a 2000-char baseline (≈200k tok).
-const totalTok = computed(() => {
+const ALL_VIEWS = ['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Preview', 'Info'] as const
+const DEFAULT_VIEWS = ['Diff', 'Files', 'Terminal']
+const openViews = ref<string[]>([...DEFAULT_VIEWS])
+// Active view per dock side — kept valid by the watchers below.
+const activeLeft = ref<string | null>(null)
+const activeRight = ref<string | null>(null)
+const activeBottom = ref<string | null>(null)
+
+const leftTabs = computed(() =>
+  openViews.value.filter((v) => settings.workspaceDockOf(v) === 'left'),
+)
+const rightTabs = computed(() =>
+  openViews.value.filter((v) => settings.workspaceDockOf(v) === 'right'),
+)
+const bottomTabs = computed(() =>
+  openViews.value.filter((v) => settings.workspaceDockOf(v) === 'bottom'),
+)
+const addableViews = computed(() => ALL_VIEWS.filter((v) => !openViews.value.includes(v)))
+
+const wpLeftWidth = computed(() => settings.workspacePanel.leftWidth)
+const wpWidth = computed(() => settings.workspacePanel.rightWidth)
+const wpHeight = computed(() => settings.workspacePanel.bottomHeight)
+const wpDragging = ref(false)
+
+// Keep each side's active tab inside that side's tab set (falls back to the first
+// tab, or null when the side is empty so its panel unmounts).
+watch(
+  leftTabs,
+  (list) => {
+    if (!activeLeft.value || !list.includes(activeLeft.value)) activeLeft.value = list[0] ?? null
+  },
+  { immediate: true },
+)
+watch(
+  rightTabs,
+  (list) => {
+    if (!activeRight.value || !list.includes(activeRight.value)) activeRight.value = list[0] ?? null
+  },
+  { immediate: true },
+)
+watch(
+  bottomTabs,
+  (list) => {
+    if (!activeBottom.value || !list.includes(activeBottom.value))
+      activeBottom.value = list[0] ?? null
+  },
+  { immediate: true },
+)
+// Re-seed the default views when reopening an emptied workspace; auto-close when
+// every view has been closed from both sides.
+watch(wpOpen, (open) => {
+  if (open && !openViews.value.length) openViews.value = [...DEFAULT_VIEWS]
+})
+watch([leftTabs, rightTabs, bottomTabs], ([l, r, b]) => {
+  if (wpOpen.value && !l.length && !r.length && !b.length) wpOpen.value = false
+})
+
+// Add a view to a panel (the one whose "+" was clicked): pin its dock side, open
+// it, and make it that side's active tab.
+function addView(view: string, side: WorkspaceDockSide) {
+  settings.setWorkspaceDock(view, side)
+  if (!openViews.value.includes(view)) openViews.value.push(view)
+  if (side === 'left') activeLeft.value = view
+  else if (side === 'right') activeRight.value = view
+  else activeBottom.value = view
+}
+function closeTab(view: string) {
+  openViews.value = openViews.value.filter((v) => v !== view)
+}
+// Panel "×": close every view docked on that side.
+function closeSide(side: WorkspaceDockSide) {
+  const closing =
+    side === 'left' ? leftTabs.value : side === 'right' ? rightTabs.value : bottomTabs.value
+  openViews.value = openViews.value.filter((v) => !closing.includes(v))
+}
+// Move a view to a chosen side (reuses addView — the view is already open); it
+// becomes that side's active tab.
+function moveDock(view: string, side: WorkspaceDockSide) {
+  addView(view, side)
+}
+
+// One handler for all three docks: drag X to resize a left/right column, Y for the
+// bottom row. Each panel grows as the handle moves toward it — the left panel's
+// handle sits on its right edge (drag right → grow, sign +1), the right/bottom
+// panels' handles sit on their near edge (drag left/up → grow, sign −1).
+const WP_SIDE = { min: 240, max: 560 } as const
+const WP_BOTTOM = { min: 120, max: 600 } as const
+function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
+  ev.preventDefault()
+  const handle = ev.currentTarget as HTMLElement
+  handle.setPointerCapture(ev.pointerId)
+  wpDragging.value = true
+  const vertical = side === 'bottom'
+  const start = vertical ? ev.clientY : ev.clientX
+  const startSize =
+    side === 'left' ? wpLeftWidth.value : side === 'right' ? wpWidth.value : wpHeight.value
+  const sign = side === 'left' ? 1 : -1
+  const { min, max } = vertical ? WP_BOTTOM : WP_SIDE
+  const onMove = (e: PointerEvent) => {
+    const delta = (vertical ? e.clientY : e.clientX) - start
+    const next = Math.max(min, Math.min(max, startSize + sign * delta))
+    if (side === 'left') settings.setWorkspaceLeftWidth(next)
+    else if (side === 'right') settings.setWorkspaceRightWidth(next)
+    else settings.setWorkspaceBottomHeight(next)
+  }
+  const onUp = () => {
+    wpDragging.value = false
+    handle.removeEventListener('pointermove', onMove)
+    handle.removeEventListener('pointerup', onUp)
+  }
+  handle.addEventListener('pointermove', onMove)
+  handle.addEventListener('pointerup', onUp)
+}
+
+// Compact token formatter (kfmt ~1234): 1.2k / 999.
+const kfmt = (n: number): string => (n > 999 ? `${(n / 1000).toFixed(1)}k` : String(n))
+
+// Real engine usage (set by the store from the send-message result: input /
+// output / cache read+write / total / max) when present — i.e. the actual tokens
+// the model reported for this session. Falls back to a rough chars/3 estimate in
+// browser-dev / before the first real turn finishes (no usage yet).
+const usage = computed(() => props.session.usage)
+const estTok = computed(() => {
   const chars = props.session.msgs.reduce((a, m) => {
     if (m.role === 'user' || m.role === 'system') return a + m.text.length
     return (
@@ -441,39 +683,209 @@ const totalTok = computed(() => {
   }, 0)
   return Math.floor(chars / 3)
 })
-const tokLabel = computed(() =>
-  totalTok.value > 999 ? `${(totalTok.value / 1000).toFixed(0)}k` : String(totalTok.value),
+const totalTok = computed(() => usage.value?.total ?? estTok.value)
+// Context window follows the session's SELECTED model id (retains `-1m`); the
+// provider's base id collapses 1M → 200k, so we derive from the display the user
+// picked, not from usage. Prefer an engine-reported max if one is ever set.
+const maxTok = computed(
+  () => usage.value?.max ?? contextLimitFor(modelIdFromDisplay(props.session.model)),
 )
-const pct = computed(() => Math.min(100, totalTok.value / 2000))
-const cache = computed(() => Math.round(pct.value * 0.66))
-const inp = computed(() => Math.round(pct.value * 0.12))
-const out = computed(() => pct.value - cache.value - inp.value)
+const tokLabel = computed(() => formatTokenCount(totalTok.value))
+const limitLabel = computed(() => formatTokenCount(maxTok.value))
+const pct = computed(() =>
+  maxTok.value ? Math.min(100, (totalTok.value / maxTok.value) * 100) : 0,
+)
 
-// Compact token formatter (kfmt ~1234): 1.2k / 999.
-const kfmt = (n: number): string => (n > 999 ? `${(n / 1000).toFixed(1)}k` : String(n))
+// Context-window breakdown by CONTENT category (Claude-Code `/context` style),
+// not by token-type. The engine reports char sizes of each prompt segment in
+// usage.contextChars (÷4 ≈ tokens): the base System prompt, the appended
+// Instructions, System tools + MCP tools schemas, the bulk-loaded Custom agents /
+// Skills / Memory files catalogues (Claude Code preloads these so the model knows
+// what it can invoke), and the Messages history. An "Other" bucket absorbs the
+// cache/thinking/structure overhead the char estimate can't see.
+const CTX_DIVISOR = 4
+// Breakdown key order = render order = bar-segment order. `other` is derived last.
+type BreakdownKey =
+  | 'sys'
+  | 'instr'
+  | 'tools'
+  | 'mcp'
+  | 'agents'
+  | 'skills'
+  | 'memory'
+  | 'msgs'
+  | 'other'
+type Breakdown = Record<BreakdownKey, number>
+const breakdown = computed<Breakdown>(() => {
+  const cap = Math.max(totalTok.value, 1)
+  const cc = usage.value?.contextChars
+  const tok = (chars: number | undefined) => Math.round((chars ?? 0) / CTX_DIVISOR)
+  if (cc) {
+    // System prompt: prefer the itemised `systemPrompt`, fall back to the legacy
+    // aggregate `system`. Likewise tools: split into systemTools + mcpTools when
+    // present, else the legacy combined `tools` lands in System tools.
+    const sys = tok(cc.systemPrompt ?? cc.system)
+    const instr = tok(cc.instructions)
+    const tools = tok(cc.systemTools ?? cc.tools)
+    const mcp = tok(cc.mcpTools)
+    const agents = tok(cc.customAgents)
+    const skills = tok(cc.skills)
+    const memory = tok(cc.memoryFiles)
+    const msgs = tok(cc.history)
+    const est = sys + instr + tools + mcp + agents + skills + memory + msgs
+    // Overshoot → scale every segment to the real total (Other 0); undershoot →
+    // the deficit is the genuine unattributed remainder (prompt-cache, thinking…).
+    if (est > cap && est > 0) {
+      const k = cap / est
+      return {
+        sys: sys * k,
+        instr: instr * k,
+        tools: tools * k,
+        mcp: mcp * k,
+        agents: agents * k,
+        skills: skills * k,
+        memory: memory * k,
+        msgs: msgs * k,
+        other: 0,
+      }
+    }
+    return {
+      sys,
+      instr,
+      tools,
+      mcp,
+      agents,
+      skills,
+      memory,
+      msgs,
+      other: Math.max(0, totalTok.value - est),
+    }
+  }
+  // Fallback before any real turn / in browser-dev: visible message text only.
+  const msgs = Math.min(estTok.value, cap)
+  return {
+    sys: 0,
+    instr: 0,
+    tools: 0,
+    mcp: 0,
+    agents: 0,
+    skills: 0,
+    memory: 0,
+    msgs,
+    other: Math.max(0, totalTok.value - msgs),
+  }
+})
 
-// Usage breakdown rows (ctxPop ~1297) — proportional split of the context window.
-const usageRows = computed(() => [
-  { label: 'Input', tok: Math.round(totalTok.value * 0.12), color: 'var(--accent)' },
-  { label: 'Cache read', tok: Math.round(totalTok.value * 0.6), color: 'var(--blue)' },
-  { label: 'Cache write', tok: Math.round(totalTok.value * 0.06), color: 'var(--blue)' },
-  { label: 'Output', tok: Math.round(totalTok.value * 0.22), color: 'var(--violet)' },
-])
+// One row per category + Free space; tokens, % of the window, and a colour for the
+// square + bar segment. Empty categories (0 tokens) are dropped, except Free space.
+// Palette intentionally avoids --del (red): every category here is benign, so a
+// red swatch would falsely read as an error. Messages (usually the dominant
+// bucket) gets the prominent violet; the rarely-co-shown static-context buckets
+// (system prompt / memory files) share the accent family.
+const CAT_META = [
+  { key: 'sys', labelKey: 'sessions.detail.cat.systemPrompt', color: 'var(--accent)' },
+  { key: 'instr', labelKey: 'sessions.detail.cat.instructions', color: 'var(--amber)' },
+  { key: 'tools', labelKey: 'sessions.detail.cat.systemTools', color: 'var(--blue)' },
+  { key: 'mcp', labelKey: 'sessions.detail.cat.mcpTools', color: 'var(--add)' },
+  { key: 'agents', labelKey: 'sessions.detail.cat.customAgents', color: 'var(--mod)' },
+  { key: 'skills', labelKey: 'sessions.detail.cat.skills', color: 'var(--green)' },
+  { key: 'memory', labelKey: 'sessions.detail.cat.memoryFiles', color: 'var(--accent)' },
+  { key: 'msgs', labelKey: 'sessions.detail.cat.messages', color: 'var(--violet)' },
+  { key: 'other', labelKey: 'sessions.detail.cat.other', color: 'var(--textFaint)' },
+] as const satisfies readonly { key: BreakdownKey; labelKey: string; color: string }[]
+type CatRow = { key: string; label: string; tokens: number; color: string; pct: number }
+const catRows = computed<CatRow[]>(() => {
+  const b = breakdown.value
+  const limit = maxTok.value || 1
+  const rows: CatRow[] = CAT_META.map((m) => ({
+    key: m.key,
+    label: t(m.labelKey),
+    tokens: Math.round(b[m.key]),
+    color: m.color,
+    pct: (b[m.key] / limit) * 100,
+  })).filter((r) => r.tokens > 0)
+  const free = Math.max(0, maxTok.value - totalTok.value)
+  rows.push({
+    key: 'free',
+    label: t('sessions.detail.cat.freeSpace'),
+    tokens: free,
+    color: 'var(--bgActive)',
+    pct: (free / limit) * 100,
+  })
+  return rows
+})
+// Filled bar segments (everything except Free space, which is the empty track).
+const barSegments = computed(() => catRows.value.filter((r) => r.key !== 'free'))
 
-// Plan rate-limit rows (ctxPop ~1300) — mock, provider-shaped.
+// Expandable detail sections (MEMORY FILES / CUSTOM AGENTS), each a flat list of
+// label + token count from the engine breakdown. Collapsed by default; the
+// chevron toggles them. Hidden entirely when the engine reported no items.
+type CtxItemRow = { label: string; tokens: number }
+const memoryFilesOpen = ref(false)
+const agentsOpen = ref(false)
+const memoryFilesList = computed<CtxItemRow[]>(() =>
+  (usage.value?.contextChars?.memoryFilesList ?? []).map((it) => ({
+    label: it.label,
+    tokens: Math.round(it.chars / CTX_DIVISOR),
+  })),
+)
+const agentsList = computed<CtxItemRow[]>(() =>
+  (usage.value?.contextChars?.customAgentsList ?? []).map((it) => ({
+    label: it.label,
+    tokens: Math.round(it.chars / CTX_DIVISOR),
+  })),
+)
+
+// Plan rate-limit rows — REAL usage from the engine (account.usage → claude.ai
+// OAuth / Codex). Browser-dev (no bridge) keeps demo rows so the popover isn't empty.
 const provider = computed(() => providerOf(props.session.account))
 type RateLimit = { label: string; used: number; reset: string }
+
+const {
+  entries: usageEntries,
+  loading: usageLoading,
+  refresh: refreshUsage,
+  available: usageAvailable,
+} = useAccountUsage(() => ({
+  provider: provider.value.toLowerCase(),
+  accountId: props.session.accountId,
+}))
+// Refresh usage when the popover opens (sidecar caches 60s, so this is cheap).
+watch(menu, (m) => {
+  if (m === 'usage') void refreshUsage()
+})
+
+const RL_LABELS: Record<string, string> = {
+  five_hour: '5-hour limit',
+  seven_day: 'Weekly · all',
+  seven_day_opus: 'Weekly · Opus',
+  seven_day_sonnet: 'Weekly · Sonnet',
+  overage: 'Overage',
+}
+function formatResetsIn(ms?: number): string {
+  if (!ms) return '—'
+  const diff = ms - Date.now()
+  if (diff <= 0) return 'now'
+  const mins = Math.floor(diff / 60000)
+  const days = Math.floor(mins / 1440)
+  const hours = Math.floor((mins % 1440) / 60)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${mins % 60}m`
+  return `${mins % 60}m`
+}
 const rateLimits = computed<RateLimit[]>(() => {
+  if (usageAvailable) {
+    return usageEntries.value.map((e) => ({
+      label: RL_LABELS[e.rateLimitType] ?? e.rateLimitType,
+      used: e.utilization,
+      reset: formatResetsIn(e.resetsAt),
+    }))
+  }
+  // Browser-dev demo rows (no bridge).
   if (provider.value === 'OpenAI') {
     return [
       { label: '5-hour limit', used: 0.34, reset: '4h 02m' },
       { label: 'Weekly · all', used: 0.51, reset: '5d 1h' },
-    ]
-  }
-  if (provider.value === 'Google') {
-    return [
-      { label: 'RPM', used: 0.18, reset: '—' },
-      { label: 'RPD', used: 0.44, reset: '9h' },
     ]
   }
   return [
@@ -494,6 +906,43 @@ function rlColor(u: number): string {
 /* Anchor the drop overlay to the detail. */
 .detail {
   position: relative;
+}
+/* Two-axis dock: .chatwrap stacks the top row (chat + right panel) over the
+   full-width bottom panel; .wptop is the horizontal row the prototype's .chatwrap
+   used to be. */
+.chatwrap {
+  flex-direction: column;
+}
+.wptop {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Resize handle docked at the bottom: a full-width row gripper (the prototype's
+   .rszwp is a vertical col-resize bar for the right dock). The ::after divider
+   runs horizontally instead of vertically. */
+.rszwp.vert {
+  flex: 0 0 6px;
+  width: auto;
+  align-self: stretch;
+  cursor: row-resize;
+}
+.rszwp.vert::after {
+  left: 0;
+  right: 0;
+  top: 2.5px;
+  bottom: auto;
+  width: auto;
+  height: 1px;
+}
+.rszwp.vert:hover::after,
+.rszwp.vert.drag::after {
+  height: 2px;
+  top: 2px;
+  width: auto;
+  left: 0;
 }
 /* Keep the rate-limit reset (e.g. "3h 12m") on one line — no mid-value wrap. */
 .rlp {
@@ -606,5 +1055,197 @@ function rlColor(u: number): string {
 .npbtn.pri {
   background: var(--accent);
   color: var(--bg);
+}
+/* Plan-usage reload: ghost icon button on the section header; spins while fetching. */
+.rlreload {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--textFaint);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
+}
+.rlreload:hover {
+  color: var(--text);
+  background: var(--bgHover);
+}
+.rlreload:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.spin {
+  animation: usage-spin 0.9s linear infinite;
+}
+@keyframes usage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
+/* ── Context-window breakdown table (Claude-Code /context style) ───────────── */
+.ctxmodel {
+  font-family: var(--code);
+  font-size: 12px;
+  color: var(--textDim);
+  margin: 2px 0 8px;
+}
+/* Header row stays on ONE line (the label + the token/limit count never wrap);
+   if the popover is ever too narrow the label ellipsises rather than wrapping. */
+.plnowrap {
+  white-space: nowrap;
+  gap: 10px;
+}
+.plnowrap > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plnowrap > .ctxn {
+  flex: 0 0 auto;
+}
+.cattbl {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.cathead,
+.catrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.cathead {
+  font-size: 12px;
+  color: var(--textFaint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 5px;
+  margin-bottom: 2px;
+}
+.catsq {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+.cathead .catlbl {
+  margin-left: 17px; /* align under the rows' square + gap */
+}
+.catlbl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.catnum,
+.catpct {
+  flex: 0 0 auto;
+  font-family: var(--code);
+  font-size: 12px;
+  color: var(--textDim);
+  text-align: right;
+}
+.catnum {
+  min-width: 56px;
+}
+.catpct {
+  min-width: 48px;
+  color: var(--textFaint);
+}
+
+/* ── Expandable bulk-load sections (MEMORY FILES / CUSTOM AGENTS) ──────────── */
+.ctxsec {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+.ctxsechead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--textFaint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ctxsechead:hover {
+  color: var(--text);
+}
+.ctxchev {
+  transition: transform 0.12s ease;
+}
+.ctxchev.open {
+  transform: rotate(90deg);
+}
+.ctxcount {
+  margin-left: auto;
+  font-family: var(--code);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--textDim);
+}
+.ctxitems {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  /* Long bulk-load lists (12+ agents / many memory files) scroll within their own
+     section so they don't push Plan usage off the bottom of the popover. */
+  max-height: 184px;
+  overflow-y: auto;
+}
+/* The usage popover is absolutely positioned just below the header chip, so the
+   global `.pop` max-height (100vh − 24px) lets the now much taller breakdown +
+   plan-usage run off-screen with no scroll. Cap it to the room below the chip. */
+.pop {
+  max-height: calc(100vh - 96px);
+}
+.ctxitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.ctxipath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--code);
+  font-size: 12px;
+  color: var(--textDim);
+}
+.ctxinum {
+  flex: 0 0 auto;
+  font-family: var(--code);
+  font-size: 12px;
+  color: var(--textFaint);
+  text-align: right;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctxchev {
+    transition: none;
+  }
 }
 </style>

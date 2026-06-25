@@ -1,4 +1,6 @@
 {
   "sessions.transcript.anchor.tooltip": "Jump to quoted message",
-  "sessions.transcript.mark.tooltip": "Quoted as follow-up {n}"
+  "sessions.transcript.mark.tooltip": "Quoted as follow-up {n}",
+  "sessions.transcript.fold.expand": "Expand all steps",
+  "sessions.transcript.fold.collapse": "Collapse all steps"
 }

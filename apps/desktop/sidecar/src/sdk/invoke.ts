@@ -62,7 +62,15 @@ export interface InvokeCallbacks {
 export interface InvokeResult {
   text: string
   modelUsed: string
-  usage: { input_tokens: number; output_tokens: number }
+  // cache_* are the Anthropic prompt-cache buckets (history served from cache).
+  // Surfaced so the Activity rollup attributes a task's full token spend, not
+  // just input/output (ADR 0054). Mirrors RunStreamResult.usage.
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_read_tokens: number
+    cache_creation_tokens: number
+  }
   stopReason: string | null
 }
 

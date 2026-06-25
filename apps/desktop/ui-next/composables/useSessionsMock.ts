@@ -38,7 +38,17 @@ export type Followup = {
   end?: number
 }
 
-export type SubStep = { tool: string; target: string; result?: string; detail?: string }
+// How a step's `detail` string should render: a unified diff, full file content,
+// terminal output, plain text, or a list. Drives SessionStepBody's view (so live
+// Edit/Write show the REAL diff/file, not the mock DEMO_DIFF). Absent on mock seed.
+export type StepDetailKind = 'diff' | 'file' | 'terminal' | 'text' | 'list'
+export type SubStep = {
+  tool: string
+  target: string
+  result?: string
+  detail?: string
+  detailKind?: StepDetailKind
+}
 export type SubAgent = { agent: string; steps: SubStep[] }
 
 // `eid` (engine step/request id) is set only on the IPC path so live events can
@@ -52,6 +62,7 @@ export type StepBlock = {
   target: string
   result?: string
   detail?: string
+  detailKind?: StepDetailKind
   sub?: SubAgent
   eid?: string
   status?: 'running' | 'done' | 'error'
@@ -76,6 +87,10 @@ export type QuestionBlock = {
   // Per-question header from the engine (AskUserQuestion) — needed to build the
   // answer payload back to the sidecar. Absent on mock questions.
   header?: string
+  // Set when the turn was cancelled while this gate was still parked: the gate is
+  // dead (answering it is a no-op), so it renders as "cancelled" and no longer
+  // counts as "awaiting" (which otherwise kept the composer stuck on Stop).
+  cancelled?: boolean
 }
 export type PermBlock = {
   kind: 'perm'
@@ -84,6 +99,8 @@ export type PermBlock = {
   status?: 'pending' | 'allowed' | 'denied'
   // Permission request id from the engine — passed to sessions.permission.
   eid?: string
+  // See QuestionBlock.cancelled — a parked permission abandoned by a turn cancel.
+  cancelled?: boolean
 }
 export type SteerBlock = { kind: 'steer'; text: string }
 export type ErrorBlock = { kind: 'error'; text: string }
@@ -133,6 +150,34 @@ export type GitMeta = {
 }
 export type Todo = { t: string; done: boolean }
 
+// One bulk-loaded memory file / custom agent / skill in the breakdown (label +
+// char size; ÷4 ≈ tokens). Drives the expandable MEMORY FILES / CUSTOM AGENTS
+// sections of the usage panel.
+export type ContextItemSize = { label: string; chars: number }
+
+// Engine-reported context-window breakdown (char sizes of each segment of the
+// last prompt; ÷4 ≈ tokens), itemised the way Claude Code's `/context` reports
+// it. Every field is OPTIONAL: a session hydrated from a message persisted with
+// the legacy shape carries only `system`/`tools`/`history`, so the panel reads
+// each field defensively.
+export type ContextChars = {
+  systemPrompt?: number
+  instructions?: number
+  systemTools?: number
+  mcpTools?: number
+  customAgents?: number
+  skills?: number
+  memoryFiles?: number
+  history?: number
+  // Legacy aggregate fields (pre-itemisation) — fallback for old messages.
+  system?: number
+  tools?: number
+  // Itemised lists for the expandable sections.
+  memoryFilesList?: ContextItemSize[]
+  customAgentsList?: ContextItemSize[]
+  skillsList?: ContextItemSize[]
+}
+
 // Context-window usage for the session (engine path). `used` = input + cacheRead
 // + cacheWrite + output (history sits in cacheRead, so `input` alone looks small —
 // see memory usage-cache-tokens). `max` is the model's context window when known.
@@ -143,6 +188,10 @@ export type SessionUsage = {
   cacheWrite: number
   total: number
   max?: number
+  // Engine-reported context-window breakdown (see ContextChars). Lets the usage
+  // panel itemise System prompt / Instructions / System tools / MCP tools /
+  // Custom agents / Skills / Memory files / Messages instead of token totals only.
+  contextChars?: ContextChars
 }
 
 // A message the user queued while a turn was streaming (§2). Auto-drained FIFO as
@@ -191,6 +240,10 @@ export type Session = {
   usage?: SessionUsage
   // Queued messages (auto-sent after the current turn finishes).
   queue?: QueuedMessage[]
+  // Unsent composer text, kept per session so switching sessions doesn't lose a
+  // half-typed message. In-memory UI state only (like `followups`/`queue`) — never
+  // persisted to JSONL.
+  draft?: string
   // True once this session's full transcript has been fetched (sessions.get).
   // Lazy-load guard — see ADR 0048. Unset/false = summary only (msgs empty).
   loaded?: boolean
@@ -201,7 +254,7 @@ export type TreeDir = { d: string; ch?: TreeNode[] }
 export type TreeNode = TreeFile | TreeDir
 
 const PROVIDER_MODELS: Record<Provider, string[]> = {
-  Anthropic: ['Opus 4.8', 'Sonnet 4.6', 'Haiku 4.5'],
+  Anthropic: ['Opus 4.8', 'Opus 4.8 (1M)', 'Sonnet 4.6', 'Haiku 4.5'],
   OpenAI: ['GPT-5', 'GPT-5 mini', 'o3', 'GPT-4.1'],
   Google: ['Gemini 2.5 Pro', 'Gemini 2.5 Flash', 'Gemini 2.0 Flash'],
 }
@@ -220,6 +273,7 @@ export const PROVIDER_DISPLAY: Record<string, Provider> = {
 // unknown ids fall back to the raw id (see modelDisplayName).
 export const MODEL_DISPLAY: Record<string, string> = {
   'claude-opus-4-8': 'Opus 4.8',
+  'claude-opus-4-8-1m': 'Opus 4.8 (1M)',
   'claude-sonnet-4-6': 'Sonnet 4.6',
   'claude-haiku-4-5': 'Haiku 4.5',
   'gpt-5': 'GPT-5',

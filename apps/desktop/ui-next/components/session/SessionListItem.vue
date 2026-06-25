@@ -66,13 +66,18 @@
     </div>
     <div v-if="!editing" class="liact">
       <span
-        class="del"
+        class="liactbtn"
+        :class="{ on: session.pinned }"
         :title="session.pinned ? t('sessions.sidebar.unpin') : t('sessions.sidebar.pin')"
         @click.stop="store.togglePin(session.id)"
       >
         <Icon name="pin" style="width: 12px; height: 12px" />
       </span>
-      <span class="del" :title="t('sessions.item.delete')" @click.stop="store.remove(session.id)">
+      <span
+        class="liactbtn danger"
+        :title="t('sessions.item.delete')"
+        @click.stop="store.remove(session.id)"
+      >
         <Icon name="trash" style="width: 13px; height: 13px" />
       </span>
     </div>
@@ -210,5 +215,32 @@ watch(
 /* Pin mark is interactive (toggles pin); keep the pointer affordance. */
 .pinmark {
   cursor: pointer;
+}
+/* Row hover actions — ghost pills. Pin hovers to accent (it's a toggle, not
+   destructive); only the trash variant goes danger. The shared prototype `.del`
+   rule turned BOTH red, so these own classes replace it. */
+.liact .liactbtn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--textDim);
+  background: var(--bgActive);
+  transition:
+    color 0.12s,
+    background 0.12s;
+}
+.liact .liactbtn:hover {
+  color: var(--accent);
+  background: var(--bgHover);
+}
+.liact .liactbtn.on {
+  color: var(--accent);
+}
+.liact .liactbtn.danger:hover {
+  color: var(--danger);
+  background: var(--dangerDim, var(--bgHover));
 }
 </style>

@@ -52,25 +52,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 type NavBadge = { kind: 'run' | 'wait'; n: number }
 type NavItem = { to: string; icon: string; label: string; badge?: NavBadge; dot?: boolean }
 type NavGroup = { title?: string; items: NavItem[] }
 
-// Grouping + badges mirror awog-prototype.html. Badge/dot counts are static mock
-// for now — wired to live stores (sessions/tasks/git) during the feature port.
-// `label`/`title` hold i18n keys (resolved via t()). Grouping + badges mirror
-// awog-prototype.html. Badge/dot counts are static mock for now — wired to live
-// stores (sessions/tasks/git) during the feature port.
-const groups: NavGroup[] = [
+const sessions = useSessionsStore()
+// Sessions needing the user's attention: unread, or paused on a gate (awaiting a
+// question / permission answer). Drives the live "wait" badge on the Sessions nav
+// item — replaces the old static mock. 0 → no badge.
+const sessionsAttention = computed(
+  () => sessions.sessions.filter((s) => s.unread || s.status === 'awaiting').length,
+)
+
+// Grouping mirrors awog-prototype.html; `label`/`title` are i18n keys (resolved
+// via t()). The Sessions badge is live (sessionsAttention); Tasks has no live
+// store in ui-next yet, so it carries no (mock) badge.
+const groups = computed<NavGroup[]>(() => [
   { items: [{ to: '/', icon: 'home', label: 'nav.home' }] },
   {
     title: 'nav.group.work',
     items: [
-      { to: '/sessions', icon: 'sessions', label: 'nav.sessions', badge: { kind: 'wait', n: 2 } },
-      { to: '/tasks', icon: 'tasks', label: 'nav.tasks', badge: { kind: 'run', n: 3 } },
+      {
+        to: '/sessions',
+        icon: 'sessions',
+        label: 'nav.sessions',
+        ...(sessionsAttention.value > 0
+          ? { badge: { kind: 'wait', n: sessionsAttention.value } as NavBadge }
+          : {}),
+      },
+      { to: '/tasks', icon: 'tasks', label: 'nav.tasks' },
       { to: '/workflows', icon: 'workflows', label: 'nav.workflows' },
     ],
   },
@@ -87,13 +100,14 @@ const groups: NavGroup[] = [
   {
     title: 'nav.group.system',
     items: [
+      { to: '/activity', icon: 'act', label: 'nav.activity' },
       { to: '/projects', icon: 'projects', label: 'nav.projects' },
       { to: '/git', icon: 'git', label: 'nav.git', dot: true },
       { to: '/connections', icon: 'conn', label: 'nav.connections' },
       { to: '/hooks', icon: 'hooks', label: 'nav.hooks' },
     ],
   },
-]
+])
 
 const { t } = useI18n()
 const route = useRoute()
