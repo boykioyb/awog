@@ -16,6 +16,18 @@
     <Icon name="layers" class="tsb-icn" />
     <span class="mono">{{ source.key }}</span>
   </span>
+  <span
+    v-else-if="source.type === 'session'"
+    class="tsb link"
+    :title="t('tasks.source.session')"
+    role="link"
+    tabindex="0"
+    @click.stop="openSession(source.sessionId)"
+    @keydown.enter.stop="openSession(source.sessionId)"
+  >
+    <Icon name="sessions" class="tsb-icn" />
+    {{ t('tasks.source.session') }}
+  </span>
   <span v-else class="tsb">
     <Icon name="text" class="tsb-icn" />
     {{ t('tasks.source.manual') }}
@@ -29,12 +41,14 @@
 import Icon from '~/components/Icon.vue'
 import { useI18n } from '~/composables/useI18n'
 import { useSidecar } from '~/composables/useSidecar'
+import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
 import type { TaskSource } from '~/stores/tasks'
 
 defineProps<{ source: TaskSource }>()
 
 const { t } = useI18n()
 const sc = useSidecar()
+const { openSession } = useSessionTaskLink()
 
 // Open the issue/PR in the OS browser; fall back to window.open in browser-dev.
 const open = (url: string): void => {

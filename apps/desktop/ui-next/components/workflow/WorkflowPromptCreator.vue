@@ -18,7 +18,7 @@
           <textarea
             v-model="promptText"
             class="wfpc-ta"
-            rows="3"
+            rows="5"
             :disabled="isGenerating"
             :placeholder="t('workflow.creator.placeholder')"
             @keydown.enter.exact.prevent="onGenerate"
@@ -180,9 +180,9 @@ const onBackdrop = () => {
   padding-top: 0;
 }
 .wfpc {
-  width: 540px;
+  width: 680px;
   max-width: 94vw;
-  max-height: 80vh;
+  max-height: 86vh;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: 16px;
@@ -229,7 +229,7 @@ const onBackdrop = () => {
   padding: 11px;
   outline: none;
   resize: vertical;
-  min-height: 4.5rem;
+  min-height: 7rem;
   color: var(--text);
   font-size: 0.9231rem;
   line-height: 1.55;

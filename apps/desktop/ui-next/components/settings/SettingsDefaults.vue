@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="sech">{{ t('settings.defaults.heading') }}</div>
+    <SettingsPaneHeader :title="t('settings.defaults.heading')" />
 
     <SettingsField
       block

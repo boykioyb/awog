@@ -1,7 +1,9 @@
 <template>
   <div class="spr">
-    <div class="sech">{{ t('settings.pricing.heading') }}</div>
-    <div class="fd sprintro">{{ t('settings.pricing.intro') }}</div>
+    <SettingsPaneHeader
+      :title="t('settings.pricing.heading')"
+      :subtitle="t('settings.pricing.intro')"
+    />
 
     <div class="sprtoolbar">
       <span class="fd">
@@ -167,9 +169,6 @@ function onFetch(): void {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.sprintro {
-  margin-top: -4px;
 }
 .sprtoolbar {
   display: flex;

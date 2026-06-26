@@ -33,10 +33,8 @@
             </div>
           </div>
         </span>
-        <span class="dsep">/</span>
-        <span class="dttitle">{{ session.title }}</span>
+        <span class="dttitle" :title="session.title">{{ session.title }}</span>
       </div>
-      <span style="flex: 1" />
 
       <span
         class="ctxmini chipbtn"
@@ -169,24 +167,57 @@
           @click.stop
         />
       </span>
-      <button
-        class="iconbtn"
-        :title="t('sessions.detail.workspacePanel')"
-        style="width: 28px; height: 28px"
-        :style="wpOpen ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}"
-        @click="wpOpen = !wpOpen"
-      >
-        <Icon name="workflows" style="width: 14px; height: 14px" />
-      </button>
+      <span style="position: relative">
+        <button
+          class="iconbtn"
+          :title="t('sessions.detail.workspacePanel')"
+          style="width: 28px; height: 28px"
+          :style="
+            wpOpen || menu === 'workspace'
+              ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
+              : {}
+          "
+          @click.stop="openMenu('workspace')"
+        >
+          <Icon name="workflows" style="width: 14px; height: 14px" />
+        </button>
+        <!-- View picker: clicking the workspace button opens this dropdown; picking
+             a view opens it (and the panel). Open views show a check + toggle off. -->
+        <div
+          v-if="menu === 'workspace'"
+          class="smenu"
+          style="position: absolute; top: 130%; right: 0; z-index: 50"
+          @click.stop
+        >
+          <div v-for="v in ALL_VIEWS" :key="v" class="mi" @click="toggleView(v)">
+            <Icon :name="wpIcon(v)" style="width: 13px; height: 13px" />
+            {{ v }}
+            <Icon
+              v-if="openViews.includes(v)"
+              name="check"
+              class="ck"
+              style="width: 13px; height: 13px"
+            />
+          </div>
+        </div>
+      </span>
       <button
         class="iconbtn"
         :title="t('sessions.detail.delete')"
         style="width: 28px; height: 28px"
-        @click="store.remove(session.id)"
+        @click="askRemove"
       >
         <Icon name="trash" style="width: 14px; height: 14px" />
       </button>
     </div>
+
+    <!-- Discuss banner (ADR 0055): this session was opened to discuss a task. -->
+    <button v-if="session.aboutTaskId" class="aboutbar" @click="openTask(session.aboutTaskId)">
+      <Icon name="workflows" class="aboutbar-icn" />
+      <span class="aboutbar-lbl">{{ t('sessions.detail.aboutTask') }}</span>
+      <span class="aboutbar-title">{{ aboutTaskTitle }}</span>
+      <Icon name="chev" class="aboutbar-chev" />
+    </button>
 
     <!-- chat + right-docked panel share a row (.wptop); the bottom-docked panel
          stacks full-width beneath them. Right and bottom are independent panel
@@ -219,7 +250,11 @@
             :todos="session.todos"
             @toggle="(i) => store.toggleTodo(session.id, i)"
           />
-          <SessionTranscript :messages="session.msgs" :fallback-when="session.when" />
+          <SessionTranscript
+            :messages="session.msgs"
+            :fallback-when="session.when"
+            :loading="!!session.loading"
+          />
           <SessionComposer
             :attachments="pendingAtt"
             @send="onSend"
@@ -228,6 +263,7 @@
             @add-att="onAddAtt"
             @preview="previewAtt"
             @open-more="moreOpen = true"
+            @run-as-task="onRunAsTask"
           />
         </div>
         <template v-if="wpOpen && rightTabs.length">
@@ -348,13 +384,35 @@ import PreviewModal, { type PreviewItem } from '~/components/common/PreviewModal
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
-const { providerOf } = useSessionsMock()
+const { providerOf, wpIcon } = useSessionsMock()
 const { projects, projectName } = useProjects()
 const store = useSessionsStore()
+const { confirm } = useConfirm()
+
+// Header trash → confirm before dropping the session (destructive, no undo).
+async function askRemove() {
+  const ok = await confirm({
+    title: t('sessions.delete.title'),
+    description: t('sessions.delete.one', { title: props.session.title }),
+  })
+  if (ok) store.remove(props.session.id)
+}
+
+// Discuss link (ADR 0055): when this session was opened to discuss a task, show a
+// banner with the task title (resolved from the tasks store) → click opens it.
+const tasksStore = useTasksStore()
+const { openTask } = useSessionTaskLink()
+const aboutTask = computed(() =>
+  props.session.aboutTaskId ? tasksStore.taskById(props.session.aboutTaskId) : undefined,
+)
+const aboutTaskTitle = computed(() => aboutTask.value?.title ?? props.session.aboutTaskId)
+onMounted(() => {
+  if (props.session.aboutTaskId && !aboutTask.value) void tasksStore.loadTasks()
+})
 
 // Single popover open at a time (project switcher · usage · config). The shared
 // backdrop closes whichever is open.
-type Menu = 'proj' | 'usage' | 'config'
+type Menu = 'proj' | 'usage' | 'config' | 'workspace'
 const menu = ref<Menu | null>(null)
 function openMenu(m: Menu) {
   menu.value = menu.value === m ? null : m
@@ -373,6 +431,18 @@ function selectProj(id: string) {
 function onSend(text: string) {
   store.sendMessage(props.session.id, text, pendingAtt.value)
   pendingAtt.value = []
+}
+
+// "Run as task" (ADR 0055) → open the shared New Task modal seeded with this
+// session as the task origin (project + title pre-filled; source = this session).
+const { openModal: openNewTaskModal } = useNewTaskModal()
+function onRunAsTask() {
+  const seed: { projectId?: string; title?: string; originSessionId?: string } = {
+    title: props.session.title,
+  }
+  if (props.session.project) seed.projectId = props.session.project
+  if (props.session.engineId) seed.originSessionId = props.session.engineId
+  openNewTaskModal(seed)
 }
 
 // Pending attachments for the next message. Drag-drop anywhere on the detail and
@@ -545,8 +615,10 @@ const settings = useSettingsStore()
 const wpOpen = ref(false)
 
 const ALL_VIEWS = ['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Preview', 'Info'] as const
-const DEFAULT_VIEWS = ['Diff', 'Files', 'Terminal']
-const openViews = ref<string[]>([...DEFAULT_VIEWS])
+// Workspace panel starts EMPTY. The header's workspace button opens a view picker
+// (dropdown, `menu === 'workspace'`); picking a view is what opens it (+ the panel),
+// so clicking the button no longer dumps every default view at once.
+const openViews = ref<string[]>([])
 // Active view per dock side — kept valid by the watchers below.
 const activeLeft = ref<string | null>(null)
 const activeRight = ref<string | null>(null)
@@ -592,11 +664,8 @@ watch(
   },
   { immediate: true },
 )
-// Re-seed the default views when reopening an emptied workspace; auto-close when
-// every view has been closed from both sides.
-watch(wpOpen, (open) => {
-  if (open && !openViews.value.length) openViews.value = [...DEFAULT_VIEWS]
-})
+// Auto-close the panel once every view has been closed from all sides (closing the
+// last tab, or toggling them all off in the picker).
 watch([leftTabs, rightTabs, bottomTabs], ([l, r, b]) => {
   if (wpOpen.value && !l.length && !r.length && !b.length) wpOpen.value = false
 })
@@ -612,6 +681,18 @@ function addView(view: string, side: WorkspaceDockSide) {
 }
 function closeTab(view: string) {
   openViews.value = openViews.value.filter((v) => v !== view)
+}
+// Header view picker: open a view on its configured dock side (+ open the panel),
+// or toggle it back off if already open. The auto-close watcher hides the panel
+// once the last view is toggled off.
+function openView(view: string) {
+  wpOpen.value = true
+  addView(view, settings.workspaceDockOf(view))
+}
+function toggleView(view: string) {
+  if (openViews.value.includes(view)) closeTab(view)
+  else openView(view)
+  menu.value = null // close the picker on selection (single pick per open)
 }
 // Panel "×": close every view docked on that side.
 function closeSide(side: WorkspaceDockSide) {
@@ -906,6 +987,46 @@ function rlColor(u: number): string {
 /* Anchor the drop overlay to the detail. */
 .detail {
   position: relative;
+}
+/* Discuss banner (ADR 0055) — links a discussion session back to its task. */
+.aboutbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 14px 8px;
+  padding: 7px 11px;
+  border: 1px solid var(--accentBorder);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.aboutbar:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.aboutbar-icn {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.aboutbar-lbl {
+  flex: 0 0 auto;
+  color: var(--textMuted);
+}
+.aboutbar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.aboutbar-chev {
+  flex: 0 0 auto;
+  opacity: 0.6;
 }
 /* Two-axis dock: .chatwrap stacks the top row (chat + right panel) over the
    full-width bottom panel; .wptop is the horizontal row the prototype's .chatwrap

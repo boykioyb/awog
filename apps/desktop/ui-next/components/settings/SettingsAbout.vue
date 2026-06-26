@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="sech">{{ t('settings.about.heading') }}</div>
+    <SettingsPaneHeader :title="t('settings.about.heading')" />
 
     <!-- App identity + version -->
     <SettingsField :name="t('settings.about.appName')" :desc="versionLine">

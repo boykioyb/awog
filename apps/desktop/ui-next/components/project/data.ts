@@ -15,7 +15,7 @@ export type ProjectRepo = {
   gh?: string
 }
 
-export type ProjectViewSession = { t: string; w: string }
+export type ProjectViewSession = { id: number; t: string; w: string }
 export type ProjectViewTask = { t: string; s: string }
 
 // Compact view-model the master list + overview tab render. Derived from the real
@@ -57,14 +57,26 @@ export function avatarBg(color: string): string {
 // null when the remote is absent / non-GitHub. Drives the overview "remote" row
 // + the GH tab visibility.
 export function githubSlugFromRemote(remote: string): string | null {
-  const url = (remote ?? '').trim()
-  if (!url) return null
+  const raw = (remote ?? '').trim()
+  if (!raw) return null
   const strip = (s: string): string => (s.endsWith('.git') ? s.slice(0, -4) : s)
-  // git@github.com:owner/repo(.git)
-  const ssh = /^git@github\.com:(.+?)\/([^/]+?)\/?$/.exec(url)
-  if (ssh && ssh[1] && ssh[2]) return `${ssh[1]}/${strip(ssh[2])}`
-  // https://github.com/owner/repo(.git)
-  const https = /^https?:\/\/(?:www\.)?github\.com\/(.+?)\/([^/]+?)\/?$/.exec(url)
-  if (https && https[1] && https[2]) return `${https[1]}/${strip(https[2])}`
-  return null
+
+  // scp-like SSH (no scheme): [user@]github.com:owner/repo(.git)
+  if (!raw.includes('://')) {
+    const scp = /^(?:[^@\s]+@)?github\.com:(.+?)\/([^/]+?)\/?$/.exec(raw)
+    return scp?.[1] && scp[2] ? `${scp[1]}/${strip(scp[2])}` : null
+  }
+
+  // URL forms with optional `user[:token]@` userinfo + port:
+  //   https://[user[:token]@][www.]github.com[:443]/owner/repo(.git)
+  //   ssh|git://git@github.com/owner/repo(.git)
+  // The userinfo segment is why credential-bearing remotes (e.g. cloned with a
+  // PAT in the URL) used to read as "not GitHub" — the host no longer sits right
+  // after `://`. The captured slug is the path only, so it never carries the
+  // credential.
+  const u =
+    /^(?:https?|ssh|git):\/\/(?:[^@/]+@)?(?:www\.)?github\.com(?::\d+)?\/(.+?)\/([^/]+?)\/?$/.exec(
+      raw,
+    )
+  return u?.[1] && u[2] ? `${u[1]}/${strip(u[2])}` : null
 }

@@ -395,11 +395,15 @@ export const useSettingsStore = defineStore('settings', () => {
     state: string,
     code: string,
     label?: string,
+    // When set, the sidecar replaces this account's credentials in place (re-auth)
+    // instead of adding a new account — keeps the id + active selection stable.
+    replaceAccountId?: string,
   ): Promise<ProviderAccount> {
     const account = await useSidecar().request<ProviderAccount>('auth.completeOAuth', {
       state,
       code,
       label,
+      replaceAccountId,
     })
     mergeAccount('anthropic', account, true)
     return account
@@ -475,7 +479,10 @@ export const useSettingsStore = defineStore('settings', () => {
       if (result.ok) {
         account.status = 'connected'
         if (typeof result.expiresAt === 'number') account.expiresAt = result.expiresAt
-      } else if (result.error?.code === 'TOKEN_EXPIRED') {
+      } else if (result.error?.code === 'TOKEN_EXPIRED' || result.error?.code === 'AUTH_EXPIRED') {
+        // Recoverable via re-authentication — keep it 'expired' (amber), not
+        // 'disconnected'. The sidecar returns AUTH_EXPIRED when an OAuth refresh
+        // token is revoked; TOKEN_EXPIRED for a lapsed access token.
         account.status = 'expired'
       } else {
         account.status = 'disconnected'

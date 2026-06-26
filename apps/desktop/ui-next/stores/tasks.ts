@@ -36,11 +36,14 @@ export type PhaseStatus =
 export type RunStatus = 'running' | 'waiting_approval' | 'completed' | 'superseded' | 'failed'
 
 // `connectionId` = the mcpServerId the task uses to reach its source (ADR 0025
-// simplified). Optional; never carries a token, only the id.
+// simplified). Optional; never carries a token, only the id. `session` (ADR 0055)
+// = spawned from a chat session; `sessionId` is the origin session's engineId so
+// the UI can navigate back. The reverse link is derived (filter on sessionId).
 export type TaskSource =
   | { type: 'github'; repo: string; issueNumber: number; url: string; connectionId?: string }
   | { type: 'jira'; key: string; connectionId?: string }
   | { type: 'manual' }
+  | { type: 'session'; sessionId: string; messageId?: string; connectionId?: string }
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed'
 export type TodoItem = { content: string; status: TodoStatus }

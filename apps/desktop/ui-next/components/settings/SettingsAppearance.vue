@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="sech">{{ t('settings.appearance.heading') }}</div>
+    <SettingsPaneHeader :title="t('settings.appearance.heading')" />
 
     <SettingsField
       :name="t('settings.appearance.themeFamily.name')"

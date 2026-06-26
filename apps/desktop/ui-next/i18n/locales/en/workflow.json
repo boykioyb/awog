@@ -35,12 +35,5 @@
   "workflow.creator.dragHint": "No steps generated — drag agents onto the canvas after creating.",
   "workflow.item.meta": "{nodes} nodes · {edges} edges",
   "workflow.delete.title": "Delete workflow",
-  "workflow.delete.desc": "This will permanently delete the workflow \"{name}\".",
-  "workflow.run.created": "Started task \"{title}\"",
-  "workflow.run.noProject": "Add a project before running a workflow.",
-  "workflow.run.pickProject": "Run workflow",
-  "workflow.run.projectLabel": "Project",
-  "workflow.run.projectPlaceholder": "Select a project",
-  "workflow.run.projectHint": "The task runs against this project's workspace.",
-  "workflow.run.confirm": "Run"
+  "workflow.delete.desc": "This will permanently delete the workflow \"{name}\"."
 }

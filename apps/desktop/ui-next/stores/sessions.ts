@@ -112,6 +112,21 @@ const isPermissionPayload = (raw: unknown): raw is PermissionRequestPayload => {
   )
 }
 
+// Terminal "turn finished" event (sidecar emits it right before returning the
+// sessions.sendMessage result). We only need the ids to clear the streaming
+// indicator; text/stopReason ride along so the byline can settle authoritatively.
+type MessageDonePayload = {
+  sessionId: string
+  messageId: string
+  text?: string
+  stopReason?: string | null
+}
+const isMessageDonePayload = (raw: unknown): raw is MessageDonePayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return typeof p.sessionId === 'string' && typeof p.messageId === 'string'
+}
+
 // sessions.list summary (sidecar SessionSummary, ADR 0048) — no messages.
 type EngineSessionSettings = {
   provider?: string
@@ -131,6 +146,10 @@ type SessionSummaryDto = {
   settings?: EngineSessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Task this session discusses (ADR 0055) — mirrors sidecar SessionSummary.
+  aboutTaskId?: string
+  // GitHub issue/PR this session was opened from — mirrors sidecar SessionSummary.
+  aboutGhUrl?: string
   messageCount: number
   lastPreview?: string
 }
@@ -380,6 +399,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.settings?.responseStyleNoMarkdown) session.noMarkdown = true
     if (dto.disabledTools) session.disabledTools = [...dto.disabledTools]
     if (dto.mcpServerIds) session.mcpServerIds = [...dto.mcpServerIds]
+    if (dto.aboutTaskId) session.aboutTaskId = dto.aboutTaskId
+    if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
     return session
   }
 
@@ -424,6 +445,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       s.loaded = true
       return
     }
+    // Mark loading so the transcript shows a skeleton instead of the empty welcome
+    // while sessions.get is in flight. Skip the flag when msgs are already present
+    // (e.g. a re-load) so we don't blank an existing transcript.
+    if (!s.msgs.length) s.loading = true
     try {
       const res = await sc.request<{ session: SessionGetDto | null }>('sessions.get', {
         sessionId: s.engineId,
@@ -442,6 +467,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       target.loaded = true
     } catch (err) {
       console.warn('[sessions] ensureLoaded failed', id, err)
+    } finally {
+      const target = byId(id)
+      if (target) target.loading = false
     }
   }
 
@@ -462,6 +490,18 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (s) s.unread = false
     if (useIpc) void ensureLoaded(id)
+  }
+
+  // Open a session by its sidecar engineId (ADR 0055 — Task → origin/discussion
+  // navigation). Hydrates the list first so it works even when arriving from the
+  // Tasks page before the Sessions page has loaded. Returns false when no session
+  // with that id exists (deleted) so the caller can surface a "not found" hint.
+  async function openByEngineId(eid: string): Promise<boolean> {
+    await hydrate()
+    const s = byEngineId(eid)
+    if (!s) return false
+    setActive(s.id)
+    return true
   }
 
   // Create a new session. `projectId` assigns it to a project up front (the
@@ -492,6 +532,38 @@ export const useSessionsStore = defineStore('sessions', () => {
       session.engineId = engineIdFor(id)
       pushUpsert(session, 'create')
     }
+    return id
+  }
+
+  // Create a session bound to a task to discuss (ADR 0055). Mirrors create() but
+  // seeds the title + aboutTaskId so the sidecar injects the <linked_task> context
+  // and the UI shows the "discussing task" banner. Returns the new client id so the
+  // caller (Task → "Discuss in session") can navigate to it.
+  function createForTask(taskId: string, projectId: string, title: string): number {
+    const id = newClientId()
+    const acct = useIpc ? accounts.value[0] : undefined
+    const session: Session = {
+      id,
+      title,
+      project: projectId,
+      model: acct ? (modelsForAccount(acct)[0] ?? 'Opus 4.8') : 'Opus 4.8',
+      account: acct?.display ?? 'hoatq · Anthropic',
+      style: 'Default',
+      status: 'idle',
+      when: 'vừa xong',
+      mode: 'Ask',
+      msgs: [],
+      loaded: true,
+      aboutTaskId: taskId,
+    }
+    if (acct) session.accountId = acct.id
+    sessions.value.unshift(session)
+    activeId.value = id
+    if (useIpc) {
+      session.engineId = engineIdFor(id)
+      pushUpsert(session, 'create')
+    }
+    return id
   }
 
   function remove(id: number) {
@@ -517,6 +589,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (s) {
       s.project = project
+      if (useIpc) pushUpsert(s, 'update-metadata')
+    }
+  }
+
+  // Link a session to the GitHub issue/PR it was opened from (persisted; shown as
+  // a link in the Info panel). Set right after create() for a "New session" on a
+  // GH row.
+  function setAboutGh(id: number, url: string) {
+    const s = byId(id)
+    if (s) {
+      s.aboutGhUrl = url
       if (useIpc) pushUpsert(s, 'update-metadata')
     }
   }
@@ -708,9 +791,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // reads as a lurch. Instead reveal `chars/sec · elapsed`, where the speed scales
     // with the backlog (so we keep up with fast bursts) but is capped (so catch-up
     // stays a smooth fast scroll, not a jump). dt-scaling also absorbs timer jitter.
-    const BASE_CPS = 220 // steady pace ≈ typical token output
-    const GAP_GAIN = 16 // +cps per char of backlog
-    const MAX_CPS = 3000 // ceiling so catch-up never lurches
+    const BASE_CPS = 200 // steady pace ≈ typical token output
+    const GAP_GAIN = 12 // +cps per char of backlog
+    const MAX_CPS = 1400 // ceiling so even a whole-reply burst types out (not dumps)
     let last = performance.now()
     tw.timer = setInterval(() => {
       const m = findStreamingMsg(eid, messageId)
@@ -876,6 +959,35 @@ export const useSessionsStore = defineStore('sessions', () => {
             m.blocks.push(block)
           }
           s.status = 'awaiting'
+          return
+        }
+        if (evt.type === 'session.message.done') {
+          if (!isMessageDonePayload(evt.payload)) return
+          const p = evt.payload
+          const m = findStreamingMsg(p.sessionId, p.messageId)
+          // Already finalized (RPC landed first, the healthy case) → nothing to do.
+          if (!m || !m.streaming) return
+          // Clear the "Streaming…" indicator straight from the stream rather than
+          // waiting on the sessions.sendMessage RPC response — its large `parts`
+          // payload can land late or be dropped, which used to leave the byline
+          // stuck on "Streaming… {elapsed}" forever after the reply had finished.
+          // The RPC resolve still owns the authoritative finalize (usage, model,
+          // title, error block); this just stops the spinner.
+          flushText(p.sessionId, p.messageId)
+          if (typeof p.text === 'string' && p.text) {
+            const tp = trailingText(m)
+            if (tp) tp.text = p.text
+          }
+          m.streaming = false
+          if (m.completedAt == null) m.completedAt = Date.now()
+          const s = byEngineId(p.sessionId)
+          if (s) {
+            s.status = statusFromMessages(s.msgs)
+            // Clean finish → drain the next queued message (idempotent with the
+            // RPC path: whichever runs second sees the queue drained / a new turn
+            // already streaming and no-ops).
+            if (p.stopReason !== 'error') drainQueue(s.id)
+          }
         }
       })
     } catch {
@@ -891,6 +1003,32 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
   function engineIdFor(clientId: number): string {
     return `ses-${clientId.toString(36)}`
+  }
+
+  // Concatenate an assistant turn's text runs. Tool / thinking / plan blocks are
+  // NOT replayed to the model — this mirrors the sidecar, which persists assistant
+  // turns text-only (no tool blocks in JSONL). For a parts-based or single-text
+  // turn the runs join back to the full reply.
+  function assistantText(blocks: AssistantBlock[]): string {
+    let text = ''
+    for (const b of blocks) if (b.kind === 'text') text += b.text
+    return text.trim()
+  }
+
+  // Map ui-next display messages → engine SessionMessage shape (id/role/text/at).
+  // The sidecar resumes a session from its JSONL transcript, so a session created
+  // WITH prior turns (a fork) must carry them on disk or the model would see an
+  // empty context. Reuses an assistant turn's `eid` as the engine message id so the
+  // forked transcript's ids match what hydrate later assigns. Attachments are not
+  // replicated (best-effort: the conversational text is what drives forked context).
+  function msgsToEngineMessages(msgs: Session['msgs']): Record<string, unknown>[] {
+    const now = new Date().toISOString()
+    return msgs.map((m, i) => {
+      const at = m.at || now
+      if (m.role === 'user') return { id: `fm-${i}-${seq++}`, role: 'user', text: m.text, at }
+      if (m.role === 'system') return { id: `fm-${i}-${seq++}`, role: 'system', text: m.text, at }
+      return { id: m.eid ?? `fm-${i}-${seq++}`, role: 'agent', text: assistantText(m.blocks), at }
+    })
   }
   // Build the minimal sidecar session payload from the ui-next display fields. The
   // engine owns the canonical settings; we only forward what we can derive.
@@ -909,12 +1047,17 @@ export const useSessionsStore = defineStore('sessions', () => {
       updatedAt: now,
       pinned: s.pinned ?? false,
       invitedAgentIds: [],
-      messages: [],
+      // Persist the transcript only on create (a fork seeds prior turns; a plain
+      // new session has none). update-metadata ignores messages sidecar-side, so
+      // sending [] there avoids bloating every pin/rename/mode change.
+      messages: mode === 'create' ? msgsToEngineMessages(s.msgs) : [],
       pendingAgentIds: [],
       settings,
     }
     if (s.disabledTools) session.disabledTools = s.disabledTools
     if (s.mcpServerIds !== undefined) session.mcpServerIds = s.mcpServerIds
+    if (s.aboutTaskId) session.aboutTaskId = s.aboutTaskId
+    if (s.aboutGhUrl) session.aboutGhUrl = s.aboutGhUrl
     pushRequest('sessions.upsert', { session, mode })
   }
 
@@ -1003,6 +1146,9 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Session-scoped tool denylist + MCP whitelist (config popover).
         ...(s.disabledTools && s.disabledTools.length ? { disabledTools: s.disabledTools } : {}),
         ...(s.mcpServerIds !== undefined ? { mcpServerIds: s.mcpServerIds } : {}),
+        // Discuss link (ADR 0055): the sidecar injects this task's output + trace
+        // as <linked_task> context so the agent can reason about its results.
+        ...(s.aboutTaskId ? { aboutTaskId: s.aboutTaskId } : {}),
       })
       flushText(s.engineId, messageId)
       // Stamp the authoritative full reply onto the trailing text run.
@@ -1331,7 +1477,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (td) td.done = !td.done
   }
 
-  function regenerate(id: number, index: number) {
+  async function regenerate(id: number, index: number) {
     const s = byId(id)
     if (!s) return
     s.msgs = s.msgs.slice(0, index)
@@ -1343,6 +1489,21 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (userMsg && userMsg.role === 'user') {
         s.msgs = s.msgs.slice(0, ui)
         const atts = userMsg.att ?? undefined
+        // The sidecar resumes from the JSONL transcript (sendMessage sends no
+        // history), so slicing the in-memory copy is not enough — persist the
+        // truncation first, else the regenerated turn would replay the very reply
+        // it replaces. Keep through the assistant turn before the re-run user
+        // message (null = drop all). AWAIT so loadSession on the next turn reads
+        // the already-truncated file (avoids a read-before-write race).
+        if (s.engineId) {
+          const prev = ui > 0 ? s.msgs[ui - 1] : undefined
+          const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
+          try {
+            await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
+          } catch (err) {
+            console.warn('[sessions] truncate before regenerate failed', err)
+          }
+        }
         void sendMessage(id, userMsg.text, atts ?? undefined)
       }
       return
@@ -1389,12 +1550,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s) return
     const nid = newClientId()
     const msgs = JSON.parse(JSON.stringify(s.msgs.slice(0, index + 1))) as Session['msgs']
-    // Strip engine-only fields from the clone (a fork is a brand-new session).
+    // Clear the streaming flag on the clone (a fork's turns are all finalized).
+    // Keep `eid`: msgsToEngineMessages reuses it as the persisted engine message id
+    // so the forked transcript on disk lines up with the display.
     msgs.forEach((m) => {
-      if (m.role === 'assistant') {
-        delete m.eid
-        delete m.streaming
-      }
+      if (m.role === 'assistant') delete m.streaming
     })
     const branch: Session = {
       ...s,
@@ -1486,12 +1646,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     // load (IPC)
     hydrate,
     ensureLoaded,
+    openByEngineId,
     // crud
     setActive,
     create,
+    createForTask,
     remove,
     rename,
     setProject,
+    setAboutGh,
     setMode,
     setModel,
     setAccount,

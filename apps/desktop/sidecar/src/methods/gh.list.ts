@@ -18,7 +18,13 @@ const Params = z
     state: z.string().min(1),
     assignee: z.string().optional(),
     account: z.string().optional(),
-    limit: z.number().int().min(1).max(200).optional(),
+    // Child repo of a multi-repo workspace (relativePath from git.discoverRepos).
+    repoPath: z.string().optional(),
+    // Server-side search: a bare `#?<number>` resolves the exact issue/PR (view);
+    // anything else is a GitHub text search across the whole repo (not just the
+    // loaded page). Empty = normal list.
+    search: z.string().optional(),
+    limit: z.number().int().min(1).max(500).optional(),
   })
   .superRefine((p, ctx) => {
     const allowed: readonly string[] = p.kind === 'pr' ? PR_STATES : ISSUE_STATES
@@ -48,22 +54,32 @@ interface Result {
 
 register('gh.list', async (raw): Promise<Result> => {
   const params = Params.parse(raw)
-  const cwd = await resolveProjectCwd(params.projectId)
+  const cwd = await resolveProjectCwd(params.projectId, params.repoPath)
 
   const limit = params.limit ?? 50
   const fields = params.kind === 'pr' ? PR_FIELDS : ISSUE_FIELDS
-  const args = [
-    params.kind === 'pr' ? 'pr' : 'issue',
-    'list',
-    '--state',
-    params.state,
-    '--limit',
-    String(limit),
-    '--json',
-    fields,
-  ]
-  // Only append --assignee when present & non-empty (Anyone = no filter).
-  if (params.assignee !== undefined && params.assignee !== '') {
+  const kindArg = params.kind === 'pr' ? 'pr' : 'issue'
+  const search = (params.search ?? '').trim()
+
+  // Exact number → resolve that one issue/PR directly (works regardless of which
+  // page it's on, or its state). gh `view` returns a single object; wrap it as a
+  // one-row list. A miss (wrong number / not a PR) → empty, not an error.
+  const numMatch = /^#?(\d+)$/.exec(search)
+  if (numMatch) {
+    try {
+      const one = await runGh([kindArg, 'view', numMatch[1], '--json', fields], cwd, params.account)
+      return { items: parseThreadList(params.kind, `[${one}]`) }
+    } catch {
+      return { items: [] }
+    }
+  }
+
+  const args = [kindArg, 'list', '--state', params.state, '--limit', String(limit), '--json', fields]
+  if (search) {
+    // GitHub text search across the whole repo (title/body), not just this page.
+    args.push('--search', search)
+  } else if (params.assignee !== undefined && params.assignee !== '') {
+    // Assignee filter only applies to the plain list (search carries its own scope).
     args.push('--assignee', params.assignee)
   }
 

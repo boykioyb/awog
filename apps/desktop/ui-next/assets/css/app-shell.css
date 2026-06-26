@@ -98,6 +98,20 @@ body.light[data-surface='deep'] {
   display: none !important;
 }
 
+/* NavRail collapse: snap instantly instead of animating `flex-basis`.
+   `flex-basis` is a LAYOUT property, so animating it (prototype.css
+   `.side{transition:flex-basis .16s}`) reflows the whole `.main` pane every frame
+   for 160ms — on heavy pages (Git / Sessions) Chromium drops frames → the visible
+   jank when toggling the rail. It's also out of sync with the labels, which use
+   `display:none`/`font-size:0` and flip at t=0: on expand they render inside the
+   58px rail and wrap until the width catches up (a second reflow). Dropping the
+   transition changes width + labels together in a single reflow — zero per-frame
+   churn, no jank. (A docked sidebar pushes `.main`, so its width can't be GPU
+   /transform-composited; instant is the only reliably smooth option.) */
+.side {
+  transition: none;
+}
+
 /* ── Responsive: keep the desktop shell at every width ──────────────────────
    The prototype ships showcase mobile media queries (it was a fixed 1280px demo
    card): below 820px it stacks `.app` into a column and turns `.side` into a top
@@ -146,34 +160,121 @@ body.light[data-surface='deep'] {
   overflow: hidden;
 }
 
-/* Detail-header title row: lay the crumb + separator + title as a flex row and
-   truncate ONLY the title (.dttitle) so a long session title stays on one line
-   with an ellipsis instead of wrapping out of the fixed-height .dh header (the
-   "vỡ" at the project crumb). Overflow lives on .dttitle — NOT on .dt — so the
-   project-switcher dropdown inside the crumb is never clipped. */
+/* ── Compact shell (≤1100px, toggled via `.app.compact` from useResponsiveShell) ──
+   The nav rail and the per-page secondary `.list` column collapse into left-edge
+   off-canvas drawers so the main content (chat / detail) takes the full width.
+   AppTopBar shows ☰ (nav) and a panel-left toggle (list); the layout mounts a scrim
+   behind whichever drawer is open. At full width none of this applies — the shell
+   stays the normal NavRail | list | detail row.
+
+   Z-index band 90–92 sits deliberately ABOVE all page content (menus/popovers ≤61,
+   the in-detail workspace panel at 80/81) and BELOW every global overlay (modals,
+   command palette, AppSelect at 100–300) — so a drawer covers the page but a modal
+   opened over it still wins. */
+.app.compact .side {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 218px;
+  z-index: 92;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  box-shadow: 2px 0 18px rgba(0, 0, 0, 0.45);
+}
+.app.compact.nav-open .side {
+  transform: translateX(0);
+}
+
+/* The list drawer overlays the detail/chat. Every list page nests `.list` inside a
+   `.md` flex container that fills .body, so anchor the absolute drawer to `.md`.
+   Explicit width since flex-basis does not apply to an absolutely-positioned box;
+   max-width keeps it from covering the whole narrow window. The inter-column resize
+   handle is meaningless for an overlay drawer, so hide it. */
+.app.compact .md {
+  position: relative;
+}
+.app.compact .md > .rsz {
+  display: none;
+}
+.app.compact .list {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 280px;
+  max-width: 82vw;
+  z-index: 91;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  box-shadow: 2px 0 18px rgba(0, 0, 0, 0.45);
+}
+.app.compact.list-open .list {
+  transform: translateX(0);
+}
+
+.shell-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Respect reduced-motion: the drawers still open/close, just without the slide. */
+@media (prefers-reduced-motion: reduce) {
+  .app.compact .side,
+  .app.compact .list {
+    transition: none;
+  }
+}
+
+/* Generic detail-header title: single-line flex row (every non-session header —
+   Skills/Agents/Tasks/Projects/… render just a name here). */
 .dh .dt {
   display: flex;
   align-items: center;
   min-width: 0;
 }
-/* Crumb = its own inline-flex row so the project name + chevron (and, when open,
-   the dropdown) stay on ONE line instead of the chevron wrapping under the name. */
+/* Session detail-header title: STACK the project crumb (small eyebrow, top) over
+   the session title (prominent, bottom) so a long title gets its own full-width
+   line and the project reads as a de-emphasised label above it. Scoped via
+   :has(> .dproj) so ONLY the session header (the only .dt carrying a project
+   crumb) becomes a column — every other detail header keeps the row rule above. */
+.dh .dt:has(> .dproj) {
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+}
+/* Crumb = the eyebrow line: small, dimmed, brightens on hover (it's the project
+   switcher). inline-flex keeps name + chevron (and the open dropdown) on one line
+   and un-clipped — no overflow here, so the dropdown is never cut off. */
 .dh .dt > .dproj {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--textDim);
   white-space: nowrap;
 }
-.dh .dt > .dsep {
-  flex: 0 0 auto;
+.dh .dt > .dproj:hover {
+  color: var(--text);
 }
-.dh .dt .dttitle {
-  flex: 1;
+/* Session title = the prominent bottom line; truncates with an ellipsis (tooltip
+   carries the full title) so a long title stays on one line within the header. */
+.dh .dt > .dttitle {
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 /* Session list width is applied inline with !important by SessionList (so it beats
@@ -700,4 +801,123 @@ textarea.gcpta {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/* ──── Projects ──────────────────────────────────────────────────────────────
+   The issue/PR list uses the same two-layer card system as the Overview tab: the
+   pane stays on the base `--bg` (grey in light) and each row becomes an elevated
+   `--bgEl` card (white in light) with its own border + radius + gap. This avoids
+   the flat one-white-sheet look and matches .pcard/.pstat. Hover darkens the
+   border (works in both themes) instead of filling the card grey like the
+   prototype default. `--bgEl` keeps both modes + surface-depth correct. */
+[data-page='projects'] .ghlist {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 12px;
+}
+[data-page='projects'] .ghrow {
+  background: var(--bgEl);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 11px 13px;
+}
+[data-page='projects'] .ghrow:hover {
+  background: var(--bgEl);
+  border-color: var(--borderStrong);
+}
+
+/* Tabs (Overview / Issues / PR): the prototype fills the active tab with the grey
+   `--bgActive` surface, which reads as washed-out (the same grey-fill issue flagged
+   on segmented controls). Use the accent-tint pattern instead (matches .seg.on /
+   .pll-chip.on): accent text + faint accent fill + accent border, semibold when
+   active. Transparent border on the base keeps the active border from shifting
+   layout. */
+[data-page='projects'] .ptab {
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+[data-page='projects'] .ptab:hover {
+  color: var(--text);
+}
+[data-page='projects'] .ptab.on {
+  background: var(--accentDim);
+  color: var(--accent);
+  border-color: var(--accentBorder);
+  font-weight: 600;
+}
+
+/* GH detail drawer fullscreen: overlay the whole issue/PR pane. The pane is the
+   positioning context; the drawer covers it (above the list) until toggled back. */
+[data-page='projects'] .projmain {
+  position: relative;
+}
+[data-page='projects'] .ghdrawer.full {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  z-index: 5;
+}
+
+/* ──── Typography: section/group headers are UI titles, not machine strings ────
+   The prototype renders every uppercase "eyebrow" label (section headers, group
+   labels, stat captions) in the monospace `--code` font — a terminal aesthetic
+   that reads as semantically wrong (and harder to read) for plain UI labels like
+   "CẤU HÌNH" / "REPOS". Flip just this header family to the UI sans font, keeping
+   the uppercase + letter-spacing that gives the structural rhythm. Monospace
+   stays for genuine technical strings: paths (.mono/.kvv.mono), SHAs, branch
+   names, timestamps, counts/badges, code/diff/terminal. App-wide for consistency
+   across every page, not just Projects.
+
+   Weight: these headers ship with NO explicit font-weight, so they fall to
+   `--font-weight-base` (400) — too light to read as a title, and inconsistent
+   (siblings `.palg`/`.grph .gnm` already declare 600). Pin the whole family to
+   600 (semibold) — the heading tier in the scale; 700 stays reserved for numbers
+   /badges. An explicit weight also keeps headers above body even when the user
+   raises the base body weight in Appearance. */
+.navg,
+.sech,
+.gsec,
+.gfh,
+.palg,
+.tgrph,
+.pl2,
+.pcardh,
+.th .tt,
+.stat .lbl,
+.grph .gnm {
+  font-family: var(--sans);
+  font-weight: 600;
+}
+
+/* Issue/PR rows: the "new session" action reveals on row hover (and keyboard
+   focus) so the dense list stays uncluttered. accent on hover signals it's the
+   row's primary action; stop-propagation in the template keeps it from opening
+   the drawer. */
+.ghrow .ghnewses {
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.ghrow:hover .ghnewses,
+.ghrow .ghnewses:focus-visible {
+  opacity: 1;
+}
+.ghrow .ghnewses:hover {
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+
+/* Config key/value rows: `.kvk` collides with the git commit-detail `.kvk`
+   (forced to 46px for short keys like SHA/Author), which is far too narrow for
+   the Vietnamese field labels here — they wrap onto two lines. Widen + nowrap so
+   the value column aligns, and lift the dim label to `--textMuted` (the dim tone
+   reads as washed-out on the white card). */
+[data-page='projects'] .kvk {
+  flex: 0 0 104px;
+  width: 104px;
+  white-space: nowrap;
+  color: var(--textMuted);
 }

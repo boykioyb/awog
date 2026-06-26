@@ -1,0 +1,298 @@
+<template>
+  <!-- One sanitized markdown HTML run, rendered imperatively (not v-html) so we can wrap
+       quoted excerpts in numbered <mark>s on the parsed DOM (§8) and overlay a copy button
+       on each code block — both need to mutate the rendered subtree. The container is
+       Vue-rendered (carries the scoped style attribute → :deep(...) rules still apply). -->
+  <div ref="root" class="mdinline" />
+</template>
+
+<script setup lang="ts">
+// Renders a single markdown HTML run produced by useMarkdown (one segment between mermaid
+// blocks). Split out of SessionTextBlock so each run is an independent node — letting
+// mermaid segments render as live <MermaidView> diagrams in between (SoC).
+//
+// Highlight mapping (§8): a follow-up is matched by substring-matching its `excerpt`
+// against the RENDERED text (utils/quote-highlight), then the matched span is wrapped in a
+// `<mark class="qmark">` with a circled `<sup>` number — done on the PARSED DOM after
+// render (not by splicing into the HTML string), keeping markdown formatting + the inline
+// number and staying XSS-safe (the HTML is already sanitized by useMarkdown, same trust
+// boundary as v-html). Highlights not found in this run are simply skipped by locateMarks.
+import type { BlockHighlight } from './SessionTextBlock.vue'
+import { locateMarks, type QuoteMark } from '~/utils/quote-highlight'
+
+const props = defineProps<{ html: string; highlights?: BlockHighlight[] }>()
+const { t } = useI18n()
+const root = useTemplateRef<HTMLElement>('root')
+
+// Wrap each quoted excerpt in a numbered <mark>. Overlapping matches (rare) are dropped;
+// the rest are wrapped LAST-first so wrapping a later span can't shift the offsets/nodes
+// of an earlier one. extractContents preserves any inline formatting inside the span.
+function applyMarks(el: HTMLElement) {
+  const hs = props.highlights ?? []
+  if (!hs.length) return
+  const found = locateMarks(
+    el,
+    hs.map((h) => ({ needle: h.fu.excerpt || '', label: h.label })),
+  ).sort((a, b) => a.start - b.start)
+  const kept: QuoteMark[] = []
+  let lastEnd = 0
+  for (const m of found) {
+    if (m.start < lastEnd) continue // skip overlap
+    kept.push(m)
+    lastEnd = m.end
+  }
+  kept.sort((a, b) => b.start - a.start)
+  for (const m of kept) {
+    try {
+      const mark = document.createElement('mark')
+      mark.className = 'qmark'
+      mark.appendChild(m.range.extractContents())
+      const sup = document.createElement('sup')
+      sup.className = 'qnum'
+      sup.textContent = m.label
+      mark.appendChild(sup)
+      m.range.insertNode(mark)
+    } catch {
+      // Selection crossed element boundaries we can't cleanly wrap — skip this mark.
+    }
+  }
+}
+
+// Overlay a hover-revealed copy button on each code block. The button markup is a trusted
+// constant (icon sprite <use>), appended AFTER applyMarks so its (text-empty) node can't
+// interfere with quote matching. The subtree is rebuilt each rerender, so stale buttons +
+// their reset timers are detached and GC'd.
+const COPY_RESET_MS = 1200
+const COPY_SVG = '<svg class="icn"><use href="#i-copy"></use></svg>'
+const CHECK_SVG = '<svg class="icn"><use href="#i-check"></use></svg>'
+function addCopyButtons(el: HTMLElement) {
+  for (const pre of Array.from(el.querySelectorAll('pre'))) {
+    const code = pre.querySelector('code')
+    if (!code) continue
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'codecopy'
+    btn.title = t('common.copy')
+    btn.innerHTML = COPY_SVG
+    let reset: ReturnType<typeof setTimeout> | null = null
+    btn.addEventListener('click', () => {
+      void navigator.clipboard.writeText(code.textContent ?? '')
+      btn.classList.add('ok')
+      btn.title = t('common.copied')
+      btn.innerHTML = CHECK_SVG
+      if (reset) clearTimeout(reset)
+      reset = setTimeout(() => {
+        btn.classList.remove('ok')
+        btn.title = t('common.copy')
+        btn.innerHTML = COPY_SVG
+      }, COPY_RESET_MS)
+    })
+    pre.appendChild(btn)
+  }
+}
+
+// Rebuild the subtree from the sanitized HTML, then re-apply marks + copy buttons. Runs on
+// mount and whenever the HTML or highlights change (flush:'post' so the DOM is in place).
+//
+// Guarded by the last-rendered html + a highlight CONTENT signature: the parent hands a
+// fresh `highlights` array (and re-evaluates this run) on every streaming frame, but only
+// the one block whose text actually grew has new `html`. Skipping the rebuild when nothing
+// changed is what keeps a streaming reply's per-frame cost bounded to its trailing block
+// (rebuild + querySelectorAll over a whole long reply each frame is the jank we're killing).
+let lastHtml: string | null = null
+let lastHlSig = ''
+const hlSig = () => (props.highlights ?? []).map((h) => `${h.label} ${h.fu.excerpt}`).join('|')
+
+function rerender() {
+  const el = root.value
+  if (!el) return
+  const sig = hlSig()
+  if (props.html === lastHtml && sig === lastHlSig) return
+  lastHtml = props.html
+  lastHlSig = sig
+  el.innerHTML = props.html
+  applyMarks(el)
+  addCopyButtons(el)
+}
+onMounted(rerender)
+watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
+</script>
+
+<style scoped>
+/* Inline-markdown styling for the transcript (§3). Colors via theme tokens only; sizing
+   inherits .blk.txt (text-[1em]). Reasonably complete (tables, hr, headings, spacing,
+   line-height) — PreviewModal still owns heavy/full-screen rendering. */
+.mdinline {
+  line-height: 1.6;
+}
+/* No top gap on the run's first element (heading/para/table). */
+.mdinline :deep(:first-child) {
+  margin-top: 0;
+}
+.mdinline :deep(p) {
+  margin: 0 0 10px;
+}
+.mdinline :deep(p:last-child) {
+  margin-bottom: 0;
+}
+/* Each .mdinline now holds exactly ONE top-level block (per-block streaming render),
+   so its block's own bottom margin would double with the 10px inter-segment gap that
+   SessionTextBlock owns (`.mdwrap > * + *`). Zero it for one uniform rhythm. */
+.mdinline :deep(> :last-child) {
+  margin-bottom: 0;
+}
+.mdinline :deep(strong),
+.mdinline :deep(b) {
+  font-weight: 600;
+}
+.mdinline :deep(em) {
+  font-style: italic;
+}
+.mdinline :deep(code) {
+  font-family: var(--code);
+  background: var(--bgInput);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.92em;
+  /* Long unbreakable tokens (file paths, URLs) must wrap inside the bubble instead
+     of spilling past its right edge when the message column is narrow (e.g. with the
+     workspace panel open). `/` and `.` aren't break opportunities by default, so allow
+     breaking anywhere. Block code (`pre code`) keeps white-space:pre → unaffected,
+     scrolls via the pre's overflow-x. */
+  overflow-wrap: anywhere;
+}
+.mdinline :deep(pre) {
+  position: relative;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  background: var(--bgInput);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+.mdinline :deep(pre code) {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.92em;
+}
+/* Per-code-block copy button — hover-revealed, top-right (mirrors Library/Preview copy). */
+.mdinline :deep(.codecopy) {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--textDim);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease,
+    background 0.12s ease;
+}
+.mdinline :deep(pre:hover .codecopy),
+.mdinline :deep(.codecopy:focus-visible) {
+  opacity: 1;
+}
+.mdinline :deep(.codecopy:hover) {
+  color: var(--text);
+  background: var(--bgHover);
+}
+.mdinline :deep(.codecopy.ok) {
+  color: var(--add);
+  opacity: 1;
+}
+.mdinline :deep(.codecopy .icn) {
+  width: 13px;
+  height: 13px;
+}
+.mdinline :deep(ul),
+.mdinline :deep(ol) {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+/* Tailwind Preflight resets list-style to none — restore markers for prose lists. */
+.mdinline :deep(ul) {
+  list-style: disc;
+}
+.mdinline :deep(ol) {
+  list-style: decimal;
+}
+.mdinline :deep(li) {
+  margin: 3px 0;
+}
+.mdinline :deep(li > ul),
+.mdinline :deep(li > ol) {
+  margin: 3px 0 0;
+}
+.mdinline :deep(a) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mdinline :deep(blockquote) {
+  margin: 0 0 10px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--border);
+  color: var(--textDim);
+}
+.mdinline :deep(h1),
+.mdinline :deep(h2),
+.mdinline :deep(h3),
+.mdinline :deep(h4),
+.mdinline :deep(h5) {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 16px 0 8px;
+}
+.mdinline :deep(h1) {
+  font-size: 1.3em;
+}
+.mdinline :deep(h2) {
+  font-size: 1.18em;
+}
+.mdinline :deep(h3) {
+  font-size: 1.08em;
+}
+.mdinline :deep(hr) {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+/* GFM tables — bordered, padded, header tint, zebra rows. Wide tables scroll in place
+   (display:block + overflow) so they never push the page/bubble width. */
+.mdinline :deep(table) {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 0.96em;
+}
+.mdinline :deep(th),
+.mdinline :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 11px;
+  text-align: left;
+  vertical-align: top;
+}
+.mdinline :deep(th) {
+  background: var(--bgInput);
+  font-weight: 600;
+}
+.mdinline :deep(tbody tr:nth-child(even)) {
+  background: color-mix(in srgb, var(--bgInput) 45%, transparent);
+}
+.mdinline :deep(img) {
+  max-width: 100%;
+}
+</style>

@@ -7,8 +7,9 @@ import {
   unregisterAborter,
   type RunStreamResult,
 } from '../sessions/runner.js'
-import { appendMessage, appendEvent } from '../sessions/store.js'
+import { appendMessage, appendEvent, loadSession } from '../sessions/store.js'
 import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
+import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { loadProject } from '../projects/store.js'
 import {
@@ -111,6 +112,10 @@ const Params = z.object({
   // all globally-enabled servers. `[]` = explicitly none. `[ids]` = only these
   // (intersected with the globally-enabled set).
   mcpServerIds: z.array(z.string()).optional(),
+  // Discuss link (ADR 0055): the task this session discusses. When set, a
+  // <linked_task> block (the task's status + per-phase output) is injected into
+  // this turn's systemPromptAppend so the agent can reason about the results.
+  aboutTaskId: z.string().optional(),
   // Active compaction checkpoint (ADR 0047), forwarded by the UI alongside
   // `history` (same trust model). When present, the runtime feeds the model the
   // summary + messages from `firstKeptMessageId` onward instead of full history.
@@ -308,6 +313,29 @@ register('sessions.sendMessage', async (raw) => {
   // persisted user message and the runtime image-content rebuild.
   const attachments = params.attachments?.map(toSessionAttachment)
 
+  // Resume context (ADR 0029): the runtime has no opaque session id — it rebuilds
+  // the model context from `history` every turn. The reference `ui` snapshots its
+  // in-memory transcript into `params.history`; the rebuilt `ui-next` cannot (its
+  // display model keeps only render blocks, no canonical per-message text), so it
+  // sends an empty array. When history is empty, fold it from the JSONL transcript
+  // — the source of truth — so a follow-up turn still sees the prior conversation
+  // instead of starting blank. Loaded BEFORE the current user message is persisted
+  // below, so it carries ONLY prior turns (pendingText drives this one). A brand-
+  // new session (no file) folds to []. A non-empty `params.history` is honoured
+  // unchanged (reference `ui`) — backward compatible.
+  let historyForRun = params.history as unknown as SessionMessage[]
+  if (historyForRun.length === 0) {
+    try {
+      const loaded = await loadSession(params.sessionId)
+      if (loaded && loaded.messages.length > 0) historyForRun = loaded.messages
+    } catch (err) {
+      log.warn('failed to fold session history for resume', {
+        sessionId: params.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
   // One AbortController per turn. sessions.cancel resolves it by messageId.
   const abortController = new AbortController()
   // This turn signal fans out to undici (per LLM request), parallel tool calls,
@@ -461,6 +489,18 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     systemPromptAppend = systemPromptAppend
       ? `${systemPromptAppend}\n\n${bulkLoad.block}`
       : bulkLoad.block
+  }
+
+  // Discuss link (ADR 0055): when this session discusses a task, inject the task's
+  // results as a <linked_task> block. Rebuilt each turn so a running task's context
+  // stays fresh. Best-effort — a missing/deleted task yields no block.
+  if (params.aboutTaskId) {
+    const linkedTask = await buildLinkedTaskBlock(params.aboutTaskId)
+    if (linkedTask) {
+      systemPromptAppend = systemPromptAppend
+        ? `${systemPromptAppend}\n\n${linkedTask}`
+        : linkedTask
+    }
   }
 
   // Total ms this turn spends PARKED on human input (permission prompt or
@@ -703,10 +743,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         sessionId: params.sessionId,
         pendingText: params.text,
         ...(attachments && attachments.length ? { pendingAttachments: attachments } : {}),
-        // Cast: zod .passthrough() yields a permissive shape; we only consume the
-        // fields declared above (id/role/text/at) plus ignored extras. The runner
+        // Prior turns: either what the UI sent (reference `ui`) or, when it sent
+        // none (`ui-next`), the transcript folded from JSONL above. The runner
         // treats history as read-only SessionMessage[].
-        history: params.history as unknown as SessionMessage[],
+        history: historyForRun,
         settings: toSessionSettings(params.settings),
         ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(cwd ? { cwd } : {}),

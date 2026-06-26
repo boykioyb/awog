@@ -33,6 +33,9 @@
     >
       <Icon name="stop" />
     </button>
+    <button class="iconbtn" :title="t('tasks.action.discussInSession')" @click="discussTask">
+      <Icon name="sessions" />
+    </button>
     <button class="iconbtn" :title="t('tasks.action.openEditor')" @click="openEditor">
       <Icon name="edit" />
     </button>
@@ -51,6 +54,24 @@
       <TaskSourceBadge v-if="task.source" :source="task.source" />
     </div>
     <p v-if="task.description" class="td-desc">{{ task.description }}</p>
+
+    <div v-if="discussions.length" class="td-discuss">
+      <div class="td-discuss-head">
+        <Icon name="sessions" class="td-meta-icn" />
+        {{ t('tasks.discussions', { n: discussions.length }) }}
+      </div>
+      <button
+        v-for="d in discussions"
+        :key="d.id"
+        class="td-discuss-row"
+        :disabled="!d.engineId"
+        @click="d.engineId && openSession(d.engineId)"
+      >
+        <Icon name="sessions" class="td-discuss-icn" />
+        <span class="td-discuss-title">{{ d.title }}</span>
+        <Icon name="chev" class="td-discuss-chev" />
+      </button>
+    </div>
 
     <div class="th td-pipehead">
       <Icon name="workflows" />
@@ -81,12 +102,14 @@
 // Task detail — header (title/id/time/status + pause/resume/stop/delete) plus the
 // pipeline of phase cards. Port of the old UI TaskDetail in prototype CSS. The
 // detail is rendered inside LibraryView's #detail slot.
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import Icon from '~/components/Icon.vue'
 import TaskPhaseCard from '~/components/task/TaskPhaseCard.vue'
 import TaskSourceBadge from '~/components/task/TaskSourceBadge.vue'
 import { useI18n } from '~/composables/useI18n'
 import { useTasksStore, type Task, type TaskPhase } from '~/stores/tasks'
+import { useSessionsStore } from '~/stores/sessions'
+import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
 
 const props = defineProps<{ task: Task }>()
 
@@ -102,6 +125,26 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const store = useTasksStore()
+const sessionsStore = useSessionsStore()
+const { openSession, discussInSession } = useSessionTaskLink()
+
+// "Discuss in session" → spawn a session bound to this task and navigate to it.
+const discussTask = () =>
+  discussInSession(
+    props.task.id,
+    props.task.projectId,
+    t('tasks.discussTitle', { title: props.task.title }),
+  )
+
+// Sessions opened to discuss this task (ADR 0055 — reverse link, derived). Hydrate
+// the sessions list on mount so this populates even when arriving from the Tasks
+// page before Sessions has loaded.
+onMounted(() => {
+  void sessionsStore.hydrate()
+})
+const discussions = computed(() =>
+  sessionsStore.sessions.filter((s) => s.aboutTaskId === props.task.id),
+)
 
 const progress = computed(() => store.progressOf(props.task))
 
@@ -220,6 +263,62 @@ const formattedTime = computed(() => {
   color: var(--textMuted);
   line-height: 1.6;
   margin-bottom: 6px;
+}
+.td-discuss {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.td-discuss-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9231rem;
+  color: var(--textMuted);
+  margin-bottom: 2px;
+}
+.td-discuss-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bgSubtle);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.td-discuss-row:hover:not(:disabled) {
+  border-color: var(--accentBorder);
+  background: var(--bgHover);
+}
+.td-discuss-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.td-discuss-icn {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--textDim);
+}
+.td-discuss-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.td-discuss-chev {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--textFaint);
 }
 .td-pipehead {
   margin-top: 20px;

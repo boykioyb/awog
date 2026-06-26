@@ -21,6 +21,15 @@
       </div>
 
       <button
+        v-if="needsReauth"
+        class="acract acrreauth"
+        type="button"
+        :title="t('settingsModels.account.reauth')"
+        @click="emit('reauth')"
+      >
+        <Icon name="refresh" style="width: 13px; height: 13px" />
+      </button>
+      <button
         class="acract"
         type="button"
         :title="t('settingsModels.account.edit')"
@@ -72,24 +81,42 @@ export type AccountTestResult = {
   error?: { code: string; message: string }
 }
 
-const props = defineProps<{
-  account: ProviderAccount
-  active: boolean
-  testing: boolean
-  testResult: AccountTestResult | null
-  // Optional override for the mono detail line (e.g. custom endpoint host). When
-  // omitted, derive from the account (email/org · fingerprint · subscription).
-  subtitle?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    account: ProviderAccount
+    active: boolean
+    testing: boolean
+    testResult: AccountTestResult | null
+    // Optional override for the mono detail line (e.g. custom endpoint host). When
+    // omitted, derive from the account (email/org · fingerprint · subscription).
+    subtitle?: string
+    // Capability flag: the parent card can re-run the OAuth flow for this account.
+    // The button only shows when this is true AND the account actually needs it.
+    reauthable?: boolean
+  }>(),
+  { subtitle: '', reauthable: false },
+)
 
 const emit = defineEmits<{
   'set-active': []
   edit: []
   test: []
   disconnect: []
+  reauth: []
 }>()
 
 const { t } = useI18n()
+
+// Re-auth is only meaningful for OAuth accounts whose credentials have lapsed —
+// either the persisted status is 'expired', or a Test just failed with an auth
+// error (the sidecar returns AUTH_EXPIRED when the refresh token is revoked, which
+// does not flip the persisted status). API-key accounts recover via Edit instead.
+const needsReauth = computed(() => {
+  if (!props.reauthable || props.account.authMode !== 'oauth') return false
+  if (props.account.status === 'expired') return true
+  const code = props.testResult && !props.testResult.ok ? props.testResult.error?.code : undefined
+  return code === 'AUTH_EXPIRED' || code === 'TOKEN_EXPIRED'
+})
 
 const statusColor = computed(() => {
   if (props.account.status === 'connected') return 'var(--green)'
@@ -222,6 +249,17 @@ const formatTestResult = (result: AccountTestResult): string => {
 .acract:hover {
   border-color: var(--borderStrong);
   color: var(--text);
+}
+/* Recovery action for a lapsed OAuth account — icon-only like its siblings, but
+   accent-tinted so it reads as the recommended action (label via `title`). */
+.acrreauth {
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+.acrreauth:hover {
+  background: var(--accentDim);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .acract:disabled {
   cursor: default;

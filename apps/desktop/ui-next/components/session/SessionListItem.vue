@@ -55,8 +55,8 @@
       <span v-if="!editing" class="tm">{{ session.when }}</span>
     </div>
     <div class="sub">
-      <span class="tag" style="padding: 1px 6px">{{ projName }}</span>
-      <span>{{ session.model }} · {{ statusLabel }}</span>
+      <span v-if="!hideProject" class="tag projtag" style="padding: 1px 6px">{{ projName }}</span>
+      <span class="smeta">{{ session.model }} · {{ statusLabel }}</span>
       <span v-if="indicators.length" class="lind">
         <span v-for="ind in indicators" :key="ind.key" class="lindchip" :title="ind.title">
           <Icon :name="ind.icon" style="width: 11px; height: 11px" />
@@ -73,11 +73,7 @@
       >
         <Icon name="pin" style="width: 12px; height: 12px" />
       </span>
-      <span
-        class="liactbtn danger"
-        :title="t('sessions.item.delete')"
-        @click.stop="store.remove(session.id)"
-      >
+      <span class="liactbtn danger" :title="t('sessions.item.delete')" @click.stop="askRemove">
         <Icon name="trash" style="width: 13px; height: 13px" />
       </span>
     </div>
@@ -97,6 +93,9 @@ const props = defineProps<{
   session: Session
   active: boolean
   selecting: boolean
+  // Hide the project chip — redundant when the list is grouped by project (the
+  // group header already names it), and frees the sub-row so it stays one line.
+  hideProject?: boolean
   // Rename signal from the parent context menu: when `.id` matches this row, the
   // inline rename starts. `n` (nonce) lets the same row be re-triggered.
   renameReq?: { id: number; n: number }
@@ -110,6 +109,16 @@ const { t } = useI18n()
 const { STATUS_COLOR } = useSessionsMock()
 const { projectName } = useProjects()
 const store = useSessionsStore()
+const { confirm } = useConfirm()
+
+// Delete is destructive + unrecoverable (drops the JSONL transcript) → confirm first.
+async function askRemove() {
+  const ok = await confirm({
+    title: t('sessions.delete.title'),
+    description: t('sessions.delete.one', { title: props.session.title }),
+  })
+  if (ok) store.remove(props.session.id)
+}
 
 const statusColor = computed(() => STATUS_COLOR[props.session.status])
 const statusLabel = computed(() => t(`sessions.status.${props.session.status}`))
@@ -211,6 +220,27 @@ watch(
   font-size: 12px;
   line-height: 1;
   color: var(--textFaint);
+}
+/* Keep the meta sub-row on a SINGLE line: never wrap, and let the two text parts
+   shrink + ellipsis instead of pushing to a second line. Project chip is capped
+   (secondary info) so the model · status — the more useful part — keeps its room. */
+.sub {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.projtag {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smeta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* Pin mark is interactive (toggles pin); keep the pointer affordance. */
 .pinmark {

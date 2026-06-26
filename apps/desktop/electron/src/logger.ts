@@ -1,4 +1,6 @@
-import { shell } from 'electron'
+import { unwatchFile, watchFile } from 'node:fs'
+import { open, type FileHandle } from 'node:fs/promises'
+import { ipcMain, shell, type BrowserWindow } from 'electron'
 import log from 'electron-log/main'
 
 // Centralized file logging for the packaged app. A GUI build has no terminal
@@ -39,4 +41,97 @@ export function logFilePath(): string {
 
 export function revealLogs(): void {
   shell.showItemInFolder(logFilePath())
+}
+
+// ── Live log tail (Diagnostics panel) ───────────────────────────────────────
+// The Settings → Diagnostics panel streams the tail of the log file into an
+// in-app terminal view instead of only revealing it in the file manager. The
+// path is still derived internally (logFilePath) — the renderer never supplies
+// it — so this widens no allowlist (invariant #7). One tailer is active at a
+// time: the panel opens → start, closes/unmounts → stop.
+
+const INITIAL_TAIL_BYTES = 64 * 1024 // last 64 KB shown when the panel opens
+
+export type LogTailEvent =
+  | { type: 'init'; content: string; path: string }
+  | { type: 'data'; chunk: string }
+  | { type: 'error'; message: string }
+
+let tailFile: string | null = null
+let tailPosition = 0
+let tailReading = false
+
+// Read everything appended since tailPosition and forward it. Guarded against
+// re-entrancy (watchFile can fire while a read is in flight) and resets to 0 if
+// the file shrank — electron-log rotates the file at maxSize.
+async function readLogDelta(send: (event: LogTailEvent) => void): Promise<void> {
+  if (tailReading || !tailFile) return
+  tailReading = true
+  let handle: FileHandle | null = null
+  try {
+    handle = await open(tailFile, 'r')
+    const { size } = await handle.stat()
+    if (size < tailPosition) tailPosition = 0 // rotated / truncated → re-read from start
+    if (size > tailPosition) {
+      const length = size - tailPosition
+      const buf = Buffer.alloc(length)
+      await handle.read(buf, 0, length, tailPosition)
+      tailPosition = size
+      send({ type: 'data', chunk: buf.toString('utf8') })
+    }
+  } catch {
+    // Transient (file mid-rotation) — the next watchFile tick re-reads.
+  } finally {
+    await handle?.close()
+    tailReading = false
+  }
+}
+
+export async function startLogTail(send: (event: LogTailEvent) => void): Promise<void> {
+  stopLogTail()
+  const file = logFilePath()
+  tailFile = file
+  try {
+    const handle = await open(file, 'r')
+    try {
+      const { size } = await handle.stat()
+      const start = Math.max(0, size - INITIAL_TAIL_BYTES)
+      const length = size - start
+      const buf = Buffer.alloc(length)
+      if (length > 0) await handle.read(buf, 0, length, start)
+      tailPosition = size
+      send({ type: 'init', content: buf.toString('utf8'), path: file })
+    } finally {
+      await handle.close()
+    }
+  } catch (err) {
+    tailFile = null
+    send({ type: 'error', message: err instanceof Error ? err.message : String(err) })
+    return
+  }
+  // Poll-based watch survives log rotation (a rename leaves fs.watch on the old
+  // inode silent). 1 s latency is fine for a diagnostics view.
+  watchFile(file, { interval: 1000 }, () => {
+    void readLogDelta(send)
+  })
+}
+
+export function stopLogTail(): void {
+  if (tailFile) unwatchFile(tailFile)
+  tailFile = null
+  tailPosition = 0
+  tailReading = false
+}
+
+// IPC for the live log tail. Events ride a dedicated `app:logData` channel
+// (mirrors updater:event), so they never mix with engine:event traffic.
+export function registerLogTailIpc(getWindow: () => BrowserWindow | null): void {
+  ipcMain.handle('app:tailLogs:start', async () => {
+    await startLogTail((event) => {
+      getWindow()?.webContents.send('app:logData', event)
+    })
+  })
+  ipcMain.handle('app:tailLogs:stop', () => {
+    stopLogTail()
+  })
 }

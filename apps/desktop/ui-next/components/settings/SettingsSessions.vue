@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="sech">{{ t('settings.sessions.heading') }}</div>
+    <SettingsPaneHeader :title="t('settings.sessions.heading')" />
 
     <SettingsField
       :name="t('settingsSessions.autoApprove.name')"

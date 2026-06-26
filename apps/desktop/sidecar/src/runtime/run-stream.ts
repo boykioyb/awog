@@ -29,6 +29,8 @@ import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
 import { createTaskTool } from './tools/task-tool.js'
+import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
+import { listWorkflows } from '../workflows/store.js'
 import { makeBeforeToolCall } from './permission.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
@@ -197,6 +199,37 @@ export async function runStreamPi(
           const child = createEventAdapter(cb, { parentId: parentToolCallId })
           return { emit: child.handle, text: () => child.result().text }
         },
+      }),
+    )
+  }
+
+  // RunWorkflow tool (ADR 0055): lets the model spawn a background Task from this
+  // session. TOP LEVEL only (depth = 1 — never in a subagent toolset). Requires a
+  // project (a Task is project-scoped) + a sessionId (the origin link); skipped in
+  // plan mode and when allowedTools/disabledTools exclude it. Mutating per
+  // permission.ts → prompts in ask/accept-edits, runs only in execute.
+  const runWorkflowAllowed =
+    !inPlanMode &&
+    !!args.projectId &&
+    !!args.sessionId &&
+    isToolAllowed(RUN_WORKFLOW_TOOL_NAME, {
+      ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+      ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+    })
+  if (runWorkflowAllowed && args.projectId) {
+    let workflows: Awaited<ReturnType<typeof listWorkflows>> = []
+    try {
+      workflows = await listWorkflows([args.projectId])
+    } catch (err) {
+      log.warn('failed to list workflows for RunWorkflow tool', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+    tools.push(
+      createRunWorkflowTool({
+        sessionId: args.sessionId,
+        projectId: args.projectId,
+        workflows,
       }),
     )
   }

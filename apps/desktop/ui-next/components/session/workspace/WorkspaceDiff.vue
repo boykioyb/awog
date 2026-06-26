@@ -32,15 +32,11 @@
     </div>
 
     <template v-else>
-      <!-- Changed-file list -->
+      <!-- Changed-file list — click a file to open it in the shared full-window
+           PreviewModal (workspaceRoot + path → fs.readFile). The full +/- diff
+           stays one click away via the "Open Git" button above. -->
       <div class="wsdiff-files">
-        <button
-          v-for="f in files"
-          :key="f.path"
-          class="frow file"
-          :style="f.path === selectedPath ? { background: 'var(--bgActive)' } : undefined"
-          @click="selectFile(f.path)"
-        >
+        <button v-for="f in files" :key="f.path" class="frow file" @click="openFile(f)">
           <span class="fst" :class="statusClass(f.changeType)">
             {{ statusLetter(f.changeType) }}
           </span>
@@ -53,29 +49,17 @@
           </span>
         </button>
       </div>
-
-      <!-- Diff body for the selected file -->
-      <div class="wsdiff-body">
-        <div v-if="currentBinary" class="empty" style="padding: 20px">
-          <div class="et">{{ t('sessions.workspace.diff.binary') }}</div>
-        </div>
-        <SessionCodeView
-          v-else-if="selectedPath"
-          mode="diff"
-          :fname="selectedPath"
-          :lines="currentLines"
-        />
-      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-// Diff tab (§5/§10) — real working-tree changes via git.status + git.diff for the
-// session's resolved workspace root. Renders the changed-file list + a +/- colored
-// diff (reusing SessionCodeView's prototype styling). Degrades to an empty/disabled
-// state when the engine bridge is absent or the root can't be resolved (browser-dev).
-import type { Session, DiffLine } from '~/composables/useSessionsMock'
+// Diff tab (§5/§10) — real working-tree changes via git.status for the session's
+// resolved workspace root. Renders the changed-file list; clicking a file opens it
+// in the shared full-window PreviewModal (usePreview) rather than an inline diff
+// pane. Degrades to an empty/disabled state when the engine bridge is absent or the
+// root can't be resolved (browser-dev).
+import type { Session } from '~/composables/useSessionsMock'
 import {
   SidecarError,
   SidecarUnavailableError,
@@ -84,12 +68,14 @@ import {
 } from '~/composables/useSidecar'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useGitModal } from '~/composables/useGitModal'
+import { usePreview, type PreviewRef } from '~/composables/usePreview'
 
 const props = defineProps<{ session: Session }>()
 
 const { t } = useI18n()
 const sc = useSidecar()
 const gitModal = useGitModal()
+const preview = usePreview()
 const { root, ready } = useWorkspaceData(() => props.session.project)
 
 function openGit(): void {
@@ -123,24 +109,11 @@ type SidecarGitStatus = {
   ahead: number
   behind: number
 }
-type GitDiffLineKind = 'context' | 'add' | 'del' | 'noeol'
-type SidecarGitDiffLine = {
-  kind: GitDiffLineKind
-  oldLineNum?: number
-  newLineNum?: number
-  content: string
-}
-type SidecarGitDiffHunk = { header: string; lines: SidecarGitDiffLine[] }
-type SidecarGitFileDiff = { path: string; isBinary: boolean; hunks: SidecarGitDiffHunk[] }
-type SidecarGitDiff = { files: SidecarGitFileDiff[] }
 
 // Raw working-tree status from git.status (whole repo); `files` narrows it to the
 // paths THIS session touched (see touchedPaths) so the Diff tab shows the
 // session's changes, not the repo's.
 const rawFiles = ref<SidecarGitFileStatus[]>([])
-const selectedPath = ref<string | null>(null)
-const currentLines = ref<DiffLine[]>([])
-const currentBinary = ref(false)
 const loading = ref(false)
 const noRepo = ref(false)
 // Real current branch + ahead count for the gitlink header (replaces mock meta).
@@ -220,53 +193,31 @@ const statusClass = (c: GitFileChangeType): Record<string, boolean> => ({
   m: c !== 'added' && c !== 'untracked' && c !== 'deleted',
 })
 
-// Map sidecar diff hunks → the prototype DiffLine shape SessionCodeView renders.
-function toDiffLines(diff: SidecarGitFileDiff): DiffLine[] {
-  const out: DiffLine[] = []
-  for (const h of diff.hunks) {
-    out.push({ t: '@', s: h.header })
-    for (const ln of h.lines) {
-      if (ln.kind === 'add') out.push({ t: '+', n: ln.newLineNum, s: ln.content })
-      else if (ln.kind === 'del') out.push({ t: '-', n: ln.oldLineNum, s: ln.content })
-      else out.push({ t: ' ', n: ln.newLineNum ?? ln.oldLineNum, s: ln.content })
-    }
-  }
-  return out
-}
-
 const gitCodeOf = (err: unknown): string | null => {
   if (!(err instanceof SidecarError)) return null
   return (err.data as { gitCode?: string } | undefined)?.gitCode ?? null
 }
 
-async function loadDiff(path: string): Promise<void> {
-  if (!root.value) return
-  const file = files.value.find((f) => f.path === path)
-  const kind =
-    file?.stageState === 'untracked'
-      ? 'untracked'
-      : file?.stageState === 'staged'
-        ? 'staged'
-        : 'workingTree'
-  try {
-    const res = await sc.request<SidecarGitDiff>('git.diff', {
-      kind,
-      workspaceRoot: root.value,
-      path,
-    })
-    const first = res.files[0]
-    currentBinary.value = first?.isBinary ?? false
-    currentLines.value = first ? toDiffLines(first) : []
-  } catch (err) {
-    if (err instanceof SidecarUnavailableError) return
-    currentBinary.value = false
-    currentLines.value = []
-  }
+// Preview kind from the file extension (the modal reads the real content itself).
+function kindOf(path: string): PreviewRef['kind'] {
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(path)) return 'image'
+  if (/\.pdf$/i.test(path)) return 'pdf'
+  if (/\.(md|markdown)$/i.test(path)) return 'markdown'
+  return 'text'
 }
 
-function selectFile(path: string): void {
-  selectedPath.value = path
-  void loadDiff(path)
+// Open a changed file in the shared full-window PreviewModal (workspaceRoot + path
+// → fs.readFile). A binary file with no useful text view falls back to the modal's
+// file placeholder.
+function openFile(f: SidecarGitFileStatus): void {
+  if (!root.value) return
+  const kind = kindOf(f.path)
+  preview.open({
+    name: f.path.split('/').pop() || f.path,
+    kind: f.isBinary && kind === 'text' ? 'file' : kind,
+    workspaceRoot: root.value,
+    path: f.path,
+  })
 }
 
 async function load(): Promise<void> {
@@ -291,21 +242,6 @@ async function load(): Promise<void> {
     loading.value = false
   }
 }
-
-// Keep the selection valid as the file list changes; auto-select the first file.
-watch(
-  files,
-  (list) => {
-    const stillThere = selectedPath.value && list.some((f) => f.path === selectedPath.value)
-    if (!stillThere) {
-      selectedPath.value = list[0]?.path ?? null
-      currentLines.value = []
-      currentBinary.value = false
-      if (selectedPath.value) void loadDiff(selectedPath.value)
-    }
-  },
-  { immediate: true },
-)
 
 // Re-load when the root resolves (projects may hydrate after mount).
 watch(root, () => void load())
@@ -347,8 +283,8 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 .wsdiff-files {
-  flex: 0 0 auto;
-  max-height: 40%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   font-family: var(--code);
   font-size: 0.9231rem;
@@ -358,13 +294,7 @@ onBeforeUnmount(() => {
   text-align: left;
   background: transparent;
   border: none;
-}
-.wsdiff-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  border-top: 1px solid var(--border);
-  margin-top: 6px;
+  cursor: pointer;
 }
 .wsdiff-counts {
   margin-left: auto;

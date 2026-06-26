@@ -8,6 +8,7 @@
   "common.confirm": "Confirm",
   "common.delete": "Delete",
   "common.copy": "Copy",
+  "common.copied": "Copied",
   "common.render": "Render",
   "common.raw": "Raw",
   "common.zoomIn": "Zoom in",

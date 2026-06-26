@@ -19,6 +19,10 @@ type UpdateEvent =
   | { type: 'progress'; percent: number }
   | { type: 'downloaded'; version: string }
   | { type: 'error'; message: string }
+type LogTailEvent =
+  | { type: 'init'; content: string; path: string }
+  | { type: 'data'; chunk: string }
+  | { type: 'error'; message: string }
 
 const awog = {
   // Returns the JSON-RPC result, or rejects with the RpcErrorShape so the
@@ -67,6 +71,16 @@ const awog = {
     const listener = (_e: unknown, event: UpdateEvent): void => handler(event)
     ipcRenderer.on('updater:event', listener)
     return () => ipcRenderer.removeListener('updater:event', listener)
+  },
+  // Live log tail for the Diagnostics panel. start → init snapshot + appended
+  // chunks stream over app:logData; stop ends the watch. onLogData returns an
+  // unsubscribe, like onUpdateEvent.
+  startLogTail: (): Promise<void> => ipcRenderer.invoke('app:tailLogs:start'),
+  stopLogTail: (): Promise<void> => ipcRenderer.invoke('app:tailLogs:stop'),
+  onLogData(handler: (event: LogTailEvent) => void): () => void {
+    const listener = (_e: unknown, event: LogTailEvent): void => handler(event)
+    ipcRenderer.on('app:logData', listener)
+    return () => ipcRenderer.removeListener('app:logData', listener)
   },
 }
 

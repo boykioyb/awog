@@ -2,5 +2,7 @@
   "topbar.search": "Search or jump to…",
   "topbar.new": "New",
   "topbar.toLight": "Switch to light",
-  "topbar.toDark": "Switch to dark"
+  "topbar.toDark": "Switch to dark",
+  "topbar.openNav": "Show navigation",
+  "topbar.openList": "Show list"
 }

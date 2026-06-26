@@ -16,7 +16,8 @@
       <Icon name="foldv" style="width: 13px; height: 13px" />
     </button>
     <div ref="msgsEl" class="msgs" @scroll="onScroll">
-      <SessionWelcome v-if="!messages.length" />
+      <SessionTranscriptSkeleton v-if="loading && !messages.length" />
+      <SessionWelcome v-else-if="!messages.length" />
       <SessionMessageItem
         v-for="(m, i) in messages"
         v-else
@@ -56,7 +57,13 @@
 // jump-to-top / jump-to-bottom controls overlay the bottom-right.
 import type { SessionMessage } from '~/composables/useSessionsMock'
 
-const props = defineProps<{ messages: SessionMessage[]; fallbackWhen: string }>()
+const props = defineProps<{
+  messages: SessionMessage[]
+  fallbackWhen: string
+  // True while the session's transcript is being fetched → show the skeleton
+  // instead of the empty welcome (only matters when there are no messages yet).
+  loading?: boolean
+}>()
 const { t } = useI18n()
 
 // Fold-all toggle: alternates collapse/expand on every click. Steps & clusters are

@@ -1,5 +1,5 @@
 <template>
-  <aside class="side" :class="{ collapsed }">
+  <aside class="side" :class="{ collapsed: collapsed && !compact }">
     <div class="brand">
       <span class="logo"><Icon name="home" /></span>
       <span class="nm">
@@ -44,7 +44,7 @@
       >
         <Icon :name="isDark ? 'moon' : 'sun'" style="width: 15px; height: 15px" />
       </button>
-      <button class="navtgl" :title="t('nav.collapse')" @click="toggleCollapsed">
+      <button v-if="!compact" class="navtgl" :title="t('nav.collapse')" @click="toggleCollapsed">
         <Icon name="chev" />
       </button>
     </div>
@@ -114,6 +114,7 @@ const route = useRoute()
 const { open: settingsOpen, openSettings } = useSettingsModal()
 const { isDark, toggleTheme } = useTheme()
 const { hasUnseen, openPanel } = useWhatsNew()
+const { compact } = useResponsiveShell()
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 
 const COLLAPSE_KEY = 'awog-nav-collapsed'

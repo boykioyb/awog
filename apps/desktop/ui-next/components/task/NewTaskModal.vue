@@ -18,8 +18,8 @@
         <div class="nt-hint">{{ t('tasks.new.projectHint') }}</div>
       </div>
 
-      <!-- source -->
-      <div class="nt-field">
+      <!-- source (hidden for a session-spawned task — its source IS the session) -->
+      <div v-if="!originSessionId" class="nt-field">
         <label class="nt-label">{{ t('tasks.new.source') }}</label>
         <div class="seg">
           <span
@@ -33,7 +33,7 @@
         </div>
       </div>
 
-      <div v-if="sourceType === 'github'" class="nt-field">
+      <div v-if="!originSessionId && sourceType === 'github'" class="nt-field">
         <label class="nt-label">{{ t('tasks.new.githubUrl') }}</label>
         <input
           v-model="githubUrl"
@@ -42,7 +42,7 @@
           @input="onGithubInput"
         />
       </div>
-      <div v-if="sourceType === 'jira'" class="nt-field">
+      <div v-if="!originSessionId && sourceType === 'jira'" class="nt-field">
         <label class="nt-label">{{ t('tasks.new.jiraKey') }}</label>
         <input
           :value="jiraKey"
@@ -53,7 +53,7 @@
       </div>
 
       <!-- optional connection -->
-      <div v-if="showConnectionPicker" class="nt-field">
+      <div v-if="!originSessionId && showConnectionPicker" class="nt-field">
         <label class="nt-label">{{ t('tasks.new.connection') }}</label>
         <div v-if="!connections.length" class="nt-hint">{{ t('tasks.new.connectionEmpty') }}</div>
         <template v-else>
@@ -148,6 +148,14 @@ import type { CreateTaskInput, TaskSource } from '~/stores/tasks'
 const props = defineProps<{
   open: boolean
   data: ReturnType<typeof useNewTaskData>
+  // Pre-fill (ADR 0055): seed project + title when opened from a session/elsewhere.
+  seedProjectId?: string
+  seedTitle?: string
+  // Pre-select a workflow (e.g. opened from the Workflows "Run" button).
+  seedWorkflowId?: string
+  // When set, the task is spawned from this session: the source picker is hidden
+  // and the created task's source becomes { type:'session', sessionId }.
+  originSessionId?: string
 }>()
 
 const emit = defineEmits<{
@@ -210,9 +218,20 @@ watch(
       closeDirty()
       return
     }
-    if (!projectId.value) projectId.value = projects.value[0]?.id ?? ''
+    // Seed project + title (ADR 0055) take precedence on open; fall back to the
+    // first project. Title only seeds when the field is still empty (don't clobber
+    // user edits if the modal re-seeds while open).
+    projectId.value = props.seedProjectId || projectId.value || projects.value[0]?.id || ''
+    if (props.seedTitle && !title.value) title.value = props.seedTitle
+    // When the current selection is no longer valid (modal just opened, or the
+    // project changed the offered set), prefer a seeded workflow if it's offered
+    // for this project; otherwise fall back to the first.
     if (!workflows.value.some((w) => w.id === workflowId.value)) {
-      workflowId.value = workflows.value[0]?.id ?? ''
+      const seeded = props.seedWorkflowId
+      workflowId.value =
+        (seeded && workflows.value.some((w) => w.id === seeded)
+          ? seeded
+          : workflows.value[0]?.id) ?? ''
     }
   },
   { immediate: true },
@@ -251,7 +270,9 @@ const canSubmit = computed(
     !!title.value.trim() &&
     !!workflowId.value &&
     !!projectId.value &&
-    (sourceType.value === 'manual' ||
+    // A session-spawned task has an implicit source; the picker is hidden.
+    (!!props.originSessionId ||
+      sourceType.value === 'manual' ||
       (sourceType.value === 'github' && !!githubUrl.value) ||
       (sourceType.value === 'jira' && !!jiraKey.value)),
 )
@@ -259,7 +280,10 @@ const canSubmit = computed(
 const buildPayload = (): CreateTaskInput => {
   const conn = connectionId.value ? { connectionId: connectionId.value } : {}
   let source: TaskSource
-  if (sourceType.value === 'github') {
+  if (props.originSessionId) {
+    // Spawned from a chat session (ADR 0055) — the session is the origin.
+    source = { type: 'session', sessionId: props.originSessionId }
+  } else if (sourceType.value === 'github') {
     const parsed = parseGithub(githubUrl.value)
     source = parsed
       ? {

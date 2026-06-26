@@ -36,6 +36,7 @@
   "settingsModels.account.active": "Đang dùng",
   "settingsModels.account.edit": "Sửa",
   "settingsModels.account.test": "Kiểm tra kết nối",
+  "settingsModels.account.reauth": "Đăng nhập lại",
   "settingsModels.account.disconnect": "Ngắt kết nối",
   "settingsModels.account.addAnother": "Thêm tài khoản khác",
   "settingsModels.account.addKey": "Thêm API key",
@@ -66,6 +67,8 @@
   "settingsModels.oauth.labelPlaceholder": "Nhãn tùy chọn (vd: Personal Pro)",
   "settingsModels.oauth.confirm": "Xác nhận",
   "settingsModels.oauth.stateMismatch": "Mã không khớp với phiên ủy quyền này. Vui lòng thử lại từ đầu.",
+  "settingsModels.oauth.reauthTitle": "Đăng nhập lại tài khoản Claude",
+  "settingsModels.oauth.reauthHint": "Phiên đăng nhập của tài khoản này đã hết hạn. Đăng nhập lại để làm mới — thông tin đăng nhập được thay tại chỗ nên tài khoản vẫn giữ nguyên cấu hình.",
 
   "settingsModels.codex.title": "Đăng nhập bằng ChatGPT",
   "settingsModels.codex.preparing": "Đang chuẩn bị đăng nhập OpenAI…",

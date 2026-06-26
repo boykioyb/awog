@@ -1,11 +1,13 @@
 import { marked, type Tokens, type TokensList } from 'marked'
-import hljs from 'highlight.js/lib/common'
+import { createHighlighter, createJavaScriptRegexEngine, type Highlighter } from 'shiki'
 
-// Markdown rendering for the preview modal. Security (rules/security.md sink table:
-// "markdown từ user → renderer AST, không inject HTML"): raw HTML tokens are dropped
-// and link/image hrefs sanitized — we never pass author HTML through to v-html.
-// Mermaid fenced blocks are split out as separate segments so they render as live
-// (zoomable) diagrams instead of code.
+// Markdown rendering for the transcript + preview. Security (rules/security.md sink table:
+// "markdown từ user → renderer AST, không inject HTML"): raw HTML tokens are dropped and
+// link/image hrefs sanitized — we never pass author HTML through to v-html. Syntax
+// highlighting goes through Shiki (ADR 0055): VS Code TextMate grammars + themes rendered
+// to static HTML; Shiki escapes the code text, so its output is safe to inline. Mermaid
+// fenced blocks are split out as separate segments so they render as live (zoomable)
+// diagrams instead of code.
 
 export type MdSegment = { type: 'html'; html: string } | { type: 'mermaid'; code: string }
 
@@ -34,6 +36,95 @@ function stripFrontMatter(src: string): string {
   return m ? src.slice(m[0].length) : src
 }
 
+// ── Syntax highlighting via Shiki (ADR 0055) ──
+// Curated grammars LLM transcripts commonly emit, loaded once into a singleton highlighter
+// (each grammar/theme is a lazy chunk; the JS regex engine avoids the oniguruma WASM so it
+// works under the packaged Electron `app://` sandbox without a wasm-unsafe-eval CSP). A
+// fence with NO language defaults to `shell` (in an assistant transcript a bare ``` block
+// is almost always a terminal command); an explicit unknown language, or `text`/`txt`/
+// `plaintext`, renders plain escaped. There is deliberately no language *auto-detection* —
+// auto-detect mis-guessing a shell-command list as SQL was the root cause of the garbled
+// highlighting. `ready` flips when the async load completes so consuming computeds
+// re-render (plain → highlighted), and `activeTheme` follows the app's dark/light mode.
+const SHIKI_LANGS = [
+  'typescript',
+  'javascript',
+  'tsx',
+  'jsx',
+  'json',
+  'jsonc',
+  'bash',
+  'shellscript',
+  'python',
+  'vue',
+  'html',
+  'xml',
+  'css',
+  'scss',
+  'markdown',
+  'yaml',
+  'sql',
+  'diff',
+  'go',
+  'rust',
+  'java',
+  'c',
+  'cpp',
+  'csharp',
+  'php',
+  'ruby',
+  'toml',
+  'dockerfile',
+  'ini',
+  'graphql',
+]
+// Common fence tags Shiki doesn't resolve as aliases on its own. Empty string → plain.
+const LANG_ALIAS: Record<string, string> = {
+  console: 'bash',
+  shellsession: 'bash',
+  'c++': 'cpp',
+  'c#': 'csharp',
+  cs: 'csharp',
+  docker: 'dockerfile',
+  text: '',
+  txt: '',
+  plaintext: '',
+}
+
+let highlighter: Highlighter | null = null
+let initStarted = false
+const ready = ref(false)
+let activeTheme: 'github-dark' | 'github-light' = 'github-dark'
+
+function ensureHighlighter() {
+  if (initStarted) return
+  initStarted = true
+  createHighlighter({
+    themes: ['github-dark', 'github-light'],
+    langs: SHIKI_LANGS,
+    engine: createJavaScriptRegexEngine({ forgiving: true }),
+  })
+    .then((h) => {
+      highlighter = h
+      ready.value = true
+    })
+    .catch((err: unknown) => {
+      // Non-fatal: highlighting stays plain. Failing the whole render would be worse.
+      console.warn('[useMarkdown] Shiki highlighter init failed; code blocks stay plain.', err)
+    })
+}
+
+function highlightCode(text: string, rawLang: string): string {
+  // Bare fence → default to shell; otherwise resolve aliases ('' → plain).
+  const lang = rawLang === '' ? 'bash' : (LANG_ALIAS[rawLang] ?? rawLang)
+  if (lang && highlighter && highlighter.getLoadedLanguages().includes(lang)) {
+    // Shiki escapes `text` and emits per-token inline colors; the block background +
+    // chrome come from the surrounding .mdinline/.mdbody styles.
+    return highlighter.codeToHtml(text, { lang, theme: activeTheme })
+  }
+  return `<pre class="codeplain"><code>${escapeHtml(text)}</code></pre>`
+}
+
 let configured = false
 function configure() {
   if (configured) return
@@ -58,42 +149,109 @@ function configure() {
       },
       code(token) {
         const t = token as Tokens.Code
-        const lang = (t.lang || '').trim().split(/\s+/)[0] ?? ''
-        if (lang && hljs.getLanguage(lang)) {
-          const out = hljs.highlight(t.text, { language: lang }).value
-          return `<pre class="hljs"><code class="language-${escapeHtml(lang)}">${out}</code></pre>`
-        }
-        return `<pre class="hljs"><code>${escapeHtml(t.text)}</code></pre>`
+        const lang = (t.lang || '').trim().split(/\s+/)[0]?.toLowerCase() ?? ''
+        return highlightCode(t.text, lang)
       },
     },
   })
 }
 
-export function useMarkdown() {
-  // Split into HTML runs + mermaid blocks, preserving order.
-  function renderMarkdown(src: string): MdSegment[] {
-    configure()
-    const tokens = marked.lexer(stripFrontMatter(src))
-    const segments: MdSegment[] = []
-    let buf: Tokens.Generic[] = []
+// ── Per-block render cache (streaming jank fix) ──
+// renderMarkdown emits ONE html segment per top-level block (not one merged run) and
+// memoizes each block's parsed HTML by its raw source. A streaming reply only mutates
+// its LAST block each frame, so every earlier block is a cache hit → no re-parse, no
+// re-highlight, and (because its `html` prop is byte-identical) SessionMarkdownHtml
+// skips its innerHTML rebuild. Per-frame cost becomes ~the size of the current block
+// instead of the whole growing document (was O(n²) over a reply → dropped frames).
+const PARSE_CACHE_MAX = 1200
+const parseCache = new Map<string, string>()
+let cacheSig = ''
 
-    const flush = () => {
-      if (!buf.length) return
-      const list = buf as unknown as TokensList
-      list.links = tokens.links
-      segments.push({ type: 'html', html: marked.parser(list) })
-      buf = []
-    }
-
-    for (const tok of tokens) {
-      if (tok.type === 'code' && (tok as Tokens.Code).lang?.trim() === 'mermaid') {
-        flush()
-        segments.push({ type: 'mermaid', code: (tok as Tokens.Code).text })
-      } else {
-        buf.push(tok)
+function renderToken(tok: Tokens.Generic, links: TokensList['links'], useCache: boolean): string {
+  if (useCache) {
+    const hit = parseCache.get(tok.raw)
+    if (hit !== undefined) return hit
+  }
+  const list = [tok] as unknown as TokensList
+  list.links = links
+  const html = marked.parser(list)
+  if (useCache) {
+    if (parseCache.size >= PARSE_CACHE_MAX) {
+      // FIFO-evict the oldest ~15% so the cache stays bounded over a long session.
+      let n = Math.ceil(PARSE_CACHE_MAX * 0.15)
+      for (const k of parseCache.keys()) {
+        parseCache.delete(k)
+        if (--n <= 0) break
       }
     }
-    flush()
+    parseCache.set(tok.raw, html)
+  }
+  return html
+}
+
+export function useMarkdown() {
+  // Split into HTML runs + mermaid blocks, in order.
+  //
+  // `granular` (STREAMING only) emits one segment PER top-level block and memoizes each
+  // by its raw source, so a streaming reply re-parses/re-highlights only its last,
+  // changing block per frame and SessionMarkdownHtml rebuilds only that block's DOM —
+  // the fix for O(n²) streaming jank. Static callers (preview, library, editor, and
+  // finalized transcript messages) omit it → the original single merged run, identical
+  // layout, parsed once.
+  function renderMarkdown(src: string, granular = false): MdSegment[] {
+    configure()
+    ensureHighlighter()
+    // Track reactive deps so consuming computeds re-render when the highlighter finishes
+    // loading (plain → highlighted) and when the app theme flips (dark/light → Shiki theme).
+    void ready.value
+    activeTheme = useTheme().isDark.value ? 'github-dark' : 'github-light'
+
+    const tokens = marked.lexer(stripFrontMatter(src))
+
+    if (!granular) {
+      // Original behavior: merge consecutive non-mermaid blocks into one HTML run.
+      const segments: MdSegment[] = []
+      let buf: Tokens.Generic[] = []
+      const flush = () => {
+        if (!buf.length) return
+        const list = buf as unknown as TokensList
+        list.links = tokens.links
+        segments.push({ type: 'html', html: marked.parser(list) })
+        buf = []
+      }
+      for (const tok of tokens) {
+        if (tok.type === 'code' && (tok as Tokens.Code).lang?.trim() === 'mermaid') {
+          flush()
+          segments.push({ type: 'mermaid', code: (tok as Tokens.Code).text })
+        } else {
+          buf.push(tok)
+        }
+      }
+      flush()
+      return segments
+    }
+
+    // Granular: one segment per block, memoized. Theme flip / highlighter-ready changes
+    // EVERY block's output → drop the cache.
+    const sig = `${activeTheme}|${ready.value ? 1 : 0}`
+    if (sig !== cacheSig) {
+      parseCache.clear()
+      cacheSig = sig
+    }
+    const lastIdx = tokens.length - 1
+    const segments: MdSegment[] = []
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (!tok || tok.type === 'space') continue
+      if (tok.type === 'code' && (tok as Tokens.Code).lang?.trim() === 'mermaid') {
+        segments.push({ type: 'mermaid', code: (tok as Tokens.Code).text })
+        continue
+      }
+      // Don't cache the last block: while streaming it changes every frame, so caching
+      // each intermediate version would just churn the cache. Earlier blocks are stable.
+      const html = renderToken(tok, tokens.links, i !== lastIdx)
+      if (html.trim()) segments.push({ type: 'html', html })
+    }
     return segments
   }
 

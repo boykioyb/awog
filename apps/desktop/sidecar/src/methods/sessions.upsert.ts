@@ -42,6 +42,11 @@ const SessionSchema = z.object({
   settings: SessionSettingsSchema,
   disabledTools: z.array(z.string()).optional(),
   mcpServerIds: z.array(z.string()).optional(),
+  // Task this session was opened to discuss (ADR 0055). Set at create time for a
+  // "Discuss in session" session; absent for a normal chat.
+  aboutTaskId: z.string().optional(),
+  // GitHub issue/PR URL this session was opened from ("New session" on a row).
+  aboutGhUrl: z.string().optional(),
 })
 
 const Params = z.object({
@@ -83,6 +88,8 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.pinned !== undefined) base.pinned = parsed.pinned
   if (parsed.disabledTools !== undefined) base.disabledTools = parsed.disabledTools
   if (parsed.mcpServerIds !== undefined) base.mcpServerIds = parsed.mcpServerIds
+  if (parsed.aboutTaskId !== undefined) base.aboutTaskId = parsed.aboutTaskId
+  if (parsed.aboutGhUrl !== undefined) base.aboutGhUrl = parsed.aboutGhUrl
   return base
 }
 
@@ -106,6 +113,8 @@ register('sessions.upsert', async (raw) => {
   if (session.pinned !== undefined) patch.pinned = session.pinned
   if (session.disabledTools !== undefined) patch.disabledTools = session.disabledTools
   if (session.mcpServerIds !== undefined) patch.mcpServerIds = session.mcpServerIds
+  if (session.aboutTaskId !== undefined) patch.aboutTaskId = session.aboutTaskId
+  if (session.aboutGhUrl !== undefined) patch.aboutGhUrl = session.aboutGhUrl
   await updateSessionMetadata(session.id, patch)
   return { session }
 })

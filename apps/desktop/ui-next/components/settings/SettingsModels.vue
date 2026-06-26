@@ -1,7 +1,9 @@
 <template>
   <div class="smodels">
-    <div class="sech">{{ t('settingsModels.heading') }}</div>
-    <div class="fd smintro">{{ t('settingsModels.intro') }}</div>
+    <SettingsPaneHeader
+      :title="t('settingsModels.heading')"
+      :subtitle="t('settingsModels.intro')"
+    />
 
     <!-- ── Anthropic card (OAuth + advanced API key) ─────────────────────── -->
     <div class="pcard">
@@ -41,10 +43,12 @@
             :active="anthropicActiveId === acc.id"
             :testing="testingIds.has(acc.id)"
             :test-result="testResults[acc.id] ?? null"
+            reauthable
             @set-active="onSetActive(acc.id)"
             @edit="editAccount = acc"
             @test="onTest(acc.id)"
             @disconnect="onDisconnect(acc.id)"
+            @reauth="onReauth(acc.id)"
           />
         </div>
         <button class="btn sm pcardadd" type="button" @click="oauthOpen = true">
@@ -160,8 +164,9 @@
 
     <SettingsOAuthDialog
       :open="oauthOpen"
-      @close="oauthOpen = false"
-      @connected="oauthOpen = false"
+      :reauth-account-id="reauthAccountId"
+      @close="onOauthClose"
+      @connected="onOauthConnected"
     />
 
     <SettingsAccountEditDialog
@@ -203,6 +208,9 @@ const { t } = useI18n()
 const settings = useSettingsStore()
 
 const oauthOpen = ref(false)
+// When set, the OAuth dialog re-authenticates this existing account in place
+// rather than adding a new one. Cleared whenever the dialog closes.
+const reauthAccountId = ref<string | null>(null)
 const advancedOpen = ref(false)
 const editAccount = ref<ProviderAccount | null>(null)
 const testingIds = reactive(new Set<string>())
@@ -345,6 +353,23 @@ const onEditSaved = (account: ProviderAccount) => {
   // A rotated key / changed endpoint makes a prior Test result stale.
   delete testResults[account.id]
 }
+
+const onReauth = (accountId: string) => {
+  reauthAccountId.value = accountId
+  oauthOpen.value = true
+}
+
+const onOauthClose = () => {
+  oauthOpen.value = false
+  reauthAccountId.value = null
+}
+
+const onOauthConnected = (account: ProviderAccount) => {
+  // Re-auth refreshed the credentials in place — drop the stale AUTH_EXPIRED line.
+  delete testResults[account.id]
+  oauthOpen.value = false
+  reauthAccountId.value = null
+}
 </script>
 
 <style scoped>
@@ -352,10 +377,6 @@ const onEditSaved = (account: ProviderAccount) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.smintro {
-  margin-top: -4px;
-  margin-bottom: 4px;
 }
 
 /* Card surface (shared visual with SettingsProviderCard) */

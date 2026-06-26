@@ -17,6 +17,13 @@ const TaskSourceSchema = z.union([
   }),
   z.object({ type: z.literal('jira'), key: z.string(), connectionId: z.string().optional() }),
   z.object({ type: z.literal('manual') }),
+  // Spawned from a chat session (ADR 0055). sessionId = the origin session's id.
+  z.object({
+    type: z.literal('session'),
+    sessionId: z.string().min(1),
+    messageId: z.string().optional(),
+    connectionId: z.string().optional(),
+  }),
 ])
 
 const Params = z.object({

@@ -68,7 +68,7 @@
         {{ a.label }}
       </span>
     </div>
-    <div class="abody" :class="{ bubble: showBubble }">
+    <div ref="bodyEl" class="abody" :class="{ bubble: showBubble }">
       <template v-for="(g, gi) in grouped" :key="g.key">
         <SessionCluster v-if="g.type === 'cluster'" :steps="g.steps" />
         <SessionStepItem v-else-if="g.type === 'step'" :block="g.step" />
@@ -76,6 +76,8 @@
           v-else-if="g.type === 'text'"
           :text="g.text"
           :highlights="highlightsForBlock(g.blockIndex)"
+          :streaming="streaming"
+          :caret="streaming && gi === grouped.length - 1"
         />
         <div
           v-else-if="g.type === 'thinking'"
@@ -92,8 +94,10 @@
         <SessionGateCard v-else :block="g.gate" />
       </template>
     </div>
-    <!-- Floating pill at the top-right of the reply (quick access while reading the head). -->
-    <div class="hoveract top">
+    <!-- Floating pill at the top-right of the reply: only earns its place on a TALL
+         reply (>500px) where the bottom action row would otherwise be a scroll away.
+         Never while streaming (would collide with the byline; actions aren't valid yet). -->
+    <div v-if="showTopActions" class="hoveract top">
       <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
         <Icon :name="a.icon" style="width: 13px; height: 13px" />
       </span>
@@ -114,7 +118,7 @@
           <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
         </template>
       </span>
-      <div class="hoveract bottom">
+      <div v-if="showBottomActions" class="hoveract bottom">
         <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
           <Icon :name="a.icon" style="width: 13px; height: 13px" />
         </span>
@@ -247,6 +251,19 @@ const parkedOnGate = computed(() => {
 })
 const streamingActive = computed(() => streaming.value && !parkedOnGate.value)
 
+// ── Action-toolbar visibility ────────────────────────────────────────────────
+// Never on an in-flight reply: the actions (quote/fork/regen…) aren't valid until
+// the turn finishes, and the floating top pill would collide with the "Streaming…"
+// byline (the empty body collapses both onto the same line). The TOP pill is also
+// gated on a tall reply — on a short one the inline bottom row is right there, so a
+// second floating copy is just clutter.
+const TALL_REPLY_PX = 500
+const bodyEl = useTemplateRef<HTMLElement>('bodyEl')
+const bodyHeight = ref(0)
+let bodyRO: ResizeObserver | null = null
+const showBottomActions = computed(() => !streaming.value)
+const showTopActions = computed(() => !streaming.value && bodyHeight.value > TALL_REPLY_PX)
+
 const nowTick = ref(Date.now())
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
 watch(
@@ -262,8 +279,21 @@ watch(
   },
   { immediate: true },
 )
+// Track the rendered reply height (drives showTopActions). The body grows as the
+// reply streams in, so observe it rather than measure once. Only assistant rows
+// have `.abody`; for others bodyEl is null and the top pill stays hidden anyway.
+onMounted(() => {
+  const el = bodyEl.value
+  if (!el) return
+  bodyRO = new ResizeObserver(() => {
+    bodyHeight.value = el.offsetHeight
+  })
+  bodyRO.observe(el)
+})
 onBeforeUnmount(() => {
   if (elapsedTimer) clearInterval(elapsedTimer)
+  bodyRO?.disconnect()
+  bodyRO = null
 })
 
 function formatElapsed(ms: number): string {
@@ -386,8 +416,19 @@ const msgActions = computed(() => [
 .maw .hoveract {
   right: 0;
 }
+/* User bubble is right-aligned (.urow align-self:flex-end), so its hover pill must
+   hug the bubble's top-right — not float off at the row's far-left edge. */
 .urow .hoveract {
-  left: 0;
+  right: 0;
+}
+/* Bubble width: the prototype caps .mu at max-width:74%, but that % resolves against
+   .urow — which shrinks to its widest child. For a short message the meta line
+   ("04:02 PM · 3 tok") is wider than the text, so the bubble got capped to 74% of the
+   TIMESTAMP width and even "review lại" wrapped. Let the bubble size to its own
+   content instead; long messages are still capped by .urow's max-width:80% of the
+   transcript. */
+.mu {
+  max-width: 100%;
 }
 /* The bottom copy (assistant only) sits inline on the meta row — same actions, no
    floating pill chrome, right-aligned next to the byline so it hugs the reply end. */

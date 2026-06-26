@@ -39,10 +39,24 @@ export interface GhThreadSummary {
   baseRefName?: string
   headRefName?: string
 }
+export interface GhThreadFile {
+  path: string
+  additions: number
+  deletions: number
+}
+export interface GhThreadReview {
+  author: { login: string }
+  body: string
+  state: string
+  createdAt: string
+}
 export interface GhThread extends GhThreadSummary {
   body: string
   url: string
   comments: GhThreadComment[]
+  // PR-only (absent / empty for issues).
+  files?: GhThreadFile[]
+  reviews?: GhThreadReview[]
 }
 
 export interface GhAccount {
@@ -77,7 +91,11 @@ const ghCodeOf = (err: unknown): string => {
   return 'UNKNOWN'
 }
 
-export function useProjectGh(getProjectId: () => string, kind: GhKind) {
+export function useProjectGh(
+  getProjectId: () => string,
+  getKind: () => GhKind,
+  getRepoPath: () => string | undefined = () => undefined,
+) {
   const sc = useSidecar()
   const settings = useSettingsStore()
   const projectsStore = useProjectsStore()
@@ -89,6 +107,9 @@ export function useProjectGh(getProjectId: () => string, kind: GhKind) {
   const stateFilter = ref<GhListState>('open')
   const assigneeFilter = ref<string>('') // '' = anyone; '@me' or a login otherwise.
   const searchQuery = ref('')
+  // How many rows to request — bumped by loadMore() for the plain (non-search) list.
+  const PAGE = 50
+  const pageLimit = ref(PAGE)
 
   const selected = ref<GhThread | null>(null)
   const drawerOpen = ref(false)
@@ -100,19 +121,62 @@ export function useProjectGh(getProjectId: () => string, kind: GhKind) {
   // app-level setting; the GH tab also lets the user pick per-tab.
   const account = ref<string>(settings.githubAccount.trim())
 
+  // Persisted filters (state / assignee / account) per project+kind so they
+  // survive an app restart. localStorage holds a `{ "<projectId>:<kind>": {...} }`
+  // map; search is intentionally NOT persisted (transient text query). `account`
+  // '' means "follow gh's active account".
+  const FILTER_KEY = 'awog.gh.filters'
+  type SavedFilter = { state: GhListState; assignee: string; account: string }
+  const filterKey = (): string => `${getProjectId()}:${getKind()}`
+  const readAllFilters = (): Record<string, SavedFilter> => {
+    try {
+      const raw = localStorage.getItem(FILTER_KEY)
+      return raw ? (JSON.parse(raw) as Record<string, SavedFilter>) : {}
+    } catch {
+      return {}
+    }
+  }
+  const loadFilters = (): void => {
+    const saved = readAllFilters()[filterKey()]
+    let state: GhListState = saved?.state ?? 'open'
+    // 'merged' is PR-only — never restore it onto the Issues tab.
+    if (getKind() !== 'pr' && state === 'merged') state = 'open'
+    stateFilter.value = state
+    assigneeFilter.value = saved?.assignee ?? ''
+    account.value = saved?.account ?? settings.githubAccount.trim()
+    searchQuery.value = ''
+  }
+  const saveFilters = (): void => {
+    try {
+      const all = readAllFilters()
+      all[filterKey()] = {
+        state: stateFilter.value,
+        assignee: assigneeFilter.value,
+        account: account.value,
+      }
+      localStorage.setItem(FILTER_KEY, JSON.stringify(all))
+    } catch {
+      // localStorage unavailable (private mode / quota) — filters won't persist.
+    }
+  }
+  loadFilters()
+
   const knownAssignees = computed<string[]>(() => {
     const set = new Set<string>()
     for (const it of items.value) for (const a of it.assignees) set.add(a.login)
     return [...set].sort((a, b) => a.localeCompare(b))
   })
 
-  const visibleItems = computed<GhThreadSummary[]>(() => {
-    const q = searchQuery.value.trim().toLowerCase()
-    if (!q) return items.value
-    return items.value.filter(
-      (it) => it.title.toLowerCase().includes(q) || String(it.number).includes(q),
-    )
-  })
+  // Search is now resolved server-side (see refresh) so the loaded rows are
+  // already the matches — no client-side narrowing (which only ever saw the
+  // current page and broke on `#<number>`).
+  const visibleItems = computed<GhThreadSummary[]>(() => items.value)
+
+  // There may be more rows when the plain list came back full to the limit. Hidden
+  // while searching (search returns its own scoped set).
+  const canLoadMore = computed(
+    () => !searchQuery.value.trim() && !loading.value && items.value.length >= pageLimit.value,
+  )
 
   // The real gh.list round-trip.
   const refresh = async (): Promise<void> => {
@@ -131,9 +195,16 @@ export function useProjectGh(getProjectId: () => string, kind: GhKind) {
         state: GhListState
         assignee?: string
         account?: string
-      } = { projectId, kind, state: stateFilter.value }
+        repoPath?: string
+        search?: string
+        limit?: number
+      } = { projectId, kind: getKind(), state: stateFilter.value, limit: pageLimit.value }
       if (assigneeFilter.value) params.assignee = assigneeFilter.value
       if (account.value) params.account = account.value
+      const repoPath = getRepoPath()
+      if (repoPath) params.repoPath = repoPath
+      const q = searchQuery.value.trim()
+      if (q) params.search = q
       const res = await sc.request<{ items: GhThreadSummary[] }>('gh.list', params)
       items.value = res.items
       errorCode.value = null
@@ -157,12 +228,20 @@ export function useProjectGh(getProjectId: () => string, kind: GhKind) {
       return
     }
     try {
-      const params: { projectId: string; kind: GhKind; number: number; account?: string } = {
+      const params: {
+        projectId: string
+        kind: GhKind
+        number: number
+        account?: string
+        repoPath?: string
+      } = {
         projectId,
-        kind,
+        kind: getKind(),
         number,
       }
       if (account.value) params.account = account.value
+      const repoPath = getRepoPath()
+      if (repoPath) params.repoPath = repoPath
       selected.value = await sc.request<GhThread>('gh.get', params)
     } catch (err) {
       errorCode.value = ghCodeOf(err)
@@ -249,22 +328,52 @@ export function useProjectGh(getProjectId: () => string, kind: GhKind) {
   const setStateFilter = (next: GhListState): void => {
     if (next === stateFilter.value) return
     stateFilter.value = next
+    pageLimit.value = PAGE
+    saveFilters()
     void refresh()
   }
   const setAssigneeFilter = (next: string): void => {
     if (next === assigneeFilter.value) return
     assigneeFilter.value = next
+    pageLimit.value = PAGE
+    saveFilters()
     void refresh()
   }
   const setAccount = (login: string): void => {
     if (login === account.value) return
     account.value = login
+    pageLimit.value = PAGE
+    saveFilters()
     void refresh()
   }
 
-  // Re-fetch when the bound project changes.
-  watch(getProjectId, () => {
+  // Search runs server-side (whole repo, not just the loaded page), so debounce
+  // keystrokes into one refetch. NOT persisted (transient query).
+  let searchTimer: ReturnType<typeof setTimeout> | null = null
+  const setSearch = (q: string): void => {
+    searchQuery.value = q
+    pageLimit.value = PAGE
+    if (searchTimer) clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => void refresh(), 350)
+  }
+
+  // Load the next page of the plain list (bump the limit + refetch).
+  const loadMore = (): void => {
+    if (!canLoadMore.value) return
+    pageLimit.value += PAGE
+    void refresh()
+  }
+
+  // Re-fetch + reload this project's saved filters when the bound project — or the
+  // selected child repo (multi-repo workspace) — changes. Kind does NOT trigger a
+  // refetch: Issues / Pull Requests are separate, independently-cached ProjectGh
+  // instances (see ProjectDetail), so switching tabs shows already-loaded data —
+  // re-pull via the manual fetch button.
+  watch([getProjectId, getRepoPath], () => {
     closeDrawer()
+    loadFilters()
+    pageLimit.value = PAGE
+    items.value = []
     void refresh()
   })
 
@@ -275,6 +384,7 @@ export function useProjectGh(getProjectId: () => string, kind: GhKind) {
     // state
     items,
     visibleItems,
+    canLoadMore,
     knownAssignees,
     loading,
     errorCode,
@@ -295,5 +405,7 @@ export function useProjectGh(getProjectId: () => string, kind: GhKind) {
     setStateFilter,
     setAssigneeFilter,
     setAccount,
+    setSearch,
+    loadMore,
   }
 }

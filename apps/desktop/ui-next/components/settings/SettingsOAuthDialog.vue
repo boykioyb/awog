@@ -1,11 +1,12 @@
 <template>
   <SettingsModelDialog
     :open="open"
-    :title="t('settingsModels.oauth.title')"
+    :title="dialogTitle"
     :lock-scrim="phase === 'confirming'"
     @close="onCancel"
   >
     <div class="oad">
+      <div v-if="reauthAccountId" class="oareauth">{{ t('settingsModels.oauth.reauthHint') }}</div>
       <!-- Step 1 -->
       <section class="oastep">
         <div class="oarow">
@@ -89,13 +90,25 @@ import { SidecarError, SidecarUnavailableError, useSidecar } from '~/composables
 // SettingsOAuthCodeDialog.vue into ui-next prototype style.
 type Phase = 'idle' | 'opening' | 'waiting-code' | 'confirming' | 'error'
 
-const props = defineProps<{ open: boolean }>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    // When set, this OAuth flow re-authenticates an existing account in place
+    // (refresh expired credentials) instead of adding a new one.
+    reauthAccountId?: string | null
+  }>(),
+  { reauthAccountId: null },
+)
 const emit = defineEmits<{
   close: []
   connected: [account: ProviderAccount]
 }>()
 
 const { t } = useI18n()
+
+const dialogTitle = computed(() =>
+  props.reauthAccountId ? t('settingsModels.oauth.reauthTitle') : t('settingsModels.oauth.title'),
+)
 const settings = useSettingsStore()
 const sidecar = useSidecar()
 
@@ -181,6 +194,7 @@ const onConfirm = async () => {
       oauthState.value,
       codeOnly,
       trimmedLabel || undefined,
+      props.reauthAccountId ?? undefined,
     )
     emit('connected', account)
     emit('close')
@@ -201,6 +215,15 @@ const onCancel = () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+.oareauth {
+  font-size: 1em;
+  color: var(--textDim);
+  line-height: 1.5;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--bgInput);
+  border: 1px solid var(--border);
 }
 .oastep {
   display: flex;

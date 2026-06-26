@@ -35,12 +35,5 @@
   "workflow.creator.dragHint": "Chưa tạo bước nào — kéo agent vào canvas sau khi tạo.",
   "workflow.item.meta": "{nodes} node · {edges} cạnh",
   "workflow.delete.title": "Xóa workflow",
-  "workflow.delete.desc": "Thao tác này sẽ xóa vĩnh viễn workflow \"{name}\".",
-  "workflow.run.created": "Đã tạo task \"{title}\"",
-  "workflow.run.noProject": "Thêm một dự án trước khi chạy workflow.",
-  "workflow.run.pickProject": "Chạy workflow",
-  "workflow.run.projectLabel": "Dự án",
-  "workflow.run.projectPlaceholder": "Chọn một dự án",
-  "workflow.run.projectHint": "Task sẽ chạy trên workspace của dự án này.",
-  "workflow.run.confirm": "Chạy"
+  "workflow.delete.desc": "Thao tác này sẽ xóa vĩnh viễn workflow \"{name}\"."
 }

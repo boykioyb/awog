@@ -2,7 +2,7 @@
   <div class="dscroll">
     <div class="pstats">
       <div class="pstat">
-        <div class="pv">{{ view.repos.length }}</div>
+        <div class="pv">{{ effRepos.length }}</div>
         <div class="pl2">{{ t('projects.overview.repos') }}</div>
       </div>
       <div class="pstat">
@@ -22,19 +22,19 @@
     <div class="pcard">
       <div class="pcardh">
         <Icon name="git" style="width: 13px; height: 13px" />
-        <span>{{ t('projects.overview.reposCard', { n: view.repos.length }) }}</span>
+        <span>{{ t('projects.overview.reposCard', { n: effRepos.length }) }}</span>
         <span v-if="totalDirty" class="gchip m" style="margin-left: auto">{{ totalDirty }} M</span>
-        <span v-else-if="view.repos.length" class="gchip" style="margin-left: auto">
+        <span v-else-if="effRepos.length" class="gchip" style="margin-left: auto">
           {{ t('projects.overview.clean') }}
         </span>
         <span v-if="totalAhead" class="gchip a">↑{{ totalAhead }}</span>
       </div>
-      <template v-if="view.repos.length">
-        <div v-for="r in view.repos" :key="r.n" class="prepo">
+      <template v-if="effRepos.length">
+        <div v-for="r in effRepos" :key="r.n" class="prepo">
           <span class="prepo-ic"><Icon name="git" style="width: 14px; height: 14px" /></span>
           <div style="min-width: 0">
             <div class="prepo-n">{{ r.n }}</div>
-            <div class="prepo-br">
+            <div v-if="r.br" class="prepo-br">
               <Icon name="branch" style="width: 11px; height: 11px" />
               {{ r.br }}
             </div>
@@ -73,9 +73,11 @@
         </div>
         <div
           v-for="s in view.ses"
-          :key="s.t"
-          class="rs"
-          style="padding: 7px 0; border-top: 1px solid var(--border)"
+          :key="s.id"
+          class="rs rs-link"
+          style="padding: 7px 0; border-top: 1px solid var(--border); cursor: pointer"
+          :title="t('projects.overview.openSession')"
+          @click="openSession(s.id)"
         >
           <span class="si" style="background: var(--textFaint)" />
           <span class="st1">{{ s.t }}</span>
@@ -175,19 +177,33 @@
 // entity for the config block (description / path / language / remote / LLM).
 // Edit / delete / LLM defaults are emitted up to the page-controller.
 import { computed } from 'vue'
-import { agBadge, avatarBg, type ProjectView } from './data'
+import { agBadge, avatarBg, type ProjectRepo, type ProjectView } from './data'
 import { modelDisplayName } from '~/composables/useSessionsMock'
+import { useSessionsStore } from '~/stores/sessions'
 import type { Project } from '~/types'
 
-const props = defineProps<{ project: Project; view: ProjectView }>()
+const props = defineProps<{ project: Project; view: ProjectView; repos?: ProjectRepo[] }>()
 const emit = defineEmits<{ (e: 'delete'): void; (e: 'open-llm'): void }>()
 
 const { t } = useI18n()
+const sessions = useSessionsStore()
+
+// Discovered child repos (multi-repo workspace) when provided, else the entity's
+// single repo. Drives the repo card + the "REPO" stat count.
+const effRepos = computed<ProjectRepo[]>(() =>
+  props.repos && props.repos.length ? props.repos : props.view.repos,
+)
+
+// Open a recent session from the overview — select it + jump to the Sessions page.
+function openSession(id: number) {
+  sessions.setActive(id)
+  navigateTo('/sessions')
+}
 
 const TIERS = ['agents', 'skills', 'rules', 'workflows', 'commands', 'hooks'] as const
 
-const totalDirty = computed(() => props.view.repos.reduce((a, r) => a + (r.dirty ?? 0), 0))
-const totalAhead = computed(() => props.view.repos.reduce((a, r) => a + (r.ahead ?? 0), 0))
+const totalDirty = computed(() => effRepos.value.reduce((a, r) => a + (r.dirty ?? 0), 0))
+const totalAhead = computed(() => effRepos.value.reduce((a, r) => a + (r.ahead ?? 0), 0))
 
 // LLM defaults summary chip: model name when set, else "App default".
 const llmLabel = computed(() => {
@@ -196,3 +212,9 @@ const llmLabel = computed(() => {
   return modelDisplayName(ld.modelId)
 })
 </script>
+
+<style scoped>
+.rs-link:hover .st1 {
+  color: var(--accent);
+}
+</style>

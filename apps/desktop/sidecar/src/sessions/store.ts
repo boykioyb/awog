@@ -31,6 +31,8 @@ type SessionMetadataPatch = Partial<
     | 'invitedAgentIds'
     | 'disabledTools'
     | 'mcpServerIds'
+    | 'aboutTaskId'
+    | 'aboutGhUrl'
   >
 >
 
@@ -293,6 +295,8 @@ function summarize(s: Session): SessionSummary {
   if (s.pinned !== undefined) summary.pinned = s.pinned
   if (s.disabledTools !== undefined) summary.disabledTools = s.disabledTools
   if (s.mcpServerIds !== undefined) summary.mcpServerIds = s.mcpServerIds
+  if (s.aboutTaskId !== undefined) summary.aboutTaskId = s.aboutTaskId
+  if (s.aboutGhUrl !== undefined) summary.aboutGhUrl = s.aboutGhUrl
   if (s.compaction) summary.hasCompaction = true
   if (last?.text) summary.lastPreview = last.text.slice(0, PREVIEW_MAX)
   return summary
@@ -394,6 +398,8 @@ async function touchIndex(sessionId: string, evt: SessionEvent): Promise<void> {
         : {}),
       ...(evt.patch.disabledTools !== undefined ? { disabledTools: evt.patch.disabledTools } : {}),
       ...(evt.patch.mcpServerIds !== undefined ? { mcpServerIds: evt.patch.mcpServerIds } : {}),
+      ...(evt.patch.aboutTaskId !== undefined ? { aboutTaskId: evt.patch.aboutTaskId } : {}),
+      ...(evt.patch.aboutGhUrl !== undefined ? { aboutGhUrl: evt.patch.aboutGhUrl } : {}),
       updatedAt: evt.at,
     })
   } else if (evt.type === 'message.appended') {

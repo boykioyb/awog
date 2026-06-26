@@ -1,8 +1,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
-import { useNewTaskData, type WorkflowOption } from '~/composables/useNewTaskData'
+import { useNewTaskModal } from '~/composables/useNewTaskModal'
 import { useToasts } from '~/composables/useToasts'
-import { useTasksStore, type CreateTaskInput, type Task } from '~/stores/tasks'
+import { useTasksStore, type Task } from '~/stores/tasks'
 
 // Page-controller for /tasks — owns selection, the New Task modal flow, the
 // delete-confirm flow, and the per-phase lifecycle handlers so pages/tasks.vue
@@ -14,7 +14,7 @@ export function useTasksPage() {
   const store = useTasksStore()
   const { t } = useI18n()
   const { toasts, pushToast, toastColor } = useToasts()
-  const newTaskData = useNewTaskData()
+  const { openModal } = useNewTaskModal()
 
   // ── selection ───────────────────────────────────────────────────────────────
   // The store owns selectedTaskId; the page selects via setSelected.
@@ -28,26 +28,9 @@ export function useTasksPage() {
   })
 
   // ── new task modal ───────────────────────────────────────────────────────────
-  const newOpen = ref(false)
-  const openNew = () => {
-    newOpen.value = true
-    void newTaskData.load()
-  }
-  const closeNew = () => {
-    newOpen.value = false
-  }
-  // Emitted by NewTaskModal once the user confirms (and any dirty-workspace gate
-  // resolved). Resolves the chosen workflow's snapshot to forward to the store so
-  // the optimistic detail renders the pipeline immediately.
-  const onCreate = (data: CreateTaskInput) => {
-    const wf: WorkflowOption | undefined = newTaskData.workflows.value.find(
-      (w) => w.id === data.workflowId,
-    )
-    const snapshot = wf ? { id: wf.id, name: wf.name, nodes: wf.nodes, edges: wf.edges } : undefined
-    const task = store.createTask(data, snapshot)
-    newOpen.value = false
-    pushToast(t('tasks.toast.created', { title: task.title }), 'success')
-  }
+  // Creation now lives in the shared NewTaskModalHost (mounted in the layout) so the
+  // same modal serves both the Tasks page and the session "Run as task" action.
+  const openNew = () => openModal()
 
   // ── lifecycle handlers (forwarded from TaskDetail) ───────────────────────────
   const approve = (taskId: string, nodeId: string) => {
@@ -97,12 +80,8 @@ export function useTasksPage() {
     progressOf: store.progressOf,
     phaseOrder: store.phaseOrder,
     nodeFor: store.nodeFor,
-    // new task modal
-    newOpen,
+    // new task modal (opens the shared host)
     openNew,
-    closeNew,
-    onCreate,
-    newTaskData,
     // lifecycle
     approve,
     rerun,

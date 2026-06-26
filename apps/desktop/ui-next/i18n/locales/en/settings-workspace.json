@@ -3,7 +3,14 @@
   "settings.workspace.git.desc": "All artifacts are committed to Git automatically",
   "settings.workspace.git.enabled": "Enabled",
   "settings.workspace.diagnostics.name": "Diagnostics",
-  "settings.workspace.diagnostics.desc": "Open the app log file — updater activity, engine output, and errors",
+  "settings.workspace.diagnostics.desc": "Tail the app log live — updater activity, engine output, and errors",
   "settings.workspace.diagnostics.openLogs": "Open logs",
+  "settings.workspace.diagnostics.viewLogs": "View logs",
+  "settings.workspace.diagnostics.hideLogs": "Hide logs",
+  "settings.workspace.diagnostics.logTitle": "App log",
+  "settings.workspace.diagnostics.reveal": "Reveal in file manager",
+  "settings.workspace.diagnostics.clear": "Clear view",
+  "settings.workspace.diagnostics.waiting": "Waiting for log output…",
+  "settings.workspace.diagnostics.follow": "↓ Follow",
   "settings.workspace.diagnostics.unavailable": "Logs are only available in the installed app"
 }

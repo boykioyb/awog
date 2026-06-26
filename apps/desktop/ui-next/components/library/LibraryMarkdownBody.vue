@@ -200,7 +200,7 @@ const onEdit = (e: MouseEvent) => {
   padding: 1px 5px;
   border-radius: 4px;
 }
-.mdbody :deep(pre.hljs) {
+.mdbody :deep(pre) {
   background: var(--bgSubtle);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -208,7 +208,7 @@ const onEdit = (e: MouseEvent) => {
   overflow-x: auto;
   line-height: 1.6;
 }
-.mdbody :deep(pre.hljs code) {
+.mdbody :deep(pre code) {
   background: none;
   padding: 0;
   font-size: 0.8846rem;

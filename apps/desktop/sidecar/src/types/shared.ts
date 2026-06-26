@@ -323,6 +323,16 @@ export interface Session {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Task this session was opened to discuss (ADR 0055). When set, buildContext
+  // injects a <linked_task> block (the task's latest output + a trace summary)
+  // each turn so the agent can reason about the task's results. Absent for a
+  // normal chat session. The reverse link (task → its discussion sessions) is
+  // derived by filtering sessions on aboutTaskId — not stored on the task.
+  aboutTaskId?: string
+  // GitHub issue/PR this session was opened from ("New session" on an issue/PR
+  // row). Full github.com URL — a back-reference surfaced in the UI; not injected
+  // into the model context. Absent for a normal chat.
+  aboutGhUrl?: string
   // Latest context-compaction checkpoint (ADR 0047), or absent if never compacted.
   compaction?: SessionCompaction
 }
@@ -343,6 +353,12 @@ export interface SessionSummary {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Task this session discusses (ADR 0055) — surfaced on the list row so the UI
+  // can badge / navigate without loading the full transcript. Mirrors
+  // Session.aboutTaskId.
+  aboutTaskId?: string
+  // GitHub issue/PR this session was opened from — mirrors Session.aboutGhUrl.
+  aboutGhUrl?: string
   // True when a compaction checkpoint exists — lets the UI badge it without
   // loading the transcript.
   hasCompaction?: boolean
@@ -673,10 +689,15 @@ export type RunStatus = 'running' | 'waiting_approval' | 'completed' | 'supersed
 // `connectionId` = the mcpServerId of the connection the task uses to reach its
 // source. Optional; the engine unions that MCP server into every node. Token
 // never lives here — only the id (ADR 0025, simplified: no service tag/tier).
+// `session` (ADR 0055) = the task was spawned from a chat session; `sessionId` is
+// the session's canonical id and `messageId` the message it was kicked off from
+// (both let the UI navigate back). The reverse link (session → its spawned tasks)
+// is NOT stored — it is derived by filtering tasks on source.sessionId.
 export type TaskSource =
   | { type: 'github'; repo: string; issueNumber: number; url: string; connectionId?: string }
   | { type: 'jira'; key: string; connectionId?: string }
   | { type: 'manual' }
+  | { type: 'session'; sessionId: string; messageId?: string; connectionId?: string }
 
 export interface TraceNode {
   id: string

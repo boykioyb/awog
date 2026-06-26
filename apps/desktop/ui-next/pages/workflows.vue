@@ -85,31 +85,6 @@
       @cancel="cancelDelete"
     />
 
-    <!-- run: project picker (global workflow has no project of its own) -->
-    <LibraryEntityModal
-      :open="projectPickerOpen"
-      :title="t('workflow.run.pickProject')"
-      :width="440"
-      @close="cancelProjectPicker"
-    >
-      <div class="wfrun">
-        <label class="wfrun-label">{{ t('workflow.run.projectLabel') }}</label>
-        <AppSelect
-          v-model="runProjectId"
-          :options="runProjectOptions"
-          :placeholder="t('workflow.run.projectPlaceholder')"
-          width="100%"
-        />
-        <div class="wfrun-hint">{{ t('workflow.run.projectHint') }}</div>
-      </div>
-      <template #footer>
-        <button class="btn" @click="cancelProjectPicker">{{ t('common.cancel') }}</button>
-        <button class="btn pri" :disabled="!runProjectId" @click="confirmProjectPicker">
-          {{ t('workflow.run.confirm') }}
-        </button>
-      </template>
-    </LibraryEntityModal>
-
     <!-- transient toasts -->
     <div
       v-for="tt in toasts"
@@ -130,7 +105,6 @@
 import { computed } from 'vue'
 import AppSelect from '~/components/common/AppSelect.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
-import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import WorkflowCanvas from '~/components/workflow/WorkflowCanvas.vue'
 import WorkflowInspector from '~/components/workflow/WorkflowInspector.vue'
 import WorkflowListItem from '~/components/workflow/WorkflowListItem.vue'
@@ -176,11 +150,6 @@ const {
   pendingDeleteName,
   confirmDelete,
   onRun,
-  projectPickerOpen,
-  runProjectId,
-  runProjectOptions,
-  cancelProjectPicker,
-  confirmProjectPicker,
   toasts,
   toastColor,
 } = useWorkflowsPage()
@@ -231,19 +200,5 @@ const canvasScopeLabel = computed(() => {
   font-size: 0.8846rem;
   color: var(--textFaint);
   text-align: center;
-}
-.wfrun {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.wfrun-label {
-  font-size: 0.8846rem;
-  font-weight: 550;
-  color: var(--text);
-}
-.wfrun-hint {
-  font-size: 0.8462rem;
-  color: var(--textDim);
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="app">
+  <div class="app" :class="{ compact, 'nav-open': navOpen, 'list-open': listOpen }">
     <NavRail />
     <div class="main">
       <AppTopBar />
@@ -8,17 +8,24 @@
       </div>
     </div>
 
+    <!-- Compact-mode drawer backdrop: dim the main content and dismiss the open
+         nav/list drawer on click. Only mounted while a drawer is open. -->
+    <div v-if="compact && (navOpen || listOpen)" class="shell-scrim" @click="closeDrawers" />
+
     <!-- §9 globals: mounted once so they work on every page. -->
     <CommandPalette />
     <SessionPromptEditOverlay />
     <SettingsModal />
     <WhatsNewModal />
     <SessionGitModal />
+    <NewTaskModalHost />
+    <ConfirmDialogHost />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useCommandPalette } from '~/composables/useCommandPalette'
 
 // Shell layout: NavRail | (TopBar + page body). Ported from awog-prototype.html
@@ -28,6 +35,13 @@ import { useCommandPalette } from '~/composables/useCommandPalette'
 // palette, prompt-edit overlay, and the native turn-complete notification watcher.
 
 const { toggle, isOpen, close } = useCommandPalette()
+const route = useRoute()
+
+// Compact responsive shell (≤1100px): nav rail + list become off-canvas drawers.
+// initResponsiveShell binds the viewport listener once; closing on navigation means
+// tapping a nav item or opening a list row dismisses the overlay.
+const { compact, navOpen, listOpen, closeDrawers, initResponsiveShell } = useResponsiveShell()
+watch(() => route.path, closeDrawers)
 
 // Watch the sessions store for turn-complete → fire a native notification when
 // the window is unfocused (composable owns the gating + permission flow).
@@ -42,9 +56,16 @@ function onKeydown(e: KeyboardEvent) {
     toggle()
     return
   }
-  if (e.key === 'Escape' && isOpen.value) close()
+  if (e.key === 'Escape' && isOpen.value) {
+    close()
+    return
+  }
+  if (e.key === 'Escape' && (navOpen.value || listOpen.value)) closeDrawers()
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  initResponsiveShell()
+})
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>

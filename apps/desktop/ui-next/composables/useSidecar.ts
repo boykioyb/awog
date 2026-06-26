@@ -39,6 +39,13 @@ export type UpdateEvent =
   | { type: 'error'; message: string }
 export type UpdateEventHandler = (event: UpdateEvent) => void
 
+// Live log tail (Diagnostics panel).
+export type LogTailEvent =
+  | { type: 'init'; content: string; path: string }
+  | { type: 'data'; chunk: string }
+  | { type: 'error'; message: string }
+export type LogTailEventHandler = (event: LogTailEvent) => void
+
 const bridge = () => (typeof window !== 'undefined' ? window.awog : undefined)
 
 const toSidecarError = (raw: unknown): SidecarError => {
@@ -144,6 +151,20 @@ export function useSidecar() {
     if (!api) throw new SidecarUnavailableError()
     await api.openLogs()
   }
+  // Live log tail (Diagnostics panel). Subscribe with onLogData first, then call
+  // startLogTail so the init snapshot isn't missed; stopLogTail on teardown.
+  const startLogTail = async (): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.startLogTail()
+  }
+  const stopLogTail = async (): Promise<void> => {
+    if (!api) return
+    await api.stopLogTail()
+  }
+  const onLogData = async (handler: LogTailEventHandler): Promise<UnlistenFn> => {
+    if (!api) throw new SidecarUnavailableError()
+    return api.onLogData((e) => handler(e))
+  }
 
   return {
     available: !!api,
@@ -162,5 +183,8 @@ export function useSidecar() {
     openReleasesPage,
     onUpdateEvent,
     openLogs,
+    startLogTail,
+    stopLogTail,
+    onLogData,
   }
 }

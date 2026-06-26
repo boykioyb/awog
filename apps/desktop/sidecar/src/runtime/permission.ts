@@ -34,12 +34,16 @@ import { log } from '../util/logger.js'
 // and runs without a permission prompt.
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 const EXEC_TOOLS = new Set(['Bash'])
+// Tools that spawn durable background work (ADR 0055): RunWorkflow kicks off a
+// Task. Gated like a mutation so it prompts in ask/accept-edits and runs only in
+// execute mode (in plan mode it isn't even registered).
+const SPAWN_TOOLS = new Set(['RunWorkflow'])
 
 // browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
 // screenshot/extract are read-only (don't gate). Decided per-call from args.
 function isGatedTool(name: string, args: unknown): boolean {
   if (name === BROWSER_TOOL_NAME) return isMutatingBrowserAction(args)
-  return WRITE_TOOLS.has(name) || EXEC_TOOLS.has(name)
+  return WRITE_TOOLS.has(name) || EXEC_TOOLS.has(name) || SPAWN_TOOLS.has(name)
 }
 
 export type BeforeToolCall = (

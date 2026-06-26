@@ -81,9 +81,7 @@
       <div class="csrow">
         <span class="cslbl">{{ t('sessions.filter.project') }}</span>
         <div class="csval" style="position: relative" @click.stop="projMenu = !projMenu">
-          {{
-            projectFilter === 'all' ? t('sessions.filter.allProjects') : projectName(projectFilter)
-          }}
+          {{ projectFilterLabel }}
           <Icon name="chev" style="width: 13px; height: 13px" />
           <div
             v-if="projMenu"
@@ -94,7 +92,7 @@
             <div v-for="p in projectOptions" :key="p.id" class="mi" @click="selectProject(p.id)">
               {{ p.id === 'all' ? t('sessions.filter.allProjects') : p.name }}
               <Icon
-                v-if="p.id === projectFilter"
+                v-if="p.id === 'all' ? !projectFilter.size : projectFilter.has(p.id)"
                 name="check"
                 class="ck"
                 style="width: 13px; height: 13px"
@@ -103,7 +101,7 @@
           </div>
         </div>
       </div>
-      <span v-if="activeFilters" class="clearf" @click="projectFilter = 'all'">
+      <span v-if="activeFilters" class="clearf" @click="projectFilter = new Set()">
         {{ t('sessions.filter.clear') }}
       </span>
     </div>
@@ -125,7 +123,7 @@
         class="del"
         :title="t('sessions.sidebar.deleteSelected')"
         style="color: var(--danger)"
-        @click="store.bulkRemove()"
+        @click="askBulkRemove"
       >
         <Icon name="trash" style="width: 13px; height: 13px" />
       </span>
@@ -176,6 +174,7 @@
                 :session="s"
                 :active="s.id === activeId"
                 :selecting="selecting"
+                :hide-project="groupBy === 'project'"
                 :rename-req="renameReq"
                 @click="$emit('select', s.id)"
                 @ctxmenu="(p) => openCtx(p, s)"
@@ -293,11 +292,51 @@ const { GROUPBY, providerOf, projColor } = useSessionsMock()
 const { projects, projectName, projectPath } = useProjects()
 const store = useSessionsStore()
 const sc = useSidecar()
+const { confirm } = useConfirm()
+
+// Confirm before deleting selected sessions (bulk bar trash). Destructive +
+// unrecoverable, so gate even though the rows are explicitly selected.
+async function askBulkRemove() {
+  const n = selectedCount.value
+  if (!n) return
+  const ok = await confirm({
+    title: t('sessions.delete.manyTitle', { n }),
+    description: t('sessions.delete.many', { n }),
+  })
+  if (ok) store.bulkRemove()
+}
+
+// Filter state (group-by + project selection) persists across restarts via
+// localStorage so re-opening the app restores the last filter. Search text stays
+// transient — it's a per-look query, not a saved preference.
+const STORAGE_GROUPBY = 'awog.sessions.filter.groupBy'
+const STORAGE_PROJECTS = 'awog.sessions.filter.projects'
+
+function readGroupBy(): string {
+  const v = localStorage.getItem(STORAGE_GROUPBY)
+  return v && GROUPBY.some(([value]) => value === v) ? v : 'project'
+}
+function readProjectFilter(): Set<string> {
+  try {
+    const arr: unknown = JSON.parse(localStorage.getItem(STORAGE_PROJECTS) ?? '[]')
+    if (Array.isArray(arr)) return new Set(arr.filter((x): x is string => typeof x === 'string'))
+  } catch {
+    // Corrupt value → fall back to "no filter".
+  }
+  return new Set()
+}
 
 const filter = ref('')
-const groupBy = ref('project')
-const projectFilter = ref('all')
+const groupBy = ref(readGroupBy())
+// Multi-select project filter: a set of selected projectIds. Empty = no filter
+// (all projects shown). Reassign a fresh Set on every change so the ref triggers.
+const projectFilter = ref<Set<string>>(readProjectFilter())
 const showFilters = ref(false)
+
+// Persist on change. projectFilter is always reassigned (never mutated in place),
+// so a shallow watch fires correctly without deep tracking.
+watch(groupBy, (v) => localStorage.setItem(STORAGE_GROUPBY, v))
+watch(projectFilter, (v) => localStorage.setItem(STORAGE_PROJECTS, JSON.stringify([...v])))
 
 // Multi-select mode (§1): when on, every row shows its checkbox and a row click
 // toggles selection instead of opening the session. The bulk action bar appears
@@ -332,12 +371,19 @@ const projectOptions = computed(() => [
   { id: 'all', name: t('sessions.filter.allProjects') },
   ...projects.value,
 ])
-const activeFilters = computed(() => (projectFilter.value !== 'all' ? 1 : 0))
+const activeFilters = computed(() => projectFilter.value.size)
 const groupByLabel = computed(() => t(`sessions.group.${groupBy.value}`))
+// "All" when nothing picked, the project name for a single pick, "N projects" beyond.
+const projectFilterLabel = computed(() => {
+  const sel = [...projectFilter.value]
+  if (sel.length === 0) return t('sessions.filter.allProjects')
+  if (sel.length === 1) return projectName(sel[0]!)
+  return t('sessions.filter.nProjects', { n: sel.length })
+})
 
 const filtered = computed(() => {
   let f = props.sessions.filter((s) => s.title.toLowerCase().includes(filter.value.toLowerCase()))
-  if (projectFilter.value !== 'all') f = f.filter((s) => s.project === projectFilter.value)
+  if (projectFilter.value.size) f = f.filter((s) => projectFilter.value.has(s.project))
   // Pinned-first, otherwise preserve the incoming order (stable sort). Applies to
   // the flat list and — since buckets are filled from this order — keeps pinned
   // sessions at the top within each group too.
@@ -380,9 +426,17 @@ function selectGroup(value: string) {
   groupBy.value = value
   groupMenu.value = false
 }
+// Toggle a project in/out of the filter set; "all" clears it. The menu stays open
+// so several projects can be picked in one pass (backdrop click closes it).
 function selectProject(p: string) {
-  projectFilter.value = p
-  projMenu.value = false
+  if (p === 'all') {
+    projectFilter.value = new Set()
+    return
+  }
+  const next = new Set(projectFilter.value)
+  if (next.has(p)) next.delete(p)
+  else next.add(p)
+  projectFilter.value = next
 }
 function closeMenus() {
   groupMenu.value = false
@@ -448,9 +502,15 @@ function ctxCopyId() {
   }
   ctx.value = null
 }
-function ctxDelete() {
-  if (ctx.value) store.remove(ctx.value.session.id)
-  ctx.value = null
+async function ctxDelete() {
+  const s = ctx.value?.session
+  ctx.value = null // close the menu before the dialog opens
+  if (!s) return
+  const ok = await confirm({
+    title: t('sessions.delete.title'),
+    description: t('sessions.delete.one', { title: s.title }),
+  })
+  if (ok) store.remove(s.id)
 }
 
 // ── Project group context menu ─────────────────────────────────────────────────
@@ -488,9 +548,16 @@ function pDeselectAll() {
     })
   pctx.value = null
 }
-function pDeleteAll() {
-  if (pctx.value) store.bulkRemove(pctx.value.grp.items.map((s) => s.id))
-  pctx.value = null
+async function pDeleteAll() {
+  const grp = pctx.value?.grp
+  pctx.value = null // close the menu before the dialog opens
+  if (!grp) return
+  const n = grp.items.length
+  const ok = await confirm({
+    title: t('sessions.delete.manyTitle', { n }),
+    description: t('sessions.delete.many', { n }),
+  })
+  if (ok) store.bulkRemove(grp.items.map((s) => s.id))
 }
 function pOpenFinder() {
   const path = pctxPath.value

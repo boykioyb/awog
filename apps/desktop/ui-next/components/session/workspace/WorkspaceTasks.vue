@@ -5,67 +5,73 @@
     </div>
 
     <div v-else class="wstasks-list">
-      <div v-for="entry in entries" :key="entry.key" class="wstasks-row">
-        <Icon :name="entry.icon" style="width: 13px; height: 13px; color: var(--textDim)" />
+      <button
+        v-for="entry in entries"
+        :key="entry.id"
+        class="wstasks-row"
+        @click="openTask(entry.id)"
+      >
+        <Icon name="workflows" style="width: 13px; height: 13px; color: var(--textDim)" />
         <div class="wstasks-main">
-          <div class="wstasks-label">{{ entry.label }}</div>
-          <div v-if="entry.target" class="wstasks-target">{{ entry.target }}</div>
+          <div class="wstasks-label">{{ entry.title }}</div>
+          <div class="wstasks-target">{{ entry.statusLabel }}</div>
         </div>
-        <span class="wstasks-dot" :style="{ background: entry.color }" :title="entry.status" />
-      </div>
+        <span class="wstasks-dot" :style="{ background: entry.color }" :title="entry.statusLabel" />
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Tasks tab (§5/§10) — ui-next has no dedicated tasks store/data source, so this is
-// a minimal, graceful surface derived from the session's own transcript: it lists
-// background-task steps (Bash/terminal commands + Task sub-agents) the session ran.
-// No backend is invented; an empty session shows a clear placeholder. (NOTE: a true
-// Tasks engine view would need a tasks store — out of scope here.)
-import type { Session, StepBlock } from '~/composables/useSessionsMock'
+// Tasks tab — lists the real background Tasks spawned from THIS session (ADR 0055).
+// A task carries its origin in `source = { type:'session', sessionId }`; we filter
+// the live tasks store on the session's engineId, so status dots update over the
+// store's `task.*` event subscription. Click a row to open the task. An empty
+// session (or mock mode, where there's no engineId) shows the placeholder.
+import { computed, onMounted } from 'vue'
+import Icon from '~/components/Icon.vue'
+import { useI18n } from '~/composables/useI18n'
+import { useTasksStore, type TaskStatus } from '~/stores/tasks'
+import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
+import type { Session } from '~/composables/useSessionsMock'
 
 const props = defineProps<{ session: Session }>()
 
 const { t } = useI18n()
+const tasks = useTasksStore()
+const { openTask } = useSessionTaskLink()
 
-type Entry = {
-  key: string
-  label: string
-  target: string
-  status: string
-  color: string
-  icon: string
-}
+// Ensure the task list is loaded so links resolve even when the workspace panel is
+// opened before the Tasks page was ever visited.
+onMounted(() => {
+  void tasks.loadTasks()
+})
 
-// Tools that represent a background task in the transcript.
-const TASK_TOOLS = new Set(['bash', 'terminal', 'task', 'subagent'])
+type Entry = { id: string; title: string; status: TaskStatus; statusLabel: string; color: string }
 
-const colorOf = (status: StepBlock['status']): string => {
+const colorOf = (status: TaskStatus): string => {
   if (status === 'running') return 'var(--amber)'
-  if (status === 'error') return 'var(--danger)'
-  return 'var(--add)'
+  if (status === 'failed') return 'var(--danger)'
+  if (status === 'completed') return 'var(--add)'
+  if (status === 'waiting_approval' || status === 'waiting_connection') return 'var(--amber)'
+  return 'var(--textDim)'
 }
 
 const entries = computed<Entry[]>(() => {
+  const eid = props.session.engineId
+  if (!eid) return []
   const out: Entry[] = []
-  props.session.msgs.forEach((m, mi) => {
-    if (m.role !== 'assistant') return
-    m.blocks.forEach((b, bi) => {
-      if (b.kind !== 'step') return
-      const toolLower = b.tool.toLowerCase()
-      if (!TASK_TOOLS.has(toolLower) && !b.sub) return
-      out.push({
-        key: `${mi}-${bi}`,
-        label: b.tool,
-        target: b.target,
-        status: b.status ?? 'done',
-        color: colorOf(b.status),
-        icon: b.sub || toolLower === 'task' ? 'agents' : 'commands',
-      })
+  for (const task of tasks.tasks) {
+    if (task.source?.type !== 'session' || task.source.sessionId !== eid) continue
+    out.push({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      statusLabel: t(`tasks.statusLabel.${task.status}`),
+      color: colorOf(task.status),
     })
-  })
-  // Running entries float to the top so an in-flight turn is obvious.
+  }
+  // Running tasks float to the top so an in-flight spawn is obvious.
   return out.sort((a, b) => Number(b.status === 'running') - Number(a.status === 'running'))
 })
 </script>
@@ -89,6 +95,16 @@ const entries = computed<Entry[]>(() => {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bgSubtle);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.wstasks-row:hover {
+  border-color: var(--accentBorder);
+  background: var(--bgHover);
 }
 .wstasks-main {
   min-width: 0;

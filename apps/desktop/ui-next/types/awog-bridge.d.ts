@@ -17,6 +17,12 @@ export type AwogUpdateEvent =
   | { type: 'downloaded'; version: string }
   | { type: 'error'; message: string }
 
+// Live log tail (Diagnostics panel).
+export type AwogLogTailEvent =
+  | { type: 'init'; content: string; path: string }
+  | { type: 'data'; chunk: string }
+  | { type: 'error'; message: string }
+
 export interface AwogBridge {
   // Resolves with the JSON-RPC result, or rejects with { code, message, data }.
   request(method: string, params?: unknown): Promise<unknown>
@@ -40,6 +46,10 @@ export interface AwogBridge {
   openReleasesPage(): Promise<void>
   onUpdateEvent(handler: (event: AwogUpdateEvent) => void): () => void
   openLogs(): Promise<void>
+  // Live log tail for the Diagnostics panel (streams over app:logData).
+  startLogTail(): Promise<void>
+  stopLogTail(): Promise<void>
+  onLogData(handler: (event: AwogLogTailEvent) => void): () => void
 }
 
 declare global {

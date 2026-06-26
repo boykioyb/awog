@@ -12,17 +12,19 @@ const Params = z.object({
   kind: z.enum(['issue', 'pr']),
   number: z.number().int().positive(),
   account: z.string().optional(),
+  // Child repo of a multi-repo workspace (relativePath from git.discoverRepos).
+  repoPath: z.string().optional(),
 })
 
 // Detail field sets. PR adds isDraft + base/head refs on top of the issue set.
 const ISSUE_FIELDS =
   'number,title,state,author,assignees,labels,createdAt,updatedAt,body,url,comments'
 const PR_FIELDS =
-  'number,title,state,isDraft,author,assignees,labels,baseRefName,headRefName,createdAt,updatedAt,body,url,comments'
+  'number,title,state,isDraft,author,assignees,labels,baseRefName,headRefName,createdAt,updatedAt,body,url,comments,files,reviews'
 
 register('gh.get', async (raw): Promise<GhThread> => {
   const params = Params.parse(raw)
-  const cwd = await resolveProjectCwd(params.projectId)
+  const cwd = await resolveProjectCwd(params.projectId, params.repoPath)
 
   const fields = params.kind === 'pr' ? PR_FIELDS : ISSUE_FIELDS
   const args = [

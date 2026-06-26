@@ -59,6 +59,10 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
     [getOpen, getProjectId] as const,
     ([open]) => {
       if (!open) return
+      // The settings store only hydrates accounts on the Settings modal mount;
+      // pull the real accounts.list so the account picker isn't empty when this
+      // modal is opened directly (else it shows only the "active account" stub).
+      void settings.hydrateFromSidecar()
       const ld = project.value?.llmDefaults
       draft.value = ld
         ? {

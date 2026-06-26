@@ -19,6 +19,22 @@ export interface GhThreadComment {
   createdAt: string
 }
 
+// PR-only: a changed file with its line delta.
+export interface GhThreadFile {
+  path: string
+  additions: number
+  deletions: number
+}
+
+// PR-only: a submitted review (only ones carrying a body are surfaced — a bare
+// APPROVE with no text isn't a comment). state ∈ APPROVED/CHANGES_REQUESTED/…
+export interface GhThreadReview {
+  author: { login: string }
+  body: string
+  state: string
+  createdAt: string
+}
+
 export interface GhThreadSummary {
   kind: GhThreadKind
   number: number
@@ -39,6 +55,9 @@ export interface GhThread extends GhThreadSummary {
   body: string
   url: string
   comments: GhThreadComment[]
+  // PR-only (absent / empty for issues).
+  files?: GhThreadFile[]
+  reviews?: GhThreadReview[]
 }
 
 // gh sometimes returns author/assignee as `null` (ghost user) — coerce to a
@@ -77,10 +96,30 @@ const SummaryJson = z
   })
   .passthrough()
 
+const FileJson = z
+  .object({
+    path: z.string(),
+    additions: z.number().optional(),
+    deletions: z.number().optional(),
+  })
+  .passthrough()
+
+// gh review objects carry `submittedAt` (not createdAt) + a state + body.
+const ReviewJson = z
+  .object({
+    author: Actor.optional(),
+    body: z.string().optional(),
+    state: z.string().optional(),
+    submittedAt: z.string().optional(),
+  })
+  .passthrough()
+
 const ThreadJson = SummaryJson.extend({
   body: z.string().optional(),
   url: z.string().optional(),
   comments: z.array(Comment).optional(),
+  files: z.array(FileJson).optional(),
+  reviews: z.array(ReviewJson).optional(),
 })
 
 export const SummaryListJson = z.array(SummaryJson)
@@ -137,10 +176,31 @@ export function parseThread(kind: GhThreadKind, stdout: string): GhThread {
     createdAt: c.createdAt ?? '',
   }))
   comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  return {
+
+  const thread: GhThread = {
     ...toSummary(kind, j),
     body: j.body ?? '',
     url: j.url ?? '',
     comments,
   }
+
+  // PR-only: changed files + reviews that carry a body (bare approvals dropped).
+  if (kind === 'pr') {
+    thread.files = (j.files ?? []).map((f) => ({
+      path: f.path,
+      additions: f.additions ?? 0,
+      deletions: f.deletions ?? 0,
+    }))
+    thread.reviews = (j.reviews ?? [])
+      .filter((r) => (r.body ?? '').trim().length > 0)
+      .map((r) => ({
+        author: login(r.author),
+        body: r.body ?? '',
+        state: (r.state ?? '').toUpperCase(),
+        createdAt: r.submittedAt ?? '',
+      }))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  }
+
+  return thread
 }

@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useI18n } from '~/composables/useI18n'
+import { useNewTaskModal } from '~/composables/useNewTaskModal'
 import { useProjects } from '~/composables/useProjects'
 import { useToasts } from '~/composables/useToasts'
 import {
@@ -8,7 +8,6 @@ import {
   type WorkflowDraft,
   type WorkflowSkill,
 } from '~/composables/useWorkflowGen'
-import { useTasksStore } from '~/stores/tasks'
 import {
   useWorkflowsStore,
   type Workflow,
@@ -23,10 +22,9 @@ import {
 
 export function useWorkflowsPage() {
   const store = useWorkflowsStore()
-  const tasksStore = useTasksStore()
+  const newTaskModal = useNewTaskModal()
   const { projects } = useProjects()
   const { toasts, pushToast, toastColor } = useToasts()
-  const { t } = useI18n()
   const gen = useWorkflowGen()
 
   const projectList = computed(() => projects.value.map((p) => ({ id: p.id, name: p.name })))
@@ -203,82 +201,20 @@ export function useWorkflowsPage() {
     pushToast(`Deleted "${name}"`, 'success')
   }
 
-  // --- run → create Task ---------------------------------------------------
-  // Running a workflow hands off to the Tasks feature: snapshot the workflow into
-  // a Task (the engine resolves the authoritative snapshot from workflowId; the
-  // slice here is for the optimistic detail view) then navigate to /tasks.
-  //
-  // A task always needs a project. A project-tier workflow supplies its own; a
-  // global workflow has none, so we surface a minimal project picker (preselecting
-  // nothing — the user chooses). When zero projects exist there is nothing to run
-  // against, so we toast and bail.
-  const projectPickerOpen = ref(false)
-  const runProjectId = ref('')
-  const runProjectOptions = computed(() =>
-    projectList.value.map((p) => ({ value: p.id, label: p.name })),
-  )
-
-  // Build the engine-shaped snapshot slice (id/name + node/edge refs) used for the
-  // optimistic Task detail. agentName is resolved from the loaded roster so the
-  // pipeline labels render before the engine returns its own snapshot.
-  const buildSnapshot = (wf: Workflow) => ({
-    id: wf.id,
-    name: wf.name,
-    nodes: wf.nodes.map((n) => {
-      const agentName = allAgents.value.find((a) => a.id === n.agentId)?.name
-      return {
-        id: n.id,
-        agentId: n.agentId,
-        ...(agentName ? { agentName } : {}),
-        skillId: n.skillId,
-        approval: n.approval,
-      }
-    }),
-    edges: wf.edges.map((e) => ({ from: e.from, to: e.to })),
-  })
-
-  // Create the task for `wf` against `projectId`, then jump to Tasks.
-  const launchTask = (wf: Workflow, projectId: string) => {
-    const task = tasksStore.createTask(
-      {
-        title: wf.name,
-        description: wf.description,
-        source: { type: 'manual' },
-        workflowId: wf.id,
-        projectId,
-      },
-      buildSnapshot(wf),
-    )
-    pushToast(t('workflow.run.created', { title: task.title }), 'success')
-    void navigateTo('/tasks')
-  }
-
+  // --- run → New Task ------------------------------------------------------
+  // Running a workflow opens the shared New Task modal pre-selected to this
+  // workflow, so the user supplies the actual brief (title/description) and a
+  // project before the task is created — a workflow alone carries no work item.
+  // A project-tier workflow seeds its own project; a global one leaves it for the
+  // user to pick. The modal (NewTaskModalHost in the default layout) owns creation.
   const onRun = () => {
     const wf = workflow.value
     if (!wf || wf.nodes.length === 0) return
-    // Project-tier workflow → run against its own project directly.
-    if (wf.source === 'project' && wf.projectId) {
-      launchTask(wf, wf.projectId)
-      return
-    }
-    // Global workflow → needs a project chosen by the user.
-    if (projectList.value.length === 0) {
-      pushToast(t('workflow.run.noProject'), 'error')
-      return
-    }
-    runProjectId.value = ''
-    projectPickerOpen.value = true
-  }
-
-  const cancelProjectPicker = () => {
-    projectPickerOpen.value = false
-  }
-  const confirmProjectPicker = () => {
-    const wf = workflow.value
-    const projectId = runProjectId.value
-    if (!wf || !projectId) return
-    projectPickerOpen.value = false
-    launchTask(wf, projectId)
+    newTaskModal.openModal({
+      workflowId: wf.id,
+      title: wf.name,
+      ...(wf.source === 'project' && wf.projectId ? { projectId: wf.projectId } : {}),
+    })
   }
 
   return {
@@ -325,13 +261,8 @@ export function useWorkflowsPage() {
     cancelDelete,
     pendingDeleteName,
     confirmDelete,
-    // run → task
+    // run → New Task modal (shared host)
     onRun,
-    projectPickerOpen,
-    runProjectId,
-    runProjectOptions,
-    cancelProjectPicker,
-    confirmProjectPicker,
     // toasts
     toasts,
     toastColor,

@@ -1,5 +1,5 @@
 <template>
-  <div class="composer">
+  <div ref="composerEl" class="composer">
     <div
       class="cresize"
       :class="{ drag: resizing }"
@@ -112,23 +112,178 @@
         </span>
       </div>
       <div class="cbar">
+        <!-- Wide: inline mode/model/account/style chips. Narrow (compact) → they
+             fold into the single "Config" dropdown (below) so the toolbar never
+             overflows / truncates a chip label. -->
+        <template v-if="!compact">
+          <span
+            class="chip sm chipbtn"
+            :class="`mode-${selectedMode}`"
+            :title="t('sessions.composer.modeTooltip')"
+            style="position: relative"
+            @click.stop="toggle('mode')"
+          >
+            <Icon :name="modeIcon" style="width: 12px; height: 12px" />
+            {{ t(`sessions.mode.${selectedMode}`) }}
+            <Icon name="chev" style="width: 11px; height: 11px" />
+            <div
+              v-if="open === 'mode'"
+              class="smenu"
+              style="position: absolute; bottom: 130%; left: 0; z-index: 50"
+              @click.stop
+            >
+              <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id)">
+                <Icon :name="m.icon" style="width: 13px; height: 13px" />
+                {{ t(`sessions.mode.${m.id}`) }}
+                <Icon
+                  v-if="m.id === selectedMode"
+                  name="check"
+                  class="ck"
+                  style="width: 13px; height: 13px"
+                />
+              </div>
+            </div>
+          </span>
+          <span
+            class="chip sm chipbtn"
+            :title="t('sessions.composer.modelTooltip')"
+            style="position: relative"
+            @click.stop="toggle('model')"
+          >
+            <Icon name="settings" style="width: 12px; height: 12px" />
+            {{ selectedModel }}
+            <Icon name="chev" style="width: 11px; height: 11px" />
+            <div
+              v-if="open === 'model'"
+              class="smenu"
+              style="
+                position: absolute;
+                bottom: 130%;
+                left: 0;
+                z-index: 50;
+                max-height: 320px;
+                overflow-y: auto;
+              "
+              @click.stop
+            >
+              <div v-for="m in availableModels" :key="m" class="mi" @click="selectModel(m)">
+                {{ m }}
+                <Icon
+                  v-if="m === selectedModel"
+                  name="check"
+                  class="ck"
+                  style="width: 13px; height: 13px"
+                />
+              </div>
+              <!-- Thinking selector folded under the model list -->
+              <div class="palg">
+                {{ t('sessions.config.thinking') }}
+                <span v-if="!thinkSupported">{{ t('sessions.config.thinkingUnsupported') }}</span>
+              </div>
+              <div
+                v-for="[v, l] in THINK"
+                :key="v"
+                class="mi"
+                :class="{ mdisabled: !thinkSupported }"
+                @click="selectThink(v)"
+              >
+                {{ l }}
+                <Icon
+                  v-if="thinking === v"
+                  name="check"
+                  class="ck"
+                  style="width: 13px; height: 13px"
+                />
+              </div>
+            </div>
+          </span>
+          <span
+            class="chip sm chipbtn acct"
+            :title="selectedAccountDisplay || t('sessions.composer.accountTooltip')"
+            style="position: relative"
+            @click.stop="toggle('account')"
+          >
+            <Icon name="agents" style="width: 12px; height: 12px" />
+            <span class="chiplbl">{{ accountShort }}</span>
+            <Icon name="chev" style="width: 11px; height: 11px" />
+            <div
+              v-if="open === 'account'"
+              class="smenu"
+              style="position: absolute; bottom: 130%; left: 0; z-index: 50"
+              @click.stop
+            >
+              <div v-for="a in accounts" :key="a.id" class="mi" @click="selectAccount(a)">
+                {{ a.display }}
+                <Icon
+                  v-if="a.id === selectedAccountId"
+                  name="check"
+                  class="ck"
+                  style="width: 13px; height: 13px"
+                />
+              </div>
+            </div>
+          </span>
+          <span
+            class="chip sm chipbtn"
+            :title="t('sessions.composer.styleTooltip')"
+            style="position: relative"
+            @click.stop="toggle('style')"
+          >
+            <Icon name="skills" style="width: 12px; height: 12px" />
+            {{ styleName }}
+            <Icon name="chev" style="width: 11px; height: 11px" />
+            <div
+              v-if="open === 'style'"
+              class="smenu stylemenu"
+              style="position: absolute; bottom: 130%; left: 0; z-index: 50"
+              @click.stop
+            >
+              <template v-for="(grp, gi) in RESPONSE_STYLES" :key="grp.key">
+                <div class="palg" :class="{ first: gi === 0 }">
+                  {{ t(`sessions.style.group.${grp.key}`) }}
+                </div>
+                <div
+                  v-for="row in grp.rows"
+                  :key="row.id"
+                  class="mi sty"
+                  :class="{ cur: row.id === activeStyleId }"
+                  @click="selectStyle(row.id)"
+                >
+                  <Icon :name="row.icon" class="styicon" />
+                  <div class="stytext">
+                    <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
+                    <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
+                  </div>
+                  <Icon v-if="row.id === activeStyleId" name="check" class="styck" />
+                </div>
+              </template>
+              <label class="nmk" style="padding: 0 11px 9px" @click.stop="toggleNoMd">
+                <span class="tog2 sm" :class="{ off: !noMd }" />
+                {{ t('sessions.config.noMarkdown') }}
+              </label>
+            </div>
+          </span>
+        </template>
+        <!-- Compact: one chip standing in for all four selectors; opens a single
+             scrollable dropdown with Mode / Model / Account / Style sections. -->
         <span
-          class="chip sm chipbtn"
-          :class="`mode-${selectedMode}`"
-          :title="t('sessions.composer.modeTooltip')"
+          v-else
+          class="chip sm chipbtn cfgchip"
+          :title="t('sessions.composer.configTooltip')"
           style="position: relative"
-          @click.stop="toggle('mode')"
+          @click.stop="toggle('config')"
         >
-          <Icon :name="modeIcon" style="width: 12px; height: 12px" />
-          {{ t(`sessions.mode.${selectedMode}`) }}
+          <Icon name="settings" style="width: 12px; height: 12px" />
+          {{ t('sessions.composer.config') }}
           <Icon name="chev" style="width: 11px; height: 11px" />
           <div
-            v-if="open === 'mode'"
-            class="smenu"
+            v-if="open === 'config'"
+            class="smenu stylemenu cfgmenu"
             style="position: absolute; bottom: 130%; left: 0; z-index: 50"
             @click.stop
           >
-            <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id)">
+            <div class="palg first">{{ t('sessions.composer.section.mode') }}</div>
+            <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id, true)">
               <Icon :name="m.icon" style="width: 13px; height: 13px" />
               {{ t(`sessions.mode.${m.id}`) }}
               <Icon
@@ -138,31 +293,9 @@
                 style="width: 13px; height: 13px"
               />
             </div>
-          </div>
-        </span>
-        <span
-          class="chip sm chipbtn"
-          :title="t('sessions.composer.modelTooltip')"
-          style="position: relative"
-          @click.stop="toggle('model')"
-        >
-          <Icon name="settings" style="width: 12px; height: 12px" />
-          {{ selectedModel }}
-          <Icon name="chev" style="width: 11px; height: 11px" />
-          <div
-            v-if="open === 'model'"
-            class="smenu"
-            style="
-              position: absolute;
-              bottom: 130%;
-              left: 0;
-              z-index: 50;
-              max-height: 320px;
-              overflow-y: auto;
-            "
-            @click.stop
-          >
-            <div v-for="m in availableModels" :key="m" class="mi" @click="selectModel(m)">
+
+            <div class="palg">{{ t('sessions.composer.section.model') }}</div>
+            <div v-for="m in availableModels" :key="m" class="mi" @click="selectModel(m, true)">
               {{ m }}
               <Icon
                 v-if="m === selectedModel"
@@ -171,7 +304,6 @@
                 style="width: 13px; height: 13px"
               />
             </div>
-            <!-- Thinking selector folded under the model list -->
             <div class="palg">
               {{ t('sessions.config.thinking') }}
               <span v-if="!thinkSupported">{{ t('sessions.config.thinkingUnsupported') }}</span>
@@ -181,7 +313,7 @@
               :key="v"
               class="mi"
               :class="{ mdisabled: !thinkSupported }"
-              @click="selectThink(v)"
+              @click="selectThink(v, true)"
             >
               {{ l }}
               <Icon
@@ -191,24 +323,9 @@
                 style="width: 13px; height: 13px"
               />
             </div>
-          </div>
-        </span>
-        <span
-          class="chip sm chipbtn acct"
-          :title="selectedAccountDisplay || t('sessions.composer.accountTooltip')"
-          style="position: relative"
-          @click.stop="toggle('account')"
-        >
-          <Icon name="agents" style="width: 12px; height: 12px" />
-          <span class="chiplbl">{{ accountShort }}</span>
-          <Icon name="chev" style="width: 11px; height: 11px" />
-          <div
-            v-if="open === 'account'"
-            class="smenu"
-            style="position: absolute; bottom: 130%; left: 0; z-index: 50"
-            @click.stop
-          >
-            <div v-for="a in accounts" :key="a.id" class="mi" @click="selectAccount(a)">
+
+            <div class="palg">{{ t('sessions.composer.section.account') }}</div>
+            <div v-for="a in accounts" :key="a.id" class="mi" @click="selectAccount(a, true)">
               {{ a.display }}
               <Icon
                 v-if="a.id === selectedAccountId"
@@ -217,42 +334,22 @@
                 style="width: 13px; height: 13px"
               />
             </div>
-          </div>
-        </span>
-        <span
-          class="chip sm chipbtn"
-          :title="t('sessions.composer.styleTooltip')"
-          style="position: relative"
-          @click.stop="toggle('style')"
-        >
-          <Icon name="skills" style="width: 12px; height: 12px" />
-          {{ styleName }}
-          <Icon name="chev" style="width: 11px; height: 11px" />
-          <div
-            v-if="open === 'style'"
-            class="smenu stylemenu"
-            style="position: absolute; bottom: 130%; left: 0; z-index: 50"
-            @click.stop
-          >
-            <template v-for="(grp, gi) in RESPONSE_STYLES" :key="grp.key">
-              <div class="palg" :class="{ first: gi === 0 }">
-                {{ t(`sessions.style.group.${grp.key}`) }}
+
+            <div class="palg">{{ t('sessions.composer.section.style') }}</div>
+            <div
+              v-for="row in allStyles"
+              :key="row.id"
+              class="mi sty"
+              :class="{ cur: row.id === activeStyleId }"
+              @click="selectStyle(row.id, true)"
+            >
+              <Icon :name="row.icon" class="styicon" />
+              <div class="stytext">
+                <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
+                <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
               </div>
-              <div
-                v-for="row in grp.rows"
-                :key="row.id"
-                class="mi sty"
-                :class="{ cur: row.id === activeStyleId }"
-                @click="selectStyle(row.id)"
-              >
-                <Icon :name="row.icon" class="styicon" />
-                <div class="stytext">
-                  <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
-                  <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
-                </div>
-                <Icon v-if="row.id === activeStyleId" name="check" class="styck" />
-              </div>
-            </template>
+              <Icon v-if="row.id === activeStyleId" name="check" class="styck" />
+            </div>
             <label class="nmk" style="padding: 0 11px 9px" @click.stop="toggleNoMd">
               <span class="tog2 sm" :class="{ off: !noMd }" />
               {{ t('sessions.config.noMarkdown') }}
@@ -260,6 +357,14 @@
           </div>
         </span>
         <span class="grow1" />
+        <button
+          class="iconbtn"
+          :title="t('sessions.composer.runAsTask')"
+          style="width: 28px; height: 28px"
+          @click="emit('run-as-task')"
+        >
+          <Icon name="workflows" style="width: 14px; height: 14px" />
+        </button>
         <button
           class="iconbtn"
           :title="enhancing ? t('sessions.composer.enhancing') : t('sessions.composer.enhance')"
@@ -340,6 +445,8 @@ const emit = defineEmits<{
   'add-att': [att: SessionAttachment]
   preview: [i: number]
   'open-more': []
+  // Open the New Task modal seeded with this session as the task origin (ADR 0055).
+  'run-as-task': []
 }>()
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -536,11 +643,35 @@ const selectedModel = computed(() => store.active?.model || 'Opus 4.8')
 const selectedAccountDisplay = computed(() => store.active?.account || '')
 const selectedAccountId = computed(() => store.active?.accountId ?? '')
 
-type MenuKind = 'mode' | 'model' | 'account' | 'style'
+// 'config' is the consolidated popover shown when the toolbar is too narrow for the
+// four inline chips — it folds mode/model/account/style into one dropdown.
+type MenuKind = 'mode' | 'model' | 'account' | 'style' | 'config'
 const open = ref<MenuKind | null>(null)
 function toggle(kind: MenuKind) {
   open.value = open.value === kind ? null : kind
 }
+
+// Below this toolbar width the four selector chips would overflow / truncate, so
+// they collapse into a single "Config" dropdown (the consolidated popover). Observed
+// on the composer root; flips live as the workspace panel opens/closes.
+const COMPACT_W = 560
+const composerEl = useTemplateRef<HTMLDivElement>('composerEl')
+const compact = ref(false)
+let ro: ResizeObserver | null = null
+onMounted(() => {
+  const el = composerEl.value
+  if (!el || typeof ResizeObserver === 'undefined') return
+  ro = new ResizeObserver((entries) => {
+    compact.value = (entries[0]?.contentRect.width ?? el.clientWidth) < COMPACT_W
+  })
+  ro.observe(el)
+})
+onBeforeUnmount(() => ro?.disconnect())
+// Flipping layouts removes the inline chips (or the config chip) from the DOM, so
+// drop any open menu to avoid a dangling popover + scrim.
+watch(compact, () => {
+  open.value = null
+})
 
 // Models for the currently-selected account (prefer its engine modelIds), with a
 // fallback to the display-string provider catalog (mock / unresolved account).
@@ -556,17 +687,19 @@ const availableModels = computed(() => {
   })
 })
 
-function selectMode(m: string) {
+// `keepOpen` lets the consolidated config dropdown stay open across several picks
+// (mode + model + style in one go); the inline chips call without it → close on pick.
+function selectMode(m: string, keepOpen = false) {
   if (store.activeId != null) store.setMode(store.activeId, m)
-  open.value = null
+  if (!keepOpen) open.value = null
 }
-function selectModel(m: string) {
+function selectModel(m: string, keepOpen = false) {
   if (store.activeId != null) store.setModel(store.activeId, m)
-  open.value = null
+  if (!keepOpen) open.value = null
 }
-function selectAccount(a: AccountOption) {
+function selectAccount(a: AccountOption, keepOpen = false) {
   if (store.activeId != null) store.selectAccount(store.activeId, { id: a.id, display: a.display })
-  open.value = null
+  if (!keepOpen) open.value = null
 }
 
 const modeIcon = computed(
@@ -587,10 +720,10 @@ const accountShort = computed(() => {
 // ── Thinking (folded under the model chip) ─────────────────────────────────────
 const thinkSupported = computed(() => !NO_THINK.has(selectedModel.value))
 const thinking = computed<ThinkingLevel>(() => store.active?.thinkingLevel ?? 'high')
-function selectThink(v: ThinkingLevel) {
+function selectThink(v: ThinkingLevel, keepOpen = false) {
   if (!thinkSupported.value || store.activeId == null) return
   store.setThinking(store.activeId, v)
-  open.value = null
+  if (!keepOpen) open.value = null
 }
 
 // ── Response style (style chip) ────────────────────────────────────────────────
@@ -606,9 +739,12 @@ const activeStyleId = computed(() => {
   return st && st !== 'Default' ? st : 'Normal'
 })
 const noMd = computed(() => store.active?.noMarkdown ?? false)
-function selectStyle(id: string) {
+// Flat style list (groups folded away) for the consolidated config dropdown, which
+// already carries its own section header — nested group headers would over-nest it.
+const allStyles = computed(() => RESPONSE_STYLES.flatMap((g) => g.rows))
+function selectStyle(id: string, keepOpen = false) {
   if (store.activeId != null) store.setStyle(store.activeId, id === 'Normal' ? 'Default' : id)
-  open.value = null
+  if (!keepOpen) open.value = null
 }
 function toggleNoMd() {
   if (store.activeId != null) store.setNoMarkdown(store.activeId, !noMd.value)
@@ -975,6 +1111,15 @@ function onPaste(e: ClipboardEvent) {
 .cbar > .chip.acct {
   flex: 0 1 auto;
   min-width: 0;
+}
+/* Consolidated config dropdown (compact toolbar) — wider than a plain .smenu so the
+   style hints read, and height-capped with its own scroll since it folds all four
+   selectors + thinking + the no-markdown toggle into one popover. */
+.cfgmenu {
+  min-width: 240px;
+  max-width: 300px;
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
 }
 /* Account chip label: cap width + ellipsis so a long account name (e.g.
    "Malme Co (tran.quang_hoa)") stays a concise chip; the full "label · Provider"

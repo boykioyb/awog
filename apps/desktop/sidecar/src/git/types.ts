@@ -130,4 +130,11 @@ export interface GitRepoEntry {
   relativePath: string
   // True when path === scanned root (single-repo project).
   isRoot: boolean
+  // Current branch (rev-parse --abbrev-ref HEAD) — best-effort, absent on failure.
+  branch?: string
+  // `remote.origin.url` — best-effort; lets the UI derive a GitHub slug per repo.
+  remote?: string
+  // Count of tracked working-tree changes (git status --porcelain, untracked
+  // excluded) — 0 = clean. Best-effort; absent on failure.
+  dirty?: number
 }

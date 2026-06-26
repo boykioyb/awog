@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron'
 import { engine } from './engine'
 import { browser, registerBrowserHostHandlers } from './browser'
 import { registerIpc } from './ipc'
-import { setupLogging } from './logger'
+import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
 import { trayIconPath } from './paths'
 import { loadShellEnv } from './shell-env'
 import { setupUpdater } from './updater'
@@ -28,6 +28,9 @@ function openMainWindow(): void {
   mainWindow = createMainWindow()
   mainWindow.on('closed', () => {
     mainWindow = null
+    // A hard window close skips the renderer's onBeforeUnmount, so end any
+    // active log-tail poll here rather than leaving watchFile running.
+    stopLogTail()
   })
 }
 
@@ -58,6 +61,7 @@ if (!gotLock) {
     registerBrowserHostHandlers()
     registerIpc(getWindow)
     setupUpdater(getWindow)
+    registerLogTailIpc(getWindow)
     openMainWindow()
     setupTray()
 

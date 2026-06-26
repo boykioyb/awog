@@ -1,43 +1,48 @@
 <template>
-  <div class="mmd" :class="{ full: fullscreen }">
-    <div class="mmdbar">
-      <button class="mmb" :title="t('common.zoomOut')" @click="zoomBy(-0.2)">
-        <Icon name="minus" style="width: 13px; height: 13px" />
-      </button>
-      <button class="mmz" :title="t('common.zoomReset')" @click="reset">
-        {{ Math.round(scale * 100) }}%
-      </button>
-      <button class="mmb" :title="t('common.zoomIn')" @click="zoomBy(0.2)">
-        <Icon name="plus" style="width: 13px; height: 13px" />
-      </button>
-      <span class="mmsep" />
-      <button
-        class="mmb"
-        :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
-        @click="toggleFull"
-      >
-        <Icon :name="fullscreen ? 'minimize' : 'maximize'" style="width: 13px; height: 13px" />
-      </button>
-    </div>
-
-    <div
-      class="mmdvp"
-      @wheel="onWheelZoom"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-    >
-      <!-- mermaid output is sanitized (securityLevel:strict) before v-html -->
-      <!-- eslint-disable-next-line vue/no-v-html -- mermaid SVG, sanitized -->
-      <div v-if="svg" class="mmdstage" :style="stageStyle" v-html="svg" />
-      <div v-else-if="error" class="mmderr">
-        <Icon name="alert" style="width: 15px; height: 15px" />
-        <span>{{ error }}</span>
-        <pre class="mmdsrc">{{ code }}</pre>
+  <!-- When fullscreen, teleport to <body> so the position:fixed overlay covers the whole
+       viewport: a transformed/filtered ancestor in the transcript would otherwise become
+       its containing block and confine it (the "gap at top" bug). Disabled inline. -->
+  <Teleport to="body" :disabled="!fullscreen">
+    <div class="mmd" :class="{ full: fullscreen }">
+      <div class="mmdbar">
+        <button class="mmb" :title="t('common.zoomOut')" @click="zoomBy(-0.2)">
+          <Icon name="minus" style="width: 13px; height: 13px" />
+        </button>
+        <button class="mmz" :title="t('common.zoomReset')" @click="reset">
+          {{ Math.round(scale * 100) }}%
+        </button>
+        <button class="mmb" :title="t('common.zoomIn')" @click="zoomBy(0.2)">
+          <Icon name="plus" style="width: 13px; height: 13px" />
+        </button>
+        <span class="mmsep" />
+        <button
+          class="mmb"
+          :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
+          @click="toggleFull"
+        >
+          <Icon :name="fullscreen ? 'minimize' : 'maximize'" style="width: 13px; height: 13px" />
+        </button>
       </div>
-      <div v-else class="mmdwait">{{ t('common.mermaid.rendering') }}</div>
+
+      <div
+        class="mmdvp"
+        @wheel="onWheelZoom"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+      >
+        <!-- mermaid output is sanitized (securityLevel:strict) before v-html -->
+        <!-- eslint-disable-next-line vue/no-v-html -- mermaid SVG, sanitized -->
+        <div v-if="svg" class="mmdstage" :style="stageStyle" v-html="svg" />
+        <div v-else-if="error" class="mmderr">
+          <Icon name="alert" style="width: 15px; height: 15px" />
+          <span>{{ error }}</span>
+          <pre class="mmdsrc">{{ code }}</pre>
+        </div>
+        <div v-else class="mmdwait">{{ t('common.mermaid.rendering') }}</div>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -66,12 +71,12 @@ const stageStyle = computed(() => ({
   transform: `translate(${tx.value}px, ${ty.value}px)`,
 }))
 
-// Wheel zooms only with Ctrl/Cmd (or in fullscreen) so scrolling the page/transcript
-// over a diagram doesn't hijack the scroll and silently zoom it out.
+// Scroll wheel over the diagram zooms it (preventDefault stops it from also scrolling the
+// transcript). To scroll the feed past a diagram, move the cursor off the viewport — or use
+// the toolbar ± / fit buttons. Finer steps than the toolbar so wheel zoom feels smooth.
 function onWheelZoom(e: WheelEvent) {
-  if (!fullscreen.value && !e.ctrlKey && !e.metaKey) return
   e.preventDefault()
-  zoomBy(e.deltaY < 0 ? 0.2 : -0.2)
+  zoomBy(e.deltaY < 0 ? 0.1 : -0.1)
 }
 
 // Module-level so ids are unique across every MermaidView instance + re-render.
@@ -79,6 +84,19 @@ let UID = 0
 // Per-instance token guards against a stale async render (theme/code changed
 // mid-render) overwriting the latest result.
 let renderToken = 0
+
+// Best-effort repair for common LLM mermaid slips, run ONLY after a parse failure — so a
+// valid diagram renders on the first pass untouched and this can never corrupt it. Quotes
+// flowchart edge labels whose text carries shape punctuation: `-->|secret('X')|` trips the
+// parser on the `(` (it reads a node shape) unless the label is quoted: `-->|"secret('X')"|`.
+function repairMermaid(src: string): string {
+  if (!/^\s*(flowchart|graph)\b/m.test(src)) return src
+  return src.replace(/\|([^|\n]+)\|/g, (whole, label: string) => {
+    const t = label.trim()
+    if (t.startsWith('"') || !/[(){}[\]]/.test(t)) return whole
+    return `|"${t.replace(/"/g, "'")}"|`
+  })
+}
 
 async function render() {
   const myToken = ++renderToken
@@ -94,7 +112,20 @@ async function render() {
       securityLevel: 'strict',
       theme: isDark.value ? 'dark' : 'default',
     })
-    const { svg: out } = await mermaid.render(`mmd-${++UID}`, props.code)
+    let out = ''
+    try {
+      out = (await mermaid.render(`mmd-${++UID}`, props.code)).svg
+    } catch (first) {
+      // Retry once with a repaired source; if it's a no-op or still fails, surface the
+      // ORIGINAL parse error so the message points at the real line.
+      const repaired = repairMermaid(props.code)
+      if (repaired === props.code) throw first
+      try {
+        out = (await mermaid.render(`mmd-${++UID}`, repaired)).svg
+      } catch {
+        throw first
+      }
+    }
     if (myToken !== renderToken) return // superseded by a newer render
     if (!out) {
       error.value = t('common.mermaid.empty')
@@ -220,6 +251,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onFsKey, true))
   max-height: 60vh;
   overflow: hidden;
   display: grid;
+  /* Definite track so the stage's width:100% resolves to the viewport width. Without it
+     the implicit `auto` column sizes to content, and mermaid's `<svg width="100%">`
+     contributes 0 to an auto track → the column (and the diagram) collapses to nothing.
+     minmax(0,1fr) fills the container yet still lets a zoomed (>100%) stage overflow +
+     be clipped. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   cursor: grab;
   touch-action: none;

@@ -2,5 +2,7 @@
   "topbar.search": "Tìm hoặc nhảy tới…",
   "topbar.new": "Tạo mới",
   "topbar.toLight": "Chuyển sáng",
-  "topbar.toDark": "Chuyển tối"
+  "topbar.toDark": "Chuyển tối",
+  "topbar.openNav": "Hiện điều hướng",
+  "topbar.openList": "Hiện danh sách"
 }

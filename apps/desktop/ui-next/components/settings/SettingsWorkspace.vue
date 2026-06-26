@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="sech">{{ t('settings.workspace.heading') }}</div>
+    <SettingsPaneHeader :title="t('settings.workspace.heading')" />
 
     <SettingsField
       :name="t('settings.workspace.path.name')"
@@ -36,11 +36,17 @@
       :name="t('settings.workspace.diagnostics.name')"
       :desc="t('settings.workspace.diagnostics.desc')"
     >
-      <button class="btn sm" :disabled="openingLogs" @click="onOpenLogs">
+      <button class="btn sm" @click="showLogs = !showLogs">
         <Icon name="clip" />
-        {{ t('settings.workspace.diagnostics.openLogs') }}
+        {{
+          showLogs
+            ? t('settings.workspace.diagnostics.hideLogs')
+            : t('settings.workspace.diagnostics.viewLogs')
+        }}
       </button>
     </SettingsField>
+
+    <SettingsLogTail v-if="sidecar.available && showLogs" @close="showLogs = false" />
   </div>
 </template>
 
@@ -48,7 +54,8 @@
 // Workspace panel — wires setSecHtml('workspace') to real state + IPC.
 //   - Workspace path: two-way bound to the settings store.
 //   - Git versioning: informational read-only status (auto-commit is always on).
-//   - Diagnostics: opens the app log file via the sidecar (Electron only).
+//   - Diagnostics: toggles an inline log tail (SettingsLogTail) that streams the
+//     app log file into a terminal-style view (Electron only).
 // Telemetry/templates rows from the prototype are omitted — no backing store field.
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -60,18 +67,5 @@ const workspacePath = computed({
   set: (v: string) => settings.setWorkspacePath(v),
 })
 
-const openingLogs = ref(false)
-
-const onOpenLogs = async () => {
-  if (openingLogs.value) return
-  openingLogs.value = true
-  try {
-    await sidecar.openLogs()
-  } catch {
-    // Sidecar unavailable / failed — nothing harmful; the button is hidden when
-    // !available, so this only guards transient IPC failures.
-  } finally {
-    openingLogs.value = false
-  }
-}
+const showLogs = ref(false)
 </script>

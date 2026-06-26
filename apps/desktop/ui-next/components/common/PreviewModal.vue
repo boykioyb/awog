@@ -555,7 +555,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   padding: 1px 5px;
   border-radius: 4px;
 }
-.mdbody :deep(pre.hljs) {
+.mdbody :deep(pre) {
   background: var(--bgSubtle);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -563,7 +563,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   overflow-x: auto;
   line-height: 1.6;
 }
-.mdbody :deep(pre.hljs code) {
+.mdbody :deep(pre code) {
   background: none;
   padding: 0;
   font-size: 0.8846rem;
@@ -594,26 +594,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .mdbody :deep(img) {
   max-width: 100%;
 }
-/* highlight.js tokens (theme-token palette; mirrors prototype .t-* colors) */
-.mdbody :deep(.hljs-keyword),
-.mdbody :deep(.hljs-built_in) {
-  color: var(--violet);
-}
-.mdbody :deep(.hljs-string),
-.mdbody :deep(.hljs-attr) {
-  color: var(--add);
-}
-.mdbody :deep(.hljs-comment) {
-  color: var(--textFaint);
-  font-style: italic;
-}
-.mdbody :deep(.hljs-number),
-.mdbody :deep(.hljs-literal) {
-  color: var(--amber);
-}
-.mdbody :deep(.hljs-title),
-.mdbody :deep(.hljs-title.function_),
-.mdbody :deep(.hljs-section) {
-  color: var(--blue);
-}
+/* Code token colors come from Shiki inline styles (ADR 0055). */
 </style>

@@ -103,7 +103,17 @@
           "
         >
           <span style="color: var(--textDim); flex: 0 0 96px">{{ row.k }}</span>
-          <span class="mono" style="min-width: 0; overflow-wrap: anywhere">{{ row.v }}</span>
+          <a
+            v-if="row.href"
+            class="mono"
+            :href="row.href"
+            target="_blank"
+            rel="noopener"
+            style="min-width: 0; overflow-wrap: anywhere; color: var(--blue); text-decoration: none"
+          >
+            {{ row.v }}
+          </a>
+          <span v-else class="mono" style="min-width: 0; overflow-wrap: anywhere">{{ row.v }}</span>
         </div>
       </div>
 
@@ -234,9 +244,17 @@ const totalTok = computed(() => {
   return Math.floor(chars / 3)
 })
 
-const infoRows = computed(() => {
+// Derive a compact label for a GitHub issue/PR URL, e.g. "PR owner/repo#5".
+function ghLabel(url: string): string {
+  const m = /github\.com\/([^/]+)\/([^/]+)\/(pull|issues)\/(\d+)/.exec(url)
+  if (!m) return url
+  const kind = m[3] === 'pull' ? 'PR' : 'Issue'
+  return `${kind} ${m[1]}/${m[2]}#${m[4]}`
+}
+
+const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
   const s = props.session
-  return [
+  const rows: { k: string; v: string; href?: string }[] = [
     { k: t('sessions.info.id'), v: `s_${s.id}` },
     { k: t('sessions.info.project'), v: projectName(s.project) },
     { k: t('sessions.info.account'), v: s.account },
@@ -247,6 +265,10 @@ const infoRows = computed(() => {
     { k: t('sessions.info.tokens'), v: `${kfmt(totalTok.value)} / 200k` },
     { k: t('sessions.info.updated'), v: s.when },
   ]
+  if (s.aboutGhUrl) {
+    rows.push({ k: t('sessions.info.gh'), v: ghLabel(s.aboutGhUrl), href: s.aboutGhUrl })
+  }
+  return rows
 })
 </script>
 

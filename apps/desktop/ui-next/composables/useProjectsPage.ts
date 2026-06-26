@@ -83,7 +83,7 @@ export function useProjectsPage() {
     const sessions = sessionsStore.sessions.filter(
       (s) => s.project === p.id || s.project === p.name,
     )
-    const ses = sessions.slice(0, 6).map((s) => ({ t: s.title, w: s.when }))
+    const ses = sessions.slice(0, 6).map((s) => ({ id: s.id, t: s.title, w: s.when }))
     const anyRunning = sessions.some((s) => s.status === 'streaming' || s.status === 'awaiting')
 
     const tasks = tasksStore.tasks

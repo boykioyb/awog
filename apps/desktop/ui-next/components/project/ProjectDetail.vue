@@ -61,7 +61,7 @@
       <span class="ptab" :class="{ on: tab === 'overview' }" @click="setTab('overview')">
         {{ t('projects.tab.overview') }}
       </span>
-      <template v-if="view.gh">
+      <template v-if="hasGh">
         <span class="ptab" :class="{ on: tab === 'issues' }" @click="setTab('issues')">
           {{ t('projects.tab.issues') }}
         </span>
@@ -78,11 +78,31 @@
       <ProjectOverview
         :project="project"
         :view="view"
+        :repos="overviewRepos"
         @delete="emit('delete')"
         @open-llm="emit('open-llm')"
       />
     </div>
-    <ProjectGh v-else :project-id="project.id" :kind="tab === 'prs' ? 'pr' : 'issue'" />
+    <!-- Issues + PR are two independent instances, lazily mounted on first visit
+         and kept alive (v-show) so switching tabs never refetches — each holds its
+         own list + filters. `ghRepos` drives the repo picker (multi-repo workspace).
+         Both unmount when leaving for Overview / another project (visited resets). -->
+    <template v-else>
+      <ProjectGh
+        v-if="visited.issues"
+        v-show="tab === 'issues'"
+        :project-id="project.id"
+        kind="issue"
+        :repos="ghRepos"
+      />
+      <ProjectGh
+        v-if="visited.prs"
+        v-show="tab === 'prs'"
+        :project-id="project.id"
+        kind="pr"
+        :repos="ghRepos"
+      />
+    </template>
   </div>
 </template>
 
@@ -93,10 +113,11 @@
 // GitHub tabs mount ProjectGh (live gh.* RPC) only when the remote is a GitHub
 // repo. Edit / delete / LLM-defaults / template / open-code / open-workspace
 // bubble to the page.
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import ProjectGh from './ProjectGh.vue'
 import ProjectOverview from './ProjectOverview.vue'
-import type { ProjectView } from './data'
+import type { ProjectRepo, ProjectView } from './data'
+import { useProjectRepos } from '~/composables/useProjectRepos'
 import type { Project } from '~/types'
 
 const props = defineProps<{ project: Project; view: ProjectView }>()
@@ -112,8 +133,44 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// Discover the project's git repos (multi-repo workspace). `ghRepos` are the ones
+// with a GitHub remote — they drive the Issues/PR tab visibility + repo picker.
+const { repos, ghRepos } = useProjectRepos(
+  () => props.project.id,
+  () => props.project.path,
+)
+
+// Show Issues/PR when the entity remote is GitHub (immediate) OR discovery found a
+// GitHub child repo (multi-repo workspace, resolves async).
+const hasGh = computed(() => !!props.view.gh || ghRepos.value.length > 0)
+
+// Repos for the Overview card — discovered child repos (workspace) when available,
+// else the entity-derived single repo. Mapped to the card's ProjectRepo shape.
+const overviewRepos = computed<ProjectRepo[]>(() => {
+  if (!repos.value.length) return props.view.repos
+  return repos.value.map((r) => {
+    const o: ProjectRepo = { n: r.relativePath === '.' ? r.name : r.relativePath, br: r.branch }
+    if (r.ghSlug) o.gh = r.ghSlug
+    if (r.dirty > 0) o.dirty = r.dirty
+    return o
+  })
+})
+
 type Tab = 'overview' | 'issues' | 'prs'
 const tab = ref<Tab>('overview')
+
+// Which GH tabs have been opened this visit — gates lazy mount (so a tab fetches
+// only once opened) while v-show keeps the mounted instance for instant switching.
+// Reset when leaving the GH area so re-entering re-pulls fresh.
+const visited = ref<{ issues: boolean; prs: boolean }>({ issues: false, prs: false })
+watch(tab, (t) => {
+  if (t === 'issues') visited.value.issues = true
+  else if (t === 'prs') visited.value.prs = true
+  else {
+    visited.value.issues = false
+    visited.value.prs = false
+  }
+})
 
 function setTab(next: Tab) {
   tab.value = next
@@ -127,10 +184,7 @@ watch(
     tab.value = 'overview'
   },
 )
-watch(
-  () => props.view.gh,
-  (gh) => {
-    if (!gh && tab.value !== 'overview') tab.value = 'overview'
-  },
-)
+watch(hasGh, (has) => {
+  if (!has && tab.value !== 'overview') tab.value = 'overview'
+})
 </script>

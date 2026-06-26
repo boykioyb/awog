@@ -36,6 +36,7 @@
   "settingsModels.account.active": "Active",
   "settingsModels.account.edit": "Edit",
   "settingsModels.account.test": "Test connection",
+  "settingsModels.account.reauth": "Re-authenticate",
   "settingsModels.account.disconnect": "Disconnect",
   "settingsModels.account.addAnother": "Add another account",
   "settingsModels.account.addKey": "Add API key",
@@ -66,6 +67,8 @@
   "settingsModels.oauth.labelPlaceholder": "Optional label (e.g. Personal Pro)",
   "settingsModels.oauth.confirm": "Confirm",
   "settingsModels.oauth.stateMismatch": "The code does not match this authorization session. Please restart.",
+  "settingsModels.oauth.reauthTitle": "Re-authenticate Claude account",
+  "settingsModels.oauth.reauthHint": "This account's sign-in expired. Sign in again to refresh it — the credentials are replaced in place, so the account keeps its settings.",
 
   "settingsModels.codex.title": "Sign in with ChatGPT",
   "settingsModels.codex.preparing": "Preparing OpenAI sign-in…",

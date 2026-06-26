@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="sech">{{ t('settings.git.heading') }}</div>
+    <SettingsPaneHeader :title="t('settings.git.heading')" />
 
     <SettingsField
       :name="t('settings.git.autoCommit.name')"

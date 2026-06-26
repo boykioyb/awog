@@ -236,6 +236,13 @@ export type Session = {
   // for Vue lists; `engineId` is what the RPCs use. Set when hydrated from
   // sessions.list / created via the engine.
   engineId?: string
+  // Task this session was opened to discuss (ADR 0055). Set when created via the
+  // "Discuss in session" action on a Task; drives the SessionDetail banner + the
+  // sidecar <linked_task> context injection. Round-trips through sessions.upsert.
+  aboutTaskId?: string
+  // GitHub issue/PR URL this session was opened from ("New session" on an issue/PR
+  // row). Surfaced in the Info panel as a link; round-trips through sessions.upsert.
+  aboutGhUrl?: string
   // Real context-window usage from turn events.
   usage?: SessionUsage
   // Queued messages (auto-sent after the current turn finishes).
@@ -247,6 +254,10 @@ export type Session = {
   // True once this session's full transcript has been fetched (sessions.get).
   // Lazy-load guard — see ADR 0048. Unset/false = summary only (msgs empty).
   loaded?: boolean
+  // True while the transcript fetch is in flight (drives the skeleton so opening
+  // an old session shows a loading placeholder, not the empty "new session"
+  // welcome). Set by ensureLoaded; cleared when it settles.
+  loading?: boolean
 }
 
 export type TreeFile = { f: string; st?: 'M' | 'A' }

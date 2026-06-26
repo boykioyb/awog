@@ -26,8 +26,7 @@
       </template>
     </LibraryView>
 
-    <!-- new task -->
-    <NewTaskModal :open="newOpen" :data="newTaskData" @save="onCreate" @cancel="closeNew" />
+    <!-- new task modal is hosted app-wide (NewTaskModalHost in the layout) -->
 
     <!-- delete confirm -->
     <LibraryConfirmDelete
@@ -59,7 +58,6 @@
 // editor route (old UI /edit/[taskId]) is intentionally OUT OF SCOPE here.
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import LibraryView from '~/components/library/LibraryView.vue'
-import NewTaskModal from '~/components/task/NewTaskModal.vue'
 import TaskDetail from '~/components/task/TaskDetail.vue'
 import TaskListItem from '~/components/task/TaskListItem.vue'
 import { useI18n } from '~/composables/useI18n'
@@ -70,11 +68,7 @@ const { t } = useI18n()
 const {
   tasks,
   progressOf,
-  newOpen,
   openNew,
-  closeNew,
-  onCreate,
-  newTaskData,
   approve,
   rerun,
   discuss,

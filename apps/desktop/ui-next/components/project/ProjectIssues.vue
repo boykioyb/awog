@@ -2,6 +2,13 @@
   <div class="ghpane">
     <div class="ghhead">
       <AppSelect
+        v-if="repos.length > 1"
+        :model-value="repoPath"
+        :options="repoOptions"
+        width="auto"
+        @update:model-value="(v) => emit('set-repo', v)"
+      />
+      <AppSelect
         :model-value="account || '__active'"
         :options="accountOptions"
         width="170px"
@@ -57,12 +64,26 @@
             >
               {{ t('projects.gh.state.draft') }}
             </span>
+            <button
+              class="iconbtn ghnewses"
+              style="width: 26px; height: 26px; flex: 0 0 auto"
+              :title="t('projects.gh.newSession')"
+              :aria-label="t('projects.gh.newSession')"
+              @click.stop="emit('new-session', it)"
+            >
+              <Icon name="sessions" style="width: 14px; height: 14px" />
+            </button>
           </div>
           <div class="ghr2">
             <span v-if="kind === 'pr' && it.baseRefName" class="mono">
               {{ it.baseRefName }} ← {{ it.headRefName }}
             </span>
-            <span v-for="l in it.labels" :key="l.name" class="ghlabel" :style="labelStyle(l.color)">
+            <span
+              v-for="l in it.labels"
+              :key="l.name"
+              class="ghlabel"
+              :style="ghLabelStyle(l.color, isDark)"
+            >
               {{ l.name }}
             </span>
             <span style="margin-left: auto; font-family: var(--code)">
@@ -74,6 +95,9 @@
           <span class="ei"><Icon name="git" style="width: 20px; height: 20px" /></span>
           <div class="et">{{ emptyText }}</div>
         </div>
+        <button v-if="canLoadMore" class="ghmore" :disabled="loading" @click="emit('load-more')">
+          {{ loading ? t('projects.gh.loading') : t('projects.gh.loadMore') }}
+        </button>
       </template>
     </div>
   </div>
@@ -85,12 +109,16 @@
 // account/state/assignee dropdowns are themed AppSelects (WKWebView-safe).
 import { computed } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
+import type { ProjectRepo } from '~/composables/useProjectRepos'
 import type {
   GhKind,
   GhListState,
   GhThreadState,
   GhThreadSummary,
 } from '~/composables/useProjectGh'
+import { ghLabelStyle } from '~/utils/gh-label'
+
+const { isDark } = useTheme()
 
 const props = defineProps<{
   kind: GhKind
@@ -103,6 +131,11 @@ const props = defineProps<{
   account: string
   accounts: string[]
   knownAssignees: string[]
+  // GitHub child repos of the project + the selected one (multi-repo workspace).
+  repos: ProjectRepo[]
+  repoPath: string
+  // The plain list came back full → there may be more rows to load.
+  canLoadMore: boolean
 }>()
 
 const emit = defineEmits<{
@@ -112,6 +145,9 @@ const emit = defineEmits<{
   (e: 'set-assignee', v: string): void
   (e: 'set-account', v: string): void
   (e: 'set-search', v: string): void
+  (e: 'set-repo', v: string): void
+  (e: 'load-more'): void
+  (e: 'new-session', item: GhThreadSummary): void
 }>()
 
 const { t } = useI18n()
@@ -135,6 +171,16 @@ const accountOptions = computed<AppSelectOption[]>(() => [
   ...props.accounts.map((a) => ({ value: a, label: a })),
 ])
 
+// Repo picker (multi-repo workspace): value = relativePath, label = the repo
+// folder name (the owner is the same across a workspace, so the short name is
+// clearer + compact; the menu auto-fits so it never scrolls).
+const repoOptions = computed<AppSelectOption[]>(() =>
+  props.repos.map((r) => ({
+    value: r.relativePath,
+    label: r.relativePath === '.' ? r.name : r.relativePath,
+  })),
+)
+
 const emptyText = computed(() => {
   if (props.errorCode === 'GH_NOT_AUTH') return t('projects.gh.errAuth')
   if (props.errorCode === 'GH_NO_REPO') return t('projects.gh.errNoRepo')
@@ -147,11 +193,6 @@ const emptyText = computed(() => {
 
 function stateColor(s: GhThreadState): string {
   return s === 'OPEN' ? 'var(--green)' : s === 'MERGED' ? 'var(--violet)' : 'var(--textDim)'
-}
-
-function labelStyle(color: string): Record<string, string> {
-  const c = color ? `#${color}` : 'var(--textDim)'
-  return { color: c, borderColor: c }
 }
 
 const onState = (v: string) => emit('set-state', v as GhListState)
@@ -174,3 +215,26 @@ function relativeWhen(iso: string): string {
   return new Date(ms).toLocaleDateString()
 }
 </script>
+
+<style scoped>
+.ghmore {
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--textDim);
+  font-size: 1em;
+  cursor: pointer;
+}
+.ghmore:hover:not(:disabled) {
+  border-color: var(--borderStrong);
+  color: var(--text);
+  background: var(--bgHover);
+}
+.ghmore:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+</style>
