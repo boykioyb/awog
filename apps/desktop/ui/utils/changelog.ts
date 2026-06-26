@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.21.0',
+    date: '2026-06-26',
+    highlight: {
+      en: 'Connect your chats and tasks both ways — kick off a background task from a chat, or open a chat to discuss a task — plus VS Code-quality code highlighting and a richer GitHub issues & PRs view.',
+      vi: 'Liên kết hai chiều giữa chat và task — khởi chạy một task chạy nền từ chat, hoặc mở một chat để bàn về một task — cùng tô màu code chất lượng như VS Code và khung xem issue & PR GitHub phong phú hơn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Run a chat as a task: a “Run as task” button in the composer spins up a background task from your conversation — and the agent can start one itself (with your approval) while you keep chatting.',
+        vi: 'Chạy một chat thành task: nút “Run as task” trong ô soạn khởi tạo một task chạy nền từ cuộc trò chuyện — và agent cũng có thể tự khởi chạy một task (sau khi bạn cho phép) trong khi bạn tiếp tục trò chuyện.',
+      },
+      {
+        kind: 'added',
+        en: 'Discuss a task in a chat: open a session straight from a task to talk through its results — the task’s status and per-phase output stay in the conversation’s context as it runs.',
+        vi: 'Bàn về một task trong chat: mở một phiên ngay từ một task để trao đổi về kết quả của nó — trạng thái và output từng phase của task được giữ trong ngữ cảnh hội thoại khi task đang chạy.',
+      },
+      {
+        kind: 'improved',
+        en: 'Code blocks now use VS Code-quality syntax highlighting across chat, file previews, the library, and the editor, following the app’s light/dark theme — and shell commands without a language tag are no longer mis-highlighted as SQL.',
+        vi: 'Code block giờ dùng tô màu cú pháp chất lượng như VS Code trong chat, khung xem file, thư viện và editor, bám theo theme sáng/tối của app — và lệnh shell không khai báo ngôn ngữ không còn bị tô nhầm thành SQL.',
+      },
+      {
+        kind: 'improved',
+        en: 'GitHub issues & PRs: the pull-request drawer now shows changed files and reviews (approved, changes requested, and more), you can start a new session seeded from an issue or PR, expand the drawer to fullscreen, and load more items.',
+        vi: 'Issue & PR GitHub: khung pull request giờ hiển thị các file đã đổi và review (approved, changes requested, …), bạn có thể mở một phiên mới với nội dung gợi sẵn từ một issue hoặc PR, phóng khung lên toàn màn hình, và tải thêm mục.',
+      },
+      {
+        kind: 'improved',
+        en: 'The session composer tucks mode, model, account, and response style into a single “Config” menu to keep the input bar uncluttered.',
+        vi: 'Ô soạn của phiên gom chế độ, model, account và phong cách trả lời vào một menu “Config” duy nhất để thanh nhập gọn gàng hơn.',
+      },
+      {
+        kind: 'improved',
+        en: 'The interface now adapts to narrow windows: below a certain width the navigation rail and the list column slide into drawers you toggle from the top bar, giving the chat or detail view the full width.',
+        vi: 'Giao diện giờ thích ứng với cửa sổ hẹp: dưới một độ rộng nhất định, thanh điều hướng và cột danh sách thu vào ngăn kéo bật/tắt từ thanh trên, nhường toàn bộ chiều rộng cho khung chat hoặc chi tiết.',
+      },
+      {
+        kind: 'added',
+        en: 'Deleting a session — or several selected at once — now asks you to confirm first.',
+        vi: 'Xóa một phiên — hoặc nhiều phiên đã chọn cùng lúc — giờ sẽ hỏi xác nhận trước.',
+      },
+    ],
+  },
+  {
     version: '0.20.0',
     date: '2026-06-26',
     highlight: {
