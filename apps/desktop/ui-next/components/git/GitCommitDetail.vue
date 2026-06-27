@@ -46,50 +46,37 @@
     <div class="cdmsg">{{ commit.body || '' }}</div>
   </div>
 
-  <div v-else-if="tab === 'changes'" class="cdbody">
-    <div class="sech">Files changed · {{ files.length }}</div>
-    <div v-for="f in files" :key="f.f" class="gfile" style="cursor: default">
-      <span class="gm" :style="{ color: statusColor(f.st) }">{{ f.st }}</span>
-      <span class="gnm2">
-        <span class="gp">{{ dir(f.f) }}</span>
-        <span class="gn">{{ base(f.f) }}</span>
-      </span>
+  <!-- 2-pane: changed-files list (left) ↔ selected file's diff (right). -->
+  <div v-else-if="tab === 'changes'" class="cdchanges">
+    <div class="cdflist">
+      <div class="sech">{{ t('git.detail.filesChanged', { n: files.length }) }}</div>
+      <div
+        v-for="f in files"
+        :key="f.f"
+        class="gfile"
+        :class="{ on: activeFile === f.f }"
+        @click="picked = f.f"
+      >
+        <span class="gm" :style="{ color: statusColor(f.st) }">{{ f.st }}</span>
+        <span class="gnm2">
+          <span class="gp">{{ dir(f.f) }}</span>
+          <span class="gn">{{ base(f.f) }}</span>
+        </span>
+      </div>
     </div>
-    <div class="sech">Diff</div>
-    <template v-if="hasRealDiff">
-      <div class="codeview">
+    <div class="cddiff">
+      <div v-if="activeFile && activeDiffRows.length" class="codeview">
         <div class="cvhead">
           <Icon name="git" style="width: 12px; height: 12px" />
-          <span>{{ files[0]?.f }}</span>
+          <span>{{ activeFile }}</span>
           <span class="cvlang">diff</span>
         </div>
         <div class="cvdiff">
-          <GitDiffLine v-for="(l, i) in realDiff" :key="i" :line="l" />
+          <GitDiffLine v-for="(l, i) in activeDiffRows" :key="i" :line="l" />
         </div>
       </div>
-    </template>
-    <template v-else>
-      <div class="codeview">
-        <div class="cvhead">
-          <Icon name="git" style="width: 12px; height: 12px" />
-          <span>{{ commit.files[0]?.f }}</span>
-          <span class="cvlang">diff</span>
-        </div>
-        <div class="cvdiff">
-          <GitDiffLine v-for="(l, i) in diff1" :key="i" :line="l" />
-        </div>
-      </div>
-      <div v-if="commit.files[1]" class="codeview">
-        <div class="cvhead">
-          <Icon name="git" style="width: 12px; height: 12px" />
-          <span>{{ commit.files[1].f }}</span>
-          <span class="cvlang">diff</span>
-        </div>
-        <div class="cvdiff">
-          <GitDiffLine v-for="(l, i) in diff2" :key="i" :line="l" />
-        </div>
-      </div>
-    </template>
+      <div v-else class="cddiffempty">{{ t('git.detail.noDiff') }}</div>
+    </div>
   </div>
 
   <div v-else class="cdbody">
@@ -107,28 +94,23 @@
 // Git commit detail — COMMIT / CHANGES / FILE TREE tabs.
 // Ported from commitDetail in awog-prototype.html.
 import type { Commit, CommitTab, DiffLine, DiffRow, GitFile } from './git-types'
-import {
-  DEMO_DIFF,
-  DEMO_DIFF2,
-  avatarOf,
-  baseNameOf,
-  shortPath,
-  statusColor,
-  tokenizeCode,
-} from './git-types'
+import { avatarOf, baseNameOf, shortPath, statusColor, tokenizeCode } from './git-types'
 
 const props = defineProps<{
   commit: Commit
   parent: string | null
   tab: CommitTab
   files?: GitFile[]
-  diff?: DiffLine[]
+  // Per-file diff lines keyed by path (built by store.loadCommitDiff).
+  diffByPath?: Record<string, DiffLine[]>
 }>()
 
 const emit = defineEmits<{
   (e: 'set-tab', tab: CommitTab): void
   (e: 'select-commit', hash: string): void
 }>()
+
+const { t } = useI18n()
 
 function toRows(lines: DiffLine[]): DiffRow[] {
   return lines.map((l) => ({
@@ -138,16 +120,55 @@ function toRows(lines: DiffLine[]): DiffRow[] {
   }))
 }
 
-const diff1 = computed(() => toRows(DEMO_DIFF))
-const diff2 = computed(() => toRows(DEMO_DIFF2))
-
-// Real per-commit data (IPC) wins; fall back to the mock commit.files / DEMO diff.
+// Real per-commit data (IPC) wins; fall back to the mock commit.files.
 const files = computed<GitFile[]>(() =>
   props.files && props.files.length ? props.files : props.commit.files,
 )
-const hasRealDiff = computed(() => !!props.diff && props.diff.length > 0)
-const realDiff = computed(() => toRows(props.diff ?? []))
+
+// CHANGES tab: which file's diff shows in the right pane. The user's pick wins
+// while it's still in the list; otherwise default to the first file. Derived (not
+// a watch) so it survives the async load race — files/diffByPath arrive after the
+// detail pane mounts, and activeFile must track them without a stale null.
+const picked = ref<string | null>(null)
+const activeFile = computed<string | null>(() => {
+  const list = files.value
+  if (picked.value && list.some((f) => f.f === picked.value)) return picked.value
+  return list[0]?.f ?? null
+})
+
+const activeDiffRows = computed<DiffRow[]>(() =>
+  toRows((activeFile.value && props.diffByPath?.[activeFile.value]) || []),
+)
 
 const base = (f: string) => baseNameOf(f)
 const dir = (f: string) => shortPath(f)[0]
 </script>
+
+<style scoped>
+/* CHANGES tab: file list (left) ↔ selected file's diff (right), each scrolls
+   independently inside the commit-detail pane. */
+.cdchanges {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.cdflist {
+  flex: 0 0 248px;
+  min-width: 168px;
+  overflow-y: auto;
+  padding: 12px 10px;
+  border-right: 1px solid var(--border);
+}
+.cddiff {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 12px;
+}
+.cddiffempty {
+  color: var(--textDim);
+  font-size: 0.9231rem;
+  padding: 8px 4px;
+}
+</style>

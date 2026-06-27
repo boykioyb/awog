@@ -71,6 +71,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .lcd-ovl {
   align-items: center;
   padding-top: 0;
+  /* Topmost imperative dialog — match TextPromptHost (200) so a confirm raised
+     from inside another modal (e.g. the session Git modal at z-120, the Git
+     prompt modal at z-150) stacks above it rather than behind. */
+  z-index: 200;
 }
 .lcd-card {
   width: 420px;

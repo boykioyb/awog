@@ -86,10 +86,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: var(--text);
   background: var(--bgHover);
 }
-/* The Git Manager fills the remaining height; its own .gcols handles overflow. */
+/* The Git Manager fills the remaining space; its own .gcols handles overflow.
+   Mirror the full /git page wrapper (.page + inline flex-direction:column) exactly
+   — flex column + min-width:0 + min-height:0 + overflow:hidden — so GitManager
+   renders under the same container constraints and never spills past the modal. */
 .gitmodal-body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
   display: flex;
+  flex-direction: column;
 }
 </style>

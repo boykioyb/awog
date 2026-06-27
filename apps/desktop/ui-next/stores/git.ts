@@ -10,7 +10,7 @@ import type {
   RemoteInfo,
   Stash,
 } from '~/components/git/git-types'
-import { DEMO_DIFF, createGitState } from '~/components/git/git-types'
+import { DEMO_DIFF, DEMO_DIFF2, createGitState } from '~/components/git/git-types'
 import { useGitApi } from '~/composables/useGitApi'
 import type {
   SidecarGitBranch,
@@ -105,20 +105,23 @@ function adaptRemote(r: SidecarGitRemote): RemoteInfo {
 // Flatten every file's hunks into a single list of rendered diff rows (the
 // prototype DiffViewer renders one flat list, not per-file sections). Hunk
 // headers become `@` rows; context/add/del rows carry the relevant line number.
-function adaptDiff(d: SidecarGitDiff): DiffLine[] {
+// Adapt a single file's hunks into rendered diff lines (hunk header + body).
+function adaptFileDiff(file: SidecarGitDiff['files'][number]): DiffLine[] {
   const out: DiffLine[] = []
-  for (const file of d.files) {
-    for (const hunk of file.hunks) {
-      out.push({ t: '@', s: hunk.header })
-      for (const line of hunk.lines) {
-        if (line.kind === 'context') out.push({ t: ' ', n: line.newLineNum, s: line.content })
-        else if (line.kind === 'add') out.push({ t: '+', n: line.newLineNum, s: line.content })
-        else if (line.kind === 'del') out.push({ t: '-', n: line.oldLineNum, s: line.content })
-        // 'noeol' → skip (no rendered row).
-      }
+  for (const hunk of file.hunks) {
+    out.push({ t: '@', s: hunk.header })
+    for (const line of hunk.lines) {
+      if (line.kind === 'context') out.push({ t: ' ', n: line.newLineNum, s: line.content })
+      else if (line.kind === 'add') out.push({ t: '+', n: line.newLineNum, s: line.content })
+      else if (line.kind === 'del') out.push({ t: '-', n: line.oldLineNum, s: line.content })
+      // 'noeol' → skip (no rendered row).
     }
   }
   return out
+}
+
+function adaptDiff(d: SidecarGitDiff): DiffLine[] {
+  return d.files.flatMap(adaptFileDiff)
 }
 
 // Parse a git remote URL into {host, owner, repo}, handling both SSH
@@ -905,6 +908,61 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
+  // ─── Commit ops (history context menu) ───────────────────────────────────────
+
+  // Checkout a specific commit → detached HEAD. Reuses the tag-checkout RPC.
+  const checkoutCommit = async (sha: string) => {
+    if (!available.value) return
+    const root = workspaceRoot()
+    if (!root) return
+    try {
+      await useGitApi().checkoutCommit(root, sha)
+      await loadAll()
+    } catch (err) {
+      console.warn('[git] checkoutCommit failed', err)
+    }
+  }
+
+  // Replay a commit onto the current branch. Conflicts surface via loadStatus
+  // (isMerging/hasConflict drive the existing banner).
+  const cherryPick = async (sha: string) => {
+    if (!available.value) return
+    const root = workspaceRoot()
+    if (!root) return
+    try {
+      await useGitApi().cherryPick(root, sha)
+      await loadAll()
+    } catch (err) {
+      console.warn('[git] cherryPick failed', err)
+    }
+  }
+
+  // Create an inverse commit that undoes the given commit.
+  const revertCommit = async (sha: string) => {
+    if (!available.value) return
+    const root = workspaceRoot()
+    if (!root) return
+    try {
+      await useGitApi().revertCommit(root, sha)
+      await loadAll()
+    } catch (err) {
+      console.warn('[git] revertCommit failed', err)
+    }
+  }
+
+  // Move the current branch to <sha>. 'hard' discards the working tree.
+  const resetTo = async (sha: string, mode: 'soft' | 'mixed' | 'hard') => {
+    if (!available.value) return
+    const root = workspaceRoot()
+    if (!root) return
+    try {
+      await useGitApi().resetTo(root, sha, mode)
+      await loadAll()
+    } catch (err) {
+      console.warn('[git] resetTo failed', err)
+    }
+  }
+
   // ─── Ignore / patch ──────────────────────────────────────────────────────────
 
   const ignore = async (patterns: string[]) => {
@@ -958,23 +1016,34 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
-  const loadCommitDiff = async (sha: string): Promise<{ files: GitFile[]; diff: DiffLine[] }> => {
+  // Per-commit detail: the changed files plus each file's own diff lines (keyed
+  // by path) so the CHANGES tab can show a 2-pane file-list ↔ selected-file diff.
+  const loadCommitDiff = async (
+    sha: string,
+  ): Promise<{ files: GitFile[]; diffByPath: Record<string, DiffLine[]> }> => {
     if (!available.value) {
       const known = commits.value.find((c) => c.sha === sha || c.h === sha.slice(0, 7))
-      return { files: known?.files ?? [], diff: DEMO_DIFF }
+      const files = known?.files ?? []
+      const diffByPath: Record<string, DiffLine[]> = {}
+      files.forEach((f, i) => {
+        diffByPath[f.f] = i % 2 === 0 ? DEMO_DIFF : DEMO_DIFF2
+      })
+      return { files, diffByPath }
     }
     const root = workspaceRoot()
-    if (!root) return { files: [], diff: [] }
+    if (!root) return { files: [], diffByPath: {} }
     try {
       const result = await useGitApi().diff({ kind: 'commit', workspaceRoot: root, sha })
       const files: GitFile[] = result.files.map((fd) => ({
         f: fd.path,
         st: fd.isRename ? 'R' : 'M',
       }))
-      return { files, diff: adaptDiff(result) }
+      const diffByPath: Record<string, DiffLine[]> = {}
+      for (const fd of result.files) diffByPath[fd.path] = adaptFileDiff(fd)
+      return { files, diffByPath }
     } catch (err) {
       console.warn('[git] loadCommitDiff failed', err)
-      return { files: [], diff: [] }
+      return { files: [], diffByPath: {} }
     }
   }
 
@@ -1129,6 +1198,10 @@ export const useGitStore = defineStore('git', () => {
     tagCreate,
     deleteTag,
     checkoutTag,
+    checkoutCommit,
+    cherryPick,
+    revertCommit,
+    resetTo,
     ignore,
     savePatch,
     loadDiff,

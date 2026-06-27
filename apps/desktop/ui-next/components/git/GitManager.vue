@@ -67,6 +67,7 @@
               @toggle-tree="chTree = !chTree"
               @select="(f) => (selectedFile = f)"
               @discard="onDiscard"
+              @discard-all="onDiscardAll"
               @toggle-stage="onToggleStage"
               @stage-all="onStageAll"
               @unstage-all="onUnstageAll"
@@ -101,9 +102,10 @@
             :sel="commitSel"
             :ctab="ctab"
             :detail-files="detailFiles"
-            :detail-diff="detailDiff"
+            :detail-diff-by-path="detailDiffByPath"
             @select-commit="(h) => (commitSel = `c:${h}`)"
             @set-tab="(t2) => (ctab = t2)"
+            @context-commit="(e, cm) => openMenu(e, { kind: 'commit', commit: cm })"
           />
 
           <!-- Remote detail -->
@@ -164,6 +166,7 @@
 // that project on mount so the modal opens on the session's repo.
 import type {
   BranchInfo,
+  Commit,
   CommitTab,
   DiffLine,
   DiffMode,
@@ -178,6 +181,7 @@ const props = defineProps<{ projectId?: string }>()
 
 const { t } = useI18n()
 const store = useGitStore()
+const { confirm } = useConfirm()
 
 // ── View state (component-local; not git data) ──
 const section = ref<GitSection>({ kind: 'local-changes' })
@@ -198,7 +202,7 @@ const ctab = ref<CommitTab>('commit')
 const selectedFile = ref<string | null>(null)
 const commitSel = ref<string | null>(null)
 const detailFiles = ref<GitFile[]>([])
-const detailDiff = ref<DiffLine[]>([])
+const detailDiffByPath = ref<Record<string, DiffLine[]>>({})
 
 const {
   width: midW,
@@ -230,12 +234,12 @@ watch(
     const sha = v?.startsWith('c:') ? v.slice(2) : null
     if (!sha) {
       detailFiles.value = []
-      detailDiff.value = []
+      detailDiffByPath.value = {}
       return
     }
     const res = await store.loadCommitDiff(sha)
     detailFiles.value = res.files
-    detailDiff.value = res.diff
+    detailDiffByPath.value = res.diffByPath
   },
   { immediate: true },
 )
@@ -276,8 +280,28 @@ async function onStageFile(file: string) {
 }
 
 async function onDiscard(file: string) {
+  // Discard reverts the working tree irreversibly → gate behind a confirm.
+  const ok = await confirm({
+    title: t('git.discard.title'),
+    description: t('git.discard.one', { file }),
+    confirmLabel: t('git.discard.confirm'),
+  })
+  if (!ok) return
   await store.discardFile(file)
   if (selectedFile.value === file) selectedFile.value = null
+  reloadDiff()
+}
+
+async function onDiscardAll(files: string[]) {
+  if (!files.length) return
+  const ok = await confirm({
+    title: t('git.discard.allTitle'),
+    description: t('git.discard.all', { n: files.length }),
+    confirmLabel: t('git.discard.confirm'),
+  })
+  if (!ok) return
+  for (const file of files) await store.discardFile(file)
+  if (selectedFile.value && files.includes(selectedFile.value)) selectedFile.value = null
   reloadDiff()
 }
 
@@ -345,6 +369,7 @@ type MenuTarget =
   | { kind: 'stash'; index: number }
   | { kind: 'tag'; name: string }
   | { kind: 'remote'; name: string }
+  | { kind: 'commit'; commit: Commit }
 
 const menu = ref<{ x: number; y: number; target: MenuTarget } | null>(null)
 
@@ -408,6 +433,30 @@ const menuItems = computed<MenuItem[]>(() => {
       { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' },
     )
     return items
+  }
+
+  if (tgt.kind === 'commit') {
+    return [
+      { id: 'checkout', label: t('git.ctx.checkoutCommit'), icon: 'check' },
+      { id: 'branch-here', label: t('git.ctx.newBranchHere'), icon: 'plus' },
+      { id: 'tag-here', label: t('git.ctx.newTagHere'), icon: 'tag' },
+      sep,
+      { id: 'cherry-pick', label: t('git.ctx.cherryPick'), icon: 'copy' },
+      { id: 'revert', label: t('git.ctx.revert'), icon: 'rewind' },
+      {
+        label: t('git.ctx.resetToHere'),
+        icon: 'refresh',
+        children: [
+          { id: 'reset:soft', label: t('git.ctx.resetSoft') },
+          { id: 'reset:mixed', label: t('git.ctx.resetMixed') },
+          { id: 'reset:hard', label: t('git.ctx.resetHard'), danger: true },
+        ],
+      },
+      { id: 'save-patch', label: t('git.ctx.savePatch') },
+      sep,
+      { id: 'copy-sha', label: t('git.ctx.copySha'), hint: '⌘C' },
+      { id: 'copy-msg', label: t('git.ctx.copyMessage') },
+    ]
   }
 
   if (tgt.kind === 'branch') {
@@ -491,6 +540,7 @@ function onMenuSelect(id: string) {
   else if (tgt.kind === 'stash') dispatchStash(id, tgt.index)
   else if (tgt.kind === 'tag') dispatchTag(id, tgt.name)
   else if (tgt.kind === 'remote') dispatchRemote(id, tgt.name)
+  else if (tgt.kind === 'commit') void dispatchCommit(id, tgt.commit)
 }
 
 const copy = (s: string) => void navigator.clipboard?.writeText(s).catch(() => {})
@@ -517,6 +567,75 @@ function dispatchFile(id: string, file: string) {
     void store.ignore([slash > 0 ? file.slice(0, slash + 1) : file])
   }
   // external-diff / blame / history: need a dedicated view (blame/timeline) — no-op.
+}
+
+async function dispatchCommit(id: string, c: Commit) {
+  const sha = c.sha || c.h
+  if (id === 'copy-sha') return copy(sha)
+  if (id === 'copy-msg') return copy(c.m)
+  if (id === 'save-patch') return void store.savePatch()
+  if (id === 'branch-here')
+    return openPrompt({
+      title: t('git.prompt.newBranch'),
+      placeholder: 'feature/…',
+      submitLabel: t('git.sidebar.newBranch'),
+      onSubmit: (name) => void store.createBranch(name, sha),
+    })
+  if (id === 'tag-here')
+    return openPrompt({
+      title: t('git.prompt.newTag'),
+      placeholder: 'v1.0.0',
+      submitLabel: t('git.ctx.createTag'),
+      onSubmit: (name) => void store.tagCreate(name, sha),
+    })
+  // Destructive / history-rewriting ops gate behind a confirm.
+  if (id === 'checkout') {
+    if (
+      await confirm({
+        title: t('git.confirm.checkoutCommitTitle'),
+        description: t('git.confirm.checkoutCommit', { sha: c.h }),
+        kind: 'primary',
+        confirmLabel: t('git.ctx.checkoutCommit'),
+      })
+    )
+      await store.checkoutCommit(sha)
+    return
+  }
+  if (id === 'cherry-pick') {
+    if (
+      await confirm({
+        title: t('git.confirm.cherryPickTitle'),
+        description: t('git.confirm.cherryPick', { sha: c.h }),
+        kind: 'primary',
+        confirmLabel: t('git.ctx.cherryPick'),
+      })
+    )
+      await store.cherryPick(sha)
+    return
+  }
+  if (id === 'revert') {
+    if (
+      await confirm({
+        title: t('git.confirm.revertTitle'),
+        description: t('git.confirm.revert', { sha: c.h }),
+        kind: 'primary',
+        confirmLabel: t('git.ctx.revert'),
+      })
+    )
+      await store.revertCommit(sha)
+    return
+  }
+  if (id === 'reset:soft' || id === 'reset:mixed' || id === 'reset:hard') {
+    const mode = id.slice('reset:'.length) as 'soft' | 'mixed' | 'hard'
+    if (
+      await confirm({
+        title: t('git.confirm.resetTitle'),
+        description: t(`git.confirm.reset.${mode}`, { sha: c.h }),
+        kind: mode === 'hard' ? 'danger' : 'primary',
+      })
+    )
+      await store.resetTo(sha, mode)
+  }
 }
 
 function dispatchBranch(id: string, b: BranchInfo) {
@@ -596,6 +715,7 @@ onUnmounted(() => {
    already flexes to fill, so this just carries the height chain down. */
 .gitmgr {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;

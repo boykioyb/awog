@@ -109,6 +109,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select', file: string): void
   (e: 'discard', file: string): void
+  (e: 'discard-all', files: string[]): void
   (e: 'toggle-stage', file: string, staged: boolean): void
   (e: 'context-file', event: MouseEvent, file: string, staged: boolean): void
 }>()
@@ -134,6 +135,11 @@ const baseName = (f: string) => baseNameOf(f)
 const dirName = (f: string) => shortPath(f)[0]
 
 function discardAll() {
-  for (const x of [...props.files]) emit('discard', x.f)
+  // Emit once with the full list so the parent can gate it behind a single
+  // confirm — looping per-file `discard` here would pop one dialog per file.
+  emit(
+    'discard-all',
+    props.files.map((x) => x.f),
+  )
 }
 </script>

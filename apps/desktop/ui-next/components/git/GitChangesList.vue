@@ -50,6 +50,7 @@
         :sel="sel"
         @select="(f) => emit('select', f)"
         @discard="(f) => emit('discard', f)"
+        @discard-all="(files) => emit('discard-all', files)"
         @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
         @context-file="(e, f, s) => emit('context-file', e, f, s)"
       />
@@ -62,6 +63,7 @@
         :sel="sel"
         @select="(f) => emit('select', f)"
         @discard="(f) => emit('discard', f)"
+        @discard-all="(files) => emit('discard-all', files)"
         @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
         @context-file="(e, f, s) => emit('context-file', e, f, s)"
       />
@@ -95,6 +97,7 @@ const emit = defineEmits<{
   (e: 'toggle-tree'): void
   (e: 'select', file: string): void
   (e: 'discard', file: string): void
+  (e: 'discard-all', files: string[]): void
   (e: 'toggle-stage', file: string, staged: boolean): void
   (e: 'stage-all'): void
   (e: 'unstage-all'): void

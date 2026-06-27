@@ -47,6 +47,7 @@
             class="ghrow2"
             :class="{ on: sel === `c:${cm.h}` }"
             @click="emit('select-commit', cm.h)"
+            @contextmenu.prevent="emit('context-commit', $event, cm)"
           >
             <span v-for="(r, ri) in cm.refs || []" :key="ri" class="ghref" :class="r.t">
               <Icon v-if="r.t === 'head'" name="branch" style="width: 10px; height: 10px" />
@@ -74,7 +75,7 @@
         :parent="parentHash"
         :tab="ctab"
         :files="detailFiles"
-        :diff="detailDiff"
+        :diff-by-path="detailDiffByPath"
         @set-tab="(tb) => emit('set-tab', tb)"
         @select-commit="(h) => emit('select-commit', h)"
       />
@@ -97,12 +98,13 @@ const props = defineProps<{
   sel: string | null
   ctab: CommitTab
   detailFiles?: GitFile[]
-  detailDiff?: DiffLine[]
+  detailDiffByPath?: Record<string, DiffLine[]>
 }>()
 
 const emit = defineEmits<{
   (e: 'select-commit', hash: string): void
   (e: 'set-tab', tab: CommitTab): void
+  (e: 'context-commit', event: MouseEvent, commit: Commit): void
 }>()
 const { t } = useI18n()
 
