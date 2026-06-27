@@ -208,6 +208,13 @@ interface SendMessageResult {
   contextChars?: ContextChars
   stopReason: string | null
   errorMessage?: string
+  // Authoritative ordered timeline (ADR 0032): reply-text runs interleaved with
+  // steps in arrival order. When present it is the source of truth for the final
+  // per-run text — finalize reconciles each text block against its matching run
+  // rather than stamping the whole reply onto the trailing block (which merged
+  // every run + duplicated earlier ones). May be absent (non-streaming reply) or
+  // arrive late/dropped, so the consumer falls back gracefully.
+  parts?: ({ kind: 'text'; text: string } | EngineStep)[]
 }
 
 export const useSessionsStore = defineStore('sessions', () => {
@@ -951,6 +958,43 @@ export const useSessionsStore = defineStore('sessions', () => {
     stopReveal(messageId)
   }
 
+  // Finalize an assistant turn's reply text WITHOUT collapsing its interleaved
+  // structure. The live stream already split the reply into text runs around steps
+  // (`upsertStep` closes the open run before pushing a step), so a multi-run turn
+  // has several text blocks. The authoritative ordered `parts` carries each run's
+  // final text in arrival order → assign run-by-run, matching 1:1 (both the live
+  // blocks and `parts` are driven by the same onChunk/onStep callbacks).
+  //
+  // WITHOUT parts (non-streaming reply or a dropped payload) only stamp the full
+  // reply when the turn is a SINGLE run; stamping it onto the trailing run of a
+  // multi-run turn would merge every run into the last block AND duplicate the
+  // earlier ones — the "giao cho Dev agent" duplicate-after-step bug this fixes.
+  function reconcileReplyText(
+    m: AssistantMessage,
+    fullText: string,
+    parts?: ({ kind: 'text'; text: string } | EngineStep)[],
+  ): void {
+    const textBlocks = m.blocks.filter(
+      (b): b is Extract<AssistantBlock, { kind: 'text' }> => b.kind === 'text',
+    )
+    const runs = (parts ?? []).filter((p): p is { kind: 'text'; text: string } => p.kind === 'text')
+    if (runs.length) {
+      // Reconcile the matching prefix; never clobber across run boundaries. Extra
+      // live blocks keep their streamed text, extra runs are ignored (rare drift).
+      textBlocks.forEach((b, i) => {
+        const run = runs[i]
+        if (run) b.text = run.text
+      })
+      return
+    }
+    if (!fullText) return
+    const only = textBlocks[0]
+    if (textBlocks.length === 1 && only) only.text = fullText
+    else if (textBlocks.length === 0) m.blocks.push({ kind: 'text', text: fullText })
+    // Multi-run turn with no parts: trust the per-run deltas (already snapped at
+    // each step boundary + by flushText) — do NOT stamp the whole reply.
+  }
+
   // Upsert an engine step into the streaming assistant message's blocks. A
   // running → done repeat merges by eid in place; a new step closes the open text
   // run (so it splits the reply). Subagent steps (parentId) attach under their
@@ -1117,10 +1161,11 @@ export const useSessionsStore = defineStore('sessions', () => {
           // The RPC resolve still owns the authoritative finalize (usage, model,
           // title, error block); this just stops the spinner.
           flushText(p.sessionId, p.messageId)
-          if (typeof p.text === 'string' && p.text) {
-            const tp = trailingText(m)
-            if (tp) tp.text = p.text
-          }
+          // The done event carries no `parts`; reconcile only recovers the full
+          // text on a single-run turn (safe), and leaves a multi-run turn's
+          // per-run deltas intact. The RPC resolve still owns the authoritative
+          // parts-based reconcile.
+          if (typeof p.text === 'string') reconcileReplyText(m, p.text)
           m.streaming = false
           if (m.completedAt == null) m.completedAt = Date.now()
           const s = byEngineId(p.sessionId)
@@ -1327,12 +1372,10 @@ export const useSessionsStore = defineStore('sessions', () => {
         ...(hasHardBudget(s.budget) ? { budget: hardBudgetOf(s.budget) } : {}),
       })
       flushText(s.engineId, messageId)
-      // Stamp the authoritative full reply onto the trailing text run.
-      const tp = trailingText(placeholder)
-      if (tp && result.text) tp.text = result.text
-      else if (result.text && !placeholder.blocks.some((b) => b.kind === 'text')) {
-        placeholder.blocks.push({ kind: 'text', text: result.text })
-      }
+      // Reconcile the reply text from the authoritative ordered `parts` (per-run),
+      // never by stamping the whole reply onto the trailing block (which merged
+      // every run + duplicated earlier ones around a step/subagent card).
+      reconcileReplyText(placeholder, result.text, result.parts)
       placeholder.streaming = false
       placeholder.completedAt = Date.now()
       if (result.stopReason === 'error') {

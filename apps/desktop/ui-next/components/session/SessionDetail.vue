@@ -207,14 +207,11 @@
       </span>
       <button
         class="iconbtn"
-        :title="t('sessions.fork.treeTitle')"
+        :title="t('sessions.workspace.openGit')"
         style="width: 28px; height: 28px"
-        :style="
-          hasForkLineage ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}
-        "
-        @click="forkModal.open(session.id)"
+        @click="gitModal.open(session.project)"
       >
-        <Icon name="fork" style="width: 14px; height: 14px" />
+        <Icon name="git" style="width: 14px; height: 14px" />
       </button>
       <button
         class="iconbtn"
@@ -412,13 +409,10 @@ const { projects, projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
-const forkModal = useSessionForkModal()
+const gitModal = useGitModal()
 const { fmtUsd } = useSessionCost()
-const { treeFor } = useSessionForkTree()
 // Cumulative session cost (USD) for the usage popover. undefined → no priced turn yet.
 const sessionCost = computed(() => props.session.usage?.cost)
-// Accent the fork-tree button when this session is part of a fork lineage.
-const hasForkLineage = computed(() => treeFor(props.session.id).hasLineage)
 
 // Resolve this session's workspace root once and provide a file opener so file
 // paths in chat markdown (e.g. `docs/x.md`) open in the shared PreviewModal.
