@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.0',
+    date: '2026-06-27',
+    highlight: {
+      en: 'Task workflows now fix themselves: when a review or QA step fails, the engine sends the work back, fixes it, and re-runs — up to a limit you set. Plus per-chat cost tracking with budgets, transcript export, pinned context, a styled system tray, and a fork history view.',
+      vi: 'Workflow của task giờ tự sửa: khi một bước review hoặc QA phán lỗi, engine tự đưa việc về sửa rồi chạy lại — tới một trần lặp bạn đặt. Cùng với theo dõi chi phí mỗi chat kèm ngân sách, xuất transcript, ghim ngữ cảnh, khay hệ thống có giao diện, và khung xem lịch sử nhánh.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Self-correcting task workflows: a review or QA step can now hand back a pass/fail verdict, and on a fail the task automatically loops back to the earlier step to fix the problem and re-runs — repeating up to a loop limit you set, then pausing for your approval instead of burning tokens forever.',
+        vi: 'Workflow task tự sửa lỗi: một bước review hoặc QA giờ có thể đưa ra phán quyết đạt/không đạt, và khi không đạt, task tự quay về bước trước để sửa rồi chạy lại — lặp tới một trần bạn đặt, sau đó dừng chờ bạn duyệt thay vì cháy token vô hạn.',
+      },
+      {
+        kind: 'added',
+        en: 'See what a chat costs: token usage is now converted to a running US-dollar cost, and you can set a soft budget per chat that warns you before a long session runs up a bill you did not expect.',
+        vi: 'Xem một chat tốn bao nhiêu: lượng token giờ được quy ra chi phí USD chạy dồn, và bạn có thể đặt một ngân sách mềm cho mỗi chat để được cảnh báo trước khi một phiên dài đội chi phí ngoài dự kiến.',
+      },
+      {
+        kind: 'added',
+        en: 'Export a chat: save a transcript as Markdown or a self-contained HTML file — copy it to the clipboard or write it to disk — to archive a session, share it for review, or drop it into a PR or issue. Everything renders locally, with no network involved.',
+        vi: 'Xuất một chat: lưu transcript thành Markdown hoặc file HTML độc lập — sao chép vào clipboard hoặc ghi ra đĩa — để lưu trữ một phiên, gửi đi review, hay chèn vào PR hoặc issue. Mọi thứ render cục bộ, không qua mạng.',
+      },
+      {
+        kind: 'added',
+        en: 'Pin context to a chat: pin files or a note and the agent keeps them in mind on every turn — the middle ground between a one-off attachment and a project-wide rule.',
+        vi: 'Ghim ngữ cảnh vào một chat: ghim file hoặc một ghi chú và agent sẽ nhớ chúng ở mọi lượt — điểm trung gian giữa một file đính kèm dùng một lần và một quy tắc toàn dự án.',
+      },
+      {
+        kind: 'added',
+        en: 'Fork history: a tree view shows how a chat branched into forks, so you can see and jump between the versions you split off.',
+        vi: 'Lịch sử nhánh: khung dạng cây cho thấy một chat đã rẽ thành các nhánh ra sao, để bạn xem và nhảy giữa những phiên bản đã tách.',
+      },
+      {
+        kind: 'improved',
+        en: 'The system tray now opens a styled status panel — provider rate limits, today’s usage, what is running, and what needs your attention — with a running-count badge on the icon; click any item to jump straight into the app.',
+        vi: 'Khay hệ thống giờ mở một bảng trạng thái có giao diện — giới hạn tốc độ của nhà cung cấp, mức dùng hôm nay, những gì đang chạy, và việc cần bạn xử lý — kèm chỉ báo số đang chạy cạnh icon; bấm vào bất kỳ mục nào để nhảy thẳng vào app.',
+      },
+      {
+        kind: 'improved',
+        en: 'The GitHub pull-request view now shows a PR’s commits and per-file diffs, and you can write and post a comment or review right from the drawer.',
+        vi: 'Khung pull request GitHub giờ hiển thị các commit và diff từng file của một PR, và bạn có thể viết rồi gửi một comment hoặc review ngay trong khung.',
+      },
+    ],
+  },
+  {
     version: '0.21.0',
     date: '2026-06-26',
     highlight: {
