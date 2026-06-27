@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.1',
+    date: '2026-06-28',
+    highlight: {
+      en: 'Git Manager polish: right-click any commit for branch / tag / cherry-pick / revert / reset actions, browse a commit’s changes in a two-pane file ↔ diff view, and discarding now asks first. Plus the Git Manager opens cleanly from a chat, and assistant replies no longer duplicate around a step.',
+      vi: 'Trau chuốt Git Manager: chuột phải vào commit để branch / tag / cherry-pick / revert / reset, xem thay đổi của commit ở khung 2 cột file ↔ diff, và discard giờ hỏi xác nhận trước. Cùng với việc mở Git Manager gọn gàng từ một chat, và phản hồi của trợ lý không còn bị lặp quanh một bước.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Right-click a commit in history for a full action menu: checkout, create a branch or tag here, cherry-pick, revert, reset (soft / mixed / hard), save as patch, and copy the SHA or message — destructive actions ask for confirmation first.',
+        vi: 'Chuột phải vào một commit trong lịch sử để mở menu thao tác đầy đủ: checkout, tạo nhánh hoặc tag tại đây, cherry-pick, revert, reset (soft / mixed / hard), lưu thành patch, và copy SHA hoặc nội dung — các thao tác phá huỷ sẽ hỏi xác nhận trước.',
+      },
+      {
+        kind: 'improved',
+        en: 'A commit’s changes now open in a two-pane view — the changed-file list on the left, the selected file’s diff on the right — instead of one long stacked column.',
+        vi: 'Thay đổi của một commit giờ mở ở khung 2 cột — danh sách file bên trái, diff của file đang chọn bên phải — thay vì một cột dài xếp chồng.',
+      },
+      {
+        kind: 'improved',
+        en: 'Discarding a file’s changes (or all changes) now asks for confirmation first, so an accidental click can’t wipe your work.',
+        vi: 'Huỷ thay đổi của một file (hoặc tất cả) giờ hỏi xác nhận trước, để một cú bấm nhầm không xoá mất công sức của bạn.',
+      },
+      {
+        kind: 'added',
+        en: 'Open the Git Manager directly from a chat’s header to stage, commit, and browse history for that chat’s project.',
+        vi: 'Mở Git Manager thẳng từ thanh tiêu đề của một chat để stage, commit và xem lịch sử cho dự án của chat đó.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The Git Manager opened from a chat no longer overflows its window — the toolbar and panels fit inside the dialog.',
+        vi: 'Git Manager mở từ một chat không còn tràn khỏi cửa sổ — thanh công cụ và các panel vừa khít trong hộp thoại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Assistant replies no longer duplicate or merge together around a step or tool card — each part of a multi-step turn keeps its own text.',
+        vi: 'Phản hồi của trợ lý không còn bị lặp hay dính vào nhau quanh một bước hoặc thẻ công cụ — mỗi phần của một lượt nhiều bước giữ đúng nội dung của nó.',
+      },
+    ],
+  },
+  {
     version: '0.22.0',
     date: '2026-06-27',
     highlight: {
