@@ -60,27 +60,27 @@ body[data-surface='deep'] {
   --borderStrong: #3c3c3c;
 }
 body.light[data-surface='flat'] {
-  --bgPanel: #f5f6f8;
-  --bgEl: #f6f6f5;
-  --bgHover: #efeeed;
-  --bgActive: #e9e7e5;
-  --bgSubtle: #f6f6f5;
-  --bgInput: #f6f6f5;
-  --bgCanvas: #f1f1f0;
-  --border: #ececea;
-  --borderStrong: #dedcd9;
+  --bgPanel: #eef2f8;
+  --bgEl: #f4f7fb;
+  --bgHover: #e8eef6;
+  --bgActive: #dde6f1;
+  --bgSubtle: #f4f7fb;
+  --bgInput: #f4f7fb;
+  --bgCanvas: #ebf0f7;
+  --border: #e6ebf2;
+  --borderStrong: #d4dde8;
 }
 body.light[data-surface='deep'] {
-  --bg: #eceef1;
-  --bgPanel: #fbfbfa;
+  --bg: #e7edf5;
+  --bgPanel: #fbfcfe;
   --bgEl: #ffffff;
-  --bgHover: #f1f0ef;
-  --bgActive: #e7e5e4;
-  --bgSubtle: #f3f3f1;
+  --bgHover: #eef3fa;
+  --bgActive: #dfe7f2;
+  --bgSubtle: #f3f7fc;
   --bgInput: #ffffff;
-  --bgCanvas: #f0f0ee;
-  --border: #dcd9d6;
-  --borderStrong: #c4c0bc;
+  --bgCanvas: #e9eff6;
+  --border: #d9e1ec;
+  --borderStrong: #c2cdde;
 }
 
 /* full-window app frame: drop the card max-width / radius / shadow */

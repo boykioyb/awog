@@ -69,7 +69,7 @@ export function useHomeDashboard() {
           (b) => b.kind === 'perm' && b.status === 'pending' && !b.cancelled,
         )
         const hasQuestion = lastAssistant.blocks.some(
-          (b) => b.kind === 'question' && !b.answer && !b.cancelled,
+          (b) => b.kind === 'question' && !questionAnswered(b) && !b.cancelled,
         )
         if (hasPerm) {
           kind = 'permission'

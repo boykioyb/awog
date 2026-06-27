@@ -5,6 +5,12 @@ import type { Workflow } from '../types/shared.js'
 
 const AgentSourceSchema = z.enum(['global', 'project'])
 
+const NodeGateSchema = z.object({
+  onFailTarget: z.string().min(1),
+  maxIterations: z.number().int().min(1),
+  auto: z.boolean(),
+})
+
 const WorkflowNodeSchema = z.object({
   id: z.string().min(1),
   agentId: z.string(),
@@ -15,6 +21,7 @@ const WorkflowNodeSchema = z.object({
   y: z.number(),
   outputs: z.array(z.string()),
   approval: z.boolean(),
+  gate: NodeGateSchema.optional(),
 })
 
 const WorkflowEdgeSchema = z.object({
@@ -51,6 +58,7 @@ function toNode(parsed: z.infer<typeof WorkflowNodeSchema>): Workflow['nodes'][n
   }
   if (parsed.agentSource !== undefined) base.agentSource = parsed.agentSource
   if (parsed.agentProjectId !== undefined) base.agentProjectId = parsed.agentProjectId
+  if (parsed.gate !== undefined) base.gate = parsed.gate
   return base
 }
 

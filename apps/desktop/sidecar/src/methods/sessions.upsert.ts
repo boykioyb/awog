@@ -29,6 +29,18 @@ const SessionMessageSchema = z
   })
   .passthrough()
 
+const BudgetSchema = z.object({
+  limitUsd: z.number().nonnegative().optional(),
+  hardLimitUsd: z.number().nonnegative().optional(),
+  maxToolCalls: z.number().int().nonnegative().optional(),
+  maxWallclockMs: z.number().int().nonnegative().optional(),
+})
+
+const PinnedContextSchema = z.object({
+  files: z.array(z.string()).optional(),
+  notes: z.string().optional(),
+})
+
 const SessionSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -47,6 +59,13 @@ const SessionSchema = z.object({
   aboutTaskId: z.string().optional(),
   // GitHub issue/PR URL this session was opened from ("New session" on a row).
   aboutGhUrl: z.string().optional(),
+  // Files/notes re-fed into every turn (pinned context).
+  pinnedContext: PinnedContextSchema.optional(),
+  // Soft + hard spend caps.
+  budget: BudgetSchema.optional(),
+  // Fork lineage.
+  parentSessionId: z.string().optional(),
+  forkFromMessageId: z.string().optional(),
 })
 
 const Params = z.object({
@@ -90,7 +109,36 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.mcpServerIds !== undefined) base.mcpServerIds = parsed.mcpServerIds
   if (parsed.aboutTaskId !== undefined) base.aboutTaskId = parsed.aboutTaskId
   if (parsed.aboutGhUrl !== undefined) base.aboutGhUrl = parsed.aboutGhUrl
+  const budget = toBudget(parsed.budget)
+  if (budget) base.budget = budget
+  const pinned = toPinnedContext(parsed.pinnedContext)
+  if (pinned) base.pinnedContext = pinned
+  if (parsed.parentSessionId !== undefined) base.parentSessionId = parsed.parentSessionId
+  if (parsed.forkFromMessageId !== undefined) base.forkFromMessageId = parsed.forkFromMessageId
   return base
+}
+
+// Rebuild budget/pinnedContext dropping `undefined` fields (exactOptionalPropertyTypes:
+// zod .optional() yields `T | undefined`, which is not assignable to `T?`). Returns
+// undefined when the whole object carries no defined field.
+function toBudget(parsed: z.infer<typeof BudgetSchema> | undefined): Session['budget'] {
+  if (!parsed) return undefined
+  const b: NonNullable<Session['budget']> = {}
+  if (parsed.limitUsd !== undefined) b.limitUsd = parsed.limitUsd
+  if (parsed.hardLimitUsd !== undefined) b.hardLimitUsd = parsed.hardLimitUsd
+  if (parsed.maxToolCalls !== undefined) b.maxToolCalls = parsed.maxToolCalls
+  if (parsed.maxWallclockMs !== undefined) b.maxWallclockMs = parsed.maxWallclockMs
+  return Object.keys(b).length ? b : undefined
+}
+
+function toPinnedContext(
+  parsed: z.infer<typeof PinnedContextSchema> | undefined,
+): Session['pinnedContext'] {
+  if (!parsed) return undefined
+  const p: NonNullable<Session['pinnedContext']> = {}
+  if (parsed.files !== undefined) p.files = parsed.files
+  if (parsed.notes !== undefined) p.notes = parsed.notes
+  return Object.keys(p).length ? p : undefined
 }
 
 register('sessions.upsert', async (raw) => {
@@ -115,6 +163,10 @@ register('sessions.upsert', async (raw) => {
   if (session.mcpServerIds !== undefined) patch.mcpServerIds = session.mcpServerIds
   if (session.aboutTaskId !== undefined) patch.aboutTaskId = session.aboutTaskId
   if (session.aboutGhUrl !== undefined) patch.aboutGhUrl = session.aboutGhUrl
+  if (session.pinnedContext !== undefined) patch.pinnedContext = session.pinnedContext
+  if (session.budget !== undefined) patch.budget = session.budget
+  if (session.parentSessionId !== undefined) patch.parentSessionId = session.parentSessionId
+  if (session.forkFromMessageId !== undefined) patch.forkFromMessageId = session.forkFromMessageId
   await updateSessionMetadata(session.id, patch)
   return { session }
 })

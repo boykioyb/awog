@@ -14,7 +14,7 @@ import { liftTurnSignalListenerCap } from '../runtime/turn-signal.js'
 import { loadProject } from '../projects/store.js'
 import { dispatch } from '../hooks/dispatcher.js'
 import { loadTask, listTasks } from './store.js'
-import { runNode, type NodeRunOutcome } from './node-runner.js'
+import { runNode, type NodeRunResult } from './node-runner.js'
 import { computeRunnable, downstreamOf, settledStatus } from './scheduler.js'
 import { resolveAgentContext } from './agent-context.js'
 import {
@@ -24,10 +24,24 @@ import {
   emitRunStarted,
   emitTaskStatus,
 } from './emit.js'
-import type { SessionSettings, Task, TaskMessage, WorkflowNode } from '../types/shared.js'
+import type {
+  NodeGate,
+  SessionSettings,
+  Task,
+  TaskMessage,
+  TaskRun,
+  Verdict,
+  WorkflowNode,
+} from '../types/shared.js'
 
 const CONCURRENCY_CAP = 4
 const DEFAULT_MODEL = 'claude-opus-4-8'
+// Absolute ceiling on gate auto-loop iterations regardless of node config —
+// budget guard against a gate that never passes (ADR 0056 / security).
+const MAX_GATE_ITERATIONS_CEILING = 10
+// Cap the gate findings woven into the dev rerun instruction (same budget as the
+// session <linked_task> block).
+const LOOP_INSTRUCTION_CAP = 8000
 
 interface TaskRuntime {
   inFlight: Map<string, AbortController>
@@ -90,7 +104,7 @@ function executeRun(
   node: WorkflowNode,
   task: Task,
   version: number,
-  opts?: { instruction?: string; triggeredBy?: 'rerun' },
+  opts?: { instruction?: string; triggeredBy?: TaskRun['triggeredBy'] },
 ): void {
   const rt = ensureRuntime(taskId)
   const ac = new AbortController()
@@ -113,9 +127,9 @@ function executeRun(
           at: new Date().toISOString(),
         })
       }
-      let outcome: NodeRunOutcome
+      let result: NodeRunResult
       try {
-        outcome = await runNode({
+        result = await runNode({
           taskId,
           version,
           node,
@@ -129,11 +143,16 @@ function executeRun(
           nodeId: node.id,
           err: err instanceof Error ? err.message : String(err),
         })
-        outcome = 'failed'
+        result = { outcome: 'failed' }
       }
-      if (outcome === 'failed') {
+      if (result.outcome === 'failed') {
         rt.failed = true
         await markDownstreamFailed(taskId, node.id)
+      } else if (node.gate) {
+        // Gate post-processing (ADR 0056) — runs BEFORE the finally's
+        // requestSchedule, so an escalate/loop decision is applied before any
+        // downstream node could be dispatched off the provisional 'completed'.
+        await handleGateVerdict(taskId, node, node.gate, result.verdict)
       }
     } finally {
       rt.inFlight.delete(node.id)
@@ -151,6 +170,53 @@ async function markDownstreamFailed(taskId: string, nodeId: string): Promise<voi
       await emitPhaseStatus(taskId, did, 'failed')
     }
   }
+}
+
+// How many auto loop-backs this gate has already driven — count the target's
+// runs that were dispatched by an auto-loop (event-sourced → restart-safe).
+function gateIterationCount(task: Task, targetId: string): number {
+  const runs = task.phases[targetId]?.runs ?? []
+  return runs.reduce((n, r) => (r.triggeredBy === 'auto-loop' ? n + 1 : n), 0)
+}
+
+// Latest authoritative output of a node — the gate's findings to feed back.
+function latestCompletedOutput(task: Task, nodeId: string): string {
+  const runs = task.phases[nodeId]?.runs ?? []
+  const done = [...runs].reverse().find((r) => r.status === 'completed')
+  return done?.output ?? ''
+}
+
+// Gate post-processing (ADR 0056), after a gate node-run COMPLETES:
+//   pass → nothing (phase already completed → downstream proceeds).
+//   fail + auto + iterations remain → auto loop-back: rerun onFailTarget with
+//     the gate's findings; the rerun cascade invalidates the gate phase→pending
+//     so it re-runs after the path re-flows.
+//   else (cap hit / auto off / unparsable verdict) → escalate: override the
+//     provisional 'completed' to 'waiting_approval' and hand control to a human.
+async function handleGateVerdict(
+  taskId: string,
+  node: WorkflowNode,
+  gate: NodeGate,
+  verdict: Verdict | undefined,
+): Promise<void> {
+  if (verdict === 'pass') return
+  const task = await loadTask(taskId)
+  if (!task) return
+  const cap = Math.min(Math.max(1, gate.maxIterations), MAX_GATE_ITERATIONS_CEILING)
+  const iterations = gateIterationCount(task, gate.onFailTarget)
+  if (verdict === 'fail' && gate.auto && findNode(task, gate.onFailTarget) && iterations < cap) {
+    const findings = latestCompletedOutput(task, node.id).slice(0, LOOP_INSTRUCTION_CAP)
+    const instruction = [
+      `# Quality gate feedback — "${node.skillId}" did not pass (auto loop-back ${iterations + 1}/${cap})`,
+      'Fix the issues below. The check re-runs automatically after you apply changes.',
+      '',
+      findings,
+    ].join('\n')
+    await rerunPhase(taskId, gate.onFailTarget, instruction, 'auto-loop')
+    return
+  }
+  // Escalate to a human (guild master).
+  await emitPhaseStatus(taskId, node.id, 'waiting_approval')
 }
 
 async function finalize(taskId: string, task: Task): Promise<void> {
@@ -300,6 +366,7 @@ export async function rerunPhase(
   taskId: string,
   nodeId: string,
   instruction?: string,
+  triggeredBy: 'rerun' | 'auto-loop' = 'rerun',
 ): Promise<void> {
   const task = await loadTask(taskId)
   if (!task?.workflowSnapshot) return
@@ -338,7 +405,7 @@ export async function rerunPhase(
   // scheduler won't pick it up); downstream cascades once it completes.
   const fresh = (await loadTask(taskId)) ?? task
   executeRun(taskId, node, fresh, nextVersion(task, nodeId), {
-    triggeredBy: 'rerun',
+    triggeredBy,
     ...(instruction ? { instruction } : {}),
   })
 }

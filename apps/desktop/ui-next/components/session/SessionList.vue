@@ -221,6 +221,10 @@
           <Icon name="fork" style="width: 13px; height: 13px" />
           {{ t('sessions.ctx.duplicate') }}
         </div>
+        <div class="mi" @click="ctxExport">
+          <Icon name="save" style="width: 13px; height: 13px" />
+          {{ t('sessions.ctx.export') }}
+        </div>
         <div class="ctxsep" />
         <div v-if="ctxPath" class="mi" @click="ctxCopyPath">
           <Icon name="copy" style="width: 13px; height: 13px" />
@@ -293,6 +297,7 @@ const { projects, projectName, projectPath } = useProjects()
 const store = useSessionsStore()
 const sc = useSidecar()
 const { confirm } = useConfirm()
+const exportModal = useSessionExportModal()
 
 // Confirm before deleting selected sessions (bulk bar trash). Destructive +
 // unrecoverable, so gate even though the rows are explicitly selected.
@@ -500,6 +505,10 @@ function ctxCopyId() {
     const s = ctx.value.session
     void navigator.clipboard.writeText(s.engineId ?? String(s.id))
   }
+  ctx.value = null
+}
+function ctxExport() {
+  if (ctx.value) exportModal.open(ctx.value.session.id)
   ctx.value = null
 }
 async function ctxDelete() {

@@ -24,11 +24,15 @@ const AvailableAgentSchema = z.object({
   scope: z.enum(['project', 'global']).default('global'),
 })
 
-// Skills are independent of agents (no per-agent skill list). The whole
-// workspace skill set is offered; the model assigns one to each node as needed.
+// Skills are independent of agents (no per-agent skill list). The skill set is
+// already scoped by the UI to the workflow's tier; the model assigns one to each
+// node as needed and is told to prefer project skills over global ones.
 const AvailableSkillSchema = z.object({
   id: z.string().min(1).max(120),
   name: z.string().max(120).default(''),
+  // 'project' = lives in this project's repo; 'global' = shared. Like agents,
+  // the model is told to prefer project skills when both could fit a step.
+  scope: z.enum(['project', 'global']).default('global'),
 })
 
 const Params = z.object({
@@ -76,9 +80,14 @@ function buildSystemPrompt(
           .join('\n')
       : '(no agents available — return an empty nodes array and explain in the description)'
 
+  // Project skills first so the model sees them as the primary choices (mirror agents).
+  const orderedSkills = [...skills].sort((a, b) => {
+    if (a.scope === b.scope) return 0
+    return a.scope === 'project' ? -1 : 1
+  })
   const skillList =
-    skills.length > 0
-      ? skills.map((s) => `- id: ${s.id} | name: ${s.name}`).join('\n')
+    orderedSkills.length > 0
+      ? orderedSkills.map((s) => `- [${s.scope}] id: ${s.id} | name: ${s.name}`).join('\n')
       : '(no skills available — leave skillId empty on every node)'
 
   return `You are a workflow designer for AWOG, a local-first AI Team OS. A workflow is a DAG of steps; each step (node) runs ONE agent applying ONE skill (the step's task template), producing artifact file(s). Edges define order + dependencies (a node runs after all its upstream nodes complete). Independent branches run in parallel.
@@ -104,6 +113,7 @@ Rules:
 - node id: short, unique, kebab/alnum (e.g. n1, n2, review).
 - agentId MUST be one of the listed agent ids. skillId MUST be one of the listed skill ids (or "" if none fits).
 - PREFER [project] agents over [global] agents when both could perform a step — project agents are tailored to this codebase. Only fall back to a [global] agent when no [project] agent fits the step.
+- Likewise PREFER [project] skills over [global] skills when both could fit a step.
 - Build a sensible pipeline: sequence dependent steps with edges; put genuinely independent steps as parallel branches (no edge between them).
 - Set "approval": true on steps a human should review before continuing (e.g. after architecture/design, before code merge).
 - outputs: one or more short artifact filenames the step produces (.md / .diff / .yaml).

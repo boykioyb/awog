@@ -72,6 +72,12 @@ export function useWorkspaceFiles(root: Ref<string | null>) {
     if (root.value) await loadDir('')
   }
 
+  // Force-reload one dir's children after a mutating op (drop the cache, refetch).
+  async function reload(dir: string): Promise<void> {
+    delete childrenByPath[dir]
+    await loadDir(dir)
+  }
+
   return {
     rootNodes,
     loading: computed(() => loading.value),
@@ -80,5 +86,6 @@ export function useWorkspaceFiles(root: Ref<string | null>) {
     toggle,
     loadDir,
     reset,
+    reload,
   }
 }

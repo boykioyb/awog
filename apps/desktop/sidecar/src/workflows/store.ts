@@ -105,6 +105,31 @@ function isAcyclic(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
   return visited === nodes.length
 }
 
+// True if `ancestorId` can reach `nodeId` by following edges forward — i.e.
+// nodeId is a transitive DOWNSTREAM of ancestorId (so ancestorId is upstream).
+function isAncestor(
+  nodeId: string,
+  ancestorId: string,
+  edges: WorkflowEdge[],
+): boolean {
+  const adj = new Map<string, string[]>()
+  edges.forEach((e) => {
+    const list = adj.get(e.from) ?? []
+    list.push(e.to)
+    adj.set(e.from, list)
+  })
+  const seen = new Set<string>()
+  const queue = [...(adj.get(ancestorId) ?? [])]
+  while (queue.length) {
+    const id = queue.shift() as string
+    if (id === nodeId) return true
+    if (seen.has(id)) continue
+    seen.add(id)
+    for (const next of adj.get(id) ?? []) queue.push(next)
+  }
+  return false
+}
+
 export function validateWorkflow(wf: Workflow): void {
   const ids = new Set<string>()
   wf.nodes.forEach((n) => {
@@ -118,6 +143,28 @@ export function validateWorkflow(wf: Workflow): void {
   if (!isAcyclic(wf.nodes, wf.edges)) {
     throw new RpcError(-32602, 'Workflow has a cycle — DAG required')
   }
+  // Gate loop-back targets (ADR 0056): onFailTarget must be a transitive
+  // ANCESTOR of the gate so re-running it re-flows the path back down to the
+  // gate — and the DAG stays acyclic (the loop is a directive, not an edge).
+  wf.nodes.forEach((n) => {
+    if (!n.gate) return
+    const { onFailTarget, maxIterations } = n.gate
+    if (!ids.has(onFailTarget)) {
+      throw new RpcError(-32602, `Gate onFailTarget references missing node: ${onFailTarget}`)
+    }
+    if (onFailTarget === n.id) {
+      throw new RpcError(-32602, `Gate onFailTarget cannot be the gate itself: ${n.id}`)
+    }
+    if (!isAncestor(n.id, onFailTarget, wf.edges)) {
+      throw new RpcError(
+        -32602,
+        `Gate onFailTarget "${onFailTarget}" must be an upstream ancestor of gate "${n.id}"`,
+      )
+    }
+    if (!Number.isFinite(maxIterations) || maxIterations < 1) {
+      throw new RpcError(-32602, `Gate maxIterations must be >= 1 (node ${n.id})`)
+    }
+  })
 }
 
 async function listFromDir(

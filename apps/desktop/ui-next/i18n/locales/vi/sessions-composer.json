@@ -55,5 +55,13 @@
   "sessions.style.feynman.name": "Feynman",
   "sessions.style.feynman.hint": "Onboard junior / tự học",
   "sessions.style.first-principles.name": "First Principles",
-  "sessions.style.first-principles.hint": "Chọn stack / kiến trúc"
+  "sessions.style.first-principles.hint": "Chọn stack / kiến trúc",
+  "sessions.pinned.title": "Ngữ cảnh ghim",
+  "sessions.pinned.hint": "File + ghi chú được nạp lại vào mỗi turn của session này",
+  "sessions.pinned.remove": "Bỏ ghim",
+  "sessions.pinned.chipTitle": "Đã ghim: {path}",
+  "sessions.pinned.notes": "Ghi chú",
+  "sessions.pinned.notesTitle": "Ghi chú đã ghim — bấm để sửa",
+  "sessions.pinned.searchFiles": "Ghim một file (gõ để tìm)…",
+  "sessions.pinned.notesPlaceholder": "Ghi chú luôn gửi cho model…"
 }

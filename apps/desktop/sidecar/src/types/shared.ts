@@ -267,6 +267,11 @@ export interface SessionMessage {
     outputTokens: number
     cacheReadTokens?: number
     cacheWriteTokens?: number
+    // Cost of THIS turn in USD, computed at finalize from usage + modelUsed via
+    // activity/pricing.ts (single source of truth). Persisted so the session's
+    // cumulative cost stays stable even if the price table changes later. Absent
+    // when the model has no known price (UI shows "n/a", not a wrong number).
+    costUsd?: number
     // Per-segment char sizes of the turn's assembled prompt — lets the usage
     // panel itemise the context window the way Claude Code's `/context` does
     // (System prompt / Instructions / System tools / MCP tools / Custom agents /
@@ -310,6 +315,27 @@ export interface SessionCompaction {
   at: string
 }
 
+// Per-session spend caps. `limitUsd` is a SOFT cap (UI warning only). The rest are
+// HARD caps enforced sidecar-side: a turn is refused once cumulative cost reaches
+// `hardLimitUsd`, and a turn is stopped once it makes more than `maxToolCalls` tool
+// calls or runs longer than `maxWallclockMs`. Closes the "budget per task" invariant.
+// All optional; absent = no budget. Mirrors the UI SessionBudget.
+export interface SessionBudget {
+  limitUsd?: number
+  hardLimitUsd?: number
+  maxToolCalls?: number
+  maxWallclockMs?: number
+}
+
+// Files/notes pinned to a session, re-fed into EVERY turn as a <pinned_context>
+// block (distinct from one-shot attachments and global/project rules). `files` are
+// workspace-relative paths read fresh per turn (path-sanitized); `notes` is free
+// text. Mirrors the UI PinnedContext. Round-trips through sessions.upsert.
+export interface PinnedContext {
+  files?: string[]
+  notes?: string
+}
+
 export interface Session {
   id: string
   title: string
@@ -323,6 +349,14 @@ export interface Session {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Files/notes re-fed into every turn as <pinned_context> (see PinnedContext).
+  pinnedContext?: PinnedContext
+  // Soft + hard spend caps for this session (see SessionBudget).
+  budget?: SessionBudget
+  // Fork lineage: the session this one was forked from (its id) and the message
+  // (id) it forked at. Set by sessions.fork / upsert; drives the fork-tree graph.
+  parentSessionId?: string
+  forkFromMessageId?: string
   // Task this session was opened to discuss (ADR 0055). When set, buildContext
   // injects a <linked_task> block (the task's latest output + a trace summary)
   // each turn so the agent can reason about the task's results. Absent for a
@@ -359,6 +393,10 @@ export interface SessionSummary {
   aboutTaskId?: string
   // GitHub issue/PR this session was opened from — mirrors Session.aboutGhUrl.
   aboutGhUrl?: string
+  // Fork parent (its session id) — surfaced on the list row so the fork-tree graph
+  // can be built from sessions.list without loading every transcript. Mirrors
+  // Session.parentSessionId.
+  parentSessionId?: string
   // True when a compaction checkpoint exists — lets the UI badge it without
   // loading the transcript.
   hasCompaction?: boolean
@@ -625,6 +663,23 @@ export interface Agent {
 // full agent identity tuple (id + source + projectId) so the engine can resolve
 // it via loadAgent at execution time (D-11).
 
+// Machine-readable quality verdict a gate node produces (ADR 0056). Distinct
+// from RunStatus: a gate run that reports `fail` still COMPLETED (it did its
+// job — found the problems). Parsed from a ```verdict``` block in the output.
+export type Verdict = 'pass' | 'fail'
+
+// Turns a node into a quality checkpoint with a loop-back directive (ADR 0056).
+// On verdict `fail`, the engine reruns `onFailTarget` (a transitive ancestor —
+// edges stay acyclic; the loop is a directive, not a cycle) with this gate's
+// output as the instruction, up to `maxIterations` times. After that (or when
+// `auto` is false, or the verdict can't be parsed) it escalates to a human via
+// `waiting_approval`.
+export interface NodeGate {
+  onFailTarget: string
+  maxIterations: number
+  auto: boolean
+}
+
 export interface WorkflowNode {
   id: string
   agentId: string
@@ -638,6 +693,8 @@ export interface WorkflowNode {
   y: number
   outputs: string[]
   approval: boolean
+  // Gate config (ADR 0056). Absent = an ordinary node (no verdict, no loop).
+  gate?: NodeGate
 }
 
 export interface WorkflowEdge {
@@ -749,7 +806,12 @@ export interface TaskRun {
   duration: string | null
   approvedBy?: 'human' | 'auto'
   approvedAt?: string
-  triggeredBy?: 'rerun' | 'resume-connection'
+  // 'auto-loop' = this run was dispatched by a gate's auto loop-back (ADR 0056);
+  // counting these on the loop target gives the iteration number (restart-safe).
+  triggeredBy?: 'rerun' | 'resume-connection' | 'auto-loop'
+  // Quality verdict (ADR 0056) — only set on gate-node runs. Drives the engine's
+  // loop-back / escalate decision; absent on ordinary nodes.
+  verdict?: Verdict
   // Token usage of this run (ADR 0054). Absent until the run finishes (or for
   // legacy runs). The completion time for the Activity day-bucket is the run's
   // run.status='completed' event timestamp.

@@ -111,6 +111,36 @@
           {{ t('sessions.attachment.more', { n: overflowCount }) }}
         </span>
       </div>
+      <!-- pinned context (session working-set): files + a notes indicator. Re-fed
+           into every turn by the sidecar. Managed from the pin popover below. -->
+      <div v-if="hasPinned" class="attc">
+        <span
+          v-for="f in pinnedFiles"
+          :key="f"
+          class="att"
+          :title="t('sessions.pinned.chipTitle', { path: f })"
+        >
+          <Icon name="pin" style="width: 11px; height: 11px" />
+          <span class="attn">{{ fileBase(f) }}</span>
+          <span class="x" :title="t('sessions.pinned.remove')" @click.stop="removePin(f)">×</span>
+        </span>
+        <span
+          v-if="store.active?.pinnedContext?.notes?.trim()"
+          class="att"
+          :title="t('sessions.pinned.notesTitle')"
+          @click="onPinOpen"
+        >
+          <Icon name="edit" style="width: 11px; height: 11px" />
+          <span class="attn">{{ t('sessions.pinned.notes') }}</span>
+        </span>
+      </div>
+
+      <!-- soft budget warning: cumulative cost crossed the limit (no block). -->
+      <div v-if="budgetOver" class="budgetwarn">
+        <Icon name="alert" style="width: 12px; height: 12px; flex: 0 0 auto" />
+        {{ t('sessions.budget.warnBanner', { cost: budgetLabel }) }}
+      </div>
+
       <div class="cbar">
         <!-- Wide: inline mode/model/account/style chips. Narrow (compact) → they
              fold into the single "Config" dropdown (below) so the toolbar never
@@ -356,7 +386,80 @@
             </label>
           </div>
         </span>
+        <span
+          v-if="showBudget"
+          class="chip sm budgetchip"
+          :class="{ over: budgetOver }"
+          :title="budgetOver ? t('sessions.budget.over') : t('sessions.budget.usage')"
+        >
+          <Icon name="zap" style="width: 12px; height: 12px" />
+          {{ budgetLabel }}
+        </span>
         <span class="grow1" />
+        <span style="position: relative">
+          <button
+            class="iconbtn"
+            :title="t('sessions.pinned.title')"
+            style="width: 28px; height: 28px"
+            :style="
+              hasPinned || open === 'pin'
+                ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
+                : {}
+            "
+            @click="onPinOpen"
+          >
+            <Icon name="pin" style="width: 14px; height: 14px" />
+          </button>
+          <div
+            v-if="open === 'pin'"
+            class="pop pinpop"
+            style="position: absolute; bottom: 130%; right: 0; z-index: 50"
+            @click.stop
+          >
+            <div class="pinpop-h">{{ t('sessions.pinned.title') }}</div>
+            <div class="pinpop-hint">{{ t('sessions.pinned.hint') }}</div>
+
+            <!-- pinned files -->
+            <div v-if="pinnedFiles.length" class="pinlist">
+              <div v-for="f in pinnedFiles" :key="f" class="pinrow">
+                <Icon name="file" style="width: 12px; height: 12px; flex: 0 0 auto" />
+                <span class="pinpath" :title="f">{{ f }}</span>
+                <span class="pinx" :title="t('sessions.pinned.remove')" @click="removePin(f)">
+                  ×
+                </span>
+              </div>
+            </div>
+
+            <!-- add a file (workspace file index, same source as @-mention) -->
+            <input
+              v-model="pinQuery"
+              class="pininput"
+              :placeholder="t('sessions.pinned.searchFiles')"
+            />
+            <div v-if="pinFileMatches.length" class="pinmatches">
+              <div
+                v-for="f in pinFileMatches"
+                :key="f.path"
+                class="pinmatch"
+                :title="f.path"
+                @click="addPin(f.path)"
+              >
+                <Icon name="plus" style="width: 11px; height: 11px; flex: 0 0 auto" />
+                <span class="pinmname">{{ f.name }}</span>
+                <span class="pinmpath">{{ f.path }}</span>
+              </div>
+            </div>
+
+            <!-- notes (persisted on blur) -->
+            <textarea
+              v-model="notesDraft"
+              class="pinnotes"
+              :placeholder="t('sessions.pinned.notesPlaceholder')"
+              rows="3"
+              @blur="saveNotes"
+            />
+          </div>
+        </span>
         <button
           class="iconbtn"
           :title="t('sessions.composer.runAsTask')"
@@ -645,16 +748,72 @@ const selectedAccountId = computed(() => store.active?.accountId ?? '')
 
 // 'config' is the consolidated popover shown when the toolbar is too narrow for the
 // four inline chips — it folds mode/model/account/style into one dropdown.
-type MenuKind = 'mode' | 'model' | 'account' | 'style' | 'config'
+type MenuKind = 'mode' | 'model' | 'account' | 'style' | 'config' | 'pin'
 const open = ref<MenuKind | null>(null)
 function toggle(kind: MenuKind) {
   open.value = open.value === kind ? null : kind
 }
 
+// ── Pinned context (session working-set) ─────────────────────────────────────
+// Files + notes re-fed into every turn by the sidecar. Reads the active session;
+// writes go through store actions (persist via upsert). The notes are edited via a
+// local draft persisted on blur so we don't fire an upsert on every keystroke.
+const pinnedFiles = computed<string[]>(() => store.active?.pinnedContext?.files ?? [])
+const hasPinned = computed(
+  () => pinnedFiles.value.length > 0 || !!store.active?.pinnedContext?.notes?.trim(),
+)
+const notesDraft = ref('')
+watch(
+  () => [store.activeId, store.active?.pinnedContext?.notes] as const,
+  () => {
+    notesDraft.value = store.active?.pinnedContext?.notes ?? ''
+  },
+  { immediate: true },
+)
+function saveNotes() {
+  if (store.activeId != null) store.setPinnedNotes(store.activeId, notesDraft.value)
+}
+function removePin(path: string) {
+  if (store.activeId != null) store.removePinnedFile(store.activeId, path)
+}
+// File picker for pinning: reuse the workspace file index (same source as @-mention).
+const pinQuery = ref('')
+const pinFileMatches = computed(() => {
+  const q = pinQuery.value.toLowerCase().trim()
+  const pinnedSet = new Set(pinnedFiles.value)
+  return data.files.value
+    .filter((f) => !pinnedSet.has(f.path))
+    .filter((f) => q === '' || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
+    .slice(0, 12)
+})
+function addPin(path: string) {
+  if (store.activeId != null) store.addPinnedFile(store.activeId, path)
+  pinQuery.value = ''
+}
+const fileBase = (p: string): string => p.split('/').pop() || p
+function onPinOpen() {
+  toggle('pin')
+  if (open.value === 'pin') data.ensureFiles()
+}
+
+// ── Budget (cost cap) ─────────────────────────────────────────────────────────
+// Cumulative cost vs the soft limit. Shown as a readonly chip; turns warn-colored
+// when over the limit (soft = no block; hard caps enforced sidecar-side).
+const { fmtUsd, hasBudgetInfo, overSoft } = useSessionCost()
+const showBudget = computed(() => hasBudgetInfo(store.active))
+const budgetOver = computed(() => overSoft(store.active))
+const budgetLabel = computed(() => {
+  const cost = store.active?.usage?.cost
+  const limit = store.active?.budget?.limitUsd
+  return limit ? `${fmtUsd(cost ?? 0)} / ${fmtUsd(limit)}` : fmtUsd(cost)
+})
+
 // Below this toolbar width the four selector chips would overflow / truncate, so
 // they collapse into a single "Config" dropdown (the consolidated popover). Observed
-// on the composer root; flips live as the workspace panel opens/closes.
-const COMPACT_W = 560
+// on the composer root; flips live as the workspace panel opens/closes. Set wide
+// enough that opening the workspace (Files/Diff/…) panel — which narrows the composer —
+// already folds the chips into the Config dropdown instead of cramming them inline.
+const COMPACT_W = 760
 const composerEl = useTemplateRef<HTMLDivElement>('composerEl')
 const compact = ref(false)
 let ro: ResizeObserver | null = null
@@ -1261,5 +1420,127 @@ function onPaste(e: ClipboardEvent) {
 }
 .btn.pri.stop:hover {
   background: color-mix(in srgb, var(--danger) 88%, black);
+}
+
+/* Soft-budget warning banner above the toolbar (no block — just a heads-up). */
+.budgetwarn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 2px 0;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--danger);
+  background: var(--dangerBg);
+  border: 1px solid var(--danger);
+}
+/* Budget chip: readonly cost / limit readout. Warn-tinted when over the soft cap. */
+.budgetchip {
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+.budgetchip.over {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Pinned-context popover (toolbar pin button). Reuses the .pop chrome; adds a file
+   list + add-file search + a notes textarea. */
+.pinpop {
+  width: 320px;
+  max-width: 80vw;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pinpop-h {
+  font-weight: 600;
+  color: var(--text);
+}
+.pinpop-hint {
+  font-size: 12px;
+  color: var(--textDim);
+  margin-top: -4px;
+}
+.pinlist {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pinrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--bgActive);
+  color: var(--text);
+}
+.pinpath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--code);
+  font-size: 12px;
+}
+.pinx {
+  cursor: pointer;
+  color: var(--textDim);
+  padding: 0 2px;
+}
+.pinx:hover {
+  color: var(--danger);
+}
+.pininput,
+.pinnotes {
+  width: 100%;
+  background: var(--bgInput, var(--bgActive));
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+.pinnotes {
+  resize: vertical;
+  min-height: 3.5rem;
+  font-family: inherit;
+}
+.pinmatches {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+}
+.pinmatch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+.pinmatch:hover {
+  background: var(--bgHover);
+}
+.pinmname {
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.pinmpath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--textDim);
+  font-family: var(--code);
 }
 </style>

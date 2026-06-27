@@ -1,0 +1,15 @@
+{
+  "tray.section.limits": "Provider limits",
+  "tray.section.running": "Running",
+  "tray.section.attention": "Needs action",
+  "tray.section.recent": "Recent sessions",
+  "tray.todayUsage": "Today {cost} · {tokens} tok",
+  "tray.loading": "Loading…",
+  "tray.streaming": "streaming",
+  "tray.awaitingReply": "awaiting reply",
+  "tray.awaitingApproval": "awaiting approval",
+  "tray.empty.limits": "No provider limits to show",
+  "tray.empty.recent": "No recent sessions",
+  "tray.openActivity": "Open full Activity",
+  "tray.tooltip.busy": "AWOG — {running} running · {attention} need action"
+}

@@ -55,5 +55,13 @@
   "sessions.style.feynman.name": "Feynman",
   "sessions.style.feynman.hint": "Onboard a junior / self-study",
   "sessions.style.first-principles.name": "First Principles",
-  "sessions.style.first-principles.hint": "Choosing a stack / architecture"
+  "sessions.style.first-principles.hint": "Choosing a stack / architecture",
+  "sessions.pinned.title": "Pinned context",
+  "sessions.pinned.hint": "Files + notes re-fed into every turn of this session",
+  "sessions.pinned.remove": "Unpin",
+  "sessions.pinned.chipTitle": "Pinned: {path}",
+  "sessions.pinned.notes": "Notes",
+  "sessions.pinned.notesTitle": "Pinned notes — click to edit",
+  "sessions.pinned.searchFiles": "Pin a file (type to search)…",
+  "sessions.pinned.notesPlaceholder": "Notes always sent to the model…"
 }

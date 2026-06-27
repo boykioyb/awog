@@ -14,6 +14,12 @@
         <span class="wfn-out-t">{{ data.outputs?.[0] ?? '' }}</span>
       </span>
       <Icon
+        v-if="data.isGate"
+        name="refresh"
+        class="wfn-loop"
+        :title="t('workflow.node.qualityGate')"
+      />
+      <Icon
         v-if="data.approval"
         name="shield"
         class="wfn-gate"
@@ -43,6 +49,8 @@ type NodeData = {
   skill?: WorkflowSkill
   outputs: string[]
   approval: boolean
+  // True when the node has a gate config (ADR 0056) — shows the loop indicator.
+  isGate?: boolean
   onDelete?: (id: string) => void
 }
 
@@ -140,6 +148,12 @@ const onDelete = () => props.data.onDelete?.(props.id)
   width: 12px;
   height: 12px;
   color: var(--amber);
+  flex: 0 0 auto;
+}
+.wfn-loop {
+  width: 12px;
+  height: 12px;
+  color: var(--accent);
   flex: 0 0 auto;
 }
 .wfn-del {

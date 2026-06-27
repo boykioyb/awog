@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, net, protocol } from 'electron'
+import { app, BrowserWindow, net, protocol, shell } from 'electron'
 import { log } from './logger'
 import { DEV_URL, preloadPath, uiDir } from './paths'
 
@@ -46,6 +46,26 @@ function registerAppProtocolHandler(): void {
   })
 }
 
+// Load a SPA route into an arbitrary window (dev URL or packaged app:// scheme).
+// Shared by secondary windows (e.g. the tray popover) so they reach the same
+// Nuxt app. Dev retries until the Nuxt server is up, mirroring loadDevUrl.
+export function loadAppRoute(win: BrowserWindow, route: string): void {
+  const rel = route.replace(/^\/+/, '')
+  if (app.isPackaged) {
+    registerAppProtocolHandler()
+    void win.loadURL(`${APP_ORIGIN}/${rel}`)
+    return
+  }
+  const url = `${DEV_URL.replace(/\/+$/, '')}/${rel}`
+  win.loadURL(url).catch(() => undefined)
+  win.webContents.on('did-fail-load', () => {
+    if (win.isDestroyed()) return
+    setTimeout(() => {
+      if (!win.isDestroyed()) win.loadURL(url).catch(() => undefined)
+    }, 500)
+  })
+}
+
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -63,6 +83,25 @@ export function createMainWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+
+  // External links open in the OS browser, never inside the app shell. Covers both
+  // `target="_blank"` / window.open (e.g. the GitHub drawer's "Open on GitHub" link)
+  // and full-page navigations to an off-origin http(s) URL (e.g. a link clicked
+  // inside rendered issue/PR markdown). Internal navigations (the SPA's own origin)
+  // are left alone; the SPA router uses pushState so it never hits will-navigate.
+  const isInternalUrl = (url: string): boolean =>
+    url.startsWith(APP_ORIGIN) || url.startsWith(DEV_URL)
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (e, url) => {
+    if (isInternalUrl(url)) return
+    if (/^https?:\/\//i.test(url)) {
+      e.preventDefault()
+      void shell.openExternal(url)
+    }
+  })
 
   // DevTools toggle (F12 / Ctrl+Shift+I / Cmd+Opt+I) — works in the PACKAGED app
   // too, since hiding the menu removed the default shortcut. Needed to diagnose

@@ -80,7 +80,10 @@ export type TaskRun = {
   duration: string | null
   approvedBy?: 'human' | 'auto'
   approvedAt?: string
-  triggeredBy?: 'rerun' | 'resume-connection'
+  // 'auto-loop' = dispatched by a gate's auto loop-back (ADR 0056).
+  triggeredBy?: 'rerun' | 'resume-connection' | 'auto-loop'
+  // Quality verdict on a gate-node run (ADR 0056); absent on ordinary nodes.
+  verdict?: 'pass' | 'fail'
 }
 
 export type TaskPhase = {
@@ -96,6 +99,9 @@ type WorkflowNodeSlice = {
   agentName?: string
   skillId: string
   approval?: boolean
+  // Gate config (ADR 0056) — present on gate nodes; lets the UI show the loop
+  // counter (maxIterations) + auto badge from the snapshot.
+  gate?: { onFailTarget: string; maxIterations: number; auto: boolean }
 }
 
 type WorkflowEdgeSlice = { from: string; to: string }
@@ -175,6 +181,7 @@ type TaskRunDoneEvent = {
   duration: string | null
   approvedBy?: 'human' | 'auto'
   approvedAt?: string
+  verdict?: 'pass' | 'fail'
 }
 type TaskMessageEvent = { taskId: string; nodeId: string; version: number; message: TaskMessage }
 
@@ -714,6 +721,7 @@ export const useTasksStore = defineStore('tasks', () => {
     run.duration = e.duration
     if (e.approvedBy) run.approvedBy = e.approvedBy
     if (e.approvedAt) run.approvedAt = e.approvedAt
+    if (e.verdict) run.verdict = e.verdict
   }
 
   function applyMessage(e: TaskMessageEvent): void {

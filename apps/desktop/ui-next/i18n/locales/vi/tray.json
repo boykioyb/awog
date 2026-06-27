@@ -1,0 +1,15 @@
+{
+  "tray.section.limits": "Giới hạn provider",
+  "tray.section.running": "Đang chạy",
+  "tray.section.attention": "Cần xử lý",
+  "tray.section.recent": "Phiên gần đây",
+  "tray.todayUsage": "Hôm nay {cost} · {tokens} tok",
+  "tray.loading": "Đang tải…",
+  "tray.streaming": "đang chạy",
+  "tray.awaitingReply": "chờ trả lời",
+  "tray.awaitingApproval": "chờ duyệt",
+  "tray.empty.limits": "Chưa có giới hạn provider",
+  "tray.empty.recent": "Chưa có phiên gần đây",
+  "tray.openActivity": "Mở Activity đầy đủ",
+  "tray.tooltip.busy": "AWOG — {running} đang chạy · {attention} cần xử lý"
+}

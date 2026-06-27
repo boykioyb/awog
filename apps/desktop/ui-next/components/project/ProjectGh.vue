@@ -15,7 +15,7 @@
       :repo-path="selectedRepoPath"
       :can-load-more="gh.canLoadMore.value"
       @open="gh.open"
-      @refresh="gh.refresh"
+      @refresh="() => gh.refresh({ force: true })"
       @set-state="gh.setStateFilter"
       @set-assignee="gh.setAssigneeFilter"
       @set-account="gh.setAccount"
@@ -26,14 +26,37 @@
     />
     <ProjectGhDrawer
       v-if="gh.drawerOpen.value"
+      ref="drawerRef"
       :thread="gh.selected.value"
       :kind="kind"
       :loading="gh.detailLoading.value"
       :width="400"
       :view-lang="gh.viewLang.value"
       :segment="gh.segmentTranslation"
+      :comment-draft="gh.commentDraft.value"
+      :posting="gh.posting.value"
+      :enhancing="gh.enhancing.value"
+      :translating="gh.translatingDraft.value"
+      :can-undo="gh.canUndoDraft.value"
+      :reviewing="gh.reviewing.value"
+      :review-error="gh.reviewError.value"
+      :reviewed="gh.reviewed.value"
+      :diff-files="gh.diffFiles.value"
+      :diff-loading="gh.diffLoading.value"
+      :commits="gh.commits.value"
+      :commits-loading="gh.commitsLoading.value"
       @close="gh.closeDrawer"
+      @refresh="gh.refreshThread"
       @set-lang="gh.setViewLang"
+      @load-diff="onLoadDiff"
+      @load-commits="onLoadCommits"
+      @submit-comment="onSubmitComment"
+      @enhance="gh.enhanceDraft"
+      @translate="gh.translateDraft"
+      @undo="gh.undoDraft"
+      @approve="gh.approvePr"
+      @update:comment-draft="(v) => (gh.commentDraft.value = v)"
+      @reply="onReply"
     />
   </div>
 </template>
@@ -87,6 +110,40 @@ const gh = useProjectGh(
   () => (selectedRepoPath.value === '.' ? undefined : selectedRepoPath.value),
 )
 
+// Drawer ref → focus the composer after a Reply prefills the draft.
+const drawerRef = ref<{ focusComposer: () => void } | null>(null)
+
+// Fetch + reveal the open PR's diff (idempotent in the controller).
+function onLoadDiff(): void {
+  const n = gh.selected.value?.number
+  if (n != null) void gh.loadDiff(n)
+}
+
+// Fetch the open PR's commit list the first time the Commits tab opens (idempotent).
+function onLoadCommits(): void {
+  const n = gh.selected.value?.number
+  if (n != null) void gh.loadCommits(n)
+}
+
+// Post the composer draft as a comment, then refetch the thread (controller).
+function onSubmitComment(): void {
+  const n = gh.selected.value?.number
+  if (n != null) void gh.postComment(n)
+}
+
+// Reply = a new comment quoting the parent. Build a markdown blockquote of the
+// quoted body ("> @author wrote:" + each line prefixed) + two newlines, then focus
+// the composer ready to type the reply below it.
+function onReply(payload: { author: string; body: string }): void {
+  const quoted = payload.body
+    .split('\n')
+    .map((l) => `> ${l}`)
+    .join('\n')
+  const header = t('projects.drawer.replyQuote', { author: payload.author })
+  gh.commentDraft.value = `> ${header}\n${quoted}\n\n`
+  drawerRef.value?.focusComposer()
+}
+
 // Start a new session in this project seeded with the issue/PR as context, then
 // jump to it. The seed lands in the composer draft (editable) rather than auto-
 // sending; the URL uses the SELECTED repo's slug (multi-repo workspace).
@@ -95,12 +152,21 @@ async function onNewSession(item: GhThreadSummary): Promise<void> {
   const path = props.kind === 'pr' ? 'pull' : 'issues'
   const url = slug ? `https://github.com/${slug}/${path}/${item.number}` : ''
   const kindWord = props.kind === 'pr' ? 'pull request' : 'issue'
-  const seed =
-    t('projects.gh.newSessionSeed', {
-      kind: kindWord,
-      number: item.number,
-      title: item.title,
-    }) + (url ? `\n${url}` : '')
+
+  // Capture the issue/PR body ONCE here so the session carries it as context — the
+  // model gets the full description in the first message instead of re-fetching it.
+  const full = await gh.fetchThread(item.number)
+
+  const lead = t('projects.gh.newSessionSeed', {
+    kind: kindWord,
+    number: item.number,
+    title: item.title,
+  })
+  const parts = [lead]
+  if (url) parts.push(url)
+  if (full?.body?.trim()) parts.push('', '---', '', full.body.trim())
+  const seed = parts.join('\n')
+
   const id = sessions.create(props.projectId)
   sessions.rename(id, `#${item.number} ${item.title}`)
   if (url) sessions.setAboutGh(id, url)

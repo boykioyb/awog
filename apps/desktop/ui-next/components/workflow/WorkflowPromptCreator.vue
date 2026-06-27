@@ -33,18 +33,29 @@
               <span class="wfpc-draft-name">{{ draft.name }}</span>
             </div>
             <div class="wfpc-draft-desc">{{ draft.description }}</div>
-            <div v-if="draft.nodes.length" class="wfpc-steps">
-              <div v-for="(n, i) in draft.nodes" :key="n.id" class="wfpc-step">
-                <span class="wfpc-step-n mono">{{ (i + 1).toString().padStart(2, '0') }}</span>
-                <span class="wfpc-step-agent">{{ agentName(n.agentId) }}</span>
-                <span class="wfpc-step-sep">·</span>
-                <span class="wfpc-step-skill">{{ n.skillId || t('workflow.node.noSkill') }}</span>
-                <Icon
-                  v-if="n.approval"
-                  name="shield"
-                  style="width: 11px; height: 11px; color: var(--amber)"
-                  :title="t('workflow.node.approvalGate')"
-                />
+            <!-- Steps grouped by agent (project agents first), the agent name as
+                 the group header and its skills/steps listed underneath. -->
+            <div v-if="draft.nodes.length" class="wfpc-groups">
+              <div v-for="grp in groupedSteps" :key="grp.agentId" class="wfpc-group">
+                <div class="wfpc-group-hd">
+                  <Icon name="agents" style="width: 12px; height: 12px; color: var(--textDim)" />
+                  <span class="wfpc-group-name">{{ grp.agentName }}</span>
+                  <span v-if="grp.role" class="wfpc-group-role">{{ grp.role }}</span>
+                </div>
+                <div class="wfpc-group-steps">
+                  <div v-for="s in grp.steps" :key="s.id" class="wfpc-step">
+                    <span class="wfpc-step-n mono">{{ s.num }}</span>
+                    <span class="wfpc-step-skill">
+                      {{ s.skillId || t('workflow.node.noSkill') }}
+                    </span>
+                    <Icon
+                      v-if="s.approval"
+                      name="shield"
+                      style="width: 11px; height: 11px; color: var(--amber)"
+                      :title="t('workflow.node.approvalGate')"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <div class="wfpc-draft-hint">
@@ -95,18 +106,24 @@
 // tier. Falls back to a name/description-only mock draft when no account/sidecar.
 import { computed, ref, watch } from 'vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
-import type { WorkflowAgent, WorkflowDraft } from '~/composables/useWorkflowGen'
+import type { WorkflowAgent, WorkflowDraft, WorkflowSkill } from '~/composables/useWorkflowGen'
 
 const props = withDefaults(
   defineProps<{
     open: boolean
-    // Agents the LLM may wire as steps (already scoped by the page to the chosen
-    // tier — see scopedAgents below for the modal-scope re-filter).
+    // Full agent/skill rosters (global + every project). The modal re-scopes both
+    // to the chosen "Save to" tier below (scopedAgents / scopedSkills) so a global
+    // workflow never references a project-only agent or skill.
     agents: WorkflowAgent[]
+    skills: WorkflowSkill[]
     projects?: { id: string; name: string }[]
     defaultScope?: string
     // Runs the generate (one-shot LLM or mock). Provided by the page-controller.
-    generate: (prompt: string, scopedAgents: WorkflowAgent[]) => Promise<WorkflowDraft>
+    generate: (
+      prompt: string,
+      scopedAgents: WorkflowAgent[],
+      scopedSkills: WorkflowSkill[],
+    ) => Promise<WorkflowDraft>
   }>(),
   { projects: () => [], defaultScope: 'global' },
 )
@@ -145,9 +162,62 @@ const scopedAgents = computed<WorkflowAgent[]>(() => {
   return props.agents.filter((a) => a.source !== 'project' || a.projectId === scope.value)
 })
 
+// Skills offered to the LLM — re-scoped the same way (preserve per-project skill
+// scope: a global workflow only sees global skills; a project workflow sees global
+// + that project's skills).
+const scopedSkills = computed<WorkflowSkill[]>(() => {
+  if (scope.value === 'global') return props.skills.filter((s) => s.source !== 'project')
+  return props.skills.filter((s) => s.source !== 'project' || s.projectId === scope.value)
+})
+
 const canGenerate = computed(() => !isGenerating.value && promptText.value.trim().length > 0)
 
-const agentName = (id: string): string => props.agents.find((a) => a.id === id)?.name ?? id
+// Draft steps grouped by agent — the agent is the group header (like the project
+// header in the session list), its skills/steps listed underneath. Project agents
+// come first, then global; within each tier, first-appearance (pipeline) order.
+// Step numbers keep the original DAG index so pipeline position stays legible.
+type StepRow = { id: string; num: string; skillId: string; approval: boolean }
+type StepGroup = {
+  agentId: string
+  agentName: string
+  role: string
+  scope: 'project' | 'global'
+  steps: StepRow[]
+}
+const groupedSteps = computed<StepGroup[]>(() => {
+  const d = draft.value
+  if (!d) return []
+  const byAgent = new Map<string, StepGroup>()
+  const order: string[] = []
+  d.nodes.forEach((n, i) => {
+    let grp = byAgent.get(n.agentId)
+    if (!grp) {
+      const a = props.agents.find((x) => x.id === n.agentId)
+      grp = {
+        agentId: n.agentId,
+        agentName: a?.name ?? n.agentId,
+        role: a?.role ?? '',
+        scope: (a?.source ?? n.agentSource) === 'project' ? 'project' : 'global',
+        steps: [],
+      }
+      byAgent.set(n.agentId, grp)
+      order.push(n.agentId)
+    }
+    grp.steps.push({
+      id: n.id,
+      num: (i + 1).toString().padStart(2, '0'),
+      skillId: n.skillId,
+      approval: n.approval,
+    })
+  })
+  // Stable sort keeps first-appearance order within each scope tier.
+  return order
+    .map((id) => byAgent.get(id)!)
+    .sort((a, b) => {
+      if (a.scope === b.scope) return 0
+      return a.scope === 'project' ? -1 : 1
+    })
+})
 
 const onGenerate = async () => {
   const text = promptText.value.trim()
@@ -155,7 +225,7 @@ const onGenerate = async () => {
   isGenerating.value = true
   error.value = null
   try {
-    draft.value = await props.generate(text, scopedAgents.value)
+    draft.value = await props.generate(text, scopedAgents.value, scopedSkills.value)
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
   } finally {
@@ -268,11 +338,32 @@ const onBackdrop = () => {
   color: var(--textMuted);
   line-height: 1.5;
 }
-.wfpc-steps {
+.wfpc-groups {
   margin-top: 9px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 9px;
+}
+.wfpc-group-hd {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.wfpc-group-name {
+  font-size: 0.9231rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.wfpc-group-role {
+  font-size: 0.8462rem;
+  color: var(--textFaint);
+}
+.wfpc-group-steps {
+  margin-top: 3px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 .wfpc-step {
   display: flex;
@@ -284,10 +375,6 @@ const onBackdrop = () => {
   font-size: 0.7692rem;
   color: var(--textFaint);
 }
-.wfpc-step-agent {
-  color: var(--text);
-}
-.wfpc-step-sep,
 .wfpc-step-skill {
   color: var(--textDim);
 }

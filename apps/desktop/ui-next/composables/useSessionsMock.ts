@@ -43,6 +43,10 @@ export type Followup = {
 // Edit/Write show the REAL diff/file, not the mock DEMO_DIFF). Absent on mock seed.
 export type StepDetailKind = 'diff' | 'file' | 'terminal' | 'text' | 'list'
 export type SubStep = {
+  // Engine step id — present on the IPC path so live deltas of the SAME subagent
+  // step (e.g. a streaming `thinking` block whose label grows each delta) merge
+  // in place instead of pushing a new row per delta. Absent on mock seed.
+  eid?: string
   tool: string
   target: string
   result?: string
@@ -70,27 +74,43 @@ export type StepBlock = {
 export type PlanBlock = {
   kind: 'plan'
   title: string
+  // Authoritative plan source: the model's own markdown (headers, nested lists,
+  // bold, blockquotes) rendered as a document in the card. `items` is the legacy
+  // flattened fallback (mock data + engine steps with no planMarkdown).
+  markdown?: string
   items: string[]
   status?: 'pending' | 'approved'
   eid?: string
 }
 export type QuestionOption = { label: string; desc?: string }
-export type QuestionBlock = {
-  kind: 'question'
+// One question within an AskUserQuestion call. A call carries 1–4 questions that
+// are answered and submitted TOGETHER (the sidecar parks once and resumes with
+// all answers), so each item keeps its own selection/answer state.
+export type QuestionItem = {
   prompt: string
   options: QuestionOption[]
   multi?: boolean
-  sel?: string[]
-  other?: string
-  answer?: string | null
-  eid?: string
-  // Per-question header from the engine (AskUserQuestion) — needed to build the
-  // answer payload back to the sidecar. Absent on mock questions.
+  // Per-question header from the engine (AskUserQuestion) — needed to map the
+  // answer back to the right question in the sidecar. Absent on mock questions.
   header?: string
+  // The user's chosen answer for THIS question (label(s)/free-text joined by
+  // ", "); null/absent until submitted.
+  answer?: string | null
+}
+export type QuestionBlock = {
+  kind: 'question'
+  // Every question in the call — render them all in one card with one Submit.
+  items: QuestionItem[]
+  eid?: string
   // Set when the turn was cancelled while this gate was still parked: the gate is
   // dead (answering it is a no-op), so it renders as "cancelled" and no longer
   // counts as "awaiting" (which otherwise kept the composer stuck on Stop).
   cancelled?: boolean
+}
+// A question gate is answered once EVERY question in the call has a recorded
+// answer (one AskUserQuestion call = 1–4 questions submitted in one go).
+export function questionAnswered(b: QuestionBlock): boolean {
+  return b.items.length > 0 && b.items.every((it) => !!it.answer)
 }
 export type PermBlock = {
   kind: 'perm'
@@ -192,6 +212,30 @@ export type SessionUsage = {
   // panel itemise System prompt / Instructions / System tools / MCP tools /
   // Custom agents / Skills / Memory files / Messages instead of token totals only.
   contextChars?: ContextChars
+  // Cumulative cost in USD across all turns of this session. Computed sidecar-side
+  // (single source of truth = activity/pricing.ts) from per-turn usage + modelUsed,
+  // then summed here. Absent when no priced turn has run (or model has no price → n/a).
+  cost?: number
+}
+
+// Per-session budget. `limitUsd` is a SOFT cap (warning banner only). `hardLimitUsd`
+// + `maxToolCalls` + `maxWallclockMs` are HARD caps enforced sidecar-side (block the
+// turn / tool call when exceeded — closes the "budget per task" security invariant).
+// All optional: unset = no budget. Round-trips through sessions.upsert (metadata).
+export type SessionBudget = {
+  limitUsd?: number
+  hardLimitUsd?: number
+  maxToolCalls?: number
+  maxWallclockMs?: number
+}
+
+// A file/note pinned to a session that the sidecar re-feeds into EVERY turn as a
+// `<pinned_context>` block (distinct from one-shot attachments and global/project
+// rules — see ADR-tier). `files` are workspace-relative paths read fresh per turn
+// (path-sanitized sidecar-side); `notes` is free text. Round-trips through upsert.
+export type PinnedContext = {
+  files?: string[]
+  notes?: string
 }
 
 // A message the user queued while a turn was streaming (§2). Auto-drained FIFO as
@@ -231,6 +275,15 @@ export type Session = {
   // Session-scoped MCP server whitelist → params.mcpServerIds. undefined = all
   // enabled (legacy); [] = none; [ids] = only those.
   mcpServerIds?: string[]
+  // Files/notes pinned to this session, re-fed into every turn as <pinned_context>.
+  pinnedContext?: PinnedContext
+  // Soft + hard spend caps for this session (see SessionBudget).
+  budget?: SessionBudget
+  // ── Fork lineage (set when this session was forked off another) ────────────
+  // engineId of the session this one was forked from; the message (eid) it forked
+  // at. Drives the fork-tree graph. Persisted via sessions.upsert (metadata).
+  parentSessionId?: string
+  forkFromMessageId?: string
   // ── Engine-bridge fields (IPC path only; unset in mock mode) ──────────────
   // Sidecar session id (string). The numeric `id` stays the stable client key
   // for Vue lists; `engineId` is what the RPCs use. Set when hydrated from
@@ -514,19 +567,22 @@ const SESSIONS: Session[] = [
           },
           {
             kind: 'question',
-            prompt:
-              'Với task chạy song song trong cùng một session, dùng cơ chế nào cho server child?',
-            options: [
+            items: [
               {
-                label: 'Worktree isolation',
-                desc: 'Mỗi task một worktree riêng — an toàn nhất, tốn đĩa hơn',
-              },
-              {
-                label: 'Shared lock',
-                desc: 'Một child dùng chung + mutex — nhẹ, có thể nghẽn khi tải cao',
+                prompt:
+                  'Với task chạy song song trong cùng một session, dùng cơ chế nào cho server child?',
+                options: [
+                  {
+                    label: 'Worktree isolation',
+                    desc: 'Mỗi task một worktree riêng — an toàn nhất, tốn đĩa hơn',
+                  },
+                  {
+                    label: 'Shared lock',
+                    desc: 'Một child dùng chung + mutex — nhẹ, có thể nghẽn khi tải cao',
+                  },
+                ],
               },
             ],
-            answer: null,
           },
         ],
       },
@@ -570,15 +626,17 @@ const SESSIONS: Session[] = [
           },
           {
             kind: 'question',
-            prompt: 'Áp cho session cũ luôn hay chỉ session mới?',
-            multi: true,
-            options: [
-              { label: 'Migrate session cũ (1 lần)' },
-              { label: 'Nén backup .jsonl.gz' },
-              { label: 'Chỉ áp session mới' },
+            items: [
+              {
+                prompt: 'Áp cho session cũ luôn hay chỉ session mới?',
+                multi: true,
+                options: [
+                  { label: 'Migrate session cũ (1 lần)' },
+                  { label: 'Nén backup .jsonl.gz' },
+                  { label: 'Chỉ áp session mới' },
+                ],
+              },
             ],
-            sel: ['Migrate session cũ (1 lần)', 'Nén backup .jsonl.gz'],
-            answer: null,
           },
           {
             kind: 'error',

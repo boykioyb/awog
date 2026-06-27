@@ -44,6 +44,18 @@
         >
           <Icon :name="isFull ? 'minimize' : 'maximize'" style="width: 14px; height: 14px" />
         </button>
+        <button
+          v-if="thread"
+          class="iconbtn"
+          type="button"
+          :title="t('projects.drawer.refresh')"
+          :aria-label="t('projects.drawer.refresh')"
+          :disabled="loading"
+          style="width: 28px; height: 28px"
+          @click="emit('refresh')"
+        >
+          <Icon name="refresh" style="width: 14px; height: 14px" />
+        </button>
         <a
           v-if="thread?.url"
           class="iconbtn"
@@ -64,107 +76,285 @@
           <Icon name="x" style="width: 14px; height: 14px" />
         </button>
       </div>
-      <div class="ghdwbody">
+
+      <!-- GitHub-style tab bar (underline indicator + icon + count badge). Issue →
+           Conversation | Comments. PR → Conversation | Comments | Commits | Files. -->
+      <div v-if="thread && tabDefs.length > 1" class="ghtabs">
+        <button
+          v-for="tb in tabDefs"
+          :key="tb.key"
+          type="button"
+          class="ghtab"
+          :class="{ on: activeTab === tb.key }"
+          @click="selectTab(tb.key)"
+        >
+          <Icon :name="tb.icon" class="ghtab-ic" style="width: 14px; height: 14px" />
+          <span>{{ t('projects.drawer.tab.' + tb.key) }}</span>
+          <span v-if="tb.count" class="ghtab-n">{{ tb.count }}</span>
+        </button>
+      </div>
+
+      <div
+        class="ghdwbody"
+        :class="{ 'gh-files-full': isFull && activeTab === 'files' && !!thread }"
+      >
         <div v-if="loading" class="fd" style="padding: 24px; text-align: center">
           {{ t('projects.gh.loading') }}
         </div>
         <template v-else-if="thread">
-          <div class="ghdwtitle">{{ segText('title', thread.title) }}</div>
-          <div class="ghdwmeta">
-            <span class="mono">{{ thread.author.login }}</span>
-            {{ t('projects.drawer.opened') }} · {{ relativeWhen(thread.createdAt) }}
-            <template v-if="kind === 'pr' && thread.baseRefName">
-              ·
-              <span class="mono">{{ thread.baseRefName }} ← {{ thread.headRefName }}</span>
-            </template>
-          </div>
-          <div
-            v-if="thread.labels.length"
-            style="display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px"
-          >
-            <span
-              v-for="l in thread.labels"
-              :key="l.name"
-              class="ghlabel"
-              :style="ghLabelStyle(l.color, isDark)"
+          <!-- ── Conversation: the opening post (meta + labels + body), plus PR
+               reviews (the description / overview). ─────────────────────────── -->
+          <template v-if="activeTab === 'conversation'">
+            <div class="ghdwtitle">{{ segText('title', thread.title) }}</div>
+            <div class="ghdwmeta">
+              <span class="mono">{{ thread.author.login }}</span>
+              {{ t('projects.drawer.opened') }} · {{ relativeWhen(thread.createdAt) }}
+              <template v-if="kind === 'pr' && thread.baseRefName">
+                ·
+                <span class="mono">{{ thread.baseRefName }} ← {{ thread.headRefName }}</span>
+              </template>
+            </div>
+            <div
+              v-if="thread.labels.length"
+              style="display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px"
             >
-              {{ l.name }}
-            </span>
-          </div>
-          <div v-if="viewLang !== 'orig'" class="trbadge">
-            {{ t('projects.drawer.translatedBadge') }}
-          </div>
-          <div class="ghmd">
-            <p v-for="(par, i) in bodyParagraphs" :key="i">{{ par }}</p>
-          </div>
-
-          <!-- PR-only: changed files (path + line delta). -->
-          <template v-if="kind === 'pr' && files.length">
-            <div class="sech">{{ t('projects.drawer.filesChanged', { n: files.length }) }}</div>
-            <div class="ghfiles">
-              <div v-for="f in files" :key="f.path" class="ghfile">
-                <span class="ghfile-p mono">{{ f.path }}</span>
-                <span class="ghfile-d">
-                  <span v-if="f.additions" style="color: var(--add)">+{{ f.additions }}</span>
-                  <span v-if="f.deletions" style="color: var(--del)">−{{ f.deletions }}</span>
-                </span>
-              </div>
+              <span
+                v-for="l in thread.labels"
+                :key="l.name"
+                class="ghlabel"
+                :style="ghLabelStyle(l.color, isDark)"
+              >
+                {{ l.name }}
+              </span>
+            </div>
+            <div v-if="viewLang !== 'orig'" class="trbadge">
+              {{ t('projects.drawer.translatedBadge') }}
+            </div>
+            <div class="ghmd">
+              <ProjectGhMarkdown :source="segText('body', thread.body)" />
             </div>
           </template>
 
-          <div class="sech">{{ t('projects.drawer.comments', { n: thread.comments.length }) }}</div>
-          <template v-if="thread.comments.length">
-            <div v-for="(c, i) in thread.comments" :key="i" class="ghcomment">
+          <!-- ── Comments: conversation comments + the review timeline (each review
+               with its state + body + nested inline threads), Approve + composer. ── -->
+          <template v-else-if="activeTab === 'comments'">
+            <!-- Conversation comments (top-level PR/issue comments). -->
+            <div v-if="thread.comments.length" class="sech">
+              {{ t('projects.drawer.comments', { n: thread.comments.length }) }}
+            </div>
+            <div v-for="(c, i) in thread.comments" :key="`c${i}`" class="ghcomment">
               <div class="ghchd">
                 <span class="mono">{{ c.author.login }}</span>
                 · {{ relativeWhen(c.createdAt) }}
-              </div>
-              <div class="ghmd">
-                <p v-for="(par, j) in paragraphs(segText(i, c.body))" :key="j">{{ par }}</p>
-              </div>
-            </div>
-          </template>
-          <div v-else-if="!reviews.length" class="fd">{{ t('projects.drawer.noComment') }}</div>
-
-          <!-- PR-only: reviews carrying a body (bare approvals are dropped server-side). -->
-          <template v-if="kind === 'pr' && reviews.length">
-            <div class="sech">{{ t('projects.drawer.reviews', { n: reviews.length }) }}</div>
-            <div v-for="(r, i) in reviews" :key="`r${i}`" class="ghcomment">
-              <div class="ghchd">
-                <span class="mono">{{ r.author.login }}</span>
-                <span
-                  class="ghstate"
-                  :style="{ color: reviewColor(r.state), borderColor: reviewColor(r.state) }"
+                <span style="flex: 1" />
+                <button
+                  type="button"
+                  class="ghreply"
+                  :title="t('projects.drawer.reply')"
+                  @click="emit('reply', { author: c.author.login, body: c.body })"
                 >
-                  {{ reviewLabel(r.state) }}
-                </span>
-                · {{ relativeWhen(r.createdAt) }}
+                  <Icon name="message" style="width: 12px; height: 12px" />
+                  {{ t('projects.drawer.reply') }}
+                </button>
               </div>
               <div class="ghmd">
-                <p v-for="(par, j) in paragraphs(r.body)" :key="j">{{ par }}</p>
+                <ProjectGhMarkdown :source="segText(i, c.body)" />
               </div>
             </div>
+
+            <!-- PR-only: review timeline — each review's state + body + its nested
+                 inline comment threads (root + replies), like GitHub. -->
+            <template v-if="kind === 'pr' && reviews.length">
+              <div class="sech">{{ t('projects.drawer.reviews', { n: reviews.length }) }}</div>
+              <div v-for="(r, i) in reviews" :key="`r${i}`" class="ghreview">
+                <div class="ghchd">
+                  <span class="mono">{{ r.author.login }}</span>
+                  <span
+                    class="ghstate"
+                    :style="{ color: reviewColor(r.state), borderColor: reviewColor(r.state) }"
+                  >
+                    {{ reviewLabel(r.state) }}
+                  </span>
+                  · {{ relativeWhen(r.createdAt) }}
+                </div>
+                <div v-if="r.body.trim()" class="ghmd">
+                  <ProjectGhMarkdown :source="segText(`r${i}`, r.body)" />
+                </div>
+                <!-- Inline comment threads created by this review. -->
+                <div v-for="(th, ti) in r.threads" :key="`r${i}t${ti}`" class="ghrthread">
+                  <div class="ghrt-loc mono">
+                    <Icon name="file" style="width: 12px; height: 12px" />
+                    {{ th.path }}
+                    <template v-if="th.line">:{{ th.line }}</template>
+                  </div>
+                  <!-- The commented code snippet (GitHub's diff_hunk). -->
+                  <div v-if="th.diffHunk" class="ghrt-hunk">
+                    <ProjectGhFileDiff :patch="th.diffHunk" />
+                  </div>
+                  <div
+                    v-for="(c, ci) in th.comments"
+                    :key="ci"
+                    class="ghcomment"
+                    :class="{ 'ghrt-reply': ci > 0 }"
+                  >
+                    <div class="ghchd">
+                      <span class="mono">{{ c.author.login }}</span>
+                      · {{ relativeWhen(c.createdAt) }}
+                    </div>
+                    <div class="ghmd">
+                      <ProjectGhMarkdown :source="c.body" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Empty state when there's no discussion yet. -->
+            <div
+              v-if="!thread.comments.length && !reviews.length"
+              class="fd"
+              style="margin-bottom: 4px"
+            >
+              {{ t('projects.drawer.noComment') }}
+            </div>
+
+            <!-- Approve PR with an LGTM! review (open PRs only; hidden once approved). -->
+            <div v-if="kind === 'pr' && thread.state === 'OPEN' && !reviewed" class="ghapprove-row">
+              <button
+                type="button"
+                class="ghapprove"
+                :disabled="reviewing"
+                @click="emit('approve')"
+              >
+                <Icon name="check" style="width: 14px; height: 14px" />
+                {{ reviewing ? t('projects.drawer.approving') : t('projects.drawer.approve') }}
+              </button>
+              <span v-if="reviewError" class="fd ghapprove-err">
+                {{ t('projects.drawer.approveFailed') }}
+              </span>
+            </div>
+            <div v-else-if="kind === 'pr' && reviewed" class="ghapproved">
+              <Icon name="check" style="width: 13px; height: 13px" />
+              {{ t('projects.drawer.approved') }}
+            </div>
+
+            <!-- Comment / reply composer (markdown editor + translate + enhance). -->
+            <ProjectGhComposer
+              ref="composerRef"
+              :model-value="commentDraft"
+              :posting="posting"
+              :enhancing="enhancing"
+              :translating="translating"
+              :can-undo="canUndo"
+              @update:model-value="(v) => emit('update:comment-draft', v)"
+              @submit="emit('submit-comment')"
+              @enhance="emit('enhance')"
+              @translate="(lang) => emit('translate', lang)"
+              @undo="emit('undo')"
+            />
+          </template>
+
+          <!-- ── Commits (PR only): lazy-loaded commit list. ─────────────────── -->
+          <ProjectGhCommits
+            v-else-if="activeTab === 'commits'"
+            :commits="commits"
+            :loading="commitsLoading"
+          />
+
+          <!-- ── Files changed (PR only). Fullscreen → two-pane (tree | diff, like
+               GitHub); docked → directory tree with per-file inline diff. ───────── -->
+          <template v-else-if="activeTab === 'files'">
+            <div v-if="!files.length" class="fd">
+              {{ t('projects.drawer.filesChanged', { n: 0 }) }}
+            </div>
+
+            <!-- Two-pane (fullscreen): file tree on the left, selected diff on the right. -->
+            <div v-else-if="isFull" class="ghfiles-2pane">
+              <div class="ghfiles-tree">
+                <ProjectGhFileTree
+                  :nodes="fileTree"
+                  :expanded="expanded"
+                  :diff-files="diffFiles"
+                  :diff-loading="diffLoading"
+                  :inline-diff="false"
+                  @toggle-file="selectFile"
+                  @context-file="(ev, p) => ghMenu.open(ev, { path: p })"
+                />
+              </div>
+              <div class="ghfiles-diff">
+                <template v-if="expanded">
+                  <div class="ghfiles-diffhd">
+                    <span class="mono">{{ expanded }}</span>
+                  </div>
+                  <div v-if="diffLoading" class="fd" style="padding: 14px">
+                    {{ t('projects.drawer.diffLoading') }}
+                  </div>
+                  <ProjectGhFileDiff v-else :patch="patchFor(expanded)" />
+                </template>
+                <div v-else class="fd ghfiles-pick">{{ t('projects.drawer.pickFile') }}</div>
+              </div>
+            </div>
+
+            <!-- Docked: tree + inline diff. -->
+            <template v-else>
+              <div class="sech">{{ t('projects.drawer.filesChanged', { n: files.length }) }}</div>
+              <ProjectGhFileTree
+                :nodes="fileTree"
+                :expanded="expanded"
+                :diff-files="diffFiles"
+                :diff-loading="diffLoading"
+                @toggle-file="toggleFile"
+                @context-file="(ev, p) => ghMenu.open(ev, { path: p })"
+              />
+            </template>
           </template>
         </template>
       </div>
     </div>
+
+    <!-- PR file context menu (copy path / name). -->
+    <ContextMenu
+      :open="ghMenu.pos.value !== null"
+      :position="ghMenu.pos.value ?? { x: 0, y: 0 }"
+      :items="ghMenuItems"
+      @close="ghMenu.close"
+      @select="onGhMenuSelect"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-// Right-docked issue/PR detail — binds a live gh.get thread. Per-segment
-// translation: each block (title / body / comment-by-index) renders its cached
-// translation when a language tab is active (orig/vi/en), or the original prose.
-// Markdown renders as plain paragraphs (no v-html). The parent (ProjectGh) owns
-// the useProjectGh controller and forwards thread + segment lookups. The panel is
-// user-resizable (left-edge drag, persisted) and has a fullscreen toggle. PRs add
-// a Files-changed list + a Reviews section (review bodies).
-import { computed, onBeforeUnmount, ref } from 'vue'
+// Right-docked issue/PR detail — binds a live gh.get thread. GitHub-style underline
+// tabs split the content: Conversation (the opening post — meta + labels + body),
+// Comments (reviews + conversation comments + nested review threads + the Approve
+// action + composer), Commits (PR only, lazy gh.commits) and Files changed (PR only,
+// the changed-file list + inline diffs). Per-segment translation: each block (title /
+// body / comment / review) renders its cached translation when a language tab is
+// active (orig/vi/en/ja), or the original prose. Body / comments / reviews render as
+// sanitized markdown (ProjectGhMarkdown — never raw v-html). The parent (ProjectGh)
+// owns the useProjectGh controller and forwards thread + segment lookups + comment/
+// diff/commits/review state. The panel is user-resizable (left-edge drag, persisted)
+// and has a fullscreen toggle. The composer (markdown editor + translate + LLM
+// enhance) sits in the Comments tab; per-comment Reply switches there + focuses it.
+// The Approve button hides once the PR is approved this session.
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import ProjectGhMarkdown from './ProjectGhMarkdown.vue'
+import ProjectGhFileTree from './ProjectGhFileTree.vue'
+import ProjectGhFileDiff from './ProjectGhFileDiff.vue'
+import ProjectGhComposer from './ProjectGhComposer.vue'
+import ProjectGhCommits from './ProjectGhCommits.vue'
+import { buildFileTree } from '~/utils/gh-file-tree'
+import type { MenuItem } from '~/composables/useContextMenu'
+import { useContextMenu } from '~/composables/useContextMenu'
+import { copyText } from '~/utils/clipboard'
 import type {
+  GhCommit,
+  GhDiffFile,
   GhKind,
   GhSegmentId,
   GhSegmentState,
   GhThread,
+  TranslateLang,
   ViewLang,
 } from '~/composables/useProjectGh'
 import { ghLabelStyle } from '~/utils/gh-label'
@@ -178,13 +368,68 @@ const props = defineProps<{
   width: number
   viewLang: ViewLang
   segment: (id: GhSegmentId) => GhSegmentState | null
+  // Comment composer + PR diff state (owned by the useProjectGh controller).
+  commentDraft: string
+  posting: boolean
+  enhancing: boolean
+  translating: boolean
+  canUndo: boolean
+  reviewing: boolean
+  reviewError: boolean
+  reviewed: boolean
+  diffFiles: GhDiffFile[]
+  diffLoading: boolean
+  // PR commits (lazy — fetched when the Commits tab is first opened).
+  commits: GhCommit[]
+  commitsLoading: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'close'): void; (e: 'set-lang', lang: ViewLang): void }>()
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'refresh'): void
+  (e: 'set-lang', lang: ViewLang): void
+  (e: 'load-diff'): void
+  (e: 'load-commits'): void
+  (e: 'submit-comment'): void
+  (e: 'enhance'): void
+  (e: 'undo'): void
+  (e: 'approve'): void
+  (e: 'translate', lang: TranslateLang): void
+  (e: 'update:comment-draft', v: string): void
+  (e: 'reply', payload: { author: string; body: string }): void
+}>()
 
 const { t } = useI18n()
 
-const LANGS: ViewLang[] = ['orig', 'vi', 'en']
+// Translation tabs, priority order (vi, en, ja) after the original.
+const LANGS: ViewLang[] = ['orig', 'vi', 'en', 'ja']
+
+// ── Content tabs (conditional on kind) ───────────────────────────────────────────
+// Conversation = the opening post (description). Comments = the discussion (reviews
+// + conversation comments + nested review threads + composer + approve). Issue →
+// Conversation | Comments. PR → Conversation | Comments | Commits | Files changed.
+// Each tab carries an icon + a count badge (comments / commits / files).
+type GhTab = 'conversation' | 'comments' | 'commits' | 'files'
+const tabDefs = computed<{ key: GhTab; icon: string; count: number }[]>(() => {
+  const commentCount = (props.thread?.comments.length ?? 0) + reviews.value.length
+  const defs: { key: GhTab; icon: string; count: number }[] = [
+    { key: 'conversation', icon: props.kind === 'pr' ? 'fork' : 'alert', count: 0 },
+    { key: 'comments', icon: 'message', count: commentCount },
+  ]
+  if (props.kind === 'pr') {
+    // Commits count is only known once lazily loaded; files count comes from gh.get.
+    defs.push({ key: 'commits', icon: 'commit', count: props.commits.length })
+    defs.push({ key: 'files', icon: 'file', count: files.value.length })
+  }
+  return defs
+})
+const activeTab = ref<GhTab>('conversation')
+
+function selectTab(tab: GhTab): void {
+  activeTab.value = tab
+  // Lazy-load the commit list the first time the Commits tab is opened.
+  if (tab === 'commits') emit('load-commits')
+}
 
 // ── Resize (left-edge drag) + fullscreen ──────────────────────────────────────
 const STORAGE_W = 'awog.gh.drawerWidth'
@@ -237,6 +482,23 @@ onBeforeUnmount(onUp)
 // ── Display helpers ───────────────────────────────────────────────────────────
 const files = computed(() => props.thread?.files ?? [])
 const reviews = computed(() => props.thread?.reviews ?? [])
+// Changed files as a directory tree (GitHub-style), single-child chains compressed.
+const fileTree = computed(() => buildFileTree(files.value))
+
+// Path of the currently-expanded file row (declared before the watch below, which
+// resets it on the initial/immediate run — referencing it later would hit the TDZ).
+const expanded = ref<string | null>(null)
+
+// Reset to the Conversation tab + collapse any open diff whenever the opened thread
+// changes (the parent re-fetches) — including the initial open.
+watch(
+  () => props.thread?.number,
+  () => {
+    expanded.value = null
+    activeTab.value = 'conversation'
+  },
+  { immediate: true },
+)
 
 // Resolve a segment's display text: the cached translation when the active lang
 // tab has one (and isn't erroring), else the original.
@@ -270,14 +532,57 @@ function reviewColor(state: string): string {
   return 'var(--textMuted)'
 }
 
-function paragraphs(text: string): string[] {
-  return String(text).split('\n\n')
+// ── PR file diff (lazy reveal) ──────────────────────────────────────────────────
+// `expanded` (one open file row at a time) is declared above. Toggling a file in the
+// tree asks the parent to fetch the patch once (idempotent in the controller); the
+// tree looks up the parsed per-file section from `diffFiles`.
+function toggleFile(path: string): void {
+  if (expanded.value === path) {
+    expanded.value = null
+    return
+  }
+  expanded.value = path
+  emit('load-diff')
 }
 
-const bodyParagraphs = computed(() => {
-  if (!props.thread) return []
-  return paragraphs(segText('body', props.thread.body))
-})
+// Two-pane (fullscreen): clicking a file selects it (shows its diff on the right) —
+// no toggle-off, the diff pane always reflects a selection.
+function selectFile(path: string): void {
+  if (expanded.value === path) return
+  expanded.value = path
+  emit('load-diff')
+}
+
+// Look up a parsed per-file patch (used by the two-pane right diff pane).
+function patchFor(path: string): string {
+  return props.diffFiles.find((f) => f.path === path)?.patch ?? ''
+}
+
+// ── PR file context menu (reduced set: copy only) ─────────────────────────────────
+// PR changed files are remote diff entries (no local fs), so the menu only offers
+// copy-path / copy-name — same generic ContextMenu plumbing as the local-fs trees.
+const ghMenu = useContextMenu<{ path: string }>()
+const ghMenuItems = computed<MenuItem[]>(() => [
+  { id: 'copy-path', label: t('files.ctx.copyPath') },
+  { id: 'copy-name', label: t('files.ctx.copyName') },
+])
+function onGhMenuSelect(id: string): void {
+  const tgt = ghMenu.target.value
+  ghMenu.close()
+  if (!tgt) return
+  if (id === 'copy-path') void copyText(tgt.path)
+  else if (id === 'copy-name') void copyText(tgt.path.split('/').pop() ?? tgt.path)
+}
+
+// ── Composer (Reply focuses it after the parent prefills the draft) ───────────────
+const composerRef = useTemplateRef<{ focus: () => void }>('composerRef')
+function focusComposer(): void {
+  // The composer lives in the Comments tab — switch to it (it may be active already),
+  // then focus once mounted.
+  activeTab.value = 'comments'
+  nextTick(() => composerRef.value?.focus())
+}
+defineExpose({ focusComposer })
 
 function relativeWhen(iso: string): string {
   const ms = Date.parse(iso)
@@ -295,39 +600,212 @@ function relativeWhen(iso: string): string {
 </script>
 
 <style scoped>
-.ghfiles {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+/* Files-changed two-pane (fullscreen only): turn the scrolling body into a
+   non-scrolling flex row so the tree column + diff column each scroll on their own
+   (GitHub-style). Higher specificity than the global .ghdwbody so it wins. */
+.ghdwbody.gh-files-full {
+  padding: 0;
   overflow: hidden;
-}
-.ghfile {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-top: 1px solid var(--border);
 }
-.ghfile:first-child {
-  border-top: none;
+.ghfiles-2pane {
+  flex: 1;
+  display: flex;
+  min-height: 0;
 }
-.ghfile-p {
+.ghfiles-tree {
+  flex: 0 0 260px;
+  min-width: 0;
+  overflow: auto;
+  padding: 8px 6px;
+  border-right: 1px solid var(--border);
+}
+.ghfiles-diff {
   flex: 1;
   min-width: 0;
+  overflow: auto;
+}
+.ghfiles-diffhd {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bgPanel);
   font-size: 0.8462rem;
   color: var(--textMuted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
 }
-.ghfile-d {
-  flex: 0 0 auto;
+.ghfiles-pick {
+  padding: 28px 16px;
+  text-align: center;
+}
+
+/* GitHub-style tab bar: underline indicator (not a pill). A bottom border runs the
+   full width; the active tab sits on a 2px accent underline that overlaps it, with
+   full-color bold text. Inactive = textDim, hover = text. Each tab is icon + label
+   + a subtle count badge. */
+.ghtabs {
   display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.ghtab {
+  display: inline-flex;
+  align-items: center;
   gap: 7px;
+  padding: 10px 11px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+  font-size: 1em;
+  white-space: nowrap;
+  transition: color 0.12s ease;
+}
+.ghtab:hover {
+  color: var(--text);
+}
+.ghtab.on {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.ghtab-ic {
+  color: var(--textDim);
+  flex: 0 0 auto;
+}
+.ghtab.on .ghtab-ic {
+  color: var(--text);
+}
+.ghtab-n {
+  font-size: 12px;
   font-family: var(--code);
-  font-size: 0.7692rem;
+  line-height: 1;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--bgActive);
+  color: var(--textDim);
+  min-width: 18px;
+  text-align: center;
+}
+.ghtab.on .ghtab-n {
+  color: var(--text);
+}
+/* Per-comment Reply action — quiet inline button that quotes the parent. */
+.ghreply {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+  font-size: 0.8462rem;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.ghreply:hover {
+  color: var(--text);
+  background: var(--bgHover);
+  border-color: var(--borderStrong);
+}
+.ghchd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+/* Comments sit flat on the panel — drop the grey fill, keep the outline + spacing. */
+.ghcomment {
+  background: transparent;
+}
+/* A review timeline entry — its header + body + nested threads grouped in a card. */
+.ghreview {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.ghreview > .ghchd {
+  margin-bottom: 6px;
+}
+/* Threaded inline review comments: a left rail groups the thread; replies indent. */
+.ghrthread {
+  border-left: 2px solid var(--border);
+  padding-left: 11px;
+  margin: 10px 0;
+}
+.ghrt-loc {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--textDim);
+  margin-bottom: 5px;
+  overflow-wrap: anywhere;
+}
+/* The commented code snippet (diff_hunk) above a review thread. */
+.ghrt-hunk {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ghrt-reply {
+  margin-left: 18px;
+  border-left: 1px solid var(--border);
+  padding-left: 11px;
+}
+/* Approve PR — distinct green outline (not the primary fill, so it doesn't compete
+   with the composer's Comment button). */
+.ghapprove-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.ghapprove {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--green);
+  font-size: 1em;
+  font-weight: 550;
+  cursor: pointer;
+}
+.ghapprove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+.ghapprove:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ghapprove-err {
+  font-size: 12px;
+  color: var(--danger);
+}
+/* Post-approve marker (replaces the button once approved). */
+.ghapproved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 1em;
+  font-weight: 550;
+  color: var(--green);
 }
 </style>

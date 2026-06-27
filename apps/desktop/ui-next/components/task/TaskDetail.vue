@@ -90,6 +90,7 @@
         :agent-name="entry.agentName"
         :index="entry.index"
         :task-status="task.status"
+        :gate="entry.gate"
         @approve="emit('approve', entry.nodeId)"
         @rerun="(instr) => emit('rerun', entry.nodeId, instr)"
         @discuss="(v, text) => emit('discuss', entry.nodeId, v, text)"
@@ -159,13 +160,28 @@ const agentNameFor = (nodeId: string): string => {
 
 // Phases in topological pipeline order, paired with their display index +
 // resolved agent name. Skips order entries that have no seeded phase.
-type PhaseEntry = { nodeId: string; phase: TaskPhase; agentName: string; index: number }
+type GateSlice = { onFailTarget: string; maxIterations: number; auto: boolean }
+type PhaseEntry = {
+  nodeId: string
+  phase: TaskPhase
+  agentName: string
+  index: number
+  gate?: GateSlice
+}
 const orderedPhases = computed<PhaseEntry[]>(() => {
   const out: PhaseEntry[] = []
   for (const nodeId of store.phaseOrder(props.task)) {
     const phase = props.task.phases[nodeId]
     if (!phase) continue
-    out.push({ nodeId, phase, agentName: agentNameFor(nodeId), index: out.length + 1 })
+    const gate = store.nodeFor(props.task, nodeId)?.gate
+    const entry: PhaseEntry = {
+      nodeId,
+      phase,
+      agentName: agentNameFor(nodeId),
+      index: out.length + 1,
+    }
+    if (gate) entry.gate = gate
+    out.push(entry)
   }
   return out
 })

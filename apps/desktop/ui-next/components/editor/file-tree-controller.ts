@@ -14,4 +14,6 @@ export interface FileTreeController {
   // Open a file (workspace-relative path) in the editor.
   openFile: (path: string) => void
   loading: ComputedRef<boolean>
+  // Right-click a row → open the shared file context menu.
+  onContext?: (e: MouseEvent, path: string, kind: 'file' | 'dir') => void
 }

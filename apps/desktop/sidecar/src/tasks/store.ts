@@ -25,6 +25,7 @@ import type {
   PhaseStatus,
   RunStatus,
   TraceNode,
+  Verdict,
 } from '../types/shared.js'
 
 export type TaskEvent =
@@ -33,7 +34,7 @@ export type TaskEvent =
   | { type: 'task.status'; at: string; status: TaskStatus; currentNodeId?: string | null; waitingApproval?: string | null }
   | { type: 'phase.status'; at: string; nodeId: string; status: PhaseStatus }
   | { type: 'run.started'; at: string; nodeId: string; version: number; triggeredBy?: TaskRun['triggeredBy'] }
-  | { type: 'run.status'; at: string; nodeId: string; version: number; status: RunStatus; duration?: string | null }
+  | { type: 'run.status'; at: string; nodeId: string; version: number; status: RunStatus; duration?: string | null; verdict?: Verdict }
   | { type: 'run.output'; at: string; nodeId: string; version: number; output: string }
   // Token usage + cost-attribution metadata of a finished run (ADR 0054). `at`
   // is the run completion time → the Activity day-bucket key.
@@ -190,6 +191,7 @@ function applyEvent(snapshot: Task | null, e: TaskEvent): Task | null {
       if (run) {
         run.status = e.status
         if (e.duration !== undefined) run.duration = e.duration
+        if (e.verdict !== undefined) run.verdict = e.verdict
       }
       break
     }

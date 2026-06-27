@@ -23,6 +23,8 @@ import { locateMarks, type QuoteMark } from '~/utils/quote-highlight'
 const props = defineProps<{ html: string; highlights?: BlockHighlight[] }>()
 const { t } = useI18n()
 const root = useTemplateRef<HTMLElement>('root')
+// Opens / shortens workspace file references in the markdown (from SessionDetail).
+const filePreview = useFilePreview()
 
 // Wrap each quoted excerpt in a numbered <mark>. Overlapping matches (rare) are dropped;
 // the rest are wrapped LAST-first so wrapping a later span can't shift the offsets/nodes
@@ -91,6 +93,45 @@ function addCopyButtons(el: HTMLElement) {
   }
 }
 
+// Turn inline-code file references (e.g. `docs/x.md`, `tasks/#21/plan.md`) and
+// relative-path links into clickable chips that open the shared PreviewModal —
+// porting the old UI's "click a file path → preview" behaviour. Only INLINE code
+// is considered (block `<pre><code>` is skipped); the path heuristic (filePathOf)
+// is closed so prose like `array.map` never linkifies. Listeners die with the
+// subtree on the next rerender (innerHTML rebuild), same as the copy buttons.
+function linkifyFilePaths(el: HTMLElement) {
+  const openAt = (path: string) => (e: Event) => {
+    e.preventDefault()
+    filePreview.open(path)
+  }
+  for (const code of Array.from(el.querySelectorAll('code'))) {
+    if (code.closest('pre')) continue // block code, not an inline reference
+    const path = filePathOf(code.textContent ?? '')
+    if (!path) continue
+    code.classList.add('filelink')
+    code.setAttribute('role', 'button')
+    code.setAttribute('tabindex', '0')
+    code.title = t('sessions.preview.openFile', { path })
+    // Show the path relative to the workspace root so an absolute path the model
+    // emitted reads cleanly; the click still uses the full path.
+    const short = filePreview.shorten(path)
+    if (short !== code.textContent) code.textContent = short
+    code.addEventListener('click', openAt(path))
+    code.addEventListener('keydown', (e) => {
+      const k = (e as KeyboardEvent).key
+      if (k === 'Enter' || k === ' ') openAt(path)(e)
+    })
+  }
+  // Markdown links to a workspace file → preview instead of navigating.
+  for (const a of Array.from(el.querySelectorAll('a'))) {
+    const path = filePathOf(a.getAttribute('href') ?? '')
+    if (!path) continue
+    a.classList.add('filelink')
+    a.title = t('sessions.preview.openFile', { path })
+    a.addEventListener('click', openAt(path))
+  }
+}
+
 // Rebuild the subtree from the sanitized HTML, then re-apply marks + copy buttons. Runs on
 // mount and whenever the HTML or highlights change (flush:'post' so the DOM is in place).
 //
@@ -113,6 +154,7 @@ function rerender() {
   el.innerHTML = props.html
   applyMarks(el)
   addCopyButtons(el)
+  linkifyFilePaths(el)
 }
 onMounted(rerender)
 watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
@@ -161,6 +203,23 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
      breaking anywhere. Block code (`pre code`) keeps white-space:pre → unaffected,
      scrolls via the pre's overflow-x. */
   overflow-wrap: anywhere;
+}
+/* Inline-code / link that resolves to a workspace file → clickable preview chip.
+   Accent tint (not a grey fill) marks it as actionable, per the chip convention. */
+.mdinline :deep(code.filelink),
+.mdinline :deep(a.filelink) {
+  cursor: pointer;
+  color: var(--accent);
+  border-color: var(--accentBorder);
+  text-decoration: none;
+}
+.mdinline :deep(code.filelink:hover),
+.mdinline :deep(a.filelink:hover),
+.mdinline :deep(code.filelink:focus-visible),
+.mdinline :deep(a.filelink:focus-visible) {
+  background: var(--accentDim);
+  border-color: var(--accent);
+  outline: none;
 }
 .mdinline :deep(pre) {
   position: relative;

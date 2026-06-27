@@ -63,6 +63,10 @@
               <span class="ctxn">{{ tokLabel }} / {{ limitLabel }} · {{ Math.round(pct) }}%</span>
             </div>
             <div class="ctxmodel">{{ session.model }}</div>
+            <div v-if="sessionCost != null" class="ctxcost">
+              <span>{{ t('sessions.detail.cat.cost') }}</span>
+              <span class="ctxn">{{ fmtUsd(sessionCost) }}</span>
+            </div>
             <span class="ctxbar" style="width: 100%; height: 8px">
               <i
                 v-for="s in barSegments"
@@ -201,6 +205,25 @@
           </div>
         </div>
       </span>
+      <button
+        class="iconbtn"
+        :title="t('sessions.fork.treeTitle')"
+        style="width: 28px; height: 28px"
+        :style="
+          hasForkLineage ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}
+        "
+        @click="forkModal.open(session.id)"
+      >
+        <Icon name="fork" style="width: 14px; height: 14px" />
+      </button>
+      <button
+        class="iconbtn"
+        :title="t('sessions.export.title')"
+        style="width: 28px; height: 28px"
+        @click="exportModal.open(session.id)"
+      >
+        <Icon name="save" style="width: 14px; height: 14px" />
+      </button>
       <button
         class="iconbtn"
         :title="t('sessions.detail.delete')"
@@ -388,6 +411,18 @@ const { providerOf, wpIcon } = useSessionsMock()
 const { projects, projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()
+const exportModal = useSessionExportModal()
+const forkModal = useSessionForkModal()
+const { fmtUsd } = useSessionCost()
+const { treeFor } = useSessionForkTree()
+// Cumulative session cost (USD) for the usage popover. undefined → no priced turn yet.
+const sessionCost = computed(() => props.session.usage?.cost)
+// Accent the fork-tree button when this session is part of a fork lineage.
+const hasForkLineage = computed(() => treeFor(props.session.id).hasLineage)
+
+// Resolve this session's workspace root once and provide a file opener so file
+// paths in chat markdown (e.g. `docs/x.md`) open in the shared PreviewModal.
+provideFilePreview(() => props.session.project)
 
 // Header trash → confirm before dropping the session (destructive, no undo).
 async function askRemove() {
@@ -1222,6 +1257,15 @@ function rlColor(u: number): string {
   font-size: 12px;
   color: var(--textDim);
   margin: 2px 0 8px;
+}
+.ctxcost {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -4px 0 8px;
+  font-size: 12px;
+  color: var(--textDim);
 }
 /* Header row stays on ONE line (the label + the token/limit count never wrap);
    if the popover is ever too narrow the label ellipsises rather than wrapping. */

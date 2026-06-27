@@ -25,6 +25,7 @@ import { loadAgent, listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { assertInsideWorkspace } from '../git/path-sanitize.js'
+import { getEffectivePricing, cost as priceCost } from '../pricing/catalog.js'
 import { readFile as fsReadFile } from 'node:fs/promises'
 import type {
   AskUserQuestionFn,
@@ -116,6 +117,27 @@ const Params = z.object({
   // <linked_task> block (the task's status + per-phase output) is injected into
   // this turn's systemPromptAppend so the agent can reason about the results.
   aboutTaskId: z.string().optional(),
+  // Session-pinned working-set: files (workspace-relative paths, read fresh each
+  // turn) + free-text notes, injected as a <pinned_context> block. Mirrors the
+  // session's persisted pinnedContext; forwarded each turn (same trust model as
+  // disabledTools/mcpServerIds). Files are path-sanitized against cwd below.
+  pinnedContext: z
+    .object({
+      files: z.array(z.string()).max(20).optional(),
+      notes: z.string().max(20000).optional(),
+    })
+    .optional(),
+  // Hard budget caps (Pha 3). `hardLimitUsd` refuses a turn once the session's
+  // cumulative cost reaches it (cost computed sidecar-side from persisted turns —
+  // the limit is the user's config intent, forwarded here). `maxToolCalls` /
+  // `maxWallclockMs` cap a single turn (enforced in the runtime beforeToolCall).
+  budget: z
+    .object({
+      hardLimitUsd: z.number().nonnegative().optional(),
+      maxToolCalls: z.number().int().nonnegative().optional(),
+      maxWallclockMs: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   // Active compaction checkpoint (ADR 0047), forwarded by the UI alongside
   // `history` (same trust model). When present, the runtime feeds the model the
   // summary + messages from `firstKeptMessageId` onward instead of full history.
@@ -204,6 +226,76 @@ const MAX_MEMORY_FILE_CHARS = 64_000
 function compactLine(name: string, description: string): string {
   const desc = description.replace(/\s+/g, ' ').trim().slice(0, 200)
   return desc ? `- ${name}: ${desc}` : `- ${name}`
+}
+
+// Per-turn cost in USD from the resolved model + token buckets (single source of
+// truth = pricing/catalog). Returns undefined when the model has no known price so
+// the UI shows "n/a" instead of a wrong $0. Default catalog only (no overrides/remote
+// here — the Activity rollup remains the authoritative cost report).
+function computeTurnCostUsd(modelUsed: string, usage: RunStreamResult['usage']): number | undefined {
+  const price = getEffectivePricing(modelUsed, {})
+  if (!price) return undefined
+  return priceCost(
+    {
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      cacheReadTokens: usage.cache_read_tokens,
+      cacheWriteTokens: usage.cache_creation_tokens,
+    },
+    price,
+  )
+}
+
+// ── Pinned context (session working-set) ────────────────────────────────────
+// Per-file + total caps so a pinned working-set can't blow the prompt / cost.
+const MAX_PINNED_FILE_CHARS = 24_000
+const MAX_PINNED_TOTAL_CHARS = 80_000
+
+// Build the <pinned_context> block from the session's pinned files + notes. Files
+// are read fresh each turn (path-sanitized against cwd via assertInsideWorkspace —
+// security invariant #2); missing/oversized files are skipped/truncated with a note
+// so the model never silently sees stale or partial content as complete. Returns
+// undefined when nothing pins. Best-effort: never throws.
+async function buildPinnedContextBlock(
+  pinned: { files?: string[] | undefined; notes?: string | undefined } | undefined,
+  cwd: string | undefined,
+): Promise<string | undefined> {
+  if (!pinned) return undefined
+  const parts: string[] = []
+  let total = 0
+
+  if (cwd && pinned.files?.length) {
+    for (const rel of pinned.files) {
+      if (total >= MAX_PINNED_TOTAL_CHARS) break
+      let abs: string
+      try {
+        abs = assertInsideWorkspace(cwd, rel)
+      } catch {
+        continue // outside workspace → skip (never read arbitrary paths)
+      }
+      let content: string
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        content = await fsReadFile(abs, 'utf8')
+      } catch {
+        continue // missing / unreadable / binary → skip
+      }
+      const budget = Math.min(MAX_PINNED_FILE_CHARS, MAX_PINNED_TOTAL_CHARS - total)
+      const truncated = content.length > budget
+      const body = truncated ? `${content.slice(0, budget)}\n…[truncated]` : content
+      total += body.length
+      parts.push(`<file path="${rel}">\n${body}\n</file>`)
+    }
+  }
+
+  const notes = pinned.notes?.trim()
+  if (notes) parts.push(`<notes>\n${notes}\n</notes>`)
+
+  if (!parts.length) return undefined
+  return `<pinned_context>
+The user pinned the following context to this session. Treat it as always-relevant background for every turn.
+${parts.join('\n')}
+</pinned_context>`
 }
 
 interface BulkLoadResult {
@@ -333,6 +425,37 @@ register('sessions.sendMessage', async (raw) => {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       })
+    }
+  }
+
+  // Hard budget guard (Pha 3): refuse the turn BEFORE any model call when the
+  // session's cumulative cost already reached the hard cap. Cost is summed from the
+  // persisted turns (historyForRun) — never trusted from the client — while the
+  // limit is the user's config intent forwarded in params. Returns early (before
+  // registering the aborter / persisting) so a refused turn leaves no side effects;
+  // the UI surfaces `budget-exceeded` and prompts to raise the cap.
+  const hardLimitUsd = params.budget?.hardLimitUsd
+  if (hardLimitUsd && hardLimitUsd > 0) {
+    const spentUsd = historyForRun.reduce(
+      (sum, m) => sum + (m.role === 'agent' ? (m.usage?.costUsd ?? 0) : 0),
+      0,
+    )
+    if (spentUsd >= hardLimitUsd) {
+      const errorMessage = `Session budget exceeded: $${spentUsd.toFixed(2)} ≥ $${hardLimitUsd.toFixed(2)} hard cap. Raise the cap in session config to continue.`
+      emit('session.message.done', {
+        sessionId: params.sessionId,
+        messageId: params.messageId,
+        text: '',
+        stopReason: 'budget-exceeded',
+      })
+      return {
+        messageId: params.messageId,
+        text: '',
+        modelUsed: params.settings.modelId,
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
+        stopReason: 'budget-exceeded',
+        errorMessage,
+      }
     }
   }
 
@@ -503,6 +626,16 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     }
   }
 
+  // Pinned context (session working-set): prepend so it leads the appended context
+  // and rules (added later in run-stream) can still override it. Read fresh each
+  // turn so edits to a pinned file take effect on the next message.
+  const pinnedBlock = await buildPinnedContextBlock(params.pinnedContext, cwd)
+  if (pinnedBlock) {
+    systemPromptAppend = systemPromptAppend
+      ? `${pinnedBlock}\n\n${systemPromptAppend}`
+      : pinnedBlock
+  }
+
   // Total ms this turn spends PARKED on human input (permission prompt or
   // AskUserQuestion answer). Measured around the park awaits below and persisted
   // on the agent message so the UI can subtract it from the displayed elapsed
@@ -666,11 +799,13 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     if (params.settings.accountId !== undefined) message.accountId = params.settings.accountId
     if (opts.result) {
       message.modelUsed = opts.result.modelUsed
+      const costUsd = computeTurnCostUsd(opts.result.modelUsed, opts.result.usage)
       message.usage = {
         inputTokens: opts.result.usage.input_tokens,
         outputTokens: opts.result.usage.output_tokens,
         cacheReadTokens: opts.result.usage.cache_read_tokens,
         cacheWriteTokens: opts.result.usage.cache_creation_tokens,
+        ...(costUsd !== undefined ? { costUsd } : {}),
         ...(opts.result.contextChars ? { contextChars: opts.result.contextChars } : {}),
       }
       // Graceful `error` stop: the loop returned normally but the provider
@@ -769,6 +904,20 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         },
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
         ...(params.compaction ? { compaction: params.compaction } : {}),
+        // Per-turn hard caps (tool-call count / wallclock) enforced in the runtime
+        // beforeToolCall. Forward only the defined fields.
+        ...(params.budget?.maxToolCalls !== undefined || params.budget?.maxWallclockMs !== undefined
+          ? {
+              budget: {
+                ...(params.budget.maxToolCalls !== undefined
+                  ? { maxToolCalls: params.budget.maxToolCalls }
+                  : {}),
+                ...(params.budget.maxWallclockMs !== undefined
+                  ? { maxWallclockMs: params.budget.maxWallclockMs }
+                  : {}),
+              },
+            }
+          : {}),
         canUseTool,
         askUserQuestion,
         abortController,
@@ -846,11 +995,14 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // not awaiting keeps the UI finalize snappy.
   if (cwd) void captureSnapshot(params.sessionId, params.messageId, cwd)
 
+  const turnCostUsd = computeTurnCostUsd(result.modelUsed, result.usage)
   return {
     messageId: params.messageId,
     text: result.text,
     modelUsed: result.modelUsed,
-    usage: result.usage,
+    // Forward per-turn cost (USD) alongside the token buckets so the UI can sum the
+    // session's cumulative cost. Omitted when the model has no known price.
+    usage: turnCostUsd !== undefined ? { ...result.usage, cost_usd: turnCostUsd } : result.usage,
     stopReason: result.stopReason,
     // Context-window breakdown (System prompt / Tools / Messages char sizes) so
     // the UI usage panel can itemise the window instead of showing token totals

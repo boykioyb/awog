@@ -130,6 +130,7 @@ const vfElements = computed<(Node | Edge)[]>(() => {
       skill: props.skills.find((s) => s.id === n.skillId),
       outputs: n.outputs,
       approval: n.approval,
+      isGate: !!n.gate,
       onDelete: (id: string) => deleteNode(id),
     },
     selected: props.selectedNodeId === n.id,

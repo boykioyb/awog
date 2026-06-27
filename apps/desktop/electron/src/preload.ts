@@ -23,6 +23,13 @@ type LogTailEvent =
   | { type: 'init'; content: string; path: string }
   | { type: 'data'; chunk: string }
   | { type: 'error'; message: string }
+// Live tray status (system-tray-status). The main window pushes a lightweight
+// indicator model; the styled popover window forwards item clicks as commands.
+type TrayCommand =
+  | { kind: 'activity' }
+  | { kind: 'session'; id: number }
+  | { kind: 'task'; id: string }
+type TrayModel = { macTitle: string; tooltip: string }
 
 const awog = {
   // Returns the JSON-RPC result, or rejects with the RpcErrorShape so the
@@ -81,6 +88,21 @@ const awog = {
     const listener = (_e: unknown, event: LogTailEvent): void => handler(event)
     ipcRenderer.on('app:logData', listener)
     return () => ipcRenderer.removeListener('app:logData', listener)
+  },
+
+  // Tray indicator: push the running-count + tooltip to main (fire-and-forget).
+  sendTrayUpdate: (model: TrayModel): void => {
+    ipcRenderer.send('tray:update', model)
+  },
+  // Main window subscribes to tray/popover navigation; returns an unsubscribe.
+  onTrayCommand(handler: (cmd: TrayCommand) => void): () => void {
+    const listener = (_e: unknown, cmd: TrayCommand): void => handler(cmd)
+    ipcRenderer.on('tray:command', listener)
+    return () => ipcRenderer.removeListener('tray:command', listener)
+  },
+  // Popover window forwards a clicked item; main relays it to the main window.
+  sendTrayCommand: (cmd: TrayCommand): void => {
+    ipcRenderer.send('tray:navigate', cmd)
   },
 }
 

@@ -25,3 +25,18 @@ For any request that takes more than a couple of steps, use the \`TodoWrite\` to
 
 Before you end your turn, reconcile the checklist with what you actually did: mark every item you have genuinely finished as \`completed\`, and do not leave an already-finished item stuck at \`in_progress\`. NEVER mark an item \`completed\` that you did not actually finish — if you stop with work still remaining, leave those items \`pending\` or \`in_progress\` and say what is left. When you pause to wait for the user (a question or an approval gate), leave that item \`in_progress\` until you resume, then mark it \`completed\` once you continue.
 </todo-list>`
+
+// File-reference nudge (sessions only). The chat UI turns file paths written in
+// inline code into clickable links that open a preview, but it can only resolve a
+// path it can anchor to the workspace root. Models tend to write the bare basename
+// (`notify.ts`) or a path relative to whatever dir they cd'd into in the terminal,
+// neither of which resolves. So we tell the model the absolute workspace root and
+// ask for full absolute paths. Returns undefined when there is no workspace root
+// (no project bound → nothing to link to). The UI shortens these for display, so
+// the verbose absolute path is not a readability cost.
+export function fileRefPrompt(cwd?: string): string | undefined {
+  if (!cwd) return undefined
+  return `<file-references>
+When you mention a workspace file in your reply, write its FULL ABSOLUTE path inside inline code (backticks) — for example \`${cwd}/src/example.ts\` — never just the bare file name. The user's UI turns these paths into clickable links that open a file preview, and a bare name like \`example.ts\` or a path relative to a subdirectory you cd'd into cannot be resolved. Always anchor the path at the workspace root \`${cwd}\`.
+</file-references>`
+}

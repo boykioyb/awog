@@ -43,6 +43,41 @@
         <span>{{ t('workflow.inspector.approvalLabel') }}</span>
       </label>
       <div class="wfi-hint">{{ t('workflow.inspector.approvalHint') }}</div>
+
+      <div class="sech">{{ t('workflow.inspector.gate') }}</div>
+      <label class="wfi-chk" :class="{ 'wfi-chk-disabled': !canGate }">
+        <input type="checkbox" :checked="!!node.gate" :disabled="!canGate" @change="onGateToggle" />
+        <span>{{ t('workflow.inspector.gateLabel') }}</span>
+      </label>
+      <div v-if="!canGate" class="wfi-hint">{{ t('workflow.inspector.gateNoAncestors') }}</div>
+      <template v-else-if="node.gate">
+        <div class="wfi-hint">{{ t('workflow.inspector.gateHint') }}</div>
+        <div class="wfi-gate-field">
+          <div class="wfi-gate-lbl">{{ t('workflow.inspector.gateTarget') }}</div>
+          <AppSelect
+            :model-value="node.gate.onFailTarget"
+            :options="gateTargetOptions"
+            width="100%"
+            @update:model-value="onGateTarget"
+          />
+        </div>
+        <div class="wfi-gate-field">
+          <div class="wfi-gate-lbl">{{ t('workflow.inspector.gateMaxIter') }}</div>
+          <input
+            class="wfi-inp mono wfi-gate-num"
+            type="number"
+            min="1"
+            max="10"
+            :value="node.gate.maxIterations"
+            @input="onGateMaxIter(($event.target as HTMLInputElement).value)"
+          />
+        </div>
+        <label class="wfi-chk wfi-gate-auto">
+          <input type="checkbox" :checked="node.gate.auto" @change="onGateAuto" />
+          <span>{{ t('workflow.inspector.gateAuto') }}</span>
+        </label>
+        <div class="wfi-hint">{{ t('workflow.inspector.gateAutoHint') }}</div>
+      </template>
     </template>
 
     <div v-else class="wfi-empty">
@@ -61,13 +96,15 @@
 import { computed } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { WorkflowAgent, WorkflowSkill } from '~/composables/useWorkflowGen'
-import type { WorkflowNode } from '~/stores/workflows'
+import type { NodeGate, WorkflowNode } from '~/stores/workflows'
 
 const props = defineProps<{
   node: WorkflowNode | undefined
   agent: WorkflowAgent | undefined
   skill: WorkflowSkill | undefined
   availableSkills: WorkflowSkill[]
+  // Transitive ancestors of the selected node — valid loop-back targets (ADR 0056).
+  gateTargets: { id: string; label: string }[]
 }>()
 
 const emit = defineEmits<{ 'update:node': [node: WorkflowNode] }>()
@@ -115,6 +152,42 @@ const onApproval = (e: Event) => {
   if (!props.node) return
   emit('update:node', { ...props.node, approval: (e.target as HTMLInputElement).checked })
 }
+
+// --- gate (ADR 0056) -------------------------------------------------------
+// A node can only be a gate if it has an upstream node to loop back to.
+const canGate = computed(() => props.gateTargets.length > 0)
+
+const gateTargetOptions = computed<AppSelectOption[]>(() =>
+  props.gateTargets.map((g) => ({ value: g.id, label: g.label })),
+)
+
+const onGateToggle = (e: Event) => {
+  if (!props.node) return
+  if ((e.target as HTMLInputElement).checked) {
+    const target = props.gateTargets[0]?.id
+    if (!target) return
+    const gate: NodeGate = { onFailTarget: target, maxIterations: 3, auto: true }
+    emit('update:node', { ...props.node, gate })
+  } else {
+    // Drop the gate key entirely (exactOptionalPropertyTypes-safe).
+    const { gate: _gate, ...rest } = props.node
+    emit('update:node', rest)
+  }
+}
+
+const patchGate = (patch: Partial<NodeGate>) => {
+  if (!props.node?.gate) return
+  emit('update:node', { ...props.node, gate: { ...props.node.gate, ...patch } })
+}
+
+const onGateTarget = (value: string) => patchGate({ onFailTarget: value })
+
+const onGateMaxIter = (value: string) => {
+  const n = Math.max(1, Math.min(10, Math.trunc(Number(value) || 1)))
+  patchGate({ maxIterations: n })
+}
+
+const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement).checked })
 </script>
 
 <style scoped>
@@ -224,6 +297,24 @@ const onApproval = (e: Event) => {
 }
 .wfi-chk input {
   accent-color: var(--accent);
+}
+.wfi-chk-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wfi-gate-field {
+  margin-top: 8px;
+}
+.wfi-gate-lbl {
+  font-size: 0.8462rem;
+  color: var(--textDim);
+  margin-bottom: 4px;
+}
+.wfi-gate-num {
+  width: 72px;
+}
+.wfi-gate-auto {
+  margin-top: 10px;
 }
 .wfi-hint {
   font-size: 0.8462rem;

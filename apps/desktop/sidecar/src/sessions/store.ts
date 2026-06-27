@@ -33,6 +33,10 @@ type SessionMetadataPatch = Partial<
     | 'mcpServerIds'
     | 'aboutTaskId'
     | 'aboutGhUrl'
+    | 'pinnedContext'
+    | 'budget'
+    | 'parentSessionId'
+    | 'forkFromMessageId'
   >
 >
 
@@ -297,6 +301,7 @@ function summarize(s: Session): SessionSummary {
   if (s.mcpServerIds !== undefined) summary.mcpServerIds = s.mcpServerIds
   if (s.aboutTaskId !== undefined) summary.aboutTaskId = s.aboutTaskId
   if (s.aboutGhUrl !== undefined) summary.aboutGhUrl = s.aboutGhUrl
+  if (s.parentSessionId !== undefined) summary.parentSessionId = s.parentSessionId
   if (s.compaction) summary.hasCompaction = true
   if (last?.text) summary.lastPreview = last.text.slice(0, PREVIEW_MAX)
   return summary
@@ -400,6 +405,9 @@ async function touchIndex(sessionId: string, evt: SessionEvent): Promise<void> {
       ...(evt.patch.mcpServerIds !== undefined ? { mcpServerIds: evt.patch.mcpServerIds } : {}),
       ...(evt.patch.aboutTaskId !== undefined ? { aboutTaskId: evt.patch.aboutTaskId } : {}),
       ...(evt.patch.aboutGhUrl !== undefined ? { aboutGhUrl: evt.patch.aboutGhUrl } : {}),
+      ...(evt.patch.parentSessionId !== undefined
+        ? { parentSessionId: evt.patch.parentSessionId }
+        : {}),
       updatedAt: evt.at,
     })
   } else if (evt.type === 'message.appended') {

@@ -51,6 +51,39 @@ export type BeforeToolCall = (
   signal?: AbortSignal,
 ) => Promise<BeforeToolCallResult | undefined>
 
+// Wrap a beforeToolCall with per-turn hard caps (Pha 3 budget guard): once the
+// turn makes more than `maxToolCalls` tool calls, or runs past `maxWallclockMs`,
+// every further tool call is blocked — a runaway-loop / cost backstop independent
+// of the permission mode. No-op (returns the inner hook unchanged) when no cap is
+// set. The block reason surfaces to the model as a tool error, so it sees why and
+// stops. `startedAtMs` is the turn start (caller-supplied so the clock is testable).
+export function withTurnBudget(
+  inner: BeforeToolCall,
+  budget: { maxToolCalls?: number; maxWallclockMs?: number } | undefined,
+  startedAtMs: number,
+): BeforeToolCall {
+  const maxCalls = budget?.maxToolCalls
+  const maxMs = budget?.maxWallclockMs
+  if ((maxCalls == null || maxCalls <= 0) && (maxMs == null || maxMs <= 0)) return inner
+  let calls = 0
+  return async (context, signal) => {
+    calls += 1
+    if (maxCalls != null && maxCalls > 0 && calls > maxCalls) {
+      return {
+        block: true,
+        reason: `Turn tool-call budget exceeded (${maxCalls}). Stopped to prevent a runaway loop — raise the cap in session config to continue.`,
+      }
+    }
+    if (maxMs != null && maxMs > 0 && Date.now() - startedAtMs > maxMs) {
+      return {
+        block: true,
+        reason: `Turn time budget exceeded (${Math.round(maxMs / 1000)}s). Stopped — raise the cap in session config to continue.`,
+      }
+    }
+    return inner(context, signal)
+  }
+}
+
 export function makeBeforeToolCall(
   canUseTool: CanUseTool | undefined,
   mode: AgentMode,

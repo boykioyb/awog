@@ -26,13 +26,31 @@ export interface GhThreadFile {
   deletions: number
 }
 
-// PR-only: a submitted review (only ones carrying a body are surfaced — a bare
-// APPROVE with no text isn't a comment). state ∈ APPROVED/CHANGES_REQUESTED/…
-export interface GhThreadReview {
+// PR-only: a threaded inline review-comment conversation (a root comment on a code
+// line + its replies). GitHub nests these under the review that created them.
+export interface GhReviewThreadComment {
   author: { login: string }
   body: string
-  state: string
   createdAt: string
+}
+export interface GhReviewThread {
+  path: string
+  line: number | null
+  // The unified-diff snippet around the commented line (GitHub's `diff_hunk`) — the
+  // code context shown above the thread. Empty when unavailable.
+  diffHunk: string
+  comments: GhReviewThreadComment[]
+}
+
+// PR-only: a submitted review — a timeline entry with its state + optional summary
+// body + the inline comment threads it created (GitHub shows threads INSIDE their
+// review). Fetched from the REST reviews + comments endpoints (numeric ids join).
+export interface GhReview {
+  author: { login: string }
+  state: string
+  body: string
+  createdAt: string
+  threads: GhReviewThread[]
 }
 
 export interface GhThreadSummary {
@@ -57,7 +75,8 @@ export interface GhThread extends GhThreadSummary {
   comments: GhThreadComment[]
   // PR-only (absent / empty for issues).
   files?: GhThreadFile[]
-  reviews?: GhThreadReview[]
+  // PR-only: submitted reviews (timeline), each with its nested inline threads.
+  reviews?: GhReview[]
 }
 
 // gh sometimes returns author/assignee as `null` (ghost user) — coerce to a
@@ -104,22 +123,11 @@ const FileJson = z
   })
   .passthrough()
 
-// gh review objects carry `submittedAt` (not createdAt) + a state + body.
-const ReviewJson = z
-  .object({
-    author: Actor.optional(),
-    body: z.string().optional(),
-    state: z.string().optional(),
-    submittedAt: z.string().optional(),
-  })
-  .passthrough()
-
 const ThreadJson = SummaryJson.extend({
   body: z.string().optional(),
   url: z.string().optional(),
   comments: z.array(Comment).optional(),
   files: z.array(FileJson).optional(),
-  reviews: z.array(ReviewJson).optional(),
 })
 
 export const SummaryListJson = z.array(SummaryJson)
@@ -184,23 +192,122 @@ export function parseThread(kind: GhThreadKind, stdout: string): GhThread {
     comments,
   }
 
-  // PR-only: changed files + reviews that carry a body (bare approvals dropped).
+  // PR-only changed files (reviews come from the REST endpoints — see parseReviews).
   if (kind === 'pr') {
     thread.files = (j.files ?? []).map((f) => ({
       path: f.path,
       additions: f.additions ?? 0,
       deletions: f.deletions ?? 0,
     }))
-    thread.reviews = (j.reviews ?? [])
-      .filter((r) => (r.body ?? '').trim().length > 0)
-      .map((r) => ({
-        author: login(r.author),
-        body: r.body ?? '',
-        state: (r.state ?? '').toUpperCase(),
-        createdAt: r.submittedAt ?? '',
-      }))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   }
 
   return thread
+}
+
+// REST review (gh api .../pulls/N/reviews) — numeric id joins the comments below.
+const RestReviewJson = z
+  .object({
+    id: z.number(),
+    user: Actor.optional(),
+    body: z.string().optional(),
+    state: z.string().optional(),
+    submitted_at: z.string().nullable().optional(),
+  })
+  .passthrough()
+const RestReviewsJson = z.array(RestReviewJson)
+
+// REST review comment (gh api .../pulls/N/comments). snake_case + lenient.
+// `pull_request_review_id` links it to its parent review; `in_reply_to_id` threads it.
+const ReviewCommentJson = z
+  .object({
+    id: z.number(),
+    pull_request_review_id: z.number().nullable().optional(),
+    in_reply_to_id: z.number().nullable().optional(),
+    path: z.string().optional(),
+    line: z.number().nullable().optional(),
+    original_line: z.number().nullable().optional(),
+    diff_hunk: z.string().optional(),
+    user: Actor.optional(),
+    body: z.string().optional(),
+    created_at: z.string().optional(),
+  })
+  .passthrough()
+const ReviewCommentsJson = z.array(ReviewCommentJson)
+
+const MEANINGFUL_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])
+
+// Build the PR review timeline from the REST reviews + review-comments endpoints
+// (GitHub nests inline comment threads under the review that created them). Comments
+// are grouped into threads (root + replies by in_reply_to_id), each thread attached
+// to its root comment's `pull_request_review_id`; threads whose review is missing
+// fall into a synthetic "commented" review so nothing is dropped. A review is kept
+// when it has a body, threads, or a meaningful state (approved / changes / dismiss).
+// Best-effort: unparseable input → []. L1-untrusted (rendered as markdown, no HTML).
+export function parseReviews(reviewsStdout: string, commentsStdout: string): GhReview[] {
+  let reviewsArr: z.infer<typeof RestReviewsJson> = []
+  let commentsArr: z.infer<typeof ReviewCommentsJson> = []
+  try {
+    reviewsArr = RestReviewsJson.parse(JSON.parse(reviewsStdout))
+  } catch {
+    reviewsArr = []
+  }
+  try {
+    commentsArr = ReviewCommentsJson.parse(JSON.parse(commentsStdout))
+  } catch {
+    commentsArr = []
+  }
+
+  // Group comments into threads (oldest first → roots precede replies), tracking the
+  // root comment's owning review id.
+  const sorted = [...commentsArr].sort((a, b) =>
+    (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+  )
+  type Th = GhReviewThread & { reviewId: number | null }
+  const threadMap = new Map<number, Th>()
+  for (const c of sorted) {
+    const rootId = c.in_reply_to_id ?? c.id
+    let th = threadMap.get(rootId)
+    if (!th) {
+      th = {
+        path: c.path ?? '',
+        line: c.line ?? c.original_line ?? null,
+        diffHunk: c.diff_hunk ?? '',
+        comments: [],
+        reviewId: c.pull_request_review_id ?? null,
+      }
+      threadMap.set(rootId, th)
+    }
+    th.comments.push({ author: login(c.user), body: c.body ?? '', createdAt: c.created_at ?? '' })
+  }
+
+  const reviews: GhReview[] = reviewsArr.map((r) => ({
+    author: login(r.user),
+    state: (r.state ?? '').toUpperCase(),
+    body: r.body ?? '',
+    createdAt: r.submitted_at ?? '',
+    threads: [],
+  }))
+  const byId = new Map<number, GhReview>()
+  reviewsArr.forEach((r, i) => byId.set(r.id, reviews[i]!))
+
+  for (const th of threadMap.values()) {
+    const { reviewId, ...thread } = th
+    const target = reviewId != null ? byId.get(reviewId) : undefined
+    if (target) {
+      target.threads.push(thread)
+    } else {
+      // Orphan thread (review not in the page) → its own commented review entry.
+      reviews.push({
+        author: thread.comments[0]?.author ?? { login: '' },
+        state: 'COMMENTED',
+        body: '',
+        createdAt: thread.comments[0]?.createdAt ?? '',
+        threads: [thread],
+      })
+    }
+  }
+
+  return reviews
+    .filter((r) => r.body.trim().length > 0 || r.threads.length > 0 || MEANINGFUL_STATES.has(r.state))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }

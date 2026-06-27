@@ -16,9 +16,6 @@
       </span>
       <div class="dt">{{ project.name }}</div>
       <span style="flex: 1" />
-      <span class="tag" :class="{ acc: view.status === 'active' }">
-        {{ t(`projects.status.${view.status}`) }}
-      </span>
       <button
         class="iconbtn"
         style="width: 28px; height: 28px"

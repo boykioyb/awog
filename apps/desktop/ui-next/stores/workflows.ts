@@ -15,6 +15,15 @@ import { useSidecar } from '~/composables/useSidecar'
 
 export type WorkflowSource = 'global' | 'project'
 
+// Quality-gate loop-back directive on a node (ADR 0056). onFailTarget is a
+// transitive ancestor; on verdict `fail` the engine reruns it up to
+// maxIterations, then escalates to a human.
+export type NodeGate = {
+  onFailTarget: string
+  maxIterations: number
+  auto: boolean
+}
+
 // Agent identity tuple carried on a node (ADR 0024 D-11) so the engine resolves
 // the right agent across tiers without a lookup-by-id guess.
 export type WorkflowNode = {
@@ -29,6 +38,8 @@ export type WorkflowNode = {
   y: number
   outputs: string[]
   approval: boolean
+  // Gate config (ADR 0056). Absent = ordinary node.
+  gate?: NodeGate
 }
 
 export type WorkflowEdge = {
@@ -260,7 +271,7 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     prompt: string
     accountId: string
     availableAgents: { id: string; name: string; role: string; scope: 'project' | 'global' }[]
-    availableSkills: { id: string; name: string }[]
+    availableSkills: { id: string; name: string; scope: 'project' | 'global' }[]
   }): Promise<GeneratedWorkflow> {
     const res = await sc.request<GenerateResponse>('workflows.generate', params)
     return res.workflow

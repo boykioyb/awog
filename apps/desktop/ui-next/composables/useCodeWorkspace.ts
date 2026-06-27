@@ -10,6 +10,7 @@ import { useFsApi } from '~/composables/useFsApi'
 import { useWorkspaceFiles } from '~/composables/useWorkspaceFiles'
 import { loadProjects } from '~/composables/useWorkspaceData'
 import { useSidecar } from '~/composables/useSidecar'
+import { useFileContextMenu } from '~/composables/useFileContextMenu'
 import type { FileTreeController } from '~/components/editor/file-tree-controller'
 import type { EditorTab, MonacoEditorHandle } from '~/components/editor/types'
 
@@ -158,6 +159,17 @@ export function useCodeWorkspace(projectId: string) {
     }
   }
 
+  // ── Shared file context menu (right-click a tree row) ────────────────────
+  // Open a file → editor tab; mutating ops reload the affected dir; errors toast.
+  const fileMenu = useFileContextMenu({
+    root: () => root.value,
+    onOpen: (tgt) => {
+      if (tgt.kind === 'file') void openFile(tgt.path)
+    },
+    onChanged: (dir) => void tree.reload(dir),
+    notify: (text, kind) => pushToast(text, kind === 'success' ? 'success' : 'error'),
+  })
+
   // ── File-tree controller (handed to EditorFileTree) ──────────────────────
   const fileTreeCtrl: FileTreeController = {
     childrenFor: (dir) => tree.childrenFor(dir),
@@ -165,6 +177,7 @@ export function useCodeWorkspace(projectId: string) {
     toggle: (dir) => tree.toggle(dir),
     openFile: (path) => void openFile(path),
     loading: tree.loading,
+    onContext: (e, path, kind) => fileMenu.open(e, { path, kind }),
   }
 
   // ── Resolve root + load root tree ─────────────────────────────────────────
@@ -193,6 +206,7 @@ export function useCodeWorkspace(projectId: string) {
     available: sc.available,
     // tree
     fileTreeCtrl,
+    fileMenu,
     // tabs
     tabs: computed(() => tabs.value),
     activePath: computed(() => activePath.value),

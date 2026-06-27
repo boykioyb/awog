@@ -31,9 +31,12 @@
       <template v-if="streaming">
         <span class="strdot" :class="{ pulse: streamingActive }" />
         <template v-if="streamingActive">
-          {{ t('sessions.message.streaming') }} {{ elapsedLabel }}
+          <span class="strshimmer">{{ t('sessions.message.streaming') }}</span>
+          {{ elapsedLabel }}
         </template>
-        <template v-else>{{ t('sessions.message.waiting') }}</template>
+        <template v-else>
+          <span class="strshimmer">{{ t('sessions.message.waiting') }}</span>
+        </template>
       </template>
       <template v-else>
         {{ fmt(message.at) }} · {{ tokLabel }} tok
@@ -44,11 +47,17 @@
       <span class="ha" :title="t('sessions.message.copy')" @click="copyText">
         <Icon name="copy" style="width: 13px; height: 13px" />
       </span>
-      <span class="ha" :title="t('sessions.message.fork')" @click="fork">
-        <Icon name="fork" style="width: 13px; height: 13px" />
-      </span>
       <span class="ha" :title="t('sessions.message.edit')" @click="editMsg">
         <Icon name="edit" style="width: 13px; height: 13px" />
+      </span>
+      <span class="ha" :title="t('sessions.message.resend')" @click="resend">
+        <Icon name="send" style="width: 13px; height: 13px" />
+      </span>
+      <span class="ha" :title="t('sessions.message.rewind')" @click="rewind">
+        <Icon name="rewind" style="width: 13px; height: 13px" />
+      </span>
+      <span class="ha" :title="t('sessions.message.fork')" @click="fork">
+        <Icon name="fork" style="width: 13px; height: 13px" />
       </span>
     </div>
   </div>
@@ -109,9 +118,12 @@
         <template v-if="streaming">
           <span class="strdot" :class="{ pulse: streamingActive }" />
           <template v-if="streamingActive">
-            {{ t('sessions.message.streaming') }} {{ elapsedLabel }}
+            <span class="strshimmer">{{ t('sessions.message.streaming') }}</span>
+            {{ elapsedLabel }}
           </template>
-          <template v-else>{{ t('sessions.message.waiting') }}</template>
+          <template v-else>
+            <span class="strshimmer">{{ t('sessions.message.waiting') }}</span>
+          </template>
         </template>
         <template v-else>
           {{ fmt(message.at) }} · {{ tokLabel }} tok
@@ -246,7 +258,9 @@ const parkedOnGate = computed(() => {
   const m = asAssistant.value
   if (!m) return false
   return m.blocks.some(
-    (b) => (b.kind === 'question' && !b.answer) || (b.kind === 'perm' && b.status === 'pending'),
+    (b) =>
+      (b.kind === 'question' && !questionAnswered(b)) ||
+      (b.kind === 'perm' && b.status === 'pending'),
   )
 })
 const streamingActive = computed(() => streaming.value && !parkedOnGate.value)
@@ -366,13 +380,19 @@ function act(fn: (id: number, i: number) => void) {
 }
 const copyText = () => void navigator.clipboard.writeText(plainText.value)
 const quote = () => act(store.addQuote)
-// Edit → open the focused prompt-edit overlay (§9); on confirm seed the composer
-// with the edited text. Cancel (null) leaves the composer untouched.
+// Edit → open the focused prompt-edit overlay (§9); on confirm, edit & resend this
+// user turn (truncate it + everything after, re-run with the new text). Cancel
+// (null) leaves the turn untouched.
 const { openPromptEdit } = useCommandPalette()
 const editMsg = async () => {
   const next = await openPromptEdit(plainText.value)
-  if (next != null) store.seedComposer(next)
+  if (next == null) return
+  if (store.activeId != null && msgIndex.value >= 0) {
+    void store.resend(store.activeId, msgIndex.value, next)
+  }
 }
+// Resend → re-run this user turn unchanged (one click, no overlay).
+const resend = () => act(store.resend)
 const regen = () => act(store.regenerate)
 const retry = () => act(store.retryModel)
 const rewind = () => act(store.rewind)

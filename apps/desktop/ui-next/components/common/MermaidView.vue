@@ -45,6 +45,18 @@
   </Teleport>
 </template>
 
+<script lang="ts">
+// Module scope — runs ONCE, NOT per instance: a single counter shared across every
+// MermaidView so each mermaid render gets a process-unique id. mermaid keeps GLOBAL
+// state keyed by the render id and renders through a temp element with that id, so two
+// diagrams sharing an id clobber each other and all but one silently produce an EMPTY
+// SVG (no thrown error → blank box, no log). This MUST live outside <script setup>:
+// that block re-runs per instance, so a counter declared there resets to 0 every time
+// and every diagram starts at mmd-1 → collisions the moment a message with several
+// diagrams mounts together.
+let mermaidUid = 0
+</script>
+
 <script setup lang="ts">
 // Renders one Mermaid diagram as live SVG with wheel-zoom (Ctrl/Cmd) + drag-pan.
 // mermaid is dynamically imported (heavy, client-only) and re-rendered on theme
@@ -79,10 +91,9 @@ function onWheelZoom(e: WheelEvent) {
   zoomBy(e.deltaY < 0 ? 0.1 : -0.1)
 }
 
-// Module-level so ids are unique across every MermaidView instance + re-render.
-let UID = 0
 // Per-instance token guards against a stale async render (theme/code changed
-// mid-render) overwriting the latest result.
+// mid-render) overwriting the latest result. (The render-id counter `mermaidUid` is
+// module-scoped — see the companion <script> block above — so ids never collide.)
 let renderToken = 0
 
 // Best-effort repair for common LLM mermaid slips, run ONLY after a parse failure — so a
@@ -96,6 +107,62 @@ function repairMermaid(src: string): string {
     if (t.startsWith('"') || !/[(){}[\]]/.test(t)) return whole
     return `|"${t.replace(/"/g, "'")}"|`
   })
+}
+
+// Parse a CSS colour (hex #rgb/#rrggbb or rgb()) to [r,g,b] 0–255, or null.
+function parseColor(raw: string): [number, number, number] | null {
+  const c = raw.trim().toLowerCase()
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(c)?.[1]
+  if (hex) {
+    const f = hex.length === 3 ? hex.replace(/(.)/g, '$1$1') : hex
+    return [parseInt(f.slice(0, 2), 16), parseInt(f.slice(2, 4), 16), parseInt(f.slice(4, 6), 16)]
+  }
+  const rgb = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c)
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
+  return null
+}
+
+// Read a shape's INLINE fill (from `style="fill:…"` or a `fill` attribute), ignoring
+// none/transparent. Theme fills come from the embedded <style>, never inline — so this
+// only ever sees a fill the diagram author set explicitly.
+function inlineFill(el: Element): string | null {
+  const fromStyle = /fill:\s*([^;!]+)/i.exec(el.getAttribute('style') ?? '')?.[1]
+  const fill = (fromStyle ?? el.getAttribute('fill') ?? '').trim()
+  if (!fill || fill === 'none' || fill === 'transparent') return null
+  return fill
+}
+
+// mermaid colours node labels from the (dark) theme → light text. When the diagram
+// author sets a LIGHT custom fill (e.g. `style X fill:#ffebee` — common in LLM output
+// tuned for the light theme), that light text lands on a light fill and is unreadable.
+// For every node carrying an inline fill, flip its label ink to dark/light by the fill's
+// perceived luminance. Default-fill nodes have no inline fill → left untouched, and the
+// whole markup is returned verbatim unless we actually recoloured something (so the
+// common no-custom-fill diagram never round-trips). Parse as text/html so the XHTML
+// foreignObject label elements expose a working .style; pure colour edits only (no
+// markup injected) → still v-html-safe.
+function fixNodeContrast(svgMarkup: string): string {
+  const doc = new DOMParser().parseFromString(svgMarkup, 'text/html')
+  const svgEl = doc.body.querySelector('svg')
+  if (!svgEl) return svgMarkup
+  let changed = false
+  for (const node of Array.from(svgEl.querySelectorAll('.node, .cluster'))) {
+    const shape = node.querySelector('rect, polygon, path, circle, ellipse')
+    const fill = shape ? inlineFill(shape) : null
+    const rgb = fill ? parseColor(fill) : null
+    if (!rgb) continue
+    // Perceived luminance (ITU-R BT.601); >150/255 ≈ light surface → needs dark ink.
+    const ink = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] > 150 ? '#1a1a1a' : '#f5f5f5'
+    for (const lbl of Array.from(
+      node.querySelectorAll<HTMLElement>(
+        '.nodeLabel, foreignObject div, foreignObject span, foreignObject p',
+      ),
+    ))
+      lbl.style.color = ink
+    for (const txt of Array.from(node.querySelectorAll('text'))) txt.setAttribute('fill', ink)
+    changed = true
+  }
+  return changed ? svgEl.outerHTML : svgMarkup
 }
 
 async function render() {
@@ -114,14 +181,14 @@ async function render() {
     })
     let out = ''
     try {
-      out = (await mermaid.render(`mmd-${++UID}`, props.code)).svg
+      out = (await mermaid.render(`mmd-${++mermaidUid}`, props.code)).svg
     } catch (first) {
       // Retry once with a repaired source; if it's a no-op or still fails, surface the
       // ORIGINAL parse error so the message points at the real line.
       const repaired = repairMermaid(props.code)
       if (repaired === props.code) throw first
       try {
-        out = (await mermaid.render(`mmd-${++UID}`, repaired)).svg
+        out = (await mermaid.render(`mmd-${++mermaidUid}`, repaired)).svg
       } catch {
         throw first
       }
@@ -132,7 +199,7 @@ async function render() {
       svg.value = ''
       return
     }
-    svg.value = out
+    svg.value = fixNodeContrast(out)
     error.value = ''
   } catch (e) {
     if (myToken !== renderToken) return

@@ -1,16 +1,17 @@
 import { onBeforeUnmount, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionsStore } from '~/stores/sessions'
+import { useTasksStore } from '~/stores/tasks'
 import type { Session } from '~/composables/useSessionsMock'
 
-// ── Native turn-complete notification (§9 globals) ───────────────────────────
-// Watches every session's status and fires a browser Notification when a turn
-// settles (streaming/awaiting → done/error). The Electron renderer is Chromium,
-// so the Notification API is available. Gating:
-//   • only when the window is NOT focused (document.hidden) — avoid in-app noise
-//   • permission requested once, lazily, on first eligible transition
-//   • no-op + guarded when unsupported / permission denied
-// Call once globally (in the layout). Returns nothing; lives for the app's life.
+// ── Native notifications (§9 globals) ────────────────────────────────────────
+// Fires browser Notifications (the Electron renderer is Chromium) for:
+//   • turn settle: a session leaving streaming/awaiting → done/error
+//   • new attention: a session entering `awaiting` (reply/permission) or a task
+//     entering "awaiting approval"
+// Gating (shared): only when the window is NOT focused (avoid in-app noise);
+// permission requested once, lazily, on the first eligible event; no-op +
+// guarded when unsupported / denied. Call once globally (in the layout).
 
 // Statuses considered "in flight" → a transition out of these is a turn settle.
 const ACTIVE = new Set<Session['status']>(['streaming', 'awaiting'])
@@ -18,6 +19,7 @@ const SETTLED = new Set<Session['status']>(['done', 'error'])
 
 export function useNativeNotify() {
   const store = useSessionsStore()
+  const tasks = useTasksStore()
   const { sessions } = storeToRefs(store)
   const { t } = useI18n()
 
@@ -76,8 +78,29 @@ export function useNativeNotify() {
     }
   }
 
+  // Generic attention notification (session needs reply/permission, or task
+  // needs approval). Same focus + permission gate as notifyTurn.
+  async function notifyAttention(title: string, body: string, tag: string): Promise<void> {
+    if (!supported || !windowIsHidden()) return
+    const perm = await ensurePermission()
+    if (perm !== 'granted' || !windowIsHidden()) return
+    try {
+      const n = new Notification(title, { body, tag })
+      n.onclick = () => {
+        try {
+          window.focus()
+        } catch {
+          /* noop */
+        }
+      }
+    } catch {
+      // Permission revoked mid-flight — swallow.
+    }
+  }
+
   // Watch the whole list shallowly: we only need each session's id+status. A
   // single deep-ish watch keeps it simple (the list is small in practice).
+  // Fires turn-settle (→ done/error) and new-attention (→ awaiting) notifications.
   const stop = watch(
     () =>
       sessions.value.map((s) => ({
@@ -96,9 +119,16 @@ export function useNativeNotify() {
         live.add(s.id)
         const prev = lastStatus.get(s.id)
         lastStatus.set(s.id, s.status)
-        if (prev != null && ACTIVE.has(prev) && SETTLED.has(s.status)) {
+        if (prev == null) continue
+        if (ACTIVE.has(prev) && SETTLED.has(s.status)) {
           const full = sessions.value.find((x) => x.id === s.id)
           if (full) void notifyTurn(full)
+        } else if (prev !== 'awaiting' && s.status === 'awaiting') {
+          void notifyAttention(
+            t('palette.notify.attention.reply.title'),
+            t('palette.notify.attention.reply.body', { title: s.title }),
+            `awog-att-ses-${s.id}`,
+          )
         }
       }
       // Drop removed sessions so the map doesn't grow unbounded.
@@ -107,5 +137,34 @@ export function useNativeNotify() {
     { deep: true },
   )
 
-  onBeforeUnmount(stop)
+  // Tasks awaiting approval — notify when a task newly enters the awaiting set.
+  const seenAwaitingTasks = new Set<string>()
+  let taskSeeded = false
+  const stopTasks = watch(
+    () => tasks.awaitingTasks.map((task) => ({ id: task.id, title: task.title })),
+    (list) => {
+      const live = new Set(list.map((x) => x.id))
+      if (!taskSeeded) {
+        for (const x of list) seenAwaitingTasks.add(x.id)
+        taskSeeded = true
+        return
+      }
+      for (const x of list) {
+        if (seenAwaitingTasks.has(x.id)) continue
+        seenAwaitingTasks.add(x.id)
+        void notifyAttention(
+          t('palette.notify.attention.approve.title'),
+          t('palette.notify.attention.approve.body', { title: x.title }),
+          `awog-att-task-${x.id}`,
+        )
+      }
+      for (const id of [...seenAwaitingTasks]) if (!live.has(id)) seenAwaitingTasks.delete(id)
+    },
+    { deep: true },
+  )
+
+  onBeforeUnmount(() => {
+    stop()
+    stopTasks()
+  })
 }

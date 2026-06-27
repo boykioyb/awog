@@ -29,5 +29,9 @@
   "palette.notify.turnDone.title": "Session finished",
   "palette.notify.turnDone.body": "{title} completed its turn.",
   "palette.notify.turnError.title": "Session error",
-  "palette.notify.turnError.body": "{title} ended with an error."
+  "palette.notify.turnError.body": "{title} ended with an error.",
+  "palette.notify.attention.reply.title": "Awaiting your reply",
+  "palette.notify.attention.reply.body": "{title} needs a reply or a permission decision.",
+  "palette.notify.attention.approve.title": "Awaiting approval",
+  "palette.notify.attention.approve.body": "{title} is paused for your approval."
 }

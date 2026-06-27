@@ -9,9 +9,11 @@ import type {
   PhaseStatus,
   RunStatus,
   TaskMessage,
+  TaskRun,
   TaskRunUsage,
   TaskStatus,
   TraceNode,
+  Verdict,
 } from '../types/shared.js'
 
 const now = (): string => new Date().toISOString()
@@ -38,7 +40,7 @@ export async function emitRunStarted(
   taskId: string,
   nodeId: string,
   version: number,
-  opts?: { agentId?: string; triggeredBy?: 'rerun' },
+  opts?: { agentId?: string; triggeredBy?: TaskRun['triggeredBy'] },
 ): Promise<void> {
   const evt = {
     type: 'run.started' as const,
@@ -154,8 +156,17 @@ export async function emitRunDone(
   status: RunStatus,
   duration: string | null,
   approved?: { approvedBy: 'human' | 'auto'; approvedAt: string },
+  verdict?: Verdict,
 ): Promise<void> {
-  await appendTaskEvent(taskId, { type: 'run.status', at: now(), nodeId, version, status, duration })
+  await appendTaskEvent(taskId, {
+    type: 'run.status',
+    at: now(),
+    nodeId,
+    version,
+    status,
+    duration,
+    ...(verdict !== undefined ? { verdict } : {}),
+  })
   if (approved) {
     await appendTaskEvent(taskId, {
       type: 'run.approved',
@@ -173,5 +184,6 @@ export async function emitRunDone(
     status,
     duration,
     ...(approved ? { approvedBy: approved.approvedBy, approvedAt: approved.approvedAt } : {}),
+    ...(verdict !== undefined ? { verdict } : {}),
   })
 }

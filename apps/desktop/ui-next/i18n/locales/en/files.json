@@ -1,0 +1,18 @@
+{
+  "files.ctx.open": "Open",
+  "files.ctx.openInVscode": "Open in VS Code",
+  "files.ctx.reveal": "Reveal in Finder",
+  "files.ctx.openDefault": "Open with default app",
+  "files.ctx.copyPath": "Copy path",
+  "files.ctx.copyRelPath": "Copy relative path",
+  "files.ctx.copyName": "Copy name",
+  "files.ctx.newFile": "New File…",
+  "files.ctx.newFolder": "New Folder…",
+  "files.ctx.rename": "Rename…",
+  "files.ctx.delete": "Delete",
+  "files.prompt.newFileTitle": "New file name",
+  "files.prompt.newFilePh": "example.ts",
+  "files.prompt.newFolderTitle": "New folder name",
+  "files.prompt.renameTitle": "Rename",
+  "files.confirm.deleteTitle": "Delete this item?"
+}

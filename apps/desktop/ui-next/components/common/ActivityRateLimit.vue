@@ -1,7 +1,7 @@
 <template>
   <!-- Self-hides when settled with no rate-limit data (account has no usage
-  surface) — see `hidden`. `compact` drops the card chrome for the Home tile. -->
-  <div v-if="!hidden" class="arl" :class="{ compact }">
+  surface) — see `hidden`. -->
+  <div v-if="!hidden" class="arl">
     <div class="arlhd">
       <span class="arlnm">{{ account.label }}</span>
       <span class="tag">{{ account.provider }}</span>
@@ -44,7 +44,7 @@ import { computed, onMounted } from 'vue'
 import type { AccountOption } from '~/composables/useAccounts'
 import { useAccountUsage } from '~/composables/useAccountUsage'
 
-const props = defineProps<{ account: AccountOption; compact?: boolean }>()
+const props = defineProps<{ account: AccountOption }>()
 
 const { t } = useI18n()
 
@@ -97,17 +97,6 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: 13px;
-}
-/* Compact (Home tile): drop the card chrome, separate rows with a top border. */
-.arl.compact {
-  padding: 11px 0;
-  gap: 8px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-}
-.arl.compact:not(:first-child) {
-  border-top: 1px solid var(--border);
 }
 .arlhd {
   display: flex;

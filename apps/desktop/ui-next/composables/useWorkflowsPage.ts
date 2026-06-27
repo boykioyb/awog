@@ -108,6 +108,34 @@ export function useWorkflowsPage() {
     return n ? gen.skills.value.find((s) => s.id === n.skillId) : undefined
   })
 
+  // Valid gate.onFailTarget candidates (ADR 0056): the transitive ANCESTORS of
+  // the selected node — re-running one re-flows the path back down to this gate.
+  const gateTargets = computed<{ id: string; label: string }[]>(() => {
+    const wf = workflow.value
+    const sel = selectedNode.value
+    if (!wf || !sel) return []
+    const up = new Map<string, string[]>()
+    for (const e of wf.edges) {
+      const list = up.get(e.to) ?? []
+      list.push(e.from)
+      up.set(e.to, list)
+    }
+    const seen = new Set<string>()
+    const queue = [...(up.get(sel.id) ?? [])]
+    while (queue.length) {
+      const id = queue.shift() as string
+      if (seen.has(id)) continue
+      seen.add(id)
+      for (const f of up.get(id) ?? []) queue.push(f)
+    }
+    return wf.nodes
+      .filter((n) => seen.has(n.id))
+      .map((n) => {
+        const agent = gen.agents.value.find((a) => a.id === n.agentId)
+        return { id: n.id, label: agent?.name ? `${agent.name} (${n.id})` : n.id }
+      })
+  })
+
   // Skills offered in the node picker — scoped to the workflow's tier (preserve
   // per-project skill scope; a global workflow only sees global skills).
   const availableSkills = computed<WorkflowSkill[]>(() => {
@@ -239,6 +267,7 @@ export function useWorkflowsPage() {
     selectedAgent,
     selectedSkill,
     availableSkills,
+    gateTargets,
     // canvas
     onNodesUpdate,
     onEdgesUpdate,

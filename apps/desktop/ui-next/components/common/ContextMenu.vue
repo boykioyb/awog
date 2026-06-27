@@ -47,11 +47,11 @@
 </template>
 
 <script setup lang="ts">
-// Generic git context menu — renders a MenuItem[] (separators, danger rows,
-// disabled rows, trailing hint/shortcut, one level of submenu via `children`).
-// Emits `select` with the chosen item's id. Used for file / branch / stash /
-// tag / remote menus. Mirrors production ContextMenu.vue.
-import type { MenuItem } from './git-types'
+// Generic context menu — renders a MenuItem[] (separators, danger rows, disabled
+// rows, trailing hint/shortcut, one level of submenu via `children`). Emits
+// `select` with the chosen item's id. Shared across the git, file, and PR-file
+// surfaces (any caller builds a MenuItem list + handles select).
+import type { MenuItem } from '~/composables/useContextMenu'
 
 defineProps<{
   open: boolean

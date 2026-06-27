@@ -6,6 +6,7 @@
         :class="{ on: node.kind === 'file' && node.path === selectedPath }"
         :style="{ paddingLeft: `${depth * 12 + 10}px` }"
         @click="onClick(node)"
+        @contextmenu.prevent="ctrl.onContext?.($event, node.path, node.kind)"
       >
         <Icon
           v-if="node.kind === 'dir'"

@@ -14,7 +14,7 @@ import {
   type AgentEvent,
   type AgentMessage,
 } from '@earendil-works/pi-agent-core'
-import type { Message } from '@earendil-works/pi-ai'
+import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { confirmOverageOrStop } from './overage-guard.js'
@@ -27,11 +27,11 @@ import { buildContext, historyToAgentMessages } from './context-builder.js'
 import { computeCutPoint } from './compaction.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
-import { TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
+import { fileRefPrompt, TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
 import { listWorkflows } from '../workflows/store.js'
-import { makeBeforeToolCall } from './permission.js'
+import { makeBeforeToolCall, withTurnBudget } from './permission.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
@@ -147,6 +147,9 @@ export async function runStreamPi(
     stylePrompt,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
+    // Ask for full absolute file paths so chat file references become clickable
+    // preview links (sessions only; undefined when no workspace root).
+    fileRefPrompt(args.cwd),
     mcpUnavailable,
     // MCP catalog (ADR 0051): present only when the MCP toolset is in proxy mode.
     mcpCatalog,
@@ -155,7 +158,11 @@ export async function runStreamPi(
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
 
-  const beforeToolCall = makeBeforeToolCall(args.canUseTool, args.settings.mode, args.sessionId)
+  const beforeToolCall = withTurnBudget(
+    makeBeforeToolCall(args.canUseTool, args.settings.mode, args.sessionId),
+    args.budget,
+    Date.now(),
+  )
 
   // Task subagent tool (ADR 0030). Added at the TOP LEVEL only — never to a
   // subagent's toolset (so depth = 1). Skipped in plan mode (read-only) and when
@@ -382,6 +389,19 @@ export async function runStreamPi(
         // touching any regular tool still executes one-by-one — deterministic UI
         // steps, no interleaved permission prompts. Only a pure-Task batch fans out.
         toolExecution: 'parallel',
+        // Plan mode: end the turn the moment the model presents a plan via
+        // ExitPlanMode, so the UI's "Streaming…" indicator stops and the turn waits
+        // for the user's approve/edit (a NEW turn runs on approval). ExitPlanMode
+        // itself returns terminate:true, but Pi only auto-terminates a batch when
+        // EVERY call in it terminates — so a model that batched ExitPlanMode with a
+        // read-only sibling (Read/Grep) would otherwise keep looping. This stop is
+        // turn-scoped: research turns that don't present a plan keep running.
+        ...(inPlanMode
+          ? {
+              shouldStopAfterTurn: ({ message }: { message: AssistantMessage }): boolean =>
+                message.content.some((c) => c.type === 'toolCall' && c.name === 'ExitPlanMode'),
+            }
+          : {}),
       },
       emit,
       args.abortController?.signal,

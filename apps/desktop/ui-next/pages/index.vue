@@ -82,7 +82,7 @@
             <Icon name="act" />
             <span class="tt">{{ t('home.activity.title') }}</span>
             <span class="ct">
-              <a @click="navigateTo('/activity')">{{ t('home.open') }}</a>
+              <a @click="openActivity()">{{ t('home.open') }}</a>
             </span>
           </div>
           <div v-if="!sparkline.length" class="hmHint" :style="hintStyle">
@@ -115,19 +115,14 @@
             <Icon name="act" />
             <span class="tt">{{ t('home.rateLimit.title') }}</span>
             <span class="ct">
-              <a @click="navigateTo('/activity')">{{ t('home.open') }}</a>
+              <a @click="openActivity()">{{ t('home.open') }}</a>
             </span>
           </div>
           <div v-if="!rateLimitAccounts.length" class="hmHint" :style="hintStyle">
             {{ t('home.rateLimit.empty') }}
           </div>
-          <div v-else>
-            <ActivityRateLimit
-              v-for="acc in rateLimitAccounts"
-              :key="acc.id"
-              :account="acc"
-              compact
-            />
+          <div v-else class="rlcards">
+            <ActivityRateLimit v-for="acc in rateLimitAccounts" :key="acc.id" :account="acc" />
           </div>
         </div>
 
@@ -168,6 +163,7 @@ import { useAccounts } from '~/composables/useAccounts'
 import type { SessionStatus } from '~/composables/useSessionsMock'
 
 const { t } = useI18n()
+const { openActivity } = useActivityModal()
 
 // Provider rate-limit accounts — only providers with a usage surface (Anthropic
 // subscription / OpenAI Codex). Each ActivityRateLimit self-hides if its account
@@ -258,3 +254,13 @@ const sessionDot = (status: SessionStatus): string =>
 const sessionStatusLabel = (status: SessionStatus, when: string): string =>
   t(`home.recent.status.${status}`, { when })
 </script>
+
+<style scoped>
+/* Provider rate-limit tile: one full card per account, same as the Activity page
+   (.actrl grid) — auto-fill so wide tiles lay cards side by side. */
+.rlcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+</style>

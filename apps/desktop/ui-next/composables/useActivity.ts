@@ -1,9 +1,9 @@
-// Activity page orchestrator — fetches the usage/cost summary from the sidecar
+// Activity orchestrator — fetches the usage/cost summary from the sidecar
 // (`activity.summary`) for a chosen time range + optional account filter, and
-// derives the view the page binds to (summary cards, timeseries chart, by-model
+// derives the view the UI binds to (summary cards, timeseries chart, by-model
 // + by-account tables, missing-price flags). SoC: it only reaches the sidecar
-// through useSidecar; no fs/SDK access. The page (pages/activity.vue) stays a
-// thin template binding this composable's refs.
+// through useSidecar; no fs/SDK access. The Activity modal (ActivityView.vue)
+// stays a thin template binding this composable's refs.
 //
 // Compile-time decoupled from the sidecar: when the Electron bridge is absent
 // (browser-dev) or the `activity.summary` method is not yet implemented, it

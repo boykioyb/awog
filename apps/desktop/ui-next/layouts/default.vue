@@ -16,10 +16,14 @@
     <CommandPalette />
     <SessionPromptEditOverlay />
     <SettingsModal />
+    <ActivityModal />
     <WhatsNewModal />
     <SessionGitModal />
+    <SessionExportModal />
+    <SessionForkTreeModal />
     <NewTaskModalHost />
     <ConfirmDialogHost />
+    <TextPromptHost />
   </div>
 </template>
 
@@ -43,9 +47,13 @@ const route = useRoute()
 const { compact, navOpen, listOpen, closeDrawers, initResponsiveShell } = useResponsiveShell()
 watch(() => route.path, closeDrawers)
 
-// Watch the sessions store for turn-complete → fire a native notification when
-// the window is unfocused (composable owns the gating + permission flow).
+// Watch the sessions store for turn-complete + new attention items → fire native
+// notifications when the window is unfocused (composable owns gating/permission).
 useNativeNotify()
+
+// Drive the live system-tray status surface (rate limits / usage / running /
+// attention) + route tray menu clicks. No-op outside Electron.
+useTrayStatus()
 
 // Global ⌘K / Ctrl+K toggle (+ Esc to close while open). Bound at the window so it
 // fires regardless of focus; ignore the browser's own find shortcut by handling K

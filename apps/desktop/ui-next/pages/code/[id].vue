@@ -86,6 +86,15 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- Shared file context menu (right-click a tree row). -->
+    <ContextMenu
+      :open="fileMenu.menu.value !== null"
+      :position="fileMenu.menu.value ?? { x: 0, y: 0 }"
+      :items="fileMenu.items.value"
+      @close="fileMenu.close"
+      @select="fileMenu.onSelect"
+    />
   </div>
 </template>
 
@@ -117,6 +126,7 @@ const {
   projectPath,
   ready,
   fileTreeCtrl,
+  fileMenu,
   tabs,
   activePath,
   activeTab,

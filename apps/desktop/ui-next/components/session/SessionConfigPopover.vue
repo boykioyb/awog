@@ -47,6 +47,70 @@
             </span>
           </div>
         </div>
+
+        <!-- Budget: soft warning + hard cap (USD). Soft only warns; hard refuses a
+             turn / stops tool calls sidecar-side. Empty = no cap. -->
+        <div class="pr2">
+          <div class="pl plnowrap">
+            <span>{{ t('sessions.budget.section') }}</span>
+            <span class="budgetcost">
+              {{ t('sessions.budget.spent', { cost: fmtUsd(spent) }) }}
+            </span>
+          </div>
+          <div class="budgetfields">
+            <label class="budgetfield">
+              <span>{{ t('sessions.budget.softLimit') }}</span>
+              <input
+                v-model="softLimitInput"
+                class="budgetinput"
+                type="number"
+                min="0"
+                step="0.5"
+                placeholder="—"
+                @change="commitSoft"
+              />
+            </label>
+            <label class="budgetfield">
+              <span>{{ t('sessions.budget.hardLimit') }}</span>
+              <input
+                v-model="hardLimitInput"
+                class="budgetinput"
+                type="number"
+                min="0"
+                step="0.5"
+                placeholder="—"
+                @change="commitHard"
+              />
+            </label>
+          </div>
+          <div class="budgetfields">
+            <label class="budgetfield">
+              <span>{{ t('sessions.budget.maxToolCalls') }}</span>
+              <input
+                v-model="maxToolCallsInput"
+                class="budgetinput"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="—"
+                @change="commitMaxToolCalls"
+              />
+            </label>
+            <label class="budgetfield">
+              <span>{{ t('sessions.budget.maxMinutes') }}</span>
+              <input
+                v-model="maxMinutesInput"
+                class="budgetinput"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="—"
+                @change="commitMaxMinutes"
+              />
+            </label>
+          </div>
+          <p class="budgethint">{{ t('sessions.budget.hardHint') }}</p>
+        </div>
       </template>
 
       <!-- Tools -->
@@ -111,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { Session } from '~/composables/useSessionsMock'
 
 // Session config — tabbed popover (General / Tools / MCP). General now keeps just
@@ -125,6 +189,53 @@ const { providerOf } = useSessionsMock()
 const { accounts, accountById, modelsForAccount } = useAccounts()
 const store = useSessionsStore()
 const sc = useSidecar()
+const { fmtUsd } = useSessionCost()
+
+// ── Budget (soft + hard caps) ────────────────────────────────────────────────
+// Inputs are local strings (so an empty field clears the cap); committed on blur.
+const spent = computed(() => props.session.usage?.cost)
+const softLimitInput = ref('')
+const hardLimitInput = ref('')
+const maxToolCallsInput = ref('')
+const maxMinutesInput = ref('')
+watch(
+  () => [
+    props.session.id,
+    props.session.budget?.limitUsd,
+    props.session.budget?.hardLimitUsd,
+    props.session.budget?.maxToolCalls,
+    props.session.budget?.maxWallclockMs,
+  ],
+  () => {
+    const b = props.session.budget
+    softLimitInput.value = b?.limitUsd?.toString() ?? ''
+    hardLimitInput.value = b?.hardLimitUsd?.toString() ?? ''
+    maxToolCallsInput.value = b?.maxToolCalls?.toString() ?? ''
+    maxMinutesInput.value = b?.maxWallclockMs != null ? String(b.maxWallclockMs / 60000) : ''
+  },
+  { immediate: true },
+)
+function parseUsd(v: string): number | undefined {
+  const n = Number.parseFloat(v)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+function parseCount(v: string): number | undefined {
+  const n = Number.parseInt(v, 10)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+function commitSoft() {
+  store.setBudget(props.session.id, { limitUsd: parseUsd(softLimitInput.value) })
+}
+function commitHard() {
+  store.setBudget(props.session.id, { hardLimitUsd: parseUsd(hardLimitInput.value) })
+}
+function commitMaxToolCalls() {
+  store.setBudget(props.session.id, { maxToolCalls: parseCount(maxToolCallsInput.value) })
+}
+function commitMaxMinutes() {
+  const mins = parseCount(maxMinutesInput.value)
+  store.setBudget(props.session.id, { maxWallclockMs: mins != null ? mins * 60000 : undefined })
+}
 
 // Built-in Claude Code tools (the toggleable runtime toolset). MCP tools live in
 // their own tab — the denylist here is built-ins only.
@@ -222,3 +333,43 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.plnowrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.budgetcost {
+  font-size: 12px;
+  color: var(--textDim);
+  font-variant-numeric: tabular-nums;
+}
+.budgetfields {
+  display: flex;
+  gap: 8px;
+}
+.budgetfield {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  font-size: 12px;
+  color: var(--textDim);
+}
+.budgetinput {
+  width: 100%;
+  background: var(--bgInput, var(--bgActive));
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.budgethint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--textFaint);
+}
+</style>

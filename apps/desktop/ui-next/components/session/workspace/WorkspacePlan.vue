@@ -9,12 +9,7 @@
         <span class="wsplan-title">{{ plan.title }}</span>
         <span class="wsplan-badge" :style="badgeStyle">{{ statusLabel }}</span>
       </div>
-      <ol class="wsplan-items">
-        <li v-for="(item, i) in plan.items" :key="i" class="wsplan-item">
-          <span class="wsplan-num">{{ i + 1 }}.</span>
-          <span>{{ item }}</span>
-        </li>
-      </ol>
+      <SessionTextBlock :text="planMarkdown" />
     </div>
   </div>
 </template>
@@ -41,6 +36,16 @@ const plan = computed<PlanBlock | null>(() => {
     }
   }
   return null
+})
+
+// Render the model's own markdown when present (headers/lists/bold survive); fall
+// back to the flattened items as a bullet list (mock data / legacy steps). Mirrors
+// SessionGateCard so the chat card and this tab show the same document.
+const planMarkdown = computed<string>(() => {
+  const p = plan.value
+  if (!p) return ''
+  if (p.markdown) return p.markdown
+  return p.items.map((x) => `- ${x}`).join('\n')
 })
 
 const statusLabel = computed(() =>
@@ -82,27 +87,5 @@ const badgeStyle = computed(() =>
   line-height: 1;
   padding: 3px 7px;
   border-radius: 5px;
-}
-.wsplan-items {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.wsplan-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  line-height: 1.6;
-  color: var(--text);
-}
-.wsplan-num {
-  font-family: var(--code);
-  font-size: 12px;
-  color: var(--textDim);
-  flex: 0 0 auto;
-  margin-top: 2px;
 }
 </style>

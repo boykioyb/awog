@@ -19,6 +19,15 @@
         <div class="et">{{ t('sessions.workspace.files.empty') }}</div>
       </div>
     </div>
+
+    <!-- Shared file context menu (right-click a tree row). -->
+    <ContextMenu
+      :open="fileMenu.menu.value !== null"
+      :position="fileMenu.menu.value ?? { x: 0, y: 0 }"
+      :items="fileMenu.items.value"
+      @close="fileMenu.close"
+      @select="fileMenu.onSelect"
+    />
   </div>
 </template>
 
@@ -32,6 +41,7 @@ import type { FileTreeController } from '~/components/session/SessionFileTree.vu
 import { useSidecar } from '~/composables/useSidecar'
 import { usePreview, type PreviewRef } from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
+import { useFileContextMenu } from '~/composables/useFileContextMenu'
 
 const props = defineProps<{ session: Session }>()
 
@@ -76,6 +86,13 @@ async function loadDir(dir: string): Promise<void> {
   }
 }
 
+// Force-reload one dir's children after a mutating menu op (drop the cache so
+// loadDir re-fetches).
+async function reloadDir(dir: string): Promise<void> {
+  delete childrenByPath[dir]
+  await loadDir(dir)
+}
+
 // Preview kind from the file extension (the modal reads the real content itself).
 function kindOf(path: string): PreviewRef['kind'] {
   if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(path)) return 'image'
@@ -96,6 +113,16 @@ function openFile(path: string): void {
   })
 }
 
+// Shared file context menu (right-click a tree row). Open a file → preview modal;
+// mutating ops reload the affected dir.
+const fileMenu = useFileContextMenu({
+  root: () => root.value,
+  onOpen: (tgt) => {
+    if (tgt.kind === 'file') openFile(tgt.path)
+  },
+  onChanged: (dir) => reloadDir(dir),
+})
+
 // Controller handed to SessionFileTree for real-data expand/select + lazy load.
 const ctrl: FileTreeController = {
   isOpen: (p) => expanded.has(p),
@@ -110,6 +137,7 @@ const ctrl: FileTreeController = {
   selectedPath,
   selectFile: (p) => openFile(p),
   childrenFor: (p) => nodesFor(p),
+  onContext: (e, path, kind) => fileMenu.open(e, { path, kind }),
 }
 
 watch(root, (r) => {

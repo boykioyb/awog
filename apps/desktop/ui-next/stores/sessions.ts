@@ -5,6 +5,7 @@ import {
   modelDisplayName,
   modelIdFromDisplay,
   PROVIDER_DISPLAY,
+  questionAnswered,
 } from '~/composables/useSessionsMock'
 import { useAccounts } from '~/composables/useAccounts'
 import type {
@@ -14,6 +15,7 @@ import type {
   Followup,
   PermBlock,
   QuestionBlock,
+  QuestionItem,
   Session,
   SessionAttachment,
   SessionUsage,
@@ -150,6 +152,8 @@ type SessionSummaryDto = {
   aboutTaskId?: string
   // GitHub issue/PR this session was opened from — mirrors sidecar SessionSummary.
   aboutGhUrl?: string
+  // Fork parent (its session id) — mirrors sidecar SessionSummary; drives fork tree.
+  parentSessionId?: string
   messageCount: number
   lastPreview?: string
 }
@@ -173,6 +177,16 @@ type SessionGetDto = {
   pinned?: boolean
   settings?: { provider?: string; modelId?: string; accountId?: string; mode?: string }
   messages: EngineMessage[]
+  // Pinned context + budget + fork lineage (full session only; not on the summary).
+  pinnedContext?: { files?: string[]; notes?: string }
+  budget?: {
+    limitUsd?: number
+    hardLimitUsd?: number
+    maxToolCalls?: number
+    maxWallclockMs?: number
+  }
+  parentSessionId?: string
+  forkFromMessageId?: string
 }
 
 interface SendMessageResult {
@@ -184,6 +198,9 @@ interface SendMessageResult {
     output_tokens: number
     cache_read_tokens?: number
     cache_creation_tokens?: number
+    // Cost of THIS turn in USD (sidecar-computed via activity/pricing.ts). Summed
+    // into the session's cumulative SessionUsage.cost. Absent → model has no price.
+    cost_usd?: number
   }
   // Char sizes of each context segment of the last prompt (itemised the way
   // Claude Code's `/context` reports it), forwarded so the usage panel can break
@@ -248,7 +265,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (last && last.role === 'assistant') {
       if (last.streaming) return 'streaming'
       if (last.blocks.some((b) => b.kind === 'error')) return 'error'
-      if (last.blocks.some((b) => b.kind === 'question' && !b.answer && !b.cancelled))
+      if (last.blocks.some((b) => b.kind === 'question' && !questionAnswered(b) && !b.cancelled))
         return 'awaiting'
       if (last.blocks.some((b) => b.kind === 'perm' && b.status === 'pending' && !b.cancelled))
         return 'awaiting'
@@ -272,23 +289,38 @@ export const useSessionsStore = defineStore('sessions', () => {
             .map((l) => l.replace(/^[-*\d.\s]+/, '').trim())
             .filter(Boolean)
       const status: PlanBlock['status'] = step.planStatus === 'approved' ? 'approved' : 'pending'
-      return { kind: 'plan', title: step.label || 'Plan', items, status, eid: step.id }
-    }
-    if (step.kind === 'question') {
-      const q = step.questions?.[0]
-      const block: QuestionBlock = {
-        kind: 'question',
-        prompt: q?.question ?? step.label,
-        options: (q?.options ?? []).map((o) =>
-          o.description ? { label: o.label, desc: o.description } : { label: o.label },
-        ),
+      // Carry the model's full markdown so the card renders it as a document
+      // (headers/lists/bold survive); `items` stays the flattened fallback.
+      const md = step.planMarkdown?.trim()
+      return {
+        kind: 'plan',
+        title: step.label || 'Plan',
+        items,
+        ...(md ? { markdown: md } : {}),
+        status,
         eid: step.id,
       }
-      if (q?.header) block.header = q.header
-      if (q?.multiSelect) block.multi = true
-      const ans = step.answers?.[0]
-      if (ans) block.answer = ans.selected.join(', ')
-      return block
+    }
+    if (step.kind === 'question') {
+      // A question step with no questions = a validation-failed / no-op
+      // AskUserQuestion call (the tool returns details.questions:[]). Don't render
+      // a ghost "Questions" card — the model will have retried with a valid call.
+      if (!step.questions?.length) return null
+      const byHeader = new Map((step.answers ?? []).map((a) => [a.header, a.selected]))
+      const items: QuestionItem[] = step.questions.map((q) => {
+        const item: QuestionItem = {
+          prompt: q.question,
+          options: (q.options ?? []).map((o) =>
+            o.description ? { label: o.label, desc: o.description } : { label: o.label },
+          ),
+        }
+        if (q.header) item.header = q.header
+        if (q.multiSelect) item.multi = true
+        const sel = byHeader.get(q.header)
+        if (sel?.length) item.answer = sel.join(', ')
+        return item
+      })
+      return { kind: 'question', items, eid: step.id }
     }
     if (step.kind === 'steer') {
       return { kind: 'steer', text: step.steerText ?? step.label }
@@ -333,43 +365,72 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (d.kind === 'list') return d.items.map((it) => it.label).join('\n')
     return undefined
   }
+  // Map a single engine child step to the ui-next SubStep shape. Returns null for
+  // a no-op subagent question (validation-failed / headless — no questions) so it
+  // never shows as a ghost "Questions" sub-row.
+  function engineStepToSubStep(c: EngineStep): SubAgent['steps'][number] | null {
+    if (c.kind === 'question' && !c.questions?.length) return null
+    const sub: SubAgent['steps'][number] = {
+      eid: c.id,
+      tool: c.label || c.tool || 'Tool',
+      target: c.target ?? '',
+    }
+    const res = engineStepResult(c)
+    const det = engineStepDetail(c)
+    if (res) sub.result = res
+    if (det) sub.detail = det
+    if (det && c.detail?.kind) sub.detailKind = c.detail.kind
+    return sub
+  }
   // Map a Task step's children to the ui-next SubAgent shape.
   function engineSubAgent(step: EngineStep): SubAgent {
     return {
       agent: step.target ?? step.label,
-      steps: (step.children ?? []).map((c) => {
-        const sub: SubAgent['steps'][number] = {
-          tool: c.label || c.tool || 'Tool',
-          target: c.target ?? '',
-        }
-        const res = engineStepResult(c)
-        const det = engineStepDetail(c)
-        if (res) sub.result = res
-        if (det) sub.detail = det
-        if (det && c.detail?.kind) sub.detailKind = c.detail.kind
-        return sub
-      }),
+      steps: (step.children ?? [])
+        .map(engineStepToSubStep)
+        .filter((s): s is SubAgent['steps'][number] => s != null),
     }
   }
 
-  // Build a finalized assistant message's blocks from engine parts/steps.
+  // Build a finalized assistant message's blocks from engine parts/steps. Steps are
+  // stored FLAT (subagent children carry `parentId`); re-nest them under their
+  // parent step's `sub.steps` here — mirroring the live `upsertStep` path — so a
+  // subagent step never leaks out as a top-level block (which, for a done-but-
+  // unanswered subagent question, would otherwise read as a pending gate and keep
+  // the composer stuck on "Stop").
   function engineMessageToBlocks(m: EngineMessage): AssistantBlock[] {
     const out: AssistantBlock[] = []
+    const stepBlockById = new Map<string, StepBlock>()
+    const addStep = (p: EngineStep): void => {
+      if (p.parentId) {
+        const parent = stepBlockById.get(p.parentId)
+        if (parent) {
+          const subStep = engineStepToSubStep(p)
+          if (subStep) {
+            const sub = parent.sub ?? { agent: parent.target, steps: [] }
+            sub.steps.push(subStep)
+            parent.sub = sub
+          }
+          return // a subagent child is never a top-level block
+        }
+        // Unknown parent (shouldn't happen) → fall through to top-level, defensively.
+      }
+      const b = engineStepToBlock(p)
+      if (!b) return
+      out.push(b)
+      if (b.kind === 'step' && p.id) stepBlockById.set(p.id, b)
+    }
     if (m.parts?.length) {
       for (const p of m.parts) {
         if (p.kind === 'text') {
           if (p.text) out.push({ kind: 'text', text: p.text })
         } else {
-          const b = engineStepToBlock(p)
-          if (b) out.push(b)
+          addStep(p)
         }
       }
     } else {
       if (m.text) out.push({ kind: 'text', text: m.text })
-      for (const s of m.steps ?? []) {
-        const b = engineStepToBlock(s)
-        if (b) out.push(b)
-      }
+      for (const s of m.steps ?? []) addStep(s)
     }
     if (m.error) out.push({ kind: 'error', text: m.error.message })
     if (!out.length) out.push({ kind: 'text', text: m.text })
@@ -401,6 +462,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.mcpServerIds) session.mcpServerIds = [...dto.mcpServerIds]
     if (dto.aboutTaskId) session.aboutTaskId = dto.aboutTaskId
     if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
+    if (dto.parentSessionId) session.parentSessionId = dto.parentSessionId
     return session
   }
 
@@ -463,6 +525,11 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (full) {
         target.msgs = full.messages.map((m) => engineMessageToSessionMessage(m))
         target.status = statusFromMessages(target.msgs)
+        // Hydrate pinned context / budget / fork lineage (full session only).
+        if (full.pinnedContext) target.pinnedContext = full.pinnedContext
+        if (full.budget) target.budget = full.budget
+        if (full.parentSessionId) target.parentSessionId = full.parentSessionId
+        if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
       }
       target.loaded = true
     } catch (err) {
@@ -683,6 +750,60 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (useIpc) pushUpsert(s, 'update-metadata')
   }
 
+  // ── Pinned context (session working-set) ─────────────────────────────────────
+  // Files/notes the sidecar re-feeds into every turn as <pinned_context>. Persisted
+  // via upsert metadata so they survive restart. Drop an empty container so we never
+  // persist `{}` (keeps the round-trip clean).
+  function pruneEmptyPinned(s: Session) {
+    const p = s.pinnedContext
+    if (p && !(p.files && p.files.length) && !(p.notes && p.notes.trim())) {
+      delete s.pinnedContext
+    }
+  }
+  function addPinnedFile(id: number, path: string) {
+    const s = byId(id)
+    const rel = path.trim()
+    if (!s || !rel) return
+    const files = s.pinnedContext?.files ?? []
+    if (files.includes(rel)) return
+    s.pinnedContext = { ...s.pinnedContext, files: [...files, rel] }
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+  function removePinnedFile(id: number, path: string) {
+    const s = byId(id)
+    if (!s?.pinnedContext?.files) return
+    s.pinnedContext = { ...s.pinnedContext, files: s.pinnedContext.files.filter((f) => f !== path) }
+    pruneEmptyPinned(s)
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+  function setPinnedNotes(id: number, notes: string) {
+    const s = byId(id)
+    if (!s) return
+    s.pinnedContext = { ...s.pinnedContext, notes }
+    pruneEmptyPinned(s)
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+
+  // ── Budget (cost cap) ─────────────────────────────────────────────────────────
+  // Soft (`limitUsd`, warning only) + hard (`hardLimitUsd`/`maxToolCalls`/
+  // `maxWallclockMs`, enforced sidecar-side) spend caps. Merge the patch so setting
+  // one field doesn't drop the others; drop an all-empty budget so we don't persist {}.
+  function setBudget(id: number, patch: Partial<NonNullable<Session['budget']>>) {
+    const s = byId(id)
+    if (!s) return
+    const next = { ...s.budget, ...patch }
+    // Strip undefined/empty values so an emptied field clears cleanly.
+    ;(Object.keys(next) as (keyof typeof next)[]).forEach((k) => {
+      const v = next[k]
+      if (v === undefined || v === null || (typeof v === 'number' && !Number.isFinite(v))) {
+        delete next[k]
+      }
+    })
+    if (Object.keys(next).length) s.budget = next
+    else delete s.budget
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+
   // ── Pin / bulk (§1) ─────────────────────────────────────────────────────────
 
   function togglePin(id: number) {
@@ -838,21 +959,43 @@ export const useSessionsStore = defineStore('sessions', () => {
     const m = findStreamingMsg(eid, messageId)
     if (!m) return
 
+    // A question step that arrives with no questions = a validation-failed / no-op
+    // AskUserQuestion call (the model retried with a valid one). Never leave a
+    // ghost "Questions" card: drop any block OR subagent sub-step already shown
+    // for this id (the start event may have pushed one), then stop.
+    if (step.kind === 'question' && !step.questions?.length) {
+      const bi = m.blocks.findIndex((b) => 'eid' in b && b.eid === step.id)
+      if (bi >= 0) m.blocks.splice(bi, 1)
+      for (const b of m.blocks) {
+        if (b.kind !== 'step' || !b.sub) continue
+        const si = b.sub.steps.findIndex((c) => c.eid === step.id)
+        if (si >= 0) b.sub.steps.splice(si, 1)
+      }
+      return
+    }
+
     if (step.parentId) {
       const parent = m.blocks.find(
         (b): b is StepBlock => b.kind === 'step' && b.eid === step.parentId,
       )
       if (parent) {
         const sub = parent.sub ?? { agent: parent.target, steps: [] }
-        const subStep = {
+        const subStep: SubAgent['steps'][number] = {
+          eid: step.id,
           tool: step.label || step.tool || 'Tool',
           target: step.target ?? '',
           ...(engineStepResult(step) ? { result: engineStepResult(step) } : {}),
           ...(engineStepDetail(step) ? { detail: engineStepDetail(step) } : {}),
+          ...(engineStepDetail(step) && step.detail?.kind ? { detailKind: step.detail.kind } : {}),
         }
-        // Merge a repeat by tool+target (subagent children have no stable id here).
-        const idx = sub.steps.findIndex(
-          (c) => c.tool === subStep.tool && c.target === subStep.target,
+        // Merge a repeat by engine step id — subagent steps DO carry a stable id
+        // (e.g. `thinking-6-0`), and a streaming step re-emits it on every delta
+        // with a GROWING label. Keying on id (not tool+target, which IS the
+        // mutating label) keeps one row per step instead of one row per delta.
+        const idx = sub.steps.findIndex((c) =>
+          c.eid && step.id
+            ? c.eid === step.id
+            : c.tool === subStep.tool && c.target === subStep.target,
         )
         if (idx >= 0) sub.steps[idx] = subStep
         else sub.steps.push(subStep)
@@ -1015,6 +1158,29 @@ export const useSessionsStore = defineStore('sessions', () => {
     return text.trim()
   }
 
+  // True when a session has any pinned context worth forwarding to the turn (≥1
+  // file or non-empty notes) — so we don't ship an empty `{}` in the payload.
+  function hasPinnedContext(p: Session['pinnedContext']): boolean {
+    return !!p && ((p.files?.length ?? 0) > 0 || (p.notes?.trim()?.length ?? 0) > 0)
+  }
+
+  // The HARD budget fields only (the soft `limitUsd` stays UI-side, never enforced
+  // by the sidecar). Forwarded to sendMessage so the sidecar can refuse / cap a turn.
+  function hardBudgetOf(b: Session['budget']): {
+    hardLimitUsd?: number
+    maxToolCalls?: number
+    maxWallclockMs?: number
+  } {
+    const out: { hardLimitUsd?: number; maxToolCalls?: number; maxWallclockMs?: number } = {}
+    if (b?.hardLimitUsd != null) out.hardLimitUsd = b.hardLimitUsd
+    if (b?.maxToolCalls != null) out.maxToolCalls = b.maxToolCalls
+    if (b?.maxWallclockMs != null) out.maxWallclockMs = b.maxWallclockMs
+    return out
+  }
+  function hasHardBudget(b: Session['budget']): boolean {
+    return Object.keys(hardBudgetOf(b)).length > 0
+  }
+
   // Map ui-next display messages → engine SessionMessage shape (id/role/text/at).
   // The sidecar resumes a session from its JSONL transcript, so a session created
   // WITH prior turns (a fork) must carry them on disk or the model would see an
@@ -1058,6 +1224,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.mcpServerIds !== undefined) session.mcpServerIds = s.mcpServerIds
     if (s.aboutTaskId) session.aboutTaskId = s.aboutTaskId
     if (s.aboutGhUrl) session.aboutGhUrl = s.aboutGhUrl
+    if (s.pinnedContext) session.pinnedContext = s.pinnedContext
+    if (s.budget) session.budget = s.budget
+    if (s.parentSessionId) session.parentSessionId = s.parentSessionId
+    if (s.forkFromMessageId) session.forkFromMessageId = s.forkFromMessageId
     pushRequest('sessions.upsert', { session, mode })
   }
 
@@ -1149,6 +1319,12 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Discuss link (ADR 0055): the sidecar injects this task's output + trace
         // as <linked_task> context so the agent can reason about its results.
         ...(s.aboutTaskId ? { aboutTaskId: s.aboutTaskId } : {}),
+        // Pinned working-set: sidecar reads these files (path-sanitized) + notes
+        // each turn and injects a <pinned_context> block.
+        ...(hasPinnedContext(s.pinnedContext) ? { pinnedContext: s.pinnedContext } : {}),
+        // Hard budget caps (Pha 3): pre-turn cost refusal + per-turn tool-call /
+        // wallclock caps enforced sidecar-side. Forward only the hard fields.
+        ...(hasHardBudget(s.budget) ? { budget: hardBudgetOf(s.budget) } : {}),
       })
       flushText(s.engineId, messageId)
       // Stamp the authoritative full reply onto the trailing text run.
@@ -1164,8 +1340,20 @@ export const useSessionsStore = defineStore('sessions', () => {
           kind: 'error',
           text: result.errorMessage || 'The model returned an error.',
         })
+      } else if (result.stopReason === 'budget-exceeded') {
+        // Hard budget cap (Pha 3): the sidecar refused the turn before any model
+        // call. Surface as an error block; the user raises the cap in config + retries.
+        placeholder.blocks.push({
+          kind: 'error',
+          text: result.errorMessage || 'Session budget exceeded.',
+        })
       }
-      s.usage = mergeUsage(s.usage, result.usage, result.contextChars)
+      // A budget-refused turn never reached the model: don't merge its zero usage
+      // (that would wipe the context-window snapshot), don't drain the queue (the
+      // next message would be refused too), and don't auto-title (a model call that
+      // would bypass the very cap we just enforced).
+      const refused = result.stopReason === 'budget-exceeded'
+      if (!refused) s.usage = mergeUsage(s.usage, result.usage, result.contextChars)
       // Reflect the actually-used model, but DON'T collapse a 1M variant: the
       // engine reports the API base id (`claude-opus-4-8`) for the AWOG-internal
       // `claude-opus-4-8-1m`, so overwriting unconditionally would snap the
@@ -1173,16 +1361,16 @@ export const useSessionsStore = defineStore('sessions', () => {
       // update when the base genuinely differs (a real model substitution).
       const usedDisplay = modelDisplay(result.modelUsed)
       const selectedBase = modelIdFromDisplay(s.model).replace(/-1m$/, '')
-      if (usedDisplay && result.modelUsed && result.modelUsed !== selectedBase) {
+      if (!refused && usedDisplay && result.modelUsed && result.modelUsed !== selectedBase) {
         s.model = usedDisplay
       }
       s.status = statusFromMessages(s.msgs)
       // Clean finish → drain the next queued message FIFO.
-      if (result.stopReason !== 'error') drainQueue(s.id)
+      if (result.stopReason !== 'error' && !refused) drainQueue(s.id)
       // First exchange finalized (user + agent now persisted) → refine the default
       // "New session" title into a concise AI title. Fire-and-forget; a manual
       // rename (title ≠ default) is left untouched.
-      if (isFirstTurn && result.stopReason !== 'error' && s.title === 'New session') {
+      if (isFirstTurn && result.stopReason !== 'error' && !refused && s.title === 'New session') {
         void autoGenerateTitle(s)
       }
     } catch (err) {
@@ -1280,28 +1468,42 @@ export const useSessionsStore = defineStore('sessions', () => {
     // panel keeps itemising if a later result omits it).
     const cc = contextChars ?? prev?.contextChars
     if (cc) usage.contextChars = cc
+    // Cost is CUMULATIVE across turns (unlike the token figures above, which are a
+    // per-turn context-window snapshot). Sum this turn's cost onto the prior total;
+    // omit entirely when neither side has a priced figure (UI then shows "n/a").
+    const prevCost = prev?.cost ?? 0
+    const turnCost = u.cost_usd ?? 0
+    if (prevCost > 0 || turnCost > 0) usage.cost = prevCost + turnCost
     return usage
   }
 
   // ── Gates ──────────────────────────────────────────────────────────────────
 
-  // Answer an AskUserQuestion gate. `answer` is the chosen label(s) joined; the
-  // engine needs the question header + selected labels. msgIndex/eid locate the block.
-  function answerQuestion(id: number, msgIndex: number, answer: string) {
+  // Answer an AskUserQuestion gate. One call carries 1–4 questions answered
+  // together: `answers` holds one entry per question ({header, selected labels}).
+  // The whole set resumes the single parked tool call. msgIndex/eid locate the block.
+  function answerQuestion(
+    id: number,
+    msgIndex: number,
+    answers: { header: string; selected: string[] }[],
+  ) {
     const s = byId(id)
     const msg = s?.msgs[msgIndex]
     if (!s || !msg || msg.role !== 'assistant') return
-    const block = msg.blocks.find((b): b is QuestionBlock => b.kind === 'question' && !b.answer)
+    const block = msg.blocks.find(
+      (b): b is QuestionBlock => b.kind === 'question' && !questionAnswered(b),
+    )
     if (!block) return
-    block.answer = answer
+    // Record each answer onto its question (match by header, fall back positional).
+    const byHeader = new Map(answers.map((a) => [a.header, a.selected]))
+    block.items.forEach((it, i) => {
+      const sel = (it.header != null ? byHeader.get(it.header) : undefined) ?? answers[i]?.selected
+      it.answer = (sel ?? []).join(', ')
+    })
     if (!useIpc || !block.eid) return
-    const selected = answer
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean)
     pushRequest('sessions.answerQuestion', {
       requestId: block.eid,
-      answers: [{ header: block.header ?? '', selected }],
+      answers: answers.map((a) => ({ header: a.header, selected: a.selected })),
     })
     // Turn resumes generating → flip status back to streaming (else it stays
     // "awaiting" / shows "Waiting…" even though the model is working again).
@@ -1395,7 +1597,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (m.role !== 'assistant') continue
       const pendingGate = m.blocks.some(
         (b) =>
-          (b.kind === 'question' && !b.answer && !b.cancelled) ||
+          (b.kind === 'question' && !questionAnswered(b) && !b.cancelled) ||
           (b.kind === 'perm' && b.status === 'pending' && !b.cancelled),
       )
       if (!m.streaming && !pendingGate) continue
@@ -1412,7 +1614,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       // stops counting as "awaiting" and renders as cancelled rather than an
       // interactive prompt that would now no-op.
       for (const b of m.blocks) {
-        if (b.kind === 'question' && !b.answer) b.cancelled = true
+        if (b.kind === 'question' && !questionAnswered(b)) b.cancelled = true
         if (b.kind === 'perm' && b.status === 'pending') b.cancelled = true
       }
       target = m // keep the latest matched message for the RPC messageId
@@ -1545,6 +1747,38 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
+  // Re-run a USER turn (the bubble at `index`): drop that message + everything
+  // after it and send it again (optionally with edited text). Mirrors regenerate's
+  // truncate-then-resend, but anchored at this user turn instead of the nearest
+  // preceding one. `overrideText` powers "edit & resend".
+  async function resend(id: number, index: number, overrideText?: string) {
+    const s = byId(id)
+    if (!s) return
+    const userMsg = s.msgs[index]
+    if (!userMsg || userMsg.role !== 'user') return
+    // Never resend under a live turn (would race the streaming reply).
+    if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) return
+    const text = overrideText ?? userMsg.text
+    const atts = userMsg.att ?? undefined
+    // Drop this user message + everything after; sendMessage re-appends a fresh
+    // user bubble and runs the turn.
+    s.msgs = s.msgs.slice(0, index)
+    // Persist the truncation BEFORE re-running (the sidecar resumes from JSONL, so
+    // slicing in-memory alone would replay the dropped reply). Keep through the
+    // assistant turn before this one (null = drop all). AWAIT to avoid a
+    // read-before-write race on the next turn's loadSession.
+    if (useIpc && s.engineId) {
+      const prev = index > 0 ? s.msgs[index - 1] : undefined
+      const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
+      try {
+        await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
+      } catch (err) {
+        console.warn('[sessions] truncate before resend failed', err)
+      }
+    }
+    void sendMessage(id, text, atts ?? undefined)
+  }
+
   function fork(id: number, index: number, suffix = 'fork') {
     const s = byId(id)
     if (!s) return
@@ -1566,6 +1800,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
     delete branch.engineId
     delete branch.queue
+    // Record fork lineage: the branch's parent is THIS session (override any lineage
+    // copied via `...s`). forkFromMessageId = the engine id of the fork point (the
+    // last kept message). Drives the fork-tree graph; persisted via upsert.
+    const forkPoint = msgs[msgs.length - 1]
+    if (s.engineId) branch.parentSessionId = s.engineId
+    else delete branch.parentSessionId
+    if (forkPoint?.role === 'assistant' && forkPoint.eid) branch.forkFromMessageId = forkPoint.eid
+    else delete branch.forkFromMessageId
     sessions.value.unshift(branch)
     activeId.value = nid
     if (useIpc) {
@@ -1664,6 +1906,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     setNoMarkdown,
     setDisabledTools,
     setMcpServerIds,
+    addPinnedFile,
+    removePinnedFile,
+    setPinnedNotes,
+    setBudget,
     compactSession,
     // pin / bulk
     togglePin,
@@ -1688,6 +1934,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     regenerate,
     retryModel,
     rewind,
+    resend,
     fork,
     draftSeed,
     seedComposer,

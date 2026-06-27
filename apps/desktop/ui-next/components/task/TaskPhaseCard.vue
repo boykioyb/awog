@@ -12,6 +12,16 @@
       <span v-if="phase.runs.length > 1 && latestRun" class="chip mono tpc-ver">
         {{ t('tasks.phase.version', { v: latestRun.version, n: phase.runs.length }) }}
       </span>
+      <span
+        v-if="latestVerdict"
+        class="tag tpc-verdict"
+        :class="latestVerdict === 'pass' ? 'ok' : 'fail'"
+      >
+        {{ latestVerdict === 'pass' ? t('tasks.phase.verdictPass') : t('tasks.phase.verdictFail') }}
+      </span>
+      <span v-if="gate && failCount > 0" class="chip mono tpc-loop">
+        {{ t('tasks.phase.loop', { n: failCount, max: gate.maxIterations }) }}
+      </span>
       <span v-if="phase.status === 'waiting_approval'" class="tag warn tpc-flag">
         {{ t('tasks.phase.approvalNeeded') }}
       </span>
@@ -32,9 +42,13 @@
           :key="r.version"
           class="chip mono tpc-runchip"
           :class="{ on: shownVersion === r.version, dead: r.status === 'superseded' }"
+          :title="r.triggeredBy === 'auto-loop' ? t('tasks.phase.autoLoopRun') : undefined"
           @click.stop="selectedVersion = r.version"
         >
+          <Icon v-if="r.triggeredBy === 'auto-loop'" name="refresh" class="tpc-rc-loop" />
           v{{ r.version }}
+          <span v-if="r.verdict === 'pass'" class="tpc-rc-ok">✓</span>
+          <span v-else-if="r.verdict === 'fail'" class="tpc-rc-fail">✗</span>
         </button>
       </div>
 
@@ -142,6 +156,9 @@ const props = defineProps<{
   agentName: string
   index: number
   taskStatus: TaskStatus
+  // Gate config (ADR 0056) when this phase is a quality gate — drives the loop
+  // counter ceiling display.
+  gate?: { onFailTarget: string; maxIterations: number; auto: boolean }
 }>()
 
 const emit = defineEmits<{
@@ -179,6 +196,11 @@ const currentRun = computed(
 const isActive = computed(
   () => props.phase.status === 'running' || props.phase.status === 'waiting_approval',
 )
+
+// Gate verdict UI (ADR 0056). verdict lives on the run; the loop counter is this
+// gate's own fail-verdict count vs its iteration ceiling — self-contained.
+const latestVerdict = computed(() => latestRun.value?.verdict)
+const failCount = computed(() => props.phase.runs.filter((r) => r.verdict === 'fail').length)
 const canRerun = computed(
   () =>
     props.phase.runs.length > 0 &&
@@ -334,8 +356,36 @@ const confirmRerun = () => {
   white-space: nowrap;
 }
 .tpc-ver,
-.tpc-flag {
+.tpc-flag,
+.tpc-verdict,
+.tpc-loop {
   flex: 0 0 auto;
+}
+.tpc-verdict.ok {
+  color: var(--green);
+  border-color: var(--green);
+}
+.tpc-verdict.fail {
+  color: var(--danger);
+  border-color: var(--dangerBorder);
+}
+.tpc-loop {
+  color: var(--amber);
+  border-color: var(--amberBorder);
+}
+.tpc-rc-loop {
+  width: 10px;
+  height: 10px;
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+.tpc-rc-ok {
+  color: var(--green);
+  margin-left: 3px;
+}
+.tpc-rc-fail {
+  color: var(--danger);
+  margin-left: 3px;
 }
 .tpc-live {
   display: inline-flex;

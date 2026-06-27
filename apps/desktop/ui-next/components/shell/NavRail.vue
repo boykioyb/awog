@@ -27,6 +27,14 @@
     <div class="sfoot">
       <button
         class="footbtn"
+        :class="{ on: activityOpen }"
+        :title="t('nav.activity')"
+        @click="openActivity()"
+      >
+        <Icon name="act" style="width: 15px; height: 15px" />
+      </button>
+      <button
+        class="footbtn"
         :class="{ on: settingsOpen }"
         :title="t('nav.settings')"
         @click="openSettings()"
@@ -100,7 +108,6 @@ const groups = computed<NavGroup[]>(() => [
   {
     title: 'nav.group.system',
     items: [
-      { to: '/activity', icon: 'act', label: 'nav.activity' },
       { to: '/projects', icon: 'projects', label: 'nav.projects' },
       { to: '/git', icon: 'git', label: 'nav.git', dot: true },
       { to: '/connections', icon: 'conn', label: 'nav.connections' },
@@ -112,6 +119,7 @@ const groups = computed<NavGroup[]>(() => [
 const { t } = useI18n()
 const route = useRoute()
 const { open: settingsOpen, openSettings } = useSettingsModal()
+const { open: activityOpen, openActivity } = useActivityModal()
 const { isDark, toggleTheme } = useTheme()
 const { hasUnseen, openPanel } = useWhatsNew()
 const { compact } = useResponsiveShell()

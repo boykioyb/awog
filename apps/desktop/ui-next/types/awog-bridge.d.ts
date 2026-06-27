@@ -23,6 +23,14 @@ export type AwogLogTailEvent =
   | { type: 'data'; chunk: string }
   | { type: 'error'; message: string }
 
+// Live tray status (system-tray-status). The main window pushes a lightweight
+// indicator; the styled popover window forwards clicked items as commands.
+export type AwogTrayCommand =
+  | { kind: 'activity' }
+  | { kind: 'session'; id: number }
+  | { kind: 'task'; id: string }
+export type AwogTrayModel = { macTitle: string; tooltip: string }
+
 export interface AwogBridge {
   // Resolves with the JSON-RPC result, or rejects with { code, message, data }.
   request(method: string, params?: unknown): Promise<unknown>
@@ -50,6 +58,10 @@ export interface AwogBridge {
   startLogTail(): Promise<void>
   stopLogTail(): Promise<void>
   onLogData(handler: (event: AwogLogTailEvent) => void): () => void
+  // Live tray status (system-tray-status).
+  sendTrayUpdate(model: AwogTrayModel): void
+  onTrayCommand(handler: (cmd: AwogTrayCommand) => void): () => void
+  sendTrayCommand(cmd: AwogTrayCommand): void
 }
 
 declare global {

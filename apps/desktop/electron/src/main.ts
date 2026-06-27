@@ -1,10 +1,11 @@
-import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu } from 'electron'
 import { engine } from './engine'
 import { browser, registerBrowserHostHandlers } from './browser'
 import { registerIpc } from './ipc'
 import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
-import { trayIconPath } from './paths'
 import { loadShellEnv } from './shell-env'
+import { trayPopover } from './popover'
+import { setupTray, updateTray, type TrayCommand, type TrayModel } from './tray'
 import { setupUpdater } from './updater'
 import { createMainWindow, registerAppProtocolScheme } from './window'
 
@@ -17,7 +18,6 @@ setupLogging()
 // and bridges renderer ⇄ engine through the IPC router (ipc.ts).
 
 let mainWindow: BrowserWindow | null = null
-let tray: Tray | null = null
 
 const getWindow = (): BrowserWindow | null => mainWindow
 
@@ -31,6 +31,34 @@ function openMainWindow(): void {
     // A hard window close skips the renderer's onBeforeUnmount, so end any
     // active log-tail poll here rather than leaving watchFile running.
     stopLogTail()
+  })
+}
+
+// Show + focus the main window, re-creating it if it was closed. Shared by the
+// tray click, the tray menu, and tray command handling.
+function showWindow(): void {
+  if (!mainWindow) openMainWindow()
+  else {
+    mainWindow.show()
+    mainWindow.focus()
+  }
+}
+
+// Live tray status (feature: system-tray-status). Left-click toggles the styled
+// popover window; the renderer pushes a lightweight indicator (running count +
+// tooltip). The popover forwards item clicks over `tray:navigate` → we hide it,
+// show the main window, and relay the command so the main renderer routes there.
+function setupTrayBridge(): void {
+  setupTray({
+    showWindow,
+    toggleBrowser: () => (browser.isVisible() ? browser.hide() : browser.show()),
+    togglePopover: (bounds) => trayPopover.toggle(bounds),
+  })
+  ipcMain.on('tray:update', (_e, model: TrayModel) => updateTray(model))
+  ipcMain.on('tray:navigate', (_e, cmd: TrayCommand) => {
+    trayPopover.hide()
+    showWindow()
+    getWindow()?.webContents.send('tray:command', cmd)
   })
 }
 
@@ -51,6 +79,9 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     setupAppMenu()
+    // macOS: keep the app in the Dock. Secondary windows (tray popover) must not
+    // turn this into a background/accessory app — show the Dock icon explicitly.
+    if (process.platform === 'darwin') app.dock?.show()
     // Recover the user's real PATH (Homebrew/nvm/…) before spawning the engine,
     // so the agent's Bash tool / PTY / git runner can find tools under a GUI
     // (Finder/Dock) launch that strips the environment. No-op in dev + Windows.
@@ -63,7 +94,7 @@ if (!gotLock) {
     setupUpdater(getWindow)
     registerLogTailIpc(getWindow)
     openMainWindow()
-    setupTray()
+    setupTrayBridge()
 
     app.on('activate', () => {
       // macOS: re-create the window when the dock icon is clicked and none open.
@@ -96,41 +127,3 @@ function setupAppMenu(): void {
   }
 }
 
-function setupTray(): void {
-  const icon = nativeImage.createFromPath(trayIconPath())
-  if (icon.isEmpty()) return // no icon available — skip tray rather than crash
-  // macOS: template image → menu bar renders it black/white with no background.
-  if (process.platform === 'darwin') icon.setTemplateImage(true)
-  tray = new Tray(icon)
-  tray.setToolTip('AWOG')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      {
-        label: 'Show AWOG',
-        click: () => {
-          if (!mainWindow) openMainWindow()
-          else {
-            mainWindow.show()
-            mainWindow.focus()
-          }
-        },
-      },
-      {
-        label: 'Toggle browser window',
-        click: () => {
-          if (browser.isVisible()) browser.hide()
-          else browser.show()
-        },
-      },
-      { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() },
-    ]),
-  )
-  tray.on('click', () => {
-    if (!mainWindow) openMainWindow()
-    else {
-      mainWindow.show()
-      mainWindow.focus()
-    }
-  })
-}

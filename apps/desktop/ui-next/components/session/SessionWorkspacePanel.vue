@@ -115,6 +115,36 @@
           </a>
           <span v-else class="mono" style="min-width: 0; overflow-wrap: anywhere">{{ row.v }}</span>
         </div>
+
+        <!-- Context files: attachments + pinned working-set fed into the model. -->
+        <div class="infoctx">
+          <div class="infoctx-h">
+            {{ t('sessions.info.contextFiles') }}
+            <span v-if="contextFiles.length" class="infoctx-n">{{ contextFiles.length }}</span>
+          </div>
+          <button
+            v-for="f in contextFiles"
+            :key="f.key"
+            type="button"
+            class="infoctx-row"
+            :title="f.kind === 'pinned' ? f.path : f.name"
+            @click="openContextFile(f)"
+          >
+            <Icon
+              :name="f.kind === 'pinned' ? 'pin' : 'rules'"
+              style="width: 12px; height: 12px; flex: 0 0 auto"
+              :style="{ color: f.kind === 'pinned' ? 'var(--accent)' : 'var(--textDim)' }"
+            />
+            <span class="infoctx-name mono">{{ f.name }}</span>
+            <span v-if="f.kind === 'attachment' && f.size != null" class="infoctx-size">
+              {{ fmtBytes(f.size) }}
+            </span>
+            <span class="infoctx-kind">{{ t(`sessions.info.ctxKind.${f.kind}`) }}</span>
+          </button>
+          <p v-if="!contextFiles.length" class="infoctx-empty">
+            {{ t('sessions.info.contextFilesEmpty') }}
+          </p>
+        </div>
       </div>
 
       <!-- fallback (Preview / any unhandled view) -->
@@ -169,6 +199,14 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { wpIcon } = useSessionsMock()
 const { projectName } = useProjects()
+
+// Context files (attachments + pinned working-set) for the Info tab.
+const { contextFiles, openContextFile } = useSessionContextFiles(() => props.session)
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
 
 // Dock side + size go on the docked axis (width when right, height when bottom).
 // flex-basis is set both ways so .chatwrap can hold the panel as a row (right) or
@@ -273,6 +311,62 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
 </script>
 
 <style scoped>
+/* Info tab — context files section (attachments + pinned working-set). */
+.infoctx {
+  margin-top: 14px;
+}
+.infoctx-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--textDim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.infoctx-n {
+  font-family: var(--code);
+  font-size: 12px;
+  color: var(--textFaint);
+}
+.infoctx-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.infoctx-row:hover {
+  background: var(--bgHover);
+}
+.infoctx-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.infoctx-size {
+  font-size: 12px;
+  color: var(--textFaint);
+  flex: 0 0 auto;
+}
+.infoctx-kind {
+  font-size: 12px;
+  color: var(--textDim);
+  flex: 0 0 auto;
+}
+.infoctx-empty {
+  color: var(--textFaint);
+  padding: 4px 0;
+}
 /* Diff/Files/Terminal own their full chrome (file lists, viewers, the PTY canvas)
    so they take over the whole body without the default 13px padding + scroll. */
 .wpbody.flush {

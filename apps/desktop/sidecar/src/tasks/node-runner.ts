@@ -41,6 +41,7 @@ import type {
   Task,
   TaskRunUsage,
   TraceNode,
+  Verdict,
   WorkflowNode,
 } from '../types/shared.js'
 
@@ -59,9 +60,31 @@ export interface NodeRunContext {
 
 export type NodeRunOutcome = 'completed' | 'waiting_approval' | 'failed'
 
+// The run's terminal status plus, for gate nodes (ADR 0056), the parsed verdict
+// the engine uses to decide loop-back vs escalate. verdict is undefined for
+// ordinary nodes and for gate nodes whose output had no parsable verdict block.
+export interface NodeRunResult {
+  outcome: NodeRunOutcome
+  verdict?: Verdict
+}
+
 function firstLine(text: string): string {
   const line = text.split('\n').find((l) => l.trim().length > 0) ?? ''
   return line.replace(/^#+\s*/, '').trim()
+}
+
+// Parse the LAST ```verdict``` fenced block in a gate node's output (ADR 0056).
+// Output is L1 (model response) → defensive: any miss returns undefined so the
+// engine escalates to a human rather than guessing pass/fail.
+function parseVerdict(output: string): Verdict | undefined {
+  const re = /```verdict\s*([\s\S]*?)```/gi
+  let last: string | undefined
+  let m: RegExpExecArray | null
+  while ((m = re.exec(output)) !== null) last = m[1]
+  if (last === undefined) return undefined
+  const status = /status\s*:\s*(pass|fail)/i.exec(last)
+  if (!status) return undefined
+  return status[1]?.toLowerCase() === 'pass' ? 'pass' : 'fail'
 }
 
 function sourceLine(task: Task): string {
@@ -107,7 +130,7 @@ async function writeArtifact(taskId: string, name: string, content: string): Pro
   return Buffer.byteLength(content, 'utf8')
 }
 
-export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
+export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
   const { taskId, version, node, task } = ctx
   const startedMs = Date.now()
   const rootId = `tr-${node.id}-v${version}`
@@ -151,6 +174,22 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
     const upstream = await gatherUpstream(taskId, node, task)
     const outputs = node.outputs.length > 0 ? node.outputs : ['output.md']
 
+    // Gate verdict instruction (ADR 0056) — injected engine-side so ANY skill
+    // works as a gate without being edited. node-runner parses the block back.
+    const gateBlock = node.gate
+      ? [
+          '# Quality gate verdict (required)',
+          'This node is a quality gate. End your response with a fenced verdict block:',
+          '',
+          '```verdict',
+          'status: pass',
+          'summary: <one line — why it passed, or what failed>',
+          '```',
+          '',
+          'Use `status: fail` if ANY required criterion is unmet (the upstream work must be redone); otherwise `status: pass`. The orchestrator reads this block to decide whether to loop back for fixes.',
+        ].join('\n')
+      : ''
+
     const prompt = [
       `# Task: ${task.title}`,
       task.description,
@@ -159,6 +198,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
       skillBlock,
       ctx.instruction ? `# Rerun instruction\n\n${ctx.instruction}\n` : '',
       `# Deliverable\n\nProduce the artifact(s): ${outputs.join(', ')}. Write your deliverable as your final message. Apply any code changes to the repository using the Write/Edit tools.`,
+      gateBlock,
     ]
       .filter((s) => s && s.trim().length > 0)
       .join('\n\n')
@@ -319,10 +359,14 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
       }
     }
 
+    // Gate verdict (ADR 0056): parse only for gate nodes; the run itself still
+    // COMPLETED regardless of pass/fail. The engine post-processes the verdict
+    // (loop-back vs escalate) — node-runner just records it.
+    const verdict = node.gate ? parseVerdict(text) : undefined
     const outcome: NodeRunOutcome = node.approval ? 'waiting_approval' : 'completed'
-    await emitRunDone(taskId, node.id, version, outcome, formatDuration(elapsed))
+    await emitRunDone(taskId, node.id, version, outcome, formatDuration(elapsed), undefined, verdict)
     await emitPhaseStatus(taskId, node.id, outcome)
-    return outcome
+    return verdict !== undefined ? { outcome, verdict } : { outcome }
   } catch (err) {
     const elapsed = Date.now() - startedMs
     const message = err instanceof Error ? err.message : String(err)
@@ -337,6 +381,6 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunOutcome> {
     )
     await emitRunDone(taskId, node.id, version, 'failed', formatDuration(elapsed))
     await emitPhaseStatus(taskId, node.id, 'failed')
-    return 'failed'
+    return { outcome: 'failed' }
   }
 }

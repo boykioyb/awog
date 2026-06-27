@@ -1,0 +1,60 @@
+import { app, Menu, nativeImage, Tray, type Rectangle } from 'electron'
+import { trayIconPath } from './paths'
+
+// System tray (docs/features/system-tray-status.md). The rich, STYLED status
+// view lives in a frameless popover window (popover.ts) — native menus can't
+// render bars/colours. So: left-click toggles the popover; right-click shows a
+// minimal native fallback menu. This module also applies the lightweight
+// indicator the renderer pushes: the macOS title (running count) + tooltip.
+
+export type TrayCommand =
+  | { kind: 'activity' }
+  | { kind: 'session'; id: number }
+  | { kind: 'task'; id: string }
+
+// Pushed from the renderer (useTrayStatus). Only the glanceable indicator —
+// the popover computes its own detailed view.
+export type TrayModel = { macTitle: string; tooltip: string }
+
+type TrayDeps = {
+  // Show + focus the main window (creating it if it was closed).
+  showWindow: () => void
+  // Toggle the embedded browser window.
+  toggleBrowser: () => void
+  // Toggle the styled popover at the clicked icon bounds.
+  togglePopover: (bounds: Rectangle) => void
+}
+
+let tray: Tray | null = null
+let deps: TrayDeps | null = null
+
+export function setupTray(d: TrayDeps): void {
+  deps = d
+  const icon = nativeImage.createFromPath(trayIconPath())
+  if (icon.isEmpty()) return // no icon available — skip tray rather than crash
+  // macOS: template image → menu bar renders it black/white with no background.
+  if (process.platform === 'darwin') icon.setTemplateImage(true)
+  tray = new Tray(icon)
+  tray.setToolTip('AWOG')
+  // Left-click → styled popover (no setContextMenu, or it would hijack the click).
+  tray.on('click', (_e, bounds) => deps?.togglePopover(bounds))
+  // Right-click → minimal native fallback menu.
+  tray.on('right-click', () => tray?.popUpContextMenu(buildMenu()))
+}
+
+// Apply the renderer's indicator: tooltip + (macOS) the running-count title.
+export function updateTray(next: TrayModel): void {
+  if (!tray) return
+  tray.setToolTip(next.tooltip || 'AWOG')
+  // macOS-only text beside the menu-bar icon. Guard — undefined elsewhere.
+  if (process.platform === 'darwin') tray.setTitle(next.macTitle ?? '')
+}
+
+function buildMenu(): Menu {
+  return Menu.buildFromTemplate([
+    { label: 'Show AWOG', click: () => deps?.showWindow() },
+    { label: 'Toggle browser window', click: () => deps?.toggleBrowser() },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() },
+  ])
+}

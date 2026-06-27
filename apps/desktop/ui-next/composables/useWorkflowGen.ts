@@ -209,9 +209,14 @@ export function useWorkflowGen() {
     return { name: gen.name, description: gen.description, nodes, edges }
   }
 
-  // Generate a draft. `scopedAgents` are already filtered to the chosen "Save to"
-  // tier so a global workflow never references a project-only agent.
-  async function generate(prompt: string, scopedAgents: WorkflowAgent[]): Promise<WorkflowDraft> {
+  // Generate a draft. `scopedAgents` / `scopedSkills` are already filtered to the
+  // chosen "Save to" tier so a global workflow never references a project-only
+  // agent or skill.
+  async function generate(
+    prompt: string,
+    scopedAgents: WorkflowAgent[],
+    scopedSkills: WorkflowSkill[],
+  ): Promise<WorkflowDraft> {
     const trimmed = prompt.trim()
     if (!trimmed) return mockDraft('')
     const id = accountId.value
@@ -229,7 +234,11 @@ export function useWorkflowGen() {
           role: a.role,
           scope: a.source === 'project' ? 'project' : 'global',
         })),
-        availableSkills: skills.value.map((s) => ({ id: s.id, name: s.name })),
+        availableSkills: scopedSkills.map((s) => ({
+          id: s.id,
+          name: s.name,
+          scope: s.source === 'project' ? 'project' : 'global',
+        })),
       })
       return toDraft({
         name: res.name,

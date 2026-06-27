@@ -29,5 +29,9 @@
   "palette.notify.turnDone.title": "Phiên đã hoàn tất",
   "palette.notify.turnDone.body": "{title} đã hoàn thành lượt.",
   "palette.notify.turnError.title": "Phiên gặp lỗi",
-  "palette.notify.turnError.body": "{title} kết thúc với lỗi."
+  "palette.notify.turnError.body": "{title} kết thúc với lỗi.",
+  "palette.notify.attention.reply.title": "Đang chờ bạn trả lời",
+  "palette.notify.attention.reply.body": "{title} cần bạn trả lời hoặc quyết định quyền.",
+  "palette.notify.attention.approve.title": "Đang chờ duyệt",
+  "palette.notify.attention.approve.body": "{title} đang tạm dừng chờ bạn duyệt."
 }

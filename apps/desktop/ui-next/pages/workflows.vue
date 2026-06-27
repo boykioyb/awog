@@ -61,6 +61,7 @@
         :agent="selectedAgent"
         :skill="selectedSkill"
         :available-skills="availableSkills"
+        :gate-targets="gateTargets"
         @update:node="onInspectorUpdate"
       />
     </div>
@@ -68,7 +69,8 @@
     <!-- chat-to-workflow generation -->
     <WorkflowPromptCreator
       :open="creatorOpen"
-      :agents="paletteAgents"
+      :agents="allAgents"
+      :skills="allSkills"
       :projects="projectList"
       :default-scope="scopeFilter === 'all' ? 'global' : scopeFilter"
       :generate="generate"
@@ -131,6 +133,7 @@ const {
   selectedAgent,
   selectedSkill,
   availableSkills,
+  gateTargets,
   onNodesUpdate,
   onEdgesUpdate,
   onSelectNode,

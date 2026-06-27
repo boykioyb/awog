@@ -1,0 +1,18 @@
+{
+  "files.ctx.open": "Mở",
+  "files.ctx.openInVscode": "Mở trong VS Code",
+  "files.ctx.reveal": "Hiện trong Finder",
+  "files.ctx.openDefault": "Mở bằng ứng dụng mặc định",
+  "files.ctx.copyPath": "Sao chép đường dẫn",
+  "files.ctx.copyRelPath": "Sao chép đường dẫn tương đối",
+  "files.ctx.copyName": "Sao chép tên",
+  "files.ctx.newFile": "Tệp mới…",
+  "files.ctx.newFolder": "Thư mục mới…",
+  "files.ctx.rename": "Đổi tên…",
+  "files.ctx.delete": "Xoá",
+  "files.prompt.newFileTitle": "Tên tệp mới",
+  "files.prompt.newFilePh": "vidu.ts",
+  "files.prompt.newFolderTitle": "Tên thư mục mới",
+  "files.prompt.renameTitle": "Đổi tên",
+  "files.confirm.deleteTitle": "Xoá mục này?"
+}

@@ -24,10 +24,13 @@
         <Icon name="git" style="width: 13px; height: 13px" />
         <span>{{ t('projects.overview.reposCard', { n: effRepos.length }) }}</span>
         <span v-if="totalDirty" class="gchip m" style="margin-left: auto">{{ totalDirty }} M</span>
-        <span v-else-if="effRepos.length" class="gchip" style="margin-left: auto">
-          {{ t('projects.overview.clean') }}
+        <span
+          v-if="totalAhead"
+          class="gchip a"
+          :style="totalDirty ? undefined : { marginLeft: 'auto' }"
+        >
+          ↑{{ totalAhead }}
         </span>
-        <span v-if="totalAhead" class="gchip a">↑{{ totalAhead }}</span>
       </div>
       <template v-if="effRepos.length">
         <div v-for="r in effRepos" :key="r.n" class="prepo">
@@ -41,7 +44,6 @@
           </div>
           <div style="margin-left: auto; display: flex; gap: 6px">
             <span v-if="r.dirty" class="gchip m">{{ r.dirty }} M</span>
-            <span v-else class="gchip">{{ t('projects.overview.clean') }}</span>
             <span v-if="r.ahead" class="gchip a">↑{{ r.ahead }}</span>
           </div>
         </div>

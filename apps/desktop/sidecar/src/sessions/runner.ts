@@ -154,6 +154,13 @@ export interface RunNonStreamArgs {
   // the running conversation. Each drained item is also surfaced as a
   // `kind:'steer'` step in the timeline. Tasks/subagents leave it undefined.
   getSteeringMessages?: () => Promise<{ id: string; text: string }[]>
+  // Per-turn hard caps (Pha 3). Enforced in the runtime beforeToolCall: once a turn
+  // makes more than `maxToolCalls` tool calls, or runs longer than `maxWallclockMs`,
+  // every further tool call is blocked (runaway-loop guard). Absent = uncapped.
+  budget?: {
+    maxToolCalls?: number
+    maxWallclockMs?: number
+  }
 }
 
 export interface StreamCallbacks {

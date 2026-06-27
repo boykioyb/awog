@@ -85,18 +85,10 @@ export type SectionOpen = {
   submodules: boolean
 }
 
-// Generic context-menu item — one row of GitContextMenu (file / branch / stash /
-// tag / remote menus are all built as MenuItem lists).
-export type MenuItem = {
-  id?: string
-  label?: string
-  icon?: string
-  danger?: boolean
-  disabled?: boolean
-  hint?: string
-  separator?: boolean
-  children?: MenuItem[]
-}
+// Generic context-menu item — one row of ContextMenu (file / branch / stash /
+// tag / remote menus are all built as MenuItem lists). Re-exported from the
+// shared composable so git call sites keep importing it from here unchanged.
+export type { MenuItem } from '~/composables/useContextMenu'
 
 export const DEMO_DIFF: DiffLine[] = [
   { t: '@', s: '@@ -210,4 +210,5 @@ const send = () => {' },
