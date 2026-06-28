@@ -30,6 +30,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.3',
+    date: '2026-06-28',
+    highlight: {
+      en: 'Color-code your projects: right-click a project group in the chat list to give its dot a color (or reset it to the default).',
+      vi: 'Gán màu cho project: chuột phải vào nhóm project trong danh sách chat để chọn màu cho chấm của nó (hoặc đặt lại mặc định).',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Per-project dot color: right-click a project group in the chat list and pick a color for its dot from the menu — your choice is remembered, and you can reset it to the neutral default any time.',
+        vi: 'Màu chấm theo project: chuột phải vào nhóm project trong danh sách chat và chọn màu cho chấm của nó từ menu — lựa chọn được ghi nhớ, và bạn có thể đặt lại về mặc định trung tính bất cứ lúc nào.',
+      },
+    ],
+  },
+  {
     version: '0.22.2',
     date: '2026-06-28',
     highlight: {
