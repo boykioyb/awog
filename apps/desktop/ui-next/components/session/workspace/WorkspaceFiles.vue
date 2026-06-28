@@ -36,7 +36,7 @@
 // the shared PreviewModal (usePreview) — the SAME modal used for attachment preview,
 // so there's a single file-preview surface (the modal reads content via fs.readFile
 // when given workspaceRoot + path). Browser-dev (no engine) → static mock tree.
-import type { Session, TreeNode } from '~/composables/useSessionsMock'
+import type { Session, TreeNode } from '~/composables/useSessionsData'
 import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { usePreview, type PreviewRef } from '~/composables/usePreview'
@@ -46,7 +46,7 @@ import { useFileContextMenu } from '~/composables/useFileContextMenu'
 const props = defineProps<{ session: Session }>()
 
 const { t } = useI18n()
-const { FTREE } = useSessionsMock()
+const { FTREE } = useSessionsData()
 const sc = useSidecar()
 const preview = usePreview()
 const { root, ready, available } = useWorkspaceData(() => props.session.project)

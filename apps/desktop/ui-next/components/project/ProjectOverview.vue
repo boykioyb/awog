@@ -197,7 +197,7 @@
 // Edit / delete / LLM defaults are emitted up to the page-controller.
 import { computed, ref } from 'vue'
 import { agBadge, avatarBg, type ProjectRepo, type ProjectView } from './data'
-import { modelDisplayName } from '~/composables/useSessionsMock'
+import { modelDisplayName } from '~/composables/useSessionsData'
 import { useSessionsStore } from '~/stores/sessions'
 import { useConfigImport } from '~/composables/useConfigImport'
 import type { Project } from '~/types'

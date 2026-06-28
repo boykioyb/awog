@@ -396,8 +396,8 @@
 // usage + config popovers reuse the `.dproj` dropdown pattern (one menu open at a
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are mock.
-import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsMock'
-import { modelIdFromDisplay } from '~/composables/useSessionsMock'
+import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsData'
+import { modelIdFromDisplay } from '~/composables/useSessionsData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import { contextLimitFor, formatTokenCount } from '~/utils/context-window'
 import type { WorkspaceDockSide } from '~/stores/settings'
@@ -405,7 +405,7 @@ import PreviewModal, { type PreviewItem } from '~/components/common/PreviewModal
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
-const { providerOf, wpIcon } = useSessionsMock()
+const { providerOf, wpIcon } = useSessionsData()
 const { projects, projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()

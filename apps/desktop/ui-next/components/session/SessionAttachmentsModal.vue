@@ -45,7 +45,7 @@
 <script setup lang="ts">
 // Overflow modal: lists ALL pending attachments when the composer has too many to
 // show inline. Each row → click previews, × removes. Reuses the prototype .ovl scrim.
-import type { SessionAttachment } from '~/composables/useSessionsMock'
+import type { SessionAttachment } from '~/composables/useSessionsData'
 
 const props = defineProps<{ open: boolean; attachments: SessionAttachment[] }>()
 const emit = defineEmits<{ close: []; preview: [i: number]; remove: [i: number] }>()

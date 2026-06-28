@@ -6,7 +6,7 @@ import {
   modelIdFromDisplay,
   PROVIDER_DISPLAY,
   questionAnswered,
-} from '~/composables/useSessionsMock'
+} from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
 import type {
   AssistantBlock,
@@ -24,7 +24,7 @@ import type {
   StepBlock,
   SubAgent,
   ThinkingLevel,
-} from '~/composables/useSessionsMock'
+} from '~/composables/useSessionsData'
 
 // Sessions store — dual-path. When the Electron bridge is available (`sc.available`)
 // every action drives the real sidecar over IPC and folds the engine's streaming
@@ -221,7 +221,7 @@ interface SendMessageResult {
 
 export const useSessionsStore = defineStore('sessions', () => {
   const sc = useSidecar()
-  const { SESSIONS, modelsFor } = useSessionsMock()
+  const { SESSIONS, modelsFor } = useSessionsData()
   const { accounts, accountById, accountByDisplay, modelsForAccount } = useAccounts()
   const useIpc = sc.available
 

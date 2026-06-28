@@ -169,7 +169,7 @@ import type {
   StepBlock,
   TextBlock,
   Followup,
-} from '~/composables/useSessionsMock'
+} from '~/composables/useSessionsData'
 import type { BlockHighlight } from './SessionTextBlock.vue'
 
 const props = defineProps<{ message: SessionMessage; fallbackWhen: string }>()
@@ -262,7 +262,7 @@ const toggleThink = (gi: number) => {
 // Message actions (mock-backed via the sessions store). The item finds its own index
 // in the active session's message list so each button acts at the right point.
 const store = useSessionsStore()
-const { CIRCLED } = useSessionsMock()
+const { CIRCLED } = useSessionsData()
 const { scrollToMessage } = useSessionScroll()
 const msgIndex = computed(() => store.active?.msgs.indexOf(props.message) ?? -1)
 

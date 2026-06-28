@@ -32,7 +32,7 @@
 // codeBlock / diffBlock (prototype ~1866) — shared between step details and the
 // workspace panel. Syntax highlight from the prototype's hl() is dropped (visual
 // fidelity is preserved by the .cvcode mono styling); plain text avoids v-html.
-import type { DiffLine } from '~/composables/useSessionsMock'
+import type { DiffLine } from '~/composables/useSessionsData'
 
 const props = withDefaults(
   defineProps<{

@@ -4,7 +4,7 @@
 // (session.budget.limitUsd) is a warning-only cap (hard caps are enforced sidecar-side
 // in Phase 3). Pure formatting/derivation — no state, no IPC.
 
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 
 export function useSessionCost() {
   // Format a USD figure with sensible precision (sub-cent turns shouldn't read $0.00).

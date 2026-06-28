@@ -93,7 +93,7 @@ import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useSidecar } from '~/composables/useSidecar'
 import { useAccounts } from '~/composables/useAccounts'
-import { useSessionsMock } from '~/composables/useSessionsMock'
+import { useSessionsData } from '~/composables/useSessionsData'
 import { formatCost, formatTokens } from '~/composables/useActivity'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import type { AwogTrayCommand } from '~/types/awog-bridge'
@@ -105,7 +105,7 @@ const sessions = useSessionsStore()
 const tasks = useTasksStore()
 const sc = useSidecar()
 const { accounts } = useAccounts()
-const { STATUS_COLOR } = useSessionsMock()
+const { STATUS_COLOR } = useSessionsData()
 
 const today = ref<{ tokens: number; cost: number }>({ tokens: 0, cost: 0 })
 const rateLimitsRaw = ref<{ id: string; label: string; entries: UsageEntry[] }[]>([])

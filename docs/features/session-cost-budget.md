@@ -38,7 +38,7 @@ mỗi turn). `usage.cost = (prev.cost ?? 0) + (turn.cost_usd ?? 0)`.
 
 - Sidecar: `pricing/catalog.ts` (reuse), `methods/sessions.send-message.ts` (compute + return),
   `types/shared.ts` (`message.usage.costUsd`, `SessionBudget`).
-- UI: `composables/useSessionsMock.ts` (`SessionUsage.cost`, `SessionBudget`),
+- UI: `composables/useSessionsData.ts` (`SessionUsage.cost`, `SessionBudget`),
   `composables/useSessionCost.ts`, `stores/sessions.ts` (`mergeUsage`, `setBudget`),
   `components/session/SessionComposer.vue`, `SessionConfigPopover.vue`, `SessionDetail.vue`.
 - i18n: `sessions.budget.*`, `sessions.detail.cat.cost`.

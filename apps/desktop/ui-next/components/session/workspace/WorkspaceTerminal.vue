@@ -65,7 +65,7 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import { Plus, X } from 'lucide-vue-next'
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 import { useSidecar, type SidecarEvent, type UnlistenFn } from '~/composables/useSidecar'
 import { useTerminalApi } from '~/composables/useTerminalApi'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'

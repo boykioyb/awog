@@ -258,7 +258,7 @@ type DashboardUsageResult = {
 - RPC: [`tasks.list`](../../apps/desktop/sidecar/src/methods/tasks.list.ts), [`mcp.list`](../../apps/desktop/sidecar/src/methods/mcp.list.ts), [`agents.list`](../../apps/desktop/sidecar/src/methods/agents.list.ts), `sessions.list` (đã dùng ở `sessions.ts`).
 - Live event: `task.status` / `task.phase.status` / `task.run.started|output|trace|message|done` ([tasks/emit.ts](../../apps/desktop/sidecar/src/tasks/emit.ts)); `session.chunk`/`session.step`/`session.permission-request` (sessions store); `mcp.status`; `git:status:changed`.
 - Store live: `useSessionsStore`, `useGitStore` (ui-next). Tham chiếu IPC logic: `apps/desktop/ui/stores/{tasks,workspace,git}.ts`.
-- Types: [`Task` / `TaskStatus` / `TaskPhase` / `Workflow`](../../apps/desktop/sidecar/src/types/shared.ts), `McpServerSnapshot` / `McpStatus`, `Agent`, `SessionMessage.usage`, `SessionStatus` (ui-next `useSessionsMock`).
+- Types: [`Task` / `TaskStatus` / `TaskPhase` / `Workflow`](../../apps/desktop/sidecar/src/types/shared.ts), `McpServerSnapshot` / `McpStatus`, `Agent`, `SessionMessage.usage`, `SessionStatus` (ui-next `useSessionsData`).
 - Index session list ([ADR 0048](../decisions/0048-session-index-lazy-load.md)) — lọc session active cho `dashboard.usage`.
 
 ### Phần mới

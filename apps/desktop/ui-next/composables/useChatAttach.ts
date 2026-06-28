@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import type { SessionAttachment } from '~/composables/useSessionsMock'
+import type { SessionAttachment } from '~/composables/useSessionsData'
 
 // Decoupled channel for "Add file to chat" from the global PreviewModal. The modal
 // is mounted app-wide and must NOT know about the sessions store (SoC): it just

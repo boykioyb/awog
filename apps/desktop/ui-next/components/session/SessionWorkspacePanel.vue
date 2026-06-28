@@ -169,7 +169,7 @@
 // renders the views routed to one side and emits intents back. Tab bodies are
 // wired to real engine data via dedicated tab components (Diff/Files/Terminal/
 // Plan/Tasks) which degrade gracefully to an empty state outside the Electron shell.
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 import type { WorkspaceDockSide } from '~/stores/settings'
 
 const props = withDefaults(
@@ -197,7 +197,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { wpIcon } = useSessionsMock()
+const { wpIcon } = useSessionsData()
 const { projectName } = useProjects()
 const { fmtUsd, costOf, softLimit, hasBudgetInfo } = useSessionCost()
 

@@ -25,7 +25,7 @@
 
 <script setup lang="ts">
 // To-do panel (todoHtml ~1882): collapsible header (chevron) + rows that toggle done.
-import type { Todo } from '~/composables/useSessionsMock'
+import type { Todo } from '~/composables/useSessionsData'
 
 const props = defineProps<{ todos: Todo[] }>()
 const emit = defineEmits<{ toggle: [i: number] }>()

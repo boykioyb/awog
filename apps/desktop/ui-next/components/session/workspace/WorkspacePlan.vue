@@ -18,7 +18,7 @@
 // Plan tab (§5/§10) — shows the active session's latest plan block (derived from
 // the assistant `plan` blocks in the transcript). Read-only view; approve/run is
 // handled inline in the transcript gate cards. No mock data.
-import type { PlanBlock, Session } from '~/composables/useSessionsMock'
+import type { PlanBlock, Session } from '~/composables/useSessionsData'
 
 const props = defineProps<{ session: Session }>()
 

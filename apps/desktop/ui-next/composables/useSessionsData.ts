@@ -1,7 +1,10 @@
-// Typed static mock for the Sessions page — ported verbatim from awog-prototype.html
-// (SS state ~1180, PROVIDER_MODELS 1130, ACCOUNTS 1174, STYLES 1175, GROUPBY 1179,
-// MODES 1641, WPVIEWS 1380, FTREE 1382, FILE_SRC 1390, DEMO_DIFF 1873, FILES 1876).
-// VISUAL ONLY: no Pinia / IPC. Renderers consume these consts to mirror the prototype.
+// Sessions domain home: the canonical session TYPES (Session + message/assistant
+// blocks, diff/tree shapes…) and the UI display helpers/catalog (STATUS_COLOR,
+// model/provider display maps, GROUPBY, wpIcon, providerOf…) that the whole
+// Sessions feature imports. `useSessionsData()` also exposes a small browser-dev
+// SEED (SESSIONS, FTREE, DEMO_DIFF, ACCOUNTS) used only as the `!available`
+// fallback so the UI is browsable without the Electron shell + sidecar; in the
+// desktop app the live stores load real data over IPC and ignore these.
 
 export type Provider = 'Anthropic' | 'OpenAI' | 'Google'
 export type SessionStatus = 'idle' | 'streaming' | 'awaiting' | 'done' | 'error'
@@ -362,13 +365,6 @@ export const modelIdFromDisplay = (display: string): string =>
 export const modelsForProvider = (provider: Provider): string[] => PROVIDER_MODELS[provider]
 
 const ACCOUNTS = ['hoatq · Anthropic', 'team · OpenAI', 'personal · Google']
-const PCOL: Record<string, string> = {
-  awog: 'var(--accent)',
-  vbsec: 'var(--blue)',
-  'spacelinks-web': 'var(--violet)',
-}
-const projColor = (p: string): string => PCOL[p] || 'var(--textDim)'
-const PROJECTS = ['awog', 'vbsec', 'spacelinks-web']
 
 const GROUPBY: [string, string][] = [
   ['project', 'Project'],
@@ -376,11 +372,6 @@ const GROUPBY: [string, string][] = [
   ['model', 'Model'],
   ['unread', 'Unread'],
   ['none', 'None (phẳng)'],
-]
-const MODES: [string, string][] = [
-  ['Ask', 'Hỏi — agent trả lời'],
-  ['Plan', 'Lập kế hoạch trước, duyệt rồi chạy'],
-  ['Execute', 'Thực thi ngay'],
 ]
 
 // Workspace views — [name, icon sprite id, shortcut]
@@ -413,16 +404,6 @@ const FTREE: TreeNode[] = [
   { f: 'CLAUDE.md' },
 ]
 
-const FILE_SRC: Record<string, string> = {
-  'SessionComposer.vue':
-    '<script setup lang="ts">\nconst draft = ref("")\nasync function send() {\n  const enhanced = await enhancePrompt(draft.value)\n  emit("send", enhanced)\n  draft.value = ""\n}\n</' +
-    'script>',
-  'sessions.ts':
-    'export const useSessionsStore = defineStore("sessions", () => {\n  const sessions = ref<Session[]>([])\n  function add(s: Session) { sessions.value.unshift(s) }\n  return { sessions, add }\n})',
-  'sessions.enhance-prompt.ts':
-    'export async function enhancePrompt(text: string) {\n  // bọc text của user kèm bối cảnh project\n  return `Bối cảnh: AWOG\\nYêu cầu: ${text}`\n}',
-}
-
 const DEMO_DIFF: DiffLine[] = [
   { t: '@', s: '@@ -210,4 +210,5 @@ const send = () => {' },
   { t: ' ', n: 210, s: '  const text = draft.value.trim()' },
@@ -433,16 +414,6 @@ const DEMO_DIFF: DiffLine[] = [
   { t: ' ', n: 214, s: '}' },
 ]
 
-const FILES = [
-  'apps/desktop/ui/components/session/SessionComposer.vue',
-  'apps/desktop/ui/stores/sessions.ts',
-  'apps/desktop/sidecar/src/sessions/runner.ts',
-  'apps/desktop/sidecar/src/mcp/pool.ts',
-  'apps/desktop/sidecar/src/methods/sessions.enhance-prompt.ts',
-  'docs/architecture/system-overview.md',
-  'CLAUDE.md',
-]
-
 // Status → dot color + Vietnamese label (SD / SLBL in the prototype).
 const STATUS_COLOR: Record<SessionStatus, string> = {
   idle: 'var(--textFaint)',
@@ -450,13 +421,6 @@ const STATUS_COLOR: Record<SessionStatus, string> = {
   awaiting: 'var(--amber)',
   done: 'var(--textFaint)',
   error: 'var(--danger)',
-}
-const STATUS_LABEL: Record<SessionStatus, string> = {
-  idle: 'nháp',
-  streaming: 'đang chạy',
-  awaiting: 'đang chờ',
-  done: 'xong',
-  error: 'lỗi',
 }
 
 const SESSIONS: Session[] = [
@@ -776,25 +740,18 @@ const SESSIONS: Session[] = [
 // Circled numerals for follow-up quote badges (①② … up to 10 quotes).
 const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
 
-export function useSessionsMock() {
+export function useSessionsData() {
   return {
     PROVIDER_MODELS,
     CIRCLED,
     ACCOUNTS,
-    PROJECTS,
     GROUPBY,
-    MODES,
-    WPVIEWS,
     FTREE,
-    FILE_SRC,
     DEMO_DIFF,
-    FILES,
     SESSIONS,
     STATUS_COLOR,
-    STATUS_LABEL,
     providerOf,
     modelsFor,
-    projColor,
     wpIcon,
   }
 }

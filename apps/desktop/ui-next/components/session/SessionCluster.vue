@@ -14,7 +14,7 @@
 
 <script setup lang="ts">
 // clusterHtml (~1446): collapses a run of plain tool steps into one summary row.
-import type { StepBlock } from '~/composables/useSessionsMock'
+import type { StepBlock } from '~/composables/useSessionsData'
 
 const props = defineProps<{ steps: StepBlock[] }>()
 const { t } = useI18n()

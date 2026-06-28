@@ -33,7 +33,7 @@ import Icon from '~/components/Icon.vue'
 import { useI18n } from '~/composables/useI18n'
 import { useTasksStore, type TaskStatus } from '~/stores/tasks'
 import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 
 const props = defineProps<{ session: Session }>()
 

@@ -18,7 +18,7 @@
 // mermaid code) and composes them. The heavy lifting (sanitized markdown, quote-highlight,
 // copy buttons) lives in SessionMarkdownHtml; live diagrams in MermaidView. This component
 // owns the streaming throttle so a trailing block re-parses at ~30fps, not every frame.
-import type { Followup } from '~/composables/useSessionsMock'
+import type { Followup } from '~/composables/useSessionsData'
 
 // A follow-up plus its index in `active.followups` (used for the circled label).
 export type BlockHighlight = { fu: Followup; label: string }

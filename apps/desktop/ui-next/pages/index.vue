@@ -160,7 +160,7 @@
 import { computed } from 'vue'
 import { useHomeDashboard } from '~/composables/useHomeDashboard'
 import { useAccounts } from '~/composables/useAccounts'
-import type { SessionStatus } from '~/composables/useSessionsMock'
+import type { SessionStatus } from '~/composables/useSessionsData'
 
 const { t } = useI18n()
 const { openActivity } = useActivityModal()

@@ -53,6 +53,8 @@
   "sessions.pctx.selectAll": "Chọn tất cả ({n})",
   "sessions.pctx.deselectAll": "Bỏ chọn tất cả",
   "sessions.pctx.openFinder": "Mở thư mục trong Finder",
+  "sessions.pctx.color": "Màu chấm",
+  "sessions.pctx.colorClear": "Đặt lại mặc định",
   "sessions.pctx.deleteAll": "Xoá tất cả ({n})",
   "sessions.status.idle": "nháp",
   "sessions.status.streaming": "đang chạy",

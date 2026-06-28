@@ -71,7 +71,7 @@
 <script setup lang="ts">
 // A single tool step (blockHtml step branch ~1461 + stepInner ~1479 + subHtml ~1486).
 // Collapsed-by-default styling comes from .step.col in the prototype CSS.
-import type { StepBlock } from '~/composables/useSessionsMock'
+import type { StepBlock } from '~/composables/useSessionsData'
 
 const props = defineProps<{ block: StepBlock }>()
 const { t } = useI18n()

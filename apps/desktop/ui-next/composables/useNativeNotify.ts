@@ -2,7 +2,7 @@ import { onBeforeUnmount, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 
 // ── Native notifications (§9 globals) ────────────────────────────────────────
 // Fires browser Notifications (the Electron renderer is Chromium) for:

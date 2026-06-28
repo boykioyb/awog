@@ -87,7 +87,7 @@
 // reveals pin + delete actions. Title supports inline rename (double-click →
 // input). Pin / delete / select route to the store; in select mode a row click
 // toggles selection instead of opening the session.
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 
 const props = defineProps<{
   session: Session
@@ -106,7 +106,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { STATUS_COLOR } = useSessionsMock()
+const { STATUS_COLOR } = useSessionsData()
 const { projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()

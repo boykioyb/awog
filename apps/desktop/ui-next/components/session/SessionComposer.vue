@@ -556,7 +556,7 @@ import type {
   SessionAttachment,
   SlashCommandRef,
   ThinkingLevel,
-} from '~/composables/useSessionsMock'
+} from '~/composables/useSessionsData'
 import { useComposerData } from '~/composables/useComposerData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import {
@@ -593,7 +593,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const settings = useSettingsStore()
-const { providerOf, CIRCLED } = useSessionsMock()
+const { providerOf, CIRCLED } = useSessionsData()
 const { accounts, accountById, modelsForAccount } = useAccounts()
 const { scrollToMessage } = useSessionScroll()
 

@@ -315,7 +315,7 @@
 // Session list column (renderList ~1264 + renderFilters ~1253): search, filter
 // drawer, group-by buckets. Filter / group / collapse state is local UI state;
 // data mutations go through `useSessionsStore`.
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 import {
   PROJECT_COLOR_DEFAULT,
   PROJECT_COLOR_PALETTE,
@@ -326,7 +326,7 @@ const props = defineProps<{ sessions: Session[]; activeId: number | null; listWi
 const emit = defineEmits<{ select: [id: number] }>()
 
 const { t } = useI18n()
-const { GROUPBY, providerOf } = useSessionsMock()
+const { GROUPBY, providerOf } = useSessionsData()
 const { colorOf, setColor } = useProjectColors()
 const { projects, projectName, projectPath } = useProjects()
 const store = useSessionsStore()

@@ -9,7 +9,7 @@
 // HTML is a standalone, neutral light document (good for sharing/printing) and is
 // deliberately self-styled — it can't reference the app's CSS theme vars off-app.
 
-import type { AssistantBlock, Session } from '~/composables/useSessionsMock'
+import type { AssistantBlock, Session } from '~/composables/useSessionsData'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
 import { useSidecar } from '~/composables/useSidecar'
 

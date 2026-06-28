@@ -18,7 +18,7 @@
 // Uses the engine `detailKind` to pick the right view with the REAL content (so a
 // live Edit shows its actual diff, Read its file). Falls back to the mock DEMO_DIFF
 // only for seed/mock steps that carry no real detail.
-import type { DiffLine, StepDetailKind } from '~/composables/useSessionsMock'
+import type { DiffLine, StepDetailKind } from '~/composables/useSessionsData'
 
 const props = defineProps<{
   tool: string
@@ -26,7 +26,7 @@ const props = defineProps<{
   detail?: string
   detailKind?: StepDetailKind
 }>()
-const { DEMO_DIFF } = useSessionsMock()
+const { DEMO_DIFF } = useSessionsData()
 
 const isEditish = (t: string): boolean => /edit|write|update|create|notebook/i.test(t)
 const isReadish = (t: string): boolean => /read/i.test(t)

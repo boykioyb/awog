@@ -32,7 +32,7 @@
 // attChip (~1743): file vs image attachment chip inside a user bubble (.uatt).
 // Clicking opens the shared full-window PreviewModal (§7) via usePreview() — the
 // single modal instance (mounted in SessionDetail) reads the shared store.
-import type { SessionAttachment } from '~/composables/useSessionsMock'
+import type { SessionAttachment } from '~/composables/useSessionsData'
 import type { PreviewRef } from '~/composables/usePreview'
 
 const props = defineProps<{ att: SessionAttachment }>()

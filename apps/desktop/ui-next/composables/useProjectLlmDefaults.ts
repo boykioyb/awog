@@ -8,12 +8,12 @@ import {
   modelsForProvider,
   PROVIDER_DISPLAY,
   type ThinkingLevel,
-} from '~/composables/useSessionsMock'
+} from '~/composables/useSessionsData'
 import type { ProjectLlmDefaults, ProviderName } from '~/types'
 
 // Controller for the per-project LLM-defaults form. Owns the draft + the
 // provider→account→model→effort reconciliation, mirroring the old UI
-// useProjectLlmDefaults trimmed to the ui-next model catalog (useSessionsMock).
+// useProjectLlmDefaults trimmed to the ui-next model catalog (useSessionsData).
 // `accountId` undefined = follow the provider's active account. `getProjectId` /
 // `getOpen` are getters so the modal can pass reactive props.
 

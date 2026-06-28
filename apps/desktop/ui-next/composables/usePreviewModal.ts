@@ -7,7 +7,7 @@ import { useMarkdown } from '~/composables/useMarkdown'
 import { useZoomPan } from '~/composables/useZoomPan'
 import { useMarkdownOutline } from '~/composables/useMarkdownOutline'
 import { ATTACHMENT_TEXT_MAX, useChatAttach } from '~/composables/useChatAttach'
-import type { SessionAttachment } from '~/composables/useSessionsMock'
+import type { SessionAttachment } from '~/composables/useSessionsData'
 
 // Page-controller for the shared PreviewModal (nuxt-vue page-controller rule): the
 // SFC stays a thin template, all state + IPC live here. Orchestrates:

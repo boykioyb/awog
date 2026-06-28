@@ -190,8 +190,8 @@
 // (`forms` + the active tab) stays local UI working-state until "Submit" commits it.
 // Accepts the full block union; only the gate kinds match a branch (others render
 // nothing) so the parent's v-else can pass an un-narrowed AssistantBlock cleanly.
-import { questionAnswered } from '~/composables/useSessionsMock'
-import type { AssistantBlock, QuestionItem } from '~/composables/useSessionsMock'
+import { questionAnswered } from '~/composables/useSessionsData'
+import type { AssistantBlock, QuestionItem } from '~/composables/useSessionsData'
 
 const props = defineProps<{ block: AssistantBlock }>()
 const { t } = useI18n()

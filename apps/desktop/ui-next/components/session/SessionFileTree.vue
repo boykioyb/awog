@@ -33,7 +33,7 @@
 // recursive instances all reference the SAME symbol (bindings inside <script
 // setup> are per-instance and would mint a fresh symbol each time).
 import type { InjectionKey, Ref } from 'vue'
-import type { TreeDir, TreeNode } from '~/composables/useSessionsMock'
+import type { TreeDir, TreeNode } from '~/composables/useSessionsData'
 
 // External controller (real-data mode): the Files tab owns expand/select state +
 // lazy directory loading, and passes children for a dir via `childrenFor`. When a

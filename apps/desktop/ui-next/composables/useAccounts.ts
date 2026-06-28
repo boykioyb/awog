@@ -10,9 +10,9 @@ import {
   MODEL_DISPLAY,
   PROVIDER_DISPLAY,
   modelsForProvider,
-  useSessionsMock,
+  useSessionsData,
   type Provider,
-} from './useSessionsMock'
+} from './useSessionsData'
 import { useSidecar } from './useSidecar'
 
 // A flattened, UI-ready account across all providers.
@@ -87,7 +87,7 @@ async function loadAccounts(): Promise<AccountOption[]> {
 
 export function useAccounts() {
   const sc = useSidecar()
-  const { ACCOUNTS, providerOf } = useSessionsMock()
+  const { ACCOUNTS, providerOf } = useSessionsData()
 
   // Mock fallback (browser-dev): synthesise an option from each seed string. The
   // label doubles as the id (no real sidecar id available off-shell).

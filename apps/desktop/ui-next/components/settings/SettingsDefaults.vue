@@ -77,7 +77,7 @@ import {
   modelIdFromDisplay,
   modelsForProvider,
   type ThinkingLevel,
-} from '~/composables/useSessionsMock'
+} from '~/composables/useSessionsData'
 import type { AgentMode, ProviderName } from '~/stores/settings'
 
 const { t } = useI18n()

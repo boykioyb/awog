@@ -53,6 +53,8 @@
   "sessions.pctx.selectAll": "Select all ({n})",
   "sessions.pctx.deselectAll": "Deselect all",
   "sessions.pctx.openFinder": "Open folder in Finder",
+  "sessions.pctx.color": "Dot color",
+  "sessions.pctx.colorClear": "Reset to default",
   "sessions.pctx.deleteAll": "Delete all ({n})",
   "sessions.status.idle": "draft",
   "sessions.status.streaming": "running",

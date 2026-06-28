@@ -4,7 +4,7 @@
 // the fork-tree graph (SessionForkGraph) can lay it out. Pure derivation over the
 // sessions store — no IPC.
 
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 import { useSessionsStore } from '~/stores/sessions'
 
 export type ForkNode = {

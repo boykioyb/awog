@@ -57,8 +57,8 @@ export interface AccountUpdateInput {
 
 export type AgentMode = 'ask' | 'accept-edits' | 'plan' | 'execute'
 // Defined locally (not exported) to avoid an auto-import name clash with the
-// canonical `ThinkingLevel` exported from composables/useSessionsMock.ts — both
-// are the identical union. Consumers import the type from useSessionsMock.
+// canonical `ThinkingLevel` exported from composables/useSessionsData.ts — both
+// are the identical union. Consumers import the type from useSessionsData.
 type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
 
 export interface SessionDefaults {

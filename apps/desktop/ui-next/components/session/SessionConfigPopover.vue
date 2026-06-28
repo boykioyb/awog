@@ -176,7 +176,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 
 // Session config — tabbed popover (General / Tools / MCP). General now keeps just
 // Account + Model (real data via useAccounts); style / thinking / no-markdown moved
@@ -185,7 +185,7 @@ import type { Session } from '~/composables/useSessionsMock'
 // the session MCP whitelist (params.mcpServerIds).
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
-const { providerOf } = useSessionsMock()
+const { providerOf } = useSessionsData()
 const { accounts, accountById, modelsForAccount } = useAccounts()
 const store = useSessionsStore()
 const sc = useSidecar()

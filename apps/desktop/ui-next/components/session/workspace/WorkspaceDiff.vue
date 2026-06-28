@@ -59,7 +59,7 @@
 // in the shared full-window PreviewModal (usePreview) rather than an inline diff
 // pane. Degrades to an empty/disabled state when the engine bridge is absent or the
 // root can't be resolved (browser-dev).
-import type { Session } from '~/composables/useSessionsMock'
+import type { Session } from '~/composables/useSessionsData'
 import {
   SidecarError,
   SidecarUnavailableError,

@@ -55,7 +55,7 @@
 // bottom on new content while the user is at the bottom ("stick to bottom"); if
 // they scroll up to read history it leaves their position alone. Floating
 // jump-to-top / jump-to-bottom controls overlay the bottom-right.
-import type { SessionMessage } from '~/composables/useSessionsMock'
+import type { SessionMessage } from '~/composables/useSessionsData'
 
 const props = defineProps<{
   messages: SessionMessage[]

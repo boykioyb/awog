@@ -11,7 +11,7 @@
 // SoC: derivation + preview wiring only — no IPC, no fs.
 
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import type { Session, SessionAttachment } from '~/composables/useSessionsMock'
+import type { Session, SessionAttachment } from '~/composables/useSessionsData'
 import { usePreview, type PreviewRef } from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 

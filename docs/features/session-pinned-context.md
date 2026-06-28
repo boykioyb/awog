@@ -12,7 +12,7 @@ Pinned context = "luôn nhớ những file/ghi chú này trong suốt session".
 
 ## Mô hình dữ liệu
 
-- `Session.pinnedContext?: { files?: string[]; notes?: string }` (cả UI `useSessionsMock` + sidecar
+- `Session.pinnedContext?: { files?: string[]; notes?: string }` (cả UI `useSessionsData` + sidecar
   `types/shared.ts`). `files` = path workspace-relative; round-trip qua `sessions.upsert` (metadata).
 
 ## UI (composer)
@@ -43,7 +43,7 @@ Pinned context = "luôn nhớ những file/ghi chú này trong suốt session".
 
 - Sidecar: `types/shared.ts` (PinnedContext), `sessions/store.ts` (SessionMetadataPatch),
   `methods/sessions.upsert.ts` (schema + patch), `methods/sessions.send-message.ts` (Params + inject).
-- UI: `composables/useSessionsMock.ts` (type), `stores/sessions.ts` (actions + forward payload),
+- UI: `composables/useSessionsData.ts` (type), `stores/sessions.ts` (actions + forward payload),
   `components/session/SessionComposer.vue` (chip row + popover).
 - i18n: `i18n/locales/{en,vi}/sessions-composer.json` (`sessions.pinned.*`).
 
