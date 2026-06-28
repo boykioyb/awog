@@ -204,6 +204,19 @@ watch(
 </script>
 
 <style scoped>
+/* Inline rename field: a native <input> reusing .ttl would render on the browser
+   default WHITE box, so its theme-light text was white-on-white in dark mode. Pin
+   it to theme tokens (dark surface + readable text + accent focus ring). */
+input.ttl {
+  background: var(--bgInput);
+  color: var(--text);
+  border: 1px solid var(--accentBorder);
+  border-radius: 6px;
+  padding: 2px 7px;
+  outline: none;
+  font: inherit;
+}
+
 /* Indicator chips: small mono count pills, subtle (§1). Color tokens only — no
    hardcoded hex. Numeric counts use a fixed 12px mono per the badge rule. */
 .lind {

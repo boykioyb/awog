@@ -36,6 +36,16 @@
             />
           </div>
         </div>
+        <!-- The subagent's final report — the summary it returns to the main agent
+             (Task tool result). Without this the nested timeline ends at the last
+             tool call and the handed-back summary is invisible. -->
+        <div v-if="summaryText" class="subsum">
+          <div class="subhd">
+            <Icon name="check" style="width: 12px; height: 12px" />
+            {{ t('sessions.step.subagentSummary') }}
+          </div>
+          <SessionTextBlock :text="summaryText" />
+        </div>
       </div>
 
       <!-- skill -->
@@ -69,6 +79,16 @@ const { t } = useI18n()
 // Subagent steps render via the sub-step loop (when `block.sub` is set); a Skill
 // step shows its description text; everything else delegates to SessionStepBody.
 const isSkill = computed(() => /skill/i.test(props.block.tool))
+
+// A subagent's (Task) final report = the text it returns to the main agent, carried
+// on the step's `detail` (full, up to ~2k chars) or the truncated `result` chip.
+// Surfaced as a concluding summary block under the nested sub-steps.
+const summaryText = computed(() => {
+  const b = props.block
+  if (!b.sub) return ''
+  if (b.detail && (!b.detailKind || b.detailKind === 'text')) return b.detail
+  return b.result ?? ''
+})
 
 // Per-tool glyph for the step header. Matches both canonical tool names (mock:
 // Read/Edit/Bash/…) and the engine's human labels ("Run", "Search", "Update", …)
@@ -147,5 +167,16 @@ const toggleSub = (i: number) => {
 }
 .step > .steph:hover {
   background: var(--bgHover);
+}
+/* Subagent summary: the report handed back to the main agent, under the nested
+   steps. Compact (step-context) markdown with a small top divider. */
+.subsum {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9231rem;
 }
 </style>

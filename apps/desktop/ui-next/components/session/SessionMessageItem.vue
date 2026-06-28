@@ -19,9 +19,18 @@
           </div>
         </div>
       </div>
-      <template v-for="(line, k) in message.text.split('\n')" :key="k">
-        <br v-if="k > 0" />
-        {{ line }}
+      <!-- Slash command: show the compact invocation, not the expanded body
+           (full body sent to the model lives in message.text, shown on hover). -->
+      <span v-if="message.command" class="ucmd" :title="message.text">
+        <Icon name="commands" style="width: 12px; height: 12px" />
+        <span class="ucmd-name">/{{ message.command.name }}</span>
+        <span v-if="message.command.args" class="ucmd-args">{{ message.command.args }}</span>
+      </span>
+      <template v-else>
+        <template v-for="(line, k) in message.text.split('\n')" :key="k">
+          <br v-if="k > 0" />
+          {{ line }}
+        </template>
       </template>
       <div v-if="message.att && message.att.length" class="uatt">
         <SessionAttachmentChip v-for="(a, k) in message.att" :key="k" :att="a" />
@@ -100,6 +109,18 @@
           </div>
           <div class="thb">{{ g.text }}</div>
         </div>
+        <!-- Turn error (stopReason 'error') — surface the provider message + a one-click
+             retry (re-run this turn) instead of a silent empty bubble. -->
+        <div v-else-if="g.type === 'error'" class="merr">
+          <Icon name="alert" class="merr-ic" />
+          <div class="merr-main">
+            <div class="merr-msg">{{ g.text }}</div>
+            <button class="merr-retry" :title="t('sessions.message.retry')" @click="regen">
+              <Icon name="refresh" style="width: 12px; height: 12px" />
+              {{ t('sessions.message.retry') }}
+            </button>
+          </div>
+        </div>
         <SessionGateCard v-else :block="g.gate" />
       </template>
     </div>
@@ -175,6 +196,7 @@ type Grouped =
   | { key: string; type: 'step'; step: StepBlock }
   | { key: string; type: 'text'; text: string; blockIndex: number }
   | { key: string; type: 'thinking'; text: string }
+  | { key: string; type: 'error'; text: string }
   | { key: string; type: 'gate'; gate: AssistantBlock }
 
 const blockKey = (b: AssistantBlock, bi: number): string =>
@@ -209,6 +231,7 @@ const grouped = computed<Grouped[]>(() => {
       out.push({ key: `text-${bi}`, type: 'text', text: b.text, blockIndex: bi })
     else if (b.kind === 'thinking')
       out.push({ key: blockKey(b, bi), type: 'thinking', text: b.text })
+    else if (b.kind === 'error') out.push({ key: blockKey(b, bi), type: 'error', text: b.text })
     else out.push({ key: blockKey(b, bi), type: 'gate', gate: b })
   })
   flush()
@@ -413,6 +436,31 @@ const msgActions = computed(() => [
 </script>
 
 <style scoped>
+/* Slash-command invocation chip in the user bubble — compact `/name args` pill in
+   place of the expanded body (which is still sent to the model). */
+.ucmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: var(--accentDim);
+  border: 1px solid var(--accentBorder);
+  color: var(--accent);
+  font-family: var(--code);
+  vertical-align: middle;
+}
+.ucmd-name {
+  font-weight: 650;
+}
+.ucmd-args {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Hover actions: a cohesive floating toolbar (pill) overlaying the message's top
    corner on hover — no reserved row below every message (the old invisible 26px row
    was the big inter-message gap). Position-relative host + absolute toolbar. */
@@ -534,5 +582,51 @@ const msgActions = computed(() => [
   .strdot.pulse {
     animation: none;
   }
+}
+
+/* Turn-error alert: danger-tinted box with the provider message + a retry button. */
+.merr {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 4px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--dangerDim, rgba(239, 68, 68, 0.12));
+  border: 1px solid var(--dangerBorder, rgba(239, 68, 68, 0.35));
+}
+.merr-ic {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--danger);
+}
+.merr-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.merr-msg {
+  color: var(--text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.merr-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid var(--dangerBorder, var(--border));
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 0.9231rem;
+}
+.merr-retry:hover {
+  background: var(--dangerDim, var(--bgHover));
 }
 </style>

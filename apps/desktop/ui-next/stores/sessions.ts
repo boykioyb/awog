@@ -16,9 +16,11 @@ import type {
   PermBlock,
   QuestionBlock,
   QuestionItem,
+  QueuedMessage,
   Session,
   SessionAttachment,
   SessionUsage,
+  SlashCommandRef,
   StepBlock,
   SubAgent,
   ThinkingLevel,
@@ -837,13 +839,15 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // ── Queue (§2) ───────────────────────────────────────────────────────────────
 
-  function enqueue(id: number, text: string, att?: SessionAttachment[]) {
+  function enqueue(id: number, text: string, att?: SessionAttachment[], command?: SlashCommandRef) {
     const s = byId(id)
     if (!s) return
     const trimmed = text.trim()
     const atts = att ?? []
     if (!trimmed && atts.length === 0) return
-    const item = atts.length ? { text: trimmed, att: [...atts] } : { text: trimmed }
+    const item: QueuedMessage = { text: trimmed }
+    if (atts.length) item.att = [...atts]
+    if (command) item.command = command
     s.queue = [...(s.queue ?? []), item]
   }
   function dequeue(id: number, i: number) {
@@ -869,7 +873,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.status === 'streaming' || s.status === 'awaiting') return
     const head = s.queue.shift()
     if (!s.queue.length) delete s.queue
-    if (head) void sendMessage(id, head.text, head.att)
+    if (head) void sendMessage(id, head.text, head.att, head.command)
   }
 
   // ── Turn runner ──────────────────────────────────────────────────────────────
@@ -1053,6 +1057,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Merge by eid (running → done, thinking re-emits, question answered).
     const existingIdx = m.blocks.findIndex((b) => 'eid' in b && b.eid != null && b.eid === step.id)
     if (existingIdx >= 0) {
+      // Preserve nested subagent steps: a Task's children arrive as separate
+      // `parentId` events DURING the run, so the tool's own end event (which carries
+      // no children) must not wipe the `sub` already attached to the live block.
+      const prev = m.blocks[existingIdx]
+      if (prev?.kind === 'step' && prev.sub && block.kind === 'step' && !block.sub) {
+        block.sub = prev.sub
+      }
       m.blocks[existingIdx] = block
       return
     }
@@ -1278,7 +1289,12 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // Turn runner. Appends the user message + a placeholder assistant bubble, then
   // either streams the real reply (IPC) or appends a canned reply (mock).
-  async function sendMessage(id: number, text: string, att?: SessionAttachment[]) {
+  async function sendMessage(
+    id: number,
+    text: string,
+    att?: SessionAttachment[],
+    command?: SlashCommandRef,
+  ) {
     const s = byId(id)
     const trimmed = text.trim()
     const atts = att ?? []
@@ -1291,6 +1307,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       at: new Date().toISOString(),
       att: atts.length ? atts : null,
       quotes: quotes.length ? quotes : null,
+      command: command ?? null,
     })
     s.followups = []
 

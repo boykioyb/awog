@@ -199,6 +199,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { wpIcon } = useSessionsMock()
 const { projectName } = useProjects()
+const { fmtUsd, costOf, softLimit, hasBudgetInfo } = useSessionCost()
 
 // Context files (attachments + pinned working-set) for the Info tab.
 const { contextFiles, openContextFile } = useSessionContextFiles(() => props.session)
@@ -303,6 +304,15 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
     { k: t('sessions.info.tokens'), v: `${kfmt(totalTok.value)} / 200k` },
     { k: t('sessions.info.updated'), v: s.when },
   ]
+  // Cost / soft budget (moved here from the composer toolbar): cumulative USD,
+  // with `/ limit` when a soft budget is set.
+  if (hasBudgetInfo(s)) {
+    const limit = softLimit(s)
+    rows.push({
+      k: t('sessions.info.cost'),
+      v: limit ? `${fmtUsd(costOf(s) ?? 0)} / ${fmtUsd(limit)}` : fmtUsd(costOf(s)),
+    })
+  }
   if (s.aboutGhUrl) {
     rows.push({ k: t('sessions.info.gh'), v: ghLabel(s.aboutGhUrl), href: s.aboutGhUrl })
   }

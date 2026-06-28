@@ -135,12 +135,18 @@ export type AssistantBlock =
   | SteerBlock
   | ErrorBlock
 
+// A slash-command invocation shown compactly in the user bubble (`/name args`).
+// `text` still holds the expanded body (what the model receives + persists); this
+// is display-only metadata, mirroring `quotes` (in-memory, lost on reload).
+export type SlashCommandRef = { name: string; args: string }
+
 export type UserMessage = {
   role: 'user'
   text: string
   at?: string
   att?: SessionAttachment[] | null
   quotes?: Followup[] | null
+  command?: SlashCommandRef | null
 }
 export type AssistantMessage = {
   role: 'assistant'
@@ -240,7 +246,7 @@ export type PinnedContext = {
 
 // A message the user queued while a turn was streaming (§2). Auto-drained FIFO as
 // a fresh turn once the current turn returns to idle/done.
-export type QueuedMessage = { text: string; att?: SessionAttachment[] }
+export type QueuedMessage = { text: string; att?: SessionAttachment[]; command?: SlashCommandRef }
 
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'

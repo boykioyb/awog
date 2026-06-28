@@ -208,10 +208,11 @@
       <button
         class="iconbtn"
         :title="t('sessions.workspace.openGit')"
-        style="width: 28px; height: 28px"
+        style="width: 28px; height: 28px; position: relative"
         @click="gitModal.open(session.project)"
       >
         <Icon name="git" style="width: 14px; height: 14px" />
+        <span v-if="dirtyCount" class="fbadge">{{ dirtyCount }}</span>
       </button>
       <button
         class="iconbtn"
@@ -395,7 +396,7 @@
 // usage + config popovers reuse the `.dproj` dropdown pattern (one menu open at a
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are mock.
-import type { Session, SessionAttachment } from '~/composables/useSessionsMock'
+import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsMock'
 import { modelIdFromDisplay } from '~/composables/useSessionsMock'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import { contextLimitFor, formatTokenCount } from '~/utils/context-window'
@@ -411,6 +412,8 @@ const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
 const gitModal = useGitModal()
 const { fmtUsd } = useSessionCost()
+// Working-tree changed-file count for the chat's project → badges the Git button.
+const { dirtyCount } = useGitDirtyCount(() => props.session.project)
 // Cumulative session cost (USD) for the usage popover. undefined → no priced turn yet.
 const sessionCost = computed(() => props.session.usage?.cost)
 
@@ -457,8 +460,8 @@ function selectProj(id: string) {
 
 // Composer send → mock turn runner (store swaps in the real IPC runner later).
 // Pending attachments ride along, then clear (new array so the sent copy is safe).
-function onSend(text: string) {
-  store.sendMessage(props.session.id, text, pendingAtt.value)
+function onSend(text: string, command?: SlashCommandRef) {
+  store.sendMessage(props.session.id, text, pendingAtt.value, command)
   pendingAtt.value = []
 }
 

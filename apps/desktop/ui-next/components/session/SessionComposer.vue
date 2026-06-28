@@ -39,9 +39,7 @@
           :title="t('sessions.composer.queued')"
         >
           <Icon name="clock" style="width: 11px; height: 11px" />
-          <span class="attn">
-            {{ q.text || t('sessions.attachment.allTitle', { n: q.att?.length ?? 0 }) }}
-          </span>
+          <span class="attn">{{ queuedLabel(q) }}</span>
           <span class="x" :title="t('sessions.composer.queuedRemove')" @click.stop="dequeue(i)">
             ×
           </span>
@@ -386,15 +384,6 @@
             </label>
           </div>
         </span>
-        <span
-          v-if="showBudget"
-          class="chip sm budgetchip"
-          :class="{ over: budgetOver }"
-          :title="budgetOver ? t('sessions.budget.over') : t('sessions.budget.usage')"
-        >
-          <Icon name="zap" style="width: 12px; height: 12px" />
-          {{ budgetLabel }}
-        </span>
         <span class="grow1" />
         <span style="position: relative">
           <button
@@ -490,20 +479,64 @@
         >
           <Icon name="clip" style="width: 14px; height: 14px" />
         </button>
-        <span>
-          <button
-            class="btn pri sm"
-            :class="{ stop: primaryAction === 'stop' }"
-            :title="primaryTitle"
-            @click="onPrimary"
-          >
-            <Icon :name="primaryIcon" />
-            {{ primaryLabel }}
+        <!-- Idle → Send. While a turn streams → Stop + a split steer/queue button
+             (caret opens the alternate action). Mirrors the production composer. -->
+        <span v-if="!busy">
+          <button class="btn pri sm" :title="t('sessions.composer.send')" @click="sendNow">
+            <Icon name="send" />
+            {{ t('sessions.composer.send') }}
           </button>
+        </span>
+        <span v-else class="sendgrp">
+          <button
+            class="btn pri sm stop"
+            :title="t('sessions.composer.stopTooltip')"
+            @click="store.activeId != null && store.cancel(store.activeId)"
+          >
+            <Icon name="stop" />
+            {{ t('sessions.composer.stop') }}
+          </button>
+          <span v-if="hasContent" class="splitsend">
+            <button
+              class="btn pri sm splitmain"
+              :title="streamPrimaryTitle"
+              @click="onStreamPrimary"
+            >
+              <Icon :name="streamPrimaryAction === 'steer' ? 'send' : 'clock'" />
+            </button>
+            <button
+              class="btn pri sm splitcaret"
+              :title="t('sessions.composer.queue')"
+              @click.stop="sendMenuOpen = !sendMenuOpen"
+            >
+              <Icon name="chev" style="transform: rotate(180deg)" />
+            </button>
+            <div v-if="sendMenuOpen" class="smenu sendmenu" @click.stop>
+              <div class="mi sty" :class="{ mdisabled: !canSteerText }" @click="pickSteer">
+                <Icon name="send" class="styicon" />
+                <div class="stytext">
+                  <div class="nm2">{{ t('sessions.composer.steer') }}</div>
+                  <div class="sd2">{{ t('sessions.composer.steerHint') }}</div>
+                </div>
+              </div>
+              <div class="mi sty" @click="pickQueue">
+                <Icon name="clock" class="styicon" />
+                <div class="stytext">
+                  <div class="nm2">{{ t('sessions.composer.queue') }}</div>
+                  <div class="sd2">{{ t('sessions.composer.queueHint') }}</div>
+                </div>
+              </div>
+            </div>
+          </span>
         </span>
       </div>
     </div>
     <div v-if="open" style="position: fixed; inset: 0; z-index: 40" @click="open = null" />
+    <div
+      v-if="sendMenuOpen"
+      style="position: fixed; inset: 0; z-index: 40"
+      @click="sendMenuOpen = false"
+    />
   </div>
 </template>
 
@@ -518,7 +551,12 @@
 // effect on the next turn. The model chip popover also folds the Thinking selector;
 // the style chip carries the response-style catalog + the no-markdown toggle.
 import type { AccountOption } from '~/composables/useAccounts'
-import type { SessionAttachment, ThinkingLevel } from '~/composables/useSessionsMock'
+import type {
+  QueuedMessage,
+  SessionAttachment,
+  SlashCommandRef,
+  ThinkingLevel,
+} from '~/composables/useSessionsMock'
 import { useComposerData } from '~/composables/useComposerData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import {
@@ -540,7 +578,9 @@ const props = withDefaults(
   { attachments: () => [] },
 )
 const emit = defineEmits<{
-  send: [text: string]
+  // `text` is the expanded body sent to the model; `command` (when set) is the
+  // slash invocation displayed compactly in the user bubble.
+  send: [text: string, command?: SlashCommandRef]
   pick: []
   'remove-att': [i: number]
   // A pasted clipboard image → a pending attachment for the parent to track
@@ -797,10 +837,9 @@ function onPinOpen() {
 }
 
 // ── Budget (cost cap) ─────────────────────────────────────────────────────────
-// Cumulative cost vs the soft limit. Shown as a readonly chip; turns warn-colored
-// when over the limit (soft = no block; hard caps enforced sidecar-side).
-const { fmtUsd, hasBudgetInfo, overSoft } = useSessionCost()
-const showBudget = computed(() => hasBudgetInfo(store.active))
+// The cost/budget readout now lives in the workspace panel's Info tab; the composer
+// only keeps the soft-limit OVER warning banner (a conditional safety alert).
+const { fmtUsd, overSoft } = useSessionCost()
 const budgetOver = computed(() => overSoft(store.active))
 const budgetLabel = computed(() => {
   const cost = store.active?.usage?.cost
@@ -920,64 +959,98 @@ const queued = computed(() => store.active?.queue ?? [])
 function dequeue(i: number) {
   if (store.activeId != null) store.dequeue(store.activeId, i)
 }
+// A queued slash command previews as its compact invocation, not the expanded body.
+function queuedLabel(q: QueuedMessage): string {
+  if (q.command) return `/${q.command.name}${q.command.args ? ` ${q.command.args}` : ''}`
+  return q.text || t('sessions.attachment.allTitle', { n: q.att?.length ?? 0 })
+}
 
 // Primary button state. Idle → Send. While a turn runs (busy): with something
 // typed → Queue (gửi sau); with nothing typed → Stop (cancel the running turn).
 const hasContent = computed(
   () => !!draft.value.trim() || props.attachments.length > 0 || followups.value.length > 0,
 )
-const primaryAction = computed<'send' | 'queue' | 'stop'>(() =>
-  !busy.value ? 'send' : hasContent.value ? 'queue' : 'stop',
-)
-const primaryIcon = computed(() =>
-  primaryAction.value === 'stop' ? 'stop' : primaryAction.value === 'queue' ? 'clock' : 'send',
-)
-const primaryLabel = computed(() =>
-  primaryAction.value === 'stop'
-    ? t('sessions.composer.stop')
-    : primaryAction.value === 'queue'
-      ? t('sessions.composer.queued')
-      : t('sessions.composer.send'),
-)
-const primaryTitle = computed(() =>
-  primaryAction.value === 'stop'
-    ? t('sessions.composer.stopTooltip')
-    : primaryAction.value === 'queue'
-      ? t('sessions.composer.queueSend')
-      : t('sessions.composer.send'),
-)
-function onPrimary() {
-  if (primaryAction.value === 'stop') {
-    if (store.activeId != null) void store.cancel(store.activeId)
-    return
-  }
-  send()
-}
+// Idle button shows Send. While a turn streams, the send area splits into a Stop
+// button + a steer/queue split button (see template). `sendMenuOpen` toggles the
+// caret dropdown that offers the alternate streaming action.
+const sendMenuOpen = ref(false)
 
-function send() {
-  const text = draft.value.trim()
+// A draft can be STEERED (injected into the running turn) only when it is text-only
+// — attachments/quotes need a full turn, so those force Queue. Mirrors old UI.
+const canSteerText = computed(
+  () => !!draft.value.trim() && props.attachments.length === 0 && followups.value.length === 0,
+)
+const streamPrimaryAction = computed<'steer' | 'queue'>(() =>
+  canSteerText.value ? 'steer' : 'queue',
+)
+const streamPrimaryTitle = computed(() =>
+  streamPrimaryAction.value === 'steer'
+    ? t('sessions.composer.steerHint')
+    : t('sessions.composer.queueHint'),
+)
+
+// Idle send → start a fresh turn. Slash command expands to its body (model gets the
+// template) while `command` keeps the compact bubble label.
+function sendNow() {
+  const { text: outgoing, command } = buildOutgoing(draft.value)
   const hasAtt = props.attachments.length > 0
   const hasQuotes = followups.value.length > 0
-  if (!text && !hasAtt && !hasQuotes) return
+  if (!outgoing.trim() && !hasAtt && !hasQuotes) return
   closeAutocomplete()
-  // Busy → queue (gửi sau) instead of sending. We snapshot the current attachments
-  // into the store, then clear the parent's pendingAtt via `remove-att` (descending
-  // so indices don't shift). We deliberately do NOT emit `send` here: the parent's
-  // onSend always calls store.sendMessage, which has no busy-guard — emitting it
-  // would start a second concurrent turn instead of queueing.
-  // Expand a `/command` invocation into its body before sending/queueing so the
-  // model receives the prompt template, not the literal `/name`.
-  const outgoing = outgoingText(draft.value)
-  if (busy.value && store.activeId != null) {
-    store.enqueue(store.activeId, outgoing, props.attachments)
-    for (let i = props.attachments.length - 1; i >= 0; i--) emit('remove-att', i)
-    draft.value = ''
-    nextTick(grow)
-    return
-  }
-  emit('send', outgoing)
+  emit('send', outgoing, command)
   draft.value = ''
   nextTick(grow)
+}
+
+// Queue → stash the full draft (text + attachments) to auto-send as a fresh turn
+// once the current one settles. We snapshot attachments into the store, then clear
+// the parent's pendingAtt (descending so indices don't shift). NOT emitting `send`
+// here is deliberate: the parent's onSend has no busy-guard and would open a second
+// concurrent turn instead of queueing.
+function onQueue() {
+  const { text: outgoing, command } = buildOutgoing(draft.value)
+  const hasAtt = props.attachments.length > 0
+  if (!outgoing.trim() && !hasAtt) return
+  if (store.activeId == null) return
+  closeAutocomplete()
+  store.enqueue(store.activeId, outgoing, props.attachments, command)
+  for (let i = props.attachments.length - 1; i >= 0; i--) emit('remove-att', i)
+  draft.value = ''
+  nextTick(grow)
+}
+
+// Steer → inject the raw draft text into the in-flight turn (text only; matches the
+// old UI, which does not expand commands when steering). Clears just the draft.
+async function onSteer() {
+  const text = draft.value
+  if (!text.trim() || store.activeId == null) return
+  draft.value = ''
+  closeAutocomplete()
+  await store.steer(store.activeId, text)
+  showNotice(t('sessions.composer.steerDone'))
+  nextTick(grow)
+}
+
+function onStreamPrimary() {
+  if (streamPrimaryAction.value === 'steer') void onSteer()
+  else onQueue()
+}
+function pickSteer() {
+  sendMenuOpen.value = false
+  if (canSteerText.value) void onSteer()
+}
+function pickQueue() {
+  sendMenuOpen.value = false
+  onQueue()
+}
+
+// Enter / primary action router: idle → fresh turn; streaming → steer or queue.
+function send() {
+  if (busy.value) {
+    if (hasContent.value) onStreamPrimary()
+    return
+  }
+  sendNow()
 }
 function onEnter(e: KeyboardEvent) {
   if (e.shiftKey) return // Shift+Enter → newline
@@ -1183,12 +1256,18 @@ function applyMention(i: number) {
 }
 
 // Expand a `/command args` draft into the user command's body on send (built-ins
-// are dispatched via the menu, never sent as text). Non-invocations pass through.
-function outgoingText(raw: string): string {
+// are dispatched via the menu, never sent as text). Returns the expanded `text`
+// for the model plus the `command` invocation for the compact bubble; a
+// non-invocation (or unknown command) passes the raw text through with no command.
+function buildOutgoing(raw: string): { text: string; command?: SlashCommandRef } {
   const inv = parseSlashInvocation(raw)
-  if (!inv) return raw
+  if (!inv) return { text: raw }
   const cmd = findInvocableCommand(data.userCommands.value, inv.name, projectIdRef.value)
-  return cmd ? expandCommandBody(cmd.body, inv.args) : raw
+  if (!cmd) return { text: raw }
+  return {
+    text: expandCommandBody(cmd.body, inv.args),
+    command: { name: inv.name, args: inv.args },
+  }
 }
 
 // Byte length of a string (chip size meta) — mirrors the dropped/picked file path.
@@ -1422,6 +1501,38 @@ function onPaste(e: ClipboardEvent) {
   background: color-mix(in srgb, var(--danger) 88%, black);
 }
 
+/* Streaming send area: Stop + a split steer/queue button (caret opens the
+   alternate action in a small upward menu). */
+.sendgrp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.splitsend {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+.splitmain {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.splitcaret {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+  border-left: 1px solid color-mix(in srgb, var(--accentText) 25%, transparent);
+}
+/* Anchor the menu above the split button (the base .smenu is position:fixed). */
+.sendmenu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 224px;
+}
+
 /* Soft-budget warning banner above the toolbar (no block — just a heads-up). */
 .budgetwarn {
   display: flex;
@@ -1434,15 +1545,6 @@ function onPaste(e: ClipboardEvent) {
   color: var(--danger);
   background: var(--dangerBg);
   border: 1px solid var(--danger);
-}
-/* Budget chip: readonly cost / limit readout. Warn-tinted when over the soft cap. */
-.budgetchip {
-  font-variant-numeric: tabular-nums;
-  cursor: default;
-}
-.budgetchip.over {
-  color: var(--danger);
-  border-color: var(--danger);
 }
 
 /* Pinned-context popover (toolbar pin button). Reuses the .pop chrome; adds a file
