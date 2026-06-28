@@ -374,11 +374,9 @@ type MenuTarget =
 const menu = ref<{ x: number; y: number; target: MenuTarget } | null>(null)
 
 function openMenu(e: MouseEvent, target: MenuTarget) {
-  menu.value = {
-    x: Math.min(e.clientX, window.innerWidth - 220),
-    y: Math.min(e.clientY, window.innerHeight - 320),
-    target,
-  }
+  // Pass the raw click point — ContextMenu measures its own size and clamps to the
+  // viewport (flips/shifts so a tall menu never overflows off-screen).
+  menu.value = { x: e.clientX, y: e.clientY, target }
 }
 
 const sep: MenuItem = { separator: true }

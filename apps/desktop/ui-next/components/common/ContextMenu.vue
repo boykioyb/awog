@@ -1,10 +1,5 @@
 <template>
-  <div
-    v-if="open"
-    class="smenu ctxm"
-    :style="{ top: `${position.y}px`, left: `${position.x}px` }"
-    @click.stop
-  >
+  <div v-if="open" ref="menuEl" class="smenu ctxm" :style="menuStyle" @click.stop>
     <template v-for="(it, i) in items" :key="i">
       <div v-if="it.separator" class="ctxsep" />
       <div
@@ -53,7 +48,7 @@
 // surfaces (any caller builds a MenuItem list + handles select).
 import type { MenuItem } from '~/composables/useContextMenu'
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   position: { x: number; y: number }
   items: MenuItem[]
@@ -63,6 +58,55 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'select', id: string): void
 }>()
+
+// Viewport-aware placement: the caller passes the click point, but a tall menu
+// (e.g. the git file menu, 13+ rows) would overflow below the viewport and clip
+// its bottom rows. After render we measure the real height, shift the menu up to
+// fit, and cap it with a scroll when it's taller than the screen.
+const menuEl = useTemplateRef<HTMLElement>('menuEl')
+const placed = ref<{ top: number; left: number; maxHeight: number | null }>({
+  top: 0,
+  left: 0,
+  maxHeight: null,
+})
+const menuStyle = computed(() => ({
+  top: `${placed.value.top}px`,
+  left: `${placed.value.left}px`,
+  ...(placed.value.maxHeight != null
+    ? { maxHeight: `${placed.value.maxHeight}px`, overflowY: 'auto' as const }
+    : {}),
+}))
+
+function reposition() {
+  const el = menuEl.value
+  if (!el) return
+  const M = 8
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const w = el.offsetWidth
+  const h = el.scrollHeight // full content height, even if a stale maxHeight clips it
+  let left = props.position.x
+  let top = props.position.y
+  if (left + w > vw - M) left = Math.max(M, vw - w - M)
+  const avail = vh - M * 2
+  const maxHeight = h > avail ? avail : null
+  const effH = maxHeight ?? h
+  if (top + effH > vh - M) top = Math.max(M, vh - effH - M)
+  placed.value = { top, left, maxHeight }
+}
+
+watch(
+  () => [props.open, props.position.x, props.position.y] as const,
+  async ([isOpen]) => {
+    if (!isOpen) return
+    // Seed at the click point so the first frame is roughly right, then refine
+    // once the DOM has measurable dimensions.
+    placed.value = { top: props.position.y, left: props.position.x, maxHeight: null }
+    await nextTick()
+    reposition()
+  },
+  { immediate: true },
+)
 
 const openSub = ref<number | null>(null)
 const subStyle = ref<Record<string, string>>({})
@@ -75,7 +119,11 @@ function onEnter(it: MenuItem, i: number, ev: MouseEvent) {
   const r = (ev.currentTarget as HTMLElement).getBoundingClientRect()
   // Open to the right; flip left if it would overflow the viewport.
   const left = r.right + 198 > window.innerWidth ? r.left - 198 : r.right + 2
-  subStyle.value = { top: `${r.top - 5}px`, left: `${left}px` }
+  // Clamp the top so a submenu opened near the bottom edge doesn't overflow
+  // (height estimated from the child count — the flyout isn't measured yet).
+  const estH = (it.children?.length ?? 0) * 30 + 12
+  const top = Math.max(8, Math.min(r.top - 5, window.innerHeight - estH - 8))
+  subStyle.value = { top: `${top}px`, left: `${left}px` }
   openSub.value = i
 }
 
