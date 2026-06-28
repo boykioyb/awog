@@ -1,13 +1,12 @@
 import { computed, ref, watch } from 'vue'
 import { SidecarUnavailableError, useSidecar } from '~/composables/useSidecar'
+import type { ConfigKind } from '~/stores/templates'
 
 // Config-import assistant (ADR 0035): a project's `.claude`/`.agents` dirs are
 // import sources, not live-scanned tiers. This composable scans them via
 // `migration.scan` and copies selected items into `.awog` via `migration.import`
 // (non-destructive — sources are left untouched, existing entries are skipped).
 // Drives the "import from .claude/.agents" banner on the project overview.
-
-export type ConfigKind = 'agent' | 'skill' | 'hook' | 'rule' | 'command'
 
 export type ImportCandidate = {
   kind: ConfigKind
