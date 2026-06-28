@@ -162,6 +162,23 @@
           </span>
         </span>
       </div>
+      <!-- Config-import assistant (ADR 0035): `.claude`/`.agents` are import sources,
+           not live tiers — offer to copy them into `.awog`. -->
+      <div v-if="importable.length || justImported" class="cfgimport">
+        <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
+        <span v-if="importable.length">
+          {{ t('projects.import.banner', { n: importable.length }) }}
+        </span>
+        <span v-else>{{ t('projects.import.done', { n: justImported }) }}</span>
+        <span style="flex: 1" />
+        <button v-if="importable.length" class="btn sm pri" :disabled="importing" @click="onImport">
+          {{
+            importing
+              ? t('projects.import.importing')
+              : t('projects.import.action', { n: importable.length })
+          }}
+        </button>
+      </div>
     </div>
 
     <div style="display: flex; justify-content: flex-end; margin-top: 6px">
@@ -178,17 +195,33 @@
 // Binds the derived ProjectView (live counts) for the cards and the real Project
 // entity for the config block (description / path / language / remote / LLM).
 // Edit / delete / LLM defaults are emitted up to the page-controller.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { agBadge, avatarBg, type ProjectRepo, type ProjectView } from './data'
 import { modelDisplayName } from '~/composables/useSessionsMock'
 import { useSessionsStore } from '~/stores/sessions'
+import { useConfigImport } from '~/composables/useConfigImport'
 import type { Project } from '~/types'
 
 const props = defineProps<{ project: Project; view: ProjectView; repos?: ProjectRepo[] }>()
-const emit = defineEmits<{ (e: 'delete'): void; (e: 'open-llm'): void }>()
+const emit = defineEmits<{
+  (e: 'delete'): void
+  (e: 'open-llm'): void
+  (e: 'imported', n: number): void
+}>()
 
 const { t } = useI18n()
 const sessions = useSessionsStore()
+
+// Importable `.claude`/`.agents` config for this project → the import banner.
+const { importable, importing, importAll } = useConfigImport(() => props.project.id)
+const justImported = ref(0)
+async function onImport() {
+  const n = await importAll()
+  if (n <= 0) return
+  justImported.value = n
+  emit('imported', n)
+  setTimeout(() => (justImported.value = 0), 5000)
+}
 
 // Discovered child repos (multi-repo workspace) when provided, else the entity's
 // single repo. Drives the repo card + the "REPO" stat count.
@@ -218,5 +251,19 @@ const llmLabel = computed(() => {
 <style scoped>
 .rs-link:hover .st1 {
   color: var(--accent);
+}
+/* Config-import banner row: amber heads-up + an Import action, full width under
+   the .awog/ tier chips. */
+.cfgimport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-size: 0.9231rem;
+  color: var(--amber);
+  background: var(--amberDim);
+  border: 1px solid var(--amberBorder);
 }
 </style>

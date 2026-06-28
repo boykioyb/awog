@@ -78,6 +78,7 @@
         :repos="overviewRepos"
         @delete="emit('delete')"
         @open-llm="emit('open-llm')"
+        @imported="(n) => emit('imported', n)"
       />
     </div>
     <!-- Issues + PR are two independent instances, lazily mounted on first visit
@@ -126,6 +127,7 @@ const emit = defineEmits<{
   (e: 'open-workspace'): void
   (e: 'save-template'): void
   (e: 'install-template'): void
+  (e: 'imported', n: number): void
 }>()
 
 const { t } = useI18n()

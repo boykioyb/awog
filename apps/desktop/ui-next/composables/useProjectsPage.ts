@@ -124,6 +124,14 @@ export function useProjectsPage() {
     }
   }
 
+  // Config-import banner finished copying `.claude`/`.agents` into `.awog`: confirm
+  // + re-hydrate so the overview counts (and project-tier agents) reflect the import.
+  const onImported = async (n: number): Promise<void> => {
+    if (n > 0) pushToast(t('projects.toast.imported', { n }), 'success')
+    await refresh({ silent: true })
+    if (sc.available) void agentsStore.loadAgents(store.projects.map((p) => p.id))
+  }
+
   onMounted(async () => {
     await refresh({ silent: true })
     // Best-effort: hydrate the read-only derivation sources so the overview shows
@@ -326,6 +334,7 @@ export function useProjectsPage() {
     // hydrate
     refreshing,
     refresh,
+    onImported,
     // editor
     editorOpen,
     editTarget,

@@ -18,6 +18,7 @@
         @open-workspace="openWorkspace(selected)"
         @save-template="openSaveTemplate"
         @install-template="openInstallTemplate"
+        @imported="onImported"
       />
       <div v-else class="detail">
         <div class="empty">
@@ -146,6 +147,7 @@ const {
   openInstallTemplate,
   closeInstallTemplate,
   onTemplateInstalled,
+  onImported,
   toasts,
   toastColor,
 } = useProjectsPage()
