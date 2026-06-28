@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.4',
+    date: '2026-06-28',
+    highlight: {
+      en: 'A status bar now runs along the bottom of the window: switch git branches, watch your context window and plan usage, open a project, and tweak model · account · reasoning effort · style — all from one fixed spot.',
+      vi: 'Thanh trạng thái mới chạy dọc đáy cửa sổ: đổi nhánh git, theo dõi cửa sổ ngữ cảnh và hạn mức gói, mở dự án, và chỉnh model · account · mức suy luận · phong cách — tất cả từ một chỗ cố định.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: "Global status bar (VSCode-style footer): the active session's git branch with a quick-switch popover, context-window usage, a project opener, the model / account / reasoning-effort / response-style chips, and Files / Terminal panel toggles.",
+        vi: 'Thanh trạng thái toàn cục (footer kiểu VSCode): nhánh git của session đang mở kèm popover đổi nhánh nhanh, mức dùng cửa sổ ngữ cảnh, nút mở dự án, các chip model / account / mức suy luận / phong cách trả lời, và nút bật/tắt panel Files / Terminal.',
+      },
+      {
+        kind: 'added',
+        en: 'Plan-usage donuts: a per-account ring on the status bar shows your 5-hour limit at a glance, with a hover tooltip for the full breakdown (weekly, Opus, Sonnet…).',
+        vi: 'Donut hạn mức gói: mỗi tài khoản một vòng tròn trên thanh trạng thái hiển thị giới hạn 5 giờ trong nháy mắt, rê chuột để xem chi tiết đầy đủ (tuần, Opus, Sonnet…).',
+      },
+      {
+        kind: 'changed',
+        en: 'Context-window usage and the model / account / effort / style selectors moved out of the chat header and composer into the status bar, so the chat area stays focused on the conversation.',
+        vi: 'Mức dùng cửa sổ ngữ cảnh và các bộ chọn model / account / mức suy luận / phong cách được chuyển từ header chat và ô soạn xuống thanh trạng thái, để vùng chat tập trung vào hội thoại.',
+      },
+    ],
+  },
+  {
     version: '0.22.3',
     date: '2026-06-28',
     highlight: {
