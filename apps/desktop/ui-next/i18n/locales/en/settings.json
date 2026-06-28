@@ -70,7 +70,8 @@
 
   "settings.workspace.heading": "Workspace",
   "settings.workspace.path.name": "Workspace path",
-  "settings.workspace.path.desc": "AWOG home",
+  "settings.workspace.path.desc": "AWOG home (fixed; the sidecar always uses ~/.awog)",
+  "settings.workspace.path.copy": "Copy path",
   "settings.workspace.telemetry.name": "Telemetry",
   "settings.workspace.telemetry.desc": "Never sent externally except to the model API",
   "settings.workspace.templates.name": "Project templates",

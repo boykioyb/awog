@@ -16,6 +16,11 @@ import type {
 // - surface depth→ `body[data-surface]` (app-shell layer-token overrides)
 // - theme family → `body[data-theme-family]`
 // - liquid glass → `body.glass`
+//
+// `applyReducedMotion` lives here too but is NOT part of AppearanceExtras: it
+// reads settings.sessions.reducedMotion (a separate store slice). It toggles
+// `<html data-reduced-motion="1">`, which app-shell.css uses to force-disable all
+// animations/transitions regardless of the OS prefers-reduced-motion setting.
 const SANS_STACKS: Record<SansFamily, string> = {
   geist: "'Geist Variable', system-ui, sans-serif",
   inter: "'Inter', system-ui, sans-serif",
@@ -34,6 +39,10 @@ export function useAppearanceDom() {
     document.body.dataset.themeFamily = value
   }
   const applyGlass = (value: boolean) => document.body.classList.toggle('glass', value)
+  const applyReducedMotion = (value: boolean) => {
+    if (value) document.documentElement.dataset.reducedMotion = '1'
+    else delete document.documentElement.dataset.reducedMotion
+  }
 
   const applyAll = (a: AppearanceExtras) => {
     applySansFamily(a.sansFamily)
@@ -49,6 +58,7 @@ export function useAppearanceDom() {
     applySurfaceDepth,
     applyThemeFamily,
     applyGlass,
+    applyReducedMotion,
     applyAll,
   }
 }

@@ -36,134 +36,20 @@
         <span class="dttitle" :title="session.title">{{ session.title }}</span>
       </div>
 
-      <span
-        class="ctxmini chipbtn"
-        :title="t('sessions.detail.contextUsage')"
-        style="cursor: pointer; position: relative"
-        @click.stop="openMenu('usage')"
-      >
-        <span class="ctxbar">
-          <i
-            v-for="s in barSegments"
-            :key="s.key"
-            :style="{ width: `${s.pct}%`, background: s.color }"
-          />
-        </span>
-        <span class="ctxn">{{ tokLabel }}/{{ limitLabel }}</span>
-
-        <div
-          v-if="menu === 'usage'"
-          class="pop"
-          style="position: absolute; top: 130%; right: 0; z-index: 50"
-          @click.stop
+      <!-- Config gear → Budget / Tools / MCP (Model · Account · Effort · Style moved
+           to the status-bar chips). -->
+      <span style="position: relative">
+        <button
+          class="iconbtn"
+          :title="t('sessions.detail.config')"
+          style="width: 28px; height: 28px"
+          :style="
+            menu === 'config' ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}
+          "
+          @click.stop="openMenu('config')"
         >
-          <div class="pr2">
-            <div class="pl plnowrap">
-              <span>{{ t('sessions.detail.contextWindow') }}</span>
-              <span class="ctxn">{{ tokLabel }} / {{ limitLabel }} · {{ Math.round(pct) }}%</span>
-            </div>
-            <div class="ctxmodel">{{ session.model }}</div>
-            <div v-if="sessionCost != null" class="ctxcost">
-              <span>{{ t('sessions.detail.cat.cost') }}</span>
-              <span class="ctxn">{{ fmtUsd(sessionCost) }}</span>
-            </div>
-            <span class="ctxbar" style="width: 100%; height: 8px">
-              <i
-                v-for="s in barSegments"
-                :key="s.key"
-                :style="{ width: `${s.pct}%`, background: s.color }"
-              />
-            </span>
-            <div class="cattbl">
-              <div class="cathead">
-                <span class="catlbl">{{ t('sessions.detail.cat.category') }}</span>
-                <span class="catnum">{{ t('sessions.detail.cat.tokens') }}</span>
-                <span class="catpct">{{ t('sessions.detail.cat.usage') }}</span>
-              </div>
-              <div v-for="row in catRows" :key="row.key" class="catrow">
-                <span class="catsq" :style="{ background: row.color }" />
-                <span class="catlbl">{{ row.label }}</span>
-                <span class="catnum">{{ kfmt(row.tokens) }}</span>
-                <span class="catpct">{{ row.pct < 0.05 ? '0%' : `${row.pct.toFixed(1)}%` }}</span>
-              </div>
-            </div>
-
-            <!-- Expandable detail: bulk-loaded memory files + custom agents. -->
-            <div v-if="memoryFilesList.length" class="ctxsec">
-              <button class="ctxsechead" @click.stop="memoryFilesOpen = !memoryFilesOpen">
-                <Icon
-                  name="chev"
-                  class="ctxchev"
-                  :class="{ open: memoryFilesOpen }"
-                  style="width: 11px; height: 11px"
-                />
-                {{ t('sessions.detail.cat.memoryFilesSection') }}
-                <span class="ctxcount">{{ memoryFilesList.length }}</span>
-              </button>
-              <div v-if="memoryFilesOpen" class="ctxitems">
-                <div v-for="it in memoryFilesList" :key="it.label" class="ctxitem">
-                  <span class="ctxipath">{{ it.label }}</span>
-                  <span class="ctxinum">{{ kfmt(it.tokens) }}</span>
-                </div>
-              </div>
-            </div>
-            <div v-if="agentsList.length" class="ctxsec">
-              <button class="ctxsechead" @click.stop="agentsOpen = !agentsOpen">
-                <Icon
-                  name="chev"
-                  class="ctxchev"
-                  :class="{ open: agentsOpen }"
-                  style="width: 11px; height: 11px"
-                />
-                {{ t('sessions.detail.cat.agentsSection') }}
-                <span class="ctxcount">{{ agentsList.length }}</span>
-              </button>
-              <div v-if="agentsOpen" class="ctxitems">
-                <div v-for="it in agentsList" :key="it.label" class="ctxitem">
-                  <span class="ctxipath">{{ it.label }}</span>
-                  <span class="ctxinum">{{ kfmt(it.tokens) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="pr2">
-            <div class="pl">
-              <span>Plan usage · {{ provider }}</span>
-              <button
-                class="rlreload"
-                :title="t('sessions.detail.refreshUsage')"
-                :disabled="usageLoading"
-                @click.stop="refreshUsage(true)"
-              >
-                <Icon
-                  name="refresh"
-                  :class="{ spin: usageLoading }"
-                  style="width: 12px; height: 12px"
-                />
-              </button>
-            </div>
-            <div v-for="rl in rateLimits" :key="rl.label" class="rlrow">
-              <span class="rln">{{ rl.label }}</span>
-              <div class="rlbar2">
-                <i
-                  :style="{ width: `${Math.round(rl.used * 100)}%`, background: rlColor(rl.used) }"
-                />
-              </div>
-              <span class="rlp">{{ Math.round(rl.used * 100) }}% · {{ rl.reset }}</span>
-            </div>
-          </div>
-        </div>
-      </span>
-
-      <span
-        class="chip chipbtn"
-        :title="t('sessions.detail.config')"
-        style="cursor: pointer; position: relative"
-        @click.stop="openMenu('config')"
-      >
-        <Icon name="settings" style="width: 13px; height: 13px" />
-        {{ session.model }}
-
+          <Icon name="settings" style="width: 14px; height: 14px" />
+        </button>
         <SessionConfigPopover
           v-if="menu === 'config'"
           :session="session"
@@ -205,15 +91,6 @@
           </div>
         </div>
       </span>
-      <button
-        class="iconbtn"
-        :title="t('sessions.workspace.openGit')"
-        style="width: 28px; height: 28px; position: relative"
-        @click="gitModal.open(session.project)"
-      >
-        <Icon name="git" style="width: 14px; height: 14px" />
-        <span v-if="dirtyCount" class="fbadge">{{ dirtyCount }}</span>
-      </button>
       <button
         class="iconbtn"
         :title="t('sessions.export.title')"
@@ -397,25 +274,17 @@
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are mock.
 import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsData'
-import { modelIdFromDisplay } from '~/composables/useSessionsData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
-import { contextLimitFor, formatTokenCount } from '~/utils/context-window'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import PreviewModal, { type PreviewItem } from '~/components/common/PreviewModal.vue'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
-const { providerOf, wpIcon } = useSessionsData()
+const { wpIcon } = useSessionsData()
 const { projects, projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
-const gitModal = useGitModal()
-const { fmtUsd } = useSessionCost()
-// Working-tree changed-file count for the chat's project → badges the Git button.
-const { dirtyCount } = useGitDirtyCount(() => props.session.project)
-// Cumulative session cost (USD) for the usage popover. undefined → no priced turn yet.
-const sessionCost = computed(() => props.session.usage?.cost)
 
 // Resolve this session's workspace root once and provide a file opener so file
 // paths in chat markdown (e.g. `docs/x.md`) open in the shared PreviewModal.
@@ -442,9 +311,9 @@ onMounted(() => {
   if (props.session.aboutTaskId && !aboutTask.value) void tasksStore.loadTasks()
 })
 
-// Single popover open at a time (project switcher · usage · config). The shared
+// Single popover open at a time (project switcher · config · workspace). The shared
 // backdrop closes whichever is open.
-type Menu = 'proj' | 'usage' | 'config' | 'workspace'
+type Menu = 'proj' | 'config' | 'workspace'
 const menu = ref<Menu | null>(null)
 function openMenu(m: Menu) {
   menu.value = menu.value === m ? null : m
@@ -726,6 +595,17 @@ function toggleView(view: string) {
   else openView(view)
   menu.value = null // close the picker on selection (single pick per open)
 }
+// Status-bar bridge: the footer's Files/Terminal buttons request a view toggle here;
+// publish the open views back so those footer chips can reflect active state.
+const wpBridge = useWorkspacePanel()
+watch(
+  () => wpBridge.requested.value,
+  (req) => {
+    if (req) toggleView(req.view)
+  },
+)
+watch(openViews, (v) => wpBridge.publishOpenViews(v), { immediate: true })
+onBeforeUnmount(() => wpBridge.publishOpenViews([]))
 // Panel "×": close every view docked on that side.
 function closeSide(side: WorkspaceDockSide) {
   const closing =
@@ -769,249 +649,6 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   }
   handle.addEventListener('pointermove', onMove)
   handle.addEventListener('pointerup', onUp)
-}
-
-// Compact token formatter (kfmt ~1234): 1.2k / 999.
-const kfmt = (n: number): string => (n > 999 ? `${(n / 1000).toFixed(1)}k` : String(n))
-
-// Real engine usage (set by the store from the send-message result: input /
-// output / cache read+write / total / max) when present — i.e. the actual tokens
-// the model reported for this session. Falls back to a rough chars/3 estimate in
-// browser-dev / before the first real turn finishes (no usage yet).
-const usage = computed(() => props.session.usage)
-const estTok = computed(() => {
-  const chars = props.session.msgs.reduce((a, m) => {
-    if (m.role === 'user' || m.role === 'system') return a + m.text.length
-    return (
-      a +
-      m.blocks.reduce(
-        (b, k) =>
-          b +
-          ('text' in k ? k.text.length : 0) +
-          ('detail' in k ? (k.detail || '').length : 0) +
-          60,
-        0,
-      )
-    )
-  }, 0)
-  return Math.floor(chars / 3)
-})
-const totalTok = computed(() => usage.value?.total ?? estTok.value)
-// Context window follows the session's SELECTED model id (retains `-1m`); the
-// provider's base id collapses 1M → 200k, so we derive from the display the user
-// picked, not from usage. Prefer an engine-reported max if one is ever set.
-const maxTok = computed(
-  () => usage.value?.max ?? contextLimitFor(modelIdFromDisplay(props.session.model)),
-)
-const tokLabel = computed(() => formatTokenCount(totalTok.value))
-const limitLabel = computed(() => formatTokenCount(maxTok.value))
-const pct = computed(() =>
-  maxTok.value ? Math.min(100, (totalTok.value / maxTok.value) * 100) : 0,
-)
-
-// Context-window breakdown by CONTENT category (Claude-Code `/context` style),
-// not by token-type. The engine reports char sizes of each prompt segment in
-// usage.contextChars (÷4 ≈ tokens): the base System prompt, the appended
-// Instructions, System tools + MCP tools schemas, the bulk-loaded Custom agents /
-// Skills / Memory files catalogues (Claude Code preloads these so the model knows
-// what it can invoke), and the Messages history. An "Other" bucket absorbs the
-// cache/thinking/structure overhead the char estimate can't see.
-const CTX_DIVISOR = 4
-// Breakdown key order = render order = bar-segment order. `other` is derived last.
-type BreakdownKey =
-  | 'sys'
-  | 'instr'
-  | 'tools'
-  | 'mcp'
-  | 'agents'
-  | 'skills'
-  | 'memory'
-  | 'msgs'
-  | 'other'
-type Breakdown = Record<BreakdownKey, number>
-const breakdown = computed<Breakdown>(() => {
-  const cap = Math.max(totalTok.value, 1)
-  const cc = usage.value?.contextChars
-  const tok = (chars: number | undefined) => Math.round((chars ?? 0) / CTX_DIVISOR)
-  if (cc) {
-    // System prompt: prefer the itemised `systemPrompt`, fall back to the legacy
-    // aggregate `system`. Likewise tools: split into systemTools + mcpTools when
-    // present, else the legacy combined `tools` lands in System tools.
-    const sys = tok(cc.systemPrompt ?? cc.system)
-    const instr = tok(cc.instructions)
-    const tools = tok(cc.systemTools ?? cc.tools)
-    const mcp = tok(cc.mcpTools)
-    const agents = tok(cc.customAgents)
-    const skills = tok(cc.skills)
-    const memory = tok(cc.memoryFiles)
-    const msgs = tok(cc.history)
-    const est = sys + instr + tools + mcp + agents + skills + memory + msgs
-    // Overshoot → scale every segment to the real total (Other 0); undershoot →
-    // the deficit is the genuine unattributed remainder (prompt-cache, thinking…).
-    if (est > cap && est > 0) {
-      const k = cap / est
-      return {
-        sys: sys * k,
-        instr: instr * k,
-        tools: tools * k,
-        mcp: mcp * k,
-        agents: agents * k,
-        skills: skills * k,
-        memory: memory * k,
-        msgs: msgs * k,
-        other: 0,
-      }
-    }
-    return {
-      sys,
-      instr,
-      tools,
-      mcp,
-      agents,
-      skills,
-      memory,
-      msgs,
-      other: Math.max(0, totalTok.value - est),
-    }
-  }
-  // Fallback before any real turn / in browser-dev: visible message text only.
-  const msgs = Math.min(estTok.value, cap)
-  return {
-    sys: 0,
-    instr: 0,
-    tools: 0,
-    mcp: 0,
-    agents: 0,
-    skills: 0,
-    memory: 0,
-    msgs,
-    other: Math.max(0, totalTok.value - msgs),
-  }
-})
-
-// One row per category + Free space; tokens, % of the window, and a colour for the
-// square + bar segment. Empty categories (0 tokens) are dropped, except Free space.
-// Palette intentionally avoids --del (red): every category here is benign, so a
-// red swatch would falsely read as an error. Messages (usually the dominant
-// bucket) gets the prominent violet; the rarely-co-shown static-context buckets
-// (system prompt / memory files) share the accent family.
-const CAT_META = [
-  { key: 'sys', labelKey: 'sessions.detail.cat.systemPrompt', color: 'var(--accent)' },
-  { key: 'instr', labelKey: 'sessions.detail.cat.instructions', color: 'var(--amber)' },
-  { key: 'tools', labelKey: 'sessions.detail.cat.systemTools', color: 'var(--blue)' },
-  { key: 'mcp', labelKey: 'sessions.detail.cat.mcpTools', color: 'var(--add)' },
-  { key: 'agents', labelKey: 'sessions.detail.cat.customAgents', color: 'var(--mod)' },
-  { key: 'skills', labelKey: 'sessions.detail.cat.skills', color: 'var(--green)' },
-  { key: 'memory', labelKey: 'sessions.detail.cat.memoryFiles', color: 'var(--accent)' },
-  { key: 'msgs', labelKey: 'sessions.detail.cat.messages', color: 'var(--violet)' },
-  { key: 'other', labelKey: 'sessions.detail.cat.other', color: 'var(--textFaint)' },
-] as const satisfies readonly { key: BreakdownKey; labelKey: string; color: string }[]
-type CatRow = { key: string; label: string; tokens: number; color: string; pct: number }
-const catRows = computed<CatRow[]>(() => {
-  const b = breakdown.value
-  const limit = maxTok.value || 1
-  const rows: CatRow[] = CAT_META.map((m) => ({
-    key: m.key,
-    label: t(m.labelKey),
-    tokens: Math.round(b[m.key]),
-    color: m.color,
-    pct: (b[m.key] / limit) * 100,
-  })).filter((r) => r.tokens > 0)
-  const free = Math.max(0, maxTok.value - totalTok.value)
-  rows.push({
-    key: 'free',
-    label: t('sessions.detail.cat.freeSpace'),
-    tokens: free,
-    color: 'var(--bgActive)',
-    pct: (free / limit) * 100,
-  })
-  return rows
-})
-// Filled bar segments (everything except Free space, which is the empty track).
-const barSegments = computed(() => catRows.value.filter((r) => r.key !== 'free'))
-
-// Expandable detail sections (MEMORY FILES / CUSTOM AGENTS), each a flat list of
-// label + token count from the engine breakdown. Collapsed by default; the
-// chevron toggles them. Hidden entirely when the engine reported no items.
-type CtxItemRow = { label: string; tokens: number }
-const memoryFilesOpen = ref(false)
-const agentsOpen = ref(false)
-const memoryFilesList = computed<CtxItemRow[]>(() =>
-  (usage.value?.contextChars?.memoryFilesList ?? []).map((it) => ({
-    label: it.label,
-    tokens: Math.round(it.chars / CTX_DIVISOR),
-  })),
-)
-const agentsList = computed<CtxItemRow[]>(() =>
-  (usage.value?.contextChars?.customAgentsList ?? []).map((it) => ({
-    label: it.label,
-    tokens: Math.round(it.chars / CTX_DIVISOR),
-  })),
-)
-
-// Plan rate-limit rows — REAL usage from the engine (account.usage → claude.ai
-// OAuth / Codex). Browser-dev (no bridge) keeps demo rows so the popover isn't empty.
-const provider = computed(() => providerOf(props.session.account))
-type RateLimit = { label: string; used: number; reset: string }
-
-const {
-  entries: usageEntries,
-  loading: usageLoading,
-  refresh: refreshUsage,
-  available: usageAvailable,
-} = useAccountUsage(() => ({
-  provider: provider.value.toLowerCase(),
-  accountId: props.session.accountId,
-}))
-// Refresh usage when the popover opens (sidecar caches 60s, so this is cheap).
-watch(menu, (m) => {
-  if (m === 'usage') void refreshUsage()
-})
-
-const RL_LABELS: Record<string, string> = {
-  five_hour: '5-hour limit',
-  seven_day: 'Weekly · all',
-  seven_day_opus: 'Weekly · Opus',
-  seven_day_sonnet: 'Weekly · Sonnet',
-  overage: 'Overage',
-}
-function formatResetsIn(ms?: number): string {
-  if (!ms) return '—'
-  const diff = ms - Date.now()
-  if (diff <= 0) return 'now'
-  const mins = Math.floor(diff / 60000)
-  const days = Math.floor(mins / 1440)
-  const hours = Math.floor((mins % 1440) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${mins % 60}m`
-  return `${mins % 60}m`
-}
-const rateLimits = computed<RateLimit[]>(() => {
-  if (usageAvailable) {
-    return usageEntries.value.map((e) => ({
-      label: RL_LABELS[e.rateLimitType] ?? e.rateLimitType,
-      used: e.utilization,
-      reset: formatResetsIn(e.resetsAt),
-    }))
-  }
-  // Browser-dev demo rows (no bridge).
-  if (provider.value === 'OpenAI') {
-    return [
-      { label: '5-hour limit', used: 0.34, reset: '4h 02m' },
-      { label: 'Weekly · all', used: 0.51, reset: '5d 1h' },
-    ]
-  }
-  return [
-    { label: '5-hour limit', used: 0.41, reset: '3h 12m' },
-    { label: 'Weekly · all', used: 0.62, reset: '2d 4h' },
-    { label: 'Weekly · Opus', used: 0.78, reset: '2d 4h' },
-    { label: 'Weekly · Sonnet', used: 0.23, reset: '2d 4h' },
-  ]
-})
-function rlColor(u: number): string {
-  if (u >= 1) return 'var(--danger)'
-  if (u >= 0.9) return 'var(--amber)'
-  return 'var(--accent)'
 }
 </script>
 
@@ -1096,10 +733,6 @@ function rlColor(u: number): string {
   top: 2px;
   width: auto;
   left: 0;
-}
-/* Keep the rate-limit reset (e.g. "3h 12m") on one line — no mid-value wrap. */
-.rlp {
-  white-space: nowrap;
 }
 /* Drop-anywhere overlay — dashed accent frame + centred hint. pointer-events:none
    so dragleave/drop fire on .detail itself (no flicker, the drop always lands). */
@@ -1208,206 +841,5 @@ function rlColor(u: number): string {
 .npbtn.pri {
   background: var(--accent);
   color: var(--bg);
-}
-/* Plan-usage reload: ghost icon button on the section header; spins while fetching. */
-.rlreload {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  color: var(--textFaint);
-  cursor: pointer;
-  transition:
-    color 0.12s ease,
-    background 0.12s ease;
-}
-.rlreload:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.rlreload:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-.spin {
-  animation: usage-spin 0.9s linear infinite;
-}
-@keyframes usage-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-}
-
-/* ── Context-window breakdown table (Claude-Code /context style) ───────────── */
-.ctxmodel {
-  font-family: var(--code);
-  font-size: 12px;
-  color: var(--textDim);
-  margin: 2px 0 8px;
-}
-.ctxcost {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: -4px 0 8px;
-  font-size: 12px;
-  color: var(--textDim);
-}
-/* Header row stays on ONE line (the label + the token/limit count never wrap);
-   if the popover is ever too narrow the label ellipsises rather than wrapping. */
-.plnowrap {
-  white-space: nowrap;
-  gap: 10px;
-}
-.plnowrap > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.plnowrap > .ctxn {
-  flex: 0 0 auto;
-}
-.cattbl {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-}
-.cathead,
-.catrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-}
-.cathead {
-  font-size: 12px;
-  color: var(--textFaint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 5px;
-  margin-bottom: 2px;
-}
-.catsq {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  flex: 0 0 auto;
-}
-.cathead .catlbl {
-  margin-left: 17px; /* align under the rows' square + gap */
-}
-.catlbl {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-}
-.catnum,
-.catpct {
-  flex: 0 0 auto;
-  font-family: var(--code);
-  font-size: 12px;
-  color: var(--textDim);
-  text-align: right;
-}
-.catnum {
-  min-width: 56px;
-}
-.catpct {
-  min-width: 48px;
-  color: var(--textFaint);
-}
-
-/* ── Expandable bulk-load sections (MEMORY FILES / CUSTOM AGENTS) ──────────── */
-.ctxsec {
-  margin-top: 8px;
-  border-top: 1px solid var(--border);
-  padding-top: 6px;
-}
-.ctxsechead {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 2px 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--textFaint);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.ctxsechead:hover {
-  color: var(--text);
-}
-.ctxchev {
-  transition: transform 0.12s ease;
-}
-.ctxchev.open {
-  transform: rotate(90deg);
-}
-.ctxcount {
-  margin-left: auto;
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 1;
-  color: var(--textDim);
-}
-.ctxitems {
-  display: flex;
-  flex-direction: column;
-  margin-top: 4px;
-  /* Long bulk-load lists (12+ agents / many memory files) scroll within their own
-     section so they don't push Plan usage off the bottom of the popover. */
-  max-height: 184px;
-  overflow-y: auto;
-}
-/* The usage popover is absolutely positioned just below the header chip, so the
-   global `.pop` max-height (100vh − 24px) lets the now much taller breakdown +
-   plan-usage run off-screen with no scroll. Cap it to the room below the chip. */
-.pop {
-  max-height: calc(100vh - 96px);
-}
-.ctxitem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-}
-.ctxipath {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--code);
-  font-size: 12px;
-  color: var(--textDim);
-}
-.ctxinum {
-  flex: 0 0 auto;
-  font-family: var(--code);
-  font-size: 12px;
-  color: var(--textFaint);
-  text-align: right;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ctxchev {
-    transition: none;
-  }
 }
 </style>

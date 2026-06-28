@@ -6,9 +6,11 @@
         {{ t('sessions.cluster.steps', { n: steps.length }) }} · {{ summary }}
       </span>
     </div>
-    <div class="clbody">
-      <SessionStepItem v-for="(s, i) in steps" :key="i" :block="s" />
-    </div>
+    <Collapse :open="!collapsed">
+      <div class="clbody">
+        <SessionStepItem v-for="(s, i) in steps" :key="i" :block="s" />
+      </div>
+    </Collapse>
   </div>
 </template>
 
@@ -53,5 +55,18 @@ const summary = computed(() => {
    keep the hairline border so the grouped run still reads as one unit. */
 .cluster {
   background: transparent;
+}
+/* The <Collapse> wrapper now owns the body's reveal; neutralize the prototype's
+   `.cluster.col .clbody{display:none}` snap (scoped → higher specificity wins). */
+.cluster.col .clbody {
+  display: flex;
+}
+/* Header is the clickable toggle — give it the same hover feedback as step rows. */
+.clh {
+  transition: background 0.12s ease;
+  border-radius: 8px;
+}
+.clh:hover {
+  background: var(--bgHover);
 }
 </style>

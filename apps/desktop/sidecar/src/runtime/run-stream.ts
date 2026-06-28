@@ -159,7 +159,7 @@ export async function runStreamPi(
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
 
   const beforeToolCall = withTurnBudget(
-    makeBeforeToolCall(args.canUseTool, args.settings.mode, args.sessionId),
+    makeBeforeToolCall(args.canUseTool, args.settings.mode, args.sessionId, args.autoApprove ?? false),
     args.budget,
     Date.now(),
   )
@@ -251,6 +251,9 @@ export async function runStreamPi(
     // Active compaction checkpoint (ADR 0047): feed the model summary + recent
     // turns instead of the full transcript.
     args.compaction,
+    // Re-feed prior-turn images (Settings → Sessions). Default true; false drops
+    // prior images from the rebuilt history (current turn's images still sent).
+    args.refeedImages ?? true,
   )
 
   // Context-window breakdown for the UI usage panel: measure each segment's size

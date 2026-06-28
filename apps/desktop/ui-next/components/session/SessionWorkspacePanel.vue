@@ -79,6 +79,9 @@
       <!-- Tasks -->
       <WorkspaceTasks v-else-if="active === 'Tasks'" :session="session" />
 
+      <!-- Preview — renders the markdown artifacts this session produced. -->
+      <WorkspacePreview v-else-if="active === 'Preview'" :session="session" />
+
       <!-- Terminal — kept mounted once opened so the PTY persists across tab
            switches; unmounted (PTY killed) only when the Terminal view leaves
            this panel (closed or docked to the other side). -->
@@ -229,10 +232,11 @@ watch(
   },
 )
 
-// Diff/Files/Terminal own their own full-bleed chrome; the others use the padded
-// wpbody. `isFallbackTab` = any view without a dedicated body (Preview).
-const FLUSH_TABS = new Set(['Diff', 'Files', 'Terminal'])
-const HANDLED_TABS = new Set(['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Info'])
+// Diff/Files/Terminal/Preview own their own full-bleed chrome; the others use the
+// padded wpbody. `isFallbackTab` = any view without a dedicated body (defensive — all
+// known views are handled).
+const FLUSH_TABS = new Set(['Diff', 'Files', 'Terminal', 'Preview'])
+const HANDLED_TABS = new Set(['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Info', 'Preview'])
 const isFlushTab = computed(() => FLUSH_TABS.has(props.active ?? ''))
 const isFallbackTab = computed(() => !!props.active && !HANDLED_TABS.has(props.active))
 

@@ -1,5 +1,5 @@
 <template>
-  <div ref="composerEl" class="composer">
+  <div class="composer">
     <div
       class="cresize"
       :class="{ drag: resizing }"
@@ -140,178 +140,25 @@
       </div>
 
       <div class="cbar">
-        <!-- Wide: inline mode/model/account/style chips. Narrow (compact) → they
-             fold into the single "Config" dropdown (below) so the toolbar never
-             overflows / truncates a chip label. -->
-        <template v-if="!compact">
-          <span
-            class="chip sm chipbtn"
-            :class="`mode-${selectedMode}`"
-            :title="t('sessions.composer.modeTooltip')"
-            style="position: relative"
-            @click.stop="toggle('mode')"
-          >
-            <Icon :name="modeIcon" style="width: 12px; height: 12px" />
-            {{ t(`sessions.mode.${selectedMode}`) }}
-            <Icon name="chev" style="width: 11px; height: 11px" />
-            <div
-              v-if="open === 'mode'"
-              class="smenu"
-              style="position: absolute; bottom: 130%; left: 0; z-index: 50"
-              @click.stop
-            >
-              <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id)">
-                <Icon :name="m.icon" style="width: 13px; height: 13px" />
-                {{ t(`sessions.mode.${m.id}`) }}
-                <Icon
-                  v-if="m.id === selectedMode"
-                  name="check"
-                  class="ck"
-                  style="width: 13px; height: 13px"
-                />
-              </div>
-            </div>
-          </span>
-          <span
-            class="chip sm chipbtn"
-            :title="t('sessions.composer.modelTooltip')"
-            style="position: relative"
-            @click.stop="toggle('model')"
-          >
-            <Icon name="settings" style="width: 12px; height: 12px" />
-            {{ selectedModel }}
-            <Icon name="chev" style="width: 11px; height: 11px" />
-            <div
-              v-if="open === 'model'"
-              class="smenu"
-              style="
-                position: absolute;
-                bottom: 130%;
-                left: 0;
-                z-index: 50;
-                max-height: 320px;
-                overflow-y: auto;
-              "
-              @click.stop
-            >
-              <div v-for="m in availableModels" :key="m" class="mi" @click="selectModel(m)">
-                {{ m }}
-                <Icon
-                  v-if="m === selectedModel"
-                  name="check"
-                  class="ck"
-                  style="width: 13px; height: 13px"
-                />
-              </div>
-              <!-- Thinking selector folded under the model list -->
-              <div class="palg">
-                {{ t('sessions.config.thinking') }}
-                <span v-if="!thinkSupported">{{ t('sessions.config.thinkingUnsupported') }}</span>
-              </div>
-              <div
-                v-for="[v, l] in THINK"
-                :key="v"
-                class="mi"
-                :class="{ mdisabled: !thinkSupported }"
-                @click="selectThink(v)"
-              >
-                {{ l }}
-                <Icon
-                  v-if="thinking === v"
-                  name="check"
-                  class="ck"
-                  style="width: 13px; height: 13px"
-                />
-              </div>
-            </div>
-          </span>
-          <span
-            class="chip sm chipbtn acct"
-            :title="selectedAccountDisplay || t('sessions.composer.accountTooltip')"
-            style="position: relative"
-            @click.stop="toggle('account')"
-          >
-            <Icon name="agents" style="width: 12px; height: 12px" />
-            <span class="chiplbl">{{ accountShort }}</span>
-            <Icon name="chev" style="width: 11px; height: 11px" />
-            <div
-              v-if="open === 'account'"
-              class="smenu"
-              style="position: absolute; bottom: 130%; left: 0; z-index: 50"
-              @click.stop
-            >
-              <div v-for="a in accounts" :key="a.id" class="mi" @click="selectAccount(a)">
-                {{ a.display }}
-                <Icon
-                  v-if="a.id === selectedAccountId"
-                  name="check"
-                  class="ck"
-                  style="width: 13px; height: 13px"
-                />
-              </div>
-            </div>
-          </span>
-          <span
-            class="chip sm chipbtn"
-            :title="t('sessions.composer.styleTooltip')"
-            style="position: relative"
-            @click.stop="toggle('style')"
-          >
-            <Icon name="skills" style="width: 12px; height: 12px" />
-            {{ styleName }}
-            <Icon name="chev" style="width: 11px; height: 11px" />
-            <div
-              v-if="open === 'style'"
-              class="smenu stylemenu"
-              style="position: absolute; bottom: 130%; left: 0; z-index: 50"
-              @click.stop
-            >
-              <template v-for="(grp, gi) in RESPONSE_STYLES" :key="grp.key">
-                <div class="palg" :class="{ first: gi === 0 }">
-                  {{ t(`sessions.style.group.${grp.key}`) }}
-                </div>
-                <div
-                  v-for="row in grp.rows"
-                  :key="row.id"
-                  class="mi sty"
-                  :class="{ cur: row.id === activeStyleId }"
-                  @click="selectStyle(row.id)"
-                >
-                  <Icon :name="row.icon" class="styicon" />
-                  <div class="stytext">
-                    <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
-                    <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
-                  </div>
-                  <Icon v-if="row.id === activeStyleId" name="check" class="styck" />
-                </div>
-              </template>
-              <label class="nmk" style="padding: 0 11px 9px" @click.stop="toggleNoMd">
-                <span class="tog2 sm" :class="{ off: !noMd }" />
-                {{ t('sessions.config.noMarkdown') }}
-              </label>
-            </div>
-          </span>
-        </template>
-        <!-- Compact: one chip standing in for all four selectors; opens a single
-             scrollable dropdown with Mode / Model / Account / Style sections. -->
+        <!-- Per-turn Mode chip (Ask/Plan/AcceptEdits/Execute). Model / Account /
+             Reasoning-effort / Style moved to the global status-bar chips. -->
         <span
-          v-else
-          class="chip sm chipbtn cfgchip"
-          :title="t('sessions.composer.configTooltip')"
+          class="chip sm chipbtn"
+          :class="`mode-${selectedMode}`"
+          :title="t('sessions.composer.modeTooltip')"
           style="position: relative"
-          @click.stop="toggle('config')"
+          @click.stop="toggle('mode')"
         >
-          <Icon name="settings" style="width: 12px; height: 12px" />
-          {{ t('sessions.composer.config') }}
+          <Icon :name="modeIcon" style="width: 12px; height: 12px" />
+          {{ t(`sessions.mode.${selectedMode}`) }}
           <Icon name="chev" style="width: 11px; height: 11px" />
           <div
-            v-if="open === 'config'"
-            class="smenu stylemenu cfgmenu"
+            v-if="open === 'mode'"
+            class="smenu"
             style="position: absolute; bottom: 130%; left: 0; z-index: 50"
             @click.stop
           >
-            <div class="palg first">{{ t('sessions.composer.section.mode') }}</div>
-            <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id, true)">
+            <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id)">
               <Icon :name="m.icon" style="width: 13px; height: 13px" />
               {{ t(`sessions.mode.${m.id}`) }}
               <Icon
@@ -321,67 +168,6 @@
                 style="width: 13px; height: 13px"
               />
             </div>
-
-            <div class="palg">{{ t('sessions.composer.section.model') }}</div>
-            <div v-for="m in availableModels" :key="m" class="mi" @click="selectModel(m, true)">
-              {{ m }}
-              <Icon
-                v-if="m === selectedModel"
-                name="check"
-                class="ck"
-                style="width: 13px; height: 13px"
-              />
-            </div>
-            <div class="palg">
-              {{ t('sessions.config.thinking') }}
-              <span v-if="!thinkSupported">{{ t('sessions.config.thinkingUnsupported') }}</span>
-            </div>
-            <div
-              v-for="[v, l] in THINK"
-              :key="v"
-              class="mi"
-              :class="{ mdisabled: !thinkSupported }"
-              @click="selectThink(v, true)"
-            >
-              {{ l }}
-              <Icon
-                v-if="thinking === v"
-                name="check"
-                class="ck"
-                style="width: 13px; height: 13px"
-              />
-            </div>
-
-            <div class="palg">{{ t('sessions.composer.section.account') }}</div>
-            <div v-for="a in accounts" :key="a.id" class="mi" @click="selectAccount(a, true)">
-              {{ a.display }}
-              <Icon
-                v-if="a.id === selectedAccountId"
-                name="check"
-                class="ck"
-                style="width: 13px; height: 13px"
-              />
-            </div>
-
-            <div class="palg">{{ t('sessions.composer.section.style') }}</div>
-            <div
-              v-for="row in allStyles"
-              :key="row.id"
-              class="mi sty"
-              :class="{ cur: row.id === activeStyleId }"
-              @click="selectStyle(row.id, true)"
-            >
-              <Icon :name="row.icon" class="styicon" />
-              <div class="stytext">
-                <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
-                <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
-              </div>
-              <Icon v-if="row.id === activeStyleId" name="check" class="styck" />
-            </div>
-            <label class="nmk" style="padding: 0 11px 9px" @click.stop="toggleNoMd">
-              <span class="tog2 sm" :class="{ off: !noMd }" />
-              {{ t('sessions.config.noMarkdown') }}
-            </label>
           </div>
         </span>
         <span class="grow1" />
@@ -550,12 +336,10 @@
 // the STORE (read `store.active`, write via store actions) so they persist + take
 // effect on the next turn. The model chip popover also folds the Thinking selector;
 // the style chip carries the response-style catalog + the no-markdown toggle.
-import type { AccountOption } from '~/composables/useAccounts'
 import type {
   QueuedMessage,
   SessionAttachment,
   SlashCommandRef,
-  ThinkingLevel,
 } from '~/composables/useSessionsData'
 import { useComposerData } from '~/composables/useComposerData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
@@ -593,8 +377,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const settings = useSettingsStore()
-const { providerOf, CIRCLED } = useSessionsData()
-const { accounts, accountById, modelsForAccount } = useAccounts()
+const { CIRCLED } = useSessionsData()
 const { scrollToMessage } = useSessionScroll()
 
 // Cap inline chips; the rest collapse into a "+N more" chip that opens the list modal.
@@ -609,58 +392,6 @@ const MODES_UI = [
   { id: 'AcceptEdits', icon: 'edit' },
   { id: 'Execute', icon: 'play' },
 ] as const
-
-// Thinking levels + the models that don't support reasoning effort (mirrors the
-// config popover). The model chip popover folds this selector.
-const THINK: [ThinkingLevel, string][] = [
-  ['low', 'Low'],
-  ['medium', 'Medium'],
-  ['high', 'High'],
-  ['extra-high', 'Extra high'],
-  ['max', 'Max'],
-]
-const NO_THINK = new Set(['Haiku 4.5', 'GPT-4.1'])
-
-// Response-style catalog. `id` is the engine contract (sent via store.setStyle —
-// never translate it); `slug` derives the i18n name/hint keys; `icon` is a lucide
-// sprite glyph (no emoji — AWOG renders icons as SVG). Group titles + names + hints
-// resolve through i18n at render (see `styleGroupTitle` / `styleName` / template).
-type StyleRow = { id: string; slug: string; icon: string }
-type StyleGroup = { key: string; rows: StyleRow[] }
-const RESPONSE_STYLES: StyleGroup[] = [
-  { key: 'default', rows: [{ id: 'Normal', slug: 'normal', icon: 'text' }] },
-  {
-    key: 'fast',
-    rows: [
-      { id: 'Military', slug: 'military', icon: 'shield' },
-      { id: 'Caveman', slug: 'caveman', icon: 'zap' },
-      { id: 'Reality Check', slug: 'reality-check', icon: 'search' },
-      { id: 'git log', slug: 'git-log', icon: 'git' },
-      { id: 'Socratic', slug: 'socratic', icon: 'help' },
-      { id: 'BLUF', slug: 'bluf', icon: 'pin' },
-    ],
-  },
-  {
-    key: 'fun',
-    rows: [
-      { id: 'Yoda', slug: 'yoda', icon: 'sparkles' },
-      { id: 'Pirate', slug: 'pirate', icon: 'flag' },
-      { id: '80s Hacker', slug: 'hacker-80s', icon: 'save' },
-      { id: 'Dad Joke', slug: 'dad-joke', icon: 'smile' },
-    ],
-  },
-  {
-    key: 'deep',
-    rows: [
-      { id: 'Rubber Duck', slug: 'rubber-duck', icon: 'message' },
-      { id: 'Feynman', slug: 'feynman', icon: 'bulb' },
-      { id: 'First Principles', slug: 'first-principles', icon: 'layers' },
-    ],
-  },
-]
-// id → slug lookup so the chip label can resolve the localized name of the active
-// style (store holds the id; 'Default' maps back to the Normal row).
-const STYLE_SLUG = new Map(RESPONSE_STYLES.flatMap((g) => g.rows).map((r) => [r.id, r.slug]))
 
 const store = useSessionsStore()
 const ta = useTemplateRef<HTMLTextAreaElement>('ta')
@@ -714,7 +445,8 @@ function onCommand(builtinId: string) {
       )
     })
   } else if (cmd.action.type === 'style') {
-    open.value = 'style'
+    // The style picker moved to the status bar; `/style` pops it there.
+    useStatusConfig().open('style')
   }
 }
 
@@ -779,16 +511,12 @@ function onNote(i: number, e: Event) {
     store.setQuoteNote(store.activeId, i, (e.target as HTMLInputElement).value)
 }
 
-// Chip state reads straight off the active session (store-driven). Selections call
-// store actions so they persist + drive engineSettings on the next turn.
+// The per-turn Mode chip reads straight off the active session (store-driven);
+// model / account / effort / style moved to the status-bar chips (StatusConfig).
 const selectedMode = computed(() => store.active?.mode || 'Ask')
-const selectedModel = computed(() => store.active?.model || 'Opus 4.8')
-const selectedAccountDisplay = computed(() => store.active?.account || '')
-const selectedAccountId = computed(() => store.active?.accountId ?? '')
 
-// 'config' is the consolidated popover shown when the toolbar is too narrow for the
-// four inline chips — it folds mode/model/account/style into one dropdown.
-type MenuKind = 'mode' | 'model' | 'account' | 'style' | 'config' | 'pin'
+// Composer popovers: the Mode chip + the pinned-context popover.
+type MenuKind = 'mode' | 'pin'
 const open = ref<MenuKind | null>(null)
 function toggle(kind: MenuKind) {
   open.value = open.value === kind ? null : kind
@@ -847,106 +575,14 @@ const budgetLabel = computed(() => {
   return limit ? `${fmtUsd(cost ?? 0)} / ${fmtUsd(limit)}` : fmtUsd(cost)
 })
 
-// Below this toolbar width the four selector chips would overflow / truncate, so
-// they collapse into a single "Config" dropdown (the consolidated popover). Observed
-// on the composer root; flips live as the workspace panel opens/closes. Set wide
-// enough that opening the workspace (Files/Diff/…) panel — which narrows the composer —
-// already folds the chips into the Config dropdown instead of cramming them inline.
-const COMPACT_W = 760
-const composerEl = useTemplateRef<HTMLDivElement>('composerEl')
-const compact = ref(false)
-let ro: ResizeObserver | null = null
-onMounted(() => {
-  const el = composerEl.value
-  if (!el || typeof ResizeObserver === 'undefined') return
-  ro = new ResizeObserver((entries) => {
-    compact.value = (entries[0]?.contentRect.width ?? el.clientWidth) < COMPACT_W
-  })
-  ro.observe(el)
-})
-onBeforeUnmount(() => ro?.disconnect())
-// Flipping layouts removes the inline chips (or the config chip) from the DOM, so
-// drop any open menu to avoid a dangling popover + scrim.
-watch(compact, () => {
-  open.value = null
-})
-
-// Models for the currently-selected account (prefer its engine modelIds), with a
-// fallback to the display-string provider catalog (mock / unresolved account).
-const availableModels = computed(() => {
-  const opt = selectedAccountId.value ? accountById(selectedAccountId.value) : undefined
-  if (opt) return modelsForAccount(opt)
-  return modelsForAccount({
-    id: '',
-    label: '',
-    provider: providerOf(selectedAccountDisplay.value),
-    providerDisplay: providerOf(selectedAccountDisplay.value),
-    display: selectedAccountDisplay.value,
-  })
-})
-
-// `keepOpen` lets the consolidated config dropdown stay open across several picks
-// (mode + model + style in one go); the inline chips call without it → close on pick.
-function selectMode(m: string, keepOpen = false) {
+// Mode chip selection → store action (persists + drives engineSettings next turn).
+function selectMode(m: string) {
   if (store.activeId != null) store.setMode(store.activeId, m)
-  if (!keepOpen) open.value = null
+  open.value = null
 }
-function selectModel(m: string, keepOpen = false) {
-  if (store.activeId != null) store.setModel(store.activeId, m)
-  if (!keepOpen) open.value = null
-}
-function selectAccount(a: AccountOption, keepOpen = false) {
-  if (store.activeId != null) store.selectAccount(store.activeId, { id: a.id, display: a.display })
-  if (!keepOpen) open.value = null
-}
-
 const modeIcon = computed(
   () => MODES_UI.find((m) => m.id === selectedMode.value)?.icon ?? 'sessions',
 )
-// Account chip shows the concise account LABEL (e.g. "Malme Co (tran.quang_hoa)")
-// rather than the provider — with several accounts on the same provider, the
-// provider name alone can't tell you which one is active. Prefer the resolved
-// account's label; fall back to the part of the display string before " · Provider".
-const accountShort = computed(() => {
-  const opt = selectedAccountId.value ? accountById(selectedAccountId.value) : undefined
-  if (opt?.label) return opt.label
-  const disp = selectedAccountDisplay.value
-  const idx = disp.lastIndexOf(' · ')
-  return (idx > 0 ? disp.slice(0, idx) : disp) || providerOf(disp)
-})
-
-// ── Thinking (folded under the model chip) ─────────────────────────────────────
-const thinkSupported = computed(() => !NO_THINK.has(selectedModel.value))
-const thinking = computed<ThinkingLevel>(() => store.active?.thinkingLevel ?? 'high')
-function selectThink(v: ThinkingLevel, keepOpen = false) {
-  if (!thinkSupported.value || store.activeId == null) return
-  store.setThinking(store.activeId, v)
-  if (!keepOpen) open.value = null
-}
-
-// ── Response style (style chip) ────────────────────────────────────────────────
-const styleName = computed(() => {
-  const st = store.active?.style
-  const slug = st && st !== 'Default' ? (STYLE_SLUG.get(st) ?? null) : 'normal'
-  // Unknown/legacy id → show it raw rather than a missing-key string.
-  return slug ? t(`sessions.style.${slug}.name`) : (st ?? t('sessions.style.normal.name'))
-})
-// The currently-selected style id ('Default' in the store ↔ 'Normal' row).
-const activeStyleId = computed(() => {
-  const st = store.active?.style
-  return st && st !== 'Default' ? st : 'Normal'
-})
-const noMd = computed(() => store.active?.noMarkdown ?? false)
-// Flat style list (groups folded away) for the consolidated config dropdown, which
-// already carries its own section header — nested group headers would over-nest it.
-const allStyles = computed(() => RESPONSE_STYLES.flatMap((g) => g.rows))
-function selectStyle(id: string, keepOpen = false) {
-  if (store.activeId != null) store.setStyle(store.activeId, id === 'Normal' ? 'Default' : id)
-  if (!keepOpen) open.value = null
-}
-function toggleNoMd() {
-  if (store.activeId != null) store.setNoMarkdown(store.activeId, !noMd.value)
-}
 
 // ── Queue (gửi sau) ──────────────────────────────────────────────────────────
 // While the active turn is busy, Send enqueues instead of sending; the queued
@@ -1053,13 +689,20 @@ function send() {
   sendNow()
 }
 function onEnter(e: KeyboardEvent) {
-  if (e.shiftKey) return // Shift+Enter → newline
-  // An open autocomplete steals Enter to accept the highlighted item.
-  if (autocomplete.value) {
+  // An open autocomplete steals plain Enter to accept the highlighted item (never
+  // Shift+Enter — that chord is reserved for the send/newline logic below).
+  if (autocomplete.value && !e.shiftKey) {
     e.preventDefault()
     acceptActive()
     return
   }
+  // Which chord sends vs. inserts a newline follows the user's setting
+  // (Settings → Defaults → composerSendKey):
+  //   'enter'       → Enter sends, Shift+Enter = newline
+  //   'shift-enter' → Shift+Enter sends, Enter = newline
+  const sendOnShiftEnter = settings.appearance.composerSendKey === 'shift-enter'
+  const isSendChord = sendOnShiftEnter ? e.shiftKey : !e.shiftKey
+  if (!isSendChord) return // the other chord → let the textarea insert a newline
   e.preventDefault()
   send()
 }
@@ -1345,33 +988,6 @@ function onPaste(e: ClipboardEvent) {
 .cbar > span:last-child {
   flex: 0 0 auto;
 }
-/* The account chip is the one that flexes (it carries the variable-length label). */
-.cbar > .chip.acct {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-/* Consolidated config dropdown (compact toolbar) — wider than a plain .smenu so the
-   style hints read, and height-capped with its own scroll since it folds all four
-   selectors + thinking + the no-markdown toggle into one popover. */
-.cfgmenu {
-  min-width: 240px;
-  max-width: 300px;
-  max-height: min(60vh, 460px);
-  overflow-y: auto;
-}
-/* Account chip label: cap width + ellipsis so a long account name (e.g.
-   "Malme Co (tran.quang_hoa)") stays a concise chip; the full "label · Provider"
-   is in the chip's title. min-width:0 lets it shrink below the cap when the row is
-   tight so the chip never forces a wrap/overflow. */
-.chiplbl {
-  display: inline-block;
-  min-width: 0;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
-}
 /* Outlined attachment chips: drop the grey fill (prototype .att uses
    var(--bgActive)) to match the transcript chips + flat step rows; keep the border,
    add a subtle hover since the chip opens a preview. Covers pending, queued (.qatt)
@@ -1389,6 +1005,43 @@ function onPaste(e: ClipboardEvent) {
 @media (prefers-reduced-motion: reduce) {
   .att {
     transition: none;
+  }
+}
+/* Composer box reacts to focus: the border + a soft accent ring light up while the
+   textarea inside is focused (focus-within), instead of a static border. */
+.cbox {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.cbox:focus-within {
+  border-color: var(--accentBorder);
+  box-shadow: 0 0 0 3px var(--accentDim);
+}
+/* Tactile press: primary + icon action buttons dip slightly when pressed, and the
+   primary's hover brightness now eases in instead of snapping. */
+.btn,
+.iconbtn {
+  transition:
+    transform 0.08s ease,
+    filter 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.btn:active,
+.iconbtn:active {
+  transform: scale(0.95);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cbox,
+  .btn,
+  .iconbtn {
+    transition: none;
+  }
+  .btn:active,
+  .iconbtn:active {
+    transform: none;
   }
 }
 /* Transient built-in command feedback (Mode → Plan, /compact running…). Sits just

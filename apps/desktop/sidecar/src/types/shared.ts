@@ -847,6 +847,15 @@ export interface Task {
   // true the per-phase auto-commit appends `Co-Authored-By: AWOG …`. Optional
   // for legacy tasks — undefined is treated as enabled.
   commitCoAuthor?: boolean
+  // Snapshot of the remaining auto-commit Git settings (UI) at creation time.
+  // Settings live in the renderer (localStorage) so they travel in tasks.create
+  // and are persisted here for restart/rerun. Optional for legacy tasks:
+  //   autoCommitPerPhase undefined → enabled (commit each phase)
+  //   autoCommitScope undefined    → 'workspace'
+  //   autoCommitMessageTemplate undefined → node-runner default template
+  autoCommitPerPhase?: boolean
+  autoCommitScope?: 'workspace' | 'artifacts-only'
+  autoCommitMessageTemplate?: string
   phases: Record<string, TaskPhase>
 }
 

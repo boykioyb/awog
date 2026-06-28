@@ -17,6 +17,11 @@ import { suppressEchoFor } from './watcher.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 
+// Pathspecs staged when scope = 'artifacts-only': the artifact/AWOG folders inside
+// the project workspace, not the whole tree. Only paths that actually exist are
+// passed to `git add` (an absent pathspec would make git error out).
+const ARTIFACTS_ONLY_PATHSPECS = ['artifacts', '.awog'] as const
+
 const AUTO_COMMIT_LOCK_TIMEOUT_MS = 30_000
 
 export interface AutoCommitPhaseOptions {
@@ -31,9 +36,10 @@ export interface AutoCommitPhaseOptions {
   // Caller passes the template straight from settings (e.g.
   // `[{phaseId}] {agentName}: {summary}`). Tokens are substituted below.
   template: string
-  // v1 only honours 'workspace' (git add -A). 'artifacts-only' is reserved for
-  // v2 once the engine carries explicit per-phase artifact pathspecs; we
-  // accept the value here so call sites are stable across versions.
+  // 'workspace' → stage the whole tree (`git add -A`). 'artifacts-only' → stage
+  // only the project's artifact folders (artifacts/ + .awog/) so generated docs
+  // get committed but agent-touched source files don't. Falls back to a no-op
+  // (committed:false) when artifacts-only and neither folder has changes.
   scope: 'workspace' | 'artifacts-only'
   // Append the `Co-Authored-By: AWOG …` trailer (Git setting `commitCoAuthor`,
   // snapshotted on the task). Defaults to true when omitted.
@@ -70,14 +76,24 @@ function renderTemplate(template: string, vars: Record<string, string>): string 
   return template.replace(/\{(\w+)\}/g, (_match, key: string) => vars[key] ?? '')
 }
 
-export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<AutoCommitResult> {
-  if (opts.scope === 'artifacts-only') {
-    log.warn('autoCommit artifacts-only scope not supported in v1, falling back to workspace', {
-      taskId: opts.taskId,
-      phaseId: opts.phaseId,
-    })
+// List the artifacts-only pathspecs that exist in the working tree. `git ls-files`
+// + `--others` covers tracked + untracked; we just probe each folder for any path
+// under it. Returns the subset to hand to `git add` (empty → nothing to stage).
+async function existingArtifactPathspecs(workspaceRoot: string): Promise<string[]> {
+  const present: string[] = []
+  for (const spec of ARTIFACTS_ONLY_PATHSPECS) {
+    // eslint-disable-next-line no-await-in-loop
+    const res = await runGit(
+      workspaceRoot,
+      ['ls-files', '--cached', '--others', '--exclude-standard', '--', spec],
+      { throwOnNonZero: false },
+    )
+    if (res.stdout.trim().length > 0) present.push(spec)
   }
+  return present
+}
 
+export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<AutoCommitResult> {
   const summary = normalizeSummary(opts.summary)
   const subject = renderTemplate(opts.template, {
     phaseId: opts.phaseId,
@@ -121,17 +137,39 @@ export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<Aut
         return { committed: false, reason: 'no-changes' }
       }
 
+      // Resolve the pathspec to stage. 'workspace' → everything (`-A`).
+      // 'artifacts-only' → just the artifacts/ + .awog/ folders that exist; if
+      // neither has changes there is nothing artifact-scoped to commit.
+      let addArgs: string[]
+      let cachedQuietPathspec: string[] = []
+      if (opts.scope === 'artifacts-only') {
+        const specs = await existingArtifactPathspecs(opts.workspaceRoot)
+        if (specs.length === 0) {
+          log.info('autoCommit skipped — no artifact-scoped changes', {
+            taskId: opts.taskId,
+            phaseId: opts.phaseId,
+          })
+          return { committed: false, reason: 'no-changes' }
+        }
+        addArgs = ['add', '--', ...specs]
+        cachedQuietPathspec = ['--', ...specs]
+      } else {
+        addArgs = ['add', '-A']
+      }
+
       suppressEchoFor(opts.workspaceRoot)
 
-      // Stage everything in the working tree. v1 scope = 'workspace' only.
-      await runGit(opts.workspaceRoot, ['add', '-A'])
+      await runGit(opts.workspaceRoot, addArgs)
 
       // Some operations above (e.g. discard) may have left index in a state
       // where there is still nothing to commit (rare race). Re-check before
-      // the actual commit to avoid the "nothing to commit" git error.
-      const recheck = await runGit(opts.workspaceRoot, ['diff', '--cached', '--quiet'], {
-        throwOnNonZero: false,
-      })
+      // the actual commit to avoid the "nothing to commit" git error. For
+      // artifacts-only the recheck is scoped to the same pathspec.
+      const recheck = await runGit(
+        opts.workspaceRoot,
+        ['diff', '--cached', '--quiet', ...cachedQuietPathspec],
+        { throwOnNonZero: false },
+      )
       if (recheck.code === 0) {
         log.info('autoCommit skipped — index clean after add', {
           taskId: opts.taskId,
@@ -140,7 +178,11 @@ export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<Aut
         return { committed: false, reason: 'no-changes' }
       }
 
-      await runGit(opts.workspaceRoot, ['commit', '-F', '-'], { stdin: message })
+      // For artifacts-only, scope the commit to the same pathspec so any files
+      // a concurrent user staged outside the artifact folders are left alone.
+      await runGit(opts.workspaceRoot, ['commit', '-F', '-', ...cachedQuietPathspec], {
+        stdin: message,
+      })
 
       const head = await runGit(opts.workspaceRoot, ['rev-parse', 'HEAD'])
       const sha = head.stdout.trim()
@@ -159,7 +201,7 @@ export async function autoCommitPhase(opts: AutoCommitPhaseOptions): Promise<Aut
         commitSha: sha,
         commitSha7: sha7,
         message,
-        scope: 'workspace',
+        scope: opts.scope,
         at: new Date().toISOString(),
       })
 

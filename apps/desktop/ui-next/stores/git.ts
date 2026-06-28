@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type {
   BranchInfo,
   Commit,
@@ -22,6 +22,7 @@ import type {
   SidecarGitStashEntry,
 } from '~/composables/useGitApi'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { DEFAULT_COMMIT_MESSAGE_RULE, useSettingsStore } from '~/stores/settings'
 import type { GitRepoEntry, ProjectsListResponse } from '~/types'
 
 // ─── Adapters: sidecar shape → ui-next view shape ───────────────────────────
@@ -216,6 +217,12 @@ export const useGitStore = defineStore('git', () => {
   // Live `git:status:changed` unlisten handle (set by subscribe()).
   let unlisten: UnlistenFn | null = null
   let statusRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  // Background auto-fetch (CLAUDE.md: silent fetch every N minutes while the git
+  // page is open + on window focus). Interval ms comes from
+  // settings.git.autoFetchIntervalMs; 0 disables it. Set/cleared by subscribe()/
+  // unsubscribe() so the lifecycle matches the git page mount/unmount.
+  let autoFetchTimer: ReturnType<typeof setInterval> | null = null
+  let onWindowFocus: (() => void) | null = null
 
   const available = computed(() => useSidecar().available)
 
@@ -394,11 +401,65 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
+  // ─── Background auto-fetch ──────────────────────────────────────────────────
+  // Silent `git fetch` so ahead/behind stays fresh without a manual click. Never
+  // throws (failures are swallowed) and never opens the progress strip — it just
+  // refreshes status + branches when refs actually moved.
+  const silentFetch = async () => {
+    const root = workspaceRoot()
+    if (!available.value || !root) return
+    try {
+      await useGitApi().fetch(root)
+      await Promise.all([loadStatus(), loadBranches()])
+    } catch {
+      // Background fetch is best-effort — offline/no-remote is non-fatal.
+    }
+  }
+
+  const stopAutoFetch = () => {
+    if (autoFetchTimer) {
+      clearInterval(autoFetchTimer)
+      autoFetchTimer = null
+    }
+    if (onWindowFocus && typeof window !== 'undefined') {
+      window.removeEventListener('focus', onWindowFocus)
+      onWindowFocus = null
+    }
+  }
+
+  // (Re)arm the periodic fetch from the current settings interval. interval ≤ 0
+  // disables it (Settings → Workspace "Auto-fetch" off). Called on subscribe and
+  // whenever the configured interval changes.
+  const startAutoFetch = () => {
+    stopAutoFetch()
+    if (!available.value) return
+    const intervalMs = useSettingsStore().git.autoFetchIntervalMs
+    if (!intervalMs || intervalMs <= 0) return
+    autoFetchTimer = setInterval(() => {
+      void silentFetch()
+    }, intervalMs)
+    if (typeof window !== 'undefined') {
+      onWindowFocus = () => void silentFetch()
+      window.addEventListener('focus', onWindowFocus)
+    }
+  }
+
   // ─── Live subscription ──────────────────────────────────────────────────────
+
+  // Re-arm the scheduler when the user changes the interval (or toggles
+  // auto-fetch) while the git page is open. The watch only acts while a live
+  // subscription exists (unlisten set) — otherwise nothing is scheduled yet.
+  watch(
+    () => useSettingsStore().git.autoFetchIntervalMs,
+    () => {
+      if (unlisten) startAutoFetch()
+    },
+  )
 
   const subscribe = async () => {
     const sidecar = useSidecar()
     if (!sidecar.available) return
+    startAutoFetch()
     try {
       unlisten = await sidecar.onEvent((evt) => {
         const typed = evt as unknown as { type?: string; method?: string }
@@ -421,6 +482,7 @@ export const useGitStore = defineStore('git', () => {
       clearTimeout(statusRefreshTimer)
       statusRefreshTimer = null
     }
+    stopAutoFetch()
     if (unlisten) {
       unlisten()
       unlisten = null
@@ -614,7 +676,11 @@ export const useGitStore = defineStore('git', () => {
       return
     }
     try {
-      const result = await useGitApi().generateCommitMessage(workspaceRoot(), { rule: '' })
+      // Feed the user-configured commit-message rule (settings.git.commitMessageRule)
+      // as the model's system prompt. The sidecar rejects an empty rule (Params
+      // requires min(1)), so fall back to the store default when somehow blank.
+      const rule = useSettingsStore().git.commitMessageRule || DEFAULT_COMMIT_MESSAGE_RULE
+      const result = await useGitApi().generateCommitMessage(workspaceRoot(), { rule })
       commitMessage.value = result.message
     } catch (err) {
       console.warn('[git] generateCommitMessage failed', err)

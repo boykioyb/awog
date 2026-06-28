@@ -29,6 +29,16 @@ export interface FsFileContent {
   isBinary: boolean
 }
 
+// Result of `fs.readFileBase64` — raw bytes (base64) + MIME for in-app binary
+// preview (image / PDF). `base64` is '' + `truncated: true` when over the cap.
+export interface FsFileBase64 {
+  path: string
+  base64: string
+  mimeType: string
+  size: number
+  truncated: boolean
+}
+
 // One hit from `fs.search` (find-in-files). `line`/`column` are 1-based.
 export interface FsSearchMatch {
   path: string
@@ -78,6 +88,12 @@ export function useFsApi() {
         path,
         ...(maxBytes !== undefined ? { maxBytes } : {}),
       })
+    },
+    // Raw bytes (base64) for in-app binary preview (image / PDF). Over the sidecar
+    // cap → `{ base64: '', truncated: true }` so callers fall back to "open externally".
+    readFileBase64: async (workspaceRoot: string, path: string): Promise<FsFileBase64> => {
+      if (!available) return { path, base64: '', mimeType: '', size: 0, truncated: false }
+      return sidecar.request<FsFileBase64>('fs.readFileBase64', { workspaceRoot, path })
     },
 
     // ── Write / file ops ──────────────────────────────────────────────────

@@ -310,29 +310,39 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
       await emitRunUsage(taskId, node.id, version, runUsage)
     }
 
-    // Git auto-commit the project repo (captures code the agent wrote).
+    // Git auto-commit the project repo (captures code the agent wrote). All
+    // settings are snapshotted on the task at creation (the renderer owns them):
+    //   autoCommitPerPhase === false  → skip the per-node commit entirely
+    //   autoCommitScope               → 'workspace' (v1) | 'artifacts-only'
+    //   autoCommitMessageTemplate     → message template (token-substituted)
+    //   commitCoAuthor                → append the Co-Authored-By trailer
+    // Each is undefined for legacy tasks → defaults match the UI defaults.
     let commitSha: string | undefined
-    try {
-      const commit = await autoCommitPhase({
-        workspaceRoot: cwd,
-        taskId,
-        phaseId: node.id,
-        agentName,
-        skillName: node.skillId,
-        taskTitle: task.title,
-        summary: firstLine(text) || node.skillId,
-        template: COMMIT_TEMPLATE,
-        scope: 'workspace',
-        // Snapshotted on the task at creation; undefined (legacy) → enabled.
-        coAuthor: task.commitCoAuthor ?? true,
-      })
-      if (commit.committed) commitSha = commit.sha
-    } catch (err) {
-      log.warn('task auto-commit failed (non-fatal)', {
-        taskId,
-        nodeId: node.id,
-        err: err instanceof Error ? err.message : String(err),
-      })
+    if (task.autoCommitPerPhase === false) {
+      log.info('task auto-commit disabled by setting — skipping', { taskId, nodeId: node.id })
+    } else {
+      try {
+        const commit = await autoCommitPhase({
+          workspaceRoot: cwd,
+          taskId,
+          phaseId: node.id,
+          agentName,
+          skillName: node.skillId,
+          taskTitle: task.title,
+          summary: firstLine(text) || node.skillId,
+          template: task.autoCommitMessageTemplate || COMMIT_TEMPLATE,
+          scope: task.autoCommitScope ?? 'workspace',
+          // Snapshotted on the task at creation; undefined (legacy) → enabled.
+          coAuthor: task.commitCoAuthor ?? true,
+        })
+        if (commit.committed) commitSha = commit.sha
+      } catch (err) {
+        log.warn('task auto-commit failed (non-fatal)', {
+          taskId,
+          nodeId: node.id,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
 
     for (let i = 0; i < outputs.length; i += 1) {

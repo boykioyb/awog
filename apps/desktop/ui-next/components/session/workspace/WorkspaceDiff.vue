@@ -69,6 +69,7 @@ import {
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useGitModal } from '~/composables/useGitModal'
 import { usePreview, type PreviewRef } from '~/composables/usePreview'
+import { useSessionTouchedPaths } from '~/composables/useSessionTouchedPaths'
 
 const props = defineProps<{ session: Session }>()
 
@@ -77,6 +78,11 @@ const sc = useSidecar()
 const gitModal = useGitModal()
 const preview = usePreview()
 const { root, ready } = useWorkspaceData(() => props.session.project)
+// Workspace-relative paths this session wrote/edited (shared with the Preview tab).
+const { touchedPaths } = useSessionTouchedPaths(
+  () => props.session,
+  () => root.value,
+)
 
 function openGit(): void {
   gitModal.open(props.session.project)
@@ -121,41 +127,6 @@ const branch = ref('')
 const ahead = ref(0)
 
 // ── Session-scoped change filter ─────────────────────────────────────────────
-// A session "touched" a file when one of its file-writing tool steps (Write /
-// Edit / MultiEdit / NotebookEdit — incl. subagent steps) named it. These labels
-// are emitted verbatim by the sidecar step-mapper (humanLabel), so matching on the
-// label is stable; Read/search/terminal don't reliably name an edited path.
-const WRITE_LABELS = new Set(['Write', 'Edit', 'Edit (multi)', 'Edit notebook'])
-
-// Normalise a step target (absolute or workspace-relative, possibly anchored to an
-// ancestor cwd — see memory session-file-link-path-base) toward a repo-relative
-// path comparable to git.status output.
-function normalizeTouched(target: string): string {
-  let p = target.trim().replace(/\\/g, '/')
-  const r = root.value
-  if (p.startsWith('/') && r && p.startsWith(r)) p = p.slice(r.length)
-  return p.replace(/^\.\//, '').replace(/^\/+/, '')
-}
-
-const touchedPaths = computed<string[]>(() => {
-  const out = new Set<string>()
-  const add = (tool: string, target: string): void => {
-    if (target && WRITE_LABELS.has(tool)) {
-      const n = normalizeTouched(target)
-      if (n) out.add(n)
-    }
-  }
-  for (const m of props.session.msgs) {
-    if (m.role !== 'assistant') continue
-    for (const b of m.blocks) {
-      if (b.kind !== 'step') continue
-      add(b.tool, b.target)
-      if (b.sub) for (const s of b.sub.steps) add(s.tool, s.target)
-    }
-  }
-  return [...out]
-})
-
 // Bidirectional suffix match tolerates a base-path mismatch in either direction
 // (the step path carrying an extra ancestor prefix, or a multi-repo subfolder
 // prefix on the git.status path).

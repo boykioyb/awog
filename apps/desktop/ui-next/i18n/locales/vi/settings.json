@@ -70,7 +70,8 @@
 
   "settings.workspace.heading": "Workspace",
   "settings.workspace.path.name": "Đường dẫn workspace",
-  "settings.workspace.path.desc": "Thư mục gốc AWOG",
+  "settings.workspace.path.desc": "Thư mục gốc AWOG (cố định; sidecar luôn dùng ~/.awog)",
+  "settings.workspace.path.copy": "Sao chép đường dẫn",
   "settings.workspace.telemetry.name": "Telemetry",
   "settings.workspace.telemetry.desc": "Không gửi ra ngoài trừ API của model",
   "settings.workspace.templates.name": "Mẫu dự án",

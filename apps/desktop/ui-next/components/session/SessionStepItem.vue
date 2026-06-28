@@ -7,64 +7,68 @@
       <SessionStepResult :text="block.result" />
       <Icon name="chev" style="width: 13px; height: 13px" />
     </div>
-    <div class="stepd">
-      <!-- subagent (has children) -->
-      <div v-if="block.sub" class="substep">
-        <div class="subhd">
-          <Icon name="agents" style="width: 12px; height: 12px" />
-          {{ block.sub.agent }}
-        </div>
-        <div
-          v-for="(st, i) in block.sub.steps"
-          :key="i"
-          class="step"
-          :class="{ col: !subExpanded.has(i) }"
-        >
-          <div class="steph" @click="toggleSub(i)">
-            <Icon :name="stepIcon(st.tool)" class="stepic" style="width: 13px; height: 13px" />
-            <span class="tname">{{ st.tool }}</span>
-            <span class="starg">{{ st.target }}</span>
-            <SessionStepResult :text="st.result" />
-            <Icon name="chev" style="width: 13px; height: 13px" />
+    <Collapse :open="!collapsed">
+      <div class="stepd">
+        <!-- subagent (has children) -->
+        <div v-if="block.sub" class="substep">
+          <div class="subhd">
+            <Icon name="agents" style="width: 12px; height: 12px" />
+            {{ block.sub.agent }}
           </div>
-          <div class="stepd">
-            <SessionStepBody
-              :tool="st.tool"
-              :target="st.target"
-              :detail="st.detail"
-              :detail-kind="st.detailKind"
-            />
+          <div
+            v-for="(st, i) in block.sub.steps"
+            :key="i"
+            class="step"
+            :class="{ col: !subExpanded.has(i) }"
+          >
+            <div class="steph" @click="toggleSub(i)">
+              <Icon :name="stepIcon(st.tool)" class="stepic" style="width: 13px; height: 13px" />
+              <span class="tname">{{ st.tool }}</span>
+              <span class="starg">{{ st.target }}</span>
+              <SessionStepResult :text="st.result" />
+              <Icon name="chev" style="width: 13px; height: 13px" />
+            </div>
+            <Collapse :open="subExpanded.has(i)">
+              <div class="stepd">
+                <SessionStepBody
+                  :tool="st.tool"
+                  :target="st.target"
+                  :detail="st.detail"
+                  :detail-kind="st.detailKind"
+                />
+              </div>
+            </Collapse>
           </div>
-        </div>
-        <!-- The subagent's final report — the summary it returns to the main agent
+          <!-- The subagent's final report — the summary it returns to the main agent
              (Task tool result). Without this the nested timeline ends at the last
              tool call and the handed-back summary is invisible. -->
-        <div v-if="summaryText" class="subsum">
-          <div class="subhd">
-            <Icon name="check" style="width: 12px; height: 12px" />
-            {{ t('sessions.step.subagentSummary') }}
+          <div v-if="summaryText" class="subsum">
+            <div class="subhd">
+              <Icon name="check" style="width: 12px; height: 12px" />
+              {{ t('sessions.step.subagentSummary') }}
+            </div>
+            <SessionTextBlock :text="summaryText" />
           </div>
-          <SessionTextBlock :text="summaryText" />
         </div>
-      </div>
 
-      <!-- skill -->
-      <div
-        v-else-if="isSkill"
-        style="font-size: 0.9231rem; color: var(--textMuted); line-height: 1.6"
-      >
-        {{ block.detail || t('sessions.step.skillRunning') }}
-      </div>
+        <!-- skill -->
+        <div
+          v-else-if="isSkill"
+          style="font-size: 0.9231rem; color: var(--textMuted); line-height: 1.6"
+        >
+          {{ block.detail || t('sessions.step.skillRunning') }}
+        </div>
 
-      <!-- diff / file / output — real detail (mock DEMO_DIFF fallback inside) -->
-      <SessionStepBody
-        v-else
-        :tool="block.tool"
-        :target="block.target"
-        :detail="block.detail"
-        :detail-kind="block.detailKind"
-      />
-    </div>
+        <!-- diff / file / output — real detail (mock DEMO_DIFF fallback inside) -->
+        <SessionStepBody
+          v-else
+          :tool="block.tool"
+          :target="block.target"
+          :detail="block.detail"
+          :detail-kind="block.detailKind"
+        />
+      </div>
+    </Collapse>
   </div>
 </template>
 
@@ -159,6 +163,12 @@ const toggleSub = (i: number) => {
 .stepic {
   flex: 0 0 auto;
   color: var(--textDim);
+}
+/* The <Collapse> wrapper now owns the body's reveal; neutralize the prototype's
+   `.step.col .stepd{display:none}` snap (scoped → higher specificity wins). Applies
+   to the top-level body and every nested sub-step body rendered by this component. */
+.step.col .stepd {
+  display: block;
 }
 /* Sharper, more interactive step cards: hover feedback on the header (the whole
    row is the clickable expand toggle), with a tidy accent on the open state. */

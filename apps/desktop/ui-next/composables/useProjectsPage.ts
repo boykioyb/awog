@@ -7,9 +7,8 @@ import { useI18n } from '~/composables/useI18n'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useAgentsStore } from '~/stores/agents'
-import { useGitStore } from '~/stores/git'
 import { pickFolder } from '~/composables/useFolderPicker'
-import { githubSlugFromRemote, type ProjectRepo, type ProjectView } from '~/components/project/data'
+import { useProjectView } from '~/composables/useProjectView'
 import type { Project } from '~/types'
 import type { ProjectEditorSavePayload } from '~/components/project/types'
 
@@ -27,13 +26,12 @@ export function useProjectsPage() {
   const { t } = useI18n()
   const { toasts, pushToast, toastColor } = useToasts()
 
-  // Live stores used only to derive overview counts (read-only). The git store is
-  // NOT re-pointed here (that would disturb the Git page's active project) — its
-  // dirty/ahead numbers are surfaced only for the project it already tracks.
+  // Live stores used only to hydrate the read-only overview sources on mount (the
+  // derivation itself lives in useProjectView). App-lifetime singletons, re-entry
+  // guarded.
   const sessionsStore = useSessionsStore()
   const tasksStore = useTasksStore()
   const agentsStore = useAgentsStore()
-  const gitStore = useGitStore()
 
   // --- selection -----------------------------------------------------------
   const selectedId = ref<string | null>(null)
@@ -49,61 +47,9 @@ export function useProjectsPage() {
   }
 
   // --- overview view-model -------------------------------------------------
-  // A session counts toward a project when its `project` (name string) matches
-  // the project name (ui-next sessions carry the display name). Tasks key by
-  // projectId. Agents are the project-tier agents registered under this project.
-  const overview = computed<ProjectView | null>(() => {
-    const p = selected.value
-    if (!p) return null
-
-    const ghSlug = githubSlugFromRemote(p.gitRemote)
-
-    // Single-repo derivation from the entity. Dirty/ahead are surfaced only when
-    // the Git page already tracks this project (no cross-page mutation here).
-    const repos: ProjectRepo[] = []
-    if (p.gitRemote || p.gitBranch) {
-      const tracksThis = gitStore.currentProjectId === p.id
-      const repo: ProjectRepo = {
-        n: p.name,
-        br: tracksThis && gitStore.branch ? gitStore.branch : p.gitBranch || 'main',
-      }
-      if (ghSlug) repo.gh = ghSlug
-      if (tracksThis) {
-        const dirty = gitStore.staged.length + gitStore.unstaged.length
-        if (dirty > 0) repo.dirty = dirty
-        if (gitStore.ahead > 0) repo.ahead = gitStore.ahead
-      }
-      repos.push(repo)
-    }
-
-    const projectAgents = agentsStore.agents
-      .filter((a) => a.source === 'project' && a.projectId === p.id)
-      .map((a) => a.name || a.id)
-
-    const sessions = sessionsStore.sessions.filter(
-      (s) => s.project === p.id || s.project === p.name,
-    )
-    const ses = sessions.slice(0, 6).map((s) => ({ id: s.id, t: s.title, w: s.when }))
-    const anyRunning = sessions.some((s) => s.status === 'streaming' || s.status === 'awaiting')
-
-    const tasks = tasksStore.tasks
-      .filter((task) => task.projectId === p.id)
-      .filter((task) => task.status === 'running' || task.status === 'waiting_approval')
-      .slice(0, 6)
-      .map((task) => ({ t: task.title, s: task.status }))
-
-    return {
-      id: p.id,
-      name: p.name,
-      path: p.path,
-      status: anyRunning || tasks.length > 0 ? 'active' : 'idle',
-      gh: ghSlug,
-      repos,
-      agents: projectAgents,
-      ses,
-      tasks,
-    }
-  })
+  // Derived from the live stores by the shared deriver (also used by the session
+  // Project quick-view modal) so both render the same overview from one source.
+  const overview = useProjectView(() => selected.value?.id ?? null)
 
   // --- hydrate -------------------------------------------------------------
   const refreshing = ref(false)

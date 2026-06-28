@@ -13,41 +13,9 @@
     </div>
 
     <div class="popbody">
-      <!-- General — Account + Model (real data). Style / no-markdown / thinking
-           now live on the composer chips, not here. -->
+      <!-- General — Budget caps. Account / Model / Reasoning effort / Style now live
+           on the status-bar chips (StatusConfig); Tools + MCP on their own tabs. -->
       <template v-if="cfgTab === 'General'">
-        <div class="pr2">
-          <div class="pl">{{ t('sessions.config.account') }}</div>
-          <div class="opts">
-            <span
-              v-for="a in accounts"
-              :key="a.id"
-              class="o"
-              :class="{ on: a.id === session.accountId }"
-              @click="store.selectAccount(session.id, { id: a.id, display: a.display })"
-            >
-              {{ a.display }}
-            </span>
-          </div>
-        </div>
-
-        <div class="pr2">
-          <div class="pl">
-            {{ t('sessions.config.model', { provider: accountProvider }) }}
-          </div>
-          <div class="opts">
-            <span
-              v-for="m in models"
-              :key="m"
-              class="o"
-              :class="{ on: m === session.model }"
-              @click="store.setModel(session.id, m)"
-            >
-              {{ m }}
-            </span>
-          </div>
-        </div>
-
         <!-- Budget: soft warning + hard cap (USD). Soft only warns; hard refuses a
              turn / stops tool calls sidecar-side. Empty = no cap. -->
         <div class="pr2">
@@ -185,8 +153,6 @@ import type { Session } from '~/composables/useSessionsData'
 // the session MCP whitelist (params.mcpServerIds).
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
-const { providerOf } = useSessionsData()
-const { accounts, accountById, modelsForAccount } = useAccounts()
 const store = useSessionsStore()
 const sc = useSidecar()
 const { fmtUsd } = useSessionCost()
@@ -256,27 +222,6 @@ const MCP_FALLBACK: [string, string][] = [
 
 const cfgTab = ref<'General' | 'Tools' | 'MCP'>('General')
 const toolQ = ref('')
-
-// ── General (Account + Model) ───────────────────────────────────────────────────
-// Resolve the selected account (by real id) to drive its model catalog + provider
-// label; fall back to the display-string provider when unresolved (mock / deleted).
-const selectedAccount = computed(() =>
-  props.session.accountId ? accountById(props.session.accountId) : undefined,
-)
-const accountProvider = computed(
-  () => selectedAccount.value?.provider ?? providerOf(props.session.account),
-)
-const models = computed(() => {
-  const opt = selectedAccount.value
-  if (opt) return modelsForAccount(opt)
-  return modelsForAccount({
-    id: '',
-    label: '',
-    provider: accountProvider.value,
-    providerDisplay: accountProvider.value,
-    display: props.session.account,
-  })
-})
 
 // ── Tools (denylist) ───────────────────────────────────────────────────────────
 // A tool is ON when it is NOT in the session denylist. Default (no denylist) = all on.

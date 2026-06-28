@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import { useAppearanceDom } from '~/composables/useAppearanceDom'
 
@@ -17,10 +17,18 @@ import { useAppearanceDom } from '~/composables/useAppearanceDom'
 const { init } = useTheme()
 const { initLocale } = useI18n()
 const settings = useSettingsStore()
-const { applyAll } = useAppearanceDom()
+const { applyAll, applyReducedMotion } = useAppearanceDom()
 onMounted(() => {
   init()
   initLocale()
   applyAll(settings.appearance)
+  // Reduce-motion lives in the sessions slice (not AppearanceExtras): paint the
+  // saved value here, then keep <html data-reduced-motion> in sync with the
+  // in-app toggle regardless of the OS prefers-reduced-motion setting.
+  applyReducedMotion(settings.sessions.reducedMotion)
+  watch(
+    () => settings.sessions.reducedMotion,
+    (on) => applyReducedMotion(on),
+  )
 })
 </script>

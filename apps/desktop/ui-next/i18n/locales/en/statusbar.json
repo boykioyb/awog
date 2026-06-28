@@ -1,0 +1,16 @@
+{
+  "statusbar.branch.title": "Current branch",
+  "statusbar.branch.none": "No repo",
+  "statusbar.branch.switch": "Switch branch",
+  "statusbar.branch.openGit": "Open Git Manager…",
+  "statusbar.branch.loading": "Loading…",
+  "statusbar.branch.empty": "No local branches",
+  "statusbar.project.open": "Open project",
+  "statusbar.effort.title": "Reasoning effort",
+  "statusbar.workspaceFiles": "Toggle Files panel",
+  "statusbar.workspaceTerminal": "Toggle Terminal panel",
+  "statusbar.usage.title": "Plan usage · 5h limit",
+  "statusbar.usage.fiveHour": "5-hour limit",
+  "statusbar.usage.loading": "Loading usage…",
+  "statusbar.usage.none": "No usage data"
+}

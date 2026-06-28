@@ -1,0 +1,16 @@
+{
+  "statusbar.branch.title": "Nhánh hiện tại",
+  "statusbar.branch.none": "Chưa có repo",
+  "statusbar.branch.switch": "Chuyển nhánh",
+  "statusbar.branch.openGit": "Mở Git Manager…",
+  "statusbar.branch.loading": "Đang tải…",
+  "statusbar.branch.empty": "Không có nhánh local",
+  "statusbar.project.open": "Mở dự án",
+  "statusbar.effort.title": "Mức suy luận",
+  "statusbar.workspaceFiles": "Bật/tắt bảng Files",
+  "statusbar.workspaceTerminal": "Bật/tắt bảng Terminal",
+  "statusbar.usage.title": "Hạn mức gói · giới hạn 5h",
+  "statusbar.usage.fiveHour": "Giới hạn 5 giờ",
+  "statusbar.usage.loading": "Đang tải hạn mức…",
+  "statusbar.usage.none": "Chưa có dữ liệu hạn mức"
+}

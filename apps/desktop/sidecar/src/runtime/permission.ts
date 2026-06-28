@@ -88,6 +88,11 @@ export function makeBeforeToolCall(
   canUseTool: CanUseTool | undefined,
   mode: AgentMode,
   sessionId?: string,
+  // Auto-approve (Settings → Sessions). When true, gated tools run WITHOUT a
+  // permission prompt — the user opted into auto-approval for this session. Plan
+  // mode still blocks writes/exec below (planning is read-only by design); auto-
+  // approve only short-circuits the ask/accept-edits prompt path.
+  autoApprove = false,
 ): BeforeToolCall {
   return async (context, signal) => {
     const toolName = context.toolCall.name
@@ -99,10 +104,15 @@ export function makeBeforeToolCall(
     // execute mode: no gate (the user opted into full access).
     if (mode === 'execute') return undefined
 
-    // plan mode: block every write/exec — planning is read-only.
+    // plan mode: block every write/exec — planning is read-only. Checked BEFORE
+    // auto-approve so plan mode stays read-only even with auto-approve on.
     if (mode === 'plan') {
       return { block: true, reason: `Blocked in plan mode: ${toolName} is not allowed while planning.` }
     }
+
+    // Auto-approve (Settings → Sessions): allow gated tools without prompting. Sits
+    // after the plan-mode block (planning stays read-only) but before the ask path.
+    if (autoApprove) return undefined
 
     // accept-edits: auto-allow file edits; other gated tools (Bash) still prompt.
     if (mode === 'accept-edits' && WRITE_TOOLS.has(toolName)) return undefined

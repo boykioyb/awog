@@ -16,42 +16,50 @@
       </span>
       <div class="dt">{{ project.name }}</div>
       <span style="flex: 1" />
-      <button
-        class="iconbtn"
-        style="width: 28px; height: 28px"
-        :title="t('projects.detail.edit')"
-        @click="emit('edit')"
-      >
-        <Icon name="edit" style="width: 14px; height: 14px" />
-      </button>
-      <button
-        class="iconbtn"
-        style="width: 28px; height: 28px"
-        :title="t('projects.detail.saveAsTemplate')"
-        @click="emit('save-template')"
-      >
-        <Icon name="save" style="width: 14px; height: 14px" />
-      </button>
-      <button
-        class="iconbtn"
-        style="width: 28px; height: 28px"
-        :title="t('projects.detail.installTemplate')"
-        @click="emit('install-template')"
-      >
-        <Icon name="templates" style="width: 14px; height: 14px" />
-      </button>
-      <button
-        class="iconbtn"
-        style="width: 28px; height: 28px"
-        :title="t('projects.detail.openWorkspace')"
-        @click="emit('open-workspace')"
-      >
-        <Icon name="layers" style="width: 14px; height: 14px" />
-      </button>
-      <button class="btn pri sm" :title="t('projects.detail.openCode')" @click="emit('open-code')">
-        <Icon name="commands" />
-        {{ t('projects.detail.openCode') }}
-      </button>
+      <!-- Management actions are hidden in compact (quick-view) mode — the modal is
+           for peeking at info + issues/PRs, not editing. -->
+      <template v-if="!compact">
+        <button
+          class="iconbtn"
+          style="width: 28px; height: 28px"
+          :title="t('projects.detail.edit')"
+          @click="emit('edit')"
+        >
+          <Icon name="edit" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="iconbtn"
+          style="width: 28px; height: 28px"
+          :title="t('projects.detail.saveAsTemplate')"
+          @click="emit('save-template')"
+        >
+          <Icon name="save" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="iconbtn"
+          style="width: 28px; height: 28px"
+          :title="t('projects.detail.installTemplate')"
+          @click="emit('install-template')"
+        >
+          <Icon name="templates" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="iconbtn"
+          style="width: 28px; height: 28px"
+          :title="t('projects.detail.openWorkspace')"
+          @click="emit('open-workspace')"
+        >
+          <Icon name="layers" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="btn pri sm"
+          :title="t('projects.detail.openCode')"
+          @click="emit('open-code')"
+        >
+          <Icon name="commands" />
+          {{ t('projects.detail.openCode') }}
+        </button>
+      </template>
     </div>
 
     <div class="ptabs">
@@ -76,6 +84,7 @@
         :project="project"
         :view="view"
         :repos="overviewRepos"
+        :compact="compact"
         @delete="emit('delete')"
         @open-llm="emit('open-llm')"
         @imported="(n) => emit('imported', n)"
@@ -118,7 +127,14 @@ import type { ProjectRepo, ProjectView } from './data'
 import { useProjectRepos } from '~/composables/useProjectRepos'
 import type { Project } from '~/types'
 
-const props = defineProps<{ project: Project; view: ProjectView }>()
+// `compact` (quick-view modal): hide management chrome (header actions + Overview's
+// destructive / config-import controls) so the panel is view-only.
+const props = withDefaults(
+  defineProps<{ project: Project; view: ProjectView; compact?: boolean }>(),
+  {
+    compact: false,
+  },
+)
 const emit = defineEmits<{
   (e: 'edit'): void
   (e: 'delete'): void

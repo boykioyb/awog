@@ -373,6 +373,12 @@ const submit = async () => {
   const payload = buildPayload()
   const path = selectedProjectPath.value
   const policy = settings.git.dirtyTaskPolicy
+  // `autoStashDirtyBeforeTask` is the always-on form of the 'auto-stash' policy:
+  // when set, dirty changes are stashed before every task run regardless of the
+  // policy seg. The two settings overlap by design — the toggle wins so a user
+  // who turned it on never sees the warn dialog. Effective auto-stash = toggle OR
+  // policy === 'auto-stash'.
+  const autoStash = settings.git.autoStashDirtyBeforeTask || policy === 'auto-stash'
 
   const count = await probeDirtyCount(path)
   if (count === 0) {
@@ -381,7 +387,7 @@ const submit = async () => {
   }
 
   // auto-stash: stash silently then create, no prompt.
-  if (policy === 'auto-stash') {
+  if (autoStash) {
     await stashBeforeRun(path, payload.title)
     emit('save', payload)
     return

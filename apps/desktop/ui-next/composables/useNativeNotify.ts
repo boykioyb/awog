@@ -2,6 +2,7 @@ import { onBeforeUnmount, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
+import { useSettingsStore } from '~/stores/settings'
 import type { Session } from '~/composables/useSessionsData'
 
 // ── Native notifications (§9 globals) ────────────────────────────────────────
@@ -20,8 +21,14 @@ const SETTLED = new Set<Session['status']>(['done', 'error'])
 export function useNativeNotify() {
   const store = useSessionsStore()
   const tasks = useTasksStore()
+  const settings = useSettingsStore()
   const { sessions } = storeToRefs(store)
   const { t } = useI18n()
+
+  // Master toggle (Settings → Sessions → notificationsEnabled). When off, suppress
+  // every native notification regardless of focus / permission. Read live so the
+  // toggle takes effect immediately without remounting the watcher.
+  const notificationsOn = (): boolean => settings.sessions.notificationsEnabled
 
   // Last seen status per session id (numeric client id). Seeded on first run so
   // we never notify for the initial hydrate snapshot.
@@ -53,7 +60,7 @@ export function useNativeNotify() {
   }
 
   async function notifyTurn(s: Session) {
-    if (!supported || !windowIsHidden()) return
+    if (!notificationsOn() || !supported || !windowIsHidden()) return
     const perm = await ensurePermission()
     if (perm !== 'granted') return
     // Re-check focus — the permission prompt may have refocused the window.
@@ -81,7 +88,7 @@ export function useNativeNotify() {
   // Generic attention notification (session needs reply/permission, or task
   // needs approval). Same focus + permission gate as notifyTurn.
   async function notifyAttention(title: string, body: string, tag: string): Promise<void> {
-    if (!supported || !windowIsHidden()) return
+    if (!notificationsOn() || !supported || !windowIsHidden()) return
     const perm = await ensurePermission()
     if (perm !== 'granted' || !windowIsHidden()) return
     try {

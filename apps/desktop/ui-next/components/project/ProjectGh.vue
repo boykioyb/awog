@@ -167,7 +167,10 @@ async function onNewSession(item: GhThreadSummary): Promise<void> {
   if (full?.body?.trim()) parts.push('', '---', '', full.body.trim())
   const seed = parts.join('\n')
 
+  // create() returns null when the quota guard blocks new sessions (Settings →
+  // Quota warning). Bail out — the guard already surfaced the reason.
   const id = sessions.create(props.projectId)
+  if (id == null) return
   sessions.rename(id, `#${item.number} ${item.title}`)
   if (url) sessions.setAboutGh(id, url)
   sessions.setDraft(id, seed)

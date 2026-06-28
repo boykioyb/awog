@@ -88,7 +88,7 @@
 // Separate renderer from the main window → no live engine events; it loads
 // snapshots on mount and refreshes on window focus (each open). Item clicks go to
 // main via window.awog.sendTrayCommand → main shows the app + routes there.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useSidecar } from '~/composables/useSidecar'
@@ -237,6 +237,13 @@ function refreshAll(): void {
 function go(cmd: AwogTrayCommand): void {
   window.awog?.sendTrayCommand?.(cmd)
 }
+
+// Accounts load asynchronously (accounts.list round-trip). Until the real list
+// resolves, `accounts` falls back to mock ids the sidecar can't resolve, so the
+// first fetch on mount returns empty ("No provider limits to show"). Re-fetch
+// once the real account list arrives — this is the reactive trigger the main
+// window's home tile gets for free via its keyed v-for of <ActivityRateLimit>.
+watch(accounts, () => void fetchRateLimits())
 
 onMounted(() => {
   refreshAll()

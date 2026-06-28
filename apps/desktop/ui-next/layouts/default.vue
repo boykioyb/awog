@@ -1,16 +1,24 @@
 <template>
-  <div class="app" :class="{ compact, 'nav-open': navOpen, 'list-open': listOpen }">
-    <NavRail />
-    <div class="main">
-      <AppTopBar />
-      <div class="body">
-        <slot />
+  <!-- Column wrapper: the NavRail|main row sits above the full-width status bar
+       (VSCode-style footer). The row keeps the compact-drawer classes so the
+       `.app.compact …` rules in app-shell.css are unchanged. -->
+  <div class="appwrap">
+    <div class="app" :class="{ compact, 'nav-open': navOpen, 'list-open': listOpen }">
+      <NavRail />
+      <div class="main">
+        <AppTopBar />
+        <div class="body">
+          <slot />
+        </div>
       </div>
+
+      <!-- Compact-mode drawer backdrop: dim the main content and dismiss the open
+           nav/list drawer on click. Only mounted while a drawer is open. -->
+      <div v-if="compact && (navOpen || listOpen)" class="shell-scrim" @click="closeDrawers" />
     </div>
 
-    <!-- Compact-mode drawer backdrop: dim the main content and dismiss the open
-         nav/list drawer on click. Only mounted while a drawer is open. -->
-    <div v-if="compact && (navOpen || listOpen)" class="shell-scrim" @click="closeDrawers" />
+    <!-- Global status bar — single app-lifetime mount, shows on every page. -->
+    <AppStatusBar />
 
     <!-- §9 globals: mounted once so they work on every page. -->
     <CommandPalette />
@@ -19,11 +27,13 @@
     <ActivityModal />
     <WhatsNewModal />
     <SessionGitModal />
+    <ProjectQuickViewModal />
     <SessionExportModal />
     <SessionForkTreeModal />
     <NewTaskModalHost />
     <ConfirmDialogHost />
     <TextPromptHost />
+    <QuotaGuardHost />
   </div>
 </template>
 

@@ -148,6 +148,14 @@ export interface RunNonStreamArgs {
   // the full history. On a `/compact` run it is the PRIOR checkpoint (so the cut
   // only advances); on a normal turn it cuts the context the model sees.
   compaction?: SessionCompaction
+  // Auto-approve (Settings → Sessions). When true, the permission gate is bypassed
+  // entirely — gated tool calls run without a UI prompt. Honours the existing park
+  // machinery by simply not invoking it (canUseTool is skipped in makeBeforeToolCall).
+  autoApprove?: boolean
+  // Re-feed image attachments (Settings → Sessions). When false, prior-turn image
+  // attachments are NOT rebuilt into the model context — only the current turn's
+  // images are sent. Default (omitted/true) re-feeds every prior image each turn.
+  refeedImages?: boolean
   // Mid-turn steering (Session steering). When provided, the runtime wires it to
   // Pi's getSteeringMessages: polled at each turn boundary, it returns the user
   // instructions queued via the sessions.steer RPC so the loop injects them into

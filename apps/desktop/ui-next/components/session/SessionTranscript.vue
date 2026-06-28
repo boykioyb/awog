@@ -3,48 +3,59 @@
     <!-- Fold control: one click collapses every open step/cluster in the
          transcript, the next click expands them all back. Hidden until the
          session actually has messages to fold. -->
-    <button
-      v-if="messages.length"
-      class="foldbtn"
-      :class="{ on: allExpanded }"
-      :title="
-        allExpanded ? t('sessions.transcript.fold.collapse') : t('sessions.transcript.fold.expand')
-      "
-      :aria-pressed="allExpanded"
-      @click="toggleFold"
-    >
-      <Icon name="foldv" style="width: 13px; height: 13px" />
-    </button>
+    <Transition name="fadepop">
+      <button
+        v-if="messages.length"
+        class="foldbtn"
+        :class="{ on: allExpanded }"
+        :title="
+          allExpanded
+            ? t('sessions.transcript.fold.collapse')
+            : t('sessions.transcript.fold.expand')
+        "
+        :aria-pressed="allExpanded"
+        @click="toggleFold"
+      >
+        <Icon name="foldv" style="width: 13px; height: 13px" />
+      </button>
+    </Transition>
     <div ref="msgsEl" class="msgs" @scroll="onScroll">
       <SessionTranscriptSkeleton v-if="loading && !messages.length" />
       <SessionWelcome v-else-if="!messages.length" />
-      <SessionMessageItem
-        v-for="(m, i) in messages"
-        v-else
-        :key="i"
-        :message="m"
-        :fallback-when="fallbackWhen"
-      />
+      <!-- No `appear`: opening a session shows its history instantly; only turns
+           that arrive afterwards (user send / assistant reply) fade + rise in. -->
+      <TransitionGroup v-else tag="div" name="mi" class="milist">
+        <SessionMessageItem
+          v-for="(m, i) in messages"
+          :key="i"
+          :message="m"
+          :fallback-when="fallbackWhen"
+        />
+      </TransitionGroup>
     </div>
     <!-- Jump-to-top / jump-to-bottom: each shows only when there's somewhere to go
          in that direction (both hidden when the transcript doesn't overflow). -->
     <div class="scrolljump">
-      <button
-        v-if="!atTop"
-        class="sjbtn"
-        :title="t('sessions.transcript.scrollTop')"
-        @click="jumpTop"
-      >
-        <Icon name="chev" class="up" style="width: 16px; height: 16px" />
-      </button>
-      <button
-        v-if="!atBottom"
-        class="sjbtn"
-        :title="t('sessions.transcript.scrollBottom')"
-        @click="jumpBottom"
-      >
-        <Icon name="chev" style="width: 16px; height: 16px" />
-      </button>
+      <Transition name="fadepop">
+        <button
+          v-if="!atTop"
+          class="sjbtn"
+          :title="t('sessions.transcript.scrollTop')"
+          @click="jumpTop"
+        >
+          <Icon name="chev" class="up" style="width: 16px; height: 16px" />
+        </button>
+      </Transition>
+      <Transition name="fadepop">
+        <button
+          v-if="!atBottom"
+          class="sjbtn"
+          :title="t('sessions.transcript.scrollBottom')"
+          @click="jumpBottom"
+        >
+          <Icon name="chev" style="width: 16px; height: 16px" />
+        </button>
+      </Transition>
     </div>
   </div>
 </template>
@@ -229,5 +240,64 @@ onMounted(() => {
 }
 .sjbtn .up {
   transform: rotate(180deg);
+}
+.sjbtn {
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease,
+    transform 0.1s ease;
+}
+.sjbtn:active {
+  transform: scale(0.92);
+}
+
+/* New-turn enter: a freshly appended message fades + rises into place. The inner
+   wrapper carries the prototype's flex column rhythm (gap matches .msgs). */
+.milist {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.mi-enter-active {
+  transition:
+    opacity 0.26s ease,
+    transform 0.26s ease;
+}
+.mi-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* Floating controls (fold / jump): fade + slight scale on show/hide instead of a
+   hard pop. Exit is quicker than enter, per the motion guidelines. */
+.fadepop-enter-active {
+  transition:
+    opacity 0.16s ease-out,
+    transform 0.16s ease-out;
+}
+.fadepop-leave-active {
+  transition:
+    opacity 0.1s ease-in,
+    transform 0.1s ease-in;
+}
+.fadepop-enter-from,
+.fadepop-leave-to {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mi-enter-active,
+  .fadepop-enter-active,
+  .fadepop-leave-active,
+  .sjbtn {
+    transition: none;
+  }
+  .mi-enter-from,
+  .fadepop-enter-from,
+  .fadepop-leave-to {
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>

@@ -141,7 +141,7 @@
           <div v-for="s in recentSessions" v-else :key="s.id" class="rs" @click="openSession(s.id)">
             <span class="si" :style="{ background: sessionDot(s.status) }" />
             <span class="st1">{{ s.title }}</span>
-            <span class="tag">{{ s.project }}</span>
+            <span class="tag">{{ projectName(s.project) }}</span>
             <span class="tag">{{ s.model }}</span>
             <span class="sw">{{ sessionStatusLabel(s.status, s.when) }}</span>
           </div>
@@ -164,6 +164,9 @@ import type { SessionStatus } from '~/composables/useSessionsData'
 
 const { t } = useI18n()
 const { openActivity } = useActivityModal()
+// session.project holds the engine projectId — resolve it to the display name
+// (mirrors SessionListItem); unknown ids fall back to the id itself.
+const { projectName } = useProjects()
 
 // Provider rate-limit accounts — only providers with a usage surface (Anthropic
 // subscription / OpenAI Codex). Each ActivityRateLimit self-hides if its account

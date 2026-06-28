@@ -36,6 +36,12 @@ const Params = z.object({
   // Snapshot of the UI's `commitCoAuthor` Git setting. Omitted by legacy/older
   // callers → defaults to enabled (matches the UI default).
   commitCoAuthor: z.boolean().optional(),
+  // Snapshot of the remaining auto-commit Git settings (settings live in the
+  // renderer; the sidecar can't read them). Omitted by legacy callers → engine
+  // defaults (per-phase on, workspace scope, default template).
+  autoCommitPerPhase: z.boolean().optional(),
+  autoCommitScope: z.enum(['workspace', 'artifacts-only']).optional(),
+  autoCommitMessageTemplate: z.string().max(400).optional(),
 })
 
 register('tasks.create', async (raw) => {
@@ -75,6 +81,12 @@ register('tasks.create', async (raw) => {
     // Snapshot the co-author preference so per-phase auto-commit is consistent
     // across restart/rerun (default enabled when the caller omits it).
     commitCoAuthor: params.commitCoAuthor ?? true,
+    // Snapshot the rest of the auto-commit settings (omitted → engine defaults).
+    autoCommitPerPhase: params.autoCommitPerPhase ?? true,
+    autoCommitScope: params.autoCommitScope ?? 'workspace',
+    ...(params.autoCommitMessageTemplate !== undefined
+      ? { autoCommitMessageTemplate: params.autoCommitMessageTemplate }
+      : {}),
     phases,
   }
 

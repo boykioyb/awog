@@ -10,6 +10,9 @@
    UI proportionally. Default 13px reproduces the prototype's original px exactly. */
 :root {
   --font-size-base: 13px;
+  /* Global status-bar (footer) height — the column wrapper reserves this row
+     beneath the NavRail|main shell. */
+  --statusbar-h: 26px;
 }
 html {
   font-size: var(--font-size-base);
@@ -83,11 +86,24 @@ body.light[data-surface='deep'] {
   --borderStrong: #c2cdde;
 }
 
-/* full-window app frame: drop the card max-width / radius / shadow */
+/* Full-window column shell: the NavRail|main row (.app) fills the space above the
+   fixed-height status bar (footer). */
+.appwrap {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+}
+
+/* full-window app frame: drop the card max-width / radius / shadow. Height is now
+   driven by the flex column (fill the row above the status bar) instead of 100vh. */
 .app {
   width: 100%;
   max-width: none;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  height: auto;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -174,7 +190,7 @@ body.light[data-surface='deep'] {
 .app.compact .side {
   position: fixed;
   top: 0;
-  bottom: 0;
+  bottom: var(--statusbar-h); /* keep the status bar uncovered by the drawer */
   left: 0;
   width: 218px;
   z-index: 92;
@@ -216,6 +232,7 @@ body.light[data-surface='deep'] {
 .shell-scrim {
   position: fixed;
   inset: 0;
+  bottom: var(--statusbar-h); /* leave the status bar interactive while a drawer is open */
   z-index: 90;
   background: rgba(0, 0, 0, 0.5);
 }
@@ -920,4 +937,18 @@ textarea.gcpta {
   width: 104px;
   white-space: nowrap;
   color: var(--textMuted);
+}
+
+/* In-app "Reduce motion" toggle (settings.sessions.reducedMotion).
+   The OS @media (prefers-reduced-motion) already neutralizes a couple of
+   transitions above; this attribute lets the user force the same behaviour
+   regardless of the OS setting. useAppearanceDom.applyReducedMotion() sets
+   <html data-reduced-motion="1"> from the store at boot + live on toggle. */
+[data-reduced-motion='1'] *,
+[data-reduced-motion='1'] *::before,
+[data-reduced-motion='1'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
 }

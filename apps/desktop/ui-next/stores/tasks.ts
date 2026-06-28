@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { useSettingsStore, type AutoCommitScope } from '~/stores/settings'
 
 // Tasks store — dual-path live. When the Electron bridge is available
 // (`sc.available`) `loadTasks()` pulls the real task list over IPC and a lazy
@@ -125,6 +126,11 @@ export type Task = {
   waitingApproval: string | null
   createdAt: string
   commitCoAuthor?: boolean
+  // Snapshot of the auto-commit Git settings at creation time so per-phase
+  // commits stay consistent across restart/rerun. Optional for legacy tasks.
+  autoCommitPerPhase?: boolean
+  autoCommitScope?: AutoCommitScope
+  autoCommitMessageTemplate?: string
   workflowSnapshot?: WorkflowSlice
   phases: Record<string, TaskPhase>
 }
@@ -744,11 +750,7 @@ export const useTasksStore = defineStore('tasks', () => {
   // blocked — never in practice). `workflowName` is a display label the caller
   // resolves from its already-loaded workflow list (the store has no workflows
   // store dep — SoC).
-  function createTask(
-    data: CreateTaskInput,
-    snapshot?: WorkflowSlice,
-    commitCoAuthor = true,
-  ): Task {
+  function createTask(data: CreateTaskInput, snapshot?: WorkflowSlice): Task {
     const id = `tsk-${Date.now().toString(36)}`
     const phases: Record<string, TaskPhase> = {}
     const nodes = snapshot?.nodes ?? []
@@ -760,6 +762,14 @@ export const useTasksStore = defineStore('tasks', () => {
         runs: [],
       }
     }
+    // Snapshot the auto-commit Git settings at creation time. Settings live in the
+    // renderer (localStorage); the sidecar can't read them, so they must travel in
+    // the create payload. The engine persists them on the task for restart/rerun.
+    const gitSettings = useSettingsStore().git
+    const commitCoAuthor = gitSettings.commitCoAuthor
+    const autoCommitPerPhase = gitSettings.autoCommitPerPhase
+    const autoCommitScope = gitSettings.autoCommitScope
+    const autoCommitMessageTemplate = gitSettings.autoCommitMessageTemplate
     const task: Task = {
       id,
       title: data.title,
@@ -772,6 +782,9 @@ export const useTasksStore = defineStore('tasks', () => {
       waitingApproval: null,
       createdAt: nowIso(),
       commitCoAuthor,
+      autoCommitPerPhase,
+      autoCommitScope,
+      autoCommitMessageTemplate,
       phases,
     }
     if (snapshot) task.workflowSnapshot = snapshot
@@ -785,6 +798,9 @@ export const useTasksStore = defineStore('tasks', () => {
       description: data.description,
       workflowId: data.workflowId,
       commitCoAuthor,
+      autoCommitPerPhase,
+      autoCommitScope,
+      autoCommitMessageTemplate,
     })
     return task
   }

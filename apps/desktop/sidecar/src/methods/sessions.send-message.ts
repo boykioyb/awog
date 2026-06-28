@@ -102,6 +102,19 @@ const Params = z.object({
   history: z.array(SessionMessageSchema).default([]),
   settings: SessionSettingsSchema,
   systemPrompt: z.string().optional(),
+  // Session defaults / behaviour prefs (Settings → Defaults / Sessions). Functional
+  // — each is consumed by the runtime below:
+  //   • instructions — extra guidance appended after the base system prompt (folded
+  //     into systemPromptAppend so it augments, never replaces, the prompt). Bounded
+  //     so an oversized IPC payload can't blow the prompt.
+  instructions: z.string().max(20000).optional(),
+  //   • autoApprove — when true, gated tool calls (Write/Edit/Bash/…) are auto-
+  //     allowed without parking a permission prompt (the runtime skips the gate).
+  autoApprove: z.boolean().optional(),
+  //   • refeedImages — when false, prior-turn image attachments are NOT re-fed to
+  //     the model each turn (only the turn that sent them carries them). Default true
+  //     (omitted) keeps the current re-feed behaviour.
+  refeedImages: z.boolean().optional(),
   // Optional project linkage. When present, sidecar resolves the project's
   // on-disk path and passes it as the runtime tools' fs root so Read/Bash/Edit
   // operate against the user's repo instead of process.cwd().
@@ -416,10 +429,19 @@ register('sessions.sendMessage', async (raw) => {
   // new session (no file) folds to []. A non-empty `params.history` is honoured
   // unchanged (reference `ui`) — backward compatible.
   let historyForRun = params.history as unknown as SessionMessage[]
+  // Active compaction checkpoint (ADR 0047). The reference `ui` forwards it in the
+  // payload; `ui-next` does NOT track it client-side, so — like history — we fold
+  // it from the persisted session (the JSONL `session.compacted` event is the
+  // source of truth). This is what makes BOTH manual /compact AND auto-compact
+  // actually cut the model context on the next turn: the checkpoint persisted by
+  // sessions.compact is read back here and passed to runStream. An explicit
+  // `params.compaction` (reference `ui`) still wins.
+  let compactionForRun = params.compaction
   if (historyForRun.length === 0) {
     try {
       const loaded = await loadSession(params.sessionId)
       if (loaded && loaded.messages.length > 0) historyForRun = loaded.messages
+      if (!compactionForRun && loaded?.compaction) compactionForRun = loaded.compaction
     } catch (err) {
       log.warn('failed to fold session history for resume', {
         sessionId: params.sessionId,
@@ -601,6 +623,16 @@ When you need to interact with these services, **prefer the corresponding \`mcp_
 
 When delegating work via the Task tool, the subagent inherits these MCP servers automatically — instruct it in the prompt to use the same \`mcp__<serverId>__<toolName>\` tools rather than CLI alternatives.
 </mcp-preference>`
+  }
+
+  // User instructions (Settings → Defaults → instructions). Extra always-on
+  // guidance appended after the base system prompt (augments, never replaces it).
+  // Wrapped in a labelled block so the model reads it as the user's standing
+  // directives, folded into systemPromptAppend before the bulk-load catalogue.
+  const instructions = params.instructions?.trim()
+  if (instructions) {
+    const block = `<user_instructions>\n${instructions}\n</user_instructions>`
+    systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${block}` : block
   }
 
   // Claude-Code-style bulk load (memory files / available agents / available
@@ -903,7 +935,16 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
           skillsList: bulkLoad.skillsList,
         },
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
-        ...(params.compaction ? { compaction: params.compaction } : {}),
+        // Compaction checkpoint: explicit payload (reference `ui`) or folded from the
+        // persisted session (`ui-next` / auto-compact) — see compactionForRun above.
+        ...(compactionForRun ? { compaction: compactionForRun } : {}),
+        // Auto-approve (Settings → Sessions): skip the permission park for gated
+        // tools when the user opted in. The runtime's beforeToolCall bypasses
+        // canUseTool entirely (see makeBeforeToolCall).
+        ...(params.autoApprove ? { autoApprove: true } : {}),
+        // Re-feed images (Settings → Sessions): when false the context builder drops
+        // prior-turn image attachments (only the current turn carries them).
+        ...(params.refeedImages === false ? { refeedImages: false } : {}),
         // Per-turn hard caps (tool-call count / wallclock) enforced in the runtime
         // beforeToolCall. Forward only the defined fields.
         ...(params.budget?.maxToolCalls !== undefined || params.budget?.maxWallclockMs !== undefined

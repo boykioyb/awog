@@ -7,7 +7,10 @@
       :desc="t('settings.workspace.path.desc')"
     >
       <div class="keyrow">
-        <input v-model="workspacePath" class="keyinp mono" />
+        <input :value="workspaceRoot" class="keyinp mono" readonly />
+        <button class="btn sm" :title="t('settings.workspace.path.copy')" @click="onCopy">
+          <Icon :name="copied ? 'check' : 'copy'" />
+        </button>
       </div>
     </SettingsField>
 
@@ -52,7 +55,13 @@
 
 <script setup lang="ts">
 // Workspace panel — wires setSecHtml('workspace') to real state + IPC.
-//   - Workspace path: two-way bound to the settings store.
+//   - Workspace path: READ-ONLY. The sidecar always uses os.homedir()/.awog as
+//     its home root (see sidecar util/path.ts `awogHome()`); there is no safe
+//     runtime remap, so an editable field would only mislead. We surface the
+//     actual root the sidecar uses and offer copy instead. NOTE for follow-up:
+//     to display this with zero hardcoded default, the sidecar would need to
+//     expose awogHome over RPC (e.g. an `app.paths`/extended getAppInfo) — not
+//     done here to keep this change inside the UI domain.
 //   - Git versioning: informational read-only status (auto-commit is always on).
 //   - Diagnostics: toggles an inline log tail (SettingsLogTail) that streams the
 //     app log file into a terminal-style view (Electron only).
@@ -61,11 +70,20 @@ const { t } = useI18n()
 const settings = useSettingsStore()
 const sidecar = useSidecar()
 
-// Proxy so the input reads workspacePath and writes through the store action.
-const workspacePath = computed({
-  get: () => settings.workspacePath,
-  set: (v: string) => settings.setWorkspacePath(v),
-})
+// The workspace root the sidecar actually uses. Read-only display; the store
+// value matches the sidecar's awogHome (~/.awog) and persists across reloads.
+const workspaceRoot = computed(() => settings.workspacePath)
+
+const copied = ref(false)
+let copyResetTimer: ReturnType<typeof setTimeout> | null = null
+const onCopy = () => {
+  void navigator.clipboard?.writeText(workspaceRoot.value).catch(() => {})
+  copied.value = true
+  if (copyResetTimer) clearTimeout(copyResetTimer)
+  copyResetTimer = setTimeout(() => {
+    copied.value = false
+  }, 1200)
+}
 
 const showLogs = ref(false)
 </script>

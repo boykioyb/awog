@@ -143,10 +143,14 @@
       <div class="kvrow">
         <span class="kvk">{{ t('projects.overview.llm') }}</span>
         <span class="kvv">
-          <button class="btn sm" @click="emit('open-llm')">
+          <button v-if="!compact" class="btn sm" @click="emit('open-llm')">
             <Icon name="brain" />
             {{ llmLabel }}
           </button>
+          <span v-else style="display: inline-flex; align-items: center; gap: 6px">
+            <Icon name="brain" style="width: 12px; height: 12px" />
+            {{ llmLabel }}
+          </span>
         </span>
       </div>
       <div class="kvrow" style="align-items: flex-start">
@@ -163,8 +167,8 @@
         </span>
       </div>
       <!-- Config-import assistant (ADR 0035): `.claude`/`.agents` are import sources,
-           not live tiers — offer to copy them into `.awog`. -->
-      <div v-if="importable.length || justImported" class="cfgimport">
+           not live tiers — offer to copy them into `.awog`. Hidden in compact mode. -->
+      <div v-if="(importable.length || justImported) && !compact" class="cfgimport">
         <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
         <span v-if="importable.length">
           {{ t('projects.import.banner', { n: importable.length }) }}
@@ -181,7 +185,7 @@
       </div>
     </div>
 
-    <div style="display: flex; justify-content: flex-end; margin-top: 6px">
+    <div v-if="!compact" style="display: flex; justify-content: flex-end; margin-top: 6px">
       <button class="btn sm" style="color: var(--danger)" @click="emit('delete')">
         <Icon name="trash" />
         {{ t('projects.overview.removeProject') }}
@@ -200,9 +204,18 @@ import { agBadge, avatarBg, type ProjectRepo, type ProjectView } from './data'
 import { modelDisplayName } from '~/composables/useSessionsData'
 import { useSessionsStore } from '~/stores/sessions'
 import { useConfigImport } from '~/composables/useConfigImport'
+import { useProjectModal } from '~/composables/useProjectModal'
 import type { Project } from '~/types'
 
-const props = defineProps<{ project: Project; view: ProjectView; repos?: ProjectRepo[] }>()
+// `compact` (quick-view modal): hide destructive / management controls (remove
+// project, config-import banner, LLM-defaults button → static label) so the panel
+// is view-only.
+const props = defineProps<{
+  project: Project
+  view: ProjectView
+  repos?: ProjectRepo[]
+  compact?: boolean
+}>()
 const emit = defineEmits<{
   (e: 'delete'): void
   (e: 'open-llm'): void
@@ -230,8 +243,12 @@ const effRepos = computed<ProjectRepo[]>(() =>
 )
 
 // Open a recent session from the overview — select it + jump to the Sessions page.
+// Also dismiss the project quick-view modal when open (this component renders both
+// on the /projects page and inside that modal); a no-op when the modal is closed.
+const projectModal = useProjectModal()
 function openSession(id: number) {
   sessions.setActive(id)
+  projectModal.close()
   navigateTo('/sessions')
 }
 

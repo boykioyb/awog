@@ -93,17 +93,22 @@ function toFileTextContent(att: SessionAttachment): TextContent | null {
 // when usable attachments are present (images, or text-based files) we switch to
 // the block array — user text first, then file-text blocks, then images — so the
 // model actually receives them.
+//
+// `includeImages` (Settings → Sessions → refeedImages): false drops image blocks
+// (used for PRIOR turns when the user opted out of re-feeding images). Text-based
+// file attachments always stay — only images are bandwidth-/cost-heavy to re-feed.
 function historyUser(
   text: string,
   attachments: SessionAttachment[] | undefined,
   timestamp: number,
+  includeImages = true,
 ): UserMessage {
   const fileTexts = (attachments ?? [])
     .map(toFileTextContent)
     .filter((c): c is TextContent => c !== null)
-  const images = (attachments ?? [])
-    .map(toImageContent)
-    .filter((c): c is ImageContent => c !== null)
+  const images = includeImages
+    ? (attachments ?? []).map(toImageContent).filter((c): c is ImageContent => c !== null)
+    : []
   if (fileTexts.length === 0 && images.length === 0) {
     return { role: 'user', content: text, timestamp }
   }
@@ -157,7 +162,14 @@ function resolveSystemPrompt(
 // systemPrompt), agent → assistant, user → user (with rebuilt image/file blocks).
 // Empty turns are dropped. Shared by buildContext and the compaction summary
 // input (ADR 0047), so both see the exact same replay shape.
-export function historyToAgentMessages(history: SessionMessage[]): AgentMessage[] {
+//
+// `includeImages` (Settings → Sessions → refeedImages): false drops prior-turn
+// image blocks (a turn that becomes empty after dropping its only image is then
+// pruned). Default true = re-feed every prior image (current behaviour).
+export function historyToAgentMessages(
+  history: SessionMessage[],
+  includeImages = true,
+): AgentMessage[] {
   const messages: AgentMessage[] = []
   for (const m of history) {
     if (m.role === 'system') continue
@@ -172,7 +184,7 @@ export function historyToAgentMessages(history: SessionMessage[]): AgentMessage[
     // User turns: rebuild image blocks from persisted attachments so resume
     // re-feeds the same images to the model. Drop turns with neither text nor
     // a usable image.
-    const userMsg = historyUser(text, m.attachments, ts)
+    const userMsg = historyUser(text, m.attachments, ts, includeImages)
     if (isEmptyUserMessage(userMsg)) continue
     messages.push(userMsg)
   }
@@ -206,6 +218,10 @@ export function buildContext(
   // `firstKeptMessageId` onward are replayed; the summary is injected into the
   // system prompt. Older turns remain in the transcript (UI) but not the context.
   compaction?: Pick<SessionCompaction, 'summary' | 'firstKeptMessageId'>,
+  // Re-feed image attachments (Settings → Sessions → refeedImages). false drops
+  // PRIOR-turn images from the rebuilt history; the CURRENT turn's images (the
+  // pending prompt) are always sent. Default true = current re-feed behaviour.
+  refeedImages = true,
 ): BuiltContext {
   let effective = history
   let appended = systemPromptAppend
@@ -220,7 +236,8 @@ export function buildContext(
     }
   }
 
-  const messages = historyToAgentMessages(effective)
+  // Prior turns honour refeedImages; the pending turn always carries its own images.
+  const messages = historyToAgentMessages(effective, refeedImages)
 
   const context: AgentContext = {
     systemPrompt: resolveSystemPrompt(systemPrompt, appended),

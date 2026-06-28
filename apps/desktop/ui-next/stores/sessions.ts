@@ -8,6 +8,8 @@ import {
   questionAnswered,
 } from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
+import { useSettingsStore } from '~/stores/settings'
+import { contextLimitFor } from '~/utils/context-window'
 import type {
   AssistantBlock,
   AssistantMessage,
@@ -223,6 +225,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const sc = useSidecar()
   const { SESSIONS, modelsFor } = useSessionsData()
   const { accounts, accountById, accountByDisplay, modelsForAccount } = useAccounts()
+  const settingsStore = useSettingsStore()
   const useIpc = sc.available
 
   // In IPC mode start empty (hydrate from sidecar); in mock mode use the seed.
@@ -240,6 +243,59 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   const byId = (id: number) => sessions.value.find((s) => s.id === id)
   const byEngineId = (eid: string) => sessions.value.find((s) => s.engineId === eid)
+
+  // Context-window usage percentage (0..100) for a session. Mirrors
+  // useSessionContextUsage: used tokens (input + cache + output, summed in
+  // mergeUsage) over the SELECTED model's window. 0 when no real turn has run yet
+  // (browser-dev / first turn). Shared by the auto-compact trigger + quota guard.
+  function usagePct(s: Session): number {
+    const used = s.usage?.total ?? 0
+    if (!used) return 0
+    const max = s.usage?.max ?? contextLimitFor(modelIdFromDisplay(s.model))
+    if (!max) return 0
+    return Math.min(100, (used / max) * 100)
+  }
+
+  // Quota guard (Settings → Quota warning). True when the active session has crossed
+  // the threshold AND `blockNewSessionsOnThreshold` is enabled — `create()` reads
+  // this to refuse a new session. Disabled / under threshold → false (always allow).
+  const newSessionsBlocked = computed<boolean>(() => {
+    const q = settingsStore.quota
+    if (!q.enabled || !q.blockNewSessionsOnThreshold) return false
+    return sessions.value.some((s) => usagePct(s) >= q.threshold)
+  })
+
+  // Block-reason notifier (registered by useQuotaGuard). The store owns the gate in
+  // create() but has no i18n, so the guard registers a callback to push a localised
+  // "blocked" toast when a new session is refused. No-op until registered.
+  let notifyBlocked: (() => void) | null = null
+  function onNewSessionBlocked(fn: () => void): void {
+    notifyBlocked = fn
+  }
+
+  // Auto-compaction trigger (Settings → Sessions → autoCompact). The sidecar has no
+  // server-side auto-compact loop — `/compact` is a client-driven RPC — so we drive
+  // it here: once a turn settles and the session crosses the auto-compact threshold,
+  // fire compactSession() (the real ADR 0047 RPC, same as the manual button). The
+  // sidecar persists a checkpoint and trims the model context on the NEXT turn; the
+  // transcript is left intact. Guarded so it never fires twice for one threshold
+  // crossing (a per-engineId latch reset when usage drops back below the band).
+  const AUTO_COMPACT_PCT = 85
+  const autoCompactedAt = new Map<string, boolean>()
+  function maybeAutoCompact(s: Session): void {
+    if (!useIpc || !s.engineId || !settingsStore.sessions.autoCompact) return
+    const pct = usagePct(s)
+    const latched = autoCompactedAt.get(s.engineId) ?? false
+    // Reset the latch once usage falls well below the band (a fresh compaction cut
+    // frees space) so a later re-fill can auto-compact again.
+    if (pct < AUTO_COMPACT_PCT - 15) {
+      if (latched) autoCompactedAt.set(s.engineId, false)
+      return
+    }
+    if (pct < AUTO_COMPACT_PCT || latched) return
+    autoCompactedAt.set(s.engineId, true)
+    void compactSession(s.id)
+  }
 
   // ── Mappers: engine → ui-next shapes ────────────────────────────────────
 
@@ -580,24 +636,52 @@ export const useSessionsStore = defineStore('sessions', () => {
     return true
   }
 
+  // Resolve the default account for a NEW session from Settings → Defaults: prefer
+  // the first connected account on the configured default provider, fall back to the
+  // first account of any provider (else the mock seed off-shell). Returns the chosen
+  // account + the model display to seed (the default model when it's available on
+  // that account, otherwise the account's first model).
+  function defaultAccountAndModel(): { acct: ReturnType<typeof accountById>; model: string } {
+    if (!useIpc) return { acct: undefined, model: 'Opus 4.8' }
+    const wantProvider = PROVIDER_DISPLAY[settingsStore.defaults.provider] ?? 'Anthropic'
+    const acct =
+      accounts.value.find((a) => a.provider === wantProvider) ?? accounts.value[0] ?? undefined
+    const available = acct ? modelsForAccount(acct) : []
+    // Default model id (e.g. 'claude-opus-4-8') → display name; use it only when the
+    // chosen account actually offers it, else the account's first model.
+    const wantModel = modelDisplayName(settingsStore.defaults.modelId)
+    const model = available.includes(wantModel) ? wantModel : (available[0] ?? 'Opus 4.8')
+    return { acct, model }
+  }
+
   // Create a new session. `projectId` assigns it to a project up front (the
   // per-group "+" passes the group's project); omitted (the global "+") leaves the
   // project UNSET ('' = default) — the user picks one later via the crumb, since
   // at global-create time there's no project context to guess from.
-  function create(projectId?: string) {
+  //
+  // Quota guard (Settings → Quota warning): when `blockNewSessionsOnThreshold` is on
+  // and the active session has crossed the threshold, refuse to spawn a new session
+  // (returns null) so the user resolves the existing one first — the single gate for
+  // every "+" callsite. Disabled / under threshold → always creates.
+  function create(projectId?: string): number | null {
+    if (newSessionsBlocked.value) {
+      notifyBlocked?.()
+      return null
+    }
     const id = newClientId()
-    // Default account: the first real account when on the engine (else the mock seed).
-    const acct = useIpc ? accounts.value[0] : undefined
+    // Defaults (Settings → Defaults): account/model/mode/thinking seed a new session.
+    const { acct, model } = defaultAccountAndModel()
     const session: Session = {
       id,
       title: 'New session',
       project: projectId ?? '',
-      model: acct ? (modelsForAccount(acct)[0] ?? 'Opus 4.8') : 'Opus 4.8',
+      model,
       account: acct?.display ?? 'hoatq · Anthropic',
       style: 'Default',
       status: 'idle',
       when: 'vừa xong',
-      mode: 'Ask',
+      mode: modeDisplay(settingsStore.defaults.mode),
+      thinkingLevel: settingsStore.defaults.thinkingLevel,
       msgs: [],
       loaded: true,
     }
@@ -617,17 +701,18 @@ export const useSessionsStore = defineStore('sessions', () => {
   // caller (Task → "Discuss in session") can navigate to it.
   function createForTask(taskId: string, projectId: string, title: string): number {
     const id = newClientId()
-    const acct = useIpc ? accounts.value[0] : undefined
+    const { acct, model } = defaultAccountAndModel()
     const session: Session = {
       id,
       title,
       project: projectId,
-      model: acct ? (modelsForAccount(acct)[0] ?? 'Opus 4.8') : 'Opus 4.8',
+      model,
       account: acct?.display ?? 'hoatq · Anthropic',
       style: 'Default',
       status: 'idle',
       when: 'vừa xong',
-      mode: 'Ask',
+      mode: modeDisplay(settingsStore.defaults.mode),
+      thinkingLevel: settingsStore.defaults.thinkingLevel,
       msgs: [],
       loaded: true,
       aboutTaskId: taskId,
@@ -912,6 +997,15 @@ export const useSessionsStore = defineStore('sessions', () => {
       typers.set(messageId, tw)
     }
     tw.target += delta
+    // Typewriter OFF (Settings → Sessions → typewriter): reveal text immediately
+    // instead of animating it in. We still track the target on the typewriter so
+    // flushText/upsertStep's "snap the open run" logic keeps working — just write
+    // the trailing text run straight through with no reveal timer.
+    if (!settingsStore.sessions.typewriter) {
+      const tp = trailingText(m)
+      if (tp) tp.text = tw.target
+      return
+    }
     ensureReveal(eid, messageId)
   }
 
@@ -1362,6 +1456,18 @@ export const useSessionsStore = defineStore('sessions', () => {
       })
       .filter((a): a is NonNullable<typeof a> => a != null)
 
+    // Functional session prefs (Settings → Defaults / Sessions). Read per turn so a
+    // settings change takes effect on the next message without recreating the session.
+    //   • systemPrompt — replaces the sidecar's base prompt (blank = engine default).
+    //   • instructions — appended after the base prompt (sidecar systemPromptAppend).
+    //   • autoApprove  — skip the permission park (auto-allow gated tools).
+    //   • refeedImages — re-feed prior-turn image attachments each turn (false = only
+    //     the turn that sent them).
+    const defaults = settingsStore.defaults
+    const sessionPrefs = settingsStore.sessions
+    const sysPrompt = defaults.systemPrompt.trim()
+    const instructions = defaults.instructions.trim()
+
     try {
       const result = await sc.request<SendMessageResult>('sessions.sendMessage', {
         sessionId: s.engineId,
@@ -1370,6 +1476,13 @@ export const useSessionsStore = defineStore('sessions', () => {
         ...(engineAtts.length ? { attachments: engineAtts } : {}),
         history: [],
         settings: engineSettings(s),
+        // Session defaults / behaviour prefs (functional — consumed by the runtime).
+        ...(sysPrompt ? { systemPrompt: sysPrompt } : {}),
+        ...(instructions ? { instructions } : {}),
+        ...(sessionPrefs.autoApprove ? { autoApprove: true } : {}),
+        // refeedImages defaults true sidecar-side; forward only the opt-OUT so the
+        // payload stays minimal and the engine keeps its current default otherwise.
+        ...(sessionPrefs.refeedImages === false ? { refeedImages: false } : {}),
         // Project linkage → sidecar resolves the project's on-disk path as the
         // tools' cwd. WITHOUT this, tools fall back to process.cwd() (the repo the
         // engine was launched from) — so a medbase-platform session would wrongly
@@ -1413,7 +1526,12 @@ export const useSessionsStore = defineStore('sessions', () => {
       // next message would be refused too), and don't auto-title (a model call that
       // would bypass the very cap we just enforced).
       const refused = result.stopReason === 'budget-exceeded'
-      if (!refused) s.usage = mergeUsage(s.usage, result.usage, result.contextChars)
+      if (!refused) {
+        s.usage = mergeUsage(s.usage, result.usage, result.contextChars)
+        // Auto-compaction (Settings → Sessions): client-driven /compact once this
+        // session's context-window usage crosses the threshold (ADR 0047 RPC).
+        maybeAutoCompact(s)
+      }
       // Reflect the actually-used model, but DON'T collapse a 1M variant: the
       // engine reports the API base id (`claude-opus-4-8`) for the AWOG-internal
       // `claude-opus-4-8-1m`, so overwriting unconditionally would snap the
@@ -1951,6 +2069,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     active,
     selectedIds,
     pendingPermission,
+    // quota / usage (Settings → Quota warning)
+    usagePct,
+    newSessionsBlocked,
+    onNewSessionBlocked,
     // load (IPC)
     hydrate,
     ensureLoaded,
