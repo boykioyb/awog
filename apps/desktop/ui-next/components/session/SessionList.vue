@@ -200,7 +200,7 @@
         @contextmenu.prevent="ctx = null"
         @wheel="ctx = null"
       />
-      <div class="smenu ctxmenu" :style="{ left: `${ctx.x}px`, top: `${ctx.y}px` }">
+      <div ref="ctxMenuEl" class="smenu ctxmenu" :style="ctxStyle">
         <div class="mi" @click="ctxOpen">
           <Icon name="sessions" style="width: 13px; height: 13px" />
           {{ t('sessions.ctx.open') }}
@@ -258,11 +258,36 @@
         @contextmenu.prevent="pctx = null"
         @wheel="pctx = null"
       />
-      <div class="smenu ctxmenu" :style="{ left: `${pctx.x}px`, top: `${pctx.y}px` }">
+      <div ref="pctxMenuEl" class="smenu ctxmenu" :style="pctxStyle">
         <div class="mi" @click="pNewSession">
           <Icon name="plus" style="width: 13px; height: 13px" />
           {{ t('sessions.pctx.newSession') }}
         </div>
+        <template v-if="pctxIsProject">
+          <div class="ctxsep" />
+          <div class="ctxcolor">
+            <span class="ctxcolorlbl">{{ t('sessions.pctx.color') }}</span>
+            <div class="ctxsw">
+              <span
+                v-for="c in PROJECT_COLOR_PALETTE"
+                :key="c.token"
+                class="swatch"
+                :class="{ on: pctxColor === c.token }"
+                :style="{ background: c.token }"
+                :title="c.label"
+                @click="pSetColor(c.token)"
+              />
+              <span
+                class="swatch clear"
+                :class="{ on: pctxColor === PROJECT_COLOR_DEFAULT }"
+                :title="t('sessions.pctx.colorClear')"
+                @click="pSetColor(null)"
+              >
+                <Icon name="x" style="width: 11px; height: 11px" />
+              </span>
+            </div>
+          </div>
+        </template>
         <div class="ctxsep" />
         <div class="mi" @click="pSelectAll">
           <Icon name="check" style="width: 13px; height: 13px" />
@@ -291,12 +316,18 @@
 // drawer, group-by buckets. Filter / group / collapse state is local UI state;
 // data mutations go through `useSessionsStore`.
 import type { Session } from '~/composables/useSessionsMock'
+import {
+  PROJECT_COLOR_DEFAULT,
+  PROJECT_COLOR_PALETTE,
+  useProjectColors,
+} from '~/composables/useProjectColors'
 
 const props = defineProps<{ sessions: Session[]; activeId: number | null; listWidth: number }>()
 const emit = defineEmits<{ select: [id: number] }>()
 
 const { t } = useI18n()
-const { GROUPBY, providerOf, projColor } = useSessionsMock()
+const { GROUPBY, providerOf } = useSessionsMock()
+const { colorOf, setColor } = useProjectColors()
 const { projects, projectName, projectPath } = useProjects()
 const store = useSessionsStore()
 const sc = useSidecar()
@@ -427,7 +458,7 @@ const groups = computed(() => {
     key,
     label: groupLabelOf(key),
     items,
-    dot: groupBy.value === 'project' ? projColor(key) : 'var(--textDim)',
+    dot: groupBy.value === 'project' ? colorOf(key) : PROJECT_COLOR_DEFAULT,
   }))
 })
 
@@ -457,12 +488,39 @@ function closeMenus() {
 // its inline rename (the edit state is local to SessionListItem).
 const ctx = ref<{ x: number; y: number; session: Session } | null>(null)
 const renameReq = ref<{ id: number; n: number }>({ id: -1, n: 0 })
+const ctxMenuEl = useTemplateRef<HTMLElement>('ctxMenuEl')
+const ctxStyle = ref<Record<string, string>>({})
+
+// Place a context menu at the click point but keep it fully on-screen: flip up when
+// it would overflow the bottom (a click near the bottom edge), clamp horizontally,
+// and cap height with a scroll when taller than the viewport. Measured AFTER render
+// (the height isn't known up front), so it self-corrects regardless of item count.
+function placeMenu(el: HTMLElement | null, x: number, y: number): Record<string, string> {
+  if (!el) return { left: `${x}px`, top: `${y}px` }
+  const M = 8
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const w = el.offsetWidth
+  const h = el.scrollHeight
+  const left = x + w > vw - M ? Math.max(M, vw - w - M) : x
+  const avail = vh - M * 2
+  const maxH = h > avail ? avail : null
+  const effH = maxH ?? h
+  const top = y + effH > vh - M ? Math.max(M, vh - effH - M) : y
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+    ...(maxH != null ? { maxHeight: `${maxH}px`, overflowY: 'auto' } : {}),
+  }
+}
 
 function openCtx(p: { id: number; x: number; y: number }, s: Session) {
-  // Clamp so the menu stays on-screen (rough menu size ≈ 170×230).
-  const x = Math.min(p.x, window.innerWidth - 184)
-  const y = Math.min(p.y, window.innerHeight - 268)
-  ctx.value = { x: Math.max(8, x), y: Math.max(8, y), session: s }
+  // Seed at the click point, then refine once the menu has measurable dimensions.
+  ctx.value = { x: p.x, y: p.y, session: s }
+  ctxStyle.value = { left: `${p.x}px`, top: `${p.y}px` }
+  nextTick(() => {
+    ctxStyle.value = placeMenu(ctxMenuEl.value, p.x, p.y)
+  })
 }
 function ctxOpen() {
   if (ctx.value) emit('select', ctx.value.session.id)
@@ -537,16 +595,29 @@ async function ctxDelete() {
 // project, (de)select all, delete all, open folder). Same menu chrome as `ctx`.
 type GroupRef = { key: string; items: Session[] }
 const pctx = ref<{ x: number; y: number; grp: GroupRef } | null>(null)
+const pctxMenuEl = useTemplateRef<HTMLElement>('pctxMenuEl')
+const pctxStyle = ref<Record<string, string>>({})
 
 function openProjectCtx(grp: GroupRef, e: MouseEvent) {
-  const x = Math.min(e.clientX, window.innerWidth - 184)
-  const y = Math.min(e.clientY, window.innerHeight - 200)
-  pctx.value = { x: Math.max(8, x), y: Math.max(8, y), grp }
+  const { clientX: x, clientY: y } = e
+  pctx.value = { x, y, grp }
+  pctxStyle.value = { left: `${x}px`, top: `${y}px` }
+  nextTick(() => {
+    pctxStyle.value = placeMenu(pctxMenuEl.value, x, y)
+  })
 }
 // Open-folder only when grouping by project (other groupings carry no path).
 const pctxPath = computed<string | null>(() =>
   pctx.value && groupBy.value === 'project' ? projectPath(pctx.value.grp.key) : null,
 )
+// Color picker only makes sense for project buckets (the dot maps to a project).
+const pctxIsProject = computed(() => !!pctx.value && groupBy.value === 'project')
+const pctxColor = computed(() => (pctx.value ? colorOf(pctx.value.grp.key) : PROJECT_COLOR_DEFAULT))
+// Paint (or clear, with null) the right-clicked project's dot. Keep the menu open
+// so several swatches can be tried in one pass; the backdrop click dismisses it.
+function pSetColor(token: string | null) {
+  if (pctx.value) setColor(pctx.value.grp.key, token)
+}
 function pNewSession() {
   if (pctx.value) store.create(groupBy.value === 'project' ? pctx.value.grp.key : undefined)
   pctx.value = null
@@ -644,6 +715,48 @@ function toggleFoldAll() {
   height: 1px;
   margin: 4px 6px;
   background: var(--border);
+}
+/* Project-dot color picker (inside the group context menu). A small label over a
+   row of swatches; the active swatch gets an accent ring, the trailing "clear"
+   swatch resets to the neutral default. */
+.ctxcolor {
+  padding: 4px 10px 6px;
+}
+.ctxcolorlbl {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--textDim);
+}
+.ctxsw {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.ctxsw .swatch {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 99px;
+  cursor: pointer;
+  color: var(--textDim);
+  box-shadow: 0 0 0 1px var(--border);
+  transition:
+    transform 0.1s,
+    box-shadow 0.1s;
+}
+.ctxsw .swatch:hover {
+  transform: scale(1.12);
+}
+.ctxsw .swatch.on {
+  box-shadow:
+    0 0 0 2px var(--bgPanel),
+    0 0 0 4px var(--accent);
+}
+/* "Clear" swatch reads as an outline (no fill) carrying the reset glyph. */
+.ctxsw .swatch.clear {
+  background: transparent;
 }
 /* Per-group quick-add "+" — hover-revealed on the group header so it doesn't
    clutter every row. Click is stopped from toggling the group collapse. */
