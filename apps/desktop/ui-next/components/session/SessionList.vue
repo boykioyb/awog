@@ -209,6 +209,10 @@
           <Icon name="edit" style="width: 13px; height: 13px" />
           {{ t('sessions.ctx.rename') }}
         </div>
+        <div class="mi" @click="ctxAutoTitle">
+          <Icon name="sparkles" style="width: 13px; height: 13px" />
+          {{ t('sessions.ctx.autoTitle') }}
+        </div>
         <div class="mi" @click="ctxPin">
           <Icon name="pin" style="width: 13px; height: 13px" />
           {{ ctx.session.pinned ? t('sessions.ctx.unpin') : t('sessions.ctx.pin') }}
@@ -457,7 +461,7 @@ const renameReq = ref<{ id: number; n: number }>({ id: -1, n: 0 })
 function openCtx(p: { id: number; x: number; y: number }, s: Session) {
   // Clamp so the menu stays on-screen (rough menu size ≈ 170×230).
   const x = Math.min(p.x, window.innerWidth - 184)
-  const y = Math.min(p.y, window.innerHeight - 236)
+  const y = Math.min(p.y, window.innerHeight - 268)
   ctx.value = { x: Math.max(8, x), y: Math.max(8, y), session: s }
 }
 function ctxOpen() {
@@ -466,6 +470,12 @@ function ctxOpen() {
 }
 function ctxRename() {
   if (ctx.value) renameReq.value = { id: ctx.value.session.id, n: renameReq.value.n + 1 }
+  ctx.value = null
+}
+// Summarize the transcript into a concise title via the model (best-effort; keeps
+// the current title on failure or an empty session).
+function ctxAutoTitle() {
+  if (ctx.value) void store.regenerateTitle(ctx.value.session.id)
   ctx.value = null
 }
 function ctxPin() {

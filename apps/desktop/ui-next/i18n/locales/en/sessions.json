@@ -29,6 +29,7 @@
   "sessions.item.delete": "Delete session",
   "sessions.ctx.open": "Open",
   "sessions.ctx.rename": "Rename",
+  "sessions.ctx.autoTitle": "Auto-generate title",
   "sessions.ctx.pin": "Pin",
   "sessions.ctx.unpin": "Unpin",
   "sessions.ctx.select": "Select",

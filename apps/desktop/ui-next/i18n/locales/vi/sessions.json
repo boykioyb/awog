@@ -29,6 +29,7 @@
   "sessions.item.delete": "Xoá session",
   "sessions.ctx.open": "Mở",
   "sessions.ctx.rename": "Đổi tên",
+  "sessions.ctx.autoTitle": "Tự tạo tiêu đề",
   "sessions.ctx.pin": "Ghim",
   "sessions.ctx.unpin": "Bỏ ghim",
   "sessions.ctx.select": "Chọn",

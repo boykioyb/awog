@@ -1716,6 +1716,12 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Summarize the first exchange into a concise title + rename. Best-effort: any
   // failure keeps the "New session" placeholder. Reads persisted messages on the
   // sidecar, so call only after the first turn has finalized.
+  // Public wrapper for the session context menu: regenerate the title by id.
+  async function regenerateTitle(id: number): Promise<void> {
+    const s = byId(id)
+    if (s) await autoGenerateTitle(s)
+  }
+
   async function autoGenerateTitle(s: Session): Promise<void> {
     if (!useIpc || !s.engineId) return
     const settings = engineSettings(s)
@@ -1955,6 +1961,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     createForTask,
     remove,
     rename,
+    regenerateTitle,
     setProject,
     setAboutGh,
     setMode,
