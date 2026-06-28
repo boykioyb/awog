@@ -30,6 +30,61 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.2',
+    date: '2026-06-28',
+    highlight: {
+      en: 'Chat-surface polish: slash commands show as a compact chip, you can insert into a running turn or queue a follow-up, failed turns offer a one-click retry, and subagents show a summary of what they hand back. Plus auto-generate a chat title, a Git changed-files badge, and a one-click import of .claude/.agents config into .awog.',
+      vi: 'Trau chuốt khung chat: lệnh slash hiện gọn dạng chip, có thể chèn vào lượt đang chạy hoặc xếp hàng lượt kế, lượt lỗi cho thử lại một chạm, và subagent hiện tóm tắt phần trả về. Cùng với tự tạo tiêu đề chat, badge số file thay đổi trên nút Git, và import cấu hình .claude/.agents vào .awog chỉ một chạm.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Slash commands now appear as a compact `/name args` chip in your message instead of the whole expanded template — the full prompt still goes to the model, and you can hover the chip to see it.',
+        vi: 'Lệnh slash giờ hiện dạng chip gọn `/name args` trong tin nhắn thay vì cả mẫu prompt bung ra — prompt đầy đủ vẫn gửi tới model, và bạn rê chuột vào chip để xem.',
+      },
+      {
+        kind: 'added',
+        en: 'While a turn is running you can Insert a quick nudge into it (steering) or Queue a follow-up to send automatically when it finishes — pick either from the send button.',
+        vi: 'Khi một lượt đang chạy, bạn có thể Chèn một nhắc nhanh vào lượt đó (steering) hoặc Xếp hàng một lượt kế để tự gửi khi lượt hiện tại xong — chọn ở nút gửi.',
+      },
+      {
+        kind: 'added',
+        en: 'Auto-generate a chat title: right-click a chat → Auto-generate title to summarize the conversation into a concise name.',
+        vi: 'Tự tạo tiêu đề chat: chuột phải vào một chat → Tự tạo tiêu đề để tóm tắt cuộc trò chuyện thành một tên ngắn gọn.',
+      },
+      {
+        kind: 'added',
+        en: 'Import existing config: a project with `.claude`/`.agents` config now shows a banner to copy those agents, skills, commands, rules, and hooks into `.awog` in one click (non-destructive — existing entries are skipped).',
+        vi: 'Import cấu hình sẵn có: project có cấu hình `.claude`/`.agents` giờ hiện banner để copy các agent, skill, command, rule, hook đó vào `.awog` chỉ một chạm (không phá huỷ — bỏ qua mục đã có).',
+      },
+      {
+        kind: 'added',
+        en: 'The Git button on a chat shows a badge with the project’s changed-file count; the cost/budget readout moved into the workspace Info tab.',
+        vi: 'Nút Git trên một chat hiện badge số file đang thay đổi của project; phần chi phí/ngân sách chuyển vào tab Info của workspace.',
+      },
+      {
+        kind: 'improved',
+        en: 'A subagent (delegated task) now shows a Summary of the report it returns to the main agent, under its nested steps.',
+        vi: 'Một subagent (việc được uỷ thác) giờ hiện phần Tóm tắt báo cáo mà nó trả về cho agent chính, ngay dưới các bước con.',
+      },
+      {
+        kind: 'fixed',
+        en: 'A failed turn now shows the error message with a one-click Retry instead of a silent empty reply.',
+        vi: 'Lượt bị lỗi giờ hiện thông báo lỗi kèm nút Thử lại một chạm thay vì một phản hồi trống lặng lẽ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Right-click menus (Git files, sessions) no longer overflow off-screen — they flip up near the bottom edge and scroll when very tall.',
+        vi: 'Menu chuột phải (file Git, session) không còn tràn ra ngoài màn hình — tự lật lên khi gần mép dưới và cuộn được khi quá dài.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The inline “rename chat” field is now readable in dark mode (was white-on-white).',
+        vi: 'Ô “đổi tên chat” inline giờ đọc được ở chế độ tối (trước bị trắng trên trắng).',
+      },
+    ],
+  },
+  {
     version: '0.22.1',
     date: '2026-06-28',
     highlight: {
