@@ -637,15 +637,20 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   // Resolve the default account for a NEW session from Settings → Defaults: prefer
-  // the first connected account on the configured default provider, fall back to the
-  // first account of any provider (else the mock seed off-shell). Returns the chosen
+  // the configured provider's ACTIVE account (the one the user marked "Set active"),
+  // then any account on that provider, then any account at all (else the mock seed
+  // off-shell). Preferring the active account matters because a custom endpoint that
+  // speaks the Anthropic/OpenAI protocol lives in that provider's bucket and shares
+  // its display provider — without the active check, the first such account (e.g. a
+  // custom endpoint) would win over the user's real subscription. Returns the chosen
   // account + the model display to seed (the default model when it's available on
   // that account, otherwise the account's first model).
   function defaultAccountAndModel(): { acct: ReturnType<typeof accountById>; model: string } {
     if (!useIpc) return { acct: undefined, model: 'Opus 4.8' }
     const wantProvider = PROVIDER_DISPLAY[settingsStore.defaults.provider] ?? 'Anthropic'
+    const inProvider = accounts.value.filter((a) => a.provider === wantProvider)
     const acct =
-      accounts.value.find((a) => a.provider === wantProvider) ?? accounts.value[0] ?? undefined
+      inProvider.find((a) => a.isActive) ?? inProvider[0] ?? accounts.value[0] ?? undefined
     const available = acct ? modelsForAccount(acct) : []
     // Default model id (e.g. 'claude-opus-4-8') → display name; use it only when the
     // chosen account actually offers it, else the account's first model.

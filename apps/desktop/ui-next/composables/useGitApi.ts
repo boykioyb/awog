@@ -126,6 +126,25 @@ export interface CheckInstalledResult {
   required: string
 }
 
+export interface GitIdentityValue {
+  name: string | null
+  email: string | null
+}
+
+export interface GitIdentity {
+  // ~/.gitconfig — applies to every repo unless a local value overrides it.
+  global: GitIdentityValue
+  // <repo>/.git/config — overrides global for this repo only.
+  local: GitIdentityValue
+}
+
+export interface SetIdentityParams {
+  scope: 'global' | 'local'
+  // Empty string unsets the key (clears a local override → falls back to global).
+  name?: string
+  email?: string
+}
+
 export type DiffParams =
   | { kind: 'workingTree'; workspaceRoot: string; path?: string }
   | { kind: 'staged'; workspaceRoot: string; path?: string }
@@ -336,6 +355,10 @@ export function useGitApi() {
     stageHunk: (workspaceRoot: string, path: string, hunkIndex: number) =>
       sidecar.request<{ ok: true }>('git.stageHunk', { workspaceRoot, path, hunkIndex }),
     init: (workspaceRoot: string) => sidecar.request<{ ok: true }>('git.init', { workspaceRoot }),
+    getIdentity: (workspaceRoot: string) =>
+      sidecar.request<GitIdentity>('git.getIdentity', { workspaceRoot }),
+    setIdentity: (workspaceRoot: string, params: SetIdentityParams) =>
+      sidecar.request<{ ok: true }>('git.setIdentity', { workspaceRoot, ...params }),
     unstageFile: (workspaceRoot: string, paths: string[]) =>
       sidecar.request<{ ok: true }>('git.unstageFile', { workspaceRoot, paths }),
     discardFile: (workspaceRoot: string, paths: string[]) =>

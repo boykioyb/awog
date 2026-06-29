@@ -9,6 +9,7 @@
       :assignee="gh.assigneeFilter.value"
       :search="gh.searchQuery.value"
       :account="gh.account.value"
+      :global-account="gh.globalAccount.value"
       :accounts="accountLogins"
       :known-assignees="gh.knownAssignees.value"
       :repos="repos"
@@ -23,6 +24,8 @@
       @set-repo="(v) => (selectedRepoPath = v)"
       @load-more="gh.loadMore"
       @new-session="onNewSession"
+      @install-gh="onInstallGh"
+      @login-help="onLoginHelp"
     />
     <ProjectGhDrawer
       v-if="gh.drawerOpen.value"
@@ -175,6 +178,15 @@ async function onNewSession(item: GhThreadSummary): Promise<void> {
   if (url) sessions.setAboutGh(id, url)
   sessions.setDraft(id, seed)
   await navigateTo('/sessions')
+}
+
+// gh not installed / not authenticated → open the official install + auth docs in
+// the browser (login is interactive, so we point the user at the gh CLI flow).
+function onInstallGh(): void {
+  void sc.openExternal('https://cli.github.com/')
+}
+function onLoginHelp(): void {
+  void sc.openExternal('https://cli.github.com/manual/gh_auth_login')
 }
 
 // gh CLI accounts (login only — never a token). Best-effort; empty in browser-dev.

@@ -42,12 +42,13 @@
           :has-conflict="store.hasConflict"
           @select-project="(id) => store.setProject(id)"
           @select-repo="(r) => store.setRepo(r)"
-          @switch-branch="(n) => store.checkoutBranch(n)"
+          @switch-branch="switchBranch"
           @fetch="() => store.fetchRemote()"
           @pull="() => store.pull()"
           @push="() => store.push()"
           @complete-merge="() => store.completeMerge()"
           @abort-merge="() => store.abortMerge()"
+          @open-identity="() => (identityOpen = true)"
         />
 
         <div v-if="store.isDetached" class="gbanner">
@@ -72,6 +73,7 @@
               @stage-all="onStageAll"
               @unstage-all="onUnstageAll"
               @context-file="(e, f, s) => openMenu(e, { kind: 'file', file: f, staged: s })"
+              @context-folder="(e, p, s) => openMenu(e, { kind: 'folder', path: p, staged: s })"
             />
             <div class="grsz" :class="{ drag: midDragging }" @pointerdown="onMidResize" />
             <div class="detail">
@@ -152,6 +154,17 @@
       @submit="onPromptSubmit"
       @close="prompt = null"
     />
+
+    <GitIdentityModal :open="identityOpen" @close="identityOpen = false" />
+
+    <div
+      v-for="tt in toasts"
+      :key="tt.id"
+      class="toast"
+      :style="{ borderColor: toastColor(tt.kind) }"
+    >
+      {{ tt.text }}
+    </div>
   </div>
 </template>
 
@@ -182,6 +195,49 @@ const props = defineProps<{ projectId?: string }>()
 const { t } = useI18n()
 const store = useGitStore()
 const { confirm } = useConfirm()
+const { toasts, pushToast, toastColor } = useToasts()
+
+// Map a sidecar gitCode (DIRTY_TREE / AUTH_FAILED / …) to a human message; fall
+// back to the raw (already-sanitized) error text when the code isn't translated.
+function gitErrorMessage(code: string | null, fallback: string): string {
+  if (code) {
+    const key = `git.error.${code}`
+    const msg = t(key)
+    if (msg !== key) return msg
+  }
+  return fallback || t('git.error.UNKNOWN')
+}
+
+// Any mutating op that fails surfaces via store.lastError (instead of a silent
+// console.warn) → toast it so the user sees what happened.
+watch(
+  () => store.lastError,
+  (e) => {
+    if (e) pushToast(gitErrorMessage(e.code, e.message), 'error')
+  },
+)
+
+// Switch branch. `git checkout` refuses to clobber uncommitted changes
+// (DIRTY_TREE) — offer to stash them first, then retry. Other failures toast.
+async function switchBranch(name: string) {
+  const res = await store.checkoutBranch(name)
+  if (res.ok) return
+  if (res.code === 'DIRTY_TREE') {
+    const ok = await confirm({
+      title: t('git.checkoutDirty.title'),
+      description: t('git.checkoutDirty.desc', { name }),
+      kind: 'primary',
+      confirmLabel: t('git.checkoutDirty.stashSwitch'),
+    })
+    if (!ok) return
+    await store.stashSave()
+    const retry = await store.checkoutBranch(name)
+    if (retry.ok) pushToast(t('git.checkoutDirty.stashed', { name }), 'success')
+    else pushToast(gitErrorMessage(retry.code, retry.message), 'error')
+    return
+  }
+  pushToast(gitErrorMessage(res.code, res.message), 'error')
+}
 
 // ── View state (component-local; not git data) ──
 const section = ref<GitSection>({ kind: 'local-changes' })
@@ -201,6 +257,7 @@ const diffMode = ref<DiffMode>('unified')
 const ctab = ref<CommitTab>('commit')
 const selectedFile = ref<string | null>(null)
 const commitSel = ref<string | null>(null)
+const identityOpen = ref(false)
 const detailFiles = ref<GitFile[]>([])
 const detailDiffByPath = ref<Record<string, DiffLine[]>>({})
 
@@ -365,6 +422,7 @@ function onNewBranch() {
 // ── Context menus (file / branch / stash / tag / remote) ──
 type MenuTarget =
   | { kind: 'file'; file: string; staged: boolean }
+  | { kind: 'folder'; path: string; staged: boolean }
   | { kind: 'branch'; branch: BranchInfo }
   | { kind: 'stash'; index: number }
   | { kind: 'tag'; name: string }
@@ -430,6 +488,21 @@ const menuItems = computed<MenuItem[]>(() => {
       sep,
       { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' },
     )
+    return items
+  }
+
+  if (tgt.kind === 'folder') {
+    const items: MenuItem[] = []
+    if (tgt.staged) {
+      items.push({ id: 'unstage', label: t('git.ctxFolder.unstage'), icon: 'rewind' })
+    } else {
+      items.push(
+        { id: 'stage', label: t('git.ctxFolder.stage'), icon: 'plus' },
+        { id: 'discard', label: t('git.ctxFolder.discard'), icon: 'revert', danger: true },
+        { id: 'ignore', label: t('git.ctxFolder.ignore') },
+      )
+    }
+    items.push(sep, { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' })
     return items
   }
 
@@ -534,6 +607,7 @@ function onMenuSelect(id: string) {
   menu.value = null
   if (!tgt) return
   if (tgt.kind === 'file') dispatchFile(id, tgt.file)
+  else if (tgt.kind === 'folder') void dispatchFolder(id, tgt.path, tgt.staged)
   else if (tgt.kind === 'branch') dispatchBranch(id, tgt.branch)
   else if (tgt.kind === 'stash') dispatchStash(id, tgt.index)
   else if (tgt.kind === 'tag') dispatchTag(id, tgt.name)
@@ -565,6 +639,40 @@ function dispatchFile(id: string, file: string) {
     void store.ignore([slash > 0 ? file.slice(0, slash + 1) : file])
   }
   // external-diff / blame / history: need a dedicated view (blame/timeline) — no-op.
+}
+
+// Files in the given section (staged ↔ unstaged) that live under `path`.
+function filesUnderFolder(path: string, isStaged: boolean): string[] {
+  const prefix = `${path}/`
+  return (isStaged ? store.staged : store.unstaged)
+    .map((x) => x.f)
+    .filter((f) => f.startsWith(prefix))
+}
+
+async function dispatchFolder(id: string, path: string, isStaged: boolean) {
+  const files = filesUnderFolder(path, isStaged)
+  if (id === 'stage') {
+    await store.stagePaths(files)
+    reloadDiff()
+  } else if (id === 'unstage') {
+    await store.unstagePaths(files)
+    reloadDiff()
+  } else if (id === 'discard') {
+    if (!files.length) return
+    const ok = await confirm({
+      title: t('git.discard.allTitle'),
+      description: t('git.discard.folder', { folder: path, n: files.length }),
+      confirmLabel: t('git.discard.confirm'),
+    })
+    if (!ok) return
+    await store.discardPaths(files)
+    if (selectedFile.value && files.includes(selectedFile.value)) selectedFile.value = null
+    reloadDiff()
+  } else if (id === 'ignore') {
+    void store.ignore([`${path}/`])
+  } else if (id === 'copy') {
+    copy(path)
+  }
 }
 
 async function dispatchCommit(id: string, c: Commit) {
@@ -637,8 +745,8 @@ async function dispatchCommit(id: string, c: Commit) {
 }
 
 function dispatchBranch(id: string, b: BranchInfo) {
-  if (id === 'checkout') store.checkoutBranch(b.name)
-  else if (id === 'checkout-local') store.checkoutBranch(b.name.replace(/^origin\//, ''))
+  if (id === 'checkout') void switchBranch(b.name)
+  else if (id === 'checkout-local') void switchBranch(b.name.replace(/^origin\//, ''))
   else if (id === 'create-from')
     openPrompt({
       title: t('git.prompt.newBranch'),

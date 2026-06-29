@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowRight, MessageSquarePlus, Search, Terminal } from 'lucide-vue-next'
+import { ArrowRight, MessageSquarePlus, Search, Sparkles, Terminal, Wand2 } from 'lucide-vue-next'
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useSessionsStore } from '~/stores/sessions'
 import {
@@ -80,6 +80,8 @@ import {
 const { t } = useI18n()
 const { isOpen, close } = useCommandPalette()
 const store = useSessionsStore()
+const { start: startTour } = useTour()
+const { reset: rerunSetup } = useOnboarding()
 
 const defaultIcon = Terminal
 
@@ -146,6 +148,22 @@ const commands = computed<PaletteCommand[]>(() => {
       run: () => void navigateTo(r.to),
     })
   }
+
+  // Onboarding replay — re-run the setup wizard or take the interface tour.
+  out.push({
+    id: 'onboarding-tour',
+    label: t('onboarding.cmd.startTour'),
+    icon: Sparkles,
+    section: 'navigate',
+    run: () => startTour('intro'),
+  })
+  out.push({
+    id: 'onboarding-setup',
+    label: t('onboarding.cmd.startSetup'),
+    icon: Wand2,
+    section: 'navigate',
+    run: () => rerunSetup(),
+  })
 
   return out
 })

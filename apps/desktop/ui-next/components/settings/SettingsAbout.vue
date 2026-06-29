@@ -15,6 +15,20 @@
       <button class="btn sm" @click="onOpenRepo">{{ t('settings.about.repo.open') }}</button>
     </SettingsField>
 
+    <!-- Onboarding — re-run the setup wizard / replay the interface tour. Closes
+         this modal first so the wizard + spotlight render over the shell. -->
+    <SettingsField :name="t('onboarding.settings.name')" :desc="t('onboarding.settings.desc')">
+      <div class="keyrow">
+        <button class="btn sm" @click="onRerunSetup">
+          <Icon name="sparkles" />
+          {{ t('onboarding.settings.rerunSetup') }}
+        </button>
+        <button class="btn sm" @click="onReplayTour">
+          {{ t('onboarding.settings.replayTour') }}
+        </button>
+      </div>
+    </SettingsField>
+
     <!-- Automatic update checks -->
     <SettingsField
       :name="t('settings.about.autoUpdate.name')"
@@ -58,8 +72,22 @@ import type { UnlistenFn, UpdateEvent } from '~/composables/useSidecar'
 const { t } = useI18n()
 const store = useSettingsStore()
 const sidecar = useSidecar()
+const { closeSettings } = useSettingsModal()
+const { reset: rerunSetup } = useOnboarding()
+const { start: startTour } = useTour()
 
 const REPO_URL = 'https://github.com/boykioyb/awog'
+
+// Replay entry points — close the Settings modal first so the wizard / spotlight
+// overlay isn't stacked over a modal whose backdrop hides the highlighted shell.
+const onRerunSetup = () => {
+  closeSettings()
+  rerunSetup()
+}
+const onReplayTour = () => {
+  closeSettings()
+  startTour('intro')
+}
 
 const available = sidecar.available
 

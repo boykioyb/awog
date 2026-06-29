@@ -18,6 +18,7 @@ const { init } = useTheme()
 const { initLocale } = useI18n()
 const settings = useSettingsStore()
 const { applyAll, applyReducedMotion } = useAppearanceDom()
+const { maybeStart } = useOnboarding()
 onMounted(() => {
   init()
   initLocale()
@@ -30,5 +31,8 @@ onMounted(() => {
     () => settings.sessions.reducedMotion,
     (on) => applyReducedMotion(on),
   )
+  // First-run setup wizard — shows only for users without an account yet (it
+  // hydrates accounts from the sidecar first), and never after it's completed.
+  void maybeStart()
 })
 </script>

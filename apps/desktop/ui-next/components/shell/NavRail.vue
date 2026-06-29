@@ -1,5 +1,5 @@
 <template>
-  <aside class="side" :class="{ collapsed: collapsed && !compact }">
+  <aside class="side" :class="{ collapsed: collapsed && !compact }" data-tour="nav-rail">
     <div class="brand">
       <span class="logo"><Icon name="home" /></span>
       <span class="nm">
@@ -16,6 +16,7 @@
         :to="item.to"
         class="ni"
         :class="{ on: isActive(item.to) }"
+        :data-tour="item.to === '/sessions' ? 'nav-sessions' : undefined"
       >
         <Icon :name="item.icon" />
         {{ t(item.label) }}
@@ -37,11 +38,17 @@
         class="footbtn"
         :class="{ on: settingsOpen }"
         :title="t('nav.settings')"
+        data-tour="settings-btn"
         @click="openSettings()"
       >
         <Icon name="settings" style="width: 15px; height: 15px" />
       </button>
-      <button class="footbtn wn-btn" :title="t('topbar.whatsNew')" @click="openPanel">
+      <button
+        class="footbtn wn-btn"
+        :title="t('topbar.whatsNew')"
+        data-tour="whatsnew-btn"
+        @click="openPanel"
+      >
         <Icon name="tag" style="width: 15px; height: 15px" />
         <span v-if="hasUnseen" class="wn-dot" />
       </button>

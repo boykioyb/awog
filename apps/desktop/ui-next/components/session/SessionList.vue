@@ -406,9 +406,16 @@ const projMenu = ref(false)
 // Per-group collapse state, keyed by the group's stable key (groupKeyOf).
 const collapsed = ref<Record<string, boolean>>({})
 
-// Filter options: an "all" sentinel + the real projects (id + display name).
+// Sessions with no project assigned (s.project === '') bucket under a "Default"
+// group in the list, so the filter needs a matching entry to target them. The
+// store has no "Default" project (it's the empty-id bucket), so derive it — and
+// only when ≥1 such session exists, mirroring the conditional group header.
+const hasUnassigned = computed(() => props.sessions.some((s) => !s.project))
+// Filter options: an "all" sentinel + the "Default" bucket (when present) + the
+// real projects (id + display name).
 const projectOptions = computed(() => [
   { id: 'all', name: t('sessions.filter.allProjects') },
+  ...(hasUnassigned.value ? [{ id: '', name: t('sessions.defaultProject') }] : []),
   ...projects.value,
 ])
 const activeFilters = computed(() => projectFilter.value.size)

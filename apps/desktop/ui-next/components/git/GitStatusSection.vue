@@ -24,6 +24,7 @@
             class="gtdir"
             :style="{ paddingLeft: pad(row.depth) }"
             @click="toggleDir(row.path)"
+            @contextmenu.prevent="emit('context-folder', $event, row.path, staged)"
           >
             <svg class="icn fchv" :class="{ col: collapsedDirs.has(row.path) }">
               <use href="#i-chev" />
@@ -112,6 +113,7 @@ const emit = defineEmits<{
   (e: 'discard-all', files: string[]): void
   (e: 'toggle-stage', file: string, staged: boolean): void
   (e: 'context-file', event: MouseEvent, file: string, staged: boolean): void
+  (e: 'context-folder', event: MouseEvent, path: string, staged: boolean): void
 }>()
 
 const { t } = useI18n()

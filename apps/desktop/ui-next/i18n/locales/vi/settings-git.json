@@ -1,4 +1,7 @@
 {
+  "settings.git.ghAccount.name": "Tài khoản GitHub mặc định",
+  "settings.git.ghAccount.desc": "Tài khoản gh CLI dùng mặc định cho Issues / Pull Requests ở mọi project. Mỗi project có thể override trong tab GitHub của nó.",
+  "settings.git.ghAccount.active": "tài khoản gh hiện hành",
   "settings.git.coAuthor.name": "Commit kèm co-author",
   "settings.git.coAuthor.desc": "Thêm trailer Co-Authored-By cho commit do AWOG tạo (commit session và auto-commit của task)",
   "settings.git.template.name": "Mẫu commit message",

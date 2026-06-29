@@ -242,9 +242,21 @@ export function useProjectGh(
   const commitsLoading = ref(false)
   const commitsLoaded = ref(false)
 
-  // gh account override (empty = follow gh's active account). Sourced from the
-  // app-level setting; the GH tab also lets the user pick per-tab.
-  const account = ref<string>(settings.githubAccount.trim())
+  // Per-project gh account OVERRIDE. Three states:
+  //   '__inherit' → follow the app-level default (settings.githubAccount)
+  //   ''          → explicitly "active gh account"
+  //   '<login>'   → explicit account
+  // The GH tab picker writes this; loadFilters seeds it (default = inherit).
+  const INHERIT = '__inherit'
+  const account = ref<string>(INHERIT)
+
+  // The account actually sent to gh: resolve inherit → app-level default. Empty
+  // ('' = active gh account) means "omit the param" so gh uses its active login.
+  const effectiveAccount = computed<string>(() =>
+    account.value === INHERIT ? settings.githubAccount.trim() : account.value,
+  )
+  // App-level default, surfaced to the picker so the "inherit" row can show it.
+  const globalAccount = computed<string>(() => settings.githubAccount.trim())
 
   // Persisted filters (state / assignee / account) per project+kind so they
   // survive an app restart. localStorage holds a `{ "<projectId>:<kind>": {...} }`
@@ -268,7 +280,7 @@ export function useProjectGh(
     if (getKind() !== 'pr' && state === 'merged') state = 'open'
     stateFilter.value = state
     assigneeFilter.value = saved?.assignee ?? ''
-    account.value = saved?.account ?? settings.githubAccount.trim()
+    account.value = saved?.account ?? INHERIT
     searchQuery.value = ''
   }
   const saveFilters = (): void => {
@@ -304,7 +316,8 @@ export function useProjectGh(
   )
 
   // Cache keys — scoped to project + child repo + account so they never collide.
-  const ck = (): string => `${getProjectId()}|${getRepoPath() ?? ''}|${getKind()}|${account.value}`
+  const ck = (): string =>
+    `${getProjectId()}|${getRepoPath() ?? ''}|${getKind()}|${effectiveAccount.value}`
   const listKey = (): string =>
     `L|${ck()}|${stateFilter.value}|${assigneeFilter.value}|${searchQuery.value.trim()}|${pageLimit.value}`
   const threadKey = (n: number): string => `T|${ck()}|${n}`
@@ -341,7 +354,7 @@ export function useProjectGh(
         limit?: number
       } = { projectId, kind: getKind(), state: stateFilter.value, limit: pageLimit.value }
       if (assigneeFilter.value) params.assignee = assigneeFilter.value
-      if (account.value) params.account = account.value
+      if (effectiveAccount.value) params.account = effectiveAccount.value
       const repoPath = getRepoPath()
       if (repoPath) params.repoPath = repoPath
       const q = searchQuery.value.trim()
@@ -399,7 +412,7 @@ export function useProjectGh(
         kind: getKind(),
         number,
       }
-      if (account.value) params.account = account.value
+      if (effectiveAccount.value) params.account = effectiveAccount.value
       const repoPath = getRepoPath()
       if (repoPath) params.repoPath = repoPath
       const thread = await sc.request<GhThread>('gh.get', params)
@@ -429,7 +442,7 @@ export function useProjectGh(
         account?: string
         repoPath?: string
       } = { projectId, kind: getKind(), number }
-      if (account.value) params.account = account.value
+      if (effectiveAccount.value) params.account = effectiveAccount.value
       const repoPath = getRepoPath()
       if (repoPath) params.repoPath = repoPath
       const thread = await sc.request<GhThread>('gh.get', params)
@@ -546,7 +559,7 @@ export function useProjectGh(
         account?: string
         repoPath?: string
       } = { projectId, kind: getKind(), number }
-      if (account.value) params.account = account.value
+      if (effectiveAccount.value) params.account = effectiveAccount.value
       const repoPath = getRepoPath()
       if (repoPath) params.repoPath = repoPath
       const res = await sc.request<{ patch: string }>('gh.diff', params)
@@ -585,7 +598,7 @@ export function useProjectGh(
         account?: string
         repoPath?: string
       } = { projectId, kind: getKind(), number }
-      if (account.value) params.account = account.value
+      if (effectiveAccount.value) params.account = effectiveAccount.value
       const repoPath = getRepoPath()
       if (repoPath) params.repoPath = repoPath
       const res = await sc.request<{ commits: GhCommit[] }>('gh.commits', params)
@@ -619,7 +632,7 @@ export function useProjectGh(
         account?: string
         repoPath?: string
       } = { projectId, kind: getKind(), number, body }
-      if (account.value) params.account = account.value
+      if (effectiveAccount.value) params.account = effectiveAccount.value
       const repoPath = getRepoPath()
       if (repoPath) params.repoPath = repoPath
       await sc.request<{ url: string }>('gh.comment', params)
@@ -709,7 +722,7 @@ export function useProjectGh(
         account?: string
         repoPath?: string
       } = { projectId: getProjectId(), number, event: 'approve', body: 'LGTM!' }
-      if (account.value) params.account = account.value
+      if (effectiveAccount.value) params.account = effectiveAccount.value
       const rp = getRepoPath()
       if (rp) params.repoPath = rp
       await sc.request('gh.review', params)
@@ -784,6 +797,15 @@ export function useProjectGh(
     void refresh()
   })
 
+  // When the app-level default changes and this project is inheriting it, the
+  // effective account moved → re-fetch (the cache key already keys on it).
+  watch(
+    () => settings.githubAccount,
+    () => {
+      if (account.value === INHERIT) void refresh()
+    },
+  )
+
   onMounted(() => void refresh())
   onBeforeUnmount(() => closeDrawer())
 
@@ -799,6 +821,7 @@ export function useProjectGh(
     assigneeFilter,
     searchQuery,
     account,
+    globalAccount,
     selected,
     drawerOpen,
     detailLoading,

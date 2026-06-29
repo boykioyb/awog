@@ -3,6 +3,18 @@
     <SettingsPaneHeader :title="t('settings.git.heading')" />
 
     <SettingsField
+      :name="t('settings.git.ghAccount.name')"
+      :desc="t('settings.git.ghAccount.desc')"
+    >
+      <AppSelect
+        :model-value="githubAccount || '__active'"
+        :options="ghAccountOptions"
+        width="200px"
+        @update:model-value="onGithubAccount"
+      />
+    </SettingsField>
+
+    <SettingsField
       :name="t('settings.git.autoCommit.name')"
       :desc="t('settings.git.autoCommit.desc')"
     >
@@ -84,11 +96,32 @@
 // legacy SettingsGitSection. Wired to the settings store's `git` slice. Seg/tog/
 // textarea controls write through `updateGit` / `resetGitCommitRule` via computed
 // get/set proxies, so store state is only ever mutated inside the store actions.
+import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import type { GhAccount } from '~/composables/useProjectGh'
 import type { AutoCommitScope, DirtyTaskPolicy } from '~/stores/settings'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
-const { git } = storeToRefs(settings)
+const { git, githubAccount } = storeToRefs(settings)
+const sc = useSidecar()
+
+// App-level default GitHub (gh CLI) account. '__active' (empty stored value) =
+// follow gh's active account. Per-project Issue/PR pickers inherit this default.
+const ghLogins = ref<string[]>([])
+onMounted(async () => {
+  if (!sc.available) return
+  try {
+    const res = await sc.request<{ accounts: GhAccount[] }>('gh.accounts', {})
+    ghLogins.value = res.accounts.map((a) => a.login)
+  } catch {
+    ghLogins.value = []
+  }
+})
+const ghAccountOptions = computed<AppSelectOption[]>(() => [
+  { value: '__active', label: t('settings.git.ghAccount.active') },
+  ...ghLogins.value.map((a) => ({ value: a, label: a })),
+])
+const onGithubAccount = (v: string) => settings.setGithubAccount(v === '__active' ? '' : v)
 
 // Default interval used when auto-fetch is toggled back on (5 minutes).
 const DEFAULT_FETCH_INTERVAL_MS = 300_000

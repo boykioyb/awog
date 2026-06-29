@@ -94,6 +94,27 @@
         <div v-if="!items.length" class="empty" style="padding: 36px">
           <span class="ei"><Icon name="git" style="width: 20px; height: 20px" /></span>
           <div class="et">{{ emptyText }}</div>
+
+          <!-- gh CLI not installed → install button + per-OS hint -->
+          <div v-if="errorCode === 'GH_NOT_FOUND'" class="ghcta">
+            <button class="btn pri sm" @click="emit('install-gh')">
+              <Icon name="globe" style="width: 13px; height: 13px" />
+              {{ t('projects.gh.installBtn') }}
+            </button>
+            <code class="ghcmd">{{ installHint }}</code>
+          </div>
+
+          <!-- gh installed but not authenticated → copy login command + open guide -->
+          <div v-else-if="errorCode === 'GH_NOT_AUTH'" class="ghcta">
+            <button class="btn sm" @click="copyLoginCmd">
+              <Icon name="copy" style="width: 13px; height: 13px" />
+              {{ copied ? t('projects.gh.copied') : t('projects.gh.copyLoginCmd') }}
+            </button>
+            <button class="btn sm" @click="emit('login-help')">
+              <Icon name="help" style="width: 13px; height: 13px" />
+              {{ t('projects.gh.loginGuide') }}
+            </button>
+          </div>
         </div>
         <button v-if="canLoadMore" class="ghmore" :disabled="loading" @click="emit('load-more')">
           {{ loading ? t('projects.gh.loading') : t('projects.gh.loadMore') }}
@@ -107,7 +128,7 @@
 // Issues / Pull Requests tab — presentational. Filter chips drive the parent's
 // useProjectGh controller via emits; rows bind the live gh.list summaries. The
 // account/state/assignee dropdowns are themed AppSelects (WKWebView-safe).
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { ProjectRepo } from '~/composables/useProjectRepos'
 import type {
@@ -129,6 +150,9 @@ const props = defineProps<{
   assignee: string
   search: string
   account: string
+  // App-level default account login ('' = active gh account) the per-project
+  // picker inherits — used to label the "inherit" row.
+  globalAccount: string
   accounts: string[]
   knownAssignees: string[]
   // GitHub child repos of the project + the selected one (multi-repo workspace).
@@ -148,6 +172,8 @@ const emit = defineEmits<{
   (e: 'set-repo', v: string): void
   (e: 'load-more'): void
   (e: 'new-session', item: GhThreadSummary): void
+  (e: 'install-gh'): void
+  (e: 'login-help'): void
 }>()
 
 const { t } = useI18n()
@@ -166,10 +192,20 @@ const assigneeOptions = computed<AppSelectOption[]>(() => [
   ...props.knownAssignees.map((a) => ({ value: a, label: a })),
 ])
 
-const accountOptions = computed<AppSelectOption[]>(() => [
-  { value: '__active', label: t('projects.gh.accountActive') },
-  ...props.accounts.map((a) => ({ value: a, label: a })),
-])
+// First row inherits the app-level default (Settings → Git). Its label shows what
+// that resolves to so picking "inherit" is informative. Below it: the explicit
+// choices (active gh account + each known login) which override per project.
+const accountOptions = computed<AppSelectOption[]>(() => {
+  const g = props.globalAccount.trim()
+  const inheritLabel = t('projects.gh.accountInherit', {
+    account: g || t('projects.gh.accountActive'),
+  })
+  return [
+    { value: '__inherit', label: inheritLabel },
+    { value: '__active', label: t('projects.gh.accountActive') },
+    ...props.accounts.map((a) => ({ value: a, label: a })),
+  ]
+})
 
 // Repo picker (multi-repo workspace): value = relativePath, label = the repo
 // folder name (the owner is the same across a workspace, so the short name is
@@ -197,7 +233,28 @@ function stateColor(s: GhThreadState): string {
 
 const onState = (v: string) => emit('set-state', v as GhListState)
 const onAssignee = (v: string) => emit('set-assignee', v === '__any' ? '' : v)
+// '__active' → '' (active gh account); '__inherit' passes through as the override.
 const onAccount = (v: string) => emit('set-account', v === '__active' ? '' : v)
+
+// gh CLI install hint + copyable login command for the not-installed / not-authed
+// empty states. The brew/winget commands are literal shell commands (not prose).
+const LOGIN_CMD = 'gh auth login'
+const copied = ref(false)
+function copyLoginCmd(): void {
+  navigator.clipboard
+    ?.writeText(LOGIN_CMD)
+    .then(() => {
+      copied.value = true
+      setTimeout(() => (copied.value = false), 1500)
+    })
+    .catch(() => {})
+}
+const installHint = computed<string>(() => {
+  const p = (navigator.platform || '').toLowerCase()
+  if (p.includes('mac')) return 'brew install gh'
+  if (p.includes('win')) return 'winget install GitHub.cli'
+  return 'cli.github.com'
+})
 const onSearch = (e: Event) => emit('set-search', (e.target as HTMLInputElement).value)
 
 // Short relative time for an ISO timestamp: <1h Nm, <24h Nh, <7d Nd, else date.
@@ -236,5 +293,22 @@ function relativeWhen(iso: string): string {
 .ghmore:disabled {
   opacity: 0.5;
   cursor: default;
+}
+.ghcta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.ghcmd {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bgInput);
+  color: var(--textDim);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 </style>

@@ -25,6 +25,11 @@ export type AccountOption = {
   display: string
   // Engine modelIds the account exposes (when the sidecar reports them).
   modelIds?: string[]
+  // True when this is the active account of its provider bucket (sidecar
+  // `activeAccountId`). Drives the default pick for a NEW session so it honours
+  // the user's "Set active" choice instead of the first account in the bucket —
+  // which may be a custom endpoint that merely shares the provider's protocol.
+  isActive?: boolean
 }
 
 // Sidecar accounts.list shapes (confirmed — apps/desktop/sidecar/src/methods/
@@ -56,6 +61,7 @@ function flatten(dto: AccountsListDto): AccountOption[] {
         display: `${a.label} · ${provider}`,
       }
       if (a.models?.length) opt.modelIds = a.models
+      if (a.id === bucket.activeAccountId) opt.isActive = true
       out.push(opt)
     }
   }

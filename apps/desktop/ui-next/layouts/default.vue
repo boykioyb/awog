@@ -34,6 +34,8 @@
     <ConfirmDialogHost />
     <TextPromptHost />
     <QuotaGuardHost />
+    <OnboardingWizard />
+    <TourHost />
   </div>
 </template>
 

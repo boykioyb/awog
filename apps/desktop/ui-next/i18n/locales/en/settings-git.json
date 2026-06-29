@@ -1,4 +1,7 @@
 {
+  "settings.git.ghAccount.name": "Default GitHub account",
+  "settings.git.ghAccount.desc": "The gh CLI account used by default for Issues / Pull Requests across projects. Each project can override it in its GitHub tab.",
+  "settings.git.ghAccount.active": "active gh account",
   "settings.git.coAuthor.name": "Co-authored commits",
   "settings.git.coAuthor.desc": "Add a Co-Authored-By trailer to commits AWOG creates (session commits and task auto-commits)",
   "settings.git.template.name": "Commit message template",

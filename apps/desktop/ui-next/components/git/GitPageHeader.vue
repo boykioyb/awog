@@ -74,6 +74,12 @@
       <span v-if="ahead" class="mono" style="font-size: 0.8462rem">↑{{ ahead }}</span>
     </button>
 
+    <span class="gsep" />
+
+    <button class="btn sm" :title="t('git.header.identity')" @click="emit('open-identity')">
+      <Icon name="settings" style="width: 13px; height: 13px" />
+    </button>
+
     <!-- Dropdowns (fixed-positioned so they escape the header's overflow) -->
     <div v-if="open === 'project'" class="smenu" :style="menuStyle" @click.stop>
       <div
@@ -180,6 +186,7 @@ const emit = defineEmits<{
   (e: 'push'): void
   (e: 'complete-merge'): void
   (e: 'abort-merge'): void
+  (e: 'open-identity'): void
 }>()
 
 const { t } = useI18n()

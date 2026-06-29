@@ -22,12 +22,12 @@
     </button>
     <span class="ptitle">{{ title }}</span>
     <span class="sp" />
-    <div class="kbd" title="Command palette (chưa wire)">
+    <div class="kbd" data-tour="cmdk-hint" title="Command palette (chưa wire)">
       <Icon name="search" style="width: 13px; height: 13px" />
       {{ t('topbar.search') }}
       <span class="kk">⌘K</span>
     </div>
-    <button class="btn pri" :title="t('topbar.new')" @click="onNew">
+    <button class="btn pri" data-tour="new-btn" :title="t('topbar.new')" @click="onNew">
       <Icon name="plus" />
       <span>{{ t('topbar.new') }}</span>
     </button>

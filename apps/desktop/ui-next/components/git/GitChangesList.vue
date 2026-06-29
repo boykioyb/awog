@@ -53,6 +53,7 @@
         @discard-all="(files) => emit('discard-all', files)"
         @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
         @context-file="(e, f, s) => emit('context-file', e, f, s)"
+        @context-folder="(e, p, s) => emit('context-folder', e, p, s)"
       />
 
       <GitStatusSection
@@ -66,6 +67,7 @@
         @discard-all="(files) => emit('discard-all', files)"
         @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
         @context-file="(e, f, s) => emit('context-file', e, f, s)"
+        @context-folder="(e, p, s) => emit('context-folder', e, p, s)"
       />
       <div v-if="!unstaged.length && !staged.length" class="listempty">
         {{ t('git.changes.noUnstaged') }}
@@ -102,5 +104,6 @@ const emit = defineEmits<{
   (e: 'stage-all'): void
   (e: 'unstage-all'): void
   (e: 'context-file', event: MouseEvent, file: string, staged: boolean): void
+  (e: 'context-folder', event: MouseEvent, path: string, staged: boolean): void
 }>()
 </script>

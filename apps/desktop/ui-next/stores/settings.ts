@@ -505,6 +505,11 @@ export const useSettingsStore = defineStore('settings', () => {
   const setWorkspacePath = (path: string) => {
     workspacePath.value = path
   }
+  // App-level default GitHub (gh CLI) account login. '' = follow gh's active
+  // account. Per-project pickers inherit this unless they set an override.
+  const setGithubAccount = (login: string) => {
+    githubAccount.value = login.trim()
+  }
 
   // Resolve the dock side for a view, falling back to 'right' for unknown views.
   const workspaceDockOf = (view: string): WorkspaceDockSide => workspacePanel.dock[view] ?? 'right'
@@ -560,6 +565,7 @@ export const useSettingsStore = defineStore('settings', () => {
     updateAutoUpdate,
     updateAppearance,
     setWorkspacePath,
+    setGithubAccount,
     setWorkspaceDock,
     setWorkspaceLeftWidth,
     setWorkspaceRightWidth,

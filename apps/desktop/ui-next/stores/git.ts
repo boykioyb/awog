@@ -13,6 +13,8 @@ import type {
 import { DEMO_DIFF, DEMO_DIFF2, createGitState } from '~/components/git/git-types'
 import { useGitApi } from '~/composables/useGitApi'
 import type {
+  GitIdentity,
+  SetIdentityParams,
   SidecarGitBranch,
   SidecarGitCommit,
   SidecarGitDiff,
@@ -21,7 +23,7 @@ import type {
   SidecarGitRemote,
   SidecarGitStashEntry,
 } from '~/composables/useGitApi'
-import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { SidecarError, useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import { DEFAULT_COMMIT_MESSAGE_RULE, useSettingsStore } from '~/stores/settings'
 import type { GitRepoEntry, ProjectsListResponse } from '~/types'
 
@@ -173,6 +175,11 @@ function formatWhen(iso: string): string {
   return then.toLocaleString()
 }
 
+// Result of a mutating git action. Actions never throw to their caller; they
+// resolve `{ ok: false, code }` so the UI can branch on the gitCode (e.g. offer
+// "stash & switch" on DIRTY_TREE) instead of failing silently in the console.
+export type GitOpResult = { ok: true } | { ok: false; code: string | null; message: string }
+
 // ─── Store ──────────────────────────────────────────────────────────────────
 // Dual-mode: in the Electron shell (`available`) every action hits the sidecar
 // over IPC and re-syncs the view state; in browser-dev (`!available`) it mutates
@@ -225,6 +232,31 @@ export const useGitStore = defineStore('git', () => {
   let onWindowFocus: (() => void) | null = null
 
   const available = computed(() => useSidecar().available)
+
+  // ── Error surfacing ──
+  // Last failed mutating op. The git page watches this to toast a human message
+  // (mapped from `code`) so failures aren't silent in the console. A fresh object
+  // is assigned per failure so identical consecutive errors still trigger the watch.
+  const lastError = ref<{ op: string; code: string | null; message: string } | null>(null)
+
+  // Pull the sidecar gitCode (DIRTY_TREE / AUTH_FAILED / …) out of an error, when present.
+  const gitCodeOf = (err: unknown): string | null => {
+    if (err instanceof SidecarError && err.data && typeof err.data === 'object') {
+      const c = (err.data as { gitCode?: unknown }).gitCode
+      if (typeof c === 'string') return c
+    }
+    return null
+  }
+
+  // Log (kept for diagnostics) + publish to `lastError` so the UI can react.
+  const reportError = (op: string, err: unknown): void => {
+    console.warn(`[git] ${op} failed`, err)
+    lastError.value = {
+      op,
+      code: gitCodeOf(err),
+      message: err instanceof Error ? err.message : String(err),
+    }
+  }
 
   const projectPath = (): string =>
     projects.value.find((p) => p.id === currentProjectId.value)?.path ?? ''
@@ -560,7 +592,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stageFile(workspaceRoot(), [path])
       await loadStatus()
     } catch (err) {
-      console.warn('[git] stageFile failed', err)
+      reportError('stageFile', err)
     }
   }
 
@@ -573,7 +605,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().unstageFile(workspaceRoot(), [path])
       await loadStatus()
     } catch (err) {
-      console.warn('[git] unstageFile failed', err)
+      reportError('unstageFile', err)
     }
   }
 
@@ -587,7 +619,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().discardFile(workspaceRoot(), [path])
       await loadStatus()
     } catch (err) {
-      console.warn('[git] discardFile failed', err)
+      reportError('discardFile', err)
     }
   }
 
@@ -603,7 +635,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stageFile(workspaceRoot(), paths)
       await loadStatus()
     } catch (err) {
-      console.warn('[git] stageAll failed', err)
+      reportError('stageAll', err)
     }
   }
 
@@ -619,7 +651,53 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().unstageFile(workspaceRoot(), paths)
       await loadStatus()
     } catch (err) {
-      console.warn('[git] unstageAll failed', err)
+      reportError('unstageAll', err)
+    }
+  }
+
+  // Bulk stage/unstage/discard a subset of paths (e.g. every file under a folder
+  // in the changes tree) — one API call + one status reload instead of N.
+  const stagePaths = async (paths: string[]) => {
+    if (paths.length === 0) return
+    if (!available.value) {
+      for (const p of paths) moveMock(p, unstaged.value, staged.value)
+      return
+    }
+    try {
+      await useGitApi().stageFile(workspaceRoot(), paths)
+      await loadStatus()
+    } catch (err) {
+      reportError('stagePaths', err)
+    }
+  }
+
+  const unstagePaths = async (paths: string[]) => {
+    if (paths.length === 0) return
+    if (!available.value) {
+      for (const p of paths) moveMock(p, staged.value, unstaged.value)
+      return
+    }
+    try {
+      await useGitApi().unstageFile(workspaceRoot(), paths)
+      await loadStatus()
+    } catch (err) {
+      reportError('unstagePaths', err)
+    }
+  }
+
+  const discardPaths = async (paths: string[]) => {
+    if (paths.length === 0) return
+    if (!available.value) {
+      const drop = new Set(paths)
+      staged.value = staged.value.filter((x) => !drop.has(x.f))
+      unstaged.value = unstaged.value.filter((x) => !drop.has(x.f))
+      return
+    }
+    try {
+      await useGitApi().discardFile(workspaceRoot(), paths)
+      await loadStatus()
+    } catch (err) {
+      reportError('discardPaths', err)
     }
   }
 
@@ -650,7 +728,7 @@ export const useGitStore = defineStore('git', () => {
       commitMessage.value = ''
       await Promise.all([loadStatus(), loadHistory()])
     } catch (err) {
-      console.warn('[git] commit failed', err)
+      reportError('commit', err)
     }
   }
 
@@ -666,7 +744,7 @@ export const useGitStore = defineStore('git', () => {
       commitMessage.value = ''
       await Promise.all([loadStatus(), loadHistory()])
     } catch (err) {
-      console.warn('[git] amend failed', err)
+      reportError('amend', err)
     }
   }
 
@@ -683,7 +761,7 @@ export const useGitStore = defineStore('git', () => {
       const result = await useGitApi().generateCommitMessage(workspaceRoot(), { rule })
       commitMessage.value = result.message
     } catch (err) {
-      console.warn('[git] generateCommitMessage failed', err)
+      reportError('generateCommitMessage', err)
     }
   }
 
@@ -695,7 +773,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().fetch(workspaceRoot())
       await Promise.all([loadStatus(), loadBranches()])
     } catch (err) {
-      console.warn('[git] fetch failed', err)
+      reportError('fetch', err)
     }
   }
 
@@ -708,7 +786,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().pull(workspaceRoot(), { strategy })
       await Promise.all([loadStatus(), loadBranches()])
     } catch (err) {
-      console.warn('[git] pull failed', err)
+      reportError('pull', err)
     }
   }
 
@@ -721,7 +799,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().push(workspaceRoot())
       await Promise.all([loadStatus(), loadBranches()])
     } catch (err) {
-      console.warn('[git] push failed', err)
+      reportError('push', err)
     }
   }
 
@@ -736,17 +814,32 @@ export const useGitStore = defineStore('git', () => {
 
   // ─── Branches ─────────────────────────────────────────────────────────────
 
-  const checkoutBranch = async (name: string) => {
+  // Returns a result instead of swallowing: the caller decides how to surface a
+  // failure (e.g. DIRTY_TREE → offer "stash & switch"). `force` maps to
+  // `git checkout --force` (discards local changes).
+  const checkoutBranch = async (
+    name: string,
+    opts: { force?: boolean } = {},
+  ): Promise<GitOpResult> => {
     if (!available.value) {
       branch.value = name
       branches.value = branches.value.map((b) => ({ ...b, current: !b.remote && b.name === name }))
-      return
+      return { ok: true }
     }
     try {
-      await useGitApi().branchCheckout(workspaceRoot(), { name })
+      await useGitApi().branchCheckout(workspaceRoot(), {
+        name,
+        ...(opts.force ? { force: true } : {}),
+      })
       await loadAll()
+      return { ok: true }
     } catch (err) {
       console.warn('[git] checkoutBranch failed', err)
+      return {
+        ok: false,
+        code: gitCodeOf(err),
+        message: err instanceof Error ? err.message : String(err),
+      }
     }
   }
 
@@ -761,7 +854,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().branchCreate(workspaceRoot(), params)
       await loadBranches()
     } catch (err) {
-      console.warn('[git] createBranch failed', err)
+      reportError('createBranch', err)
     }
   }
 
@@ -774,7 +867,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().branchDelete(workspaceRoot(), { name })
       await loadBranches()
     } catch (err) {
-      console.warn('[git] deleteBranch failed', err)
+      reportError('deleteBranch', err)
     }
   }
 
@@ -790,7 +883,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().branchDelete(workspaceRoot(), { name: oldName })
       await loadBranches()
     } catch (err) {
-      console.warn('[git] renameBranch failed', err)
+      reportError('renameBranch', err)
     }
   }
 
@@ -817,7 +910,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().merge(workspaceRoot(), name)
       await loadAll()
     } catch (err) {
-      console.warn('[git] merge failed', err)
+      reportError('merge', err)
     }
   }
 
@@ -830,7 +923,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().rebase(workspaceRoot(), name)
       await loadStatus()
     } catch (err) {
-      console.warn('[git] rebase failed', err)
+      reportError('rebase', err)
     }
   }
 
@@ -845,7 +938,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().completeMerge(workspaceRoot())
       await loadAll()
     } catch (err) {
-      console.warn('[git] completeMerge failed', err)
+      reportError('completeMerge', err)
     }
   }
 
@@ -861,7 +954,7 @@ export const useGitStore = defineStore('git', () => {
       else await useGitApi().mergeAbort(workspaceRoot())
       await loadAll()
     } catch (err) {
-      console.warn('[git] abortMerge failed', err)
+      reportError('abortMerge', err)
     }
   }
 
@@ -887,7 +980,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stashSave(workspaceRoot(), { message: msg ?? '' })
       await Promise.all([loadStatus(), loadStashes()])
     } catch (err) {
-      console.warn('[git] stashSave failed', err)
+      reportError('stashSave', err)
     }
   }
 
@@ -897,7 +990,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stashApply(workspaceRoot(), i)
       await Promise.all([loadStatus(), loadStashes()])
     } catch (err) {
-      console.warn('[git] stashApply failed', err)
+      reportError('stashApply', err)
     }
   }
 
@@ -910,7 +1003,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stashPop(workspaceRoot(), i)
       await Promise.all([loadStatus(), loadStashes()])
     } catch (err) {
-      console.warn('[git] stashPop failed', err)
+      reportError('stashPop', err)
     }
   }
 
@@ -923,7 +1016,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stashDrop(workspaceRoot(), i)
       await Promise.all([loadStatus(), loadStashes()])
     } catch (err) {
-      console.warn('[git] stashDrop failed', err)
+      reportError('stashDrop', err)
     }
   }
 
@@ -940,7 +1033,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().tagCreate(workspaceRoot(), params)
       await Promise.all([loadHistory(), loadTags()])
     } catch (err) {
-      console.warn('[git] tagCreate failed', err)
+      reportError('tagCreate', err)
     }
   }
 
@@ -955,7 +1048,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().tagDelete(root, name)
       await loadTags()
     } catch (err) {
-      console.warn('[git] deleteTag failed', err)
+      reportError('deleteTag', err)
     }
   }
 
@@ -970,7 +1063,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().checkoutCommit(root, sha)
       await loadAll()
     } catch (err) {
-      console.warn('[git] checkoutTag failed', err)
+      reportError('checkoutTag', err)
     }
   }
 
@@ -985,7 +1078,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().checkoutCommit(root, sha)
       await loadAll()
     } catch (err) {
-      console.warn('[git] checkoutCommit failed', err)
+      reportError('checkoutCommit', err)
     }
   }
 
@@ -999,7 +1092,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().cherryPick(root, sha)
       await loadAll()
     } catch (err) {
-      console.warn('[git] cherryPick failed', err)
+      reportError('cherryPick', err)
     }
   }
 
@@ -1012,7 +1105,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().revertCommit(root, sha)
       await loadAll()
     } catch (err) {
-      console.warn('[git] revertCommit failed', err)
+      reportError('revertCommit', err)
     }
   }
 
@@ -1025,7 +1118,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().resetTo(root, sha, mode)
       await loadAll()
     } catch (err) {
-      console.warn('[git] resetTo failed', err)
+      reportError('resetTo', err)
     }
   }
 
@@ -1039,7 +1132,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().ignore(root, patterns)
       await loadStatus()
     } catch (err) {
-      console.warn('[git] ignore failed', err)
+      reportError('ignore', err)
     }
   }
 
@@ -1057,7 +1150,7 @@ export const useGitStore = defineStore('git', () => {
         console.warn('[git] savePatch reveal failed', err)
       }
     } catch (err) {
-      console.warn('[git] savePatch failed', err)
+      reportError('savePatch', err)
     }
   }
 
@@ -1123,7 +1216,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stageHunk(root, path, hunkIndex)
       await loadStatus()
     } catch (err) {
-      console.warn('[git] stageHunk failed', err)
+      reportError('stageHunk', err)
     }
   }
 
@@ -1197,6 +1290,41 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
+  // ─── Identity (user.name / user.email) ──────────────────────────────────────
+  // Commit identity at the global (~/.gitconfig) and repo-local scopes. Read on
+  // demand by the Git Identity modal (not part of loadAll). Mock mode returns a
+  // seeded global identity and pretends saves succeed (no real git in browser-dev).
+
+  const loadIdentity = async (): Promise<GitIdentity | null> => {
+    if (!available.value) {
+      return {
+        global: { name: 'Local Developer', email: 'dev@awog.local' },
+        local: { name: null, email: null },
+      }
+    }
+    const root = workspaceRoot()
+    if (!root) return null
+    try {
+      return await useGitApi().getIdentity(root)
+    } catch (err) {
+      console.warn('[git] loadIdentity failed', err)
+      return null
+    }
+  }
+
+  const saveIdentity = async (params: SetIdentityParams): Promise<boolean> => {
+    if (!available.value) return true // mock: pretend success
+    const root = workspaceRoot()
+    if (!root) return false
+    try {
+      await useGitApi().setIdentity(root, params)
+      return true
+    } catch (err) {
+      console.warn('[git] saveIdentity failed', err)
+      return false
+    }
+  }
+
   return {
     // state
     projects,
@@ -1221,6 +1349,7 @@ export const useGitStore = defineStore('git', () => {
     commitMessage,
     historyHasMore,
     available,
+    lastError,
     // actions
     init,
     loadProjects,
@@ -1242,6 +1371,9 @@ export const useGitStore = defineStore('git', () => {
     discardFile,
     stageAll,
     unstageAll,
+    stagePaths,
+    unstagePaths,
+    discardPaths,
     commit,
     amend,
     generateCommitMessage,
@@ -1278,5 +1410,7 @@ export const useGitStore = defineStore('git', () => {
     openInVscode,
     vscodeAvailable,
     openPrFor,
+    loadIdentity,
+    saveIdentity,
   }
 })
