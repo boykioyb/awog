@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.6',
+    date: '2026-06-29',
+    highlight: {
+      en: 'Drop a folder into a chat to make it the session’s working directory; Git gains remote management and one-click repository init; the usage quota now tracks your account’s 5-hour limit; and the context meter is fixed to match what the model actually sees.',
+      vi: 'Kéo một thư mục vào cuộc trò chuyện để biến nó thành thư mục làm việc của phiên; Git có thêm quản lý remote và khởi tạo kho một chạm; hạn mức sử dụng nay theo giới hạn 5 giờ của tài khoản; và thước đo ngữ cảnh được sửa để khớp đúng những gì model thực sự thấy.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Folder as working directory: drag a folder into a chat and the AI reads, explores, and edits files inside it. The choice sticks across restarts and a file tree opens in the preview.',
+        vi: 'Thư mục làm thư mục làm việc: kéo một thư mục vào cuộc trò chuyện và AI đọc, khám phá, chỉnh sửa các file bên trong. Lựa chọn này được giữ qua các lần khởi động lại và cây file mở trong khung xem trước.',
+      },
+      {
+        kind: 'added',
+        en: 'Git remotes & init: add or edit remote URLs, create a branch (choosing its starting point) or a tag, and initialize a Git repository right from the Git screen — including setting your commit name and email when none exists.',
+        vi: 'Git remote & khởi tạo: thêm hoặc sửa URL remote, tạo nhánh (chọn điểm bắt đầu) hoặc tag, và khởi tạo kho Git ngay trong màn Git — kèm đặt tên và email commit khi chưa có.',
+      },
+      {
+        kind: 'improved',
+        en: 'Git sync feedback: fetch, pull, and push now show live progress and a clear result ("Pulled 3 commits", "Already up to date"), and the repository picker gains a project search box.',
+        vi: 'Phản hồi đồng bộ Git: fetch, pull và push giờ hiện tiến trình trực tiếp và kết quả rõ ràng ("Đã pull 3 commit", "Đã cập nhật"), và bộ chọn kho có thêm ô tìm kiếm dự án.',
+      },
+      {
+        kind: 'changed',
+        en: 'Usage quota now tracks your account’s 5-hour usage limit instead of the conversation context window: warn, stop running sessions, or block new sessions and messages as an account nears its limit.',
+        vi: 'Hạn mức sử dụng nay theo giới hạn 5 giờ của tài khoản thay vì cửa sổ ngữ cảnh của cuộc trò chuyện: cảnh báo, dừng các phiên đang chạy, hoặc chặn phiên và tin nhắn mới khi tài khoản sắp đạt giới hạn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Context meter accuracy: it now reflects what the model actually sees (like /context), so it no longer overshoots past 100% or shows a phantom "Other" slice — the breakdown adds up to the gauge.',
+        vi: 'Độ chính xác thước đo ngữ cảnh: giờ phản ánh đúng những gì model thực sự thấy (như /context), nên không còn vượt quá 100% hay hiện lát "Khác" ảo — bảng chi tiết cộng lại đúng bằng thước đo.',
+      },
+      {
+        kind: 'improved',
+        en: 'Faster long lists: Sessions, Library, and Projects load in batches with a "Load more" control instead of rendering everything at once.',
+        vi: 'Danh sách dài nhanh hơn: Sessions, Thư viện và Dự án tải theo từng đợt với nút "Tải thêm" thay vì hiển thị tất cả cùng lúc.',
+      },
+      {
+        kind: 'added',
+        en: 'Open any chat message full-screen, and a new "Accept Edits" composer mode alongside Ask / Plan / Execute.',
+        vi: 'Mở toàn màn hình bất kỳ tin nhắn nào trong cuộc trò chuyện, và chế độ soạn thảo "Accept Edits" mới bên cạnh Ask / Plan / Execute.',
+      },
+      {
+        kind: 'added',
+        en: 'Per-project session defaults can preselect which MCP connections new sessions in that project start with.',
+        vi: 'Mặc định phiên theo từng dự án có thể chọn sẵn những kết nối MCP mà phiên mới trong dự án đó khởi đầu.',
+      },
+    ],
+  },
+  {
     version: '0.22.5',
     date: '2026-06-29',
     highlight: {
