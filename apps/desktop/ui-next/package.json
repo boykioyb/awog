@@ -2,7 +2,7 @@
   "name": "awog-ui-next",
   "private": true,
   "type": "module",
-  "version": "0.22.4",
+  "version": "0.22.5",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
