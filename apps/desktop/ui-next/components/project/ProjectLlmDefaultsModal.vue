@@ -64,6 +64,47 @@
           </button>
         </div>
       </div>
+
+      <div class="pll-field">
+        <div class="pll-mcphead">
+          <label class="pll-label">{{ t('projects.llm.mcp') }}</label>
+          <button
+            v-if="ctrl.isMcpCustomized.value"
+            type="button"
+            class="pll-mcpreset"
+            @click="ctrl.resetMcp"
+          >
+            {{ t('projects.llm.mcpReset') }}
+          </button>
+        </div>
+        <p class="pll-mcphint">
+          {{ ctrl.isMcpCustomized.value ? t('projects.llm.mcpCustom') : t('projects.llm.mcpAll') }}
+        </p>
+        <div v-if="!ctrl.mcpEnabledServers.value.length" class="listempty">
+          {{ t('projects.llm.mcpNone') }}
+        </div>
+        <div v-else class="pll-mcplist">
+          <div
+            v-for="m in ctrl.mcpEnabledServers.value"
+            :key="m.id"
+            class="mcprow"
+            @click="ctrl.toggleMcp(m.id)"
+          >
+            <span
+              class="cdot"
+              :style="{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: m.status === 'running' ? 'var(--green)' : 'var(--textFaint)',
+              }"
+            />
+            <span class="mcpn">{{ m.name }}</span>
+            <span class="mcpst">{{ m.status }}</span>
+            <span class="tog2 sm" :class="{ off: !ctrl.isMcpActive(m.id) }" />
+          </div>
+        </div>
+      </div>
     </div>
 
     <template #footer>
@@ -167,5 +208,27 @@ const onReset = async () => {
 .pll-chip:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+.pll-mcphead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pll-mcpreset {
+  font-size: 0.8462rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+.pll-mcphint {
+  font-size: 0.8462rem;
+  color: var(--textDim);
+}
+.pll-mcplist {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  max-height: 196px;
+  overflow-y: auto;
 }
 </style>

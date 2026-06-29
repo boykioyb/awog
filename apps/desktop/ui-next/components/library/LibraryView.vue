@@ -86,7 +86,7 @@
         <!-- Flat list — used when no groupBy is provided. -->
         <template v-if="!groupBy">
           <div
-            v-for="it in filtered"
+            v-for="it in visible"
             :key="itemKey(it)"
             class="libli"
             :class="{ on: !!selected && itemKey(it) === itemKey(selected) }"
@@ -122,7 +122,7 @@
             </div>
             <div class="grpitems">
               <div
-                v-for="it in grp.items"
+                v-for="it in grp.visible"
                 :key="itemKey(it)"
                 class="libli"
                 :class="{ on: !!selected && itemKey(it) === itemKey(selected) }"
@@ -130,10 +130,22 @@
               >
                 <slot name="row" :item="it" />
               </div>
+              <LoadMoreSentinel
+                v-if="grp.hasMore"
+                :remaining="grp.remaining"
+                @load="groupLoad.loadMore(grp.key)"
+              />
             </div>
           </div>
           <div v-if="!filtered.length" class="listempty">{{ t('common.empty.none') }}</div>
         </template>
+
+        <LoadMoreSentinel
+          v-if="!groupBy && hasMore"
+          auto
+          :remaining="remaining"
+          @load="loadMore()"
+        />
       </div>
     </div>
     <div class="detail">
@@ -147,7 +159,8 @@
 </template>
 
 <script setup lang="ts" generic="T">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import type { GroupWindow } from '~/composables/useLoadMore'
 
 // Shared master-detail shell — a searchable list (.list/.ltop/.lscroll/.libli)
 // beside a detail pane (.detail). Pages supply per-entity #row and #detail slots
@@ -221,6 +234,20 @@ const filtered = computed(() => {
   return list.filter((it) => text(it).toLowerCase().includes(query))
 })
 
+// Incremental render windows keep the DOM small on large lists.
+//  • Flat (no groupBy): a single bottom window that grows on scroll.
+//  • Grouped: each tier/project shows GROUP_PAGE_SIZE rows with its own "load
+//    more" button (see the grouped template + `groups`).
+// `selected` still resolves against the full `filtered` set, so selecting a
+// not-yet-rendered item stays correct.
+const { visible, hasMore, remaining, loadMore, reset } = useLoadMore(() => filtered.value)
+const groupLoad = useGroupLoadMore()
+// Reset to the first page when the query/filter changes (results from the top).
+watch([q, groupFilter], () => {
+  reset()
+  groupLoad.reset()
+})
+
 // All group keys present across the items (the filter dropdown's options) —
 // derived from the full item set so every tier stays selectable while filtered.
 const groupOptions = computed<{ key: string; label: string }[]>(() => {
@@ -246,7 +273,7 @@ const activeFilters = computed(() => (groupFilter.value !== 'all' ? 1 : 0))
 
 // Buckets for the grouped render. Insertion order from `filtered`, then the
 // primary group (global tier) floated to the top and the rest sorted by label.
-const groups = computed<{ key: string; label: string; items: T[]; dot: string }[]>(() => {
+const groups = computed<({ key: string; label: string; dot: string } & GroupWindow<T>)[]>(() => {
   const by = props.groupBy
   if (!by) return []
   const map = new Map<string, T[]>()
@@ -260,7 +287,13 @@ const groups = computed<{ key: string; label: string; items: T[]; dot: string }[
   const label = (key: string) => props.groupLabel?.(key) ?? key
   const dot = (key: string) => props.groupDot?.(key) ?? 'var(--textDim)'
   return [...map.entries()]
-    .map(([key, items]) => ({ key, label: label(key), items, dot: dot(key) }))
+    .map(([key, items]) => ({
+      key,
+      label: label(key),
+      // Per-group window: first GROUP_PAGE_SIZE rows, rest behind "load more".
+      ...groupLoad.windowOf(key, items),
+      dot: dot(key),
+    }))
     .sort((a, b) => {
       if (a.key === primary) return -1
       if (b.key === primary) return 1

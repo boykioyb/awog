@@ -14,7 +14,10 @@ import { ref } from 'vue'
 // for prop typing; both shapes are kept in sync by hand (small, stable surface).
 export type PreviewRef = {
   name: string
-  kind: 'image' | 'pdf' | 'markdown' | 'text' | 'file'
+  // 'folder' renders a lazy file tree of `workspaceRoot` (dragged working folder);
+  // 'html' renders a sandboxed iframe (render) with a raw (Monaco) toggle; all other
+  // kinds render a single file.
+  kind: 'image' | 'pdf' | 'markdown' | 'text' | 'file' | 'html' | 'folder'
   // Object URL / data URL for images and PDFs (drag-dropped / inlined files).
   src?: string
   // In-memory source for markdown / text (drag-dropped files, mock data).
@@ -30,6 +33,38 @@ export type PreviewRef = {
   // in-memory fields / placeholder when absent or unavailable.
   workspaceRoot?: string
   path?: string
+}
+
+// Single source of truth for mapping a filename/path → preview kind. Previously
+// duplicated in 5 places (Files tab, Diff, folder tree, attachment chip, composer).
+const RE_IMAGE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
+const RE_PDF = /\.pdf$/i
+const RE_MD = /\.(md|markdown)$/i
+const RE_HTML = /\.html?$/i
+
+export function previewKindFromPath(path: string): PreviewRef['kind'] {
+  if (RE_IMAGE.test(path)) return 'image'
+  if (RE_PDF.test(path)) return 'pdf'
+  if (RE_MD.test(path)) return 'markdown'
+  if (RE_HTML.test(path)) return 'html'
+  return 'text'
+}
+
+// Attachment variant: image/pdf are decided by the carried data (img flag / mime),
+// the rest by the filename. No inline content (`text == null`) → an opaque file card.
+export function previewKindFromAttachment(a: {
+  img: boolean
+  src?: string
+  mime?: string
+  text?: string
+  name: string
+}): PreviewRef['kind'] {
+  if (a.img) return 'image'
+  if (a.src && (a.mime === 'application/pdf' || RE_PDF.test(a.name))) return 'pdf'
+  if (a.text == null) return 'file'
+  if (RE_MD.test(a.name)) return 'markdown'
+  if (RE_HTML.test(a.name)) return 'html'
+  return 'text'
 }
 
 const current = ref<PreviewRef | null>(null)

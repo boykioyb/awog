@@ -39,14 +39,6 @@
       >
         <Icon name="foldv" style="width: 13px; height: 13px" />
       </button>
-      <button
-        class="iconbtn pri"
-        :title="t('sessions.new.tooltip')"
-        style="width: 28px; height: 28px"
-        @click="store.create()"
-      >
-        <Icon name="plus" style="width: 14px; height: 14px" />
-      </button>
     </div>
 
     <div v-if="showFilters" class="sfdrawer">
@@ -133,7 +125,7 @@
       <template v-if="groupBy === 'none'">
         <div v-if="filtered.length" class="grpitems" style="padding-top: 5px">
           <SessionListItem
-            v-for="s in filtered"
+            v-for="s in visible"
             :key="s.id"
             :session="s"
             :active="s.id === activeId"
@@ -169,7 +161,7 @@
             </div>
             <div class="grpitems">
               <SessionListItem
-                v-for="s in grp.items"
+                v-for="s in grp.visible"
                 :key="s.id"
                 :session="s"
                 :active="s.id === activeId"
@@ -179,11 +171,23 @@
                 @click="$emit('select', s.id)"
                 @ctxmenu="(p) => openCtx(p, s)"
               />
+              <LoadMoreSentinel
+                v-if="grp.hasMore"
+                :remaining="grp.remaining"
+                @load="groupLoad.loadMore(grp.key)"
+              />
             </div>
           </div>
         </template>
         <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
       </template>
+
+      <LoadMoreSentinel
+        v-if="groupBy === 'none' && hasMore"
+        auto
+        :remaining="remaining"
+        @load="loadMore()"
+      />
     </div>
 
     <div
@@ -265,6 +269,11 @@
         </div>
         <template v-if="pctxIsProject">
           <div class="ctxsep" />
+          <div class="mi" @click="pLlmDefaults">
+            <Icon name="brain" style="width: 13px; height: 13px" />
+            {{ t('sessions.pctx.llmDefaults') }}
+          </div>
+          <div class="ctxsep" />
           <div class="ctxcolor">
             <span class="ctxcolorlbl">{{ t('sessions.pctx.color') }}</span>
             <div class="ctxsw">
@@ -308,6 +317,14 @@
         </div>
       </div>
     </template>
+
+    <!-- Per-project "Session LLM defaults" — opened from the group context menu. -->
+    <ProjectLlmDefaultsModal
+      :open="!!llmModalProject"
+      :project="llmModalProject"
+      @saved="llmModalProject = null"
+      @cancel="llmModalProject = null"
+    />
   </div>
 </template>
 
@@ -316,6 +333,8 @@
 // drawer, group-by buckets. Filter / group / collapse state is local UI state;
 // data mutations go through `useSessionsStore`.
 import type { Session } from '~/composables/useSessionsData'
+import type { Project } from '~/types'
+import ProjectLlmDefaultsModal from '~/components/project/ProjectLlmDefaultsModal.vue'
 import {
   PROJECT_COLOR_DEFAULT,
   PROJECT_COLOR_PALETTE,
@@ -329,6 +348,7 @@ const { t } = useI18n()
 const { GROUPBY, providerOf } = useSessionsData()
 const { colorOf, setColor } = useProjectColors()
 const { projects, projectName, projectPath } = useProjects()
+const projectsStore = useProjectsStore()
 const store = useSessionsStore()
 const sc = useSidecar()
 const { confirm } = useConfirm()
@@ -437,6 +457,20 @@ const filtered = computed(() => {
   return f.slice().sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
 })
 
+// Incremental render windows — keep the DOM small on large histories.
+//  • Flat (groupBy='none'): a single bottom window that grows on scroll.
+//  • Grouped: each project/bucket shows GROUP_PAGE_SIZE rows with its own
+//    "load more" button (see the grouped template + `groups` below).
+// Bulk/select actions still operate on the full `filtered` set, not what's rendered.
+const { visible, hasMore, remaining, loadMore, reset } = useLoadMore(() => filtered.value)
+const groupLoad = useGroupLoadMore()
+// Snap back to the first page when the *query* narrows (so results show from the
+// top). A new session appearing in the live store must NOT reset the window.
+watch([filter, projectFilter, groupBy], () => {
+  reset()
+  groupLoad.reset()
+})
+
 // Stable identity for a bucket (data value for project/provider/model; a token
 // for the unread split). The display label is resolved separately so chrome
 // (unread/read bucket names) goes through i18n while data stays literal.
@@ -464,7 +498,8 @@ const groups = computed(() => {
   return [...map.entries()].map(([key, items]) => ({
     key,
     label: groupLabelOf(key),
-    items,
+    // Per-group window (.items = full group, .visible = first GROUP_PAGE_SIZE).
+    ...groupLoad.windowOf(key, items),
     dot: groupBy.value === 'project' ? colorOf(key) : PROJECT_COLOR_DEFAULT,
   }))
 })
@@ -628,6 +663,15 @@ function pSetColor(token: string | null) {
 function pNewSession() {
   if (pctx.value) store.create(groupBy.value === 'project' ? pctx.value.grp.key : undefined)
   pctx.value = null
+}
+// Open the per-project "Session LLM defaults" modal for the right-clicked bucket
+// (project groups only — grp.key is the engine projectId). Closes the menu first.
+const llmModalProject = ref<Project | null>(null)
+function pLlmDefaults() {
+  const id = pctx.value?.grp.key
+  pctx.value = null
+  if (!id) return
+  llmModalProject.value = projectsStore.projectById(id) ?? null
 }
 function pSelectAll() {
   if (pctx.value) {
@@ -797,17 +841,5 @@ function toggleFoldAll() {
 .ltop .iconbtn {
   width: 28px;
   height: 28px;
-}
-/* Toolbar: "New session" is the one primary CTA on this surface (filled accent);
-   select / filter / fold-all stay subordinate ghost icon buttons (design §4). */
-.ltop .iconbtn.pri {
-  background: var(--accent);
-  border-color: transparent;
-  color: var(--accentText);
-}
-.ltop .iconbtn.pri:hover {
-  border-color: transparent;
-  color: var(--accentText);
-  filter: brightness(1.07);
 }
 </style>

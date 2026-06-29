@@ -351,6 +351,10 @@ export interface Session {
   mcpServerIds?: string[]
   // Files/notes re-fed into every turn as <pinned_context> (see PinnedContext).
   pinnedContext?: PinnedContext
+  // Absolute path of a folder dragged into the session; becomes the runtime tools'
+  // cwd (forwarded as sessions.sendMessage params.workspacePath, takes precedence
+  // over the project path). A <workspace_tree> orientation block is injected.
+  workspaceFolder?: string
   // Soft + hard spend caps for this session (see SessionBudget).
   budget?: SessionBudget
   // Fork lineage: the session this one was forked from (its id) and the message

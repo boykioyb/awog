@@ -47,6 +47,33 @@
       </template>
     </template>
 
+    <!-- html: render/raw toggle + reload (render) + copy -->
+    <template v-else-if="item?.kind === 'html'">
+      <button
+        class="pvtb"
+        :class="{ on: view === 'render' }"
+        :title="t('common.render')"
+        @click="view = 'render'"
+      >
+        <Icon name="globe" style="width: 14px; height: 14px" />
+      </button>
+      <button
+        class="pvtb"
+        :class="{ on: view === 'raw' }"
+        :title="t('common.raw')"
+        @click="view = 'raw'"
+      >
+        <Icon name="commands" style="width: 14px; height: 14px" />
+      </button>
+      <span class="pvsep" />
+      <button v-if="view === 'render'" class="pvtb" :title="t('common.reload')" @click="reload()">
+        <Icon name="refresh" style="width: 13px; height: 13px" />
+      </button>
+      <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
+        <Icon name="copy" style="width: 13px; height: 13px" />
+      </button>
+    </template>
+
     <!-- text: copy -->
     <template v-else-if="item?.kind === 'text'">
       <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
@@ -182,6 +209,7 @@ const {
   zoomBy,
   resetView,
   copyContent,
+  reload,
   startEdit,
   save,
   cancelEdit,

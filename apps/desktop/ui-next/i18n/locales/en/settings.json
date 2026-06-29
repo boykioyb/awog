@@ -38,7 +38,7 @@
   "settings.defaults.model.name": "Model",
   "settings.defaults.model.desc": "Default model when creating a session",
   "settings.defaults.mode.name": "Mode",
-  "settings.defaults.mode.desc": "Ask / Plan / Execute",
+  "settings.defaults.mode.desc": "Ask / Plan / Accept Edits / Execute",
   "settings.defaults.mode.ask": "Ask",
   "settings.defaults.mode.plan": "Plan",
   "settings.defaults.mode.execute": "Execute",

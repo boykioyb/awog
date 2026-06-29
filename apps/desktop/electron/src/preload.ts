@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // Preload bridge — runs sandboxed (contextIsolation + sandbox). Exposes a single
 // `window.awog` object; the renderer never touches ipcRenderer/Node directly
@@ -62,6 +62,11 @@ const awog = {
     ipcRenderer.invoke('shell:openInVscode', { root, path }),
   pickFolder: (opts?: DialogOpts): Promise<string | null> =>
     ipcRenderer.invoke('dialog:pickFolder', opts ?? {}),
+  // Resolve the absolute on-disk path of a dropped File/folder. Electron ≥32
+  // removed the non-standard `File.path`; webUtils.getPathForFile is the
+  // supported replacement (runs in the sandboxed preload). Returns '' if the
+  // File did not originate from a real filesystem entry.
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   savePath: (opts?: SavePathOpts): Promise<string | null> =>
     ipcRenderer.invoke('dialog:savePath', opts ?? {}),
 

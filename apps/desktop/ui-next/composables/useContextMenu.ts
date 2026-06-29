@@ -8,6 +8,8 @@ export type MenuItem = {
   icon?: string
   danger?: boolean
   disabled?: boolean
+  // Marks the row as the current selection — accent color + trailing checkmark.
+  active?: boolean
   hint?: string
   separator?: boolean
   children?: MenuItem[]

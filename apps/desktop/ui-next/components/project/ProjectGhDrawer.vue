@@ -15,23 +15,30 @@
           {{ t('projects.gh.state.draft') }}
         </span>
         <span style="flex: 1" />
+        <!-- Language picker — collapses the orig/vi/en/ja tabs into one dropdown so
+             the header toolbar stays roomy on a narrow drawer. -->
         <button
-          v-for="lang in LANGS"
-          :key="lang"
           class="iconbtn"
-          :title="t('projects.drawer.viewLang.' + lang)"
+          type="button"
+          :title="t('projects.drawer.language')"
+          :aria-label="t('projects.drawer.language')"
           :style="{
             width: 'auto',
             height: '28px',
             padding: '0 8px',
+            gap: '5px',
+            display: 'inline-flex',
+            alignItems: 'center',
             fontSize: '0.8462rem',
-            ...(viewLang === lang
+            ...(viewLang !== 'orig'
               ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
               : {}),
           }"
-          @click="emit('set-lang', lang)"
+          @click.stop="toggleLangMenu"
         >
-          {{ t('projects.drawer.viewLang.' + lang) }}
+          <Icon name="globe" style="width: 13px; height: 13px" />
+          <span>{{ t('projects.drawer.viewLang.' + viewLang) }}</span>
+          <Icon name="chev" style="width: 12px; height: 12px" />
         </button>
         <button
           class="iconbtn"
@@ -312,6 +319,15 @@
       </div>
     </div>
 
+    <!-- View-language dropdown (orig / vi / en / ja), anchored under the trigger. -->
+    <ContextMenu
+      :open="langMenu.pos.value !== null"
+      :position="langMenu.pos.value ?? { x: 0, y: 0 }"
+      :items="langMenuItems"
+      @close="langMenu.close"
+      @select="onLangSelect"
+    />
+
     <!-- PR file context menu (copy path / name). -->
     <ContextMenu
       :open="ghMenu.pos.value !== null"
@@ -403,6 +419,30 @@ const { t } = useI18n()
 
 // Translation tabs, priority order (vi, en, ja) after the original.
 const LANGS: ViewLang[] = ['orig', 'vi', 'en', 'ja']
+
+// View-language dropdown — collapses the orig/vi/en/ja tabs into one header button
+// (keeps the toolbar roomy on a narrow drawer). Anchored under the trigger; the
+// active language carries a trailing check.
+const langMenu = useContextMenu()
+const langMenuItems = computed<MenuItem[]>(() =>
+  LANGS.map((lang) => ({
+    id: lang,
+    label: t('projects.drawer.viewLang.' + lang),
+    active: props.viewLang === lang,
+  })),
+)
+function toggleLangMenu(e: MouseEvent): void {
+  if (langMenu.pos.value) {
+    langMenu.close()
+    return
+  }
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  langMenu.pos.value = { x: r.left, y: r.bottom + 4 }
+}
+function onLangSelect(id: string): void {
+  langMenu.close()
+  emit('set-lang', id as ViewLang)
+}
 
 // ── Content tabs (conditional on kind) ───────────────────────────────────────────
 // Conversation = the opening post (description). Comments = the discussion (reviews

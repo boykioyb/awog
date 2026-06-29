@@ -25,6 +25,12 @@ export type SessionAttachment = {
   // turn — see memory image-attachments). Set when the engine path needs to send
   // the image content; mock mode leaves it unset (preview uses `src`).
   dataUrl?: string
+  // A dragged FOLDER (not a file): `path` is its absolute on-disk path. Shown on
+  // the bubble as a folder chip (click → tree preview); on send it sets the
+  // session's working folder (cwd). Carries no inline content — skipped by the
+  // engine attachment mapping (the cwd is forwarded as workspacePath instead).
+  folder?: boolean
+  path?: string
 }
 
 // A quoted message carried into the next user turn (follow-up). `src` = index of the
@@ -207,9 +213,12 @@ export type ContextChars = {
   skillsList?: ContextItemSize[]
 }
 
-// Context-window usage for the session (engine path). `used` = input + cacheRead
-// + cacheWrite + output (history sits in cacheRead, so `input` alone looks small —
-// see memory usage-cache-tokens). `max` is the model's context window when known.
+// Context-window usage for the session (engine path). `total` = input + cacheRead +
+// cacheWrite + output (raw API tally, kept for reference/debugging). NOTE: the
+// context-window OCCUPANCY gauge does NOT use `total` — it sums the assembled
+// content from `contextChars` (see contextTokensFromChars), because cache read/write
+// is the cached split of that same content and `output` is the response, not the
+// input window. `max` is the model's context window when known.
 export type SessionUsage = {
   input: number
   output: number
@@ -286,6 +295,10 @@ export type Session = {
   mcpServerIds?: string[]
   // Files/notes pinned to this session, re-fed into every turn as <pinned_context>.
   pinnedContext?: PinnedContext
+  // Absolute path of a folder dragged into the session. Becomes the runtime tools'
+  // cwd (forwarded as params.workspacePath, takes precedence over the project path)
+  // so the model reads/writes inside it. Surfaced as a folder chip in the composer.
+  workspaceFolder?: string
   // Soft + hard spend caps for this session (see SessionBudget).
   budget?: SessionBudget
   // ── Fork lineage (set when this session was forked off another) ────────────

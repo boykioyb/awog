@@ -350,6 +350,12 @@ export function useGitApi() {
       sidecar.request<{ stashes: SidecarGitStashEntry[] }>('git.stashList', { workspaceRoot }),
     remoteList: (workspaceRoot: string) =>
       sidecar.request<{ remotes: SidecarGitRemote[] }>('git.remoteList', { workspaceRoot }),
+    remoteAdd: (workspaceRoot: string, params: { name: string; url: string }) =>
+      sidecar.request<{ ok: true }>('git.remoteAdd', { workspaceRoot, ...params }),
+    remoteSetUrl: (
+      workspaceRoot: string,
+      params: { name: string; fetchUrl?: string; pushUrl?: string },
+    ) => sidecar.request<{ ok: true }>('git.remoteSetUrl', { workspaceRoot, ...params }),
     stageFile: (workspaceRoot: string, paths: string[]) =>
       sidecar.request<{ ok: true }>('git.stageFile', { workspaceRoot, paths }),
     stageHunk: (workspaceRoot: string, path: string, hunkIndex: number) =>

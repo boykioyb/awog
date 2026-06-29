@@ -8,8 +8,10 @@ import {
   questionAnswered,
 } from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
+import type { UsageEntry } from '~/composables/useAccountUsage'
 import { useSettingsStore } from '~/stores/settings'
-import { contextLimitFor } from '~/utils/context-window'
+import { useProjectsStore } from '~/stores/projects'
+import { contextLimitFor, contextTokensFromChars } from '~/utils/context-window'
 import type {
   AssistantBlock,
   AssistantMessage,
@@ -183,6 +185,7 @@ type SessionGetDto = {
   messages: EngineMessage[]
   // Pinned context + budget + fork lineage (full session only; not on the summary).
   pinnedContext?: { files?: string[]; notes?: string }
+  workspaceFolder?: string
   budget?: {
     limitUsd?: number
     hardLimitUsd?: number
@@ -226,6 +229,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const { SESSIONS, modelsFor } = useSessionsData()
   const { accounts, accountById, accountByDisplay, modelsForAccount } = useAccounts()
   const settingsStore = useSettingsStore()
+  const projectsStore = useProjectsStore()
   const useIpc = sc.available
 
   // In IPC mode start empty (hydrate from sidecar); in mock mode use the seed.
@@ -245,32 +249,119 @@ export const useSessionsStore = defineStore('sessions', () => {
   const byEngineId = (eid: string) => sessions.value.find((s) => s.engineId === eid)
 
   // Context-window usage percentage (0..100) for a session. Mirrors
-  // useSessionContextUsage: used tokens (input + cache + output, summed in
-  // mergeUsage) over the SELECTED model's window. 0 when no real turn has run yet
-  // (browser-dev / first turn). Shared by the auto-compact trigger + quota guard.
+  // useSessionContextUsage: occupancy = the assembled prompt content the model sees
+  // (the engine's per-segment breakdown, contextTokensFromChars) over the SELECTED
+  // model's window — NOT the API usage total, which double-counts the cached prefix
+  // and adds output, inflating the gauge past 100%. 0 when no real turn has run yet
+  // (no breakdown / browser-dev). Shared by the auto-compact trigger + quota guard.
   function usagePct(s: Session): number {
-    const used = s.usage?.total ?? 0
+    const used = contextTokensFromChars(s.usage?.contextChars)
     if (!used) return 0
     const max = s.usage?.max ?? contextLimitFor(modelIdFromDisplay(s.model))
     if (!max) return 0
     return Math.min(100, (used / max) * 100)
   }
 
-  // Quota guard (Settings → Quota warning). True when the active session has crossed
-  // the threshold AND `blockNewSessionsOnThreshold` is enabled — `create()` reads
-  // this to refuse a new session. Disabled / under threshold → false (always allow).
+  // ── Account rate-limit quota (Settings → Usage quota) ─────────────────────
+  // The REAL plan usage the account popover shows: the Anthropic 5-hour rate-limit
+  // bucket (account.usage RPC → /api/oauth/usage), NOT the per-session context
+  // window. Keyed by accountId, `fiveHour` is a 0..100 percentage. Refreshed by the
+  // app-lifetime quota guard (useQuotaGuard) on a 60s cadence (matches the sidecar
+  // cache) and forced right after one of the account's turns settles.
+  const quotaUsage = ref<Record<string, { fiveHour: number; resetsAt?: number }>>({})
+
+  function quotaPctForAccount(accountId: string | undefined): number {
+    if (!accountId) return 0
+    return quotaUsage.value[accountId]?.fiveHour ?? 0
+  }
+
+  // account.usage only has a usage surface for anthropic + openai (subscription).
+  function providerKeyOf(display: string): 'anthropic' | 'openai' | null {
+    for (const [key, label] of Object.entries(PROVIDER_DISPLAY)) {
+      if (label === display && (key === 'anthropic' || key === 'openai')) return key
+    }
+    return null
+  }
+
+  // Fetch one account's 5-hour utilization. Best-effort: the panel never hard-errors
+  // (browser-dev, API-key account, or a rate-limited fetch) → keep the prior value.
+  async function refreshAccountQuota(accountId: string, force = false): Promise<void> {
+    if (!useIpc) return
+    const acct = accountById(accountId)
+    if (!acct) return
+    const provider = providerKeyOf(acct.provider)
+    if (!provider) return
+    try {
+      const res = await sc.request<{ usage: UsageEntry[] }>('account.usage', {
+        provider,
+        accountId,
+        ...(force ? { force: true } : {}),
+      })
+      const five = res.usage?.find((u) => u.rateLimitType === 'five_hour')
+      const next: { fiveHour: number; resetsAt?: number } = {
+        fiveHour: five ? Math.min(100, Math.round(five.utilization * 100)) : 0,
+      }
+      if (five?.resetsAt) next.resetsAt = five.resetsAt
+      quotaUsage.value = { ...quotaUsage.value, [accountId]: next }
+    } catch {
+      // best-effort — keep the last known value
+    }
+  }
+
+  // Refresh every account currently in use plus the default account (so the
+  // block-new gate is accurate before any turn has run).
+  function refreshQuotaUsage(force = false): void {
+    if (!useIpc) return
+    const ids = new Set<string>()
+    for (const s of sessions.value) if (s.accountId) ids.add(s.accountId)
+    const def = defaultAccountAndModel().acct
+    if (def) ids.add(def.id)
+    for (const id of ids) void refreshAccountQuota(id, force)
+  }
+
+  // Quota guard (Settings → Usage quota). True when the account a NEW session would
+  // use has crossed the 5-hour usage threshold AND `blockNewSessionsOnThreshold` is
+  // enabled — `create()` reads this to refuse the session. Per-account: a maxed
+  // account never blocks a session on a different account.
   const newSessionsBlocked = computed<boolean>(() => {
     const q = settingsStore.quota
     if (!q.enabled || !q.blockNewSessionsOnThreshold) return false
-    return sessions.value.some((s) => usagePct(s) >= q.threshold)
+    const acct = defaultAccountAndModel().acct
+    if (!acct) return false
+    return quotaPctForAccount(acct.id) >= q.threshold
   })
 
   // Block-reason notifier (registered by useQuotaGuard). The store owns the gate in
   // create() but has no i18n, so the guard registers a callback to push a localised
   // "blocked" toast when a new session is refused. No-op until registered.
-  let notifyBlocked: (() => void) | null = null
-  function onNewSessionBlocked(fn: () => void): void {
+  let notifyBlocked: ((account: string, kind: 'create' | 'send') => void) | null = null
+  function onQuotaBlocked(fn: (account: string, kind: 'create' | 'send') => void): void {
     notifyBlocked = fn
+  }
+
+  // True when Settings → Usage quota blocking is on AND the session's account has
+  // crossed its 5-hour threshold, using whatever usage is currently cached (sync).
+  function isSendBlocked(sessionId: number): boolean {
+    const q = settingsStore.quota
+    if (!q.enabled || !q.blockNewSessionsOnThreshold) return false
+    const s = byId(sessionId)
+    if (!s) return false
+    return quotaPctForAccount(s.accountId) >= q.threshold
+  }
+
+  // Block-BEFORE-send check: ensure the account's 5-hour usage is fresh (awaits one
+  // refresh — cheap, the sidecar caches it 60s and each turn force-refreshes on
+  // settle) THEN decide. Closes the fail-open window where a just-opened app hasn't
+  // polled yet. The composer awaits this to refuse a turn while keeping the draft;
+  // sendMessage awaits it as the backstop for every other turn-starting path (queue
+  // drain, resend, run-as-task, regenerate).
+  async function checkSendBlocked(sessionId: number): Promise<boolean> {
+    const q = settingsStore.quota
+    if (!q.enabled || !q.blockNewSessionsOnThreshold) return false
+    const s = byId(sessionId)
+    if (!s?.accountId) return false
+    await refreshAccountQuota(s.accountId)
+    return isSendBlocked(sessionId)
   }
 
   // Auto-compaction trigger (Settings → Sessions → autoCompact). The sidecar has no
@@ -592,6 +683,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         target.status = statusFromMessages(target.msgs)
         // Hydrate pinned context / budget / fork lineage (full session only).
         if (full.pinnedContext) target.pinnedContext = full.pinnedContext
+        if (full.workspaceFolder) target.workspaceFolder = full.workspaceFolder
         if (full.budget) target.budget = full.budget
         if (full.parentSessionId) target.parentSessionId = full.parentSessionId
         if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
@@ -645,17 +737,48 @@ export const useSessionsStore = defineStore('sessions', () => {
   // custom endpoint) would win over the user's real subscription. Returns the chosen
   // account + the model display to seed (the default model when it's available on
   // that account, otherwise the account's first model).
-  function defaultAccountAndModel(): { acct: ReturnType<typeof accountById>; model: string } {
-    if (!useIpc) return { acct: undefined, model: 'Opus 4.8' }
-    const wantProvider = PROVIDER_DISPLAY[settingsStore.defaults.provider] ?? 'Anthropic'
+  // Resolve the initial account / model / reasoning effort / MCP whitelist for a NEW
+  // session. A project's "Session LLM defaults" (Sessions → right-click a project, or
+  // the Project overview) take precedence over the global Settings → Defaults; any
+  // field a project leaves unset falls back to the global default. The account is
+  // chosen by: project-pinned account (when it still exists) → provider active account
+  // → first account on the provider → any account. Preferring the active account
+  // matters because a custom endpoint speaking the Anthropic/OpenAI protocol lives in
+  // that provider's bucket and would otherwise win over the real subscription.
+  // mcpServerIds: undefined = all enabled servers (default); [id…] = whitelist.
+  function defaultsForNewSession(projectId?: string): {
+    acct: ReturnType<typeof accountById>
+    model: string
+    level: ThinkingLevel
+    mcpServerIds: string[] | undefined
+  } {
+    const g = settingsStore.defaults
+    const ld = projectId ? projectsStore.projectById(projectId)?.llmDefaults : undefined
+    const provider = ld?.provider ?? g.provider
+    const modelId = ld?.modelId ?? g.modelId
+    const level = ld?.level ?? g.thinkingLevel
+    const mcpServerIds = ld?.mcpServerIds
+    if (!useIpc) return { acct: undefined, model: 'Opus 4.8', level, mcpServerIds }
+    const wantProvider = PROVIDER_DISPLAY[provider] ?? 'Anthropic'
     const inProvider = accounts.value.filter((a) => a.provider === wantProvider)
     const acct =
-      inProvider.find((a) => a.isActive) ?? inProvider[0] ?? accounts.value[0] ?? undefined
+      (ld?.accountId ? inProvider.find((a) => a.id === ld.accountId) : undefined) ??
+      inProvider.find((a) => a.isActive) ??
+      inProvider[0] ??
+      accounts.value[0] ??
+      undefined
     const available = acct ? modelsForAccount(acct) : []
     // Default model id (e.g. 'claude-opus-4-8') → display name; use it only when the
     // chosen account actually offers it, else the account's first model.
-    const wantModel = modelDisplayName(settingsStore.defaults.modelId)
+    const wantModel = modelDisplayName(modelId)
     const model = available.includes(wantModel) ? wantModel : (available[0] ?? 'Opus 4.8')
+    return { acct, model, level, mcpServerIds }
+  }
+
+  // Global default account/model (no project context) — the quota gate + usage
+  // refresh read this. Thin wrapper over defaultsForNewSession().
+  function defaultAccountAndModel(): { acct: ReturnType<typeof accountById>; model: string } {
+    const { acct, model } = defaultsForNewSession()
     return { acct, model }
   }
 
@@ -664,18 +787,38 @@ export const useSessionsStore = defineStore('sessions', () => {
   // project UNSET ('' = default) — the user picks one later via the crumb, since
   // at global-create time there's no project context to guess from.
   //
-  // Quota guard (Settings → Quota warning): when `blockNewSessionsOnThreshold` is on
-  // and the active session has crossed the threshold, refuse to spawn a new session
-  // (returns null) so the user resolves the existing one first — the single gate for
-  // every "+" callsite. Disabled / under threshold → always creates.
+  // Quota guard (Settings → Usage quota): when `blockNewSessionsOnThreshold` is on
+  // and the account this session would use has crossed its 5-hour usage threshold,
+  // refuse to spawn it (returns null) — the single gate for every "+" callsite.
+  // Disabled / under threshold → always creates.
   function create(projectId?: string): number | null {
     if (newSessionsBlocked.value) {
-      notifyBlocked?.()
+      notifyBlocked?.(defaultAccountAndModel().acct?.label ?? '', 'create')
       return null
     }
+    // Dedup: don't pile up empties when "+" is clicked repeatedly. A blank "New
+    // session" (fully loaded, no messages, no half-typed draft, idle, and not bound
+    // to a task/issue) for the same project scope is reused — just re-select it.
+    const scope = projectId ?? ''
+    const blank = sessions.value.find(
+      (s) =>
+        s.project === scope &&
+        s.loaded === true &&
+        s.status === 'idle' &&
+        s.msgs.length === 0 &&
+        !s.draft?.trim() &&
+        !s.aboutTaskId &&
+        !s.aboutGhUrl,
+    )
+    if (blank) {
+      activeId.value = blank.id
+      return blank.id
+    }
     const id = newClientId()
-    // Defaults (Settings → Defaults): account/model/mode/thinking seed a new session.
-    const { acct, model } = defaultAccountAndModel()
+    // Project "Session LLM defaults" (when set) seed account/model/effort/MCP; else
+    // the global Settings → Defaults. Mode stays the global default (projects don't
+    // pin a mode).
+    const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
     const session: Session = {
       id,
       title: 'New session',
@@ -686,11 +829,12 @@ export const useSessionsStore = defineStore('sessions', () => {
       status: 'idle',
       when: 'vừa xong',
       mode: modeDisplay(settingsStore.defaults.mode),
-      thinkingLevel: settingsStore.defaults.thinkingLevel,
+      thinkingLevel: level,
       msgs: [],
       loaded: true,
     }
     if (acct) session.accountId = acct.id
+    if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
     sessions.value.unshift(session)
     activeId.value = id
     if (useIpc) {
@@ -706,7 +850,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   // caller (Task → "Discuss in session") can navigate to it.
   function createForTask(taskId: string, projectId: string, title: string): number {
     const id = newClientId()
-    const { acct, model } = defaultAccountAndModel()
+    const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
     const session: Session = {
       id,
       title,
@@ -717,12 +861,13 @@ export const useSessionsStore = defineStore('sessions', () => {
       status: 'idle',
       when: 'vừa xong',
       mode: modeDisplay(settingsStore.defaults.mode),
-      thinkingLevel: settingsStore.defaults.thinkingLevel,
+      thinkingLevel: level,
       msgs: [],
       loaded: true,
       aboutTaskId: taskId,
     }
     if (acct) session.accountId = acct.id
+    if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
     sessions.value.unshift(session)
     activeId.value = id
     if (useIpc) {
@@ -755,6 +900,23 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (s) {
       s.project = project
+      if (useIpc) pushUpsert(s, 'update-metadata')
+    }
+  }
+
+  // Folder dragged into the session → becomes the runtime tools' cwd (forwarded
+  // as workspacePath each turn). Persisted via update-metadata so it survives reload.
+  function setWorkspaceFolder(id: number, path: string) {
+    const s = byId(id)
+    if (s) {
+      s.workspaceFolder = path
+      if (useIpc) pushUpsert(s, 'update-metadata')
+    }
+  }
+  function clearWorkspaceFolder(id: number) {
+    const s = byId(id)
+    if (s) {
+      delete s.workspaceFolder
       if (useIpc) pushUpsert(s, 'update-metadata')
     }
   }
@@ -1380,6 +1542,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.aboutTaskId) session.aboutTaskId = s.aboutTaskId
     if (s.aboutGhUrl) session.aboutGhUrl = s.aboutGhUrl
     if (s.pinnedContext) session.pinnedContext = s.pinnedContext
+    if (s.workspaceFolder) session.workspaceFolder = s.workspaceFolder
     if (s.budget) session.budget = s.budget
     if (s.parentSessionId) session.parentSessionId = s.parentSessionId
     if (s.forkFromMessageId) session.forkFromMessageId = s.forkFromMessageId
@@ -1399,6 +1562,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     const atts = att ?? []
     const quotes = s?.followups ?? []
     if (!s || (!trimmed && atts.length === 0 && quotes.length === 0)) return
+
+    // Usage-quota gate (Settings → Usage quota): when blocking is on and this session's
+    // account has crossed its 5-hour threshold, refuse to start a turn — the message is
+    // NOT added. Awaits a fresh usage read so it blocks reliably even right after app
+    // open. Same gate as create(), extended to new messages; backstop for every
+    // turn-starting path (the composer also gates sendNow to preserve the draft).
+    if (await checkSendBlocked(id)) {
+      notifyBlocked?.(accountById(s.accountId ?? '')?.label ?? '', 'send')
+      return
+    }
 
     s.msgs.push({
       role: 'user',
@@ -1432,8 +1605,8 @@ export const useSessionsStore = defineStore('sessions', () => {
   async function runEngineTurn(s: Session, text: string, atts: SessionAttachment[]) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     const messageId = `m-${Date.now().toString(36)}-${(seq++).toString(36)}`
-    // First exchange? (no prior assistant reply) → auto-generate a title after it
-    // finalizes. Captured before the placeholder is pushed.
+    // First exchange? (no prior assistant reply). Captured before the placeholder is
+    // pushed. Drives early title generation below + the post-turn fallback.
     const isFirstTurn = !s.msgs.some((m) => m.role === 'assistant')
     const placeholder: AssistantMessage = {
       role: 'assistant',
@@ -1446,9 +1619,18 @@ export const useSessionsStore = defineStore('sessions', () => {
     s.msgs.push(placeholder)
     s.status = 'streaming'
 
+    // Kick off the AI title NOW, in parallel with the turn — titling from the user's
+    // opening message (passed directly, no dependency on the turn finishing or the
+    // message being persisted). A long agentic first turn otherwise leaves the session
+    // "New session" for minutes. The post-turn call below is the fallback if this fails.
+    if (isFirstTurn) kickoffAutoTitle(s, text)
+
     // Engine attachments: only image data URLs + text content reach the model.
+    // Folder attachments carry no content — they set the working folder (forwarded
+    // as workspacePath below), so they're excluded here.
     const engineAtts = atts
       .map((a, i) => {
+        if (a.folder) return null
         const base = {
           id: `att-${i}`,
           name: a.name,
@@ -1493,6 +1675,9 @@ export const useSessionsStore = defineStore('sessions', () => {
         // engine was launched from) — so a medbase-platform session would wrongly
         // operate on the awog repo. `s.project` holds the engine projectId.
         ...(s.project ? { projectId: s.project } : {}),
+        // Dragged working folder → cwd for the turn (takes precedence over the
+        // project path sidecar-side) + a <workspace_tree> orientation block.
+        ...(s.workspaceFolder ? { workspacePath: s.workspaceFolder } : {}),
         // Session-scoped tool denylist + MCP whitelist (config popover).
         ...(s.disabledTools && s.disabledTools.length ? { disabledTools: s.disabledTools } : {}),
         ...(s.mcpServerIds !== undefined ? { mcpServerIds: s.mcpServerIds } : {}),
@@ -1550,11 +1735,12 @@ export const useSessionsStore = defineStore('sessions', () => {
       s.status = statusFromMessages(s.msgs)
       // Clean finish → drain the next queued message FIFO.
       if (result.stopReason !== 'error' && !refused) drainQueue(s.id)
-      // First exchange finalized (user + agent now persisted) → refine the default
-      // "New session" title into a concise AI title. Fire-and-forget; a manual
-      // rename (title ≠ default) is left untouched.
-      if (isFirstTurn && result.stopReason !== 'error' && !refused && s.title === 'New session') {
-        void autoGenerateTitle(s)
+      // Fallback: if the early (on-send) title kickoff failed/raced, retry now that
+      // the full first exchange is persisted (uses user + agent text from disk).
+      // Deduped via kickoffAutoTitle — a no-op when the early one already landed, and
+      // a manual rename (title ≠ default) is left untouched.
+      if (isFirstTurn && result.stopReason !== 'error' && !refused) {
+        kickoffAutoTitle(s)
       }
     } catch (err) {
       flushText(s.engineId, messageId)
@@ -1845,8 +2031,27 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s) await autoGenerateTitle(s)
   }
 
-  async function autoGenerateTitle(s: Session): Promise<void> {
-    if (!useIpc || !s.engineId) return
+  // Engine ids whose auto-title generation has already been kicked off, so the early
+  // (parallel-with-turn) trigger and the post-turn fallback never double-fire. Cleared
+  // on failure so a later turn can retry. Manual regenerate bypasses this entirely.
+  const autoTitleStarted = new Set<string>()
+
+  // Fire-and-forget auto title for a still-unnamed first-turn session, deduped across
+  // the early + fallback triggers. `userText` lets it run BEFORE the turn finishes
+  // (titles from the user's opening message alone, like Claude Code).
+  function kickoffAutoTitle(s: Session, userText?: string): void {
+    if (!useIpc || !s.engineId || s.title !== 'New session') return
+    const eid = s.engineId
+    if (autoTitleStarted.has(eid)) return
+    autoTitleStarted.add(eid)
+    void autoGenerateTitle(s, userText).then((ok) => {
+      // Failed (race / model error) → allow a later turn to retry.
+      if (!ok) autoTitleStarted.delete(eid)
+    })
+  }
+
+  async function autoGenerateTitle(s: Session, userText?: string): Promise<boolean> {
+    if (!useIpc || !s.engineId) return false
     const settings = engineSettings(s)
     try {
       const res = await sc.request<{ ok: boolean; title?: string }>('sessions.generateTitle', {
@@ -1854,10 +2059,16 @@ export const useSessionsStore = defineStore('sessions', () => {
         provider: settings.provider,
         modelId: settings.modelId,
         ...(s.accountId ? { accountId: s.accountId } : {}),
+        ...(userText?.trim() ? { userText: userText.trim() } : {}),
       })
-      if (res.ok && res.title) rename(s.id, res.title)
+      if (res.ok && res.title) {
+        rename(s.id, res.title)
+        return true
+      }
+      return false
     } catch (err) {
       console.warn('[sessions] generateTitle failed', err)
+      return false
     }
   }
 
@@ -2074,10 +2285,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     active,
     selectedIds,
     pendingPermission,
-    // quota / usage (Settings → Quota warning)
+    // quota / usage (Settings → Usage quota)
     usagePct,
+    quotaUsage,
+    quotaPctForAccount,
+    refreshQuotaUsage,
+    refreshAccountQuota,
     newSessionsBlocked,
-    onNewSessionBlocked,
+    isSendBlocked,
+    checkSendBlocked,
+    onQuotaBlocked,
     // load (IPC)
     hydrate,
     ensureLoaded,
@@ -2090,6 +2307,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     rename,
     regenerateTitle,
     setProject,
+    setWorkspaceFolder,
+    clearWorkspaceFolder,
     setAboutGh,
     setMode,
     setModel,

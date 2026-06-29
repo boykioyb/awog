@@ -56,6 +56,9 @@
       <span class="ha" :title="t('sessions.message.copy')" @click="copyText">
         <Icon name="copy" style="width: 13px; height: 13px" />
       </span>
+      <span class="ha" :title="t('sessions.message.fullscreen')" @click="openFullscreen">
+        <Icon name="maximize" style="width: 13px; height: 13px" />
+      </span>
       <span class="ha" :title="t('sessions.message.edit')" @click="editMsg">
         <Icon name="edit" style="width: 13px; height: 13px" />
       </span>
@@ -422,10 +425,29 @@ const rewind = () => act(store.rewind)
 const fork = () => act((id, i) => store.fork(id, i, 'fork'))
 const branch = () => act((id, i) => store.fork(id, i, 'branch'))
 
+// Full screen → open the message body in the shared full-window PreviewModal
+// (usePreview, the SAME instance mounted in SessionDetail) as rendered markdown:
+// a read-only viewer with outline + scroll, the comfortable way to read a long
+// reply. No-op on an empty body.
+const { open: openPreview } = usePreview()
+const openFullscreen = () => {
+  const text = plainText.value
+  if (!text.trim()) return
+  openPreview({
+    name: store.active?.title?.trim() || t('sessions.message.fullscreenName'),
+    kind: 'markdown',
+    text,
+  })
+}
+
 // One action set, rendered twice (floating pill at the top + inline on the meta
 // row at the bottom) so the actions are reachable without scrolling a long reply.
 const msgActions = computed(() => [
   { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
+  // Full screen only earns a slot when there's prose to read (skip tool-only turns).
+  ...(plainText.value.trim()
+    ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
+    : []),
   { icon: 'quote', title: t('sessions.message.quote'), run: quote },
   { icon: 'refresh', title: t('sessions.message.regen'), run: regen },
   { icon: 'settings', title: t('sessions.message.retryModel'), run: retry },

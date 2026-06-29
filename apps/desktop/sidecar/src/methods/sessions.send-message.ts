@@ -25,8 +25,10 @@ import { loadAgent, listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { assertInsideWorkspace } from '../git/path-sanitize.js'
+import { SKIP_DIRS } from '../fs/skip-dirs.js'
 import { getEffectivePricing, cost as priceCost } from '../pricing/catalog.js'
-import { readFile as fsReadFile } from 'node:fs/promises'
+import { readFile as fsReadFile, readdir, stat } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
 import type {
   AskUserQuestionFn,
   CanUseTool,
@@ -119,6 +121,12 @@ const Params = z.object({
   // on-disk path and passes it as the runtime tools' fs root so Read/Bash/Edit
   // operate against the user's repo instead of process.cwd().
   projectId: z.string().optional(),
+  // Working folder dragged into the session (absolute on-disk path). Takes
+  // precedence over the project-derived path as the runtime tools' cwd: the user
+  // explicitly chose this folder. Validated (absolute + existing directory) below;
+  // invalid → ignored, never errors the chat. A compact <workspace_tree> block is
+  // injected so the model orients without a blind filesystem scan.
+  workspacePath: z.string().optional(),
   // Session-scoped tool denylist (Claude Code tool names). Removes these tools
   // from the runtime tool set so the model never even sees them.
   disabledTools: z.array(z.string()).optional(),
@@ -311,6 +319,71 @@ ${parts.join('\n')}
 </pinned_context>`
 }
 
+// ── Workspace tree (dragged folder) ─────────────────────────────────────────
+// When the user drags a folder into the session it becomes the turn's cwd. We
+// inject a compact, bounded tree so the model knows what's there without a blind
+// `find` (the original bug this feature fixes). Bounded by depth + entry count so
+// a huge folder can't blow the prompt; SKIP_DIRS (node_modules/.git/…) are
+// pruned, symlinks never followed (security invariant #2 via assertInsideWorkspace).
+const MAX_TREE_ENTRIES = 300
+const MAX_TREE_DEPTH = 4
+
+async function buildWorkspaceTreeBlock(root: string | undefined): Promise<string | undefined> {
+  if (!root) return undefined
+  const lines: string[] = []
+  let count = 0
+  let truncated = false
+
+  async function walk(relDir: string, depth: number): Promise<void> {
+    if (truncated || depth > MAX_TREE_DEPTH) return
+    let absDir: string
+    try {
+      absDir = assertInsideWorkspace(root!, relDir || '.')
+    } catch {
+      return // escapes root (symlink) → skip
+    }
+    let dirents
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      dirents = await readdir(absDir, { withFileTypes: true })
+    } catch {
+      return // unreadable → skip
+    }
+    dirents.sort((a, b) => {
+      const ad = a.isDirectory() ? 0 : 1
+      const bd = b.isDirectory() ? 0 : 1
+      return ad !== bd ? ad - bd : a.name.localeCompare(b.name)
+    })
+    const indent = '  '.repeat(depth)
+    for (const dirent of dirents) {
+      if (count >= MAX_TREE_ENTRIES) {
+        truncated = true
+        return
+      }
+      const { name } = dirent
+      if (dirent.isSymbolicLink()) continue // never follow symlinks
+      if (dirent.isDirectory()) {
+        if (SKIP_DIRS.has(name)) continue
+        lines.push(`${indent}${name}/`)
+        count += 1
+        // eslint-disable-next-line no-await-in-loop
+        await walk(relDir ? `${relDir}/${name}` : name, depth + 1)
+      } else if (dirent.isFile()) {
+        lines.push(`${indent}${name}`)
+        count += 1
+      }
+    }
+  }
+
+  await walk('', 0)
+  if (!lines.length) return undefined
+  const body = truncated ? `${lines.join('\n')}\n…[truncated]` : lines.join('\n')
+  return `<workspace_tree root="${root}">
+The user dragged this folder into the session; it is your working directory (cwd) for this turn. Read/Write/Edit/Bash operate inside it — use these paths directly instead of searching the filesystem.
+${body}
+</workspace_tree>`
+}
+
 interface BulkLoadResult {
   // Appended to systemPromptAppend (joined blocks), or undefined when empty.
   block?: string
@@ -497,7 +570,25 @@ register('sessions.sendMessage', async (raw) => {
   // cwd (the runtime falls back to process.cwd()). Don't error the chat for a
   // stale projectId.
   let cwd: string | undefined
-  if (params.projectId) {
+  // Dragged working folder wins: the user explicitly chose it this session.
+  // Validate absolute + existing directory; invalid → ignore (fall through),
+  // never error the chat.
+  if (params.workspacePath) {
+    try {
+      if (isAbsolute(params.workspacePath) && (await stat(params.workspacePath)).isDirectory()) {
+        cwd = params.workspacePath
+      } else {
+        log.warn('ignoring non-absolute / non-directory workspacePath', {
+          workspacePath: params.workspacePath,
+        })
+      }
+    } catch (err) {
+      log.warn('failed to stat workspacePath', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  if (!cwd && params.projectId) {
     try {
       const project = await loadProject(params.projectId)
       if (project?.path) cwd = project.path
@@ -666,6 +757,18 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     systemPromptAppend = systemPromptAppend
       ? `${pinnedBlock}\n\n${systemPromptAppend}`
       : pinnedBlock
+  }
+
+  // Dragged working folder → compact tree so the model uses real paths instead of
+  // a blind scan. Only when the cwd actually came from an explicit workspacePath
+  // (not a project repo, whose layout the model can discover on demand).
+  if (params.workspacePath && cwd === params.workspacePath) {
+    const treeBlock = await buildWorkspaceTreeBlock(cwd)
+    if (treeBlock) {
+      systemPromptAppend = systemPromptAppend
+        ? `${treeBlock}\n\n${systemPromptAppend}`
+        : treeBlock
+    }
   }
 
   // Total ms this turn spends PARKED on human input (permission prompt or

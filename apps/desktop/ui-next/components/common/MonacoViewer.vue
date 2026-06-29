@@ -1,5 +1,12 @@
 <template>
-  <div ref="hostRef" class="mvhost" />
+  <div class="mvwrap">
+    <div ref="hostRef" class="mvhost" />
+    <!-- Heavy Monaco bundle loads async on mount; cover the blank host with a
+         spinner until the editor is created (the bundle can take a beat). -->
+    <div v-if="!ready" class="mvloading">
+      <span class="mvspin" />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -42,6 +49,8 @@ const { isDark } = useTheme()
 const { current, hydrate, loadThemeData } = useMonacoTheme()
 
 const hostRef = useTemplateRef<HTMLElement>('hostRef')
+// Editor created + bundle loaded → hide the loading overlay.
+const ready = ref(false)
 const editor = shallowRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
 const monacoRef = shallowRef<typeof Monaco | null>(null)
 let model: Monaco.editor.ITextModel | null = null
@@ -152,6 +161,7 @@ onMounted(async () => {
   })
   // ⌘/Ctrl+S → let the modal persist. Monaco swallows the browser default.
   editor.value.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => emit('save'))
+  ready.value = true
 
   await hydrate()
   void applyTheme()
@@ -195,9 +205,35 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.mvwrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
 .mvhost {
   width: 100%;
   height: 100%;
   background: var(--bgEl);
+}
+/* Loading overlay shown until the editor is created (covers the blank host). */
+.mvloading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bgEl);
+}
+.mvspin {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: mv-spin 0.8s linear infinite;
+}
+@keyframes mv-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

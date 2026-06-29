@@ -68,7 +68,7 @@ import {
 } from '~/composables/useSidecar'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useGitModal } from '~/composables/useGitModal'
-import { usePreview, type PreviewRef } from '~/composables/usePreview'
+import { usePreview, previewKindFromPath } from '~/composables/usePreview'
 import { useSessionTouchedPaths } from '~/composables/useSessionTouchedPaths'
 
 const props = defineProps<{ session: Session }>()
@@ -169,20 +169,12 @@ const gitCodeOf = (err: unknown): string | null => {
   return (err.data as { gitCode?: string } | undefined)?.gitCode ?? null
 }
 
-// Preview kind from the file extension (the modal reads the real content itself).
-function kindOf(path: string): PreviewRef['kind'] {
-  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(path)) return 'image'
-  if (/\.pdf$/i.test(path)) return 'pdf'
-  if (/\.(md|markdown)$/i.test(path)) return 'markdown'
-  return 'text'
-}
-
 // Open a changed file in the shared full-window PreviewModal (workspaceRoot + path
 // → fs.readFile). A binary file with no useful text view falls back to the modal's
 // file placeholder.
 function openFile(f: SidecarGitFileStatus): void {
   if (!root.value) return
-  const kind = kindOf(f.path)
+  const kind = previewKindFromPath(f.path)
   preview.open({
     name: f.path.split('/').pop() || f.path,
     kind: f.isBinary && kind === 'text' ? 'file' : kind,

@@ -10,8 +10,10 @@ Khi một Session dài tới mức **sắp đầy context window**, tự động
 
 ### Tự động (auto-compact)
 - Mặc định **BẬT**. Tắt ở **Settings → Sessions → "Tự động tóm tắt ngữ cảnh"**.
-- Trước mỗi tin nhắn mới, nếu `used > limit − 16384` (đệm 16k, mirror `DEFAULT_COMPACTION_SETTINGS.reserveTokens` của Pi) → tự compact rồi mới chạy lượt. `used` là context occupancy thật của lượt gần nhất (input + cache-read + cache-write + output); `limit` lấy theo **`session.settings.modelId`** (model người dùng chọn) — KHÔNG theo `modelUsed` do provider trả về, vì biến thể 1M `claude-opus-4-8-1m` được map về id base `claude-opus-4-8` khi gọi API, sẽ làm `limit` tụt 1M → 200k sau lượt đầu.
-- Ngưỡng = "ngay khi sắp đầy". Không chờ literal 100% vì lượt đẩy lên 100% có thể tràn trước khi kịp tóm tắt.
+- Sau khi một lượt settle, nếu `usagePct(session) ≥ 85%` → tự compact (latch per-session, **re-arm khi tụt < 70%** để lần đầy sau lại compact được). `limit` (mẫu số) lấy theo **`session.settings.modelId`** (model người dùng chọn) — KHÔNG theo `modelUsed` do provider trả về, vì biến thể 1M `claude-opus-4-8-1m` được map về id base `claude-opus-4-8` khi gọi API, sẽ làm `limit` tụt 1M → 200k sau lượt đầu.
+- **Đo occupancy (ĐÃ SỬA 2026-06-29):** `used` = **occupancy nội dung prompt** model thực sự thấy = **tổng các segment đã assemble** (`contextChars`: systemPrompt + instructions + systemTools + mcpTools + customAgents + skills + memoryFiles + history, ÷4 ≈ token) — y như Claude Code `/context`. **KHÔNG** lấy từ API usage `total` (input + cacheRead + cacheWrite + output): theo Anthropic, prompt size = input + cacheRead + cacheWrite (cacheRead/Write chỉ là phần cached/uncached của CHÍNH nội dung đó, không phải occupancy cộng thêm), còn `output` là response không thuộc input window. Cộng cache+output vào sẽ phồng gauge > 100% và sinh bucket ảo **"Other (cache + overhead)"**. Helper chung: [`utils/context-window.ts#contextTokensFromChars`](../../apps/desktop/ui-next/utils/context-window.ts) — dùng bởi cả widget % ([`useSessionContextUsage`](../../apps/desktop/ui-next/composables/useSessionContextUsage.ts)) và trigger ([`stores/sessions.ts#usagePct`](../../apps/desktop/ui-next/stores/sessions.ts)) nên không lệch nhau.
+- **Breakdown panel:** itemize theo CONTENT (System prompt / Instructions / System tools / MCP / Custom agents / Skills / Memory files / Messages) + **Còn trống** = `max − tổng(buckets)`. Đã **GỠ** bucket "Other (cache + overhead)" và logic scale-k overshoot — các row cộng lại đúng bằng gauge.
+- Ngưỡng 85% = "sắp đầy" — không chờ literal 100% vì một lượt đẩy lên 100% có thể tràn trước khi kịp tóm tắt.
 
 ### Thủ công (`/compact`)
 - Gõ `/compact` trong composer (hoặc qua `/` picker).
@@ -43,12 +45,12 @@ Khi một Session dài tới mức **sắp đầy context window**, tự động
 | Sidecar | `methods/sessions.compact.ts` | RPC abortable (`messageId` + `registerAborter`), persist, trả `compaction` |
 | Sidecar | `methods/sessions.send-message.ts` | nhận + forward `compaction` |
 | Sidecar/UI | `types/shared.ts` · `types/index.ts` | `SessionCompaction` + `Session.compaction` |
-| UI | `utils/context-window.ts` | `contextUsage` + `shouldAutoCompact` (ngưỡng dùng chung) |
-| UI | `stores/sessions.ts` | auto-trigger trong `sendMessage`; `compactSession` running-state |
-| UI | `components/session/SessionCompactionMarker.vue` | marker tóm tắt |
-| UI | `components/session/SessionMessageList.vue` | chèn marker trước mốc cắt |
-| UI | `stores/settings.ts` · `composables/useSettingsSync.ts` | toggle `autoCompact` (persist) |
-| UI | `components/settings/SettingsSessionsSection.vue` | UI toggle |
+| UI | `utils/context-window.ts` | `contextTokensFromChars` (occupancy = SUM content, dùng chung widget % + trigger) + `contextLimitFor` |
+| UI | `composables/useSessionContextUsage.ts` | breakdown per-category + gauge (không còn bucket "Other") |
+| UI | `stores/sessions.ts` | `usagePct` (content-based) + `maybeAutoCompact` (latch 85%/re-arm 70%, post-turn); `compactSession` RPC |
+| UI | `components/settings/SettingsSessions.vue` | toggle `autoCompact` (persist) |
+
+> Bảng trên đã trỏ sang `apps/desktop/ui-next/` (UI hiện hành). `SessionCompactionMarker.vue` chèn marker tóm tắt vẫn theo mô hình cũ.
 
 ## Giới hạn
 

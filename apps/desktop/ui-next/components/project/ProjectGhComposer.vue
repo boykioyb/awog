@@ -48,16 +48,19 @@
     </div>
 
     <div class="ghcbar">
-      <span class="ghclbl">{{ t('projects.drawer.translateDraft') }}</span>
+      <!-- Translate-draft (LLM) collapsed into one dropdown so the action bar stays
+           roomy on a narrow drawer; selecting a language bubbles `translate`. -->
       <button
-        v-for="lang in LANGS"
-        :key="lang"
-        class="ghclang"
+        class="ghclang ghctrlang"
         type="button"
         :disabled="busy || !modelValue.trim()"
-        @click="emit('translate', lang)"
+        :title="t('projects.drawer.translate')"
+        :aria-label="t('projects.drawer.translate')"
+        @click.stop="toggleTrMenu"
       >
-        {{ t('projects.drawer.viewLang.' + lang) }}
+        <Icon name="globe" style="width: 12px; height: 12px" />
+        <span>{{ t('projects.drawer.translateMenu') }}</span>
+        <Icon name="chev" style="width: 11px; height: 11px" />
       </button>
       <button
         class="iconbtn"
@@ -100,6 +103,15 @@
         {{ posting ? t('projects.drawer.posting') : t('projects.drawer.comment') }}
       </button>
     </div>
+
+    <!-- Translate-language dropdown (vi / en / ja), anchored under the trigger. -->
+    <ContextMenu
+      :open="trMenu.pos.value !== null"
+      :position="trMenu.pos.value ?? { x: 0, y: 0 }"
+      :items="trMenuItems"
+      @close="trMenu.close"
+      @select="onTrSelect"
+    />
   </div>
 </template>
 
@@ -111,6 +123,8 @@
 // `focus()` is exposed so a Reply action can prefill the draft and focus the input.
 import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import ProjectGhMarkdown from './ProjectGhMarkdown.vue'
+import type { MenuItem } from '~/composables/useContextMenu'
+import { useContextMenu } from '~/composables/useContextMenu'
 import type { TranslateLang } from '~/composables/useProjectGh'
 
 const props = defineProps<{
@@ -135,6 +149,25 @@ const mode = ref<'write' | 'preview'>('write')
 const LANGS: TranslateLang[] = ['vi', 'en', 'ja']
 // Any in-flight LLM/post action disables the toolbar's LLM buttons.
 const busy = computed(() => props.posting || props.enhancing || props.translating)
+
+// Translate-draft dropdown — collapses the vi/en/ja buttons into one trigger.
+// These are one-shot LLM actions (not a view toggle), so no active/checked state.
+const trMenu = useContextMenu()
+const trMenuItems = computed<MenuItem[]>(() =>
+  LANGS.map((lang) => ({ id: lang, label: t('projects.drawer.viewLang.' + lang) })),
+)
+function toggleTrMenu(e: MouseEvent): void {
+  if (trMenu.pos.value) {
+    trMenu.close()
+    return
+  }
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  trMenu.pos.value = { x: r.left, y: r.bottom + 4 }
+}
+function onTrSelect(id: string): void {
+  trMenu.close()
+  emit('translate', id as TranslateLang)
+}
 
 function onInput(e: Event): void {
   emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
@@ -288,10 +321,6 @@ defineExpose({ focus })
   margin-top: 6px;
   flex-wrap: wrap;
 }
-.ghclbl {
-  font-size: 12px;
-  color: var(--textDim);
-}
 .ghclang {
   font-size: 12px;
   font-family: var(--code);
@@ -305,6 +334,12 @@ defineExpose({ focus })
 .ghclang:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accentBorder);
+}
+.ghctrlang {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--sans);
 }
 .ghcbusy {
   font-size: 12px;

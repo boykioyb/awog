@@ -4,6 +4,7 @@ import { register, RpcError } from '../transport/rpc.js'
 import { exchangeCode } from '../auth/anthropic-oauth.js'
 import { takeState } from '../auth/state-store.js'
 import { loadCredentials, saveCredentials, toSafe } from '../credentials/store.js'
+import { invalidateCache } from '../credentials/token-manager.js'
 import { log } from '../util/logger.js'
 import type { AccountRecord, OAuthTokens } from '../types/shared.js'
 
@@ -86,6 +87,11 @@ register('auth.completeOAuth', async (raw) => {
   }
 
   await saveCredentials(data)
+
+  // Drop any cached tokens for this account: after re-auth the old refresh token
+  // has been rotated away, so a stale cache entry would make the next
+  // ensureFreshAccessToken refresh with a now-invalid token (AUTH_EXPIRED).
+  invalidateCache('anthropic', record.id)
 
   log.info(existing ? 'oauth account re-authenticated' : 'oauth account added', {
     provider: 'anthropic',

@@ -34,6 +34,7 @@ type SessionMetadataPatch = Partial<
     | 'aboutTaskId'
     | 'aboutGhUrl'
     | 'pinnedContext'
+    | 'workspaceFolder'
     | 'budget'
     | 'parentSessionId'
     | 'forkFromMessageId'

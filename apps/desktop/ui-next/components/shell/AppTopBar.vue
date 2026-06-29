@@ -22,11 +22,17 @@
     </button>
     <span class="ptitle">{{ title }}</span>
     <span class="sp" />
-    <div class="kbd" data-tour="cmdk-hint" title="Command palette (chưa wire)">
+    <button
+      type="button"
+      class="kbd"
+      data-tour="cmdk-hint"
+      :title="t('topbar.searchHint')"
+      @click="openPalette"
+    >
       <Icon name="search" style="width: 13px; height: 13px" />
-      {{ t('topbar.search') }}
+      <span class="kbd-label">{{ t('topbar.search') }}</span>
       <span class="kk">⌘K</span>
-    </div>
+    </button>
     <button class="btn pri" data-tour="new-btn" :title="t('topbar.new')" @click="onNew">
       <Icon name="plus" />
       <span>{{ t('topbar.new') }}</span>
@@ -37,6 +43,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useCommandPalette } from '~/composables/useCommandPalette'
 
 // Route → page-title i18n key (reuses the NavRail nav.* keys).
 const TITLE_KEYS: Record<string, string> = {
@@ -59,6 +66,10 @@ const TITLE_KEYS: Record<string, string> = {
 const { t } = useI18n()
 const route = useRoute()
 const { compact, navOpen, listOpen, hasList, toggleNav, toggleList } = useResponsiveShell()
+
+// Search box opens the ⌘K command palette (the keyboard shortcut is bound in the
+// layout; this makes the visible box clickable too).
+const { open: openPalette } = useCommandPalette()
 const title = computed(() => {
   const path = route.path
   const key = Object.keys(TITLE_KEYS).find((k) => (k === '/' ? path === '/' : path.startsWith(k)))

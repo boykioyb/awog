@@ -6,15 +6,15 @@
   "settingsSessions.pasteAsFile.name": "Dán thành file",
   "settingsSessions.pasteAsFile.desc": "Đoạn dán dài sẽ thành tệp đính kèm thay vì nội dung inline",
   "settingsSessions.pasteThreshold.name": "Ngưỡng dán (ký tự)",
-  "settingsSessions.pasteThreshold.desc": "Đoạn dán dài hơn mức này sẽ thành file (tối thiểu 200)",
+  "settingsSessions.pasteThreshold.desc": "Đoạn dán dài hơn mức này sẽ thành file (200–100000)",
 
-  "settingsSessions.quota.heading": "Hạn mức sử dụng",
+  "settingsSessions.quota.heading": "Hạn mức sử dụng (giới hạn 5 giờ)",
   "settingsSessions.quota.warning.name": "Cảnh báo hạn mức",
-  "settingsSessions.quota.warning.desc": "Cảnh báo khi mức sử dụng chạm ngưỡng",
+  "settingsSessions.quota.warning.desc": "Cảnh báo khi hạn mức 5 giờ của tài khoản chạm ngưỡng",
   "settingsSessions.quota.threshold.name": "Ngưỡng (%)",
-  "settingsSessions.quota.threshold.desc": "Cảnh báo ở phần trăm này của hạn mức (50–99)",
+  "settingsSessions.quota.threshold.desc": "Cảnh báo ở phần trăm này của hạn mức 5 giờ của tài khoản (50–99)",
   "settingsSessions.quota.abort.name": "Hủy session khi chạm ngưỡng",
-  "settingsSessions.quota.abort.desc": "Nguy hiểm: hủy các session đang chạy khi chạm ngưỡng",
-  "settingsSessions.quota.blockNew.name": "Chặn session mới khi chạm ngưỡng",
-  "settingsSessions.quota.blockNew.desc": "Không cho khởi tạo session mới khi đã chạm ngưỡng"
+  "settingsSessions.quota.abort.desc": "Nguy hiểm: hủy các session đang chạy của tài khoản khi hạn mức 5 giờ chạm ngưỡng",
+  "settingsSessions.quota.blockNew.name": "Chặn khi chạm ngưỡng",
+  "settingsSessions.quota.blockNew.desc": "Không cho tạo session mới VÀ gửi tin nhắn trên tài khoản khi hạn mức 5 giờ chạm ngưỡng"
 }

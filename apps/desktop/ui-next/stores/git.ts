@@ -14,6 +14,7 @@ import { DEMO_DIFF, DEMO_DIFF2, createGitState } from '~/components/git/git-type
 import { useGitApi } from '~/composables/useGitApi'
 import type {
   GitIdentity,
+  GitStreamingOp,
   SetIdentityParams,
   SidecarGitBranch,
   SidecarGitCommit,
@@ -211,6 +212,10 @@ export const useGitStore = defineStore('git', () => {
   const detachedAt = ref<string | null>(seed.detachedAt)
   const commitMessage = ref<string>('')
   const historyHasMore = ref<boolean>(false)
+  // True when the selected workspace exists but isn't a git repo (git.status →
+  // NO_REPO). Drives the Git page's "initialize repository" empty state instead of
+  // a silent console error.
+  const notARepo = ref<boolean>(false)
 
   // ── Internal repo resolution ──
   // Discovered repo entries keyed by label; `selectedRepoLabel` drives `repo`.
@@ -238,6 +243,16 @@ export const useGitStore = defineStore('git', () => {
   // (mapped from `code`) so failures aren't silent in the console. A fresh object
   // is assigned per failure so identical consecutive errors still trigger the watch.
   const lastError = ref<{ op: string; code: string | null; message: string } | null>(null)
+
+  // Remote-sync in-flight state (fetch/pull/push). Drives the header buttons'
+  // busy/spinner state + live progress fed by git:*:progress events. null = idle.
+  const syncOp = ref<{ op: GitStreamingOp; phase: string; pct: number | null } | null>(null)
+
+  // One-off success notice (mirrors lastError) → GitManager toasts it. Gives the
+  // remote-sync ops a visible confirmation even when nothing changed (the common
+  // "Already up to date" case that otherwise looks like the button did nothing).
+  // A fresh object per call so identical consecutive notices still trigger the watch.
+  const lastNotice = ref<{ key: string; params?: Record<string, string | number> } | null>(null)
 
   // Pull the sidecar gitCode (DIRTY_TREE / AUTH_FAILED / …) out of an error, when present.
   const gitCodeOf = (err: unknown): string | null => {
@@ -319,7 +334,23 @@ export const useGitStore = defineStore('git', () => {
         status.conflictedCount > 0 || status.files.some((f) => f.stageState === 'conflicted')
       ahead.value = status.ahead
       behind.value = status.behind
+      notARepo.value = false
     } catch (err) {
+      if (gitCodeOf(err) === 'NO_REPO') {
+        // Folder exists but has no .git — surface the init empty state and clear
+        // any data carried over from a previously-selected (real) repo.
+        notARepo.value = true
+        staged.value = []
+        unstaged.value = []
+        commits.value = []
+        branches.value = []
+        remotes.value = []
+        tags.value = []
+        stashes.value = []
+        ahead.value = 0
+        behind.value = 0
+        return
+      }
       console.warn('[git] loadStatus failed', err)
     }
   }
@@ -393,7 +424,15 @@ export const useGitStore = defineStore('git', () => {
   }
 
   const loadAll = async () => {
-    await Promise.all([loadStatus(), loadHistory(), loadBranches(), loadStashes(), loadRemotes()])
+    // Probe status first: a NO_REPO workspace short-circuits the rest so the other
+    // loaders (history / branches / stashes / remotes / tags) don't each spawn git
+    // and fail with "not a git repository". loadStatus sets notARepo + clears data.
+    await loadStatus()
+    if (notARepo.value) {
+      historyHasMore.value = false
+      return
+    }
+    await Promise.all([loadHistory(), loadBranches(), loadStashes(), loadRemotes()])
     if (available.value) {
       await loadTags()
       return
@@ -439,7 +478,7 @@ export const useGitStore = defineStore('git', () => {
   // refreshes status + branches when refs actually moved.
   const silentFetch = async () => {
     const root = workspaceRoot()
-    if (!available.value || !root) return
+    if (!available.value || !root || notARepo.value) return
     try {
       await useGitApi().fetch(root)
       await Promise.all([loadStatus(), loadBranches()])
@@ -496,6 +535,20 @@ export const useGitStore = defineStore('git', () => {
       unlisten = await sidecar.onEvent((evt) => {
         const typed = evt as unknown as { type?: string; method?: string }
         const evtType = typed.type ?? typed.method ?? null
+        if (!evtType) return
+        // Live progress for the in-flight remote-sync op → drives the header
+        // button's spinner/percent. Only react while an op is actually running.
+        // Payload (phase/pct) is nested under `evt.payload` per SidecarEvent.
+        const m = /^git:(fetch|pull|push):progress$/.exec(evtType)
+        if (m && syncOp.value && syncOp.value.op === m[1]) {
+          const p = (evt as { payload?: { phase?: string; pct?: number | null } }).payload ?? {}
+          syncOp.value = {
+            op: syncOp.value.op,
+            phase: typeof p.phase === 'string' ? p.phase : syncOp.value.phase,
+            pct: typeof p.pct === 'number' ? p.pct : null,
+          }
+          return
+        }
         if (evtType !== 'git:status:changed') return
         // Debounce burst (many .git files touched in one operation).
         if (statusRefreshTimer) clearTimeout(statusRefreshTimer)
@@ -547,6 +600,7 @@ export const useGitStore = defineStore('git', () => {
     detachedAt.value = s.detachedAt
     commitMessage.value = ''
     historyHasMore.value = false
+    notARepo.value = false
 
     if (!available.value) return
     await loadProjects()
@@ -769,11 +823,17 @@ export const useGitStore = defineStore('git', () => {
 
   const fetchRemote = async () => {
     if (!available.value) return
+    syncOp.value = { op: 'fetch', phase: 'connecting', pct: null }
     try {
-      await useGitApi().fetch(workspaceRoot())
+      const res = await useGitApi().fetch(workspaceRoot())
       await Promise.all([loadStatus(), loadBranches()])
+      lastNotice.value = res.updated.length
+        ? { key: 'git.notice.fetched', params: { n: res.updated.length } }
+        : { key: 'git.notice.fetchUpToDate' }
     } catch (err) {
       reportError('fetch', err)
+    } finally {
+      syncOp.value = null
     }
   }
 
@@ -782,11 +842,17 @@ export const useGitStore = defineStore('git', () => {
       behind.value = 0
       return
     }
+    syncOp.value = { op: 'pull', phase: 'connecting', pct: null }
     try {
-      await useGitApi().pull(workspaceRoot(), { strategy })
+      const res = await useGitApi().pull(workspaceRoot(), { strategy })
       await Promise.all([loadStatus(), loadBranches()])
+      lastNotice.value = res.commitsApplied
+        ? { key: 'git.notice.pulled', params: { n: res.commitsApplied } }
+        : { key: 'git.notice.pullUpToDate' }
     } catch (err) {
       reportError('pull', err)
+    } finally {
+      syncOp.value = null
     }
   }
 
@@ -795,11 +861,17 @@ export const useGitStore = defineStore('git', () => {
       ahead.value = 0
       return
     }
+    syncOp.value = { op: 'push', phase: 'connecting', pct: null }
     try {
-      await useGitApi().push(workspaceRoot())
+      const res = await useGitApi().push(workspaceRoot())
       await Promise.all([loadStatus(), loadBranches()])
+      lastNotice.value = res.pushed
+        ? { key: 'git.notice.pushed', params: { n: res.pushed } }
+        : { key: 'git.notice.pushUpToDate' }
     } catch (err) {
       reportError('push', err)
+    } finally {
+      syncOp.value = null
     }
   }
 
@@ -1325,6 +1397,77 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
+  // ─── Init repo (NO_REPO empty state) ────────────────────────────────────────
+  // `git init` the selected workspace, then re-discover + reload so the regular
+  // Git UI replaces the empty state. Subscription is already live (store.init),
+  // so no re-subscribe needed.
+  const gitInit = async (): Promise<boolean> => {
+    if (!available.value) {
+      notARepo.value = false
+      return true
+    }
+    const root = workspaceRoot()
+    if (!root) return false
+    try {
+      await useGitApi().init(root)
+      notARepo.value = false
+      await discoverRepos()
+      await loadAll()
+      return true
+    } catch (err) {
+      reportError('init', err)
+      return false
+    }
+  }
+
+  // ─── Remotes ──────────────────────────────────────────────────────────────
+  // Add a new remote (`git remote add`). A fresh `git init` repo has none, so this
+  // is the path to wiring up origin before the first push.
+  const addRemote = async (name: string, url: string): Promise<boolean> => {
+    if (!available.value) {
+      if (!remotes.value.some((r) => r.name === name)) {
+        remotes.value = [...remotes.value, { name, fetchUrl: url, pushUrl: url }]
+      }
+      return true
+    }
+    try {
+      await useGitApi().remoteAdd(workspaceRoot(), { name, url })
+      await loadRemotes()
+      return true
+    } catch (err) {
+      reportError('remoteAdd', err)
+      return false
+    }
+  }
+
+  // Edit a remote's fetch and/or push URL (`git remote set-url`). Errors surface
+  // via lastError → toast like other mutations.
+  const setRemoteUrl = async (
+    name: string,
+    urls: { fetchUrl?: string; pushUrl?: string },
+  ): Promise<boolean> => {
+    if (!available.value) {
+      remotes.value = remotes.value.map((r) =>
+        r.name === name
+          ? {
+              ...r,
+              ...(urls.fetchUrl !== undefined ? { fetchUrl: urls.fetchUrl } : {}),
+              ...(urls.pushUrl !== undefined ? { pushUrl: urls.pushUrl } : {}),
+            }
+          : r,
+      )
+      return true
+    }
+    try {
+      await useGitApi().remoteSetUrl(workspaceRoot(), { name, ...urls })
+      await loadRemotes()
+      return true
+    } catch (err) {
+      reportError('remoteSetUrl', err)
+      return false
+    }
+  }
+
   return {
     // state
     projects,
@@ -1348,10 +1491,16 @@ export const useGitStore = defineStore('git', () => {
     detachedAt,
     commitMessage,
     historyHasMore,
+    notARepo,
     available,
     lastError,
+    lastNotice,
+    syncOp,
     // actions
     init,
+    gitInit,
+    addRemote,
+    setRemoteUrl,
     loadProjects,
     discoverRepos,
     loadStatus,

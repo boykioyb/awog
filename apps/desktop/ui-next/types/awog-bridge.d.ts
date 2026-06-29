@@ -45,6 +45,9 @@ export interface AwogBridge {
   vscodeAvailable(): Promise<boolean>
   openInVscode(root: string, path: string): Promise<void>
   pickFolder(opts?: AwogDialogOpts): Promise<string | null>
+  // Absolute on-disk path of a dropped File/folder (Electron webUtils). '' when
+  // the File has no real filesystem origin (e.g. synthetic/clipboard blob).
+  getPathForFile(file: File): string
   savePath(opts?: AwogSavePathOpts): Promise<string | null>
   // Auto-update (ADR 0028).
   getAppInfo(): Promise<AwogAppInfo>

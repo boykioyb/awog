@@ -61,6 +61,8 @@ const SessionSchema = z.object({
   aboutGhUrl: z.string().optional(),
   // Files/notes re-fed into every turn (pinned context).
   pinnedContext: PinnedContextSchema.optional(),
+  // Absolute path of a folder dragged into the session → runtime cwd.
+  workspaceFolder: z.string().optional(),
   // Soft + hard spend caps.
   budget: BudgetSchema.optional(),
   // Fork lineage.
@@ -113,6 +115,7 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (budget) base.budget = budget
   const pinned = toPinnedContext(parsed.pinnedContext)
   if (pinned) base.pinnedContext = pinned
+  if (parsed.workspaceFolder !== undefined) base.workspaceFolder = parsed.workspaceFolder
   if (parsed.parentSessionId !== undefined) base.parentSessionId = parsed.parentSessionId
   if (parsed.forkFromMessageId !== undefined) base.forkFromMessageId = parsed.forkFromMessageId
   return base
@@ -164,6 +167,7 @@ register('sessions.upsert', async (raw) => {
   if (session.aboutTaskId !== undefined) patch.aboutTaskId = session.aboutTaskId
   if (session.aboutGhUrl !== undefined) patch.aboutGhUrl = session.aboutGhUrl
   if (session.pinnedContext !== undefined) patch.pinnedContext = session.pinnedContext
+  if (session.workspaceFolder !== undefined) patch.workspaceFolder = session.workspaceFolder
   if (session.budget !== undefined) patch.budget = session.budget
   if (session.parentSessionId !== undefined) patch.parentSessionId = session.parentSessionId
   if (session.forkFromMessageId !== undefined) patch.forkFromMessageId = session.forkFromMessageId

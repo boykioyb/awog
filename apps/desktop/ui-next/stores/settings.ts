@@ -144,6 +144,9 @@ export interface AppearanceExtras {
 export const QUOTA_THRESHOLD_MIN = 50
 export const QUOTA_THRESHOLD_MAX = 99
 
+export const PASTE_THRESHOLD_MIN = 200
+export const PASTE_THRESHOLD_MAX = 100000
+
 export const DEFAULT_COMMIT_MESSAGE_RULE = `You write git commit messages following Conventional Commits.
 
 Input:

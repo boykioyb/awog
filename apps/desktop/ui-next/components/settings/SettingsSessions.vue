@@ -63,15 +63,12 @@
       :name="t('settingsSessions.pasteThreshold.name')"
       :desc="t('settingsSessions.pasteThreshold.desc')"
     >
-      <div class="keyrow">
-        <input
-          v-model.number="pasteThreshold"
-          class="keyinp mono"
-          type="number"
-          min="200"
-          step="100"
-        />
-      </div>
+      <SettingsNumber
+        v-model="pasteThreshold"
+        :min="PASTE_THRESHOLD_MIN"
+        :max="PASTE_THRESHOLD_MAX"
+        :step="100"
+      />
     </SettingsField>
 
     <div class="sech">{{ t('settingsSessions.quota.heading') }}</div>
@@ -88,16 +85,12 @@
       :name="t('settingsSessions.quota.threshold.name')"
       :desc="t('settingsSessions.quota.threshold.desc')"
     >
-      <div class="keyrow">
-        <input
-          v-model.number="quotaThreshold"
-          class="keyinp mono"
-          type="number"
-          :min="QUOTA_THRESHOLD_MIN"
-          :max="QUOTA_THRESHOLD_MAX"
-          step="5"
-        />
-      </div>
+      <SettingsNumber
+        v-model="quotaThreshold"
+        :min="QUOTA_THRESHOLD_MIN"
+        :max="QUOTA_THRESHOLD_MAX"
+        :step="5"
+      />
     </SettingsField>
 
     <SettingsField v-if="quotaEnabled" :name="t('settingsSessions.quota.abort.name')">
@@ -122,9 +115,16 @@
 <script setup lang="ts">
 // Sessions panel — wires setSecHtml('sessions') to the settings store.
 // v-model proxies write through store actions (never mutate store state directly):
-// boolean toggles via updateSessions/updateQuota; numeric inputs are clamped on set.
+// boolean toggles via updateSessions/updateQuota; numeric inputs go through
+// SettingsNumber, which clamps to [min, max] on commit.
 import { computed } from 'vue'
-import { QUOTA_THRESHOLD_MAX, QUOTA_THRESHOLD_MIN, useSettingsStore } from '~/stores/settings'
+import {
+  PASTE_THRESHOLD_MAX,
+  PASTE_THRESHOLD_MIN,
+  QUOTA_THRESHOLD_MAX,
+  QUOTA_THRESHOLD_MIN,
+  useSettingsStore,
+} from '~/stores/settings'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -155,12 +155,10 @@ const reducedMotion = sessionToggle('reducedMotion')
 const refeedImages = sessionToggle('refeedImages')
 const pasteAsFile = sessionToggle('pasteAsFile')
 
+// SettingsNumber clamps to [min, max] on commit; the setter just persists.
 const pasteThreshold = computed<number>({
   get: () => settings.sessions.pasteThreshold,
-  set: (v) => {
-    if (!Number.isFinite(v)) return
-    settings.updateSessions({ pasteThreshold: Math.max(200, v) })
-  },
+  set: (v) => settings.updateSessions({ pasteThreshold: v }),
 })
 
 const quotaEnabled = computed<boolean>({
@@ -170,11 +168,7 @@ const quotaEnabled = computed<boolean>({
 
 const quotaThreshold = computed<number>({
   get: () => settings.quota.threshold,
-  set: (v) => {
-    if (!Number.isFinite(v)) return
-    const clamped = Math.min(QUOTA_THRESHOLD_MAX, Math.max(QUOTA_THRESHOLD_MIN, v))
-    settings.updateQuota({ threshold: clamped })
-  },
+  set: (v) => settings.updateQuota({ threshold: v }),
 })
 
 const abortSessionsOnThreshold = computed<boolean>({

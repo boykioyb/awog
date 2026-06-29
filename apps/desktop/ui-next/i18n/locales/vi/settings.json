@@ -38,7 +38,7 @@
   "settings.defaults.model.name": "Model",
   "settings.defaults.model.desc": "Model mặc định khi tạo session",
   "settings.defaults.mode.name": "Chế độ",
-  "settings.defaults.mode.desc": "Ask / Plan / Execute",
+  "settings.defaults.mode.desc": "Ask / Plan / Accept Edits / Execute",
   "settings.defaults.mode.ask": "Ask",
   "settings.defaults.mode.plan": "Plan",
   "settings.defaults.mode.execute": "Execute",

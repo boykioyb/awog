@@ -61,6 +61,8 @@
   "sessions.style.feynman.hint": "Onboard junior / tự học",
   "sessions.style.first-principles.name": "First Principles",
   "sessions.style.first-principles.hint": "Chọn stack / kiến trúc",
+  "sessions.folder.chipTitle": "Thư mục làm việc: {path} — bấm để duyệt",
+  "sessions.folder.remove": "Gỡ thư mục làm việc",
   "sessions.pinned.title": "Ngữ cảnh ghim",
   "sessions.pinned.hint": "File + ghi chú được nạp lại vào mỗi turn của session này",
   "sessions.pinned.remove": "Bỏ ghim",

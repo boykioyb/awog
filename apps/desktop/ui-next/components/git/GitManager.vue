@@ -2,6 +2,7 @@
   <div class="gitmgr">
     <div class="gcols">
       <GitSidebar
+        v-if="!store.notARepo"
         :section="section"
         :dirty-count="store.unstaged.length + store.staged.length"
         :branches="store.branches"
@@ -18,7 +19,9 @@
         @toggle-collapse="collapsed = !collapsed"
         @update:search="(v) => (search = v)"
         @new-branch="onNewBranch"
+        @new-tag="onNewTag"
         @save-stash="() => store.stashSave()"
+        @add-remote="remoteAddOpen = true"
         @context-branch="(e, b) => openMenu(e, { kind: 'branch', branch: b })"
         @context-stash="(e, i) => openMenu(e, { kind: 'stash', index: i })"
         @context-tag="(e, n) => openMenu(e, { kind: 'tag', name: n })"
@@ -40,6 +43,8 @@
           :is-merging="store.isMerging"
           :is-rebasing="store.isRebasing"
           :has-conflict="store.hasConflict"
+          :not-a-repo="store.notARepo"
+          :sync-op="store.syncOp"
           @select-project="(id) => store.setProject(id)"
           @select-repo="(r) => store.setRepo(r)"
           @switch-branch="switchBranch"
@@ -57,8 +62,11 @@
         </div>
 
         <div class="gbody">
+          <!-- Not a git repository → offer `git init` + identity setup -->
+          <GitInitEmptyState v-if="store.notARepo" />
+
           <!-- Local Changes -->
-          <template v-if="section.kind === 'local-changes'">
+          <template v-else-if="section.kind === 'local-changes'">
             <GitChangesList
               :staged="store.staged"
               :unstaged="store.unstaged"
@@ -118,6 +126,7 @@
             @fetch="() => store.fetchRemote()"
             @pull="() => store.pull()"
             @push="() => store.push()"
+            @set-url="(p) => store.setRemoteUrl(p.name, p)"
           />
 
           <!-- Stash detail -->
@@ -156,6 +165,16 @@
     />
 
     <GitIdentityModal :open="identityOpen" @close="identityOpen = false" />
+
+    <GitRemoteAddModal :open="remoteAddOpen" @submit="onAddRemote" @close="remoteAddOpen = false" />
+
+    <GitBranchCreateModal
+      :open="branchCreateOpen"
+      :branches="store.branches"
+      :current-branch="store.branch"
+      @submit="onCreateBranch"
+      @close="branchCreateOpen = false"
+    />
 
     <div
       v-for="tt in toasts"
@@ -217,6 +236,15 @@ watch(
   },
 )
 
+// Success notices for fetch/pull/push (incl. the "Already up to date" case) so the
+// ops give visible confirmation instead of silently doing nothing.
+watch(
+  () => store.lastNotice,
+  (n) => {
+    if (n) pushToast(t(n.key, n.params ?? {}), 'success')
+  },
+)
+
 // Switch branch. `git checkout` refuses to clobber uncommitted changes
 // (DIRTY_TREE) — offer to stash them first, then retry. Other failures toast.
 async function switchBranch(name: string) {
@@ -258,6 +286,21 @@ const ctab = ref<CommitTab>('commit')
 const selectedFile = ref<string | null>(null)
 const commitSel = ref<string | null>(null)
 const identityOpen = ref(false)
+const remoteAddOpen = ref(false)
+const branchCreateOpen = ref(false)
+
+// Add a remote, then jump to it so the user can fetch/push straight away.
+async function onAddRemote(payload: { name: string; url: string }) {
+  remoteAddOpen.value = false
+  const ok = await store.addRemote(payload.name, payload.url)
+  if (ok) section.value = { kind: 'remote', name: payload.name }
+}
+
+// Create a branch off the chosen base (empty `from` → branch off HEAD).
+function onCreateBranch(payload: { name: string; from: string }) {
+  branchCreateOpen.value = false
+  void store.createBranch(payload.name, payload.from || undefined)
+}
 const detailFiles = ref<GitFile[]>([])
 const detailDiffByPath = ref<Record<string, DiffLine[]>>({})
 
@@ -411,11 +454,16 @@ function onPromptSubmit(value: string) {
 }
 
 function onNewBranch() {
+  branchCreateOpen.value = true
+}
+
+// Create a tag at the current HEAD (tagging a specific commit is in the commit menu).
+function onNewTag() {
   openPrompt({
-    title: t('git.prompt.newBranch'),
-    placeholder: 'feature/…',
-    submitLabel: t('git.sidebar.newBranch'),
-    onSubmit: (name) => void store.createBranch(name),
+    title: t('git.prompt.newTag'),
+    placeholder: 'v1.0.0',
+    submitLabel: t('git.sidebar.newTag'),
+    onSubmit: (name) => void store.tagCreate(name),
   })
 }
 

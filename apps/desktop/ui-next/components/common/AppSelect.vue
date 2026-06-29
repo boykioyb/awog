@@ -191,10 +191,13 @@ onBeforeUnmount(() => {
 }
 .aselmenu {
   /* Fixed + teleported to body — top/left/width/max-height set inline by
-     updatePosition so the menu escapes overflow-clipping ancestors. z-index sits
-     above the modal overlay (.ovl = 100), matching the floating-menu layer. */
+     updatePosition so the menu escapes overflow-clipping ancestors. z-index must
+     sit above every form-modal overlay that can host a select (.ovl = 100,
+     SessionGitModal = 120, git sub-modals = 150) yet below top-level alerts
+     (confirm / command palette = 200), so it floats over its own modal but a
+     confirm still covers it. */
   position: fixed;
-  z-index: 130;
+  z-index: 160;
   max-height: 280px;
   overflow-y: auto;
   background: var(--bgEl);

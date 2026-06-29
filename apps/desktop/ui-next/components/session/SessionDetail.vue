@@ -277,6 +277,7 @@ import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import PreviewModal, { type PreviewItem } from '~/components/common/PreviewModal.vue'
+import { previewKindFromAttachment } from '~/composables/usePreview'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
@@ -330,6 +331,10 @@ function selectProj(id: string) {
 // Composer send → mock turn runner (store swaps in the real IPC runner later).
 // Pending attachments ride along, then clear (new array so the sent copy is safe).
 function onSend(text: string, command?: SlashCommandRef) {
+  // A folder attachment commits the session's working folder (cwd, persisted +
+  // forwarded each turn). The att itself rides into the user message → bubble.
+  const folderAtt = pendingAtt.value.find((a) => a.folder && a.path)
+  if (folderAtt?.path) store.setWorkspaceFolder(props.session.id, folderAtt.path)
   store.sendMessage(props.session.id, text, pendingAtt.value, command)
   pendingAtt.value = []
 }
@@ -467,19 +472,16 @@ function saveQuote() {
 
 // Shared preview modal — map an attachment into the generic PreviewItem shape.
 const preview = ref<PreviewItem | null>(null)
-function kindOf(a: SessionAttachment): PreviewItem['kind'] {
-  if (a.img) return 'image'
-  if (a.src && (a.mime === 'application/pdf' || /\.pdf$/i.test(a.name))) return 'pdf'
-  if (a.text != null && /\.(md|markdown)$/i.test(a.name)) return 'markdown'
-  if (a.text != null) return 'text'
-  return 'file'
-}
 function previewAtt(i: number) {
   const a = pendingAtt.value[i]
   if (!a) return
+  if (a.folder && a.path) {
+    preview.value = { name: a.name, kind: 'folder', workspaceRoot: a.path }
+    return
+  }
   preview.value = {
     name: a.name,
-    kind: kindOf(a),
+    kind: previewKindFromAttachment(a),
     src: a.src,
     text: a.text,
     size: a.size,
@@ -504,7 +506,31 @@ function onDragLeave() {
 }
 function onDrop(e: DragEvent) {
   dragDepth.value = 0
-  if (e.dataTransfer?.files.length) addFiles(e.dataTransfer.files)
+  const dt = e.dataTransfer
+  if (!dt) return
+  // A dropped FOLDER becomes the session's working directory (cwd), not a file
+  // attachment: webkitGetAsEntry distinguishes folder from file, getPathForFile
+  // (Electron preload) resolves its absolute on-disk path. Read items synchronously
+  // — the DataTransferItemList is only valid during this event.
+  for (const item of Array.from(dt.items)) {
+    if (item.kind !== 'file') continue
+    const entry = item.webkitGetAsEntry?.()
+    if (!entry?.isDirectory) continue
+    const file = item.getAsFile()
+    const path = file ? (window.awog?.getPathForFile?.(file) ?? '') : ''
+    if (path) {
+      // A folder is a per-message attachment: shows on the bubble + (on send) sets
+      // the session's working folder (cwd). Pending here like a file attachment.
+      const name =
+        path
+          .replace(/[/\\]+$/, '')
+          .split(/[/\\]/)
+          .pop() || path
+      pendingAtt.value.push({ name, img: false, folder: true, path })
+      return // folder handled; don't also treat the drop as file attachments
+    }
+  }
+  if (dt.files.length) addFiles(dt.files)
 }
 
 // Workspace panel: dock side is configured per VIEW (Settings store). Open views

@@ -16,7 +16,7 @@
     </div>
     <div class="lscroll">
       <div
-        v-for="p in filtered"
+        v-for="p in visible"
         :key="p.id"
         class="libli"
         :class="{ on: p.id === selectedId }"
@@ -35,6 +35,8 @@
       <div v-if="!filtered.length" class="empty" style="padding: 28px">
         <div class="et">{{ query ? t('projects.list.noMatch') : t('projects.list.none') }}</div>
       </div>
+
+      <LoadMoreSentinel v-if="hasMore" auto :remaining="remaining" @load="loadMore()" />
     </div>
   </div>
 </template>
@@ -42,7 +44,7 @@
 <script setup lang="ts">
 // Left master list — searchable project rows (status-less; the language tag +
 // mono path). Binds the real Project entities; selection emits the project id.
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Project } from '~/types'
 
 const props = defineProps<{ projects: Project[]; selectedId: string | null }>()
@@ -58,4 +60,8 @@ const filtered = computed(() => {
     (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q),
   )
 })
+
+// Incremental render window — keeps the DOM small when many projects are linked.
+const { visible, hasMore, remaining, loadMore, reset } = useLoadMore(() => filtered.value)
+watch(query, () => reset())
 </script>

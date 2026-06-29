@@ -61,6 +61,8 @@
   "sessions.style.feynman.hint": "Onboard a junior / self-study",
   "sessions.style.first-principles.name": "First Principles",
   "sessions.style.first-principles.hint": "Choosing a stack / architecture",
+  "sessions.folder.chipTitle": "Working folder: {path} — click to browse",
+  "sessions.folder.remove": "Remove working folder",
   "sessions.pinned.title": "Pinned context",
   "sessions.pinned.hint": "Files + notes re-fed into every turn of this session",
   "sessions.pinned.remove": "Unpin",

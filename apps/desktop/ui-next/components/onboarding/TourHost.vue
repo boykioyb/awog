@@ -212,8 +212,12 @@ onBeforeUnmount(unbindListeners)
 }
 .tour-pop {
   position: fixed;
-  width: 300px;
-  max-width: calc(100vw - 24px);
+  /* Fit content (so the nowrap footer never clips) but cap the body width for
+     readability. The footer's nowrap buttons feed max-content, so the card is
+     always at least as wide as the action row. */
+  width: max-content;
+  min-width: 260px;
+  max-width: min(340px, calc(100vw - 24px));
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: 12px;
@@ -238,6 +242,10 @@ onBeforeUnmount(unbindListeners)
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Fallback only — on a viewport narrower than the action row, let the buttons
+     drop below the dots instead of overflowing. */
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 .tour-dots {
   display: flex;
@@ -256,6 +264,7 @@ onBeforeUnmount(unbindListeners)
   margin-left: auto;
   display: flex;
   gap: 6px;
+  flex-shrink: 0;
 }
 .tbtn {
   border: 0;
@@ -265,6 +274,8 @@ onBeforeUnmount(unbindListeners)
   color: var(--textDim);
   background: transparent;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tbtn:hover {
   color: var(--text);

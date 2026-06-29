@@ -18,12 +18,16 @@
     class="a1"
     role="button"
     tabindex="0"
-    :title="t('sessions.preview.openAttachment')"
+    :title="
+      att.folder
+        ? t('sessions.folder.chipTitle', { path: att.path ?? '' })
+        : t('sessions.preview.openAttachment')
+    "
     style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer"
     @click="openPreview"
     @keydown.enter="openPreview"
   >
-    <Icon name="rules" style="width: 11px; height: 11px" />
+    <Icon :name="att.folder ? 'folder' : 'rules'" style="width: 11px; height: 11px" />
     {{ att.name }}
   </span>
 </template>
@@ -33,25 +37,19 @@
 // Clicking opens the shared full-window PreviewModal (§7) via usePreview() — the
 // single modal instance (mounted in SessionDetail) reads the shared store.
 import type { SessionAttachment } from '~/composables/useSessionsData'
-import type { PreviewRef } from '~/composables/usePreview'
+import { previewKindFromAttachment, type PreviewRef } from '~/composables/usePreview'
 
 const props = defineProps<{ att: SessionAttachment }>()
 const { t } = useI18n()
 const { open } = usePreview()
 
-// Map a SessionAttachment → generic PreviewRef. Mirrors SessionDetail.kindOf so a
-// sent-message chip previews the same way as a pending composer attachment.
-function kindOf(a: SessionAttachment): PreviewRef['kind'] {
-  if (a.img) return 'image'
-  if (a.src && (a.mime === 'application/pdf' || /\.pdf$/i.test(a.name))) return 'pdf'
-  if (a.text != null && /\.(md|markdown)$/i.test(a.name)) return 'markdown'
-  if (a.text != null) return 'text'
-  return 'file'
-}
-
 function openPreview() {
   const a = props.att
-  const item: PreviewRef = { name: a.name, kind: kindOf(a) }
+  if (a.folder && a.path) {
+    open({ kind: 'folder', name: a.name, workspaceRoot: a.path })
+    return
+  }
+  const item: PreviewRef = { name: a.name, kind: previewKindFromAttachment(a) }
   if (a.src) item.src = a.src
   if (a.text != null) item.text = a.text
   if (a.size != null) item.size = a.size

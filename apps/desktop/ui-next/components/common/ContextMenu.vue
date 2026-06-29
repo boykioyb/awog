@@ -5,13 +5,14 @@
       <div
         v-else
         class="mi"
-        :class="{ dmi: it.danger, mdisabled: it.disabled, msub: !!it.children }"
+        :class="{ dmi: it.danger, mdisabled: it.disabled, msub: !!it.children, cur: it.active }"
         @mouseenter="onEnter(it, i, $event)"
         @click="onPick(it)"
       >
         <Icon v-if="it.icon" :name="it.icon" style="width: 13px; height: 13px" />
         <span style="flex: 1">{{ it.label }}</span>
         <span v-if="it.hint" class="mhint">{{ it.hint }}</span>
+        <Icon v-if="it.active" name="check" class="ck" style="width: 13px; height: 13px" />
         <svg v-if="it.children" class="icn msubchev"><use href="#i-chev" /></svg>
 
         <!-- Submenu flyout — fixed-positioned so the parent menu's overflow
@@ -27,12 +28,13 @@
             <div
               v-else
               class="mi"
-              :class="{ dmi: c.danger, mdisabled: c.disabled }"
+              :class="{ dmi: c.danger, mdisabled: c.disabled, cur: c.active }"
               @click="onPick(c)"
             >
               <Icon v-if="c.icon" :name="c.icon" style="width: 13px; height: 13px" />
               <span style="flex: 1">{{ c.label }}</span>
               <span v-if="c.hint" class="mhint">{{ c.hint }}</span>
+              <Icon v-if="c.active" name="check" class="ck" style="width: 13px; height: 13px" />
             </div>
           </template>
         </div>

@@ -1,9 +1,11 @@
 # 0047 — Auto-compact ngữ cảnh Session (checkpoint summary, reuse Pi primitives)
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted (đính chính cách đo occupancy 2026-06-29 — xem note cuối)
 - **Ngày:** 2026-06-18
 - **Người quyết định:** User (chốt 2 lựa chọn UX) + Tech Lead
 - **Liên quan:** sửa lỗi `/compact` của [ADR 0023](./0023-sdk-session-resume-and-compact.md); giải quyết TODO "ADR 0029 C1" trong [ADR 0029](./0029-migrate-llm-runtime-to-pi-sdk.md)
+
+> **Đính chính (2026-06-29) — cách đo `used`/occupancy:** ADR này (mục Quyết định, dưới) tính `used` từ API usage (input + cacheRead + cacheWrite + output). **Sai.** Theo Anthropic: prompt size = input + cacheRead + cacheWrite (cacheRead/Write chỉ là phần cached của CHÍNH nội dung prompt, không phải occupancy thêm); `output` là response, không thuộc input window. Cách đó làm gauge phồng > 100% và sinh bucket ảo "Other (cache + overhead)". **Occupancy ĐÚNG = tổng nội dung đã assemble** (`contextChars` ÷4) — như Claude Code `/context`. ui-next nay dùng `contextTokensFromChars` (`utils/context-window.ts`) cho cả widget % lẫn trigger (`usagePct` latch 85%/re-arm 70%, post-turn). Chi tiết hành vi: [docs/features/auto-compact.md](../features/auto-compact.md).
 
 ## Bối cảnh
 

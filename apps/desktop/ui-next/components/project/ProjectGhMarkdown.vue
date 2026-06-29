@@ -1,59 +1,57 @@
 <template>
-  <!-- Sanitized markdown for an issue/PR body, comment or review. useMarkdown drops
-       raw HTML + unsafe hrefs and Shiki-escapes code, so each segment's `.html` is
-       safe to inline; we render it imperatively (innerHTML on a Vue-owned node) so the
-       scoped .ghmd styles in the drawer apply, mirroring SessionMarkdownHtml. -->
-  <div ref="root" class="ghmdbody" />
+  <!-- Sanitized markdown for an issue/PR body, comment or review. useMarkdown drops raw
+       HTML + unsafe hrefs and Shiki-escapes code, splitting the source into ordered HTML
+       runs + mermaid fences. Each HTML run is inlined imperatively (innerHTML on a
+       Vue-owned node, not v-html) so the scoped .ghmd styles apply, mirroring
+       SessionMarkdownHtml; each mermaid fence renders as a live, zoomable <MermaidView>
+       diagram — the same renderer the session transcript uses. -->
+  <div class="ghmdbody">
+    <template v-for="(seg, i) in segments" :key="i">
+      <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+      <div v-else :ref="(el) => setSegHtml(el, seg.html)" class="ghmdseg" />
+    </template>
+  </div>
 </template>
 
 <script setup lang="ts">
 // One markdown run for the GitHub drawer (body / comment / review). Reuses
 // useMarkdown().renderMarkdown — the same sanitized renderer the session transcript
-// uses — instead of hand-splitting on \n\n + plain <p>. Mermaid segments (rare in
-// gh prose) render as a plain code card; everything else is sanitized HTML.
+// uses — which returns ordered HTML runs + mermaid fences. HTML runs inline
+// imperatively (no v-html); mermaid fences reuse <MermaidView> so issue/PR prose gets
+// live diagrams instead of the plain code card they fell back to before.
 import { useMarkdown } from '~/composables/useMarkdown'
 
 const props = defineProps<{ source: string }>()
 
 const { renderMarkdown } = useMarkdown()
-const root = useTemplateRef<HTMLElement>('root')
 
-// Joined HTML of the sanitized segments. Mermaid fences (no quote/diagram chrome
-// needed here) fall back to an escaped <pre> so they never inject markup.
-const ESC: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
+const segments = computed(() => renderMarkdown(props.source || ''))
+
+// Inline a segment's sanitized HTML imperatively (function ref). The template ref hands
+// an `Element | ComponentPublicInstance | null`; narrow at the boundary. A WeakMap of
+// the last HTML written per node skips redundant innerHTML rebuilds on re-render.
+const written = new WeakMap<HTMLElement, string>()
+function setSegHtml(el: unknown, html: string): void {
+  const node = el instanceof HTMLElement ? el : null
+  if (!node || written.get(node) === html) return
+  written.set(node, html)
+  node.innerHTML = html
 }
-const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => ESC[c] ?? c)
-
-const html = computed(() =>
-  renderMarkdown(props.source || '')
-    .map((seg) =>
-      seg.type === 'html'
-        ? seg.html
-        : `<pre class="codeplain"><code>${escapeHtml(seg.code)}</code></pre>`,
-    )
-    .join('\n'),
-)
-
-function rerender(): void {
-  const el = root.value
-  if (el) el.innerHTML = html.value
-}
-onMounted(rerender)
-watch(html, rerender, { flush: 'post' })
 </script>
 
 <style scoped>
 /* Inherit the drawer's .ghmd typography (font-size/line-height); add the inline
    prose styling the markdown needs. Colors via theme tokens only. */
-.ghmdbody :deep(:first-child) {
+/* Gap between segments (a prose run ↔ a diagram); within a run, the prose rules below
+   own the spacing. */
+.ghmdbody > * + * {
+  margin-top: 9px;
+}
+/* Trim each segment's outer block margins so the inter-segment gap stays uniform. */
+.ghmdseg :deep(:first-child) {
   margin-top: 0;
 }
-.ghmdbody :deep(> :last-child) {
+.ghmdseg :deep(:last-child) {
   margin-bottom: 0;
 }
 .ghmdbody :deep(p) {

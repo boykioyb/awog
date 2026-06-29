@@ -84,6 +84,11 @@ register('activity.summary', async (raw): Promise<ActivitySummary> => {
     let dayCost = 0
     for (const [key, bucket] of Object.entries(day.buckets)) {
       const { accountId, provider, model } = parseBucketKey(key)
+      // Bỏ usage của account mồ côi (đã logout/xoá khỏi credentials): nếu giữ,
+      // chúng làm phồng tổng mà không có dòng nhận diện / chọn được trong UI →
+      // tổng không khớp bảng BY ACCOUNT. Loại khỏi MỌI số liệu (totals + by* +
+      // byDay) để nhất quán.
+      if (!accountIndex.has(accountId)) continue
       // Lọc account: bỏ qua bucket không khớp khi filter bật.
       if (params.accountId !== undefined && accountId !== params.accountId) continue
 

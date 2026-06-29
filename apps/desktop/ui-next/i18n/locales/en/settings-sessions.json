@@ -6,15 +6,15 @@
   "settingsSessions.pasteAsFile.name": "Paste as file",
   "settingsSessions.pasteAsFile.desc": "Long pasted text becomes an attachment instead of inline content",
   "settingsSessions.pasteThreshold.name": "Paste threshold (chars)",
-  "settingsSessions.pasteThreshold.desc": "Paste longer than this becomes a file (min 200)",
+  "settingsSessions.pasteThreshold.desc": "Paste longer than this becomes a file (200–100000)",
 
-  "settingsSessions.quota.heading": "Usage quota",
+  "settingsSessions.quota.heading": "Usage quota (5-hour limit)",
   "settingsSessions.quota.warning.name": "Quota warning",
-  "settingsSessions.quota.warning.desc": "Warn when usage reaches the threshold",
+  "settingsSessions.quota.warning.desc": "Warn when the account's 5-hour usage limit reaches the threshold",
   "settingsSessions.quota.threshold.name": "Threshold (%)",
-  "settingsSessions.quota.threshold.desc": "Warn at this percentage of the quota (50–99)",
+  "settingsSessions.quota.threshold.desc": "Warn at this percentage of the account's 5-hour usage limit (50–99)",
   "settingsSessions.quota.abort.name": "Abort sessions on threshold",
-  "settingsSessions.quota.abort.desc": "Destructive: cancels running sessions when the threshold is hit",
-  "settingsSessions.quota.blockNew.name": "Block new sessions on threshold",
-  "settingsSessions.quota.blockNew.desc": "Prevent starting new sessions once the threshold is hit"
+  "settingsSessions.quota.abort.desc": "Destructive: cancels the account's running sessions when its 5-hour limit hits the threshold",
+  "settingsSessions.quota.blockNew.name": "Block on threshold",
+  "settingsSessions.quota.blockNew.desc": "Prevent new sessions AND new messages on an account once its 5-hour limit hits the threshold"
 }

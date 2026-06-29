@@ -1,5 +1,6 @@
 {
   "topbar.search": "Search or jump to…",
+  "topbar.searchHint": "Open command palette (⌘K)",
   "topbar.new": "New",
   "topbar.toLight": "Switch to light",
   "topbar.toDark": "Switch to dark",

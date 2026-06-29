@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { homedir } from 'node:os'
 import { log } from './logger'
 import { enginePath } from './paths'
 
@@ -48,7 +49,15 @@ class Engine {
 
   start(): void {
     if (this.child) return
+    // Launch the engine from the user's home dir, not the inherited cwd (the app
+    // install dir when packaged, the repo root in dev). A session with no project
+    // bound resolves no `cwd`, so the runtime's workspace tools fall back to the
+    // engine's `process.cwd()`; without this they'd blindly scan AWOG's own files
+    // (e.g. `find . -name '*.md'` hitting only sidecar/node_modules) instead of the
+    // user's natural space. Engine/UI asset paths resolve absolutely (see paths.ts),
+    // so cwd never affects resource loading.
     const child = spawn(process.execPath, [enginePath()], {
+      cwd: homedir(),
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       stdio: ['pipe', 'pipe', 'pipe'],
     })

@@ -7,10 +7,7 @@
     <div v-if="shownItem" class="ovl on pvovl" @click.self="close">
       <div class="pvcard">
         <div class="pvhead">
-          <Icon
-            :name="shownItem.kind === 'image' ? 'clip' : 'rules'"
-            style="width: 13px; height: 13px"
-          />
+          <Icon :name="headIcon" style="width: 13px; height: 13px" />
           <span class="pvname">{{ shownItem.name }}</span>
           <span v-if="dirty" class="pvdirty" :title="t('common.preview.unsaved')">●</span>
           <span v-if="meta" class="pvmeta">{{ meta }}</span>
@@ -24,12 +21,11 @@
         </div>
 
         <div class="pvbody" :class="bodyClass">
-          <!-- status placeholder: workspace file loading / failed / too big / binary -->
+          <!-- status placeholder: workspace file loading / failed / too big / binary.
+               Loading shows a spinner; the other states keep the file icon. -->
           <div v-if="statusMessage" class="pvempty">
-            <Icon
-              :name="shownItem.kind === 'image' ? 'clip' : 'rules'"
-              style="width: 40px; height: 40px"
-            />
+            <span v-if="loading" class="pvspin" />
+            <Icon v-else :name="headIcon" style="width: 40px; height: 40px" />
             <div class="pvename">{{ shownItem.name }}</div>
             <div class="pvehint">{{ statusMessage }}</div>
           </div>
@@ -80,8 +76,21 @@
             </div>
           </template>
 
-          <!-- text / markdown-raw / code → Monaco viewer/editor (§9). Read-only
-               unless edit mode is on (then `change`/`save` flow back to the modal). -->
+          <!-- html render → sandboxed, opaque-origin iframe (allow-scripts but NO
+               allow-same-origin: the page's JS runs isolated, can't reach app:// or
+               the parent). Relative/CDN assets won't resolve — "open in browser" is
+               the full-fidelity path. `:key` re-creates the frame on reload. -->
+          <iframe
+            v-else-if="htmlRender"
+            :key="htmlReloadKey"
+            class="pvhtml"
+            sandbox="allow-scripts allow-popups allow-forms allow-modals"
+            :srcdoc="effectiveText"
+            :title="shownItem.name"
+          />
+
+          <!-- text / markdown-raw / html-raw / code → Monaco viewer/editor (§9).
+               Read-only unless edit mode is on (then `change`/`save` flow to the modal). -->
           <div v-else-if="showCode" class="pvcode">
             <MonacoViewer
               :value="editorValue"
@@ -90,6 +99,20 @@
               @change="onEditorChange"
               @save="save"
             />
+          </div>
+
+          <!-- folder: lazy file tree of the dragged working directory. Clicking a
+               file repoints this modal to that file. -->
+          <div v-else-if="shownItem.kind === 'folder'" class="pvfolder">
+            <SessionFileTree v-if="treeRootNodes.length" :nodes="treeRootNodes" :ctrl="treeCtrl" />
+            <div v-else class="pvempty">
+              <span v-if="treeLoading" class="pvspin" />
+              <Icon v-else name="folder" style="width: 40px; height: 40px" />
+              <div class="pvename">{{ shownItem.name }}</div>
+              <div class="pvehint">
+                {{ treeLoading ? t('sessions.preview.loading') : t('common.preview.folderEmpty') }}
+              </div>
+            </div>
           </div>
 
           <!-- image with no data (seed mock) or non-previewable file -->
@@ -198,11 +221,19 @@ const {
   meta,
   truncated,
   statusMessage,
+  loading,
   bodyClass,
+  headIcon,
   showCode,
+  htmlRender,
+  htmlReloadKey,
   hasBar,
   view,
+  treeRootNodes,
+  treeCtrl,
+  treeLoading,
   segments,
+  effectiveText,
   effectiveSrc,
   monacoLang,
   editorValue,
@@ -240,7 +271,8 @@ watch(
 watch(
   shownItem,
   (it) => {
-    if (it && (it.kind === 'text' || it.kind === 'markdown')) void loadMonaco()
+    if (it && (it.kind === 'text' || it.kind === 'markdown' || it.kind === 'html'))
+      void loadMonaco()
   },
   { immediate: true },
 )
@@ -335,6 +367,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   padding: 0;
   overflow: hidden;
 }
+/* Folder tree: fill the body, left-aligned, tree manages its own scroll. */
+.pvbody.tree {
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+.pvfolder {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 14px 12px;
+}
 .mdoutline {
   flex: 0 0 240px;
   overflow-y: auto;
@@ -402,6 +446,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   height: 100%;
   border: 0;
 }
+/* HTML render — sandboxed iframe fills the body; white canvas (browser default) so
+   a page without its own background stays readable in dark mode. */
+.pvhtml {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
 /* Monaco viewer fills the body edge-to-edge (body padding reset via `flush`). */
 .pvcode {
   width: 100%;
@@ -423,6 +475,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .pvehint {
   color: var(--textFaint);
+}
+/* Loading spinner (content fetch / folder tree load) inside the empty placeholder. */
+.pvspin {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: pv-spin 0.8s linear infinite;
+}
+@keyframes pv-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* rename / confirm dialogs (centered card over the scrim) */

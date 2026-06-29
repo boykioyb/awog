@@ -3,38 +3,35 @@
 // (apps/desktop/ui/composables/useSessionInfo.ts → contextFiles) to ui-next, plus
 // the new pinned-context working-set:
 //
+//   - folder     : the dragged working folder (session cwd, re-fed every turn)
 //   - attachment : files/images attached to a user message (deduped across turns)
 //   - pinned     : workspace files pinned to the session (re-fed every turn)
 //
-// Clicking a row opens the shared PreviewModal (usePreview): attachments preview
-// from their inline src/text; pinned files read from the resolved workspace root.
-// SoC: derivation + preview wiring only — no IPC, no fs.
+// Clicking a row opens the shared PreviewModal (usePreview): the folder opens its
+// file tree; attachments preview from their inline src/text; pinned files read from
+// the resolved workspace root. SoC: derivation + preview wiring only — no IPC, no fs.
 
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { Session, SessionAttachment } from '~/composables/useSessionsData'
-import { usePreview, type PreviewRef } from '~/composables/usePreview'
+import {
+  usePreview,
+  previewKindFromAttachment,
+  previewKindFromPath,
+  type PreviewRef,
+} from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 
 export type SessionContextFile =
+  | { kind: 'folder'; key: string; name: string; path: string }
   | { kind: 'attachment'; key: string; name: string; size?: number; att: SessionAttachment }
   | { kind: 'pinned'; key: string; name: string; path: string }
 
-// Mirror SessionAttachmentChip.kindOf so an Info-panel row previews identically to
-// the in-bubble chip.
-function attKind(a: SessionAttachment): PreviewRef['kind'] {
-  if (a.img) return 'image'
-  if (a.src && (a.mime === 'application/pdf' || /\.pdf$/i.test(a.name))) return 'pdf'
-  if (a.text != null && /\.(md|markdown)$/i.test(a.name)) return 'markdown'
-  if (a.text != null) return 'text'
-  return 'file'
-}
-
-function pinnedKind(name: string): PreviewRef['kind'] {
-  if (/\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i.test(name)) return 'image'
-  if (/\.pdf$/i.test(name)) return 'pdf'
-  if (/\.(md|markdown|mdx)$/i.test(name)) return 'markdown'
-  return 'text'
-}
+// Last path segment, tolerant of POSIX + Windows separators.
+const baseName = (p: string): string =>
+  p
+    .replace(/[/\\]+$/, '')
+    .split(/[/\\]/)
+    .pop() || p
 
 export function useSessionContextFiles(session: MaybeRefOrGetter<Session | null | undefined>) {
   const { open } = usePreview()
@@ -47,12 +44,24 @@ export function useSessionContextFiles(session: MaybeRefOrGetter<Session | null 
     if (!s) return []
     const out: SessionContextFile[] = []
 
+    // Working folder (dragged in) — the session cwd, fed into every turn. Listed
+    // first as the primary standing context.
+    if (s.workspaceFolder) {
+      out.push({
+        kind: 'folder',
+        key: `folder-${s.workspaceFolder}`,
+        name: baseName(s.workspaceFolder),
+        path: s.workspaceFolder,
+      })
+    }
+
     // Attachments across all user turns (deduped by name+size — ui-next attachments
     // carry no stable id).
     const seen = new Set<string>()
     for (const m of s.msgs) {
       if (m.role !== 'user' || !m.att) continue
       for (const a of m.att) {
+        if (a.folder) continue // folder atts are surfaced via the working-folder row
         const dedupe = `${a.name}::${a.size ?? ''}`
         if (seen.has(dedupe)) continue
         seen.add(dedupe)
@@ -75,9 +84,14 @@ export function useSessionContextFiles(session: MaybeRefOrGetter<Session | null 
 
   // Open a context file in the shared PreviewModal.
   function openContextFile(file: SessionContextFile): void {
+    if (file.kind === 'folder') {
+      // The folder's own path IS the root — open the lazy tree.
+      open({ kind: 'folder', name: file.name, workspaceRoot: file.path })
+      return
+    }
     if (file.kind === 'attachment') {
       const a = file.att
-      const item: PreviewRef = { name: a.name, kind: attKind(a) }
+      const item: PreviewRef = { name: a.name, kind: previewKindFromAttachment(a) }
       if (a.src) item.src = a.src
       if (a.text != null) item.text = a.text
       if (a.size != null) item.size = a.size
@@ -87,7 +101,7 @@ export function useSessionContextFiles(session: MaybeRefOrGetter<Session | null 
     }
     // Pinned: read from the resolved workspace root (degrades to a placeholder when
     // unresolved / browser-dev, like useFilePreview).
-    const item: PreviewRef = { name: file.name, kind: pinnedKind(file.name) }
+    const item: PreviewRef = { name: file.name, kind: previewKindFromPath(file.name) }
     if (root.value) {
       item.workspaceRoot = root.value
       item.path = file.path

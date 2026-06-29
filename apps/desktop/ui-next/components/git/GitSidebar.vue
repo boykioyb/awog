@@ -162,6 +162,9 @@
           <Icon name="conn" style="width: 12px; height: 12px" />
           <span style="flex: 1">{{ t('git.sidebar.remotes') }}</span>
           <span class="gsecct">{{ remoteCount }}</span>
+          <span class="gsecadd" :title="t('git.remote.add')" @click.stop="emit('add-remote')">
+            <Icon name="plus" style="width: 12px; height: 12px" />
+          </span>
         </div>
         <template v-if="sectionOpenWithSearch.remotes">
           <div v-if="!visibleRemotes.length" class="gsecempty">
@@ -201,6 +204,9 @@
           <Icon name="git" style="width: 12px; height: 12px" />
           <span style="flex: 1">{{ t('git.sidebar.tags') }}</span>
           <span class="gsecct">{{ tags.length }}</span>
+          <span class="gsecadd" :title="t('git.sidebar.newTag')" @click.stop="emit('new-tag')">
+            <Icon name="plus" style="width: 12px; height: 12px" />
+          </span>
         </div>
         <template v-if="secOpen.tags">
           <div v-if="!tags.length" class="gsecempty">{{ t('git.sidebar.empty') }}</div>
@@ -297,7 +303,9 @@ const emit = defineEmits<{
   (e: 'toggle-collapse'): void
   (e: 'update:search', value: string): void
   (e: 'new-branch'): void
+  (e: 'new-tag'): void
   (e: 'save-stash'): void
+  (e: 'add-remote'): void
   (e: 'context-branch', event: MouseEvent, branch: BranchInfo): void
   (e: 'context-stash', event: MouseEvent, index: number): void
   (e: 'context-tag', event: MouseEvent, name: string): void

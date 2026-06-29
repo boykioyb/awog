@@ -12,8 +12,8 @@
       @mousedown.prevent="emit('select', i)"
       @mouseenter="emit('hover', i)"
     >
-      <span class="sc">/{{ c.label }}</span>
-      <span class="sd">{{ c.desc }}</span>
+      <span class="sc" :title="`/${c.label}`">/{{ c.label }}</span>
+      <span class="sd" :title="c.desc">{{ c.desc }}</span>
       <span class="sd sitag" :style="tagStyle(c.kind)">
         {{ t(`sessions.composer.kind.${c.kind}`) }}
       </span>
@@ -35,11 +35,13 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-// Tag accent per kind: builtin = accent, command = blue, skill = violet.
+// Tag accent per kind: builtin = accent, command = blue, skill = violet. Exposed
+// as a `--tagc` custom property so the pill derives both text + tinted background
+// from one color (the CSS uses color-mix on it).
 function tagStyle(kind: SlashItem['kind']) {
   const color =
     kind === 'builtin' ? 'var(--accent)' : kind === 'command' ? 'var(--blue)' : 'var(--violet)'
-  return { color }
+  return { '--tagc': color }
 }
 </script>
 
@@ -71,19 +73,49 @@ function tagStyle(kind: SlashItem['kind']) {
   font-style: italic;
   color: var(--textFaint);
 }
+/* Three-column grid so name / description / tag align into clean vertical columns
+   across every row (the prototype's flex let long names + descriptions wrap, which
+   read as ragged). Column 1 is a fixed rem width — scales with the Appearance font
+   size — so descriptions start at the same x; longer names truncate (full name in
+   the title tooltip). Overrides the prototype .si2 flex. */
+.si2 {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+}
 .si2.on {
   background: var(--bgHover);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
-/* The description takes the row; the kind tag pins to the right. */
-.si2 .sd:first-of-type {
-  flex: 1;
+/* Command name (col 1): single line, truncate with ellipsis past the column. */
+.sc {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.9615rem;
 }
+/* Description (col 2): single line, truncate; matches the name's size so baselines
+   line up — hierarchy comes from the dim color, not a smaller font. */
+.si2 .sd:not(.sitag) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9615rem;
+  color: var(--textDim);
+}
+/* Kind tag (col 3): right-aligned pill, text + faint tint from --tagc (set inline). */
 .sitag {
-  flex: 0 0 auto;
+  justify-self: end;
   font-family: var(--code);
   font-size: 12px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 7px;
+  border-radius: 5px;
+  color: var(--tagc);
+  background: color-mix(in srgb, var(--tagc) 13%, transparent);
 }
 </style>

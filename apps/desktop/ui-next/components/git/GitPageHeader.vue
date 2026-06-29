@@ -20,10 +20,10 @@
       <Icon name="chev" style="width: 11px; height: 11px" />
     </span>
 
-    <span class="gsep" />
+    <span v-if="!notARepo" class="gsep" />
 
     <!-- Repo picker — only when project holds more than one repo -->
-    <template v-if="repos.length > 1">
+    <template v-if="repos.length > 1 && !notARepo">
       <span
         class="chip chipbtn"
         :title="t('git.header.selectRepo')"
@@ -38,6 +38,7 @@
 
     <!-- Branch picker -->
     <span
+      v-if="!notARepo"
       class="chip chipbtn"
       :title="t('git.header.switchBranch')"
       @click.stop="toggle('branch', $event)"
@@ -49,71 +50,114 @@
 
     <span style="flex: 1" />
 
-    <!-- Merge / rebase in progress -->
-    <template v-if="isMerging || isRebasing">
-      <button class="btn sm" :disabled="hasConflict" @click="emit('complete-merge')">
-        {{ isRebasing ? t('git.header.continueRebase') : t('git.header.completeMerge') }}
+    <!-- Repo ops — hidden when the workspace isn't a git repo (init empty state) -->
+    <template v-if="!notARepo">
+      <!-- Merge / rebase in progress -->
+      <template v-if="isMerging || isRebasing">
+        <button class="btn sm" :disabled="hasConflict" @click="emit('complete-merge')">
+          {{ isRebasing ? t('git.header.continueRebase') : t('git.header.completeMerge') }}
+        </button>
+        <button class="btn sm gdanger" @click="emit('abort-merge')">
+          {{ isRebasing ? t('git.header.abortRebase') : t('git.header.abortMerge') }}
+        </button>
+        <span class="gsep" />
+      </template>
+
+      <!-- Ops -->
+      <button class="btn sm" :disabled="busy" @click="emit('fetch')">
+        <Icon
+          name="refresh"
+          :class="{ gspin: syncOp?.op === 'fetch' }"
+          style="width: 13px; height: 13px"
+        />
+        {{ syncOp?.op === 'fetch' ? syncLabel : t('git.ops.fetch') }}
       </button>
-      <button class="btn sm gdanger" @click="emit('abort-merge')">
-        {{ isRebasing ? t('git.header.abortRebase') : t('git.header.abortMerge') }}
+      <button class="btn sm" :disabled="busy" @click="emit('pull')">
+        <Icon
+          v-if="syncOp?.op === 'pull'"
+          name="refresh"
+          class="gspin"
+          style="width: 13px; height: 13px"
+        />
+        {{ syncOp?.op === 'pull' ? syncLabel : t('git.ops.pullWord') }}
+        <span v-if="!syncOp && behind" class="mono" style="font-size: 0.8462rem">
+          ↓{{ behind }}
+        </span>
       </button>
+      <button class="btn pri sm" :disabled="busy" @click="emit('push')">
+        <Icon
+          v-if="syncOp?.op === 'push'"
+          name="refresh"
+          class="gspin"
+          style="width: 13px; height: 13px"
+        />
+        {{ syncOp?.op === 'push' ? syncLabel : t('git.ops.pushWord') }}
+        <span v-if="!syncOp && ahead" class="mono" style="font-size: 0.8462rem">↑{{ ahead }}</span>
+      </button>
+
       <span class="gsep" />
+
+      <button class="btn sm" :title="t('git.header.identity')" @click="emit('open-identity')">
+        <Icon name="settings" style="width: 13px; height: 13px" />
+      </button>
     </template>
 
-    <!-- Ops -->
-    <button class="btn sm" @click="emit('fetch')">
-      <Icon name="refresh" style="width: 13px; height: 13px" />
-      {{ t('git.ops.fetch') }}
-    </button>
-    <button class="btn sm" @click="emit('pull')">
-      {{ t('git.ops.pullWord') }}
-      <span v-if="behind" class="mono" style="font-size: 0.8462rem">↓{{ behind }}</span>
-    </button>
-    <button class="btn pri sm" @click="emit('push')">
-      {{ t('git.ops.pushWord') }}
-      <span v-if="ahead" class="mono" style="font-size: 0.8462rem">↑{{ ahead }}</span>
-    </button>
-
-    <span class="gsep" />
-
-    <button class="btn sm" :title="t('git.header.identity')" @click="emit('open-identity')">
-      <Icon name="settings" style="width: 13px; height: 13px" />
-    </button>
-
     <!-- Dropdowns (fixed-positioned so they escape the header's overflow) -->
-    <div v-if="open === 'project'" class="smenu" :style="menuStyle" @click.stop>
-      <div
-        v-for="p in projects"
-        :key="p.id"
-        class="mi"
-        style="align-items: flex-start"
-        @click="pickProject(p.id)"
-      >
-        <Icon
-          name="projects"
-          style="width: 12px; height: 12px; margin-top: 2px"
-          :style="p.color ? { color: p.color } : undefined"
+    <div
+      v-if="open === 'project'"
+      class="smenu"
+      :style="{ ...menuStyle, width: '340px', padding: '0' }"
+      @click.stop
+    >
+      <div class="gbranchfilter">
+        <Icon name="search" style="width: 12px; height: 12px; color: var(--textDim)" />
+        <input
+          ref="projectSearch"
+          v-model="projectQuery"
+          :placeholder="t('git.header.filterProjects')"
+          @keydown.enter.prevent="pickFirstProject"
+          @keydown.esc.prevent="open = null"
         />
-        <span style="flex: 1; min-width: 0">
-          <span style="display: flex; align-items: center; gap: 6px">
-            <span class="gtrunc" style="flex: 1">{{ p.name }}</span>
-            <span v-if="(p.dirty ?? 0) > 0" class="gbadge" :style="dirtyStyle">{{ p.dirty }}</span>
+      </div>
+      <div class="gbranchlist">
+        <div
+          v-for="p in filteredProjects"
+          :key="p.id"
+          class="mi"
+          style="align-items: flex-start"
+          @click="pickProject(p.id)"
+        >
+          <Icon
+            name="projects"
+            style="width: 12px; height: 12px; margin-top: 2px"
+            :style="p.color ? { color: p.color } : undefined"
+          />
+          <span style="flex: 1; min-width: 0">
+            <span style="display: flex; align-items: center; gap: 6px">
+              <span class="gtrunc" style="flex: 1">{{ p.name }}</span>
+              <span v-if="(p.dirty ?? 0) > 0" class="gbadge" :style="dirtyStyle">
+                {{ p.dirty }}
+              </span>
+            </span>
+            <span
+              class="mono"
+              style="
+                display: block;
+                font-size: 0.8462rem;
+                color: var(--textDim);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              "
+            >
+              {{ p.path }}
+            </span>
           </span>
-          <span
-            class="mono"
-            style="
-              display: block;
-              font-size: 0.8462rem;
-              color: var(--textDim);
-              overflow: hidden;
-              text-overflow: ellipsis;
-              white-space: nowrap;
-            "
-          >
-            {{ p.path }}
-          </span>
-        </span>
-        <span v-if="p.id === currentProjectId" class="ck">✓</span>
+          <span v-if="p.id === currentProjectId" class="ck">✓</span>
+        </div>
+        <div v-if="!filteredProjects.length" class="gsecempty">
+          {{ projectQuery ? t('git.sidebar.noMatch') : t('git.sidebar.empty') }}
+        </div>
       </div>
     </div>
 
@@ -163,6 +207,10 @@
 // doesn't clip them.
 import type { BranchInfo, ProjectInfo } from './git-types'
 
+// In-flight remote-sync op (mirrors the git store's `syncOp`). Drives the busy
+// state + live progress on the fetch/pull/push buttons.
+type SyncOp = { op: 'fetch' | 'pull' | 'push'; phase: string; pct: number | null }
+
 const props = defineProps<{
   projects: ProjectInfo[]
   currentProjectId: string
@@ -175,6 +223,8 @@ const props = defineProps<{
   isMerging: boolean
   isRebasing: boolean
   hasConflict: boolean
+  notARepo: boolean
+  syncOp: SyncOp | null
 }>()
 
 const emit = defineEmits<{
@@ -194,7 +244,9 @@ const { t } = useI18n()
 type Picker = 'project' | 'repo' | 'branch' | null
 const open = ref<Picker>(null)
 const branchQuery = ref('')
+const projectQuery = ref('')
 const menuStyle = ref<Record<string, string>>({})
+const projectSearch = useTemplateRef<HTMLInputElement>('projectSearch')
 
 const dirtyStyle = {
   color: 'var(--amber)',
@@ -202,7 +254,26 @@ const dirtyStyle = {
   borderColor: 'var(--amberBorder)',
 }
 
+// Any remote-sync op in flight → disable all three buttons; the active one shows
+// a spinner + localized progress label.
+const busy = computed(() => props.syncOp !== null)
+const syncLabel = computed(() => {
+  const s = props.syncOp
+  if (!s) return ''
+  const base = t(`git.ops.${s.op}ing`)
+  return s.pct != null ? `${base} ${s.pct}%` : base
+})
+
 const currentProject = computed(() => props.projects.find((p) => p.id === props.currentProjectId))
+
+// Project picker filter — matches name or path (case-insensitive).
+const filteredProjects = computed(() => {
+  const q = projectQuery.value.trim().toLowerCase()
+  if (!q) return props.projects
+  return props.projects.filter(
+    (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q),
+  )
+})
 
 const localBranches = computed(() => props.branches.filter((b) => !b.remote))
 const filteredBranches = computed(() => {
@@ -221,11 +292,21 @@ function toggle(p: Exclude<Picker, null>, ev: MouseEvent) {
   menuStyle.value = { top: `${r.bottom + 4}px`, left: `${r.left}px` }
   open.value = p
   if (p === 'branch') branchQuery.value = ''
+  if (p === 'project') {
+    projectQuery.value = ''
+    void nextTick(() => projectSearch.value?.focus())
+  }
 }
 
 function pickProject(id: string) {
   open.value = null
   emit('select-project', id)
+}
+
+// Enter in the search field selects the first match — quick keyboard jump.
+function pickFirstProject() {
+  const first = filteredProjects.value[0]
+  if (first) pickProject(first.id)
 }
 
 function pickRepo(r: string) {
@@ -245,3 +326,21 @@ const onDocClick = () => {
 onMounted(() => document.addEventListener('click', onDocClick))
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
+
+<style scoped>
+/* Spinner for the in-flight fetch/pull/push button (no rotate keyframe in the
+   shared prototype.css). Disabled under reduced-motion. */
+.gspin {
+  animation: gspin 0.8s linear infinite;
+}
+@keyframes gspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gspin {
+    animation: none;
+  }
+}
+</style>

@@ -9,5 +9,5 @@
   "settingsDefaults.provider.desc": "Which connection a new session starts with",
   "settingsDefaults.model.name": "Default model",
   "settingsDefaults.model.desc": "Filtered by the selected provider",
-  "settingsDefaults.mode.acceptEdits": "Accept edits"
+  "settingsDefaults.mode.acceptEdits": "Accept Edits"
 }

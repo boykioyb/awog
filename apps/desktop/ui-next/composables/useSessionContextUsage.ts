@@ -1,28 +1,22 @@
 import { computed } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
 import { modelIdFromDisplay } from '~/composables/useSessionsData'
-import { contextLimitFor, formatTokenCount } from '~/utils/context-window'
+import { contextLimitFor, contextTokensFromChars, formatTokenCount } from '~/utils/context-window'
 
 // Context-window usage math for a session — extracted from SessionDetail so the
 // global status bar (footer) can render the context chip + breakdown for the
 // ACTIVE session without prop-drilling. Mirrors Claude-Code `/context`: a
 // per-CATEGORY breakdown of the prompt (system / instructions / tools / mcp /
-// agents / skills / memory / msgs) plus an "Other" remainder, scaled to the real
-// token total. Pure derivation off the session's reported usage — no IPC.
+// agents / skills / memory / msgs). Occupancy = the SUM of those content segments
+// (the prompt the model sees), NOT the API usage total — cache read/write and
+// output tokens are excluded (see contextTokensFromChars), so there is no phantom
+// "Other (cache + overhead)" bucket and the gauge never exceeds 100%. Pure
+// derivation off the session's reported breakdown — no IPC.
 
 const CTX_DIVISOR = 4
 
-// Breakdown key order = render order = bar-segment order. `other` is derived last.
-type BreakdownKey =
-  | 'sys'
-  | 'instr'
-  | 'tools'
-  | 'mcp'
-  | 'agents'
-  | 'skills'
-  | 'memory'
-  | 'msgs'
-  | 'other'
+// Breakdown key order = render order = bar-segment order.
+type BreakdownKey = 'sys' | 'instr' | 'tools' | 'mcp' | 'agents' | 'skills' | 'memory' | 'msgs'
 type Breakdown = Record<BreakdownKey, number>
 
 // Palette intentionally avoids --del (red): every category here is benign, so a
@@ -38,7 +32,6 @@ const CAT_META = [
   { key: 'skills', labelKey: 'sessions.detail.cat.skills', color: 'var(--green)' },
   { key: 'memory', labelKey: 'sessions.detail.cat.memoryFiles', color: 'var(--accent)' },
   { key: 'msgs', labelKey: 'sessions.detail.cat.messages', color: 'var(--violet)' },
-  { key: 'other', labelKey: 'sessions.detail.cat.other', color: 'var(--textFaint)' },
 ] as const satisfies readonly { key: BreakdownKey; labelKey: string; color: string }[]
 
 export type CatRow = { key: string; label: string; tokens: number; color: string; pct: number }
@@ -75,7 +68,13 @@ export function useSessionContextUsage(session: () => Session) {
     }, 0)
     return Math.floor(chars / 3)
   })
-  const totalTok = computed(() => usage.value?.total ?? estTok.value)
+  // Occupancy = the assembled prompt content the model sees (the breakdown sum),
+  // NOT the API usage total. When the engine breakdown is present we sum it (so the
+  // gauge and the per-category rows always agree); before the first real turn /
+  // browser-dev we fall back to the rough visible-text estimate.
+  const totalTok = computed(() =>
+    usage.value?.contextChars ? contextTokensFromChars(usage.value.contextChars) : estTok.value,
+  )
   // Context window follows the session's SELECTED model id (retains `-1m`); the
   // provider's base id collapses 1M → 200k, so we derive from the display the user
   // picked, not from usage. Prefer an engine-reported max if one is ever set.
@@ -89,52 +88,27 @@ export function useSessionContextUsage(session: () => Session) {
   )
 
   // Context-window breakdown by CONTENT category. The engine reports char sizes of
-  // each prompt segment in usage.contextChars (÷4 ≈ tokens). An "Other" bucket
-  // absorbs the cache/thinking/structure overhead the char estimate can't see.
+  // each prompt segment in usage.contextChars (÷4 ≈ tokens). The buckets sum to
+  // totalTok by construction — no scaling, no "Other (cache + overhead)" remainder:
+  // occupancy IS the assembled content, exactly as Claude Code's `/context` reports
+  // it (see contextTokensFromChars for why cache / output are excluded).
   const breakdown = computed<Breakdown>(() => {
-    const cap = Math.max(totalTok.value, 1)
     const cc = usage.value?.contextChars
     const tok = (chars: number | undefined) => Math.round((chars ?? 0) / CTX_DIVISOR)
     if (cc) {
-      const sys = tok(cc.systemPrompt ?? cc.system)
-      const instr = tok(cc.instructions)
-      const tools = tok(cc.systemTools ?? cc.tools)
-      const mcp = tok(cc.mcpTools)
-      const agents = tok(cc.customAgents)
-      const skills = tok(cc.skills)
-      const memory = tok(cc.memoryFiles)
-      const msgs = tok(cc.history)
-      const est = sys + instr + tools + mcp + agents + skills + memory + msgs
-      // Overshoot → scale every segment to the real total (Other 0); undershoot →
-      // the deficit is the genuine unattributed remainder (prompt-cache, thinking…).
-      if (est > cap && est > 0) {
-        const k = cap / est
-        return {
-          sys: sys * k,
-          instr: instr * k,
-          tools: tools * k,
-          mcp: mcp * k,
-          agents: agents * k,
-          skills: skills * k,
-          memory: memory * k,
-          msgs: msgs * k,
-          other: 0,
-        }
-      }
       return {
-        sys,
-        instr,
-        tools,
-        mcp,
-        agents,
-        skills,
-        memory,
-        msgs,
-        other: Math.max(0, totalTok.value - est),
+        sys: tok(cc.systemPrompt ?? cc.system),
+        instr: tok(cc.instructions),
+        tools: tok(cc.systemTools ?? cc.tools),
+        mcp: tok(cc.mcpTools),
+        agents: tok(cc.customAgents),
+        skills: tok(cc.skills),
+        memory: tok(cc.memoryFiles),
+        msgs: tok(cc.history),
       }
     }
-    // Fallback before any real turn / in browser-dev: visible message text only.
-    const msgs = Math.min(estTok.value, cap)
+    // Fallback before any real turn / in browser-dev: attribute the rough
+    // visible-text estimate to Messages (the only segment we can see client-side).
     return {
       sys: 0,
       instr: 0,
@@ -143,8 +117,7 @@ export function useSessionContextUsage(session: () => Session) {
       agents: 0,
       skills: 0,
       memory: 0,
-      msgs,
-      other: Math.max(0, totalTok.value - msgs),
+      msgs: estTok.value,
     }
   })
 

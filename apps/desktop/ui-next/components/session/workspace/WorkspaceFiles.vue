@@ -39,7 +39,7 @@
 import type { Session, TreeNode } from '~/composables/useSessionsData'
 import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
 import { useSidecar } from '~/composables/useSidecar'
-import { usePreview, type PreviewRef } from '~/composables/usePreview'
+import { usePreview, previewKindFromPath } from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useFileContextMenu } from '~/composables/useFileContextMenu'
 
@@ -93,21 +93,13 @@ async function reloadDir(dir: string): Promise<void> {
   await loadDir(dir)
 }
 
-// Preview kind from the file extension (the modal reads the real content itself).
-function kindOf(path: string): PreviewRef['kind'] {
-  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(path)) return 'image'
-  if (/\.pdf$/i.test(path)) return 'pdf'
-  if (/\.(md|markdown)$/i.test(path)) return 'markdown'
-  return 'text'
-}
-
 // Open a file in the shared PreviewModal (workspaceRoot + path → fs.readFile).
 function openFile(path: string): void {
   if (!root.value) return
   selectedPath.value = path
   preview.open({
     name: path.split('/').pop() || path,
-    kind: kindOf(path),
+    kind: previewKindFromPath(path),
     workspaceRoot: root.value,
     path,
   })

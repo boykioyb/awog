@@ -1,13 +1,14 @@
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import type { PreviewRef } from '~/composables/usePreview'
-import { usePreview } from '~/composables/usePreview'
+import { usePreview, previewKindFromPath } from '~/composables/usePreview'
 import { useSidecar } from '~/composables/useSidecar'
 import { useI18n } from '~/composables/useI18n'
 import { useMarkdown } from '~/composables/useMarkdown'
 import { useZoomPan } from '~/composables/useZoomPan'
 import { useMarkdownOutline } from '~/composables/useMarkdownOutline'
 import { ATTACHMENT_TEXT_MAX, useChatAttach } from '~/composables/useChatAttach'
-import type { SessionAttachment } from '~/composables/useSessionsData'
+import type { SessionAttachment, TreeNode } from '~/composables/useSessionsData'
+import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
 
 // Page-controller for the shared PreviewModal (nuxt-vue page-controller rule): the
 // SFC stays a thin template, all state + IPC live here. Orchestrates:
@@ -196,8 +197,80 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     return effectiveLang.value ?? langFromName(it.name)
   })
 
-  // ── markdown render/raw + outline ────────────────────────────────────────────
+  // ── folder tree (kind: 'folder') ─────────────────────────────────────────────
+  // Lazy file tree of item.workspaceRoot (a dragged working folder). Mirrors the
+  // Files-tab controller (WorkspaceFiles.vue) rooted at the previewed folder via
+  // fs.listDir. Clicking a file repoints the modal to that file (workspaceRoot +
+  // path → fs.readFile), so the tree and file views share this one modal.
+  type FsDirEntry = { name: string; path: string; kind: 'file' | 'dir'; size?: number }
+  const treeChildren = reactive<Record<string, FsDirEntry[]>>({})
+  const treeExpanded = reactive<Set<string>>(new Set())
+  const treeSelected = ref<string | null>(null)
+  const treeLoading = ref(false)
+
+  const treeNodesFor = (dir: string): TreeNode[] =>
+    (treeChildren[dir] ?? []).map<TreeNode>((e) =>
+      e.kind === 'dir' ? { d: e.name } : { f: e.name },
+    )
+  const treeRootNodes = computed<TreeNode[]>(() => treeNodesFor(''))
+
+  async function loadTreeDir(root: string, dir: string): Promise<void> {
+    if (treeChildren[dir]) return
+    treeLoading.value = true
+    try {
+      const res = await sc.request<{ entries: FsDirEntry[] }>('fs.listDir', {
+        workspaceRoot: root,
+        ...(dir ? { path: dir } : {}),
+      })
+      treeChildren[dir] = res.entries
+    } catch {
+      treeChildren[dir] = []
+    } finally {
+      treeLoading.value = false
+    }
+  }
+
+  function openTreeFile(path: string): void {
+    const root = item.value?.workspaceRoot
+    if (!root) return
+    treeSelected.value = path
+    // Repoint the shared item → the load watcher fetches the file content.
+    sharedItem.value = {
+      name: path.split('/').pop() || path,
+      kind: previewKindFromPath(path),
+      workspaceRoot: root,
+      path,
+    }
+  }
+
+  const treeCtrl: FileTreeController = {
+    isOpen: (p) => treeExpanded.has(p),
+    toggle: (p) => {
+      const root = item.value?.workspaceRoot
+      if (treeExpanded.has(p)) {
+        treeExpanded.delete(p)
+      } else {
+        treeExpanded.add(p)
+        if (root) void loadTreeDir(root, p)
+      }
+    },
+    selectedPath: treeSelected,
+    selectFile: (p) => openTreeFile(p),
+    childrenFor: (p) => treeNodesFor(p),
+  }
+
+  // ── markdown / html render/raw + outline ─────────────────────────────────────
   const view = ref<'render' | 'raw'>('render')
+  // Bumped on reload to force the HTML iframe to re-create (re-run its scripts even
+  // when the content string is unchanged).
+  const htmlReloadKey = ref(0)
+  // Re-fetch the file from disk (HTML preview "reload"): pick up on-disk edits and
+  // re-render. Bumping the key also re-runs an unchanged page's scripts.
+  function reload(): void {
+    htmlReloadKey.value += 1
+    const it = item.value
+    if (it && it.workspaceRoot && it.path && sc.available) void loadFromWorkspace(it)
+  }
   const segments = computed(() =>
     item.value?.kind === 'markdown' ? renderMarkdown(effectiveText.value) : [],
   )
@@ -390,6 +463,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   }
 
   // ── derived view flags ───────────────────────────────────────────────────────
+  // True while a workspace file's content is being fetched (drives a spinner in
+  // the status placeholder, distinct from the error/tooLarge/binary states).
+  const loading = computed(() => loadStatus.value === 'loading')
   const statusMessage = computed(() => {
     switch (loadStatus.value) {
       case 'loading':
@@ -405,27 +481,45 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     }
   })
 
-  // Monaco shows for plain text and for markdown's raw view.
+  // Monaco shows for plain text and for the raw view of markdown / html.
   const showCode = computed(() => {
     const it = item.value
     if (!it || statusMessage.value) return false
-    return it.kind === 'text' || (it.kind === 'markdown' && view.value === 'raw')
+    if (it.kind === 'text') return true
+    return (it.kind === 'markdown' || it.kind === 'html') && view.value === 'raw'
   })
+
+  // HTML render view: the sandboxed iframe fills the body like an image/pdf.
+  const htmlRender = computed(
+    () => item.value?.kind === 'html' && view.value === 'render' && !statusMessage.value,
+  )
 
   const bodyClass = computed(() => {
     const it = item.value
     if (!it) return {}
     return {
-      flush: !statusMessage.value && (it.kind === 'image' || it.kind === 'pdf' || showCode.value),
+      flush:
+        !statusMessage.value &&
+        (it.kind === 'image' || it.kind === 'pdf' || htmlRender.value || showCode.value),
       mdrender: it.kind === 'markdown' && view.value === 'render' && !statusMessage.value,
+      // Folder tree fills the body (left-aligned, own scroll) — not the centered prose layout.
+      tree: it.kind === 'folder',
     }
+  })
+
+  // Header icon: clip (image) · folder (folder tree) · doc (everything else).
+  const headIcon = computed(() => {
+    const k = item.value?.kind
+    if (k === 'image') return 'clip'
+    if (k === 'folder') return 'folder'
+    return 'rules'
   })
 
   // The bar shows when there are view controls OR actionable workspace-file actions.
   const hasBar = computed(() => {
     const it = item.value
     if (!it || statusMessage.value) return false
-    return ['image', 'markdown', 'text'].includes(it.kind) || hasWorkspaceFile.value
+    return ['image', 'markdown', 'html', 'text'].includes(it.kind) || hasWorkspaceFile.value
   })
 
   function fmtSize(n?: number): string {
@@ -473,7 +567,15 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       loadedSrc.value = null
       loadedLang.value = undefined
       truncated.value = false
+      // Reset folder-tree state on every item change; load the root when a folder opens.
+      for (const k of Object.keys(treeChildren)) delete treeChildren[k]
+      treeExpanded.clear()
+      treeSelected.value = null
+      treeLoading.value = false
       if (it && it.workspaceRoot && it.path && sc.available) void loadFromWorkspace(it)
+      if (it?.kind === 'folder' && it.workspaceRoot && sc.available) {
+        void loadTreeDir(it.workspaceRoot, '')
+      }
     },
     { immediate: true },
   )
@@ -492,13 +594,22 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     item,
     meta,
     statusMessage,
+    loading,
     truncated,
     hasWorkspaceFile,
     // body / view
     bodyClass,
+    headIcon,
     showCode,
+    htmlRender,
+    htmlReloadKey,
+    reload,
     hasBar,
     view,
+    // folder tree (kind: 'folder')
+    treeRootNodes,
+    treeCtrl,
+    treeLoading,
     segments,
     effectiveText,
     effectiveSrc,

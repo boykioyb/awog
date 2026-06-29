@@ -90,6 +90,7 @@
         >
           <img v-if="a.img && a.src" :src="a.src" class="attthumb" :alt="a.name" />
           <span v-else-if="a.img" class="thumb" />
+          <Icon v-else-if="a.folder" name="folder" style="width: 11px; height: 11px" />
           <Icon v-else name="rules" style="width: 11px; height: 11px" />
           <span class="attn">{{ a.name }}</span>
           <span
@@ -627,11 +628,29 @@ const streamPrimaryTitle = computed(() =>
 
 // Idle send → start a fresh turn. Slash command expands to its body (model gets the
 // template) while `command` keeps the compact bubble label.
-function sendNow() {
+// Re-entry guard while the pre-send quota check awaits (the draft isn't cleared until
+// after, so a fast double-Enter could otherwise fire two turns).
+let sendChecking = false
+
+async function sendNow() {
   const { text: outgoing, command } = buildOutgoing(draft.value)
   const hasAtt = props.attachments.length > 0
   const hasQuotes = followups.value.length > 0
   if (!outgoing.trim() && !hasAtt && !hasQuotes) return
+  // Usage-quota gate: await a fresh read, then refuse the turn while KEEPING the draft
+  // so the user doesn't lose what they typed. The store enforces the same gate too.
+  if (sendChecking) return
+  if (store.activeId != null) {
+    sendChecking = true
+    try {
+      if (await store.checkSendBlocked(store.activeId)) {
+        showNotice(t('sessions.quota.blockedSendNotice'))
+        return
+      }
+    } finally {
+      sendChecking = false
+    }
+  }
   closeAutocomplete()
   emit('send', outgoing, command)
   draft.value = ''
@@ -643,11 +662,23 @@ function sendNow() {
 // the parent's pendingAtt (descending so indices don't shift). NOT emitting `send`
 // here is deliberate: the parent's onSend has no busy-guard and would open a second
 // concurrent turn instead of queueing.
-function onQueue() {
+async function onQueue() {
   const { text: outgoing, command } = buildOutgoing(draft.value)
   const hasAtt = props.attachments.length > 0
   if (!outgoing.trim() && !hasAtt) return
   if (store.activeId == null) return
+  // Usage-quota gate: queueing only defers a turn that would be blocked on drain —
+  // await a fresh read, refuse up front and keep the draft.
+  if (sendChecking) return
+  sendChecking = true
+  try {
+    if (await store.checkSendBlocked(store.activeId)) {
+      showNotice(t('sessions.quota.blockedSendNotice'))
+      return
+    }
+  } finally {
+    sendChecking = false
+  }
   closeAutocomplete()
   store.enqueue(store.activeId, outgoing, props.attachments, command)
   for (let i = props.attachments.length - 1; i >= 0; i--) emit('remove-att', i)
@@ -669,7 +700,7 @@ async function onSteer() {
 
 function onStreamPrimary() {
   if (streamPrimaryAction.value === 'steer') void onSteer()
-  else onQueue()
+  else void onQueue()
 }
 function pickSteer() {
   sendMenuOpen.value = false
@@ -677,7 +708,7 @@ function pickSteer() {
 }
 function pickQueue() {
   sendMenuOpen.value = false
-  onQueue()
+  void onQueue()
 }
 
 // Enter / primary action router: idle → fresh turn; streaming → steer or queue.
@@ -686,7 +717,7 @@ function send() {
     if (hasContent.value) onStreamPrimary()
     return
   }
-  sendNow()
+  void sendNow()
 }
 function onEnter(e: KeyboardEvent) {
   // An open autocomplete steals plain Enter to accept the highlighted item (never

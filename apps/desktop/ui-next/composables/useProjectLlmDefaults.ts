@@ -1,6 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useSettingsStore } from '~/stores/settings'
+import { useConnectionsStore } from '~/stores/connections'
 import {
   MODEL_DISPLAY,
   modelDisplayName,
@@ -22,6 +23,9 @@ export interface LlmDefaultsDraft {
   accountId: string | undefined
   modelId: string
   level: ThinkingLevel
+  // MCP whitelist new sessions in this project start with. undefined = all enabled
+  // servers (default); explicit array = whitelist (a subset, possibly empty).
+  mcpServerIds: string[] | undefined
 }
 
 const PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'google']
@@ -38,6 +42,7 @@ function modelIdsForProvider(provider: ProviderName): string[] {
 export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen: () => boolean) {
   const store = useProjectsStore()
   const settings = useSettingsStore()
+  const connections = useConnectionsStore()
 
   const project = computed(() => {
     const id = getProjectId()
@@ -51,6 +56,7 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
     accountId: undefined,
     modelId: settings.defaults.modelId,
     level: settings.defaults.thinkingLevel,
+    mcpServerIds: undefined,
   })
 
   const draft = ref<LlmDefaultsDraft>(appDefault())
@@ -63,6 +69,9 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
       // pull the real accounts.list so the account picker isn't empty when this
       // modal is opened directly (else it shows only the "active account" stub).
       void settings.hydrateFromSidecar()
+      // The connections store loads lazily — pull the server list so the MCP picker
+      // isn't empty when this modal is opened before the Connections page was visited.
+      if (!connections.loaded) void connections.loadServers()
       const ld = project.value?.llmDefaults
       draft.value = ld
         ? {
@@ -70,6 +79,7 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
             accountId: ld.accountId,
             modelId: ld.modelId,
             level: ld.level,
+            mcpServerIds: ld.mcpServerIds ? [...ld.mcpServerIds] : undefined,
           }
         : appDefault()
     },
@@ -116,6 +126,27 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
     draft.value.level = lv
   }
 
+  // ─── MCP whitelist ──────────────────────────────────────────────────────────
+  // Same semantics as the per-session config (SessionConfigPopover): undefined =
+  // all enabled servers, explicit array = whitelist (the first toggle materialises
+  // the full enabled set so a tick reads as include and an untick as exclude).
+  const mcpEnabledServers = computed(() => connections.mcpServers.filter((s) => s.enabled))
+  const isMcpCustomized = computed(() => draft.value.mcpServerIds !== undefined)
+  const isMcpActive = (id: string): boolean => {
+    const list = draft.value.mcpServerIds
+    return list === undefined ? true : list.includes(id)
+  }
+  const toggleMcp = (id: string) => {
+    const current = draft.value.mcpServerIds ?? mcpEnabledServers.value.map((s) => s.id)
+    const set = new Set(current)
+    if (set.has(id)) set.delete(id)
+    else set.add(id)
+    draft.value.mcpServerIds = [...set]
+  }
+  const resetMcp = () => {
+    draft.value.mcpServerIds = undefined
+  }
+
   // Persist the draft as the project's llmDefaults. Returns the saved project.
   const save = async () => {
     const p = project.value
@@ -126,6 +157,8 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
       level: draft.value.level,
     }
     if (draft.value.accountId) llmDefaults.accountId = draft.value.accountId
+    if (draft.value.mcpServerIds !== undefined)
+      llmDefaults.mcpServerIds = [...draft.value.mcpServerIds]
     return store.updateProject({ ...p, llmDefaults })
   }
 
@@ -150,6 +183,11 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
     modelLabel,
     hasCustomDefaults,
     isProviderConnected,
+    mcpEnabledServers,
+    isMcpCustomized,
+    isMcpActive,
+    toggleMcp,
+    resetMcp,
     setProvider,
     setAccount,
     setModel,

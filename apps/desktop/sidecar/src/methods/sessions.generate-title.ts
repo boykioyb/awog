@@ -22,6 +22,11 @@ const Params = z.object({
   provider: z.enum(['anthropic', 'openai', 'google']),
   modelId: z.string().min(1),
   accountId: z.string().optional(),
+  // Client-provided first user message. Lets the UI fire titling EARLY — in
+  // parallel with the opening turn, before that message is persisted — so a long
+  // agentic first turn doesn't leave the session as "New session" for minutes.
+  // Absent ⇒ fall back to the persisted first user message (post-turn path).
+  userText: z.string().optional(),
 })
 
 const TITLE_SYS = `You generate a concise title for a chat conversation.
@@ -54,14 +59,20 @@ function normalizeTitle(raw: string): string {
 register('sessions.generateTitle', async (raw) => {
   const params = Params.parse(raw)
   const session = await loadSession(params.sessionId)
-  if (!session) return { ok: false, reason: 'no-session' }
 
-  const firstUser = session.messages.find((m) => m.role === 'user')
-  if (!firstUser || !firstUser.text.trim()) return { ok: false, reason: 'no-message' }
-  const firstAgent = session.messages.find((m) => m.role === 'agent')
+  // Prefer the client-provided first message (early titling, before it's persisted);
+  // fall back to the persisted first user message. The session read is best-effort —
+  // a title only needs the user's text, so titling still works before anything is on
+  // disk (loadSession may legitimately return null on a brand-new session).
+  const userText =
+    params.userText?.trim() ||
+    session?.messages.find((m) => m.role === 'user')?.text.trim() ||
+    ''
+  if (!userText) return { ok: false, reason: 'no-message' }
+  const firstAgent = session?.messages.find((m) => m.role === 'agent')
 
   const prompt = [
-    `User: ${clip(firstUser.text, MAX_INPUT)}`,
+    `User: ${clip(userText, MAX_INPUT)}`,
     firstAgent && firstAgent.text.trim() ? `Assistant: ${clip(firstAgent.text, MAX_INPUT)}` : '',
     '',
     'Title:',

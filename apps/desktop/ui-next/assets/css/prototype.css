@@ -388,13 +388,21 @@
   .csval{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bgInput);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size: 0.9615rem;cursor:pointer;color:var(--text)}
   .csval:hover{border-color:var(--borderStrong)}.csval .icn{width:13px;height:13px;color:var(--textDim)}
   .clearf{align-self:flex-start;font-size: 0.9231rem;color:var(--textDim);cursor:pointer;padding:2px 0}.clearf:hover{color:var(--text)}
-  .grp{margin-bottom:3px}
-  .grph{display:flex;align-items:center;gap:8px;padding:9px 9px 5px;cursor:pointer;user-select:none}
+  .grp{margin-bottom:2px}
+  /* Clear gap between sections so each group reads as its own block. */
+  .grp + .grp{margin-top:11px}
+  /* Section header: sticky so the active group stays labelled while scrolling, with
+     an opaque fill + bottom hairline so it reads as a divider capping its rows —
+     not just another list item. */
+  .grph{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;padding:7px 9px;cursor:pointer;user-select:none;background:var(--bgPanel);border-bottom:1px solid var(--border)}
+  .grph:hover{background:var(--bgHover)}
   .grph .gchv{width:12px;height:12px;color:var(--textFaint);transition:transform .15s;flex:0 0 auto}
   .grp.col .gchv{transform:rotate(-90deg)}
-  .grph .pdot{width:8px;height:8px;border-radius:3px;flex:0 0 auto}
-  .grph .gnm{font-size: 0.8462rem;font-family:var(--code);letter-spacing:.05em;text-transform:uppercase;color:var(--textDim);font-weight:600}
-  .grph .gct{font-family:var(--code);font-size: 0.7692rem;color:var(--textFaint);margin-left:auto}
+  .grph .pdot{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+  .grph .gnm{font-size: 0.8462rem;font-family:var(--code);letter-spacing:.06em;text-transform:uppercase;color:var(--textMuted);font-weight:700}
+  .grph:hover .gnm{color:var(--text)}
+  .grph .gct{font-family:var(--code);font-size: 0.7692rem;color:var(--textFaint);margin-left:auto;font-variant-numeric:tabular-nums}
+  .grpitems{padding-top:4px}
   .grp.col .grpitems{display:none}
 
   /* detail project crumb */

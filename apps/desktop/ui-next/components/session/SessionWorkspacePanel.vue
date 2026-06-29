@@ -130,13 +130,13 @@
             :key="f.key"
             type="button"
             class="infoctx-row"
-            :title="f.kind === 'pinned' ? f.path : f.name"
+            :title="'path' in f ? f.path : f.name"
             @click="openContextFile(f)"
           >
             <Icon
-              :name="f.kind === 'pinned' ? 'pin' : 'rules'"
+              :name="ctxIcon(f.kind)"
               style="width: 12px; height: 12px; flex: 0 0 auto"
-              :style="{ color: f.kind === 'pinned' ? 'var(--accent)' : 'var(--textDim)' }"
+              :style="{ color: ctxIconColor(f.kind) }"
             />
             <span class="infoctx-name mono">{{ f.name }}</span>
             <span v-if="f.kind === 'attachment' && f.size != null" class="infoctx-size">
@@ -173,6 +173,7 @@
 // wired to real engine data via dedicated tab components (Diff/Files/Terminal/
 // Plan/Tasks) which degrade gracefully to an empty state outside the Electron shell.
 import type { Session } from '~/composables/useSessionsData'
+import type { SessionContextFile } from '~/composables/useSessionContextFiles'
 import type { WorkspaceDockSide } from '~/stores/settings'
 
 const props = withDefaults(
@@ -204,8 +205,17 @@ const { wpIcon } = useSessionsData()
 const { projectName } = useProjects()
 const { fmtUsd, costOf, softLimit, hasBudgetInfo } = useSessionCost()
 
-// Context files (attachments + pinned working-set) for the Info tab.
+// Context files (working folder + attachments + pinned working-set) for the Info tab.
 const { contextFiles, openContextFile } = useSessionContextFiles(() => props.session)
+// Row icon + accent per context kind (folder/pinned = standing context → accent).
+function ctxIcon(kind: SessionContextFile['kind']): string {
+  if (kind === 'folder') return 'folder'
+  if (kind === 'pinned') return 'pin'
+  return 'rules'
+}
+function ctxIconColor(kind: SessionContextFile['kind']): string {
+  return kind === 'attachment' ? 'var(--textDim)' : 'var(--accent)'
+}
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`

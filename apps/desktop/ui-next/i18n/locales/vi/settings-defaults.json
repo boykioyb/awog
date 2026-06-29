@@ -9,5 +9,5 @@
   "settingsDefaults.provider.desc": "Connection mà session mới khởi tạo cùng",
   "settingsDefaults.model.name": "Model mặc định",
   "settingsDefaults.model.desc": "Lọc theo provider đã chọn",
-  "settingsDefaults.mode.acceptEdits": "Tự áp dụng sửa"
+  "settingsDefaults.mode.acceptEdits": "Accept Edits"
 }
