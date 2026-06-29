@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.5',
+    date: '2026-06-29',
+    highlight: {
+      en: 'A guided first run: a quick setup wizard gets you to a working app (connect an account, open a project), then a spotlight tour shows you around the interface — replayable any time from ⌘K or Settings. Plus a Git commit-identity editor and smarter GitHub account handling.',
+      vi: 'Lần đầu mở app được dẫn dắt: wizard cài đặt nhanh đưa bạn tới trạng thái dùng được (kết nối tài khoản, mở dự án), rồi tour giao diện chỉ cho bạn từng chỗ — chạy lại bất cứ lúc nào từ ⌘K hoặc Settings. Kèm trình sửa danh tính commit Git và quản lý tài khoản GitHub thông minh hơn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'First-run setup wizard: a few skippable steps (connect an account, set theme & language, open your first project) get a fresh install to a usable state — existing setups are detected and never interrupted.',
+        vi: 'Wizard cài đặt lần đầu: vài bước có thể bỏ qua (kết nối tài khoản, chọn theme & ngôn ngữ, mở dự án đầu tiên) đưa bản cài mới tới trạng thái dùng được — bản đã cấu hình sẵn được nhận diện và không bị làm phiền.',
+      },
+      {
+        kind: 'added',
+        en: 'Interface tour: a spotlight highlights the real UI step by step (navigation, the New button, ⌘K, Settings…). Replay it any time from the Command Palette or Settings → About.',
+        vi: 'Tour giao diện: spotlight làm nổi bật UI thật theo từng bước (thanh điều hướng, nút New, ⌘K, Settings…). Chạy lại bất cứ lúc nào từ Command Palette hoặc Settings → About.',
+      },
+      {
+        kind: 'added',
+        en: 'Git commit-identity editor: set your commit name and email — globally or for the current repo — from the Git screen, without dropping to the terminal.',
+        vi: 'Trình sửa danh tính commit Git: đặt tên và email commit — phạm vi toàn cục hoặc riêng repo hiện tại — ngay trong màn Git, khỏi cần mở terminal.',
+      },
+      {
+        kind: 'added',
+        en: 'Default GitHub account in Settings → Git that every project inherits, with a per-project override that shows which account "inherit" resolves to.',
+        vi: 'Tài khoản GitHub mặc định trong Settings → Git mà mọi dự án kế thừa, kèm tùy chọn ghi đè theo từng dự án và hiển thị "kế thừa" đang trỏ tới tài khoản nào.',
+      },
+      {
+        kind: 'improved',
+        en: 'When the GitHub CLI is missing or not signed in, the Issues/PRs view now guides you: an install button with an OS-specific command, or a one-click copy of `gh auth login` plus a link to the sign-in guide.',
+        vi: 'Khi GitHub CLI chưa cài hoặc chưa đăng nhập, màn Issues/PRs giờ hướng dẫn: nút cài kèm lệnh theo từng hệ điều hành, hoặc sao chép một chạm `gh auth login` cùng liên kết tới hướng dẫn đăng nhập.',
+      },
+      {
+        kind: 'improved',
+        en: 'Git screen: right-click a folder to stage / unstage / discard / ignore everything under it, switching branches with uncommitted changes offers to stash them first, and failed Git actions now show a clear message instead of failing silently.',
+        vi: 'Màn Git: chuột phải vào thư mục để stage / unstage / discard / ignore toàn bộ bên trong, đổi nhánh khi còn thay đổi chưa commit sẽ hỏi stash trước, và thao tác Git lỗi giờ hiện thông báo rõ ràng thay vì lỗi âm thầm.',
+      },
+    ],
+  },
+  {
     version: '0.22.4',
     date: '2026-06-28',
     highlight: {
