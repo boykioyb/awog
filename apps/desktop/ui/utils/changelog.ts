@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.8',
+    date: '2026-06-30',
+    highlight: {
+      en: 'A terminal you can open from the status bar on any screen — no session required — plus VSCode-style project tabs on the Sessions screen to keep sessions organized by project.',
+      vi: 'Một cửa sổ terminal mở được từ thanh trạng thái trên mọi màn hình — không cần phiên nào — cùng các tab dự án kiểu VSCode trên màn hình Phiên để sắp xếp phiên theo dự án.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Terminal: open a terminal dock from the status bar on any screen. It works even without an open session, starts in your home folder, and keeps your shell alive as you switch pages or close and reopen the dock. Drag its top edge to resize.',
+        vi: 'Terminal: mở khung terminal từ thanh trạng thái trên mọi màn hình. Nó hoạt động ngay cả khi không có phiên nào đang mở, khởi động ở thư mục home của bạn, và giữ shell sống khi bạn chuyển trang hoặc đóng rồi mở lại khung. Kéo mép trên để đổi kích thước.',
+      },
+      {
+        kind: 'added',
+        en: 'Sessions: a project tab strip at the top of the Sessions screen — one tab per project — filters the list to that project, and each tab remembers the session you were last viewing.',
+        vi: 'Phiên: dải tab dự án ở đầu màn hình Phiên — mỗi dự án một tab — lọc danh sách theo dự án đó, và mỗi tab ghi nhớ phiên bạn xem gần nhất.',
+      },
+      {
+        kind: 'improved',
+        en: 'Sessions: right-click a project tab to close it, close others, close tabs to the right, or close all; tabs show a badge when their sessions need your attention.',
+        vi: 'Phiên: chuột phải vào tab dự án để đóng tab đó, đóng các tab khác, đóng các tab bên phải, hoặc đóng tất cả; tab hiển thị huy hiệu khi các phiên trong đó cần bạn chú ý.',
+      },
+    ],
+  },
+  {
     version: '0.22.7',
     date: '2026-06-30',
     highlight: {
