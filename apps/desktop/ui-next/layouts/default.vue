@@ -20,6 +20,11 @@
       <div v-if="compact && (navOpen || listOpen)" class="shell-scrim" @click="closeDrawers" />
     </div>
 
+    <!-- App-wide terminal dock — sits in the flex column between the page and the
+         status bar so opening it pushes content up on every page. Single mount;
+         its PTY persists across navigation + open/close (useGlobalTerminal). -->
+    <GlobalTerminalHost />
+
     <!-- Global status bar — single app-lifetime mount, shows on every page. -->
     <AppStatusBar />
 

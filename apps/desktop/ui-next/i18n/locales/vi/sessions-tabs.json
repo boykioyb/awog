@@ -1,0 +1,12 @@
+{
+  "sessions.tabs.label": "Tab dự án",
+  "sessions.tabs.close": "Đóng tab",
+  "sessions.tabs.closeName": "Đóng tab {name}",
+  "sessions.tabs.closeOthers": "Đóng các tab khác",
+  "sessions.tabs.closeRight": "Đóng tab bên phải",
+  "sessions.tabs.closeAll": "Đóng tất cả tab",
+  "sessions.tabs.addProject": "Mở tab dự án",
+  "sessions.tabs.overflow": "Mọi tab đang mở",
+  "sessions.tabs.noProjects": "Không còn dự án để mở",
+  "sessions.tabs.unread": "{n} cần chú ý"
+}

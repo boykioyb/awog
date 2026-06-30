@@ -57,43 +57,54 @@
 
 <script setup lang="ts">
 // Terminal tab (§5/§10) — real PTY via terminal.create/write/resize/kill, output
-// streamed through sc.onEvent (terminal.data / terminal.exit). Now multi-tab:
-// each UI tab owns its own independent PTY + xterm instance + early-output buffer,
-// all sharing the session's PTY grouping key. Switching tabs only hides/shows
-// (never kills) — every PTY is killed on tab close / component unmount.
-// Degrades to an empty state when the engine bridge / workspace root is absent.
+// streamed through sc.onEvent (terminal.data / terminal.exit). Multi-tab: each UI
+// tab owns its own independent PTY + xterm instance + early-output buffer, all
+// sharing one PTY grouping key. Switching tabs only hides/shows (never kills) —
+// every PTY is killed on tab close / component unmount.
+//
+// SoC: this widget knows only a cwd + a grouping key, NOT sessions or projects.
+// Two hosts use it: the session workspace panel (cwd = project root, key
+// `ses:<id>`) and the app-wide GlobalTerminalHost (cwd = "~", key `global`).
+// Degrades to an empty state when the engine bridge / cwd is absent.
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import { Plus, X } from 'lucide-vue-next'
-import type { Session } from '~/composables/useSessionsData'
 import { useSidecar, type SidecarEvent, type UnlistenFn } from '~/composables/useSidecar'
 import { useTerminalApi } from '~/composables/useTerminalApi'
-import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{
-  session: Session
-  // True when this is the visible tab — drives deferred PTY spawn / refit (an
+  // Absolute cwd for the PTY, or "~" (the sidecar expands it). null while a
+  // host's root is still resolving → the empty state shows.
+  root: string | null
+  // True when the engine bridge is present AND a cwd is available — gates xterm
+  // init + PTY spawn. Session panel: sc.available && project root resolved;
+  // global dock: sc.available (cwd is always "~").
+  ready: boolean
+  // Opaque PTY grouping key for the sidecar (`ses:<id>` or `global`). All tabs
+  // of one host share it; the sidecar still hands back a distinct terminalId.
+  ptyKey: string
+  // True when this is the visible host — drives deferred PTY spawn / refit (an
   // off-screen terminal has zero size).
   visible: boolean
+  // Optional empty-state text when the engine bridge is absent. Defaults to the
+  // session wording; the global dock passes its own (no "this session" phrasing).
+  unavailableLabel?: string
 }>()
 
 const { t } = useI18n()
 const sc = useSidecar()
 const api = useTerminalApi()
-const { root, ready } = useWorkspaceData(() => props.session.project)
 
 const errorMsg = ref<string | null>(null)
 
-const unavailableMsg = computed(() =>
-  sc.available ? t('sessions.workspace.noProject') : t('sessions.workspace.unavailable'),
+const unavailableMsg = computed(
+  () =>
+    props.unavailableLabel ??
+    (sc.available ? t('sessions.workspace.noProject') : t('sessions.workspace.unavailable')),
 )
 
 const tabTitle = (i: number): string => t('sessions.workspace.terminal.tabTitle', { n: i + 1 })
-
-// Opaque PTY grouping key for the sidecar — the session's client id. All tabs of
-// one session share this key; the sidecar still hands back a distinct terminalId.
-const ptyKey = computed(() => `ses:${props.session.id}`)
 
 // Read CSS theme tokens off the live document so xterm matches the active theme.
 const cssVar = (name: string, fallback: string): string => {
@@ -176,10 +187,11 @@ const onSidecarEvent = (evt: SidecarEvent): void => {
 // Spawn the PTY at the terminal's real fitted size. The shared data listener is
 // already attached (see ensureListener) so no early output is dropped.
 const createPty = async (tab: TerminalTab, cols: number, rows: number): Promise<void> => {
-  if (tab.terminalId || tab.creating || !tab.term || !root.value) return
+  if (tab.terminalId || tab.creating || !tab.term || !props.root) return
+  const cwd = props.root
   tab.creating = true
   try {
-    const result = await api.create(root.value, ptyKey.value, cols, rows)
+    const result = await api.create(cwd, props.ptyKey, cols, rows)
     tab.terminalId = result.terminalId
   } catch (err) {
     errorMsg.value =
@@ -228,7 +240,7 @@ const ensureListener = async (): Promise<void> => {
 // Open xterm into the tab's container (once the DOM node + root are ready).
 const initTab = async (tab: TerminalTab): Promise<void> => {
   const container = tab.el
-  if (!container || tab.term || !ready.value) return
+  if (!container || tab.term || !props.ready) return
 
   await ensureListener()
 
@@ -346,7 +358,7 @@ const setContainer = (id: string, el: unknown): void => {
   const node = el instanceof HTMLElement ? el : null
   if (node && tab.el !== node) {
     tab.el = node
-    if (ready.value) void initTab(tab)
+    if (props.ready) void initTab(tab)
   } else if (!node) {
     tab.el = null
   }
@@ -366,8 +378,8 @@ watch(
 )
 
 // The root may resolve after mount — init the active tab once it's ready + visible.
-watch([ready, () => props.visible], () => {
-  if (!ready.value || !props.visible) return
+watch([() => props.ready, () => props.visible], () => {
+  if (!props.ready || !props.visible) return
   if (!tabs.value.length) addTab(true)
   const tab = activeTabId.value ? instances.get(activeTabId.value) : undefined
   if (tab && !tab.term) void initTab(tab)
@@ -375,7 +387,7 @@ watch([ready, () => props.visible], () => {
 
 onMounted(() => {
   if (!tabs.value.length) addTab(true)
-  if (props.visible && ready.value) {
+  if (props.visible && props.ready) {
     const tab = activeTabId.value ? instances.get(activeTabId.value) : undefined
     if (tab) void initTab(tab)
   }

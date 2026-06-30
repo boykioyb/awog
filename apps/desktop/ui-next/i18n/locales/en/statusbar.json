@@ -8,7 +8,7 @@
   "statusbar.project.open": "Open project",
   "statusbar.effort.title": "Reasoning effort",
   "statusbar.workspaceFiles": "Toggle Files panel",
-  "statusbar.workspaceTerminal": "Toggle Terminal panel",
+  "statusbar.terminalGlobal": "Toggle terminal",
   "statusbar.usage.title": "Plan usage · 5h limit",
   "statusbar.usage.fiveHour": "5-hour limit",
   "statusbar.usage.loading": "Loading usage…",

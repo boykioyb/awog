@@ -1,0 +1,7 @@
+{
+  "terminalGlobal.title": "Terminal",
+  "terminalGlobal.close": "Đóng terminal",
+  "terminalGlobal.resize": "Kéo để chỉnh kích thước",
+  "terminalGlobal.cwdHint": "Thư mục làm việc: home (~)",
+  "terminalGlobal.unavailable": "Terminal không khả dụng — mở AWOG trong app desktop"
+}

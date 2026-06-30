@@ -8,7 +8,7 @@
   "statusbar.project.open": "Mở dự án",
   "statusbar.effort.title": "Mức suy luận",
   "statusbar.workspaceFiles": "Bật/tắt bảng Files",
-  "statusbar.workspaceTerminal": "Bật/tắt bảng Terminal",
+  "statusbar.terminalGlobal": "Bật/tắt terminal",
   "statusbar.usage.title": "Hạn mức gói · giới hạn 5h",
   "statusbar.usage.fiveHour": "Giới hạn 5 giờ",
   "statusbar.usage.loading": "Đang tải hạn mức…",

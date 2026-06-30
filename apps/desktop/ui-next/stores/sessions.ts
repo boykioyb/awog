@@ -253,8 +253,50 @@ export const useSessionsStore = defineStore('sessions', () => {
     () => sessions.value.find((s) => s.id === activeId.value) ?? null,
   )
 
-  // Selection state for bulk actions (§1). Reactive set of client ids.
+  // Selection state for bulk actions (§1). Reactive set of client ids. `selecting`
+  // is the select-mode toggle (rows show checkboxes + the bulk bar appears); it
+  // lives in the store rather than SessionList because the project-tab context menu
+  // (SessionTabBar) also enters select mode (select-all-in-project).
   const selectedIds = ref<Set<number>>(new Set())
+  const selecting = ref(false)
+
+  // ── Project tabs (VSCode-style) ─────────────────────────────────────────────
+  // The Sessions screen shows one tab per OPENED project ('' = the Default tab for
+  // unassigned sessions). `activeTab` is the projectId currently shown; the list is
+  // filtered to it (`tabSessions`). Each tab remembers the session last viewed in it
+  // (`lastActiveByProject`) so switching tabs restores it — like a VSCode editor
+  // group. A single global `activeId` stays the source of truth for the open session
+  // (every consumer reads `active`/`activeId` unchanged); `activate()` keeps the
+  // active tab + per-tab memory in sync with it. Only `openProjectTabs`/`activeTab`
+  // persist (UI prefs, same class as the old `awog.sessions.filter.*` keys); the
+  // per-tab memory stays in-memory so it never points at a deleted session.
+  const STORAGE_OPEN_TABS = 'awog.sessions.tabs'
+  const STORAGE_ACTIVE_TAB = 'awog.sessions.activeTab'
+
+  function readOpenTabs(): string[] {
+    try {
+      const arr: unknown = JSON.parse(localStorage.getItem(STORAGE_OPEN_TABS) ?? '[]')
+      if (Array.isArray(arr)) return arr.filter((x): x is string => typeof x === 'string')
+    } catch {
+      // Corrupt value → no tabs (hydrate re-seeds from the loaded session list).
+    }
+    return []
+  }
+
+  const openProjectTabs = ref<string[]>(readOpenTabs())
+  const activeTab = ref<string>(localStorage.getItem(STORAGE_ACTIVE_TAB) ?? '')
+  const lastActiveByProject = ref<Record<string, number | null>>({})
+
+  // Sessions in the active tab — the list operates on this (pinned-first sort is
+  // applied by the list view, not here).
+  const tabSessions = computed<Session[]>(() =>
+    sessions.value.filter((s) => s.project === activeTab.value),
+  )
+
+  // Persist only the tab set + active tab. Both refs are always reassigned (never
+  // mutated in place), so a shallow watch fires correctly.
+  watch(openProjectTabs, (v) => localStorage.setItem(STORAGE_OPEN_TABS, JSON.stringify(v)))
+  watch(activeTab, (v) => localStorage.setItem(STORAGE_ACTIVE_TAB, v))
 
   let seq = 1
   const newClientId = () => Date.now() + seq++
@@ -686,8 +728,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       const res = await sc.request<{ sessions: SessionSummaryDto[] }>('sessions.list')
       const list = Array.isArray(res.sessions) ? res.sessions : []
       sessions.value = list.map(summaryToSession)
-      activeId.value = sessions.value[0]?.id ?? null
-      if (activeId.value != null) void ensureLoaded(activeId.value)
+      seedTabsFromSessions()
     } catch (err) {
       console.warn('[sessions] hydrate failed', err)
     }
@@ -749,11 +790,121 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
-  function setActive(id: number) {
-    activeId.value = id
+  // Open a session AND sync the project tab + per-tab memory to it. The single
+  // internal entry point for every "open a session" path (setActive, create,
+  // createForTask, fork, the remove fallback) — so selecting a session ANYWHERE
+  // (incl. Command Palette / Project overview / tray) auto-opens + activates its
+  // project tab with no callsite changes.
+  function activate(id: number) {
     const s = byId(id)
-    if (s) s.unread = false
+    if (!s) return
+    activeId.value = id
+    s.unread = false
+    const proj = s.project
+    if (!openProjectTabs.value.includes(proj)) {
+      openProjectTabs.value = [...openProjectTabs.value, proj]
+    }
+    activeTab.value = proj
+    lastActiveByProject.value = { ...lastActiveByProject.value, [proj]: id }
     if (useIpc) void ensureLoaded(id)
+  }
+
+  // Add a project's tab to the open set (no activation). '' = the Default tab.
+  function openTab(projectId: string) {
+    if (!openProjectTabs.value.includes(projectId)) {
+      openProjectTabs.value = [...openProjectTabs.value, projectId]
+    }
+  }
+
+  // Switch to a project's tab, restoring the session last viewed there (else the
+  // project's first session, else leave nothing active → the tab's empty state).
+  function setActiveTab(projectId: string) {
+    openTab(projectId)
+    const remembered = lastActiveByProject.value[projectId]
+    const target =
+      remembered != null && byId(remembered)?.project === projectId
+        ? remembered
+        : (sessions.value.find((s) => s.project === projectId)?.id ?? null)
+    if (target != null) {
+      activate(target) // sets activeTab + activeId + last-active + ensureLoaded
+    } else {
+      activeTab.value = projectId
+      activeId.value = null
+    }
+  }
+
+  // The Default tab ('') auto-closes once it has no sessions AND ≥1 other tab is
+  // open (it's implicit, not user-opened). Returns true when it pruned. Real project
+  // tabs stay open when empty (the user opened them; they show an empty state).
+  function pruneEmptyDefaultTab(): boolean {
+    if (sessions.value.some((s) => !s.project)) return false
+    const others = openProjectTabs.value.filter((p) => p !== '')
+    if (!others.length) return false
+    if (openProjectTabs.value.includes('')) openProjectTabs.value = others
+    if (activeTab.value === '') setActiveTab(others[0]!)
+    return true
+  }
+
+  // Close a tab (VSCode-style): never deletes sessions. Closing the active tab moves
+  // to the left neighbour (else right, else any). The Default tab is not user-closable
+  // (pruneEmptyDefaultTab manages it).
+  function closeTab(projectId: string) {
+    if (projectId === '') return
+    const idx = openProjectTabs.value.indexOf(projectId)
+    if (idx < 0) return
+    const next = openProjectTabs.value.filter((p) => p !== projectId)
+    openProjectTabs.value = next
+    if (activeTab.value !== projectId) return
+    const fallback = next[idx - 1] ?? next[idx] ?? null
+    if (fallback != null) setActiveTab(fallback)
+    else {
+      activeTab.value = ''
+      activeId.value = null
+    }
+  }
+
+  // Bulk tab-close (VSCode-style). None of these delete sessions — they only drop
+  // tabs from the open set; the Default tab ('') is never closed (it's the unscoped
+  // "home", auto-managed by pruneEmptyDefaultTab).
+  function closeOtherTabs(keepProjectId: string) {
+    openProjectTabs.value = openProjectTabs.value.filter((p) => p === keepProjectId || p === '')
+    setActiveTab(keepProjectId)
+    pruneEmptyDefaultTab()
+  }
+  function closeTabsToRight(projectId: string) {
+    const idx = openProjectTabs.value.indexOf(projectId)
+    if (idx < 0) return
+    openProjectTabs.value = openProjectTabs.value.filter((p, i) => i <= idx || p === '')
+    if (!openProjectTabs.value.includes(activeTab.value)) setActiveTab(projectId)
+    pruneEmptyDefaultTab()
+  }
+  function closeAllTabs() {
+    // Everything closed → fall back to the Default tab (the unscoped "home").
+    openProjectTabs.value = ['']
+    setActiveTab('')
+  }
+
+  // Seed the open-tab set + active tab/session from the loaded sessions, reconciled
+  // with the persisted tabs. Persisted tabs are kept only when they still have ≥1
+  // session ('' kept only when unassigned sessions exist) so deleted projects don't
+  // leave ghost tabs. First run (nothing valid persisted): open the most-recent
+  // session's tab plus Default when any unassigned session exists.
+  function seedTabsFromSessions(): void {
+    const projectsWithSessions = new Set(sessions.value.map((s) => s.project))
+    let seeded = openProjectTabs.value.filter((p) => projectsWithSessions.has(p))
+    if (!seeded.length) {
+      const first = sessions.value[0]
+      if (first) seeded = [first.project]
+      if (projectsWithSessions.has('') && !seeded.includes('')) seeded.unshift('')
+    }
+    openProjectTabs.value = seeded
+    const persistedActiveValid = seeded.includes(activeTab.value)
+    const wantTab = persistedActiveValid ? activeTab.value : (sessions.value[0]?.project ?? '')
+    setActiveTab(wantTab)
+  }
+
+  function setActive(id: number) {
+    activate(id)
   }
 
   // A turn just settled for `s` (terminal done/error). Flag it unread — drives the
@@ -869,7 +1020,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         !s.aboutGhUrl,
     )
     if (blank) {
-      activeId.value = blank.id
+      activate(blank.id)
       return blank.id
     }
     const id = newClientId()
@@ -894,7 +1045,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (acct) session.accountId = acct.id
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
     sessions.value.unshift(session)
-    activeId.value = id
+    activate(id)
     if (useIpc) {
       session.engineId = engineIdFor(id)
       pushUpsert(session, 'create')
@@ -927,7 +1078,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (acct) session.accountId = acct.id
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
     sessions.value.unshift(session)
-    activeId.value = id
+    activate(id)
     if (useIpc) {
       session.engineId = engineIdFor(id)
       pushUpsert(session, 'create')
@@ -937,11 +1088,27 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   function remove(id: number) {
     const s = byId(id)
+    const wasActive = activeId.value === id
+    const proj = s?.project ?? ''
     sessions.value = sessions.value.filter((x) => x.id !== id)
     selectedIds.value.delete(id)
-    if (activeId.value === id) {
-      activeId.value = sessions.value[0]?.id ?? null
-      if (useIpc && activeId.value != null) void ensureLoaded(activeId.value)
+    // Forget per-tab memory pointing at the deleted session.
+    if (lastActiveByProject.value[proj] === id) {
+      lastActiveByProject.value = { ...lastActiveByProject.value, [proj]: null }
+    }
+    if (wasActive) {
+      // Re-select within the SAME tab first (its remembered session if still there,
+      // else its first session), then fall back to pruning/clearing.
+      const inTab = sessions.value.filter((x) => x.project === activeTab.value)
+      const remembered = lastActiveByProject.value[activeTab.value]
+      const next =
+        (remembered != null && inTab.some((x) => x.id === remembered)
+          ? remembered
+          : inTab[0]?.id) ?? null
+      if (next != null) activate(next)
+      else if (!pruneEmptyDefaultTab()) activeId.value = null
+    } else {
+      pruneEmptyDefaultTab()
     }
     if (useIpc && s?.engineId) pushRequest('sessions.delete', { id: s.engineId })
   }
@@ -956,10 +1123,15 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   function setProject(id: number, project: string) {
     const s = byId(id)
-    if (s) {
-      s.project = project
-      if (useIpc) pushUpsert(s, 'update-metadata')
-    }
+    if (!s) return
+    const wasActive = activeId.value === id
+    s.project = project
+    if (useIpc) pushUpsert(s, 'update-metadata')
+    // The session moved buckets. If it's the one being viewed, follow it to the
+    // destination tab (open + activate); always prune the source if it was an
+    // emptied Default tab.
+    if (wasActive) activate(id)
+    pruneEmptyDefaultTab()
   }
 
   // Folder dragged into the session → becomes the runtime tools' cwd (forwarded
@@ -1140,6 +1312,11 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
   function clearSelection() {
     selectedIds.value = new Set()
+  }
+  // Enter/exit multi-select mode; exiting clears the current selection.
+  function setSelectMode(on: boolean) {
+    selecting.value = on
+    if (!on) clearSelection()
   }
   function bulkRemove(ids?: number[]) {
     const target = ids ?? [...selectedIds.value]
@@ -2381,7 +2558,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (forkPoint?.role === 'assistant' && forkPoint.eid) branch.forkFromMessageId = forkPoint.eid
     else delete branch.forkFromMessageId
     sessions.value.unshift(branch)
-    activeId.value = nid
+    activate(nid)
     if (useIpc) {
       branch.engineId = engineIdFor(nid)
       pushUpsert(branch, 'create')
@@ -2453,6 +2630,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     void subscribe()
     void hydrate()
     startStallWatchdog()
+  } else {
+    // Browser-dev: sessions are seeded synchronously from the mock; seed the tabs
+    // from them (hydrate, which normally does this, is IPC-only).
+    seedTabsFromSessions()
   }
 
   return {
@@ -2461,7 +2642,18 @@ export const useSessionsStore = defineStore('sessions', () => {
     activeId,
     active,
     selectedIds,
+    selecting,
     pendingPermission,
+    // project tabs (VSCode-style)
+    openProjectTabs,
+    activeTab,
+    tabSessions,
+    openTab,
+    closeTab,
+    closeOtherTabs,
+    closeTabsToRight,
+    closeAllTabs,
+    setActiveTab,
     // quota / usage (Settings → Usage quota)
     usagePct,
     quotaUsage,
@@ -2505,6 +2697,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     togglePin,
     toggleSelect,
     clearSelection,
+    setSelectMode,
     bulkRemove,
     // queue
     enqueue,

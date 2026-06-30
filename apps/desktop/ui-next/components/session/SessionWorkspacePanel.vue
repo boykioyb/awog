@@ -88,7 +88,9 @@
       <WorkspaceTerminal
         v-if="terminalMounted && tabs.includes('Terminal')"
         v-show="active === 'Terminal'"
-        :session="session"
+        :root="termRoot"
+        :ready="termReady"
+        :pty-key="`ses:${session.id}`"
         :visible="active === 'Terminal'"
       />
 
@@ -174,6 +176,7 @@
 // Plan/Tasks) which degrade gracefully to an empty state outside the Electron shell.
 import type { Session } from '~/composables/useSessionsData'
 import type { SessionContextFile } from '~/composables/useSessionContextFiles'
+import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import type { WorkspaceDockSide } from '~/stores/settings'
 
 const props = withDefaults(
@@ -204,6 +207,10 @@ const { t } = useI18n()
 const { wpIcon } = useSessionsData()
 const { projectName } = useProjects()
 const { fmtUsd, costOf, softLimit, hasBudgetInfo } = useSessionCost()
+
+// Resolve the project's absolute root + readiness for the (session-agnostic)
+// Terminal widget — it now takes a cwd + grouping key, not a Session.
+const { root: termRoot, ready: termReady } = useWorkspaceData(() => props.session.project)
 
 // Context files (working folder + attachments + pinned working-set) for the Info tab.
 const { contextFiles, openContextFile } = useSessionContextFiles(() => props.session)

@@ -1,0 +1,12 @@
+{
+  "sessions.tabs.label": "Project tabs",
+  "sessions.tabs.close": "Close tab",
+  "sessions.tabs.closeName": "Close {name} tab",
+  "sessions.tabs.closeOthers": "Close other tabs",
+  "sessions.tabs.closeRight": "Close tabs to the right",
+  "sessions.tabs.closeAll": "Close all tabs",
+  "sessions.tabs.addProject": "Open a project tab",
+  "sessions.tabs.overflow": "All open tabs",
+  "sessions.tabs.noProjects": "No more projects to open",
+  "sessions.tabs.unread": "{n} needing attention"
+}

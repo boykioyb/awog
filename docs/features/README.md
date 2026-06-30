@@ -27,6 +27,7 @@
 | 19 | rtk-token-proxy (đã gỡ — xem [ADR 0031](../decisions/0031-rtk-token-proxy.md)) | Reverted (2026-06-15) |
 | 20 | [rules](./rules.md) | v1 implemented (ADR 0033) |
 | 21 | [project-github](./project-github.md) | Draft (ADR 0049) — Issues + Pull Requests |
+| 22 | [global-terminal](./global-terminal.md) | Implemented (ui-next) — dock terminal toàn app, cwd home |
 
 ## Template
 

@@ -25,7 +25,9 @@
         <!-- Model / Account / Effort / Style chips (moved out of the composer). -->
         <StatusConfig :session="active" />
         <span class="sb-div" />
-        <!-- Quick workspace toggles (open/close the Files / Terminal panel views). -->
+        <!-- Quick workspace toggle (open/close the session's Files panel view).
+             The session's project-scoped Terminal tab stays reachable from the
+             workspace panel's own view picker. -->
         <button
           class="sb-item"
           :class="{ 'sb-on': wpViews.includes('Files') }"
@@ -35,16 +37,20 @@
           <Icon name="folder" style="width: 13px; height: 13px" />
           Files
         </button>
-        <button
-          class="sb-item"
-          :class="{ 'sb-on': wpViews.includes('Terminal') }"
-          :title="t('statusbar.workspaceTerminal')"
-          @click="wpToggle('Terminal')"
-        >
-          <Icon name="commands" style="width: 13px; height: 13px" />
-          Terminal
-        </button>
+        <span class="sb-div" />
       </template>
+
+      <!-- Global terminal toggle — ALWAYS visible (every page, with or without a
+           session). Opens the app-wide terminal dock (cwd = home). -->
+      <button
+        class="sb-item"
+        :class="{ 'sb-on': gtOpen }"
+        :title="t('statusbar.terminalGlobal')"
+        @click="gtToggle"
+      >
+        <Icon name="commands" style="width: 13px; height: 13px" />
+        Terminal
+      </button>
     </div>
   </footer>
 </template>
@@ -53,20 +59,24 @@
 // Global status bar (VSCode-style footer), mounted once in the default layout. Left
 // edge shows per-account plan-usage donuts; the right edge surfaces the ACTIVE
 // session's git branch (quick-switch), context-window usage, a project-modal opener,
-// and the model/account/effort/style config chips — moved out of the SessionDetail
-// header so they are reachable from a fixed spot. Session items render only on the
-// Sessions route with an open session.
+// the model/account/effort/style config chips, and the Files panel toggle — moved
+// out of the SessionDetail header so they are reachable from a fixed spot. Those
+// session items render only on the Sessions route with an open session. The global
+// Terminal toggle (app-wide terminal dock, cwd = home) is ALWAYS visible.
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useGlobalTerminal } from '~/composables/useGlobalTerminal'
 
 const { t } = useI18n()
 const route = useRoute()
 const sessions = useSessionsStore()
 const { projectName } = useProjects()
 const projectModal = useProjectModal()
-// Workspace-panel bridge: toggle Files/Terminal in the active session's panel; the
-// open-views list (published by SessionDetail) drives the chips' active state.
+// Workspace-panel bridge: toggle the active session's Files panel; the open-views
+// list (published by SessionDetail) drives the chip's active state.
 const { openViews: wpViews, toggleView: wpToggle } = useWorkspacePanel()
+// Always-visible global terminal dock (independent of any session).
+const { isOpen: gtOpen, toggle: gtToggle } = useGlobalTerminal()
 
 // The active session, but only while the Sessions screen is the one in view.
 const active = computed(() => (route.path.startsWith('/sessions') ? sessions.active : null))

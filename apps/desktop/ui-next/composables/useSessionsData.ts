@@ -386,8 +386,10 @@ export const modelsForProvider = (provider: Provider): string[] => PROVIDER_MODE
 
 const ACCOUNTS = ['hoatq · Anthropic', 'team · OpenAI', 'personal · Google']
 
+// Project grouping moved to the VSCode-style tab strip (SessionTabBar), so it's no
+// longer a group-by option — the active tab IS the project filter. The remaining
+// options sub-group WITHIN a tab.
 const GROUPBY: [string, string][] = [
-  ['project', 'Project'],
   ['provider', 'Connection'],
   ['model', 'Model'],
   ['unread', 'Unread'],
