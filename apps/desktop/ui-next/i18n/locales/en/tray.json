@@ -11,5 +11,5 @@
   "tray.empty.limits": "No provider limits to show",
   "tray.empty.recent": "No recent sessions",
   "tray.openActivity": "Open full Activity",
-  "tray.tooltip.busy": "AWOG — {running} running · {attention} need action"
+  "tray.tooltip.busy": "AWOG — {running} running · {attention} need action · {unread} unread"
 }

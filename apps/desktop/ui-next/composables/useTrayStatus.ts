@@ -28,9 +28,16 @@ export function useTrayStatus() {
       tasks.runningTasks.length + sessions.sessions.filter((s) => s.status === 'streaming').length
     const attention =
       tasks.awaitingTasks.length + sessions.sessions.filter((s) => s.status === 'awaiting').length
+    // Finished-but-unread sessions: surfaced so the tray flags "go read it" even
+    // after nothing is actively running (the gap the user hit — a done session
+    // left the menu bar blank). Drives a dot in the macOS title + the tooltip.
+    const unread = sessions.sessions.filter((s) => s.unread).length
     return {
-      macTitle: running > 0 ? `${running}▶` : '',
-      tooltip: running || attention ? t('tray.tooltip.busy', { running, attention }) : 'AWOG',
+      macTitle: running > 0 ? `${running}▶` : attention + unread > 0 ? '●' : '',
+      tooltip:
+        running || attention || unread
+          ? t('tray.tooltip.busy', { running, attention, unread })
+          : 'AWOG',
     }
   })
 
@@ -49,8 +56,11 @@ export function useTrayStatus() {
     if (cmd.kind === 'activity') {
       openActivity()
     } else if (cmd.kind === 'session') {
-      sessions.setActive(cmd.id)
+      // Resolve by the stable engine id — the popover sent the sidecar id, not its
+      // own renderer's numeric client id (which never matches this store).
+      // openByEngineId hydrates first, so it works even before Sessions has loaded.
       navigateTo('/sessions')
+      void sessions.openByEngineId(cmd.engineId)
     } else if (cmd.kind === 'task') {
       tasks.selectTask(cmd.id)
       navigateTo('/tasks')

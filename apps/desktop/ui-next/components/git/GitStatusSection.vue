@@ -35,9 +35,9 @@
           <div
             v-else
             class="gfile"
-            :class="{ on: sel === row.path }"
+            :class="{ on: sel?.path === row.path && sel?.staged === staged }"
             :style="{ paddingLeft: pad(row.depth) }"
-            @click="emit('select', row.path)"
+            @click="emit('select', row.path, staged)"
             @contextmenu.prevent="emit('context-file', $event, row.path, staged)"
           >
             <input
@@ -68,8 +68,8 @@
           v-for="x in files"
           :key="x.f"
           class="gfile"
-          :class="{ on: sel === x.f }"
-          @click="emit('select', x.f)"
+          :class="{ on: sel?.path === x.f && sel?.staged === staged }"
+          @click="emit('select', x.f, staged)"
           @contextmenu.prevent="emit('context-file', $event, x.f, staged)"
         >
           <input
@@ -96,7 +96,7 @@
 <script setup lang="ts">
 // One working-tree section (Staged / Changes) — collapsible header + a real
 // nested folder tree (or flat full-path rows). Mirrors production GitStatusSection.
-import type { GitFile } from './git-types'
+import type { GitFile, GitSelection } from './git-types'
 import { baseNameOf, buildPathTreeRows, shortPath, statusColor } from './git-types'
 
 const props = defineProps<{
@@ -104,11 +104,11 @@ const props = defineProps<{
   files: GitFile[]
   staged: boolean
   chTree: boolean
-  sel: string | null
+  sel: GitSelection | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'select', file: string): void
+  (e: 'select', file: string, staged: boolean): void
   (e: 'discard', file: string): void
   (e: 'discard-all', files: string[]): void
   (e: 'toggle-stage', file: string, staged: boolean): void

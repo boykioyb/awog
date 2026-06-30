@@ -79,6 +79,10 @@ export type StepBlock = {
   sub?: SubAgent
   eid?: string
   status?: 'running' | 'done' | 'error'
+  // A TodoWrite `note` step carries its checklist here instead of a detail body.
+  // Such blocks are NOT rendered inline (SessionMessageItem skips them); the docked
+  // SessionTodoPanel scans for the latest one. `undefined` = not a todo step.
+  todos?: Todo[]
 }
 export type PlanBlock = {
   kind: 'plan'
@@ -183,7 +187,10 @@ export type GitMeta = {
   issue?: number
   issueTitle?: string
 }
-export type Todo = { t: string; done: boolean }
+// One row in the model's live checklist (a TodoWrite `note` step). `t` = label,
+// `done` = completed (kept for the mock seed + simple checks); `status` carries the
+// full 3-state so the panel can show an in-progress marker, not just done/undone.
+export type Todo = { t: string; done: boolean; status?: 'pending' | 'in_progress' | 'completed' }
 
 // One bulk-loaded memory file / custom agent / skill in the breakdown (label +
 // char size; ÷4 ≈ tokens). Drives the expandable MEMORY FILES / CUSTOM AGENTS

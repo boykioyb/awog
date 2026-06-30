@@ -70,5 +70,13 @@
   "sessions.pinned.notes": "Ghi chú",
   "sessions.pinned.notesTitle": "Ghi chú đã ghim — bấm để sửa",
   "sessions.pinned.searchFiles": "Ghim một file (gõ để tìm)…",
-  "sessions.pinned.notesPlaceholder": "Ghi chú luôn gửi cho model…"
+  "sessions.pinned.notesPlaceholder": "Ghi chú luôn gửi cho model…",
+  "sessions.pinned.savePreset": "Lưu thành mẫu",
+  "sessions.pinned.savePresetTitle": "Lưu ghi chú này để tái dùng ở mọi session",
+  "sessions.pinned.presetNamePlaceholder": "Tên mẫu…",
+  "sessions.pinned.cancelPreset": "Hủy",
+  "sessions.pinned.deletePreset": "Xóa mẫu",
+  "sessions.pinned.presets": "Mẫu đã lưu",
+  "sessions.pinned.recentNotes": "Gần đây",
+  "sessions.pinned.clearRecent": "Xóa"
 }

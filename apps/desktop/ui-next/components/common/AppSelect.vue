@@ -152,6 +152,10 @@ onBeforeUnmount(() => {
 .asel {
   position: relative;
   display: inline-block;
+  /* When used as a flex child (e.g. label + select in a row), min-width:0 lets
+     the control shrink below its content so the value can ellipsize instead of
+     overflowing the row. Harmless when standalone. */
+  min-width: 0;
 }
 .aseltrigger {
   display: flex;
@@ -172,6 +176,10 @@ onBeforeUnmount(() => {
   border-color: var(--borderStrong);
 }
 .aselval {
+  /* min-width:0 lets this flex child shrink below its content width so the
+     ellipsis actually engages — without it a long value (e.g. a deep branch
+     ref) overflows the trigger and stretches the control past its container. */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

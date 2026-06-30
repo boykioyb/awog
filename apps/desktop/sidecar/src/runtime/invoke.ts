@@ -24,7 +24,7 @@ import { buildContext } from './context-builder.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
-import { TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
+import { TODO_USAGE_PROMPT, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from './prompts.js'
 import { toReasoning } from './thinking.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../sdk/invoke.js'
@@ -268,6 +268,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   const appendParts = [
     args.systemPromptAppend,
     rulesPrompt,
+    // Act through tools, don't narrate (see prompts.ts). Tasks are tool-driven.
+    TOOL_DISCIPLINE_PROMPT,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
     mcpUnavailable,

@@ -60,6 +60,7 @@
   "hooks.editor.env": "Biến môi trường",
   "hooks.editor.enabled": "Bật",
   "hooks.editor.save": "Lưu",
+  "hooks.editor.saving": "Đang lưu…",
 
   "hooks.configEdit.title": "Sửa hook: {name}",
   "hooks.configEdit.hint": "Mô tả thay đổi — model sẽ chỉnh cấu hình hook (sự kiện, bộ lọc, lệnh, hết giờ).",

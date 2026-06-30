@@ -139,8 +139,8 @@
 
     <template #footer>
       <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
-        {{ t('hooks.editor.save') }}
+      <button class="btn pri" :disabled="!canSave || saving" @click="onSave">
+        {{ saving ? t('hooks.editor.saving') : t('hooks.editor.save') }}
       </button>
     </template>
   </LibraryEntityModal>
@@ -423,8 +423,22 @@ const sourceHint = computed(() => {
   return t('hooks.editor.projectHint', { name: project.name })
 })
 
+// In-flight guard: onSave awaits an inline writeHookScript IPC write before
+// emitting `save`. Without this, a double-click fires two concurrent script
+// writes + save emits. Also drives the button's disabled state.
+const saving = ref(false)
+
 const onSave = async () => {
-  if (!canSave.value) return
+  if (!canSave.value || saving.value) return
+  saving.value = true
+  try {
+    await doSave()
+  } finally {
+    saving.value = false
+  }
+}
+
+const doSave = async () => {
   // Derive a stable slug for a brand-new hook from the name.
   const id =
     draft.value.id ||

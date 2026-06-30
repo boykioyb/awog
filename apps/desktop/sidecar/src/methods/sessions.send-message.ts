@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
-import { register } from '../transport/rpc.js'
+import { register, RpcError } from '../transport/rpc.js'
 import {
   runStream,
   registerAborter,
@@ -542,6 +542,9 @@ register('sessions.sendMessage', async (raw) => {
         messageId: params.messageId,
         text: '',
         stopReason: 'budget-exceeded',
+        // Carry the cause on this terminal event so the UI surfaces the alert
+        // from the stream — the sendMessage RPC response can be dropped/land late.
+        errorMessage,
       })
       return {
         messageId: params.messageId,
@@ -912,7 +915,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // `message.progress` deltas — last write wins. Called once per turn at every
   // exit (success, cancel, error). appendEvent has no re-fold guard; if the
   // session was deleted mid-turn the fold tombstones this anyway.
-  const persistAgent = async (opts: { result?: RunStreamResult }) => {
+  const persistAgent = async (opts: { result?: RunStreamResult; error?: string }) => {
     const steps = [...collectedSteps.values()]
     const message: SessionMessage = {
       id: params.messageId,
@@ -949,8 +952,14 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       if (opts.result.stopReason === 'error') {
         message.error = { message: opts.result.errorMessage ?? 'The model returned an error.' }
       }
+    } else if (opts.error !== undefined) {
+      // Thrown runtime error (auth expired, chat failed, runtime crash — NOT a user
+      // cancel): persist the cause as `error` so a reload shows the alert + retry,
+      // identical to a graceful `error` stop. Persisting it as `canceled` would make
+      // ui-next render a silent empty bubble (it has no canceled badge).
+      message.error = { message: opts.error }
     } else {
-      // Reached on cancel/error: flag the truncated reply so the UI badges it.
+      // Reached on cancel: flag the truncated reply so the UI badges it.
       message.canceled = true
     }
     try {
@@ -1106,10 +1115,22 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     // Success → persist the authoritative final reply (full text + usage + steps).
     await persistAgent({ result })
   } catch (err) {
-    // Cancel / error / runtime failure: runStreamPi throws here. Persist whatever
-    // text + steps streamed so the partial reply survives reload, then re-throw
-    // so the UI keeps its cancel/error handling.
-    await persistAgent({})
+    // Cancel / error / runtime failure: runStreamPi throws here (always an RpcError
+    // via mapErrorToRpc). Persist whatever text + steps streamed so the partial reply
+    // survives reload, flagged by outcome: a user cancel → `canceled`; any other
+    // thrown error → `error` (with the specific cause) so reload shows the alert + retry.
+    const isCancel = err instanceof RpcError && err.code === -32023
+    const errMsg = err instanceof Error ? err.message : String(err)
+    await persistAgent(isCancel ? {} : { error: errMsg })
+    // Terminal event on the RELIABLE stream so the UI finalizes — and surfaces the
+    // error alert — even if the RPC reject below is dropped or lands late. Cancel →
+    // 'aborted' (no alert); any other thrown error → 'error' with the cause + retry.
+    emit('session.message.done', {
+      sessionId: params.sessionId,
+      messageId: params.messageId,
+      stopReason: isCancel ? 'aborted' : 'error',
+      ...(isCancel ? {} : { errorMessage: errMsg }),
+    })
     throw err
   } finally {
     abortController.signal.removeEventListener('abort', onAbort)
@@ -1131,6 +1152,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     modelUsed: result.modelUsed,
     usage: result.usage,
     stopReason: result.stopReason,
+    // Provider error cause on a graceful `error` stop. Carried here — not only in
+    // the RPC result below — because this terminal event is the RELIABLE finalize
+    // signal: the sendMessage RPC response can land late or be dropped (see the
+    // session.message.done handler in the UI store), and the error alert must not
+    // depend on it landing.
+    ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
   })
 
   // Rewind snapshot (ADR 0038): capture the workspace state at the end of this

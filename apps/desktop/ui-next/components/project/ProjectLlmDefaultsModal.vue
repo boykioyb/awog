@@ -112,12 +112,17 @@
         v-if="ctrl.hasCustomDefaults.value"
         class="btn"
         style="margin-right: auto; color: var(--danger)"
+        :disabled="ctrl.saving.value"
         @click="onReset"
       >
         {{ t('projects.llm.reset') }}
       </button>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" @click="onSave">{{ t('projects.llm.save') }}</button>
+      <button class="btn" :disabled="ctrl.saving.value" @click="emit('cancel')">
+        {{ t('common.cancel') }}
+      </button>
+      <button class="btn pri" :disabled="ctrl.saving.value" @click="onSave">
+        {{ ctrl.saving.value ? t('projects.llm.saving') : t('projects.llm.save') }}
+      </button>
     </template>
   </LibraryEntityModal>
 </template>

@@ -66,11 +66,6 @@
     </div>
     <div class="cddiff">
       <div v-if="activeFile && activeDiffRows.length" class="codeview">
-        <div class="cvhead">
-          <Icon name="git" style="width: 12px; height: 12px" />
-          <span>{{ activeFile }}</span>
-          <span class="cvlang">diff</span>
-        </div>
         <div class="cvdiff">
           <GitDiffLine v-for="(l, i) in activeDiffRows" :key="i" :line="l" />
         </div>
@@ -94,7 +89,7 @@
 // Git commit detail — COMMIT / CHANGES / FILE TREE tabs.
 // Ported from commitDetail in awog-prototype.html.
 import type { Commit, CommitTab, DiffLine, DiffRow, GitFile } from './git-types'
-import { avatarOf, baseNameOf, shortPath, statusColor, tokenizeCode } from './git-types'
+import { avatarOf, baseNameOf, shortPath, statusColor } from './git-types'
 
 const props = defineProps<{
   commit: Commit
@@ -112,11 +107,13 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// Diff lines render as plain text colored by line type only (no syntax
+// tokenizing — see GitDiffViewer: per-token colors looked noisy over add/del).
 function toRows(lines: DiffLine[]): DiffRow[] {
   return lines.map((l) => ({
     cls: l.t === '+' ? 'add' : l.t === '-' ? 'del' : l.t === '@' ? 'hunk' : '',
     n: l.n ?? '',
-    tokens: l.t === '@' ? [{ text: l.s, cls: '' as const }] : tokenizeCode(l.s),
+    tokens: [{ text: l.s, cls: '' as const }],
   }))
 }
 
@@ -164,7 +161,15 @@ const dir = (f: string) => shortPath(f)[0]
   flex: 1;
   min-width: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 0;
+}
+/* Full-bleed diff (matches the Local Changes viewer): drop the .codeview card
+   chrome so the diff fills the pane instead of sitting in an inset box. */
+.cddiff .codeview {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  background: transparent;
 }
 .cddiffempty {
   color: var(--textDim);

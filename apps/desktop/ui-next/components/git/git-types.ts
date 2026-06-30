@@ -14,6 +14,11 @@ export type DiffRow = { cls: string; n: number | string; tokens: CodeToken[]; hu
 
 export type GitFile = { f: string; st: string }
 
+// A selected working-tree row + which section it was clicked in. A partially
+// staged file appears in BOTH the Staged and Changes sections, so the `staged`
+// side disambiguates which diff to load and which actions apply.
+export type GitSelection = { path: string; staged: boolean }
+
 export type CommitRef = { t: 'head' | 'remote' | 'branch' | 'tag'; n: string }
 
 export type Commit = {
@@ -285,37 +290,7 @@ export function buildPathTreeRows(
   return rows
 }
 
-const HLKW = new Set(
-  (
-    'const let var function return import export from await async if else for while do new class ' +
-    'extends implements interface type enum of in try catch finally throw typeof instanceof this ' +
-    'super null undefined true false void as public private readonly default'
-  ).split(' '),
-)
-
-// Token for syntax highlighting; cls maps to the prototype's t-c/t-s/t-n/t-k/t-t spans.
+// Token for a diff line cell. The diff viewers render lines as a single plain
+// token (cls '') colored by line type — the `t-*` syntax classes exist for the
+// shape but are no longer produced (per-token highlighting fought add/del color).
 export type CodeToken = { text: string; cls: '' | 't-c' | 't-s' | 't-n' | 't-k' | 't-t' }
-
-// hl: tiny syntax tokenizer — comment / string / number / keyword / type.
-// Returns tokens so templates render <span> per token (no v-html); Vue escapes text.
-export function tokenizeCode(src: string): CodeToken[] {
-  const re = /(\/\/[^\n]*)|(`[^`]*`|'[^']*'|"[^"]*")|(\b\d[\w.]*\b)|([A-Za-z_$][\w$]*)/g
-  const tokens: CodeToken[] = []
-  let last = 0
-  let match: RegExpExecArray | null
-  while ((match = re.exec(src))) {
-    if (match.index > last) tokens.push({ text: src.slice(last, match.index), cls: '' })
-    const [, c, s, n, id] = match
-    if (c) tokens.push({ text: c, cls: 't-c' })
-    else if (s) tokens.push({ text: s, cls: 't-s' })
-    else if (n) tokens.push({ text: n, cls: 't-n' })
-    else if (id) {
-      if (HLKW.has(id)) tokens.push({ text: id, cls: 't-k' })
-      else if (/^[A-Z]/.test(id)) tokens.push({ text: id, cls: 't-t' })
-      else tokens.push({ text: id, cls: '' })
-    }
-    last = re.lastIndex
-  }
-  if (last < src.length) tokens.push({ text: src.slice(last), cls: '' })
-  return tokens
-}

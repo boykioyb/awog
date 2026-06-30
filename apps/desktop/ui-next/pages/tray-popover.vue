@@ -59,7 +59,7 @@
           v-for="s in recent"
           :key="s.id"
           class="tp-row"
-          @click="go({ kind: 'session', id: s.id })"
+          @click="go({ kind: 'session', engineId: s.engineId })"
         >
           <span class="tp-dot" :style="{ background: s.color }" />
           <span class="tp-rtitle">{{ s.title }}</span>
@@ -146,13 +146,13 @@ const running = computed<Row[]>(() => {
       cmd: { kind: 'task', id: task.id },
     })
   for (const s of sessions.sessions)
-    if (s.status === 'streaming')
+    if (s.status === 'streaming' && s.engineId)
       out.push({
         key: `s-${s.id}`,
         title: s.title,
         meta: t('tray.streaming'),
         color: STATUS_COLOR.streaming,
-        cmd: { kind: 'session', id: s.id },
+        cmd: { kind: 'session', engineId: s.engineId },
       })
   return out
 })
@@ -160,13 +160,13 @@ const running = computed<Row[]>(() => {
 const attention = computed<Row[]>(() => {
   const out: Row[] = []
   for (const s of sessions.sessions)
-    if (s.status === 'awaiting')
+    if (s.status === 'awaiting' && s.engineId)
       out.push({
         key: `s-${s.id}`,
         title: s.title,
         meta: t('tray.awaitingReply'),
         color: 'var(--amber)',
-        cmd: { kind: 'session', id: s.id },
+        cmd: { kind: 'session', engineId: s.engineId },
       })
   for (const task of tasks.awaitingTasks)
     out.push({
@@ -181,12 +181,23 @@ const attention = computed<Row[]>(() => {
 
 // Recent: newest first (the list is already recency-ordered), excluding the
 // streaming/awaiting sessions already surfaced in Running / Needs action.
-const recent = computed(() =>
-  sessions.sessions
-    .filter((s) => s.status !== 'streaming' && s.status !== 'awaiting')
-    .slice(0, 5)
-    .map((s) => ({ id: s.id, title: s.title, when: s.when, color: STATUS_COLOR[s.status] })),
-)
+const recent = computed(() => {
+  const out: { id: number; engineId: string; title: string; when: string; color: string }[] = []
+  for (const s of sessions.sessions) {
+    if (s.status === 'streaming' || s.status === 'awaiting') continue
+    // Need the stable engine id to route the click to the main window's store.
+    if (!s.engineId) continue
+    out.push({
+      id: s.id,
+      engineId: s.engineId,
+      title: s.title,
+      when: s.when,
+      color: STATUS_COLOR[s.status],
+    })
+    if (out.length >= 5) break
+  }
+  return out
+})
 
 async function fetchUsage(): Promise<void> {
   if (!sc.available) return

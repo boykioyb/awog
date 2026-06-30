@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { SidecarError, useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import { useGitApi } from '~/composables/useGitApi'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 
@@ -14,9 +14,20 @@ import { useWorkspaceData } from '~/composables/useWorkspaceData'
 // which project the Git page last opened. Returns null branch / empty list when the
 // sidecar is unavailable (browser-dev) or the project has no repo.
 
+// gitCode (DIRTY_TREE / …) out of a SidecarError, when present.
+function gitCodeOf(err: unknown): string | null {
+  if (err instanceof SidecarError && err.data && typeof err.data === 'object') {
+    const c = (err.data as { gitCode?: unknown }).gitCode
+    return typeof c === 'string' ? c : null
+  }
+  return null
+}
+
 export function useSessionBranch(projectId: () => string | undefined) {
   const sc = useSidecar()
   const api = useGitApi()
+  const { confirm } = useConfirm()
+  const { t } = useI18n()
   const { root } = useWorkspaceData(projectId)
   const branch = ref<string | null>(null)
   const localBranches = ref<string[]>([])
@@ -46,12 +57,36 @@ export function useSessionBranch(projectId: () => string | undefined) {
 
   async function checkout(name: string): Promise<void> {
     if (!root.value || !sc.available || name === branch.value) return
+    const repoRoot = root.value
     switching.value = true
     try {
-      await api.branchCheckout(root.value, { name })
+      await api.branchCheckout(repoRoot, { name })
       branch.value = name // optimistic; load() confirms below
     } catch (err) {
-      console.warn('[statusbar] branch checkout failed', err)
+      // `git checkout` refuses to clobber a dirty tree — offer to stash first
+      // (incl. untracked, which may be the blocker) then retry, mirroring the
+      // Git Manager flow. Other failures just log.
+      if (gitCodeOf(err) !== 'DIRTY_TREE') {
+        console.warn('[statusbar] branch checkout failed', err)
+        return
+      }
+      const ok = await confirm({
+        title: t('git.checkoutDirty.title'),
+        description: t('git.checkoutDirty.desc', { name }),
+        kind: 'primary',
+        confirmLabel: t('git.checkoutDirty.stashSwitch'),
+      })
+      if (!ok) return
+      try {
+        await api.stashSave(repoRoot, {
+          message: `WIP on ${branch.value || 'HEAD'}`,
+          includeUntracked: true,
+        })
+        await api.branchCheckout(repoRoot, { name })
+        branch.value = name
+      } catch (err2) {
+        console.warn('[statusbar] stash & switch failed', err2)
+      }
     } finally {
       switching.value = false
       void load()

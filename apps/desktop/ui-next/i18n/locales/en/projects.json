@@ -181,6 +181,7 @@
   "projects.llm.mcpNone": "No enabled connections",
   "projects.llm.reset": "Reset to app default",
   "projects.llm.save": "Save defaults",
+  "projects.llm.saving": "Saving…",
   "projects.delete.title": "Remove project",
   "projects.delete.body": "Remove \"{name}\" from AWOG. The folder on disk is NOT deleted — only the AWOG registration.",
   "projects.toast.offline": "Engine offline — showing cached projects",

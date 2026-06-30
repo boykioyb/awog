@@ -1,16 +1,24 @@
 <template>
   <div class="step" :class="{ col: collapsed }">
     <div class="steph" @click="collapsed = !collapsed">
-      <Icon :name="stepIcon(block.tool)" class="stepic" style="width: 13px; height: 13px" />
+      <Icon
+        :name="isTodo ? 'tasks' : stepIcon(block.tool)"
+        class="stepic"
+        style="width: 13px; height: 13px"
+      />
       <span class="tname">{{ block.tool }}</span>
       <span class="starg">{{ block.target }}</span>
-      <SessionStepResult :text="block.result" />
+      <SessionStepResult :text="isTodo ? todoCount : block.result" />
       <Icon name="chev" style="width: 13px; height: 13px" />
     </div>
     <Collapse :open="!collapsed">
       <div class="stepd">
+        <!-- todo checklist (a TodoWrite note step rendered inline once the live banner
+             has yielded — i.e. all done or the turn ended). Reuses the banner rows. -->
+        <SessionTodoList v-if="isTodo" :todos="block.todos ?? []" />
+
         <!-- subagent (has children) -->
-        <div v-if="block.sub" class="substep">
+        <div v-else-if="block.sub" class="substep">
           <div class="subhd">
             <Icon name="agents" style="width: 12px; height: 12px" />
             {{ block.sub.agent }}
@@ -80,8 +88,15 @@ import type { StepBlock } from '~/composables/useSessionsData'
 const props = defineProps<{ block: StepBlock }>()
 const { t } = useI18n()
 
-// Subagent steps render via the sub-step loop (when `block.sub` is set); a Skill
-// step shows its description text; everything else delegates to SessionStepBody.
+// A TodoWrite note step (carries `todos`) renders its checklist inline; a subagent
+// step renders via the sub-step loop (when `block.sub` is set); a Skill step shows
+// its description text; everything else delegates to SessionStepBody.
+const isTodo = computed(() => props.block.todos !== undefined)
+const todoCount = computed(() => {
+  const td = props.block.todos
+  if (!td || !td.length) return ''
+  return `${td.filter((x) => x.done).length}/${td.length}`
+})
 const isSkill = computed(() => /skill/i.test(props.block.tool))
 
 // A subagent's (Task) final report = the text it returns to the main agent, carried

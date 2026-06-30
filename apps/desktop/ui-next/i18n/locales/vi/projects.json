@@ -181,6 +181,7 @@
   "projects.llm.mcpNone": "Chưa có kết nối nào đang bật",
   "projects.llm.reset": "Về mặc định app",
   "projects.llm.save": "Lưu mặc định",
+  "projects.llm.saving": "Đang lưu…",
   "projects.delete.title": "Gỡ project",
   "projects.delete.body": "Gỡ \"{name}\" khỏi AWOG. Thư mục trên đĩa KHÔNG bị xoá — chỉ gỡ đăng ký trong AWOG.",
   "projects.toast.offline": "Engine offline — hiển thị project đã cache",

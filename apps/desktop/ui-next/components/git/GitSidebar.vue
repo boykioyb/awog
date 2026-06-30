@@ -105,7 +105,51 @@
           </span>
         </div>
         <template v-if="sectionOpenWithSearch.branches">
-          <div v-if="!branchRows.length" class="gsecempty">
+          <!-- Pinned branches (floated to top) -->
+          <template v-if="pinnedBranches.length">
+            <div class="gbpinhd">{{ t('git.sidebar.pinned') }}</div>
+            <div
+              v-for="b in pinnedBranches"
+              :key="`pin:${b.name}`"
+              class="gsi gbranch"
+              :class="{ on: isBranchActive(b.name) }"
+              :style="{ paddingLeft: '22px' }"
+              @click="emit('update:section', { kind: 'branch', name: b.name })"
+              @contextmenu.prevent="emit('context-branch', $event, b)"
+            >
+              <Icon
+                name="branch"
+                style="width: 12px; height: 12px"
+                :style="b.current ? { color: 'var(--accent)' } : undefined"
+              />
+              <span
+                class="gtrunc"
+                :style="
+                  b.current
+                    ? 'flex:1;min-width:0;color:var(--accent);font-weight:600'
+                    : 'flex:1;min-width:0'
+                "
+              >
+                {{ b.name }}
+              </span>
+              <span
+                v-if="branchHint(b)"
+                class="gc"
+                :style="b.current ? { color: 'var(--accent)' } : undefined"
+              >
+                {{ branchHint(b) }}
+              </span>
+              <span
+                class="gpinbtn on"
+                :title="t('git.ctx.unpin')"
+                @click.stop="emit('toggle-pin', b.name)"
+              >
+                <Icon name="pin" style="width: 12px; height: 12px" />
+              </span>
+            </div>
+          </template>
+
+          <div v-if="!branchRows.length && !pinnedBranches.length" class="gsecempty">
             {{ search ? t('git.sidebar.noMatch') : t('git.sidebar.empty') }}
           </div>
           <template v-for="row in branchRows" :key="row.key">
@@ -149,6 +193,14 @@
                 :style="row.branch.current ? { color: 'var(--accent)' } : undefined"
               >
                 {{ branchHint(row.branch) }}
+              </span>
+              <span
+                class="gpinbtn"
+                :class="{ on: isPinned(row.branch.name) }"
+                :title="isPinned(row.branch.name) ? t('git.ctx.unpin') : t('git.ctx.pin')"
+                @click.stop="emit('toggle-pin', row.branch.name)"
+              >
+                <Icon name="pin" style="width: 12px; height: 12px" />
               </span>
             </div>
           </template>
@@ -292,6 +344,9 @@ const props = defineProps<{
   collapsed: boolean
   search: string
   branchCollapsed: Record<string, boolean>
+  // Pinned local-branch names (per project) — floated into a "Pinned" group at
+  // the top of the Branches section and excluded from the folder tree below.
+  pinned: string[]
   sideW: number
 }>()
 
@@ -311,6 +366,7 @@ const emit = defineEmits<{
   (e: 'context-tag', event: MouseEvent, name: string): void
   (e: 'context-remote', event: MouseEvent, name: string): void
   (e: 'toggle-branch-folder', folder: string): void
+  (e: 'toggle-pin', name: string): void
   (e: 'resize', width: number): void
 }>()
 
@@ -330,9 +386,22 @@ const sectionOpenWithSearch = computed(() => ({
 
 // ── Local branches → collapsible folder tree (group by `/` prefix) ──
 const localBranches = computed(() => props.branches.filter((b) => !b.remote))
-const filteredLocal = computed(() =>
-  hasSearch.value ? localBranches.value.filter((b) => matchBranch(b.name)) : localBranches.value,
+
+// ── Pinned local branches (floated to the top) ──
+const pinnedSet = computed(() => new Set(props.pinned))
+const isPinned = (name: string) => pinnedSet.value.has(name)
+// Only branches that still exist, honoring the active search filter.
+const pinnedBranches = computed(() =>
+  localBranches.value.filter((b) => isPinned(b.name) && (!hasSearch.value || matchBranch(b.name))),
 )
+
+// Pinned branches are lifted into their own group, so exclude them from the tree.
+const filteredLocal = computed(() => {
+  const base = hasSearch.value
+    ? localBranches.value.filter((b) => matchBranch(b.name))
+    : localBranches.value
+  return base.filter((b) => !isPinned(b.name))
+})
 
 type BranchRow =
   | { kind: 'branch'; key: string; branch: BranchInfo; label: string; depth: number }
@@ -444,3 +513,50 @@ function onPointerDown(ev: PointerEvent) {
   handle.addEventListener('pointerup', up)
 }
 </script>
+
+<style scoped>
+/* "Pinned" subgroup label inside the Branches section — mirrors the .gsec
+   section-header idiom (mono, uppercase, faint) but indented as a child. */
+.gbpinhd {
+  padding: 6px 8px 2px 22px;
+  font-family: var(--code);
+  font-size: 0.7692rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--textFaint);
+}
+
+/* Pin toggle on a branch row — hidden until row hover, always shown (accent)
+   when the branch is pinned. flex:0 0 auto so it never squeezes the name. */
+.gpinbtn {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 2px;
+  border-radius: 5px;
+  color: var(--textDim);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.12s,
+    color 0.12s,
+    background 0.12s;
+}
+.gbranch:hover .gpinbtn {
+  opacity: 0.75;
+}
+.gpinbtn:hover {
+  opacity: 1;
+  color: var(--text);
+  background: var(--bgHover);
+}
+.gpinbtn.on {
+  opacity: 1;
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gpinbtn {
+    transition: none;
+  }
+}
+</style>

@@ -360,6 +360,8 @@ export function useGitApi() {
       sidecar.request<{ ok: true }>('git.stageFile', { workspaceRoot, paths }),
     stageHunk: (workspaceRoot: string, path: string, hunkIndex: number) =>
       sidecar.request<{ ok: true }>('git.stageHunk', { workspaceRoot, path, hunkIndex }),
+    unstageHunk: (workspaceRoot: string, path: string, hunkIndex: number) =>
+      sidecar.request<{ ok: true }>('git.unstageHunk', { workspaceRoot, path, hunkIndex }),
     init: (workspaceRoot: string) => sidecar.request<{ ok: true }>('git.init', { workspaceRoot }),
     getIdentity: (workspaceRoot: string) =>
       sidecar.request<GitIdentity>('git.getIdentity', { workspaceRoot }),

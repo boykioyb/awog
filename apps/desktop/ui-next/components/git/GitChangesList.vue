@@ -48,7 +48,7 @@
         :staged="true"
         :ch-tree="chTree"
         :sel="sel"
-        @select="(f) => emit('select', f)"
+        @select="(f, s) => emit('select', f, s)"
         @discard="(f) => emit('discard', f)"
         @discard-all="(files) => emit('discard-all', files)"
         @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
@@ -62,7 +62,7 @@
         :staged="false"
         :ch-tree="chTree"
         :sel="sel"
-        @select="(f) => emit('select', f)"
+        @select="(f, s) => emit('select', f, s)"
         @discard="(f) => emit('discard', f)"
         @discard-all="(files) => emit('discard-all', files)"
         @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
@@ -80,7 +80,7 @@
 // Git working-tree file list (middle pane) — WORKING TREE header (stage-all /
 // unstage-all / tree-flat toggle) + Staged / Changes sections (real nested tree).
 // Mirrors production GitStatusList; commit panel lives in the detail pane.
-import type { GitFile } from './git-types'
+import type { GitFile, GitSelection } from './git-types'
 
 const { t } = useI18n()
 
@@ -89,7 +89,7 @@ withDefaults(
     staged: GitFile[]
     unstaged: GitFile[]
     chTree: boolean
-    sel: string | null
+    sel: GitSelection | null
     width?: number
   }>(),
   { width: 304 },
@@ -97,7 +97,7 @@ withDefaults(
 
 const emit = defineEmits<{
   (e: 'toggle-tree'): void
-  (e: 'select', file: string): void
+  (e: 'select', file: string, staged: boolean): void
   (e: 'discard', file: string): void
   (e: 'discard-all', files: string[]): void
   (e: 'toggle-stage', file: string, staged: boolean): void

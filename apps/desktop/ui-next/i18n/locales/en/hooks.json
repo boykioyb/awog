@@ -60,6 +60,7 @@
   "hooks.editor.env": "Environment",
   "hooks.editor.enabled": "Enabled",
   "hooks.editor.save": "Save",
+  "hooks.editor.saving": "Saving…",
 
   "hooks.configEdit.title": "Edit hook: {name}",
   "hooks.configEdit.hint": "Describe the change — the model revises the hook config (event, matcher, command, timeout).",

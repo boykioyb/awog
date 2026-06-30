@@ -2,12 +2,24 @@
   <div>
     <SettingsPaneHeader :title="t('settings.about.heading')" />
 
-    <!-- App identity + version -->
+    <!-- App identity + version. When an update is actionable, the primary action
+         (Download / Open download page / Restart) sits next to "Check now". -->
     <SettingsField :name="t('settings.about.appName')" :desc="versionLine">
-      <button class="btn sm" :disabled="!available || checking" @click="onCheckNow">
-        <Icon name="refresh" />
-        {{ checking ? t('settings.about.checking') : t('settings.about.checkNow') }}
-      </button>
+      <div class="keyrow">
+        <button
+          v-if="action"
+          class="btn sm pri"
+          :disabled="update.actionBusy"
+          @click="update.runPrimaryAction()"
+        >
+          <Icon :name="action.icon" :class="{ uaspin: update.actionBusy }" />
+          {{ action.label }}
+        </button>
+        <button class="btn sm" :disabled="!available || checking" @click="onCheckNow">
+          <Icon name="refresh" />
+          {{ checking ? t('settings.about.checking') : t('settings.about.checkNow') }}
+        </button>
+      </div>
     </SettingsField>
 
     <!-- Repository -->
@@ -45,14 +57,14 @@
       <span style="color: var(--textDim); font-size: 0.8846rem">{{ lastCheckedLabel }}</span>
     </SettingsField>
 
-    <!-- Transient check status -->
+    <!-- Live status line (reflects the shared update store). -->
     <div v-if="statusLine" class="fd" :style="statusStyle">{{ statusLine }}</div>
 
     <div class="fd" style="margin-top: 8px">
       {{ t('settings.about.tagline') }} · {{ t('settings.about.tagline2') }}
     </div>
 
-    <!-- Platform manual-install note -->
+    <!-- Platform manual-install note (installed app on notify-only platforms). -->
     <div v-if="needsManualInstall" class="fd" style="margin-top: 8px; color: var(--amber)">
       {{ t('settings.about.manualInstallNote') }}
     </div>
@@ -60,18 +72,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
+import { useUpdateStore } from '~/stores/update'
 import { useSidecar } from '~/composables/useSidecar'
-import type { UnlistenFn, UpdateEvent } from '~/composables/useSidecar'
 
-// About panel — ports setSecHtml('about') and wires it to the real update bridge.
-// App identity + version come from the sidecar (getAppInfo on mount); auto-update
-// preference lives in the settings store; "Check now" drives a one-shot background
-// check whose outcome is surfaced as a transient inline status line.
+// About panel — reads the shared update store (state machine + app info live
+// there; the auto-update plugin owns the single app-lifetime subscription). The
+// auto-update preference lives in the settings store. "Check now" drives a
+// one-shot manual check; outcome surfaces via the store-derived status line.
 const { t } = useI18n()
 const store = useSettingsStore()
+const update = useUpdateStore()
 const sidecar = useSidecar()
+const { action } = useUpdateAction()
 const { closeSettings } = useSettingsModal()
 const { reset: rerunSetup } = useOnboarding()
 const { start: startTour } = useTour()
@@ -91,15 +105,12 @@ const onReplayTour = () => {
 
 const available = sidecar.available
 
-// --- version + platform info (sidecar truth; static fallback in browser-dev) ---
-const version = ref('')
-// `null` until known; only the explicit `false` from the sidecar shows the note.
-const canAutoInstall = ref<boolean | null>(null)
-const needsManualInstall = computed(() => canAutoInstall.value === false)
-
 const versionLine = computed(() =>
-  version.value ? `v${version.value}` : t('settings.about.versionFallback'),
+  update.currentVersion ? `v${update.currentVersion}` : t('settings.about.versionFallback'),
 )
+
+// Manual install note only matters in the installed app on notify-only platforms.
+const needsManualInstall = computed(() => update.isPackaged && !update.canAutoInstall)
 
 // --- auto-update preference (store proxy; never mutate state directly) ---
 const autoUpdateEnabled = computed<boolean>({
@@ -113,48 +124,36 @@ const lastCheckedLabel = computed(() => {
   return new Date(iso).toLocaleString()
 })
 
-// --- "Check now" flow ---
-const checking = ref(false)
-const statusLine = ref('')
-type StatusKind = 'info' | 'error'
-const statusKind = ref<StatusKind>('info')
+// --- "Check now" flow (delegates to the store) ---
+const checking = computed(() => update.status === 'checking')
+
+const onCheckNow = () => {
+  if (!available || checking.value) return
+  void update.checkNow()
+}
+
+// Status line derived from the shared store, so it stays in sync with the banner.
+const statusLine = computed(() => {
+  switch (update.status) {
+    case 'available':
+      return t('settings.about.status.available', { version: update.newVersion ?? '' })
+    case 'downloading':
+      return t('settings.about.status.downloading', { percent: update.progressPercent })
+    case 'downloaded':
+      return t('settings.about.status.downloaded')
+    case 'not-available':
+      return t('settings.about.status.latest')
+    case 'error':
+      return update.errorMessage || t('settings.about.status.error')
+    default:
+      // In dev / browser there's no real updater — make "Check now" explain itself.
+      return available && !update.isPackaged ? t('settings.about.status.devOnly') : ''
+  }
+})
 const statusStyle = computed(() => ({
   marginTop: '8px',
-  color: statusKind.value === 'error' ? 'var(--amber)' : 'var(--accent)',
+  color: update.status === 'error' ? 'var(--amber)' : 'var(--accent)',
 }))
-
-let unlisten: UnlistenFn | null = null
-
-const handleUpdateEvent = (event: UpdateEvent) => {
-  if (event.type === 'checking') return
-  // Any resolved outcome ends the pending check and records the timestamp.
-  checking.value = false
-  store.updateAutoUpdate({ lastCheckedAt: new Date().toISOString() })
-  if (event.type === 'available') {
-    statusKind.value = 'info'
-    statusLine.value = t('settings.about.status.available', { version: event.version })
-  } else if (event.type === 'not-available') {
-    statusKind.value = 'info'
-    statusLine.value = t('settings.about.status.latest')
-  } else if (event.type === 'error') {
-    statusKind.value = 'error'
-    statusLine.value = event.message || t('settings.about.status.error')
-  }
-}
-
-const onCheckNow = async () => {
-  if (!available || checking.value) return
-  checking.value = true
-  statusLine.value = ''
-  try {
-    if (!unlisten) unlisten = await sidecar.onUpdateEvent(handleUpdateEvent)
-    await sidecar.checkForUpdates()
-  } catch {
-    checking.value = false
-    statusKind.value = 'error'
-    statusLine.value = t('settings.about.status.error')
-  }
-}
 
 // Open the repo in the OS browser (Electron); fall back to window.open in
 // browser-dev where the sidecar bridge isn't available.
@@ -163,20 +162,22 @@ const onOpenRepo = () => {
     if (typeof window !== 'undefined') window.open(REPO_URL, '_blank', 'noopener,noreferrer')
   })
 }
-
-onMounted(async () => {
-  if (!available) return
-  try {
-    const info = await sidecar.getAppInfo()
-    version.value = info.version
-    canAutoInstall.value = info.canAutoInstall
-  } catch {
-    // Leave the static fallback in place when app info can't be read.
-  }
-})
-
-onUnmounted(() => {
-  unlisten?.()
-  unlisten = null
-})
 </script>
+
+<style scoped>
+/* Spinner for the in-flight update primary action (restart/open-releases don't
+   flip the status synchronously). No rotate keyframe in the shared prototype.css. */
+.uaspin {
+  animation: uaspin 0.8s linear infinite;
+}
+@keyframes uaspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .uaspin {
+    animation: none;
+  }
+}
+</style>

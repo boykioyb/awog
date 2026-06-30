@@ -13,6 +13,9 @@
   "settings.about.checking": "Checking…",
   "settings.about.status.latest": "You're on the latest version",
   "settings.about.status.available": "Update available: v{version}",
+  "settings.about.status.downloading": "Downloading update… {percent}%",
+  "settings.about.status.downloaded": "Update ready — restart to install",
   "settings.about.status.error": "Couldn't check for updates",
+  "settings.about.status.devOnly": "Updates are only available in the installed app",
   "settings.about.manualInstallNote": "On this platform AWOG notifies you of new versions and opens the download page — installing the update is manual."
 }

@@ -28,12 +28,32 @@
           <span class="kvv mono">{{ remote.pushUrl }}</span>
         </div>
         <div class="gdpactions">
-          <button class="btn sm" @click="emit('fetch')">
-            <Icon name="refresh" style="width: 13px; height: 13px" />
+          <button class="btn sm" :disabled="busy" @click="emit('fetch')">
+            <Icon
+              name="refresh"
+              :class="{ gdpspin: syncOp?.op === 'fetch' }"
+              style="width: 13px; height: 13px"
+            />
             {{ t('git.ops.fetch') }}
           </button>
-          <button class="btn sm" @click="emit('pull')">{{ t('git.ops.pullWord') }}</button>
-          <button class="btn pri sm" @click="emit('push')">{{ t('git.ops.pushWord') }}</button>
+          <button class="btn sm" :disabled="busy" @click="emit('pull')">
+            <Icon
+              v-if="syncOp?.op === 'pull'"
+              name="refresh"
+              class="gdpspin"
+              style="width: 13px; height: 13px"
+            />
+            {{ t('git.ops.pullWord') }}
+          </button>
+          <button class="btn pri sm" :disabled="busy" @click="emit('push')">
+            <Icon
+              v-if="syncOp?.op === 'push'"
+              name="refresh"
+              class="gdpspin"
+              style="width: 13px; height: 13px"
+            />
+            {{ t('git.ops.pushWord') }}
+          </button>
         </div>
       </div>
 
@@ -77,7 +97,15 @@
 // create a redundant separate push-url when fetch === push.
 import type { RemoteInfo } from './git-types'
 
-const props = defineProps<{ name: string; remotes: RemoteInfo[] }>()
+type SyncOp = { op: 'fetch' | 'pull' | 'push'; phase: string; pct: number | null }
+
+const props = defineProps<{
+  name: string
+  remotes: RemoteInfo[]
+  // In-flight network op from the git store — disables fetch/pull/push and spins
+  // the active one (mirrors GitPageHeader) so the pane can't race a second op.
+  syncOp?: SyncOp | null
+}>()
 
 const emit = defineEmits<{
   (e: 'fetch'): void
@@ -88,6 +116,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const remote = computed(() => props.remotes.find((r) => r.name === props.name))
+const busy = computed(() => props.syncOp != null)
 
 const editing = ref(false)
 const fetchDraft = ref('')
@@ -168,5 +197,20 @@ watch(
 .gdpactions .btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+/* Spinner for the in-flight fetch/pull/push op (no rotate keyframe in the shared
+   prototype.css). Disabled under reduced-motion. */
+.gdpspin {
+  animation: gdpspin 0.8s linear infinite;
+}
+@keyframes gdpspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gdpspin {
+    animation: none;
+  }
 }
 </style>

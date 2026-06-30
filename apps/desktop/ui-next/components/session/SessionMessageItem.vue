@@ -178,6 +178,12 @@ import type { BlockHighlight } from './SessionTextBlock.vue'
 const props = defineProps<{ message: SessionMessage; fallbackWhen: string }>()
 const { t } = useI18n()
 const settings = useSettingsStore()
+const store = useSessionsStore()
+
+// The latest TodoWrite step renders inline as a transcript step once the docked banner
+// yields (all done / turn ended). `inlineTodoStep` is that block (or null while it's
+// still in the banner) — matched by reference below so only it shows inline.
+const { inlineTodoStep } = useSessionTodo(() => store.active)
 
 // Assistant-bubble pref (Settings → Sessions): wrap the reply body in an elevated
 // bubble card. Only when there's content (don't paint an empty box mid-stream).
@@ -223,6 +229,18 @@ const grouped = computed<Grouped[]>(() => {
     runBi = -1
   }
   props.message.blocks.forEach((b, bi) => {
+    // TodoWrite note steps carry the checklist for the docked SessionTodoPanel. Render
+    // the LATEST one inline as its own step ONLY once the live banner has yielded (turn
+    // ended / all items done) — never while the banner shows it, and never the older
+    // intermediate snapshots (which would pile up as duplicate "Todos" rows). When not
+    // rendered, skip without flushing so the tool steps around it still cluster.
+    if (b.kind === 'step' && b.todos !== undefined) {
+      if (b === inlineTodoStep.value) {
+        flush()
+        out.push({ key: blockKey(b, bi), type: 'step', step: b })
+      }
+      return
+    }
     if (b.kind === 'step' && !b.sub) {
       if (!run.length) runBi = bi
       run.push(b)
@@ -264,7 +282,6 @@ const toggleThink = (gi: number) => {
 
 // Message actions (mock-backed via the sessions store). The item finds its own index
 // in the active session's message list so each button acts at the right point.
-const store = useSessionsStore()
 const { CIRCLED } = useSessionsData()
 const { scrollToMessage } = useSessionScroll()
 const msgIndex = computed(() => store.active?.msgs.indexOf(props.message) ?? -1)
@@ -370,24 +387,20 @@ const ownFollowups = computed<IndexedFollowup[]>(() =>
 // Anchor badges: circled numbers for follow-up quotes whose source is THIS message.
 const anchors = computed(() => ownFollowups.value.map((x) => ({ label: x.label })))
 
-// Resolve each own-follow-up to exactly ONE target text-block index. Explicit
-// `blockIndex` wins; otherwise the first text block whose text contains the excerpt
-// (so a repeated excerpt marks once, not in every block). `-1` = no target.
-const followupTargets = computed<{ fu: Followup; label: string; blockIndex: number }[]>(() => {
-  const blocks = props.message.role === 'assistant' ? props.message.blocks : []
-  return ownFollowups.value.map((x) => {
-    if (x.fu.blockIndex != null) return { fu: x.fu, label: x.label, blockIndex: x.fu.blockIndex }
-    const needle = (x.fu.excerpt || '').trim()
-    const bi = needle ? blocks.findIndex((b) => b.kind === 'text' && b.text.includes(needle)) : -1
-    return { fu: x.fu, label: x.label, blockIndex: bi }
-  })
-})
-
 // §8 — highlights for one text block, derived purely from state so regenerate/rewind
 // and store.removeQuote re-render correctly (no stale local copy, automatic renumber).
+//
+// A follow-up with an explicit `blockIndex` targets only that block; one without (the
+// selection-quote path always omits it) is offered to EVERY text block and painted by
+// whichever block's RENDERED text actually contains the excerpt (locateMarks). We can't
+// pre-resolve the block here by `b.text.includes(excerpt)`: `b.text` is raw markdown while
+// the excerpt is the whitespace-normalized RENDERED selection, so any quote crossing inline
+// formatting (**bold**, `code`, links) or a soft line break would never match → no
+// highlight. locateMarks matches on rendered text per block and simply skips blocks that
+// don't contain the excerpt, so deferring to it is both correct and simpler.
 const highlightsForBlock = (blockIndex: number): BlockHighlight[] =>
-  followupTargets.value
-    .filter((x) => x.blockIndex === blockIndex)
+  ownFollowups.value
+    .filter((x) => x.fu.blockIndex == null || x.fu.blockIndex === blockIndex)
     .map((x) => ({ fu: x.fu, label: x.label }))
 
 // Plain text — user: raw; assistant: concatenated text blocks.

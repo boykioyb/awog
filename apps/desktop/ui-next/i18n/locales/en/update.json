@@ -1,0 +1,12 @@
+{
+  "update.banner.available": "AWOG v{version} is available.",
+  "update.banner.downloading": "Downloading update… {percent}%",
+  "update.banner.downloaded": "AWOG v{version} is ready — restart to install.",
+  "update.banner.error": "Couldn't check for updates.",
+  "update.action.download": "Download",
+  "update.action.openReleases": "Open download page",
+  "update.action.restart": "Restart now",
+  "update.action.retry": "Retry",
+  "update.dismiss.later": "Later",
+  "update.dismiss.dismiss": "Dismiss"
+}

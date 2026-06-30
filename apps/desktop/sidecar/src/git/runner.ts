@@ -22,6 +22,17 @@ function filteredEnv(): NodeJS.ProcessEnv {
   // (what IDEs do when polling git) keeps reads lock-free; the genuine mutators
   // still take the required lock and are serialized by withWorkspaceLock.
   out.GIT_OPTIONAL_LOCKS = '0'
+  // Never let a network op (fetch/pull/push) fall back to an interactive
+  // credential prompt: the sidecar has no TTY, so `Password for 'https://…'`
+  // would hang the process (and only leak to the console) instead of returning.
+  // With prompts disabled git fails fast — "could not read Username … terminal
+  // prompts disabled" → mapped to AUTH_FAILED → surfaced in the UI. Credential
+  // *helpers* (osxkeychain / GCM / gh) still run non-interactively, so a cached
+  // token keeps working; only the no-credentials case turns into a clean error.
+  out.GIT_TERMINAL_PROMPT = '0'
+  // Belt-and-suspenders: stop Git Credential Manager from popping its own GUI
+  // window in place of the terminal prompt (harmless when GCM isn't installed).
+  out.GCM_INTERACTIVE = 'never'
   return out
 }
 

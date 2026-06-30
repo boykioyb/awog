@@ -13,6 +13,7 @@
         :collapsed="collapsed"
         :search="search"
         :branch-collapsed="bcol"
+        :pinned="pinnedBranches"
         :side-w="sideW"
         @update:section="onSelectSection"
         @toggle-section="(k) => (secOpen[k] = !secOpen[k])"
@@ -27,6 +28,7 @@
         @context-tag="(e, n) => openMenu(e, { kind: 'tag', name: n })"
         @context-remote="(e, n) => openMenu(e, { kind: 'remote', name: n })"
         @toggle-branch-folder="(f) => (bcol[f] = !bcol[f])"
+        @toggle-pin="(name) => pins.toggle(name)"
         @resize="(w) => (sideW = w)"
       />
 
@@ -50,7 +52,7 @@
           @switch-branch="switchBranch"
           @fetch="() => store.fetchRemote()"
           @pull="() => store.pull()"
-          @push="() => store.push()"
+          @push="openPush"
           @complete-merge="() => store.completeMerge()"
           @abort-merge="() => store.abortMerge()"
           @open-identity="() => (identityOpen = true)"
@@ -74,7 +76,7 @@
               :sel="selectedFile"
               :width="midW"
               @toggle-tree="chTree = !chTree"
-              @select="(f) => (selectedFile = f)"
+              @select="(f, s) => (selectedFile = { path: f, staged: s })"
               @discard="onDiscard"
               @discard-all="onDiscardAll"
               @toggle-stage="onToggleStage"
@@ -86,17 +88,22 @@
             <div class="grsz" :class="{ drag: midDragging }" @pointerdown="onMidResize" />
             <div class="detail">
               <GitDiffViewer
-                :file="selectedFile"
+                :file="selectedFile?.path ?? null"
                 :diff="diffLines"
                 :diff-mode="diffMode"
+                :staged="selectedFile?.staged ?? false"
                 @toggle-diff-mode="diffMode = diffMode === 'split' ? 'unified' : 'split'"
                 @stage-file="onStageFile"
+                @unstage-file="onUnstageFile"
                 @stage-hunk="onStageHunk"
+                @unstage-hunk="onUnstageHunk"
               />
               <GitCommitPanel
                 :msg="store.commitMessage"
                 :staged-count="store.staged.length"
                 :commits-count="store.commits.length"
+                :generating="store.isGeneratingCommit"
+                :committing="store.isCommitting"
                 @update-msg="(v) => (store.commitMessage = v)"
                 @commit="() => store.commit(store.commitMessage)"
                 @amend="() => store.amend(store.commitMessage)"
@@ -123,9 +130,10 @@
             v-else-if="section.kind === 'remote'"
             :name="section.name"
             :remotes="store.remotes"
+            :sync-op="store.syncOp"
             @fetch="() => store.fetchRemote()"
             @pull="() => store.pull()"
-            @push="() => store.push()"
+            @push="openPush"
             @set-url="(p) => store.setRemoteUrl(p.name, p)"
           />
 
@@ -166,6 +174,16 @@
 
     <GitIdentityModal :open="identityOpen" @close="identityOpen = false" />
 
+    <GitAuthErrorModal :error="store.pendingAuthError" @close="() => store.clearAuthError()" />
+
+    <GitBranchDeleteModal
+      :open="pendingDelete !== null"
+      :branch-name="pendingDelete?.name ?? ''"
+      :remote-name="pendingDelete ? remoteForBranch(pendingDelete) : null"
+      @submit="onConfirmDelete"
+      @close="pendingDelete = null"
+    />
+
     <GitRemoteAddModal :open="remoteAddOpen" @submit="onAddRemote" @close="remoteAddOpen = false" />
 
     <GitBranchCreateModal
@@ -174,6 +192,17 @@
       :current-branch="store.branch"
       @submit="onCreateBranch"
       @close="branchCreateOpen = false"
+    />
+
+    <GitPushModal
+      :open="pushOpen"
+      :current-branch="store.branch"
+      :branches="store.branches"
+      :remotes="store.remotes"
+      :ahead="store.ahead"
+      :busy="store.syncOp !== null"
+      @submit="onPush"
+      @close="pushOpen = false"
     />
 
     <div
@@ -204,10 +233,12 @@ import type {
   DiffMode,
   GitFile,
   GitSection,
+  GitSelection,
   MenuItem,
   SectionOpen,
 } from '~/components/git/git-types'
-import { useGitStore } from '~/stores/git'
+import type { PushParams } from '~/composables/useGitApi'
+import { type DeleteBranchResult, useGitStore } from '~/stores/git'
 
 const props = defineProps<{ projectId?: string }>()
 
@@ -215,6 +246,10 @@ const { t } = useI18n()
 const store = useGitStore()
 const { confirm } = useConfirm()
 const { toasts, pushToast, toastColor } = useToasts()
+
+// Pinned branches (persisted per project) — floated to the top of the sidebar.
+const pins = useGitBranchPins(() => store.currentProjectId)
+const pinnedBranches = computed(() => [...pins.pinned.value])
 
 // Map a sidecar gitCode (DIRTY_TREE / AUTH_FAILED / …) to a human message; fall
 // back to the raw (already-sanitized) error text when the code isn't translated.
@@ -258,13 +293,73 @@ async function switchBranch(name: string) {
       confirmLabel: t('git.checkoutDirty.stashSwitch'),
     })
     if (!ok) return
-    await store.stashSave()
+    // Stash failed (e.g. nothing to stash) → its error already surfaced via
+    // store.lastError; don't retry the checkout onto a still-dirty tree.
+    // includeUntracked: the blocker may be untracked files, which a plain stash
+    // leaves behind ("No local changes to save") → checkout stays refused.
+    if (!(await store.stashSave(undefined, { includeUntracked: true }))) return
     const retry = await store.checkoutBranch(name)
     if (retry.ok) pushToast(t('git.checkoutDirty.stashed', { name }), 'success')
     else pushToast(gitErrorMessage(retry.code, retry.message), 'error')
     return
   }
   pushToast(gitErrorMessage(res.code, res.message), 'error')
+}
+
+// Delete a local branch via a confirm modal that also offers deleting the
+// matching remote branch. UNMERGED (`branch -d` refused) → a second danger
+// confirm offering a force delete (`-D`), carrying the same remote choice.
+const pendingDelete = ref<BranchInfo | null>(null)
+
+// The remote that holds this branch (for the "also delete remote" option):
+// prefer the tracked upstream's remote, else any remote with a same-named branch.
+function remoteForBranch(b: BranchInfo): string | null {
+  const remotes = store.remotes.map((r) => r.name)
+  const upstream = b.upstream
+  if (upstream) {
+    const tracked = remotes.find((n) => upstream === n || upstream.startsWith(`${n}/`))
+    if (tracked) return tracked
+  }
+  return (
+    remotes.find((r) => store.branches.some((rb) => rb.remote && rb.name === `${r}/${b.name}`)) ??
+    null
+  )
+}
+
+function onConfirmDelete(payload: { deleteRemote: boolean }) {
+  const b = pendingDelete.value
+  pendingDelete.value = null
+  if (b) void runDelete(b, payload.deleteRemote)
+}
+
+async function runDelete(b: BranchInfo, deleteRemote: boolean) {
+  const remote = remoteForBranch(b) ?? undefined
+  const res = await store.deleteBranch(b.name, { deleteRemote, remote })
+  if (!res.ok && res.code === 'UNMERGED') {
+    const force = await confirm({
+      title: t('git.deleteBranch.unmergedTitle'),
+      description: t('git.deleteBranch.unmerged', { name: b.name }),
+      kind: 'danger',
+      confirmLabel: t('git.deleteBranch.forceConfirm'),
+    })
+    if (!force) return
+    finishDelete(b.name, await store.deleteBranch(b.name, { force: true, deleteRemote, remote }))
+    return
+  }
+  finishDelete(b.name, res)
+}
+
+// Toast the outcome + drop a stale pin so a future same-named branch isn't
+// silently re-pinned. A failed opt-in remote delete is warned separately (the
+// local delete still succeeded).
+function finishDelete(name: string, res: DeleteBranchResult) {
+  if (!res.ok) {
+    pushToast(gitErrorMessage(res.code, res.message), 'error')
+    return
+  }
+  if (pins.isPinned(name)) pins.toggle(name)
+  if (res.remoteError) pushToast(t('git.deleteBranch.remoteFailed', { name }), 'error')
+  else pushToast(t('git.deleteBranch.deleted', { name }), 'success')
 }
 
 // ── View state (component-local; not git data) ──
@@ -283,11 +378,28 @@ const bcol = reactive<Record<string, boolean>>({})
 const chTree = ref(true)
 const diffMode = ref<DiffMode>('unified')
 const ctab = ref<CommitTab>('commit')
-const selectedFile = ref<string | null>(null)
+// The selected working-tree row + its section (staged vs unstaged). A partially
+// staged file is in both sections, so the side determines which diff/actions apply.
+const selectedFile = ref<GitSelection | null>(null)
 const commitSel = ref<string | null>(null)
 const identityOpen = ref(false)
 const remoteAddOpen = ref(false)
 const branchCreateOpen = ref(false)
+const pushOpen = ref(false)
+
+// Single push entry point — header / remote pane / branch+remote context menus
+// all open the options dialog (target remote/branch, force, tags, set-upstream)
+// rather than firing a bare `git push`.
+function openPush() {
+  pushOpen.value = true
+}
+
+// Dialog confirmed → close + push with the resolved options. Errors surface via
+// store.lastError → toast (the store reports, doesn't swallow).
+function onPush(params: PushParams) {
+  pushOpen.value = false
+  void store.push(params)
+}
 
 // Add a remote, then jump to it so the user can fetch/push straight away.
 async function onAddRemote(payload: { name: string; url: string }) {
@@ -317,12 +429,13 @@ const isHistory = computed(
     section.value.kind === 'tag',
 )
 
-// Working-tree diff for the selected file (store.loadDiff handles real vs mock).
+// Working-tree diff for the selected file. The selected side (staged vs unstaged)
+// decides whether to load the index-vs-HEAD diff or the working-tree diff.
 const diffLines = ref<DiffLine[]>([])
 watch(
   selectedFile,
   async (f) => {
-    diffLines.value = f ? await store.loadDiff(f) : []
+    diffLines.value = f ? await store.loadDiff(f.path, f.staged) : []
   },
   { immediate: true },
 )
@@ -355,27 +468,41 @@ function onSelectSection(next: GitSection) {
   }
 }
 
-// Reload the selected file's diff (staged vs unstaged is resolved inside the
-// store) — called after any staging mutation since `selectedFile` is unchanged.
+// Reload the selected file's diff for its current side — called after a staging
+// mutation that leaves `selectedFile` pointing at the same row (e.g. stage hunk).
 function reloadDiff() {
   const f = selectedFile.value
   if (!f) {
     diffLines.value = []
     return
   }
-  void store.loadDiff(f).then((d) => {
+  void store.loadDiff(f.path, f.staged).then((d) => {
     diffLines.value = d
   })
+}
+
+// A whole-file stage/unstage moves the file out of its current section; if it was
+// selected there, drop the selection (the user re-picks the side they want).
+function clearSelectionFor(file: string) {
+  if (selectedFile.value?.path === file) selectedFile.value = null
 }
 
 async function onToggleStage(file: string, staged: boolean) {
   if (staged) await store.unstageFile(file)
   else await store.stageFile(file)
+  clearSelectionFor(file)
   reloadDiff()
 }
 
 async function onStageFile(file: string) {
   await store.stageFile(file)
+  clearSelectionFor(file)
+  reloadDiff()
+}
+
+async function onUnstageFile(file: string) {
+  await store.unstageFile(file)
+  clearSelectionFor(file)
   reloadDiff()
 }
 
@@ -388,7 +515,7 @@ async function onDiscard(file: string) {
   })
   if (!ok) return
   await store.discardFile(file)
-  if (selectedFile.value === file) selectedFile.value = null
+  clearSelectionFor(file)
   reloadDiff()
 }
 
@@ -401,7 +528,7 @@ async function onDiscardAll(files: string[]) {
   })
   if (!ok) return
   for (const file of files) await store.discardFile(file)
-  if (selectedFile.value && files.includes(selectedFile.value)) selectedFile.value = null
+  if (selectedFile.value && files.includes(selectedFile.value.path)) selectedFile.value = null
   reloadDiff()
 }
 
@@ -415,9 +542,22 @@ async function onUnstageAll() {
   reloadDiff()
 }
 
+// Stage a single hunk — only meaningful from the unstaged side (the staged side
+// hides the per-hunk affordance). Selection stays put so the reload shows the
+// remaining unstaged hunks.
 async function onStageHunk(hunkIndex: number) {
-  if (!selectedFile.value) return
-  await store.stageHunk(selectedFile.value, hunkIndex)
+  const f = selectedFile.value
+  if (!f || f.staged) return
+  await store.stageHunk(f.path, hunkIndex)
+  reloadDiff()
+}
+
+// Unstage a single hunk — only from the staged side. Selection stays put so the
+// reload shows the remaining staged hunks.
+async function onUnstageHunk(hunkIndex: number) {
+  const f = selectedFile.value
+  if (!f || !f.staged) return
+  await store.unstageHunk(f.path, hunkIndex)
   reloadDiff()
 }
 
@@ -595,6 +735,11 @@ const menuItems = computed<MenuItem[]>(() => {
     const items: MenuItem[] = [
       { id: 'checkout', label: t('git.ctx.checkout'), icon: 'check', disabled: b.current },
       { id: 'create-from', label: t('git.ctx.newFrom'), icon: 'plus' },
+      {
+        id: 'pin',
+        label: pins.isPinned(b.name) ? t('git.ctx.unpin') : t('git.ctx.pin'),
+        icon: 'pin',
+      },
       sep,
     ]
     if (b.current) {
@@ -714,7 +859,7 @@ async function dispatchFolder(id: string, path: string, isStaged: boolean) {
     })
     if (!ok) return
     await store.discardPaths(files)
-    if (selectedFile.value && files.includes(selectedFile.value)) selectedFile.value = null
+    if (selectedFile.value && files.includes(selectedFile.value.path)) selectedFile.value = null
     reloadDiff()
   } else if (id === 'ignore') {
     void store.ignore([`${path}/`])
@@ -819,12 +964,13 @@ function dispatchBranch(id: string, b: BranchInfo) {
       onSubmit: (name) => void store.tagCreate(name),
     })
   else if (id === 'create-pr') void store.openPrFor(b.name)
+  else if (id === 'pin') pins.toggle(b.name)
   else if (id === 'pull') store.pull()
-  else if (id === 'push') store.push()
+  else if (id === 'push') openPush()
   else if (id === 'merge') store.merge(b.name)
   else if (id === 'rebase') store.rebase(b.name)
   else if (id === 'copy') copy(b.name)
-  else if (id === 'delete') store.deleteBranch(b.name)
+  else if (id === 'delete') pendingDelete.value = b
   else if (id === 'fetch') store.fetchRemote()
 }
 
@@ -843,7 +989,7 @@ function dispatchTag(id: string, name: string) {
 function dispatchRemote(id: string, name: string) {
   if (id === 'fetch') store.fetchRemote()
   else if (id === 'pull') store.pull()
-  else if (id === 'push') store.push()
+  else if (id === 'push') openPush()
   else if (id === 'copy-url') copy(store.remotes.find((r) => r.name === name)?.fetchUrl ?? name)
 }
 

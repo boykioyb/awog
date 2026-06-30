@@ -143,11 +143,7 @@
           />
         </template>
         <div class="chat" @mouseup="onSelectQuote" @mousedown="quoteSel = null">
-          <SessionTodoPanel
-            v-if="session.todos && session.todos.length"
-            :todos="session.todos"
-            @toggle="(i) => store.toggleTodo(session.id, i)"
-          />
+          <SessionTodoPanel :session="session" />
           <SessionTranscript
             :messages="session.msgs"
             :fallback-when="session.when"
@@ -238,12 +234,14 @@
           <Icon name="quote" style="width: 12px; height: 12px" />
           <span class="npex">{{ notePop.text }}</span>
         </div>
-        <input
+        <textarea
           v-model="noteText"
           class="npinput"
+          rows="3"
           autofocus
           :placeholder="t('sessions.quote.notePlaceholder')"
-          @keydown.enter="saveQuote"
+          @keydown.enter.meta.prevent="saveQuote"
+          @keydown.enter.ctrl.prevent="saveQuote"
           @keydown.esc="notePop = null"
         />
         <div class="nprow">
@@ -369,9 +367,25 @@ function addFiles(files: FileList | File[]) {
     const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(f.name)
     const att: SessionAttachment = { name: f.name, img, size: f.size }
     if (mime) att.mime = mime
-    if (img || isPdf) att.src = URL.createObjectURL(f)
+    // PDFs preview via an object URL (display-only). Images are read as a base64
+    // `data:` URL instead: the engine attachment mapping only forwards an image to
+    // the model when it carries a `data:` URL — a `blob:` object URL is dropped
+    // before send, so a dragged/picked screenshot would render in the bubble yet
+    // never reach the model. Mirrors the composer's paste path (sets dataUrl+src).
+    if (isPdf) att.src = URL.createObjectURL(f)
     const idx = pendingAtt.value.push(att) - 1
-    if (!img && isTextLike(f)) {
+    if (img) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === 'string' ? reader.result : ''
+        const a = pendingAtt.value[idx]
+        if (a && dataUrl) {
+          a.dataUrl = dataUrl
+          a.src = dataUrl
+        }
+      }
+      reader.readAsDataURL(f)
+    } else if (isTextLike(f)) {
       void f.text().then((tx) => {
         const a = pendingAtt.value[idx]
         if (a) a.text = tx.slice(0, ATTACHMENT_TEXT_MAX)
@@ -511,25 +525,30 @@ function onDrop(e: DragEvent) {
   // A dropped FOLDER becomes the session's working directory (cwd), not a file
   // attachment: webkitGetAsEntry distinguishes folder from file, getPathForFile
   // (Electron preload) resolves its absolute on-disk path. Read items synchronously
-  // — the DataTransferItemList is only valid during this event.
+  // — the DataTransferItemList is only valid during this event. A drop can carry
+  // several folders, so collect ALL of them (not just the first) and skip any whose
+  // path is already attached so duplicate chips don't pile up.
+  let droppedFolder = false
   for (const item of Array.from(dt.items)) {
     if (item.kind !== 'file') continue
     const entry = item.webkitGetAsEntry?.()
     if (!entry?.isDirectory) continue
     const file = item.getAsFile()
     const path = file ? (window.awog?.getPathForFile?.(file) ?? '') : ''
-    if (path) {
-      // A folder is a per-message attachment: shows on the bubble + (on send) sets
-      // the session's working folder (cwd). Pending here like a file attachment.
-      const name =
-        path
-          .replace(/[/\\]+$/, '')
-          .split(/[/\\]/)
-          .pop() || path
-      pendingAtt.value.push({ name, img: false, folder: true, path })
-      return // folder handled; don't also treat the drop as file attachments
-    }
+    if (!path) continue
+    droppedFolder = true
+    if (pendingAtt.value.some((a) => a.folder && a.path === path)) continue
+    // A folder is a per-message attachment: shows on the bubble + (on send) sets
+    // the session's working folder (cwd). Pending here like a file attachment.
+    const name =
+      path
+        .replace(/[/\\]+$/, '')
+        .split(/[/\\]/)
+        .pop() || path
+    pendingAtt.value.push({ name, img: false, folder: true, path })
   }
+  // Folders handled → don't also treat the drop as file attachments.
+  if (droppedFolder) return
   if (dt.files.length) addFiles(dt.files)
 }
 
@@ -826,16 +845,21 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 }
 .npq {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   color: var(--accent);
   font-size: 0.8462rem;
 }
+.npq svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 .npex {
   color: var(--textMuted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 8em;
+  overflow-y: auto;
 }
 .npinput {
   width: 100%;
@@ -845,6 +869,10 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   background: var(--bgInput);
   color: var(--text);
   outline: none;
+  resize: vertical;
+  min-height: 4.5em;
+  line-height: 1.4;
+  font-family: var(--sans);
 }
 .npinput:focus {
   border-color: var(--accentBorder);

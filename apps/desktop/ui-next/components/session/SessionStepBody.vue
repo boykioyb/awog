@@ -7,10 +7,22 @@
     :lines="diffLines"
     embedded
   />
-  <!-- File content (Read/Write) → code view. -->
+  <!-- File content (Read/Write) → code view (the fname header already names the
+       input path, so no separate Input section is needed here). -->
   <SessionCodeView v-else-if="codeText !== null" :fname="target" :code="codeText" embedded />
-  <!-- Terminal output / plain text / list → raw. -->
-  <pre v-else class="cvcode plain">{{ detail || '(no output)' }}</pre>
+  <!-- Terminal output / plain text / list → Input + Output split. The header
+       truncates the input (command / query / url); here it shows in full,
+       clearly separated from the result. -->
+  <template v-else>
+    <div v-if="inputText" class="stepio">
+      <div class="stepio-lbl">{{ t('sessions.step.input') }}</div>
+      <pre class="cvcode plain">{{ inputText }}</pre>
+    </div>
+    <div class="stepio">
+      <div v-if="inputText" class="stepio-lbl">{{ t('sessions.step.output') }}</div>
+      <pre class="cvcode plain">{{ detail || t('sessions.step.noOutput') }}</pre>
+    </div>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -27,9 +39,15 @@ const props = defineProps<{
   detailKind?: StepDetailKind
 }>()
 const { DEMO_DIFF } = useSessionsData()
+const { t } = useI18n()
 
 const isEditish = (t: string): boolean => /edit|write|update|create|notebook/i.test(t)
 const isReadish = (t: string): boolean => /read/i.test(t)
+
+// Full input for the raw branch (terminal command, search pattern, fetched URL,
+// MCP args…). It's the step `target`, which the engine carries un-truncated — the
+// header only ellipsises it, so this is where the user reads the whole command.
+const inputText = computed<string>(() => props.target?.trim() ?? '')
 
 const diffLines = computed<DiffLine[]>(() => {
   if (props.detailKind === 'diff' && props.detail) return parseDiff(props.detail)
@@ -77,5 +95,19 @@ function parseDiff(src: string): DiffLine[] {
   background: transparent;
   padding: 4px 0;
   white-space: pre-wrap;
+}
+/* Input / Output split: a small muted label above each <pre>, with a hairline
+   between the input and output blocks so they read as distinct sections. */
+.stepio + .stepio {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.stepio-lbl {
+  font-size: 0.7692rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 650;
+  color: var(--textDim);
 }
 </style>

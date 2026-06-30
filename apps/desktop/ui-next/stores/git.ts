@@ -15,6 +15,7 @@ import { useGitApi } from '~/composables/useGitApi'
 import type {
   GitIdentity,
   GitStreamingOp,
+  PushParams,
   SetIdentityParams,
   SidecarGitBranch,
   SidecarGitCommit,
@@ -181,6 +182,12 @@ function formatWhen(iso: string): string {
 // "stash & switch" on DIRTY_TREE) instead of failing silently in the console.
 export type GitOpResult = { ok: true } | { ok: false; code: string | null; message: string }
 
+// Branch delete also reports the optional remote-delete outcome (the local
+// delete can succeed while the remote push --delete fails, e.g. auth).
+export type DeleteBranchResult =
+  | { ok: true; remoteDeleted: boolean; remoteError?: string }
+  | { ok: false; code: string | null; message: string }
+
 // ─── Store ──────────────────────────────────────────────────────────────────
 // Dual-mode: in the Electron shell (`available`) every action hits the sidecar
 // over IPC and re-syncs the view state; in browser-dev (`!available`) it mutates
@@ -211,6 +218,11 @@ export const useGitStore = defineStore('git', () => {
   const isDetached = ref<boolean>(seed.isDetached)
   const detachedAt = ref<string | null>(seed.detachedAt)
   const commitMessage = ref<string>('')
+  // In-flight guards for the commit panel — drive button spinners + disabled
+  // state and block re-entry (Cmd+Enter / double-click) to avoid racing the
+  // sidecar with overlapping commit/amend or generate calls.
+  const isCommitting = ref<boolean>(false)
+  const isGeneratingCommit = ref<boolean>(false)
   const historyHasMore = ref<boolean>(false)
   // True when the selected workspace exists but isn't a git repo (git.status →
   // NO_REPO). Drives the Git page's "initialize repository" empty state instead of
@@ -271,6 +283,44 @@ export const useGitStore = defineStore('git', () => {
       code: gitCodeOf(err),
       message: err instanceof Error ? err.message : String(err),
     }
+  }
+
+  // Auth-failure flavour the sidecar tags onto AUTH_FAILED errors (mirrors
+  // detectAuthHint) so the UI can give actionable copy: SSH key vs HTTPS token.
+  type GitAuthHint = 'ssh-key' | 'https-token' | 'unknown'
+
+  // A remote op that failed to authenticate → drives the rich GitAuthErrorModal
+  // (not just a toast). null = no pending auth error.
+  const pendingAuthError = ref<{ op: GitStreamingOp; hint: GitAuthHint; message: string } | null>(
+    null,
+  )
+
+  // Pull the auth flavour + sanitized message out of an AUTH_FAILED error; null
+  // when it isn't an auth failure (caller then falls back to a plain toast).
+  const authPayloadOf = (err: unknown): { hint: GitAuthHint; message: string } | null => {
+    if (gitCodeOf(err) !== 'AUTH_FAILED') return null
+    const data =
+      err instanceof SidecarError && err.data && typeof err.data === 'object'
+        ? (err.data as { hint?: unknown; stderrSanitized?: unknown })
+        : undefined
+    const hint = data?.hint
+    return {
+      hint: hint === 'ssh-key' || hint === 'https-token' ? hint : 'unknown',
+      message:
+        (typeof data?.stderrSanitized === 'string' && data.stderrSanitized) ||
+        (err instanceof Error ? err.message : ''),
+    }
+  }
+
+  const clearAuthError = (): void => {
+    pendingAuthError.value = null
+  }
+
+  // Route a remote-sync failure: auth → rich modal, everything else → toast.
+  const reportSyncError = (op: GitStreamingOp, err: unknown): void => {
+    const auth = authPayloadOf(err)
+    if (auth) pendingAuthError.value = { op, ...auth }
+    else reportError(op, err)
   }
 
   const projectPath = (): string =>
@@ -758,6 +808,9 @@ export const useGitStore = defineStore('git', () => {
   // ─── Commit ─────────────────────────────────────────────────────────────────
 
   const commit = async (msg: string) => {
+    // Block re-entry — the button is disabled while in flight, but Cmd+Enter on
+    // the textarea can still fire a second commit before the first resolves.
+    if (isCommitting.value) return
     if (!available.value) {
       const hash = `mock${Date.now().toString(16).slice(-7)}`
       commits.value = [
@@ -777,36 +830,45 @@ export const useGitStore = defineStore('git', () => {
       ahead.value += 1
       return
     }
+    isCommitting.value = true
     try {
       await useGitApi().commit(workspaceRoot(), { message: msg })
       commitMessage.value = ''
       await Promise.all([loadStatus(), loadHistory()])
     } catch (err) {
       reportError('commit', err)
+    } finally {
+      isCommitting.value = false
     }
   }
 
   const amend = async (msg: string) => {
+    if (isCommitting.value) return
     if (!available.value) {
       const head = commits.value[0]
       if (head) head.m = msg.split('\n')[0] ?? msg
       commitMessage.value = ''
       return
     }
+    isCommitting.value = true
     try {
       await useGitApi().commit(workspaceRoot(), { message: msg, amend: true })
       commitMessage.value = ''
       await Promise.all([loadStatus(), loadHistory()])
     } catch (err) {
       reportError('amend', err)
+    } finally {
+      isCommitting.value = false
     }
   }
 
   const generateCommitMessage = async () => {
+    if (isGeneratingCommit.value) return
     if (!available.value) {
       commitMessage.value = `feat(git): update ${staged.value.length} staged file(s)`
       return
     }
+    isGeneratingCommit.value = true
     try {
       // Feed the user-configured commit-message rule (settings.git.commitMessageRule)
       // as the model's system prompt. The sidecar rejects an empty rule (Params
@@ -816,6 +878,8 @@ export const useGitStore = defineStore('git', () => {
       commitMessage.value = result.message
     } catch (err) {
       reportError('generateCommitMessage', err)
+    } finally {
+      isGeneratingCommit.value = false
     }
   }
 
@@ -823,6 +887,10 @@ export const useGitStore = defineStore('git', () => {
 
   const fetchRemote = async () => {
     if (!available.value) return
+    // Guard re-entry: a sync op already in flight. Header buttons disable on
+    // syncOp, but the remote-detail pane can also trigger these — block here so
+    // no caller can race two network git ops at once.
+    if (syncOp.value) return
     syncOp.value = { op: 'fetch', phase: 'connecting', pct: null }
     try {
       const res = await useGitApi().fetch(workspaceRoot())
@@ -831,7 +899,7 @@ export const useGitStore = defineStore('git', () => {
         ? { key: 'git.notice.fetched', params: { n: res.updated.length } }
         : { key: 'git.notice.fetchUpToDate' }
     } catch (err) {
-      reportError('fetch', err)
+      reportSyncError('fetch', err)
     } finally {
       syncOp.value = null
     }
@@ -842,6 +910,7 @@ export const useGitStore = defineStore('git', () => {
       behind.value = 0
       return
     }
+    if (syncOp.value) return
     syncOp.value = { op: 'pull', phase: 'connecting', pct: null }
     try {
       const res = await useGitApi().pull(workspaceRoot(), { strategy })
@@ -850,26 +919,30 @@ export const useGitStore = defineStore('git', () => {
         ? { key: 'git.notice.pulled', params: { n: res.commitsApplied } }
         : { key: 'git.notice.pullUpToDate' }
     } catch (err) {
-      reportError('pull', err)
+      reportSyncError('pull', err)
     } finally {
       syncOp.value = null
     }
   }
 
-  const push = async () => {
+  // Options come from the Push dialog (target remote/branch, force, push tags,
+  // set-upstream). No-arg push (e.g. remote-pane "Push") falls back to the
+  // tracked upstream — same as bare `git push`.
+  const push = async (params: PushParams = {}) => {
     if (!available.value) {
       ahead.value = 0
       return
     }
+    if (syncOp.value) return
     syncOp.value = { op: 'push', phase: 'connecting', pct: null }
     try {
-      const res = await useGitApi().push(workspaceRoot())
+      const res = await useGitApi().push(workspaceRoot(), params)
       await Promise.all([loadStatus(), loadBranches()])
       lastNotice.value = res.pushed
         ? { key: 'git.notice.pushed', params: { n: res.pushed } }
         : { key: 'git.notice.pushUpToDate' }
     } catch (err) {
-      reportError('push', err)
+      reportSyncError('push', err)
     } finally {
       syncOp.value = null
     }
@@ -930,16 +1003,34 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
-  const deleteBranch = async (name: string) => {
+  // Returns a result (instead of swallowing) so the caller can react to an
+  // UNMERGED refusal by offering a force delete. `force` → `git branch -D`;
+  // `deleteRemote` → also `git push <remote> --delete <name>` (remote failure
+  // doesn't roll back the local delete — surfaced via `remoteError`).
+  const deleteBranch = async (
+    name: string,
+    opts: { force?: boolean; deleteRemote?: boolean; remote?: string } = {},
+  ): Promise<DeleteBranchResult> => {
     if (!available.value) {
       branches.value = branches.value.filter((b) => b.name !== name)
-      return
+      return { ok: true, remoteDeleted: opts.deleteRemote === true }
     }
     try {
-      await useGitApi().branchDelete(workspaceRoot(), { name })
+      const res = await useGitApi().branchDelete(workspaceRoot(), {
+        name,
+        ...(opts.force ? { force: true } : {}),
+        ...(opts.deleteRemote ? { deleteRemote: true } : {}),
+        ...(opts.remote ? { remote: opts.remote } : {}),
+      })
       await loadBranches()
+      return { ok: true, remoteDeleted: res.remoteDeleted, remoteError: res.remoteError }
     } catch (err) {
-      reportError('deleteBranch', err)
+      console.warn('[git] deleteBranch failed', err)
+      return {
+        ok: false,
+        code: gitCodeOf(err),
+        message: err instanceof Error ? err.message : String(err),
+      }
     }
   }
 
@@ -1032,27 +1123,35 @@ export const useGitStore = defineStore('git', () => {
 
   // ─── Stashes ──────────────────────────────────────────────────────────────
 
-  const stashSave = async (msg?: string) => {
+  // Returns whether the stash succeeded so callers (e.g. "stash & switch") can
+  // avoid acting on a tree that's still dirty. The sidecar rejects an empty
+  // message, so default to git's own `WIP on <branch>` label when none is given.
+  // `includeUntracked` (`git stash -u`) is needed when the blocker is untracked
+  // files — plain stash leaves them and reports "No local changes to save".
+  const stashSave = async (
+    msg?: string,
+    opts: { includeUntracked?: boolean } = {},
+  ): Promise<boolean> => {
+    const message = msg?.trim() || `WIP on ${branch.value || 'HEAD'}`
     if (!available.value) {
       stashes.value = [
-        {
-          index: 0,
-          ref: 'stash@{0}',
-          m: msg ?? `WIP on ${branch.value}`,
-          branch: branch.value,
-          w: 'now',
-        },
+        { index: 0, ref: 'stash@{0}', m: message, branch: branch.value, w: 'now' },
         ...stashes.value.map((s) => ({ ...s, index: s.index + 1, ref: `stash@{${s.index + 1}}` })),
       ]
       staged.value = []
       unstaged.value = []
-      return
+      return true
     }
     try {
-      await useGitApi().stashSave(workspaceRoot(), { message: msg ?? '' })
+      await useGitApi().stashSave(workspaceRoot(), {
+        message,
+        ...(opts.includeUntracked ? { includeUntracked: true } : {}),
+      })
       await Promise.all([loadStatus(), loadStashes()])
+      return true
     } catch (err) {
       reportError('stashSave', err)
+      return false
     }
   }
 
@@ -1228,17 +1327,20 @@ export const useGitStore = defineStore('git', () => {
 
   // ─── Diff loaders ─────────────────────────────────────────────────────────
 
-  const loadDiff = async (path: string): Promise<DiffLine[]> => {
+  // `staged` selects the index-vs-HEAD diff (Staged section) vs the working-tree
+  // diff (Changes section). A partially-staged file lives in BOTH sections, so
+  // the caller must say which side it's showing — inferring from list membership
+  // is ambiguous once a file is in both.
+  const loadDiff = async (path: string, staged = false): Promise<DiffLine[]> => {
     if (!available.value) return DEMO_DIFF
     const root = workspaceRoot()
     if (!root) return []
     try {
       const api = useGitApi()
-      const isUntracked = unstaged.value.some((f) => f.f === path && f.st === '?')
-      const isStaged = staged.value.some((f) => f.f === path)
+      const isUntracked = !staged && unstaged.value.some((f) => f.f === path && f.st === '?')
       let result: SidecarGitDiff
       if (isUntracked) result = await api.diff({ kind: 'untracked', workspaceRoot: root, path })
-      else if (isStaged) result = await api.diff({ kind: 'staged', workspaceRoot: root, path })
+      else if (staged) result = await api.diff({ kind: 'staged', workspaceRoot: root, path })
       else result = await api.diff({ kind: 'workingTree', workspaceRoot: root, path })
       return adaptDiff(result)
     } catch (err) {
@@ -1289,6 +1391,18 @@ export const useGitStore = defineStore('git', () => {
       await loadStatus()
     } catch (err) {
       reportError('stageHunk', err)
+    }
+  }
+
+  const unstageHunk = async (path: string, hunkIndex: number) => {
+    if (!available.value) return // mock can't unstage a single hunk
+    const root = workspaceRoot()
+    if (!root) return
+    try {
+      await useGitApi().unstageHunk(root, path, hunkIndex)
+      await loadStatus()
+    } catch (err) {
+      reportError('unstageHunk', err)
     }
   }
 
@@ -1490,13 +1604,17 @@ export const useGitStore = defineStore('git', () => {
     isDetached,
     detachedAt,
     commitMessage,
+    isCommitting,
+    isGeneratingCommit,
     historyHasMore,
     notARepo,
     available,
     lastError,
     lastNotice,
     syncOp,
+    pendingAuthError,
     // actions
+    clearAuthError,
     init,
     gitInit,
     addRemote,
@@ -1554,6 +1672,7 @@ export const useGitStore = defineStore('git', () => {
     loadDiff,
     loadCommitDiff,
     stageHunk,
+    unstageHunk,
     openFile,
     revealFile,
     openInVscode,

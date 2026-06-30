@@ -27,7 +27,10 @@ export type AwogLogTailEvent =
 // indicator; the styled popover window forwards clicked items as commands.
 export type AwogTrayCommand =
   | { kind: 'activity' }
-  | { kind: 'session'; id: number }
+  // Stable sidecar engine id ("ses-…"), NOT the per-window numeric client id: the
+  // popover renderer has its own Pinia store + id counter, so a numeric id would
+  // resolve to the wrong session (or none) in the main window.
+  | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
 export type AwogTrayModel = { macTitle: string; tooltip: string }
 

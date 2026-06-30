@@ -9,7 +9,10 @@ import { trayIconPath } from './paths'
 
 export type TrayCommand =
   | { kind: 'activity' }
-  | { kind: 'session'; id: number }
+  // Stable sidecar engine id ("ses-…"), NOT the per-window numeric client id: the
+  // popover is a separate renderer with its own Pinia store + id counter, so a
+  // numeric id never matches the main window's session list.
+  | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
 
 // Pushed from the renderer (useTrayStatus). Only the glanceable indicator —

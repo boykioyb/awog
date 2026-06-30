@@ -28,6 +28,7 @@ import type {
   StepBlock,
   SubAgent,
   ThinkingLevel,
+  Todo,
 } from '~/composables/useSessionsData'
 
 // Sessions store — dual-path. When the Electron bridge is available (`sc.available`)
@@ -58,6 +59,14 @@ type EngineQuestion = {
 }
 type EngineQuestionAnswer = { header: string; selected: string[] }
 
+// One row of a TodoWrite call's checklist (sidecar SessionStep.todos). Carried on
+// `note` steps; mapped to the ui Todo shape for the docked SessionTodoPanel.
+type EngineTodo = {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  activeForm?: string
+}
+
 type EngineStep = {
   id: string
   kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer'
@@ -77,6 +86,7 @@ type EngineStep = {
   answers?: EngineQuestionAnswer[]
   steerText?: string
   parentId?: string
+  todos?: EngineTodo[]
 }
 
 type SessionChunkPayload = { sessionId: string; messageId: string; delta: string }
@@ -128,6 +138,10 @@ type MessageDonePayload = {
   messageId: string
   text?: string
   stopReason?: string | null
+  // Provider error cause on a graceful `error` stop (or the budget-refusal
+  // message). Surfaced from this event so the alert shows even when the
+  // sendMessage RPC response is dropped/late — see surfaceTurnError.
+  errorMessage?: string
 }
 const isMessageDonePayload = (raw: unknown): raw is MessageDonePayload => {
   if (!raw || typeof raw !== 'object') return false
@@ -481,7 +495,20 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (step.kind === 'steer') {
       return { kind: 'steer', text: step.steerText ?? step.label }
     }
-    // tool / group / note → a step block.
+    // TodoWrite (`note`) → a carrier block holding the checklist. It is NOT rendered
+    // inline (SessionMessageItem skips todo blocks → no empty "(no output)" step);
+    // the docked SessionTodoPanel scans the transcript for the latest one. Always
+    // carry a `todos` array (possibly empty) so the block stays identifiable.
+    if (step.kind === 'note') {
+      return {
+        kind: 'step',
+        tool: step.label || 'Todos',
+        target: '',
+        eid: step.id,
+        todos: mapTodos(step.todos),
+      }
+    }
+    // tool / group → a step block.
     const result = engineStepResult(step)
     const detail = engineStepDetail(step)
     const block: StepBlock = {
@@ -496,6 +523,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (step.status) block.status = step.status
     if (step.children?.length) block.sub = engineSubAgent(step)
     return block
+  }
+
+  // Engine TodoItem[] → ui Todo[]: carry the 3-state status; `done` mirrors completed.
+  function mapTodos(items?: EngineTodo[]): Todo[] {
+    if (!items?.length) return []
+    return items.map((it) => ({
+      t: it.content,
+      done: it.status === 'completed',
+      status: it.status,
+    }))
   }
 
   // Short "result" chip for the step header (e.g. "+18 −4", "214 lines").
@@ -526,6 +563,9 @@ export const useSessionsStore = defineStore('sessions', () => {
   // never shows as a ghost "Questions" sub-row.
   function engineStepToSubStep(c: EngineStep): SubAgent['steps'][number] | null {
     if (c.kind === 'question' && !c.questions?.length) return null
+    // A subagent's TodoWrite has no inline representation (it'd render an empty
+    // "(no output)" row); the docked panel only tracks the main agent's checklist.
+    if (c.kind === 'note') return null
     const sub: SubAgent['steps'][number] = {
       eid: c.id,
       tool: c.label || c.tool || 'Tool',
@@ -714,6 +754,24 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (s) s.unread = false
     if (useIpc) void ensureLoaded(id)
+  }
+
+  // A turn just settled for `s` (terminal done/error). Flag it unread — drives the
+  // session-list dot (`.undot`), the "Unread" group bucket, the NavRail "wait"
+  // badge, and the tray indicator — UNLESS the user is actively viewing it: the
+  // active session WITH the window focused. setActive() clears the flag when the
+  // session is opened. Background turns, and turns that finish while the app is
+  // blurred/hidden, get the dot. `awaiting` parks aren't flagged here — they
+  // already surface via the amber status indicator + NavRail (status === 'awaiting').
+  // Idempotent: safe to call from every settle path (RPC resolve, done event, throw).
+  function flagSettledUnread(s: Session): void {
+    if (s.status !== 'done' && s.status !== 'error') return
+    const viewing =
+      s.id === activeId.value &&
+      typeof document !== 'undefined' &&
+      !document.hidden &&
+      document.hasFocus()
+    if (!viewing) s.unread = true
   }
 
   // Open a session by its sidecar engineId (ADR 0055 — Task → origin/discussion
@@ -1260,6 +1318,99 @@ export const useSessionsStore = defineStore('sessions', () => {
     // each step boundary + by flushText) — do NOT stamp the whole reply.
   }
 
+  // ── Stall watchdog ─────────────────────────────────────────────────────────
+  // A bubble's "Streaming…" indicator + typewriter caret are driven by m.streaming,
+  // cleared on EITHER the sendMessage RPC resolve/reject OR the session.message.done
+  // event. Both ride the sidecar's stdout/event channel; if BOTH are lost in transit
+  // (a dropped/corrupted stdout response line, or a webContents.send to a momentarily
+  // absent window) the bubble is stranded "streaming" forever — the reply is complete
+  // but the spinner + caret never stop. This watchdog recovers that: for any turn that
+  // has been streaming past a grace period it asks the sidecar whether the turn is
+  // still in flight (its aborter is live); when the turn has actually ended it
+  // finalizes the bubble defensively. A genuinely-running turn (a long silent tool
+  // call, a turn parked on a gate) reports active=true and is left untouched.
+  //
+  // Timing: recovery latency after a lost finalize signal ≈ the poll interval (the
+  // stranded turn is almost always already past the grace by the time it finishes),
+  // so the poll interval is the lever that decides how long the spinner lingers — kept
+  // short. The grace can be low because the real safety net is the `blocks.length === 0`
+  // guard below (a turn with rendered output has provably registered its aborter, so a
+  // turnActive=false reading then is conclusive — the turn ended); the grace only avoids
+  // probing a turn during its first second of setup, before any output.
+  const STALL_GRACE_MS = 8_000 // min streaming age before a bubble is eligible to probe
+  const STALL_POLL_MS = 3_000 // how often the watchdog sweeps
+  let stallTimer: ReturnType<typeof setInterval> | null = null
+
+  // Snap a stranded turn to its streamed text and drop the streaming flag — the same
+  // settle the lost RPC resolve / done event would have done (minus the authoritative
+  // usage/title, which can't be recovered here; the streamed chunks already carry the
+  // visible reply). Idempotent: a no-op once the flag is cleared.
+  function finalizeStuckTurn(s: Session, m: AssistantMessage): void {
+    if (!m.streaming) return
+    flushText(s.engineId ?? '', m.eid ?? '')
+    m.streaming = false
+    if (m.completedAt == null) m.completedAt = Date.now()
+    s.status = statusFromMessages(s.msgs)
+    flagSettledUnread(s)
+  }
+
+  async function sweepStalledTurns(): Promise<void> {
+    const now = Date.now()
+    for (const s of sessions.value) {
+      if (!s.engineId) continue
+      const m = s.msgs.find((x) => x.role === 'assistant' && x.streaming)
+      if (!m || m.role !== 'assistant' || !m.eid) continue
+      if (m.startedAt == null || now - m.startedAt < STALL_GRACE_MS) continue
+      // Only a turn that has produced output (the stranded reply). A bubble with no
+      // blocks is still in long startup (folding a big transcript before the aborter
+      // is even registered) — probing it could read active=false and finalize a turn
+      // that is genuinely about to run.
+      if (m.blocks.length === 0) continue
+      try {
+        const res = await sc.request<{ active: boolean }>('sessions.turnActive', {
+          sessionId: s.engineId,
+          messageId: m.eid,
+        })
+        // Re-check m.streaming after the await: the real finalize may have landed
+        // meanwhile (its handlers are idempotent, but skip the redundant work).
+        if (!res.active && m.streaming) finalizeStuckTurn(s, m)
+      } catch {
+        // Probe failed (engine down / racing teardown) — leave the bubble; the next
+        // sweep retries. A real engine exit rejects the pending RPC, settling it.
+      }
+    }
+  }
+
+  function startStallWatchdog(): void {
+    if (!useIpc || stallTimer) return
+    stallTimer = setInterval(() => void sweepStalledTurns(), STALL_POLL_MS)
+  }
+
+  // Append a turn error block (rendered as an alert + retry by SessionMessageItem).
+  // Idempotent: a turn carries at most one terminal error, and several paths may try
+  // to surface it — the RPC resolve, the RPC reject (catch), and the
+  // session.message.done event (whichever lands; the RPC response can be dropped or
+  // land late). Guarding on an existing error block keeps it to a single alert.
+  function pushErrorBlock(m: AssistantMessage, text: string): void {
+    if (m.blocks.some((b) => b.kind === 'error')) return
+    m.blocks.push({ kind: 'error', text })
+  }
+
+  // Surface a terminal turn outcome that carries a stopReason: a graceful provider
+  // `error` stop, or a pre-turn budget refusal. Other stopReasons (clean finish,
+  // 'aborted' cancel) surface nothing. Thrown errors go through pushErrorBlock
+  // directly (the catch has a richer, code-tagged message).
+  function surfaceTurnError(
+    m: AssistantMessage,
+    stopReason?: string | null,
+    errorMessage?: string,
+  ): void {
+    if (stopReason !== 'error' && stopReason !== 'budget-exceeded') return
+    const fallback =
+      stopReason === 'budget-exceeded' ? 'Session budget exceeded.' : 'The model returned an error.'
+    pushErrorBlock(m, errorMessage || fallback)
+  }
+
   // Upsert an engine step into the streaming assistant message's blocks. A
   // running → done repeat merges by eid in place; a new step closes the open text
   // run (so it splits the reply). Subagent steps (parentId) attach under their
@@ -1431,7 +1582,7 @@ export const useSessionsStore = defineStore('sessions', () => {
           // payload can land late or be dropped, which used to leave the byline
           // stuck on "Streaming… {elapsed}" forever after the reply had finished.
           // The RPC resolve still owns the authoritative finalize (usage, model,
-          // title, error block); this just stops the spinner.
+          // title); this stops the spinner AND surfaces a terminal error.
           flushText(p.sessionId, p.messageId)
           // The done event carries no `parts`; reconcile only recovers the full
           // text on a single-run turn (safe), and leaves a multi-run turn's
@@ -1440,13 +1591,26 @@ export const useSessionsStore = defineStore('sessions', () => {
           if (typeof p.text === 'string') reconcileReplyText(m, p.text)
           m.streaming = false
           if (m.completedAt == null) m.completedAt = Date.now()
+          // Surface a graceful `error` stop (e.g. "Request timed out.") / budget
+          // refusal from THIS event, not only from the RPC resolve — the RPC
+          // response can be dropped/late, which used to clear the spinner here
+          // while the error alert (owned solely by the resolve) never appeared.
+          // Idempotent with the RPC path (see surfaceTurnError).
+          surfaceTurnError(m, p.stopReason, p.errorMessage)
           const s = byEngineId(p.sessionId)
           if (s) {
             s.status = statusFromMessages(s.msgs)
-            // Clean finish → drain the next queued message (idempotent with the
-            // RPC path: whichever runs second sees the queue drained / a new turn
-            // already streaming and no-ops).
-            if (p.stopReason !== 'error') drainQueue(s.id)
+            flagSettledUnread(s)
+            // Drain the next queued message ONLY on a clean finish. A failed
+            // ('error'), refused ('budget-exceeded'), or user-aborted ('aborted')
+            // turn must not auto-run the queue — the next message would likely fail
+            // the same way / wasn't meant to fire after a cancel. Idempotent with the
+            // RPC path: whichever runs second sees the queue drained and no-ops.
+            const clean =
+              p.stopReason !== 'error' &&
+              p.stopReason !== 'budget-exceeded' &&
+              p.stopReason !== 'aborted'
+            if (clean) drainQueue(s.id)
           }
         }
       })
@@ -1698,19 +1862,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       reconcileReplyText(placeholder, result.text, result.parts)
       placeholder.streaming = false
       placeholder.completedAt = Date.now()
-      if (result.stopReason === 'error') {
-        placeholder.blocks.push({
-          kind: 'error',
-          text: result.errorMessage || 'The model returned an error.',
-        })
-      } else if (result.stopReason === 'budget-exceeded') {
-        // Hard budget cap (Pha 3): the sidecar refused the turn before any model
-        // call. Surface as an error block; the user raises the cap in config + retries.
-        placeholder.blocks.push({
-          kind: 'error',
-          text: result.errorMessage || 'Session budget exceeded.',
-        })
-      }
+      // Surface a graceful provider `error` stop or a pre-turn budget refusal as an
+      // error block. Idempotent with the session.message.done path (whichever lands
+      // first wins; the RPC response here can be dropped/late) — see surfaceTurnError.
+      surfaceTurnError(placeholder, result.stopReason, result.errorMessage)
       // A budget-refused turn never reached the model: don't merge its zero usage
       // (that would wipe the context-window snapshot), don't drain the queue (the
       // next message would be refused too), and don't auto-title (a model call that
@@ -1733,6 +1888,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         s.model = usedDisplay
       }
       s.status = statusFromMessages(s.msgs)
+      flagSettledUnread(s)
       // Clean finish → drain the next queued message FIFO.
       if (result.stopReason !== 'error' && !refused) drainQueue(s.id)
       // Fallback: if the early (on-send) title kickoff failed/raced, retry now that
@@ -1752,10 +1908,16 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (err instanceof SidecarUnavailableError) message = 'Sidecar unavailable'
         else if (err instanceof SidecarError)
           message = err.code ? `${err.message} (code ${err.code})` : err.message
-        else if (err instanceof Error) message = err.message
-        placeholder.blocks.push({ kind: 'error', text: message })
+        else if (err instanceof Error && err.message) message = err.message
+        else if (err != null) message = String(err)
+        // Idempotent with the session.message.done path (the sidecar now emits a
+        // terminal 'error' event on throw too, so the alert shows even if this reject
+        // is dropped). Whichever lands first owns the single error block.
+        pushErrorBlock(placeholder, message)
       }
       s.status = statusFromMessages(s.msgs)
+      // A user-cancel (-32023) is self-aware — don't flag unread. A real error does.
+      if (!canceled) flagSettledUnread(s)
     } finally {
       stopReveal(messageId)
       // Clear a stale permission for this turn so the UI doesn't block.
@@ -2074,48 +2236,58 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // ── Existing local actions (preserved 1:1) ──────────────────────────────────
 
-  function toggleTodo(id: number, i: number) {
-    const td = byId(id)?.todos?.[i]
-    if (td) td.done = !td.done
-  }
+  // Sessions with a regenerate/retry in flight. `regenerate` runs an async
+  // truncate→re-run with an IPC round-trip in the middle; the message hover-action
+  // buttons that call it carry no per-button disabled state, so a second click
+  // during that window would fire a duplicate turn and corrupt the transcript.
+  const regenInFlight = new Set<number>()
 
   async function regenerate(id: number, index: number) {
     const s = byId(id)
     if (!s) return
-    s.msgs = s.msgs.slice(0, index)
-    if (useIpc) {
-      // Re-run the nearest preceding user turn.
-      let ui = index - 1
-      while (ui >= 0 && s.msgs[ui]?.role !== 'user') ui -= 1
-      const userMsg = ui >= 0 ? s.msgs[ui] : undefined
-      if (userMsg && userMsg.role === 'user') {
-        s.msgs = s.msgs.slice(0, ui)
-        const atts = userMsg.att ?? undefined
-        // The sidecar resumes from the JSONL transcript (sendMessage sends no
-        // history), so slicing the in-memory copy is not enough — persist the
-        // truncation first, else the regenerated turn would replay the very reply
-        // it replaces. Keep through the assistant turn before the re-run user
-        // message (null = drop all). AWAIT so loadSession on the next turn reads
-        // the already-truncated file (avoids a read-before-write race).
-        if (s.engineId) {
-          const prev = ui > 0 ? s.msgs[ui - 1] : undefined
-          const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
-          try {
-            await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
-          } catch (err) {
-            console.warn('[sessions] truncate before regenerate failed', err)
+    // Block re-entry (same-tick double-click in the truncate window) and never
+    // regenerate over a live streaming turn — same guard `resend` uses.
+    if (regenInFlight.has(id)) return
+    if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) return
+    regenInFlight.add(id)
+    try {
+      s.msgs = s.msgs.slice(0, index)
+      if (useIpc) {
+        // Re-run the nearest preceding user turn.
+        let ui = index - 1
+        while (ui >= 0 && s.msgs[ui]?.role !== 'user') ui -= 1
+        const userMsg = ui >= 0 ? s.msgs[ui] : undefined
+        if (userMsg && userMsg.role === 'user') {
+          s.msgs = s.msgs.slice(0, ui)
+          const atts = userMsg.att ?? undefined
+          // The sidecar resumes from the JSONL transcript (sendMessage sends no
+          // history), so slicing the in-memory copy is not enough — persist the
+          // truncation first, else the regenerated turn would replay the very reply
+          // it replaces. Keep through the assistant turn before the re-run user
+          // message (null = drop all). AWAIT so loadSession on the next turn reads
+          // the already-truncated file (avoids a read-before-write race).
+          if (s.engineId) {
+            const prev = ui > 0 ? s.msgs[ui - 1] : undefined
+            const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
+            try {
+              await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
+            } catch (err) {
+              console.warn('[sessions] truncate before regenerate failed', err)
+            }
           }
+          void sendMessage(id, userMsg.text, atts ?? undefined)
         }
-        void sendMessage(id, userMsg.text, atts ?? undefined)
+        return
       }
-      return
+      s.msgs.push({
+        role: 'assistant',
+        at: 'vừa xong',
+        blocks: [{ kind: 'text', text: '(mock reply — chưa nối turn runner thật qua IPC)' }],
+      })
+      s.status = 'done'
+    } finally {
+      regenInFlight.delete(id)
     }
-    s.msgs.push({
-      role: 'assistant',
-      at: 'vừa xong',
-      blocks: [{ kind: 'text', text: '(mock reply — chưa nối turn runner thật qua IPC)' }],
-    })
-    s.status = 'done'
   }
 
   function retryModel(id: number, index: number) {
@@ -2236,13 +2408,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     const m = s?.msgs[msgIndex]
     if (!s || !m) return
+    // Keep the FULL selection (whitespace-collapsed only): the excerpt doubles as the
+    // needle that locateMarks uses to paint the in-place highlight (§8), so truncating it
+    // would highlight only the head of the quote. The display surfaces (composer card
+    // `.fwq`, user-bubble `.uqx`) clamp it with CSS, so a long quote stays tidy on screen
+    // without shrinking the highlighted span.
     let excerpt = (text ?? '').replace(/\s+/g, ' ').trim()
     if (!excerpt) {
       if (m.role !== 'assistant') return
       const tb = m.blocks.find((b) => b.kind === 'text')
-      excerpt = ((tb && 'text' in tb ? tb.text : '') || 'trích dẫn').replace(/\s+/g, ' ')
+      excerpt = ((tb && 'text' in tb ? tb.text : '') || 'trích dẫn').replace(/\s+/g, ' ').trim()
     }
-    excerpt = excerpt.slice(0, 280)
     s.followups = s.followups ?? []
     const fu: Followup = { src: msgIndex, excerpt, note: note ?? '' }
     if (range?.blockIndex != null) fu.blockIndex = range.blockIndex
@@ -2276,6 +2452,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   if (useIpc) {
     void subscribe()
     void hydrate()
+    startStallWatchdog()
   }
 
   return {
@@ -2343,7 +2520,6 @@ export const useSessionsStore = defineStore('sessions', () => {
     cancel,
     enhancePrompt,
     // local message actions
-    toggleTodo,
     regenerate,
     retryModel,
     rewind,

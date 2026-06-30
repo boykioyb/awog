@@ -30,7 +30,7 @@ import { resolveModel } from '../model-resolver.js'
 import { buildContext } from '../context-builder.js'
 import { createRuntimeToolDefinitions } from './index.js'
 import { buildMcpUnavailableNote } from './mcp-tools.js'
-import { VERIFY_PROMPT } from '../prompts.js'
+import { TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from '../prompts.js'
 import { toReasoning } from '../thinking.js'
 import type { BeforeToolCall } from '../permission.js'
 
@@ -235,7 +235,7 @@ async function spawnSubagent(
   // catalog (ADR 0051) rides along when the inherited toolset is in proxy mode.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
   const subAppend =
-    [agentCtx.systemPromptAppend, VERIFY_PROMPT, mcpUnavailable, mcpCatalog]
+    [agentCtx.systemPromptAppend, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT, mcpUnavailable, mcpCatalog]
       .filter((p): p is string => typeof p === 'string' && p.length > 0)
       .join('\n\n') || undefined
 

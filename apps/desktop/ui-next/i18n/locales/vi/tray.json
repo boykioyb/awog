@@ -11,5 +11,5 @@
   "tray.empty.limits": "Chưa có giới hạn provider",
   "tray.empty.recent": "Chưa có phiên gần đây",
   "tray.openActivity": "Mở Activity đầy đủ",
-  "tray.tooltip.busy": "AWOG — {running} đang chạy · {attention} cần xử lý"
+  "tray.tooltip.busy": "AWOG — {running} đang chạy · {attention} cần xử lý · {unread} chưa đọc"
 }

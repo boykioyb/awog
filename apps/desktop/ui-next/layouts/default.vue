@@ -7,6 +7,9 @@
       <NavRail />
       <div class="main">
         <AppTopBar />
+        <!-- Global auto-update notice — sits above the page body so it pushes
+             content down on every page (ADR 0028). -->
+        <UpdateBanner />
         <div class="body">
           <slot />
         </div>

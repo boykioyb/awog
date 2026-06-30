@@ -1,0 +1,12 @@
+{
+  "update.banner.available": "Đã có AWOG v{version}.",
+  "update.banner.downloading": "Đang tải bản cập nhật… {percent}%",
+  "update.banner.downloaded": "AWOG v{version} đã sẵn sàng — khởi động lại để cài đặt.",
+  "update.banner.error": "Không kiểm tra được cập nhật.",
+  "update.action.download": "Tải về",
+  "update.action.openReleases": "Mở trang tải về",
+  "update.action.restart": "Khởi động lại",
+  "update.action.retry": "Thử lại",
+  "update.dismiss.later": "Để sau",
+  "update.dismiss.dismiss": "Bỏ qua"
+}

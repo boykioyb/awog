@@ -27,7 +27,8 @@ import { buildContext, historyToAgentMessages } from './context-builder.js'
 import { computeCutPoint } from './compaction.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
-import { fileRefPrompt, TODO_USAGE_PROMPT, VERIFY_PROMPT } from './prompts.js'
+import { fileRefPrompt, TODO_USAGE_PROMPT, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from './prompts.js'
+import { makeConfabulationFollowUp } from './confabulation-guard.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
 import { listWorkflows } from '../workflows/store.js'
@@ -145,6 +146,9 @@ export async function runStreamPi(
     args.systemPromptAppend,
     rulesPrompt,
     stylePrompt,
+    // Act through tools, don't narrate (see prompts.ts). Off in plan mode —
+    // PLAN_MODE_PROMPT governs that read-only path.
+    inPlanMode ? undefined : TOOL_DISCIPLINE_PROMPT,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
     // Ask for full absolute file paths so chat file references become clickable
@@ -305,6 +309,25 @@ export async function runStreamPi(
   const reasoning = toReasoning(args.settings.level, model)
   const adapter = createEventAdapter(cb)
 
+  // Cumulative count of tool calls started this turn — feeds the confabulation
+  // guard (a turn that called no tool but claims work gets one corrective nudge).
+  let turnToolCalls = 0
+
+  // Confabulation guard (confabulation-guard.ts): when the model would end its
+  // turn having made no tool call yet its reply claims tool-class work
+  // (delegated a subagent, ran a command, committed…), inject one reminder so it
+  // does the work for real in the same turn. Off in plan mode (read-only;
+  // ExitPlanMode governs that path) and when no tools are available.
+  const confabulationFollowUp =
+    !inPlanMode && tools.length > 0
+      ? makeConfabulationFollowUp({
+          getReplyText: () => adapter.result().text,
+          getTurnToolCalls: () => turnToolCalls,
+          toolsAvailable: true,
+          sessionId: args.sessionId,
+        })
+      : undefined
+
   // Mid-turn steering (Session steering). Pi polls this at each turn boundary
   // (after the current assistant turn's tool calls finish, before the next LLM
   // call). We drain the per-turn steer queue, surface each item as a
@@ -349,6 +372,7 @@ export async function runStreamPi(
   })
 
   const emit = (event: AgentEvent): void => {
+    if (event.type === 'tool_execution_start') turnToolCalls += 1
     adapter.handle(event)
   }
 
@@ -369,6 +393,10 @@ export async function runStreamPi(
         // Mid-turn steering: inject user instructions queued via sessions.steer
         // at each turn boundary (undefined for tasks/subagents → no-op).
         ...(getSteeringMessages ? { getSteeringMessages } : {}),
+        // Confabulation guard: polled when the model would otherwise stop (no
+        // tool calls, no steering). Re-prompts once if the turn claimed work it
+        // never performed (undefined in plan mode / no tools → no-op).
+        ...(confabulationFollowUp ? { getFollowUpMessages: confabulationFollowUp } : {}),
         // Capture Codex plan-usage from response headers (no-op for non-Codex),
         // then gate on Anthropic extra-usage (overage): if a response consumed
         // PAID overage, park and ask the user to confirm before continuing — Pi

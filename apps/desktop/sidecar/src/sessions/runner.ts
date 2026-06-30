@@ -51,6 +51,18 @@ export function abortMessage(messageId: string): boolean {
   return true
 }
 
+// Liveness probe: is this session's turn still in flight? The aborter is registered
+// at turn start and removed in send-message's `finally` (after persist + the done
+// event + RPC return), so a missing entry means the turn has fully ended. Used by
+// the UI stall watchdog to recover a bubble stranded "streaming" when both finalize
+// signals (the sendMessage RPC resolve AND the session.message.done event) were lost
+// in transit. A present, non-aborted aborter = genuinely still running (incl. a long
+// silent tool call or a turn parked on a gate).
+export function isTurnActive(sessionId: string, messageId: string): boolean {
+  const turn = ACTIVE_ABORTERS.get(messageId)
+  return !!turn && turn.sessionId === sessionId
+}
+
 // Abort EVERY in-flight turn on a session; returns how many were aborted.
 // Why session-wide and not just one messageId: a turn can hang (e.g. a stalled
 // provider stream that never yields another chunk) and hold the per-session

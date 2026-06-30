@@ -13,6 +13,9 @@
   "settings.about.checking": "Đang kiểm tra…",
   "settings.about.status.latest": "Bạn đang dùng bản mới nhất",
   "settings.about.status.available": "Có bản cập nhật: v{version}",
+  "settings.about.status.downloading": "Đang tải bản cập nhật… {percent}%",
+  "settings.about.status.downloaded": "Đã tải xong — khởi động lại để cài đặt",
   "settings.about.status.error": "Không kiểm tra được cập nhật",
+  "settings.about.status.devOnly": "Chỉ bản cài đặt mới kiểm tra được cập nhật",
   "settings.about.manualInstallNote": "Trên nền tảng này AWOG chỉ thông báo phiên bản mới và mở trang tải về — việc cài đặt phải làm thủ công."
 }

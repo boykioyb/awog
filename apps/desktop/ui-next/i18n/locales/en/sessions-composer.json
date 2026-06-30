@@ -70,5 +70,13 @@
   "sessions.pinned.notes": "Notes",
   "sessions.pinned.notesTitle": "Pinned notes — click to edit",
   "sessions.pinned.searchFiles": "Pin a file (type to search)…",
-  "sessions.pinned.notesPlaceholder": "Notes always sent to the model…"
+  "sessions.pinned.notesPlaceholder": "Notes always sent to the model…",
+  "sessions.pinned.savePreset": "Save as preset",
+  "sessions.pinned.savePresetTitle": "Save these notes for reuse in any session",
+  "sessions.pinned.presetNamePlaceholder": "Preset name…",
+  "sessions.pinned.cancelPreset": "Cancel",
+  "sessions.pinned.deletePreset": "Delete preset",
+  "sessions.pinned.presets": "Presets",
+  "sessions.pinned.recentNotes": "Recent",
+  "sessions.pinned.clearRecent": "Clear"
 }

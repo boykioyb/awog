@@ -21,9 +21,10 @@
             </span>
             <span class="fwx" :title="t('sessions.quote.remove')" @click="removeQuote(i)">×</span>
           </div>
-          <input
+          <textarea
             class="fwnote"
             :value="q.note"
+            rows="1"
             :placeholder="t('sessions.quote.notePlaceholder')"
             @input="onNote(i, $event)"
           />
@@ -234,6 +235,89 @@
               rows="3"
               @blur="saveNotes"
             />
+
+            <!-- reusable notes: save the current note as a preset, or apply a saved
+                 preset / recent note — a cross-session library (see useSessionNotePresets). -->
+            <div class="pinreuse-bar">
+              <button
+                v-if="!presetNaming"
+                class="pinreuse-save"
+                :disabled="!notesDraft.trim()"
+                :title="t('sessions.pinned.savePresetTitle')"
+                @click="startPreset"
+              >
+                <Icon name="pin" style="width: 11px; height: 11px" />
+                {{ t('sessions.pinned.savePreset') }}
+              </button>
+              <template v-else>
+                <input
+                  ref="presetNameInput"
+                  v-model="presetName"
+                  class="pinreuse-name"
+                  :placeholder="t('sessions.pinned.presetNamePlaceholder')"
+                  @keydown.enter.prevent="confirmPreset"
+                  @keydown.esc.prevent="cancelPreset"
+                />
+                <button
+                  class="pinreuse-iconbtn"
+                  :title="t('sessions.pinned.savePreset')"
+                  @click="confirmPreset"
+                >
+                  <Icon name="check" style="width: 13px; height: 13px" />
+                </button>
+                <button
+                  class="pinreuse-iconbtn"
+                  :title="t('sessions.pinned.cancelPreset')"
+                  @click="cancelPreset"
+                >
+                  <Icon name="x" style="width: 13px; height: 13px" />
+                </button>
+              </template>
+            </div>
+
+            <template v-if="notePresets.length">
+              <div class="pinreuse-h">{{ t('sessions.pinned.presets') }}</div>
+              <div class="pinreuse-list">
+                <div
+                  v-for="p in notePresets"
+                  :key="p.id"
+                  class="pinreuse-item"
+                  :title="p.text"
+                  @click="applyNote(p.text)"
+                >
+                  <Icon name="pin" style="width: 11px; height: 11px; flex: 0 0 auto" />
+                  <span class="pinreuse-label">{{ p.name }}</span>
+                  <span
+                    class="pinx"
+                    :title="t('sessions.pinned.deletePreset')"
+                    @click.stop="deleteNotePreset(p.id)"
+                  >
+                    ×
+                  </span>
+                </div>
+              </div>
+            </template>
+
+            <template v-if="noteHistory.length">
+              <div class="pinreuse-h">
+                {{ t('sessions.pinned.recentNotes') }}
+                <span class="pinreuse-clear" @click="clearNoteHistory">
+                  {{ t('sessions.pinned.clearRecent') }}
+                </span>
+              </div>
+              <div class="pinreuse-list">
+                <div
+                  v-for="(h, i) in noteHistory"
+                  :key="i"
+                  class="pinreuse-item"
+                  :title="h"
+                  @click="applyNote(h)"
+                >
+                  <Icon name="rules" style="width: 11px; height: 11px; flex: 0 0 auto" />
+                  <span class="pinreuse-label">{{ noteLabel(h) }}</span>
+                </div>
+              </div>
+            </template>
           </div>
         </span>
         <button
@@ -509,7 +593,7 @@ function removeQuote(i: number) {
 }
 function onNote(i: number, e: Event) {
   if (store.activeId != null)
-    store.setQuoteNote(store.activeId, i, (e.target as HTMLInputElement).value)
+    store.setQuoteNote(store.activeId, i, (e.target as HTMLTextAreaElement).value)
 }
 
 // The per-turn Mode chip reads straight off the active session (store-driven);
@@ -539,8 +623,57 @@ watch(
   },
   { immediate: true },
 )
+// Cross-session reusable notes: saved presets + recent history (localStorage-backed).
+const {
+  presets: notePresets,
+  history: noteHistory,
+  savePreset,
+  deletePreset: deleteNotePreset,
+  recordHistory,
+  clearHistory: clearNoteHistory,
+  deriveName: noteLabel,
+} = useSessionNotePresets()
 function saveNotes() {
   if (store.activeId != null) store.setPinnedNotes(store.activeId, notesDraft.value)
+  // Capture the committed note so it's reusable in other sessions (no-op when empty).
+  recordHistory(notesDraft.value)
+}
+// Keep the current note as a named preset. Clicking "Save as preset" reveals an inline
+// name field (prefilled with the first line) so the user can label it — Enter saves,
+// Esc cancels. An empty name falls back to the derived label (savePreset handles it).
+const presetNaming = ref(false)
+const presetName = ref('')
+const presetNameInput = useTemplateRef<HTMLInputElement>('presetNameInput')
+function startPreset() {
+  if (!notesDraft.value.trim()) return
+  presetName.value =
+    notesDraft.value
+      .split('\n')
+      .map((l) => l.trim())
+      .find(Boolean) ?? ''
+  presetNaming.value = true
+  void nextTick(() => presetNameInput.value?.focus())
+}
+function confirmPreset() {
+  if (notesDraft.value.trim()) savePreset(notesDraft.value, presetName.value)
+  presetNaming.value = false
+  presetName.value = ''
+}
+function cancelPreset() {
+  presetNaming.value = false
+  presetName.value = ''
+}
+// Closing the pin popover abandons an in-progress naming so it doesn't reappear stale.
+watch(
+  () => open.value,
+  (v) => {
+    if (v !== 'pin') cancelPreset()
+  },
+)
+// Reuse a saved preset / recent note: replace the draft and persist to this session.
+function applyNote(text: string) {
+  notesDraft.value = text
+  saveNotes()
 }
 function removePin(path: string) {
   if (store.activeId != null) store.removePinnedFile(store.activeId, path)
@@ -1038,6 +1171,54 @@ function onPaste(e: ClipboardEvent) {
     transition: none;
   }
 }
+/* Remove button as a floating badge at the chip's top-right corner instead of the
+   prototype's bare inline `×` (a tiny, fiddly target crammed against the filename).
+   A circular 16px badge sits over the corner, reveals on hover/focus, and turns
+   danger-red on its own hover — an isolated, easy click that frees the chip's inner
+   width for the filename. (Queued `.qatt` chips also carry `.att`, so this covers
+   them too.) */
+.att {
+  position: relative;
+}
+.att .x {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bgActive);
+  border: 1px solid var(--border);
+  color: var(--textDim);
+  font-size: 0.9231rem;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.att:hover .x,
+.att:focus-within .x {
+  opacity: 1;
+  transform: scale(1);
+}
+.att .x:hover {
+  background: var(--del);
+  border-color: var(--del);
+  color: var(--bgPanel);
+}
+@media (prefers-reduced-motion: reduce) {
+  .att .x {
+    transition: none;
+  }
+}
 /* Composer box reacts to focus: the border + a soft accent ring light up while the
    textarea inside is focused (focus-within), instead of a static border. */
 .cbox {
@@ -1328,5 +1509,107 @@ function onPaste(e: ClipboardEvent) {
   font-size: 12px;
   color: var(--textDim);
   font-family: var(--code);
+}
+/* Reusable-notes section (save as preset + presets/recent lists). */
+.pinreuse-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: -2px;
+}
+.pinreuse-name {
+  flex: 1;
+  min-width: 0;
+  background: var(--bgInput, var(--bgActive));
+  border: 1px solid var(--accentBorder, var(--border));
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+.pinreuse-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+}
+.pinreuse-iconbtn:hover {
+  background: var(--bgHover);
+  color: var(--text);
+}
+.pinreuse-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.pinreuse-save:hover:not(:disabled) {
+  background: var(--bgHover);
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+.pinreuse-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pinreuse-h {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--textDim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.pinreuse-clear {
+  margin-left: auto;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  color: var(--textDim);
+}
+.pinreuse-clear:hover {
+  color: var(--danger);
+}
+.pinreuse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 150px;
+  overflow: auto;
+}
+.pinreuse-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+.pinreuse-item:hover {
+  background: var(--bgHover);
+}
+.pinreuse-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
 }
 </style>

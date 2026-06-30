@@ -27,7 +27,9 @@ type LogTailEvent =
 // indicator model; the styled popover window forwards item clicks as commands.
 type TrayCommand =
   | { kind: 'activity' }
-  | { kind: 'session'; id: number }
+  // Stable sidecar engine id ("ses-…") — the popover renderer's numeric client id
+  // never matches the main window's store (separate id counters per renderer).
+  | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
 type TrayModel = { macTitle: string; tooltip: string }
 

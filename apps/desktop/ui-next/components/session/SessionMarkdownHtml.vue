@@ -26,9 +26,12 @@ const root = useTemplateRef<HTMLElement>('root')
 // Opens / shortens workspace file references in the markdown (from SessionDetail).
 const filePreview = useFilePreview()
 
-// Wrap each quoted excerpt in a numbered <mark>. Overlapping matches (rare) are dropped;
-// the rest are wrapped LAST-first so wrapping a later span can't shift the offsets/nodes
-// of an earlier one. extractContents preserves any inline formatting inside the span.
+// Wrap each quoted excerpt in numbered <mark>s. A quote spanning multiple blocks yields one
+// range per block (locateMarks splits at block boundaries — an inline <mark> can't legally
+// span <p>…</p><p>…</p>); the circled number is appended to the LAST range only. Overlapping
+// matches (rare) are dropped. All ranges are wrapped in descending document order so
+// extractContents on a later span can't shift the nodes/offsets of an earlier one.
+// extractContents preserves any inline formatting inside each span.
 function applyMarks(el: HTMLElement) {
   const hs = props.highlights ?? []
   if (!hs.length) return
@@ -43,19 +46,26 @@ function applyMarks(el: HTMLElement) {
     kept.push(m)
     lastEnd = m.end
   }
-  kept.sort((a, b) => b.start - a.start)
-  for (const m of kept) {
+  // Flatten to per-range wraps, tagging the last range of each mark with the number badge,
+  // then wrap right-to-left in the document.
+  const wraps = kept.flatMap((m) =>
+    m.ranges.map((range, i) => ({ range, label: i === m.ranges.length - 1 ? m.label : null })),
+  )
+  wraps.sort((a, b) => b.range.compareBoundaryPoints(Range.START_TO_START, a.range))
+  for (const w of wraps) {
     try {
       const mark = document.createElement('mark')
       mark.className = 'qmark'
-      mark.appendChild(m.range.extractContents())
-      const sup = document.createElement('sup')
-      sup.className = 'qnum'
-      sup.textContent = m.label
-      mark.appendChild(sup)
-      m.range.insertNode(mark)
+      mark.appendChild(w.range.extractContents())
+      if (w.label != null) {
+        const sup = document.createElement('sup')
+        sup.className = 'qnum'
+        sup.textContent = w.label
+        mark.appendChild(sup)
+      }
+      w.range.insertNode(mark)
     } catch {
-      // Selection crossed element boundaries we can't cleanly wrap — skip this mark.
+      // Selection crossed element boundaries we can't cleanly wrap — skip this span.
     }
   }
 }

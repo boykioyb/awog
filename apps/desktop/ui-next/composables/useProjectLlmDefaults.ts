@@ -147,30 +147,45 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
     draft.value.mcpServerIds = undefined
   }
 
+  // True while save/reset writes the project JSON. `updateProject` has no
+  // re-entry guard, so this blocks a double-click from firing two concurrent
+  // writes and also lets the modal disable its buttons.
+  const saving = ref(false)
+
   // Persist the draft as the project's llmDefaults. Returns the saved project.
   const save = async () => {
     const p = project.value
-    if (!p) return undefined
-    const llmDefaults: ProjectLlmDefaults = {
-      provider: draft.value.provider,
-      modelId: draft.value.modelId,
-      level: draft.value.level,
+    if (!p || saving.value) return undefined
+    saving.value = true
+    try {
+      const llmDefaults: ProjectLlmDefaults = {
+        provider: draft.value.provider,
+        modelId: draft.value.modelId,
+        level: draft.value.level,
+      }
+      if (draft.value.accountId) llmDefaults.accountId = draft.value.accountId
+      if (draft.value.mcpServerIds !== undefined)
+        llmDefaults.mcpServerIds = [...draft.value.mcpServerIds]
+      return await store.updateProject({ ...p, llmDefaults })
+    } finally {
+      saving.value = false
     }
-    if (draft.value.accountId) llmDefaults.accountId = draft.value.accountId
-    if (draft.value.mcpServerIds !== undefined)
-      llmDefaults.mcpServerIds = [...draft.value.mcpServerIds]
-    return store.updateProject({ ...p, llmDefaults })
   }
 
   // Clear the per-project override (new sessions inherit the global defaults).
   const resetToAppDefault = async () => {
     const p = project.value
-    if (!p) return undefined
-    const next = { ...p }
-    delete next.llmDefaults
-    const saved = await store.updateProject(next)
-    draft.value = appDefault()
-    return saved
+    if (!p || saving.value) return undefined
+    saving.value = true
+    try {
+      const next = { ...p }
+      delete next.llmDefaults
+      const saved = await store.updateProject(next)
+      draft.value = appDefault()
+      return saved
+    } finally {
+      saving.value = false
+    }
   }
 
   return {
@@ -192,6 +207,7 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
     setAccount,
     setModel,
     setLevel,
+    saving,
     save,
     resetToAppDefault,
   }

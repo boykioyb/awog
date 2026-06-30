@@ -27,38 +27,46 @@ export interface PorcelainParsed {
   files: GitFileStatus[]
 }
 
-// Map a single porcelain XY status pair (`MM`, `A.`, `.D`, `DD`, ...) to a
-// summary changeType + stageState. Porcelain v2 spec:
-// https://git-scm.com/docs/git-status#_changed_tracked_entries
-function mapXy(xy: string): { changeType: GitFileChangeType; stageState: GitFileStageState } {
+function changeTypeOf(code: string): GitFileChangeType {
+  switch (code) {
+    case 'M':
+      return 'modified'
+    case 'A':
+      return 'added'
+    case 'D':
+      return 'deleted'
+    case 'R':
+      return 'renamed'
+    case 'C':
+      return 'copied'
+    case 'T':
+      return 'type_changed'
+    default:
+      return 'modified'
+  }
+}
+
+type XyEntry = { changeType: GitFileChangeType; stageState: GitFileStageState }
+
+// Map a porcelain XY status pair (`MM`, `A.`, `.D`, `DD`, ...) to one OR TWO
+// entries. A file can be changed on BOTH sides at once (e.g. `MM` = staged edit
+// + further unstaged edit, after staging a hunk) — emitting one entry per
+// non-clean side makes it appear in BOTH the Staged and Changes sections
+// (partial staging) instead of collapsing to one and vanishing from the other.
+// Porcelain v2 spec: https://git-scm.com/docs/git-status#_changed_tracked_entries
+function mapXyEntries(xy: string): XyEntry[] {
   const x = xy[0] ?? '.'
   const y = xy[1] ?? '.'
   if (x === 'U' || y === 'U' || (x === 'A' && y === 'A') || (x === 'D' && y === 'D')) {
-    return { changeType: 'conflicted', stageState: 'conflicted' }
+    return [{ changeType: 'conflicted', stageState: 'conflicted' }]
   }
-  // Pick the "interesting" side — index side wins if non-clean, else worktree.
-  const code = x !== '.' && x !== ' ' ? x : y
-  const ct: GitFileChangeType = (() => {
-    switch (code) {
-      case 'M':
-        return 'modified'
-      case 'A':
-        return 'added'
-      case 'D':
-        return 'deleted'
-      case 'R':
-        return 'renamed'
-      case 'C':
-        return 'copied'
-      case 'T':
-        return 'type_changed'
-      default:
-        return 'modified'
-    }
-  })()
-  const stageState: GitFileStageState =
-    x !== '.' && x !== ' ' ? 'staged' : 'unstaged'
-  return { changeType: ct, stageState }
+  const clean = (c: string) => c === '.' || c === ' '
+  const out: XyEntry[] = []
+  if (!clean(x)) out.push({ changeType: changeTypeOf(x), stageState: 'staged' })
+  if (!clean(y)) out.push({ changeType: changeTypeOf(y), stageState: 'unstaged' })
+  // Defensive: a listed entry should never be clean on both sides.
+  if (out.length === 0) out.push({ changeType: changeTypeOf(x), stageState: 'unstaged' })
+  return out
 }
 
 // `git status --porcelain=v2 -z --branch` output:
@@ -116,13 +124,14 @@ export function parsePorcelainV2(stdout: string): PorcelainParsed {
       const parts = line.split(' ')
       const xy = parts[1] ?? '..'
       const path = parts.slice(8).join(' ')
-      const { changeType, stageState } = mapXy(xy)
-      parsed.files.push({
-        path,
-        changeType,
-        stageState,
-        isBinary: false,
-      })
+      for (const e of mapXyEntries(xy)) {
+        parsed.files.push({
+          path,
+          changeType: e.changeType,
+          stageState: e.stageState,
+          isBinary: false,
+        })
+      }
       i += 1
       continue
     }
@@ -133,15 +142,17 @@ export function parsePorcelainV2(stdout: string): PorcelainParsed {
       const xy = parts[1] ?? '..'
       const path = parts.slice(9).join(' ')
       const oldPath = tokens[i + 1] ?? ''
-      const { changeType, stageState } = mapXy(xy)
-      const entry: GitFileStatus = {
-        path,
-        changeType,
-        stageState,
-        isBinary: false,
+      for (const e of mapXyEntries(xy)) {
+        const entry: GitFileStatus = {
+          path,
+          changeType: e.changeType,
+          stageState: e.stageState,
+          isBinary: false,
+        }
+        // oldPath describes the index-side rename/copy → attach to the staged entry.
+        if (oldPath && e.stageState === 'staged') entry.oldPath = oldPath
+        parsed.files.push(entry)
       }
-      if (oldPath) entry.oldPath = oldPath
-      parsed.files.push(entry)
       i += 2
       continue
     }
@@ -503,7 +514,13 @@ export function parseUnifiedDiff(stdout: string): GitFileDiff[] {
     let kind: GitDiffLineKind
     if (first === '+') kind = 'add'
     else if (first === '-') kind = 'del'
-    else kind = 'context'
+    else if (first === ' ') kind = 'context'
+    // A unified-diff body line always starts with ' ', '+' or '-'. Anything else
+    // — notably the empty string left by `stdout.split('\n')` after git's final
+    // newline — is NOT a content line. Treating it as context appended a phantom
+    // empty context line to the last hunk, which made `git.stageHunk` rebuild a
+    // patch that `git apply` rejected ("patch does not apply") for the last hunk.
+    else continue
     const content = line.slice(1)
     const diffLine: GitDiffLine = { kind, content }
     if (kind === 'del' || kind === 'context') {

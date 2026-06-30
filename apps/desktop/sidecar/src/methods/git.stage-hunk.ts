@@ -19,32 +19,13 @@ import { withWorkspaceLock } from '../git/mutex.js'
 import { suppressEchoFor } from '../git/watcher.js'
 import { emit } from '../transport/stdio.js'
 import { GIT_RPC_CODE, GitErrorCode } from '../git/error-map.js'
-import type { GitDiffHunk, GitDiffLine } from '../git/types.js'
+import { buildHunkPatch } from '../git/hunk-patch.js'
 
 const Params = z.object({
   workspaceRoot: z.string().min(1),
   path: z.string().min(1),
   hunkIndex: z.number().int().min(0),
 })
-
-// Tái dựng raw diff line từ GitDiffLine. `noeol` giữ nguyên marker.
-function diffLineToRaw(line: GitDiffLine): string {
-  if (line.kind === 'noeol') return line.content
-  const prefix = line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '
-  return `${prefix}${line.content}`
-}
-
-function buildPatch(relPath: string, hunk: GitDiffHunk): string {
-  const header = [
-    `diff --git a/${relPath} b/${relPath}`,
-    `--- a/${relPath}`,
-    `+++ b/${relPath}`,
-    hunk.header,
-  ]
-  const body = hunk.lines.map(diffLineToRaw)
-  // Trailing newline cần thiết để `git apply` chấp nhận patch.
-  return `${[...header, ...body].join('\n')}\n`
-}
 
 register('git.stageHunk', async (raw): Promise<{ ok: true }> => {
   const params = Params.parse(raw)
@@ -85,7 +66,7 @@ register('git.stageHunk', async (raw): Promise<{ ok: true }> => {
     }
 
     // Bước 2-3: build patch + apply qua stdin.
-    const patch = buildPatch(relPath, hunk)
+    const patch = buildHunkPatch(relPath, hunk)
     suppressEchoFor(params.workspaceRoot)
     await runGit(params.workspaceRoot, ['apply', '--cached', '--recount', '-'], {
       stdin: patch,
