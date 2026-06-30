@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.22.7',
+    date: '2026-06-30',
+    highlight: {
+      en: 'Stage individual diff hunks and push with a full-featured dialog (upstream, tags, force-with-lease, clear auth help); sessions gain a live to-do list and no longer get stuck on “Streaming…”; and AWOG can now notify you of new versions and update from inside the app.',
+      vi: 'Stage từng hunk trong diff và push với hộp thoại đầy đủ (upstream, tag, force-with-lease, hướng dẫn lỗi xác thực rõ ràng); phiên có thêm danh sách việc cần làm trực tiếp và không còn kẹt ở “Streaming…”; và AWOG giờ có thể báo bạn khi có phiên bản mới và cập nhật ngay trong app.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Git: stage or unstage individual hunks straight from the diff viewer, so you can split a file’s changes across commits — with per-hunk and per-file unstage actions.',
+        vi: 'Git: stage hoặc unstage từng hunk ngay trong khung xem diff, để tách thay đổi của một file ra nhiều commit — kèm hành động unstage theo từng hunk và từng file.',
+      },
+      {
+        kind: 'added',
+        en: 'Git: a new Push dialog lets you choose the target remote and branch, set the upstream on first push, push all tags, and force-push safely (--force-with-lease); a dedicated dialog explains what to do when the remote rejects your credentials.',
+        vi: 'Git: hộp thoại Push mới cho phép chọn remote và nhánh đích, đặt upstream ở lần push đầu, push toàn bộ tag, và force-push an toàn (--force-with-lease); một hộp thoại riêng hướng dẫn xử lý khi remote từ chối thông tin đăng nhập.',
+      },
+      {
+        kind: 'added',
+        en: 'Git: delete a branch with a confirmation step (and optionally its remote counterpart), and pin the branches you use most to the top of the sidebar.',
+        vi: 'Git: xóa nhánh có bước xác nhận (và tùy chọn xóa cả nhánh remote tương ứng), và ghim những nhánh hay dùng lên đầu sidebar.',
+      },
+      {
+        kind: 'added',
+        en: 'Sessions: watch the AI’s to-do list update live in a banner while it works, then keep it inline in the transcript once the task is done.',
+        vi: 'Phiên: theo dõi danh sách việc cần làm của AI cập nhật trực tiếp trong banner khi đang chạy, rồi giữ lại trong nội dung trò chuyện khi xong việc.',
+      },
+      {
+        kind: 'added',
+        en: 'New versions now surface in-app: a banner appears when an update is available, downloads with a progress bar, and prompts a restart to install — plus a “Check now” button in Settings → About.',
+        vi: 'Phiên bản mới giờ hiện ngay trong app: banner xuất hiện khi có cập nhật, tải về kèm thanh tiến trình, và nhắc khởi động lại để cài — kèm nút “Check now” trong Settings → About.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Fixed chats occasionally getting stuck showing “Streaming…” after a turn had actually finished — AWOG now detects the stall and finalizes the message.',
+        vi: 'Sửa lỗi cuộc trò chuyện thỉnh thoảng kẹt ở “Streaming…” dù lượt đã thực sự kết thúc — AWOG giờ phát hiện tình trạng treo và hoàn tất tin nhắn.',
+      },
+      {
+        kind: 'improved',
+        en: 'More reliable when delegating: if the AI ends a turn claiming it did work (ran a command, reviewed code, delegated a task) without actually doing it, AWOG nudges it to do the work for real in the same turn instead of fabricating the result.',
+        vi: 'Đáng tin cậy hơn khi ủy thác: nếu AI kết thúc lượt mà nói đã làm việc gì đó (chạy lệnh, review code, giao việc) nhưng thực ra chưa làm, AWOG sẽ nhắc nó làm thật ngay trong lượt đó thay vì bịa ra kết quả.',
+      },
+      {
+        kind: 'improved',
+        en: 'Pinned-context notes you reuse are now saved as presets with recent history, so you don’t have to retype the same guidance in every session.',
+        vi: 'Ghi chú trong ngữ cảnh được ghim mà bạn hay dùng nay được lưu thành preset kèm lịch sử gần đây, nên bạn không phải gõ lại cùng một hướng dẫn ở mỗi phiên.',
+      },
+    ],
+  },
+  {
     version: '0.22.6',
     date: '2026-06-29',
     highlight: {
