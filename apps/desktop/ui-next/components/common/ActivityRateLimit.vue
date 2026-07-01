@@ -17,21 +17,25 @@
     </div>
 
     <div v-if="loading && !rows.length" class="arlhint">{{ t('activity.rateLimit.loading') }}</div>
-    <div v-else-if="error" class="arlhint err">{{ error }}</div>
-    <div v-else class="arlbars">
-      <div v-for="row in rows" :key="row.type" class="arlrow">
-        <div class="arlmeta">
-          <span class="arllbl">{{ row.label }}</span>
-          <span class="arlpct mono">{{ row.pct }}%</span>
-        </div>
-        <div class="arlbar">
-          <i :style="{ width: row.pct + '%', background: row.color }" />
-        </div>
-        <div v-if="row.reset" class="arlreset">
-          {{ t('activity.rateLimit.resets', { in: row.reset }) }}
+    <template v-else>
+      <!-- Keep the last-good bars visible even when a refresh failed; the error is
+      a note beneath, so a transient 429 no longer blanks (and hides) the card. -->
+      <div v-if="rows.length" class="arlbars">
+        <div v-for="row in rows" :key="row.type" class="arlrow">
+          <div class="arlmeta">
+            <span class="arllbl">{{ row.label }}</span>
+            <span class="arlpct mono">{{ row.pct }}%</span>
+          </div>
+          <div class="arlbar">
+            <i :style="{ width: row.pct + '%', background: row.color }" />
+          </div>
+          <div v-if="row.reset" class="arlreset">
+            {{ t('activity.rateLimit.resets', { in: row.reset }) }}
+          </div>
         </div>
       </div>
-    </div>
+      <div v-if="error" class="arlhint err">{{ t('activity.rateLimit.error') }}</div>
+    </template>
   </div>
 </template>
 

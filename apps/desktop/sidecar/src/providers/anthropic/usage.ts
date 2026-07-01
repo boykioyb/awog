@@ -46,6 +46,18 @@ export interface UsageEntry {
   status: 'allowed' | 'allowed_warning' | 'rejected'
 }
 
+// A non-OK response from the usage endpoint. Carries the HTTP status so callers
+// can tell a transient 429 (claude.ai rate-limits this endpoint hard) apart from
+// a real failure — and, crucially, from "this account has no usage surface".
+// Swallowing the status (the old `if (!res.ok) return []`) made the UI card
+// silently vanish on a forced refresh, indistinguishable from an empty account.
+export class UsageFetchError extends Error {
+  constructor(readonly status: number) {
+    super(`usage endpoint returned ${status}`)
+    this.name = 'UsageFetchError'
+  }
+}
+
 interface ProfileResponseShape {
   account?: {
     email?: string
@@ -113,7 +125,9 @@ export async function fetchClaudeUsage(accessToken: string): Promise<UsageEntry[
     method: 'GET',
     headers: buildHeaders(accessToken),
   })
-  if (!res.ok) return []
+  // Fail fast on non-OK: throw so the caller surfaces "temporarily unavailable"
+  // instead of returning [] (which the UI reads as "no quota" and hides the card).
+  if (!res.ok) throw new UsageFetchError(res.status)
   const data = (await res.json()) as Partial<Record<RateLimitType, UsageBucketShape | null>>
   const out: UsageEntry[] = []
   for (const type of BUCKET_TYPES) {

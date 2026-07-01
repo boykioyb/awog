@@ -47,6 +47,7 @@
   "activity.rateLimit.title": "Provider rate limits",
   "activity.rateLimit.empty": "No accounts with a usage surface (Anthropic subscription or OpenAI Codex).",
   "activity.rateLimit.loading": "Loading usage…",
+  "activity.rateLimit.error": "Couldn't refresh usage — rate-limited, try again shortly.",
   "activity.rateLimit.none": "No rate-limit data for this account.",
   "activity.rateLimit.refresh": "Refresh usage",
   "activity.rateLimit.resets": "resets in {in}",

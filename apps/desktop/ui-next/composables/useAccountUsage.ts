@@ -52,7 +52,9 @@ export function useAccountUsage(target: MaybeRefOrGetter<UsageTarget>) {
       cachedAt.value = res.cachedAt ?? null
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load usage'
-      entries.value = []
+      // Keep the last-good entries so a transient failure (e.g. a forced refresh
+      // hitting claude.ai's aggressive 429 on /api/oauth/usage) shows an error
+      // note over the existing bars instead of blanking — and hiding — the card.
     } finally {
       loading.value = false
     }

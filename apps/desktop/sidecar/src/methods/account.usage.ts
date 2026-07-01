@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { resolveAccount } from '../credentials/credential-resolver.js'
 import { ensureFreshAccessToken } from '../credentials/token-manager.js'
-import { fetchClaudeProfile, fetchClaudeUsage } from '../providers/anthropic/usage.js'
+import { fetchClaudeProfile, fetchClaudeUsage, UsageFetchError } from '../providers/anthropic/usage.js'
 import type { ClaudeProfile, UsageEntry } from '../providers/anthropic/usage.js'
 import { getCodexUsage } from '../providers/openai/usage.js'
 import { log } from '../util/logger.js'
@@ -79,6 +79,21 @@ register('account.usage', async (raw) => {
       account: account.id,
       err: err instanceof Error ? err.message : String(err),
     })
+    // Stale-on-error: /api/oauth/usage is rate-limited hard, and a forced refresh
+    // bypasses the 60s cache — so a 429 here is expected when the user mashes
+    // reload. Fall back to the last good snapshot (stale bars beat an error banner
+    // that blanks the card). Only surface an error when nothing is cached yet.
+    if (cached) {
+      return {
+        profile: cached.profile,
+        usage: cached.usage,
+        cachedAt: cached.fetchedAt,
+        accountId: account.id,
+      }
+    }
+    if (err instanceof UsageFetchError && err.status === 429) {
+      throw new RpcError(-32031, 'Anthropic usage rate-limited — try again shortly')
+    }
     throw new RpcError(-32030, 'Failed to fetch Anthropic usage')
   }
 })

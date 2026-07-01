@@ -47,6 +47,7 @@
   "activity.rateLimit.title": "Giới hạn theo nhà cung cấp",
   "activity.rateLimit.empty": "Không có tài khoản nào có dữ liệu usage (Anthropic subscription hoặc OpenAI Codex).",
   "activity.rateLimit.loading": "Đang tải usage…",
+  "activity.rateLimit.error": "Không làm mới được usage — bị giới hạn tần suất, thử lại sau giây lát.",
   "activity.rateLimit.none": "Không có dữ liệu giới hạn cho tài khoản này.",
   "activity.rateLimit.refresh": "Làm mới usage",
   "activity.rateLimit.resets": "đặt lại sau {in}",
