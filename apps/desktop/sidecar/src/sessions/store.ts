@@ -38,6 +38,7 @@ type SessionMetadataPatch = Partial<
     | 'budget'
     | 'parentSessionId'
     | 'forkFromMessageId'
+    | 'sdkSessionId'
   >
 >
 
@@ -179,7 +180,13 @@ function applyEvent(state: FoldState, e: SessionEvent): void {
     state.snapshot = { ...current, messages, updatedAt: e.at }
   } else if (e.type === 'session.truncated') {
     if (!state.snapshot) return
-    const current = state.snapshot
+    // `current` has sdkSessionId dropped: a real truncation rewrites history, so
+    // the Claude SDK resume handle is stale (the SDK store still holds the removed
+    // turns). Dropping it makes the next Claude turn seed a fresh SDK session from
+    // the truncated JSONL (ADR 0058). state.snapshot is only reassigned when we
+    // actually truncate; an unknown keepThroughId leaves it untouched (so the
+    // sdkSessionId is preserved on a stale/garbage event).
+    const { sdkSessionId: _staleSdk, ...current } = state.snapshot
     if (e.keepThroughId === null) {
       state.snapshot = { ...current, messages: [], updatedAt: e.at }
     } else {

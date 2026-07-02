@@ -82,14 +82,21 @@ register('sessions.compact', async (raw) => {
       { onChunk: () => {} },
     )
 
-    if (!result.compaction) {
-      // Nothing was summarised (too short / already compacted / failed). The UI
-      // clears its running state without adding a checkpoint.
-      return { ok: false, reason: 'nothing-to-compact' }
+    // Pi path returns a compaction CHECKPOINT (ADR 0047) we persist as a
+    // session.compacted event + render as a marker.
+    if (result.compaction) {
+      await compactSession(params.sessionId, result.compaction)
+      return { ok: true, compaction: result.compaction }
     }
-
-    await compactSession(params.sessionId, result.compaction)
-    return { ok: true, compaction: result.compaction }
+    // Claude SDK path (ADR 0058) compacts its OWN session store — no AWOG
+    // checkpoint to persist; `compacted: true` means it really compacted, so
+    // report success (avoids a false "nothing to compact" on the Anthropic path).
+    if (result.compacted) {
+      return { ok: true }
+    }
+    // Nothing was summarised (too short / already compacted / failed). The UI
+    // clears its running state without adding a checkpoint.
+    return { ok: false, reason: 'nothing-to-compact' }
   } catch (err) {
     log.warn('sessions.compact failed', {
       sessionId: params.sessionId,

@@ -363,6 +363,7 @@ export async function runStreamPi(
     : undefined
 
   log.info('chat stream request (pi)', {
+    runtime: 'pi',
     sessionId: args.sessionId,
     model: args.settings.modelId,
     account: account.id,
@@ -454,6 +455,7 @@ export async function runStreamPi(
 
   const acc = adapter.result()
   const doneMeta = {
+    runtime: 'pi',
     sessionId: args.sessionId,
     model: acc.modelUsed,
     inputTokens: acc.inputTokens,

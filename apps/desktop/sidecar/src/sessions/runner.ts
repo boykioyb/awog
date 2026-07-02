@@ -181,6 +181,11 @@ export interface RunNonStreamArgs {
     maxToolCalls?: number
     maxWallclockMs?: number
   }
+  // Current Claude Agent SDK session id for this AWOG session (ADR 0058, Anthropic
+  // path only). When set, runStreamClaude resumes the SDK session so the model
+  // gets prior history + native compaction from the SDK's own store; absent → a
+  // fresh SDK session is started. Ignored by the Pi path.
+  sdkSessionId?: string
 }
 
 export interface StreamCallbacks {
@@ -217,14 +222,29 @@ export interface RunStreamResult {
   // New compaction checkpoint produced by a `/compact` run (ADR 0047). Absent on
   // normal turns and when there was nothing to summarise; the caller persists it.
   compaction?: SessionCompaction
+  // New/rotated Claude Agent SDK session id (ADR 0058, Anthropic path only). The
+  // caller persists it onto the session so the next turn resumes the SDK session.
+  // Absent on the Pi path (which resumes by rebuilding Context from JSONL).
+  sdkSessionId?: string
+  // `/compact` on the Claude SDK path succeeded (ADR 0058). The SDK compacts its
+  // OWN session store — there is no AWOG `compaction` checkpoint to return (that is
+  // the Pi model), so this boolean lets sessions.compact report success instead of
+  // "nothing to compact". Absent on the Pi path (which returns `compaction`).
+  compacted?: boolean
 }
 
 export async function runStream(
   args: RunNonStreamArgs,
   cb: StreamCallbacks,
 ): Promise<RunStreamResult> {
-  // Pi is the sole runtime (ADR 0029). Dynamically imported so its deps load
-  // only when a turn actually runs. Serialised per session by withSessionLock.
+  // Dual runtime (ADR 0058): the Anthropic provider runs on the Claude Agent SDK
+  // (native tools + first-party prompt/loop + SDK session store); every other
+  // provider stays on Pi (ADR 0029). Runtime modules are dynamically imported so
+  // only the one in use loads its deps. Serialised per session by withSessionLock.
+  if (args.settings.provider === 'anthropic') {
+    const { runStreamClaude } = await import('../runtime/claude-sdk/run-stream.js')
+    return withSessionLock(args.sessionId, () => runStreamClaude(args, cb))
+  }
   const { runStreamPi } = await import('../runtime/run-stream.js')
   return withSessionLock(args.sessionId, () => runStreamPi(args, cb))
 }

@@ -286,6 +286,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   const adapter = createInvokeAdapter(cb)
 
   log.info('task turn request (pi)', {
+    runtime: 'pi',
     model: settings.modelId,
     account: account.id,
     tools: tools.length,
@@ -337,6 +338,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
 
   const result = adapter.result()
   log.info('task turn done (pi)', {
+    runtime: 'pi',
     model: result.modelUsed,
     inputTokens: result.usage.input_tokens,
     outputTokens: result.usage.output_tokens,

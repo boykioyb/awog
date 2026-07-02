@@ -74,11 +74,16 @@ export interface InvokeResult {
   stopReason: string | null
 }
 
-// Drive a single agentic turn through the Pi runtime. Streams text + tool +
-// thinking events via cb, returns the aggregate. Throws RpcError on failure /
-// cancellation.
+// Drive a single agentic turn. Dual runtime (ADR 0058): the Anthropic provider
+// runs on the Claude Agent SDK (native tools + first-party prompt); every other
+// provider stays on Pi. Streams text + tool + thinking events via cb, returns the
+// aggregate. Throws RpcError on failure / cancellation. Modules are dynamically
+// imported so only the runtime in use loads its deps.
 export async function invokeSdk(args: InvokeArgs, cb: InvokeCallbacks): Promise<InvokeResult> {
-  // Dynamically imported so the Pi runtime + its deps load only when a node runs.
+  if (args.settings.provider === 'anthropic') {
+    const { invokeSdkClaude } = await import('../runtime/claude-sdk/invoke.js')
+    return invokeSdkClaude(args, cb)
+  }
   const { invokeSdkPi } = await import('../runtime/invoke.js')
   return invokeSdkPi(args, cb)
 }

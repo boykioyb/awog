@@ -373,6 +373,12 @@ export interface Session {
   aboutGhUrl?: string
   // Latest context-compaction checkpoint (ADR 0047), or absent if never compacted.
   compaction?: SessionCompaction
+  // Claude Agent SDK session id (ADR 0058, Anthropic path only). Set once the
+  // first SDK turn runs and updated whenever the SDK rotates it; the next turn
+  // passes it as `resume` so the SDK restores conversation history + compaction
+  // from its own store. Absent for Pi-only (non-Anthropic) sessions. JSONL still
+  // records the messages for UI display — this is only the SDK's resume handle.
+  sdkSessionId?: string
 }
 
 // Lightweight list-row projection of a Session WITHOUT `messages` (ADR 0048).

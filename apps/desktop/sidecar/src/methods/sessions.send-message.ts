@@ -7,7 +7,12 @@ import {
   unregisterAborter,
   type RunStreamResult,
 } from '../sessions/runner.js'
-import { appendMessage, appendEvent, loadSession } from '../sessions/store.js'
+import {
+  appendMessage,
+  appendEvent,
+  loadSession,
+  updateSessionMetadata,
+} from '../sessions/store.js'
 import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
@@ -510,16 +515,30 @@ register('sessions.sendMessage', async (raw) => {
   // sessions.compact is read back here and passed to runStream. An explicit
   // `params.compaction` (reference `ui`) still wins.
   let compactionForRun = params.compaction
+  // Claude Agent SDK resume handle (ADR 0058, Anthropic path). The SDK owns
+  // conversation history + compaction in its own session store; runStreamClaude
+  // passes this as `resume`. Read alongside the history fold when we already load
+  // the session; otherwise (history came inline from the UI) do a targeted read
+  // for the Anthropic provider only. Undefined ⇒ a fresh SDK session is started.
+  let sdkSessionId: string | undefined
   if (historyForRun.length === 0) {
     try {
       const loaded = await loadSession(params.sessionId)
       if (loaded && loaded.messages.length > 0) historyForRun = loaded.messages
       if (!compactionForRun && loaded?.compaction) compactionForRun = loaded.compaction
+      sdkSessionId = loaded?.sdkSessionId
     } catch (err) {
       log.warn('failed to fold session history for resume', {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       })
+    }
+  } else if (toSessionSettings(params.settings).provider === 'anthropic') {
+    try {
+      const loaded = await loadSession(params.sessionId)
+      sdkSessionId = loaded?.sdkSessionId
+    } catch {
+      /* no persisted SDK session yet → start fresh */
     }
   }
 
@@ -1074,6 +1093,8 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         canUseTool,
         askUserQuestion,
         abortController,
+        // Claude SDK resume handle (ADR 0058, Anthropic path). Ignored by Pi.
+        ...(sdkSessionId ? { sdkSessionId } : {}),
         // Mid-turn steering: hand the loop the steers queued via sessions.steer
         // for this assistant turn. The drain clears them so each lands once.
         getSteeringMessages: async () => drainSteer(params.messageId),
@@ -1114,6 +1135,18 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     )
     // Success → persist the authoritative final reply (full text + usage + steps).
     await persistAgent({ result })
+    // Persist the (possibly rotated) Claude SDK session id so the next turn
+    // resumes this SDK session (ADR 0058, Anthropic path). Only when it changed.
+    if (result.sdkSessionId && result.sdkSessionId !== sdkSessionId) {
+      await updateSessionMetadata(params.sessionId, {
+        sdkSessionId: result.sdkSessionId,
+      }).catch((err) => {
+        log.warn('failed to persist sdk session id', {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
   } catch (err) {
     // Cancel / error / runtime failure: runStreamPi throws here (always an RpcError
     // via mapErrorToRpc). Persist whatever text + steps streamed so the partial reply

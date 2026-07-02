@@ -5,9 +5,10 @@
 
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { truncateSession } from '../sessions/store.js'
+import { truncateSession, loadSession } from '../sessions/store.js'
 import { restoreSnapshot } from '../sessions/snapshots.js'
 import { loadProject } from '../projects/store.js'
+import { removeSdkSession } from '../runtime/claude-sdk/store.js'
 import { log } from '../util/logger.js'
 
 const Params = z.object({
@@ -19,7 +20,18 @@ const Params = z.object({
 register('sessions.rewind', async (raw) => {
   const params = Params.parse(raw)
 
-  // Conversation: drop every message after the target (it is kept).
+  // Conversation: drop every message after the target (it is kept). The
+  // truncation invalidates the Claude SDK resume handle (fold clears
+  // sdkSessionId), so remove the now-orphan SDK transcript (ADR 0058); the next
+  // Claude turn seeds a fresh SDK session from the rewound JSONL.
+  try {
+    const s = await loadSession(params.sessionId)
+    if (s?.sdkSessionId && s.messages.some((m) => m.id === params.messageId)) {
+      await removeSdkSession(s.sdkSessionId)
+    }
+  } catch {
+    /* best-effort: never block the rewind */
+  }
   await truncateSession(params.sessionId, params.messageId)
 
   // Files: restore the snapshot keyed to that turn, if any.
