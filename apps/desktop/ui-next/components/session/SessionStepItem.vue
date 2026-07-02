@@ -9,6 +9,14 @@
       <span class="tname">{{ block.tool }}</span>
       <span class="starg">{{ block.target }}</span>
       <SessionStepResult :text="isTodo ? todoCount : block.result" />
+      <button
+        v-if="topFileTarget"
+        class="stepview"
+        :title="t('sessions.step.viewFile')"
+        @click.stop="viewFile(block.tool, block.target)"
+      >
+        <Icon name="file" style="width: 13px; height: 13px" />
+      </button>
       <Icon name="chev" style="width: 13px; height: 13px" />
     </div>
     <Collapse :open="!collapsed">
@@ -34,6 +42,14 @@
               <span class="tname">{{ st.tool }}</span>
               <span class="starg">{{ st.target }}</span>
               <SessionStepResult :text="st.result" />
+              <button
+                v-if="fileTargetOf(st.tool, st.target)"
+                class="stepview"
+                :title="t('sessions.step.viewFile')"
+                @click.stop="viewFile(st.tool, st.target)"
+              >
+                <Icon name="file" style="width: 13px; height: 13px" />
+              </button>
               <Icon name="chev" style="width: 13px; height: 13px" />
             </div>
             <Collapse :open="subExpanded.has(i)">
@@ -87,6 +103,34 @@ import type { StepBlock } from '~/composables/useSessionsData'
 
 const props = defineProps<{ block: StepBlock }>()
 const { t } = useI18n()
+
+// Shared full-window PreviewModal (provided by SessionDetail). Lets a file-op step
+// open the file it touched without expanding the step or leaving the transcript.
+const filePreview = useFilePreview()
+
+// File-operation tools whose `target` is the file they touched (matches both mock
+// tool names and the engine's human labels: Read/Edit/Write/Update/Create/…).
+const FILE_TOOL = /read|edit|write|update|create|notebook/i
+
+// Resolve a step's viewable file path (or null). Reuses filePathOf to clean the
+// path (strip ./ and :line, reject URLs / search patterns / quoted args); falls
+// back to a path-safe token so extensionless files (Makefile, LICENSE) still get
+// a button. Non-file tools (Bash/Grep/Glob…) never surface one.
+function fileTargetOf(tool: string, target: string): string | null {
+  if (!FILE_TOOL.test(tool)) return null
+  const raw = (target || '').trim()
+  if (!raw) return null
+  const detected = filePathOf(raw)
+  if (detected) return detected
+  if (!/\s/.test(raw) && /^[\w./#@~+-]+$/.test(raw)) return raw
+  return null
+}
+const topFileTarget = computed(() => fileTargetOf(props.block.tool, props.block.target))
+
+function viewFile(tool: string, target: string): void {
+  const path = fileTargetOf(tool, target)
+  if (path) filePreview.open(path)
+}
 
 // A TodoWrite note step (carries `todos`) renders its checklist inline; a subagent
 // step renders via the sub-step loop (when `block.sub` is set); a Skill step shows
@@ -178,6 +222,23 @@ const toggleSub = (i: number) => {
 .stepic {
   flex: 0 0 auto;
   color: var(--textDim);
+}
+/* "View file" button — icon-only, sits between the result chip and the chevron.
+   Muted by default; accents on hover. @click.stop keeps it from toggling collapse. */
+.stepview {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 5px;
+  color: var(--textFaint);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.stepview:hover {
+  background: var(--bgHover);
+  color: var(--text);
 }
 /* The <Collapse> wrapper now owns the body's reveal; neutralize the prototype's
    `.step.col .stepd{display:none}` snap (scoped → higher specificity wins). Applies

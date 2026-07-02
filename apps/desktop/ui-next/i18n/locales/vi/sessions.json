@@ -158,6 +158,7 @@
   "sessions.gate.error": "Lỗi",
   "sessions.gate.retry": "Thử lại",
   "sessions.step.skillRunning": "Đang chạy skill…",
+  "sessions.step.viewFile": "Xem file",
   "sessions.step.subagentSummary": "Tóm tắt trả về cho agent chính",
   "sessions.step.input": "Đầu vào",
   "sessions.step.output": "Kết quả",

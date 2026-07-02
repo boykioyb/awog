@@ -158,6 +158,7 @@
   "sessions.gate.error": "Error",
   "sessions.gate.retry": "Retry",
   "sessions.step.skillRunning": "Running skill…",
+  "sessions.step.viewFile": "View file",
   "sessions.step.subagentSummary": "Summary returned to the main agent",
   "sessions.step.input": "Input",
   "sessions.step.output": "Output",
