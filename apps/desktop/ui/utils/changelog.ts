@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.23.0',
+    date: '2026-07-02',
+    highlight: {
+      en: 'Claude (Anthropic) sessions and tasks now run on Anthropic’s first-party agent engine for more dependable tool use — it does the work instead of just describing it — with native plan mode and subagents; other providers are unchanged. Plus a one-click “View file” on file steps, and a steadier usage card that keeps your last readings when the server is busy.',
+      vi: 'Phiên và tác vụ dùng Claude (Anthropic) giờ chạy trên engine tác nhân chính hãng của Anthropic để dùng công cụ đáng tin cậy hơn — làm thật thay vì chỉ mô tả — kèm chế độ lập kế hoạch và tác nhân phụ gốc; các nhà cung cấp khác giữ nguyên. Thêm nút “Xem file” một chạm trên các bước thao tác file, và thẻ mức dùng ổn định hơn khi máy chủ bận.',
+    },
+    items: [
+      {
+        kind: 'improved',
+        en: 'Claude (Anthropic) sessions and tasks now run on Anthropic’s first-party agent engine, giving more reliable tool use — the assistant carries out actions instead of just describing them — along with native plan mode, subagents, and conversation compaction. Sessions on other providers (OpenAI, Google, custom) are unchanged.',
+        vi: 'Phiên và tác vụ dùng Claude (Anthropic) giờ chạy trên engine tác nhân chính hãng của Anthropic, giúp dùng công cụ đáng tin cậy hơn — trợ lý thực thi hành động thay vì chỉ mô tả — cùng chế độ lập kế hoạch, tác nhân phụ và nén hội thoại gốc. Phiên trên các nhà cung cấp khác (OpenAI, Google, tùy chỉnh) giữ nguyên.',
+      },
+      {
+        kind: 'added',
+        en: 'Sessions: a “View file” button on each file step (read, edit, write, create) opens the file it touched in a full-window preview — without expanding the step or leaving the conversation.',
+        vi: 'Phiên: nút “Xem file” trên mỗi bước thao tác file (đọc, sửa, ghi, tạo) mở file đó trong khung xem toàn màn hình — không cần mở rộng bước hay rời khỏi cuộc trò chuyện.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Usage: the rate-limit card no longer disappears when the usage service is briefly busy (rate-limited). It keeps showing your last readings with a small note instead of blanking out as if you had no quota.',
+        vi: 'Mức dùng: thẻ giới hạn tốc độ không còn biến mất khi dịch vụ mức dùng tạm thời bận (bị giới hạn tốc độ). Nó tiếp tục hiển thị số liệu gần nhất kèm một ghi chú nhỏ, thay vì trống trơn như thể bạn không có hạn mức.',
+      },
+    ],
+  },
+  {
     version: '0.22.8',
     date: '2026-06-30',
     highlight: {
