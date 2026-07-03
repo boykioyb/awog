@@ -30,6 +30,66 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.23.2',
+    date: '2026-07-03',
+    highlight: {
+      en: 'Images and PDFs you attach now reliably reach the model, you can attach whole folders as read-only context, and the app recovers on its own if the engine crashes mid-turn — telling you exactly which turn was interrupted instead of leaving it stuck on “Streaming…”.',
+      vi: 'Ảnh và PDF bạn đính kèm giờ đến được mô hình một cách đáng tin cậy, bạn có thể đính kèm cả thư mục làm ngữ cảnh chỉ-đọc, và ứng dụng tự phục hồi nếu engine gặp sự cố giữa lượt — báo rõ lượt nào bị gián đoạn thay vì kẹt mãi ở “Streaming…”.',
+    },
+    items: [
+      {
+        kind: 'improved',
+        en: 'Images and PDFs attached to a chat now reliably reach the model — sent as native image and document blocks. Other attached files ride along as a reference the model can open with a tool when the file is inside your working folder.',
+        vi: 'Ảnh và PDF đính kèm vào chat giờ đến được mô hình một cách đáng tin cậy — gửi dưới dạng khối ảnh và tài liệu gốc. Các file đính kèm khác đi kèm dưới dạng tham chiếu để mô hình mở bằng công cụ khi file nằm trong thư mục làm việc của bạn.',
+      },
+      {
+        kind: 'added',
+        en: 'Attach one or more folders to a chat as read-only context — via the new folder button, the multi-select picker, or by dragging them in. Each folder’s layout is shown to the model for orientation, without changing your working directory.',
+        vi: 'Đính kèm một hoặc nhiều thư mục vào chat làm ngữ cảnh chỉ-đọc — qua nút thư mục mới, bộ chọn nhiều mục, hoặc kéo-thả vào. Bố cục của mỗi thư mục được hiển thị cho mô hình để định hướng, mà không thay đổi thư mục làm việc của bạn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The app now recovers automatically if the engine crashes mid-turn, and marks the interrupted turn with a clear “retry to continue” message instead of leaving it stuck on “Streaming…” forever.',
+        vi: 'Ứng dụng giờ tự phục hồi nếu engine gặp sự cố giữa lượt, và đánh dấu lượt bị gián đoạn bằng thông báo “thử lại để tiếp tục” rõ ràng thay vì kẹt mãi ở “Streaming…”.',
+      },
+      {
+        kind: 'improved',
+        en: 'The session list now shows each session’s status — done, waiting for you, or error — right on its row, without needing to open it first.',
+        vi: 'Danh sách phiên giờ hiển thị trạng thái của mỗi phiên — xong, đang chờ bạn, hoặc lỗi — ngay trên hàng của nó, mà không cần mở ra trước.',
+      },
+      {
+        kind: 'fixed',
+        en: 'You can now send a follow-up made only of quoted text (with no typed message), and quoted replies are kept when you queue a message while a turn is still running.',
+        vi: 'Bạn giờ có thể gửi một tin nhắn tiếp theo chỉ gồm văn bản trích dẫn (không cần gõ thêm), và các trích dẫn được giữ lại khi bạn xếp hàng tin nhắn trong lúc một lượt vẫn đang chạy.',
+      },
+      {
+        kind: 'added',
+        en: 'Git remotes: “Remove remote” and “Edit URLs…” are now available from a remote’s right-click menu.',
+        vi: 'Git remote: “Xóa remote” và “Sửa URL…” giờ có sẵn trong menu chuột phải của một remote.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Git fetch, pull, and push with missing credentials now surface a clear sign-in error instead of silently hanging.',
+        vi: 'Git fetch, pull và push khi thiếu thông tin đăng nhập giờ hiện lỗi đăng nhập rõ ràng thay vì treo âm thầm.',
+      },
+      {
+        kind: 'added',
+        en: 'The session Files panel has a new toolbar: create a file or folder at the root, collapse the whole tree, and reload it.',
+        vi: 'Bảng Files trong phiên có thanh công cụ mới: tạo file hoặc thư mục ở gốc, thu gọn toàn bộ cây, và tải lại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Pasted text is no longer duplicated in the workspace terminal.',
+        vi: 'Văn bản dán không còn bị nhân đôi trong terminal của workspace.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Clicking a file link in a chat message now opens it in the preview — including non-ASCII filenames — instead of failing with “Page not found”.',
+        vi: 'Nhấp vào liên kết file trong tin nhắn chat giờ mở nó trong bản xem trước — kể cả tên file không phải ASCII — thay vì báo lỗi “Không tìm thấy trang”.',
+      },
+    ],
+  },
+  {
     version: '0.23.1',
     date: '2026-07-03',
     highlight: {
