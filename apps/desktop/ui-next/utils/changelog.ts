@@ -30,6 +30,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.23.1',
+    date: '2026-07-03',
+    highlight: {
+      en: 'Chat now renders LaTeX math and draws Mermaid diagrams live as they stream in, and the /compact command reliably shrinks any conversation — with the context gauge dropping the moment it’s done.',
+      vi: 'Cửa sổ chat giờ hiển thị công thức LaTeX và vẽ sơ đồ Mermaid ngay khi nội dung đang truyền về, và lệnh /compact rút gọn hội thoại đáng tin cậy trên mọi nhà cung cấp — với đồng hồ ngữ cảnh giảm ngay lúc nén xong.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Chat renders LaTeX math: inline $…$, block $$…$$, and ```latex / ```tex code blocks now show as typeset equations, right in the conversation and the preview. Works fully offline.',
+        vi: 'Chat hiển thị công thức LaTeX: $…$ trong dòng, $$…$$ dạng khối, và khối mã ```latex / ```tex giờ hiện dưới dạng phương trình sắp chữ, ngay trong cuộc trò chuyện và bản xem trước. Hoạt động hoàn toàn ngoại tuyến.',
+      },
+      {
+        kind: 'improved',
+        en: 'Mermaid diagrams now render live while a reply is streaming: each diagram appears the moment its block finishes, instead of waiting for the whole message — with no more flickering parse errors on a half-typed diagram.',
+        vi: 'Sơ đồ Mermaid giờ hiển thị ngay khi câu trả lời đang truyền về: mỗi sơ đồ xuất hiện đúng lúc khối của nó hoàn tất, thay vì chờ cả tin nhắn — và không còn lỗi phân tích nhấp nháy trên sơ đồ mới gõ dở.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The /compact command now reliably shrinks the conversation on every provider — it previously often reported “nothing to compact” on Claude. The context gauge drops immediately once compaction lands, and you get clear feedback: compacted, nothing to compact, or failed.',
+        vi: 'Lệnh /compact giờ rút gọn hội thoại đáng tin cậy trên mọi nhà cung cấp — trước đây thường báo “không có gì để nén” trên Claude. Đồng hồ ngữ cảnh giảm ngay khi nén xong, và bạn nhận phản hồi rõ ràng: đã nén, không có gì để nén, hoặc thất bại.',
+      },
+      {
+        kind: 'improved',
+        en: 'Session list: each session’s status now shows as a colored chip on the right of its row, making it easier to scan running, waiting, done, and error states at a glance.',
+        vi: 'Danh sách phiên: trạng thái mỗi phiên giờ hiện dưới dạng chip màu ở bên phải hàng, giúp dễ quét nhanh các trạng thái đang chạy, đang chờ, xong và lỗi.',
+      },
+    ],
+  },
+  {
     version: '0.23.0',
     date: '2026-07-02',
     highlight: {
