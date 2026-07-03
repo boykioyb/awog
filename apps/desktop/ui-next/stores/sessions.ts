@@ -208,6 +208,18 @@ type SessionSummaryDto = {
 
 // sessions.get full transcript (sidecar Session). Engine messages use string ids
 // + role 'agent'; we translate to the ui-next SessionMessage shape on hydrate.
+// Persisted attachment shape on an engine message (sidecar SessionAttachment).
+// Distinct from the ui-next SessionAttachment — mapped back by engineAttToSession.
+type EngineAttachment = {
+  id?: string
+  name: string
+  type: 'file' | 'image'
+  size?: string
+  mime?: string
+  url?: string
+  preview?: string
+  path?: string
+}
 type EngineMessage = {
   id: string
   role: 'user' | 'agent' | 'system'
@@ -216,6 +228,9 @@ type EngineMessage = {
   steps?: EngineStep[]
   parts?: ({ kind: 'text'; text: string } | EngineStep)[]
   error?: { message: string }
+  // User attachments persisted on the turn (sidecar SessionMessage.attachments).
+  // Restored on hydrate so a reload keeps the attachment chips + previews.
+  attachments?: EngineAttachment[]
 }
 type SessionGetDto = {
   id: string
@@ -811,9 +826,31 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
+  // Engine attachment (persisted on a user turn) → ui-next SessionAttachment so a
+  // JSONL reload restores the attachment chips + previews. Mirrors the forward map
+  // in sendMessage (att → engineAtts): image/PDF `url` (base64) → dataUrl (drives
+  // both re-feed and the in-app preview), text file `preview` → text, everything
+  // else keeps its `path` reference.
+  function engineAttToSession(a: EngineAttachment): SessionAttachment {
+    const att: SessionAttachment = { name: a.name, img: a.type === 'image' }
+    if (a.url) {
+      att.dataUrl = a.url
+      att.src = a.url
+    }
+    if (a.preview) att.text = a.preview
+    if (a.path) att.path = a.path
+    if (a.mime) att.mime = a.mime
+    return att
+  }
+
   function engineMessageToSessionMessage(m: EngineMessage): Session['msgs'][number] {
     if (m.role === 'user') {
-      return { role: 'user', text: m.text, at: m.at ?? '' }
+      return {
+        role: 'user',
+        text: m.text,
+        at: m.at ?? '',
+        ...(m.attachments?.length ? { att: m.attachments.map(engineAttToSession) } : {}),
+      }
     }
     if (m.role === 'system') {
       return { role: 'system', text: m.text, at: m.at ?? '' }
@@ -2131,6 +2168,9 @@ export const useSessionsStore = defineStore('sessions', () => {
         // refeedImages defaults true sidecar-side; forward only the opt-OUT so the
         // payload stays minimal and the engine keeps its current default otherwise.
         ...(sessionPrefs.refeedImages === false ? { refeedImages: false } : {}),
+        // Co-author trailer (Settings → Git). commitCoAuthor defaults on; forward
+        // only the opt-OUT so the runtime keeps its default-on trailer otherwise.
+        ...(settingsStore.git.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         // Project linkage → sidecar resolves the project's on-disk path as the
         // tools' cwd. WITHOUT this, tools fall back to process.cwd() (the repo the
         // engine was launched from) — so a medbase-platform session would wrongly
@@ -2267,6 +2307,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s || !useIpc || !s.engineId) return 'error'
     const es = engineSettings(s)
     const messageId = `compact-${Date.now().toString(36)}`
+    // Guard against overlapping /compact calls (auto-compact + manual button) and
+    // drive the composer's "compacting…" indicator + Send lock for the whole RPC.
+    if (s.compacting) return 'nothing'
+    s.compacting = true
     try {
       const res = await sc.request<{ ok?: boolean; reason?: string; historyChars?: number }>(
         'sessions.compact',
@@ -2297,6 +2341,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     } catch (err) {
       console.warn('[sessions] compact failed', err)
       return 'error'
+    } finally {
+      s.compacting = false
     }
   }
 

@@ -401,6 +401,90 @@ export function parseRemoteV(stdout: string): GitRemote[] {
 
 const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
 
+// Git quotes paths with non-ASCII / control chars in diff headers
+// (core.quotePath=true, the default): the path is wrapped in double quotes and
+// each unusual byte is octal-escaped (\nnn), so a UTF-8 filename becomes several
+// escapes. Decode back to a string; a plain (unquoted) path passes through
+// untouched. Without this, a Japanese/accented path parses to an empty path and
+// the file shows as a blank row in the commit CHANGES list.
+const OCTAL = /[0-7]/
+const C_ESCAPE: Record<string, number> = {
+  a: 7,
+  b: 8,
+  t: 9,
+  n: 10,
+  v: 11,
+  f: 12,
+  r: 13,
+  '"': 34,
+  '\\': 92,
+}
+
+function unquoteGitPath(s: string): string {
+  if (s.length < 2 || s[0] !== '"' || s[s.length - 1] !== '"') return s
+  const inner = s.slice(1, -1)
+  const bytes: number[] = []
+  for (let i = 0; i < inner.length; i += 1) {
+    const ch = inner[i]!
+    if (ch !== '\\') {
+      for (const b of Buffer.from(ch, 'utf8')) bytes.push(b)
+      continue
+    }
+    const next = inner[i + 1]
+    if (next === undefined) break
+    if (OCTAL.test(next)) {
+      let oct = ''
+      let j = i + 1
+      while (j < inner.length && j < i + 4 && OCTAL.test(inner[j]!)) {
+        oct += inner[j]
+        j += 1
+      }
+      bytes.push(Number.parseInt(oct, 8) & 0xff)
+      i = j - 1
+      continue
+    }
+    // Named escape (\t, \", \\, …) → its byte; unknown escape → the char literally.
+    bytes.push(C_ESCAPE[next] ?? next.charCodeAt(0))
+    i += 1
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
+// End index (exclusive) of a double-quoted token starting at `start`, past its
+// closing quote; -1 if unterminated. Skips escaped quotes (\").
+function quotedTokenEnd(s: string, start: number): number {
+  let j = start + 1
+  while (j < s.length) {
+    if (s[j] === '\\') {
+      j += 2
+      continue
+    }
+    if (s[j] === '"') return j + 1
+    j += 1
+  }
+  return -1
+}
+
+// Extract the new (b-side) path from a `diff --git a/… b/…` header. Non-ASCII
+// paths come quoted on BOTH sides (`"a/…" "b/…"`); plain/space paths come bare
+// and are split on the ` b/` anchor. Renames override this via the `rename to`
+// line, so the b-side only needs to be correct for non-renames (where both
+// sides share the same path, hence the same quoting).
+function parseDiffGitPath(line: string): string {
+  const rest = line.slice('diff --git '.length)
+  if (rest.startsWith('"')) {
+    const firstEnd = quotedTokenEnd(rest, 0)
+    if (firstEnd < 0) return ''
+    let i = firstEnd
+    while (i < rest.length && rest[i] === ' ') i += 1
+    const bRaw =
+      rest[i] === '"' ? rest.slice(i, quotedTokenEnd(rest, i)) || rest.slice(i) : rest.slice(i)
+    return unquoteGitPath(bRaw).replace(/^b\//, '')
+  }
+  const m = /^a\/(.+) b\/(.+)$/.exec(rest)
+  return m?.[2] ?? ''
+}
+
 interface PendingFile {
   path: string
   oldPath?: string
@@ -444,8 +528,7 @@ export function parseUnifiedDiff(stdout: string): GitFileDiff[] {
       pushPending(out, cur)
       curHunk = null
       // path from "diff --git a/<path> b/<path>"; rename overrides later.
-      const m = /^diff --git a\/(.+) b\/(.+)$/.exec(line)
-      const path = m?.[2] ?? ''
+      const path = parseDiffGitPath(line)
       cur = {
         path,
         isBinary: false,
@@ -457,12 +540,12 @@ export function parseUnifiedDiff(stdout: string): GitFileDiff[] {
     if (!cur) continue
 
     if (line.startsWith('rename from ')) {
-      cur.oldPath = line.slice('rename from '.length)
+      cur.oldPath = unquoteGitPath(line.slice('rename from '.length))
       cur.isRename = true
       continue
     }
     if (line.startsWith('rename to ')) {
-      cur.path = line.slice('rename to '.length)
+      cur.path = unquoteGitPath(line.slice('rename to '.length))
       continue
     }
     if (line.startsWith('old mode ')) {

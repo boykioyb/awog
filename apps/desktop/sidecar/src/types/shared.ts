@@ -572,6 +572,10 @@ export interface Project {
   createdAt: string
   color?: string
   llmDefaults?: ProjectLlmDefaults
+  // GitHub (gh CLI) account login this project authenticates as — for git
+  // push/fetch/pull AND the GH Issues/PR tabs. '' = active gh account; absent =
+  // inherit the app-level default (settings.githubAccount). A concrete login pins.
+  githubAccount?: string
 }
 
 // ─── Skill ─────────────────────────────────────────────────────────────────

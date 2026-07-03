@@ -47,6 +47,7 @@
           :has-conflict="store.hasConflict"
           :not-a-repo="store.notARepo"
           :sync-op="store.syncOp"
+          :gh-account="store.activeGhAccount"
           @select-project="(id) => store.setProject(id)"
           @select-repo="(r) => store.setRepo(r)"
           @switch-branch="switchBranch"
@@ -56,6 +57,7 @@
           @complete-merge="() => store.completeMerge()"
           @abort-merge="() => store.abortMerge()"
           @open-identity="() => (identityOpen = true)"
+          @open-account="openAccountSetting"
         />
 
         <div v-if="store.isDetached" class="gbanner">
@@ -397,6 +399,12 @@ const pushOpen = ref(false)
 // rather than firing a bare `git push`.
 function openPush() {
   pushOpen.value = true
+}
+
+// The header's gh-account chip → open the current project's quick-view (Overview)
+// where the GitHub-account setting lives, so it can be changed without leaving Git.
+function openAccountSetting() {
+  if (store.currentProjectId) useProjectModal().open(store.currentProjectId)
 }
 
 // Dialog confirmed → close + push with the resolved options. Errors surface via

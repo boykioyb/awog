@@ -186,6 +186,11 @@ export interface RunNonStreamArgs {
   // gets prior history + native compaction from the SDK's own store; absent → a
   // fresh SDK session is started. Ignored by the Pi path.
   sdkSessionId?: string
+  // Git `commitCoAuthor` setting (Settings → Git). Controls the AWOG co-author
+  // trailer on model-made commits: the Claude SDK path sets the SDK's native
+  // `attribution` (overriding the claude_code preset's Claude trailer); the Pi
+  // path appends CO_AUTHOR_INSTRUCTION to the system prompt. Omitted → on (default).
+  commitCoAuthor?: boolean
 }
 
 export interface StreamCallbacks {

@@ -232,6 +232,9 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
         // subagent's MCP set, same as the node's own agent.
         ...(skillProjectIds.length > 0 ? { projectIds: skillProjectIds } : {}),
         ...(connectionId ? { connectionId } : {}),
+        // Co-author trailer on model-made commits inside the node — matches the
+        // task's per-phase auto-commit trailer (autoCommitPhase below).
+        commitCoAuthor: task.commitCoAuthor ?? true,
         abortController: ctx.abortController,
       },
       {

@@ -31,6 +31,7 @@ import { buildContext } from '../context-builder.js'
 import { createRuntimeToolDefinitions } from './index.js'
 import { buildMcpUnavailableNote } from './mcp-tools.js'
 import { TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from '../prompts.js'
+import { CO_AUTHOR_INSTRUCTION } from '../../git/co-author.js'
 import { toReasoning } from '../thinking.js'
 import type { BeforeToolCall } from '../permission.js'
 
@@ -105,6 +106,10 @@ export interface TaskToolDeps {
   // Permission gate for the subagent's tool calls. Chat reuses the parent gate
   // (so writes still prompt); tasks pass an always-allow gate (bypass).
   beforeToolCall: BeforeToolCall
+  // Git `commitCoAuthor` setting inherited from the parent turn. When on (default),
+  // append the AWOG co-author instruction to the subagent prompt (Pi has no
+  // built-in commit attribution). Omitted → on.
+  commitCoAuthor?: boolean
   // Build the per-run event sink. `parentToolCallId` is the Task call's id so the
   // sink can tag every nested step/trace with it for UI nesting.
   makeChildSink: (parentToolCallId: string) => SubagentSink
@@ -235,7 +240,15 @@ async function spawnSubagent(
   // catalog (ADR 0051) rides along when the inherited toolset is in proxy mode.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
   const subAppend =
-    [agentCtx.systemPromptAppend, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT, mcpUnavailable, mcpCatalog]
+    [
+      agentCtx.systemPromptAppend,
+      TOOL_DISCIPLINE_PROMPT,
+      VERIFY_PROMPT,
+      // Inherit the parent turn's co-author setting (Pi has no built-in attribution).
+      deps.commitCoAuthor === false ? undefined : CO_AUTHOR_INSTRUCTION,
+      mcpUnavailable,
+      mcpCatalog,
+    ]
       .filter((p): p is string => typeof p === 'string' && p.length > 0)
       .join('\n\n') || undefined
 

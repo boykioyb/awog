@@ -1,4 +1,5 @@
 {
+  "sessions.composer.compacting": "Compacting…",
   "sessions.composer.enhancing": "Enhancing…",
   "sessions.composer.enhanceFailed": "Could not enhance the prompt",
   "sessions.composer.queueSend": "Queue (sends after the current turn)",

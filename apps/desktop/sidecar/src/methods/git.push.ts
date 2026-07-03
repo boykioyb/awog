@@ -30,6 +30,9 @@ const Params = z.object({
   force: z.boolean().optional(),
   // `--tags` — push all local tags alongside the branch.
   pushTags: z.boolean().optional(),
+  // Optional gh account login to authenticate github.com HTTPS as (validated in
+  // the streaming runner). Empty → OS keychain default, unchanged behavior.
+  ghAccount: z.string().optional(),
 })
 
 interface Result {
@@ -93,6 +96,7 @@ register('git.push', async (raw): Promise<Result> => {
       workspaceRoot: params.workspaceRoot,
       args,
       op: 'push',
+      ghAccount: params.ghAccount,
     })
 
     if (code !== 0) {

@@ -96,6 +96,8 @@
   "git.header.abortMerge": "Abort merge",
   "git.header.abortRebase": "Abort rebase",
   "git.header.identity": "Git identity (name & email)",
+  "git.header.ghAccountTitle": "GitHub account for fetch/pull/push — set in Project → Overview",
+  "git.header.ghAccountDefault": "Default account",
   "git.ops.pullWord": "Pull",
   "git.ops.pushWord": "Push",
   "git.remote.fetchUrl": "Fetch URL",

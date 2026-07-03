@@ -19,6 +19,9 @@ const Params = z.object({
   workspaceRoot: z.string().min(1),
   remote: z.string().optional(),
   prune: z.boolean().optional(),
+  // Optional gh account login to authenticate github.com HTTPS as (validated in
+  // the streaming runner). Empty → OS keychain default, unchanged behavior.
+  ghAccount: z.string().optional(),
 })
 
 interface UpdatedRef {
@@ -66,6 +69,7 @@ register('git.fetch', async (raw): Promise<Result> => {
       workspaceRoot: params.workspaceRoot,
       args,
       op: 'fetch',
+      ghAccount: params.ghAccount,
     })
 
     if (code !== 0) {

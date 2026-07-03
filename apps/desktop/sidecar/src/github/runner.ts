@@ -124,16 +124,26 @@ export async function runGhBase(args: readonly string[]): Promise<string> {
   throwForOutcome(outcome)
 }
 
-// Resolve the env a repo-scoped gh command should run with, honoring `account`
+// Resolve the GH_TOKEN to inject so a subprocess authenticates as `account`,
 // WITHOUT mutating gh's global active account (NO `gh auth switch`):
-//   - empty OR == active login → base env (keyring active account).
-//   - a different (validated, known) login → fetch that account's token via
-//     `gh auth token --user <login>` and inject GH_TOKEN into the child env.
-// Throws RpcError on an unknown / malformed login.
-export async function resolveGhEnv(account?: string): Promise<NodeJS.ProcessEnv> {
-  const env = filteredEnv()
+//   - empty account → null (the base env / keyring active account serves it).
+//   - the active login → null by default (base env already serves it); pass
+//     `includeActive` to fetch its token anyway (git needs it — see below).
+//   - a different (validated, known) login → its token via `gh auth token --user`.
+// Throws RpcError on an unknown / malformed login. The returned token is a
+// SECRET — inject it into a child env only; never log / return / surface it.
+//
+// `includeActive`: for git push/fetch/pull the token must be injected even for
+// the active account. `gh auth git-credential` honors the URL's embedded
+// username (`https://user@github.com`) and DECLINES when it mismatches the
+// active account, so relying on the keyring fails for such remotes; an injected
+// GH_TOKEN overrides the username check and always serves the pinned account.
+export async function resolveGhTokenToInject(
+  account?: string,
+  opts: { includeActive?: boolean } = {},
+): Promise<string | null> {
   const wanted = (account ?? '').trim()
-  if (!wanted) return env
+  if (!wanted) return null
 
   if (!isValidGhLogin(wanted)) {
     throw new RpcError(GH_RPC_CODE, 'Invalid GitHub account', { ghCode: GhErrorCode.GH_NOT_AUTH })
@@ -144,11 +154,10 @@ export async function resolveGhEnv(account?: string): Promise<NodeJS.ProcessEnv>
   if (!known) {
     throw new RpcError(GH_RPC_CODE, 'Unknown GitHub account', { ghCode: GhErrorCode.GH_NOT_AUTH })
   }
-  // Active account → keyring already serves it; no token injection needed.
-  if (known.active) return env
+  // Active account → keyring already serves it; skip injection unless the caller
+  // needs the token regardless (git).
+  if (known.active && !opts.includeActive) return null
 
-  // Non-active account: pull its token and inject. Treat stdout as a SECRET —
-  // do not log it, do not let it reach an error message.
   const token = (
     await runGhBase(['auth', 'token', '--user', wanted, '--hostname', 'github.com'])
   ).trim()
@@ -157,10 +166,20 @@ export async function resolveGhEnv(account?: string): Promise<NodeJS.ProcessEnv>
       ghCode: GhErrorCode.GH_NOT_AUTH,
     })
   }
-  env.GH_TOKEN = token
-  // gh also honors GITHUB_TOKEN; drop any inherited one so the injected GH_TOKEN
-  // wins deterministically (gh prefers GH_TOKEN, but keep the env unambiguous).
-  delete env.GITHUB_TOKEN
+  return token
+}
+
+// Resolve the env a repo-scoped gh command should run with, honoring `account`
+// (see resolveGhTokenToInject). Injects the resolved token into GH_TOKEN.
+export async function resolveGhEnv(account?: string): Promise<NodeJS.ProcessEnv> {
+  const env = filteredEnv()
+  const token = await resolveGhTokenToInject(account)
+  if (token) {
+    env.GH_TOKEN = token
+    // gh also honors GITHUB_TOKEN; drop any inherited one so the injected
+    // GH_TOKEN wins deterministically (gh prefers GH_TOKEN, but keep it clean).
+    delete env.GITHUB_TOKEN
+  }
   return env
 }
 

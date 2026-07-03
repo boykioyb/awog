@@ -41,6 +41,7 @@ import { createClaudeEventAdapter } from './event-adapter.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
+  commitAttribution,
   effortFromLevel,
   mapClaudeErrorToRpc,
   thinkingFromLevel,
@@ -310,6 +311,10 @@ export async function runStreamClaude(
 
   const options: Options = {
     systemPrompt: { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) },
+    // Honor the Git `commitCoAuthor` setting via the SDK flag-settings layer
+    // (highest priority). The claude_code preset otherwise adds Claude's own
+    // attribution regardless (see commitAttribution): on → AWOG trailer, off → hidden.
+    settings: { attribution: commitAttribution(args.commitCoAuthor) },
     includePartialMessages: true,
     // Thinking: enable adaptive extended thinking (except 'low' = off) + map the
     // level to Claude Code effort depth (shared.ts). effort alone won't emit

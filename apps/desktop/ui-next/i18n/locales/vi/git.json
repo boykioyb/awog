@@ -96,6 +96,8 @@
   "git.header.abortMerge": "Huỷ merge",
   "git.header.abortRebase": "Huỷ rebase",
   "git.header.identity": "Định danh Git (tên & email)",
+  "git.header.ghAccountTitle": "Tài khoản GitHub cho fetch/pull/push — đặt ở Project → Overview",
+  "git.header.ghAccountDefault": "Tài khoản mặc định",
   "git.ops.pullWord": "Pull",
   "git.ops.pushWord": "Push",
   "git.remote.fetchUrl": "Fetch URL",

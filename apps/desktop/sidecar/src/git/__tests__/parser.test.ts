@@ -132,6 +132,49 @@ describe('parseUnifiedDiff', () => {
     expect(out[0]!.isBinary).toBe(true)
     expect(out[0]!.hunks).toHaveLength(0)
   })
+
+  it('decodes a quoted non-ASCII path (git core.quotePath default)', () => {
+    // git wraps non-ASCII paths in quotes with octal-escaped UTF-8 bytes.
+    // \350\246\201\344\273\266 = 要件 — regressed to an empty path before.
+    const stdout = [
+      'diff --git "a/docs/\\350\\246\\201\\344\\273\\266/README.md" "b/docs/\\350\\246\\201\\344\\273\\266/README.md"',
+      'index abc..def 100644',
+      '--- "a/docs/\\350\\246\\201\\344\\273\\266/README.md"',
+      '+++ "b/docs/\\350\\246\\201\\344\\273\\266/README.md"',
+      '@@ -1 +1,2 @@',
+      ' a',
+      '+b',
+    ].join('\n')
+    const out = parseUnifiedDiff(stdout)
+    expect(out).toHaveLength(1)
+    expect(out[0]!.path).toBe('docs/要件/README.md')
+  })
+
+  it('decodes quoted paths on a rename (rename to overrides)', () => {
+    const stdout = [
+      'diff --git "a/docs/\\350\\246\\201\\344\\273\\266/README.md" "b/docs/\\350\\246\\201\\344\\273\\266/GUIDE.md"',
+      'similarity index 100%',
+      'rename from "docs/\\350\\246\\201\\344\\273\\266/README.md"',
+      'rename to "docs/\\350\\246\\201\\344\\273\\266/GUIDE.md"',
+    ].join('\n')
+    const out = parseUnifiedDiff(stdout)
+    expect(out).toHaveLength(1)
+    expect(out[0]!.isRename).toBe(true)
+    expect(out[0]!.oldPath).toBe('docs/要件/README.md')
+    expect(out[0]!.path).toBe('docs/要件/GUIDE.md')
+  })
+
+  it('keeps a plain path containing spaces intact', () => {
+    const stdout = [
+      'diff --git a/docs/Panwall DX/README.md b/docs/Panwall DX/README.md',
+      '@@ -1 +1,2 @@',
+      ' a',
+      '+b',
+    ].join('\n')
+    const out = parseUnifiedDiff(stdout)
+    expect(out).toHaveLength(1)
+    expect(out[0]!.path).toBe('docs/Panwall DX/README.md')
+  })
 })
 
 describe('parseForEachRef', () => {

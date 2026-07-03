@@ -12,6 +12,17 @@ import type { Credential } from '../../credentials/credential-resolver.js'
 import type { McpServersConfig } from '../permission-types.js'
 import type { ThinkingLevel } from '../../types/shared.js'
 import { assertSafeUrl } from '../tools/ssrf.js'
+import { CO_AUTHOR_TRAILER } from '../../git/co-author.js'
+
+// Commit/PR attribution for the claude_code preset. The preset otherwise injects
+// Claude's own "Generated with Claude Code" + `Co-Authored-By: Claude` trailer
+// regardless of AWOG's setting — this overrides it to honor the Git
+// `commitCoAuthor` toggle: on (default, flag omitted) → the AWOG trailer; off →
+// '' (empty string hides attribution entirely, per the SDK's `attribution` docs).
+export function commitAttribution(commitCoAuthor?: boolean): { commit: string; pr: string } {
+  const text = commitCoAuthor === false ? '' : CO_AUTHOR_TRAILER
+  return { commit: text, pr: text }
+}
 
 // Map a thrown error to the same RpcError codes the Pi path uses so the UI shows
 // identical messages regardless of runtime. Token never logged.

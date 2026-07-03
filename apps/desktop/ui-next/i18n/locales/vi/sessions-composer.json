@@ -1,4 +1,5 @@
 {
+  "sessions.composer.compacting": "Đang nén…",
   "sessions.composer.enhancing": "Đang tinh chỉnh…",
   "sessions.composer.enhanceFailed": "Không tinh chỉnh được prompt",
   "sessions.composer.queueSend": "Gửi sau (chạy sau lượt hiện tại)",

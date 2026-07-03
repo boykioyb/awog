@@ -27,6 +27,7 @@ import type {
 } from '~/composables/useGitApi'
 import { SidecarError, useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import { DEFAULT_COMMIT_MESSAGE_RULE, useSettingsStore } from '~/stores/settings'
+import { useProjectsStore } from '~/stores/projects'
 import type { GitRepoEntry, ProjectsListResponse } from '~/types'
 
 // ─── Adapters: sidecar shape → ui-next view shape ───────────────────────────
@@ -337,6 +338,21 @@ export const useGitStore = defineStore('git', () => {
     return projectPath()
   }
 
+  // The gh account to authenticate github.com remotes as, for fetch/pull/push.
+  // Source of truth = the project's GitHub-account setting (Project.githubAccount,
+  // set in Project → Overview), inheriting the app-level default (Settings → Git)
+  // when unset. Undefined → the sidecar leaves git's own credential helper (OS
+  // keychain) untouched, i.e. no behavior change. Same resolution the Issues/PR
+  // tabs use (see utils/project-gh-account). See git.push.ts for the sidecar side.
+  const effectiveGhAccount = (): string | undefined => {
+    const project = useProjectsStore().projectById(currentProjectId.value)
+    return resolveGhAccount(project?.githubAccount, useSettingsStore().githubAccount)
+  }
+
+  // The effective gh account for the current project, for display in the Git
+  // header ('' when none is pinned → the header shows a "Default" chip).
+  const activeGhAccount = computed<string>(() => effectiveGhAccount() ?? '')
+
   const repoLabel = (r: GitRepoEntry): string => (r.isRoot ? r.name : r.relativePath)
 
   // ─── Read loaders ─────────────────────────────────────────────────────────
@@ -530,7 +546,7 @@ export const useGitStore = defineStore('git', () => {
     const root = workspaceRoot()
     if (!available.value || !root || notARepo.value) return
     try {
-      await useGitApi().fetch(root)
+      await useGitApi().fetch(root, { ghAccount: effectiveGhAccount() })
       await Promise.all([loadStatus(), loadBranches()])
     } catch {
       // Background fetch is best-effort — offline/no-remote is non-fatal.
@@ -893,7 +909,7 @@ export const useGitStore = defineStore('git', () => {
     if (syncOp.value) return
     syncOp.value = { op: 'fetch', phase: 'connecting', pct: null }
     try {
-      const res = await useGitApi().fetch(workspaceRoot())
+      const res = await useGitApi().fetch(workspaceRoot(), { ghAccount: effectiveGhAccount() })
       await Promise.all([loadStatus(), loadBranches()])
       lastNotice.value = res.updated.length
         ? { key: 'git.notice.fetched', params: { n: res.updated.length } }
@@ -913,7 +929,10 @@ export const useGitStore = defineStore('git', () => {
     if (syncOp.value) return
     syncOp.value = { op: 'pull', phase: 'connecting', pct: null }
     try {
-      const res = await useGitApi().pull(workspaceRoot(), { strategy })
+      const res = await useGitApi().pull(workspaceRoot(), {
+        strategy,
+        ghAccount: effectiveGhAccount(),
+      })
       await Promise.all([loadStatus(), loadBranches()])
       lastNotice.value = res.commitsApplied
         ? { key: 'git.notice.pulled', params: { n: res.commitsApplied } }
@@ -936,7 +955,10 @@ export const useGitStore = defineStore('git', () => {
     if (syncOp.value) return
     syncOp.value = { op: 'push', phase: 'connecting', pct: null }
     try {
-      const res = await useGitApi().push(workspaceRoot(), params)
+      const res = await useGitApi().push(workspaceRoot(), {
+        ghAccount: effectiveGhAccount(),
+        ...params,
+      })
       await Promise.all([loadStatus(), loadBranches()])
       lastNotice.value = res.pushed
         ? { key: 'git.notice.pushed', params: { n: res.pushed } }
@@ -1665,6 +1687,7 @@ export const useGitStore = defineStore('git', () => {
     fetchRemote,
     pull,
     push,
+    activeGhAccount,
     cancel,
     checkoutBranch,
     createBranch,

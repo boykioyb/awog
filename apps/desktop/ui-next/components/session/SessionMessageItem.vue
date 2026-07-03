@@ -27,10 +27,7 @@
         <span v-if="message.command.args" class="ucmd-args">{{ message.command.args }}</span>
       </span>
       <template v-else>
-        <template v-for="(line, k) in message.text.split('\n')" :key="k">
-          <br v-if="k > 0" />
-          {{ line }}
-        </template>
+        <SessionLinkedText :text="message.text" />
       </template>
       <div v-if="message.att && message.att.length" class="uatt">
         <SessionAttachmentChip v-for="(a, k) in message.att" :key="k" :att="a" />

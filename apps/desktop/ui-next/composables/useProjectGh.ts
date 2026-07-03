@@ -250,13 +250,21 @@ export function useProjectGh(
   const INHERIT = '__inherit'
   const account = ref<string>(INHERIT)
 
-  // The account actually sent to gh: resolve inherit → app-level default. Empty
-  // ('' = active gh account) means "omit the param" so gh uses its active login.
+  // The account this project's GH ops resolve to when inheriting: the project's
+  // own GitHub-account setting (Project.githubAccount, set in Overview), else the
+  // app-level default. '' = active gh account.
+  const inheritedAccount = computed<string>(() => {
+    const proj = projectsStore.projectById(getProjectId())
+    return (proj?.githubAccount ?? settings.githubAccount).trim()
+  })
+  // The account actually sent to gh: an explicit per-tab override wins; INHERIT
+  // resolves to the project setting → app default. '' means "omit the param" so
+  // gh uses its active login.
   const effectiveAccount = computed<string>(() =>
-    account.value === INHERIT ? settings.githubAccount.trim() : account.value,
+    account.value === INHERIT ? inheritedAccount.value : account.value,
   )
-  // App-level default, surfaced to the picker so the "inherit" row can show it.
-  const globalAccount = computed<string>(() => settings.githubAccount.trim())
+  // What the picker's "inherit" row resolves to (project setting → app default).
+  const globalAccount = computed<string>(() => inheritedAccount.value)
 
   // Persisted filters (state / assignee / account) per project+kind so they
   // survive an app restart. localStorage holds a `{ "<projectId>:<kind>": {...} }`
@@ -797,10 +805,11 @@ export function useProjectGh(
     void refresh()
   })
 
-  // When the app-level default changes and this project is inheriting it, the
-  // effective account moved → re-fetch (the cache key already keys on it).
+  // When the inherited account moves (the app-level default OR this project's own
+  // GitHub-account setting changed) and this project is inheriting, the effective
+  // account moved → re-fetch (the cache key already keys on it).
   watch(
-    () => settings.githubAccount,
+    () => inheritedAccount.value,
     () => {
       if (account.value === INHERIT) void refresh()
     },

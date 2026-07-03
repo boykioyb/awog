@@ -153,6 +153,21 @@
           </span>
         </span>
       </div>
+      <!-- GitHub account this project authenticates as — the single source used by
+           git push/fetch/pull AND the Issues/PR tabs (inherits Settings → Git).
+           Editable even in the compact quick-view: it's a safe (non-destructive)
+           setting and the Git page's account shortcut lands here. -->
+      <div class="kvrow">
+        <span class="kvk">{{ t('projects.overview.githubAccount') }}</span>
+        <span class="kvv">
+          <AppSelect
+            :model-value="ghAccountValue"
+            :options="ghAccountOptions"
+            width="200px"
+            @update:model-value="onGhAccount"
+          />
+        </span>
+      </div>
       <div class="kvrow" style="align-items: flex-start">
         <span class="kvk">.awog/</span>
         <span class="kvv awtiers">
@@ -191,6 +206,17 @@
         {{ t('projects.overview.removeProject') }}
       </button>
     </div>
+
+    <!-- Transient toasts (e.g. GitHub-account save). `.toast` is fixed-positioned
+         at z:140, so it sits above both the page and the quick-view modal. -->
+    <div
+      v-for="tt in toasts"
+      :key="tt.id"
+      class="toast"
+      :style="{ borderColor: toastColor(tt.kind) }"
+    >
+      {{ tt.text }}
+    </div>
   </div>
 </template>
 
@@ -199,12 +225,17 @@
 // Binds the derived ProjectView (live counts) for the cards and the real Project
 // entity for the config block (description / path / language / remote / LLM).
 // Edit / delete / LLM defaults are emitted up to the page-controller.
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { agBadge, avatarBg, type ProjectRepo, type ProjectView } from './data'
 import { modelDisplayName } from '~/composables/useSessionsData'
 import { useSessionsStore } from '~/stores/sessions'
 import { useConfigImport } from '~/composables/useConfigImport'
 import { useProjectModal } from '~/composables/useProjectModal'
+import { useProjectsStore } from '~/stores/projects'
+import { useSettingsStore } from '~/stores/settings'
+import { useGhAccounts } from '~/composables/useGhAccounts'
+import { useToasts } from '~/composables/useToasts'
+import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { Project } from '~/types'
 
 // `compact` (quick-view modal): hide destructive / management controls (remove
@@ -263,6 +294,57 @@ const llmLabel = computed(() => {
   if (!ld) return t('projects.overview.llmAppDefault')
   return modelDisplayName(ld.modelId)
 })
+
+// ── GitHub account setting ──────────────────────────────────────────────────
+// The project's gh account. Encoded on Project.githubAccount: absent = inherit
+// the app default; '' = active gh account; a login pins it. The picker maps to
+// two sentinels for the inherit / active rows.
+const settings = useSettingsStore()
+const projectsStore = useProjectsStore()
+const { toasts, pushToast, toastColor } = useToasts()
+const { accounts: ghAccounts, load: loadGhAccounts } = useGhAccounts()
+onMounted(() => void loadGhAccounts())
+
+const GH_INHERIT = '__inherit'
+const GH_ACTIVE = '__active'
+
+const ghAccountValue = computed(() => {
+  const a = props.project.githubAccount
+  if (a === undefined) return GH_INHERIT
+  return a === '' ? GH_ACTIVE : a
+})
+
+const ghInheritLabel = computed(() =>
+  t('projects.gh.accountInherit', {
+    account: settings.githubAccount.trim() || t('projects.gh.accountActive'),
+  }),
+)
+
+const ghAccountOptions = computed<AppSelectOption[]>(() => {
+  const logins = ghAccounts.value.map((a) => a.login)
+  // Surface a pinned account even if it isn't currently logged into gh, so the
+  // picker doesn't render blank (and the user sees what's set).
+  const cur = props.project.githubAccount
+  if (cur && !logins.includes(cur)) logins.push(cur)
+  return [
+    { value: GH_INHERIT, label: ghInheritLabel.value },
+    { value: GH_ACTIVE, label: t('projects.gh.accountActive') },
+    ...logins.map((l) => ({ value: l, label: l })),
+  ]
+})
+
+async function onGhAccount(v: string) {
+  const next: Project = { ...props.project }
+  if (v === GH_INHERIT) delete next.githubAccount
+  else next.githubAccount = v === GH_ACTIVE ? '' : v
+  try {
+    await projectsStore.updateProject(next)
+    pushToast(t('projects.toast.ghAccountSaved', { name: props.project.name }), 'success')
+  } catch (err) {
+    console.warn('[project] save githubAccount failed', err)
+    pushToast(t('projects.toast.ghAccountFailed'), 'error')
+  }
+}
 </script>
 
 <style scoped>

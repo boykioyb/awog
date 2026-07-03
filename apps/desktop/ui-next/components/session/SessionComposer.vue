@@ -63,8 +63,12 @@
         @hover="(i) => (acIndex = i)"
       />
 
-      <!-- transient feedback for a dispatched built-in command (mode / compact) -->
-      <div v-if="commandNotice" class="cmdnotice">{{ commandNotice }}</div>
+      <!-- persistent while /compact runs; else transient built-in command feedback -->
+      <div v-if="compacting" class="cmdnotice compacting">
+        <Icon name="refresh" class="cmdspin" style="width: 12px; height: 12px" />
+        {{ t('sessions.command.notice.compacting') }}
+      </div>
+      <div v-else-if="commandNotice" class="cmdnotice">{{ commandNotice }}</div>
 
       <!-- textarea is single-purpose composer input → resize handled by .cresize handle -->
       <textarea
@@ -358,9 +362,16 @@
         >
           <Icon name="folder" style="width: 14px; height: 14px" />
         </button>
-        <!-- Idle → Send. While a turn streams → Stop + a split steer/queue button
+        <!-- Compacting → disabled processing button (Send locked until the RPC ends).
+             Idle → Send. While a turn streams → Stop + a split steer/queue button
              (caret opens the alternate action). Mirrors the production composer. -->
-        <span v-if="!busy">
+        <span v-if="compacting">
+          <button class="btn pri sm" disabled :title="t('sessions.composer.compacting')">
+            <Icon name="refresh" class="cmdspin" />
+            {{ t('sessions.composer.compacting') }}
+          </button>
+        </span>
+        <span v-else-if="!busy">
           <button class="btn pri sm" :title="t('sessions.composer.send')" @click="sendNow">
             <Icon name="send" />
             {{ t('sessions.composer.send') }}
@@ -534,7 +545,8 @@ function onCommand(builtinId: string) {
     store.setMode(store.activeId, cmd.action.mode)
     showNotice(t('sessions.command.notice.mode', { mode: t(`sessions.mode.${cmd.action.mode}`) }))
   } else if (cmd.action.type === 'compact') {
-    showNotice(t('sessions.command.notice.compacting'))
+    // No transient notice here — store.compacting drives a persistent "compacting…"
+    // line + a locked Send button for the whole RPC (result surfaces as a toast).
     void store.compactSession(store.activeId).then((r) => {
       if (r === 'compacted') {
         pushActionToast(t('sessions.command.notice.compacted'), 'success')
@@ -740,6 +752,9 @@ const modeIcon = computed(
 const busy = computed(
   () => store.active?.status === 'streaming' || store.active?.status === 'awaiting',
 )
+// True while a `/compact` RPC is in flight — the composer shows a persistent
+// "compacting…" notice + a disabled processing button and refuses to send/queue.
+const compacting = computed(() => store.active?.compacting === true)
 const queued = computed(() => store.active?.queue ?? [])
 function dequeue(i: number) {
   if (store.activeId != null) store.dequeue(store.activeId, i)
@@ -785,6 +800,7 @@ const streamPrimaryTitle = computed(() =>
 let sendChecking = false
 
 async function sendNow() {
+  if (compacting.value) return
   const { text: outgoing, command } = buildOutgoing(draft.value)
   const hasAtt = props.attachments.length > 0
   const hasQuotes = followups.value.length > 0
@@ -866,6 +882,8 @@ function pickQueue() {
 
 // Enter / primary action router: idle → fresh turn; streaming → steer or queue.
 function send() {
+  // Locked while /compact runs — no fresh turn, no steer, no queue.
+  if (compacting.value) return
   if (busy.value) {
     if (hasContent.value) onStreamPrimary()
     return
@@ -1372,6 +1390,26 @@ function onPaste(e: ClipboardEvent) {
   .enhicon.enhspin {
     animation: none;
   }
+}
+/* Spinner glyph shared by the "compacting…" notice + the locked Send button. */
+.cmdspin {
+  animation: enhspin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmdspin {
+    animation: none;
+  }
+}
+.cmdnotice.compacting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Locked Send while /compact runs — reads as processing (dimmed, not clickable). */
+.btn.pri.sm:disabled {
+  cursor: default;
+  opacity: 0.6;
+  filter: none;
 }
 .iconbtn:disabled {
   cursor: default;

@@ -25,6 +25,7 @@ import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { TODO_USAGE_PROMPT, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from './prompts.js'
+import { CO_AUTHOR_INSTRUCTION } from '../git/co-author.js'
 import { toReasoning } from './thinking.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../sdk/invoke.js'
@@ -244,6 +245,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
         // Tasks run unattended: subagent tool calls bypass permissions too.
         beforeToolCall: async () => undefined,
+        // Inherit the task's co-author setting for subagent-made commits.
+        ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         makeChildSink: (parentToolCallId) => {
           const child = createInvokeAdapter(cb, parentToolCallId)
           return { emit: child.handle, text: () => child.result().text }
@@ -272,6 +275,9 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     TOOL_DISCIPLINE_PROMPT,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
+    // Co-author trailer convention (task's `commitCoAuthor` snapshot). Pi has no
+    // built-in commit attribution, so append the AWOG instruction unless disabled.
+    args.commitCoAuthor === false ? undefined : CO_AUTHOR_INSTRUCTION,
     mcpUnavailable,
     // MCP catalog (ADR 0051): present only when the MCP toolset is in proxy mode.
     mcpCatalog,

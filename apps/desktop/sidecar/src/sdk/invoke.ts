@@ -28,6 +28,10 @@ export interface InvokeArgs {
   // Task source connection (mcpServerId) unioned into a subagent's MCP set, same
   // as the node's own agent (ADR 0025). undefined for manual sources.
   connectionId?: string
+  // Git `commitCoAuthor` setting (snapshotted on the task). Controls the AWOG
+  // co-author trailer on model-made commits: Claude SDK path sets the SDK's native
+  // `attribution`; Pi path appends CO_AUTHOR_INSTRUCTION. Omitted → on (default).
+  commitCoAuthor?: boolean
 }
 
 export interface InvokeToolUse {

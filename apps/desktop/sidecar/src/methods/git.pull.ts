@@ -16,6 +16,9 @@ import {
 const Params = z.object({
   workspaceRoot: z.string().min(1),
   strategy: z.enum(['ff-only', 'merge', 'rebase']),
+  // Optional gh account login to authenticate github.com HTTPS as (validated in
+  // the streaming runner). Empty → OS keychain default, unchanged behavior.
+  ghAccount: z.string().optional(),
 })
 
 interface Result {
@@ -88,6 +91,7 @@ register('git.pull', async (raw): Promise<Result> => {
       workspaceRoot: params.workspaceRoot,
       args,
       op: 'pull',
+      ghAccount: params.ghAccount,
     })
 
     if (code !== 0) {

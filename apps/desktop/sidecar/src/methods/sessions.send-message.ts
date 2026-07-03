@@ -126,6 +126,11 @@ const Params = z.object({
   //     the model each turn (only the turn that sent them carries them). Default true
   //     (omitted) keeps the current re-feed behaviour.
   refeedImages: z.boolean().optional(),
+  //   • commitCoAuthor — Git setting. Controls the AWOG `Co-Authored-By` trailer on
+  //     model-made commits: the Claude SDK path sets the SDK's native `attribution`
+  //     (overriding the claude_code preset's Claude trailer); the Pi path appends
+  //     CO_AUTHOR_INSTRUCTION. Omitted → on (default).
+  commitCoAuthor: z.boolean().optional(),
   // Optional project linkage. When present, sidecar resolves the project's
   // on-disk path and passes it as the runtime tools' fs root so Read/Bash/Edit
   // operate against the user's repo instead of process.cwd().
@@ -1129,6 +1134,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         // Re-feed images (Settings → Sessions): when false the context builder drops
         // prior-turn image attachments (only the current turn carries them).
         ...(params.refeedImages === false ? { refeedImages: false } : {}),
+        // Co-author trailer (Settings → Git). Forward only the explicit opt-OUT so
+        // the runtime keeps its default-on behaviour when the field is omitted.
+        ...(params.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         // Per-turn hard caps (tool-call count / wallclock) enforced in the runtime
         // beforeToolCall. Forward only the defined fields.
         ...(params.budget?.maxToolCalls !== undefined || params.budget?.maxWallclockMs !== undefined

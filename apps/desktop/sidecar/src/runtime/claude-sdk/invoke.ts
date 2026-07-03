@@ -16,6 +16,7 @@ import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
+  commitAttribution,
   effortFromLevel,
   mapClaudeErrorToRpc,
   thinkingFromLevel,
@@ -206,6 +207,10 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
 
   const options: Options = {
     systemPrompt: { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) },
+    // Honor the task's snapshotted `commitCoAuthor` setting via the SDK flag-settings
+    // layer. The claude_code preset otherwise adds Claude's own attribution regardless
+    // (see commitAttribution).
+    settings: { attribution: commitAttribution(args.commitCoAuthor) },
     includePartialMessages: true,
     thinking: thinkingFromLevel(args.settings.level),
     effort: effortFromLevel(args.settings.level),

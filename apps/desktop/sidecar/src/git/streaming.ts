@@ -10,6 +10,7 @@ import { GIT_RPC_CODE, GitErrorCode } from './error-map.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { attachGitWatcher } from './watcher.js'
+import { resolveGhTokenToInject } from '../github/runner.js'
 
 const ALLOW_ENV = [
   'PATH',
@@ -21,11 +22,19 @@ const ALLOW_ENV = [
   'USERPROFILE',
 ] as const
 
-function filteredEnv(): NodeJS.ProcessEnv {
+function filteredEnv(ghToken?: string | null): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {}
   for (const k of ALLOW_ENV) {
     const v = process.env[k]
     if (v !== undefined) out[k] = v
+  }
+  // When the caller pinned a gh account, inject its token so `gh auth
+  // git-credential` (wired as the github.com helper via `ghCredentialArgs`)
+  // serves THAT account instead of whatever the OS keychain holds. SECRET:
+  // lives only in the child env, never logged / surfaced (invariant #1).
+  if (ghToken) {
+    out.GH_TOKEN = ghToken
+    delete out.GITHUB_TOKEN
   }
   // Match runner.ts: never take git's optional index lock (the required locks
   // for fetch/pull/push are unaffected). Keeps background polling lock-free.
@@ -45,6 +54,19 @@ function filteredEnv(): NodeJS.ProcessEnv {
   out.GCM_INTERACTIVE = 'never'
   return out
 }
+
+// `-c` overrides (must precede the git subcommand) that route github.com HTTPS
+// auth through `gh` for THIS invocation only — the empty value first RESETS any
+// inherited helper (osxkeychain/GCM) for that host, then pins gh's credential
+// helper. gh serves the account from the injected GH_TOKEN (or its active
+// account). Scoped to github.com so non-GitHub remotes keep the default helper.
+// Used only when the app pinned a gh account; otherwise git auth is untouched.
+const GH_CREDENTIAL_ARGS = [
+  '-c',
+  'credential.https://github.com.helper=',
+  '-c',
+  'credential.https://github.com.helper=!gh auth git-credential',
+] as const
 
 export type StreamingOpKind = 'fetch' | 'pull' | 'push'
 
@@ -110,6 +132,10 @@ export interface RunStreamingParams {
   workspaceRoot: string
   args: readonly string[]
   op: StreamingOpKind
+  // When set (a validated gh login), authenticate github.com over HTTPS as that
+  // gh account instead of the OS keychain default. Empty/undefined → git's own
+  // credential helper is used, exactly as before (no behavior change).
+  ghAccount?: string | undefined
 }
 
 const PROGRESS_THROTTLE_MS = 250 // tối đa 4 emit/s
@@ -123,9 +149,18 @@ export async function runGitStreaming(params: RunStreamingParams): Promise<Strea
     throw new RpcError(GIT_RPC_CODE, `Git ${op} đang chạy`, { gitCode: GitErrorCode.BUSY })
   }
 
-  const child = spawn('git', [...args], {
+  // Pinned gh account → resolve its token (throws a mapped GH error if the login
+  // is unknown / gh not logged in) and route github.com auth through gh. Fetch
+  // the token even for the active account (includeActive) so a remote whose URL
+  // embeds a username still authenticates as the pinned account.
+  const ghToken = params.ghAccount
+    ? await resolveGhTokenToInject(params.ghAccount, { includeActive: true })
+    : null
+  const spawnArgs = params.ghAccount ? [...GH_CREDENTIAL_ARGS, ...args] : [...args]
+
+  const child = spawn('git', spawnArgs, {
     cwd: workspaceRoot,
-    env: filteredEnv(),
+    env: filteredEnv(ghToken),
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   })

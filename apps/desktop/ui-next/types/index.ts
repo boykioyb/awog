@@ -33,6 +33,10 @@ export interface Project {
   // Session LLM defaults (provider/account/model/effort) for this project. New
   // sessions inherit these; undefined = use the global app defaults.
   llmDefaults?: ProjectLlmDefaults
+  // GitHub (gh CLI) account this project authenticates as — for git
+  // push/fetch/pull AND the GH Issues/PR tabs. '' = active gh account; undefined
+  // = inherit the app-level default (settings.githubAccount); a login pins it.
+  githubAccount?: string
 }
 
 // A git repo discovered inside a project folder. A project may be a container

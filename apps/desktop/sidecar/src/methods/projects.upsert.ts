@@ -43,6 +43,9 @@ const ProjectSchema = z.object({
   createdAt: z.string().max(60),
   color: z.string().max(40).optional(),
   llmDefaults: LlmDefaultsSchema.optional(),
+  // gh account login (or '' for the active account). Length caps a gh login (39)
+  // with headroom; '' is allowed (means "active account").
+  githubAccount: z.string().max(60).optional(),
 })
 
 const Params = z.object({
@@ -139,6 +142,8 @@ register('projects.upsert', async (raw) => {
       project.llmDefaults.responseStyleNoMarkdown = incoming.llmDefaults.responseStyleNoMarkdown
     }
   }
+  // Omitted → dropped (inherit the app default). '' preserved (active account).
+  if (incoming.githubAccount !== undefined) project.githubAccount = incoming.githubAccount
 
   await saveProject(project)
   return { project }

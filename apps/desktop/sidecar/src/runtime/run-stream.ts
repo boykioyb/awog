@@ -37,6 +37,7 @@ import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
 import { buildStylePrompt } from '../style/styles.js'
+import { CO_AUTHOR_INSTRUCTION } from '../git/co-author.js'
 
 // Plan-mode system-prompt nudge. The model is read-only here (permission.ts
 // blocks Write/Edit/Bash); it should investigate, then present a concrete plan
@@ -151,6 +152,10 @@ export async function runStreamPi(
     inPlanMode ? undefined : TOOL_DISCIPLINE_PROMPT,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
+    // Co-author trailer convention (Git `commitCoAuthor`). Pi has no built-in
+    // commit attribution (unlike the claude_code preset), so append the AWOG
+    // instruction only when the setting is on (default; off omits it entirely).
+    args.commitCoAuthor === false ? undefined : CO_AUTHOR_INSTRUCTION,
     // Ask for full absolute file paths so chat file references become clickable
     // preview links (sessions only; undefined when no workspace root).
     fileRefPrompt(args.cwd),
@@ -206,6 +211,8 @@ export async function runStreamPi(
         // Chat subagents reuse the parent permission gate: in 'ask' mode their
         // writes/exec still prompt the user (depth-1 subagent, same session).
         beforeToolCall,
+        // Inherit the session's co-author setting for subagent-made commits.
+        ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         makeChildSink: (parentToolCallId) => {
           const child = createEventAdapter(cb, { parentId: parentToolCallId })
           return { emit: child.handle, text: () => child.result().text }

@@ -347,6 +347,10 @@ export type Session = {
   // an old session shows a loading placeholder, not the empty "new session"
   // welcome). Set by ensureLoaded; cleared when it settles.
   loading?: boolean
+  // True while a `/compact` RPC is in flight (ADR 0047). Drives the composer's
+  // persistent "compacting…" notice + a disabled Send button so the user can't
+  // queue a turn mid-compaction. In-memory UI state only. Set by compactSession.
+  compacting?: boolean
 }
 
 export type TreeFile = { f: string; st?: 'M' | 'A' }

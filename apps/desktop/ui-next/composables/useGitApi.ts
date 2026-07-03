@@ -204,6 +204,8 @@ export interface CheckoutFileParams {
 export interface FetchParams {
   remote?: string
   prune?: boolean
+  // gh account login to authenticate github.com HTTPS as (see stores/git push).
+  ghAccount?: string
 }
 
 export interface UpdatedRef {
@@ -219,6 +221,8 @@ export interface FetchResult {
 
 export interface PullParams {
   strategy: 'ff-only' | 'merge' | 'rebase'
+  // gh account login to authenticate github.com HTTPS as (see stores/git push).
+  ghAccount?: string
 }
 
 export interface PullResult {
@@ -238,6 +242,9 @@ export interface PushParams {
   force?: boolean
   // `--tags` — push all local tags alongside the branch.
   pushTags?: boolean
+  // gh account login to authenticate github.com HTTPS as. Empty → OS keychain
+  // default (unchanged). Injected by stores/git from settings.githubAccount.
+  ghAccount?: string
 }
 
 export interface PushResult {

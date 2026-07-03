@@ -97,6 +97,19 @@
 
       <span class="gsep" />
 
+      <!-- gh account used for fetch/pull/push (set in Project → Overview). Click
+           opens the project so the account can be changed. -->
+      <button
+        class="chip chipbtn"
+        :title="t('git.header.ghAccountTitle')"
+        @click.stop="emit('open-account')"
+      >
+        <Icon name="git" style="width: 12px; height: 12px; color: var(--textDim)" />
+        <span class="gtrunc" style="max-width: 120px">
+          {{ ghAccount || t('git.header.ghAccountDefault') }}
+        </span>
+      </button>
+
       <button class="btn sm" :title="t('git.header.identity')" @click="emit('open-identity')">
         <Icon name="settings" style="width: 13px; height: 13px" />
       </button>
@@ -225,6 +238,8 @@ const props = defineProps<{
   hasConflict: boolean
   notARepo: boolean
   syncOp: SyncOp | null
+  // The gh account fetch/pull/push authenticate as ('' = the default identity).
+  ghAccount: string
 }>()
 
 const emit = defineEmits<{
@@ -237,6 +252,7 @@ const emit = defineEmits<{
   (e: 'complete-merge'): void
   (e: 'abort-merge'): void
   (e: 'open-identity'): void
+  (e: 'open-account'): void
 }>()
 
 const { t } = useI18n()

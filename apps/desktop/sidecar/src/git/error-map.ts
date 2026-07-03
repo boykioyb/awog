@@ -44,7 +44,10 @@ const STDERR_PATTERNS: Array<[RegExp, GitErrorCode]> = [
   [/your local changes.*would be overwritten|commit your changes or stash/i, GitErrorCode.DIRTY_TREE],
   [/non-fast-forward|rejected.*fetch first/i, GitErrorCode.NOT_FAST_FORWARD],
   [/merge conflict|automatic merge failed|conflict.*content|fix conflicts/i, GitErrorCode.MERGE_CONFLICT],
-  [/authentication failed|could not read.*username|permission denied \(publickey\)|access denied/i, GitErrorCode.AUTH_FAILED],
+  // `could not read Username`/`Password` (+ `terminal prompts disabled`) is the
+  // no-credential case: the URL carries a username (`https://user@host`) but no
+  // helper returned a token, so git wanted an interactive prompt we disabled.
+  [/authentication failed|could not read.*(username|password)|terminal prompts disabled|permission denied \(publickey\)|access denied/i, GitErrorCode.AUTH_FAILED],
   [/could not resolve host|network is unreachable|connection (refused|timed out)|unable to access/i, GitErrorCode.NETWORK_ERROR],
   [/no such remote|does not appear to be a git repository.*remote/i, GitErrorCode.REMOTE_NOT_FOUND],
   [/the branch .* is not fully merged/i, GitErrorCode.UNMERGED],
@@ -68,7 +71,8 @@ export function detectAuthHint(stderr: string): AuthHint | null {
   if (/permission denied \(publickey\)/.test(s)) return 'ssh-key'
   if (
     /authentication failed/.test(s) ||
-    /could not read username/.test(s) ||
+    /could not read (username|password)/.test(s) ||
+    /terminal prompts disabled/.test(s) ||
     /remote: invalid username or password/.test(s)
   ) {
     return 'https-token'
@@ -87,7 +91,9 @@ export function sanitizeStderr(stderr: string): string {
   out = out.replace(/https?:\/\/[A-Za-z0-9_.-]{20,}@/g, (m) => `${m.split('://')[0]}://***@`)
   // Well-known token shapes.
   out = out.replace(/sk-[A-Za-z0-9_-]{20,}/g, '<token>')
-  out = out.replace(/ghp_[A-Za-z0-9]{20,}/g, '<token>')
+  // All GitHub token shapes: ghp_ (PAT), gho_ (oauth), ghu_/ghs_ (app), ghr_
+  // (refresh) — the gh-account push path injects one of these into the child env.
+  out = out.replace(/gh[posur]_[A-Za-z0-9]{20,}/g, '<token>')
   out = out.replace(/github_pat_[A-Za-z0-9_]{20,}/g, '<token>')
   // GitHub request ID echoed in some failures.
   out = out.replace(/\bX-GitHub-Request-Id:[^\n]*/gi, '')

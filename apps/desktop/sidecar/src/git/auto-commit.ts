@@ -14,6 +14,7 @@
 import { runGit } from './runner.js'
 import { withWorkspaceLock } from './mutex.js'
 import { suppressEchoFor } from './watcher.js'
+import { CO_AUTHOR_TRAILER } from './co-author.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 
@@ -46,9 +47,6 @@ export interface AutoCommitPhaseOptions {
   coAuthor?: boolean
 }
 
-// Mirrors the UI-side GIT_COAUTHOR_PROMPT trailer (utils/system-prompt.ts). The
-// two runtimes can't share the literal, so keep them in sync by hand.
-const CO_AUTHOR_TRAILER = 'Co-Authored-By: AWOG <noreply@awog.local>'
 
 export interface AutoCommitResult {
   committed: boolean
