@@ -296,6 +296,20 @@ export const useSessionsStore = defineStore('sessions', () => {
     () => sessions.value.find((s) => s.id === activeId.value) ?? null,
   )
 
+  // Whether the ACTIVE session's runtime supports mid-turn steering. Only the Pi
+  // runtime (non-anthropic providers) polls getSteeringMessages; the Claude SDK
+  // path (anthropic) runs a single-prompt query with no steering hook, so a steer
+  // there is dropped. The composer reads this to QUEUE instead of steer (never
+  // silently swallow the message). Provider is derived the same way engineSettings
+  // resolves it (selected account → the account's provider, else the display tail).
+  const activeCanSteer = computed<boolean>(() => {
+    const s = active.value
+    if (!s) return false
+    const opt = s.accountId ? accountById(s.accountId) : undefined
+    const provider = (opt?.provider ?? s.account.split(' · ')[1] ?? 'Anthropic').toLowerCase()
+    return provider !== 'anthropic'
+  })
+
   // Selection state for bulk actions (§1). Reactive set of client ids. `selecting`
   // is the select-mode toggle (rows show checkboxes + the bulk bar appears); it
   // lives in the store rather than SessionList because the project-tab context menu
@@ -2465,16 +2479,25 @@ export const useSessionsStore = defineStore('sessions', () => {
       await sendMessage(id, trimmed)
       return
     }
+    // Fallback when the steer doesn't land: a turn is still in flight (that's why we
+    // tried to steer), so the text must NOT be dropped. If the session is still busy
+    // — the common case: a runtime with no steering hook (Claude SDK → ok:false) —
+    // QUEUE it as a follow-up turn so it runs (and shows as a chip) once the current
+    // turn settles. If the turn already ended between click and RPC, send it now.
+    const notLanded = () => {
+      if (s.status === 'streaming' || s.status === 'awaiting') enqueue(id, trimmed)
+      else void sendMessage(id, trimmed)
+    }
     try {
       const res = await sc.request<{ ok: boolean }>('sessions.steer', {
         sessionId: s.engineId,
         messageId: streamingMsg.eid,
         text: trimmed,
       })
-      if (!res.ok) await sendMessage(id, trimmed)
+      if (!res.ok) notLanded()
     } catch (err) {
       console.warn('[sessions] steer failed', err)
-      await sendMessage(id, trimmed)
+      notLanded()
     }
   }
 
@@ -2827,6 +2850,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     sessions,
     activeId,
     active,
+    activeCanSteer,
     selectedIds,
     selecting,
     pendingPermission,

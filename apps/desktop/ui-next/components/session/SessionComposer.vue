@@ -402,7 +402,12 @@
               <Icon name="chev" style="transform: rotate(180deg)" />
             </button>
             <div v-if="sendMenuOpen" class="smenu sendmenu" @click.stop>
-              <div class="mi sty" :class="{ mdisabled: !canSteerText }" @click="pickSteer">
+              <div
+                v-if="store.activeCanSteer"
+                class="mi sty"
+                :class="{ mdisabled: !canSteer }"
+                @click="pickSteer"
+              >
                 <Icon name="send" class="styicon" />
                 <div class="stytext">
                   <div class="nm2">{{ t('sessions.composer.steer') }}</div>
@@ -784,9 +789,11 @@ const sendMenuOpen = ref(false)
 const canSteerText = computed(
   () => !!draft.value.trim() && props.attachments.length === 0 && followups.value.length === 0,
 )
-const streamPrimaryAction = computed<'steer' | 'queue'>(() =>
-  canSteerText.value ? 'steer' : 'queue',
-)
+// Steering also requires a runtime that consumes it: the Claude SDK path (anthropic)
+// has no steering hook, so those sessions QUEUE instead (never silently drop the
+// message). See store.activeCanSteer.
+const canSteer = computed(() => canSteerText.value && store.activeCanSteer)
+const streamPrimaryAction = computed<'steer' | 'queue'>(() => (canSteer.value ? 'steer' : 'queue'))
 const streamPrimaryTitle = computed(() =>
   streamPrimaryAction.value === 'steer'
     ? t('sessions.composer.steerHint')
@@ -873,7 +880,7 @@ function onStreamPrimary() {
 }
 function pickSteer() {
   sendMenuOpen.value = false
-  if (canSteerText.value) void onSteer()
+  if (canSteer.value) void onSteer()
 }
 function pickQueue() {
   sendMenuOpen.value = false

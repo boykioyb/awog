@@ -606,10 +606,15 @@ register('sessions.sendMessage', async (raw) => {
   // MaxListenersExceededWarning (see runtime/turn-signal.ts).
   liftTurnSignalListenerCap(abortController.signal)
   registerAborter(params.sessionId, params.messageId, abortController)
-  // Open the steer channel for this turn so sessions.steer can enqueue mid-turn
-  // instructions; torn down in the finally below. Keyed by the assistant
-  // messageId, same as the aborter registry.
-  beginSteerTurn(params.messageId)
+  // Open the steer channel ONLY for runtimes that actually consume it. The Pi
+  // runtime polls getSteeringMessages at each turn boundary; the Claude SDK
+  // runtime (anthropic) runs a single-prompt query with NO steering hook, so
+  // opening the channel there would make sessions.steer report success while the
+  // steer is silently discarded at turn end (the UI loses the message). Gating it
+  // → sessions.steer returns { ok: false } on that path so the UI falls back to
+  // queueing the text as a follow-up turn instead of dropping it.
+  const supportsSteering = toSessionSettings(params.settings).provider !== 'anthropic'
+  if (supportsSteering) beginSteerTurn(params.messageId)
 
   // Resolve cwd from project, if linked. Best-effort: missing project → no
   // cwd (the runtime falls back to process.cwd()). Don't error the chat for a
@@ -1157,8 +1162,11 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         // Claude SDK resume handle (ADR 0058, Anthropic path). Ignored by Pi.
         ...(sdkSessionId ? { sdkSessionId } : {}),
         // Mid-turn steering: hand the loop the steers queued via sessions.steer
-        // for this assistant turn. The drain clears them so each lands once.
-        getSteeringMessages: async () => drainSteer(params.messageId),
+        // for this assistant turn (Pi only — the Claude SDK path has no steering
+        // hook, see supportsSteering above). The drain clears them so each lands once.
+        ...(supportsSteering
+          ? { getSteeringMessages: async () => drainSteer(params.messageId) }
+          : {}),
       },
       {
         onChunk: (delta) => {
