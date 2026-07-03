@@ -17,6 +17,7 @@ import type {
   Session,
   SessionCompaction,
   SessionMessage,
+  SessionRestingStatus,
   SessionStep,
   SessionSummary,
 } from '../types/shared.js'
@@ -295,6 +296,27 @@ function indexFile(): string {
   return join(sessionsDir(), INDEX_FILE_NAME)
 }
 
+// Resting status of a session from its LAST message — the sidecar mirror of the
+// UI's statusFromMessages (stores/sessions.ts). An error turn → 'error'; an
+// UNANSWERED top-level AskUserQuestion → 'awaiting' (subagent questions carry
+// parentId and never gate the whole session); any other finished agent turn →
+// 'done'; a trailing user/system message with history → 'done'; no messages →
+// 'idle'. Never 'streaming' — that is live-only. Deriving from the last message
+// is exact because appends/upserts always target the tail.
+function statusFromLast(last: SessionMessage | undefined): SessionRestingStatus {
+  if (!last) return 'idle'
+  if (last.role !== 'agent') return 'done'
+  if (last.error) return 'error'
+  const awaiting = last.steps?.some(
+    (st) =>
+      !st.parentId &&
+      st.kind === 'question' &&
+      (st.questions?.length ?? 0) > 0 &&
+      !(st.answers?.length ?? 0),
+  )
+  return awaiting ? 'awaiting' : 'done'
+}
+
 function summarize(s: Session): SessionSummary {
   const last = s.messages[s.messages.length - 1]
   const summary: SessionSummary = {
@@ -307,6 +329,7 @@ function summarize(s: Session): SessionSummary {
     pendingAgentIds: s.pendingAgentIds ?? [],
     settings: s.settings,
     messageCount: s.messages.length,
+    status: statusFromLast(last),
   }
   if (s.pinned !== undefined) summary.pinned = s.pinned
   if (s.disabledTools !== undefined) summary.disabledTools = s.disabledTools
@@ -379,6 +402,14 @@ async function loadIndex(): Promise<Map<string, SessionSummary>> {
   try {
     const arr: unknown = JSON.parse(raw)
     if (!Array.isArray(arr)) throw new Error('index.json is not an array')
+    // Backfill: `status` (resting session state) was added after index.json
+    // shipped. A cache written before it lacks the field on every row → re-fold
+    // once so existing sessions badge awaiting/error/done in the list without
+    // being opened. One-time cost on upgrade (same as a first-run rebuild).
+    const needsStatus = (arr as SessionSummary[]).some(
+      (s) => s && typeof s.id === 'string' && s.status === undefined,
+    )
+    if (needsStatus) return rebuildIndex()
     const map = new Map<string, SessionSummary>()
     for (const s of arr as SessionSummary[]) {
       if (s && typeof s.id === 'string') map.set(s.id, s)
@@ -424,10 +455,14 @@ async function touchIndex(sessionId: string, evt: SessionEvent): Promise<void> {
     })
   } else if (evt.type === 'message.appended') {
     if (!prev) return
+    // The appended message is always the tail (append or in-place upsert of the
+    // last message), so its resting status is the session's — recompute it here so
+    // a finished/errored/parked turn updates the list badge without a full re-fold.
     map.set(sessionId, {
       ...prev,
       updatedAt: evt.at,
       messageCount: prev.messageCount + 1,
+      status: statusFromLast(evt.message),
       ...(evt.message.text ? { lastPreview: evt.message.text.slice(0, PREVIEW_MAX) } : {}),
     })
   } else if (evt.type === 'session.truncated' || evt.type === 'session.compacted') {

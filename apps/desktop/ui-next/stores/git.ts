@@ -1582,6 +1582,23 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
+  // Remove a remote (`git remote remove`). Local branches/commits are untouched —
+  // only the remote's tracking config is dropped. Errors surface via lastError.
+  const removeRemote = async (name: string): Promise<boolean> => {
+    if (!available.value) {
+      remotes.value = remotes.value.filter((r) => r.name !== name)
+      return true
+    }
+    try {
+      await useGitApi().remoteRemove(workspaceRoot(), { name })
+      await loadRemotes()
+      return true
+    } catch (err) {
+      reportError('remoteRemove', err)
+      return false
+    }
+  }
+
   return {
     // state
     projects,
@@ -1619,6 +1636,7 @@ export const useGitStore = defineStore('git', () => {
     gitInit,
     addRemote,
     setRemoteUrl,
+    removeRemote,
     loadProjects,
     discoverRepos,
     loadStatus,

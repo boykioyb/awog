@@ -23,6 +23,7 @@ import type {
   QueuedMessage,
   Session,
   SessionAttachment,
+  SessionStatus,
   SessionUsage,
   SlashCommandRef,
   StepBlock,
@@ -58,6 +59,29 @@ type EngineQuestion = {
   multiSelect: boolean
 }
 type EngineQuestionAnswer = { header: string; selected: string[] }
+
+// Circled markers mirror the UI's numbered quote cards (①②③…) so the woven prompt
+// lines up with the anchors the user sees in the bubble.
+const QUOTE_MARKERS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'] as const
+
+// Weave follow-up quotes into the outgoing MODEL text. The `quotes` carried on the
+// user message are DISPLAY-only (the numbered cards in the bubble); the model never
+// sees them unless they're folded into the prompt here. Each quote renders as a
+// markdown blockquote of the excerpt plus the user's note. Returns `text` unchanged
+// when there are no quotes. Without this a quote-only turn (empty draft) sends empty
+// text and the sidecar rejects it (the text-or-attachment invariant) → the turn
+// stops instantly with no model action or log.
+function composeQuotedText(quotes: Followup[], text: string): string {
+  if (!quotes.length) return text
+  const blocks = quotes.map((q, i) => {
+    const marker = QUOTE_MARKERS[i] ?? `[${i + 1}]`
+    const note = q.note.trim()
+    const head = `> ${marker} ${q.excerpt}`
+    return note ? `${head}\n\n${note}` : head
+  })
+  const joined = blocks.join('\n\n')
+  return text ? `${joined}\n\n${text}` : joined
+}
 
 // One row of a TodoWrite call's checklist (sidecar SessionStep.todos). Carried on
 // `note` steps; mapped to the ui Todo shape for the docked SessionTodoPanel.
@@ -176,6 +200,10 @@ type SessionSummaryDto = {
   parentSessionId?: string
   messageCount: number
   lastPreview?: string
+  // Resting status derived by the sidecar from the last message (never 'streaming')
+  // — lets the list badge awaiting/error/done without loading the transcript.
+  // Optional for back-compat with an index.json written before the field shipped.
+  status?: SessionStatus
 }
 
 // sessions.get full transcript (sidecar Session). Engine messages use string ids
@@ -686,7 +714,12 @@ export const useSessionsStore = defineStore('sessions', () => {
       account: accountDisplay(dto),
       // Persisted per-session config (sessions.upsert ↔ sessions.list round-trip).
       style: dto.settings?.responseStyle || 'Default',
-      status: 'idle',
+      // Resting status from the sidecar (derived from the last message) so the list
+      // badges awaiting/error/done without opening the session. Fallback for a
+      // legacy index.json missing the field: a session with messages is a finished
+      // turn → 'done', an empty one is a fresh draft → 'idle'. Opening still refines
+      // it via ensureLoaded → statusFromMessages.
+      status: dto.status ?? (dto.messageCount > 0 ? 'done' : 'idle'),
       when: relativeWhen(dto.updatedAt),
       pinned: dto.pinned ?? false,
       mode: modeDisplay(dto.settings?.mode),
@@ -1331,11 +1364,19 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s) return
     const trimmed = text.trim()
     const atts = att ?? []
-    if (!trimmed && atts.length === 0) return
+    // Snapshot the follow-up quotes attached right now so a quote-only queue (empty
+    // draft + a quote) is a valid queued turn and the quotes survive to drain.
+    const quotes = s.followups ?? []
+    if (!trimmed && atts.length === 0 && quotes.length === 0) return
     const item: QueuedMessage = { text: trimmed }
     if (atts.length) item.att = [...atts]
     if (command) item.command = command
+    if (quotes.length) item.quotes = [...quotes]
     s.queue = [...(s.queue ?? []), item]
+    // Move the quotes into the queued item — clear the live set so they don't also
+    // ride the composer's next message (and the composer's cards disappear, matching
+    // how the queued draft/attachments clear).
+    if (quotes.length) s.followups = []
   }
   function dequeue(id: number, i: number) {
     const s = byId(id)
@@ -1360,7 +1401,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.status === 'streaming' || s.status === 'awaiting') return
     const head = s.queue.shift()
     if (!s.queue.length) delete s.queue
-    if (head) void sendMessage(id, head.text, head.att, head.command)
+    // Pass the item's own quote snapshot as an override so draining doesn't consume
+    // (or get clobbered by) any quotes the user added to the composer meanwhile.
+    if (head) void sendMessage(id, head.text, head.att, head.command, head.quotes)
   }
 
   // ── Turn runner ──────────────────────────────────────────────────────────────
@@ -1531,6 +1574,30 @@ export const useSessionsStore = defineStore('sessions', () => {
     flagSettledUnread(s)
   }
 
+  // The engine died out from under EVERY session at once (engine.crashed). There
+  // is no per-turn done event in this case, so finalize each in-flight streaming
+  // turn with a terminal error alert — block-agnostic (a turn that crashed before
+  // emitting any output is stranded on "Streaming…" otherwise and the stall
+  // watchdog skips it). Idempotent: pushErrorBlock keeps one error block per turn,
+  // and a turn already settled by its RPC reject is left untouched.
+  function errorFinalizeStreamingTurns(message: string): void {
+    for (const s of sessions.value) {
+      let touched = false
+      for (const m of s.msgs) {
+        if (m.role !== 'assistant' || !m.streaming) continue
+        flushText(s.engineId ?? '', m.eid ?? '')
+        pushErrorBlock(m, message)
+        m.streaming = false
+        if (m.completedAt == null) m.completedAt = Date.now()
+        touched = true
+      }
+      if (touched) {
+        s.status = statusFromMessages(s.msgs)
+        flagSettledUnread(s)
+      }
+    }
+  }
+
   async function sweepStalledTurns(): Promise<void> {
     const now = Date.now()
     for (const s of sessions.value) {
@@ -1538,22 +1605,32 @@ export const useSessionsStore = defineStore('sessions', () => {
       const m = s.msgs.find((x) => x.role === 'assistant' && x.streaming)
       if (!m || m.role !== 'assistant' || !m.eid) continue
       if (m.startedAt == null || now - m.startedAt < STALL_GRACE_MS) continue
-      // Only a turn that has produced output (the stranded reply). A bubble with no
-      // blocks is still in long startup (folding a big transcript before the aborter
-      // is even registered) — probing it could read active=false and finalize a turn
-      // that is genuinely about to run.
-      if (m.blocks.length === 0) continue
       try {
         const res = await sc.request<{ active: boolean }>('sessions.turnActive', {
           sessionId: s.engineId,
           messageId: m.eid,
         })
+        // active=false is CONCLUSIVE only for a turn that has produced output (it has
+        // provably registered its aborter). A bubble with no blocks yet is still in
+        // long startup (folding a big transcript) — probing it could read active=false
+        // and finalize a turn that is genuinely about to run, so leave it.
         // Re-check m.streaming after the await: the real finalize may have landed
         // meanwhile (its handlers are idempotent, but skip the redundant work).
-        if (!res.active && m.streaming) finalizeStuckTurn(s, m)
-      } catch {
-        // Probe failed (engine down / racing teardown) — leave the bubble; the next
-        // sweep retries. A real engine exit rejects the pending RPC, settling it.
+        if (!res.active && m.streaming && m.blocks.length > 0) finalizeStuckTurn(s, m)
+      } catch (err) {
+        // A dead/unavailable engine means the turn is gone for good (the sidecar
+        // crashed — engine.crashed normally finalizes it first; this covers a missed
+        // event or the restart window). Finalize with an error alert REGARDLESS of
+        // blocks, so a turn that crashed before emitting output isn't stranded on
+        // "Streaming…". A transient probe failure with a live engine (any other code)
+        // is left for the next sweep.
+        const dead =
+          err instanceof SidecarUnavailableError ||
+          (err instanceof SidecarError && err.code === -32000)
+        if (dead && m.streaming) {
+          pushErrorBlock(m, 'The engine stopped unexpectedly. Retry to continue.')
+          finalizeStuckTurn(s, m)
+        }
       }
     }
   }
@@ -1789,6 +1866,21 @@ export const useSessionsStore = defineStore('sessions', () => {
               p.stopReason !== 'aborted'
             if (clean) drainQueue(s.id)
           }
+          return
+        }
+        if (evt.type === 'engine.crashed' || evt.type === 'engine.fatal') {
+          // The sidecar died unexpectedly out from under all sessions (see
+          // electron/engine.ts). Every in-flight turn is dead — surface WHY on each
+          // streaming bubble instead of leaving it stranded on "Streaming…". This is
+          // the reliable, block-agnostic signal (the per-turn RPC reject races the UI
+          // stream state; the stall watchdog skips turns that crashed before emitting
+          // output). 'crashed' auto-restarts; 'fatal' gave up after a crash-loop.
+          const message =
+            evt.type === 'engine.fatal'
+              ? 'The engine crashed repeatedly and could not restart. Restart the app to continue.'
+              : 'The engine crashed and was restarted. This turn was interrupted — retry to continue.'
+          errorFinalizeStreamingTurns(message)
+          return
         }
       })
     } catch {
@@ -1897,11 +1989,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     text: string,
     att?: SessionAttachment[],
     command?: SlashCommandRef,
+    // A quote snapshot to use INSTEAD of the session's live `followups` (queue drain
+    // passes the item's own quotes). When given, the live set is left untouched — the
+    // user may have added new quotes for their next message meanwhile.
+    quotesOverride?: Followup[],
   ) {
     const s = byId(id)
     const trimmed = text.trim()
     const atts = att ?? []
-    const quotes = s?.followups ?? []
+    const quotes = quotesOverride ?? s?.followups ?? []
     if (!s || (!trimmed && atts.length === 0 && quotes.length === 0)) return
 
     // Usage-quota gate (Settings → Usage quota): when blocking is on and this session's
@@ -1922,7 +2018,14 @@ export const useSessionsStore = defineStore('sessions', () => {
       quotes: quotes.length ? quotes : null,
       command: command ?? null,
     })
-    s.followups = []
+    // Only clear the LIVE follow-ups when we consumed them (immediate send). A drain
+    // passing `quotesOverride` must not wipe the quotes the user is staging next.
+    if (!quotesOverride) s.followups = []
+
+    // Model text folds the quoted excerpts + notes into the prompt (the `quotes`
+    // above are display-only). This is also what makes a quote-only turn (empty
+    // draft) carry content — otherwise the sidecar rejects the empty payload.
+    const modelText = composeQuotedText(quotes, trimmed)
 
     if (!useIpc) {
       // Mock turn: canned reply.
@@ -1938,7 +2041,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
 
-    await runEngineTurn(s, trimmed, atts)
+    await runEngineTurn(s, modelText, atts)
   }
 
   // Drive one real turn over IPC: placeholder bubble + stream subscription folds
@@ -1966,9 +2069,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     // "New session" for minutes. The post-turn call below is the fallback if this fails.
     if (isFirstTurn) kickoffAutoTitle(s, text)
 
-    // Engine attachments: only image data URLs + text content reach the model.
-    // Folder attachments carry no content — they set the working folder (forwarded
-    // as workspacePath below), so they're excluded here.
+    // Engine attachments → what the sidecar delivers to the model per type:
+    //   • image        → `url` (base64 data URL) → image block.
+    //   • PDF          → `url` (base64 data URL) → document block (Anthropic path;
+    //                    the Pi path can't take documents → it degrades to a `path`
+    //                    reference). We send `path` too so the model can Read it.
+    //   • text file    → `preview` (UTF-8 content) → delimited text block.
+    //   • binary file  → `path` only → a reference line the model can Read via tool.
+    // Folder attachments carry no model content — they ride to `contextFolders`
+    // below (read-only <workspace_tree> context), so they're excluded here.
     const engineAtts = atts
       .map((a, i) => {
         if (a.folder) return null
@@ -1977,12 +2086,23 @@ export const useSessionsStore = defineStore('sessions', () => {
           name: a.name,
           type: a.img ? ('image' as const) : ('file' as const),
         }
-        if (a.img && a.dataUrl) return { ...base, url: a.dataUrl }
-        if (a.img && a.src?.startsWith('data:')) return { ...base, url: a.src }
-        if (a.text) return { ...base, preview: a.text }
+        const dataUrl = a.dataUrl ?? (a.src?.startsWith('data:') ? a.src : undefined)
+        if (a.img) return dataUrl ? { ...base, url: dataUrl } : null
+        // PDF (base64 data URL) → document/reference; carry `path` for Read too.
+        if (dataUrl) return { ...base, url: dataUrl, ...(a.path ? { path: a.path } : {}) }
+        if (a.text) return { ...base, preview: a.text, ...(a.path ? { path: a.path } : {}) }
+        // Binary with a resolved on-disk path → reference-only.
+        if (a.path) return { ...base, path: a.path }
         return null
       })
       .filter((a): a is NonNullable<typeof a> => a != null)
+
+    // Folders attached to this turn → read-only <workspace_tree> context (multi-
+    // folder). Absolute paths only; deduped. They do NOT change the cwd (the user
+    // chose context, not a working dir), so the tools' cwd stays project/home.
+    const contextFolders = [
+      ...new Set(atts.filter((a) => a.folder && a.path).map((a) => a.path as string)),
+    ]
 
     // Functional session prefs (Settings → Defaults / Sessions). Read per turn so a
     // settings change takes effect on the next message without recreating the session.
@@ -2018,7 +2138,11 @@ export const useSessionsStore = defineStore('sessions', () => {
         ...(s.project ? { projectId: s.project } : {}),
         // Dragged working folder → cwd for the turn (takes precedence over the
         // project path sidecar-side) + a <workspace_tree> orientation block.
+        // (Legacy: folder attachments no longer set this — see contextFolders.)
         ...(s.workspaceFolder ? { workspacePath: s.workspaceFolder } : {}),
+        // Attached folders → read-only <workspace_tree> context (multi-folder), does
+        // NOT change the cwd.
+        ...(contextFolders.length ? { contextFolders } : {}),
         // Session-scoped tool denylist + MCP whitelist (config popover).
         ...(s.disabledTools && s.disabledTools.length ? { disabledTools: s.disabledTools } : {}),
         ...(s.mcpServerIds !== undefined ? { mcpServerIds: s.mcpServerIds } : {}),

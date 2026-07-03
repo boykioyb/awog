@@ -263,25 +263,18 @@ const initTab = async (tab: TerminalTab): Promise<void> => {
   instance.open(container)
   tab.term = instance
 
-  // Copy/paste: xterm doesn't bind these by default. Cmd+C/V (mac) +
-  // Ctrl+Shift+C/V (win/linux); plain Ctrl+C stays SIGINT.
+  // Copy only: xterm doesn't copy its selection on its own, so bind Cmd+C (mac) /
+  // Ctrl+Shift+C (win/linux) when there IS a selection; plain Ctrl+C stays SIGINT.
+  // Paste is intentionally NOT handled here — xterm's built-in paste (the browser's
+  // native `paste` event on Cmd+V / Ctrl+V) already writes the text through onData
+  // once, with correct bracketed-paste wrapping. Handling paste again on keydown
+  // would write it a second time → every paste duplicated.
   instance.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown') return true
     const wantsCopy =
       (e.metaKey && e.code === 'KeyC') || (e.ctrlKey && e.shiftKey && e.code === 'KeyC')
     if (wantsCopy && instance.hasSelection()) {
       navigator.clipboard.writeText(instance.getSelection()).catch(() => undefined)
-      return false
-    }
-    const wantsPaste =
-      (e.metaKey && e.code === 'KeyV') || (e.ctrlKey && e.shiftKey && e.code === 'KeyV')
-    if (wantsPaste) {
-      navigator.clipboard
-        .readText()
-        .then((text) => {
-          if (tab.terminalId && text) api.write(tab.terminalId, text).catch(() => undefined)
-        })
-        .catch(() => undefined)
       return false
     }
     return true

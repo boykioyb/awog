@@ -8,6 +8,8 @@
   "sessions.workspace.diff.binary": "File nhị phân — không hiển thị diff",
   "sessions.workspace.files.empty": "Thư mục rỗng",
   "sessions.workspace.files.loading": "Đang tải…",
+  "sessions.workspace.files.reload": "Tải lại",
+  "sessions.workspace.files.collapseAll": "Thu gọn tất cả",
   "sessions.workspace.files.browse": "Duyệt file của project",
   "sessions.workspace.files.binary": "File nhị phân — không xem trước được",
   "sessions.workspace.files.truncated": "Đã cắt bớt — file quá lớn để hiển thị đầy đủ",

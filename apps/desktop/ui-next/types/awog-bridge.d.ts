@@ -48,6 +48,8 @@ export interface AwogBridge {
   vscodeAvailable(): Promise<boolean>
   openInVscode(root: string, path: string): Promise<void>
   pickFolder(opts?: AwogDialogOpts): Promise<string | null>
+  // Pick one or more folders (multi-select) → their absolute paths ([] on cancel).
+  pickFolders(opts?: AwogDialogOpts): Promise<string[]>
   // Absolute on-disk path of a dropped File/folder (Electron webUtils). '' when
   // the File has no real filesystem origin (e.g. synthetic/clipboard blob).
   getPathForFile(file: File): string

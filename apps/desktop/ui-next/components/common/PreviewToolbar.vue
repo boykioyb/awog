@@ -5,16 +5,65 @@
 
     <!-- image: zoom / rotate / flip -->
     <template v-if="item?.kind === 'image'">
-      <button class="pvtb" :title="t('common.zoomOut')" @click="zoomBy(-0.2)">−</button>
+      <button
+        class="pvtb"
+        :title="t('common.zoomOut')"
+        :aria-label="t('common.zoomOut')"
+        @click="zoomBy(-0.2)"
+      >
+        <ZoomOut :size="15" />
+      </button>
       <span class="pvz">{{ Math.round(scale * 100) }}%</span>
-      <button class="pvtb" :title="t('common.zoomIn')" @click="zoomBy(0.2)">+</button>
-      <button class="pvtb" :title="t('common.zoomReset')" @click="resetView()">⤢</button>
+      <button
+        class="pvtb"
+        :title="t('common.zoomIn')"
+        :aria-label="t('common.zoomIn')"
+        @click="zoomBy(0.2)"
+      >
+        <ZoomIn :size="15" />
+      </button>
+      <button
+        class="pvtb"
+        :title="t('common.zoomReset')"
+        :aria-label="t('common.zoomReset')"
+        @click="resetView()"
+      >
+        <Maximize2 :size="15" />
+      </button>
       <span class="pvsep" />
-      <button class="pvtb" :title="t('common.rotateLeft')" @click="rotate -= 90">⟲</button>
-      <button class="pvtb" :title="t('common.rotateRight')" @click="rotate += 90">⟳</button>
+      <button
+        class="pvtb"
+        :title="t('common.rotateLeft')"
+        :aria-label="t('common.rotateLeft')"
+        @click="rotate -= 90"
+      >
+        <RotateCcw :size="15" />
+      </button>
+      <button
+        class="pvtb"
+        :title="t('common.rotateRight')"
+        :aria-label="t('common.rotateRight')"
+        @click="rotate += 90"
+      >
+        <RotateCw :size="15" />
+      </button>
       <span class="pvsep" />
-      <button class="pvtb" :title="t('common.flipH')" @click="flipH = !flipH">⇆</button>
-      <button class="pvtb" :title="t('common.flipV')" @click="flipV = !flipV">⇅</button>
+      <button
+        class="pvtb"
+        :title="t('common.flipH')"
+        :aria-label="t('common.flipH')"
+        @click="flipH = !flipH"
+      >
+        <FlipHorizontal2 :size="15" />
+      </button>
+      <button
+        class="pvtb"
+        :title="t('common.flipV')"
+        :aria-label="t('common.flipV')"
+        @click="flipV = !flipV"
+      >
+        <FlipVertical2 :size="15" />
+      </button>
     </template>
 
     <!-- markdown: render/raw + copy + reading width -->
@@ -41,9 +90,23 @@
       </button>
       <template v-if="view === 'render'">
         <span class="pvsep" />
-        <button class="pvtb" :title="t('common.widthNarrower')" @click="stepWidth(-1)">⇥⇤</button>
+        <button
+          class="pvtb"
+          :title="t('common.widthNarrower')"
+          :aria-label="t('common.widthNarrower')"
+          @click="stepWidth(-1)"
+        >
+          <FoldHorizontal :size="15" />
+        </button>
         <span class="pvz">{{ widthLabel }}</span>
-        <button class="pvtb" :title="t('common.widthWider')" @click="stepWidth(1)">⇤⇥</button>
+        <button
+          class="pvtb"
+          :title="t('common.widthWider')"
+          :aria-label="t('common.widthWider')"
+          @click="stepWidth(1)"
+        >
+          <UnfoldHorizontal :size="15" />
+        </button>
       </template>
     </template>
 
@@ -184,6 +247,17 @@
 // thin). Presentational: it receives the modal's controller and drives it; the
 // only state it owns is which dropdown (theme/actions) is open. The theme list is
 // read straight from useMonacoTheme (module-level shared state).
+import {
+  FlipHorizontal2,
+  FlipVertical2,
+  FoldHorizontal,
+  Maximize2,
+  RotateCcw,
+  RotateCw,
+  UnfoldHorizontal,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-vue-next'
 import { FOLLOW_APP, useMonacoTheme } from '~/composables/useMonacoTheme'
 import type { PreviewController } from '~/composables/usePreviewModal'
 
@@ -264,29 +338,31 @@ const themeGroups = [
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 9px;
+  gap: 5px;
+  padding: 7px 10px;
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
+/* Icon button — sized to match the workspace-panel buttons (.wpib, 28px) so the
+   preview controls read as the same family as the rest of the app's chrome. */
 .pvtb {
   display: grid;
   grid-auto-flow: column;
   place-items: center;
   gap: 5px;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 6px;
-  border-radius: 7px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 8px;
   color: var(--textDim);
   cursor: pointer;
   font-size: 1em;
   line-height: 1;
 }
 .pvtb.wide {
-  padding: 0 9px;
+  padding: 0 10px;
 }
 .pvtb:hover {
   background: var(--bgHover);
@@ -309,7 +385,7 @@ const themeGroups = [
 }
 .pvsep {
   width: 1px;
-  height: 18px;
+  height: 20px;
   background: var(--border);
   margin: 0 3px;
 }

@@ -1,5 +1,35 @@
 <template>
   <div class="wsfiles">
+    <!-- Toolbar (real-data mode only): create/collapse/reload for the whole tree.
+         Right-click a row still exposes the full per-target menu. -->
+    <div v-if="ready" class="wsfiles-tb">
+      <span class="wsfiles-tb-name mono" :title="root ?? ''">{{ rootLabel }}</span>
+      <div class="wsfiles-tb-actions">
+        <button class="wpib" :title="t('files.ctx.newFile')" @click="createAtRoot('file')">
+          <Icon name="file" style="width: 13px; height: 13px" />
+        </button>
+        <button class="wpib" :title="t('files.ctx.newFolder')" @click="createAtRoot('dir')">
+          <Icon name="folder" style="width: 13px; height: 13px" />
+        </button>
+        <button
+          class="wpib"
+          :title="t('sessions.workspace.files.collapseAll')"
+          @click="collapseAll"
+        >
+          <Icon name="foldv" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="wpib"
+          :class="{ spin: treeLoading }"
+          :disabled="treeLoading"
+          :title="t('sessions.workspace.files.reload')"
+          @click="reloadTree"
+        >
+          <Icon name="refresh" style="width: 14px; height: 14px" />
+        </button>
+      </div>
+    </div>
+
     <!-- Unavailable / no-root → mock tree fallback (browser-dev) or message. -->
     <div v-if="!ready" class="wsfiles-fallback">
       <div v-if="!available" class="empty" style="padding: 30px">
@@ -42,6 +72,9 @@ import { useSidecar } from '~/composables/useSidecar'
 import { usePreview, previewKindFromPath } from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useFileContextMenu } from '~/composables/useFileContextMenu'
+import { useFsApi } from '~/composables/useFsApi'
+import { useTextPrompt } from '~/composables/useTextPrompt'
+import { pushActionToast } from '~/composables/useActionToasts'
 
 const props = defineProps<{ session: Session }>()
 
@@ -49,7 +82,22 @@ const { t } = useI18n()
 const { FTREE } = useSessionsData()
 const sc = useSidecar()
 const preview = usePreview()
+const fs = useFsApi()
+const { prompt } = useTextPrompt()
 const { root, ready, available } = useWorkspaceData(() => props.session.project)
+
+// Basename of the workspace root — labels the toolbar so it's clear which folder
+// the tree is showing (the panel tab only says "Files").
+const rootLabel = computed(() => {
+  const r = root.value
+  if (!r) return ''
+  return (
+    r
+      .replace(/[/\\]+$/, '')
+      .split(/[/\\]/)
+      .pop() || r
+  )
+})
 
 // ── Sidecar fs shapes ────────────────────────────────────────────────────────
 type FsEntry = { name: string; path: string; kind: 'file' | 'dir'; size?: number }
@@ -91,6 +139,40 @@ async function loadDir(dir: string): Promise<void> {
 async function reloadDir(dir: string): Promise<void> {
   delete childrenByPath[dir]
   await loadDir(dir)
+}
+
+// Toolbar: re-read the whole tree from disk while preserving which dirs are open
+// (root + every currently-expanded dir; collapsed dirs re-fetch lazily on expand).
+async function reloadTree(): Promise<void> {
+  if (!root.value) return
+  const dirs = ['', ...expanded]
+  for (const k of Object.keys(childrenByPath)) delete childrenByPath[k]
+  await Promise.all(dirs.map((d) => loadDir(d)))
+}
+
+// Toolbar: collapse every open directory (cache is kept — re-expand is instant).
+function collapseAll(): void {
+  expanded.clear()
+}
+
+// Toolbar: create a file/folder at the workspace root (the per-row context menu
+// covers creating inside a specific dir). Errors surface as a toast, never thrown.
+async function createAtRoot(kind: 'file' | 'dir'): Promise<void> {
+  const r = root.value
+  if (!r) return
+  const name = await prompt({
+    title: t(kind === 'file' ? 'files.prompt.newFileTitle' : 'files.prompt.newFolderTitle'),
+    placeholder: kind === 'file' ? t('files.prompt.newFilePh') : '',
+    submitLabel: t(kind === 'file' ? 'files.ctx.newFile' : 'files.ctx.newFolder'),
+  })
+  if (!name) return
+  try {
+    if (kind === 'file') await fs.createFile(r, name)
+    else await fs.createDir(r, name)
+    await reloadDir('')
+  } catch (err) {
+    pushActionToast(err instanceof Error && err.message ? err.message : String(err), 'error')
+  }
 }
 
 // Open a file in the shared PreviewModal (workspaceRoot + path → fs.readFile).
@@ -151,6 +233,44 @@ onMounted(() => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+}
+/* Slim action bar above the tree — mirrors the panel-header button style (.wpib). */
+.wsfiles-tb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.wsfiles-tb-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--textDim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.wsfiles-tb-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.wsfiles-tb .wpib:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.wsfiles-tb .wpib.spin > .icn {
+  animation: wsfiles-spin 0.8s linear infinite;
+}
+@keyframes wsfiles-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .wsfiles-fallback {
   flex: 1;

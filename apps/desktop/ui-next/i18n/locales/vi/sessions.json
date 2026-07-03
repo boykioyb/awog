@@ -108,6 +108,7 @@
   "sessions.composer.styleTooltip": "Phong cách trả lời",
   "sessions.composer.enhance": "Cải thiện prompt (✨)",
   "sessions.composer.attach": "Đính kèm file / ảnh",
+  "sessions.composer.attachFolder": "Đính kèm thư mục (context)",
   "sessions.composer.runAsTask": "Chạy thành task",
   "sessions.composer.dropHint": "Thả file vào đây để đính kèm",
   "sessions.composer.pasteTruncated": "Văn bản dán quá lớn — đã đính kèm thành file (đã cắt bớt)",

@@ -264,8 +264,15 @@ export type PinnedContext = {
 }
 
 // A message the user queued while a turn was streaming (§2). Auto-drained FIFO as
-// a fresh turn once the current turn returns to idle/done.
-export type QueuedMessage = { text: string; att?: SessionAttachment[]; command?: SlashCommandRef }
+// a fresh turn once the current turn returns to idle/done. `quotes` snapshots the
+// follow-up quotes attached when it was queued so they survive the queue → drain
+// round-trip (they're woven into the model text on send, like an immediate send).
+export type QueuedMessage = {
+  text: string
+  att?: SessionAttachment[]
+  command?: SlashCommandRef
+  quotes?: Followup[]
+}
 
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'

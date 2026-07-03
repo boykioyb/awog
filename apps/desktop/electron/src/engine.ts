@@ -19,6 +19,14 @@ export type RpcErrorShape = { code: number; message: string; data?: unknown }
 export type EngineEvent = { type: string; payload: unknown }
 export type EngineEventListener = (event: EngineEvent) => void
 
+// Auto-restart tuning: recover from an unexpected engine crash without spinning
+// in a tight crash-loop. Exits closer together than the window count as
+// consecutive; more than MAX in a row → give up (emit engine.fatal) so the UI
+// can tell the user to restart the app rather than respawn forever.
+const RESTART_DELAY_MS = 500
+const CRASH_WINDOW_MS = 10_000
+const MAX_CONSECUTIVE_CRASHES = 5
+
 type InboundMessage = {
   id?: number
   method?: string
@@ -47,8 +55,19 @@ class Engine {
   // `host-request` frame (e.g. browser_tool driving Chromium). Keyed by method.
   private readonly hostHandlers = new Map<string, (params: unknown) => Promise<unknown>>()
 
+  // Auto-restart state: `stopping` marks a deliberate stop() (no restart);
+  // consecutiveCrashes/lastExitAt drive the crash-loop guard.
+  private stopping = false
+
+  private consecutiveCrashes = 0
+
+  private lastExitAt = 0
+
+  private restartTimer: ReturnType<typeof setTimeout> | null = null
+
   start(): void {
     if (this.child) return
+    this.stopping = false
     // Launch the engine from the user's home dir, not the inherited cwd (the app
     // install dir when packaged, the repo root in dev). A session with no project
     // bound resolves no `cwd`, so the runtime's workspace tools fall back to the
@@ -70,15 +89,59 @@ class Engine {
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (chunk: string) => log.info('[engine]', chunk.trimEnd()))
 
+    // Spawn failure (ENOENT/EACCES) emits 'error' with no default handler → it
+    // would crash the main process. Log it; the 'exit' below drives recovery.
+    child.on('error', (err) => {
+      log.error('engine process error', { message: err.message })
+    })
+
     child.on('exit', (code) => {
       log.warn('engine exited', { code })
       const err: RpcErrorShape = { code: -32000, message: `engine exited (code ${code})` }
       this.pending.forEach((p) => p.reject(err))
       this.pending.clear()
       this.child = null
+      if (this.stopping) return
+      // Unexpected exit (crash). Tell the renderer so it can finalize any in-flight
+      // streaming turn as errored — the per-turn pending reject above races the UI's
+      // stream state and a turn that crashed before emitting output is invisible to
+      // the stall watchdog — then auto-restart so the app recovers instead of dying.
+      this.emitEvent({ type: 'engine.crashed', payload: { code } })
+      this.scheduleRestart()
     })
 
     this.child = child
+  }
+
+  private emitEvent(event: EngineEvent): void {
+    this.listeners.forEach((listener) => listener(event))
+  }
+
+  // Restart the engine after an unexpected exit, guarding against a crash loop:
+  // if it keeps dying within CRASH_WINDOW_MS we stop retrying and emit a terminal
+  // engine.fatal so the UI can tell the user to restart the app.
+  private scheduleRestart(): void {
+    if (this.restartTimer) return
+    const now = Date.now()
+    this.consecutiveCrashes =
+      now - this.lastExitAt < CRASH_WINDOW_MS ? this.consecutiveCrashes + 1 : 1
+    this.lastExitAt = now
+    if (this.consecutiveCrashes > MAX_CONSECUTIVE_CRASHES) {
+      log.error('engine crash-loop — giving up auto-restart', {
+        crashes: this.consecutiveCrashes,
+      })
+      this.emitEvent({ type: 'engine.fatal', payload: { crashes: this.consecutiveCrashes } })
+      return
+    }
+    log.warn('scheduling engine restart', {
+      attempt: this.consecutiveCrashes,
+      delayMs: RESTART_DELAY_MS,
+    })
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null
+      this.start()
+      this.emitEvent({ type: 'engine.restarted', payload: {} })
+    }, RESTART_DELAY_MS)
   }
 
   // Re-frame stdout chunks on '\n'; each complete line is one JSON-RPC envelope.
@@ -170,6 +233,11 @@ class Engine {
   }
 
   stop(): void {
+    this.stopping = true
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer)
+      this.restartTimer = null
+    }
     this.child?.kill()
     this.child = null
   }

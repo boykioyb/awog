@@ -91,6 +91,10 @@ const SessionAttachmentSchema = z.object({
   // Bound the text payload so a hostile/oversized IPC message can't blow memory.
   // The UI caps content at ~256k chars; this leaves generous headroom.
   preview: z.string().max(2_000_000).optional(),
+  // Absolute on-disk path of a binary/document attachment (no inline text). Bounded
+  // so a hostile payload can't blow the prompt; the runtime injects it as a
+  // reference line the model can Read via a tool when inside the workspace.
+  path: z.string().max(4096).optional(),
   width: z.number().optional(),
   height: z.number().optional(),
 })
@@ -132,6 +136,12 @@ const Params = z.object({
   // invalid → ignored, never errors the chat. A compact <workspace_tree> block is
   // injected so the model orients without a blind filesystem scan.
   workspacePath: z.string().optional(),
+  // Folders attached to THIS turn as read-only context (absolute paths). Unlike
+  // workspacePath these do NOT change the cwd — each is rendered as its own compact
+  // <workspace_tree> block so the model can see the layout of every attached folder
+  // (multi-folder). Bounded (count + validated absolute existing dir below) so a
+  // hostile payload can't blow the prompt. Tools still operate in the resolved cwd.
+  contextFolders: z.array(z.string().max(4096)).max(12).optional(),
   // Session-scoped tool denylist (Claude Code tool names). Removes these tools
   // from the runtime tool set so the model never even sees them.
   disabledTools: z.array(z.string()).optional(),
@@ -229,6 +239,7 @@ function toSessionAttachment(a: z.infer<typeof SessionAttachmentSchema>): Sessio
   if (a.mime !== undefined) base.mime = a.mime
   if (a.url !== undefined) base.url = a.url
   if (a.preview !== undefined) base.preview = a.preview
+  if (a.path !== undefined) base.path = a.path
   if (a.width !== undefined) base.width = a.width
   if (a.height !== undefined) base.height = a.height
   return base
@@ -333,7 +344,14 @@ ${parts.join('\n')}
 const MAX_TREE_ENTRIES = 300
 const MAX_TREE_DEPTH = 4
 
-async function buildWorkspaceTreeBlock(root: string | undefined): Promise<string | undefined> {
+// Default intro for the cwd's own tree (dragged working folder).
+const CWD_TREE_INTRO =
+  'The user dragged this folder into the session; it is your working directory (cwd) for this turn. Read/Write/Edit/Bash operate inside it — use these paths directly instead of searching the filesystem.'
+
+async function buildWorkspaceTreeBlock(
+  root: string | undefined,
+  intro: string = CWD_TREE_INTRO,
+): Promise<string | undefined> {
   if (!root) return undefined
   const lines: string[] = []
   let count = 0
@@ -384,7 +402,7 @@ async function buildWorkspaceTreeBlock(root: string | undefined): Promise<string
   if (!lines.length) return undefined
   const body = truncated ? `${lines.join('\n')}\n…[truncated]` : lines.join('\n')
   return `<workspace_tree root="${root}">
-The user dragged this folder into the session; it is your working directory (cwd) for this turn. Read/Write/Edit/Bash operate inside it — use these paths directly instead of searching the filesystem.
+${intro}
 ${body}
 </workspace_tree>`
 }
@@ -790,6 +808,41 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       systemPromptAppend = systemPromptAppend
         ? `${treeBlock}\n\n${systemPromptAppend}`
         : treeBlock
+    }
+  }
+
+  // Attached context folders (multi-folder) → one <workspace_tree> block each so the
+  // model sees every attached folder's layout. Unlike workspacePath these do NOT
+  // change the cwd — they're read-only orientation. Validated per folder (absolute +
+  // existing dir); invalid entries skipped, never error the chat. Deduped, and the
+  // cwd's own tree (built above) isn't repeated. Tools still operate in `cwd`, so a
+  // folder outside it is browsable in the tree but only Read-able if inside cwd.
+  if (params.contextFolders?.length) {
+    const contextIntro =
+      'The user attached this folder to the session as read-only context — its structure is shown below for orientation. It is NOT your working directory; a file here is only Read-able with a tool when it sits inside your working directory (cwd).'
+    const seen = new Set<string>(cwd ? [cwd] : [])
+    const folderBlocks: string[] = []
+    for (const folder of params.contextFolders) {
+      if (seen.has(folder)) continue
+      seen.add(folder)
+      let isDir = false
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        isDir = isAbsolute(folder) && (await stat(folder)).isDirectory()
+      } catch {
+        isDir = false
+      }
+      if (!isDir) {
+        log.warn('ignoring non-absolute / non-directory contextFolder', { folder })
+        continue
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const treeBlock = await buildWorkspaceTreeBlock(folder, contextIntro)
+      if (treeBlock) folderBlocks.push(treeBlock)
+    }
+    if (folderBlocks.length) {
+      const joined = folderBlocks.join('\n\n')
+      systemPromptAppend = systemPromptAppend ? `${joined}\n\n${systemPromptAppend}` : joined
     }
   }
 

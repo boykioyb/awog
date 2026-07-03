@@ -92,6 +92,7 @@ import './methods/git.stash-list.js'
 import './methods/git.remote-list.js'
 import './methods/git.remote-add.js'
 import './methods/git.remote-set-url.js'
+import './methods/git.remote-remove.js'
 import './methods/git.stage-file.js'
 import './methods/git.stage-hunk.js'
 import './methods/git.unstage-hunk.js'
@@ -189,6 +190,40 @@ import { migrateMcpPlaintextSecrets } from './mcp/store.js'
 import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
 import { ensureUserPath } from './util/spawn-path.js'
+
+// Last-resort crash guards. A broken pipe from a spawned child (e.g. the Claude
+// Agent SDK subprocess dying mid-turn) surfaces as an async 'error' event on a
+// socket with NO listener — Node's default is to rethrow it as an uncaught
+// exception, which would take down the WHOLE engine (every session, task,
+// watcher) over one turn's recoverable I/O failure. Swallow ONLY these
+// recoverable pipe errors: the turn's own runtime path still observes the
+// subprocess exit and rejects (→ session.message.done stopReason 'error' + RPC
+// reject → UI alert). Any OTHER uncaught error is a real bug — log it and exit
+// so the Electron host restarts a clean engine (fail-fast; never mask a bug).
+const RECOVERABLE_IO_CODES = new Set(['EPIPE', 'ECONNRESET'])
+process.on('uncaughtException', (err) => {
+  const code = (err as NodeJS.ErrnoException).code
+  if (code && RECOVERABLE_IO_CODES.has(code)) {
+    log.warn('recoverable uncaughtException (broken pipe from child process)', {
+      code,
+      message: err.message,
+    })
+    return
+  }
+  log.error('fatal uncaughtException — exiting', { message: err.message, stack: err.stack })
+  process.exit(1)
+})
+process.on('unhandledRejection', (reason) => {
+  const code = (reason as NodeJS.ErrnoException | null)?.code
+  if (code && RECOVERABLE_IO_CODES.has(code)) {
+    log.warn('recoverable unhandledRejection (broken pipe)', { code })
+    return
+  }
+  log.error('unhandledRejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    ...(reason instanceof Error && reason.stack ? { stack: reason.stack } : {}),
+  })
+})
 
 type JsonRpcRequest = {
   jsonrpc: '2.0'

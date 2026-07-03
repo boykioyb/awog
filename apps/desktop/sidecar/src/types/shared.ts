@@ -226,8 +226,15 @@ export interface SessionAttachment {
   // UTF-8 text content of a text-based file (or a large pasted-text block). The
   // runtime delivers this to the model as a delimited text block (buildContext);
   // the UI also uses it for the in-app text preview. Absent for images (which use
-  // `url`) and for binary files (display-only).
+  // `url`) and for binary files (which carry `path` instead).
   preview?: string
+  // Absolute on-disk path of the source file. Carried for binary / document
+  // attachments that have no inline `preview` text: the runtime injects a
+  // reference line naming the file (+ path) so the model knows it exists and can
+  // Read it with a tool when it sits inside the working directory. Also set for
+  // PDFs alongside `url` (base64) so the Anthropic path can send the document AND
+  // the model can Read the on-disk copy.
+  path?: string
   width?: number
   height?: number
 }
@@ -385,6 +392,13 @@ export interface Session {
 // `sessions.list` returns these from sessions/index.json so app startup reads KB
 // instead of folding every transcript into RAM. Open a session → `sessions.get`
 // for the full Session with messages.
+// Resting (persisted) status of a session, derived from its last message so the
+// list can badge awaiting/error/done WITHOUT loading the transcript. Never
+// 'streaming' — that is a live-only state the UI tracks from stream events; a
+// finalized/reloaded session is one of these four. Mirrors the UI SessionStatus
+// minus 'streaming'.
+export type SessionRestingStatus = 'idle' | 'done' | 'awaiting' | 'error'
+
 export interface SessionSummary {
   id: string
   title: string
@@ -392,6 +406,10 @@ export interface SessionSummary {
   createdAt: string
   updatedAt: string
   pinned?: boolean
+  // Resting status for the list badge (ADR 0048) — derived from the last message
+  // the same way the UI derives it on open, so an un-opened session shows its true
+  // done/awaiting/error state instead of a placeholder.
+  status: SessionRestingStatus
   invitedAgentIds: string[]
   pendingAgentIds: string[]
   settings: SessionSettings

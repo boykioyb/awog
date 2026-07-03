@@ -350,6 +350,14 @@
         >
           <Icon name="clip" style="width: 14px; height: 14px" />
         </button>
+        <button
+          class="iconbtn"
+          :title="t('sessions.composer.attachFolder')"
+          style="width: 28px; height: 28px"
+          @click="emit('pick-folder')"
+        >
+          <Icon name="folder" style="width: 14px; height: 14px" />
+        </button>
         <!-- Idle → Send. While a turn streams → Stop + a split steer/queue button
              (caret opens the alternate action). Mirrors the production composer. -->
         <span v-if="!busy">
@@ -452,6 +460,8 @@ const emit = defineEmits<{
   // slash invocation displayed compactly in the user bubble.
   send: [text: string, command?: SlashCommandRef]
   pick: []
+  // Attach one or more FOLDERS (read-only context) via the native directory picker.
+  'pick-folder': []
   'remove-att': [i: number]
   // A pasted clipboard image → a pending attachment for the parent to track
   // (mirrors the drag-drop / file-picker path). The parent owns `pendingAtt`.
@@ -735,9 +745,13 @@ function dequeue(i: number) {
   if (store.activeId != null) store.dequeue(store.activeId, i)
 }
 // A queued slash command previews as its compact invocation, not the expanded body.
+// A quote-only queued message (empty draft) previews its note, else the quoted text.
 function queuedLabel(q: QueuedMessage): string {
   if (q.command) return `/${q.command.name}${q.command.args ? ` ${q.command.args}` : ''}`
-  return q.text || t('sessions.attachment.allTitle', { n: q.att?.length ?? 0 })
+  if (q.text) return q.text
+  const firstQuote = q.quotes?.[0]
+  if (firstQuote) return firstQuote.note || firstQuote.excerpt
+  return t('sessions.attachment.allTitle', { n: q.att?.length ?? 0 })
 }
 
 // Primary button state. Idle → Send. While a turn runs (busy): with something
@@ -803,7 +817,8 @@ async function sendNow() {
 async function onQueue() {
   const { text: outgoing, command } = buildOutgoing(draft.value)
   const hasAtt = props.attachments.length > 0
-  if (!outgoing.trim() && !hasAtt) return
+  const hasQuotes = followups.value.length > 0
+  if (!outgoing.trim() && !hasAtt && !hasQuotes) return
   if (store.activeId == null) return
   // Usage-quota gate: queueing only defers a turn that would be blocked on drain —
   // await a fresh read, refuse up front and keep the draft.

@@ -105,6 +105,9 @@ const props = defineProps<{
   // In-flight network op from the git store — disables fetch/pull/push and spins
   // the active one (mirrors GitPageHeader) so the pane can't race a second op.
   syncOp?: SyncOp | null
+  // Open straight into URL-edit mode (driven by the sidebar's "Edit URLs…"
+  // context-menu action). Consumed once via `edit-consumed`.
+  autoEdit?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -112,6 +115,7 @@ const emit = defineEmits<{
   (e: 'pull'): void
   (e: 'push'): void
   (e: 'set-url', payload: { name: string; fetchUrl?: string; pushUrl?: string }): void
+  (e: 'edit-consumed'): void
 }>()
 
 const { t } = useI18n()
@@ -159,6 +163,19 @@ watch(
   () => {
     editing.value = false
   },
+)
+
+// Parent requested edit mode ("Edit URLs…" context action). Immediate so a
+// freshly-mounted pane (navigating from another section) also honours it.
+// Registered after the name-reset watch so it wins when both fire in one flush.
+watch(
+  () => props.autoEdit,
+  (want) => {
+    if (!want) return
+    startEdit()
+    emit('edit-consumed')
+  },
+  { immediate: true },
 )
 </script>
 

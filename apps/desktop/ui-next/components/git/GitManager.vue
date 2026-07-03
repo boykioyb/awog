@@ -131,10 +131,12 @@
             :name="section.name"
             :remotes="store.remotes"
             :sync-op="store.syncOp"
+            :auto-edit="remoteEditName === section.name"
             @fetch="() => store.fetchRemote()"
             @pull="() => store.pull()"
             @push="openPush"
             @set-url="(p) => store.setRemoteUrl(p.name, p)"
+            @edit-consumed="remoteEditName = null"
           />
 
           <!-- Stash detail -->
@@ -384,6 +386,9 @@ const selectedFile = ref<GitSelection | null>(null)
 const commitSel = ref<string | null>(null)
 const identityOpen = ref(false)
 const remoteAddOpen = ref(false)
+// Remote whose detail pane should open straight into URL-edit mode (set by the
+// "Edit URLs…" context-menu action; consumed + cleared by the pane on open).
+const remoteEditName = ref<string | null>(null)
 const branchCreateOpen = ref(false)
 const pushOpen = ref(false)
 
@@ -791,7 +796,10 @@ const menuItems = computed<MenuItem[]>(() => {
     { id: 'pull', label: t('git.ctx.pull'), icon: 'rewind' },
     { id: 'push', label: t('git.ctx.push'), icon: 'fork' },
     sep,
+    { id: 'edit-url', label: t('git.ctx.editUrl'), icon: 'edit' },
     { id: 'copy-url', label: t('git.ctx.copyUrl'), icon: 'copy' },
+    sep,
+    { id: 'remove', label: t('git.ctx.removeRemote'), icon: 'trash', danger: true },
   ]
 })
 
@@ -991,6 +999,30 @@ function dispatchRemote(id: string, name: string) {
   else if (id === 'pull') store.pull()
   else if (id === 'push') openPush()
   else if (id === 'copy-url') copy(store.remotes.find((r) => r.name === name)?.fetchUrl ?? name)
+  else if (id === 'edit-url') {
+    // Jump to the remote's detail pane and open its inline URL editor (reuses the
+    // fetch/push field editor rather than duplicating it in a modal).
+    section.value = { kind: 'remote', name }
+    remoteEditName.value = name
+  } else if (id === 'remove') void onRemoveRemote(name)
+}
+
+// Confirm, then drop the remote. Local branches/commits are kept — only the
+// tracking config is removed. Errors surface via store.lastError → toast.
+async function onRemoveRemote(name: string) {
+  const ok = await confirm({
+    title: t('git.confirm.removeRemoteTitle'),
+    description: t('git.confirm.removeRemote', { name }),
+    confirmLabel: t('git.ctx.removeRemote'),
+  })
+  if (!ok) return
+  const removed = await store.removeRemote(name)
+  if (!removed) return
+  // Leaving the pane of a now-gone remote → fall back to Local Changes.
+  if (section.value.kind === 'remote' && section.value.name === name) {
+    section.value = { kind: 'local-changes' }
+  }
+  pushToast(t('git.remote.removed', { name }), 'success')
 }
 
 onMounted(async () => {

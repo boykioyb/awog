@@ -22,12 +22,18 @@ import {
   type Options,
   type HookInput,
   type HookJSONOutput,
+  type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 import { resolveCredential } from '../../credentials/credential-resolver.js'
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../../sessions/runner.js'
-import type { ContextChars, SessionCompaction, SessionMessage } from '../../types/shared.js'
+import type {
+  ContextChars,
+  SessionAttachment,
+  SessionCompaction,
+  SessionMessage,
+} from '../../types/shared.js'
 import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../permission.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
@@ -118,6 +124,131 @@ function renderHistoryPrefix(history: SessionMessage[], compaction?: SessionComp
   return `${summaryBlock}${convo}`.trim()
 }
 
+// ── Attachments → Claude prompt content ─────────────────────────────────────
+// The SDK's plain-string `prompt` form CANNOT carry images (the root cause of
+// "the model didn't receive the image" on the Anthropic path). To send an
+// attachment we switch to the streaming-input form — an async generator yielding
+// a single user message whose `content` is a block array: the prompt text, then
+// any text-file attachments (delimited), then image blocks. Mirrors the Pi path's
+// historyUser (context-builder.ts) so both runtimes deliver attachments identically.
+
+// Anthropic accepts only these image mime types; anything else is dropped (with a
+// warn) so the text still goes out instead of the whole turn 400-ing.
+const SDK_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const
+type SdkImageMime = (typeof SDK_IMAGE_MIMES)[number]
+const isSdkImageMime = (m: string): m is SdkImageMime => (SDK_IMAGE_MIMES as readonly string[]).includes(m)
+// Skip an image whose base64 payload exceeds ~9MB raw — one oversized image would
+// blow the provider request limit and fail the whole turn (matches context-builder).
+const MAX_IMAGE_BASE64_LENGTH = 12 * 1024 * 1024
+
+type ClaudeTextBlock = { type: 'text'; text: string }
+type ClaudeImageBlock = {
+  type: 'image'
+  source: { type: 'base64'; media_type: SdkImageMime; data: string }
+}
+// Anthropic-native PDF ingestion (Messages API document block). Unlike images this
+// works ONLY on this (Claude) path — Pi providers can't take documents, so there a
+// PDF degrades to a text reference (context-builder.toFileTextContent).
+type ClaudeDocBlock = {
+  type: 'document'
+  source: { type: 'base64'; media_type: 'application/pdf'; data: string }
+}
+type ClaudePromptBlock = ClaudeTextBlock | ClaudeImageBlock | ClaudeDocBlock
+
+// Neutralise quotes / newlines so a filename can't break out of its attribute.
+function sanitizeAttr(s: string): string {
+  return s.replace(/["\r\n]/g, ' ')
+}
+
+// Parse an attachment's inline base64 `data:` URL. Returns [mimeType, data] or null.
+function parseDataUrl(url: string | undefined): [string, string] | null {
+  if (!url) return null
+  const match = /^data:([^;,]+);base64,(.+)$/s.exec(url)
+  if (!match) return null
+  const [, mimeType, data] = match
+  return mimeType && data ? [mimeType, data] : null
+}
+
+// Parse an image attachment's inline `data:` URL into a Claude image block. Only
+// base64 data URLs with an Anthropic-supported mime type and a sane size qualify.
+function toClaudeImageBlock(att: SessionAttachment): ClaudeImageBlock | null {
+  if (att.type !== 'image') return null
+  const parsed = parseDataUrl(att.url)
+  if (!parsed) return null
+  const [mimeType, data] = parsed
+  if (!isSdkImageMime(mimeType)) {
+    log.warn('claude-sdk: skipping image with unsupported mime type', { name: att.name, mimeType })
+    return null
+  }
+  if (data.length > MAX_IMAGE_BASE64_LENGTH) {
+    log.warn('claude-sdk: skipping oversized image attachment', {
+      name: att.name,
+      base64Length: data.length,
+    })
+    return null
+  }
+  return { type: 'image', source: { type: 'base64', media_type: mimeType, data } }
+}
+
+// Parse a PDF file attachment's base64 `data:` URL into a Claude document block.
+// Only `application/pdf` data URLs of a sane size qualify.
+function toClaudeDocBlock(att: SessionAttachment): ClaudeDocBlock | null {
+  if (att.type !== 'file') return null
+  const parsed = parseDataUrl(att.url)
+  if (!parsed) return null
+  const [mimeType, data] = parsed
+  if (mimeType !== 'application/pdf') return null
+  if (data.length > MAX_IMAGE_BASE64_LENGTH) {
+    log.warn('claude-sdk: skipping oversized pdf attachment', {
+      name: att.name,
+      base64Length: data.length,
+    })
+    return null
+  }
+  return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }
+}
+
+// A `file`-type attachment as a text block: its `preview` content (delimited) when
+// text-readable, else a REFERENCE line naming the file (+ path) so the model knows
+// it exists and can Read it with a tool. PDFs with an inline `url` are sent as a
+// document block instead (toClaudeDocBlock) — skip them here to avoid duplicating.
+function toClaudeFileTextBlock(att: SessionAttachment): ClaudeTextBlock | null {
+  if (att.type !== 'file') return null
+  const name = sanitizeAttr(att.name || 'attachment')
+  if (att.preview && att.preview.trim().length > 0) {
+    return { type: 'text', text: `<attached-file name="${name}">\n${att.preview}\n</attached-file>` }
+  }
+  // A PDF that will ride as a document block is not also a reference.
+  if (parseDataUrl(att.url)?.[0] === 'application/pdf') return null
+  if (!att.path) return null
+  const attrs = `name="${name}" path="${sanitizeAttr(att.path)}"`
+  return {
+    type: 'text',
+    text: `<attached-file ${attrs} note="Binary/document attachment — no inline text. Use the Read tool to open it if it is inside your working directory." />`,
+  }
+}
+
+// Build the SDK prompt: the plain string when nothing usable is attached, else a
+// one-shot streaming generator carrying text + file/document/image blocks. All ride
+// with the CURRENT turn; prior-turn attachments persist via the SDK's own resume
+// store, so there's no re-feed to do here.
+function buildClaudePrompt(
+  text: string,
+  attachments: SessionAttachment[] | undefined,
+): string | AsyncIterable<SDKUserMessage> {
+  const list = attachments ?? []
+  const images = list.map(toClaudeImageBlock).filter((b): b is ClaudeImageBlock => b !== null)
+  const docs = list.map(toClaudeDocBlock).filter((b): b is ClaudeDocBlock => b !== null)
+  const files = list.map(toClaudeFileTextBlock).filter((b): b is ClaudeTextBlock => b !== null)
+  if (images.length === 0 && docs.length === 0 && files.length === 0) return text
+  const content: ClaudePromptBlock[] = []
+  if (text) content.push({ type: 'text', text })
+  content.push(...files, ...docs, ...images)
+  return (async function* (): AsyncGenerator<SDKUserMessage> {
+    yield { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null }
+  })()
+}
+
 export async function runStreamClaude(
   args: RunNonStreamArgs,
   cb: StreamCallbacks,
@@ -168,6 +299,11 @@ export async function runStreamClaude(
     promptText = prefix ? `${prefix}\n\n${args.pendingText}` : args.pendingText
   }
 
+  // Attachments (images / text files) need the streaming-input block form — the
+  // string prompt can't carry them. Returns the plain string when nothing usable
+  // is attached, so the common text-only turn is unchanged.
+  const prompt = buildClaudePrompt(promptText, args.pendingAttachments)
+
   // External MCP servers of the user (SDK-native mechanism, not a custom tool).
   const mcpServers = await toSdkMcpServers(args.mcpServers)
   const claudeBinary = resolveClaudeBinary()
@@ -212,7 +348,7 @@ export async function runStreamClaude(
 
   const adapter = createClaudeEventAdapter(cb)
   try {
-    for await (const msg of query({ prompt: promptText, options })) {
+    for await (const msg of query({ prompt, options })) {
       adapter.handle(msg)
     }
   } catch (err) {

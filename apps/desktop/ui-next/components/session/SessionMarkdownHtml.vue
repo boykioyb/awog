@@ -132,13 +132,28 @@ function linkifyFilePaths(el: HTMLElement) {
       if (k === 'Enter' || k === ' ') openAt(path)(e)
     })
   }
-  // Markdown links to a workspace file → preview instead of navigating.
+  // Markdown links → open in the shared preview instead of letting the SPA router
+  // navigate. External URLs (http(s)://, mailto:, tel:) and in-page anchors (#…) keep
+  // their default behaviour; every OTHER href is an intra-app/workspace path the
+  // router can't resolve — clicking it navigates to a dead route and crashes with
+  // "Page not found" (e.g. an extensionless doc path). So we always preventDefault
+  // and route it to the file preview, even when filePathOf doesn't recognise an
+  // extension (the modal surfaces a clear "could not load" if it isn't a readable file).
   for (const a of Array.from(el.querySelectorAll('a'))) {
-    const path = filePathOf(a.getAttribute('href') ?? '')
-    if (!path) continue
+    let href = (a.getAttribute('href') ?? '').trim()
+    if (!href || href.startsWith('#')) continue // in-page anchor — leave alone
+    if (/^([a-z][a-z\d+.-]*:\/\/|mailto:|tel:)/i.test(href)) continue // external — default handling
+    // Markdown renderers percent-encode non-ASCII link destinations (e.g. Japanese
+    // filenames) — decode so the path matches the real workspace file, not %E3%83…
+    try {
+      href = decodeURIComponent(href)
+    } catch {
+      // malformed escape sequence — keep the raw href
+    }
+    const path = filePathOf(href)
     a.classList.add('filelink')
-    a.title = t('sessions.preview.openFile', { path })
-    a.addEventListener('click', openAt(path))
+    a.title = t('sessions.preview.openFile', { path: path ?? href })
+    a.addEventListener('click', openAt(path ?? href))
   }
 }
 

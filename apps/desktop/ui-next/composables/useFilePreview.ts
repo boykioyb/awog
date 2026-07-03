@@ -39,7 +39,9 @@ export function filePathOf(raw: string): string | null {
   if (s.startsWith('#') || s.startsWith('@')) return null // anchors / npm scopes
   const path = s.replace(/^\.\//, '').replace(/:\d+(?::\d+)?$/, '') // strip ./ and :line(:col)
   if (!FILE_EXT.test(path)) return null
-  if (!/^[\w./#@~+-]+$/.test(path)) return null // path-segment-safe chars only
+  // path-segment-safe chars only. Unicode letters/numbers/marks are allowed so
+  // non-ASCII filenames (e.g. Japanese 仕様書.md, accented Vietnamese) linkify too.
+  if (!/^[\p{L}\p{N}\p{M}\w./#@~+-]+$/u.test(path)) return null
   if (/^\.+$/.test(path)) return null // not a bare ".", ".."
   if (/^\d+(\.\d+)+$/.test(path)) return null // not a version like 1.2.3
   return path

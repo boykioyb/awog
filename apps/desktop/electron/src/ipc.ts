@@ -120,6 +120,22 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return result.filePaths[0]
   })
 
+  // Pick one OR MORE folders (multi-select) — used to attach folders as read-only
+  // session context. Returns [] on cancel. Separate from pickFolder so the existing
+  // single-folder callers keep their `string | null` contract.
+  ipcMain.handle('dialog:pickFolders', async (_e, opts: PickFolderOpts = {}): Promise<string[]> => {
+    const win = getWindow()
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openDirectory', 'multiSelections'],
+      ...(opts.title ? { title: opts.title } : {}),
+      ...(opts.defaultPath ? { defaultPath: opts.defaultPath } : {}),
+    }
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options)
+    return result.canceled ? [] : result.filePaths
+  })
+
   // Pick a save location only — the engine writes the file (e.g. git format-patch
   // stays inside the workspace, invariant #3). Mirrors Tauri's plugin-dialog save.
   ipcMain.handle('dialog:savePath', async (_e, opts: SavePathOpts = {}): Promise<string | null> => {

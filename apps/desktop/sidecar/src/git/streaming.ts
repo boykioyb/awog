@@ -30,6 +30,19 @@ function filteredEnv(): NodeJS.ProcessEnv {
   // Match runner.ts: never take git's optional index lock (the required locks
   // for fetch/pull/push are unaffected). Keeps background polling lock-free.
   out.GIT_OPTIONAL_LOCKS = '0'
+  // Match runner.ts: fetch/pull/push must never fall back to an interactive
+  // credential prompt. The sidecar has no TTY of its own — git would open the
+  // controlling terminal that launched the app (dev: the `pnpm dev` shell) and
+  // block there, so the "Password for 'https://…'" prompt only leaked to that
+  // console and never reached the UI. With prompts disabled git fails fast
+  // ("could not read Username … terminal prompts disabled") → detectAuthHint →
+  // AUTH_FAILED → the rich GitAuthErrorModal in the renderer. Credential
+  // *helpers* (osxkeychain / GCM / gh) still run non-interactively, so a cached
+  // token keeps working; only the no-credentials case turns into a clean error.
+  out.GIT_TERMINAL_PROMPT = '0'
+  // Belt-and-suspenders: stop Git Credential Manager popping its own GUI window
+  // in place of the terminal prompt (harmless when GCM isn't installed).
+  out.GCM_INTERACTIVE = 'never'
   return out
 }
 

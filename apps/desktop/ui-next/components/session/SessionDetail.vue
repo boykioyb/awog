@@ -153,6 +153,7 @@
             :attachments="pendingAtt"
             @send="onSend"
             @pick="openPicker"
+            @pick-folder="pickFolders"
             @remove-att="removeAtt"
             @add-att="onAddAtt"
             @preview="previewAtt"
@@ -329,10 +330,9 @@ function selectProj(id: string) {
 // Composer send → mock turn runner (store swaps in the real IPC runner later).
 // Pending attachments ride along, then clear (new array so the sent copy is safe).
 function onSend(text: string, command?: SlashCommandRef) {
-  // A folder attachment commits the session's working folder (cwd, persisted +
-  // forwarded each turn). The att itself rides into the user message → bubble.
-  const folderAtt = pendingAtt.value.find((a) => a.folder && a.path)
-  if (folderAtt?.path) store.setWorkspaceFolder(props.session.id, folderAtt.path)
+  // Folder attachments ride into the user message (bubble) and, via the store, to
+  // the turn's `contextFolders` (read-only <workspace_tree> context). They do NOT
+  // set the session cwd — the tools' working dir stays the project/home.
   store.sendMessage(props.session.id, text, pendingAtt.value, command)
   pendingAtt.value = []
 }
@@ -365,16 +365,19 @@ function addFiles(files: FileList | File[]) {
     const mime = f.type || ''
     const img = mime.startsWith('image/')
     const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(f.name)
+    // Absolute on-disk path (Electron webUtils) so binary / document files can ride
+    // to the model as a Read-able reference. '' outside the shell / for synthetic
+    // (clipboard) blobs — then a non-text file simply has no way to reach the model.
+    const path = window.awog?.getPathForFile?.(f) || ''
     const att: SessionAttachment = { name: f.name, img, size: f.size }
     if (mime) att.mime = mime
-    // PDFs preview via an object URL (display-only). Images are read as a base64
-    // `data:` URL instead: the engine attachment mapping only forwards an image to
-    // the model when it carries a `data:` URL — a `blob:` object URL is dropped
-    // before send, so a dragged/picked screenshot would render in the bubble yet
-    // never reach the model. Mirrors the composer's paste path (sets dataUrl+src).
-    if (isPdf) att.src = URL.createObjectURL(f)
+    if (path) att.path = path
     const idx = pendingAtt.value.push(att) - 1
-    if (img) {
+    if (img || isPdf) {
+      // Images AND PDFs are read as a base64 `data:` URL: the engine forwards images
+      // as image blocks and PDFs as document blocks (Anthropic path — Pi degrades to
+      // the `path` reference). A `blob:` object URL is dropped before send, so the
+      // model would never receive them. Mirrors the composer's paste path.
       const reader = new FileReader()
       reader.onload = () => {
         const dataUrl = typeof reader.result === 'string' ? reader.result : ''
@@ -391,6 +394,7 @@ function addFiles(files: FileList | File[]) {
         if (a) a.text = tx.slice(0, ATTACHMENT_TEXT_MAX)
       })
     }
+    // else: binary file with no inline content → rides as a `path` reference (above).
   }
 }
 function removeAtt(i: number) {
@@ -425,6 +429,22 @@ watch(
 )
 function openPicker() {
   fileInput.value?.click()
+}
+// Attach one or more FOLDERS via the native directory picker (multi-select). Each
+// becomes a read-only <workspace_tree> context chip (does not change the cwd). No-op
+// outside the Electron shell (browser dev). Dedupe against already-attached folders.
+async function pickFolders() {
+  const paths =
+    (await window.awog?.pickFolders?.({ title: t('sessions.composer.attachFolder') })) ?? []
+  for (const path of paths) {
+    if (!path || pendingAtt.value.some((a) => a.folder && a.path === path)) continue
+    const name =
+      path
+        .replace(/[/\\]+$/, '')
+        .split(/[/\\]/)
+        .pop() || path
+    pendingAtt.value.push({ name, img: false, folder: true, path })
+  }
 }
 function onPick(e: Event) {
   const input = e.target as HTMLInputElement
@@ -522,33 +542,33 @@ function onDrop(e: DragEvent) {
   dragDepth.value = 0
   const dt = e.dataTransfer
   if (!dt) return
-  // A dropped FOLDER becomes the session's working directory (cwd), not a file
-  // attachment: webkitGetAsEntry distinguishes folder from file, getPathForFile
-  // (Electron preload) resolves its absolute on-disk path. Read items synchronously
-  // — the DataTransferItemList is only valid during this event. A drop can carry
-  // several folders, so collect ALL of them (not just the first) and skip any whose
-  // path is already attached so duplicate chips don't pile up.
-  let droppedFolder = false
-  for (const item of Array.from(dt.items)) {
-    if (item.kind !== 'file') continue
-    const entry = item.webkitGetAsEntry?.()
-    if (!entry?.isDirectory) continue
-    const file = item.getAsFile()
-    const path = file ? (window.awog?.getPathForFile?.(file) ?? '') : ''
-    if (!path) continue
-    droppedFolder = true
-    if (pendingAtt.value.some((a) => a.folder && a.path === path)) continue
-    // A folder is a per-message attachment: shows on the bubble + (on send) sets
-    // the session's working folder (cwd). Pending here like a file attachment.
-    const name =
-      path
-        .replace(/[/\\]+$/, '')
-        .split(/[/\\]/)
-        .pop() || path
-    pendingAtt.value.push({ name, img: false, folder: true, path })
+  // `dt.items` carries the folder/file distinction (webkitGetAsEntry); `dt.files`
+  // does not. Read synchronously — the list is only valid during this event. Files
+  // AND folders can be dropped together (multi-file, multi-folder): folders become
+  // read-only <workspace_tree> context chips; everything else is a file attachment.
+  const items = Array.from(dt.items)
+  if (items.length) {
+    const droppedFiles: File[] = []
+    for (const item of items) {
+      if (item.kind !== 'file') continue
+      const file = item.getAsFile()
+      const entry = item.webkitGetAsEntry?.()
+      if (entry?.isDirectory) {
+        const path = file ? (window.awog?.getPathForFile?.(file) ?? '') : ''
+        if (!path || pendingAtt.value.some((a) => a.folder && a.path === path)) continue
+        const name =
+          path
+            .replace(/[/\\]+$/, '')
+            .split(/[/\\]/)
+            .pop() || path
+        pendingAtt.value.push({ name, img: false, folder: true, path })
+      } else if (file) {
+        droppedFiles.push(file)
+      }
+    }
+    if (droppedFiles.length) addFiles(droppedFiles)
+    return
   }
-  // Folders handled → don't also treat the drop as file attachments.
-  if (droppedFolder) return
   if (dt.files.length) addFiles(dt.files)
 }
 

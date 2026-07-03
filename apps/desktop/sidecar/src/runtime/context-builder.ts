@@ -74,18 +74,31 @@ function toImageContent(att: SessionAttachment): ImageContent | null {
   return { type: 'image', data, mimeType }
 }
 
-// Turn a text-based file attachment (or a pasted-text block) into a Pi text
-// content block. Only `file`-type attachments with non-empty `preview` qualify
-// (images use `url`, binary files carry neither). The content is wrapped in a
-// named delimiter so the model can tell attachments apart from the user's prose.
+// Neutralise quotes / newlines in a display string so it can't break out of the
+// XML-ish attribute it's placed in (defence in depth — L1 UI input).
+function sanitizeAttr(s: string): string {
+  return s.replace(/["\r\n]/g, ' ')
+}
+
+// Turn a `file`-type attachment into a Pi text content block:
+//   - has `preview` (text-readable file / pasted text) → the content, delimited.
+//   - otherwise (PDF, binary) → a REFERENCE line naming the file (+ path when
+//     known). Pi providers can't ingest documents/binaries, so we tell the model
+//     the file exists and to Read it with a tool when it's inside the workspace.
+// Images (which use `url`) never reach here.
 function toFileTextContent(att: SessionAttachment): TextContent | null {
-  if (att.type !== 'file' || !att.preview || att.preview.trim().length === 0) return null
-  // Filenames are display strings; neutralise quotes so the attribute can't be
-  // broken out of (defence in depth — this is L1 UI input).
-  const name = (att.name || 'attachment.txt').replace(/["\r\n]/g, ' ')
+  if (att.type !== 'file') return null
+  const name = sanitizeAttr(att.name || 'attachment')
+  if (att.preview && att.preview.trim().length > 0) {
+    return { type: 'text', text: `<attached-file name="${name}">\n${att.preview}\n</attached-file>` }
+  }
+  // No inline text → reference-only (PDF/binary). Skip when there's nothing to
+  // point at (no path) — an empty reference would just be noise.
+  if (!att.path) return null
+  const attrs = `name="${name}" path="${sanitizeAttr(att.path)}"`
   return {
     type: 'text',
-    text: `<attached-file name="${name}">\n${att.preview}\n</attached-file>`,
+    text: `<attached-file ${attrs} note="Binary/document attachment — no inline text. Use the Read tool to open it if it is inside your working directory." />`,
   }
 }
 

@@ -64,6 +64,8 @@ const awog = {
     ipcRenderer.invoke('shell:openInVscode', { root, path }),
   pickFolder: (opts?: DialogOpts): Promise<string | null> =>
     ipcRenderer.invoke('dialog:pickFolder', opts ?? {}),
+  pickFolders: (opts?: DialogOpts): Promise<string[]> =>
+    ipcRenderer.invoke('dialog:pickFolders', opts ?? {}),
   // Resolve the absolute on-disk path of a dropped File/folder. Electron ≥32
   // removed the non-standard `File.path`; webUtils.getPathForFile is the
   // supported replacement (runs in the sandboxed preload). Returns '' if the

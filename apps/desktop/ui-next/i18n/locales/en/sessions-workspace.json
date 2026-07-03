@@ -8,6 +8,8 @@
   "sessions.workspace.diff.binary": "Binary file — diff not shown",
   "sessions.workspace.files.empty": "Empty folder",
   "sessions.workspace.files.loading": "Loading…",
+  "sessions.workspace.files.reload": "Reload",
+  "sessions.workspace.files.collapseAll": "Collapse all",
   "sessions.workspace.files.browse": "Browse the project files",
   "sessions.workspace.files.binary": "Binary file — preview not available",
   "sessions.workspace.files.truncated": "Truncated — file is too large to show in full",

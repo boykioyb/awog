@@ -356,6 +356,8 @@ export function useGitApi() {
       workspaceRoot: string,
       params: { name: string; fetchUrl?: string; pushUrl?: string },
     ) => sidecar.request<{ ok: true }>('git.remoteSetUrl', { workspaceRoot, ...params }),
+    remoteRemove: (workspaceRoot: string, params: { name: string }) =>
+      sidecar.request<{ ok: true }>('git.remoteRemove', { workspaceRoot, ...params }),
     stageFile: (workspaceRoot: string, paths: string[]) =>
       sidecar.request<{ ok: true }>('git.stageFile', { workspaceRoot, paths }),
     stageHunk: (workspaceRoot: string, path: string, hunkIndex: number) =>

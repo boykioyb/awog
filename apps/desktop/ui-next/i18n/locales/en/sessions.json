@@ -108,6 +108,7 @@
   "sessions.composer.styleTooltip": "Response style",
   "sessions.composer.enhance": "Enhance prompt (✨)",
   "sessions.composer.attach": "Attach file / image",
+  "sessions.composer.attachFolder": "Attach folder (context)",
   "sessions.composer.runAsTask": "Run as task",
   "sessions.composer.dropHint": "Drop files here to attach",
   "sessions.composer.pasteTruncated": "Pasted text was large — attached as a file (truncated)",
