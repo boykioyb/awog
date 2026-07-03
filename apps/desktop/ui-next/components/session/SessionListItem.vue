@@ -56,12 +56,16 @@
     </div>
     <div class="sub">
       <span v-if="!hideProject" class="tag projtag" style="padding: 1px 6px">{{ projName }}</span>
-      <span class="smeta">{{ session.model }} · {{ statusLabel }}</span>
-      <span v-if="indicators.length" class="lind">
-        <span v-for="ind in indicators" :key="ind.key" class="lindchip" :title="ind.title">
-          <Icon :name="ind.icon" style="width: 11px; height: 11px" />
-          {{ ind.count }}
+      <span class="smeta">{{ session.model }}</span>
+      <!-- Indicators + status badge, grouped on the far right (status rightmost). -->
+      <span class="subright">
+        <span v-if="indicators.length" class="lind">
+          <span v-for="ind in indicators" :key="ind.key" class="lindchip" :title="ind.title">
+            <Icon :name="ind.icon" style="width: 11px; height: 11px" />
+            {{ ind.count }}
+          </span>
         </span>
+        <span class="statusbadge" :style="badgeStyle">{{ statusLabel }}</span>
       </span>
     </div>
     <div v-if="!editing" class="liact">
@@ -87,7 +91,40 @@
 // reveals pin + delete actions. Title supports inline rename (double-click →
 // input). Pin / delete / select route to the store; in select mode a row click
 // toggles selection instead of opening the session.
-import type { Session } from '~/composables/useSessionsData'
+import type { Session, SessionStatus } from '~/composables/useSessionsData'
+
+// Status badge palette — mirrors the app's node-badge convention (.bdg.run / .nx.ok =
+// accent, .bdg.wait = amber): done + running use accent (complete/active), waiting amber,
+// error danger, draft a neutral chip (a not-yet-run state carries no alert color). Token
+// trios only — no hardcoded hex; danger has no *Border token so its border is color-mixed.
+const BADGE_STYLE: Record<
+  SessionStatus,
+  { color: string; background: string; borderColor: string }
+> = {
+  // draft: neutral OUTLINE chip (transparent fill, not a grey surface) — distinct from the
+  // filled accent `done` badge and consistent with the app's no-grey-fill convention.
+  idle: { color: 'var(--textDim)', background: 'transparent', borderColor: 'var(--border)' },
+  streaming: {
+    color: 'var(--accent)',
+    background: 'var(--accentDim)',
+    borderColor: 'var(--accentBorder)',
+  },
+  awaiting: {
+    color: 'var(--amber)',
+    background: 'var(--amberDim)',
+    borderColor: 'var(--amberBorder)',
+  },
+  done: {
+    color: 'var(--accent)',
+    background: 'var(--accentDim)',
+    borderColor: 'var(--accentBorder)',
+  },
+  error: {
+    color: 'var(--danger)',
+    background: 'var(--dangerDim)',
+    borderColor: 'color-mix(in srgb, var(--danger) 40%, transparent)',
+  },
+}
 
 const props = defineProps<{
   session: Session
@@ -122,6 +159,9 @@ async function askRemove() {
 
 const statusColor = computed(() => STATUS_COLOR[props.session.status])
 const statusLabel = computed(() => t(`sessions.status.${props.session.status}`))
+// Badge fill/text/border per status (see BADGE_STYLE). Kept separate from the dot's
+// STATUS_COLOR so the badge can read as a proper colored chip while the dot stays muted.
+const badgeStyle = computed(() => BADGE_STYLE[props.session.status])
 // session.project holds the engine projectId; show the resolved display name.
 const projName = computed(() => projectName(props.session.project))
 const selected = computed(() => store.selectedIds.has(props.session.id))
@@ -217,13 +257,32 @@ input.ttl {
   font: inherit;
 }
 
+/* Right-aligned group in the sub-row: indicator chips + status badge, badge rightmost. */
+.subright {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+/* Status chip: colored text + tint fill + border (bound inline via badgeStyle). Radius 5px
+   + 12px mono match the app's .bdg node-badge convention, not the round .tag pill. */
+.statusbadge {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid;
+  border-radius: 5px;
+  font-family: var(--code);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
 /* Indicator chips: small mono count pills, subtle (§1). Color tokens only — no
    hardcoded hex. Numeric counts use a fixed 12px mono per the badge rule. */
 .lind {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
 }
 .lindchip {
   display: inline-flex;

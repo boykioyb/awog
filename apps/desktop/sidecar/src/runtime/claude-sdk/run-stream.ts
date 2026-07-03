@@ -27,7 +27,7 @@ import { resolveCredential } from '../../credentials/credential-resolver.js'
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../../sessions/runner.js'
-import type { ContextChars, SessionMessage } from '../../types/shared.js'
+import type { ContextChars, SessionCompaction, SessionMessage } from '../../types/shared.js'
 import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../permission.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
@@ -90,19 +90,32 @@ function makePreToolUseHook(
   }
 }
 
-// Render prior AWOG history as a one-shot context block for the FIRST Claude
-// turn on a session that has no SDK session yet (SDK resume can't see AWOG's
-// JSONL). Subsequent turns rely on `resume` instead. Kept compact + text-only.
-function renderHistoryPrefix(history: SessionMessage[]): string {
+// Render prior AWOG history as a one-shot context block for the FIRST Claude turn
+// on a session that has no SDK session yet (SDK resume can't see AWOG's JSONL).
+// Subsequent turns rely on `resume`. When a compaction checkpoint is active (right
+// after /compact), seed from [summary + kept turns] (turns from firstKeptMessageId
+// onward) instead of the full transcript, so the fresh SDK session starts with
+// reduced context (ADR 0047/0058). Kept compact + text-only.
+function renderHistoryPrefix(history: SessionMessage[], compaction?: SessionCompaction): string {
+  let msgs = history
+  let summaryBlock = ''
+  if (compaction) {
+    const idx = history.findIndex((m) => m.id === compaction.firstKeptMessageId)
+    if (idx >= 0) {
+      msgs = history.slice(idx)
+      summaryBlock = `<summary_of_earlier_conversation>\n${compaction.summary}\n</summary_of_earlier_conversation>\n\n`
+    }
+  }
   const lines: string[] = []
-  for (const m of history) {
+  for (const m of msgs) {
     if (m.role === 'system') continue
     const text = (m.text ?? '').trim()
     if (!text) continue
     lines.push(`${m.role === 'user' ? 'User' : 'Assistant'}: ${text}`)
   }
-  if (lines.length === 0) return ''
-  return `<conversation_so_far>\n${lines.join('\n\n')}\n</conversation_so_far>`
+  const convo =
+    lines.length > 0 ? `<conversation_so_far>\n${lines.join('\n\n')}\n</conversation_so_far>` : ''
+  return `${summaryBlock}${convo}`.trim()
 }
 
 export async function runStreamClaude(
@@ -140,25 +153,18 @@ export async function runStreamClaude(
 
   const sdkModel = toSdkModel(args.settings.modelId)
 
-  // `/compact` on the Claude path defers to the SDK's native compaction over its
-  // own session store (there is nothing to compact without a resumable session).
-  const isCompact = args.slashCommand === 'compact'
-  if (isCompact && !args.sdkSessionId) {
-    return {
-      text: 'Nothing to compact yet — the conversation has no SDK session.',
-      modelUsed: args.settings.modelId,
-      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
-      stopReason: 'end_turn',
-    }
-  }
+  // NOTE: `/compact` never reaches here — runner.ts routes it to Pi's runCompact
+  // (provider-agnostic summarization, ADR 0047). Its checkpoint clears sdkSessionId
+  // (session.compacted fold), so the next turn lands in the re-seed branch below
+  // with args.compaction set → the fresh SDK session starts from [summary + kept].
 
-  // Prompt: on a fresh SDK session with prior AWOG history, prepend a one-shot
-  // context block so the first turn isn't blind; otherwise just the user text.
+  // Prompt: on a fresh SDK session (no resume) with prior AWOG history, prepend a
+  // one-shot context block so the first turn isn't blind. With an active compaction
+  // checkpoint (right after /compact) the block is [summary + kept turns] so the
+  // fresh SDK session starts with REDUCED context (ADR 0047/0058).
   let promptText = args.pendingText
-  if (isCompact) {
-    promptText = '/compact'
-  } else if (!args.sdkSessionId && args.history.length > 0) {
-    const prefix = renderHistoryPrefix(args.history)
+  if (!args.sdkSessionId && args.history.length > 0) {
+    const prefix = renderHistoryPrefix(args.history, args.compaction)
     promptText = prefix ? `${prefix}\n\n${args.pendingText}` : args.pendingText
   }
 
@@ -232,10 +238,13 @@ export async function runStreamClaude(
   if (acc.stopReason === 'error') log.warn('chat stream done (claude-sdk)', doneMeta)
   else log.info('chat stream done (claude-sdk)', doneMeta)
 
-  // Context-window breakdown for the UI usage panel: only the segments AWOG
-  // actually injects are measurable on the SDK path — the built-in tool defs and
-  // the replayed history live inside the SDK, so those buckets are omitted
-  // (ContextChars fields are all optional; the panel shows the rest as remainder).
+  // Context-window breakdown for the UI usage panel. AWOG can't read inside the
+  // SDK's resume store, but the SDK context MIRRORS the AWOG transcript (or, after
+  // /compact, [summary + kept turns]) — so estimate `history` from the transcript.
+  // Without this the gauge omits history entirely → it never grows with the
+  // conversation NOR drops after /compact. (systemTools/mcpTools are SDK-internal
+  // → omitted; that's a fixed offset, the growing/shrinking `history` is what
+  // matters for the gauge.)
   const items = args.contextItems
   const memoryFilesLen = items?.memoryFilesChars ?? 0
   const customAgentsLen = items?.customAgentsChars ?? 0
@@ -245,19 +254,33 @@ export async function runStreamClaude(
     0,
     (append?.length ?? 0) - systemPromptLen - memoryFilesLen - customAgentsLen - skillsLen,
   )
+  // Transcript the SDK context holds: kept turns from the compaction cut onward
+  // (or the whole transcript when uncompacted) + the summary. Mirrors the Pi path's
+  // `JSON.stringify(context.messages)` estimate so /compact visibly shrinks the gauge.
+  let keptMsgs = args.history
+  let summaryLen = 0
+  if (args.compaction) {
+    const cutIdx = args.history.findIndex((m) => m.id === args.compaction!.firstKeptMessageId)
+    if (cutIdx >= 0) {
+      keptMsgs = args.history.slice(cutIdx)
+      summaryLen = args.compaction.summary.length
+    }
+  }
+  const historyLen = JSON.stringify(keptMsgs).length + summaryLen + args.pendingText.length
   const contextChars: ContextChars = {
     systemPrompt: systemPromptLen,
     instructions: instructionsLen,
     customAgents: customAgentsLen,
     skills: skillsLen,
     memoryFiles: memoryFilesLen,
+    history: historyLen,
     ...(items?.memoryFilesList.length ? { memoryFilesList: items.memoryFilesList } : {}),
     ...(items?.customAgentsList.length ? { customAgentsList: items.customAgentsList } : {}),
     ...(items?.skillsList.length ? { skillsList: items.skillsList } : {}),
   }
 
   return {
-    text: isCompact ? 'Context compacted.' : acc.text,
+    text: acc.text,
     modelUsed: acc.modelUsed || args.settings.modelId,
     usage: {
       input_tokens: acc.inputTokens,
@@ -266,10 +289,7 @@ export async function runStreamClaude(
       cache_creation_tokens: acc.cacheWriteTokens,
     },
     stopReason: acc.stopReason,
-    ...(isCompact ? {} : { contextChars }),
-    // /compact: the SDK compacts its own store, so report success by whether it
-    // emitted a compact_boundary (real compaction) vs a no-op (nothing to compact).
-    ...(isCompact ? { compacted: acc.compactBoundary === true } : {}),
+    contextChars,
     // Persisted by the caller so the next turn resumes this SDK session.
     ...(acc.sdkSessionId ? { sdkSessionId: acc.sdkSessionId } : {}),
     ...(acc.errorMessage !== undefined ? { errorMessage: acc.errorMessage } : {}),

@@ -42,6 +42,7 @@
     <ConfirmDialogHost />
     <TextPromptHost />
     <QuotaGuardHost />
+    <ActionToastHost />
     <OnboardingWizard />
     <TourHost />
   </div>

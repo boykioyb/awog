@@ -2,11 +2,14 @@
   <!-- An assistant text block = an ordered mix of markdown HTML runs and mermaid fences.
        Each HTML run renders via SessionMarkdownHtml (imperative — owns quote highlight +
        copy buttons); each mermaid fence renders as a live <MermaidView> diagram (§3/§8).
-       While the message is still streaming a mermaid fence is incomplete, so it shows as
-       plain code until finalized (avoids flashing mermaid parse errors mid-stream). -->
+       Lazy render while streaming: a fence renders as a diagram as soon as its closing ```
+       has arrived (seg.closed); only the trailing, still-open fence shows as plain code
+       (avoids flashing mermaid parse errors on the half-typed source). Its code prop is
+       byte-stable once closed, so MermaidView mounts once and never re-renders as later
+       text keeps streaming — no per-frame diagram work. -->
   <div class="blk txt mdwrap" :class="{ 'tw-on': caret }">
     <template v-for="(seg, i) in segments" :key="i">
-      <MermaidView v-if="seg.type === 'mermaid' && !streaming" :code="seg.code" />
+      <MermaidView v-if="seg.type === 'mermaid' && (!streaming || seg.closed)" :code="seg.code" />
       <pre v-else-if="seg.type === 'mermaid'" class="mmdstream"><code>{{ seg.code }}</code></pre>
       <SessionMarkdownHtml v-else :html="seg.html" :highlights="highlights" />
     </template>

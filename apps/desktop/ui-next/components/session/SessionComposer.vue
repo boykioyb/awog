@@ -428,6 +428,7 @@ import type {
 } from '~/composables/useSessionsData'
 import { useComposerData } from '~/composables/useComposerData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
+import { pushActionToast } from '~/composables/useActionToasts'
 import {
   BUILTIN_COMMANDS,
   findBuiltin,
@@ -524,10 +525,14 @@ function onCommand(builtinId: string) {
     showNotice(t('sessions.command.notice.mode', { mode: t(`sessions.mode.${cmd.action.mode}`) }))
   } else if (cmd.action.type === 'compact') {
     showNotice(t('sessions.command.notice.compacting'))
-    void store.compactSession(store.activeId).then((ok) => {
-      showNotice(
-        ok ? t('sessions.command.notice.compacted') : t('sessions.command.notice.compactFailed'),
-      )
+    void store.compactSession(store.activeId).then((r) => {
+      if (r === 'compacted') {
+        pushActionToast(t('sessions.command.notice.compacted'), 'success')
+      } else if (r === 'nothing') {
+        pushActionToast(t('sessions.command.notice.nothingToCompact'), 'info')
+      } else {
+        pushActionToast(t('sessions.command.notice.compactFailed'), 'error')
+      }
     })
   } else if (cmd.action.type === 'style') {
     // The style picker moved to the status bar; `/style` pops it there.

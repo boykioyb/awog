@@ -2138,25 +2138,41 @@ export const useSessionsStore = defineStore('sessions', () => {
   // `session.compacted` checkpoint and trims model context on the NEXT turn (the
   // transcript is left intact). Returns false in browser-dev / on error / when
   // there is nothing to compact. keepRecentTokens 0 = keep only the last turn.
-  async function compactSession(id: number): Promise<boolean> {
+  async function compactSession(id: number): Promise<'compacted' | 'nothing' | 'error'> {
     const s = byId(id)
-    if (!s || !useIpc || !s.engineId) return false
+    if (!s || !useIpc || !s.engineId) return 'error'
     const es = engineSettings(s)
     const messageId = `compact-${Date.now().toString(36)}`
     try {
-      const res = await sc.request<{ ok?: boolean; reason?: string }>('sessions.compact', {
-        sessionId: s.engineId,
-        messageId,
-        provider: es.provider,
-        modelId: es.modelId,
-        ...(es.accountId ? { accountId: es.accountId } : {}),
-        ...(s.project ? { projectId: s.project } : {}),
-        keepRecentTokens: 0,
-      })
-      return res?.ok !== false
+      const res = await sc.request<{ ok?: boolean; reason?: string; historyChars?: number }>(
+        'sessions.compact',
+        {
+          sessionId: s.engineId,
+          messageId,
+          provider: es.provider,
+          modelId: es.modelId,
+          ...(es.accountId ? { accountId: es.accountId } : {}),
+          ...(s.project ? { projectId: s.project } : {}),
+          keepRecentTokens: 0,
+        },
+      )
+      if (res?.ok === false) {
+        // Nothing summarised (transcript too short / no session) is not an error.
+        return res.reason === 'nothing-to-compact' || res.reason === 'no-session'
+          ? 'nothing'
+          : 'error'
+      }
+      // Drop the context gauge IMMEDIATELY (before the next turn): swap the stale
+      // `history` bucket for the post-compaction estimate the engine returned so the
+      // reduction is visible the instant the checkpoint lands (ADR 0058). Other
+      // buckets (system/tools/…) are unchanged by compaction.
+      if (typeof res?.historyChars === 'number' && s.usage?.contextChars) {
+        s.usage.contextChars = { ...s.usage.contextChars, history: res.historyChars }
+      }
+      return 'compacted'
     } catch (err) {
       console.warn('[sessions] compact failed', err)
-      return false
+      return 'error'
     }
   }
 

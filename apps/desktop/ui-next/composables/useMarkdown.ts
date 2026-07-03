@@ -1,4 +1,6 @@
+import katex from 'katex'
 import { marked, type Tokens, type TokensList } from 'marked'
+import markedKatex from 'marked-katex-extension'
 import { createHighlighter, createJavaScriptRegexEngine, type Highlighter } from 'shiki'
 
 // Markdown rendering for the transcript + preview. Security (rules/security.md sink table:
@@ -9,7 +11,12 @@ import { createHighlighter, createJavaScriptRegexEngine, type Highlighter } from
 // fenced blocks are split out as separate segments so they render as live (zoomable)
 // diagrams instead of code.
 
-export type MdSegment = { type: 'html'; html: string } | { type: 'mermaid'; code: string }
+// `closed` marks whether the mermaid fence has fully streamed in (its closing ``` has
+// arrived). Only a closed fence is safe to render as a live diagram; a still-open one is
+// kept as plain code (see isMermaidFenceClosed). Static callers always emit closed:true.
+export type MdSegment =
+  | { type: 'html'; html: string }
+  | { type: 'mermaid'; code: string; closed: boolean }
 
 const ESC: Record<string, string> = {
   '&': '&amp;',
@@ -34,6 +41,23 @@ function stripFrontMatter(src: string): string {
   if (!src.startsWith('---')) return src
   const m = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(src)
   return m ? src.slice(m[0].length) : src
+}
+
+// A fenced mermaid block is only safe to render as a live diagram once its closing fence
+// has streamed in. marked auto-closes an unterminated fence at end-of-input, so a
+// half-typed ```mermaid … block arrives as a `code` token whose `raw` carries no closing
+// fence line; rendering that partial source would flash a mermaid parse error on every
+// streaming frame. Detect closure by the last non-blank line being a bare fence marker
+// (``` / ~~~ with no info string — the info string only ever sits on the OPENING line, and
+// a fence marker inside the block would itself have closed it). Only the trailing fence of
+// a streaming reply can be open; earlier ones always have content after them.
+function isMermaidFenceClosed(raw: string): boolean {
+  const lastLine =
+    raw
+      .replace(/[ \t\r\n]+$/, '')
+      .split('\n')
+      .pop() ?? ''
+  return /^\s{0,3}(?:```+|~~~+)\s*$/.test(lastLine)
 }
 
 // ── Syntax highlighting via Shiki (ADR 0055) ──
@@ -114,6 +138,22 @@ function ensureHighlighter() {
     })
 }
 
+// A ```latex / ```tex fenced block renders as a typeset display equation (the system
+// prompt advertises this alongside `$$…$$`). KaTeX escapes its input and (trust:false)
+// emits no author HTML → v-html-safe; throwOnError:false renders malformed source in an
+// error color rather than throwing. On a hard katex failure, fall back to plain code.
+function renderMathBlock(src: string): string {
+  try {
+    return katex.renderToString(src.trim(), {
+      displayMode: true,
+      throwOnError: false,
+      output: 'htmlAndMathml',
+    })
+  } catch {
+    return `<pre class="codeplain"><code>${escapeHtml(src)}</code></pre>`
+  }
+}
+
 function highlightCode(text: string, rawLang: string): string {
   // Bare fence → default to shell; otherwise resolve aliases ('' → plain).
   const lang = rawLang === '' ? 'bash' : (LANG_ALIAS[rawLang] ?? rawLang)
@@ -150,10 +190,20 @@ function configure() {
       code(token) {
         const t = token as Tokens.Code
         const lang = (t.lang || '').trim().split(/\s+/)[0]?.toLowerCase() ?? ''
+        if (lang === 'latex' || lang === 'tex') return renderMathBlock(t.text)
         return highlightCode(t.text, lang)
       },
     },
   })
+  // LaTeX math: `$…$` inline + `$$…$$` block, rendered to static HTML by KaTeX. The
+  // extension registers its own inlineKatex/blockKatex tokens (NOT `html` tokens), so the
+  // raw-HTML stripping above leaves them intact; KaTeX escapes its input and — with the
+  // default trust:false — emits no author HTML, so the output is v-html-safe (same trust
+  // boundary as the sanitized markdown). throwOnError:false renders malformed LaTeX in an
+  // error color instead of aborting the whole parse (robust for LLM output). An unclosed
+  // delimiter mid-stream simply fails to tokenize → shows as literal `$…` text until the
+  // closing `$` arrives (no flashing broken math), mirroring the mermaid streaming rule.
+  marked.use(markedKatex({ throwOnError: false }))
 }
 
 // ── Per-block render cache (streaming jank fix) ──
@@ -222,7 +272,8 @@ export function useMarkdown() {
       for (const tok of tokens) {
         if (tok.type === 'code' && (tok as Tokens.Code).lang?.trim() === 'mermaid') {
           flush()
-          segments.push({ type: 'mermaid', code: (tok as Tokens.Code).text })
+          // Static (non-streaming) render → the fence is always complete.
+          segments.push({ type: 'mermaid', code: (tok as Tokens.Code).text, closed: true })
         } else {
           buf.push(tok)
         }
@@ -244,7 +295,10 @@ export function useMarkdown() {
       const tok = tokens[i]
       if (!tok || tok.type === 'space') continue
       if (tok.type === 'code' && (tok as Tokens.Code).lang?.trim() === 'mermaid') {
-        segments.push({ type: 'mermaid', code: (tok as Tokens.Code).text })
+        // Lazy render: a fence renders as a live diagram the moment its closing ``` has
+        // streamed in; the trailing, still-open fence stays plain code until it closes.
+        const code = tok as Tokens.Code
+        segments.push({ type: 'mermaid', code: code.text, closed: isMermaidFenceClosed(code.raw) })
         continue
       }
       // Don't cache the last block: while streaming it changes every frame, so caching

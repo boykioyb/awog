@@ -980,3 +980,14 @@ textarea.gcpta {
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
+
+/* KaTeX block math (`$$…$$` → .katex-display): a wide equation must scroll inside its
+   own box instead of pushing the transcript bubble / preview column wider. overflow-x is
+   not set by katex.min.css, so this holds regardless of stylesheet order. Trim the vendor
+   1em top/bottom margin to the markdown rhythm; inline math (.katex) flows with its text. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0.5em 0;
+  padding-bottom: 2px;
+}

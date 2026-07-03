@@ -40,6 +40,9 @@ export default defineNuxtConfig({
     '@vue-flow/core/dist/theme-default.css',
     '@vue-flow/controls/dist/style.css',
     '@vue-flow/minimap/dist/style.css',
+    // KaTeX styles for LaTeX math in markdown (useMarkdown). Fonts ship as local
+    // woff2 assets → Vite bundles them, no network fetch (works under app://).
+    'katex/dist/katex.min.css',
   ],
   devtools: { enabled: true },
   // 3031 so ui-next can run side-by-side with the legacy ui (3030) during rebuild.

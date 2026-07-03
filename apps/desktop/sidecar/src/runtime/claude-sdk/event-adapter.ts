@@ -43,9 +43,6 @@ export interface ClaudeAccumulator {
   // Latest SDK session id seen this turn — the caller persists it so the next
   // turn resumes the same SDK session (conversation history + native compaction).
   sdkSessionId?: string
-  // The SDK emitted a `compact_boundary` system message this turn — i.e. it
-  // actually compacted its session store (vs a no-op). Observability for /compact.
-  compactBoundary?: boolean
 }
 
 // Content-block / stream-event fields we read, narrowed from the SDK's Beta
@@ -141,7 +138,6 @@ export function createClaudeEventAdapter(cb: StreamCallbacks): ClaudeEventAdapte
       case 'system': {
         const m = msg as { subtype?: string; model?: string }
         if (m.subtype === 'init' && typeof m.model === 'string') acc.modelUsed = m.model
-        if (m.subtype === 'compact_boundary') acc.compactBoundary = true
         break
       }
       case 'stream_event': {

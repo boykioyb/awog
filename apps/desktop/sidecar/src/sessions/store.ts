@@ -199,10 +199,14 @@ function applyEvent(state: FoldState, e: SessionEvent): void {
     }
   } else if (e.type === 'session.compacted') {
     if (!state.snapshot) return
-    const current = state.snapshot
+    // Drop sdkSessionId: a compaction supersedes the Claude SDK session (its store
+    // still holds the full pre-compaction history). Clearing it makes the next
+    // Claude turn re-seed a FRESH SDK session from [summary + kept turns] (ADR
+    // 0058); no-op for the Pi path (which has no sdkSessionId).
+    const { sdkSessionId: _supersededSdk, ...current } = state.snapshot
     // Defence: only accept a checkpoint whose cut point still exists in the
     // transcript (never strand the runtime on a dangling id). Messages stay
-    // untouched — the cut is applied in buildContext, not here.
+    // untouched — the cut is applied in buildContext (Pi) / re-seed (SDK), not here.
     const known = current.messages.some((m) => m.id === e.compaction.firstKeptMessageId)
     if (known) state.snapshot = { ...current, compaction: e.compaction, updatedAt: e.at }
   } else if (e.type === 'session.deleted') {

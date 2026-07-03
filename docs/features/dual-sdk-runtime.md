@@ -14,7 +14,7 @@ Mục tiêu chính: **giảm confabulation** ("kể thay vì làm") trên đư�
 - **KHÔNG custom tool trên path SDK.** ClaudeAgent chỉ dùng **built-in của SDK** (Read/Write/Edit/Bash/Grep/Glob/TodoWrite/WebFetch/WebSearch/ExitPlanMode/Task). Không port ~15 file `runtime/tools/*` của AWOG sang path này. Đây là **nguồn** đề kháng confab — nhồi custom tool sẽ pha loãng.
 - **MCP = cơ chế native SDK, không phải custom tool.** MCP external của user vẫn vào Claude qua `options.mcpServers`. **KHÔNG** dùng `createSdkMcpServer()` gói hàm AWOG (nghiêm hơn craft — đúng "SDK quyết định").
 - **Sidecar giữ vai orchestrator/backend-host.** Electron main **vẫn spawn 1 sidecar như cũ**; cây subprocess (Pi bun + native claude) treo dưới sidecar. Không đập electron/renderer/IPC.
-- **History**: đường **Pi** rebuild Context từ **JSONL** mỗi turn (source-of-truth, [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md)). Đường **Claude DÙNG session store của SDK** (`resume: sdkSessionId`, bám craft) → history + auto-compaction native; JSONL vẫn ghi message cho UI + seed context turn Claude đầu của session cũ.
+- **History**: đường **Pi** rebuild Context từ **JSONL** mỗi turn (source-of-truth, [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md)). Đường **Claude DÙNG session store của SDK** cho turn thường (`resume: sdkSessionId`, bám craft) → history; JSONL vẫn ghi message cho UI + seed context turn Claude đầu của session cũ. **Compaction KHÔNG dùng native-SDK** mà đi Pi `runCompact` → checkpoint → clear `sdkSessionId` → re-seed [summary+kept] (§8).
 - **Không đập UI/mapping**: tên + arg-key tool đã giữ kiểu Claude Code → `step-mapper`/`trace-mapper`/Workspace Panel/`SessionStep` union không đổi. Chỉ thêm event-adapter mới cho SDK.
 - **Parity có chủ đích**, chấp nhận **bất đối xứng hành vi** (đường Anthropic mất vài tool AWOG-native — xem §8).
 
@@ -123,7 +123,7 @@ Bọc `@anthropic-ai/claude-agent-sdk` `query()` (craft `claude-agent.ts:1423`).
 | Permission 4-mode | `beforeToolCall` | **PreToolUse hook + `bypassPermissions`** (reuse `makeBeforeToolCall` — `canUseTool` SDK không tin cậy) |
 | MCP | in-process bridge | `options.mcpServers` (external only) |
 | Resume | rebuild JSONL | **SDK session store** (`resume: sdkSessionId`) |
-| `/compact` | custom `computeCutPoint` | **native SDK** (session store → auto-compact fires) |
+| `/compact` | Pi `runCompact` (checkpoint) | **cùng Pi `runCompact`** (runner route compact→Pi mọi provider) → checkpoint `{summary,firstKeptMessageId}` **clear `sdkSessionId`** (fold `session.compacted`) → turn kế **re-seed SDK session mới từ [summary + kept turns]**. LUÔN nén (không dựa adaptive-compact của SDK) — verified |
 | Confab-guard | có (`getFollowUpMessages`) | **không** (dựa harness first-party — đúng mục tiêu) |
 | RunWorkflow / session↔task ([ADR 0055](../decisions/0055-session-task-link.md)) | có | **KHÔNG** (là custom tool → loại theo "SDK quyết định") |
 | AskUserQuestion (park mid-turn) | có | **KHÔNG** (park-based là custom) — dùng cơ chế SDK nếu có |

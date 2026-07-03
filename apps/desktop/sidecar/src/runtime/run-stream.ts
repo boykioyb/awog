@@ -539,6 +539,12 @@ async function runCompact(
       })
       return notice('Compaction failed — the conversation is unchanged.')
     }
+    // Post-compaction context `history` estimate = [summary + kept turns], mirroring
+    // the per-turn contextChars.history estimate. Lets the caller drop the context
+    // gauge the instant the checkpoint lands (before the next turn).
+    const cutIdx = args.history.findIndex((m) => m.id === cut.firstKeptMessageId)
+    const keptMsgs = cutIdx >= 0 ? args.history.slice(cutIdx) : args.history
+    const compactedHistoryChars = JSON.stringify(keptMsgs).length + res.value.length
     return {
       ...notice('Context compacted.'),
       compaction: {
@@ -547,6 +553,7 @@ async function runCompact(
         tokensBefore: cut.tokensBefore,
         at: new Date().toISOString(),
       },
+      compactedHistoryChars,
     }
   } catch (err) {
     log.warn('runtime /compact failed', {
