@@ -365,13 +365,16 @@ body.light[data-surface='deep'] {
    .gcols [ full-section GitSidebar | .gmain( GitPageHeader + .gbody ) ].
    ════════════════════════════════════════════════════════════════════════ */
 
-/* Main pane (right of the sidebar): header + selection-driven body. */
+/* Main pane (right of the sidebar): header + selection-driven body. The primary
+   content canvas — sits on the elevated --bgPanel surface so it reads as the clean
+   focus area, lifted above the recessed sidebar/file-list chrome (which use --bg). */
 .gmain {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bgPanel);
 }
 .gbody {
   flex: 1;

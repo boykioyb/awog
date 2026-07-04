@@ -1,27 +1,23 @@
 import { computed, onMounted, ref } from 'vue'
-import { useProjectsStore, type ProjectInspectResult } from '~/stores/projects'
-import { useTemplatesStore } from '~/stores/templates'
+import { useProjectsStore } from '~/stores/projects'
 import { useSidecar } from '~/composables/useSidecar'
 import { useToasts } from '~/composables/useToasts'
 import { useI18n } from '~/composables/useI18n'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useAgentsStore } from '~/stores/agents'
-import { pickFolder } from '~/composables/useFolderPicker'
 import { useProjectView } from '~/composables/useProjectView'
+import { useProjectActions } from '~/composables/useProjectActions'
 import type { Project } from '~/types'
-import type { ProjectEditorSavePayload } from '~/components/project/types'
 
-// Page-controller for /projects — owns selection, CRUD (link / clone / edit /
-// delete), the LLM-defaults modal, and derives the per-project overview view-model
-// from the live stores. Keeps pages/projects.vue a thin template. Mirrors the
-// reference useSkillsPage page-controller idiom.
+// Page-controller for /projects — owns selection + the hydrate lifecycle and derives
+// the per-project overview view-model from the live stores. The CRUD / management
+// actions (editor, delete, LLM defaults, templates, open-code/workspace) live in the
+// shared useProjectActions composable so the session Project quick-view modal drives
+// the exact same flows. Keeps pages/projects.vue a thin template.
 
 export function useProjectsPage() {
   const store = useProjectsStore()
-  // Cross-store: the templates store backs the Save-as / Install entry points
-  // launched from a project's detail header (read/import only — owned elsewhere).
-  const templatesStore = useTemplatesStore()
   const sc = useSidecar()
   const { t } = useI18n()
   const { toasts, pushToast, toastColor } = useToasts()
@@ -51,6 +47,16 @@ export function useProjectsPage() {
   // Project quick-view modal) so both render the same overview from one source.
   const overview = useProjectView(() => selected.value?.id ?? null)
 
+  // --- shared actions (editor / delete / llm / templates / os) -------------
+  // Scoped to the selected project; re-selects the saved project after create/clone.
+  const actions = useProjectActions({
+    currentProject: () => selected.value,
+    pushToast,
+    onSaved: (saved) => {
+      selectedId.value = saved.id
+    },
+  })
+
   // --- hydrate -------------------------------------------------------------
   const refreshing = ref(false)
   const refresh = async (opts: { silent?: boolean } = {}): Promise<void> => {
@@ -70,14 +76,6 @@ export function useProjectsPage() {
     }
   }
 
-  // Config-import banner finished copying `.claude`/`.agents` into `.awog`: confirm
-  // + re-hydrate so the overview counts (and project-tier agents) reflect the import.
-  const onImported = async (n: number): Promise<void> => {
-    if (n > 0) pushToast(t('projects.toast.imported', { n }), 'success')
-    await refresh({ silent: true })
-    if (sc.available) void agentsStore.loadAgents(store.projects.map((p) => p.id))
-  }
-
   onMounted(async () => {
     await refresh({ silent: true })
     // Best-effort: hydrate the read-only derivation sources so the overview shows
@@ -91,185 +89,6 @@ export function useProjectsPage() {
     }
   })
 
-  // --- editor (create / edit) ---------------------------------------------
-  const editorOpen = ref(false)
-  const editTarget = ref<Project | null>(null)
-  const editorBusy = ref(false)
-  const editorError = ref('')
-  const editorProgress = ref('')
-
-  const openCreate = () => {
-    editTarget.value = null
-    editorError.value = ''
-    editorProgress.value = ''
-    editorOpen.value = true
-  }
-  const openEdit = (p: Project) => {
-    editTarget.value = p
-    editorError.value = ''
-    editorProgress.value = ''
-    editorOpen.value = true
-  }
-  const closeEditor = () => {
-    if (editorBusy.value) return
-    editorOpen.value = false
-    editTarget.value = null
-  }
-
-  const onSave = async (payload: ProjectEditorSavePayload) => {
-    editorError.value = ''
-    editorBusy.value = true
-    try {
-      if (payload.kind === 'update') {
-        const saved = await store.updateProject(payload.project)
-        selectedId.value = saved.id
-        pushToast(t('projects.toast.saved', { name: saved.name }), 'success')
-      } else if (payload.kind === 'link') {
-        const saved = await store.linkProject({
-          name: payload.data.name,
-          path: payload.data.path,
-          description: payload.data.description,
-          language: payload.data.language,
-          gitRemote: payload.data.gitRemote,
-          gitBranch: payload.data.gitBranch,
-        })
-        selectedId.value = saved.id
-        pushToast(t('projects.toast.linked', { name: saved.name }), 'success')
-      } else {
-        editorProgress.value = t('projects.editor.cloning')
-        const saved = await store.cloneProject({
-          name: payload.data.name,
-          destPath: payload.data.path,
-          gitRemote: payload.data.gitRemote,
-          description: payload.data.description,
-          language: payload.data.language,
-        })
-        selectedId.value = saved.id
-        pushToast(t('projects.toast.cloned', { name: saved.name }), 'success')
-      }
-    } catch (err) {
-      editorError.value = err instanceof Error ? err.message : String(err)
-      editorBusy.value = false
-      return
-    }
-    editorBusy.value = false
-    editorOpen.value = false
-    editTarget.value = null
-    editorProgress.value = ''
-  }
-
-  // Inspect + folder-pick proxies the editor uses.
-  const inspectPath = (path: string): Promise<ProjectInspectResult | null> =>
-    store.inspectPath(path)
-  const browseFolder = (title: string): Promise<string | null> => pickFolder({ title })
-  const canBrowse = computed(() => sc.available)
-
-  // --- LLM defaults modal --------------------------------------------------
-  const llmOpen = ref(false)
-  const llmTarget = ref<Project | null>(null)
-  const openLlm = (p: Project) => {
-    llmTarget.value = p
-    llmOpen.value = true
-  }
-  const closeLlm = () => {
-    llmOpen.value = false
-    llmTarget.value = null
-  }
-  const onLlmSaved = async (saved: Project) => {
-    selectedId.value = saved.id
-    pushToast(t('projects.toast.llmSaved', { name: saved.name }), 'success')
-    closeLlm()
-  }
-
-  // --- delete --------------------------------------------------------------
-  const pendingDelete = ref<Project | null>(null)
-  const askDelete = (p: Project) => {
-    pendingDelete.value = p
-  }
-  const cancelDelete = () => {
-    pendingDelete.value = null
-  }
-  const deleteDescription = computed(() => {
-    const p = pendingDelete.value
-    if (!p) return ''
-    return t('projects.delete.body', { name: p.name })
-  })
-  const confirmDelete = async () => {
-    const p = pendingDelete.value
-    if (!p) return
-    pendingDelete.value = null
-    try {
-      await store.deleteProject(p.id)
-      if (selectedId.value === p.id) {
-        selectedId.value = store.projects[0]?.id ?? null
-      }
-      pushToast(t('projects.toast.deleted', { name: p.name }), 'success')
-    } catch (err) {
-      console.error('[projects] delete failed', err)
-      pushToast(t('projects.toast.deleteFail'), 'error')
-    }
-  }
-
-  // --- OS integration ------------------------------------------------------
-  // Open the project's code workspace (folder) in VS Code, falling back to the
-  // OS file manager when `code` is unavailable. No-op in browser-dev.
-  const openCode = async (p: Project) => {
-    if (!sc.available) return
-    try {
-      const hasVscode = await sc.isVscodeAvailable()
-      if (hasVscode) await sc.openInVscode(p.path, '.')
-      else await sc.openPath(p.path, '.')
-    } catch (err) {
-      console.warn('[projects] openCode failed', err)
-      pushToast(t('projects.toast.openCodeFail'), 'error')
-    }
-  }
-
-  // Open the in-app Monaco code workspace for this project (/code/:id route).
-  const openWorkspace = (p: Project) => {
-    void navigateTo(`/code/${p.id}`)
-  }
-
-  // --- templates (save-as / install) ---------------------------------------
-  // Both dialogs target the current project: we hand each a single-entry
-  // `projects` list (the selected project) so its target/source picker is
-  // pre-selected and effectively locked to it — the ui-next dialogs default
-  // their pick to `projects[0]` and expose no fixed-project prop.
-  const templateProjects = computed<{ id: string; name: string }[]>(() => {
-    const p = selected.value
-    return p ? [{ id: p.id, name: p.name }] : []
-  })
-
-  const saveTemplateOpen = ref(false)
-  const installTemplateOpen = ref(false)
-
-  const openSaveTemplate = () => {
-    if (!selected.value) return
-    saveTemplateOpen.value = true
-  }
-  const closeSaveTemplate = () => {
-    saveTemplateOpen.value = false
-  }
-  const onTemplateSaved = (e: { name: string; count: number }) => {
-    pushToast(t('projects.toast.templateSaved', { name: e.name, count: e.count }), 'success')
-  }
-
-  const openInstallTemplate = async () => {
-    if (!selected.value) return
-    // Ensure the dialog's template picker has options to show.
-    if (!templatesStore.loaded) await templatesStore.loadTemplates()
-    installTemplateOpen.value = true
-  }
-  const closeInstallTemplate = () => {
-    installTemplateOpen.value = false
-  }
-  const onTemplateInstalled = (e: { installed: number; skipped: number }) => {
-    pushToast(
-      t('projects.toast.templateInstalled', { installed: e.installed, skipped: e.skipped }),
-      'success',
-    )
-  }
-
   return {
     // store-backed
     projects: computed(() => store.projects),
@@ -280,45 +99,8 @@ export function useProjectsPage() {
     // hydrate
     refreshing,
     refresh,
-    onImported,
-    // editor
-    editorOpen,
-    editTarget,
-    editorBusy,
-    editorError,
-    editorProgress,
-    openCreate,
-    openEdit,
-    closeEditor,
-    onSave,
-    inspectPath,
-    browseFolder,
-    canBrowse,
-    // llm
-    llmOpen,
-    llmTarget,
-    openLlm,
-    closeLlm,
-    onLlmSaved,
-    // delete
-    pendingDelete,
-    askDelete,
-    cancelDelete,
-    deleteDescription,
-    confirmDelete,
-    // os
-    openCode,
-    openWorkspace,
-    // templates (save-as / install)
-    templateProjects,
-    saveTemplateOpen,
-    installTemplateOpen,
-    openSaveTemplate,
-    closeSaveTemplate,
-    onTemplateSaved,
-    openInstallTemplate,
-    closeInstallTemplate,
-    onTemplateInstalled,
+    // shared CRUD / management actions + their modal state
+    ...actions,
     // toasts
     toasts,
     toastColor,

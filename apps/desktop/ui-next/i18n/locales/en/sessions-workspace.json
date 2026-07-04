@@ -2,7 +2,7 @@
   "sessions.workspace.refresh": "Refresh",
   "sessions.workspace.unavailable": "Workspace not available — open this session inside the AWOG desktop app",
   "sessions.workspace.noProject": "No project bound to this session",
-  "sessions.workspace.diff.none": "No changes in the working tree",
+  "sessions.workspace.diff.none": "This session hasn't edited any files",
   "sessions.workspace.diff.noRepo": "Not a git repository",
   "sessions.workspace.diff.changes": "Changes",
   "sessions.workspace.diff.binary": "Binary file — diff not shown",

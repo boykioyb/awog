@@ -33,6 +33,9 @@
     >
       <Icon name="stop" />
     </button>
+    <button class="iconbtn" :title="t('minimize.task')" @click="minimizeTask">
+      <Icon name="minimize" />
+    </button>
     <button class="iconbtn" :title="t('tasks.action.discussInSession')" @click="discussTask">
       <Icon name="sessions" />
     </button>
@@ -111,6 +114,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useTasksStore, type Task, type TaskPhase } from '~/stores/tasks'
 import { useSessionsStore } from '~/stores/sessions'
 import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
+import { useMinimizeDock } from '~/composables/useMinimizeDock'
 
 const props = defineProps<{ task: Task }>()
 
@@ -128,6 +132,19 @@ const { t } = useI18n()
 const store = useTasksStore()
 const sessionsStore = useSessionsStore()
 const { openSession, discussInSession } = useSessionTaskLink()
+
+// Minimize this task to the corner dock as a live PiP tile (keeps tracking status
+// while the user works elsewhere; the pill pulses on attention / completion).
+const { minimize: dockMinimize } = useMinimizeDock()
+function minimizeTask() {
+  dockMinimize({
+    id: `task:${props.task.id}`,
+    kind: 'task',
+    icon: 'workflows',
+    title: props.task.title,
+    taskId: props.task.id,
+  })
+}
 
 // "Discuss in session" → spawn a session bound to this task and navigate to it.
 const discussTask = () =>

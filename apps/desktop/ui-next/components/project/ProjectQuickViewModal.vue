@@ -1,10 +1,11 @@
 <template>
-  <!-- Teleport to body so the modal escapes the workspace-panel stacking context
-       and renders as a top-level overlay. Single instance, driven by the shared
-       useProjectModal() store. ProjectDetail is mounted lazily (v-if) so its GH /
-       repo discovery only runs while the modal is actually open, and in `compact`
-       mode so management chrome (edit / delete / templates) is hidden — this is a
-       read-only peek at the project + its GitHub issues/PRs. -->
+  <!-- Teleport to body so the peek escapes the workspace-panel stacking context and
+       renders as a top-level overlay. Single instance, driven by the shared
+       useProjectModal() store. ProjectDetail is mounted lazily (v-if) so its GH / repo
+       discovery only runs while the peek is open. Full management parity with the
+       /projects page: the header + Overview actions are wired to the shared
+       useProjectActions flows. Launching an action closes the peek first so the
+       action's own modal (z:100) isn't hidden behind this overlay (z:120). -->
   <Teleport to="body">
     <div v-if="isOpen" class="ovl on projovl" @click.self="close">
       <div class="projmodal">
@@ -19,7 +20,19 @@
           </button>
         </div>
         <div class="projmodal-body">
-          <ProjectDetail v-if="project && view" :project="project" :view="view" compact />
+          <ProjectDetail
+            v-if="project && view"
+            :project="project"
+            :view="view"
+            @edit="onEdit"
+            @delete="onDelete"
+            @open-llm="onOpenLlm"
+            @open-code="onOpenCode"
+            @open-workspace="onOpenWorkspace"
+            @save-template="onSaveTemplate"
+            @install-template="onInstallTemplate"
+            @imported="(n) => actions.onImported(n)"
+          />
           <div v-else class="fd" style="padding: 24px">
             {{ t('sessions.workspace.projectModal.notFound') }}
           </div>
@@ -27,17 +40,78 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Action modals — mounted OUTSIDE the peek's v-if so they survive the peek
+       closing when an action launches. Each self-teleports to body. -->
+  <ProjectEditor
+    :open="actions.editorOpen.value"
+    :project="actions.editTarget.value"
+    :busy="actions.editorBusy.value"
+    :error="actions.editorError.value"
+    :progress="actions.editorProgress.value"
+    :can-browse="actions.canBrowse.value"
+    :inspect="actions.inspectPath"
+    :browse="actions.browseFolder"
+    @save="actions.onSave"
+    @cancel="actions.closeEditor"
+  />
+  <ProjectLlmDefaultsModal
+    :open="actions.llmOpen.value"
+    :project="actions.llmTarget.value"
+    @saved="actions.onLlmSaved"
+    @cancel="actions.closeLlm"
+  />
+  <LibraryConfirmDelete
+    :open="!!actions.pendingDelete.value"
+    :title="t('projects.delete.title')"
+    :description="actions.deleteDescription.value"
+    @confirm="actions.confirmDelete"
+    @cancel="actions.cancelDelete"
+  />
+  <SaveAsTemplateDialog
+    :open="actions.saveTemplateOpen.value"
+    :projects="actions.templateProjects.value"
+    @close="actions.closeSaveTemplate"
+    @saved="actions.onTemplateSaved"
+  />
+  <InstallTemplateDialog
+    :open="actions.installTemplateOpen.value"
+    :projects="actions.templateProjects.value"
+    @close="actions.closeInstallTemplate"
+    @installed="actions.onTemplateInstalled"
+  />
+
+  <!-- Action toasts (`.toast` is fixed-positioned at z:140 → above the peek). -->
+  <Teleport to="body">
+    <div
+      v-for="tt in toasts"
+      :key="tt.id"
+      class="toast"
+      :style="{ borderColor: toastColor(tt.kind) }"
+    >
+      {{ tt.text }}
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-// Project quick-view modal — pops the project's detail (Overview / Issues / PRs)
-// over the current session so the user can peek at info + GitHub issues/PRs without
-// navigating away. Opened from the session header via useProjectModal().open(key);
-// mounted once in the default layout. Mirrors SessionGitModal.
+// Project quick-view modal — pops the project's detail (Overview / Issues / PRs) over
+// the current session so the user can peek at info + GitHub issues/PRs AND run the
+// full set of project actions (edit / delete / templates / LLM defaults / open code /
+// open workspace) without navigating to /projects. Opened from the session header via
+// useProjectModal().open(key); mounted once in the default layout. The management
+// flows are shared with the /projects page via useProjectActions.
 import { computed } from 'vue'
 import ProjectDetail from '~/components/project/ProjectDetail.vue'
+import ProjectEditor from '~/components/project/ProjectEditor.vue'
+import ProjectLlmDefaultsModal from '~/components/project/ProjectLlmDefaultsModal.vue'
+import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
+import SaveAsTemplateDialog from '~/components/templates/SaveAsTemplateDialog.vue'
+import InstallTemplateDialog from '~/components/templates/InstallTemplateDialog.vue'
 import { useProjectModal } from '~/composables/useProjectModal'
 import { useProjectView } from '~/composables/useProjectView'
+import { useProjectActions } from '~/composables/useProjectActions'
+import { useToasts } from '~/composables/useToasts'
 import { useProjectsStore } from '~/stores/projects'
 import type { Project } from '~/types'
 
@@ -53,7 +127,30 @@ const project = computed<Project | null>(() => {
 })
 const view = useProjectView(() => project.value?.id ?? null)
 
-// Esc closes the modal (only while open, so it doesn't swallow other Esc users).
+// Shared management flows, scoped to the peeked project + a local toast queue.
+const { toasts, pushToast, toastColor } = useToasts()
+const actions = useProjectActions({
+  currentProject: () => project.value,
+  pushToast,
+})
+
+// Launch an action: close the peek first (its z:120 overlay would otherwise hide the
+// action modal at z:100), then run the flow with the peeked project.
+function withProject(run: (p: Project) => void): void {
+  const p = project.value
+  if (!p) return
+  close()
+  run(p)
+}
+const onEdit = () => withProject((p) => actions.openEdit(p))
+const onDelete = () => withProject((p) => actions.askDelete(p))
+const onOpenLlm = () => withProject((p) => actions.openLlm(p))
+const onOpenCode = () => withProject((p) => void actions.openCode(p))
+const onOpenWorkspace = () => withProject((p) => actions.openWorkspace(p))
+const onSaveTemplate = () => withProject(() => actions.openSaveTemplate())
+const onInstallTemplate = () => withProject(() => void actions.openInstallTemplate())
+
+// Esc closes the peek (only while open, so it doesn't swallow other Esc users).
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && isOpen.value) {
     e.preventDefault()

@@ -15,6 +15,14 @@
             {{ t('common.preview.truncated') }}
           </span>
           <span style="flex: 1" />
+          <button
+            v-if="canMinimize"
+            class="pvx"
+            :title="t('common.preview.minimize')"
+            @click="minimize"
+          >
+            <Icon name="minimize" style="width: 14px; height: 14px" />
+          </button>
           <button class="pvx" :title="t('common.close')" @click="close">
             <Icon name="x" style="width: 14px; height: 14px" />
           </button>
@@ -208,7 +216,9 @@ import { loadMonaco } from '~/utils/monaco-loader'
 // Backward-compatible alias: callers (e.g. SessionDetail) import `PreviewItem`.
 export type PreviewItem = PreviewRef
 
-const props = defineProps<{ item: PreviewRef | null }>()
+// `item` is optional: the app-lifetime shell mount drives the modal purely from the
+// shared usePreview() store (no prop); the legacy in-component mount can still pass one.
+const props = withDefaults(defineProps<{ item?: PreviewRef | null }>(), { item: null })
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
@@ -252,6 +262,8 @@ const {
   confirmReq,
   runConfirm,
   cancelConfirm,
+  canMinimize,
+  minimize,
   close,
   onKey,
 } = ctrl

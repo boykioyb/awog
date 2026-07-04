@@ -56,6 +56,7 @@
         class="gfile"
         :class="{ on: activeFile === f.f }"
         @click="picked = f.f"
+        @contextmenu.prevent="emit('context-file', $event, f.f)"
       >
         <span class="gm" :style="{ color: statusColor(f.st) }">{{ f.st }}</span>
         <span class="gnm2">
@@ -76,7 +77,7 @@
 
   <div v-else class="cdbody">
     <div class="ftree" style="line-height: 2">
-      <div v-for="f in files" :key="f.f">
+      <div v-for="f in files" :key="f.f" @contextmenu.prevent="emit('context-file', $event, f.f)">
         <span v-if="f.st === 'A'" class="a2">A</span>
         <span v-else class="m">M</span>
         {{ f.f }}
@@ -103,6 +104,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'set-tab', tab: CommitTab): void
   (e: 'select-commit', hash: string): void
+  (e: 'context-file', event: MouseEvent, file: string): void
 }>()
 
 const { t } = useI18n()

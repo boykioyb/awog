@@ -160,14 +160,14 @@ function parseRemoteUrl(raw: string): { host: string; owner: string; repo: strin
 }
 
 // Short, human-readable relative time for commit/stash timestamps. No external
-// lib: < 1h → "Nm", < 24h → "Nh", < 7d → "Nd", else locale date string. Invalid
-// input passes through unchanged.
+// lib: < 1h → "Nm", < 24h → "Nh", < 7d → "Nd", else a compact date (no time) so
+// history rows stay single-line. Invalid input passes through unchanged.
 function formatWhen(iso: string): string {
   const then = new Date(iso)
   const ms = then.getTime()
   if (Number.isNaN(ms)) return iso
   const diff = Date.now() - ms
-  if (diff < 0) return then.toLocaleString()
+  if (diff < 0) return then.toLocaleDateString()
   const mins = Math.floor(diff / 60_000)
   if (mins < 1) return 'now'
   if (mins < 60) return `${mins}m`
@@ -175,7 +175,7 @@ function formatWhen(iso: string): string {
   if (hours < 24) return `${hours}h`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d`
-  return then.toLocaleString()
+  return then.toLocaleDateString()
 }
 
 // Result of a mutating git action. Actions never throw to their caller; they

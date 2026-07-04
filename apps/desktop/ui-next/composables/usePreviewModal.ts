@@ -1,12 +1,13 @@
-import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreview, previewKindFromPath } from '~/composables/usePreview'
 import { useSidecar } from '~/composables/useSidecar'
 import { useI18n } from '~/composables/useI18n'
-import { useMarkdown } from '~/composables/useMarkdown'
+import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
 import { useZoomPan } from '~/composables/useZoomPan'
 import { useMarkdownOutline } from '~/composables/useMarkdownOutline'
 import { ATTACHMENT_TEXT_MAX, useChatAttach } from '~/composables/useChatAttach'
+import { useMinimizeDock, previewDockId } from '~/composables/useMinimizeDock'
 import type { SessionAttachment, TreeNode } from '~/composables/useSessionsData'
 import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
 
@@ -105,8 +106,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   const { t } = useI18n()
   const { renderMarkdown } = useMarkdown()
   const sc = useSidecar()
-  const { current: sharedItem, close: closeShared } = usePreview()
+  const { current: sharedItem, close: closeShared, takeRestore } = usePreview()
   const chatAttach = useChatAttach()
+  const dock = useMinimizeDock()
 
   // Effective item: explicit prop wins, shared store is the fallback.
   const item = computed<PreviewRef | null>(() => props.item ?? sharedItem.value)
@@ -116,6 +118,10 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   const hasWorkspaceFile = computed(
     () => !!(item.value?.workspaceRoot && item.value?.path && sc.available),
   )
+
+  // Scroll offset to replay once the (re)opened markdown has rendered — set from a
+  // minimize-dock restore hint; null otherwise. Applied by the watcher below.
+  const pendingScroll = ref<number | null>(null)
 
   // ── image transform ─────────────────────────────────────────────────────────
   const { scale, tx, ty, zoomBy, reset, onWheel, onPointerDown, onPointerMove, onPointerUp } =
@@ -271,10 +277,147 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     const it = item.value
     if (it && it.workspaceRoot && it.path && sc.available) void loadFromWorkspace(it)
   }
-  const segments = computed(() =>
+  // ── markdown image resolution (workspace-relative → base64 data URL) ──────────
+  // A markdown file's `![](…)` images use paths relative to the file on disk; v-html
+  // resolves them against the app:// origin (not the file's directory), so they render
+  // broken. Read each referenced image through the sidecar (fs.readFileBase64) and swap
+  // its src to a data: URL inline. Keyed by the ORIGINAL src string; '' marks in-flight
+  // / failed (keeps the original src, so a genuinely missing file still reads as broken).
+  const mdImages = reactive<Record<string, string>>({})
+
+  // Leave remote/data/app assets alone — only local relative refs need resolving.
+  const isRelativeAsset = (src: string): boolean =>
+    !!src && !/^(?:https?:|data:|blob:|app:|file:)/i.test(src)
+
+  // Directory of the markdown file relative to workspaceRoot ('' at root).
+  function mdDir(): string {
+    const p = item.value?.path ?? ''
+    const i = p.lastIndexOf('/')
+    return i >= 0 ? p.slice(0, i) : ''
+  }
+
+  // Resolve a relative image ref (against the md dir; a leading '/' = workspace root)
+  // to a normalized workspace-relative path, or null if it climbs out of the workspace.
+  function resolveMdAsset(src: string): string | null {
+    let s = src.split(/[?#]/)[0] ?? ''
+    try {
+      s = decodeURIComponent(s)
+    } catch {
+      // not valid percent-encoding → use the raw string
+    }
+    const base = s.startsWith('/') ? '' : mdDir()
+    const parts = (base ? base.split('/') : []).concat(s.replace(/^\/+/, '').split('/'))
+    const out: string[] = []
+    for (const seg of parts) {
+      if (!seg || seg === '.') continue
+      if (seg === '..') {
+        if (!out.length) return null
+        out.pop()
+        continue
+      }
+      out.push(seg)
+    }
+    return out.length ? out.join('/') : null
+  }
+
+  // Capture groups: 1 = `<img … src="`, 2 = the src, 3 = the closing quote.
+  const IMG_SRC_RE = /(<img\b[^>]*?\bsrc=")([^"]*)(")/gi
+  function rewriteImgSrc(html: string): string {
+    if (!html.includes('<img')) return html
+    return html.replace(IMG_SRC_RE, (m, pre: string, src: string, post: string) => {
+      if (!isRelativeAsset(src)) return m
+      const data = mdImages[src]
+      return data ? `${pre}${data}${post}` : m
+    })
+  }
+
+  async function loadMdImages(): Promise<void> {
+    const it = item.value
+    if (!it || it.kind !== 'markdown' || !it.workspaceRoot || !it.path || !sc.available) return
+    const srcs = new Set<string>()
+    for (const seg of rawSegments.value) {
+      if (seg.type !== 'html') continue
+      for (const m of seg.html.matchAll(IMG_SRC_RE)) {
+        const src = m[2]
+        if (src && isRelativeAsset(src) && !(src in mdImages)) srcs.add(src)
+      }
+    }
+    for (const src of srcs) {
+      const rel = resolveMdAsset(src)
+      if (!rel) continue
+      mdImages[src] = '' // in-flight sentinel (dedupe concurrent loads)
+      try {
+        const res = await sc.request<FsFileBase64>('fs.readFileBase64', {
+          workspaceRoot: it.workspaceRoot,
+          path: rel,
+        })
+        if (res.base64 && !res.truncated) {
+          mdImages[src] = `data:${res.mimeType};base64,${res.base64}`
+        }
+      } catch {
+        // leave '' → keeps the original relative src (renders as a missing file)
+      }
+    }
+  }
+
+  const rawSegments = computed(() =>
     item.value?.kind === 'markdown' ? renderMarkdown(effectiveText.value) : [],
   )
+  // Rendered segments with relative image srcs rewritten to loaded data URLs.
+  const segments = computed<MdSegment[]>(() =>
+    rawSegments.value.map((seg) =>
+      seg.type === 'html' ? { type: 'html', html: rewriteImgSrc(seg.html) } : seg,
+    ),
+  )
   const outline = useMarkdownOutline(computed(() => `${view.value}:${segments.value.length}`))
+
+  // (Re)resolve markdown images whenever the rendered content changes (file load,
+  // on-disk edit, or switching to another markdown file).
+  watch(
+    () => (item.value?.kind === 'markdown' ? effectiveText.value : ''),
+    () => {
+      void loadMdImages()
+    },
+  )
+
+  // Replay a restore hint's scroll once the markdown render view has content in the
+  // DOM (content loads async, so the item watcher fires before it lands). rAF after
+  // nextTick lets layout settle so scrollTop sticks; one-shot then cleared.
+  watch([effectiveText, view], () => {
+    if (pendingScroll.value == null) return
+    if (item.value?.kind !== 'markdown' || view.value !== 'render') return
+    const y = pendingScroll.value
+    nextTick(() =>
+      requestAnimationFrame(() => {
+        const el = outline.mdScroll.value
+        if (el) el.scrollTop = y
+        pendingScroll.value = null
+      }),
+    )
+  })
+
+  // ── minimize (park to the corner dock) ───────────────────────────────────────
+  // Offered while viewing (not editing — a snapshot would drop the draft). Captures
+  // the current view + markdown scroll so restore lands where the user left off.
+  const canMinimize = computed(() => !!item.value && !editMode.value)
+  function minimize() {
+    const it = item.value
+    if (!it || editMode.value) return
+    const scrollTop =
+      it.kind === 'markdown' && view.value === 'render'
+        ? (outline.mdScroll.value?.scrollTop ?? 0)
+        : 0
+    dock.minimize({
+      id: previewDockId(it),
+      kind: 'preview',
+      icon: headIcon.value,
+      title: it.name,
+      ref: it,
+      view: view.value,
+      scrollTop,
+    })
+    doClose()
+  }
 
   // ── edit mode + save ─────────────────────────────────────────────────────────
   const editMode = ref(false)
@@ -557,7 +700,11 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   watch(
     item,
     (it) => {
-      view.value = 'render'
+      // A minimize-dock restore replays the parked view + scroll; a plain open
+      // resets to the default render view at the top.
+      const hint = takeRestore()
+      view.value = hint?.view ?? 'render'
+      pendingScroll.value = hint?.scrollTop ?? null
       editMode.value = false
       draft.value = ''
       resetView()
@@ -567,6 +714,7 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       loadedSrc.value = null
       loadedLang.value = undefined
       truncated.value = false
+      for (const k of Object.keys(mdImages)) delete mdImages[k]
       // Reset folder-tree state on every item change; load the root when a folder opens.
       for (const k of Object.keys(treeChildren)) delete treeChildren[k]
       treeExpanded.clear()
@@ -655,6 +803,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     runConfirm,
     cancelConfirm,
     askDelete,
+    // minimize
+    canMinimize,
+    minimize,
     // feedback + lifecycle
     actionMsg,
     actionErr,

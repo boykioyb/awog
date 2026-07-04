@@ -1,0 +1,13 @@
+{
+  "minimize.title": "Minimized",
+  "minimize.restore": "Restore",
+  "minimize.dismiss": "Dismiss",
+  "minimize.session": "Minimize session to corner",
+  "minimize.task": "Minimize task to corner",
+  "minimize.terminal": "Minimize terminal to corner",
+  "minimize.status.idle": "Idle",
+  "minimize.status.running": "Running…",
+  "minimize.status.attention": "Needs you",
+  "minimize.status.done": "Done",
+  "minimize.status.error": "Error"
+}

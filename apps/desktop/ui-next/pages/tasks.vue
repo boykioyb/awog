@@ -5,6 +5,7 @@
       :item-key="(task) => task.id"
       :search-text="(task) => task.title"
       :placeholder="t('tasks.search')"
+      :select-key="focusId"
       show-new
       @new="openNew"
     >
@@ -62,8 +63,13 @@ import TaskDetail from '~/components/task/TaskDetail.vue'
 import TaskListItem from '~/components/task/TaskListItem.vue'
 import { useI18n } from '~/composables/useI18n'
 import { useTasksPage } from '~/composables/useTasksPage'
+import { useTaskFocus } from '~/composables/useTaskFocus'
 
 const { t } = useI18n()
+
+// Restoring a minimized Task PiP publishes the wanted id here; LibraryView adopts
+// it via `:select-key` to reselect that task on navigation back.
+const { focusId } = useTaskFocus()
 
 const {
   tasks,

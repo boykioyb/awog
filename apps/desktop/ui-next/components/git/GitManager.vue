@@ -125,6 +125,7 @@
             @select-commit="(h) => (commitSel = `c:${h}`)"
             @set-tab="(t2) => (ctab = t2)"
             @context-commit="(e, cm) => openMenu(e, { kind: 'commit', commit: cm })"
+            @context-file="(e, f) => openMenu(e, { kind: 'commit-file', file: f })"
           />
 
           <!-- Remote detail -->
@@ -623,6 +624,7 @@ function onNewTag() {
 // ── Context menus (file / branch / stash / tag / remote) ──
 type MenuTarget =
   | { kind: 'file'; file: string; staged: boolean }
+  | { kind: 'commit-file'; file: string }
   | { kind: 'folder'; path: string; staged: boolean }
   | { kind: 'branch'; branch: BranchInfo }
   | { kind: 'stash'; index: number }
@@ -705,6 +707,19 @@ const menuItems = computed<MenuItem[]>(() => {
     }
     items.push(sep, { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' })
     return items
+  }
+
+  // Committed file (history detail: CHANGES / FILE TREE tabs). No staging/discard —
+  // those act on the working tree, not a past commit's snapshot. Actions open/reveal
+  // the file's current on-disk copy.
+  if (tgt.kind === 'commit-file') {
+    return [
+      { id: 'open', label: t('git.ctx.open') },
+      { id: 'open:code', label: t('git.ctx.openInVscode') },
+      { id: 'finder', label: t('git.ctx.showInFinder') },
+      sep,
+      { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' },
+    ]
   }
 
   if (tgt.kind === 'commit') {
@@ -816,6 +831,7 @@ function onMenuSelect(id: string) {
   menu.value = null
   if (!tgt) return
   if (tgt.kind === 'file') dispatchFile(id, tgt.file)
+  else if (tgt.kind === 'commit-file') dispatchCommitFile(id, tgt.file)
   else if (tgt.kind === 'folder') void dispatchFolder(id, tgt.path, tgt.staged)
   else if (tgt.kind === 'branch') dispatchBranch(id, tgt.branch)
   else if (tgt.kind === 'stash') dispatchStash(id, tgt.index)
@@ -848,6 +864,15 @@ function dispatchFile(id: string, file: string) {
     void store.ignore([slash > 0 ? file.slice(0, slash + 1) : file])
   }
   // external-diff / blame / history: need a dedicated view (blame/timeline) — no-op.
+}
+
+// Committed file (history detail) — open/reveal the current on-disk copy or copy
+// its path. No staging: a past commit's snapshot isn't a working-tree change.
+function dispatchCommitFile(id: string, file: string) {
+  if (id === 'open') void store.openFile(file)
+  else if (id === 'open:code') void store.openInVscode(file)
+  else if (id === 'finder') void store.revealFile(file)
+  else if (id === 'copy') copy(file)
 }
 
 // Files in the given section (staged ↔ unstaged) that live under `path`.

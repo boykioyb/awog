@@ -2,6 +2,7 @@
   "editor.back": "Back",
   "editor.backToProjects": "Projects",
   "editor.backToTasks": "Tasks",
+  "editor.backToSessions": "Sessions",
   "editor.project": "Project",
   "editor.artifact": "Artifact",
   "editor.save": "Save (⌘S)",

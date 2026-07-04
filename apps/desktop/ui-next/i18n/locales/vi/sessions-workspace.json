@@ -2,7 +2,7 @@
   "sessions.workspace.refresh": "Tải lại",
   "sessions.workspace.unavailable": "Workspace không khả dụng — mở session này trong app desktop AWOG",
   "sessions.workspace.noProject": "Session chưa gắn project nào",
-  "sessions.workspace.diff.none": "Không có thay đổi nào trong working tree",
+  "sessions.workspace.diff.none": "Phiên này chưa chỉnh sửa file nào",
   "sessions.workspace.diff.noRepo": "Không phải repo git",
   "sessions.workspace.diff.changes": "Thay đổi",
   "sessions.workspace.diff.binary": "File nhị phân — không hiển thị diff",

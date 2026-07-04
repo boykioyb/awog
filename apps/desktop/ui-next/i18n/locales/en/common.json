@@ -37,6 +37,7 @@
   "common.preview.group.app": "Automatic",
   "common.preview.group.dark": "Dark",
   "common.preview.group.light": "Light",
+  "common.preview.minimize": "Minimize to corner",
   "common.preview.edit": "Edit file",
   "common.preview.save": "Save",
   "common.preview.unsaved": "Unsaved changes",

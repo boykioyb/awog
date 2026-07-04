@@ -186,6 +186,10 @@ const props = defineProps<{
   groupDot?: (key: string) => string
   // Group sorted first (e.g. the global tier). Defaults to 'global'.
   primaryGroupKey?: string
+  // Optional external selection control (additive — internal click still works):
+  // when this key CHANGES, the list selects that item. Used to restore a minimized
+  // Task PiP (LibraryView otherwise owns selection internally).
+  selectKey?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -198,6 +202,16 @@ const { t } = useI18n()
 
 const q = ref('')
 const selectedKey = ref<string | null>(null)
+
+// External selection control: adopt `selectKey` whenever it changes to a real key
+// (a minimize-dock restore publishes the wanted id here). One-way — internal clicks
+// still drive `selectedKey` directly; we never write back to the prop.
+watch(
+  () => props.selectKey,
+  (k) => {
+    if (k != null) selectedKey.value = k
+  },
+)
 // Per-group collapse state, keyed by the group key. Default expanded.
 const collapsed = ref<Record<string, boolean>>({})
 // Filter drawer (grouped lists): show/hide + the active project-tier filter.

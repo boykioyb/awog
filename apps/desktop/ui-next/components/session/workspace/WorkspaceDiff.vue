@@ -116,9 +116,9 @@ type SidecarGitStatus = {
   behind: number
 }
 
-// Raw working-tree status from git.status (whole repo); `files` narrows it to the
-// paths THIS session touched (see touchedPaths) so the Diff tab shows the
-// session's changes, not the repo's.
+// Raw working-tree status from git.status (whole repo). It is NOT the source of the
+// file list — `files` is driven by the paths THIS session touched (see touchedPaths);
+// rawFiles only enriches a still-uncommitted entry with its live change type + counts.
 const rawFiles = ref<SidecarGitFileStatus[]>([])
 const loading = ref(false)
 const noRepo = ref(false)
@@ -126,21 +126,29 @@ const noRepo = ref(false)
 const branch = ref('')
 const ahead = ref(0)
 
-// ── Session-scoped change filter ─────────────────────────────────────────────
+// ── Session-scoped file list ─────────────────────────────────────────────────
 // Bidirectional suffix match tolerates a base-path mismatch in either direction
-// (the step path carrying an extra ancestor prefix, or a multi-repo subfolder
-// prefix on the git.status path).
-function isTouched(statusPath: string): boolean {
-  const sp = statusPath.replace(/\\/g, '/')
-  return touchedPaths.value.some(
-    (tp) => sp === tp || tp.endsWith('/' + sp) || sp.endsWith('/' + tp),
-  )
+// (a step path carrying an extra ancestor prefix, or a multi-repo subfolder prefix
+// on the git.status path).
+function pathsMatch(a: string, b: string): boolean {
+  const x = a.replace(/\\/g, '/')
+  const y = b.replace(/\\/g, '/')
+  return x === y || x.endsWith('/' + y) || y.endsWith('/' + x)
 }
 
-const files = computed<SidecarGitFileStatus[]>(() =>
-  // Skip ignored entries — they aren't "changes" — then keep only session-touched.
-  rawFiles.value.filter((f) => f.changeType !== 'ignored' && isTouched(f.path)),
-)
+// Source of truth = the paths this session wrote/edited (transcript-derived), so a
+// file stays listed after the session commits it — the tab reflects the session's
+// work, not the git working tree. git.status only enriches a still-uncommitted entry
+// with its live change type + `+/-` counts; a touched file no longer in the working
+// tree (already committed, or the edit was later reverted) is listed as a plain
+// modification (clicking opens its current on-disk content).
+const files = computed<SidecarGitFileStatus[]>(() => {
+  const live = rawFiles.value.filter((f) => f.changeType !== 'ignored')
+  return touchedPaths.value.map<SidecarGitFileStatus>((tp) => {
+    const match = live.find((f) => pathsMatch(f.path, tp))
+    return match ?? { path: tp, changeType: 'modified', stageState: 'staged', isBinary: false }
+  })
+})
 
 const changedCount = computed(() => files.value.length)
 const unavailableMsg = computed(() =>

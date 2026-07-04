@@ -69,12 +69,30 @@ export function previewKindFromAttachment(a: {
 
 const current = ref<PreviewRef | null>(null)
 
+// One-shot restore hint consumed by usePreviewModal right after (re)open. Carries
+// the view mode + scroll offset captured when a preview was minimized so restoring
+// a parked markdown lands where the user left off instead of at the top.
+export type PreviewRestore = { view: 'render' | 'raw'; scrollTop: number }
+const pendingRestore = ref<PreviewRestore | null>(null)
+
 export function usePreview() {
   function open(item: PreviewRef) {
     current.value = item
+    pendingRestore.value = null
+  }
+  // Re-open a previously minimized item, replaying its captured view + scroll.
+  function restore(item: PreviewRef, hint: PreviewRestore) {
+    current.value = item
+    pendingRestore.value = hint
   }
   function close() {
     current.value = null
   }
-  return { current, open, close }
+  // Consume the pending hint (one-shot; clears itself).
+  function takeRestore(): PreviewRestore | null {
+    const r = pendingRestore.value
+    pendingRestore.value = null
+    return r
+  }
+  return { current, open, restore, close, takeRestore }
 }

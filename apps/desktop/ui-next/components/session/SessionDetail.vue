@@ -93,6 +93,14 @@
       </span>
       <button
         class="iconbtn"
+        :title="t('minimize.session')"
+        style="width: 28px; height: 28px"
+        @click="minimizeSession"
+      >
+        <Icon name="minimize" style="width: 14px; height: 14px" />
+      </button>
+      <button
+        class="iconbtn"
         :title="t('sessions.export.title')"
         style="width: 28px; height: 28px"
         @click="exportModal.open(session.id)"
@@ -261,7 +269,6 @@
       @remove="removeAtt"
       @preview="previewAtt"
     />
-    <PreviewModal :item="preview" @close="preview = null" />
   </div>
 </template>
 
@@ -275,8 +282,8 @@
 import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import type { WorkspaceDockSide } from '~/stores/settings'
-import PreviewModal, { type PreviewItem } from '~/components/common/PreviewModal.vue'
-import { previewKindFromAttachment } from '~/composables/usePreview'
+import { previewKindFromAttachment, usePreview, type PreviewRef } from '~/composables/usePreview'
+import { useMinimizeDock } from '~/composables/useMinimizeDock'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
@@ -504,16 +511,17 @@ function saveQuote() {
   noteText.value = ''
 }
 
-// Shared preview modal — map an attachment into the generic PreviewItem shape.
-const preview = ref<PreviewItem | null>(null)
+// Shared preview modal (mounted app-wide in the shell) — map an attachment into
+// the generic PreviewRef shape and open the shared viewer.
+const { open: openPreview } = usePreview()
 function previewAtt(i: number) {
   const a = pendingAtt.value[i]
   if (!a) return
   if (a.folder && a.path) {
-    preview.value = { name: a.name, kind: 'folder', workspaceRoot: a.path }
+    openPreview({ name: a.name, kind: 'folder', workspaceRoot: a.path })
     return
   }
-  preview.value = {
+  const pv: PreviewRef = {
     name: a.name,
     kind: previewKindFromAttachment(a),
     src: a.src,
@@ -521,6 +529,20 @@ function previewAtt(i: number) {
     size: a.size,
     mime: a.mime,
   }
+  openPreview(pv)
+}
+
+// Minimize this session to the corner dock as a live PiP tile (keeps tracking its
+// status while the user works elsewhere; click the pill to jump back).
+const { minimize: dockMinimize } = useMinimizeDock()
+function minimizeSession() {
+  dockMinimize({
+    id: `session:${props.session.id}`,
+    kind: 'session',
+    icon: 'sessions',
+    title: props.session.title,
+    sessionId: props.session.id,
+  })
 }
 
 // Drag-drop file attach — the WHOLE detail is the drop target (not just the

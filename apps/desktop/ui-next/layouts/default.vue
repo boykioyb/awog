@@ -45,6 +45,12 @@
     <ActionToastHost />
     <OnboardingWizard />
     <TourHost />
+
+    <!-- Shared full-window file preview + the corner "minimize dock" (parked
+         previews/sessions/tasks/terminal). Mounted once here so both survive
+         navigation between pages (docs/features/minimize-dock.md). -->
+    <PreviewModal />
+    <MinimizeDock />
   </div>
 </template>
 

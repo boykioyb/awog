@@ -1,0 +1,13 @@
+{
+  "minimize.title": "Đã thu nhỏ",
+  "minimize.restore": "Khôi phục",
+  "minimize.dismiss": "Bỏ",
+  "minimize.session": "Thu nhỏ session ra góc",
+  "minimize.task": "Thu nhỏ task ra góc",
+  "minimize.terminal": "Thu nhỏ terminal ra góc",
+  "minimize.status.idle": "Chờ",
+  "minimize.status.running": "Đang chạy…",
+  "minimize.status.attention": "Cần bạn",
+  "minimize.status.done": "Xong",
+  "minimize.status.error": "Lỗi"
+}

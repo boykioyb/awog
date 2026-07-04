@@ -168,6 +168,7 @@
   "git.ctx.removeRemote": "Remove remote",
   "git.ctx.copyUrl": "Copy URL",
   "git.ctx.open": "Open",
+  "git.ctx.openInVscode": "Open in VS Code",
   "git.ctx.openWith": "Open With",
   "git.ctx.externalDiff": "External Diff",
   "git.ctx.showInFinder": "Show in Finder",

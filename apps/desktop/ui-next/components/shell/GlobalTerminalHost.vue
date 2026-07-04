@@ -19,9 +19,18 @@
         <Icon name="commands" style="width: 13px; height: 13px" />
         {{ t('terminalGlobal.title') }}
       </span>
-      <span class="gterm-cwd" :title="t('terminalGlobal.cwdHint')">~</span>
+      <span class="gterm-cwd" :title="cwdTitle">{{ cwdLabel }}</span>
       <button
         class="gterm-close"
+        :title="t('minimize.terminal')"
+        :aria-label="t('minimize.terminal')"
+        @click="minimizeTerm"
+      >
+        <Minimize :size="14" />
+      </button>
+      <button
+        class="gterm-close"
+        style="margin-left: 0"
         :title="t('terminalGlobal.close')"
         :aria-label="t('terminalGlobal.close')"
         @click="close"
@@ -32,10 +41,12 @@
 
     <div class="gterm-body">
       <!-- Mounted once first opened (everOpened) so the PTY persists across
-           open/close; cwd is the home dir ("~", expanded by the sidecar). -->
+           open/close. `root` follows the currently-open session's cwd (dragged
+           folder → project path → home). New tabs spawn at whatever it resolves
+           to now; already-open tabs keep the cwd they were created with. -->
       <WorkspaceTerminal
         v-if="everOpened"
-        root="~"
+        :root="termRoot"
         :ready="sc.available"
         pty-key="global"
         :visible="isOpen"
@@ -48,15 +59,52 @@
 <script setup lang="ts">
 // Global terminal dock — single app-lifetime mount in the default layout. The
 // status bar's always-visible Terminal button toggles it via useGlobalTerminal.
-// Decoupled from sessions: cwd = home ("~"), PTY group key "global". The heavy
-// PTY + xterm logic is reused from the (now session-agnostic) WorkspaceTerminal.
-import { X } from 'lucide-vue-next'
+// PTY group key "global". Its cwd FOLLOWS the currently-open session so the
+// shell lands in the project you're working in, falling back to home ("~") when
+// no session/project is open. The heavy PTY + xterm logic is reused from the
+// (session-agnostic) WorkspaceTerminal.
+import { Minimize, X } from 'lucide-vue-next'
 import { useGlobalTerminal } from '~/composables/useGlobalTerminal'
+import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useSidecar } from '~/composables/useSidecar'
+import { useWorkspaceData } from '~/composables/useWorkspaceData'
 
 const { t } = useI18n()
 const sc = useSidecar()
 const { isOpen, everOpened, height, close, setHeight } = useGlobalTerminal()
+const { minimize } = useMinimizeDock()
+
+// Park the terminal to the corner dock. `close()` keeps the PTY alive (everOpened),
+// so restoring via the pill (useGlobalTerminal.open) is instant with scrollback intact.
+function minimizeTerm() {
+  minimize({
+    id: 'terminal:global',
+    kind: 'terminal',
+    icon: 'commands',
+    title: t('terminalGlobal.title'),
+  })
+  close()
+}
+
+// Resolve the open session's cwd, mirroring the session engine's precedence
+// (sessions.send-message): dragged working folder → bound project's path → home.
+// `useWorkspaceData` maps the project name/id to its absolute root; a null root
+// (no/unknown project) or no open session falls through to "~". `termRoot` is
+// reactive, so switching sessions re-points it — new terminal tabs then spawn in
+// the new project while any already-open tab keeps its original cwd.
+const sessions = useSessionsStore()
+const { root: projectRoot } = useWorkspaceData(() => sessions.active?.project)
+const termRoot = computed(() => sessions.active?.workspaceFolder || projectRoot.value || '~')
+
+// Header label: the folder name (last path segment), or "~" for home.
+const cwdLabel = computed(() => {
+  const r = termRoot.value
+  if (r === '~') return '~'
+  return r.split('/').filter(Boolean).pop() || r
+})
+const cwdTitle = computed(() =>
+  termRoot.value === '~' ? t('terminalGlobal.cwdHint') : termRoot.value,
+)
 
 // Drag the top edge: moving up (clientY decreases) grows the dock.
 function onResize(ev: PointerEvent): void {

@@ -35,7 +35,7 @@
               :cy="cy(i)"
               :r="sel === `c:${cm.h}` ? 5 : 3.6"
               :fill="cm.lane ? 'var(--violet)' : 'var(--accent)'"
-              stroke="var(--bg)"
+              stroke="var(--bgPanel)"
               stroke-width="1.6"
             />
           </svg>
@@ -78,6 +78,7 @@
         :diff-by-path="detailDiffByPath"
         @set-tab="(tb) => emit('set-tab', tb)"
         @select-commit="(h) => emit('select-commit', h)"
+        @context-file="(e, f) => emit('context-file', e, f)"
       />
       <div v-else class="empty">
         <span class="ei"><Icon name="git" style="width: 21px; height: 21px" /></span>
@@ -105,6 +106,7 @@ const emit = defineEmits<{
   (e: 'select-commit', hash: string): void
   (e: 'set-tab', tab: CommitTab): void
   (e: 'context-commit', event: MouseEvent, commit: Commit): void
+  (e: 'context-file', event: MouseEvent, file: string): void
 }>()
 const { t } = useI18n()
 

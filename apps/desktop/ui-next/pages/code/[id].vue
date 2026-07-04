@@ -1,7 +1,7 @@
 <template>
   <div class="codepage">
     <EditorTopBar
-      :back-label="t('editor.backToProjects')"
+      :back-label="backLabel"
       :title="projectName ?? t('editor.project')"
       :subtitle="projectPath ?? ''"
       title-icon="folder"
@@ -104,7 +104,7 @@
 // from projects.list, lists its tree (fs.listDir), opens files in tabs, edits in
 // Monaco, and saves via fs.writeFile. All state/logic lives in useCodeWorkspace
 // (page-controller); this SFC is the thin template + prototype CSS.
-import { onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import EditorTopBar from '~/components/editor/EditorTopBar.vue'
 import EditorFileTree from '~/components/editor/EditorFileTree.vue'
 import EditorMonacoPane from '~/components/editor/EditorMonacoPane.vue'
@@ -150,7 +150,21 @@ watch(paneRef, (pane) => {
   editorRef.value = pane ?? null
 })
 
-const goBack = () => navigateTo('/projects')
+// Return to wherever we were opened from (`?from`, set by openWorkspace) — a session
+// when launched from the Project quick-view, else the Projects page. Only accept an
+// internal path (leading single slash) so a stray query can't redirect off-app.
+const returnPath = computed<string>(() => {
+  const from = route.query.from
+  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')
+    ? from
+    : '/projects'
+})
+const backLabel = computed<string>(() =>
+  returnPath.value.startsWith('/sessions')
+    ? t('editor.backToSessions')
+    : t('editor.backToProjects'),
+)
+const goBack = () => navigateTo(returnPath.value)
 
 onMounted(() => {
   void init()
