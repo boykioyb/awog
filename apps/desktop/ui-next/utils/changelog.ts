@@ -30,6 +30,71 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.23.3',
+    date: '2026-07-06',
+    highlight: {
+      en: 'Park a running session, file preview, task, or terminal into a small pill in the corner and restore it in one click — plus much faster session switching and smoother long chats.',
+      vi: 'Thu nhỏ một phiên đang chạy, bản xem trước file, tác vụ hoặc terminal thành một pill nhỏ ở góc màn hình rồi khôi phục chỉ với một cú nhấp — cùng với chuyển phiên nhanh hơn nhiều và chat dài mượt hơn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Minimize to corner: shrink a file preview, running session, task, or the terminal into a stacked pill in the bottom-right, then click to restore each to exactly where it was — the preview keeps its view and scroll position, and the terminal keeps running in the background.',
+        vi: 'Thu nhỏ ra góc: thu một bản xem trước file, phiên đang chạy, tác vụ hoặc terminal thành một pill xếp chồng ở góc dưới bên phải, rồi nhấp để khôi phục về đúng chỗ cũ — bản xem trước giữ nguyên chế độ xem và vị trí cuộn, còn terminal vẫn tiếp tục chạy ở nền.',
+      },
+      {
+        kind: 'improved',
+        en: 'Switching between sessions is now instant, and opening a long chat is much smoother — only the most recent turns render up front, with older ones loading as you scroll up (or via jump-to-top).',
+        vi: 'Chuyển giữa các phiên giờ tức thì, và mở một cuộc chat dài mượt hơn nhiều — chỉ các lượt gần nhất được hiển thị trước, các lượt cũ hơn tải dần khi bạn cuộn lên (hoặc qua nút nhảy lên đầu).',
+      },
+      {
+        kind: 'improved',
+        en: 'Sending a message feels snappier — the short delay before your message appeared is gone.',
+        vi: 'Gửi tin nhắn cảm giác nhanh nhạy hơn — độ trễ ngắn trước khi tin nhắn của bạn hiện ra đã được loại bỏ.',
+      },
+      {
+        kind: 'added',
+        en: 'The project quick-view now offers the same full set of actions as the Projects page.',
+        vi: 'Xem nhanh dự án giờ cung cấp đầy đủ các hành động y như trang Dự án.',
+      },
+      {
+        kind: 'improved',
+        en: 'The built-in terminal now opens in the folder of the session you are working in, instead of always your home folder.',
+        vi: 'Terminal tích hợp giờ mở trong thư mục của phiên bạn đang làm việc, thay vì luôn là thư mục home.',
+      },
+      {
+        kind: 'added',
+        en: 'Git history: right-click a file in a commit to open it, reveal it in your file manager, or copy its path.',
+        vi: 'Lịch sử Git: nhấp chuột phải vào một file trong commit để mở, hiện trong trình quản lý file, hoặc sao chép đường dẫn của nó.',
+      },
+      {
+        kind: 'fixed',
+        en: 'File references in chat only become clickable when they point to a real file in your project — a filename the model merely suggests stays plain text — and a link now resolves to the file the chat is actually about.',
+        vi: 'Tham chiếu file trong chat chỉ trở nên nhấp được khi trỏ tới một file thật trong dự án của bạn — một tên file mà mô hình chỉ gợi ý sẽ giữ nguyên là văn bản thường — và một liên kết giờ trỏ đúng tới file mà cuộc chat đang nói tới.',
+      },
+      {
+        kind: 'improved',
+        en: 'Force-push now shows a clear message when the remote branch moved since your last fetch: fetch to review the new commits, then push again.',
+        vi: 'Force-push giờ hiển thị thông báo rõ ràng khi branch trên remote đã dịch chuyển kể từ lần fetch gần nhất: hãy fetch để xem các commit mới, rồi push lại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'More of the diagrams the model writes now render, thanks to auto-repair of a common Mermaid styling slip.',
+        vi: 'Nhiều sơ đồ do mô hình viết giờ hiển thị được hơn, nhờ tự sửa một lỗi tạo kiểu Mermaid thường gặp.',
+      },
+      {
+        kind: 'fixed',
+        en: 'A long file name in the diff view no longer overlaps the Stage/Unstage buttons.',
+        vi: 'Tên file dài trong khung xem diff không còn đè lên các nút Stage/Unstage.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Changing the response style mid-chat now takes effect on the next reply when using the Claude runtime.',
+        vi: 'Đổi phong cách trả lời giữa chừng cuộc chat giờ có hiệu lực ở lượt trả lời kế tiếp khi dùng runtime Claude.',
+      },
+    ],
+  },
+  {
     version: '0.23.2',
     date: '2026-07-03',
     highlight: {
