@@ -109,6 +109,15 @@ register('git.push', async (raw): Promise<Result> => {
           stderrSanitized: sanitized,
         })
       }
+      // `--force-with-lease` bailed: remote-tracking ref is stale (remote branch
+      // moved since our last fetch). Own code so the UI says "fetch then retry",
+      // not "pull & merge". Check before non-fast-forward — both are `[rejected]`.
+      if (/failed to push some refs/i.test(stderr) && /stale info/i.test(stderr)) {
+        throw new RpcError(GIT_RPC_CODE, 'Remote đã dịch chuyển, fetch rồi thử lại', {
+          gitCode: GitErrorCode.STALE_INFO,
+          stderrSanitized: sanitized,
+        })
+      }
       if (/failed to push some refs/i.test(stderr) && /non-fast-forward/i.test(stderr)) {
         throw new RpcError(GIT_RPC_CODE, 'Remote có commit mới, cần pull trước', {
           gitCode: GitErrorCode.NOT_FAST_FORWARD,

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, markRaw, ref, watch } from 'vue'
 import { SidecarError, SidecarUnavailableError } from '~/composables/useSidecar'
 import {
   modelDisplayName,
@@ -382,6 +382,12 @@ export const useSessionsStore = defineStore('sessions', () => {
   // app-lifetime quota guard (useQuotaGuard) on a 60s cadence (matches the sidecar
   // cache) and forced right after one of the account's turns settles.
   const quotaUsage = ref<Record<string, { fiveHour: number; resetsAt?: number }>>({})
+  // When each account's usage was last read (epoch ms). checkSendBlocked trusts the
+  // polled cache within this window instead of paying a fresh account.usage round-trip
+  // before every send — that latency showed up as a delay before the sent message
+  // appeared. The app-lifetime guard already refreshes on a 60s cadence.
+  const quotaFetchedAt = new Map<string, number>()
+  const QUOTA_CACHE_TTL_MS = 90_000
 
   function quotaPctForAccount(accountId: string | undefined): number {
     if (!accountId) return 0
@@ -416,6 +422,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       }
       if (five?.resetsAt) next.resetsAt = five.resetsAt
       quotaUsage.value = { ...quotaUsage.value, [accountId]: next }
+      quotaFetchedAt.set(accountId, Date.now())
     } catch {
       // best-effort — keep the last known value
     }
@@ -473,6 +480,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!q.enabled || !q.blockNewSessionsOnThreshold) return false
     const s = byId(sessionId)
     if (!s?.accountId) return false
+    // Trust a recently-read cache (the guard polls every 60s + forces on turn settle)
+    // so the common send pays no account.usage round-trip — that latency was showing up
+    // as a delay before the sent message appeared. Only refresh when the cache is stale
+    // or was never read (e.g. right after app open), which keeps the fail-open window
+    // closed exactly where it matters. Also dedupes the composer + store double-check:
+    // the first refresh stamps the cache, the second sees it fresh.
+    const fetchedAt = quotaFetchedAt.get(s.accountId) ?? 0
+    if (Date.now() - fetchedAt < QUOTA_CACHE_TTL_MS) return isSendBlocked(sessionId)
     await refreshAccountQuota(s.accountId)
     return isSendBlocked(sessionId)
   }
@@ -822,7 +837,18 @@ export const useSessionsStore = defineStore('sessions', () => {
       }
       const full = res.session
       if (full) {
-        target.msgs = full.messages.map((m) => engineMessageToSessionMessage(m))
+        const mapped = full.messages.map((m) => engineMessageToSessionMessage(m))
+        // Historical messages never change once persisted, so mark them raw: Vue then
+        // skips building reactive proxies for their (often deep) blocks/steps subtree.
+        // That proxy construction — realized when a full-transcript computed such as
+        // useSessionContextUsage iterates msgs — was the O(messages) scripting spike on
+        // opening a long session, even though only the last few turns actually render.
+        // The LAST message stays reactive so a restored interactive tail (pending
+        // permission / question / plan) and the next streamed turn still update live.
+        mapped.forEach((m, i) => {
+          if (i < mapped.length - 1) markRaw(m)
+        })
+        target.msgs = mapped
         target.status = statusFromMessages(target.msgs)
         // Hydrate pinned context / budget / fork lineage (full session only).
         if (full.pinnedContext) target.pinnedContext = full.pinnedContext

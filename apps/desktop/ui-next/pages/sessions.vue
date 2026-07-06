@@ -16,21 +16,31 @@
         :title="t('sessions.resizeList')"
         @pointerdown="onListResize"
       />
-      <SessionDetail v-if="store.active" :key="store.active.id" :session="store.active" />
-      <div v-else class="detail">
-        <div class="empty">
-          <span class="ei"><Icon name="sessions" style="width: 21px; height: 21px" /></span>
-          <div class="et">
-            {{ t('sessions.empty.title') }}
-            <br />
-            {{ t('sessions.empty.subtitle') }}
+      <!-- Cache recent detail instances (keyed by session id) so switching back to a
+           session — including the last-active session of each project tab — is instant
+           instead of tearing down + rebuilding the whole composer + workspace panel +
+           transcript. `:max` bounds how many stay mounted (their terminals/watchers keep
+           running in the background); 5 keeps a handful of projects warm while switching
+           between them. Shared singletons (chatAttach consumer, workspace footer bridge)
+           are gated on the active instance inside SessionDetail so cached ones don't
+           cross-talk. -->
+      <KeepAlive :max="5">
+        <SessionDetail v-if="store.active" :key="store.active.id" :session="store.active" />
+        <div v-else class="detail">
+          <div class="empty">
+            <span class="ei"><Icon name="sessions" style="width: 21px; height: 21px" /></span>
+            <div class="et">
+              {{ t('sessions.empty.title') }}
+              <br />
+              {{ t('sessions.empty.subtitle') }}
+            </div>
+            <button class="btn pri" @click="store.create(store.activeTab)">
+              <Icon name="plus" />
+              {{ t('sessions.new') }}
+            </button>
           </div>
-          <button class="btn pri" @click="store.create(store.activeTab)">
-            <Icon name="plus" />
-            {{ t('sessions.new') }}
-          </button>
         </div>
-      </div>
+      </KeepAlive>
     </div>
   </section>
 </template>

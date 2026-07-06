@@ -8,6 +8,10 @@ export const GitErrorCode = {
   BUSY: 'BUSY',
   DIRTY_TREE: 'DIRTY_TREE',
   NOT_FAST_FORWARD: 'NOT_FAST_FORWARD',
+  // `--force-with-lease` refused: our remote-tracking ref is stale (the remote
+  // branch moved since our last fetch). Distinct from NOT_FAST_FORWARD — the
+  // fix is "fetch then retry", not "pull & merge".
+  STALE_INFO: 'STALE_INFO',
   MERGE_CONFLICT: 'MERGE_CONFLICT',
   AUTH_FAILED: 'AUTH_FAILED',
   NETWORK_ERROR: 'NETWORK_ERROR',
@@ -42,6 +46,9 @@ const STDERR_PATTERNS: Array<[RegExp, GitErrorCode]> = [
   [/not a git repository|fatal: not a git repository/i, GitErrorCode.NO_REPO],
   [/index\.lock|unable to create.*index\.lock/i, GitErrorCode.BUSY],
   [/your local changes.*would be overwritten|commit your changes or stash/i, GitErrorCode.DIRTY_TREE],
+  // `--force-with-lease` bail-out — match before non-fast-forward (both are
+  // `[rejected]` lines) so the stale-lease case gets its own actionable copy.
+  [/stale info/i, GitErrorCode.STALE_INFO],
   [/non-fast-forward|rejected.*fetch first/i, GitErrorCode.NOT_FAST_FORWARD],
   [/merge conflict|automatic merge failed|conflict.*content|fix conflicts/i, GitErrorCode.MERGE_CONFLICT],
   // `could not read Username`/`Password` (+ `terminal prompts disabled`) is the

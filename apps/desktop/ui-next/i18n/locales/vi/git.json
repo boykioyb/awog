@@ -238,6 +238,7 @@
   "git.deleteBranch.forceConfirm": "Xoá (force)",
   "git.error.DIRTY_TREE": "Working tree có thay đổi chưa commit",
   "git.error.NOT_FAST_FORWARD": "Push bị từ chối — remote có commit bạn chưa có. Hãy pull trước.",
+  "git.error.STALE_INFO": "Force push bị chặn — branch trên remote đã dịch chuyển kể từ lần fetch gần nhất. Hãy Fetch để xem commit mới rồi push lại.",
   "git.error.MERGE_CONFLICT": "Xung đột merge — giải quyết xung đột để tiếp tục",
   "git.error.AUTH_FAILED": "Xác thực thất bại — kiểm tra tài khoản / credential GitHub",
   "git.auth.title": "Xác thực thất bại",

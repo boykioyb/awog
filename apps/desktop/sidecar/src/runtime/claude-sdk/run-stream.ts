@@ -258,8 +258,17 @@ export async function runStreamClaude(
 
   // systemPrompt: layer the agent's own prompt (AGENT.md) + bulk-loaded context
   // (memory/agents/skills, already folded into systemPromptAppend upstream) +
-  // workspace rules + response style ONTO the first-party claude_code preset.
+  // workspace rules ONTO the first-party claude_code preset. Response style is
+  // NOT appended here — it rides on the turn prompt instead (see below).
   const rulesPrompt = await buildRulesPrompt(args.projectId, extractTurnPaths(args.pendingText))
+  // Response style (ADR 0046). Deliberately kept OUT of the system-prompt append:
+  // the Claude Agent SDK resolves the preset system prompt (incl. `append`) ONCE
+  // at session creation and IGNORES a changed append on `resume` (docs: system-
+  // prompt changes "don't take effect mid-session … start a new session"). A
+  // session is created before the user picks a style — and the style can change
+  // mid-session — so a system-prompt style would be frozen stale (or absent). We
+  // inject it into the TURN PROMPT below so it is re-sent every turn, matching the
+  // Pi path (which re-appends it each turn). Rules have the same frozen limitation.
   const stylePrompt = buildStylePrompt(
     args.settings.responseStyle,
     args.settings.responseStyleNoMarkdown,
@@ -269,7 +278,6 @@ export async function runStreamClaude(
     args.systemPrompt,
     args.systemPromptAppend,
     rulesPrompt,
-    stylePrompt,
     inPlanMode ? PLAN_MODE_PROMPT : undefined,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
@@ -299,6 +307,12 @@ export async function runStreamClaude(
     const prefix = renderHistoryPrefix(args.history, args.compaction)
     promptText = prefix ? `${prefix}\n\n${args.pendingText}` : args.pendingText
   }
+  // Prepend the response-style directive to the turn prompt so it applies on the
+  // resumed path too (the frozen system-prompt append can't carry a mid-session
+  // style change — see the buildStylePrompt note above). Only the AWOG user
+  // message (params.text) is persisted to our transcript, so this SDK-only prompt
+  // shaping never pollutes the visible session history.
+  if (stylePrompt) promptText = `${stylePrompt}\n\n${promptText}`
 
   // Attachments (images / text files) need the streaming-input block form — the
   // string prompt can't carry them. Returns the plain string when nothing usable

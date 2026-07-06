@@ -318,9 +318,11 @@ const filtered = computed(() => {
 // Bulk/select actions still operate on the full `filtered` set, not what's rendered.
 const { visible, hasMore, remaining, loadMore, reset } = useLoadMore(() => filtered.value)
 const groupLoad = useGroupLoadMore()
-// Snap back to the first page when the query narrows (so results show from the top).
-// A new session appearing in the live store must NOT reset the window.
-watch([filter, groupBy], () => {
+// Snap back to the first page when the query narrows (so results show from the top)
+// OR when the project tab switches — otherwise a large window grown in the previous
+// tab would try to mount hundreds of rows for the new project at once. A new session
+// appearing in the live store (same tab) must NOT reset the window.
+watch([filter, groupBy, () => store.activeTab], () => {
   reset()
   groupLoad.reset()
 })

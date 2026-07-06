@@ -171,10 +171,15 @@ const selected = computed(() => store.selectedIds.has(props.session.id))
 type Indicator = { key: string; icon: string; count: number; title: string }
 const indicators = computed<Indicator[]>(() => {
   const out: Indicator[] = []
-  const att = props.session.msgs.reduce(
-    (sum, m) => sum + (m.role === 'user' && m.att ? m.att.length : 0),
-    0,
-  )
+  // Only scan messages for the attachment count once the transcript is loaded. An
+  // unloaded session has no msgs (att would be 0 anyway), so skipping the reduce keeps
+  // the many unopened list rows from taking a reactive dependency on their msgs array.
+  const att = props.session.loaded
+    ? props.session.msgs.reduce(
+        (sum, m) => sum + (m.role === 'user' && m.att ? m.att.length : 0),
+        0,
+      )
+    : 0
   if (att > 0)
     out.push({
       key: 'att',

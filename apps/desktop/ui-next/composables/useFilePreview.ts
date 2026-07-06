@@ -2,6 +2,8 @@ import { inject, provide, type InjectionKey, type MaybeRefOrGetter } from 'vue'
 import { usePreview, type PreviewRef } from './usePreview'
 import { useWorkspaceData } from './useWorkspaceData'
 import { useFsApi } from './useFsApi'
+import { useSessionTouchedPaths } from './useSessionTouchedPaths'
+import type { Session } from './useSessionsData'
 
 // Detect a workspace file reference written in chat markdown (e.g. an inline-code
 // `docs/features/x.md`, `tasks/#21/plan.md`, or a full absolute path) and open it
@@ -19,6 +21,10 @@ type FilePreviewApi = {
   // Display form: strip the workspace-root prefix so an absolute path renders as a
   // clean relative path in the chip (the full path is still used for the click).
   shorten: (path: string) => string
+  // Resolve a written path to a REAL workspace-relative path if the file exists,
+  // else null. Used to gate file-chip highlighting on actual existence — a merely
+  // *proposed* filename in prose must not linkify.
+  resolve: (path: string) => Promise<string | null>
 }
 const KEY: InjectionKey<FilePreviewApi> = Symbol('filePreview')
 
@@ -56,10 +62,17 @@ function kindFromName(name: string): PreviewRef['kind'] {
 
 // Resolve the active session's workspace root once and provide the file-preview API
 // to descendants. Call in the transcript host (SessionDetail).
-export function provideFilePreview(projectName: MaybeRefOrGetter<string | undefined>): void {
+export function provideFilePreview(
+  projectName: MaybeRefOrGetter<string | undefined>,
+  session: MaybeRefOrGetter<Session>,
+): void {
   const { root } = useWorkspaceData(projectName)
   const { open: openPreview } = usePreview()
   const fs = useFsApi()
+  // Files the session wrote/edited — the model's working context. Used to anchor a
+  // bare/relative link (`[plan.md](plan.md)`) to the file it's really about instead of
+  // an arbitrary same-named file elsewhere in the repo (memory: session-file-link-path-base).
+  const { touchedPaths } = useSessionTouchedPaths(session, root)
 
   // Lazy, root-keyed cache of every workspace file path (`git ls-files`). Used to
   // resolve a model-written path that doesn't map 1:1 to a real file — a bare
@@ -79,30 +92,41 @@ export function provideFilePreview(projectName: MaybeRefOrGetter<string | undefi
     }
   }
   const baseName = (p: string): string => p.split('/').pop() || p
-  // Map a written path to a real workspace-relative path. Tries, in order: the
-  // path as-is, a suffix match (wrong-base relative), then a unique-ish basename
-  // match (shortest path wins). Falls back to the input so the modal surfaces a
-  // clear "could not load" if the file genuinely isn't here.
-  async function resolvePath(r: string, raw: string): Promise<string> {
+  // Map a written path to a REAL workspace-relative path, or null when no file
+  // matches. Tries, in order: the path as-is, a suffix match (wrong-base relative),
+  // then a unique-ish basename match (shortest path wins). Returns null when the
+  // file index is empty/unavailable so callers can tell "exists" from "can't verify".
+  async function matchPath(r: string, raw: string, hints: string[]): Promise<string | null> {
+    const files = await workspaceFiles(r)
+    if (!files.length) return null
     let p = raw
     if (p.startsWith(r + '/') || p.startsWith(r + '\\')) p = p.slice(r.length) // absolute-in-root
     p = p.replace(/^[/\\]+/, '')
-    const files = await workspaceFiles(r)
-    if (!files.length || files.includes(p)) return p
+    if (files.includes(p)) return p // exact full path wins (authoritative)
+    const base = baseName(p)
+    // Anchor to the model's working context BEFORE the global fallbacks: a relative
+    // link like `[plan.md](plan.md)` is relative to the doc it's about, so in a repo
+    // with dozens of same-named files the one the SESSION actually touched (wrote/
+    // edited) is the right target — not an arbitrary global basename hit. Suffix match
+    // first (handles `e-contracts/plan.md` → `tasks/e-contracts/plan.md`), then bare
+    // basename. A touched path exists on disk even when untracked, so no git gating.
+    const hint =
+      hints.find((h) => h === p || h.endsWith('/' + p)) ?? hints.find((h) => baseName(h) === base)
+    if (hint) return hint
     const suffix = files.find((f) => f === p || f.endsWith('/' + p))
     if (suffix) return suffix
-    const base = baseName(p)
     const hits = files.filter((f) => baseName(f) === base).sort((a, b) => a.length - b.length)
-    return hits[0] ?? p
+    return hits[0] ?? null
   }
 
   const open: FilePreviewApi['open'] = async (rawPath) => {
     const detected = filePathOf(rawPath) ?? rawPath.trim()
     if (!detected) return
     const r = root.value
-    // With a root, resolve the path against the real file tree (handles bare names
-    // / wrong base). Without one (browser-dev) just degrade to a placeholder.
-    const path = r ? await resolvePath(r, detected) : detected
+    // With a root, resolve against the real file tree (handles bare names / wrong
+    // base); fall back to the written path so the modal can still surface a clear
+    // "could not load". Without a root (browser-dev) degrade to a placeholder.
+    const path = r ? ((await matchPath(r, detected, touchedPaths.value)) ?? detected) : detected
     const name = baseName(path)
     const item: PreviewRef = { name, kind: kindFromName(name) }
     if (r) {
@@ -118,11 +142,25 @@ export function provideFilePreview(projectName: MaybeRefOrGetter<string | undefi
     }
     return path
   }
-  provide(KEY, { open, shorten })
+  // Existence check for chip highlighting: only a path that resolves to a real
+  // workspace file returns non-null. No root (browser-dev / no-project session) →
+  // null, so unverifiable references stay plain text rather than fake chips.
+  const resolve: FilePreviewApi['resolve'] = async (rawPath) => {
+    const detected = filePathOf(rawPath)
+    if (!detected) return null
+    const r = root.value
+    if (!r) return null
+    return matchPath(r, detected, touchedPaths.value)
+  }
+  provide(KEY, { open, shorten, resolve })
 }
 
 // No host (markdown rendered outside a session transcript) → links are inert.
-const NOOP: FilePreviewApi = { open: () => undefined, shorten: (p) => p }
+const NOOP: FilePreviewApi = {
+  open: () => undefined,
+  shorten: (p) => p,
+  resolve: () => Promise.resolve(null),
+}
 
 // Leaf-side API, injected from the nearest provideFilePreview ancestor.
 export function useFilePreview(): FilePreviewApi {

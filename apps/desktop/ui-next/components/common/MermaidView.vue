@@ -97,16 +97,24 @@ function onWheelZoom(e: WheelEvent) {
 let renderToken = 0
 
 // Best-effort repair for common LLM mermaid slips, run ONLY after a parse failure — so a
-// valid diagram renders on the first pass untouched and this can never corrupt it. Quotes
-// flowchart edge labels whose text carries shape punctuation: `-->|secret('X')|` trips the
-// parser on the `(` (it reads a node shape) unless the label is quoted: `-->|"secret('X')"|`.
+// valid diagram renders on the first pass untouched and this can never corrupt it (the
+// retry falls back to the ORIGINAL error if the repaired source still fails).
 function repairMermaid(src: string): string {
   if (!/^\s*(flowchart|graph)\b/m.test(src)) return src
-  return src.replace(/\|([^|\n]+)\|/g, (whole, label: string) => {
+  // (1) A styling statement (classDef/class/style/linkStyle) joined to the previous one
+  // by a `;` on the SAME line fuses them for mermaid's parser: the `;` gets swallowed
+  // into the preceding value (e.g. `...stroke:#c62828; class K b` → "got 'CLASS',
+  // expecting NEWLINE"). Put each such statement on its own line.
+  let out = src.replace(/;[ \t]*(?=(?:classDef|class|style|linkStyle)\b)/g, '\n')
+  // (2) Quote flowchart edge labels whose text carries shape punctuation:
+  // `-->|secret('X')|` trips the parser on the `(` (it reads a node shape) unless the
+  // label is quoted: `-->|"secret('X')"|`.
+  out = out.replace(/\|([^|\n]+)\|/g, (whole, label: string) => {
     const t = label.trim()
     if (t.startsWith('"') || !/[(){}[\]]/.test(t)) return whole
     return `|"${t.replace(/"/g, "'")}"|`
   })
+  return out
 }
 
 // Parse a CSS colour (hex #rgb/#rrggbb or rgb()) to [r,g,b] 0–255, or null.

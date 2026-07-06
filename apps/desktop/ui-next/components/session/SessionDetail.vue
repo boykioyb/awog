@@ -293,9 +293,19 @@ const store = useSessionsStore()
 const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
 
+// Whether THIS instance is the one currently shown. Under <KeepAlive> (pages/sessions
+// caches recent detail instances so switching back is instant) inactive instances stay
+// mounted, so effects that touch app-wide singletons — the chatAttach consumer and the
+// workspace footer bridge — gate on this. Otherwise every cached session would drain
+// the same "add to chat" queue and react to the footer's view toggles at once.
+const isActive = computed(() => props.session.id === store.activeId)
+
 // Resolve this session's workspace root once and provide a file opener so file
 // paths in chat markdown (e.g. `docs/x.md`) open in the shared PreviewModal.
-provideFilePreview(() => props.session.project)
+provideFilePreview(
+  () => props.session.project,
+  () => props.session,
+)
 
 // Header trash → confirm before dropping the session (destructive, no undo).
 async function askRemove() {
@@ -421,9 +431,19 @@ function onAddAtt(a: SessionAttachment) {
 // composer's pending list.
 const chatAttach = useChatAttach()
 let unregisterChatAttach: (() => void) | null = null
-onMounted(() => {
-  unregisterChatAttach = chatAttach.registerConsumer()
-})
+// Only the active instance registers as the attach consumer and drains the queue, so a
+// cached (backgrounded) session never steals the "add to chat" attachment.
+watch(
+  isActive,
+  (active) => {
+    if (active && !unregisterChatAttach) unregisterChatAttach = chatAttach.registerConsumer()
+    else if (!active && unregisterChatAttach) {
+      unregisterChatAttach()
+      unregisterChatAttach = null
+    }
+  },
+  { immediate: true },
+)
 onBeforeUnmount(() => {
   unregisterChatAttach?.()
   unregisterChatAttach = null
@@ -431,7 +451,7 @@ onBeforeUnmount(() => {
 watch(
   () => chatAttach.queue.value.length,
   (n) => {
-    if (n > 0) pendingAtt.value.push(...chatAttach.drain())
+    if (n > 0 && isActive.value) pendingAtt.value.push(...chatAttach.drain())
   },
 )
 function openPicker() {
@@ -688,11 +708,22 @@ const wpBridge = useWorkspacePanel()
 watch(
   () => wpBridge.requested.value,
   (req) => {
-    if (req) toggleView(req.view)
+    if (req && isActive.value) toggleView(req.view)
   },
 )
-watch(openViews, (v) => wpBridge.publishOpenViews(v), { immediate: true })
-onBeforeUnmount(() => wpBridge.publishOpenViews([]))
+// Only the active instance owns the shared footer bridge: it publishes its open views
+// (incl. when it becomes active), and the next active session overwrites them. Cached
+// inactive instances never publish, so a switch can't race to an empty state.
+watch(
+  [openViews, isActive],
+  ([v, active]) => {
+    if (active) wpBridge.publishOpenViews(v)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  if (isActive.value) wpBridge.publishOpenViews([])
+})
 // Panel "×": close every view docked on that side.
 function closeSide(side: WorkspaceDockSide) {
   const closing =

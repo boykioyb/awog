@@ -238,6 +238,7 @@
   "git.deleteBranch.forceConfirm": "Force delete",
   "git.error.DIRTY_TREE": "Working tree has uncommitted changes",
   "git.error.NOT_FAST_FORWARD": "Push rejected — remote has commits you don’t have. Pull first.",
+  "git.error.STALE_INFO": "Force push blocked — the remote branch moved since your last fetch. Fetch to review the new commits, then push again.",
   "git.error.MERGE_CONFLICT": "Merge conflict — resolve the conflicts to continue",
   "git.error.AUTH_FAILED": "Authentication failed — check your GitHub account / credentials",
   "git.auth.title": "Authentication failed",

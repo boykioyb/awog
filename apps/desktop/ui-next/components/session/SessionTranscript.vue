@@ -22,16 +22,30 @@
     <div ref="msgsEl" class="msgs" @scroll="onScroll">
       <SessionTranscriptSkeleton v-if="loading && !messages.length" />
       <SessionWelcome v-else-if="!messages.length" />
-      <!-- No `appear`: opening a session shows its history instantly; only turns
-           that arrive afterwards (user send / assistant reply) fade + rise in. -->
-      <TransitionGroup v-else tag="div" name="mi" class="milist">
-        <SessionMessageItem
-          v-for="(m, i) in messages"
-          :key="i"
-          :message="m"
-          :fallback-when="fallbackWhen"
+      <template v-else>
+        <!-- Only the most recent turns mount on open — a long session's history is
+             heavy to render (markdown + highlight + mermaid per message), so mounting
+             all of it made switching sessions janky. Older turns reveal on demand as
+             the user scrolls up (auto sentinel), or all at once via jump-to-top. -->
+        <LoadMoreSentinel
+          v-if="hiddenCount > 0"
+          class="loadolder"
+          :remaining="hiddenCount"
+          auto
+          @load="loadOlder"
         />
-      </TransitionGroup>
+        <!-- No `appear`: opening a session shows its history instantly; only turns
+             that arrive afterwards (user send / assistant reply) fade + rise in. -->
+        <TransitionGroup tag="div" name="mi" class="milist">
+          <SessionMessageItem
+            v-for="row in visible"
+            :key="row.i"
+            :message="row.m"
+            :msg-index="row.i"
+            :fallback-when="fallbackWhen"
+          />
+        </TransitionGroup>
+      </template>
     </div>
     <!-- Jump-to-top / jump-to-bottom: each shows only when there's somewhere to go
          in that direction (both hidden when the transcript doesn't overflow). -->
@@ -91,13 +105,58 @@ const msgsEl = useTemplateRef<HTMLElement>('msgsEl')
 const stick = ref(true)
 let prevLen = 0
 
+// ── Render window (long-session perf) ──
+// Mount only the most recent turns on open; a "turn" begins at each user message.
+// `windowStart` is the ABSOLUTE index into `messages` where rendering begins — kept
+// stable across streaming appends (recomputed only on a new/shrunk transcript) so a
+// reply arriving never slides older turns off the top under the reader's cursor.
+const INITIAL_TURNS = 5
+const STEP_TURNS = 5
+const windowStart = ref(0)
+
+// Indices of user messages (turn boundaries) with index < `upto`.
+function userTurnIndices(upto: number): number[] {
+  const out: number[] = []
+  const end = Math.min(upto, props.messages.length)
+  for (let i = 0; i < end; i++) if (props.messages[i]?.role === 'user') out.push(i)
+  return out
+}
+// Start index that shows the last `turns` turns (0 = show all when fewer exist).
+function startForLastTurns(turns: number): number {
+  const idx = userTurnIndices(props.messages.length)
+  return idx.length <= turns ? 0 : (idx[idx.length - turns] ?? 0)
+}
+
+// Older messages hidden above the window (drives the load-older sentinel + jump-top).
+const hiddenCount = computed(() => Math.min(windowStart.value, props.messages.length))
+// The rendered slice, each tagged with its absolute index so keys stay stable when
+// the window grows (existing items keep their key → no re-mount, only prepend).
+const visible = computed(() => {
+  const start = hiddenCount.value
+  return props.messages.slice(start).map((m, k) => ({ m, i: start + k }))
+})
+
+// Reveal STEP_TURNS more older turns, anchoring the viewport so the content the user
+// is reading stays put (prepended turns push it down; add the height delta back).
+async function loadOlder() {
+  const el = msgsEl.value
+  const prevH = el?.scrollHeight ?? 0
+  const prevTop = el?.scrollTop ?? 0
+  const before = userTurnIndices(windowStart.value)
+  windowStart.value = before.length <= STEP_TURNS ? 0 : (before[before.length - STEP_TURNS] ?? 0)
+  await nextTick()
+  if (el) el.scrollTop = prevTop + (el.scrollHeight - prevH)
+}
+
 // Edge flags drive the jump buttons' visibility (hidden when already at that edge).
 const atTop = ref(true)
 const atBottom = ref(true)
 function updateEdges() {
   const el = msgsEl.value
   if (!el) return
-  atTop.value = el.scrollTop <= 4
+  // While older turns are still windowed out, keep "jump to top" available (the
+  // rendered top isn't the real top) → clicking it reveals all then scrolls up.
+  atTop.value = el.scrollTop <= 4 && hiddenCount.value === 0
   atBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
 }
 
@@ -105,7 +164,13 @@ function scrollToBottom() {
   const el = msgsEl.value
   if (el) el.scrollTop = el.scrollHeight
 }
-function jumpTop() {
+async function jumpTop() {
+  // "Go to the very beginning" is an explicit request → reveal any windowed-out
+  // older turns first (mounting all is fine here), then scroll to the true top.
+  if (windowStart.value > 0) {
+    windowStart.value = 0
+    await nextTick()
+  }
   msgsEl.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 function jumpBottom() {
@@ -141,16 +206,21 @@ watch(scrollSig, () => {
   // A brand-new message (length grew) snaps to the bottom even if the user had
   // scrolled up — they just sent / received a turn boundary.
   if (props.messages.length > prevLen) stick.value = true
+  // Transcript SHRANK in place (fork / regenerate truncation) → re-window to the
+  // latest turns so `windowStart` can't dangle past the new end.
+  else if (props.messages.length < prevLen) windowStart.value = startForLastTurns(INITIAL_TURNS)
   prevLen = props.messages.length
   if (stick.value) nextTick(scrollToBottom)
   nextTick(updateEdges)
 })
-// New array reference = session switch / transcript reload → jump to the latest.
+// New array reference = session switch / transcript reload → window to the latest
+// turns and jump to the bottom.
 watch(
   () => props.messages,
   () => {
     stick.value = true
     prevLen = props.messages.length
+    windowStart.value = startForLastTurns(INITIAL_TURNS)
     nextTick(() => {
       scrollToBottom()
       updateEdges()
@@ -159,6 +229,7 @@ watch(
 )
 onMounted(() => {
   prevLen = props.messages.length
+  windowStart.value = startForLastTurns(INITIAL_TURNS)
   nextTick(() => {
     scrollToBottom()
     updateEdges()
@@ -249,6 +320,13 @@ onMounted(() => {
 }
 .sjbtn:active {
   transform: scale(0.92);
+}
+
+/* Load-older sentinel sits centered above the windowed transcript (align-self is a
+   no-op if .msgs isn't a flex column — harmless either way). */
+.loadolder {
+  align-self: center;
+  margin-top: 8px;
 }
 
 /* New-turn enter: a freshly appended message fades + rises into place. The inner

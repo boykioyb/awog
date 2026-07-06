@@ -172,7 +172,7 @@ import type {
 } from '~/composables/useSessionsData'
 import type { BlockHighlight } from './SessionTextBlock.vue'
 
-const props = defineProps<{ message: SessionMessage; fallbackWhen: string }>()
+const props = defineProps<{ message: SessionMessage; fallbackWhen: string; msgIndex: number }>()
 const { t } = useI18n()
 const settings = useSettingsStore()
 const store = useSessionsStore()
@@ -277,11 +277,13 @@ const toggleThink = (gi: number) => {
   else thinkExpanded.add(gi)
 }
 
-// Message actions (mock-backed via the sessions store). The item finds its own index
-// in the active session's message list so each button acts at the right point.
+// Message actions (mock-backed via the sessions store). The transcript passes each
+// item its absolute index in the active session's message list (row.i) so buttons
+// act at the right point — avoids an O(msgs) indexOf per item that also depended on
+// the whole msgs array (re-running on every streaming delta).
 const { CIRCLED } = useSessionsData()
 const { scrollToMessage } = useSessionScroll()
-const msgIndex = computed(() => store.active?.msgs.indexOf(props.message) ?? -1)
+const msgIndex = computed(() => props.msgIndex)
 
 // ── Streaming indicator + time (mirrors the old flow) ───────────────────────────
 // While the turn streams, the byline shows a live "Streaming… {elapsed}" ticker

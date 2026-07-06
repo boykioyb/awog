@@ -105,32 +105,21 @@ function addCopyButtons(el: HTMLElement) {
 
 // Turn inline-code file references (e.g. `docs/x.md`, `tasks/#21/plan.md`) and
 // relative-path links into clickable chips that open the shared PreviewModal —
-// porting the old UI's "click a file path → preview" behaviour. Only INLINE code
-// is considered (block `<pre><code>` is skipped); the path heuristic (filePathOf)
-// is closed so prose like `array.map` never linkifies. Listeners die with the
-// subtree on the next rerender (innerHTML rebuild), same as the copy buttons.
+// porting the old UI's "click a file path → preview" behaviour.
+//
+// Inline-code chips are gated on ACTUAL EXISTENCE: a reference is only highlighted
+// once filePreview.resolve confirms it maps to a real workspace file, so a merely
+// *proposed* filename the model typed in prose (e.g. "add a `requirements.md`")
+// stays plain text instead of becoming a fake, dead chip. Resolution is async (one
+// cached file-index fetch per session); we bail if a later streaming frame rebuilt
+// the subtree (stale renderToken). Only INLINE code is considered (block
+// `<pre><code>` is skipped); the path heuristic (filePathOf) is closed so prose
+// like `array.map` never linkifies. Listeners die with the subtree on the next
+// rerender (innerHTML rebuild), same as the copy buttons.
 function linkifyFilePaths(el: HTMLElement) {
   const openAt = (path: string) => (e: Event) => {
     e.preventDefault()
     filePreview.open(path)
-  }
-  for (const code of Array.from(el.querySelectorAll('code'))) {
-    if (code.closest('pre')) continue // block code, not an inline reference
-    const path = filePathOf(code.textContent ?? '')
-    if (!path) continue
-    code.classList.add('filelink')
-    code.setAttribute('role', 'button')
-    code.setAttribute('tabindex', '0')
-    code.title = t('sessions.preview.openFile', { path })
-    // Show the path relative to the workspace root so an absolute path the model
-    // emitted reads cleanly; the click still uses the full path.
-    const short = filePreview.shorten(path)
-    if (short !== code.textContent) code.textContent = short
-    code.addEventListener('click', openAt(path))
-    code.addEventListener('keydown', (e) => {
-      const k = (e as KeyboardEvent).key
-      if (k === 'Enter' || k === ' ') openAt(path)(e)
-    })
   }
   // Markdown links → open in the shared preview instead of letting the SPA router
   // navigate. External URLs (http(s)://, mailto:, tel:) and in-page anchors (#…) keep
@@ -155,6 +144,37 @@ function linkifyFilePaths(el: HTMLElement) {
     a.title = t('sessions.preview.openFile', { path: path ?? href })
     a.addEventListener('click', openAt(path ?? href))
   }
+  // Collect inline-code file-path candidates, then resolve them against the real
+  // workspace index — only the ones that exist become chips.
+  const candidates: { code: HTMLElement; path: string }[] = []
+  for (const code of Array.from(el.querySelectorAll('code'))) {
+    if (code.closest('pre')) continue // block code, not an inline reference
+    const path = filePathOf(code.textContent ?? '')
+    if (path) candidates.push({ code: code as HTMLElement, path })
+  }
+  if (!candidates.length) return
+  const token = renderToken
+  void Promise.all(candidates.map((c) => filePreview.resolve(c.path))).then((resolved) => {
+    if (token !== renderToken) return // subtree replaced while resolving — nodes are stale
+    candidates.forEach((c, i) => {
+      const real = resolved[i]
+      if (!real) return // file doesn't exist → leave as plain inline code (no chip)
+      const { code } = c
+      code.classList.add('filelink')
+      code.setAttribute('role', 'button')
+      code.setAttribute('tabindex', '0')
+      code.title = t('sessions.preview.openFile', { path: real })
+      // Show the path the model wrote (relative to root); the click uses the
+      // resolved real path so a bare basename / wrong base still opens correctly.
+      const short = filePreview.shorten(c.path)
+      if (short !== code.textContent) code.textContent = short
+      code.addEventListener('click', openAt(real))
+      code.addEventListener('keydown', (e) => {
+        const k = (e as KeyboardEvent).key
+        if (k === 'Enter' || k === ' ') openAt(real)(e)
+      })
+    })
+  })
 }
 
 // Rebuild the subtree from the sanitized HTML, then re-apply marks + copy buttons. Runs on
@@ -167,6 +187,10 @@ function linkifyFilePaths(el: HTMLElement) {
 // (rebuild + querySelectorAll over a whole long reply each frame is the jank we're killing).
 let lastHtml: string | null = null
 let lastHlSig = ''
+// Bumped on every actual subtree rebuild; the async file-existence check in
+// linkifyFilePaths captures it and bails if a later streaming frame already
+// replaced the nodes it was about to turn into chips.
+let renderToken = 0
 const hlSig = () => (props.highlights ?? []).map((h) => `${h.label} ${h.fu.excerpt}`).join('|')
 
 function rerender() {
@@ -176,6 +200,7 @@ function rerender() {
   if (props.html === lastHtml && sig === lastHlSig) return
   lastHtml = props.html
   lastHlSig = sig
+  renderToken++
   el.innerHTML = props.html
   applyMarks(el)
   addCopyButtons(el)

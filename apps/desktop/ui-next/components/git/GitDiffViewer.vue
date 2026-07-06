@@ -5,7 +5,9 @@
   </div>
   <template v-else>
     <div class="dh">
-      <span class="dt mono" style="font-size: 0.9231rem">{{ baseName }}</span>
+      <span class="dt mono" style="font-size: 0.9231rem">
+        <span class="dtname" :title="file ?? ''">{{ baseName }}</span>
+      </span>
       <span v-if="additions > 0" class="chip" style="color: var(--add)">+{{ additions }}</span>
       <span v-if="deletions > 0" class="chip" style="color: var(--del)">−{{ deletions }}</span>
       <span style="flex: 1" />
@@ -138,6 +140,22 @@ const splitRight = computed<DiffRow[]>(() => {
 </script>
 
 <style scoped>
+/* A long filename must truncate with an ellipsis, not paint over the header
+   actions (diff-mode toggle + Stage/Unstage). .dt is display:flex (from the
+   global .dh .dt), so the ellipsis lives on the inner text element. */
+.dtname {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Header actions keep their size; the filename yields the space instead of them
+   getting squeezed or overlapped. */
+.gtoggle,
+.btn {
+  flex: 0 0 auto;
+}
+
 /* Full-bleed diff: drop the scroll-area padding and the .codeview card chrome
    (border / radius / margin / surface) so the diff fills the pane edge-to-edge.
    Scoped → other .codeview / .dscroll usages (commit detail, editor) keep theirs. */
