@@ -30,6 +30,61 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.23.4',
+    date: '2026-07-08',
+    highlight: {
+      en: 'See exactly what each session costs over time, and verify a connection actually authenticates — not just that it connects.',
+      vi: 'Xem chính xác chi phí của từng phiên theo thời gian, và xác minh một kết nối thực sự xác thực được — không chỉ là kết nối được.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Session Cost tab in the workspace panel: see how much a session has cost, broken down by day, with 1d / 7d / 30d / all-time and custom date ranges plus a lifetime total and token and turn counts.',
+        vi: 'Tab Chi phí trong bảng làm việc: xem một phiên đã tốn bao nhiêu, chia theo từng ngày, với các khoảng 1 ngày / 7 ngày / 30 ngày / toàn thời gian và khoảng ngày tùy chọn, kèm tổng chi phí trọn đời cùng số token và số lượt.',
+      },
+      {
+        kind: 'added',
+        en: 'Activity now has a “By session” breakdown showing tokens, turns, and cost per session, sortable by most or least used.',
+        vi: 'Hoạt động giờ có mục “Theo phiên” hiển thị số token, số lượt và chi phí của từng phiên, sắp xếp được theo dùng nhiều nhất hoặc ít nhất.',
+      },
+      {
+        kind: 'improved',
+        en: 'Testing a connection now checks authentication, not just connectivity: pick a read-only tool and AWOG confirms your token actually works — a green “Authenticated ✓” or a clear auth-failed message.',
+        vi: 'Kiểm tra kết nối giờ xác minh cả xác thực, không chỉ khả năng kết nối: chọn một công cụ chỉ-đọc và AWOG xác nhận token của bạn thực sự hoạt động — hiện “Đã xác thực ✓” hoặc thông báo xác thực thất bại rõ ràng.',
+      },
+      {
+        kind: 'improved',
+        en: 'New connections are verified as you create them: AWOG runs a handshake right in the creation flow and shows whether it connected (with tool and resource counts) or failed, instead of only writing a file.',
+        vi: 'Kết nối mới được xác minh ngay khi bạn tạo: AWOG chạy một lần bắt tay ngay trong luồng tạo và cho biết đã kết nối (kèm số công cụ và tài nguyên) hay thất bại, thay vì chỉ ghi ra một file.',
+      },
+      {
+        kind: 'added',
+        en: 'Exported sessions: reveal the saved file in Finder, open it in VS Code, or copy its path.',
+        vi: 'Phiên đã xuất: hiện file đã lưu trong Finder, mở trong VS Code, hoặc sao chép đường dẫn của nó.',
+      },
+      {
+        kind: 'added',
+        en: 'Compact a session’s context on demand to free up budget for long chats.',
+        vi: 'Nén ngữ cảnh của một phiên theo yêu cầu để giải phóng ngân sách cho các cuộc chat dài.',
+      },
+      {
+        kind: 'added',
+        en: '“Send now” for a queued message: stop the current turn and send it immediately.',
+        vi: '“Gửi ngay” cho tin nhắn đang xếp hàng: dừng lượt hiện tại và gửi nó ngay lập tức.',
+      },
+      {
+        kind: 'improved',
+        en: 'Preview: drag a minimized preview anywhere, hide or show its toolbar, and get a clear retry if the code editor fails to load.',
+        vi: 'Xem trước: kéo một bản xem trước đã thu nhỏ tới bất cứ đâu, ẩn hoặc hiện thanh công cụ của nó, và có nút thử lại rõ ràng nếu trình soạn mã không tải được.',
+      },
+      {
+        kind: 'added',
+        en: 'Git: cancel a fetch, pull, or push while it is in progress.',
+        vi: 'Git: hủy một thao tác fetch, pull hoặc push khi đang chạy.',
+      },
+    ],
+  },
+  {
     version: '0.23.3',
     date: '2026-07-06',
     highlight: {
