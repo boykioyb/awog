@@ -120,6 +120,13 @@ export function useHomeDashboard() {
     tasks.runningTasks.map((task) => ({ task, progress: tasks.progressOf(task) })),
   )
 
+  // Running sessions (streaming) — surfaced in the same "Running" tile so its
+  // count matches the Running stat, which sums tasks + sessions. Sessions have no
+  // node-level progress, so they render as a lighter row (title + model + project).
+  const runningSessionRows = computed(() =>
+    sessions.sessions.filter((s) => s.status === 'streaming'),
+  )
+
   // ── Usage metric (dashboard.usage) ──
   const usage = ref<DashboardUsage>(sc.available ? emptyUsage() : mockUsage())
   let usageTimer: ReturnType<typeof setInterval> | null = null
@@ -179,6 +186,7 @@ export function useHomeDashboard() {
     attentionItems,
     runningCount,
     runningTaskRows,
+    runningSessionRows,
     usage,
     deltaPct,
     sparkline,

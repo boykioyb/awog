@@ -4,9 +4,16 @@
 //
 // Events fired (sidecar.event):
 //   mcp.author.chunk { messageId, delta }    — text delta
-//   mcp.author.step  { messageId, step }     — tool_use / tool_result
+//   mcp.author.step  { messageId, step }     — tool_use / tool_result / verify
 //   mcp.author.done  { messageId, text, ... }— terminal
+//
+// After the model Writes a <slug>.json config, we auto-verify it: run an
+// ephemeral handshake (mcpManager.test) and stream a synthetic `verify` step
+// (running → done) through the same `mcp.author.step` channel. This turns the
+// bare "Created …" reply into a live pass/fail with tool count or stderr, so the
+// user sees whether the server actually connects without leaving the modal.
 
+import { basename } from 'node:path'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { stepFromToolResult, stepFromToolUse } from '../sessions/step-mapper.js'
@@ -15,7 +22,25 @@ import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { awogHome } from '../util/path.js'
 import { buildPreset, PRESET_META } from '../mcp/presets.js'
+import { MCP_ID_RE } from '../mcp/schema.js'
+import { loadServer } from '../mcp/store.js'
+import { mcpManager } from '../mcp/manager.js'
 import { authorPi } from '../runtime/complete.js'
+
+// First-run `npx -y <pkg>` also downloads the package before it can speak MCP,
+// so the verify handshake gets a generous budget (never below the config's own).
+const VERIFY_MIN_TIMEOUT_MS = 60_000
+
+// Derive the config slug from a successful Write's file_path. Only accepts writes
+// under the mcp-servers dir with a schema-valid slug — anything else is ignored
+// (the model asked a clarifying question, or wrote an unrelated file).
+function slugFromWritePath(filePath: unknown): string | null {
+  if (typeof filePath !== 'string' || !filePath.includes('mcp-servers')) return null
+  const base = basename(filePath)
+  if (!base.endsWith('.json')) return null
+  const slug = base.slice(0, -'.json'.length)
+  return MCP_ID_RE.test(slug) ? slug : null
+}
 
 const ModelSchema = z.enum(ANTHROPIC_MODELS)
 
@@ -88,6 +113,43 @@ Hard rules:
 - Never call Read on existing config files unless the user asks to inspect them.`
 }
 
+// Run an ephemeral handshake against the just-written config and stream a
+// `verify` step (kind: 'verify') the UI renders as a pass/fail banner. Never
+// throws — a broken config surfaces as ok:false, not an author-RPC failure.
+async function verifyWritten(messageId: string, slug: string): Promise<void> {
+  const emitStep = (step: Record<string, unknown>): void =>
+    emit('mcp.author.step', { messageId, step: { id: 'mcp-verify', kind: 'verify', ...step } })
+
+  emitStep({ state: 'running', serverId: slug })
+  try {
+    const config = await loadServer(slug)
+    if (!config) {
+      emitStep({ state: 'done', ok: false, serverId: slug, error: `Config ${slug}.json not found` })
+      return
+    }
+    const outcome = await mcpManager.test(config, {
+      timeoutMs: Math.max(config.timeoutMs, VERIFY_MIN_TIMEOUT_MS),
+    })
+    emitStep({
+      state: 'done',
+      serverId: slug,
+      ok: outcome.ok,
+      toolCount: outcome.tools?.length ?? 0,
+      resourceCount: outcome.resources?.length ?? 0,
+      ...(outcome.error ? { error: outcome.error } : {}),
+      ...(outcome.stderr?.length ? { stderr: outcome.stderr } : {}),
+    })
+    log.info('mcp.author verify', { messageId, slug, ok: outcome.ok, tools: outcome.tools?.length })
+  } catch (err) {
+    emitStep({
+      state: 'done',
+      ok: false,
+      serverId: slug,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
 register('mcp.author', async (raw) => {
   const params = Params.parse(raw)
 
@@ -100,6 +162,10 @@ register('mcp.author', async (raw) => {
   })
 
   const transcript = renderTranscript(params.history, params.userText)
+
+  // Slug of the last config the model successfully Wrote — drives the post-author
+  // verify below. Captured from tool results so a failed Write never triggers it.
+  let writtenSlug: string | null = null
 
   // Author through the Pi runtime. Writes a <slug>.json config via the Write
   // tool, so authorPi drives an agentic loop with the full tool set (bypass
@@ -118,7 +184,11 @@ register('mcp.author', async (raw) => {
           messageId: params.messageId,
           step: stepFromToolUse({ id: use.id, name: use.name, input: use.input }),
         }),
-      onToolResult: (r) =>
+      onToolResult: (r) => {
+        if (r.name === 'Write' && !r.isError) {
+          const slug = slugFromWritePath(r.input.file_path)
+          if (slug) writtenSlug = slug
+        }
         emit('mcp.author.step', {
           messageId: params.messageId,
           step: stepFromToolResult({
@@ -128,9 +198,15 @@ register('mcp.author', async (raw) => {
             content: r.content,
             isError: r.isError,
           }),
-        }),
+        })
+      },
     },
   )
+
+  // Auto-verify the written config so "Created …" carries proof of life. Streamed
+  // through the step channel (running → done) BEFORE the done event, so the UI
+  // folds the terminal verify result into the completed turn.
+  if (writtenSlug) await verifyWritten(params.messageId, writtenSlug)
 
   const result = {
     messageId: params.messageId,

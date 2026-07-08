@@ -23,6 +23,7 @@ import * as store from './store.js'
 import { HttpMcpClient, ssrfCheck } from './http-client.js'
 import { expandSecrets } from './secrets.js'
 import type {
+  McpHealthCheck,
   McpServerConfig,
   McpServerSnapshot,
   McpStatus,
@@ -35,7 +36,6 @@ import type {
 const ENV_WHITELIST = ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR'] as const
 
 const STDERR_RING_SIZE = 100
-const TEST_TIMEOUT_MS = 5000
 const STOP_GRACE_MS = 2000
 const BACKOFF_MS = [1000, 3000, 5000]
 const CRASH_WINDOW_MS = 60_000
@@ -94,6 +94,33 @@ interface ToolsListResult {
 
 interface ResourcesListResult {
   resources?: { uri?: unknown; mimeType?: unknown }[]
+}
+
+// MCP tools/call result: tool-execution errors come back as a normal result
+// with `isError: true` (NOT a JSON-RPC error), so the probe must inspect this.
+interface CallToolResult {
+  content?: { type?: unknown; text?: unknown }[]
+  isError?: boolean
+}
+
+// Result of the optional post-handshake auth probe (tools/call).
+export interface McpProbeResult {
+  ok: boolean
+  tool: string
+  error?: string
+}
+
+// Full mcp.test outcome: handshake result (tools/resources) plus the optional
+// auth probe. `ok` reflects the handshake only — a failed probe leaves ok=true
+// (the server IS reachable) but sets `probe.ok=false` so the UI can distinguish
+// "can't connect" from "connected but token rejected".
+export interface McpTestOutcome {
+  ok: boolean
+  tools?: McpTool[]
+  resources?: McpResource[]
+  error?: string
+  stderr?: string[]
+  probe?: McpProbeResult
 }
 
 async function buildEnv(config: McpServerConfig): Promise<NodeJS.ProcessEnv> {
@@ -251,6 +278,42 @@ async function handshake(
     // Many servers don't expose resources — silently empty.
   }
   return { tools, resources }
+}
+
+// Extract readable text from a tools/call result's content array (for surfacing
+// the tool/auth error message in the UI). Capped so a huge payload can't bloat
+// the RPC response.
+function extractCallText(content: CallToolResult['content']): string {
+  if (!Array.isArray(content)) return ''
+  return content
+    .map((c) => (c && typeof c.text === 'string' ? c.text : ''))
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 1000)
+}
+
+// Optional auth probe (invoked by test() after a successful handshake): call one
+// read-only tool and report whether it authenticated. A tool-level failure
+// (isError, or a JSON-RPC error like a 401 relayed by the server) → ok:false so
+// the UI shows "connected but token rejected" instead of a bare "Connection OK".
+async function probeHealth(
+  client: McpClient,
+  hc: McpHealthCheck,
+  timeoutMs: number,
+): Promise<McpProbeResult> {
+  try {
+    const res = (await client.request(
+      'tools/call',
+      { name: hc.tool, arguments: hc.args ?? {} },
+      timeoutMs,
+    )) as CallToolResult
+    if (res && res.isError) {
+      return { ok: false, tool: hc.tool, error: extractCallText(res.content) || 'tool returned an error' }
+    }
+    return { ok: true, tool: hc.tool }
+  } catch (err) {
+    return { ok: false, tool: hc.tool, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 async function spawnChild(config: McpServerConfig): Promise<ChildProcessWithoutNullStreams> {
@@ -502,22 +565,25 @@ class McpManager {
 
   // One-shot connectivity test. Stdio: spawn ephemeral child, handshake, kill.
   // Http: ssrf guard + ephemeral POST handshake (no process). Used by
-  // `mcp.test` RPC for the McpEditor "Verify connection" button.
-  async test(
-    config: McpServerConfig,
-  ): Promise<{ ok: boolean; tools?: McpTool[]; resources?: McpResource[]; error?: string; stderr?: string[] }> {
+  // `mcp.test` RPC for the McpEditor "Verify connection" button and by the
+  // author flow's post-write verify.
+  //
+  // `opts.timeoutMs` overrides the handshake budget. Default is the config's own
+  // `timeoutMs` (30s) — same as start(), so a manual test no longer fails faster
+  // than the real startup would. The author-verify passes a larger value because
+  // a first `npx -y <pkg>` run also downloads the package before it can speak MCP.
+  async test(config: McpServerConfig, opts: { timeoutMs?: number } = {}): Promise<McpTestOutcome> {
+    const timeoutMs = opts.timeoutMs ?? config.timeoutMs
     if (config.transport === 'sse') {
       return { ok: false, error: 'sse transport not supported yet' }
     }
     if (config.transport === 'http') {
-      return this.testHttp(config)
+      return this.testHttp(config, timeoutMs)
     }
-    return this.testStdio(config)
+    return this.testStdio(config, timeoutMs)
   }
 
-  private async testStdio(
-    config: McpServerConfig,
-  ): Promise<{ ok: boolean; tools?: McpTool[]; resources?: McpResource[]; error?: string; stderr?: string[] }> {
+  private async testStdio(config: McpServerConfig, timeoutMs: number): Promise<McpTestOutcome> {
     let child: ChildProcessWithoutNullStreams
     try {
       child = await spawnChild(config)
@@ -531,19 +597,16 @@ class McpManager {
     })
     const client = new StdioMcpClient(child)
     try {
-      const { tools, resources } = await handshake(client, Math.min(config.timeoutMs, TEST_TIMEOUT_MS))
-      try {
-        child.kill('SIGTERM')
-      } catch {
-        // ignore
-      }
-      return { ok: true, tools, resources, stderr }
+      const { tools, resources } = await handshake(client, timeoutMs)
+      // Run the auth probe (if configured) on the SAME live child so it inherits
+      // the token env — then tear the child down.
+      const probe = config.healthCheck
+        ? await probeHealth(client, config.healthCheck, timeoutMs)
+        : undefined
+      this.killChild(child)
+      return { ok: true, tools, resources, stderr, ...(probe ? { probe } : {}) }
     } catch (err) {
-      try {
-        child.kill('SIGTERM')
-      } catch {
-        // ignore
-      }
+      this.killChild(child)
       return {
         ok: false,
         error: err instanceof Error ? err.message : String(err),
@@ -552,9 +615,15 @@ class McpManager {
     }
   }
 
-  private async testHttp(
-    config: McpServerConfig,
-  ): Promise<{ ok: boolean; tools?: McpTool[]; resources?: McpResource[]; error?: string }> {
+  private killChild(child: ChildProcessWithoutNullStreams): void {
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // ignore
+    }
+  }
+
+  private async testHttp(config: McpServerConfig, timeoutMs: number): Promise<McpTestOutcome> {
     if (!config.url) {
       return { ok: false, error: 'http transport requires url' }
     }
@@ -565,11 +634,11 @@ class McpManager {
     const expandedHeaders = await expandSecrets(config.id, config.headers)
     const client = new HttpMcpClient(config.url, expandedHeaders)
     try {
-      const { tools, resources } = await handshake(
-        client,
-        Math.min(config.timeoutMs, TEST_TIMEOUT_MS),
-      )
-      return { ok: true, tools, resources }
+      const { tools, resources } = await handshake(client, timeoutMs)
+      const probe = config.healthCheck
+        ? await probeHealth(client, config.healthCheck, timeoutMs)
+        : undefined
+      return { ok: true, tools, resources, ...(probe ? { probe } : {}) }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

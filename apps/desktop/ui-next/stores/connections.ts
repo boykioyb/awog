@@ -30,6 +30,13 @@ export type ConnectionResource = {
   mime: string
 }
 
+// Optional auth probe (mirror of sidecar McpHealthCheck): a read-only tool the
+// Test runs after the handshake to verify the token actually authenticates.
+export type McpHealthCheck = {
+  tool: string
+  args?: Record<string, unknown>
+}
+
 // Full MCP server entity (mirror of sidecar McpServerSnapshot —
 // apps/desktop/sidecar/src/types/shared.ts). NOT imported from the sidecar
 // package; the store owns its own slice. Config fields (id..deniedTools) round-
@@ -51,6 +58,7 @@ export type McpServer = {
   timeoutMs: number
   trust: ConnectionTrust
   deniedTools?: string[]
+  healthCheck?: McpHealthCheck
   // runtime (sidecar-owned)
   status: ConnectionStatus
   tools: ConnectionTool[]
@@ -70,13 +78,23 @@ export type Connection = {
 // runtime fields before sending to `mcp.upsert`.
 export type McpServerInput = McpServer
 
-// Result of an ephemeral connection probe (`mcp.test`).
+// Outcome of the optional post-handshake auth probe.
+export type McpProbeResult = {
+  ok: boolean
+  tool: string
+  error?: string
+}
+
+// Result of an ephemeral connection probe (`mcp.test`). `ok` reflects the
+// handshake; `probe` (when a healthCheck is configured) reports whether the
+// token actually authenticated.
 export type McpTestResult = {
   ok: boolean
   tools?: ConnectionTool[]
   resources?: ConnectionResource[]
   error?: string
   stderr?: string[]
+  probe?: McpProbeResult
 }
 
 // Runtime fields rebuilt by the McpManager — never sent to `mcp.upsert` (the

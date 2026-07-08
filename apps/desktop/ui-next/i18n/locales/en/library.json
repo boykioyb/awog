@@ -26,5 +26,9 @@
   "library.creator.send": "Send",
   "library.creator.generating": "Generating…",
   "library.creator.sendHint": "Enter to send · Shift+Enter for newline",
-  "library.creator.turns": "{n} turn(s) · list auto-refreshes"
+  "library.creator.turns": "{n} turn(s) · list auto-refreshes",
+
+  "library.creator.verify.running": "Testing connection… (first run may download the package)",
+  "library.creator.verify.ok": "Connected · {tools} tool(s), {resources} resource(s)",
+  "library.creator.verify.fail": "Connection failed"
 }

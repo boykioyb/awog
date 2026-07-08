@@ -39,6 +39,7 @@ const BudgetSchema = z.object({
 const PinnedContextSchema = z.object({
   files: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  notePresets: z.array(z.string()).optional(),
 })
 
 const SessionSchema = z.object({
@@ -141,6 +142,7 @@ function toPinnedContext(
   const p: NonNullable<Session['pinnedContext']> = {}
   if (parsed.files !== undefined) p.files = parsed.files
   if (parsed.notes !== undefined) p.notes = parsed.notes
+  if (parsed.notePresets !== undefined) p.notePresets = parsed.notePresets
   return Object.keys(p).length ? p : undefined
 }
 

@@ -166,6 +166,7 @@ const Params = z.object({
     .object({
       files: z.array(z.string()).max(20).optional(),
       notes: z.string().max(20000).optional(),
+      notePresets: z.array(z.string().max(20000)).max(20).optional(),
     })
     .optional(),
   // Hard budget caps (Pha 3). `hardLimitUsd` refuses a turn once the session's
@@ -299,7 +300,9 @@ const MAX_PINNED_TOTAL_CHARS = 80_000
 // so the model never silently sees stale or partial content as complete. Returns
 // undefined when nothing pins. Best-effort: never throws.
 async function buildPinnedContextBlock(
-  pinned: { files?: string[] | undefined; notes?: string | undefined } | undefined,
+  pinned:
+    | { files?: string[] | undefined; notes?: string | undefined; notePresets?: string[] | undefined }
+    | undefined,
   cwd: string | undefined,
 ): Promise<string | undefined> {
   if (!pinned) return undefined
@@ -332,6 +335,13 @@ async function buildPinnedContextBlock(
 
   const notes = pinned.notes?.trim()
   if (notes) parts.push(`<notes>\n${notes}\n</notes>`)
+
+  // Applied reusable notes — each as its own <notes> entry (same trust/injection as the
+  // free-text notes above; not read from disk, so no path sanitize needed).
+  for (const preset of pinned.notePresets ?? []) {
+    const t = preset.trim()
+    if (t) parts.push(`<notes>\n${t}\n</notes>`)
+  }
 
   if (!parts.length) return undefined
   return `<pinned_context>

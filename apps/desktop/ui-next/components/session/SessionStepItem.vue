@@ -70,8 +70,19 @@
             <div class="subhd">
               <Icon name="check" style="width: 12px; height: 12px" />
               {{ t('sessions.step.subagentSummary') }}
+              <button
+                v-if="summaryTruncated"
+                class="stepview subview"
+                :title="t('sessions.step.viewSummary')"
+                @click.stop="openSummary"
+              >
+                <Icon name="maximize" style="width: 12px; height: 12px" />
+              </button>
             </div>
-            <SessionTextBlock :text="summaryText" />
+            <SessionTextBlock :text="summaryPreview" />
+            <button v-if="summaryTruncated" class="submore" @click.stop="openSummary">
+              {{ t('sessions.step.viewSummary') }}
+            </button>
           </div>
         </div>
 
@@ -144,14 +155,38 @@ const todoCount = computed(() => {
 const isSkill = computed(() => /skill/i.test(props.block.tool))
 
 // A subagent's (Task) final report = the text it returns to the main agent, carried
-// on the step's `detail` (full, up to ~2k chars) or the truncated `result` chip.
-// Surfaced as a concluding summary block under the nested sub-steps.
+// on the step's `detail` (the FULL report — step-mapper persists Task results up to
+// FILE_DETAIL_MAX) or the truncated `result` chip. Surfaced as a concluding summary
+// block under the nested sub-steps; long reports are clipped inline (see below).
 const summaryText = computed(() => {
   const b = props.block
   if (!b.sub) return ''
   if (b.detail && (!b.detailKind || b.detailKind === 'text')) return b.detail
   return b.result ?? ''
 })
+
+// Keep the INLINE report compact so a long subagent report doesn't flood the
+// transcript: render a bounded preview here and reveal the full text in the modal.
+const SUMMARY_INLINE_MAX = 1200
+const summaryTruncated = computed(() => summaryText.value.length > SUMMARY_INLINE_MAX)
+const summaryPreview = computed(() =>
+  summaryTruncated.value
+    ? `${summaryText.value.slice(0, SUMMARY_INLINE_MAX)}\n\n…`
+    : summaryText.value,
+)
+
+// Open the subagent's FULL report in the shared full-window PreviewModal — a long
+// report reads better (and scrolls) in the modal; markdown kind gives the
+// render/raw toggle. Named after the agent so the modal title has context.
+const { open: openPreview } = usePreview()
+function openSummary(): void {
+  if (!summaryText.value) return
+  openPreview({
+    name: props.block.sub?.agent || t('sessions.step.subagentSummary'),
+    kind: 'markdown',
+    text: summaryText.value,
+  })
+}
 
 // Per-tool glyph for the step header. Matches both canonical tool names (mock:
 // Read/Edit/Bash/…) and the engine's human labels ("Run", "Search", "Update", …)
@@ -264,5 +299,21 @@ const toggleSub = (i: number) => {
   padding-top: 8px;
   border-top: 1px solid var(--border);
   font-size: 0.9231rem;
+}
+/* "View full summary" button — trails the accent header row, opens the report in
+   the shared PreviewModal. Reuses .stepview chrome; pushed to the far right. */
+.subview {
+  margin-left: auto;
+}
+/* Text affordance under a clipped preview: opens the same full-report modal. */
+.submore {
+  align-self: flex-start;
+  padding: 1px 0;
+  font-size: 0.8462rem;
+  color: var(--accent);
+  transition: opacity 0.12s ease;
+}
+.submore:hover {
+  opacity: 0.75;
 }
 </style>

@@ -44,6 +44,16 @@
   "activity.byAccount.col.turns": "Lượt",
   "activity.byAccount.col.cost": "Chi phí",
 
+  "activity.bySession.title": "Theo phiên",
+  "activity.bySession.empty": "Không có dữ liệu theo phiên trong khoảng này.",
+  "activity.bySession.sort.most": "Dùng nhiều nhất",
+  "activity.bySession.sort.least": "Dùng ít nhất",
+  "activity.bySession.col.session": "Phiên",
+  "activity.bySession.col.model": "Model",
+  "activity.bySession.col.total": "Tổng token",
+  "activity.bySession.col.turns": "Lượt",
+  "activity.bySession.col.cost": "Chi phí",
+
   "activity.rateLimit.title": "Giới hạn theo nhà cung cấp",
   "activity.rateLimit.empty": "Không có tài khoản nào có dữ liệu usage (Anthropic subscription hoặc OpenAI Codex).",
   "activity.rateLimit.loading": "Đang tải usage…",

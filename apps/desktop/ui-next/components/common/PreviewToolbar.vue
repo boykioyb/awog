@@ -1,5 +1,27 @@
 <template>
-  <div class="pvbar">
+  <!-- collapsed → a small round icon docked in the corner, out of the content -->
+  <button
+    v-if="collapsed"
+    class="pvbardock"
+    :title="t('common.preview.showToolbar')"
+    :aria-label="t('common.preview.showToolbar')"
+    @click="collapsed = false"
+  >
+    <SlidersHorizontal :size="16" />
+  </button>
+
+  <div v-else ref="barRef" class="pvbar" :class="{ dragging }" :style="barStyle">
+    <!-- drag handle: grab to reposition the bar so it never blocks content -->
+    <button
+      class="pvtb grip"
+      :title="t('common.preview.dragMove')"
+      :aria-label="t('common.preview.dragMove')"
+      @pointerdown="startDrag"
+    >
+      <GripVertical :size="15" />
+    </button>
+    <span class="pvsep" />
+
     <!-- transient action feedback (copied / saved / error) -->
     <div v-if="actionMsg" class="pvmsg" :class="{ err: actionErr }">{{ actionMsg }}</div>
 
@@ -237,6 +259,17 @@
       </div>
     </template>
 
+    <!-- collapse the whole bar to a corner icon (persisted) -->
+    <span class="pvsep" />
+    <button
+      class="pvtb"
+      :title="t('common.preview.hideToolbar')"
+      :aria-label="t('common.preview.hideToolbar')"
+      @click="collapse()"
+    >
+      <EyeOff :size="15" />
+    </button>
+
     <!-- click-away backdrop for whichever dropdown is open -->
     <div v-if="open" class="pvddback" @click="open = null" />
   </div>
@@ -248,12 +281,15 @@
 // only state it owns is which dropdown (theme/actions) is open. The theme list is
 // read straight from useMonacoTheme (module-level shared state).
 import {
+  EyeOff,
   FlipHorizontal2,
   FlipVertical2,
   FoldHorizontal,
+  GripVertical,
   Maximize2,
   RotateCcw,
   RotateCw,
+  SlidersHorizontal,
   UnfoldHorizontal,
   ZoomIn,
   ZoomOut,
@@ -326,6 +362,92 @@ const themeGroups = [
   { key: 'dark', items: themes.filter((o) => o.group === 'dark') },
   { key: 'light', items: themes.filter((o) => o.group === 'light') },
 ]
+
+// ── Dock: draggable position + collapse-to-corner-icon ──────────────────────
+// The bar floats bottom-center by default (CSS); dragging the grip sets an
+// explicit position, and the hide button collapses it to a small corner icon.
+// Both are persisted (renderer-only) so the choice survives across previews;
+// the position is clamped on restore so a smaller window can't strand it.
+const DOCK_KEY = 'awog.pv.toolbarDock'
+const barRef = useTemplateRef<HTMLElement>('barRef')
+const collapsed = ref(false)
+const pos = ref<{ x: number; y: number } | null>(null)
+const dragging = ref(false)
+
+const barStyle = computed(() =>
+  pos.value
+    ? {
+        left: `${pos.value.x}px`,
+        top: `${pos.value.y}px`,
+        right: 'auto',
+        bottom: 'auto',
+        transform: 'none',
+      }
+    : {},
+)
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+function persist() {
+  try {
+    localStorage.setItem(DOCK_KEY, JSON.stringify({ collapsed: collapsed.value, pos: pos.value }))
+  } catch {
+    // ignore quota / denied storage — dock state is a non-critical preference
+  }
+}
+
+function collapse() {
+  collapsed.value = true
+  open.value = null
+}
+watch(collapsed, persist)
+
+function startDrag(ev: PointerEvent) {
+  ev.preventDefault()
+  open.value = null
+  const handle = ev.currentTarget as HTMLElement
+  handle.setPointerCapture(ev.pointerId)
+  dragging.value = true
+  const rect = barRef.value?.getBoundingClientRect()
+  const startLeft = rect?.left ?? 0
+  const startTop = rect?.top ?? 0
+  const barW = rect?.width ?? 0
+  const barH = rect?.height ?? 0
+  const startX = ev.clientX
+  const startY = ev.clientY
+  const M = 8
+  const onMove = (e: PointerEvent) => {
+    pos.value = {
+      x: clamp(startLeft + (e.clientX - startX), M, window.innerWidth - barW - M),
+      y: clamp(startTop + (e.clientY - startY), M, window.innerHeight - barH - M),
+    }
+  }
+  const onUp = () => {
+    dragging.value = false
+    handle.removeEventListener('pointermove', onMove)
+    handle.removeEventListener('pointerup', onUp)
+    persist()
+  }
+  handle.addEventListener('pointermove', onMove)
+  handle.addEventListener('pointerup', onUp)
+}
+
+onMounted(() => {
+  try {
+    const raw = localStorage.getItem(DOCK_KEY)
+    if (!raw) return
+    const saved = JSON.parse(raw) as { collapsed?: boolean; pos?: { x: number; y: number } | null }
+    collapsed.value = !!saved.collapsed
+    // Keep a restored position at least partly on-screen (window may have shrunk).
+    if (saved.pos)
+      pos.value = {
+        x: clamp(saved.pos.x, 8, Math.max(8, window.innerWidth - 60)),
+        y: clamp(saved.pos.y, 8, Math.max(8, window.innerHeight - 60)),
+      }
+  } catch {
+    // ignore malformed persisted state — fall back to the default docking
+  }
+})
 </script>
 
 <style scoped>
@@ -344,6 +466,39 @@ const themeGroups = [
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  user-select: none;
+}
+/* drag handle + active drag cursor */
+.pvtb.grip {
+  cursor: grab;
+  touch-action: none;
+}
+.pvbar.dragging {
+  cursor: grabbing;
+}
+.pvbar.dragging .pvtb.grip {
+  cursor: grabbing;
+}
+/* collapsed: small round icon docked bottom-right, out of the reading column */
+.pvbardock {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--textDim);
+  background: var(--bgEl);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.pvbardock:hover {
+  background: var(--bgHover);
+  color: var(--text);
 }
 /* Icon button — sized to match the workspace-panel buttons (.wpib, 28px) so the
    preview controls read as the same family as the rest of the app's chrome. */

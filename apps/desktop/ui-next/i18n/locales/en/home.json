@@ -14,6 +14,7 @@
   "home.running.summary": "{tasks} task · {sessions} session · ~{rate} tok/min",
   "home.running.empty": "Nothing running",
   "home.running.node": "Node",
+  "home.running.session": "Session · {project}",
   "home.running.elapsed": "elapsed {time}",
   "home.openTasks": "Open Tasks →",
   "home.activity.title": "Activity · 24h",

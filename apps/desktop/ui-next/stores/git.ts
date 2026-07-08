@@ -319,6 +319,12 @@ export const useGitStore = defineStore('git', () => {
 
   // Route a remote-sync failure: auth → rich modal, everything else → toast.
   const reportSyncError = (op: GitStreamingOp, err: unknown): void => {
+    // A user-initiated cancel throws CANCELLED from the sidecar — that's not a
+    // failure, so surface a neutral notice instead of an error toast.
+    if (gitCodeOf(err) === 'CANCELLED') {
+      lastNotice.value = { key: 'git.notice.cancelled' }
+      return
+    }
     const auth = authPayloadOf(err)
     if (auth) pendingAuthError.value = { op, ...auth }
     else reportError(op, err)

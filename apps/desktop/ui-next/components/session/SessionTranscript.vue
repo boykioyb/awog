@@ -227,14 +227,20 @@ watch(
     })
   },
 )
-onMounted(() => {
+function windowAndScrollToBottom() {
   prevLen = props.messages.length
   windowStart.value = startForLastTurns(INITIAL_TURNS)
   nextTick(() => {
     scrollToBottom()
     updateEdges()
   })
-})
+}
+onMounted(windowAndScrollToBottom)
+// Re-opening a session restores its SessionDetail from <KeepAlive> instead of
+// remounting, so onMounted doesn't re-run — without this the transcript would keep
+// its old scroll position. Re-window to the latest turns + jump to the bottom on every
+// re-activation so opening a session always lands at the newest message.
+onActivated(windowAndScrollToBottom)
 </script>
 
 <style scoped>

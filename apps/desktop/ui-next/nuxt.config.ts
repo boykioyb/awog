@@ -3,6 +3,13 @@ import { fileURLToPath } from 'node:url'
 export default defineNuxtConfig({
   modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@nuxt/eslint'],
   vite: {
+    // Monaco is only ever dynamic-imported (kept out of the initial bundle). Left
+    // undeclared, Vite's dev optimizer discovers it lazily and re-bundles mid-
+    // session as its many internal/language modules surface — each re-optimize
+    // rewrites the optimized-dep hash, and a dynamic import that races that window
+    // 504s ("Failed to fetch dynamically imported module .../deps/monaco-editor.js").
+    // Pre-bundling it at cold start makes the hash stable for the whole session.
+    optimizeDeps: { include: ['monaco-editor'] },
     resolve: {
       alias: {
         // `monaco-themes` ships the curated theme JSON under ./themes, but its

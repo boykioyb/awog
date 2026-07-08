@@ -23,6 +23,14 @@ export const McpResourceSchema = z.object({
   mime: z.string().max(200).default(''),
 })
 
+// Optional auth probe run by mcp.test after the handshake — see McpHealthCheck
+// in types/shared.ts. `tool` is a tool name; `args` is passed verbatim to
+// tools/call (the user's own config, exercised the same way the runtime would).
+export const McpHealthCheckSchema = z.object({
+  tool: z.string().min(1).max(200),
+  args: z.record(z.unknown()).optional(),
+})
+
 // Persistence shape — what we actually write to ~/.awog/mcp-servers/<id>.json.
 // Runtime fields are intentionally excluded.
 export const McpServerConfigSchema = z.object({
@@ -44,6 +52,9 @@ export const McpServerConfigSchema = z.object({
   // restarts. Runtime enforcement (filtering on agent invocation) is wired
   // separately — this list is the source of truth.
   deniedTools: z.array(z.string().min(1).max(200)).max(500).optional(),
+  // Optional auth probe: tool called by mcp.test after the handshake to verify
+  // the token actually authenticates (handshake + tools/list never touch auth).
+  healthCheck: McpHealthCheckSchema.optional(),
 })
 
 // Stdio-specific narrowing — pha 1 only stdio is implemented. Refines must hold

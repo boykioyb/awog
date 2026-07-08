@@ -49,6 +49,32 @@
           </button>
         </div>
 
+        <!-- Saved bar — appears after a successful save. Shows the destination in a
+             readable form (folder dimmed, filename bold, full path on hover) plus the
+             file actions: reveal in the OS file manager and open in VS Code. -->
+        <div v-if="saved" class="expsaved">
+          <div class="expsaved-top">
+            <Icon name="check" class="expsaved-ok" style="width: 14px; height: 14px" />
+            <span class="expsaved-label">{{ t('sessions.export.savedLabel') }}</span>
+            <span style="flex: 1" />
+            <button class="expbtn" @click="onReveal">
+              <Icon name="folder" style="width: 13px; height: 13px" />
+              {{ t('sessions.export.reveal') }}
+            </button>
+            <button v-if="vscodeAvailable" class="expbtn" @click="onOpenVscode">
+              <Icon name="code" style="width: 13px; height: 13px" />
+              {{ t('sessions.export.openInVscode') }}
+            </button>
+            <button class="expbtn" :title="t('sessions.export.copyPath')" @click="onCopyPath">
+              <Icon name="copy" style="width: 13px; height: 13px" />
+            </button>
+          </div>
+          <div class="expsaved-path" :title="saved.path">
+            <span class="expsaved-dir">{{ savedDir }}</span>
+            <span class="expsaved-name">{{ savedName }}</span>
+          </div>
+        </div>
+
         <div class="expmodal-body">
           <pre class="exppreview">{{ content }}</pre>
         </div>
@@ -63,32 +89,59 @@
 // thin presentation shell. Mounted once in the default layout.
 import { computed, ref, watch } from 'vue'
 import { useSessionExportModal } from '~/composables/useSessionExportModal'
-import { useSessionExport, type ExportFormat } from '~/composables/useSessionExport'
+import {
+  useSessionExport,
+  type ExportFormat,
+  type SaveResult,
+} from '~/composables/useSessionExport'
 import { useSessionsStore } from '~/stores/sessions'
 
 const { t } = useI18n()
 const { sessionId, close } = useSessionExportModal()
 const store = useSessionsStore()
-const { buildContent, copyToClipboard, saveToDisk, canSave } = useSessionExport()
+const {
+  buildContent,
+  copyToClipboard,
+  saveToDisk,
+  revealExport,
+  openExportInVscode,
+  canSave,
+  vscodeAvailable,
+} = useSessionExport()
 
 const format = ref<ExportFormat>('md')
 const status = ref('')
 const statusErr = ref(false)
+// The last successful save — drives the readable "saved" bar + its file actions.
+const saved = ref<SaveResult | null>(null)
 
 const session = computed(() => store.sessions.find((s) => s.id === sessionId.value) ?? null)
 
 // Make sure the transcript is loaded (a session exported from the list context menu
-// may not be the active one). Reset the status line each time the dialog (re)opens.
+// may not be the active one). Reset the dialog state each time it (re)opens.
 watch(sessionId, (id) => {
-  status.value = ''
-  statusErr.value = false
+  resetState()
   format.value = 'md'
   if (id != null) void store.ensureLoaded(id)
 })
 
+// A saved export belongs to one format; switching format invalidates it (the file
+// on disk no longer matches the visible content), so clear the saved bar.
+watch(format, resetState)
+
 const content = computed(() => (session.value ? buildContent(session.value, format.value) : ''))
 
 const saveTitle = computed(() => (canSave ? '' : t('sessions.export.saveUnavailable')))
+
+// Split the absolute saved path into a (dimmed) folder + (bold) filename so the
+// full name stays readable instead of being ellipsized away. Cross-platform: the
+// separator is `/` (posix) or `\` (win).
+const savedName = computed(() => saved.value?.path.split(/[\\/]/).pop() ?? '')
+const savedDir = computed(() => {
+  const p = saved.value?.path ?? ''
+  const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+  return i >= 0 ? p.slice(0, i + 1) : ''
+})
 
 async function onCopy() {
   const ok = await copyToClipboard(content.value)
@@ -97,14 +150,41 @@ async function onCopy() {
 
 async function onSave() {
   if (!session.value) return
-  const path = await saveToDisk(session.value, format.value, content.value)
-  if (path) setStatus(t('sessions.export.saved', { path }), false)
-  else setStatus(t('sessions.export.saveFailed'), true)
+  const result = await saveToDisk(session.value, format.value, content.value)
+  if (result) {
+    saved.value = result
+    setStatus('', false)
+  } else {
+    saved.value = null
+    setStatus(t('sessions.export.saveFailed'), true)
+  }
+}
+
+async function onReveal() {
+  if (!saved.value) return
+  if (!(await revealExport(saved.value))) setStatus(t('sessions.export.revealFailed'), true)
+}
+
+async function onOpenVscode() {
+  if (!saved.value) return
+  if (!(await openExportInVscode(saved.value))) setStatus(t('sessions.export.openFailed'), true)
+}
+
+async function onCopyPath() {
+  if (!saved.value) return
+  const ok = await copyToClipboard(saved.value.path)
+  setStatus(ok ? t('sessions.export.pathCopied') : t('sessions.export.copyFailed'), !ok)
 }
 
 function setStatus(msg: string, err: boolean) {
   status.value = msg
   statusErr.value = err
+}
+
+function resetState() {
+  status.value = ''
+  statusErr.value = false
+  saved.value = null
 }
 
 // Esc closes (only while open).
@@ -225,6 +305,39 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .expbtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.expsaved {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accentDim);
+}
+.expsaved-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.expsaved-ok {
+  color: var(--accent);
+}
+.expsaved-label {
+  font-weight: 600;
+}
+.expsaved-path {
+  font-family: var(--code);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.expsaved-dir {
+  color: var(--textDim);
+}
+.expsaved-name {
+  color: var(--text);
+  font-weight: 600;
 }
 .expmodal-body {
   flex: 1;

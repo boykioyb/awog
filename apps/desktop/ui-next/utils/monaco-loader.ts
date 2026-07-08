@@ -9,6 +9,15 @@ import type * as Monaco from 'monaco-editor'
 let promise: Promise<typeof Monaco> | null = null
 
 export function loadMonaco(): Promise<typeof Monaco> {
-  if (!promise) promise = import('monaco-editor')
+  if (!promise) {
+    // Clear the cache on failure — otherwise a single transient import error (e.g.
+    // a Vite dev re-optimize race) is memoized forever, poisoning every later call
+    // and leaving the viewer stuck on its spinner until a full app reload. Nulling
+    // it lets the next open (or the viewer's Retry) re-import once Vite settles.
+    promise = import('monaco-editor').catch((err) => {
+      promise = null
+      throw err
+    })
+  }
   return promise
 }

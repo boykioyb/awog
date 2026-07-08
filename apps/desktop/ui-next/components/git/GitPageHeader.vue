@@ -63,7 +63,9 @@
         <span class="gsep" />
       </template>
 
-      <!-- Ops -->
+      <!-- Ops. While an op is in flight all three disable; the active one shows a
+           spinner + progress and gains an adjacent cancel (✕) so a hung
+           fetch/pull/push can be aborted instead of spinning forever. -->
       <button class="btn sm" :disabled="busy" @click="emit('fetch')">
         <Icon
           name="refresh"
@@ -71,6 +73,14 @@
           style="width: 13px; height: 13px"
         />
         {{ syncOp?.op === 'fetch' ? syncLabel : t('git.ops.fetch') }}
+      </button>
+      <button
+        v-if="syncOp?.op === 'fetch'"
+        class="btn sm gdanger"
+        :title="t('git.ops.cancel')"
+        @click="emit('cancel', 'fetch')"
+      >
+        <Icon name="x" style="width: 13px; height: 13px" />
       </button>
       <button class="btn sm" :disabled="busy" @click="emit('pull')">
         <Icon
@@ -84,6 +94,14 @@
           ↓{{ behind }}
         </span>
       </button>
+      <button
+        v-if="syncOp?.op === 'pull'"
+        class="btn sm gdanger"
+        :title="t('git.ops.cancel')"
+        @click="emit('cancel', 'pull')"
+      >
+        <Icon name="x" style="width: 13px; height: 13px" />
+      </button>
       <button class="btn pri sm" :disabled="busy" @click="emit('push')">
         <Icon
           v-if="syncOp?.op === 'push'"
@@ -93,6 +111,14 @@
         />
         {{ syncOp?.op === 'push' ? syncLabel : t('git.ops.pushWord') }}
         <span v-if="!syncOp && ahead" class="mono" style="font-size: 0.8462rem">↑{{ ahead }}</span>
+      </button>
+      <button
+        v-if="syncOp?.op === 'push'"
+        class="btn sm gdanger"
+        :title="t('git.ops.cancel')"
+        @click="emit('cancel', 'push')"
+      >
+        <Icon name="x" style="width: 13px; height: 13px" />
       </button>
 
       <span class="gsep" />
@@ -249,6 +275,7 @@ const emit = defineEmits<{
   (e: 'fetch'): void
   (e: 'pull'): void
   (e: 'push'): void
+  (e: 'cancel', op: 'fetch' | 'pull' | 'push'): void
   (e: 'complete-merge'): void
   (e: 'abort-merge'): void
   (e: 'open-identity'): void

@@ -87,6 +87,24 @@
               </div>
             </div>
           </div>
+
+          <!-- Footer action: /compact — summarise older turns to free budget (ADR 0047),
+               same RPC as the composer's `/compact`. Locked + spinner while it runs. -->
+          <div v-if="canCompact" class="ctxfoot">
+            <button
+              class="ctxaction"
+              :disabled="compacting"
+              :title="t('sessions.detail.compactHint')"
+              @click.stop="onCompact"
+            >
+              <Icon
+                :name="compacting ? 'refresh' : 'foldv'"
+                :class="{ ctxspin: compacting }"
+                style="width: 13px; height: 13px"
+              />
+              {{ compacting ? t('sessions.composer.compacting') : t('sessions.detail.compact') }}
+            </button>
+          </div>
         </div>
       </div>
     </template>
@@ -98,11 +116,13 @@
 // active session's `/context`-style usage (moved here from the SessionDetail
 // header). All math lives in useSessionContextUsage; this owns only the popover
 // open state + the two expandable bulk-load sections.
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
+import { pushActionToast } from '~/composables/useActionToasts'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
+const store = useSessionsStore()
 
 const {
   kfmt,
@@ -121,6 +141,19 @@ const {
 const open = ref(false)
 const memoryFilesOpen = ref(false)
 const agentsOpen = ref(false)
+
+// Manual `/compact` from the context popover — only for a live (engine-backed)
+// session; the store guards overlapping calls + drives `compacting`.
+const canCompact = computed(() => !!props.session.engineId)
+const compacting = computed(() => props.session.compacting === true)
+function onCompact() {
+  if (compacting.value) return
+  void store.compactSession(props.session.id).then((r) => {
+    if (r === 'compacted') pushActionToast(t('sessions.command.notice.compacted'), 'success')
+    else if (r === 'nothing') pushActionToast(t('sessions.command.notice.nothingToCompact'), 'info')
+    else pushActionToast(t('sessions.command.notice.compactFailed'), 'error')
+  })
+}
 </script>
 
 <style scoped>
@@ -289,9 +322,53 @@ const agentsOpen = ref(false)
   color: var(--textFaint);
   text-align: right;
 }
+/* ── Footer action (/compact) ─────────────────────────────────────────────── */
+.ctxfoot {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.ctxaction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.ctxaction:hover:not(:disabled) {
+  background: var(--bgHover);
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+.ctxaction:disabled {
+  cursor: default;
+  color: var(--textDim);
+}
+.ctxspin {
+  animation: ctxspin 0.9s linear infinite;
+}
+@keyframes ctxspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .ctxchev {
     transition: none;
+  }
+  .ctxspin {
+    animation: none;
   }
 }
 </style>

@@ -3,8 +3,14 @@
     <div ref="hostRef" class="mvhost" />
     <!-- Heavy Monaco bundle loads async on mount; cover the blank host with a
          spinner until the editor is created (the bundle can take a beat). -->
-    <div v-if="!ready" class="mvloading">
+    <div v-if="!ready && !loadError" class="mvloading">
       <span class="mvspin" />
+    </div>
+    <!-- Bundle failed to fetch (e.g. a Vite dev re-optimize race). Surface it with
+         a retry instead of an unhandled mount error + an endless spinner. -->
+    <div v-else-if="loadError" class="mverror">
+      <p>{{ t('common.preview.monacoLoadFailed') }}</p>
+      <button type="button" class="mvretry" @click="retry">{{ t('common.retry') }}</button>
     </div>
   </div>
 </template>
@@ -47,10 +53,14 @@ const emit = defineEmits<{
 
 const { isDark } = useTheme()
 const { current, hydrate, loadThemeData } = useMonacoTheme()
+const { t } = useI18n()
 
 const hostRef = useTemplateRef<HTMLElement>('hostRef')
 // Editor created + bundle loaded → hide the loading overlay.
 const ready = ref(false)
+// Set when the Monaco bundle fails to fetch — shows a retry instead of an endless
+// spinner (and keeps the failure from bubbling as an unhandled mount-hook error).
+const loadError = ref(false)
 const editor = shallowRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
 const monacoRef = shallowRef<typeof Monaco | null>(null)
 let model: Monaco.editor.ITextModel | null = null
@@ -134,10 +144,19 @@ async function applyTheme(): Promise<void> {
   if (current.value === id) monaco.editor.setTheme(themeId)
 }
 
-onMounted(async () => {
-  if (!hostRef.value) return
-  setupWorkers()
-  const monaco = await loadMonaco()
+async function initEditor(): Promise<void> {
+  if (!hostRef.value || editor.value) return
+  let monaco: typeof Monaco
+  try {
+    setupWorkers()
+    monaco = await loadMonaco()
+  } catch {
+    // The dynamic import failed (loadMonaco already cleared its cache so a retry
+    // can re-import). Surface it rather than leaving the mount hook rejected.
+    loadError.value = true
+    return
+  }
+  loadError.value = false
   monacoRef.value = monaco
   defineFollowAppThemes(monaco)
   model = monaco.editor.createModel(props.value, props.language || undefined)
@@ -165,7 +184,15 @@ onMounted(async () => {
 
   await hydrate()
   void applyTheme()
-})
+}
+
+// Re-attempt the bundle load after a transient fetch failure (Vite re-optimize).
+function retry(): void {
+  loadError.value = false
+  void initEditor()
+}
+
+onMounted(() => void initEditor())
 
 // Swap content/language without recreating the editor (item change / reload after
 // save). Suppress the change emit so an external swap isn't seen as a user edit.
@@ -230,6 +257,31 @@ onBeforeUnmount(() => {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: mv-spin 0.8s linear infinite;
+}
+/* Bundle-load failure state (same footprint as the loading overlay). */
+.mverror {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  background: var(--bgEl);
+  color: var(--textDim);
+}
+.mvretry {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.mvretry:hover {
+  background: var(--bgHover);
 }
 @keyframes mv-spin {
   to {

@@ -54,6 +54,7 @@
           @fetch="() => store.fetchRemote()"
           @pull="() => store.pull()"
           @push="openPush"
+          @cancel="(op) => store.cancel(op)"
           @complete-merge="() => store.completeMerge()"
           @abort-merge="() => store.abortMerge()"
           @open-identity="() => (identityOpen = true)"
@@ -138,6 +139,7 @@
             @fetch="() => store.fetchRemote()"
             @pull="() => store.pull()"
             @push="openPush"
+            @cancel="(op) => store.cancel(op)"
             @set-url="(p) => store.setRemoteUrl(p.name, p)"
             @edit-consumed="remoteEditName = null"
           />

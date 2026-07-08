@@ -241,7 +241,7 @@ type SessionGetDto = {
   settings?: { provider?: string; modelId?: string; accountId?: string; mode?: string }
   messages: EngineMessage[]
   // Pinned context + budget + fork lineage (full session only; not on the summary).
-  pinnedContext?: { files?: string[]; notes?: string }
+  pinnedContext?: { files?: string[]; notes?: string; notePresets?: string[] }
   workspaceFolder?: string
   budget?: {
     limitUsd?: number
@@ -1357,7 +1357,12 @@ export const useSessionsStore = defineStore('sessions', () => {
   // persist `{}` (keeps the round-trip clean).
   function pruneEmptyPinned(s: Session) {
     const p = s.pinnedContext
-    if (p && !(p.files && p.files.length) && !(p.notes && p.notes.trim())) {
+    if (
+      p &&
+      !(p.files && p.files.length) &&
+      !(p.notes && p.notes.trim()) &&
+      !(p.notePresets && p.notePresets.length)
+    ) {
       delete s.pinnedContext
     }
   }
@@ -1381,6 +1386,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (!s) return
     s.pinnedContext = { ...s.pinnedContext, notes }
+    pruneEmptyPinned(s)
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+  // Applied reusable notes (from the preset/recent library), toggled like file pins:
+  // each rides into the turn as its own <notes> entry, independent of the free-text
+  // `notes`. Stored as the note TEXT (not a preset id) so it's self-contained — it
+  // survives deleting the source preset or opening on another device. Toggling an
+  // already-applied note removes it.
+  function togglePinnedNotePreset(id: number, text: string) {
+    const s = byId(id)
+    const t = text.trim()
+    if (!s || !t) return
+    const cur = s.pinnedContext?.notePresets ?? []
+    const next = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]
+    s.pinnedContext = { ...s.pinnedContext, notePresets: next }
     pruneEmptyPinned(s)
     if (useIpc) pushUpsert(s, 'update-metadata')
   }
@@ -1481,6 +1501,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Pass the item's own quote snapshot as an override so draining doesn't consume
     // (or get clobbered by) any quotes the user added to the composer meanwhile.
     if (head) void sendMessage(id, head.text, head.att, head.command, head.quotes)
+  }
+  // "Send now" from a queued chip: stop the current turn and run THIS queued message
+  // immediately (jump the queue). The sidecar serializes turns per session
+  // (withSessionLock) + `sessions.cancel` aborts the in-flight turn to release that
+  // lock, so the new turn safely queues behind the aborting one and starts once it
+  // unwinds — no need to poll for the abort to finish. Removed from the queue up front
+  // so neither the abort's (non-draining) finalize nor a racing drain re-fires it.
+  async function sendQueuedNow(id: number, index: number) {
+    const s = byId(id)
+    const queue = s?.queue
+    const item = queue?.[index]
+    if (!s || !queue || !item) return
+    queue.splice(index, 1)
+    if (!queue.length) delete s.queue
+    await cancel(id)
+    await sendMessage(id, item.text, item.att, item.command, item.quotes)
   }
 
   // ── Turn runner ──────────────────────────────────────────────────────────────
@@ -1988,7 +2024,12 @@ export const useSessionsStore = defineStore('sessions', () => {
   // True when a session has any pinned context worth forwarding to the turn (≥1
   // file or non-empty notes) — so we don't ship an empty `{}` in the payload.
   function hasPinnedContext(p: Session['pinnedContext']): boolean {
-    return !!p && ((p.files?.length ?? 0) > 0 || (p.notes?.trim()?.length ?? 0) > 0)
+    return (
+      !!p &&
+      ((p.files?.length ?? 0) > 0 ||
+        (p.notes?.trim()?.length ?? 0) > 0 ||
+        (p.notePresets?.length ?? 0) > 0)
+    )
   }
 
   // The HARD budget fields only (the soft `limitUsd` stays UI-side, never enforced
@@ -2084,6 +2125,24 @@ export const useSessionsStore = defineStore('sessions', () => {
     // turn-starting path (the composer also gates sendNow to preserve the draft).
     if (await checkSendBlocked(id)) {
       notifyBlocked?.(accountById(s.accountId ?? '')?.label ?? '', 'send')
+      return
+    }
+
+    // Concurrency guard — never run two turns at once. A turn already streaming here
+    // means a racing turn-start reached us mid-flight: the two finalize signals (the
+    // done event + the RPC resolve) can BOTH call drainQueue, and the `await` above lets
+    // the second slip past drainQueue's status check before the first flips it. Without
+    // this, each pushes a user message + a streaming placeholder → the transcript shows
+    // two "Streaming…" turns while only the first actually runs, and the queue drains out
+    // of order. Re-queue at the FRONT so this message runs next, in FIFO order, once the
+    // in-flight turn settles (drainQueue fires again on that turn's clean finish).
+    if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) {
+      const requeued: QueuedMessage = { text: trimmed }
+      if (atts.length) requeued.att = [...atts]
+      if (command) requeued.command = command
+      if (quotes.length) requeued.quotes = [...quotes]
+      s.queue = [requeued, ...(s.queue ?? [])]
+      if (!quotesOverride) s.followups = []
       return
     }
 
@@ -2927,6 +2986,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     addPinnedFile,
     removePinnedFile,
     setPinnedNotes,
+    togglePinnedNotePreset,
     setBudget,
     compactSession,
     // pin / bulk
@@ -2939,6 +2999,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     enqueue,
     dequeue,
     drainQueue,
+    sendQueuedNow,
     setDraft,
     // turn runner + gates
     sendMessage,

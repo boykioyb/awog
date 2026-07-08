@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { register, RpcError } from '../transport/rpc.js'
 import { loadSession } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
@@ -51,5 +51,8 @@ register('sessions.save-export', async (raw) => {
   const path = join(dir, filename)
   await writeFile(path, params.content, { encoding: 'utf8', mode: 0o600 })
 
-  return { path }
+  // Return the base + workspace-relative path alongside the absolute one so the UI
+  // can reveal the file / open it in VS Code through the workspace-scoped shell IPC
+  // (which validates root + rel — it never accepts a bare absolute path).
+  return { path, root: base, rel: relative(base, path) }
 })

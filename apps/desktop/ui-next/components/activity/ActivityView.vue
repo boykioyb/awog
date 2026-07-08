@@ -172,6 +172,61 @@
       </table>
     </div>
 
+    <!-- By session table -->
+    <div class="actsesh">
+      <div class="sech">{{ t('activity.bySession.title') }}</div>
+      <div class="seg">
+        <span
+          v-for="s in SESSION_SORTS"
+          :key="s"
+          :class="{ on: s === sessionSort }"
+          role="button"
+          @click="sessionSort = s"
+        >
+          {{ t(`activity.bySession.sort.${s}`) }}
+        </span>
+      </div>
+    </div>
+    <div class="tile actpanel">
+      <div v-if="!bySession.length" class="acthint">{{ t('activity.bySession.empty') }}</div>
+      <table v-else class="acttable">
+        <thead>
+          <tr>
+            <th class="tl">{{ t('activity.bySession.col.session') }}</th>
+            <th class="tl">{{ t('activity.bySession.col.model') }}</th>
+            <th class="tr">{{ t('activity.bySession.col.total') }}</th>
+            <th class="tr">{{ t('activity.bySession.col.turns') }}</th>
+            <th class="tr">{{ t('activity.bySession.col.cost') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="s in bySession" :key="s.sessionId">
+            <td class="tl">
+              <span
+                class="actseshttl actseshlink"
+                role="button"
+                tabindex="0"
+                :title="s.title"
+                @click="goToSession(s.sessionId)"
+                @keydown.enter="goToSession(s.sessionId)"
+              >
+                {{ s.title }}
+              </span>
+            </td>
+            <td class="tl">
+              <div class="actmdl">
+                <span class="mono">{{ s.model || '—' }}</span>
+                <span v-if="s.provider" class="tag">{{ s.provider }}</span>
+              </div>
+            </td>
+            <td class="tr mono">{{ formatTokens(s.totalTokens) }}</td>
+            <td class="tr mono">{{ formatTokens(s.turns) }}</td>
+            <td class="tr mono" style="color: var(--accent)">{{ formatCost(s.costUsd) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- Provider rate-limit panel (one card per account) -->
     <div class="sech">{{ t('activity.rateLimit.title') }}</div>
     <div v-if="!rateLimitAccounts.length" class="tile actpanel">
@@ -191,12 +246,28 @@
 // auto-import (components/common/AppSelect.vue). Rendered inside ActivityModal —
 // the modal body owns scrolling; this view is just the content.
 import { computed } from 'vue'
+import type { SessionSort } from '~/composables/useActivity'
 import { ACTIVITY_RANGES, useActivity } from '~/composables/useActivity'
 
+// By-session sort options (most-used first / least-used first).
+const SESSION_SORTS: readonly SessionSort[] = ['most', 'least'] as const
+
 const { t } = useI18n()
+const { openSession } = useSessionTaskLink()
+const { closeActivity } = useActivityModal()
+
+// Click a session title → open it on the Sessions page and dismiss the Activity
+// modal. Only close on success (openSession returns false for a deleted session
+// or the browser-dev mock rows, which have no real engineId to resolve).
+async function goToSession(engineId: string): Promise<void> {
+  const ok = await openSession(engineId)
+  if (ok) closeActivity()
+}
+
 const {
   range,
   accountId,
+  sessionSort,
   accountOptions,
   accounts,
   loading,
@@ -205,6 +276,7 @@ const {
   chartBars,
   byModel,
   byAccount,
+  bySession,
   missingPriceSet,
   hasMissingPrices,
   formatTokens,
@@ -403,5 +475,33 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 14px;
+}
+
+/* By-session header row: section title + sort toggle on one line. */
+.actsesh {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0 9px;
+}
+.actsesh .sech {
+  margin: 0;
+}
+.actseshttl {
+  display: block;
+  max-width: 460px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actseshlink {
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.actseshlink:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 </style>

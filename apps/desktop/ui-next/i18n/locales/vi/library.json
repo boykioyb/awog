@@ -26,5 +26,9 @@
   "library.creator.send": "Gửi",
   "library.creator.generating": "Đang tạo…",
   "library.creator.sendHint": "Enter để gửi · Shift+Enter xuống dòng",
-  "library.creator.turns": "{n} lượt · danh sách tự cập nhật"
+  "library.creator.turns": "{n} lượt · danh sách tự cập nhật",
+
+  "library.creator.verify.running": "Đang kiểm tra kết nối… (lần đầu có thể tải package)",
+  "library.creator.verify.ok": "Đã kết nối · {tools} tool, {resources} resource",
+  "library.creator.verify.fail": "Kết nối thất bại"
 }

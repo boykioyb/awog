@@ -375,6 +375,13 @@ export function stepFromToolResult(rawInfo: ToolResultInfo): SessionStep {
       content.length > 0
         ? { kind: 'file', path, content: clip(content, FILE_DETAIL_MAX) }
         : { kind: 'text', content: preview }
+  } else if (info.toolName === 'Task') {
+    // A subagent's returned report is a substantive artifact (like a source file
+    // or plan doc), not a one-line tool result — persist it up to FILE_DETAIL_MAX
+    // so the UI's "view summary" preview shows the FULL text the main agent
+    // received, instead of the 2k inline clip that reads as "…(truncated)".
+    const full = clip(toolResultText(info.content), FILE_DETAIL_MAX)
+    if (full.length > 0) detail = { kind: 'text', content: full }
   } else if (preview.length > 0) {
     detail = { kind: 'text', content: preview }
   }

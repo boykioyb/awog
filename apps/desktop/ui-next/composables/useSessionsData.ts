@@ -261,6 +261,10 @@ export type SessionBudget = {
 export type PinnedContext = {
   files?: string[]
   notes?: string
+  // Reusable notes (from the preset/recent library) applied to this session as
+  // discrete toggled units — each fed to the turn as its own <notes> entry, distinct
+  // from the free-text `notes`. Stored as text so they survive preset deletion.
+  notePresets?: string[]
 }
 
 // A message the user queued while a turn was streaming (§2). Auto-drained FIFO as
@@ -415,6 +419,7 @@ const WPVIEWS: [string, string, string][] = [
   ['Files', 'folder', '⇧⌘F'],
   ['Tasks', 'tasks', ''],
   ['Plan', 'rules', ''],
+  ['Cost', 'zap', ''],
   ['Info', 'alert', ''],
 ]
 const wpIcon = (t: string): string => WPVIEWS.find((v) => v[0] === t)?.[1] || 'folder'

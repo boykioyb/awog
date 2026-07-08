@@ -20,10 +20,7 @@
           <template v-for="(m, i) in messages" :key="i">
             <div class="lcp-msg" :class="m.role">
               <div v-if="m.steps && m.steps.length" class="lcp-steps">
-                <div v-for="s in m.steps" :key="s.id" class="lcp-step">
-                  <Icon name="zap" style="width: 11px; height: 11px" />
-                  <span>{{ s.label ?? s.id }}</span>
-                </div>
+                <CreatorStepRow v-for="s in m.steps" :key="s.id" :step="s" />
               </div>
               <div class="lcp-text">{{ m.text }}</div>
             </div>
@@ -31,10 +28,7 @@
 
           <div v-if="isStreaming" class="lcp-msg agent">
             <div v-if="streamingSteps.length" class="lcp-steps">
-              <div v-for="s in streamingSteps" :key="s.id" class="lcp-step">
-                <Icon name="zap" style="width: 11px; height: 11px" />
-                <span>{{ s.label ?? s.id }}</span>
-              </div>
+              <CreatorStepRow v-for="s in streamingSteps" :key="s.id" :step="s" />
             </div>
             <div class="lcp-text">
               {{ streamingText }}
@@ -95,6 +89,7 @@
 // resolver, and localized title/hint/placeholder strings.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
+import CreatorStepRow from '~/components/library/CreatorStepRow.vue'
 import { usePromptCreator } from '~/composables/usePromptCreator'
 
 const props = withDefaults(
@@ -271,14 +266,6 @@ onBeforeUnmount(() => creator.teardown())
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-.lcp-step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8462rem;
-  font-family: var(--code);
-  color: var(--textDim);
 }
 .lcp-caret {
   color: var(--accent);

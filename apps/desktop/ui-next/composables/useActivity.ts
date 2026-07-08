@@ -48,6 +48,22 @@ export type ActivityByAccount = {
   turns: number
 }
 
+export type ActivityBySession = {
+  sessionId: string
+  title: string
+  projectId?: string
+  provider: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  costUsd: number
+  turns: number
+  lastAt: string
+}
+
 export type ActivityByDay = {
   date: string
   totalTokens: number
@@ -61,11 +77,15 @@ export type ActivitySummary = {
   totals: ActivityTotals
   byModel: ActivityByModel[]
   byAccount: ActivityByAccount[]
+  bySession: ActivityBySession[]
   byDay: ActivityByDay[]
   // Models referenced in the period that have no configured price → cost is
   // under-reported for them. The page flags these rows.
   missingPrices: string[]
 }
+
+// Sort order for the by-session table.
+export type SessionSort = 'most' | 'least'
 
 // One chart column derived from byDay — height normalized 0..100 against the
 // max-cost (or max-token) bucket, with the value/date kept for the tooltip.
@@ -115,6 +135,7 @@ function emptySummary(range: ActivityRange): ActivitySummary {
     },
     byModel: [],
     byAccount: [],
+    bySession: [],
     byDay: [],
     missingPrices: [],
   }
@@ -194,6 +215,50 @@ function mockSummary(range: ActivityRange): ActivitySummary {
         turns: Math.round(turns * 0.4),
       },
     ],
+    bySession: [
+      {
+        sessionId: 'mock-s1',
+        title: 'Refactor Activity page',
+        provider: 'Anthropic',
+        model: 'claude-opus-4-8',
+        inputTokens: Math.round(totalTokens * 0.06),
+        outputTokens: Math.round(totalTokens * 0.04),
+        cacheReadTokens: Math.round(totalTokens * 0.22),
+        cacheWriteTokens: Math.round(totalTokens * 0.03),
+        totalTokens: Math.round(totalTokens * 0.35),
+        costUsd: Number((costUsd * 0.38).toFixed(4)),
+        turns: Math.round(turns * 0.34),
+        lastAt: byDay[byDay.length - 1]?.date ?? today.toISOString(),
+      },
+      {
+        sessionId: 'mock-s2',
+        title: 'Debug session switch lag',
+        provider: 'Anthropic',
+        model: 'claude-opus-4-8',
+        inputTokens: Math.round(totalTokens * 0.04),
+        outputTokens: Math.round(totalTokens * 0.03),
+        cacheReadTokens: Math.round(totalTokens * 0.15),
+        cacheWriteTokens: Math.round(totalTokens * 0.02),
+        totalTokens: Math.round(totalTokens * 0.24),
+        costUsd: Number((costUsd * 0.26).toFixed(4)),
+        turns: Math.round(turns * 0.28),
+        lastAt: byDay[byDay.length - 2]?.date ?? today.toISOString(),
+      },
+      {
+        sessionId: 'mock-s3',
+        title: 'Draft release notes',
+        provider: 'OpenAI',
+        model: 'gpt-5-codex',
+        inputTokens: Math.round(totalTokens * 0.02),
+        outputTokens: Math.round(totalTokens * 0.01),
+        cacheReadTokens: Math.round(totalTokens * 0.05),
+        cacheWriteTokens: Math.round(totalTokens * 0.01),
+        totalTokens: Math.round(totalTokens * 0.09),
+        costUsd: Number((costUsd * 0.08).toFixed(4)),
+        turns: Math.round(turns * 0.12),
+        lastAt: byDay[0]?.date ?? today.toISOString(),
+      },
+    ],
     byDay,
     missingPrices: range === 'all' ? ['gpt-5-codex'] : [],
   }
@@ -250,6 +315,28 @@ function normalize(raw: unknown, range: ActivityRange): ActivitySummary {
       })
     : []
 
+  const bySession: ActivityBySession[] = Array.isArray(r.bySession)
+    ? r.bySession.map((s) => {
+        const x = (s ?? {}) as Record<string, unknown>
+        const projectId = str(x.projectId)
+        return {
+          sessionId: str(x.sessionId),
+          title: str(x.title),
+          ...(projectId ? { projectId } : {}),
+          provider: str(x.provider),
+          model: str(x.model),
+          inputTokens: num(x.inputTokens),
+          outputTokens: num(x.outputTokens),
+          cacheReadTokens: num(x.cacheReadTokens),
+          cacheWriteTokens: num(x.cacheWriteTokens),
+          totalTokens: num(x.totalTokens),
+          costUsd: num(x.costUsd),
+          turns: num(x.turns),
+          lastAt: str(x.lastAt),
+        }
+      })
+    : []
+
   const byDay: ActivityByDay[] = Array.isArray(r.byDay)
     ? r.byDay.map((d) => {
         const x = (d ?? {}) as Record<string, unknown>
@@ -268,6 +355,7 @@ function normalize(raw: unknown, range: ActivityRange): ActivitySummary {
     totals,
     byModel,
     byAccount,
+    bySession,
     byDay,
     missingPrices,
   }
@@ -280,6 +368,8 @@ export function useActivity() {
   const range = ref<ActivityRange>('7d')
   // 'all' = no account filter; otherwise a real account id from useAccounts.
   const accountId = ref<string>(ACCOUNT_ALL)
+  // By-session table sort: most-used (default) or least-used.
+  const sessionSort = ref<SessionSort>('most')
   const summary = ref<ActivitySummary>(sc.available ? emptySummary(range.value) : mockSummary('7d'))
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -360,6 +450,15 @@ export function useActivity() {
       (a, b) => b.costUsd - a.costUsd || b.totalTokens - a.totalTokens,
     ),
   )
+  // by-session rows sorted by total tokens; direction driven by sessionSort so
+  // the user can flip between most-used and least-used sessions.
+  const bySession = computed(() => {
+    const rows = [...summary.value.bySession]
+    const dir = sessionSort.value === 'most' ? -1 : 1
+    return rows.sort(
+      (a, b) => dir * (a.totalTokens - b.totalTokens) || dir * (a.costUsd - b.costUsd),
+    )
+  })
 
   const isEmpty = computed(
     () => !loading.value && totals.value.totalTokens === 0 && summary.value.byDay.length === 0,
@@ -369,6 +468,7 @@ export function useActivity() {
     // state
     range,
     accountId,
+    sessionSort,
     accountOptions,
     accounts,
     loading,
@@ -380,6 +480,7 @@ export function useActivity() {
     chartBars,
     byModel,
     byAccount,
+    bySession,
     missingPriceSet,
     hasMissingPrices,
     isEmpty,

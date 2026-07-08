@@ -6,10 +6,12 @@ import { cost, getEffectivePricing, parsePricingOverrides } from '../pricing/cat
 import { loadRemotePricingMap } from '../pricing/remote.js'
 import { parseBucketKey, rangeToWindow, rollupRange } from '../usage/rollup.js'
 import type { UsageBucket } from '../usage/rollup.js'
+import { collectSessionTurnsSince, listSessionSummaries } from '../sessions/store.js'
 import type {
   ActivityByAccount,
   ActivityByDay,
   ActivityByModel,
+  ActivityBySession,
   ActivitySummary,
   ActivityTotals,
   ProviderName,
@@ -47,6 +49,129 @@ async function buildAccountIndex(): Promise<Map<string, { label: string; provide
     }
   }
   return index
+}
+
+// Per-session mutable accumulator (dominant model tracked via a per-model
+// token map, resolved after aggregation).
+interface SessionAcc {
+  sessionId: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  costUsd: number
+  turns: number
+  lastAt: number
+  // model id → tokens (to pick the session's dominant model) + its provider.
+  models: Map<string, { tokens: number; provider: string }>
+}
+
+// Build the per-session usage breakdown for the window (Sessions only). Reads
+// session JSONL tail-first over [fromMs, toMs] — bounded by recent activity, not
+// total history (see collectSessionTurnsSince). Cost is applied per turn using
+// the turn's own model, so mixed-model sessions (subagents) price correctly.
+//
+// NOTE: unlike totals/byModel/byDay this does NOT hit the frozen daily rollup
+// cache (the rollup drops session id by design), so it re-scans on each call.
+// Acceptable for a local-first single-user app; the default range is 7d.
+async function buildBySession(
+  fromMs: number,
+  toMs: number,
+  accountIndex: Map<string, { label: string; provider: ProviderName }>,
+  filterAccountId: string | undefined,
+  overrides: ReturnType<typeof parsePricingOverrides>,
+  remote: Awaited<ReturnType<typeof loadRemotePricingMap>>,
+): Promise<ActivityBySession[]> {
+  const turns = await collectSessionTurnsSince(fromMs, toMs)
+  const summaries = await listSessionSummaries()
+  const meta = new Map<string, { title: string; projectId?: string }>()
+  for (const s of summaries) {
+    meta.set(s.id, { title: s.title, ...(s.projectId ? { projectId: s.projectId } : {}) })
+  }
+
+  const bySessionMap = new Map<string, SessionAcc>()
+  for (const t of turns) {
+    // Same account guardrails as the rollup path: drop orphan-account turns and
+    // apply the account filter so numbers stay consistent across the page.
+    if (!accountIndex.has(t.accountId)) continue
+    if (filterAccountId !== undefined && t.accountId !== filterAccountId) continue
+
+    const tokens = t.inputTokens + t.outputTokens + t.cacheReadTokens + t.cacheWriteTokens
+    const price = getEffectivePricing(t.model, overrides, remote)
+    const lineCost = price
+      ? cost(
+          {
+            inputTokens: t.inputTokens,
+            outputTokens: t.outputTokens,
+            cacheReadTokens: t.cacheReadTokens,
+            cacheWriteTokens: t.cacheWriteTokens,
+          },
+          price,
+        )
+      : 0
+
+    let acc = bySessionMap.get(t.sessionId)
+    if (!acc) {
+      acc = {
+        sessionId: t.sessionId,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalTokens: 0,
+        costUsd: 0,
+        turns: 0,
+        lastAt: 0,
+        models: new Map(),
+      }
+      bySessionMap.set(t.sessionId, acc)
+    }
+    acc.inputTokens += t.inputTokens
+    acc.outputTokens += t.outputTokens
+    acc.cacheReadTokens += t.cacheReadTokens
+    acc.cacheWriteTokens += t.cacheWriteTokens
+    acc.totalTokens += tokens
+    acc.costUsd += lineCost
+    acc.turns += 1
+    if (t.at > acc.lastAt) acc.lastAt = t.at
+    const m = acc.models.get(t.model)
+    if (m) m.tokens += tokens
+    else acc.models.set(t.model, { tokens, provider: t.provider })
+  }
+
+  const out: ActivityBySession[] = [...bySessionMap.values()].map((acc) => {
+    // Dominant model = the one with the most tokens in this session.
+    let model = ''
+    let provider = ''
+    let best = -1
+    for (const [id, info] of acc.models) {
+      if (info.tokens > best) {
+        best = info.tokens
+        model = id
+        provider = info.provider
+      }
+    }
+    const info = meta.get(acc.sessionId)
+    return {
+      sessionId: acc.sessionId,
+      title: info?.title || acc.sessionId,
+      ...(info?.projectId ? { projectId: info.projectId } : {}),
+      provider: providerLabel(provider),
+      model,
+      inputTokens: acc.inputTokens,
+      outputTokens: acc.outputTokens,
+      cacheReadTokens: acc.cacheReadTokens,
+      cacheWriteTokens: acc.cacheWriteTokens,
+      totalTokens: acc.totalTokens,
+      costUsd: acc.costUsd,
+      turns: acc.turns,
+      lastAt: new Date(acc.lastAt).toISOString(),
+    }
+  })
+  // Default order: most tokens first (UI can re-sort).
+  out.sort((a, b) => b.totalTokens - a.totalTokens || b.costUsd - a.costUsd)
+  return out
 }
 
 // activity.summary — gom usage rollup theo range, áp giá hiệu lực → cost, group
@@ -179,6 +304,15 @@ register('activity.summary', async (raw): Promise<ActivitySummary> => {
     turns: m.turns,
   }))
 
+  const bySession = await buildBySession(
+    fromMs,
+    toMs,
+    accountIndex,
+    params.accountId,
+    overrides,
+    remote,
+  )
+
   return {
     range: params.range,
     from: new Date(fromMs).toISOString(),
@@ -186,6 +320,7 @@ register('activity.summary', async (raw): Promise<ActivitySummary> => {
     totals,
     byModel,
     byAccount: [...byAccountMap.values()],
+    bySession,
     byDay,
     missingPrices: [...missingPrices],
   }

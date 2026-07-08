@@ -5,6 +5,7 @@
   "sessions.composer.queueSend": "Queue (sends after the current turn)",
   "sessions.composer.queued": "Queued",
   "sessions.composer.queuedRemove": "Remove from queue",
+  "sessions.composer.queuedSendNow": "Send now — stops the current turn",
   "sessions.composer.steer": "Insert",
   "sessions.composer.steerHint": "Insert into the running turn",
   "sessions.composer.steerDone": "Inserted into the running turn",
@@ -80,5 +81,8 @@
   "sessions.pinned.deletePreset": "Delete preset",
   "sessions.pinned.presets": "Presets",
   "sessions.pinned.recentNotes": "Recent",
-  "sessions.pinned.clearRecent": "Clear"
+  "sessions.pinned.clearRecent": "Clear",
+  "sessions.pinned.inUse": "In use — re-fed every turn",
+  "sessions.pinned.titleCount": "Pinned context ({n})",
+  "sessions.pinned.deleteRecent": "Remove from recent"
 }

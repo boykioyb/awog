@@ -724,6 +724,8 @@ export interface SessionTurnUsage {
   provider: string
   model: string
   accountId: string
+  // Owning session id — lets the Activity page group usage by session.
+  sessionId: string
 }
 
 // Stable sentinel for a turn whose account id was never recorded (legacy turn +
@@ -785,6 +787,7 @@ export async function collectSessionTurnsSince(
           provider: fallbackProvider,
           model: msg.modelUsed || fallbackModel,
           accountId: msg.accountId ?? fallbackAccountId,
+          sessionId: s.id,
         })
       }
     } catch (err) {

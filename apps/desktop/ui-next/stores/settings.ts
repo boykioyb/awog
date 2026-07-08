@@ -231,6 +231,7 @@ const DEFAULT_WORKSPACE_PANEL: WorkspacePanelLayout = {
     Plan: 'right',
     Tasks: 'right',
     Preview: 'right',
+    Cost: 'right',
   },
   leftWidth: 322,
   rightWidth: 322,

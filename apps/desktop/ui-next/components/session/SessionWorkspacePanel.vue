@@ -82,6 +82,9 @@
       <!-- Preview — renders the markdown artifacts this session produced. -->
       <WorkspacePreview v-else-if="active === 'Preview'" :session="session" />
 
+      <!-- Cost — per-day spend + 1d/7d/30d/custom-range roll-up for this session. -->
+      <WorkspaceCost v-else-if="active === 'Cost'" :session="session" />
+
       <!-- Terminal — kept mounted once opened so the PTY persists across tab
            switches; unmounted (PTY killed) only when the Terminal view leaves
            this panel (closed or docked to the other side). -->
@@ -206,7 +209,6 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { wpIcon } = useSessionsData()
 const { projectName } = useProjects()
-const { fmtUsd, costOf, softLimit, hasBudgetInfo } = useSessionCost()
 
 // Resolve the project's absolute root + readiness for the (session-agnostic)
 // Terminal widget — it now takes a cwd + grouping key, not a Session.
@@ -253,7 +255,16 @@ watch(
 // padded wpbody. `isFallbackTab` = any view without a dedicated body (defensive — all
 // known views are handled).
 const FLUSH_TABS = new Set(['Diff', 'Files', 'Terminal', 'Preview'])
-const HANDLED_TABS = new Set(['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Info', 'Preview'])
+const HANDLED_TABS = new Set([
+  'Diff',
+  'Files',
+  'Terminal',
+  'Plan',
+  'Tasks',
+  'Info',
+  'Preview',
+  'Cost',
+])
 const isFlushTab = computed(() => FLUSH_TABS.has(props.active ?? ''))
 const isFallbackTab = computed(() => !!props.active && !HANDLED_TABS.has(props.active))
 
@@ -325,15 +336,8 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
     { k: t('sessions.info.tokens'), v: `${kfmt(totalTok.value)} / 200k` },
     { k: t('sessions.info.updated'), v: s.when },
   ]
-  // Cost / soft budget (moved here from the composer toolbar): cumulative USD,
-  // with `/ limit` when a soft budget is set.
-  if (hasBudgetInfo(s)) {
-    const limit = softLimit(s)
-    rows.push({
-      k: t('sessions.info.cost'),
-      v: limit ? `${fmtUsd(costOf(s) ?? 0)} / ${fmtUsd(limit)}` : fmtUsd(costOf(s)),
-    })
-  }
+  // Cost has its own dedicated Cost tab (per-day + 1d/7d/30d/custom-range roll-up);
+  // not duplicated here.
   if (s.aboutGhUrl) {
     rows.push({ k: t('sessions.info.gh'), v: ghLabel(s.aboutGhUrl), href: s.aboutGhUrl })
   }

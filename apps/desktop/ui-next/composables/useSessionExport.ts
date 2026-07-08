@@ -9,11 +9,16 @@
 // HTML is a standalone, neutral light document (good for sharing/printing) and is
 // deliberately self-styled — it can't reference the app's CSS theme vars off-app.
 
+import { ref } from 'vue'
 import type { AssistantBlock, Session } from '~/composables/useSessionsData'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
 import { useSidecar } from '~/composables/useSidecar'
 
 export type ExportFormat = 'md' | 'html'
+
+// Result of a successful save: the absolute path (for display / copy) plus the
+// base + workspace-relative path the reveal / open-in-editor IPC validates against.
+export type SaveResult = { path: string; root: string; rel: string }
 
 const ESC: Record<string, string> = {
   '&': '&amp;',
@@ -82,6 +87,14 @@ function roleHeading(role: 'user' | 'assistant' | 'system'): string {
 export function useSessionExport() {
   const { renderMarkdown } = useMarkdown()
   const sc = useSidecar()
+
+  // Probe VS Code availability once; gates the "Open in VS Code" action on a saved
+  // export. false outside the Electron shell (browser dev).
+  const vscodeAvailable = ref(false)
+  void sc
+    .isVscodeAvailable()
+    .then((ok) => (vscodeAvailable.value = ok))
+    .catch(() => {})
 
   // Assemble the full transcript as Markdown, with a small metadata header.
   function buildMarkdown(session: Session): string {
@@ -173,24 +186,46 @@ ${body}
     }
   }
 
-  // Persist to disk via the sidecar. Returns the saved absolute path, or null when
-  // not running in the Electron shell (browser dev) or the session has no engineId.
+  // Persist to disk via the sidecar. Returns the saved location, or null when not
+  // running in the Electron shell (browser dev) or the session has no engineId.
   async function saveToDisk(
     session: Session,
     format: ExportFormat,
     content: string,
-  ): Promise<string | null> {
+  ): Promise<SaveResult | null> {
     if (!sc.available || !session.engineId) return null
     try {
-      const res = await sc.request<{ path: string }>('sessions.save-export', {
+      return await sc.request<SaveResult>('sessions.save-export', {
         sessionId: session.engineId,
         format,
         content,
       })
-      return res.path
     } catch (err) {
       console.warn('[sessionExport] save failed', err)
       return null
+    }
+  }
+
+  // Reveal a saved export in the OS file manager. Path is validated in the main
+  // process against `root` (invariant #2). Returns false on failure.
+  async function revealExport(result: SaveResult): Promise<boolean> {
+    try {
+      await sc.revealPath(result.root, result.rel)
+      return true
+    } catch (err) {
+      console.warn('[sessionExport] reveal failed', err)
+      return false
+    }
+  }
+
+  // Open a saved export in VS Code. Same workspace validation as revealExport.
+  async function openExportInVscode(result: SaveResult): Promise<boolean> {
+    try {
+      await sc.openInVscode(result.root, result.rel)
+      return true
+    } catch (err) {
+      console.warn('[sessionExport] open in VS Code failed', err)
+      return false
     }
   }
 
@@ -200,6 +235,9 @@ ${body}
     buildContent,
     copyToClipboard,
     saveToDisk,
+    revealExport,
+    openExportInVscode,
     canSave: sc.available,
+    vscodeAvailable,
   }
 }

@@ -44,6 +44,16 @@
   "activity.byAccount.col.turns": "Turns",
   "activity.byAccount.col.cost": "Cost",
 
+  "activity.bySession.title": "By session",
+  "activity.bySession.empty": "No usage by session in this period.",
+  "activity.bySession.sort.most": "Most used",
+  "activity.bySession.sort.least": "Least used",
+  "activity.bySession.col.session": "Session",
+  "activity.bySession.col.model": "Model",
+  "activity.bySession.col.total": "Total tokens",
+  "activity.bySession.col.turns": "Turns",
+  "activity.bySession.col.cost": "Cost",
+
   "activity.rateLimit.title": "Provider rate limits",
   "activity.rateLimit.empty": "No accounts with a usage surface (Anthropic subscription or OpenAI Codex).",
   "activity.rateLimit.loading": "Loading usage…",

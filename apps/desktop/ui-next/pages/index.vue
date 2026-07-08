@@ -50,7 +50,11 @@
             </span>
           </div>
           <div v-if="!tasks.loaded" class="hmHint" :style="hintStyle">{{ loadingLabel }}</div>
-          <div v-else-if="!runningTaskRows.length" class="hmHint" :style="hintStyle">
+          <div
+            v-else-if="!runningTaskRows.length && !runningSessionRows.length"
+            class="hmHint"
+            :style="hintStyle"
+          >
             {{ t('home.running.empty') }}
           </div>
           <div v-else class="run">
@@ -71,6 +75,23 @@
               <div class="mt">
                 <span>{{ t('home.running.elapsed', { time: elapsed(row.task.createdAt) }) }}</span>
                 <span>{{ row.progress.pct }}%</span>
+              </div>
+            </div>
+            <!-- Running sessions: no node-level progress, so a lighter clickable row. -->
+            <div
+              v-for="s in runningSessionRows"
+              :key="'ses-' + s.id"
+              class="ritem"
+              style="cursor: pointer"
+              @click="openSession(s.id)"
+            >
+              <div class="rh">
+                <span class="pulse" />
+                <span class="nm">{{ s.title }}</span>
+                <span class="who">{{ s.model }}</span>
+              </div>
+              <div class="ph">
+                {{ t('home.running.session', { project: projectName(s.project) }) }}
               </div>
             </div>
           </div>
@@ -179,6 +200,7 @@ const {
   attentionItems,
   runningCount,
   runningTaskRows,
+  runningSessionRows,
   usage,
   deltaPct,
   sparkline,

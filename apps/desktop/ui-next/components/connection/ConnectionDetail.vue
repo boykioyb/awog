@@ -46,16 +46,22 @@
       <p v-if="server.description" class="cnd-desc">{{ server.description }}</p>
 
       <!-- test result banner -->
-      <div v-if="testResult" class="cnd-banner" :class="{ ok: testResult.ok }">
+      <div v-if="testResult" class="cnd-banner" :class="{ ok: bannerOk, err: !bannerOk }">
         <Icon
-          :name="testResult.ok ? 'check' : 'alert'"
+          :name="bannerOk ? 'check' : 'alert'"
           style="width: 13px; height: 13px; flex: 0 0 auto"
         />
         <div class="cnd-banner-body">
-          <div class="cnd-banner-title">
-            {{ testResult.ok ? t('connections.detail.testOk') : t('connections.detail.testFail') }}
-          </div>
+          <div class="cnd-banner-title">{{ bannerTitle }}</div>
           <div class="mono cnd-banner-sum">{{ testSummary }}</div>
+          <!-- auth probe outcome (only when a healthCheck is configured) -->
+          <div v-if="testResult.probe" class="cnd-probe" :class="{ bad: !testResult.probe.ok }">
+            <Icon
+              :name="testResult.probe.ok ? 'check' : 'alert'"
+              style="width: 12px; height: 12px; flex: 0 0 auto"
+            />
+            <span>{{ probeSummary }}</span>
+          </div>
           <pre v-if="testResult.stderr?.length" class="cnd-pre">{{
             testResult.stderr.join('\n')
           }}</pre>
@@ -191,7 +197,7 @@
 // prototype CSS (.dh header + .dscroll body, matching skills/agents detail).
 // Status pill + transport tag in the header; per-server enable/restart/test +
 // per-tool deny actions emit to the page; secret values are masked on display.
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type {
   ConnectionStatus,
   ConnectionTool,
@@ -295,6 +301,28 @@ const testSummary = computed(() => {
   }
   return r.error ?? t('connections.detail.testUnknown')
 })
+
+// Banner is "good" only when the handshake succeeded AND (no auth probe was run
+// OR it authenticated). A connected-but-token-rejected result reads as an error.
+const bannerOk = computed(() => {
+  const r = testResult.value
+  if (!r) return false
+  return r.ok && (!r.probe || r.probe.ok)
+})
+const bannerTitle = computed(() => {
+  const r = testResult.value
+  if (!r) return ''
+  if (!r.ok) return t('connections.detail.testFail')
+  if (r.probe && !r.probe.ok) return t('connections.detail.authFail')
+  return t('connections.detail.testOk')
+})
+const probeSummary = computed(() => {
+  const p = testResult.value?.probe
+  if (!p) return ''
+  return p.ok
+    ? t('connections.detail.authOk', { tool: p.tool })
+    : t('connections.detail.authFailSum', { tool: p.tool, error: p.error ?? '' })
+})
 const onTest = () => {
   if (testing.value) return
   testing.value = true
@@ -304,6 +332,18 @@ const onTest = () => {
     testing.value = false
   })
 }
+
+// The detail pane is a single reused instance (LibraryView slot is not keyed),
+// so transient per-connection state must reset when the shown server changes —
+// otherwise one connection's "Connection OK" banner / tool filter leaks onto the next.
+watch(
+  () => props.server.id,
+  () => {
+    testResult.value = null
+    testing.value = false
+    toolFilter.value = ''
+  },
+)
 </script>
 
 <style scoped>
@@ -370,6 +410,17 @@ const onTest = () => {
 }
 .cnd-banner-sum {
   word-break: break-word;
+}
+.cnd-probe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--green);
+  word-break: break-word;
+}
+.cnd-probe.bad {
+  color: var(--danger);
 }
 .cnd-pre {
   font-family: var(--code);

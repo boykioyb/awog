@@ -41,6 +41,13 @@
         >
           <Icon name="clock" style="width: 11px; height: 11px" />
           <span class="attn">{{ queuedLabel(q) }}</span>
+          <span
+            class="qsend"
+            :title="t('sessions.composer.queuedSendNow')"
+            @click.stop="sendQueuedNow(i)"
+          >
+            <Icon name="send" style="width: 11px; height: 11px" />
+          </span>
           <span class="x" :title="t('sessions.composer.queuedRemove')" @click.stop="dequeue(i)">
             ×
           </span>
@@ -115,29 +122,8 @@
           {{ t('sessions.attachment.more', { n: overflowCount }) }}
         </span>
       </div>
-      <!-- pinned context (session working-set): files + a notes indicator. Re-fed
-           into every turn by the sidecar. Managed from the pin popover below. -->
-      <div v-if="hasPinned" class="attc">
-        <span
-          v-for="f in pinnedFiles"
-          :key="f"
-          class="att"
-          :title="t('sessions.pinned.chipTitle', { path: f })"
-        >
-          <Icon name="pin" style="width: 11px; height: 11px" />
-          <span class="attn">{{ fileBase(f) }}</span>
-          <span class="x" :title="t('sessions.pinned.remove')" @click.stop="removePin(f)">×</span>
-        </span>
-        <span
-          v-if="store.active?.pinnedContext?.notes?.trim()"
-          class="att"
-          :title="t('sessions.pinned.notesTitle')"
-          @click="onPinOpen"
-        >
-          <Icon name="edit" style="width: 11px; height: 11px" />
-          <span class="attn">{{ t('sessions.pinned.notes') }}</span>
-        </span>
-      </div>
+      <!-- Pinned context (session working-set) is managed entirely from the pin button's
+           popover below; the button shows a count so the bar stays uncluttered. -->
 
       <!-- soft budget warning: cumulative cost crossed the limit (no block). -->
       <div v-if="budgetOver" class="budgetwarn">
@@ -180,8 +166,12 @@
         <span style="position: relative">
           <button
             class="iconbtn"
-            :title="t('sessions.pinned.title')"
-            style="width: 28px; height: 28px"
+            :title="
+              pinnedCount > 0
+                ? t('sessions.pinned.titleCount', { n: pinnedCount })
+                : t('sessions.pinned.title')
+            "
+            style="width: 28px; height: 28px; position: relative"
             :style="
               hasPinned || open === 'pin'
                 ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
@@ -190,6 +180,10 @@
             @click="onPinOpen"
           >
             <Icon name="pin" style="width: 14px; height: 14px" />
+            <!-- Count (files + notes + applied note-presets). .fbadge is absolute so it
+                 floats at the corner without adding a second grid row (the bug that
+                 stacked the number below the icon + broke the button height). -->
+            <span v-if="pinnedCount > 0" class="fbadge">{{ pinnedCount }}</span>
           </button>
           <div
             v-if="open === 'pin'"
@@ -206,6 +200,17 @@
                 <Icon name="file" style="width: 12px; height: 12px; flex: 0 0 auto" />
                 <span class="pinpath" :title="f">{{ f }}</span>
                 <span class="pinx" :title="t('sessions.pinned.remove')" @click="removePin(f)">
+                  ×
+                </span>
+              </div>
+            </div>
+
+            <!-- applied reusable notes (toggled from the library below, like file pins) -->
+            <div v-if="appliedNotes.length" class="pinlist">
+              <div v-for="(n, i) in appliedNotes" :key="`an${i}`" class="pinrow" :title="n">
+                <Icon name="pin" style="width: 12px; height: 12px; flex: 0 0 auto" />
+                <span class="pinpath">{{ noteLabel(n) }}</span>
+                <span class="pinx" :title="t('sessions.pinned.remove')" @click="toggleNote(n)">
                   ×
                 </span>
               </div>
@@ -286,11 +291,18 @@
                   v-for="p in notePresets"
                   :key="p.id"
                   class="pinreuse-item"
+                  :class="{ active: isNoteApplied(p.text) }"
                   :title="p.text"
-                  @click="applyNote(p.text)"
+                  @click="toggleNote(p.text)"
                 >
                   <Icon name="pin" style="width: 11px; height: 11px; flex: 0 0 auto" />
                   <span class="pinreuse-label">{{ p.name }}</span>
+                  <Icon
+                    v-if="isNoteApplied(p.text)"
+                    name="check"
+                    :title="t('sessions.pinned.inUse')"
+                    style="width: 12px; height: 12px; flex: 0 0 auto"
+                  />
                   <span
                     class="pinx"
                     :title="t('sessions.pinned.deletePreset')"
@@ -314,11 +326,25 @@
                   v-for="(h, i) in noteHistory"
                   :key="i"
                   class="pinreuse-item"
+                  :class="{ active: isNoteApplied(h) }"
                   :title="h"
-                  @click="applyNote(h)"
+                  @click="toggleNote(h)"
                 >
                   <Icon name="rules" style="width: 11px; height: 11px; flex: 0 0 auto" />
                   <span class="pinreuse-label">{{ noteLabel(h) }}</span>
+                  <Icon
+                    v-if="isNoteApplied(h)"
+                    name="check"
+                    :title="t('sessions.pinned.inUse')"
+                    style="width: 12px; height: 12px; flex: 0 0 auto"
+                  />
+                  <span
+                    class="pinx"
+                    :title="t('sessions.pinned.deleteRecent')"
+                    @click.stop="deleteNoteHistory(h)"
+                  >
+                    ×
+                  </span>
                 </div>
               </div>
             </template>
@@ -644,8 +670,23 @@ function toggle(kind: MenuKind) {
 // writes go through store actions (persist via upsert). The notes are edited via a
 // local draft persisted on blur so we don't fire an upsert on every keystroke.
 const pinnedFiles = computed<string[]>(() => store.active?.pinnedContext?.files ?? [])
+// Reusable notes (preset / recent) applied to this session as toggled units — like
+// attaching files. `appliedNotes` is the applied set; isNoteApplied flags which library
+// items are on so they render active with a ✓. Multiple can be applied at once.
+const appliedNotes = computed<string[]>(() => store.active?.pinnedContext?.notePresets ?? [])
+const isNoteApplied = (text: string) => appliedNotes.value.includes(text.trim())
 const hasPinned = computed(
-  () => pinnedFiles.value.length > 0 || !!store.active?.pinnedContext?.notes?.trim(),
+  () =>
+    pinnedFiles.value.length > 0 ||
+    appliedNotes.value.length > 0 ||
+    !!store.active?.pinnedContext?.notes?.trim(),
+)
+// Badge count on the pin button = files + applied notes + (1 if free-text notes set).
+const pinnedCount = computed(
+  () =>
+    pinnedFiles.value.length +
+    appliedNotes.value.length +
+    (store.active?.pinnedContext?.notes?.trim() ? 1 : 0),
 )
 const notesDraft = ref('')
 watch(
@@ -662,6 +703,7 @@ const {
   savePreset,
   deletePreset: deleteNotePreset,
   recordHistory,
+  deleteHistory: deleteNoteHistory,
   clearHistory: clearNoteHistory,
   deriveName: noteLabel,
 } = useSessionNotePresets()
@@ -702,10 +744,11 @@ watch(
     if (v !== 'pin') cancelPreset()
   },
 )
-// Reuse a saved preset / recent note: replace the draft and persist to this session.
-function applyNote(text: string) {
-  notesDraft.value = text
-  saveNotes()
+// Toggle a reusable note (preset / recent) as an applied unit for this session — like
+// attaching a file: click to apply, click again to remove (mirrored by the ✓ marker).
+// Distinct from the free-text notes box; multiple can be applied at once.
+function toggleNote(text: string) {
+  if (store.activeId != null) store.togglePinnedNotePreset(store.activeId, text)
 }
 function removePin(path: string) {
   if (store.activeId != null) store.removePinnedFile(store.activeId, path)
@@ -724,14 +767,13 @@ function addPin(path: string) {
   if (store.activeId != null) store.addPinnedFile(store.activeId, path)
   pinQuery.value = ''
 }
-const fileBase = (p: string): string => p.split('/').pop() || p
 function onPinOpen() {
   toggle('pin')
   if (open.value === 'pin') data.ensureFiles()
 }
 
 // ── Budget (cost cap) ─────────────────────────────────────────────────────────
-// The cost/budget readout now lives in the workspace panel's Info tab; the composer
+// The cost/budget readout lives in the workspace panel's Cost tab; the composer
 // only keeps the soft-limit OVER warning banner (a conditional safety alert).
 const { fmtUsd, overSoft } = useSessionCost()
 const budgetOver = computed(() => overSoft(store.active))
@@ -763,6 +805,10 @@ const compacting = computed(() => store.active?.compacting === true)
 const queued = computed(() => store.active?.queue ?? [])
 function dequeue(i: number) {
   if (store.activeId != null) store.dequeue(store.activeId, i)
+}
+// Jump the queue: stop the current turn and run this queued message right now.
+function sendQueuedNow(i: number) {
+  if (store.activeId != null) void store.sendQueuedNow(store.activeId, i)
 }
 // A queued slash command previews as its compact invocation, not the expanded body.
 // A quote-only queued message (empty draft) previews its note, else the quoted text.
@@ -1259,6 +1305,42 @@ function onPaste(e: ClipboardEvent) {
   border-color: var(--del);
   color: var(--bgPanel);
 }
+/* "Send now" on a queued chip: mirror the remove badge but on the opposite (top-left)
+   corner with an accent (positive) hover — reveal on chip hover so it doesn't crowd
+   the queued-message label. Only rendered inside `.qatt` chips. */
+.att .qsend {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bgActive);
+  border: 1px solid var(--border);
+  color: var(--textDim);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.att:hover .qsend,
+.att:focus-within .qsend {
+  opacity: 1;
+  transform: scale(1);
+}
+.att .qsend:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accentText);
+}
 @media (prefers-reduced-motion: reduce) {
   .att .x {
     transition: none;
@@ -1668,6 +1750,13 @@ function onPaste(e: ClipboardEvent) {
 }
 .pinreuse-item:hover {
   background: var(--bgHover);
+}
+/* The library item matching the note currently in the box — the one actually in use.
+   Inset ring (not a border) so the accent marker adds no layout shift. */
+.pinreuse-item.active {
+  color: var(--accent);
+  background: var(--bgHover);
+  box-shadow: inset 0 0 0 1px var(--accentBorder, var(--border));
 }
 .pinreuse-label {
   flex: 1;

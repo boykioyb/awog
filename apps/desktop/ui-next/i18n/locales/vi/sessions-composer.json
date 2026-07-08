@@ -5,6 +5,7 @@
   "sessions.composer.queueSend": "Gửi sau (chạy sau lượt hiện tại)",
   "sessions.composer.queued": "Đã xếp hàng",
   "sessions.composer.queuedRemove": "Bỏ khỏi hàng đợi",
+  "sessions.composer.queuedSendNow": "Gửi ngay — dừng turn hiện tại",
   "sessions.composer.steer": "Chèn",
   "sessions.composer.steerHint": "Chèn vào lượt đang chạy",
   "sessions.composer.steerDone": "Đã chèn vào lượt đang chạy",
@@ -80,5 +81,8 @@
   "sessions.pinned.deletePreset": "Xóa mẫu",
   "sessions.pinned.presets": "Mẫu đã lưu",
   "sessions.pinned.recentNotes": "Gần đây",
-  "sessions.pinned.clearRecent": "Xóa"
+  "sessions.pinned.clearRecent": "Xóa",
+  "sessions.pinned.inUse": "Đang dùng — nạp lại mỗi turn",
+  "sessions.pinned.titleCount": "Ngữ cảnh ghim ({n})",
+  "sessions.pinned.deleteRecent": "Xóa khỏi gần đây"
 }

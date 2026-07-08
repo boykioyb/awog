@@ -54,6 +54,14 @@
             />
             {{ t('git.ops.pushWord') }}
           </button>
+          <button
+            v-if="syncOp"
+            class="btn sm gdanger"
+            :title="t('git.ops.cancel')"
+            @click="cancelActive"
+          >
+            <Icon name="x" style="width: 13px; height: 13px" />
+          </button>
         </div>
       </div>
 
@@ -114,6 +122,7 @@ const emit = defineEmits<{
   (e: 'fetch'): void
   (e: 'pull'): void
   (e: 'push'): void
+  (e: 'cancel', op: 'fetch' | 'pull' | 'push'): void
   (e: 'set-url', payload: { name: string; fetchUrl?: string; pushUrl?: string }): void
   (e: 'edit-consumed'): void
 }>()
@@ -121,6 +130,11 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const remote = computed(() => props.remotes.find((r) => r.name === props.name))
 const busy = computed(() => props.syncOp != null)
+
+// Cancel whichever remote-sync op is currently in flight (only one runs at a time).
+function cancelActive() {
+  if (props.syncOp) emit('cancel', props.syncOp.op)
+}
 
 const editing = ref(false)
 const fetchDraft = ref('')

@@ -159,11 +159,12 @@ export function createClaudeEventAdapter(cb: StreamCallbacks): ClaudeEventAdapte
             acc.text += ev.delta.text
             cb.onChunk(ev.delta.text)
           } else if (ev.delta.type === 'thinking_delta' && cb.onStep) {
-            // Emit a running 'thinking' step even when the delta text is EMPTY:
-            // the Claude Max subscription redacts raw reasoning (`thinking:''` +
-            // estimated_tokens), so the model is thinking but the text is hidden.
-            // stepFromThinking labels an empty block "Thinking…" — so the UI still
-            // shows the model reasoning (API-key mode streams the real text).
+            // Extended-thinking delta → a 'thinking' step carrying the reasoning
+            // text. We request `display: 'summarized'` (shared.ts thinkingFromLevel)
+            // so the text arrives on both API-key AND subscription (OAuth) accounts.
+            // Still emit a running step when a delta is EMPTY (some frames are pure
+            // `estimated_tokens` pings): stepFromThinking labels it "Thinking…" so
+            // the UI shows the model is reasoning until real text merges in.
             const key = blockKey()
             const next = (thinkingBlocks.get(key) ?? '') + (ev.delta.thinking ?? '')
             thinkingBlocks.set(key, next)

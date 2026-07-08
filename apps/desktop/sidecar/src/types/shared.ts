@@ -341,6 +341,10 @@ export interface SessionBudget {
 export interface PinnedContext {
   files?: string[]
   notes?: string
+  // Reusable notes applied to the session as discrete toggled units (from the UI's
+  // preset/recent library) — each re-fed as its own <notes> entry, distinct from the
+  // free-text `notes`. Stored as text so they're self-contained.
+  notePresets?: string[]
 }
 
 export interface Session {
@@ -622,6 +626,15 @@ export interface McpResource {
   mime: string
 }
 
+// Optional auth probe: a read-only tool call the connection Test runs AFTER the
+// MCP handshake to verify the token actually authenticates (the handshake +
+// tools/list alone never exercise auth). Pick a tool that reads authenticated
+// data — a public/anonymous tool would pass even with a bad token.
+export interface McpHealthCheck {
+  tool: string
+  args?: Record<string, unknown> | undefined
+}
+
 export interface McpServerConfig {
   id: string
   name: string
@@ -638,6 +651,7 @@ export interface McpServerConfig {
   timeoutMs: number
   trust: McpTrust
   deniedTools?: string[] | undefined
+  healthCheck?: McpHealthCheck | undefined
 }
 
 export interface McpServerSnapshot extends McpServerConfig {
@@ -1179,6 +1193,26 @@ export interface ActivityByDay {
   costUsd: number
 }
 
+// Per-session usage rollup for the range (Sessions only — tasks are grouped
+// separately). `model`/`provider` are the session's dominant model (most tokens).
+export interface ActivityBySession {
+  sessionId: string
+  title: string
+  // Owning project id (if the session is scoped to one). Display-only.
+  projectId?: string
+  provider: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  costUsd: number
+  turns: number
+  // ISO of the session's most recent counted turn in range.
+  lastAt: string
+}
+
 export interface ActivitySummary {
   range: ActivityRange
   // ISO range bounds [from, to] actually covered by the response.
@@ -1187,11 +1221,39 @@ export interface ActivitySummary {
   totals: ActivityTotals
   byModel: ActivityByModel[]
   byAccount: ActivityByAccount[]
+  // Per-session usage (Sessions only), sorted by total tokens desc.
+  bySession: ActivityBySession[]
   // Oldest → newest, one per local day in range.
   byDay: ActivityByDay[]
   // Model ids referenced in the period that have no effective price → their cost
   // is omitted from the totals + flagged so the UI can warn.
   missingPrices: string[]
+}
+
+// One local day of a single session's spend (sessions.cost-breakdown). `date` is
+// the sidecar-local YYYY-MM-DD the turns completed on — a session spanning several
+// days yields one entry per active day, which the UI sums into 1d/7d/30d/custom
+// ranges. `costUsd` is the SUM of each turn's persisted `usage.costUsd` (the stable
+// per-turn figure, single source of truth), so the total matches the session's
+// cumulative cost shown elsewhere — it is not re-priced from the current catalog.
+export interface SessionCostDay {
+  date: string
+  costUsd: number
+  totalTokens: number
+  turns: number
+}
+
+// Per-session cost timeline for the Cost tab. `byDay` is oldest → newest; `total`
+// sums the whole session lifetime; `firstAt`/`lastAt` (ISO) bound the range picker.
+// `hasUnpriced` is true when ≥1 counted turn had no persisted price (its cost is
+// treated as 0), so the UI can flag an under-count.
+export interface SessionCostBreakdown {
+  sessionId: string
+  byDay: SessionCostDay[]
+  total: { costUsd: number; totalTokens: number; turns: number }
+  firstAt?: string
+  lastAt?: string
+  hasUnpriced: boolean
 }
 
 // Which pricing layer supplied the effective rates of a model row.

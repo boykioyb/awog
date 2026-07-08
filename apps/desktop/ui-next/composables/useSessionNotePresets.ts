@@ -108,6 +108,12 @@ export function useSessionNotePresets() {
     persistHistory()
   }
 
+  // Remove a single note from recent history (dedup key is exact text).
+  const deleteHistory = (text: string): void => {
+    history.value = history.value.filter((h) => h !== text)
+    persistHistory()
+  }
+
   const clearHistory = (): void => {
     history.value = []
     persistHistory()
@@ -119,6 +125,7 @@ export function useSessionNotePresets() {
     savePreset,
     deletePreset,
     recordHistory,
+    deleteHistory,
     clearHistory,
     deriveName,
   }

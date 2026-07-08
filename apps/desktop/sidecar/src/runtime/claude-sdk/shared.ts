@@ -147,6 +147,12 @@ export function effortFromLevel(level: ThinkingLevel): EffortLevel {
 // produce (and stream) reasoning as thinking content. Mirrors the Pi mapping
 // where 'low' = thinking off; every higher level uses ADAPTIVE thinking (Claude
 // decides when/how much, guided by effort — Opus 4.6+/Sonnet 4.6+/Fable 5).
+//
+// `display: 'summarized'` is REQUIRED for the reasoning text to reach the UI. On
+// the subscription (OAuth) path the SDK otherwise defaults to redacted thinking:
+// the API streams only pings (`thinking_delta.estimated_tokens`) with empty
+// `thinking` text (see sdk.d.ts SDKThinkingTokensMessage), so every thinking step
+// collapses to the "Thinking…" placeholder. 'summarized' returns visible reasoning.
 export function thinkingFromLevel(level: ThinkingLevel): ThinkingConfig {
-  return level === 'low' ? { type: 'disabled' } : { type: 'adaptive' }
+  return level === 'low' ? { type: 'disabled' } : { type: 'adaptive', display: 'summarized' }
 }

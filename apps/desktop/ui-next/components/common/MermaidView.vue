@@ -100,20 +100,46 @@ let renderToken = 0
 // valid diagram renders on the first pass untouched and this can never corrupt it (the
 // retry falls back to the ORIGINAL error if the repaired source still fails).
 function repairMermaid(src: string): string {
-  if (!/^\s*(flowchart|graph)\b/m.test(src)) return src
-  // (1) A styling statement (classDef/class/style/linkStyle) joined to the previous one
-  // by a `;` on the SAME line fuses them for mermaid's parser: the `;` gets swallowed
-  // into the preceding value (e.g. `...stroke:#c62828; class K b` → "got 'CLASS',
-  // expecting NEWLINE"). Put each such statement on its own line.
-  let out = src.replace(/;[ \t]*(?=(?:classDef|class|style|linkStyle)\b)/g, '\n')
-  // (2) Quote flowchart edge labels whose text carries shape punctuation:
-  // `-->|secret('X')|` trips the parser on the `(` (it reads a node shape) unless the
-  // label is quoted: `-->|"secret('X')"|`.
-  out = out.replace(/\|([^|\n]+)\|/g, (whole, label: string) => {
-    const t = label.trim()
-    if (t.startsWith('"') || !/[(){}[\]]/.test(t)) return whole
-    return `|"${t.replace(/"/g, "'")}"|`
-  })
+  const isSeq = /^\s*sequenceDiagram\b/m.test(src)
+  const isFlow = /^\s*(flowchart|graph)\b/m.test(src)
+  if (!isSeq && !isFlow) return src
+  let out = src
+
+  // sequenceDiagram: `;` is a statement separator, so it terminates message/Note text
+  // mid-line — `A->>B: do X; then Y` parses as a valid message PLUS an orphan `then Y`
+  // that carries no arrow → "Expecting <arrow>, got NEWLINE" at end of line. LLMs
+  // routinely write prose with `;` in message text. Neutralise `;` → `,` ONLY in the
+  // text after a message/Note colon, leaving structure (arrows, participants) untouched.
+  if (isSeq) {
+    out = out
+      .split('\n')
+      .map((line) => {
+        const colon = line.indexOf(':')
+        if (colon < 0 || !line.slice(colon + 1).includes(';')) return line
+        const head = line.slice(0, colon)
+        const isMessage = /--?>>?|--?[)x]|<<-?->>?/.test(head) // -> --> ->> -->> -x --x -) --) <<->>
+        const isNote = /^\s*note\b/i.test(head)
+        if (!isMessage && !isNote) return line
+        return `${head}:${line.slice(colon + 1).replace(/;/g, ',')}`
+      })
+      .join('\n')
+  }
+
+  if (isFlow) {
+    // (1) A styling statement (classDef/class/style/linkStyle) joined to the previous one
+    // by a `;` on the SAME line fuses them for mermaid's parser: the `;` gets swallowed
+    // into the preceding value (e.g. `...stroke:#c62828; class K b` → "got 'CLASS',
+    // expecting NEWLINE"). Put each such statement on its own line.
+    out = out.replace(/;[ \t]*(?=(?:classDef|class|style|linkStyle)\b)/g, '\n')
+    // (2) Quote flowchart edge labels whose text carries shape punctuation:
+    // `-->|secret('X')|` trips the parser on the `(` (it reads a node shape) unless the
+    // label is quoted: `-->|"secret('X')"|`.
+    out = out.replace(/\|([^|\n]+)\|/g, (whole, label: string) => {
+      const t = label.trim()
+      if (t.startsWith('"') || !/[(){}[\]]/.test(t)) return whole
+      return `|"${t.replace(/"/g, "'")}"|`
+    })
+  }
   return out
 }
 

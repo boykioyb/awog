@@ -9,21 +9,25 @@
          (the active session drives branch / context / project / config). -->
     <div class="sb-cluster sb-session">
       <template v-if="active">
-        <StatusBranch :session="active" />
-        <span class="sb-div" />
-        <StatusContext :session="active" />
-        <span class="sb-div" />
-        <button
-          class="sb-item"
-          :title="t('statusbar.project.open')"
-          @click="projectModal.open(active.project)"
-        >
-          <Icon name="folder" style="width: 13px; height: 13px" />
-          <span class="sb-proj">{{ projName }}</span>
-        </button>
-        <span class="sb-div" />
-        <!-- Model / Account / Effort / Style chips (moved out of the composer). -->
-        <StatusConfig :session="active" />
+        <!-- Informational chips: these give up width first (labels ellipsis) so the
+             Files + Terminal toggles below never get pushed off the window edge. -->
+        <div class="sb-info">
+          <StatusBranch :session="active" />
+          <span class="sb-div" />
+          <StatusContext :session="active" />
+          <span class="sb-div" />
+          <button
+            class="sb-item"
+            :title="t('statusbar.project.open')"
+            @click="projectModal.open(active.project)"
+          >
+            <Icon name="folder" style="width: 13px; height: 13px" />
+            <span class="sb-proj">{{ projName }}</span>
+          </button>
+          <span class="sb-div" />
+          <!-- Model / Account / Effort / Style chips (moved out of the composer). -->
+          <StatusConfig :session="active" />
+        </div>
         <span class="sb-div" />
         <!-- Quick workspace toggle (open/close the session's Files panel view).
              The session's project-scoped Terminal tab stays reachable from the
@@ -113,9 +117,43 @@ const projName = computed(() => (active.value ? projectName(active.value.project
 }
 .sb-session {
   flex: 0 1 auto;
+  min-width: 0;
   /* No `overflow: hidden` here — the chip popovers open UPWARD (above the bar) and
-     an overflow clip on this cluster would hide them. Chip labels self-truncate
-     (max-width + ellipsis) so the row stays bounded without clipping. */
+     an overflow clip on this cluster would hide them. Instead of clipping, the
+     informational chips (.sb-info) shrink and their labels self-truncate, so the
+     row stays bounded and the Files + Terminal toggles stay pinned at the edge. */
+}
+/* Shrinkable informational-chip region (branch / context / project / config). It
+   yields width first when the bar is narrow; the sibling Files + Terminal toggles
+   below never shrink, so Terminal is always reachable. */
+.sb-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* Files + Terminal toggles (and their separators) hold their full width — they are
+   the last things allowed to disappear. */
+.sb-session > .sb-item,
+.sb-session > .sb-div {
+  flex: 0 0 auto;
+}
+/* Let each chip inside the info region shrink below its content width so the text
+   labels ellipsis-truncate instead of overflowing past the window edge. Icons keep
+   their fixed size (no min-width override); only the labels give way. */
+.statusbar :deep(.sb-info .sb-wrap),
+.statusbar :deep(.sb-info .sb-cfg),
+.statusbar :deep(.sb-info .sb-item),
+.statusbar :deep(.sb-info .sb-branch),
+.statusbar :deep(.sb-info .sb-cfg-lbl),
+.statusbar :deep(.sb-info .sb-proj) {
+  min-width: 0;
+}
+/* The context chip is short + fixed ("274k/1.00M") and has no ellipsis, so keep it
+   from shrinking to avoid clipping the numbers mid-digit. */
+.statusbar :deep(.sb-info .sb-wrap:has(> .ctxmini)) {
+  flex: 0 0 auto;
 }
 .sb-div {
   width: 1px;

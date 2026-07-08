@@ -126,6 +126,37 @@
         </button>
       </div>
 
+      <!-- auth probe (optional) — the Test calls this tool after the handshake to
+           check the token actually authenticates (handshake alone never does). -->
+      <div class="cne-field">
+        <label class="cne-label">{{ t('connections.editor.healthCheck') }}</label>
+        <div class="cne-hint">{{ t('connections.editor.healthHint') }}</div>
+        <AppSelect
+          v-if="hasDetectedTools"
+          v-model="healthTool"
+          :options="toolOptions"
+          width="100%"
+        />
+        <input
+          v-else
+          v-model="healthTool"
+          class="cne-input mono"
+          :placeholder="t('connections.editor.healthToolPh')"
+          spellcheck="false"
+        />
+        <template v-if="healthTool">
+          <textarea
+            v-model="healthArgsText"
+            class="cne-input cne-ta mono"
+            rows="3"
+            :placeholder="t('connections.editor.healthArgsPh')"
+          />
+          <div v-if="!healthArgsValid" class="cne-err">
+            {{ t('connections.editor.healthArgsInvalid') }}
+          </div>
+        </template>
+      </div>
+
       <!-- verify (stdio only) -->
       <div class="cne-verify">
         <button class="btn sm" :disabled="!canVerify || verifying" @click="onVerify">
@@ -138,6 +169,26 @@
         </button>
         <span v-if="verifyResult" class="cne-verify-sum" :class="{ ok: verifyResult.ok }">
           {{ verifyResult.summary }}
+        </span>
+      </div>
+      <div
+        v-if="verifyResult?.probe"
+        class="cne-verify-sum cne-probe"
+        :class="{ ok: verifyResult.probe.ok }"
+      >
+        <Icon
+          :name="verifyResult.probe.ok ? 'check' : 'alert'"
+          style="width: 12px; height: 12px; flex: 0 0 auto"
+        />
+        <span>
+          {{
+            verifyResult.probe.ok
+              ? t('connections.editor.authOk', { tool: verifyResult.probe.tool })
+              : t('connections.editor.authFail', {
+                  tool: verifyResult.probe.tool,
+                  error: verifyResult.probe.error ?? '',
+                })
+          }}
         </span>
       </div>
       <pre v-if="verifyResult?.stderr?.length" class="cne-pre">{{
@@ -169,6 +220,7 @@ import LibraryKvEditor, { type KvEntry } from '~/components/library/LibraryKvEdi
 import type {
   ConnectionTransport,
   ConnectionTrust,
+  McpProbeResult,
   McpServer,
   McpServerInput,
   McpTestResult,
@@ -258,8 +310,19 @@ const argsText = ref(
 const envEntries = ref<KvEntry[]>(toEntries(props.server?.env))
 const headerEntries = ref<KvEntry[]>(toEntries(props.server?.headers))
 
+// Optional auth probe (healthCheck): a tool name + JSON args the Test runs after
+// the handshake to verify the token actually authenticates. Kept as flat refs
+// (like argsText) and assembled into `healthCheck` in buildPayload.
+const healthTool = ref<string>(props.server?.healthCheck?.tool ?? '')
+const healthArgsText = ref<string>(healthArgsToText(props.server?.healthCheck?.args))
+
 const verifying = ref(false)
-const verifyResult = ref<{ ok: boolean; summary: string; stderr?: string[] } | null>(null)
+const verifyResult = ref<{
+  ok: boolean
+  summary: string
+  stderr?: string[]
+  probe?: McpProbeResult
+} | null>(null)
 
 const isExisting = computed(() => !!props.server)
 
@@ -289,6 +352,8 @@ watch(
     )
     envEntries.value = toEntries(props.server?.env)
     headerEntries.value = toEntries(props.server?.headers)
+    healthTool.value = props.server?.healthCheck?.tool ?? ''
+    healthArgsText.value = healthArgsToText(props.server?.healthCheck?.args)
     verifyResult.value = null
   },
 )
@@ -300,16 +365,49 @@ const onSlugInput = (e: Event) => {
     .replace(/^-+|-+$/g, '')
 }
 
+// Auth-probe tool picker: the detected tools (populated after Verify or from a
+// running server) plus a "none" option. The currently-configured tool is kept
+// even if it's not in the detected list so editing never silently drops it.
+const hasDetectedTools = computed(() => draft.value.tools.length > 0)
+const toolOptions = computed<AppSelectOption[]>(() => {
+  const names = new Set(draft.value.tools.map((tool) => tool.name))
+  if (healthTool.value) names.add(healthTool.value)
+  const opts = [...names].sort().map((n) => ({ value: n, label: n }))
+  return [{ value: '', label: t('connections.editor.healthNone') }, ...opts]
+})
+
+// Parse the args textarea → a JSON object (empty text = {}). Returns null on
+// invalid JSON or a non-object so callers can block save/verify.
+const parsedHealthArgs = computed<Record<string, unknown> | null>(() => {
+  const raw = healthArgsText.value.trim()
+  if (!raw) return {}
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>
+    }
+    return null
+  } catch {
+    return null
+  }
+})
+const healthArgsValid = computed(() => !healthTool.value || parsedHealthArgs.value !== null)
+
 const canSave = computed(() => {
   if (!draft.value.id || !draft.value.name.trim()) return false
   if (!/^[a-z0-9][a-z0-9-]*$/.test(draft.value.id)) return false
   if (draft.value.transport === 'stdio' && !draft.value.command.trim()) return false
   if (draft.value.transport === 'http' && !draft.value.url.trim()) return false
+  if (!healthArgsValid.value) return false
   return true
 })
 
 const canVerify = computed(
-  () => draft.value.transport === 'stdio' && !!draft.value.command.trim() && !!draft.value.id,
+  () =>
+    draft.value.transport === 'stdio' &&
+    !!draft.value.command.trim() &&
+    !!draft.value.id &&
+    healthArgsValid.value,
 )
 
 // Assemble the config-only payload (runtime fields carried for the test probe;
@@ -330,6 +428,11 @@ const buildPayload = (): McpServerInput => {
     resources: draft.value.resources,
   }
   if (draft.value.deniedTools?.length) base.deniedTools = [...draft.value.deniedTools]
+  const tool = healthTool.value.trim()
+  if (tool) {
+    const args = parsedHealthArgs.value ?? {}
+    base.healthCheck = Object.keys(args).length > 0 ? { tool, args } : { tool }
+  }
   if (draft.value.transport === 'stdio') {
     base.command = draft.value.command.trim()
     base.args = args
@@ -355,6 +458,7 @@ const onVerify = async () => {
         ok: true,
         summary: t('connections.editor.verifyOk', { tools: tc, resources: rc }),
         stderr: res.stderr,
+        probe: res.probe,
       }
       if (res.tools) draft.value.tools = res.tools
       if (res.resources) draft.value.resources = res.resources
@@ -363,6 +467,7 @@ const onVerify = async () => {
         ok: false,
         summary: t('connections.editor.verifyFail', { error: res.error ?? '' }),
         stderr: res.stderr,
+        probe: res.probe,
       }
     }
   } catch (err) {
@@ -380,6 +485,9 @@ const onSave = () => {
   emit('save', buildPayload())
 }
 
+function healthArgsToText(args: Record<string, unknown> | undefined): string {
+  return args && Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : ''
+}
 function toEntries(record: Record<string, string> | undefined): KvEntry[] {
   return Object.entries(record ?? {}).map(([key, value]) => ({ key, value }))
 }
@@ -474,6 +582,16 @@ function fromEntries(entries: KvEntry[]): Record<string, string> {
 }
 .cne-verify-sum.ok {
   color: var(--green);
+}
+.cne-probe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -6px;
+}
+.cne-err {
+  font-size: 0.8462rem;
+  color: var(--danger);
 }
 .cne-pre {
   font-family: var(--code);

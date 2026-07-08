@@ -622,7 +622,7 @@ function onDrop(e: DragEvent) {
 const settings = useSettingsStore()
 const wpOpen = ref(false)
 
-const ALL_VIEWS = ['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Preview', 'Info'] as const
+const ALL_VIEWS = ['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Preview', 'Cost', 'Info'] as const
 // Workspace panel starts EMPTY. The header's workspace button opens a view picker
 // (dropdown, `menu === 'workspace'`); picking a view is what opens it (+ the panel),
 // so clicking the button no longer dumps every default view at once.

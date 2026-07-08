@@ -14,6 +14,7 @@
   "home.running.summary": "{tasks} task · {sessions} session · ~{rate} tok/phút",
   "home.running.empty": "Không có gì đang chạy",
   "home.running.node": "Node",
+  "home.running.session": "Phiên · {project}",
   "home.running.elapsed": "đã chạy {time}",
   "home.openTasks": "Mở Tasks →",
   "home.activity.title": "Hoạt động · 24h",
