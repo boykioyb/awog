@@ -59,9 +59,23 @@
   "connections.perms.api": "Allowed API endpoints",
   "connections.perms.bash": "Allowed bash patterns",
   "connections.perms.write": "Allowed write paths",
+  "connections.perms.edit": "Edit permissions",
+  "connections.perms.editHint": "One entry per line. Empty sections are omitted.",
+  "connections.perms.saveError": "Could not save permissions",
+  "connections.perms.mcpPh": "^mcp__github__.*",
+  "connections.perms.apiPh": "GET /v1/.*",
+  "connections.perms.apiHint": "One \"METHOD path\" per line — path is a regex (e.g. POST /search).",
+  "connections.perms.bashPh": "^git (status|log|diff)\\b",
+  "connections.perms.writePh": "docs/**",
 
   "connections.doc.loading": "Loading documentation…",
   "connections.doc.empty": "No guide.md — this source has no documentation yet.",
+  "connections.doc.edit": "Edit documentation",
+  "connections.doc.editHint": "Markdown. Leave empty to remove the guide.",
+  "connections.doc.editPlaceholder": "# Title\n\nWrite the guide for this connection…",
+  "connections.doc.saveError": "Could not save documentation",
+
+  "connections.edit.saving": "Saving…",
 
   "connections.detail.test": "Test connection",
   "connections.detail.edit": "Edit connection",

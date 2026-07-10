@@ -184,11 +184,102 @@ export function useConnectionDetail(getSource: () => Source) {
     }
   }
 
+  // Documentation edit (direct — not AI-assisted; ADR 0060 P5). Seeds a textarea
+  // from the current guide; Save writes guide.md then refetches. An empty draft
+  // clears the file (the store/sidecar delete it).
+  const guideEditing = ref(false)
+  const guideDraft = ref('')
+  const guideSaving = ref(false)
+  const guideError = ref<string | null>(null)
+
+  function startGuideEdit(): void {
+    guideDraft.value = guide.value
+    guideError.value = null
+    guideEditing.value = true
+  }
+  function cancelGuideEdit(): void {
+    guideEditing.value = false
+    guideError.value = null
+  }
+  async function saveGuideEdit(): Promise<void> {
+    if (guideSaving.value) return
+    guideSaving.value = true
+    guideError.value = null
+    try {
+      await store.saveGuide(source.value.slug, guideDraft.value)
+      guideEditing.value = false
+      await loadGuide()
+    } catch (err) {
+      guideError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      guideSaving.value = false
+    }
+  }
+
+  // Permissions edit (structured, line-based; ADR 0060 P5). Each of the four
+  // arrays is edited as newline-delimited text; API endpoints are "METHOD path"
+  // per line. Save serializes back to the object (dropping empty lines/sections),
+  // writes permissions.json, then refetches. A validation error surfaces inline.
+  const permsEditing = ref(false)
+  const permsSaving = ref(false)
+  const permsError = ref<string | null>(null)
+  const permsMcpText = ref('')
+  const permsApiText = ref('')
+  const permsBashText = ref('')
+  const permsWriteText = ref('')
+
+  function startPermsEdit(): void {
+    const p = permissions.value
+    permsMcpText.value = (p?.allowedMcpPatterns ?? []).join('\n')
+    permsApiText.value = (p?.allowedApiEndpoints ?? [])
+      .map((e) => `${e.method} ${e.path}`)
+      .join('\n')
+    permsBashText.value = (p?.allowedBashPatterns ?? []).join('\n')
+    permsWriteText.value = (p?.allowedWritePaths ?? []).join('\n')
+    permsError.value = null
+    permsEditing.value = true
+  }
+  function cancelPermsEdit(): void {
+    permsEditing.value = false
+    permsError.value = null
+  }
+  async function savePermsEdit(): Promise<void> {
+    if (permsSaving.value) return
+    permsSaving.value = true
+    permsError.value = null
+    const next: SourcePermissions = {}
+    const mcp = linesToArray(permsMcpText.value)
+    const api = parseApiEndpoints(permsApiText.value)
+    const bash = linesToArray(permsBashText.value)
+    const write = linesToArray(permsWriteText.value)
+    if (mcp.length) next.allowedMcpPatterns = mcp
+    if (api.length) next.allowedApiEndpoints = api
+    if (bash.length) next.allowedBashPatterns = bash
+    if (write.length) next.allowedWritePaths = write
+    try {
+      await store.savePermissions(source.value.slug, next)
+      permsEditing.value = false
+      await loadPermissions()
+    } catch (err) {
+      permsError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      permsSaving.value = false
+    }
+  }
+
+  function resetEdits(): void {
+    guideEditing.value = false
+    guideError.value = null
+    permsEditing.value = false
+    permsError.value = null
+  }
+
   // Refetch every section whenever the shown source changes (the detail pane is a
   // single reused instance — LibraryView does not key the slot).
   watch(
     () => source.value.slug,
     () => {
+      resetEdits()
       void loadTools()
       void loadPermissions()
       void loadGuide()
@@ -215,10 +306,51 @@ export function useConnectionDetail(getSource: () => Source) {
     permissions,
     hasPermissions,
     apiEndpointLines,
+    // permissions edit
+    permsEditing,
+    permsSaving,
+    permsError,
+    permsMcpText,
+    permsApiText,
+    permsBashText,
+    permsWriteText,
+    startPermsEdit,
+    cancelPermsEdit,
+    savePermsEdit,
     // guide
     guideLoading,
     guide,
+    // guide edit
+    guideEditing,
+    guideDraft,
+    guideSaving,
+    guideError,
+    startGuideEdit,
+    cancelGuideEdit,
+    saveGuideEdit,
   }
+}
+
+// Split a newline-delimited textarea into a trimmed, non-empty string array.
+function linesToArray(text: string): string[] {
+  return text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+}
+
+// Parse "METHOD path" lines into API endpoint rules. Lines that don't have both a
+// method token and a path are dropped (the editor hint documents the format).
+function parseApiEndpoints(text: string): { method: string; path: string }[] {
+  const out: { method: string; path: string }[] = []
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(/^(\S+)\s+(.+)$/)
+    if (!m) continue
+    const method = (m[1] ?? '').toUpperCase()
+    const path = (m[2] ?? '').trim()
+    if (method && path) out.push({ method, path })
+  }
+  return out
 }
 
 // Format a timestamp as a coarse relative time using the connections namespace.

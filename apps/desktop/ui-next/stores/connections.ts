@@ -324,6 +324,11 @@ export const useConnectionsStore = defineStore('connections', () => {
   const iconResults = new Map<string, ResolvedSourceIcon>()
   const iconInflight = new Map<string, Promise<ResolvedSourceIcon>>()
 
+  // Browser-dev only: in-memory guide/permissions so the P5 edit flow round-trips
+  // offline (the sidecar owns the real persistence at ~/.awog/sources/<slug>/).
+  const mockGuides = new Map<string, string>()
+  const mockPerms = new Map<string, SourcePermissions>()
+
   function invalidateIcon(slug: string): void {
     iconResults.delete(slug)
     iconInflight.delete(slug)
@@ -560,7 +565,7 @@ export const useConnectionsStore = defineStore('connections', () => {
 
   // Permissions section: the parsed permissions.json, or null when none exists.
   async function fetchPermissions(slug: string): Promise<SourcePermissions | null> {
-    if (!available.value) return null
+    if (!available.value) return mockPerms.get(slug) ?? null
     const res = await sc.request<{ permissions: SourcePermissions | null }>('source.permissions', {
       slug,
     })
@@ -569,9 +574,32 @@ export const useConnectionsStore = defineStore('connections', () => {
 
   // Documentation section: the raw guide.md markdown, or null when none exists.
   async function fetchGuide(slug: string): Promise<string | null> {
-    if (!available.value) return null
+    if (!available.value) return mockGuides.get(slug) ?? null
     const res = await sc.request<{ guide: string | null }>('source.guide', { slug })
     return res.guide
+  }
+
+  // Write guide.md (ADR 0060 P5 edit). Empty/whitespace content clears the file
+  // (the sidecar deletes it). No secret crosses the boundary — guide is authored
+  // markdown. Browser-dev writes to the in-memory map so the flow round-trips.
+  async function saveGuide(slug: string, content: string): Promise<void> {
+    if (!available.value) {
+      if (content.trim() === '') mockGuides.delete(slug)
+      else mockGuides.set(slug, content)
+      return
+    }
+    await sc.request('source.saveGuide', { slug, content })
+  }
+
+  // Write permissions.json (ADR 0060 P5 edit). The sidecar validates the shape and
+  // throws a validation RpcError the caller surfaces inline. No secret — patterns
+  // are scoping rules. Browser-dev writes to the in-memory map.
+  async function savePermissions(slug: string, permissions: SourcePermissions): Promise<void> {
+    if (!available.value) {
+      mockPerms.set(slug, permissions)
+      return
+    }
+    await sc.request('source.savePermissions', { slug, permissions })
   }
 
   // Start an OAuth authorization for a remote (http/sse) MCP source (ADR 0060 P2).
@@ -677,6 +705,8 @@ export const useConnectionsStore = defineStore('connections', () => {
     fetchTools,
     fetchPermissions,
     fetchGuide,
+    saveGuide,
+    savePermissions,
     fetchIcon,
     startOAuth,
     cancelOAuth,

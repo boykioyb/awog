@@ -59,9 +59,23 @@
   "connections.perms.api": "API endpoint được phép",
   "connections.perms.bash": "Pattern bash được phép",
   "connections.perms.write": "Đường dẫn ghi được phép",
+  "connections.perms.edit": "Sửa quyền",
+  "connections.perms.editHint": "Mỗi dòng một mục. Mục trống sẽ được bỏ qua.",
+  "connections.perms.saveError": "Không thể lưu quyền",
+  "connections.perms.mcpPh": "^mcp__github__.*",
+  "connections.perms.apiPh": "GET /v1/.*",
+  "connections.perms.apiHint": "Mỗi dòng một \"METHOD path\" — path là regex (vd POST /search).",
+  "connections.perms.bashPh": "^git (status|log|diff)\\b",
+  "connections.perms.writePh": "docs/**",
 
   "connections.doc.loading": "Đang tải tài liệu…",
   "connections.doc.empty": "Chưa có guide.md — nguồn này chưa có tài liệu.",
+  "connections.doc.edit": "Sửa tài liệu",
+  "connections.doc.editHint": "Markdown. Để trống để xoá guide.",
+  "connections.doc.editPlaceholder": "# Tiêu đề\n\nViết tài liệu cho connection này…",
+  "connections.doc.saveError": "Không thể lưu tài liệu",
+
+  "connections.edit.saving": "Đang lưu…",
 
   "connections.detail.test": "Kiểm tra kết nối",
   "connections.detail.edit": "Sửa connection",

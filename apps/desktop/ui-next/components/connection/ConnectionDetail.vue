@@ -181,51 +181,169 @@
       </template>
 
       <!-- ── Permissions ────────────────────────────────────────────────── -->
-      <div class="sech">{{ t('connections.section.permissions') }}</div>
-      <div v-if="permsLoading" class="fd cnd-loading">
-        <span class="cnd-oauth-spin cnd-spin-sm" />
-        {{ t('connections.perms.loading') }}
+      <div class="cnd-sech-row">
+        <div class="sech">{{ t('connections.section.permissions') }}</div>
+        <button
+          v-if="!permsEditing"
+          class="iconbtn cnd-sech-edit"
+          :title="t('connections.perms.edit')"
+          @click="startPermsEdit"
+        >
+          <Icon name="edit" style="width: 12px; height: 12px" />
+        </button>
       </div>
-      <div v-else-if="!hasPermissions" class="fd">{{ t('connections.perms.empty') }}</div>
-      <div v-else class="cnd-perms">
-        <div v-if="permissions?.allowedMcpPatterns?.length" class="cnd-perm-group">
-          <div class="cnd-perm-label">{{ t('connections.perms.mcp') }}</div>
-          <div v-for="p in permissions.allowedMcpPatterns" :key="p" class="cnd-perm-item mono">
-            {{ p }}
+
+      <!-- permissions: edit (structured, line-based) -->
+      <div v-if="permsEditing" class="cnd-edit">
+        <div class="cnd-edit-field">
+          <label class="cnd-edit-label">{{ t('connections.perms.mcp') }}</label>
+          <textarea
+            v-model="permsMcpText"
+            class="cnd-edit-ta"
+            spellcheck="false"
+            :placeholder="t('connections.perms.mcpPh')"
+          />
+        </div>
+        <div class="cnd-edit-field">
+          <label class="cnd-edit-label">{{ t('connections.perms.api') }}</label>
+          <textarea
+            v-model="permsApiText"
+            class="cnd-edit-ta"
+            spellcheck="false"
+            :placeholder="t('connections.perms.apiPh')"
+          />
+          <div class="cnd-edit-hint">{{ t('connections.perms.apiHint') }}</div>
+        </div>
+        <div class="cnd-edit-field">
+          <label class="cnd-edit-label">{{ t('connections.perms.bash') }}</label>
+          <textarea
+            v-model="permsBashText"
+            class="cnd-edit-ta"
+            spellcheck="false"
+            :placeholder="t('connections.perms.bashPh')"
+          />
+        </div>
+        <div class="cnd-edit-field">
+          <label class="cnd-edit-label">{{ t('connections.perms.write') }}</label>
+          <textarea
+            v-model="permsWriteText"
+            class="cnd-edit-ta"
+            spellcheck="false"
+            :placeholder="t('connections.perms.writePh')"
+          />
+        </div>
+        <div class="cnd-edit-hint">{{ t('connections.perms.editHint') }}</div>
+        <div v-if="permsError" class="cnd-banner err">
+          <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
+          <div class="cnd-banner-body">
+            <div class="cnd-banner-title">{{ t('connections.perms.saveError') }}</div>
+            <div class="mono cnd-banner-sum">{{ permsError }}</div>
           </div>
         </div>
-        <div v-if="apiEndpointLines.length" class="cnd-perm-group">
-          <div class="cnd-perm-label">{{ t('connections.perms.api') }}</div>
-          <div v-for="p in apiEndpointLines" :key="p" class="cnd-perm-item mono">{{ p }}</div>
-        </div>
-        <div v-if="permissions?.allowedBashPatterns?.length" class="cnd-perm-group">
-          <div class="cnd-perm-label">{{ t('connections.perms.bash') }}</div>
-          <div v-for="p in permissions.allowedBashPatterns" :key="p" class="cnd-perm-item mono">
-            {{ p }}
-          </div>
-        </div>
-        <div v-if="permissions?.allowedWritePaths?.length" class="cnd-perm-group">
-          <div class="cnd-perm-label">{{ t('connections.perms.write') }}</div>
-          <div v-for="p in permissions.allowedWritePaths" :key="p" class="cnd-perm-item mono">
-            {{ p }}
-          </div>
+        <div class="cnd-edit-actions">
+          <button class="btn sm" :disabled="permsSaving" @click="cancelPermsEdit">
+            {{ t('common.cancel') }}
+          </button>
+          <button class="btn sm pri" :disabled="permsSaving" @click="savePermsEdit">
+            <Icon
+              :name="permsSaving ? 'refresh' : 'check'"
+              :class="{ spin: permsSaving }"
+              style="width: 12px; height: 12px"
+            />
+            {{ permsSaving ? t('connections.edit.saving') : t('common.save') }}
+          </button>
         </div>
       </div>
 
-      <!-- ── Documentation ──────────────────────────────────────────────── -->
-      <LibraryMarkdownBody
-        v-if="guide"
-        :title="t('connections.section.documentation')"
-        :content="guide"
-      />
+      <!-- permissions: view -->
       <template v-else>
-        <div class="sech">{{ t('connections.section.documentation') }}</div>
-        <div v-if="guideLoading" class="fd cnd-loading">
+        <div v-if="permsLoading" class="fd cnd-loading">
           <span class="cnd-oauth-spin cnd-spin-sm" />
-          {{ t('connections.doc.loading') }}
+          {{ t('connections.perms.loading') }}
         </div>
-        <div v-else class="fd">{{ t('connections.doc.empty') }}</div>
+        <div v-else-if="!hasPermissions" class="fd">{{ t('connections.perms.empty') }}</div>
+        <div v-else class="cnd-perms">
+          <div v-if="permissions?.allowedMcpPatterns?.length" class="cnd-perm-group">
+            <div class="cnd-perm-label">{{ t('connections.perms.mcp') }}</div>
+            <div v-for="p in permissions.allowedMcpPatterns" :key="p" class="cnd-perm-item mono">
+              {{ p }}
+            </div>
+          </div>
+          <div v-if="apiEndpointLines.length" class="cnd-perm-group">
+            <div class="cnd-perm-label">{{ t('connections.perms.api') }}</div>
+            <div v-for="p in apiEndpointLines" :key="p" class="cnd-perm-item mono">{{ p }}</div>
+          </div>
+          <div v-if="permissions?.allowedBashPatterns?.length" class="cnd-perm-group">
+            <div class="cnd-perm-label">{{ t('connections.perms.bash') }}</div>
+            <div v-for="p in permissions.allowedBashPatterns" :key="p" class="cnd-perm-item mono">
+              {{ p }}
+            </div>
+          </div>
+          <div v-if="permissions?.allowedWritePaths?.length" class="cnd-perm-group">
+            <div class="cnd-perm-label">{{ t('connections.perms.write') }}</div>
+            <div v-for="p in permissions.allowedWritePaths" :key="p" class="cnd-perm-item mono">
+              {{ p }}
+            </div>
+          </div>
+        </div>
       </template>
+
+      <!-- ── Documentation ──────────────────────────────────────────────── -->
+      <div class="cnd-sech-row">
+        <div class="sech">{{ t('connections.section.documentation') }}</div>
+        <button
+          v-if="!guideEditing"
+          class="iconbtn cnd-sech-edit"
+          :title="t('connections.doc.edit')"
+          @click="startGuideEdit"
+        >
+          <Icon name="edit" style="width: 12px; height: 12px" />
+        </button>
+      </div>
+
+      <!-- documentation: edit (direct markdown textarea — no AI) -->
+      <div v-if="guideEditing" class="cnd-edit">
+        <textarea
+          v-model="guideDraft"
+          class="cnd-edit-ta lg"
+          spellcheck="false"
+          :placeholder="t('connections.doc.editPlaceholder')"
+        />
+        <div class="cnd-edit-hint">{{ t('connections.doc.editHint') }}</div>
+        <div v-if="guideError" class="cnd-banner err">
+          <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
+          <div class="cnd-banner-body">
+            <div class="cnd-banner-title">{{ t('connections.doc.saveError') }}</div>
+            <div class="mono cnd-banner-sum">{{ guideError }}</div>
+          </div>
+        </div>
+        <div class="cnd-edit-actions">
+          <button class="btn sm" :disabled="guideSaving" @click="cancelGuideEdit">
+            {{ t('common.cancel') }}
+          </button>
+          <button class="btn sm pri" :disabled="guideSaving" @click="saveGuideEdit">
+            <Icon
+              :name="guideSaving ? 'refresh' : 'check'"
+              :class="{ spin: guideSaving }"
+              style="width: 12px; height: 12px"
+            />
+            {{ guideSaving ? t('connections.edit.saving') : t('common.save') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- documentation: view -->
+      <div v-else-if="guideLoading" class="fd cnd-loading">
+        <span class="cnd-oauth-spin cnd-spin-sm" />
+        {{ t('connections.doc.loading') }}
+      </div>
+      <LibraryMarkdownBody
+        v-else
+        class="cnd-guide-body"
+        :title="''"
+        :content="guide"
+        :empty-text="t('connections.doc.empty')"
+      />
     </div>
   </div>
 </template>
@@ -276,8 +394,25 @@ const {
   permissions,
   hasPermissions,
   apiEndpointLines,
+  permsEditing,
+  permsSaving,
+  permsError,
+  permsMcpText,
+  permsApiText,
+  permsBashText,
+  permsWriteText,
+  startPermsEdit,
+  cancelPermsEdit,
+  savePermsEdit,
   guideLoading,
   guide,
+  guideEditing,
+  guideDraft,
+  guideSaving,
+  guideError,
+  startGuideEdit,
+  cancelGuideEdit,
+  saveGuideEdit,
 } = useConnectionDetail(() => props.source)
 
 // --- test (transient banner) ----------------------------------------------
@@ -632,6 +767,83 @@ watch(
   background: var(--bgInput);
   border: 1px solid var(--border);
   word-break: break-all;
+}
+/* Section header with an inline edit affordance (Permissions / Documentation).
+   Resets .sech's own margin and hoists it onto the row so the pencil button
+   aligns with the label. */
+.cnd-sech-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 20px 0 9px;
+}
+.cnd-sech-row:first-child {
+  margin-top: 0;
+}
+.cnd-sech-row .sech {
+  margin: 0;
+}
+.cnd-sech-edit {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+/* The reused markdown viewer sits directly under our own section header, so drop
+   its built-in top margin (its empty title is hidden — we render the label). */
+.cnd-guide-body :deep(.lmb-head) {
+  margin-top: 0;
+}
+.cnd-guide-body :deep(.lmb-title) {
+  display: none;
+}
+/* Inline direct editors (guide markdown / permissions arrays). */
+.cnd-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cnd-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cnd-edit-label {
+  font-size: 0.8462rem;
+  color: var(--textDim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--code);
+}
+.cnd-edit-ta {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  background: var(--bgInput);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--text);
+  font-family: var(--code);
+  font-size: 0.9231rem;
+  line-height: 1.55;
+  outline: none;
+}
+.cnd-edit-ta.lg {
+  min-height: 18rem;
+}
+.cnd-edit-ta:focus {
+  border-color: var(--accentBorder);
+}
+.cnd-edit-hint {
+  font-size: 0.8462rem;
+  color: var(--textFaint);
+  line-height: 1.5;
+}
+.cnd-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .spin {
   animation: cnd-spin 0.9s linear infinite;

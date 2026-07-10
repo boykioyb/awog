@@ -38,6 +38,10 @@ const ICON_EXT_MIME: Record<IconExt, string> = {
 // anything larger is rejected so a bad file can't bloat the RPC payload / store.
 const ICON_MAX_BYTES = 512 * 1024
 
+// guide.md write cap (raw UTF-8 bytes). Documentation is authored prose — a
+// generous cap that still keeps a runaway paste from bloating the store / RPC.
+const GUIDE_MAX_BYTES = 256 * 1024
+
 // Parsed guide.md: raw markdown + the sections agents consume as context.
 export interface SourceGuide {
   raw: string
@@ -264,6 +268,39 @@ export async function readPermissions(slug: string): Promise<SourcePermissions |
   }
 }
 
+// Atomic text write (.tmp + rename). No chmod 0600 — guide.md / permissions.json
+// carry no credentials (unlike config.json), so they use the same relaxed mode as
+// the icon writer. The dir is created 0700 by the config path; ensure it here too
+// for a source whose guide/permissions are saved before any config write.
+async function writeTextAtomic(file: string, content: string): Promise<void> {
+  const tmp = `${file}.tmp.${process.pid}`
+  await writeFile(tmp, content, 'utf8')
+  await rename(tmp, file)
+}
+
+// Save (or clear) guide.md for a source. Empty / whitespace-only content DELETES
+// the file rather than leaving a zero-byte guide behind — a source with no
+// guide.md is the canonical "no documentation" state (readGuide → null), so the
+// UI's empty state stays consistent. Byte-cap is enforced by the RPC layer.
+export async function saveGuide(slug: string, content: string): Promise<void> {
+  const file = join(sourceDir(slug), GUIDE_FILE)
+  if (content.trim() === '') {
+    await rm(file, { force: true })
+    return
+  }
+  await mkdir(sourceDir(slug), { recursive: true, mode: 0o700 })
+  await writeTextAtomic(file, content)
+}
+
+// Save permissions.json for a source. The caller (RPC) validates the shape with
+// SourcePermissionsSchema before this runs; here we only persist the pretty JSON.
+// No secret — permission patterns are scoping rules, never credentials.
+export async function savePermissions(slug: string, permissions: SourcePermissions): Promise<void> {
+  await mkdir(sourceDir(slug), { recursive: true, mode: 0o700 })
+  const file = join(sourceDir(slug), PERMISSIONS_FILE)
+  await writeTextAtomic(file, JSON.stringify(permissions, null, 2))
+}
+
 // Absolute path + extension of the source's local icon file (icon.<ext>) if one
 // exists. Config `icon` (emoji / URL) takes precedence upstream; this only
 // surfaces the auto-discovered local file.
@@ -311,5 +348,5 @@ export async function writeSourceIcon(slug: string, ext: IconExt, data: Buffer):
   await rename(tmp, file)
 }
 
-export { ICON_EXTS, ICON_EXT_MIME, ICON_MAX_BYTES }
+export { ICON_EXTS, ICON_EXT_MIME, ICON_MAX_BYTES, GUIDE_MAX_BYTES }
 export type { IconExt }
