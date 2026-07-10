@@ -1,16 +1,16 @@
 // Filesystem watcher for AWOG artifact directories. Emits debounced events
-// when AGENT.md / SKILL.md / mcp-servers/*.json change so the UI can
+// when AGENT.md / SKILL.md / sources/<slug>/config.json change so the UI can
 // auto-refresh without the user clicking 🔄 (Sprint 3 C1).
 //
 // Watch scope (ADR 0035 — `.awog` only; `.claude`/`.agents` are import sources):
-//   - User-tier:  ~/.awog/{agents,skills,mcp-servers,hooks,rules,commands}
+//   - User-tier:  ~/.awog/{agents,skills,sources,hooks,rules,commands}
 //   - Per-project dirs (added/removed dynamically as projects come and go):
 //     {project}/.awog/{agents,skills,hooks,rules,commands}
 //
 // Events fired (sidecar.event):
 //   agents.fs-changed     — agent file added/removed/modified
 //   skills.fs-changed     — skill file added/removed/modified
-//   mcp-servers.fs-changed — MCP config file added/removed/modified
+//   sources.fs-changed    — source config/guide/permissions file changed (ADR 0060)
 //   hooks.fs-changed      — hook config file added/removed/modified
 //   rules.fs-changed      — rule file added/removed/modified
 //   commands.fs-changed   — slash-command file added/removed/modified
@@ -29,7 +29,7 @@ import { listProjects } from './projects/store.js'
 const DEBOUNCE_MS = 500
 const RESCAN_PROJECTS_MS = 30_000 // re-check registered projects every 30s
 
-type WatchKind = 'agents' | 'skills' | 'mcp-servers' | 'hooks' | 'rules' | 'commands'
+type WatchKind = 'agents' | 'skills' | 'sources' | 'hooks' | 'rules' | 'commands'
 
 interface Watcher {
   close: () => Promise<void> | void
@@ -74,7 +74,7 @@ function userDirs(): DirSpec[] {
   return [
     { kind: 'agents', dir: join(awogHome(), 'agents') },
     { kind: 'skills', dir: join(awogHome(), 'skills') },
-    { kind: 'mcp-servers', dir: join(awogHome(), 'mcp-servers') },
+    { kind: 'sources', dir: join(awogHome(), 'sources') },
     { kind: 'hooks', dir: join(awogHome(), 'hooks') },
     { kind: 'rules', dir: join(awogHome(), 'rules') },
     { kind: 'commands', dir: join(awogHome(), 'commands') },
@@ -235,7 +235,15 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   if (lower.endsWith('/.ds_store')) return false
   if (kind === 'agents') return lower.endsWith('.md') || lower.endsWith('/agent.md')
   if (kind === 'skills') return lower.endsWith('skill.md')
-  if (kind === 'mcp-servers') return lower.endsWith('.json')
+  // sources: a per-source folder file we parse — config.json / guide.md /
+  // permissions.json (atomic .tmp.<pid> writes are filtered by the suffix check).
+  if (kind === 'sources') {
+    return (
+      lower.endsWith('/config.json') ||
+      lower.endsWith('/guide.md') ||
+      lower.endsWith('/permissions.json')
+    )
+  }
   // hooks: a hook config .json; never the run-log dir (.runs/*.jsonl) which
   // churns on every hook run, and never the atomic .json.tmp.<pid> writes.
   if (kind === 'hooks') return lower.endsWith('.json') && !lower.includes('/.runs/')

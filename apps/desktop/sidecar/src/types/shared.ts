@@ -662,6 +662,149 @@ export interface McpServerSnapshot extends McpServerConfig {
   lastStartedAt?: string | undefined
 }
 
+// ─── Source ──────────────────────────────────────────────────────────────────
+// Successor to McpServerConfig (kept above for compat). A Source is an external
+// data connection with three kinds — mcp | api | local — stored per-folder at
+// ~/.awog/sources/<slug>/config.json. See ADR 0060 + connections-sources-model.
+//
+// Hand-written mirror of the Zod SourceConfigSchema (sources/schema.ts); the two
+// must stay structurally identical (the store parses with the Zod schema and
+// returns the data as this type, so tsc enforces compatibility). No autoStart —
+// lifecycle is a lazy pool, and live status is captured by connectionStatus.
+
+export type SourceType = 'mcp' | 'api' | 'local'
+export type SourceTrust = 'allow' | 'prompt' | 'deny'
+export type SourceConnectionStatus =
+  | 'connected'
+  | 'needs_auth'
+  | 'failed'
+  | 'untested'
+  | 'local_disabled'
+
+export interface SourceHealthCheck {
+  tool: string
+  args?: Record<string, unknown> | undefined
+}
+
+export interface McpSourceBlock {
+  transport?: 'http' | 'sse' | 'stdio' | undefined
+  url?: string | undefined
+  authType?: 'oauth' | 'bearer' | 'none' | undefined
+  clientId?: string | undefined
+  headers?: Record<string, string> | undefined
+  headerNames?: string[] | undefined
+  command?: string | undefined
+  args?: string[] | undefined
+  env?: Record<string, string> | undefined
+  cwd?: string | undefined
+}
+
+export interface ApiSourceBlock {
+  baseUrl: string
+  authType: 'bearer' | 'header' | 'query' | 'basic' | 'oauth' | 'none'
+  headerName?: string | undefined
+  headerNames?: string[] | undefined
+  queryParam?: string | undefined
+  authScheme?: string | undefined
+  defaultHeaders?: Record<string, string> | undefined
+  testEndpoint?:
+    | {
+        method: 'GET' | 'POST'
+        path: string
+        body?: Record<string, unknown> | undefined
+        headers?: Record<string, string> | undefined
+      }
+    | undefined
+  renewEndpoint?:
+    | {
+        path: string
+        method?: 'GET' | 'POST' | undefined
+        body?: Record<string, unknown> | undefined
+        headers?: Record<string, string> | undefined
+        tokenField?: string | undefined
+        expiresInField?: string | undefined
+        fallbackTtlSecs?: number | undefined
+      }
+    | undefined
+  oauth?:
+    | {
+        authorizationUrl: string
+        tokenUrl: string
+        clientId: string
+        clientSecret?: string | undefined
+        scopes?: string[] | undefined
+        audience?: string | undefined
+        extraParams?: Record<string, string> | undefined
+      }
+    | undefined
+  googleService?:
+    | 'gmail'
+    | 'calendar'
+    | 'drive'
+    | 'docs'
+    | 'sheets'
+    | 'youtube'
+    | 'searchconsole'
+    | undefined
+  googleScopes?: string[] | undefined
+  googleOAuthClientId?: string | undefined
+  googleOAuthClientSecret?: string | undefined
+  slackService?: 'messaging' | 'channels' | 'users' | 'files' | 'full' | undefined
+  slackUserScopes?: string[] | undefined
+  microsoftService?:
+    | 'outlook'
+    | 'microsoft-calendar'
+    | 'onedrive'
+    | 'teams'
+    | 'sharepoint'
+    | undefined
+  microsoftScopes?: string[] | undefined
+}
+
+export interface LocalSourceBlock {
+  path: string
+  format?: string | undefined
+}
+
+// Fields shared by every source kind.
+export interface SourceConfigBase {
+  id: string
+  slug: string
+  name: string
+  provider: string
+  enabled: boolean
+  icon?: string | undefined
+  tagline?: string | undefined
+  description?: string | undefined
+  isAuthenticated?: boolean | undefined
+  connectionStatus?: SourceConnectionStatus | undefined
+  connectionError?: string | undefined
+  lastTestedAt?: number | undefined
+  createdAt?: number | undefined
+  updatedAt?: number | undefined
+  timeoutMs: number
+  deniedTools?: string[] | undefined
+  trust: SourceTrust
+  healthCheck?: SourceHealthCheck | undefined
+}
+
+export interface McpSource extends SourceConfigBase {
+  type: 'mcp'
+  mcp: McpSourceBlock
+}
+
+export interface ApiSource extends SourceConfigBase {
+  type: 'api'
+  api: ApiSourceBlock
+}
+
+export interface LocalSource extends SourceConfigBase {
+  type: 'local'
+  local: LocalSourceBlock
+}
+
+export type SourceConfig = McpSource | ApiSource | LocalSource
+
 // ─── Agent ─────────────────────────────────────────────────────────────────
 // Stored as a single `.md` file (or `<id>/AGENT.md` folder) with YAML
 // frontmatter + markdown body, format-compatible with Claude Code SDK subagent

@@ -12,7 +12,7 @@
 
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listProjects } from '../projects/store.js'
-import { listServers as listMcpServers } from '../mcp/store.js'
+import { listSources } from '../sources/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { log } from '../util/logger.js'
 import type { Agent, AgentSource, ProviderName } from '../types/shared.js'
@@ -72,35 +72,39 @@ async function buildMcpServers(
   const attached: { id: string; name: string }[] = []
   const entries: [string, unknown][] = []
   try {
-    const all = await listMcpServers()
+    // Source of truth is the `sources` store (ADR 0060); only `mcp`-kind sources
+    // become runtime tools. Whitelist keys are source ids (= old MCP id).
+    const all = await listSources()
     const whitelist = agentMcpIds && agentMcpIds.length > 0 ? new Set(agentMcpIds) : null
     for (const s of all) {
+      if (s.type !== 'mcp') continue
       if (!s.enabled) continue
       // The task's connection bypasses the per-agent whitelist (ADR 0025) so
       // every node can reach the source; other servers still respect it.
       const isConnection = connectionId !== undefined && s.id === connectionId
       if (whitelist && !whitelist.has(s.id) && !isConnection) continue
+      const transport = s.mcp.transport ?? 'http'
       let cfg: unknown
-      if (s.transport === 'stdio') {
-        if (!s.command) continue
+      if (transport === 'stdio') {
+        if (!s.mcp.command) continue
         // eslint-disable-next-line no-await-in-loop
-        const env = await expandSecrets(s.id, s.env)
+        const env = await expandSecrets(s.id, s.mcp.env)
         cfg = {
           type: 'stdio' as const,
-          command: s.command,
-          ...(s.args ? { args: s.args } : {}),
+          command: s.mcp.command,
+          ...(s.mcp.args ? { args: s.mcp.args } : {}),
           ...(Object.keys(env).length > 0 ? { env } : {}),
           // Per-server handshake budget — `npx -y` cold starts can exceed the
           // bridge default; honour the user's configured timeout.
           timeoutMs: s.timeoutMs,
         }
-      } else if (s.transport === 'http') {
-        if (!s.url) continue
+      } else if (transport === 'http') {
+        if (!s.mcp.url) continue
         // eslint-disable-next-line no-await-in-loop
-        const headers = await expandSecrets(s.id, s.headers)
+        const headers = await expandSecrets(s.id, s.mcp.headers)
         cfg = {
           type: 'http' as const,
-          url: s.url,
+          url: s.mcp.url,
           ...(Object.keys(headers).length > 0 ? { headers } : {}),
           timeoutMs: s.timeoutMs,
         }
@@ -111,7 +115,7 @@ async function buildMcpServers(
       attached.push({ id: s.id, name: s.name })
     }
   } catch (err) {
-    log.warn('task: failed to list mcp servers', {
+    log.warn('task: failed to list sources', {
       err: err instanceof Error ? err.message : String(err),
     })
   }

@@ -50,16 +50,16 @@ import './methods/skills.upsert.js'
 import './methods/skills.delete.js'
 import './methods/skills.generate.js'
 import './methods/skills.author.js'
-import './methods/mcp.list.js'
-import './methods/mcp.upsert.js'
-import './methods/mcp.delete.js'
-import './methods/mcp.toggle.js'
-import './methods/mcp.toggle-tool.js'
-import './methods/mcp.restart.js'
-import './methods/mcp.test.js'
-import './methods/mcp.discover-preset.js'
-import './methods/mcp.author.js'
-import './methods/mcp.set-secret.js'
+import './methods/sources.list.js'
+import './methods/sources.get.js'
+import './methods/source.upsert.js'
+import './methods/source.delete.js'
+import './methods/source.toggle.js'
+import './methods/source.toggle-tool.js'
+import './methods/source.test.js'
+import './methods/source.discover-preset.js'
+import './methods/source.author.js'
+import './methods/source.set-secret.js'
 import './methods/agents.list.js'
 import './methods/agents.upsert.js'
 import './methods/agents.delete.js'
@@ -186,8 +186,8 @@ import './methods/templates.create.js'
 import './methods/templates.fetch-remote.js'
 import './methods/templates.install.js'
 import './methods/templates.delete.js'
-import { mcpManager } from './mcp/manager.js'
 import { migrateMcpPlaintextSecrets } from './mcp/store.js'
+import { migrateMcpServersToSources } from './sources/migrate.js'
 import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
 import { ensureUserPath } from './util/spawn-path.js'
@@ -304,15 +304,32 @@ ensureUserPath()
 log.info('sidecar starting', { pid: process.pid, node: process.version })
 startStdioLoop(handleLine)
 
-// One-time: move any plaintext secret-looking MCP env/header values to the OS
-// keychain (ADR 0018, invariant 1). Idempotent — `secret:` refs are untouched.
-void migrateMcpPlaintextSecrets()
-
-// Auto-start enabled+autoStart MCP servers on sidecar boot (AC-3 restart-safe).
-void mcpManager.hydrateAutoStart()
+// One-time boot migrations, run STRICTLY IN SEQUENCE (must await — `void a(); void b()`
+// would race them):
+//   1. migrateMcpPlaintextSecrets — move any plaintext secret-looking MCP env/header
+//      values in the LEGACY mcp-servers/*.json to the OS keychain (ADR 0018,
+//      invariant 1), rewriting them to `secret:` refs.
+//   2. migrateMcpServersToSources — copy legacy mcp-servers/<id>.json into the new
+//      per-source folder layout ~/.awog/sources/<slug>/config.json (ADR 0060).
+// Step 1 MUST finish first so the copied source configs inherit `secret:` refs and
+// never plaintext. Step 2 is copy+backup, never deletes the originals, never touches
+// the keychain, idempotent (done-flag). Both are idempotent — safe on every boot.
+// The `sources` store is now the single source of truth for the runtime — there is no
+// boot auto-start anymore (ADR 0060 D-3): a source's status is derived from its last
+// source.test/auth, and the runtime bridge connects lazily per session.
+void (async () => {
+  try {
+    await migrateMcpPlaintextSecrets()
+    await migrateMcpServersToSources()
+  } catch (err) {
+    log.warn('boot: mcp→sources migration failed', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+})()
 
 // Start filesystem watcher (Sprint 3 C1) — emits *.fs-changed events to the UI
-// when AGENT.md / SKILL.md / mcp-servers/*.json are touched outside the app.
+// when AGENT.md / SKILL.md / sources/<slug>/config.json are touched outside the app.
 void awogWatcher.start()
 
 // Resume queued/running tasks from their durable frontier (ADR 0024 restart-

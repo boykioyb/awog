@@ -1,19 +1,19 @@
-// LLM-driven MCP server creator. Mirrors skills.author conversation pattern:
-// chat-style, LLM picks the preset / writes the config.json on disk via the
-// Write tool (Pi runtime). UI refreshes via mcp.list on modal close.
+// LLM-driven Source creator (ADR 0060 P1, D-7). Successor to mcp.author. Chat-
+// style: the LLM figures out which MCP server the user wants and writes a
+// config.json into the per-source folder ~/.awog/sources/<slug>/config.json via
+// the Write tool (Pi runtime). UI refreshes via source.list on modal close.
 //
 // Events fired (sidecar.event):
-//   mcp.author.chunk { messageId, delta }    — text delta
-//   mcp.author.step  { messageId, step }     — tool_use / tool_result / verify
-//   mcp.author.done  { messageId, text, ... }— terminal
+//   source.author.chunk { messageId, delta }   — text delta
+//   source.author.step  { messageId, step }    — tool_use / tool_result / verify
+//   source.author.done  { messageId, text, ... }— terminal
 //
-// After the model Writes a <slug>.json config, we auto-verify it: run an
-// ephemeral handshake (mcpManager.test) and stream a synthetic `verify` step
-// (running → done) through the same `mcp.author.step` channel. This turns the
-// bare "Created …" reply into a live pass/fail with tool count or stderr, so the
-// user sees whether the server actually connects without leaving the modal.
+// After the model writes a config.json, we auto-verify it: run source.test
+// against the written slug and stream a synthetic `verify` step (running → done)
+// through the same `source.author.step` channel, so "Created …" carries proof of
+// life (tool count or the connection error) without leaving the modal.
 
-import { basename } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { stepFromToolResult, stepFromToolUse } from '../sessions/step-mapper.js'
@@ -21,25 +21,23 @@ import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { awogHome } from '../util/path.js'
-import { buildPreset, PRESET_META } from '../mcp/presets.js'
-import { MCP_ID_RE } from '../mcp/schema.js'
-import { loadServer } from '../mcp/store.js'
-import { mcpManager } from '../mcp/manager.js'
+import { buildSourcePreset, PRESET_META } from '../sources/presets.js'
+import { SOURCE_SLUG_RE } from '../sources/schema.js'
+import { testAndPersistSource } from '../sources/test.js'
 import { authorPi } from '../runtime/complete.js'
 
 // First-run `npx -y <pkg>` also downloads the package before it can speak MCP,
 // so the verify handshake gets a generous budget (never below the config's own).
 const VERIFY_MIN_TIMEOUT_MS = 60_000
 
-// Derive the config slug from a successful Write's file_path. Only accepts writes
-// under the mcp-servers dir with a schema-valid slug — anything else is ignored
-// (the model asked a clarifying question, or wrote an unrelated file).
+// Derive the source slug from a successful Write's file_path. Only accepts writes
+// to a `sources/<slug>/config.json` path with a schema-valid slug — anything else
+// is ignored (the model asked a clarifying question, or wrote an unrelated file).
 function slugFromWritePath(filePath: unknown): string | null {
-  if (typeof filePath !== 'string' || !filePath.includes('mcp-servers')) return null
-  const base = basename(filePath)
-  if (!base.endsWith('.json')) return null
-  const slug = base.slice(0, -'.json'.length)
-  return MCP_ID_RE.test(slug) ? slug : null
+  if (typeof filePath !== 'string' || !filePath.includes('sources')) return null
+  if (basename(filePath) !== 'config.json') return null
+  const slug = basename(dirname(filePath))
+  return SOURCE_SLUG_RE.test(slug) ? slug : null
 }
 
 const ModelSchema = z.enum(ANTHROPIC_MODELS)
@@ -71,19 +69,28 @@ function renderTranscript(
   return turns.join('\n\n')
 }
 
+// A complete example SourceConfig (with id + slug) so the LLM emits the folder
+// shape verbatim rather than the legacy flat MCP config.
+function exampleSource(slug: string): string {
+  const draft = buildSourcePreset(slug === 'github' ? 'github' : 'filesystem')
+  return JSON.stringify({ id: `${slug}_00000000`, slug, ...draft }, null, 2)
+}
+
 function buildSystemPrompt(): string {
-  // Show id in the example shape so the LLM doesn't omit it (the schema rejects
-  // missing id — store.ts has a filename fallback, but cleaner to include it).
-  const fs = JSON.stringify({ id: 'filesystem', ...buildPreset('filesystem') }, null, 2)
-  const gh = JSON.stringify({ id: 'github', ...buildPreset('github') }, null, 2)
-  const dir = `${awogHome()}/mcp-servers`
-  return `You are an MCP server installer working inside AWOG (Pha 1 stdio-only).
+  const fs = exampleSource('filesystem')
+  const gh = exampleSource('github')
+  const dir = `${awogHome()}/sources`
+  return `You are a Source installer working inside AWOG (Pha 1: MCP sources over stdio/http only).
 
 Your job: figure out what MCP server the user wants, then create a config file at:
 
-  ${dir}/<slug>.json
+  ${dir}/<slug>/config.json
 
-The file MUST contain an "id" field that matches the <slug> in the filename.
+The JSON is a SourceConfig with type:"mcp". It MUST contain:
+- "id": "\${slug}_<8 hex>" (stable id; keep the slug prefix)
+- "slug": matching the <slug> folder name
+- "type": "mcp"
+- an "mcp" block holding the transport-specific fields (transport/command/args/env for stdio, transport/url/headers for http)
 
 Two built-in presets — use them when the user matches:
 
@@ -95,41 +102,43 @@ Notes: ${PRESET_META.filesystem.envHints.concat(PRESET_META.filesystem.argHints)
 ${gh}
 Notes: ${PRESET_META.github.envHints.concat(PRESET_META.github.argHints).join(' | ') || 'no extra notes'}
 
-For arbitrary stdio servers (e.g. "@modelcontextprotocol/server-postgres"), build a similar JSON
-with: id, name, description, transport: "stdio", command: "npx" (or full path),
-args: [...], env: {...}, enabled, autoStart, timeoutMs: 30000, trust: "prompt".
+For arbitrary stdio servers (e.g. "@modelcontextprotocol/server-postgres"), build a similar SourceConfig
+with: id, slug, name, provider, description, type:"mcp", enabled, timeoutMs: 30000, trust:"prompt",
+and an "mcp" block: { "transport": "stdio", "command": "npx", "args": [...], "env": {...} }.
 
 Hard rules:
-- id MUST match ^[a-z0-9][a-z0-9-]{0,62}$ (lowercase, slug). Pick a short readable one.
-- Never set http or sse transport — Pha 1 only supports stdio.
+- slug MUST match ^[a-z0-9-]+$ (lowercase, hyphens). Pick a short readable one; id = "\${slug}_<8 hex>".
+- Only "stdio" or "http" transport (inside the mcp block). Never "sse".
+- Do NOT include an "autoStart" field — it no longer exists.
 - The "args" array MUST NOT include a literal "~" path — expand it explicitly
-  (e.g. use a real absolute path like /Users/you/notes, or leave a TODO with
-  a comment for the user; never bake "~" because shells don't expand inside
-  spawn argv).
-- Write the file ONLY to ${dir}/<slug>.json. Never to any other path.
+  (a real absolute path like /Users/you/notes, or leave a TODO for the user;
+  never bake "~" because shells don't expand inside spawn argv).
+- Write the file ONLY to ${dir}/<slug>/config.json. Never to any other path.
 - Use the Write tool (not Bash). Write the file as pretty-printed JSON.
 - If the user is vague, ask ONE concise clarifying question (which server? what path?). Don't interrogate.
-- After Write succeeds, end with one sentence: "Created /<slug>.json — toggle Enabled to start." Nothing else.
+- After Write succeeds, end with one sentence: "Created <slug> — testing the connection." Nothing else.
 - Never call Read on existing config files unless the user asks to inspect them.`
 }
 
-// Run an ephemeral handshake against the just-written config and stream a
-// `verify` step (kind: 'verify') the UI renders as a pass/fail banner. Never
-// throws — a broken config surfaces as ok:false, not an author-RPC failure.
+// Run source.test against the just-written config and stream a `verify` step the
+// UI renders as a pass/fail banner. Never throws — a broken config surfaces as
+// ok:false, not an author-RPC failure.
 async function verifyWritten(messageId: string, slug: string): Promise<void> {
   const emitStep = (step: Record<string, unknown>): void =>
-    emit('mcp.author.step', { messageId, step: { id: 'mcp-verify', kind: 'verify', ...step } })
+    emit('source.author.step', {
+      messageId,
+      step: { id: 'source-verify', kind: 'verify', ...step },
+    })
 
   emitStep({ state: 'running', serverId: slug })
   try {
-    const config = await loadServer(slug)
-    if (!config) {
-      emitStep({ state: 'done', ok: false, serverId: slug, error: `Config ${slug}.json not found` })
+    const { source, outcome } = await testAndPersistSource(slug, {
+      timeoutMs: VERIFY_MIN_TIMEOUT_MS,
+    })
+    if (!source) {
+      emitStep({ state: 'done', ok: false, serverId: slug, error: `Source ${slug} not found` })
       return
     }
-    const outcome = await mcpManager.test(config, {
-      timeoutMs: Math.max(config.timeoutMs, VERIFY_MIN_TIMEOUT_MS),
-    })
     emitStep({
       state: 'done',
       serverId: slug,
@@ -139,7 +148,12 @@ async function verifyWritten(messageId: string, slug: string): Promise<void> {
       ...(outcome.error ? { error: outcome.error } : {}),
       ...(outcome.stderr?.length ? { stderr: outcome.stderr } : {}),
     })
-    log.info('mcp.author verify', { messageId, slug, ok: outcome.ok, tools: outcome.tools?.length })
+    log.info('source.author verify', {
+      messageId,
+      slug,
+      ok: outcome.ok,
+      tools: outcome.tools?.length,
+    })
   } catch (err) {
     emitStep({
       state: 'done',
@@ -150,12 +164,12 @@ async function verifyWritten(messageId: string, slug: string): Promise<void> {
   }
 }
 
-register('mcp.author', async (raw) => {
+register('source.author', async (raw) => {
   const params = Params.parse(raw)
 
   const modelId = params.modelId ?? 'claude-sonnet-4-6'
 
-  log.info('mcp.author start', {
+  log.info('source.author start', {
     messageId: params.messageId,
     model: modelId,
     historyLen: params.history.length,
@@ -163,13 +177,10 @@ register('mcp.author', async (raw) => {
 
   const transcript = renderTranscript(params.history, params.userText)
 
-  // Slug of the last config the model successfully Wrote — drives the post-author
+  // Slug of the last config the model successfully wrote — drives the post-author
   // verify below. Captured from tool results so a failed Write never triggers it.
   let writtenSlug: string | null = null
 
-  // Author through the Pi runtime. Writes a <slug>.json config via the Write
-  // tool, so authorPi drives an agentic loop with the full tool set (bypass
-  // permission) and forwards text/step events to the emitters below.
   const res = await authorPi(
     {
       accountId: params.accountId,
@@ -178,9 +189,9 @@ register('mcp.author', async (raw) => {
       prompt: transcript,
     },
     {
-      onText: (delta) => emit('mcp.author.chunk', { messageId: params.messageId, delta }),
+      onText: (delta) => emit('source.author.chunk', { messageId: params.messageId, delta }),
       onToolUse: (use) =>
-        emit('mcp.author.step', {
+        emit('source.author.step', {
           messageId: params.messageId,
           step: stepFromToolUse({ id: use.id, name: use.name, input: use.input }),
         }),
@@ -189,7 +200,7 @@ register('mcp.author', async (raw) => {
           const slug = slugFromWritePath(r.input.file_path)
           if (slug) writtenSlug = slug
         }
-        emit('mcp.author.step', {
+        emit('source.author.step', {
           messageId: params.messageId,
           step: stepFromToolResult({
             toolUseId: r.id,
@@ -215,8 +226,8 @@ register('mcp.author', async (raw) => {
     usage: { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens },
     stopReason: res.stopReason,
   }
-  emit('mcp.author.done', result)
-  log.info('mcp.author done', {
+  emit('source.author.done', result)
+  log.info('source.author done', {
     messageId: params.messageId,
     model: result.modelUsed,
     inputTokens: res.usage.inputTokens,

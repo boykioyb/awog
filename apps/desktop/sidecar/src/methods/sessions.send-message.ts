@@ -25,7 +25,7 @@ import { parkQuestionRequest, rejectQuestionRequest } from '../sessions/question
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { liftTurnSignalListenerCap } from '../runtime/turn-signal.js'
-import { listServers as listMcpServers } from '../mcp/store.js'
+import { listSources } from '../sources/store.js'
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
@@ -689,18 +689,20 @@ register('sessions.sendMessage', async (raw) => {
   }
 
   // Build the resolved MCP server map for the runtime. ADR 0029 §4: the runtime
-  // bridges these to in-process Pi tools. We only forward enabled stdio/http
-  // servers — disabled entries shouldn't surface tools to the model.
+  // bridges these to in-process Pi tools. Source of truth is the `sources` store
+  // (ADR 0060) — we only forward enabled `mcp`-kind sources with a usable
+  // stdio/http block; disabled entries shouldn't surface tools to the model.
   // Per-session whitelist (params.mcpServerIds) further narrows the set:
   //   undefined → all enabled (legacy)
   //   []        → none
   //   [ids]     → only those (∩ enabled)
+  // The whitelist keys are source ids (= the old MCP id after migration).
   let mcpServersForRuntime: McpServersConfig | undefined
   // Track which servers actually made it through so we can build a matching
   // system-prompt nudge (only when user explicitly whitelisted).
   const attachedMcpServers: { id: string; name: string }[] = []
   try {
-    const all = await listMcpServers()
+    const all = await listSources()
     // Two whitelist layers (ADR 0016): session-level (params.mcpServerIds) and
     // agent-level (resolvedAgentMcpIds). Intersect both when present so the
     // narrower scope wins. undefined = "no restriction at this layer".
@@ -709,34 +711,36 @@ register('sessions.sendMessage', async (raw) => {
     const agentWhitelist = resolvedAgentMcpIds ? new Set(resolvedAgentMcpIds) : null
     const entries: [string, McpServersConfig[string]][] = []
     for (const s of all) {
+      if (s.type !== 'mcp') continue
       if (!s.enabled) continue
       if (sessionWhitelist && !sessionWhitelist.has(s.id)) continue
       if (agentWhitelist && !agentWhitelist.has(s.id)) continue
+      const transport = s.mcp.transport ?? 'http'
       let cfg: McpServersConfig[string]
-      if (s.transport === 'stdio') {
-        if (!s.command) continue
+      if (transport === 'stdio') {
+        if (!s.mcp.command) continue
         // Expand `secret:KEY` placeholders in env against OS keychain — ADR 0018.
         // The runtime passes plaintext env to the in-process MCP child. The
         // expansion happens fresh per turn so a re-saved keychain value
         // takes effect on the next message.
         // eslint-disable-next-line no-await-in-loop
-        const expandedEnv = await expandSecrets(s.id, s.env)
+        const expandedEnv = await expandSecrets(s.id, s.mcp.env)
         cfg = {
           type: 'stdio',
-          command: s.command,
-          ...(s.args ? { args: s.args } : {}),
+          command: s.mcp.command,
+          ...(s.mcp.args ? { args: s.mcp.args } : {}),
           ...(Object.keys(expandedEnv).length > 0 ? { env: expandedEnv } : {}),
           // Per-server handshake budget — `npx -y` cold starts can exceed the
           // bridge default; honour the user's configured timeout.
           timeoutMs: s.timeoutMs,
         }
-      } else if (s.transport === 'http') {
-        if (!s.url) continue
+      } else if (transport === 'http') {
+        if (!s.mcp.url) continue
         // eslint-disable-next-line no-await-in-loop
-        const expandedHeaders = await expandSecrets(s.id, s.headers)
+        const expandedHeaders = await expandSecrets(s.id, s.mcp.headers)
         cfg = {
           type: 'http',
-          url: s.url,
+          url: s.mcp.url,
           ...(Object.keys(expandedHeaders).length > 0 ? { headers: expandedHeaders } : {}),
           timeoutMs: s.timeoutMs,
         }
@@ -751,7 +755,7 @@ register('sessions.sendMessage', async (raw) => {
       mcpServersForRuntime = Object.fromEntries(entries)
     }
   } catch (err) {
-    log.warn('failed to list mcp servers for session', {
+    log.warn('failed to list sources for session', {
       err: err instanceof Error ? err.message : String(err),
     })
   }

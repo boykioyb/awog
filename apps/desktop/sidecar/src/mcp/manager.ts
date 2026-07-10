@@ -1,77 +1,49 @@
-// McpManager — lifecycle for MCP server child processes (stdio only, pha 1).
-// See ADR 0014 Q3 for spawn / env whitelist / backoff / process-group rules.
+// MCP connection testing + the shared stdio client for the runtime bridge.
+// See ADR 0014 (spawn / env whitelist rules) + ADR 0060 D-3.
 //
-// State diagram:
-//   disabled ──enable──> idle ──start──> starting ──handshake-ok──> running
-//                                            │              │
-//                                            └─error──> error (logs kept)
-//                                                           │
-//                                            └────restart──┘
-//
-// SDK integration (sessions): the Anthropic Agent SDK spawns its OWN process
-// per query when given an `mcpServers` map (ADR 0014 Q4). McpManager runs
-// in parallel to provide: persisted config, test() for UI verify, and a
-// best-effort snapshot of last-known status. It does NOT bridge tool calls.
+// Since ADR 0060 the Connections page NO LONGER keeps persistent MCP child
+// processes: a source's status is derived from the last `source.test`/auth and
+// persisted on the SourceConfig (connectionStatus/isAuthenticated/...), not from
+// a live process. So this module dropped the start/stop/restart/idle-sweep/
+// auto-start lifecycle. What remains:
+//   - StdioMcpClient — the JSON-RPC-over-stdio transport, reused by the Pi
+//     runtime MCP bridge (runtime/tools/mcp-tools.ts). That bridge pools its OWN
+//     children per session and owns their cleanup on shutdown.
+//   - mcpManager.test() — a one-shot connectivity probe (spawn ephemeral child /
+//     one-shot http POST, handshake, optional auth probe, tear down). Consumed by
+//     source.test + source.author's verify step. It operates on a normalized
+//     McpConnectParams (mapped from an mcp source's `mcp` block by sources/test),
+//     so it no longer depends on the legacy flat McpServerConfig shape.
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { resolve, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
 import { createInterface } from 'node:readline'
-import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
-import * as store from './store.js'
 import { HttpMcpClient, ssrfCheck } from './http-client.js'
 import { expandSecrets } from './secrets.js'
-import type {
-  McpHealthCheck,
-  McpServerConfig,
-  McpServerSnapshot,
-  McpStatus,
-  McpTool,
-  McpResource,
-} from '../types/shared.js'
+import type { McpHealthCheck, McpTool, McpResource } from '../types/shared.js'
 
 // Environment vars we pass through to children. Everything else is dropped —
 // notably ANTHROPIC_API_KEY, OAuth tokens, and any leaked credential.
 const ENV_WHITELIST = ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR'] as const
 
 const STDERR_RING_SIZE = 100
-const STOP_GRACE_MS = 2000
-const BACKOFF_MS = [1000, 3000, 5000]
-const CRASH_WINDOW_MS = 60_000
-const MAX_CRASHES = 3
-// Idle stop (Sprint 3 C2): servers started manually (autoStart=false) get
-// auto-stopped after this window of inactivity to free RAM. Triggers:
-// `start`/`restart`/`test` reset the timer. autoStart=true servers are
-// unaffected — they're meant to stay up.
-const IDLE_STOP_MS = 5 * 60_000
-const IDLE_CHECK_INTERVAL_MS = 30_000
 
-interface RuntimeState {
-  status: McpStatus
-  tools: McpTool[]
-  resources: McpResource[]
-  lastError?: string | undefined
-  lastStartedAt?: string | undefined
-  // Reset by start/restart/test. Idle sweep stops the process when
-  // Date.now() - lastActivityAt > IDLE_STOP_MS (only for autoStart=false).
-  lastActivityAt?: number | undefined
-  stderr: string[]
-  child?: ChildProcessWithoutNullStreams | undefined
-  crashTimestamps: number[]
-  restartTimer?: NodeJS.Timeout | undefined
-  manualStop: boolean
-}
-
-function makeInitial(): RuntimeState {
-  return {
-    status: 'idle',
-    tools: [],
-    resources: [],
-    stderr: [],
-    crashTimestamps: [],
-    manualStop: false,
-  }
+// Normalized connection params for a one-shot test — source-agnostic. The caller
+// (sources/test.ts) maps an mcp source's `mcp` block onto this. `id` is the
+// keychain account prefix used to expand `secret:KEY` env/header refs (ADR 0018).
+export interface McpConnectParams {
+  id: string
+  transport: 'stdio' | 'http' | 'sse'
+  command?: string | undefined
+  args?: string[] | undefined
+  env?: Record<string, string> | undefined
+  cwd?: string | undefined
+  url?: string | undefined
+  headers?: Record<string, string> | undefined
+  timeoutMs: number
+  healthCheck?: McpHealthCheck | undefined
 }
 
 interface JsonRpcRequest {
@@ -110,9 +82,9 @@ export interface McpProbeResult {
   error?: string
 }
 
-// Full mcp.test outcome: handshake result (tools/resources) plus the optional
-// auth probe. `ok` reflects the handshake only — a failed probe leaves ok=true
-// (the server IS reachable) but sets `probe.ok=false` so the UI can distinguish
+// Full test outcome: handshake result (tools/resources) plus the optional auth
+// probe. `ok` reflects the handshake only — a failed probe leaves ok=true (the
+// server IS reachable) but sets `probe.ok=false` so the caller can distinguish
 // "can't connect" from "connected but token rejected".
 export interface McpTestOutcome {
   ok: boolean
@@ -123,7 +95,7 @@ export interface McpTestOutcome {
   probe?: McpProbeResult
 }
 
-async function buildEnv(config: McpServerConfig): Promise<NodeJS.ProcessEnv> {
+async function buildEnv(params: McpConnectParams): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = {}
   for (const key of ENV_WHITELIST) {
     const val = process.env[key]
@@ -133,7 +105,7 @@ async function buildEnv(config: McpServerConfig): Promise<NodeJS.ProcessEnv> {
   // passing to the child. Plaintext values pass through. Missing keychain
   // entries become empty strings — the MCP server itself surfaces a clear
   // auth failure rather than the sidecar crashing.
-  const expanded = await expandSecrets(config.id, config.env)
+  const expanded = await expandSecrets(params.id, params.env)
   for (const [k, v] of Object.entries(expanded)) {
     // Pass through user-declared env. Empty string still sent so MCP server
     // sees "GITHUB_TOKEN=" and can fail loudly instead of using stale value.
@@ -142,17 +114,18 @@ async function buildEnv(config: McpServerConfig): Promise<NodeJS.ProcessEnv> {
   return env
 }
 
-function resolveCwd(config: McpServerConfig): string | undefined {
-  if (!config.cwd) return undefined
+function resolveCwd(params: McpConnectParams): string | undefined {
+  if (!params.cwd) return undefined
   // ".." reject defensively. Resolve relative-to-home then verify scope.
-  if (config.cwd.includes('..')) {
+  if (params.cwd.includes('..')) {
     throw new Error('cwd must not contain ".."')
   }
-  const expanded = config.cwd === '~'
-    ? homedir()
-    : config.cwd.startsWith('~/')
-      ? resolve(homedir(), config.cwd.slice(2))
-      : config.cwd
+  const expanded =
+    params.cwd === '~'
+      ? homedir()
+      : params.cwd.startsWith('~/')
+        ? resolve(homedir(), params.cwd.slice(2))
+        : params.cwd
   if (!isAbsolute(expanded)) {
     throw new Error('cwd must be absolute (or start with "~/")')
   }
@@ -163,7 +136,7 @@ function resolveCwd(config: McpServerConfig): string | undefined {
   return abs
 }
 
-// Minimal MCP client over stdio. Used both for test() and start() handshake.
+// Minimal MCP client over stdio. Used both for test() and the runtime bridge.
 // Exported so the Pi runtime's MCP tool bridge (runtime/tools/mcp-tools.ts) can
 // reuse the SAME JSON-RPC-over-stdio transport for per-turn tools/list +
 // tools/call instead of writing a second client (ADR 0029 §4 — in-process MCP).
@@ -295,7 +268,7 @@ function extractCallText(content: CallToolResult['content']): string {
 // Optional auth probe (invoked by test() after a successful handshake): call one
 // read-only tool and report whether it authenticated. A tool-level failure
 // (isError, or a JSON-RPC error like a 401 relayed by the server) → ok:false so
-// the UI shows "connected but token rejected" instead of a bare "Connection OK".
+// the caller shows "connected but token rejected" instead of a bare "OK".
 async function probeHealth(
   client: McpClient,
   hc: McpHealthCheck,
@@ -308,7 +281,11 @@ async function probeHealth(
       timeoutMs,
     )) as CallToolResult
     if (res && res.isError) {
-      return { ok: false, tool: hc.tool, error: extractCallText(res.content) || 'tool returned an error' }
+      return {
+        ok: false,
+        tool: hc.tool,
+        error: extractCallText(res.content) || 'tool returned an error',
+      }
     }
     return { ok: true, tool: hc.tool }
   } catch (err) {
@@ -316,17 +293,17 @@ async function probeHealth(
   }
 }
 
-async function spawnChild(config: McpServerConfig): Promise<ChildProcessWithoutNullStreams> {
-  if (config.transport !== 'stdio') {
-    throw new Error(`transport ${config.transport} not supported in pha 1`)
+async function spawnChild(params: McpConnectParams): Promise<ChildProcessWithoutNullStreams> {
+  if (params.transport !== 'stdio') {
+    throw new Error(`transport ${params.transport} not supported for stdio spawn`)
   }
-  if (!config.command) {
+  if (!params.command) {
     throw new Error('stdio server requires command')
   }
-  const env = await buildEnv(config)
-  const cwd = resolveCwd(config)
+  const env = await buildEnv(params)
+  const cwd = resolveCwd(params)
   // execFile-style: argv array, no shell, no interpolation.
-  return spawn(config.command, config.args ?? [], {
+  return spawn(params.command, params.args ?? [], {
     env,
     cwd,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -337,256 +314,29 @@ async function spawnChild(config: McpServerConfig): Promise<ChildProcessWithoutN
 }
 
 class McpManager {
-  private runtime = new Map<string, RuntimeState>()
-
-  private getOrInit(id: string): RuntimeState {
-    let st = this.runtime.get(id)
-    if (!st) {
-      st = makeInitial()
-      this.runtime.set(id, st)
-    }
-    return st
-  }
-
-  private emitStatus(id: string, st: RuntimeState): void {
-    emit('mcp.status', {
-      id,
-      status: st.status,
-      lastError: st.lastError,
-      tools: st.tools,
-      resources: st.resources,
-      lastStartedAt: st.lastStartedAt,
-    })
-  }
-
-  private pushStderr(id: string, st: RuntimeState, line: string): void {
-    st.stderr.push(line)
-    if (st.stderr.length > STDERR_RING_SIZE) {
-      st.stderr.splice(0, st.stderr.length - STDERR_RING_SIZE)
-    }
-    emit('mcp.stderr-line', { id, line, at: new Date().toISOString() })
-  }
-
-  async start(id: string): Promise<void> {
-    const config = await store.loadServer(id)
-    if (!config) throw new Error(`mcp server not found: ${id}`)
-    if (config.transport === 'sse') {
-      throw new Error('sse transport not supported yet')
-    }
-    if (config.transport === 'http') {
-      return this.startHttp(id, config)
-    }
-    return this.startStdio(id, config)
-  }
-
-  private async startStdio(id: string, config: McpServerConfig): Promise<void> {
-    const st = this.getOrInit(id)
-    if (st.child) return // already running — no-op
-    st.status = 'starting'
-    st.lastError = undefined
-    st.manualStop = false
-    this.emitStatus(id, st)
-
-    let child: ChildProcessWithoutNullStreams
-    try {
-      child = await spawnChild(config)
-    } catch (err) {
-      st.status = 'error'
-      st.lastError = err instanceof Error ? err.message : String(err)
-      this.emitStatus(id, st)
-      throw err
-    }
-    st.child = child
-
-    // stderr capture
-    const stderrRl = createInterface({ input: child.stderr, crlfDelay: Infinity })
-    stderrRl.on('line', (line) => {
-      this.pushStderr(id, st, line)
-    })
-
-    child.on('error', (err) => {
-      st.lastError = err.message
-      this.pushStderr(id, st, `[spawn-error] ${err.message}`)
-    })
-    child.on('exit', (code, signal) => {
-      this.onChildExit(id, st, code, signal)
-    })
-
-    // Handshake
-    const client = new StdioMcpClient(child)
-    try {
-      const { tools, resources } = await handshake(client, config.timeoutMs)
-      st.tools = tools
-      st.resources = resources
-      st.status = 'running'
-      st.lastStartedAt = new Date().toISOString()
-      st.lastActivityAt = Date.now()
-      this.emitStatus(id, st)
-    } catch (err) {
-      st.lastError = err instanceof Error ? err.message : String(err)
-      st.status = 'error'
-      this.emitStatus(id, st)
-      try {
-        child.kill('SIGTERM')
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  // HTTP transport: no process, no stderr, no crash backoff. We do a one-shot
-  // handshake to verify reachability + list tools, then mark the server
-  // "running" — actual tool calls are issued by the Claude Agent SDK per-query
-  // (ADR 0014 Q4), not by McpManager. status is effectively "last probe
-  // result"; user can click Restart to re-probe.
-  private async startHttp(id: string, config: McpServerConfig): Promise<void> {
-    const st = this.getOrInit(id)
-    st.status = 'starting'
-    st.lastError = undefined
-    st.manualStop = false
-    this.emitStatus(id, st)
-
-    if (!config.url) {
-      st.status = 'error'
-      st.lastError = 'http transport requires url'
-      this.emitStatus(id, st)
-      throw new Error(st.lastError)
-    }
-    const guard = ssrfCheck(config.url)
-    if (!guard.ok) {
-      st.status = 'error'
-      st.lastError = `SSRF guard rejected URL: ${guard.reason}`
-      this.emitStatus(id, st)
-      throw new Error(st.lastError)
-    }
-    // Expand `secret:KEY` placeholders in headers before fetch — ADR 0018.
-    const expandedHeaders = await expandSecrets(config.id, config.headers)
-    const client = new HttpMcpClient(config.url, expandedHeaders)
-    try {
-      const { tools, resources } = await handshake(client, config.timeoutMs)
-      st.tools = tools
-      st.resources = resources
-      st.status = 'running'
-      st.lastStartedAt = new Date().toISOString()
-      st.lastActivityAt = Date.now()
-      this.emitStatus(id, st)
-    } catch (err) {
-      st.lastError = err instanceof Error ? err.message : String(err)
-      st.status = 'error'
-      this.emitStatus(id, st)
-    }
-  }
-
-  private onChildExit(
-    id: string,
-    st: RuntimeState,
-    code: number | null,
-    signal: NodeJS.Signals | null,
-  ): void {
-    st.child = undefined
-    const wasRunning = st.status === 'running' || st.status === 'starting'
-    if (st.manualStop) {
-      st.status = 'idle'
-      st.tools = []
-      st.resources = []
-      this.emitStatus(id, st)
-      return
-    }
-    if (!wasRunning) return // already error, no-op
-    // Crash. Record timestamp + decide backoff vs. give up.
-    const now = Date.now()
-    st.crashTimestamps = st.crashTimestamps.filter((ts) => now - ts < CRASH_WINDOW_MS)
-    st.crashTimestamps.push(now)
-    const reason = signal ?? (code !== null ? `exit ${code}` : 'unknown')
-    st.lastError = `process exited (${reason})`
-    if (st.crashTimestamps.length >= MAX_CRASHES) {
-      st.status = 'error'
-      this.emitStatus(id, st)
-      log.warn('mcp: hit crash limit, giving up', { id, crashes: st.crashTimestamps.length })
-      return
-    }
-    const delay = BACKOFF_MS[st.crashTimestamps.length - 1] ?? BACKOFF_MS[BACKOFF_MS.length - 1]
-    st.status = 'starting'
-    this.emitStatus(id, st)
-    st.restartTimer = setTimeout(() => {
-      void this.start(id).catch((err: unknown) => {
-        log.warn('mcp: auto-restart failed', {
-          id,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      })
-    }, delay)
-  }
-
-  async stop(id: string): Promise<void> {
-    const st = this.runtime.get(id)
-    if (!st) return
-    if (st.restartTimer) {
-      clearTimeout(st.restartTimer)
-      st.restartTimer = undefined
-    }
-    st.manualStop = true
-    const child = st.child
-    if (!child) {
-      st.status = 'idle'
-      st.tools = []
-      st.resources = []
-      this.emitStatus(id, st)
-      return
-    }
-    try {
-      child.kill('SIGTERM')
-    } catch {
-      // ignore
-    }
-    await new Promise<void>((resolveP) => {
-      const timer = setTimeout(() => {
-        try {
-          child.kill('SIGKILL')
-        } catch {
-          // ignore
-        }
-        resolveP()
-      }, STOP_GRACE_MS)
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolveP()
-      })
-    })
-  }
-
-  async restart(id: string): Promise<void> {
-    const st = this.getOrInit(id)
-    st.crashTimestamps = []
-    await this.stop(id)
-    st.manualStop = false
-    await this.start(id)
-  }
-
   // One-shot connectivity test. Stdio: spawn ephemeral child, handshake, kill.
   // Http: ssrf guard + ephemeral POST handshake (no process). Used by
-  // `mcp.test` RPC for the McpEditor "Verify connection" button and by the
-  // author flow's post-write verify.
+  // `source.test` (Connections "Verify" / auto-enable) and `source.author`'s
+  // post-write verify.
   //
-  // `opts.timeoutMs` overrides the handshake budget. Default is the config's own
-  // `timeoutMs` (30s) — same as start(), so a manual test no longer fails faster
-  // than the real startup would. The author-verify passes a larger value because
-  // a first `npx -y <pkg>` run also downloads the package before it can speak MCP.
-  async test(config: McpServerConfig, opts: { timeoutMs?: number } = {}): Promise<McpTestOutcome> {
-    const timeoutMs = opts.timeoutMs ?? config.timeoutMs
-    if (config.transport === 'sse') {
+  // `opts.timeoutMs` overrides the handshake budget. Default is the params'
+  // `timeoutMs`. The author-verify passes a larger value because a first
+  // `npx -y <pkg>` run also downloads the package before it can speak MCP.
+  async test(params: McpConnectParams, opts: { timeoutMs?: number } = {}): Promise<McpTestOutcome> {
+    const timeoutMs = opts.timeoutMs ?? params.timeoutMs
+    if (params.transport === 'sse') {
       return { ok: false, error: 'sse transport not supported yet' }
     }
-    if (config.transport === 'http') {
-      return this.testHttp(config, timeoutMs)
+    if (params.transport === 'http') {
+      return this.testHttp(params, timeoutMs)
     }
-    return this.testStdio(config, timeoutMs)
+    return this.testStdio(params, timeoutMs)
   }
 
-  private async testStdio(config: McpServerConfig, timeoutMs: number): Promise<McpTestOutcome> {
+  private async testStdio(params: McpConnectParams, timeoutMs: number): Promise<McpTestOutcome> {
     let child: ChildProcessWithoutNullStreams
     try {
-      child = await spawnChild(config)
+      child = await spawnChild(params)
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -600,8 +350,8 @@ class McpManager {
       const { tools, resources } = await handshake(client, timeoutMs)
       // Run the auth probe (if configured) on the SAME live child so it inherits
       // the token env — then tear the child down.
-      const probe = config.healthCheck
-        ? await probeHealth(client, config.healthCheck, timeoutMs)
+      const probe = params.healthCheck
+        ? await probeHealth(client, params.healthCheck, timeoutMs)
         : undefined
       this.killChild(child)
       return { ok: true, tools, resources, stderr, ...(probe ? { probe } : {}) }
@@ -623,20 +373,20 @@ class McpManager {
     }
   }
 
-  private async testHttp(config: McpServerConfig, timeoutMs: number): Promise<McpTestOutcome> {
-    if (!config.url) {
+  private async testHttp(params: McpConnectParams, timeoutMs: number): Promise<McpTestOutcome> {
+    if (!params.url) {
       return { ok: false, error: 'http transport requires url' }
     }
-    const guard = ssrfCheck(config.url)
+    const guard = ssrfCheck(params.url)
     if (!guard.ok) {
       return { ok: false, error: `SSRF guard rejected URL: ${guard.reason}` }
     }
-    const expandedHeaders = await expandSecrets(config.id, config.headers)
-    const client = new HttpMcpClient(config.url, expandedHeaders)
+    const expandedHeaders = await expandSecrets(params.id, params.headers)
+    const client = new HttpMcpClient(params.url, expandedHeaders)
     try {
       const { tools, resources } = await handshake(client, timeoutMs)
-      const probe = config.healthCheck
-        ? await probeHealth(client, config.healthCheck, timeoutMs)
+      const probe = params.healthCheck
+        ? await probeHealth(client, params.healthCheck, timeoutMs)
         : undefined
       return { ok: true, tools, resources, ...(probe ? { probe } : {}) }
     } catch (err) {
@@ -644,90 +394,16 @@ class McpManager {
     }
   }
 
-  getSnapshot(config: McpServerConfig): McpServerSnapshot {
-    const st = this.runtime.get(config.id)
-    const status = !config.enabled ? 'disabled' : (st?.status ?? 'idle')
-    const snap: McpServerSnapshot = {
-      ...config,
-      status,
-      tools: st?.tools ?? [],
-      resources: st?.resources ?? [],
-    }
-    if (st?.lastError) snap.lastError = st.lastError
-    if (st?.lastStartedAt) snap.lastStartedAt = st.lastStartedAt
-    return snap
-  }
-
-  getStderr(id: string): string[] {
-    return this.runtime.get(id)?.stderr.slice() ?? []
-  }
-
-  async shutdown(): Promise<void> {
-    const ids = [...this.runtime.keys()]
-    await Promise.all(ids.map((id) => this.stop(id)))
-  }
-
-  // Called by index.ts on startup. Auto-starts every enabled+autoStart server.
-  async hydrateAutoStart(): Promise<void> {
-    const configs = await store.listServers()
-    for (const cfg of configs) {
-      this.getOrInit(cfg.id)
-      if (cfg.enabled && cfg.autoStart && (cfg.transport === 'stdio' || cfg.transport === 'http')) {
-        // Fire-and-forget; restart-safe (AC-3). Failures land in 'error' state.
-        void this.start(cfg.id).catch((err: unknown) => {
-          log.warn('mcp: autoStart failed', {
-            id: cfg.id,
-            err: err instanceof Error ? err.message : String(err),
-          })
-        })
-      }
-    }
-    this.startIdleSweep()
-  }
-
-  // Idle sweep (Sprint 3 C2) — every 30s, look for running servers whose
-  // config has autoStart=false and which haven't seen activity for
-  // IDLE_STOP_MS. Stop them to free RAM. autoStart=true servers (the user
-  // explicitly asked to keep running) are exempt. Re-spawn is manual:
-  // user clicks Restart, or session SDK spawns its own per-query process
-  // (sidecar McpManager spawn is separate — ADR 0014 Q4).
-  private startIdleSweep(): void {
-    setInterval(() => {
-      void this.sweepIdle().catch((err: unknown) => {
-        log.warn('mcp: idle sweep failed', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-      })
-    }, IDLE_CHECK_INTERVAL_MS)
-  }
-
-  private async sweepIdle(): Promise<void> {
-    const now = Date.now()
-    const candidates: string[] = []
-    for (const [id, st] of this.runtime.entries()) {
-      if (st.status !== 'running') continue
-      if (!st.lastActivityAt) continue
-      if (now - st.lastActivityAt < IDLE_STOP_MS) continue
-      candidates.push(id)
-    }
-    if (candidates.length === 0) return
-    const configs = await store.listServers()
-    const configById = new Map(configs.map((c) => [c.id, c]))
-    for (const id of candidates) {
-      const cfg = configById.get(id)
-      // No config = file deleted while running, stop it anyway.
-      // autoStart=true = exempt (user wants it kept up).
-      if (cfg && cfg.autoStart) continue
-      log.info('mcp: idle-stopping server', { id, idleMs: now - (this.runtime.get(id)?.lastActivityAt ?? 0) })
-      // eslint-disable-next-line no-await-in-loop
-      await this.stop(id)
-    }
-  }
+  // No persistent MCP children remain (ADR 0060 D-3): the runtime bridge's
+  // session pool (runtime/tools/mcp-tools.ts) owns cleanup of the children it
+  // spawns via its own SIGTERM/SIGINT handlers. Retained as a no-op so the
+  // process-exit wiring below stays in place for symmetry / future use.
+  async shutdown(): Promise<void> {}
 }
 
 export const mcpManager = new McpManager()
 
-// Wire graceful shutdown so children die with the sidecar.
+// Wire graceful shutdown (no-op today; see shutdown()).
 process.once('SIGTERM', () => {
   void mcpManager.shutdown()
 })
