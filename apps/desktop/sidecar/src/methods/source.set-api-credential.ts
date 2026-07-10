@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { SOURCE_ID_RE } from '../sources/schema.js'
 import { keychainStatus } from '../credentials/keychain.js'
-import { saveApiCredential, type ApiCredential } from '../sources/api-credentials.js'
+import { buildApiCredential, saveApiCredential } from '../sources/api-credentials.js'
 
 const Params = z.object({
   // The source's stable id (keychain account), NOT the slug — matches the id the
@@ -29,30 +29,6 @@ const Params = z.object({
   headers: z.record(z.string().min(1).max(200), z.string().min(1).max(16_384)).optional(),
 })
 
-// Map the request mode + fields onto the stored ApiCredential union, failing
-// fast when the required field(s) for the mode are missing.
-function toCredential(p: z.infer<typeof Params>): ApiCredential {
-  switch (p.mode) {
-    case 'bearer':
-    case 'header':
-    case 'query':
-      if (p.value === undefined) {
-        throw new RpcError(-32602, `mode "${p.mode}" requires a "value"`)
-      }
-      return { type: 'value', value: p.value }
-    case 'basic':
-      if (p.username === undefined || p.password === undefined) {
-        throw new RpcError(-32602, 'mode "basic" requires "username" and "password"')
-      }
-      return { type: 'basic', username: p.username, password: p.password }
-    case 'multi-header':
-      if (!p.headers || Object.keys(p.headers).length === 0) {
-        throw new RpcError(-32602, 'mode "multi-header" requires a non-empty "headers" map')
-      }
-      return { type: 'multi-header', headers: p.headers }
-  }
-}
-
 register('source.setApiCredential', async (raw) => {
   const params = Params.parse(raw)
   const status = await keychainStatus()
@@ -62,7 +38,13 @@ register('source.setApiCredential', async (raw) => {
       `keychain unavailable: ${status.error ?? 'native binding missing — run \`pnpm install\` in apps/desktop/sidecar'}`,
     )
   }
-  await saveApiCredential(params.sourceId, toCredential(params))
+  let cred
+  try {
+    cred = buildApiCredential(params.mode, params)
+  } catch (err) {
+    throw new RpcError(-32602, err instanceof Error ? err.message : String(err))
+  }
+  await saveApiCredential(params.sourceId, cred)
   // Status only — never echo the secret (invariant 1).
   return { ok: true }
 })

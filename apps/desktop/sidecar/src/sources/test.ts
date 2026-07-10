@@ -91,21 +91,24 @@ async function testApiSource(
     return { ok: false, supported: true, status: 'failed', error: `baseUrl blocked: ${baseGuard.reason}` }
   }
 
-  // OAuth api sources are deferred to P6 — no generic api OAuth wired yet.
-  if (api.authType === 'oauth') {
-    return {
-      ok: false,
-      supported: true,
-      status: 'needs_auth',
-      isAuthenticated: false,
-      error: 'OAuth API sources are not supported yet (phase P6).',
-    }
-  }
-
-  // Authenticated sources need a stored credential before we probe; public
-  // (none) sources need none. Missing credential → needs_auth (don't call).
+  // Auth resolution. OAuth (ADR 0060 P6): fetch a fresh Bearer token (auto-
+  // refreshed) and probe with it; no token → needs_auth without a request.
+  // Other authed kinds need a stored credential; public (none) needs neither.
   let cred: ApiCredential | null = null
-  if (api.authType !== 'none') {
+  let oauthHeaders: Record<string, string> | undefined
+  if (api.authType === 'oauth') {
+    const token = await getFreshToken(source)
+    if (!token) {
+      return {
+        ok: false,
+        supported: true,
+        status: 'needs_auth',
+        isAuthenticated: false,
+        error: 'Not authenticated — connect via OAuth first (source_oauth_trigger).',
+      }
+    }
+    oauthHeaders = { Authorization: `Bearer ${token}` }
+  } else if (api.authType !== 'none') {
     cred = await loadApiCredential(source.id)
     if (!cred) {
       return {
@@ -118,13 +121,18 @@ async function testApiSource(
     }
   }
 
-  // Probe target: the configured testEndpoint, else a bare GET on baseUrl.
+  // Probe target: the configured testEndpoint, else a bare GET on baseUrl. The
+  // OAuth Bearer wins over any stale testEndpoint Authorization header.
   const method = api.testEndpoint?.method ?? 'GET'
+  const extraHeaders: Record<string, string> = {
+    ...(api.testEndpoint?.headers ?? {}),
+    ...(oauthHeaders ?? {}),
+  }
   const spec: ApiRequestSpec = {
     path: api.testEndpoint?.path ?? '',
     method,
     ...(method !== 'GET' && api.testEndpoint?.body ? { params: api.testEndpoint.body } : {}),
-    ...(api.testEndpoint?.headers ? { extraHeaders: api.testEndpoint.headers } : {}),
+    ...(Object.keys(extraHeaders).length > 0 ? { extraHeaders } : {}),
   }
   const { url, init } = buildApiRequest(api, cred, spec)
 

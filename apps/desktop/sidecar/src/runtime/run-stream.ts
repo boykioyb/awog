@@ -108,6 +108,9 @@ export async function runStreamPi(
       // Plan mode: expose ExitPlanMode so the model can present a plan for
       // approval (permission.ts still blocks all writes/exec meanwhile).
       ...(inPlanMode ? { includePlanTool: true } : {}),
+      // Source setup tools (ADR 0060 P6): sessions only. Lets the model add/test/
+      // authenticate Sources conversationally. Never wired into tasks (invoke.ts).
+      includeSourceTools: true,
       // Per-source Explore scoping (ADR 0060 P4): restrict a source to its own
       // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
       ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),

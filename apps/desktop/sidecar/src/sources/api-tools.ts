@@ -12,20 +12,22 @@
 //
 // The tool input is a single flexible shape { path, method, params, _intent };
 // auth is injected per the source's `authType` (bearer / header / multi-header /
-// query / basic / none). The credential is read FRESH from the keychain on every
-// call (sources/api-credentials.ts) so a mid-session credential update takes
-// effect without rebuilding the tool. Every request URL is SSRF-guarded
+// query / basic / oauth / none). The credential is read FRESH from the keychain
+// on every call (sources/api-credentials.ts) so a mid-session credential update
+// takes effect without rebuilding the tool. Every request URL is SSRF-guarded
 // (invariant 7); large or binary responses are capped/omitted so a huge payload
 // can't blow the context window. Credentials/headers are NEVER logged.
 //
-// authType 'oauth' is DEFERRED to P6: the tool registers but returns a clear
-// "not supported yet" so the model gets feedback instead of a missing tool
-// (generic api OAuth is intentionally not wired here).
+// authType 'oauth' (ADR 0060 P6): a fresh access token is fetched per call via
+// sources/oauth-manager.ts (getFreshToken — auto-refreshes within 5 min of
+// expiry) and injected as `Authorization: Bearer <token>`. No token → a clear
+// needs_auth result telling the model to run source_oauth_trigger first.
 
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { ssrfCheck } from '../mcp/http-client.js'
 import { loadApiCredential, type ApiCredential } from './api-credentials.js'
+import { getFreshToken } from './oauth-manager.js'
 import { log } from '../util/logger.js'
 import type { CompiledApiEndpoint } from '../runtime/permission-types.js'
 import type { ApiSource, ApiSourceBlock } from '../types/shared.js'
@@ -285,14 +287,6 @@ export function createApiTool(
     async execute(_toolCallId, rawParams, sig): Promise<AgentToolResult<unknown>> {
       if (sig?.aborted || loopSignal?.aborted) throw new Error(`api_${source.slug} aborted`)
 
-      // OAuth api sources are deferred to P6 — no generic api OAuth wired here.
-      if (api.authType === 'oauth') {
-        return textResult(
-          `OAuth API sources are not supported yet (phase P6). Configure a bearer/header/query/basic credential for "${source.name}", or use an MCP source with OAuth.`,
-          true,
-        )
-      }
-
       // `params` arrives typed as unknown (homogeneous AgentTool) — narrow it.
       const p = (rawParams ?? {}) as { path?: unknown; method?: unknown; params?: unknown }
       const path = typeof p.path === 'string' ? p.path : ''
@@ -310,14 +304,33 @@ export function createApiTool(
         )
       }
 
-      // Credential read FRESH so a mid-session update takes effect. `none` needs
-      // none; a null credential lets the upstream API surface its own 401.
-      const cred = api.authType === 'none' ? null : await loadApiCredential(source.id)
+      // OAuth api source (ADR 0060 P6): fetch a fresh Bearer token (auto-refreshed
+      // by getFreshToken) and inject it as an Authorization header. No token →
+      // needs_auth; tell the model to authenticate first. The token stays in
+      // memory here — never logged, never in the tool result.
+      let oauthHeaders: Record<string, string> | undefined
+      if (api.authType === 'oauth') {
+        const token = await getFreshToken(source)
+        if (!token) {
+          return textResult(
+            `"${source.name}" is not authenticated. Run source_oauth_trigger({ slug: "${source.slug}" }) to sign in, then retry.`,
+            true,
+          )
+        }
+        oauthHeaders = { Authorization: `Bearer ${token}` }
+      }
+
+      // Credential read FRESH so a mid-session update takes effect. `none`/`oauth`
+      // use no stored api credential (oauth injects a Bearer above); a null
+      // credential lets the upstream API surface its own 401.
+      const cred =
+        api.authType === 'none' || api.authType === 'oauth' ? null : await loadApiCredential(source.id)
 
       const { url, init } = buildApiRequest(api, cred, {
         path,
         method,
         ...(reqParams ? { params: reqParams } : {}),
+        ...(oauthHeaders ? { extraHeaders: oauthHeaders } : {}),
       })
 
       // SSRF-guard every request URL (baseUrl + path + any query auth). L1 input:

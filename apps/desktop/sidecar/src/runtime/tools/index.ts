@@ -31,6 +31,7 @@ import { createBashTool } from './bash-tool.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
+import { createSourceTools } from './source-tools.js'
 import { createTodoWriteTool, createWebSearchTool } from './builtin-stubs.js'
 import { createWebFetchTool } from './web-fetch-tool.js'
 import { createBrowserTool } from './browser-tool.js'
@@ -45,6 +46,12 @@ export interface ToolFilter {
   // Include the ExitPlanMode tool. Only the chat runtime sets this (when the
   // session is in plan mode) so the model can present a plan; tasks never plan.
   includePlanTool?: boolean
+  // Include the agent-callable `source_*` tools (ADR 0060 P6: list/create/test/
+  // set-credential/oauth-trigger). Only the chat runtime (sessions) sets this so
+  // the model can set up Sources conversationally; unattended tasks never do.
+  // Filtered by allowedTools/disabledTools like any tool; the mutating ones are
+  // gated by the permission hook (runtime/permission.ts).
+  includeSourceTools?: boolean
   // MCP server ids whose `mcp__<id>__*` tools bypass the allowedTools whitelist
   // (disabledTools STILL applies). Set by the subagent Task path to the parent's
   // inherited servers: the session/task attached them, not the agent, so an
@@ -149,6 +156,8 @@ export function createAwogToolDefinitions(
     // never errors out.
     createAskUserQuestionTool(askUser),
     ...(filter.includePlanTool ? [createExitPlanModeTool()] : []),
+    // Source setup tools (ADR 0060 P6) — sessions only (includeSourceTools).
+    ...(filter.includeSourceTools ? createSourceTools() : []),
   ] as AgentTool[]
 
   return applyFilter(all, filter)

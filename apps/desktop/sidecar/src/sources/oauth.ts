@@ -24,6 +24,7 @@ import { genChallenge, genStateToken, genVerifier } from '../auth/pkce.js'
 import { blockedHostReason } from '../mcp/http-client.js'
 import { log } from '../util/logger.js'
 import type { OAuthTokenBundle } from './oauth-store.js'
+import type { ApiSource } from '../types/shared.js'
 
 const CALLBACK_PORT_START = 8914
 const CALLBACK_PORT_END = 8924
@@ -334,23 +335,44 @@ async function exchangeCode(
   codeVerifier: string,
   clientId: string,
   redirectUri: string,
+  // Confidential-client secret (api.oauth.clientSecret). Omitted for public PKCE
+  // clients (mcp DCR / fixed-client flows never send one).
+  clientSecret?: string,
 ): Promise<OAuthTokenBundle> {
-  const data = await postToken(
-    tokenEndpoint,
-    new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-      client_id: clientId,
-      code_verifier: codeVerifier,
-    }),
-  )
+  const params = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: redirectUri,
+    client_id: clientId,
+    code_verifier: codeVerifier,
+  })
+  if (clientSecret) params.set('client_secret', clientSecret)
+  const data = await postToken(tokenEndpoint, params)
   return bundleFromTokenResponse(data, clientId)
 }
 
-// Refresh an access token via a re-discovered token endpoint. Re-discovery keeps
-// the bundle minimal (no persisted token endpoint) and always current. Returns a
+// Refresh an access token against an already-resolved token endpoint. Returns a
 // fresh bundle (carrying the old refresh token forward if the server omits one).
+// Used by both the mcp path (endpoint re-discovered) and the generic api-oauth
+// path (endpoint from api.oauth.tokenUrl or discovered from api.baseUrl).
+export async function refreshOAuthTokenAt(
+  tokenEndpoint: string,
+  refreshToken: string,
+  clientId: string,
+  clientSecret?: string,
+): Promise<OAuthTokenBundle> {
+  const params = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: clientId,
+  })
+  if (clientSecret) params.set('client_secret', clientSecret)
+  const data = await postToken(tokenEndpoint, params)
+  return bundleFromTokenResponse(data, clientId, refreshToken)
+}
+
+// Refresh an mcp access token via a re-discovered token endpoint. Re-discovery
+// keeps the bundle minimal (no persisted token endpoint) and always current.
 export async function refreshMcpToken(
   mcpUrl: string,
   refreshToken: string,
@@ -358,15 +380,23 @@ export async function refreshMcpToken(
 ): Promise<OAuthTokenBundle> {
   const metadata = await discoverMcpOAuth(mcpUrl)
   if (!metadata) throw new Error('could not discover token endpoint for refresh')
-  const data = await postToken(
-    metadata.token_endpoint,
-    new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-    }),
-  )
-  return bundleFromTokenResponse(data, clientId, refreshToken)
+  return refreshOAuthTokenAt(metadata.token_endpoint, refreshToken, clientId)
+}
+
+// Resolve OAuth server metadata for a generic api-oauth source (ADR 0060 D-4,
+// P6): use the explicit api.oauth {authorizationUrl, tokenUrl} block when present
+// (both HTTPS + private-IP guarded), else discover from api.baseUrl (RFC 9728 →
+// 8414). Returns null when nothing compliant is found. Never throws.
+export async function resolveApiOAuthMetadata(source: ApiSource): Promise<OAuthMetadata | null> {
+  const oauth = source.api.oauth
+  if (oauth) {
+    if (!guardHttps(oauth.authorizationUrl).ok || !guardHttps(oauth.tokenUrl).ok) {
+      log.warn('sources/oauth: api.oauth endpoint rejected by https guard', { slug: source.slug })
+      return null
+    }
+    return { authorization_endpoint: oauth.authorizationUrl, token_endpoint: oauth.tokenUrl }
+  }
+  return discoverMcpOAuth(source.api.baseUrl)
 }
 
 // ─── Loopback callback server ─────────────────────────────────────────────────
@@ -490,25 +520,37 @@ async function startCallbackServer(
 // ─── Full interactive flow ────────────────────────────────────────────────────
 
 export interface RunOAuthFlowOptions {
-  mcpUrl: string
-  // A previously registered client id to reuse (skips DCR when present).
+  // URL to run OAuth metadata discovery against (RFC 9728 → 8414) when `metadata`
+  // is not supplied. mcp.url for an mcp source; api.baseUrl for an api-oauth
+  // source without an explicit oauth block.
+  discoverUrl: string
+  // Pre-resolved OAuth server metadata (explicit api.oauth block). When present,
+  // discovery is skipped entirely.
+  metadata?: OAuthMetadata
+  // A previously registered / configured client id to reuse (skips DCR when present).
   existingClientId?: string
+  // Confidential-client secret (api.oauth.clientSecret) — sent on token exchange.
+  clientSecret?: string
+  // Extra authorize-request parameters for generic api-oauth providers.
+  scopes?: string[]
+  audience?: string
+  extraParams?: Record<string, string>
   signal: AbortSignal
   // Called once the authorize URL is built so the caller can surface it to the
   // UI (which opens it in the browser). Carries only the public authorize URL.
   onAuthorizeUrl: (url: string) => void
 }
 
-// Discover → PKCE → start callback → (DCR | fixed client) → build authorize URL →
-// hand it to onAuthorizeUrl → await the callback code → exchange for tokens.
-// Honors `signal` (cancel closes the callback server + rejects). Throws on any
-// failure; the caller classifies cancel vs error.
+// Discover (or use explicit metadata) → PKCE → start callback → (DCR | fixed
+// client) → build authorize URL → hand it to onAuthorizeUrl → await the callback
+// code → exchange for tokens. Honors `signal` (cancel closes the callback server
+// + rejects). Throws on any failure; the caller classifies cancel vs error.
 export async function runOAuthFlow(opts: RunOAuthFlowOptions): Promise<OAuthFlowResult> {
   if (opts.signal.aborted) throw new Error('canceled')
 
-  const metadata = await discoverMcpOAuth(opts.mcpUrl)
+  const metadata = opts.metadata ?? (await discoverMcpOAuth(opts.discoverUrl))
   if (!metadata) {
-    throw new Error(`no OAuth metadata found for ${opts.mcpUrl} (server may not require OAuth)`)
+    throw new Error(`no OAuth metadata found for ${opts.discoverUrl} (server may not require OAuth)`)
   }
 
   const verifier = genVerifier()
@@ -540,6 +582,16 @@ export async function runOAuthFlow(opts: RunOAuthFlowOptions): Promise<OAuthFlow
     authUrl.searchParams.set('state', state)
     authUrl.searchParams.set('code_challenge', challenge)
     authUrl.searchParams.set('code_challenge_method', 'S256')
+    // Generic api-oauth extras (no-op for mcp discovery, which passes none).
+    if (opts.scopes && opts.scopes.length > 0) {
+      authUrl.searchParams.set('scope', opts.scopes.join(' '))
+    }
+    if (opts.audience) authUrl.searchParams.set('audience', opts.audience)
+    if (opts.extraParams) {
+      for (const [key, value] of Object.entries(opts.extraParams)) {
+        authUrl.searchParams.set(key, value)
+      }
+    }
 
     opts.onAuthorizeUrl(authUrl.toString())
 
@@ -550,6 +602,7 @@ export async function runOAuthFlow(opts: RunOAuthFlowOptions): Promise<OAuthFlow
       verifier,
       clientId,
       callback.redirectUri,
+      opts.clientSecret,
     )
     return { tokens, clientId, tokenEndpoint: metadata.token_endpoint }
   } finally {

@@ -28,6 +28,7 @@ import type { CanUseTool, PermissionUpdate } from './permission-types.js'
 import type { AgentMode } from '../types/shared.js'
 import { allowSessionTool, isSessionToolAllowed } from '../sessions/permissions.js'
 import { BROWSER_TOOL_NAME, isMutatingBrowserAction } from './tools/browser-tool.js'
+import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { log } from '../util/logger.js'
 
 // Tools that mutate the workspace or execute code. Everything else is read-only
@@ -38,12 +39,23 @@ const EXEC_TOOLS = new Set(['Bash'])
 // Task. Gated like a mutation so it prompts in ask/accept-edits and runs only in
 // execute mode (in plan mode it isn't even registered).
 const SPAWN_TOOLS = new Set(['RunWorkflow'])
+// Source setup tools that persist config (ADR 0060 P6): source_create writes a
+// source config. Gated like a mutation so it prompts for approval in ask/
+// accept-edits mode (source_list/source_test/source_oauth_trigger are not). No
+// source tool takes a raw secret as an arg — api credentials are entered in the
+// UI (invariant 1), so nothing secret transits this gate's permission event.
+const SOURCE_MUTATING_TOOLS = new Set<string>(SOURCE_MUTATING_TOOL_NAMES)
 
 // browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
 // screenshot/extract are read-only (don't gate). Decided per-call from args.
 function isGatedTool(name: string, args: unknown): boolean {
   if (name === BROWSER_TOOL_NAME) return isMutatingBrowserAction(args)
-  return WRITE_TOOLS.has(name) || EXEC_TOOLS.has(name) || SPAWN_TOOLS.has(name)
+  return (
+    WRITE_TOOLS.has(name) ||
+    EXEC_TOOLS.has(name) ||
+    SPAWN_TOOLS.has(name) ||
+    SOURCE_MUTATING_TOOLS.has(name)
+  )
 }
 
 // Per-source runtime gate resolved from each active source's trust +

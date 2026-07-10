@@ -87,3 +87,42 @@ export async function deleteApiCredential(id: string): Promise<boolean> {
 export async function hasApiCredential(id: string): Promise<boolean> {
   return (await getKeychainValue(API_SERVICE, id)) !== null
 }
+
+// The credential-entry modes mirroring Craft's CredentialInputMode
+// (bearer/header/query collapse to a single value, basic to user/pass,
+// multi-header to a header→value map).
+export type ApiCredentialMode = 'bearer' | 'header' | 'query' | 'basic' | 'multi-header'
+
+// Raw credential fields as they arrive from an RPC or tool call.
+export interface ApiCredentialInput {
+  value?: string | undefined
+  username?: string | undefined
+  password?: string | undefined
+  headers?: Record<string, string> | undefined
+}
+
+// Map a request mode + fields onto the stored ApiCredential union, throwing a
+// clear Error when the required field(s) for the mode are missing. Used by the
+// `source.setApiCredential` RPC (the UI-driven, invariant-1-safe path for
+// entering an api credential). The secret value is never logged here.
+export function buildApiCredential(mode: ApiCredentialMode, input: ApiCredentialInput): ApiCredential {
+  switch (mode) {
+    case 'bearer':
+    case 'header':
+    case 'query':
+      if (input.value === undefined) {
+        throw new Error(`mode "${mode}" requires a "value"`)
+      }
+      return { type: 'value', value: input.value }
+    case 'basic':
+      if (input.username === undefined || input.password === undefined) {
+        throw new Error('mode "basic" requires "username" and "password"')
+      }
+      return { type: 'basic', username: input.username, password: input.password }
+    case 'multi-header':
+      if (!input.headers || Object.keys(input.headers).length === 0) {
+        throw new Error('mode "multi-header" requires a non-empty "headers" map')
+      }
+      return { type: 'multi-header', headers: input.headers }
+  }
+}

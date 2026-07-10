@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { cancelFlow } from '../auth/oauth-flow-store.js'
 import { SOURCE_SLUG_RE } from '../sources/schema.js'
-import { oauthFlowKey } from './source.start-oauth.js'
+import { oauthFlowKey } from '../sources/oauth-start.js'
 import { log } from '../util/logger.js'
 
 const Params = z.object({
