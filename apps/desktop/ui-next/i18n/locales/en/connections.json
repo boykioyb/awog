@@ -39,6 +39,11 @@
   "connections.detail.denied": "denied",
   "connections.detail.denyTool": "Deny this tool",
   "connections.detail.allowTool": "Allow this tool",
+  "connections.detail.oauthConnect": "Connect with OAuth",
+  "connections.detail.oauthReconnect": "Reconnect with OAuth",
+  "connections.detail.oauthCancel": "Cancel sign-in",
+  "connections.detail.oauthWaitingTitle": "Waiting for sign-in…",
+  "connections.detail.oauthWaiting": "Complete the authorization in your browser. This window updates automatically.",
 
   "connections.editor.newTitle": "New Connection",
   "connections.editor.editTitle": "Edit Connection",
@@ -58,6 +63,12 @@
   "connections.editor.cwdPh": "${workspace}",
   "connections.editor.env": "Env vars",
   "connections.editor.url": "URL",
+  "connections.editor.authType": "Authentication",
+  "connections.editor.authTypeHint": "How this remote server authenticates. OAuth signs in via your browser; the token is stored in the OS keychain.",
+  "connections.editor.authNone": "None (public)",
+  "connections.editor.authBearer": "Bearer / header token",
+  "connections.editor.authOAuth": "OAuth (browser sign-in)",
+  "connections.editor.oauthHeadersNote": "No manual token needed — connect via OAuth from the connection detail after saving.",
   "connections.editor.headers": "Headers",
   "connections.editor.enabled": "Enabled",
   "connections.editor.healthCheck": "Auth check (optional)",
@@ -78,5 +89,9 @@
   "connections.creator.subtitle": "MCP source installer",
   "connections.creator.hint": "Describe the MCP server you want (e.g. \"GitHub server with my token\" or \"filesystem access to ~/notes\"). I'll write the config to ~/.awog/sources and you toggle Enabled to use it.",
   "connections.creator.placeholder": "Describe the MCP server to install…",
-  "connections.creator.iterate": "Refine or ask for another server…"
+  "connections.creator.iterate": "Refine or ask for another server…",
+
+  "connections.toast.oauthConnected": "Connected {slug} via OAuth",
+  "connections.toast.oauthFailed": "OAuth failed: {error}",
+  "connections.toast.oauthError": "OAuth error: {error}"
 }

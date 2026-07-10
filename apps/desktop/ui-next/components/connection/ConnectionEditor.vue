@@ -98,11 +98,20 @@
             placeholder="https://mcp.example.com/v1"
           />
         </div>
+        <div class="cne-field">
+          <label class="cne-label">{{ t('connections.editor.authType') }}</label>
+          <AppSelect v-model="authTypeSelect" :options="authTypeOptions" width="100%" />
+          <div class="cne-hint">{{ t('connections.editor.authTypeHint') }}</div>
+        </div>
+        <!-- oauth tokens come from the sign-in flow (Connect on the detail pane),
+             so the manual header/token rows are hidden for authType:'oauth'. -->
         <LibraryKvEditor
+          v-if="draft.authType !== 'oauth'"
           v-model="headerEntries"
           :label="t('connections.editor.headers')"
           :secret-mode="secretMode"
         />
+        <div v-else class="cne-hint">{{ t('connections.editor.oauthHeadersNote') }}</div>
       </template>
 
       <button
@@ -220,6 +229,8 @@ import type {
 
 // Transport variants the form edits (sse is folded into http on load).
 type EditorTransport = 'http' | 'stdio'
+// Auth mode for http/sse sources (mirror of McpSourceBlock.authType).
+type EditorAuthType = 'none' | 'bearer' | 'oauth'
 
 const props = defineProps<{
   open: boolean
@@ -252,6 +263,7 @@ type Draft = {
   provider: string
   description: string
   transport: EditorTransport
+  authType: EditorAuthType
   command: string
   cwd: string
   url: string
@@ -267,6 +279,7 @@ const makeDefaults = (): Draft => ({
   provider: '',
   description: '',
   transport: 'stdio',
+  authType: 'none',
   command: 'npx',
   cwd: '',
   url: '',
@@ -281,6 +294,7 @@ const fromSource = (s: Source): Draft => ({
   provider: s.provider,
   description: s.description ?? '',
   transport: s.type === 'mcp' && s.mcp.transport === 'stdio' ? 'stdio' : 'http',
+  authType: s.type === 'mcp' ? (s.mcp.authType ?? 'none') : 'none',
   command: s.type === 'mcp' ? (s.mcp.command ?? '') : '',
   cwd: s.type === 'mcp' ? (s.mcp.cwd ?? '') : '',
   url: s.type === 'mcp' ? (s.mcp.url ?? '') : '',
@@ -358,6 +372,17 @@ const trustSelect = computed<string>({
   get: () => draft.value.trust,
   set: (v) => {
     draft.value.trust = v as SourceTrust
+  },
+})
+const authTypeOptions = computed<AppSelectOption[]>(() => [
+  { value: 'none', label: t('connections.editor.authNone') },
+  { value: 'bearer', label: t('connections.editor.authBearer') },
+  { value: 'oauth', label: t('connections.editor.authOAuth') },
+])
+const authTypeSelect = computed<string>({
+  get: () => draft.value.authType,
+  set: (v) => {
+    draft.value.authType = v as EditorAuthType
   },
 })
 
@@ -439,8 +464,16 @@ const buildPayload = (): SourceInput => {
     if (Object.keys(env).length > 0) mcp.env = env
   } else {
     mcp.url = draft.value.url.trim()
-    const headers = fromEntries(headerEntries.value)
-    if (Object.keys(headers).length > 0) mcp.headers = headers
+    mcp.authType = draft.value.authType
+    // OAuth tokens come from the sign-in flow, not manual header rows.
+    if (draft.value.authType !== 'oauth') {
+      const headers = fromEntries(headerEntries.value)
+      if (Object.keys(headers).length > 0) mcp.headers = headers
+    }
+    // Preserve the (non-secret) OAuth client id across edits so refresh reuses it.
+    if (props.source?.type === 'mcp' && props.source.mcp.clientId) {
+      mcp.clientId = props.source.mcp.clientId
+    }
   }
 
   const now = Date.now()

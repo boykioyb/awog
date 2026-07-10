@@ -11,6 +11,19 @@
       </span>
       <span style="flex: 1" />
       <button
+        v-if="isOAuthSource"
+        class="iconbtn cnd-act"
+        :disabled="oauthPending"
+        :title="oauthTitle"
+        @click="onConnectOAuth"
+      >
+        <Icon
+          :name="oauthPending ? 'refresh' : 'link'"
+          :class="{ spin: oauthPending }"
+          style="width: 14px; height: 14px"
+        />
+      </button>
+      <button
         class="iconbtn cnd-act"
         :disabled="testing"
         :title="t('connections.detail.test')"
@@ -36,6 +49,23 @@
 
     <div class="dscroll">
       <p v-if="source.description" class="cnd-desc">{{ source.description }}</p>
+
+      <!-- OAuth in-flight: the sidecar opened the browser; wait for the callback.
+           Cancel aborts the flow (source.cancelOAuth) and returns silently. -->
+      <div v-if="oauthPending" class="cnd-banner cnd-oauth">
+        <span class="cnd-oauth-spin" />
+        <div class="cnd-banner-body">
+          <div class="cnd-banner-title">{{ t('connections.detail.oauthWaitingTitle') }}</div>
+          <div class="cnd-banner-sum">{{ t('connections.detail.oauthWaiting') }}</div>
+        </div>
+        <button
+          class="iconbtn cnd-act cnd-danger"
+          :title="t('connections.detail.oauthCancel')"
+          @click="onCancelOAuth"
+        >
+          <Icon name="x" style="width: 14px; height: 14px" />
+        </button>
+      </div>
 
       <!-- test result banner -->
       <div v-if="testResult" class="cnd-banner" :class="{ ok: bannerOk, err: !bannerOk }">
@@ -169,7 +199,12 @@
 // Test button runs `source.test` against the already-persisted source and, on a
 // clean run, surfaces the detected tools so they can be denied per-tool.
 import { computed, ref, watch } from 'vue'
-import type { Source, SourceConnectionStatus, SourceTestOutcome } from '~/stores/connections'
+import type {
+  Source,
+  SourceConnectionStatus,
+  SourceOAuthResult,
+  SourceTestOutcome,
+} from '~/stores/connections'
 import { sourceTransport } from '~/stores/connections'
 
 const props = defineProps<{
@@ -182,6 +217,8 @@ const emit = defineEmits<{
   toggle: []
   'toggle-tool': [toolName: string]
   test: [done: (outcome: SourceTestOutcome) => void]
+  oauth: [done: (result: SourceOAuthResult) => void]
+  'cancel-oauth': []
 }>()
 
 const { t } = useI18n()
@@ -330,6 +367,32 @@ const onTest = () => {
   })
 }
 
+// --- OAuth (ADR 0060 P2) --------------------------------------------------
+// Only http/sse MCP sources configured for OAuth show the Connect button; the
+// long-lived flow keeps `oauthPending` true (spinner + Cancel) until it resolves.
+// Success/failure surface via the PERSISTED connectionStatus/connectionError
+// (the store refreshes the source), so this component only tracks pending.
+const isOAuthSource = computed(
+  () => props.source.type === 'mcp' && props.source.mcp.authType === 'oauth',
+)
+const oauthPending = ref(false)
+const oauthTitle = computed(() =>
+  status.value === 'connected'
+    ? t('connections.detail.oauthReconnect')
+    : t('connections.detail.oauthConnect'),
+)
+const onConnectOAuth = () => {
+  if (oauthPending.value) return
+  oauthPending.value = true
+  emit('oauth', () => {
+    oauthPending.value = false
+  })
+}
+const onCancelOAuth = () => {
+  // Keep pending until the start flow resolves as CANCELED (done clears it).
+  emit('cancel-oauth')
+}
+
 // The detail pane is a single reused instance (LibraryView slot is not keyed),
 // so transient per-source state must reset when the shown source changes —
 // otherwise one source's banner / detected tools leak onto the next.
@@ -340,6 +403,7 @@ watch(
     testing.value = false
     toolFilter.value = ''
     detectedTools.value = []
+    oauthPending.value = false
   },
 )
 </script>
@@ -393,6 +457,19 @@ watch(
 .cnd-banner.ok {
   border-color: var(--accentBorder);
   color: var(--accent);
+}
+.cnd-oauth {
+  align-items: center;
+  color: var(--textMuted);
+}
+.cnd-oauth-spin {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: cnd-spin 0.7s linear infinite;
 }
 .cnd-banner.err {
   border-color: var(--dangerBorder);

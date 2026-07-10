@@ -36,6 +36,8 @@
           @toggle="onToggle(item)"
           @toggle-tool="(tool) => onToggleTool(item, tool)"
           @test="(done) => runTest(item, done)"
+          @oauth="(done) => runOAuth(item, done)"
+          @cancel-oauth="cancelOAuth(item)"
         />
       </template>
     </LibraryView>
@@ -109,6 +111,8 @@ const {
   onToggleTool,
   runTest,
   runVerify,
+  runOAuth,
+  cancelOAuth,
   pendingDelete,
   askDelete,
   cancelDelete,

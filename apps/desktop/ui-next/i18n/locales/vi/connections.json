@@ -39,6 +39,11 @@
   "connections.detail.denied": "đã chặn",
   "connections.detail.denyTool": "Chặn tool này",
   "connections.detail.allowTool": "Cho phép tool này",
+  "connections.detail.oauthConnect": "Kết nối bằng OAuth",
+  "connections.detail.oauthReconnect": "Kết nối lại bằng OAuth",
+  "connections.detail.oauthCancel": "Huỷ đăng nhập",
+  "connections.detail.oauthWaitingTitle": "Đang chờ đăng nhập…",
+  "connections.detail.oauthWaiting": "Hoàn tất cấp quyền trên trình duyệt. Cửa sổ này sẽ tự cập nhật.",
 
   "connections.editor.newTitle": "Connection mới",
   "connections.editor.editTitle": "Sửa Connection",
@@ -58,6 +63,12 @@
   "connections.editor.cwdPh": "${workspace}",
   "connections.editor.env": "Biến môi trường",
   "connections.editor.url": "URL",
+  "connections.editor.authType": "Xác thực",
+  "connections.editor.authTypeHint": "Cách server từ xa này xác thực. OAuth đăng nhập qua trình duyệt; token lưu ở OS keychain.",
+  "connections.editor.authNone": "Không (public)",
+  "connections.editor.authBearer": "Bearer / token header",
+  "connections.editor.authOAuth": "OAuth (đăng nhập qua trình duyệt)",
+  "connections.editor.oauthHeadersNote": "Không cần token thủ công — sau khi lưu, kết nối bằng OAuth ở phần chi tiết connection.",
   "connections.editor.headers": "Headers",
   "connections.editor.enabled": "Bật",
   "connections.editor.healthCheck": "Kiểm tra xác thực (tuỳ chọn)",
@@ -78,5 +89,9 @@
   "connections.creator.subtitle": "Trình cài MCP source",
   "connections.creator.hint": "Mô tả MCP server bạn muốn (vd \"GitHub server với token của tôi\" hoặc \"truy cập filesystem tới ~/notes\"). Tôi sẽ ghi config vào ~/.awog/sources và bạn bật Enabled để dùng.",
   "connections.creator.placeholder": "Mô tả MCP server cần cài…",
-  "connections.creator.iterate": "Tinh chỉnh hoặc yêu cầu server khác…"
+  "connections.creator.iterate": "Tinh chỉnh hoặc yêu cầu server khác…",
+
+  "connections.toast.oauthConnected": "Đã kết nối {slug} qua OAuth",
+  "connections.toast.oauthFailed": "OAuth thất bại: {error}",
+  "connections.toast.oauthError": "Lỗi OAuth: {error}"
 }

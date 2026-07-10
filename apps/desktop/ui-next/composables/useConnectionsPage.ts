@@ -1,4 +1,5 @@
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from '~/composables/useI18n'
 import { useSidecar } from '~/composables/useSidecar'
 import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
@@ -6,6 +7,7 @@ import {
   useConnectionsStore,
   type Source,
   type SourceInput,
+  type SourceOAuthResult,
   type SourceTestOutcome,
 } from '~/stores/connections'
 
@@ -19,6 +21,7 @@ export function useConnectionsPage() {
   const store = useConnectionsStore()
   const settings = useSettingsStore()
   const sc = useSidecar()
+  const { t } = useI18n()
   const { toasts, pushToast, toastColor } = useToasts()
 
   // Active Anthropic account drives the chat-driven creator; null → the panel
@@ -146,6 +149,35 @@ export function useConnectionsPage() {
     return outcome
   }
 
+  // --- OAuth (ADR 0060 P2) -------------------------------------------------
+  // Detail "Connect with OAuth" — long-lived flow. The store opens the browser
+  // (via the source.oauth-url event) and resolves with the outcome. A cancel
+  // returns silently (no error toast); success/failure toast + the persisted
+  // connectionStatus/connectionError drive the detail pane. `done` clears the
+  // component's pending spinner.
+  const runOAuth = (source: Source, done: (result: SourceOAuthResult) => void) => {
+    void store
+      .startOAuth(source.slug)
+      .then((result) => {
+        if (result.kind === 'connected') {
+          pushToast(t('connections.toast.oauthConnected', { slug: source.slug }), 'success')
+        } else if (result.kind === 'failed') {
+          pushToast(t('connections.toast.oauthFailed', { error: result.error }), 'error')
+        }
+        // canceled → silent
+        done(result)
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[connections] oauth failed', err)
+        pushToast(t('connections.toast.oauthError', { error: msg }), 'error')
+        done({ kind: 'failed', error: msg })
+      })
+  }
+  const cancelOAuth = (source: Source) => {
+    void store.cancelOAuth(source.slug)
+  }
+
   // --- delete --------------------------------------------------------------
   const pendingDelete = ref<Source | null>(null)
   const askDelete = (s: Source) => {
@@ -204,6 +236,9 @@ export function useConnectionsPage() {
     onToggleTool,
     runTest,
     runVerify,
+    // oauth
+    runOAuth,
+    cancelOAuth,
     // delete
     pendingDelete,
     askDelete,
