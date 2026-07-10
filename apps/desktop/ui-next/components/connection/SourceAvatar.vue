@@ -1,8 +1,9 @@
 <template>
-  <span class="savatar" :class="`savatar--${size}`">
-    <span v-if="isTextIcon" class="savatar-emoji" :style="{ fontSize: `${glyphSize}px` }">
-      {{ source.icon }}
+  <span class="savatar" :class="[`savatar--${size}`, { 'savatar--img': !!imgSrc }]">
+    <span v-if="showEmoji" class="savatar-emoji" :style="{ fontSize: `${glyphSize}px` }">
+      {{ emojiValue }}
     </span>
+    <img v-else-if="imgSrc" class="savatar-img" :src="imgSrc" :alt="alt" />
     <component :is="fallbackIcon" v-else :size="glyphSize" :stroke-width="1.75" />
     <span
       v-if="showStatus"
@@ -14,15 +15,22 @@
 </template>
 
 <script setup lang="ts">
-// Source icon (ADR 0060 P5 — Craft's source-avatar, adapted to ui-next). An
-// emoji `config.icon` renders as text; anything else (a URL or `./icon.svg`
-// path) falls back to a lucide glyph chosen by provider/type — URL-icon
-// download/caching is a sidecar concern DEFERRED past P5, so a remote icon is
-// NOT fetched (Electron CSP + offline). An optional status-dot overlay uses the
-// shared derived status + palette.
-import { computed } from 'vue'
+// Source icon (ADR 0060 P5 + UI-parity area 1 — Craft's source-avatar, adapted to
+// ui-next). Priority: emoji `config.icon` (fast client path, no RPC) > a resolved
+// icon from the sidecar (`source.resolveIcon`: local file / downloaded config.icon
+// URL / provider favicon, all returned as a base64 data URI — CSP-safe) > a lucide
+// glyph chosen by provider/type. The resolve is lazy (on mount) and memoized in
+// the store so a list of rows resolves each source once. An optional status-dot
+// overlay uses the shared derived status + palette.
+import { computed, onMounted, ref, watch } from 'vue'
 import { Globe, HardDrive, Mail, Plug, Server, type LucideIcon } from 'lucide-vue-next'
-import { deriveStatus, SOURCE_STATUS_COLORS, type Source } from '~/stores/connections'
+import {
+  deriveStatus,
+  SOURCE_STATUS_COLORS,
+  useConnectionsStore,
+  type ResolvedSourceIcon,
+  type Source,
+} from '~/stores/connections'
 
 const props = withDefaults(
   defineProps<{
@@ -34,15 +42,34 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
+const store = useConnectionsStore()
 
 const GLYPH_PX = { sm: 13, md: 16, lg: 22 } as const
 const glyphSize = computed(() => GLYPH_PX[props.size])
 
-// An emoji icon is any non-empty value that is not a URL / path / data-uri.
-const isTextIcon = computed(() => {
+const alt = computed(() => props.source.name || props.source.slug)
+
+// An emoji icon is any non-empty value that is not a URL / path / data-uri —
+// rendered as text without touching the sidecar.
+const emojiFast = computed(() => {
   const icon = props.source.icon?.trim()
   return !!icon && !/^(https?:|\/|\.|data:)/i.test(icon)
 })
+
+// The sidecar-resolved icon (null until fetched or when the emoji fast path wins).
+const resolved = ref<ResolvedSourceIcon | null>(null)
+
+const showEmoji = computed(() => emojiFast.value || resolved.value?.kind === 'emoji')
+const emojiValue = computed(() =>
+  emojiFast.value
+    ? props.source.icon?.trim()
+    : resolved.value?.kind === 'emoji'
+      ? resolved.value.value
+      : '',
+)
+const imgSrc = computed(() =>
+  !emojiFast.value && resolved.value?.kind === 'dataUri' ? resolved.value.value : null,
+)
 
 // lucide fallback by provider (gmail/google → Mail) then source kind.
 const fallbackIcon = computed<LucideIcon>(() => {
@@ -56,6 +83,18 @@ const fallbackIcon = computed<LucideIcon>(() => {
 
 const dotColor = computed(() => SOURCE_STATUS_COLORS[deriveStatus(props.source)])
 const dotTooltip = computed(() => t('connections.status.' + deriveStatus(props.source)))
+
+// Resolve the icon lazily via the store (skipped for an emoji config.icon).
+async function loadIcon(): Promise<void> {
+  if (emojiFast.value) {
+    resolved.value = null
+    return
+  }
+  resolved.value = await store.fetchIcon(props.source.slug)
+}
+
+onMounted(loadIcon)
+watch(() => [props.source.slug, props.source.icon], loadIcon)
 </script>
 
 <style scoped>
@@ -68,6 +107,9 @@ const dotTooltip = computed(() => t('connections.status.' + deriveStatus(props.s
   background: var(--bgActive);
   color: var(--textMuted);
   border: 1px solid var(--border);
+}
+.savatar--img {
+  background: var(--bg);
 }
 .savatar--sm {
   width: 26px;
@@ -85,6 +127,11 @@ const dotTooltip = computed(() => t('connections.status.' + deriveStatus(props.s
 }
 .savatar-emoji {
   line-height: 1;
+}
+.savatar-img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
 }
 .savatar-dot {
   position: absolute;

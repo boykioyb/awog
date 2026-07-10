@@ -25,6 +25,11 @@
   "connections.status.untested": "untested",
   "connections.status.local_disabled": "local disabled",
 
+  "connections.statusBadge.needs_auth": "Auth Required",
+  "connections.statusBadge.failed": "Disconnected",
+  "connections.statusBadge.untested": "Not Tested",
+  "connections.statusBadge.local_disabled": "Disabled",
+
   "connections.section.connection": "Connection",
   "connections.section.tools": "Tools",
   "connections.section.permissions": "Permissions",

@@ -25,6 +25,11 @@
   "connections.status.untested": "chưa kiểm tra",
   "connections.status.local_disabled": "local đã tắt",
 
+  "connections.statusBadge.needs_auth": "Cần xác thực",
+  "connections.statusBadge.failed": "Mất kết nối",
+  "connections.statusBadge.untested": "Chưa kiểm tra",
+  "connections.statusBadge.local_disabled": "Đã tắt",
+
   "connections.section.connection": "Kết nối",
   "connections.section.tools": "Tool",
   "connections.section.permissions": "Quyền",

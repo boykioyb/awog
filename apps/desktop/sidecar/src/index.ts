@@ -60,6 +60,7 @@ import './methods/source.test.js'
 import './methods/source.guide.js'
 import './methods/source.permissions.js'
 import './methods/source.tools.js'
+import './methods/source.resolve-icon.js'
 import './methods/source.discover-preset.js'
 import './methods/source.author.js'
 import './methods/source.set-secret.js'
@@ -194,6 +195,7 @@ import './methods/templates.install.js'
 import './methods/templates.delete.js'
 import { migrateMcpPlaintextSecrets } from './mcp/store.js'
 import { migrateMcpServersToSources } from './sources/migrate.js'
+import { sessionManager } from './sessions/session-manager.js'
 import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
 import { ensureUserPath } from './util/spawn-path.js'
@@ -231,6 +233,32 @@ process.on('unhandledRejection', (reason) => {
     ...(reason instanceof Error && reason.stack ? { stack: reason.stack } : {}),
   })
 })
+
+// Graceful shutdown: flush pending debounced session writes to disk BEFORE exiting.
+// Session persistence is debounced (500ms) + coalesced, so a fresh session or a
+// just-finished turn can still be in the queue when the host quits — the old
+// event-sourced store awaited every append, this one must flush on quit (ADR 0062 D-2,
+// review BLOCK #1). Electron `before-quit` → engine.stop() sends SIGTERM (catchable,
+// no forced follow-up), so this handler owns the sidecar's exit. Bounded so a hung
+// write can never wedge the quit. Idempotent (SIGTERM + stdin-close can both fire).
+let shuttingDown = false
+async function gracefulShutdown(code: number): Promise<void> {
+  if (shuttingDown) return
+  shuttingDown = true
+  try {
+    await Promise.race([
+      sessionManager.flushAll(),
+      new Promise<void>((resolve) => setTimeout(resolve, 2500)),
+    ])
+  } catch (err) {
+    log.error('shutdown: session flush failed', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+  process.exit(code)
+}
+process.on('SIGTERM', () => void gracefulShutdown(0))
+process.on('SIGINT', () => void gracefulShutdown(0))
 
 type JsonRpcRequest = {
   jsonrpc: '2.0'
@@ -308,7 +336,9 @@ if (stdoutHandle?.setBlocking) stdoutHandle.setBlocking(true)
 ensureUserPath()
 
 log.info('sidecar starting', { pid: process.pid, node: process.version })
-startStdioLoop(handleLine)
+// Pass gracefulShutdown as the stdin-close handler so a host exit flushes pending
+// session writes before the process exits (mirrors the SIGTERM path).
+startStdioLoop(handleLine, () => gracefulShutdown(0))
 
 // One-time boot migrations, run STRICTLY IN SEQUENCE (must await — `void a(); void b()`
 // would race them):
@@ -333,6 +363,17 @@ void (async () => {
     })
   }
 })()
+
+// Warm the session store: migrate any legacy event logs to the single-file
+// header+messages format and load all headers into memory (ADR 0061). Idempotent +
+// lazy-guarded — every sessions.* RPC also awaits ensureLoaded, so this is just a
+// proactive kick so the destructive migration + first list happen before the user
+// opens the Sessions page rather than on the first RPC. Best-effort at boot.
+void sessionManager.ensureLoaded().catch((err) => {
+  log.error('boot: session store init failed', {
+    err: err instanceof Error ? err.message : String(err),
+  })
+})
 
 // Start filesystem watcher (Sprint 3 C1) — emits *.fs-changed events to the UI
 // when AGENT.md / SKILL.md / sources/<slug>/config.json are touched outside the app.

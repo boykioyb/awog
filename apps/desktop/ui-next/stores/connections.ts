@@ -160,6 +160,14 @@ export type Connection = {
   status: SourceConnectionStatus
 }
 
+// Resolved icon for a source (mirror of sidecar sources/icon.ts ResolvedSourceIcon).
+// `dataUri` is a base64 `data:` string — CSP-safe, never a remote src; `emoji` a
+// single glyph; `none` tells SourceAvatar to draw the lucide type fallback.
+export type ResolvedSourceIcon =
+  | { kind: 'emoji'; value: string }
+  | { kind: 'dataUri'; value: string }
+  | { kind: 'none' }
+
 // Outcome of the optional post-handshake auth probe.
 export type SourceProbeResult = {
   ok: boolean
@@ -308,6 +316,19 @@ export const useConnectionsStore = defineStore('connections', () => {
 
   let unlisten: UnlistenFn | null = null
 
+  // Icon resolution cache (UI-parity area 1). `source.resolveIcon` is a network-
+  // touching read (favicon download), so results are memoized per slug and
+  // concurrent rows for the same source dedupe on the in-flight promise. Plain
+  // Maps — SourceAvatar holds the resolved value in its own ref, so these need no
+  // reactivity. Invalidated in applySource/deleteSource when a source changes.
+  const iconResults = new Map<string, ResolvedSourceIcon>()
+  const iconInflight = new Map<string, Promise<ResolvedSourceIcon>>()
+
+  function invalidateIcon(slug: string): void {
+    iconResults.delete(slug)
+    iconInflight.delete(slug)
+  }
+
   // Dashboard/agent-picker compat slice (id/name/status).
   const servers = computed<Connection[]>(() =>
     sources.value.map((s) => ({
@@ -323,11 +344,40 @@ export const useConnectionsStore = defineStore('connections', () => {
   const sourceBySlug = (slug: string): Source | undefined =>
     sources.value.find((s) => s.slug === slug)
 
-  // Upsert a source in place (keyed by slug), used by every mutating RPC.
+  // Upsert a source in place (keyed by slug), used by every mutating RPC. Drops
+  // the cached icon so SourceAvatar re-resolves it (config.icon may have changed).
   function applySource(source: Source): void {
     const idx = sources.value.findIndex((s) => s.slug === source.slug)
     if (idx >= 0) sources.value[idx] = source
     else sources.value.push(source)
+    invalidateIcon(source.slug)
+  }
+
+  // Resolve + memoize a source's icon via the sidecar. Concurrent callers for the
+  // same slug share the in-flight promise; a resolved value is cached until the
+  // source is mutated (applySource) or deleted. Browser-dev / offline resolves to
+  // `none` (SourceAvatar still renders an emoji config.icon via its own fast path).
+  async function fetchIcon(slug: string): Promise<ResolvedSourceIcon> {
+    const cached = iconResults.get(slug)
+    if (cached) return cached
+    const inflight = iconInflight.get(slug)
+    if (inflight) return inflight
+    if (!available.value) return { kind: 'none' }
+    const p = (async (): Promise<ResolvedSourceIcon> => {
+      try {
+        const res = await sc.request<{ icon: ResolvedSourceIcon }>('source.resolveIcon', { slug })
+        const icon = res.icon ?? { kind: 'none' }
+        iconResults.set(slug, icon)
+        return icon
+      } catch (err) {
+        console.warn('[connections] fetchIcon failed', err)
+        return { kind: 'none' }
+      } finally {
+        iconInflight.delete(slug)
+      }
+    })()
+    iconInflight.set(slug, p)
+    return p
   }
 
   async function loadSources(): Promise<void> {
@@ -374,6 +424,7 @@ export const useConnectionsStore = defineStore('connections', () => {
       }
     }
     sources.value = sources.value.filter((s) => s.slug !== slug)
+    invalidateIcon(slug)
   }
 
   async function toggleSource(slug: string): Promise<void> {
@@ -626,6 +677,7 @@ export const useConnectionsStore = defineStore('connections', () => {
     fetchTools,
     fetchPermissions,
     fetchGuide,
+    fetchIcon,
     startOAuth,
     cancelOAuth,
   }

@@ -20,7 +20,23 @@ const DIR_NAME = sanitizeChild('sources')
 const CONFIG_FILE = 'config.json'
 const GUIDE_FILE = 'guide.md'
 const PERMISSIONS_FILE = 'permissions.json'
-const ICON_EXTS = ['svg', 'png', 'jpg', 'jpeg', 'webp'] as const
+const ICON_EXTS = ['svg', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'ico'] as const
+type IconExt = (typeof ICON_EXTS)[number]
+
+// Per-extension MIME used to build a `data:` URI for the renderer (base64 img).
+const ICON_EXT_MIME: Record<IconExt, string> = {
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  ico: 'image/x-icon',
+}
+
+// Data-URI size cap (raw bytes). A single small avatar icon is well under this;
+// anything larger is rejected so a bad file can't bloat the RPC payload / store.
+const ICON_MAX_BYTES = 512 * 1024
 
 // Parsed guide.md: raw markdown + the sections agents consume as context.
 export interface SourceGuide {
@@ -248,20 +264,52 @@ export async function readPermissions(slug: string): Promise<SourcePermissions |
   }
 }
 
-// Absolute path to the source's local icon file (icon.<ext>) if one exists.
-// Config `icon` (emoji / URL) takes precedence upstream; this only surfaces the
-// auto-discovered local file.
-export async function findSourceIcon(slug: string): Promise<string | undefined> {
+// Absolute path + extension of the source's local icon file (icon.<ext>) if one
+// exists. Config `icon` (emoji / URL) takes precedence upstream; this only
+// surfaces the auto-discovered local file.
+export async function findSourceIcon(
+  slug: string,
+): Promise<{ path: string; ext: IconExt } | undefined> {
   const dir = sourceDir(slug)
   for (const ext of ICON_EXTS) {
     const file = join(dir, `icon.${ext}`)
     try {
       // eslint-disable-next-line no-await-in-loop
       const s = await stat(file)
-      if (s.isFile()) return file
+      if (s.isFile()) return { path: file, ext }
     } catch (err) {
       if (!isMissing(err)) throw err
     }
   }
   return undefined
 }
+
+// Read the source's local icon file (if any) and encode it as a `data:` URI for
+// the renderer. Returns null when there is no icon file OR the file exceeds the
+// size cap (a too-large file is not partially read). Never throws on a missing
+// file. The bytes live entirely inside ~/.awog/sources — trusted, non-secret.
+export async function readSourceIconDataUri(slug: string): Promise<string | null> {
+  const found = await findSourceIcon(slug)
+  if (!found) return null
+  const st = await stat(found.path)
+  if (st.size > ICON_MAX_BYTES) {
+    log.warn('sources: icon exceeds size cap, skipping', { slug, size: st.size })
+    return null
+  }
+  const buf = await readFile(found.path)
+  return `data:${ICON_EXT_MIME[found.ext]};base64,${buf.toString('base64')}`
+}
+
+// Cache a downloaded icon into the source folder as icon.<ext> (atomic write via
+// a .tmp + rename). Non-secret content, so no chmod 0600 (unlike config.json).
+// `ext` must be one of the recognized icon extensions.
+export async function writeSourceIcon(slug: string, ext: IconExt, data: Buffer): Promise<void> {
+  await mkdir(sourceDir(slug), { recursive: true, mode: 0o700 })
+  const file = join(sourceDir(slug), `icon.${ext}`)
+  const tmp = `${file}.tmp.${process.pid}`
+  await writeFile(tmp, data)
+  await rename(tmp, file)
+}
+
+export { ICON_EXTS, ICON_EXT_MIME, ICON_MAX_BYTES }
+export type { IconExt }

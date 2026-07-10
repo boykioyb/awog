@@ -1,63 +1,68 @@
 <template>
   <div class="cnd">
-    <!-- header: avatar + name + transport tag + status pill + actions -->
-    <div class="dh">
-      <SourceAvatar :source="source" size="sm" />
-      <div class="dt">{{ source.name || source.slug }}</div>
-      <span class="tag mono">{{ transport }}</span>
-      <span class="chip cnd-status">
-        <span class="cnd-statusdot" :style="{ background: statusColor }" />
-        {{ t('connections.status.' + status) }}
-      </span>
-      <span style="flex: 1" />
-      <button
-        v-if="isOAuthSource"
-        class="iconbtn cnd-act"
-        :disabled="oauthPending"
-        :title="oauthTitle"
-        @click="onConnectOAuth"
-      >
-        <Icon
-          :name="oauthPending ? 'refresh' : 'link'"
-          :class="{ spin: oauthPending }"
-          style="width: 13px; height: 13px"
-        />
-      </button>
-      <button
-        v-if="source.type === 'api'"
-        class="iconbtn cnd-act"
-        :title="t('connections.detail.setCredential')"
-        @click="emit('edit')"
-      >
-        <Icon name="shield" style="width: 13px; height: 13px" />
-      </button>
-      <button
-        class="iconbtn cnd-act"
-        :disabled="testing"
-        :title="t('connections.detail.test')"
-        @click="onTest"
-      >
-        <Icon
-          :name="testing ? 'refresh' : 'check'"
-          :class="{ spin: testing }"
-          style="width: 13px; height: 13px"
-        />
-      </button>
-      <button class="iconbtn cnd-act" :title="t('connections.detail.edit')" @click="emit('edit')">
-        <Icon name="edit" style="width: 13px; height: 13px" />
-      </button>
-      <button
-        class="iconbtn cnd-act cnd-danger"
-        :title="t('connections.detail.delete')"
-        @click="emit('delete')"
-      >
-        <Icon name="trash" style="width: 13px; height: 13px" />
-      </button>
+    <!-- hero: large avatar + name + tagline + transport tag + status pill + actions -->
+    <div class="dh cnd-hero">
+      <SourceAvatar :source="source" size="lg" />
+      <div class="cnd-hero-main">
+        <div class="dt cnd-hero-name">{{ source.name || source.slug }}</div>
+        <div v-if="source.tagline" class="cnd-hero-tagline">{{ source.tagline }}</div>
+        <div class="cnd-hero-meta">
+          <span class="tag mono">{{ transport }}</span>
+          <span class="chip cnd-status">
+            <SourceStatusDot :status="status" :error-message="source.connectionError" />
+            {{ t('connections.status.' + status) }}
+          </span>
+        </div>
+      </div>
+      <div class="cnd-actions">
+        <button
+          v-if="isOAuthSource"
+          class="iconbtn cnd-act"
+          :disabled="oauthPending"
+          :title="oauthTitle"
+          @click="onConnectOAuth"
+        >
+          <Icon
+            :name="oauthPending ? 'refresh' : 'link'"
+            :class="{ spin: oauthPending }"
+            style="width: 13px; height: 13px"
+          />
+        </button>
+        <button
+          v-if="source.type === 'api'"
+          class="iconbtn cnd-act"
+          :title="t('connections.detail.setCredential')"
+          @click="emit('edit')"
+        >
+          <Icon name="shield" style="width: 13px; height: 13px" />
+        </button>
+        <button
+          class="iconbtn cnd-act"
+          :disabled="testing"
+          :title="t('connections.detail.test')"
+          @click="onTest"
+        >
+          <Icon
+            :name="testing ? 'refresh' : 'check'"
+            :class="{ spin: testing }"
+            style="width: 13px; height: 13px"
+          />
+        </button>
+        <button class="iconbtn cnd-act" :title="t('connections.detail.edit')" @click="emit('edit')">
+          <Icon name="edit" style="width: 13px; height: 13px" />
+        </button>
+        <button
+          class="iconbtn cnd-act cnd-danger"
+          :title="t('connections.detail.delete')"
+          @click="emit('delete')"
+        >
+          <Icon name="trash" style="width: 13px; height: 13px" />
+        </button>
+      </div>
     </div>
 
     <div class="dscroll">
       <p v-if="source.description" class="cnd-desc">{{ source.description }}</p>
-      <p v-else-if="source.tagline" class="cnd-desc">{{ source.tagline }}</p>
 
       <!-- quick controls: enabled toggle + trust -->
       <div class="cnd-controls">
@@ -235,6 +240,7 @@
 import { computed, ref, watch } from 'vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import SourceAvatar from '~/components/connection/SourceAvatar.vue'
+import SourceStatusDot from '~/components/connection/SourceStatusDot.vue'
 import { useConnectionDetail } from '~/composables/useConnectionDetail'
 import type { Source, SourceOAuthResult, SourceTestOutcome } from '~/stores/connections'
 
@@ -256,7 +262,6 @@ const { t } = useI18n()
 // Derived display + the three read-only sections (Connection/Tools/Permissions/Doc).
 const {
   status,
-  statusColor,
   transport,
   sourceUrl,
   urlLabel,
@@ -365,6 +370,43 @@ watch(
   min-height: 0;
   flex: 1;
 }
+/* Hero header (Craft SourceInfoPage parity): the shared 50px `.dh` bar is
+   overridden to an auto-height block so the large avatar + name + tagline + meta
+   fit; actions dock top-right. */
+.cnd-hero {
+  height: auto;
+  align-items: flex-start;
+  padding: 16px;
+  gap: 13px;
+}
+.cnd-hero-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cnd-hero-name {
+  word-break: break-word;
+}
+.cnd-hero-tagline {
+  font-size: 0.9231rem;
+  color: var(--textMuted);
+  line-height: 1.5;
+}
+.cnd-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.cnd-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
 .cnd-act {
   width: 28px;
   height: 28px;
@@ -379,13 +421,6 @@ watch(
 }
 .cnd-status {
   text-transform: capitalize;
-}
-.cnd-statusdot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: inline-block;
-  flex: 0 0 auto;
 }
 .cnd-desc {
   font-size: 1rem;

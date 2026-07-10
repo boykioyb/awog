@@ -13,11 +13,14 @@
           <SourceAvatar :source="item" size="sm" />
           <span class="ttl">{{ item.name || item.slug }}</span>
           <span class="tag crow-type">{{ t('connections.typeBadge.' + item.type) }}</span>
-          <SourceStatusDot
-            :status="deriveStatus(item)"
-            :error-message="item.connectionError"
-            size="sm"
-          />
+          <span
+            v-if="deriveStatus(item) !== 'connected'"
+            class="tag crow-status"
+            :style="{ color: statusColor(item), borderColor: statusColor(item) }"
+            :title="item.connectionError || undefined"
+          >
+            {{ t('connections.statusBadge.' + deriveStatus(item)) }}
+          </span>
         </div>
         <div class="sub">
           {{ item.tagline || item.provider || sourceTransport(item) }}
@@ -85,12 +88,20 @@ import ConnectionDetail from '~/components/connection/ConnectionDetail.vue'
 import ConnectionEditor from '~/components/connection/ConnectionEditor.vue'
 import ConnectionPromptCreator from '~/components/connection/ConnectionPromptCreator.vue'
 import SourceAvatar from '~/components/connection/SourceAvatar.vue'
-import SourceStatusDot from '~/components/connection/SourceStatusDot.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import { useConnectionsPage } from '~/composables/useConnectionsPage'
-import { deriveStatus, sourceTransport } from '~/stores/connections'
+import {
+  deriveStatus,
+  sourceTransport,
+  SOURCE_STATUS_COLORS,
+  type Source,
+} from '~/stores/connections'
 
 const { t } = useI18n()
+
+// Theme color for a source's derived status — drives the list-row status badge
+// (text + border), matching Craft's colored status label.
+const statusColor = (s: Source): string => SOURCE_STATUS_COLORS[deriveStatus(s)]
 
 const {
   sources,
@@ -124,5 +135,10 @@ const {
   font-size: 12px;
   padding: 1px 6px;
   text-transform: uppercase;
+}
+.crow-status {
+  font-size: 12px;
+  padding: 1px 6px;
+  background: transparent;
 }
 </style>
