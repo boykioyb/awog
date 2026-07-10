@@ -12,6 +12,7 @@ import type { UsageEntry } from '~/composables/useAccountUsage'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
 import { contextLimitFor, contextTokensFromChars } from '~/utils/context-window'
+import { slugSessionId } from '~/utils/session-slug'
 import type {
   AssistantBlock,
   AssistantMessage,
@@ -2007,8 +2008,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!useIpc) return
     sc.request(method, params).catch((err) => console.warn(`[sessions] ${method} failed`, err))
   }
+  // Human-readable, deterministic engine id (YYMMDD-adjective-noun-tail). MUST stay
+  // deterministic + synchronous — the `if (!s.engineId) s.engineId = engineIdFor(s.id)`
+  // fallback recomputes it from the same clientId. Existing sessions keep their old
+  // `ses-…` ids (ids are never migrated); only new sessions get a slug.
   function engineIdFor(clientId: number): string {
-    return `ses-${clientId.toString(36)}`
+    return slugSessionId(clientId)
   }
 
   // Concatenate an assistant turn's text runs. Tool / thinking / plan blocks are
