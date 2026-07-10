@@ -46,6 +46,31 @@ function isGatedTool(name: string, args: unknown): boolean {
   return WRITE_TOOLS.has(name) || EXEC_TOOLS.has(name) || SPAWN_TOOLS.has(name)
 }
 
+// Per-source runtime gate resolved from each active source's trust +
+// permissions.json (ADR 0060 P4). All fields optional + no-op when empty, so a
+// turn with no P4 config leaves the gate's behaviour byte-identical to before.
+export interface SourceGateConfig {
+  // trust:'prompt' source ids — their `mcp__<id>__*` tools route through the
+  // EXISTING ask-gate/park instead of running silently.
+  promptSourceIds?: string[]
+  // Per-source auto-scoped allowedMcpPatterns (mcp__<id>__.*<pat>) keyed by source
+  // id. A source tool NOT matching its source's patterns is HARD-BLOCKED. This is
+  // the enforcement backstop for the Pi path (where such tools are also filtered
+  // from exposure) and the SOLE enforcement on the Claude SDK path (the SDK owns
+  // MCP listing, so exposure can't be filtered there).
+  toolPatterns?: Record<string, RegExp[]>
+}
+
+// The source id segment of a bridged tool name `mcp__<id>__<tool>`, or null for a
+// built-in / non-source tool. `<id>` never contains `__` (SOURCE_ID_RE) so the
+// first `__` after the prefix ends it.
+function sourceIdOfTool(name: string): string | null {
+  if (!name.startsWith('mcp__')) return null
+  const rest = name.slice(5)
+  const sep = rest.indexOf('__')
+  return sep > 0 ? rest.slice(0, sep) : null
+}
+
 export type BeforeToolCall = (
   context: BeforeToolCallContext,
   signal?: AbortSignal,
@@ -93,20 +118,60 @@ export function makeBeforeToolCall(
   // mode still blocks writes/exec below (planning is read-only by design); auto-
   // approve only short-circuits the ask/accept-edits prompt path.
   autoApprove = false,
+  // Per-source P4 gate (trust:'prompt' + allowedMcpPatterns). Absent/empty → no
+  // behaviour change (default sources gate exactly as before). ADR 0060.
+  sourceGate?: SourceGateConfig,
 ): BeforeToolCall {
+  const promptSourceIds =
+    sourceGate?.promptSourceIds && sourceGate.promptSourceIds.length > 0
+      ? new Set(sourceGate.promptSourceIds)
+      : null
+  const toolPatterns = sourceGate?.toolPatterns
+  // A source tool that violates its OWN source's allowedMcpPatterns (ADR 0060 P4).
+  const violatesSourceScope = (name: string): boolean => {
+    if (!toolPatterns) return false
+    const id = sourceIdOfTool(name)
+    if (!id) return false
+    const pats = toolPatterns[id]
+    if (!pats || pats.length === 0) return false
+    return !pats.some((re) => re.test(name))
+  }
+  // A tool belonging to a trust:'prompt' source (ADR 0060 P4) → routes through the
+  // ask-gate. False for built-in + non-prompt-source tools.
+  const isPromptTrustTool = (name: string): boolean => {
+    if (!promptSourceIds) return false
+    const id = sourceIdOfTool(name)
+    return id !== null && promptSourceIds.has(id)
+  }
   return async (context, signal) => {
     const toolName = context.toolCall.name
     const toolUseId = context.toolCall.id
 
-    // Non-mutating tools: always allow.
-    if (!isGatedTool(toolName, context.args)) return undefined
+    // Per-source Explore scoping (ADR 0060 P4): a source tool outside its own
+    // permissions.json allowedMcpPatterns is HARD-BLOCKED regardless of mode — the
+    // source scoped ITSELF to a read-only subset. Checked first so the block holds
+    // even in execute mode. No-op unless a source declared patterns.
+    if (violatesSourceScope(toolName)) {
+      return {
+        block: true,
+        reason: `Blocked by source permissions: ${toolName} is outside this source's allowed tool set (permissions.json allowedMcpPatterns).`,
+      }
+    }
+
+    const builtInGated = isGatedTool(toolName, context.args)
+    const promptTrust = isPromptTrustTool(toolName)
+
+    // Non-mutating built-in tool AND not a trust:'prompt' source tool: always allow.
+    if (!builtInGated && !promptTrust) return undefined
 
     // execute mode: no gate (the user opted into full access).
     if (mode === 'execute') return undefined
 
-    // plan mode: block every write/exec — planning is read-only. Checked BEFORE
-    // auto-approve so plan mode stays read-only even with auto-approve on.
-    if (mode === 'plan') {
+    // plan mode: block every write/exec — planning is read-only. Only the built-in
+    // write/exec set is hard-blocked; a trust:'prompt' source tool (not a write)
+    // still routes through the ask path below so a read can be approved. Checked
+    // BEFORE auto-approve so plan mode stays read-only even with auto-approve on.
+    if (mode === 'plan' && builtInGated) {
       return { block: true, reason: `Blocked in plan mode: ${toolName} is not allowed while planning.` }
     }
 

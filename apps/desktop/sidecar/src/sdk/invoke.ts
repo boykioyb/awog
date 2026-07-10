@@ -7,7 +7,11 @@
 // unaffected by the runtime.
 
 import type { SessionSettings } from '../types/shared.js'
-import type { ApiSourcesConfig, McpServersConfig } from '../runtime/permission-types.js'
+import type {
+  ApiSourcesConfig,
+  CompiledApiEndpoint,
+  McpServersConfig,
+} from '../runtime/permission-types.js'
 
 export interface InvokeArgs {
   // Already-rendered single prompt (no transcript wrapping).
@@ -21,6 +25,12 @@ export interface InvokeArgs {
   // Enabled `api` sources (ADR 0060 P3), already whitelist-filtered upstream.
   // Bridged to one `mcp__<id>__api_<slug>` Pi tool each (Pi runtime only).
   apiSources?: ApiSourcesConfig
+  // Per-source Explore scoping (ADR 0060 P4), keyed by source id. Gates tool
+  // EXPOSURE / api-call scoping only (Pi path) — tasks run unattended so
+  // trust:'prompt' isn't enforced here and trust:'deny' is applied by dropping the
+  // source upstream (tasks/agent-context.ts). No-op when unset.
+  sourceToolPatterns?: Record<string, RegExp[]>
+  sourceApiEndpoints?: Record<string, CompiledApiEndpoint[]>
   // Project workspace root → the runtime tools' fs root so Read/Write/Bash act
   // against the user's repo.
   cwd?: string

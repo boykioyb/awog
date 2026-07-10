@@ -11,7 +11,12 @@
 // apply to built-in AND MCP tools alike.
 
 import type { AgentTool } from '@earendil-works/pi-agent-core'
-import type { AskUserQuestionFn, ApiSourcesConfig, McpServersConfig } from '../permission-types.js'
+import type {
+  AskUserQuestionFn,
+  ApiSourcesConfig,
+  CompiledApiEndpoint,
+  McpServersConfig,
+} from '../permission-types.js'
 import { createApiToolDefinitions } from '../../sources/api-tools.js'
 import {
   createEditTool,
@@ -46,6 +51,17 @@ export interface ToolFilter {
   // agent's narrower `tools:` list must not strip them (ADR 0030 inheritance).
   // Has no effect on built-in tools (their names never match `mcp__<id>__`).
   bypassAllowlistMcpServerIds?: string[]
+  // Per-source Explore scoping (ADR 0060 P4), keyed by source id. When a source id
+  // has a non-empty entry, ONLY its tools (mcp__<id>__*) whose full name matches
+  // one of these auto-scoped regexes survive — a pure per-source RESTRICTION that
+  // never widens access or affects non-source tools. Absent/empty for a source =
+  // current behaviour (all its tools exposed). Applied regardless of the
+  // allowedTools whitelist / bypass (it is the source's OWN declared scope).
+  sourceToolPatterns?: Record<string, RegExp[]>
+  // Per-source compiled allowedApiEndpoints (ADR 0060 P4), keyed by source id.
+  // Gates NON-GET calls of that source's `mcp__<id>__api_<slug>` tool to a
+  // matching rule (GET always allowed). Absent/empty = no api-call gating.
+  sourceApiEndpoints?: Record<string, CompiledApiEndpoint[]>
 }
 
 // Whether a tool name survives the filter: allowedTools (intersect when set) +
@@ -82,8 +98,15 @@ function buildMcpAllowed(filter: ToolFilter): McpToolAllowed {
     filter.bypassAllowlistMcpServerIds && filter.bypassAllowlistMcpServerIds.length > 0
       ? new Set(filter.bypassAllowlistMcpServerIds)
       : null
+  const sourcePatterns = filter.sourceToolPatterns
   return (serverId, toolName) => {
     const name = `mcp__${serverId}__${toolName}`
+    // Per-source Explore scoping (ADR 0060 P4): when THIS source declared
+    // allowedMcpPatterns, only its tools matching one survive. A pure restriction
+    // applied FIRST + independent of the allowedTools whitelist / bypass — it is
+    // the source's OWN scope, not the agent's whitelist. No entry → no effect.
+    const scoped = sourcePatterns?.[serverId]
+    if (scoped && scoped.length > 0 && !scoped.some((re) => re.test(name))) return false
     if (bypass && bypass.has(serverId)) {
       // Bypass allowedTools for this server; still honour the session denylist.
       return isToolAllowed(name, filter.disabledTools ? { disabledTools: filter.disabledTools } : {})
@@ -184,7 +207,13 @@ export async function createRuntimeToolDefinitions(
   // source, reusing the SAME allow predicate as the MCP tools so the agent
   // allowedTools / session disabledTools / parent-inherited bypass all cover
   // them uniformly. Its credential is read fresh from the keychain per call.
-  const apiTools = createApiToolDefinitions(apiSources, mcpAllowed, signal)
+  // Per-source allowedApiEndpoints (ADR 0060 P4) gate non-GET calls at execute.
+  const apiTools = createApiToolDefinitions(
+    apiSources,
+    mcpAllowed,
+    signal,
+    filter.sourceApiEndpoints,
+  )
   const tools = [...builtIn, ...mcpTools, ...apiTools]
   // Force sequential execution for EVERY built-in + MCP tool. Pi decides
   // parallel vs sequential per BATCH: a batch runs parallel only when the loop's

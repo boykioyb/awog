@@ -27,6 +27,13 @@ import { log } from '../util/logger.js'
 import { liftTurnSignalListenerCap } from '../runtime/turn-signal.js'
 import { listSources } from '../sources/store.js'
 import { applyOAuthAuthorization } from '../sources/oauth-manager.js'
+import {
+  resolveSourceGate,
+  accumulateSourceGate,
+  gateToolFilterFields,
+  emptyGateAccumulator,
+  buildLocalSourcesNote,
+} from '../sources/gate.js'
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
@@ -43,6 +50,7 @@ import type {
 import type {
   ApiSource,
   ContextItemSize,
+  LocalSource,
   SessionAttachment,
   SessionMessage,
   SessionMessagePart,
@@ -708,6 +716,12 @@ register('sessions.sendMessage', async (raw) => {
   // Track which servers actually made it through so we can build a matching
   // system-prompt nudge (only when user explicitly whitelisted).
   const attachedMcpServers: { id: string; name: string }[] = []
+  // Per-source Explore scoping (ADR 0060 P4): filled per surviving source; empty
+  // when no source declared trust:'prompt' / permissions.json (no behaviour change).
+  const gateAcc = emptyGateAccumulator()
+  // Enabled `local` (filesystem) sources — surfaced to the agent via a system-prompt
+  // note (no runtime tools). ADR 0060 P4.
+  const localSources: LocalSource[] = []
   try {
     const all = await listSources()
     // Two whitelist layers (ADR 0016): session-level (params.mcpServerIds) and
@@ -722,6 +736,18 @@ register('sessions.sendMessage', async (raw) => {
       // Same session ∩ agent whitelist as mcp — the keys are source ids.
       if (sessionWhitelist && !sessionWhitelist.has(s.id)) continue
       if (agentWhitelist && !agentWhitelist.has(s.id)) continue
+      // Per-source P4 gate (ADR 0060): trust:'deny' drops the source entirely (its
+      // tools never exist); trust:'prompt' + permissions.json feed the accumulator
+      // consumed by the tool filter + gate below.
+      // eslint-disable-next-line no-await-in-loop
+      const gate = await resolveSourceGate(s)
+      if (gate.trust === 'deny') continue
+      accumulateSourceGate(gateAcc, s.id, gate)
+      // local source → surfaced to the agent via a system-prompt note (no tools).
+      if (s.type === 'local') {
+        localSources.push(s)
+        continue
+      }
       // api source → forwarded whole to the runtime (no secret in config). NOT
       // added to the mcp nudge (that lists `mcp__<id>__*` for CLI-preference; the
       // api tool's own description suffices, and the nudge is provider-agnostic).
@@ -799,6 +825,16 @@ When you need to interact with these services, **prefer the corresponding \`mcp_
 
 When delegating work via the Task tool, the subagent inherits these MCP servers automatically — instruct it in the prompt to use the same \`mcp__<serverId>__<toolName>\` tools rather than CLI alternatives.
 </mcp-preference>`
+  }
+
+  // Local sources (ADR 0060 P4): surface attached filesystem folders so the agent
+  // knows where it may explore. Informational — hard fs-root enforcement is
+  // deferred (see buildLocalSourcesNote).
+  const localSourcesNote = buildLocalSourcesNote(localSources)
+  if (localSourcesNote) {
+    systemPromptAppend = systemPromptAppend
+      ? `${systemPromptAppend}\n\n${localSourcesNote}`
+      : localSourcesNote
   }
 
   // User instructions (Settings → Defaults → instructions). Extra always-on
@@ -1153,6 +1189,11 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...(mcpServersForRuntime ? { mcpServers: mcpServersForRuntime } : {}),
         // Enabled api sources (ADR 0060 P3) → mcp__<id>__api_<slug> tools (Pi).
         ...(apiSourcesForRuntime.length ? { apiSources: apiSourcesForRuntime } : {}),
+        // Per-source Explore scoping (ADR 0060 P4): trust:'prompt' routes tools
+        // through the ask-gate; allowedMcpPatterns / allowedApiEndpoints restrict a
+        // source to its own tools/endpoints. All no-op when nothing was declared.
+        ...(gateAcc.promptSourceIds.length ? { promptSourceIds: gateAcc.promptSourceIds } : {}),
+        ...gateToolFilterFields(gateAcc),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
         // Bulk-load section sizes for the context-window breakdown (the runtime
         // folds these into contextChars; it can't re-derive them from the joined

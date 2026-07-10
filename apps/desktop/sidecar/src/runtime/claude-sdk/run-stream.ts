@@ -286,7 +286,19 @@ export async function runStreamClaude(
   // per-turn budget, driven from the PreToolUse hook below. The gate parks on
   // args.canUseTool for the tools it decides to prompt for (ask/accept-edits).
   const gate = withTurnBudget(
-    makeBeforeToolCall(args.canUseTool, args.settings.mode, args.sessionId, args.autoApprove ?? false),
+    makeBeforeToolCall(
+      args.canUseTool,
+      args.settings.mode,
+      args.sessionId,
+      args.autoApprove ?? false,
+      // Per-source P4 gate (ADR 0060). On the Claude SDK path the SDK owns MCP
+      // tool listing, so exposure can't be filtered — this gate is the SOLE
+      // enforcement of a source's allowedMcpPatterns + trust:'prompt' here.
+      {
+        ...(args.promptSourceIds ? { promptSourceIds: args.promptSourceIds } : {}),
+        ...(args.sourceToolPatterns ? { toolPatterns: args.sourceToolPatterns } : {}),
+      },
+    ),
     args.budget,
     Date.now(),
   )

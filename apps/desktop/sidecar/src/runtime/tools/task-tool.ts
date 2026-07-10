@@ -258,6 +258,12 @@ async function spawnSubagent(
       ...(agentCtx.allowedTools ? { allowedTools: agentCtx.allowedTools } : {}),
       ...(deps.disabledTools ? { disabledTools: deps.disabledTools } : {}),
       ...(bypassIds.length > 0 ? { bypassAllowlistMcpServerIds: bypassIds } : {}),
+      // Per-source Explore scoping (ADR 0060 P4) for the subagent's OWN
+      // AGENT.md-resolved sources. Parent-inherited sources arrive already scoped
+      // by the parent turn; their patterns aren't re-applied here (they bypass the
+      // agent whitelist too, see bypassIds above).
+      ...(agentCtx.sourceToolPatterns ? { sourceToolPatterns: agentCtx.sourceToolPatterns } : {}),
+      ...(agentCtx.sourceApiEndpoints ? { sourceApiEndpoints: agentCtx.sourceApiEndpoints } : {}),
     },
     signal,
   )

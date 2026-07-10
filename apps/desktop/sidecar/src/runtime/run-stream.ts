@@ -108,6 +108,10 @@ export async function runStreamPi(
       // Plan mode: expose ExitPlanMode so the model can present a plan for
       // approval (permission.ts still blocks all writes/exec meanwhile).
       ...(inPlanMode ? { includePlanTool: true } : {}),
+      // Per-source Explore scoping (ADR 0060 P4): restrict a source to its own
+      // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
+      ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),
+      ...(args.sourceApiEndpoints ? { sourceApiEndpoints: args.sourceApiEndpoints } : {}),
     },
     args.abortController?.signal,
     // Wire the interactive AskUserQuestion handler (chat only). The tool parks
@@ -170,7 +174,18 @@ export async function runStreamPi(
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
 
   const beforeToolCall = withTurnBudget(
-    makeBeforeToolCall(args.canUseTool, args.settings.mode, args.sessionId, args.autoApprove ?? false),
+    makeBeforeToolCall(
+      args.canUseTool,
+      args.settings.mode,
+      args.sessionId,
+      args.autoApprove ?? false,
+      // Per-source P4 gate: trust:'prompt' routes through the ask-gate;
+      // allowedMcpPatterns hard-blocks a source tool outside its own scope.
+      {
+        ...(args.promptSourceIds ? { promptSourceIds: args.promptSourceIds } : {}),
+        ...(args.sourceToolPatterns ? { toolPatterns: args.sourceToolPatterns } : {}),
+      },
+    ),
     args.budget,
     Date.now(),
   )

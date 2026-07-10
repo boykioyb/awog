@@ -8,15 +8,18 @@
 // Mirrors Craft's session-tools-core/src/handlers/source-test.ts connection-test
 // step, but scoped to what P1 needs (mcp handshake + auth classification).
 
+import { stat } from 'node:fs/promises'
 import { mcpManager } from '../mcp/manager.js'
 import type { McpConnectParams, McpProbeResult } from '../mcp/manager.js'
 import { loadSource, saveSource } from './store.js'
+import { resolveLocalPath } from './gate.js'
 import { getFreshToken } from './oauth-manager.js'
 import { ssrfCheck } from '../mcp/http-client.js'
 import { buildApiRequest, type ApiRequestSpec } from './api-tools.js'
 import { loadApiCredential, type ApiCredential } from './api-credentials.js'
 import type {
   ApiSource,
+  LocalSource,
   McpResource,
   McpSource,
   McpTool,
@@ -171,9 +174,41 @@ async function testApiSource(
   }
 }
 
-// Run the connectivity test for a source. mcp + api are supported; local (P4)
-// returns a clear "not supported yet" outcome. Never throws — a failure is an
-// outcome.
+// Probe a local (filesystem) source (ADR 0060 D-6, P4): the configured `path`
+// must expand to an absolute path that exists AND is a readable directory →
+// connected; otherwise → failed. Never throws.
+async function testLocalSource(source: LocalSource): Promise<SourceTestOutcome> {
+  const abs = resolveLocalPath(source.local.path)
+  if (!abs) {
+    return {
+      ok: false,
+      supported: true,
+      status: 'failed',
+      error: `Invalid path (contains "..": ${source.local.path}). Use an absolute or ~-anchored folder.`,
+    }
+  }
+  try {
+    const st = await stat(abs)
+    if (!st.isDirectory()) {
+      return { ok: false, supported: true, status: 'failed', error: `Not a directory: ${abs}` }
+    }
+    return { ok: true, supported: true, status: 'connected' }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code
+    const reason =
+      code === 'ENOENT'
+        ? `Folder does not exist: ${abs}`
+        : code === 'EACCES'
+          ? `Folder is not readable (permission denied): ${abs}`
+          : err instanceof Error
+            ? err.message
+            : String(err)
+    return { ok: false, supported: true, status: 'failed', error: reason }
+  }
+}
+
+// Run the connectivity test for a source. mcp + api + local are supported. Never
+// throws — a failure is an outcome.
 export async function testSource(
   source: SourceConfig,
   opts: { timeoutMs?: number } = {},
@@ -181,15 +216,11 @@ export async function testSource(
   if (source.type === 'api') {
     return testApiSource(source, opts)
   }
-  if (source.type !== 'mcp') {
-    return {
-      ok: false,
-      supported: false,
-      status: 'untested',
-      error: `Testing ${source.type} sources is not supported yet (phase P4).`,
-    }
+  if (source.type === 'local') {
+    return testLocalSource(source)
   }
 
+  // Only `mcp` remains (the union is exhausted above).
   const params = mcpConnectParams(source)
 
   // OAuth remote sources (ADR 0060 D-4): inject a fresh Bearer token before the

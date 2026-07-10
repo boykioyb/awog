@@ -1,8 +1,8 @@
-// Test a Source's connection (ADR 0060 P1, D-6). Successor to mcp.test. Loads
-// the persisted source by slug, runs the connectivity probe (mcp handshake +
-// optional auth probe for P1), persists the outcome onto the config
-// (connectionStatus/isAuthenticated/connectionError/lastTestedAt) and auto-
-// enables a clean run. api/local kinds return a "not supported yet" outcome.
+// Test a Source's connection (ADR 0060 D-6). Successor to mcp.test. Loads the
+// persisted source by slug, runs the per-kind connectivity probe (mcp handshake +
+// optional auth probe / api testEndpoint / local path reachable — P4), persists
+// the outcome onto the config (connectionStatus/isAuthenticated/connectionError/
+// lastTestedAt) and auto-enables a clean run.
 //
 // Contract note (P1): unlike mcp.test (which accepted an unsaved draft), this
 // operates on a PERSISTED source — the outcome is written back, so the UI must

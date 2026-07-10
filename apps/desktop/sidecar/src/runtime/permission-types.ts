@@ -48,6 +48,19 @@ export type McpServersConfig = Record<string, McpServerConfig>
 // keychain), so there is nothing to strip.
 export type ApiSourcesConfig = ApiSource[]
 
+// ─── Per-source Explore-mode scoping (ADR 0060 P4) ────────────────────────────
+// A compiled entry from a source's permissions.json `allowedApiEndpoints`
+// (method + path regex). Gates NON-GET api-tool calls for that source (GET is
+// always allowed — mirrors Craft's isApiEndpointAllowed). The RegExp lives
+// IN-PROCESS only: this shape is built in the runtime resolver (sources/gate.ts)
+// and threaded straight into the tool filter — it never crosses the RPC boundary.
+export interface CompiledApiEndpoint {
+  // Upper-cased HTTP method the rule applies to.
+  method: string
+  // Compiled regex tested against the request path.
+  path: RegExp
+}
+
 // ─── Permission updates ─────────────────────────────────────────────────────
 // A permission-rule suggestion captured at prompt time (CanUseToolOptions
 // .suggestions) and handed back as PermissionResult.updatedPermissions when the

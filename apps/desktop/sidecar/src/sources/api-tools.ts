@@ -27,6 +27,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { ssrfCheck } from '../mcp/http-client.js'
 import { loadApiCredential, type ApiCredential } from './api-credentials.js'
 import { log } from '../util/logger.js'
+import type { CompiledApiEndpoint } from '../runtime/permission-types.js'
 import type { ApiSource, ApiSourceBlock } from '../types/shared.js'
 
 // Whole-request budget for one api call.
@@ -251,8 +252,27 @@ const apiToolParameters = Type.Object({
   ),
 })
 
+// Per-source Explore scoping (ADR 0060 P4): is a call to (method, path) allowed
+// by this source's compiled allowedApiEndpoints? GET is ALWAYS allowed (read-only,
+// mirrors Craft's isApiEndpointAllowed); a non-GET call must match a rule
+// (method + path regex). Empty/absent rules → no gating (allow everything).
+function isApiCallAllowed(method: string, path: string, rules: CompiledApiEndpoint[]): boolean {
+  const upper = method.toUpperCase()
+  if (upper === 'GET') return true
+  for (const rule of rules) {
+    if (rule.method === upper && rule.path.test(path)) return true
+  }
+  return false
+}
+
 // Build one api source's flexible tool. Reads its credential fresh per call.
-export function createApiTool(source: ApiSource, loopSignal?: AbortSignal): AgentTool {
+// `endpointRules` (ADR 0060 P4) gate non-GET calls when the source's
+// permissions.json declared allowedApiEndpoints; undefined/empty = no gating.
+export function createApiTool(
+  source: ApiSource,
+  loopSignal?: AbortSignal,
+  endpointRules?: CompiledApiEndpoint[],
+): AgentTool {
   const name = apiToolName(source)
   const api = source.api
   const description = buildToolDescription(source)
@@ -279,6 +299,16 @@ export function createApiTool(source: ApiSource, loopSignal?: AbortSignal): Agen
       const method = typeof p.method === 'string' ? p.method : 'GET'
       const reqParams =
         p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : undefined
+
+      // Per-source Explore scoping (ADR 0060 P4): a source that declared
+      // allowedApiEndpoints restricts itself to GET + the whitelisted non-GET
+      // endpoints. A blocked call returns a clear tool error (never a request).
+      if (endpointRules && endpointRules.length > 0 && !isApiCallAllowed(method, path, endpointRules)) {
+        return textResult(
+          `Blocked by source permissions: ${method.toUpperCase()} ${path} is not in "${source.name}"'s allowedApiEndpoints (this source is scoped to GET + its whitelisted write endpoints).`,
+          true,
+        )
+      }
 
       // Credential read FRESH so a mid-session update takes effect. `none` needs
       // none; a null credential lets the upstream API surface its own 401.
@@ -356,12 +386,16 @@ export function createApiToolDefinitions(
   apiSources: ApiSource[] | undefined,
   allowed: ApiToolAllowed,
   loopSignal?: AbortSignal,
+  // Per-source compiled allowedApiEndpoints (ADR 0060 P4), keyed by source id.
+  // A source with an entry gates its non-GET calls to a matching rule.
+  endpointRules?: Record<string, CompiledApiEndpoint[]>,
 ): AgentTool[] {
   if (!apiSources || apiSources.length === 0) return []
   const out: AgentTool[] = []
   for (const source of apiSources) {
     if (!allowed(source.id, `api_${source.slug}`)) continue
-    out.push(createApiTool(source, loopSignal))
+    const rules = endpointRules?.[source.id]
+    out.push(createApiTool(source, loopSignal, rules))
   }
   return out
 }

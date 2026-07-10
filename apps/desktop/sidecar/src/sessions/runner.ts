@@ -18,6 +18,7 @@ import type {
   ApiSourcesConfig,
   AskUserQuestionFn,
   CanUseTool,
+  CompiledApiEndpoint,
   McpServersConfig,
 } from '../runtime/permission-types.js'
 
@@ -132,6 +133,16 @@ export interface RunNonStreamArgs {
   // Bridged to one in-process `mcp__<id>__api_<slug>` Pi tool each (Pi runtime
   // only; the Claude SDK path does not surface api tools in P3).
   apiSources?: ApiSourcesConfig
+  // Per-source Explore scoping (ADR 0060 P4), resolved from each active source's
+  // permissions.json + trust. Keyed by source id. All optional + no-op when unset:
+  //   promptSourceIds   → trust:'prompt' sources' tools route through the ask-gate.
+  //   sourceToolPatterns→ auto-scoped allowedMcpPatterns; restricts a source to its
+  //                       own matching tools (Pi exposure filter + gate backstop).
+  //   sourceApiEndpoints→ compiled allowedApiEndpoints; gates a source's non-GET
+  //                       api calls (Pi path).
+  promptSourceIds?: string[]
+  sourceToolPatterns?: Record<string, RegExp[]>
+  sourceApiEndpoints?: Record<string, CompiledApiEndpoint[]>
   // Extra system prompt appended to (not replacing) the agent/base prompt. Used
   // to nudge the model toward MCP tools when the user attached MCP servers, and
   // (Claude-Code-style bulk load) the project memory files / available agents /

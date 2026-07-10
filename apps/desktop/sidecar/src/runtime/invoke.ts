@@ -205,6 +205,10 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     {
       ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
       ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+      // Per-source Explore scoping (ADR 0060 P4): restrict a source to its own
+      // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
+      ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),
+      ...(args.sourceApiEndpoints ? { sourceApiEndpoints: args.sourceApiEndpoints } : {}),
     },
     args.abortController?.signal,
     // Tasks run unattended — no interactive AskUserQuestion handler.
