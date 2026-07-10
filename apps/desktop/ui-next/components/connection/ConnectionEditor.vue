@@ -703,7 +703,7 @@ const apiAuthTypeOptions = computed<AppSelectOption[]>(() => [
   { value: 'query', label: t('connections.editor.apiAuthQuery') },
   { value: 'basic', label: t('connections.editor.apiAuthBasic') },
   { value: 'none', label: t('connections.editor.apiAuthNone') },
-  { value: 'oauth', label: t('connections.editor.apiAuthOAuth'), disabled: true },
+  { value: 'oauth', label: t('connections.editor.apiAuthOAuth') },
 ])
 const apiAuthTypeSelect = computed<string>({
   get: () => draft.value.apiAuthType,

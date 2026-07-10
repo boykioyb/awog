@@ -319,10 +319,16 @@ const onTest = () => {
   })
 }
 
-// --- OAuth (ADR 0060 P2) ----------------------------------------------------
-const isOAuthSource = computed(
-  () => props.source.type === 'mcp' && props.source.mcp.authType === 'oauth',
-)
+// --- OAuth (ADR 0060 P2 mcp · P6 api) ---------------------------------------
+// The Connect flow is shared: `source.startOAuth {slug}` now authorizes both a
+// remote MCP source (mcp.authType 'oauth') and a REST API source (api.authType
+// 'oauth', endpoints from an explicit api.oauth block or auto-discovered).
+const isOAuthSource = computed(() => {
+  const s = props.source
+  if (s.type === 'mcp') return s.mcp.authType === 'oauth'
+  if (s.type === 'api') return s.api.authType === 'oauth'
+  return false
+})
 const oauthPending = ref(false)
 const oauthTitle = computed(() =>
   status.value === 'connected'
