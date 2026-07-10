@@ -14,7 +14,7 @@
 // Keeping these local (not in the broad types/shared.ts) keeps the runtime
 // permission/tool contract co-located with the code that owns it (SoC).
 
-import type { SessionQuestion, SessionQuestionAnswer } from '../types/shared.js'
+import type { ApiSource, SessionQuestion, SessionQuestionAnswer } from '../types/shared.js'
 
 // ─── MCP server map ─────────────────────────────────────────────────────────
 // The already-resolved MCP server config the runtime tools consume. Upstream
@@ -37,6 +37,16 @@ export type McpServerConfig =
   | { type: 'http'; url: string; headers?: Record<string, string>; timeoutMs?: number }
 
 export type McpServersConfig = Record<string, McpServerConfig>
+
+// ─── API sources ─────────────────────────────────────────────────────────────
+// The enabled `api` sources handed to the runtime (parallel to McpServersConfig).
+// The runtime bridges each to ONE in-process Pi AgentTool `mcp__<id>__api_<slug>`
+// (sources/api-tools.ts) that reads its credential fresh from the keychain per
+// call. Upstream (sessions.send-message.ts / tasks/agent-context.ts) has already
+// applied the SAME whitelist rules as mcpServers. Unlike McpServerConfig this is
+// the FULL ApiSource — it carries no secret (the credential lives only in the
+// keychain), so there is nothing to strip.
+export type ApiSourcesConfig = ApiSource[]
 
 // ─── Permission updates ─────────────────────────────────────────────────────
 // A permission-rule suggestion captured at prompt time (CanUseToolOptions

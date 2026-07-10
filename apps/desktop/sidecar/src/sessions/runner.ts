@@ -15,6 +15,7 @@ import type {
   SessionStep,
 } from '../types/shared.js'
 import type {
+  ApiSourcesConfig,
   AskUserQuestionFn,
   CanUseTool,
   McpServersConfig,
@@ -127,6 +128,10 @@ export interface RunNonStreamArgs {
   // Enabled MCP servers (already whitelist-intersected + secrets-expanded).
   // Bridged to in-process Pi AgentTools (ADR 0029 §4 / ADR 0014 Q4).
   mcpServers?: McpServersConfig
+  // Enabled `api` sources (ADR 0060 P3), already whitelist-filtered upstream.
+  // Bridged to one in-process `mcp__<id>__api_<slug>` Pi tool each (Pi runtime
+  // only; the Claude SDK path does not surface api tools in P3).
+  apiSources?: ApiSourcesConfig
   // Extra system prompt appended to (not replacing) the agent/base prompt. Used
   // to nudge the model toward MCP tools when the user attached MCP servers, and
   // (Claude-Code-style bulk load) the project memory files / available agents /

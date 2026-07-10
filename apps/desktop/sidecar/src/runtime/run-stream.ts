@@ -100,6 +100,8 @@ export async function runStreamPi(
   const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
+    // Enabled api sources → one mcp__<id>__api_<slug> tool each (ADR 0060 P3).
+    args.apiSources,
     {
       ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
       ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
@@ -208,6 +210,9 @@ export async function runStreamPi(
         // Subagent inherits this turn's resolved MCP servers (session whitelist +
         // secrets already applied) so it can reach the same servers the session can.
         ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
+        // Same for the session's api sources (ADR 0060 P3): the subagent reaches
+        // every api tool the session can.
+        ...(args.apiSources ? { parentApiSources: args.apiSources } : {}),
         // Chat subagents reuse the parent permission gate: in 'ask' mode their
         // writes/exec still prompt the user (depth-1 subagent, same session).
         beforeToolCall,

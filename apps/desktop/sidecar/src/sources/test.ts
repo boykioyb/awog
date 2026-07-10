@@ -12,7 +12,11 @@ import { mcpManager } from '../mcp/manager.js'
 import type { McpConnectParams, McpProbeResult } from '../mcp/manager.js'
 import { loadSource, saveSource } from './store.js'
 import { getFreshToken } from './oauth-manager.js'
+import { ssrfCheck } from '../mcp/http-client.js'
+import { buildApiRequest, type ApiRequestSpec } from './api-tools.js'
+import { loadApiCredential, type ApiCredential } from './api-credentials.js'
 import type {
+  ApiSource,
   McpResource,
   McpSource,
   McpTool,
@@ -64,18 +68,125 @@ function mcpConnectParams(source: McpSource): McpConnectParams {
   return params
 }
 
-// Run the connectivity test for a source. mcp kind only in P1; api/local return a
-// clear "not supported yet" outcome. Never throws — a failure is an outcome.
+// Probe an api source (ADR 0060 D-6, P3). Validates config + SSRF-guards the
+// baseUrl, then hits the configured `testEndpoint` (or a bare GET on baseUrl)
+// with auth injected. Classifies: 2xx → connected; 401/403 → needs_auth (hard);
+// any other reachable status → soft warning (still connected, note surfaced);
+// a network failure → failed. A missing credential on an authenticated source
+// short-circuits to needs_auth without a request. Never throws.
+async function testApiSource(
+  source: ApiSource,
+  opts: { timeoutMs?: number },
+): Promise<SourceTestOutcome> {
+  const api = source.api
+
+  if (!api.baseUrl) {
+    return { ok: false, supported: true, status: 'failed', error: 'api source has no baseUrl' }
+  }
+  const baseGuard = ssrfCheck(api.baseUrl)
+  if (!baseGuard.ok) {
+    return { ok: false, supported: true, status: 'failed', error: `baseUrl blocked: ${baseGuard.reason}` }
+  }
+
+  // OAuth api sources are deferred to P6 — no generic api OAuth wired yet.
+  if (api.authType === 'oauth') {
+    return {
+      ok: false,
+      supported: true,
+      status: 'needs_auth',
+      isAuthenticated: false,
+      error: 'OAuth API sources are not supported yet (phase P6).',
+    }
+  }
+
+  // Authenticated sources need a stored credential before we probe; public
+  // (none) sources need none. Missing credential → needs_auth (don't call).
+  let cred: ApiCredential | null = null
+  if (api.authType !== 'none') {
+    cred = await loadApiCredential(source.id)
+    if (!cred) {
+      return {
+        ok: false,
+        supported: true,
+        status: 'needs_auth',
+        isAuthenticated: false,
+        error: 'No credential stored — add one before testing.',
+      }
+    }
+  }
+
+  // Probe target: the configured testEndpoint, else a bare GET on baseUrl.
+  const method = api.testEndpoint?.method ?? 'GET'
+  const spec: ApiRequestSpec = {
+    path: api.testEndpoint?.path ?? '',
+    method,
+    ...(method !== 'GET' && api.testEndpoint?.body ? { params: api.testEndpoint.body } : {}),
+    ...(api.testEndpoint?.headers ? { extraHeaders: api.testEndpoint.headers } : {}),
+  }
+  const { url, init } = buildApiRequest(api, cred, spec)
+
+  const guard = ssrfCheck(url)
+  if (!guard.ok) {
+    return { ok: false, supported: true, status: 'failed', error: `request blocked: ${guard.reason}` }
+  }
+
+  const timeoutMs = opts.timeoutMs ?? source.timeoutMs
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { ...init, signal: ctrl.signal })
+    // Free the socket — we classify by status only.
+    await res.body?.cancel().catch(() => {})
+    if (res.ok) {
+      return { ok: true, supported: true, status: 'connected', isAuthenticated: true }
+    }
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ok: false,
+        supported: true,
+        status: 'needs_auth',
+        isAuthenticated: false,
+        error: `HTTP ${res.status} — credential rejected. Update the credential and retry.`,
+      }
+    }
+    // Reachable but the probe path returned a non-2xx, non-auth status (e.g. a
+    // 404 for a guessed test path). Soft warning: the API answered and the
+    // credential wasn't rejected, so treat it as usable but surface the status.
+    return {
+      ok: true,
+      supported: true,
+      status: 'connected',
+      isAuthenticated: true,
+      error: `Reachable, but the test request returned HTTP ${res.status} (check testEndpoint).`,
+    }
+  } catch (err) {
+    const msg = ctrl.signal.aborted
+      ? `timed out after ${timeoutMs}ms`
+      : err instanceof Error
+        ? err.message
+        : String(err)
+    return { ok: false, supported: true, status: 'failed', isAuthenticated: false, error: msg }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Run the connectivity test for a source. mcp + api are supported; local (P4)
+// returns a clear "not supported yet" outcome. Never throws — a failure is an
+// outcome.
 export async function testSource(
   source: SourceConfig,
   opts: { timeoutMs?: number } = {},
 ): Promise<SourceTestOutcome> {
+  if (source.type === 'api') {
+    return testApiSource(source, opts)
+  }
   if (source.type !== 'mcp') {
     return {
       ok: false,
       supported: false,
       status: 'untested',
-      error: `Testing ${source.type} sources is not supported yet (phase ${source.type === 'api' ? 'P3' : 'P4'}).`,
+      error: `Testing ${source.type} sources is not supported yet (phase P4).`,
     }
   }
 

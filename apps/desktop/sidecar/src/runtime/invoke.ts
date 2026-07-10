@@ -200,6 +200,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
+    // Enabled api sources → one mcp__<id>__api_<slug> tool each (ADR 0060 P3).
+    args.apiSources,
     {
       ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
       ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
@@ -243,6 +245,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         // Subagent inherits the node's resolved MCP servers (agent whitelist +
         // task connection + secrets already applied) so it never has less reach.
         ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
+        // Same for the node's api sources (ADR 0060 P3).
+        ...(args.apiSources ? { parentApiSources: args.apiSources } : {}),
         // Tasks run unattended: subagent tool calls bypass permissions too.
         beforeToolCall: async () => undefined,
         // Inherit the task's co-author setting for subagent-made commits.

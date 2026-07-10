@@ -7,7 +7,7 @@
 // unaffected by the runtime.
 
 import type { SessionSettings } from '../types/shared.js'
-import type { McpServersConfig } from '../runtime/permission-types.js'
+import type { ApiSourcesConfig, McpServersConfig } from '../runtime/permission-types.js'
 
 export interface InvokeArgs {
   // Already-rendered single prompt (no transcript wrapping).
@@ -18,6 +18,9 @@ export interface InvokeArgs {
   allowedTools?: string[]
   disabledTools?: string[]
   mcpServers?: McpServersConfig
+  // Enabled `api` sources (ADR 0060 P3), already whitelist-filtered upstream.
+  // Bridged to one `mcp__<id>__api_<slug>` Pi tool each (Pi runtime only).
+  apiSources?: ApiSourcesConfig
   // Project workspace root → the runtime tools' fs root so Read/Write/Bash act
   // against the user's repo.
   cwd?: string

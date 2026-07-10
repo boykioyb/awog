@@ -17,7 +17,7 @@ import { applyOAuthAuthorization } from '../sources/oauth-manager.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { log } from '../util/logger.js'
 import type { Agent, AgentSource, ProviderName } from '../types/shared.js'
-import type { McpServersConfig } from '../runtime/permission-types.js'
+import type { ApiSourcesConfig, McpServersConfig } from '../runtime/permission-types.js'
 
 export interface AgentRef {
   id: string
@@ -38,6 +38,9 @@ export interface ResolvedAgentContext {
   systemPrompt?: string
   allowedTools?: string[]
   mcpServers?: McpServersConfig
+  // Enabled api sources (ADR 0060 P3) resolved for this node — bridged to
+  // `mcp__<id>__api_<slug>` tools by the runtime (Pi path).
+  apiSources?: ApiSourcesConfig
   systemPromptAppend?: string
 }
 
@@ -66,24 +69,37 @@ async function loadAgentFlexibly(ref: AgentRef): Promise<Agent | null> {
   }
 }
 
-async function buildMcpServers(
+async function buildRuntimeSources(
   agentMcpIds: string[] | undefined,
   connectionId?: string,
-): Promise<{ mcpServers?: McpServersConfig; attached: { id: string; name: string }[] }> {
+): Promise<{
+  mcpServers?: McpServersConfig
+  apiSources?: ApiSourcesConfig
+  attached: { id: string; name: string }[]
+}> {
   const attached: { id: string; name: string }[] = []
   const entries: [string, unknown][] = []
+  const apiSources: ApiSourcesConfig = []
   try {
-    // Source of truth is the `sources` store (ADR 0060); only `mcp`-kind sources
-    // become runtime tools. Whitelist keys are source ids (= old MCP id).
+    // Source of truth is the `sources` store (ADR 0060); `mcp`- and `api`-kind
+    // sources become runtime tools. Whitelist keys are source ids (= old MCP id).
     const all = await listSources()
     const whitelist = agentMcpIds && agentMcpIds.length > 0 ? new Set(agentMcpIds) : null
     for (const s of all) {
-      if (s.type !== 'mcp') continue
       if (!s.enabled) continue
       // The task's connection bypasses the per-agent whitelist (ADR 0025) so
-      // every node can reach the source; other servers still respect it.
+      // every node can reach the source; other sources still respect it.
       const isConnection = connectionId !== undefined && s.id === connectionId
       if (whitelist && !whitelist.has(s.id) && !isConnection) continue
+      // api sources (ADR 0060 P3): forwarded whole (no secret in config — the
+      // credential lives in the keychain, read fresh per call by the api tool).
+      // NOT added to `attached` (that drives the MCP-preference nudge, which is
+      // mcp-only + provider-agnostic; the api tool's own description suffices).
+      if (s.type === 'api') {
+        apiSources.push(s)
+        continue
+      }
+      if (s.type !== 'mcp') continue
       const transport = s.mcp.transport ?? 'http'
       let cfg: unknown
       if (transport === 'stdio') {
@@ -125,8 +141,11 @@ async function buildMcpServers(
       err: err instanceof Error ? err.message : String(err),
     })
   }
-  if (entries.length === 0) return { attached }
-  return { mcpServers: Object.fromEntries(entries) as McpServersConfig, attached }
+  return {
+    ...(entries.length > 0 ? { mcpServers: Object.fromEntries(entries) as McpServersConfig } : {}),
+    ...(apiSources.length > 0 ? { apiSources } : {}),
+    attached,
+  }
 }
 
 function mcpNudge(attached: { id: string; name: string }[]): string {
@@ -172,7 +191,11 @@ export async function resolveAgentContext(
   if (agent.systemPrompt) ctx.systemPrompt = agent.systemPrompt
   if (agent.tools && agent.tools.length > 0) ctx.allowedTools = agent.tools
 
-  const { mcpServers, attached } = await buildMcpServers(agent.mcpServerIds, connectionId)
+  const { mcpServers, apiSources, attached } = await buildRuntimeSources(
+    agent.mcpServerIds,
+    connectionId,
+  )
+  if (apiSources) ctx.apiSources = apiSources
   if (mcpServers) {
     ctx.mcpServers = mcpServers
     // Nudge toward mcp__* tools when the agent whitelists servers OR the task

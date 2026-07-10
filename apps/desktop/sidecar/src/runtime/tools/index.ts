@@ -11,7 +11,8 @@
 // apply to built-in AND MCP tools alike.
 
 import type { AgentTool } from '@earendil-works/pi-agent-core'
-import type { AskUserQuestionFn, McpServersConfig } from '../permission-types.js'
+import type { AskUserQuestionFn, ApiSourcesConfig, McpServersConfig } from '../permission-types.js'
+import { createApiToolDefinitions } from '../../sources/api-tools.js'
 import {
   createEditTool,
   createGlobTool,
@@ -150,6 +151,10 @@ export interface RuntimeToolset {
 export async function createRuntimeToolDefinitions(
   cwd: string,
   mcpServers: McpServersConfig | undefined,
+  // Enabled `api` sources (ADR 0060 P3), already whitelist-filtered upstream.
+  // Each becomes one in-process `mcp__<id>__api_<slug>` tool; filtered by the
+  // SAME allowedTools/disabledTools/bypass predicate as the MCP tools.
+  apiSources: ApiSourcesConfig | undefined,
   filter: ToolFilter = {},
   signal?: AbortSignal,
   // Forwarded to the AskUserQuestion tool — set only by the chat runtime.
@@ -168,13 +173,19 @@ export async function createRuntimeToolDefinitions(
   // direct AND proxy paths apply the same allowedTools/disabledTools/bypass rule.
   // Returns direct typed tools under the schema-size threshold, or proxy meta-
   // tools (mcp_describe + mcp_call) + a `catalog` block at/over it (ADR 0051).
+  const mcpAllowed = buildMcpAllowed(filter)
   const { tools: mcpTools, failures, catalog } = await createMcpToolDefinitions(
     mcpServers,
-    buildMcpAllowed(filter),
+    mcpAllowed,
     signal,
     mcpPoolKey,
   )
-  const tools = [...builtIn, ...mcpTools]
+  // API sources (ADR 0060 P3): one `mcp__<id>__api_<slug>` tool per allowed
+  // source, reusing the SAME allow predicate as the MCP tools so the agent
+  // allowedTools / session disabledTools / parent-inherited bypass all cover
+  // them uniformly. Its credential is read fresh from the keychain per call.
+  const apiTools = createApiToolDefinitions(apiSources, mcpAllowed, signal)
+  const tools = [...builtIn, ...mcpTools, ...apiTools]
   // Force sequential execution for EVERY built-in + MCP tool. Pi decides
   // parallel vs sequential per BATCH: a batch runs parallel only when the loop's
   // toolExecution is 'parallel' AND no tool in it is marked sequential

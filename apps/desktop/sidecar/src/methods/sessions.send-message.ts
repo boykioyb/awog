@@ -41,6 +41,7 @@ import type {
   McpServersConfig,
 } from '../runtime/permission-types.js'
 import type {
+  ApiSource,
   ContextItemSize,
   SessionAttachment,
   SessionMessage,
@@ -699,6 +700,11 @@ register('sessions.sendMessage', async (raw) => {
   //   [ids]     → only those (∩ enabled)
   // The whitelist keys are source ids (= the old MCP id after migration).
   let mcpServersForRuntime: McpServersConfig | undefined
+  // Enabled `api`-kind sources (ADR 0060 P3), passed to the runtime alongside the
+  // mcp map. Same whitelist rules as mcp; the runtime bridges each to one
+  // `mcp__<id>__api_<slug>` tool (Pi path). The credential lives in the keychain
+  // (never here) and is read fresh per call.
+  const apiSourcesForRuntime: ApiSource[] = []
   // Track which servers actually made it through so we can build a matching
   // system-prompt nudge (only when user explicitly whitelisted).
   const attachedMcpServers: { id: string; name: string }[] = []
@@ -712,10 +718,18 @@ register('sessions.sendMessage', async (raw) => {
     const agentWhitelist = resolvedAgentMcpIds ? new Set(resolvedAgentMcpIds) : null
     const entries: [string, McpServersConfig[string]][] = []
     for (const s of all) {
-      if (s.type !== 'mcp') continue
       if (!s.enabled) continue
+      // Same session ∩ agent whitelist as mcp — the keys are source ids.
       if (sessionWhitelist && !sessionWhitelist.has(s.id)) continue
       if (agentWhitelist && !agentWhitelist.has(s.id)) continue
+      // api source → forwarded whole to the runtime (no secret in config). NOT
+      // added to the mcp nudge (that lists `mcp__<id>__*` for CLI-preference; the
+      // api tool's own description suffices, and the nudge is provider-agnostic).
+      if (s.type === 'api') {
+        apiSourcesForRuntime.push(s)
+        continue
+      }
+      if (s.type !== 'mcp') continue
       const transport = s.mcp.transport ?? 'http'
       let cfg: McpServersConfig[string]
       if (transport === 'stdio') {
@@ -1137,6 +1151,8 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
           ? { disabledTools: params.disabledTools }
           : {}),
         ...(mcpServersForRuntime ? { mcpServers: mcpServersForRuntime } : {}),
+        // Enabled api sources (ADR 0060 P3) → mcp__<id>__api_<slug> tools (Pi).
+        ...(apiSourcesForRuntime.length ? { apiSources: apiSourcesForRuntime } : {}),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
         // Bulk-load section sizes for the context-window breakdown (the runtime
         // folds these into contextChars; it can't re-derive them from the joined

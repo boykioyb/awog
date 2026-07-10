@@ -226,6 +226,8 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
         ...(agentCtx.systemPromptAppend ? { systemPromptAppend: agentCtx.systemPromptAppend } : {}),
         ...(agentCtx.allowedTools ? { allowedTools: agentCtx.allowedTools } : {}),
         ...(agentCtx.mcpServers ? { mcpServers: agentCtx.mcpServers } : {}),
+        // Enabled api sources (ADR 0060 P3) → mcp__<id>__api_<slug> tools (Pi).
+        ...(agentCtx.apiSources ? { apiSources: agentCtx.apiSources } : {}),
         cwd,
         // Task subagent menu scope (ADR 0030): the task project + the node
         // agent's project. The task's source connection is unioned into a

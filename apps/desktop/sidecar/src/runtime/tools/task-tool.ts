@@ -25,7 +25,7 @@ import { confirmOverageOrStop } from '../overage-guard.js'
 import { resolveAgentContext, type ResolvedAgentContext } from '../../tasks/agent-context.js'
 import { log } from '../../util/logger.js'
 import type { Agent, SessionSettings } from '../../types/shared.js'
-import type { McpServersConfig } from '../permission-types.js'
+import type { ApiSourcesConfig, McpServersConfig } from '../permission-types.js'
 import { resolveModel } from '../model-resolver.js'
 import { buildContext } from '../context-builder.js'
 import { createRuntimeToolDefinitions } from './index.js'
@@ -103,6 +103,11 @@ export interface TaskToolDeps {
   // subagent with its own narrower `mcpServerIds` whitelist silently loses the
   // session's servers (e.g. fails `mcp__<id>__*` with "not found").
   parentMcpServers?: McpServersConfig
+  // The parent turn's enabled api sources (ADR 0060 P3), unioned into the
+  // subagent's own AGENT.md-resolved set (own wins on a duplicate id) so the
+  // subagent reaches every api tool its parent could — same guarantee as
+  // parentMcpServers.
+  parentApiSources?: ApiSourcesConfig
   // Permission gate for the subagent's tool calls. Chat reuses the parent gate
   // (so writes still prompt); tasks pass an always-allow gate (bypass).
   beforeToolCall: BeforeToolCall
@@ -155,6 +160,20 @@ function mergeMcpServers(
 ): McpServersConfig | undefined {
   if (!parent && !own) return undefined
   return { ...(parent ?? {}), ...(own ?? {}) }
+}
+
+// Union the parent turn's api sources with the subagent's own (ADR 0060 P3).
+// Deduped by source id — the subagent's own entry wins on a collision. Returns
+// undefined when neither side has any (so createRuntimeToolDefinitions skips it).
+function mergeApiSources(
+  parent: ApiSourcesConfig | undefined,
+  own: ApiSourcesConfig | undefined,
+): ApiSourcesConfig | undefined {
+  if (!parent && !own) return undefined
+  const byId = new Map<string, ApiSourcesConfig[number]>()
+  for (const s of parent ?? []) byId.set(s.id, s)
+  for (const s of own ?? []) byId.set(s.id, s)
+  return [...byId.values()]
 }
 
 // Merge the resolved agent context onto the parent settings: the agent's
@@ -214,23 +233,31 @@ async function spawnSubagent(
   // secrets-expanded so identical entries are equivalent). Guarantees the subagent
   // inherits every server the parent could reach, regardless of its own whitelist.
   const mcpServers = mergeMcpServers(deps.parentMcpServers, agentCtx.mcpServers)
+  // Same union for api sources (ADR 0060 P3) — the subagent reaches every api
+  // tool its parent could, plus its own AGENT.md-resolved ones.
+  const apiSources = mergeApiSources(deps.parentApiSources, agentCtx.apiSources)
 
-  // Parent-inherited servers' `mcp__<id>__*` tools must bypass the agent's
-  // `tools:` whitelist — the session/task attached them, not the agent, so a
-  // narrow allowedTools list (e.g. just Read/Write/Bash) must not silently strip
-  // them (the merge comment above promises the subagent reaches every parent
-  // server). The agent's OWN AGENT.md MCP servers still respect allowedTools.
+  // Parent-inherited servers'/sources' `mcp__<id>__*` tools must bypass the
+  // agent's `tools:` whitelist — the session/task attached them, not the agent,
+  // so a narrow allowedTools list (e.g. just Read/Write/Bash) must not silently
+  // strip them (the merge comments above promise the subagent reaches every
+  // parent server/source). The agent's OWN AGENT.md servers/sources still respect
+  // allowedTools. The bypass is keyed by source id (the `mcp__<id>__` segment).
   const parentMcpIds = deps.parentMcpServers ? Object.keys(deps.parentMcpServers) : []
+  const parentApiIds = (deps.parentApiSources ?? []).map((s) => s.id)
+  const bypassIds = [...parentMcpIds, ...parentApiIds]
 
-  // Subagent toolset: built-in + the merged MCP tools, filtered by the agent's
-  // allowedTools and the session denylist. NO Task tool (depth = 1) and NO plan.
+  // Subagent toolset: built-in + the merged MCP + api tools, filtered by the
+  // agent's allowedTools and the session denylist. NO Task tool (depth = 1) and
+  // NO plan.
   const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     deps.cwd,
     mcpServers,
+    apiSources,
     {
       ...(agentCtx.allowedTools ? { allowedTools: agentCtx.allowedTools } : {}),
       ...(deps.disabledTools ? { disabledTools: deps.disabledTools } : {}),
-      ...(parentMcpIds.length > 0 ? { bypassAllowlistMcpServerIds: parentMcpIds } : {}),
+      ...(bypassIds.length > 0 ? { bypassAllowlistMcpServerIds: bypassIds } : {}),
     },
     signal,
   )
