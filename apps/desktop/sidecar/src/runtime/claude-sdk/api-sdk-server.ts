@@ -31,8 +31,13 @@ import {
   type McpSdkServerConfigWithInstance,
 } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
-import { buildToolDescription, executeApiCall } from '../../sources/api-tools.js'
-import type { ApiSourcesConfig } from '../permission-types.js'
+import {
+  apiEndpointBlockedMessage,
+  buildToolDescription,
+  executeApiCall,
+  isApiCallAllowed,
+} from '../../sources/api-tools.js'
+import type { ApiSourcesConfig, CompiledApiEndpoint } from '../permission-types.js'
 
 // Zod input schema mirroring the Pi TypeBox schema (apiToolParameters): the single
 // flexible { path, method, params?, _intent? } shape. The SDK's `tool()` takes a
@@ -60,18 +65,35 @@ const apiToolSchema = {
 // exposed as-is. Returns {} when there are no api sources; the caller spreads the
 // result into `options.mcpServers`. `signal` (the turn abort controller) cancels
 // in-flight api fetches on cancellation, matching the Pi path's loop signal.
+// `endpointRules` (ADR 0060 P4), keyed by source id, gates a source's NON-GET
+// calls to a matching compiled allowedApiEndpoints rule — the SAME isApiCallAllowed
+// check the Pi tool runs (createApiTool), so both runtimes enforce P4 identically.
 export function buildApiSdkServers(
   apiSources: ApiSourcesConfig | undefined,
   signal?: AbortSignal,
+  endpointRules?: Record<string, CompiledApiEndpoint[]>,
 ): Record<string, McpSdkServerConfigWithInstance> {
   const out: Record<string, McpSdkServerConfigWithInstance> = {}
   if (!apiSources || apiSources.length === 0) return out
   for (const source of apiSources) {
+    const rules = endpointRules?.[source.id]
     const apiTool = tool(
       `api_${source.slug}`,
       buildToolDescription(source),
       apiToolSchema,
       async (args) => {
+        // Per-source Explore scoping (ADR 0060 P4): a source that declared
+        // allowedApiEndpoints restricts itself to GET + its whitelisted non-GET
+        // endpoints. Enforced here BEFORE the request with the SAME shared check
+        // as the Pi path; a blocked call returns a clear tool error, never a fetch.
+        if (rules && rules.length > 0 && !isApiCallAllowed(args.method, args.path, rules)) {
+          return {
+            content: [
+              { type: 'text' as const, text: apiEndpointBlockedMessage(source, args.method, args.path) },
+            ],
+            isError: true,
+          }
+        }
         const r = await executeApiCall(
           source,
           { path: args.path, method: args.method, params: args.params },

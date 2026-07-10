@@ -39,6 +39,7 @@ import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
 import { createClaudeEventAdapter } from './event-adapter.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
+import { buildSourceToolsSdkServer } from './source-sdk-server.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -333,13 +334,25 @@ export async function runStreamClaude(
   const prompt = buildClaudePrompt(promptText, args.pendingAttachments)
 
   // External MCP servers of the user (SDK-native mechanism, not a custom tool) +
-  // AWOG `api` sources as in-process SDK MCP servers (api-sdk-server.ts). Merged
-  // into ONE map handed to options.mcpServers; source ids don't collide with mcp
-  // source ids (a source has one id / one kind). The turn abort signal cancels
-  // in-flight api fetches, matching the Pi path.
+  // AWOG `api` sources as in-process SDK MCP servers (api-sdk-server.ts) + the
+  // `awog` source_* setup tools (source-sdk-server.ts, SESSIONS-only, mirroring the
+  // Pi includeSourceTools). Merged into ONE map handed to options.mcpServers;
+  // source ids don't collide with mcp source ids nor with the `awog` key (source
+  // ids are `<slug>_<hex>`). The turn abort signal cancels in-flight api fetches.
   const mcpServers = await toSdkMcpServers(args.mcpServers)
-  const apiServers = buildApiSdkServers(args.apiSources, args.abortController?.signal)
-  const allServers = { ...(mcpServers ?? {}), ...apiServers }
+  // Per-source allowedApiEndpoints (ADR 0060 P4) gate non-GET api calls inside the
+  // SDK tool handler — the SAME check the Pi path enforces (isApiCallAllowed).
+  const apiServers = buildApiSdkServers(
+    args.apiSources,
+    args.abortController?.signal,
+    args.sourceApiEndpoints,
+  )
+  const allServers = {
+    ...(mcpServers ?? {}),
+    ...apiServers,
+    // source_* conversational setup tools → mcp__awog__source_*.
+    awog: buildSourceToolsSdkServer(),
+  }
   const claudeBinary = resolveClaudeBinary()
 
   const options: Options = {

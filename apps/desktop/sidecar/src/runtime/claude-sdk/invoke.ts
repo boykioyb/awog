@@ -205,7 +205,13 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
   // External MCP servers + AWOG `api` sources (in-process SDK MCP servers). Merged
   // into one map for options.mcpServers; source ids never collide with mcp ids.
   const mcpServers = await toSdkMcpServers(args.mcpServers)
-  const apiServers = buildApiSdkServers(args.apiSources, args.abortController?.signal)
+  // Per-source allowedApiEndpoints (ADR 0060 P4) gate non-GET api calls inside the
+  // SDK tool handler — the SAME check the Pi path enforces (isApiCallAllowed).
+  const apiServers = buildApiSdkServers(
+    args.apiSources,
+    args.abortController?.signal,
+    args.sourceApiEndpoints,
+  )
   const allServers = { ...(mcpServers ?? {}), ...apiServers }
   const claudeBinary = resolveClaudeBinary()
   const sdkModel = toSdkModel(args.settings.modelId)

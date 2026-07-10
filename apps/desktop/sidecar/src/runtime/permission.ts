@@ -44,7 +44,14 @@ const SPAWN_TOOLS = new Set(['RunWorkflow'])
 // accept-edits mode (source_list/source_test/source_oauth_trigger are not). No
 // source tool takes a raw secret as an arg — api credentials are entered in the
 // UI (invariant 1), so nothing secret transits this gate's permission event.
-const SOURCE_MUTATING_TOOLS = new Set<string>(SOURCE_MUTATING_TOOL_NAMES)
+//
+// A source-mutating tool under EITHER naming: the bare Pi name (`source_create`)
+// or the Claude SDK-bridged form (`mcp__awog__source_create`). Matched precisely —
+// the name IS the mutating name, or it ENDS WITH `__<mutating name>` (the SDK
+// `mcp__<server>__<tool>` convention) — so it never over-matches an unrelated tool.
+function isSourceMutatingTool(name: string): boolean {
+  return SOURCE_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
+}
 
 // browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
 // screenshot/extract are read-only (don't gate). Decided per-call from args.
@@ -54,7 +61,7 @@ function isGatedTool(name: string, args: unknown): boolean {
     WRITE_TOOLS.has(name) ||
     EXEC_TOOLS.has(name) ||
     SPAWN_TOOLS.has(name) ||
-    SOURCE_MUTATING_TOOLS.has(name)
+    isSourceMutatingTool(name)
   )
 }
 

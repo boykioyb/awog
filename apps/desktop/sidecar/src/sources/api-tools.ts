@@ -261,13 +261,23 @@ const apiToolParameters = Type.Object({
 // by this source's compiled allowedApiEndpoints? GET is ALWAYS allowed (read-only,
 // mirrors Craft's isApiEndpointAllowed); a non-GET call must match a rule
 // (method + path regex). Empty/absent rules → no gating (allow everything).
-function isApiCallAllowed(method: string, path: string, rules: CompiledApiEndpoint[]): boolean {
+// Exported so BOTH runtimes share ONE check: the Pi tool (createApiTool below) and
+// the Claude Agent SDK server (runtime/claude-sdk/api-sdk-server.ts) enforce it
+// identically before executeApiCall — the P4 endpoint gate lives in one place.
+export function isApiCallAllowed(method: string, path: string, rules: CompiledApiEndpoint[]): boolean {
   const upper = method.toUpperCase()
   if (upper === 'GET') return true
   for (const rule of rules) {
     if (rule.method === upper && rule.path.test(path)) return true
   }
   return false
+}
+
+// The model-facing message for a call blocked by a source's allowedApiEndpoints
+// (ADR 0060 P4). Shared so the Pi tool and the Claude SDK server report the
+// blocked call identically. Carries only method/path/source name — no secret.
+export function apiEndpointBlockedMessage(source: ApiSource, method: string, path: string): string {
+  return `Blocked by source permissions: ${method.toUpperCase()} ${path} is not in "${source.name}"'s allowedApiEndpoints (this source is scoped to GET + its whitelisted write endpoints).`
 }
 
 // The path/method/params for one api call. `params` is the request body
@@ -442,10 +452,7 @@ export function createApiTool(
       // Enforced here on the Pi path (exposure is also filtered upstream); on the
       // Claude SDK path the permission gate (makeBeforeToolCall) is the backstop.
       if (endpointRules && endpointRules.length > 0 && !isApiCallAllowed(method, path, endpointRules)) {
-        return textResult(
-          `Blocked by source permissions: ${method.toUpperCase()} ${path} is not in "${source.name}"'s allowedApiEndpoints (this source is scoped to GET + its whitelisted write endpoints).`,
-          true,
-        )
+        return textResult(apiEndpointBlockedMessage(source, method, path), true)
       }
 
       // Delegate the request itself to the shared core (auth/SSRF/cap/oauth). Both
