@@ -13,6 +13,7 @@
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listProjects } from '../projects/store.js'
 import { listSources } from '../sources/store.js'
+import { applyOAuthAuthorization } from '../sources/oauth-manager.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { log } from '../util/logger.js'
 import type { Agent, AgentSource, ProviderName } from '../types/shared.js'
@@ -101,7 +102,12 @@ async function buildMcpServers(
       } else if (transport === 'http') {
         if (!s.mcp.url) continue
         // eslint-disable-next-line no-await-in-loop
-        const headers = await expandSecrets(s.id, s.mcp.headers)
+        const expandedHeaders = await expandSecrets(s.id, s.mcp.headers)
+        // Layer a fresh OAuth Bearer token (refreshed if near expiry) on top of
+        // the static headers for oauth sources — ADR 0060 D-4. No-op for
+        // bearer/none. Runs per node resolve, so a refreshed token takes effect.
+        // eslint-disable-next-line no-await-in-loop
+        const headers = await applyOAuthAuthorization(s, expandedHeaders)
         cfg = {
           type: 'http' as const,
           url: s.mcp.url,

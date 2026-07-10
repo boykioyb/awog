@@ -7,6 +7,7 @@ import { register } from '../transport/rpc.js'
 import { SOURCE_SLUG_RE } from '../sources/schema.js'
 import { deleteSource, loadSource } from '../sources/store.js'
 import { purgeServerSecrets } from '../mcp/secrets.js'
+import { deleteToken } from '../sources/oauth-store.js'
 
 const Params = z.object({
   slug: z.string().regex(SOURCE_SLUG_RE),
@@ -20,6 +21,9 @@ register('source.delete', async (raw) => {
   await deleteSource(slug)
   if (source && source.type === 'mcp') {
     await purgeServerSecrets(source.id, source.mcp.env, source.mcp.headers)
+    // Also drop any OAuth token bundle stored under the distinct
+    // `awog-source-oauth` service (ADR 0060 D-4) — best-effort, own namespace.
+    await deleteToken(source.id)
   }
   return { ok: true }
 })

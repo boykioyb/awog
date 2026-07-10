@@ -27,6 +27,7 @@
 //     session delete, idle timeout, child death, or sidecar shutdown.
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { Type } from '@earendil-works/pi-ai'
 import type { TextContent, ImageContent } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
@@ -262,13 +263,27 @@ const SESSION_MCP_IDLE_MS = 15 * 60_000
 const SESSION_MCP_SWEEP_MS = 60_000
 let sweepTimer: ReturnType<typeof setInterval> | undefined
 
+// A one-way fingerprint of the Authorization header VALUE (not the raw token) so
+// a rotated OAuth Bearer token (ADR 0060 D-4) flips the config key → the pooled
+// http connection is evicted + reconnected with the fresh Authorization, instead
+// of reusing a stale/expired one across a token refresh (mirrors Craft's
+// mcpConfigChanged url+Authorization check). The raw token never enters the key
+// (invariant 1). Non-oauth http servers (no Authorization) get an empty suffix,
+// so their behaviour is unchanged.
+function authFingerprint(headers: Record<string, string> | undefined): string {
+  const auth = headers?.Authorization ?? headers?.authorization
+  if (!auth) return ''
+  return `:auth=${createHash('sha256').update(auth).digest('hex').slice(0, 12)}`
+}
+
 // A redacted fingerprint of the resolved config — command/url + arg list + the
 // NAMES (not values) of env/header secrets. Secret values never enter this string
-// (invariant 1). A drift (different command / swapped server) evicts the pooled
-// child so the next acquire respawns with the new config.
+// (invariant 1). A drift (different command / swapped server / rotated OAuth
+// token) evicts the pooled child so the next acquire respawns with the new config.
 function configKeyOf(server: ResolvedMcpServer): string {
   if (isHttpServer(server)) {
-    return `http:${server.url}:${Object.keys(server.headers ?? {}).sort().join(',')}`
+    const names = Object.keys(server.headers ?? {}).sort().join(',')
+    return `http:${server.url}:${names}${authFingerprint(server.headers)}`
   }
   if (isStdioServer(server)) {
     const args = (server.args ?? []).join(' ')

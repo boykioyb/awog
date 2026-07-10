@@ -11,6 +11,7 @@
 import { mcpManager } from '../mcp/manager.js'
 import type { McpConnectParams, McpProbeResult } from '../mcp/manager.js'
 import { loadSource, saveSource } from './store.js'
+import { getFreshToken } from './oauth-manager.js'
 import type {
   McpResource,
   McpSource,
@@ -78,7 +79,28 @@ export async function testSource(
     }
   }
 
-  const outcome = await mcpManager.test(mcpConnectParams(source), opts)
+  const params = mcpConnectParams(source)
+
+  // OAuth remote sources (ADR 0060 D-4): inject a fresh Bearer token before the
+  // handshake. No/expired token that can't refresh → needs_auth immediately (the
+  // user must Connect first). bearer/none keep using their `secret:` header refs,
+  // resolved by mcpManager.test via expandSecrets — unchanged.
+  const transport = source.mcp.transport ?? 'http'
+  if (transport !== 'stdio' && source.mcp.authType === 'oauth') {
+    const token = await getFreshToken(source)
+    if (!token) {
+      return {
+        ok: false,
+        supported: true,
+        status: 'needs_auth',
+        isAuthenticated: false,
+        error: 'Source is not authenticated — connect via OAuth first.',
+      }
+    }
+    params.headers = { ...(params.headers ?? {}), Authorization: `Bearer ${token}` }
+  }
+
+  const outcome = await mcpManager.test(params, opts)
 
   // Clean handshake: connected unless a configured auth probe was rejected.
   if (outcome.ok) {

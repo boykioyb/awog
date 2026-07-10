@@ -26,6 +26,7 @@ import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { liftTurnSignalListenerCap } from '../runtime/turn-signal.js'
 import { listSources } from '../sources/store.js'
+import { applyOAuthAuthorization } from '../sources/oauth-manager.js'
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
@@ -738,10 +739,16 @@ register('sessions.sendMessage', async (raw) => {
         if (!s.mcp.url) continue
         // eslint-disable-next-line no-await-in-loop
         const expandedHeaders = await expandSecrets(s.id, s.mcp.headers)
+        // Layer a fresh `Authorization: Bearer <token>` (refreshed if near
+        // expiry) on top of the static headers for oauth sources — ADR 0060 D-4.
+        // No-op for bearer/none. Runs per turn, so a refreshed token takes effect
+        // on the next message.
+        // eslint-disable-next-line no-await-in-loop
+        const headers = await applyOAuthAuthorization(s, expandedHeaders)
         cfg = {
           type: 'http',
           url: s.mcp.url,
-          ...(Object.keys(expandedHeaders).length > 0 ? { headers: expandedHeaders } : {}),
+          ...(Object.keys(headers).length > 0 ? { headers } : {}),
           timeoutMs: s.timeoutMs,
         }
       } else {

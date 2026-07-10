@@ -13,10 +13,17 @@
 //
 // Service name (top-level group in OS keychain): `awog-mcp`.
 // Account name (per-secret): `<server-id>/<env-or-header-key>`.
+//
+// A generic service-scoped core (setKeychainValue / getKeychainValue /
+// deleteKeychainValue) backs the MCP-secret wrappers below AND lets other
+// credential kinds live in DISTINCT keychain services without re-implementing
+// the native-binding load. Source OAuth tokens use their own service
+// (`awog-source-oauth`, account = source id) via sources/oauth-store.ts so they
+// never collide with the `awog-mcp` env/header secrets (ADR 0060 D-4).
 
 import { log } from '../util/logger.js'
 
-const SERVICE = 'awog-mcp'
+const MCP_SERVICE = 'awog-mcp'
 
 interface EntryLike {
   setPassword: (password: string) => void
@@ -76,48 +83,68 @@ export async function keychainStatus(): Promise<KeychainStatus> {
   return { available: true }
 }
 
-export async function setSecret(
-  serverId: string,
-  key: string,
+// ─── Generic service-scoped core ─────────────────────────────────────────────
+// The account/value strings are opaque to this layer — callers own the
+// namespace. Values are never logged (only service/account, which are
+// non-secret identifiers).
+
+export async function setKeychainValue(
+  service: string,
+  account: string,
   value: string,
 ): Promise<void> {
   const mod = await getModule()
   if (!mod) {
     throw new Error(`keychain unavailable: ${loadError ?? 'native binding missing'}`)
   }
-  const entry = new mod.Entry(SERVICE, accountFor(serverId, key))
+  const entry = new mod.Entry(service, account)
   entry.setPassword(value)
 }
 
-export async function getSecret(serverId: string, key: string): Promise<string | null> {
+export async function getKeychainValue(service: string, account: string): Promise<string | null> {
   const mod = await getModule()
   if (!mod) return null
   try {
-    const entry = new mod.Entry(SERVICE, accountFor(serverId, key))
+    const entry = new mod.Entry(service, account)
     return entry.getPassword()
   } catch (err) {
     // Some platforms throw on "no entry" rather than returning null.
-    log.warn('keychain: getSecret failed', {
-      serverId,
-      key,
+    log.warn('keychain: get failed', {
+      service,
+      account,
       err: err instanceof Error ? err.message : String(err),
     })
     return null
   }
 }
 
-export async function deleteSecret(serverId: string, key: string): Promise<boolean> {
+export async function deleteKeychainValue(service: string, account: string): Promise<boolean> {
   const mod = await getModule()
   if (!mod) return false
   try {
-    const entry = new mod.Entry(SERVICE, accountFor(serverId, key))
+    const entry = new mod.Entry(service, account)
     return entry.deletePassword()
   } catch (err) {
-    log.warn('keychain: deleteSecret failed', {
-      serverId,
-      key,
+    log.warn('keychain: delete failed', {
+      service,
+      account,
       err: err instanceof Error ? err.message : String(err),
     })
     return false
   }
+}
+
+// ─── MCP secret wrappers (service `awog-mcp`, account `<serverId>/<key>`) ─────
+// Backward-compatible signatures — callers unchanged.
+
+export async function setSecret(serverId: string, key: string, value: string): Promise<void> {
+  return setKeychainValue(MCP_SERVICE, accountFor(serverId, key), value)
+}
+
+export async function getSecret(serverId: string, key: string): Promise<string | null> {
+  return getKeychainValue(MCP_SERVICE, accountFor(serverId, key))
+}
+
+export async function deleteSecret(serverId: string, key: string): Promise<boolean> {
+  return deleteKeychainValue(MCP_SERVICE, accountFor(serverId, key))
 }
