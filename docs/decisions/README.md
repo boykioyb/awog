@@ -34,7 +34,7 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0026](./0026-per-agent-multi-provider-llm.md) | Per-agent multi-provider LLM | Accepted (Phase C còn lại) |
 | [0027](./0027-tauri-vs-electron-revisit.md) | Tauri vs Electron revisit | Accepted — Option B (Electron) |
 | [0028](./0028-auto-update.md) | Auto-update | Accepted — Option A (electron-updater) |
-| [0029](./0029-migrate-llm-runtime-to-pi-sdk.md) | Migrate LLM runtime sang Pi SDK | Accepted |
+| [0029](./0029-migrate-llm-runtime-to-pi-sdk.md) | Migrate LLM runtime sang Pi SDK | Accepted (C2 amended by 0059) |
 | [0030](./0030-subagent-task-tool.md) | Subagent `Task` tool | Accepted |
 | [0031](./0031-rtk-token-proxy.md) | Bundle RTK (Rust Token Killer) làm bộ nén output cho Bash tool | Reverted (2026-06-15) |
 | [0032](./0032-hook-execution-engine-ipc-contract.md) | Hook Execution Engine + IPC contract | Accepted |
@@ -47,8 +47,12 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0038](./0038-session-rewind-fs-snapshots.md) | Rewind cho Session bằng filesystem snapshot | Accepted |
 | [0039](./0039-tray-account-usage-channel.md) | Tray account-usage state channel (`tray:setState`) + main-side notification | Accepted (phần kỹ thuật) |
 | [0040](./0040-git-branch-ops-merge-rebase-pr.md) | Git branch ops: merge/rebase trong sidecar, Create PR qua browser | Accepted |
+| [0059](./0059-creator-flow-through-session-runtime.md) | Chạy luồng creator (*.author) qua session runtime | Proposed |
+| [0060](./0060-connections-adopt-craft-sources-model.md) | Connections áp dụng mô hình "Sources" của Craft | Accepted |
+| [0061](./0061-session-craft-parity-render-model.md) | Session UI áp dụng model turn/activity + render pipeline của Craft | Accepted |
+| [0062](./0062-adopt-craft-session-storage-model.md) | Session storage áp dụng mô hình lưu + nạp của Craft (header + messages, warm cache) — amend 0048 | Accepted |
 
-> Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần (hiện 0040).
+> Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần. Các ADR 0041–0058 đã tồn tại trong thư mục nhưng bảng này chưa backfill (index đang lạc hậu); ADR kế tiếp sau 0059 dùng 0060. ADR 0062 **amend** ADR 0048 (thay `index.json` bằng header per-file + warm cache); ADR kế tiếp sau 0062 dùng 0063.
 
 ## Template
 
