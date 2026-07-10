@@ -72,9 +72,18 @@ Bổ sung ngoài `secret:KEY` header tĩnh:
 
 Craft chỉ có AI-authored (agent tự viết `config.json`). AWOG đã có cả `mcp.author` (AI) lẫn `ConnectionEditor` (form) → **giữ cả hai** (superset). `mcp.author` → `source.author`.
 
-### D-8 — API-source tool dựng bằng Pi, không phải Anthropic SDK
+### D-8 — API-source tool chạy trên CẢ HAI runtime (Pi + Claude SDK)
 
-Craft dùng `createSdkMcpServer`/`tool` của `@anthropic-ai/claude-agent-sdk` cho `api` source. AWOG dùng **Pi SDK** (ADR 0029) → dựng tool `api_<slug>` trực tiếp bằng **`AgentTool` của Pi** (đã có tiền lệ wrap MCP tool thành Pi AgentTool trong [mcp-tools.ts](../../apps/desktop/sidecar/src/runtime/tools/mcp-tools.ts)). Không import Anthropic SDK.
+AWOG có 2 runtime (ADR 0058): **Pi** (OpenAI/Google/custom) và **Claude Agent SDK** (anthropic — runtime người dùng dùng ~90%). `api` source phải chạy trên **cả hai**.
+
+- **Đường Pi:** dựng tool `api_<slug>` bằng **`AgentTool` của Pi** (tiền lệ wrap MCP tool trong [mcp-tools.ts](../../apps/desktop/sidecar/src/runtime/tools/mcp-tools.ts)).
+- **Đường Claude SDK:** cơ chế chính thống để cấp in-process tool cho SDK **là** `createSdkMcpServer`/`tool` của `@anthropic-ai/claude-agent-sdk` → dựng một in-process SDK MCP server per api source (name = `source.id`, tool = `api_<slug>` → phơi ra `mcp__<id>__api_<slug>`, khớp Pi + whitelist/permission/trace) và merge vào `options.mcpServers`.
+
+**Lõi request dùng chung:** cả hai runtime gọi cùng một `executeApiCall(source, {path,method,params})` (auth/oauth inject + SSRF + cap) trong [sources/api-tools.ts](../../apps/desktop/sidecar/src/runtime/tools/../../sources/api-tools.ts) — một implementation duy nhất.
+
+> **Đính chính (2026-07-10):** phiên bản đầu của D-8 nói "chỉ Pi, không import Anthropic SDK" — SAI về hệ quả (api source mất trên đường anthropic, tức 90% use-case). Cấm import Anthropic SDK chỉ áp cho **đường Pi**; đường Claude SDK **được** dùng `createSdkMcpServer` (đó là SDK của chính Anthropic). Đã sửa trong commit `adcb73f`.
+
+**Còn lệch (SDK):** per-call `allowedApiEndpoints` (P4, chặn non-GET theo path) hiện chỉ enforce ở đường Pi (`createApiTool`); đường SDK enforce tool-level `mcp__<id>__*` + trust nhưng chưa soi path/method. Follow-up: truyền endpoint rules vào `buildApiSdkServers` để check trong handler.
 
 ## Phương án đã cân nhắc
 
