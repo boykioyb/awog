@@ -38,6 +38,7 @@ import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../perm
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
 import { createClaudeEventAdapter } from './event-adapter.js'
+import { buildApiSdkServers } from './api-sdk-server.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -331,8 +332,14 @@ export async function runStreamClaude(
   // is attached, so the common text-only turn is unchanged.
   const prompt = buildClaudePrompt(promptText, args.pendingAttachments)
 
-  // External MCP servers of the user (SDK-native mechanism, not a custom tool).
+  // External MCP servers of the user (SDK-native mechanism, not a custom tool) +
+  // AWOG `api` sources as in-process SDK MCP servers (api-sdk-server.ts). Merged
+  // into ONE map handed to options.mcpServers; source ids don't collide with mcp
+  // source ids (a source has one id / one kind). The turn abort signal cancels
+  // in-flight api fetches, matching the Pi path.
   const mcpServers = await toSdkMcpServers(args.mcpServers)
+  const apiServers = buildApiSdkServers(args.apiSources, args.abortController?.signal)
+  const allServers = { ...(mcpServers ?? {}), ...apiServers }
   const claudeBinary = resolveClaudeBinary()
 
   const options: Options = {
@@ -358,7 +365,7 @@ export async function runStreamClaude(
     ...(sdkModel ? { model: sdkModel } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(args.sdkSessionId ? { resume: args.sdkSessionId } : {}),
-    ...(mcpServers ? { mcpServers } : {}),
+    ...(Object.keys(allServers).length > 0 ? { mcpServers: allServers } : {}),
     ...(args.abortController ? { abortController: args.abortController } : {}),
     env: buildSdkEnv(cred),
     // Packaged builds: point at the bundled native binary (ADR 0058 P3); dev leaves

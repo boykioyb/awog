@@ -7,8 +7,11 @@
 //
 // Mirrors the request-building LOGIC of Craft's
 // packages/shared/src/sources/api-tools.ts (buildHeaders / buildUrl / raw-body /
-// large-result guard), but built with Pi's `AgentTool` — NOT
-// @anthropic-ai/claude-agent-sdk's createSdkMcpServer (ADR 0029 / ADR 0060 D-8).
+// large-result guard). The request-execution core (`executeApiCall`) is runtime-
+// agnostic and shared: the Pi runtime wraps it in an `AgentTool` (here), while the
+// Claude Agent SDK runtime wraps the SAME core in a createSdkMcpServer + tool
+// (runtime/claude-sdk/api-sdk-server.ts) — so auth/SSRF/cap/oauth logic lives in
+// ONE place. This file stays free of any @anthropic-ai/claude-agent-sdk import.
 //
 // The tool input is a single flexible shape { path, method, params, _intent };
 // auth is injected per the source's `authType` (bearer / header / multi-header /
@@ -213,7 +216,7 @@ async function readCapped(
   return { text: binary ? '' : buf.toString('utf8'), truncated, binary }
 }
 
-function buildToolDescription(source: ApiSource): string {
+export function buildToolDescription(source: ApiSource): string {
   const api = source.api
   const authNote =
     api.authType === 'none'
@@ -267,6 +270,146 @@ function isApiCallAllowed(method: string, path: string, rules: CompiledApiEndpoi
   return false
 }
 
+// The path/method/params for one api call. `params` is the request body
+// (POST/PUT/PATCH) or query params (GET); it may carry _rawBody/_contentType.
+export interface ApiCallInput {
+  path: string
+  method: string
+  params?: Record<string, unknown> | undefined
+}
+
+// The runtime-agnostic result of one api call: the (already char-capped) text to
+// hand the model + whether it is an error. NEVER carries a credential/header/body
+// secret — the auth material is injected into the OUTGOING request only.
+export interface ApiCallResult {
+  text: string
+  isError: boolean
+}
+
+// Merge up to two abort signals into one (turn/loop signal + per-call signal) so
+// EITHER aborting the fetch below. Returns the lone signal when only one is set,
+// undefined when neither — avoiding an unnecessary AbortSignal.any allocation.
+function combineSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
+  const list = signals.filter((s): s is AbortSignal => s !== undefined)
+  if (list.length === 0) return undefined
+  if (list.length === 1) return list[0]
+  return AbortSignal.any(list)
+}
+
+// Execute ONE api-source request end-to-end and return the model-facing text.
+// This is the SHARED request core for BOTH runtimes: the Pi `AgentTool`
+// (createApiTool below) and the Claude Agent SDK server
+// (runtime/claude-sdk/api-sdk-server.ts) both delegate here, so auth injection,
+// SSRF guard, timeout, byte/char cap, binary omission and error shaping live in
+// ONE place. Steps: inject auth (oauth token OR stored credential, read FRESH so a
+// mid-session update takes effect), build + SSRF-guard the URL, fetch with a hard
+// timeout, reject/cap oversized bodies, omit binary, shape errors. The credential
+// is injected into the OUTGOING request headers/URL only — it is NEVER returned in
+// the text, NEVER logged, and never appears in the caller-supplied args (invariant
+// 1). `signal` (turn/loop abort) cancels the in-flight fetch; the 60s timeout
+// bounds it either way.
+export async function executeApiCall(
+  source: ApiSource,
+  input: ApiCallInput,
+  signal?: AbortSignal,
+): Promise<ApiCallResult> {
+  const api = source.api
+  const { path } = input
+  const method = input.method
+  const reqParams = input.params
+
+  // Every return goes through clip() so the model-facing text respects the char
+  // budget (MAX_RESULT_CHARS) regardless of runtime.
+  const result = (text: string, isError = false): ApiCallResult => ({ text: clip(text), isError })
+
+  // OAuth api source (ADR 0060 P6): fetch a fresh Bearer token (auto-refreshed by
+  // getFreshToken) and inject it as an Authorization header. No token → needs_auth;
+  // tell the model to authenticate first. The token stays in memory here — never
+  // logged, never in the returned text.
+  let oauthHeaders: Record<string, string> | undefined
+  if (api.authType === 'oauth') {
+    const token = await getFreshToken(source)
+    if (!token) {
+      return result(
+        `"${source.name}" is not authenticated. Run source_oauth_trigger({ slug: "${source.slug}" }) to sign in, then retry.`,
+        true,
+      )
+    }
+    oauthHeaders = { Authorization: `Bearer ${token}` }
+  }
+
+  // Credential read FRESH so a mid-session update takes effect. `none`/`oauth` use
+  // no stored api credential (oauth injects a Bearer above); a null credential lets
+  // the upstream API surface its own 401.
+  const cred =
+    api.authType === 'none' || api.authType === 'oauth' ? null : await loadApiCredential(source.id)
+
+  const { url, init } = buildApiRequest(api, cred, {
+    path,
+    method,
+    ...(reqParams ? { params: reqParams } : {}),
+    ...(oauthHeaders ? { extraHeaders: oauthHeaders } : {}),
+  })
+
+  // SSRF-guard every request URL (baseUrl + path + any query auth). L1 input: the
+  // model chose path/params, the user chose baseUrl.
+  const guard = ssrfCheck(url)
+  if (!guard.ok) return result(`Request blocked by SSRF guard: ${guard.reason}.`, true)
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), API_CALL_TIMEOUT_MS)
+  const onAbort = (): void => ctrl.abort()
+  signal?.addEventListener('abort', onAbort, { once: true })
+  try {
+    const res = await fetch(url, { ...init, signal: ctrl.signal })
+
+    // OOM pre-check: reject an oversized body before reading it into memory.
+    const cl = res.headers.get('content-length')
+    if (cl) {
+      const size = Number.parseInt(cl, 10)
+      if (Number.isFinite(size) && size > MAX_RESPONSE_BYTES) {
+        await res.body?.cancel().catch(() => {})
+        return result(
+          `Response too large: ${size} bytes exceeds the ${MAX_RESPONSE_BYTES}-byte limit. Request a narrower query or a specific field instead.`,
+          true,
+        )
+      }
+    }
+
+    const { text, truncated, binary } = await readCapped(res)
+    if (!res.ok) {
+      // Error bodies are text — surface the status + a bounded excerpt.
+      return result(`API error ${res.status} ${res.statusText}: ${text.slice(0, 2000)}`, true)
+    }
+    if (binary) {
+      const ct = res.headers.get('content-type') ?? 'application/octet-stream'
+      return result(
+        `(binary response omitted — content-type ${ct}). The API returned non-text data; request a text/JSON representation or a specific field instead.`,
+      )
+    }
+    return result(text + (truncated ? '\n…(truncated)' : ''))
+  } catch (err) {
+    // Sanitized message only — never leak headers/credentials/body.
+    const msg = ctrl.signal.aborted
+      ? `timed out after ${API_CALL_TIMEOUT_MS}ms`
+      : err instanceof Error
+        ? err.message
+        : String(err)
+    log.warn('api tool request failed', { source: source.slug, err: msg })
+    return result(`Request failed: ${msg}`, true)
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
+  }
+}
+
+// Wrap a shared ApiCallResult as a Pi AgentToolResult WITHOUT re-clipping (the
+// text is already char-capped by executeApiCall) so the Pi output is byte-for-byte
+// what it produced before this refactor.
+function toAgentResult(r: ApiCallResult): AgentToolResult<unknown> {
+  return { content: [{ type: 'text', text: r.text }], details: { isError: r.isError } }
+}
+
 // Build one api source's flexible tool. Reads its credential fresh per call.
 // `endpointRules` (ADR 0060 P4) gate non-GET calls when the source's
 // permissions.json declared allowedApiEndpoints; undefined/empty = no gating.
@@ -276,7 +419,6 @@ export function createApiTool(
   endpointRules?: CompiledApiEndpoint[],
 ): AgentTool {
   const name = apiToolName(source)
-  const api = source.api
   const description = buildToolDescription(source)
 
   return {
@@ -297,6 +439,8 @@ export function createApiTool(
       // Per-source Explore scoping (ADR 0060 P4): a source that declared
       // allowedApiEndpoints restricts itself to GET + the whitelisted non-GET
       // endpoints. A blocked call returns a clear tool error (never a request).
+      // Enforced here on the Pi path (exposure is also filtered upstream); on the
+      // Claude SDK path the permission gate (makeBeforeToolCall) is the backstop.
       if (endpointRules && endpointRules.length > 0 && !isApiCallAllowed(method, path, endpointRules)) {
         return textResult(
           `Blocked by source permissions: ${method.toUpperCase()} ${path} is not in "${source.name}"'s allowedApiEndpoints (this source is scoped to GET + its whitelisted write endpoints).`,
@@ -304,89 +448,14 @@ export function createApiTool(
         )
       }
 
-      // OAuth api source (ADR 0060 P6): fetch a fresh Bearer token (auto-refreshed
-      // by getFreshToken) and inject it as an Authorization header. No token →
-      // needs_auth; tell the model to authenticate first. The token stays in
-      // memory here — never logged, never in the tool result.
-      let oauthHeaders: Record<string, string> | undefined
-      if (api.authType === 'oauth') {
-        const token = await getFreshToken(source)
-        if (!token) {
-          return textResult(
-            `"${source.name}" is not authenticated. Run source_oauth_trigger({ slug: "${source.slug}" }) to sign in, then retry.`,
-            true,
-          )
-        }
-        oauthHeaders = { Authorization: `Bearer ${token}` }
-      }
-
-      // Credential read FRESH so a mid-session update takes effect. `none`/`oauth`
-      // use no stored api credential (oauth injects a Bearer above); a null
-      // credential lets the upstream API surface its own 401.
-      const cred =
-        api.authType === 'none' || api.authType === 'oauth' ? null : await loadApiCredential(source.id)
-
-      const { url, init } = buildApiRequest(api, cred, {
-        path,
-        method,
-        ...(reqParams ? { params: reqParams } : {}),
-        ...(oauthHeaders ? { extraHeaders: oauthHeaders } : {}),
-      })
-
-      // SSRF-guard every request URL (baseUrl + path + any query auth). L1 input:
-      // the model chose path/params, the user chose baseUrl.
-      const guard = ssrfCheck(url)
-      if (!guard.ok) {
-        return textResult(`Request blocked by SSRF guard: ${guard.reason}.`, true)
-      }
-
-      const ctrl = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), API_CALL_TIMEOUT_MS)
-      const onAbort = (): void => ctrl.abort()
-      sig?.addEventListener('abort', onAbort, { once: true })
-      loopSignal?.addEventListener('abort', onAbort, { once: true })
-      try {
-        const res = await fetch(url, { ...init, signal: ctrl.signal })
-
-        // OOM pre-check: reject an oversized body before reading it into memory.
-        const cl = res.headers.get('content-length')
-        if (cl) {
-          const size = Number.parseInt(cl, 10)
-          if (Number.isFinite(size) && size > MAX_RESPONSE_BYTES) {
-            await res.body?.cancel().catch(() => {})
-            return textResult(
-              `Response too large: ${size} bytes exceeds the ${MAX_RESPONSE_BYTES}-byte limit. Request a narrower query or a specific field instead.`,
-              true,
-            )
-          }
-        }
-
-        const { text, truncated, binary } = await readCapped(res)
-        if (!res.ok) {
-          // Error bodies are text — surface the status + a bounded excerpt.
-          return textResult(`API error ${res.status} ${res.statusText}: ${text.slice(0, 2000)}`, true)
-        }
-        if (binary) {
-          const ct = res.headers.get('content-type') ?? 'application/octet-stream'
-          return textResult(
-            `(binary response omitted — content-type ${ct}). The API returned non-text data; request a text/JSON representation or a specific field instead.`,
-          )
-        }
-        return textResult(text + (truncated ? '\n…(truncated)' : ''))
-      } catch (err) {
-        // Sanitized message only — never leak headers/credentials/body.
-        const msg = ctrl.signal.aborted
-          ? `timed out after ${API_CALL_TIMEOUT_MS}ms`
-          : err instanceof Error
-            ? err.message
-            : String(err)
-        log.warn('api tool request failed', { source: source.slug, err: msg })
-        return textResult(`Request failed: ${msg}`, true)
-      } finally {
-        clearTimeout(timer)
-        sig?.removeEventListener('abort', onAbort)
-        loopSignal?.removeEventListener('abort', onAbort)
-      }
+      // Delegate the request itself to the shared core (auth/SSRF/cap/oauth). Both
+      // the per-call signal and the loop signal abort the in-flight fetch.
+      const r = await executeApiCall(
+        source,
+        { path, method, ...(reqParams ? { params: reqParams } : {}) },
+        combineSignals(sig, loopSignal),
+      )
+      return toAgentResult(r)
     },
   }
 }

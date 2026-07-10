@@ -13,6 +13,7 @@ import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../../sdk/invoke.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
+import { buildApiSdkServers } from './api-sdk-server.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -201,7 +202,11 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     (p): p is string => typeof p === 'string' && p.length > 0,
   )
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
+  // External MCP servers + AWOG `api` sources (in-process SDK MCP servers). Merged
+  // into one map for options.mcpServers; source ids never collide with mcp ids.
   const mcpServers = await toSdkMcpServers(args.mcpServers)
+  const apiServers = buildApiSdkServers(args.apiSources, args.abortController?.signal)
+  const allServers = { ...(mcpServers ?? {}), ...apiServers }
   const claudeBinary = resolveClaudeBinary()
   const sdkModel = toSdkModel(args.settings.modelId)
 
@@ -222,7 +227,7 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     ...(args.disabledTools ? { disallowedTools: args.disabledTools } : {}),
     ...(sdkModel ? { model: sdkModel } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
-    ...(mcpServers ? { mcpServers } : {}),
+    ...(Object.keys(allServers).length > 0 ? { mcpServers: allServers } : {}),
     ...(args.abortController ? { abortController: args.abortController } : {}),
     env: buildSdkEnv(cred),
     // Packaged builds: bundled native binary (ADR 0058 P3); dev auto-discovers.
