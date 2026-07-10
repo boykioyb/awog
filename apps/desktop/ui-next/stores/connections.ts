@@ -151,6 +151,15 @@ export type SourceProbeResult = {
   error?: string
 }
 
+// Write-only credential entry for an `api` source (ADR 0060 P3). Maps 1:1 onto
+// the `source.setApiCredential` RPC modes: bearer/header/query collapse to a lone
+// secret string, basic to username+password, multi-header to a header→value map.
+// The secret NEVER round-trips — it is only ever written, never read back.
+export type ApiCredentialInput =
+  | { mode: 'bearer' | 'header' | 'query'; value: string }
+  | { mode: 'basic'; username: string; password: string }
+  | { mode: 'multi-header'; headers: Record<string, string> }
+
 // Result of `source.test` (mirror of sidecar SourceTestOutcome). `supported`
 // distinguishes "tested and failed" from "kind not testable yet" (api/local in P1).
 export type SourceTestOutcome = {
@@ -227,6 +236,25 @@ function mockSources(): Source[] {
       trust: 'prompt',
       connectionStatus: 'untested',
       mcp: { transport: 'http', url: 'https://mcp.notion.com' },
+    },
+    {
+      id: 'exa_00000000',
+      slug: 'exa',
+      name: 'exa',
+      provider: 'exa',
+      description: 'Exa search REST API (x-api-key).',
+      type: 'api',
+      enabled: false,
+      timeoutMs: 30000,
+      trust: 'prompt',
+      connectionStatus: 'needs_auth',
+      isAuthenticated: false,
+      api: {
+        baseUrl: 'https://api.exa.ai/',
+        authType: 'header',
+        headerName: 'x-api-key',
+        testEndpoint: { method: 'POST', path: '/search', body: { query: 'test' } },
+      },
     },
   ]
 }
@@ -364,6 +392,26 @@ export const useConnectionsStore = defineStore('connections', () => {
     return res
   }
 
+  // Persist an `api` source's credential to the OS keychain (ADR 0060 P3). The
+  // secret NEVER touches config.json and is NEVER echoed back — the RPC returns
+  // only { ok }, so there is no way to read a stored credential; a re-save simply
+  // overwrites. Keyed by the source's STABLE id (not slug). Browser-dev flips the
+  // matching api mock to authenticated so the flow can be exercised offline.
+  async function setApiCredential(
+    args: { sourceId: string } & ApiCredentialInput,
+  ): Promise<{ ok: boolean }> {
+    if (!available.value) {
+      const target = sources.value.find((s) => s.id === args.sourceId)
+      if (target && target.type === 'api') {
+        target.isAuthenticated = true
+        target.connectionStatus = 'connected'
+        target.connectionError = undefined
+      }
+      return { ok: true }
+    }
+    return sc.request<{ ok: boolean }>('source.setApiCredential', args)
+  }
+
   // Re-fetch a single source and patch it in place (used after an OAuth flow so
   // the freshly-persisted status/error shows immediately — the fs watcher fires
   // too, but this is deterministic and scoped).
@@ -476,6 +524,7 @@ export const useConnectionsStore = defineStore('connections', () => {
     toggleSource,
     toggleToolDeny,
     testSource,
+    setApiCredential,
     startOAuth,
     cancelOAuth,
   }

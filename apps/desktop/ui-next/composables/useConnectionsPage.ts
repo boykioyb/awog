@@ -5,6 +5,7 @@ import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
 import {
   useConnectionsStore,
+  type ApiCredentialInput,
   type Source,
   type SourceInput,
   type SourceOAuthResult,
@@ -94,10 +95,15 @@ export function useConnectionsPage() {
     editorOpen.value = false
     editTarget.value = null
   }
-  const onSave = async (data: SourceInput) => {
+  // Save the source config, then (for an `api` source whose credential fields were
+  // actually filled) persist the credential to the keychain. The credential is
+  // OMITTED when the fields are blank so an empty submit never clobbers a stored
+  // one. Keyed by the SAVED source id (stable across slug edits).
+  const onSave = async (data: SourceInput, credential?: ApiCredentialInput) => {
     try {
       const saved = await store.saveSource(data)
       selectedSlug.value = saved.slug
+      if (credential) await store.setApiCredential({ sourceId: saved.id, ...credential })
       pushToast(`Saved ${saved.slug}`, 'success')
     } catch (err) {
       console.error('[connections] save failed', err)
@@ -141,11 +147,17 @@ export function useConnectionsPage() {
   }
 
   // Editor Verify button — save-first, since `source.test` needs a persisted
-  // source. Persists the draft, then tests it by slug and returns the outcome.
-  const runVerify = async (data: SourceInput): Promise<SourceTestOutcome> => {
-    await store.saveSource(data)
-    selectedSlug.value = data.slug
-    const { outcome } = await store.testSource(data.slug)
+  // source. Persists the draft, sets the api credential first (if one was entered,
+  // so an authed api source can actually authenticate during the probe), then
+  // tests it by slug and returns the outcome.
+  const runVerify = async (
+    data: SourceInput,
+    credential?: ApiCredentialInput,
+  ): Promise<SourceTestOutcome> => {
+    const saved = await store.saveSource(data)
+    selectedSlug.value = saved.slug
+    if (credential) await store.setApiCredential({ sourceId: saved.id, ...credential })
+    const { outcome } = await store.testSource(saved.slug)
     return outcome
   }
 

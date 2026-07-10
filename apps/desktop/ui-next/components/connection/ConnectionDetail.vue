@@ -130,64 +130,78 @@
         </div>
       </div>
 
-      <!-- tools (per-tool deny) -->
-      <div class="sech">{{ toolsTitle }}</div>
-      <div v-if="toolRows.length === 0" class="fd">{{ t('connections.detail.noTools') }}</div>
-      <template v-else>
-        <div class="cnd-toolsearch">
-          <Icon name="search" style="width: 13px; height: 13px; color: var(--textDim)" />
-          <input
-            v-model="toolFilter"
-            :placeholder="t('connections.detail.filterTools')"
-            spellcheck="false"
-          />
-          <button v-if="toolFilter" class="cnd-clear" @click="toolFilter = ''">
-            <Icon name="x" style="width: 12px; height: 12px" />
-          </button>
-        </div>
-        <div v-if="filteredTools.length === 0" class="fd">
-          {{ t('connections.detail.noMatch') }}
-        </div>
-        <div v-else class="cnd-tools">
-          <div
-            v-for="tool in filteredTools"
-            :key="tool.name"
-            class="cnd-tool"
-            :class="{ denied: isDenied(tool.name) }"
-          >
-            <Icon name="zap" style="width: 11px; height: 11px; flex: 0 0 auto; margin-top: 3px" />
-            <div class="cnd-tool-body">
-              <div class="cnd-tool-head">
-                <span class="mono cnd-tool-name">{{ tool.name }}</span>
-                <span v-if="isDenied(tool.name)" class="tag cnd-denied">
-                  {{ t('connections.detail.denied') }}
-                </span>
-              </div>
-              <div v-if="tool.description" class="cnd-tool-desc">{{ tool.description }}</div>
-            </div>
-            <button
-              class="iconbtn cnd-tool-btn"
-              :class="{ denied: isDenied(tool.name) }"
-              :title="
-                isDenied(tool.name)
-                  ? t('connections.detail.allowTool')
-                  : t('connections.detail.denyTool')
-              "
-              @click="emit('toggle-tool', tool.name)"
-            >
-              <Icon name="shield" style="width: 12px; height: 12px" />
+      <!-- tools (per-tool deny) — mcp only; an api source has no tool list -->
+      <template v-if="source.type === 'mcp'">
+        <div class="sech">{{ toolsTitle }}</div>
+        <div v-if="toolRows.length === 0" class="fd">{{ t('connections.detail.noTools') }}</div>
+        <template v-else>
+          <div class="cnd-toolsearch">
+            <Icon name="search" style="width: 13px; height: 13px; color: var(--textDim)" />
+            <input
+              v-model="toolFilter"
+              :placeholder="t('connections.detail.filterTools')"
+              spellcheck="false"
+            />
+            <button v-if="toolFilter" class="cnd-clear" @click="toolFilter = ''">
+              <Icon name="x" style="width: 12px; height: 12px" />
             </button>
           </div>
-        </div>
+          <div v-if="filteredTools.length === 0" class="fd">
+            {{ t('connections.detail.noMatch') }}
+          </div>
+          <div v-else class="cnd-tools">
+            <div
+              v-for="tool in filteredTools"
+              :key="tool.name"
+              class="cnd-tool"
+              :class="{ denied: isDenied(tool.name) }"
+            >
+              <Icon name="zap" style="width: 11px; height: 11px; flex: 0 0 auto; margin-top: 3px" />
+              <div class="cnd-tool-body">
+                <div class="cnd-tool-head">
+                  <span class="mono cnd-tool-name">{{ tool.name }}</span>
+                  <span v-if="isDenied(tool.name)" class="tag cnd-denied">
+                    {{ t('connections.detail.denied') }}
+                  </span>
+                </div>
+                <div v-if="tool.description" class="cnd-tool-desc">{{ tool.description }}</div>
+              </div>
+              <button
+                class="iconbtn cnd-tool-btn"
+                :class="{ denied: isDenied(tool.name) }"
+                :title="
+                  isDenied(tool.name)
+                    ? t('connections.detail.allowTool')
+                    : t('connections.detail.denyTool')
+                "
+                @click="emit('toggle-tool', tool.name)"
+              >
+                <Icon name="shield" style="width: 12px; height: 12px" />
+              </button>
+            </div>
+          </div>
+        </template>
       </template>
 
-      <!-- secret note -->
-      <div class="sech">{{ t('connections.sech.secret') }}</div>
-      <div class="fd">
-        {{ t('connections.secretNoteBefore') }}
-        <span class="mono">secret:KEY</span>
-        {{ t('connections.secretNoteAfter') }}
-      </div>
+      <!-- credential (api) — the credential is write-only; edit to (re)set it -->
+      <template v-if="source.type === 'api'">
+        <div class="sech">{{ t('connections.sech.credential') }}</div>
+        <div class="fd">{{ t('connections.detail.credentialNote') }}</div>
+        <button class="btn sm cnd-cred-btn" @click="emit('edit')">
+          <Icon name="shield" style="width: 12px; height: 12px" />
+          {{ t('connections.detail.setCredential') }}
+        </button>
+      </template>
+
+      <!-- secret note (mcp) -->
+      <template v-else>
+        <div class="sech">{{ t('connections.sech.secret') }}</div>
+        <div class="fd">
+          {{ t('connections.secretNoteBefore') }}
+          <span class="mono">secret:KEY</span>
+          {{ t('connections.secretNoteAfter') }}
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -286,6 +300,17 @@ const configRows = computed<{ key: string; value: string }[]>(() => {
     }
   } else if (s.type === 'api') {
     rows.push({ key: 'authType', value: s.api.authType })
+    if (s.api.headerName) rows.push({ key: 'headerName', value: s.api.headerName })
+    if (s.api.headerNames?.length) {
+      rows.push({ key: 'headerNames', value: s.api.headerNames.join(', ') })
+    }
+    if (s.api.queryParam) rows.push({ key: 'queryParam', value: s.api.queryParam })
+    if (s.api.testEndpoint) {
+      rows.push({
+        key: 'testEndpoint',
+        value: `${s.api.testEndpoint.method} ${s.api.testEndpoint.path}`,
+      })
+    }
   }
   rows.push({ key: 'timeoutMs', value: String(s.timeoutMs) })
   return rows
@@ -442,6 +467,10 @@ watch(
   color: var(--textMuted);
   line-height: 1.6;
   margin: 0 0 4px;
+}
+.cnd-cred-btn {
+  margin-top: 10px;
+  align-self: flex-start;
 }
 .cnd-banner {
   display: flex;

@@ -4,6 +4,7 @@
       ref="triggerRef"
       type="button"
       class="aseltrigger"
+      :disabled="disabled"
       :aria-expanded="open"
       aria-haspopup="listbox"
       @click="toggle"
@@ -22,10 +23,12 @@
           :key="opt.value"
           type="button"
           class="aselopt"
-          :class="{ on: opt.value === model }"
+          :class="{ on: opt.value === model, disabled: opt.disabled }"
           role="option"
           :aria-selected="opt.value === model"
-          @click="select(opt.value)"
+          :aria-disabled="opt.disabled"
+          :disabled="opt.disabled"
+          @click="select(opt)"
         >
           <span class="aseloptlbl">{{ opt.label }}</span>
           <Icon v-if="opt.value === model" name="check" class="aseltick" />
@@ -44,15 +47,16 @@
 // so it escapes overflow-clipping / scroll ancestors such as a modal body.
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 
-export type AppSelectOption = { label: string; value: string }
+export type AppSelectOption = { label: string; value: string; disabled?: boolean }
 
 const props = withDefaults(
   defineProps<{
     options: readonly AppSelectOption[]
     placeholder?: string
     width?: string
+    disabled?: boolean
   }>(),
-  { placeholder: '', width: 'auto' },
+  { placeholder: '', width: 'auto', disabled: false },
 )
 
 const model = defineModel<string>({ required: true })
@@ -98,10 +102,12 @@ function updatePosition() {
 }
 
 function toggle() {
+  if (props.disabled) return
   open.value = !open.value
 }
-function select(value: string) {
-  model.value = value
+function select(opt: AppSelectOption) {
+  if (opt.disabled) return
+  model.value = opt.value
   open.value = false
 }
 
@@ -175,6 +181,13 @@ onBeforeUnmount(() => {
 .aseltrigger:hover {
   border-color: var(--borderStrong);
 }
+.aseltrigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.aseltrigger:disabled:hover {
+  border-color: var(--border);
+}
 .aselval {
   /* min-width:0 lets this flex child shrink below its content width so the
      ellipsis actually engages — without it a long value (e.g. a deep branch
@@ -244,6 +257,14 @@ onBeforeUnmount(() => {
 .aselopt.on {
   color: var(--text);
   background: var(--bgActive);
+}
+.aselopt.disabled {
+  color: var(--textFaint);
+  cursor: not-allowed;
+}
+.aselopt.disabled:hover {
+  background: transparent;
+  color: var(--textFaint);
 }
 .aseltick {
   width: 13px;
