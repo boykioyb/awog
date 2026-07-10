@@ -96,11 +96,12 @@
                 width: '7px',
                 height: '7px',
                 borderRadius: '50%',
-                background: m.status === 'running' ? 'var(--green)' : 'var(--textFaint)',
+                background:
+                  m.connectionStatus === 'connected' ? 'var(--green)' : 'var(--textFaint)',
               }"
             />
             <span class="mcpn">{{ m.name }}</span>
-            <span class="mcpst">{{ m.status }}</span>
+            <span class="mcpst">{{ m.connectionStatus ?? 'untested' }}</span>
             <span class="tog2 sm" :class="{ off: !ctrl.isMcpActive(m.id) }" />
           </div>
         </div>

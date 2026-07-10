@@ -50,15 +50,18 @@
 
 <script setup lang="ts">
 // Shared key/value editor with optional OS-keychain secret mode. Port of the old
-// UI KvEditor — connections (MCP env/headers, ADR 0018) will consume it. When
+// UI KvEditor — connections (Source env/headers, ADR 0018/0060) consume it. When
 // `secretMode` is set, each row shows a lock toggle: click → persist the value to
-// the OS keychain via `mcp.setSecret`, swap the field to a `secret:KEY`
-// placeholder (rendered masked + disabled). Rendered in prototype CSS.
+// the OS keychain via `source.setSecret` (keyed by the source's stable id), swap
+// the field to a `secret:KEY` placeholder (rendered masked + disabled). Rendered
+// in prototype CSS.
 import { ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 
 export type KvEntry = { key: string; value: string }
-export type KvSecretMode = { serverId: string }
+// `sourceId` is the source's STABLE id (keychain account prefix), NOT the slug —
+// matches the id env/headers are expanded against at connect time.
+export type KvSecretMode = { sourceId: string }
 
 const props = defineProps<{
   modelValue: KvEntry[]
@@ -118,8 +121,8 @@ const toggleSecret = async (i: number) => {
       secretError.value = t('library.kv.secretOffline')
       return
     }
-    const res = await sc.request<{ placeholder: string }>('mcp.setSecret', {
-      serverId: props.secretMode.serverId,
+    const res = await sc.request<{ placeholder: string }>('source.setSecret', {
+      sourceId: props.secretMode.sourceId,
       key: entry.key.trim(),
       value: entry.value,
     })

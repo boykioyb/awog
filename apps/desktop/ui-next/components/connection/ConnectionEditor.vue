@@ -11,7 +11,7 @@
           <label class="cne-label">{{ t('connections.editor.slug') }}</label>
           <input
             class="cne-input mono"
-            :value="draft.id"
+            :value="draft.slug"
             placeholder="e.g. github"
             spellcheck="false"
             :disabled="isExisting"
@@ -84,7 +84,7 @@
         <LibraryKvEditor
           v-model="envEntries"
           :label="t('connections.editor.env')"
-          :secret-mode="draft.id ? { serverId: draft.id } : undefined"
+          :secret-mode="secretMode"
         />
       </template>
 
@@ -101,32 +101,21 @@
         <LibraryKvEditor
           v-model="headerEntries"
           :label="t('connections.editor.headers')"
-          :secret-mode="draft.id ? { serverId: draft.id } : undefined"
+          :secret-mode="secretMode"
         />
       </template>
 
-      <div class="cne-grid">
-        <button
-          type="button"
-          class="cne-toggle"
-          :class="{ on: draft.enabled }"
-          @click="draft.enabled = !draft.enabled"
-        >
-          <span class="tog2 sm" :class="{ off: !draft.enabled }" />
-          {{ t('connections.editor.enabled') }}
-        </button>
-        <button
-          type="button"
-          class="cne-toggle"
-          :class="{ on: draft.autoStart }"
-          @click="draft.autoStart = !draft.autoStart"
-        >
-          <span class="tog2 sm" :class="{ off: !draft.autoStart }" />
-          {{ t('connections.editor.autoStart') }}
-        </button>
-      </div>
+      <button
+        type="button"
+        class="cne-toggle"
+        :class="{ on: draft.enabled }"
+        @click="draft.enabled = !draft.enabled"
+      >
+        <span class="tog2 sm" :class="{ off: !draft.enabled }" />
+        {{ t('connections.editor.enabled') }}
+      </button>
 
-      <!-- auth probe (optional) — the Test calls this tool after the handshake to
+      <!-- auth probe (optional) — the Verify calls this tool after the handshake to
            check the token actually authenticates (handshake alone never does). -->
       <div class="cne-field">
         <label class="cne-label">{{ t('connections.editor.healthCheck') }}</label>
@@ -157,7 +146,7 @@
         </template>
       </div>
 
-      <!-- verify (stdio only) -->
+      <!-- verify (save-first: source.test operates on the persisted source) -->
       <div class="cne-verify">
         <button class="btn sm" :disabled="!canVerify || verifying" @click="onVerify">
           <Icon
@@ -171,22 +160,18 @@
           {{ verifyResult.summary }}
         </span>
       </div>
-      <div
-        v-if="verifyResult?.probe"
-        class="cne-verify-sum cne-probe"
-        :class="{ ok: verifyResult.probe.ok }"
-      >
+      <div v-if="verifyProbe" class="cne-verify-sum cne-probe" :class="{ ok: verifyProbe.ok }">
         <Icon
-          :name="verifyResult.probe.ok ? 'check' : 'alert'"
+          :name="verifyProbe.ok ? 'check' : 'alert'"
           style="width: 12px; height: 12px; flex: 0 0 auto"
         />
         <span>
           {{
-            verifyResult.probe.ok
-              ? t('connections.editor.authOk', { tool: verifyResult.probe.tool })
+            verifyProbe.ok
+              ? t('connections.editor.authOk', { tool: verifyProbe.tool })
               : t('connections.editor.authFail', {
-                  tool: verifyResult.probe.tool,
-                  error: verifyResult.probe.error ?? '',
+                  tool: verifyProbe.tool,
+                  error: verifyProbe.error ?? '',
                 })
           }}
         </span>
@@ -206,36 +191,46 @@
 </template>
 
 <script setup lang="ts">
-// Connection (MCP) form editor — port of the old UI McpEditor, rendered in
-// prototype CSS inside LibraryEntityModal. Slug is locked once the server
-// exists (moving id = a new file). Env vars (stdio) / headers (http) use
-// LibraryKvEditor in secret-mode so each row can move its value to the OS
-// keychain (`mcp.setSecret` → `secret:KEY` placeholder). The Verify button
-// runs an ephemeral `mcp.test` handshake (stdio only) and pre-fills detected
-// tools/resources into the draft.
+// Source form editor (ADR 0060 P1) — rewired from the old McpEditor. Builds a
+// `SourceConfig` with type:'mcp' (P1 handles the mcp kind only; api/local land in
+// later phases). The transport now lives INSIDE the `mcp` block. There is no
+// `autoStart` toggle. Env vars (stdio) / headers (http) use LibraryKvEditor in
+// secret-mode, keyed by the source's STABLE id so `source.setSecret` persists to
+// the OS keychain and only the `secret:KEY` placeholder reaches the config.
+//
+// Verify is SAVE-FIRST: `source.test` operates on a persisted source (by slug),
+// so the injected `verify` handler saves the draft, then tests it — never an
+// in-memory draft. Detected tools populate the health-check picker.
 import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
-import LibraryKvEditor, { type KvEntry } from '~/components/library/LibraryKvEditor.vue'
+import LibraryKvEditor, {
+  type KvEntry,
+  type KvSecretMode,
+} from '~/components/library/LibraryKvEditor.vue'
 import type {
-  ConnectionTransport,
-  ConnectionTrust,
-  McpProbeResult,
-  McpServer,
-  McpServerInput,
-  McpTestResult,
+  McpSource,
+  McpSourceBlock,
+  Source,
+  SourceInput,
+  SourceProbeResult,
+  SourceTestOutcome,
+  SourceTrust,
 } from '~/stores/connections'
+
+// Transport variants the form edits (sse is folded into http on load).
+type EditorTransport = 'http' | 'stdio'
 
 const props = defineProps<{
   open: boolean
-  server: McpServer | null
-  // Injected so the editor never imports the store (SoC) — runs an ephemeral
-  // `mcp.test` and resolves the probe result.
-  test: (data: McpServerInput) => Promise<McpTestResult>
+  source: Source | null
+  // Injected so the editor never imports the store (SoC). Save-first: persists the
+  // draft, then runs `source.test` by slug and resolves the outcome.
+  verify: (data: SourceInput) => Promise<SourceTestOutcome>
 }>()
 
 const emit = defineEmits<{
-  save: [server: McpServerInput]
+  save: [source: SourceInput]
   cancel: []
 }>()
 
@@ -252,125 +247,150 @@ const trustOptions: AppSelectOption[] = [
 ]
 
 type Draft = {
-  id: string
+  slug: string
   name: string
+  provider: string
   description: string
-  transport: ConnectionTransport
+  transport: EditorTransport
   command: string
   cwd: string
   url: string
   enabled: boolean
-  autoStart: boolean
   timeoutMs: number
-  trust: ConnectionTrust
-  tools: McpServer['tools']
-  resources: McpServer['resources']
+  trust: SourceTrust
   deniedTools?: string[]
 }
 
 const makeDefaults = (): Draft => ({
-  id: '',
+  slug: '',
   name: '',
+  provider: '',
   description: '',
   transport: 'stdio',
   command: 'npx',
   cwd: '',
   url: '',
   enabled: true,
-  autoStart: true,
   timeoutMs: 30000,
   trust: 'prompt',
-  tools: [],
-  resources: [],
 })
 
-const fromServer = (s: McpServer): Draft => ({
-  id: s.id,
+const fromSource = (s: Source): Draft => ({
+  slug: s.slug,
   name: s.name,
-  description: s.description,
-  transport: s.transport === 'sse' ? 'http' : s.transport,
-  command: s.command ?? '',
-  cwd: s.cwd ?? '',
-  url: s.url ?? '',
+  provider: s.provider,
+  description: s.description ?? '',
+  transport: s.type === 'mcp' && s.mcp.transport === 'stdio' ? 'stdio' : 'http',
+  command: s.type === 'mcp' ? (s.mcp.command ?? '') : '',
+  cwd: s.type === 'mcp' ? (s.mcp.cwd ?? '') : '',
+  url: s.type === 'mcp' ? (s.mcp.url ?? '') : '',
   enabled: s.enabled,
-  autoStart: s.autoStart,
   timeoutMs: s.timeoutMs,
   trust: s.trust,
-  tools: [...s.tools],
-  resources: [...s.resources],
   deniedTools: s.deniedTools ? [...s.deniedTools] : undefined,
 })
 
-const initDraft = (s: McpServer | null): Draft => (s ? fromServer(s) : makeDefaults())
+const initDraft = (s: Source | null): Draft => (s ? fromSource(s) : makeDefaults())
 
-const draft = ref<Draft>(initDraft(props.server))
-const argsText = ref(
-  (props.server?.args ?? ['-y', '@modelcontextprotocol/server-filesystem']).join('\n'),
-)
-const envEntries = ref<KvEntry[]>(toEntries(props.server?.env))
-const headerEntries = ref<KvEntry[]>(toEntries(props.server?.headers))
+const mcpArgsOf = (s: Source | null): string[] =>
+  s && s.type === 'mcp' ? (s.mcp.args ?? []) : ['-y', '@modelcontextprotocol/server-filesystem']
+const mcpEnvOf = (s: Source | null): Record<string, string> =>
+  s && s.type === 'mcp' ? (s.mcp.env ?? {}) : {}
+const mcpHeadersOf = (s: Source | null): Record<string, string> =>
+  s && s.type === 'mcp' ? (s.mcp.headers ?? {}) : {}
 
-// Optional auth probe (healthCheck): a tool name + JSON args the Test runs after
-// the handshake to verify the token actually authenticates. Kept as flat refs
-// (like argsText) and assembled into `healthCheck` in buildPayload.
-const healthTool = ref<string>(props.server?.healthCheck?.tool ?? '')
-const healthArgsText = ref<string>(healthArgsToText(props.server?.healthCheck?.args))
+const draft = ref<Draft>(initDraft(props.source))
+const argsText = ref(mcpArgsOf(props.source).join('\n'))
+const envEntries = ref<KvEntry[]>(toEntries(mcpEnvOf(props.source)))
+const headerEntries = ref<KvEntry[]>(toEntries(mcpHeadersOf(props.source)))
+
+// Optional auth probe (healthCheck): a tool name + JSON args Verify runs after the
+// handshake to verify the token actually authenticates.
+const healthTool = ref<string>(props.source?.healthCheck?.tool ?? '')
+const healthArgsText = ref<string>(healthArgsToText(props.source?.healthCheck?.args))
+
+// Tools detected by the last Verify — populate the health-check picker (a source
+// carries no persisted tools list).
+const detectedTools = ref<{ name: string; description: string }[]>([])
 
 const verifying = ref(false)
-const verifyResult = ref<{
-  ok: boolean
-  summary: string
-  stderr?: string[]
-  probe?: McpProbeResult
-} | null>(null)
+const verifyResult = ref<{ ok: boolean; summary: string; stderr?: string[] } | null>(null)
+const verifyProbe = ref<SourceProbeResult | null>(null)
 
-const isExisting = computed(() => !!props.server)
+const isExisting = computed(() => !!props.source)
 
-// Bridge the union-typed draft fields to AppSelect's string model (mirror of
-// AgentEditor's providerSelect pattern).
+// A new source needs a stable id (`${slug}_${8hex}`) BEFORE save, because
+// source.setSecret keys the keychain by id and the saved config must reuse the
+// same id. Generated once (frozen) so changing the slug later never orphans a
+// stored secret. Existing sources keep their id.
+const generatedId = ref<string | null>(null)
+function rand8hex(): string {
+  const bytes = new Uint8Array(4)
+  crypto.getRandomValues(bytes)
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+const ensureSourceId = (): string => {
+  if (props.source) return props.source.id
+  if (!generatedId.value) generatedId.value = `${draft.value.slug || 'source'}_${rand8hex()}`
+  return generatedId.value
+}
+const sourceId = computed(() => props.source?.id ?? generatedId.value ?? '')
+const secretMode = computed<KvSecretMode | undefined>(() =>
+  sourceId.value ? { sourceId: sourceId.value } : undefined,
+)
+
+// Freeze the generated id as soon as a slug is entered for a new source.
+watch(
+  () => draft.value.slug,
+  (slug) => {
+    if (!props.source && slug && !generatedId.value) generatedId.value = `${slug}_${rand8hex()}`
+  },
+)
+
+// Bridge the union-typed draft fields to AppSelect's string model.
 const transportSelect = computed<string>({
   get: () => draft.value.transport,
   set: (v) => {
-    draft.value.transport = v as ConnectionTransport
+    draft.value.transport = v as EditorTransport
   },
 })
 const trustSelect = computed<string>({
   get: () => draft.value.trust,
   set: (v) => {
-    draft.value.trust = v as ConnectionTrust
+    draft.value.trust = v as SourceTrust
   },
 })
 
-// Re-seed every time the modal opens or the target server changes.
+// Re-seed every time the modal opens or the target source changes.
 watch(
-  () => [props.open, props.server] as const,
+  () => [props.open, props.source] as const,
   ([isOpen]) => {
     if (!isOpen) return
-    draft.value = initDraft(props.server)
-    argsText.value = (props.server?.args ?? ['-y', '@modelcontextprotocol/server-filesystem']).join(
-      '\n',
-    )
-    envEntries.value = toEntries(props.server?.env)
-    headerEntries.value = toEntries(props.server?.headers)
-    healthTool.value = props.server?.healthCheck?.tool ?? ''
-    healthArgsText.value = healthArgsToText(props.server?.healthCheck?.args)
+    draft.value = initDraft(props.source)
+    argsText.value = mcpArgsOf(props.source).join('\n')
+    envEntries.value = toEntries(mcpEnvOf(props.source))
+    headerEntries.value = toEntries(mcpHeadersOf(props.source))
+    healthTool.value = props.source?.healthCheck?.tool ?? ''
+    healthArgsText.value = healthArgsToText(props.source?.healthCheck?.args)
+    detectedTools.value = []
     verifyResult.value = null
+    verifyProbe.value = null
+    generatedId.value = null
   },
 )
 
 const onSlugInput = (e: Event) => {
-  draft.value.id = (e.target as HTMLInputElement).value
+  draft.value.slug = (e.target as HTMLInputElement).value
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '')
 }
 
-// Auth-probe tool picker: the detected tools (populated after Verify or from a
-// running server) plus a "none" option. The currently-configured tool is kept
-// even if it's not in the detected list so editing never silently drops it.
-const hasDetectedTools = computed(() => draft.value.tools.length > 0)
+// Auth-probe tool picker: the detected tools (populated after Verify) plus a
+// "none" option. The currently-configured tool is kept even if it's not detected.
+const hasDetectedTools = computed(() => detectedTools.value.length > 0)
 const toolOptions = computed<AppSelectOption[]>(() => {
-  const names = new Set(draft.value.tools.map((tool) => tool.name))
+  const names = new Set(detectedTools.value.map((tool) => tool.name))
   if (healthTool.value) names.add(healthTool.value)
   const opts = [...names].sort().map((n) => ({ value: n, label: n }))
   return [{ value: '', label: t('connections.editor.healthNone') }, ...opts]
@@ -394,80 +414,89 @@ const parsedHealthArgs = computed<Record<string, unknown> | null>(() => {
 const healthArgsValid = computed(() => !healthTool.value || parsedHealthArgs.value !== null)
 
 const canSave = computed(() => {
-  if (!draft.value.id || !draft.value.name.trim()) return false
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(draft.value.id)) return false
+  if (!draft.value.slug || !draft.value.name.trim()) return false
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(draft.value.slug)) return false
   if (draft.value.transport === 'stdio' && !draft.value.command.trim()) return false
   if (draft.value.transport === 'http' && !draft.value.url.trim()) return false
   if (!healthArgsValid.value) return false
   return true
 })
 
-const canVerify = computed(
-  () =>
-    draft.value.transport === 'stdio' &&
-    !!draft.value.command.trim() &&
-    !!draft.value.id &&
-    healthArgsValid.value,
-)
+// Verify is save-first, so it works for both transports once the draft is valid.
+const canVerify = computed(() => canSave.value)
 
-// Assemble the config-only payload (runtime fields carried for the test probe;
-// the store strips them before the RPC).
-const buildPayload = (): McpServerInput => {
-  const args = argsText.value.split('\n').filter((x) => x.length > 0)
-  const base: McpServerInput = {
-    id: draft.value.id,
+// Assemble the SourceConfig payload (type:'mcp'). Persisted status fields are
+// carried over on edit so a save doesn't wipe the last-test result.
+const buildPayload = (): SourceInput => {
+  const slug = draft.value.slug
+  const transport = draft.value.transport
+  const mcp: McpSourceBlock = { transport }
+  if (transport === 'stdio') {
+    mcp.command = draft.value.command.trim()
+    mcp.args = argsText.value.split('\n').filter((x) => x.length > 0)
+    if (draft.value.cwd.trim()) mcp.cwd = draft.value.cwd.trim()
+    const env = fromEntries(envEntries.value)
+    if (Object.keys(env).length > 0) mcp.env = env
+  } else {
+    mcp.url = draft.value.url.trim()
+    const headers = fromEntries(headerEntries.value)
+    if (Object.keys(headers).length > 0) mcp.headers = headers
+  }
+
+  const now = Date.now()
+  const src: McpSource = {
+    id: ensureSourceId(),
+    slug,
     name: draft.value.name.trim(),
-    description: draft.value.description.trim(),
-    transport: draft.value.transport,
+    provider: draft.value.provider.trim() || slug,
+    type: 'mcp',
     enabled: draft.value.enabled,
-    autoStart: draft.value.autoStart,
     timeoutMs: draft.value.timeoutMs,
     trust: draft.value.trust,
-    status: props.server?.status ?? 'idle',
-    tools: draft.value.tools,
-    resources: draft.value.resources,
+    mcp,
+    createdAt: props.source?.createdAt ?? now,
+    updatedAt: now,
   }
-  if (draft.value.deniedTools?.length) base.deniedTools = [...draft.value.deniedTools]
+  if (draft.value.description.trim()) src.description = draft.value.description.trim()
+  if (draft.value.deniedTools?.length) src.deniedTools = [...draft.value.deniedTools]
+  // Preserve persisted last-test status on edit (a fresh test overwrites it).
+  if (props.source) {
+    if (props.source.connectionStatus) src.connectionStatus = props.source.connectionStatus
+    if (props.source.isAuthenticated !== undefined)
+      src.isAuthenticated = props.source.isAuthenticated
+    if (props.source.connectionError) src.connectionError = props.source.connectionError
+    if (props.source.lastTestedAt) src.lastTestedAt = props.source.lastTestedAt
+  }
   const tool = healthTool.value.trim()
   if (tool) {
     const args = parsedHealthArgs.value ?? {}
-    base.healthCheck = Object.keys(args).length > 0 ? { tool, args } : { tool }
+    src.healthCheck = Object.keys(args).length > 0 ? { tool, args } : { tool }
   }
-  if (draft.value.transport === 'stdio') {
-    base.command = draft.value.command.trim()
-    base.args = args
-    if (draft.value.cwd.trim()) base.cwd = draft.value.cwd.trim()
-    base.env = fromEntries(envEntries.value)
-  } else {
-    base.url = draft.value.url.trim()
-    base.headers = fromEntries(headerEntries.value)
-  }
-  return base
+  return src
 }
 
 const onVerify = async () => {
   if (!canVerify.value || verifying.value) return
   verifying.value = true
   verifyResult.value = null
+  verifyProbe.value = null
   try {
-    const res = await props.test(buildPayload())
-    if (res.ok) {
-      const tc = res.tools?.length ?? 0
-      const rc = res.resources?.length ?? 0
+    const outcome = await props.verify(buildPayload())
+    verifyProbe.value = outcome.probe ?? null
+    if (outcome.tools) detectedTools.value = outcome.tools
+    if (outcome.ok) {
+      const tc = outcome.tools?.length ?? 0
+      const rc = outcome.resources?.length ?? 0
       verifyResult.value = {
         ok: true,
         summary: t('connections.editor.verifyOk', { tools: tc, resources: rc }),
-        stderr: res.stderr,
-        probe: res.probe,
+        stderr: outcome.stderr,
       }
-      if (res.tools) draft.value.tools = res.tools
-      if (res.resources) draft.value.resources = res.resources
     } else {
       verifyResult.value = {
         ok: false,
-        summary: t('connections.editor.verifyFail', { error: res.error ?? '' }),
-        stderr: res.stderr,
-        probe: res.probe,
+        summary: t('connections.editor.verifyFail', { error: outcome.error ?? '' }),
+        stderr: outcome.stderr,
       }
     }
   } catch (err) {

@@ -2,13 +2,18 @@ import { computed, onMounted, ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
-import { useConnectionsStore, type McpServer, type McpServerInput } from '~/stores/connections'
+import {
+  useConnectionsStore,
+  type Source,
+  type SourceInput,
+  type SourceTestOutcome,
+} from '~/stores/connections'
 
 // Page-controller for /connections — owns selection, CRUD, creator, and delete
-// state so pages/connections.vue stays a thin template. Mirrors useSkillsPage
-// (the reference page-controller), adapted to the MCP/Connections surface:
-// per-server enable/restart/test + per-tool deny live on the detail; the editor
-// drives the env/header secret flow through LibraryKvEditor.
+// state so pages/connections.vue stays a thin template. Rewired to the `source.*`
+// contract (ADR 0060 P1): sources are keyed by slug; there is no live process, so
+// there is no restart / stderr. Testing is save-then-test because `source.test`
+// operates on a persisted source (by slug), not an in-memory draft.
 
 export function useConnectionsPage() {
   const store = useConnectionsStore()
@@ -21,16 +26,16 @@ export function useConnectionsPage() {
   const accountId = computed(() => settings.activeAccount('anthropic')?.id ?? null)
 
   // --- selection -----------------------------------------------------------
-  const selectedId = ref<string | null>(null)
-  const selectedServer = computed<McpServer | null>(() => {
-    if (selectedId.value) {
-      const hit = store.serverById(selectedId.value)
+  const selectedSlug = ref<string | null>(null)
+  const selectedSource = computed<Source | null>(() => {
+    if (selectedSlug.value) {
+      const hit = store.sourceBySlug(selectedSlug.value)
       if (hit) return hit
     }
-    return store.mcpServers[0] ?? null
+    return store.sources[0] ?? null
   })
-  const selectServer = (s: McpServer) => {
-    selectedId.value = s.id
+  const selectSource = (s: Source) => {
+    selectedSlug.value = s.slug
   }
 
   // --- hydrate -------------------------------------------------------------
@@ -39,10 +44,10 @@ export function useConnectionsPage() {
     if (refreshing.value) return
     refreshing.value = true
     try {
-      await store.loadServers()
+      await store.loadSources()
       if (!opts.silent) {
         if (!sc.available) pushToast('Engine offline — showing cached connections', 'info')
-        else pushToast(`Loaded ${store.mcpServers.length} connections`, 'info')
+        else pushToast(`Loaded ${store.sources.length} connections`, 'info')
       }
     } catch (err) {
       console.error('[connections] refresh failed', err)
@@ -62,8 +67,8 @@ export function useConnectionsPage() {
     creatorOpen.value = true
   }
   const onCreatorTurn = () => {
-    // Each turn may have written a <slug>.json — re-hydrate live (store also
-    // re-hydrates on fs-changed, but this is immediate).
+    // Each turn may have written a sources/<slug>/config.json — re-hydrate live
+    // (store also re-hydrates on sources.fs-changed, but this is immediate).
     void refresh({ silent: true })
   }
   const onCreatorClose = () => {
@@ -73,8 +78,8 @@ export function useConnectionsPage() {
 
   // --- edit (form) ---------------------------------------------------------
   const editorOpen = ref(false)
-  const editTarget = ref<McpServer | null>(null)
-  const openEditor = (s: McpServer) => {
+  const editTarget = ref<Source | null>(null)
+  const openEditor = (s: Source) => {
     editTarget.value = s
     editorOpen.value = true
   }
@@ -86,11 +91,11 @@ export function useConnectionsPage() {
     editorOpen.value = false
     editTarget.value = null
   }
-  const onSave = async (data: McpServerInput) => {
+  const onSave = async (data: SourceInput) => {
     try {
-      const saved = await store.saveServer(data)
-      selectedId.value = saved.id
-      pushToast(`Saved ${saved.id}`, 'success')
+      const saved = await store.saveSource(data)
+      selectedSlug.value = saved.slug
+      pushToast(`Saved ${saved.slug}`, 'success')
     } catch (err) {
       console.error('[connections] save failed', err)
       pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
@@ -99,36 +104,51 @@ export function useConnectionsPage() {
     closeEditor()
   }
 
-  // --- per-server runtime actions ------------------------------------------
-  const onToggle = async (s: McpServer) => {
+  // --- runtime actions -----------------------------------------------------
+  const onToggle = async (s: Source) => {
     try {
-      await store.toggleServer(s.id)
+      await store.toggleSource(s.slug)
     } catch (err) {
       console.error('[connections] toggle failed', err)
       pushToast(`Toggle failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
     }
   }
-  const onRestart = async (s: McpServer) => {
+  const onToggleTool = async (s: Source, toolName: string) => {
     try {
-      await store.restartServer(s.id)
-      pushToast(`Restarting ${s.id}…`, 'info')
-    } catch (err) {
-      console.error('[connections] restart failed', err)
-      pushToast(`Restart failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
-    }
-  }
-  const onToggleTool = async (s: McpServer, toolName: string) => {
-    try {
-      await store.toggleToolDeny(s.id, toolName)
+      await store.toggleToolDeny(s.slug, toolName)
     } catch (err) {
       console.error('[connections] toggle tool failed', err)
       pushToast('Tool toggle failed — see console', 'error')
     }
   }
 
+  // Detail Test button — tests the already-persisted source by slug.
+  const runTest = (source: Source, done: (outcome: SourceTestOutcome) => void) => {
+    void store
+      .testSource(source.slug)
+      .then(({ outcome }) => done(outcome))
+      .catch((err) => {
+        done({
+          ok: false,
+          supported: true,
+          status: 'failed',
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+  }
+
+  // Editor Verify button — save-first, since `source.test` needs a persisted
+  // source. Persists the draft, then tests it by slug and returns the outcome.
+  const runVerify = async (data: SourceInput): Promise<SourceTestOutcome> => {
+    await store.saveSource(data)
+    selectedSlug.value = data.slug
+    const { outcome } = await store.testSource(data.slug)
+    return outcome
+  }
+
   // --- delete --------------------------------------------------------------
-  const pendingDelete = ref<McpServer | null>(null)
-  const askDelete = (s: McpServer) => {
+  const pendingDelete = ref<Source | null>(null)
+  const askDelete = (s: Source) => {
     pendingDelete.value = s
   }
   const cancelDelete = () => {
@@ -137,37 +157,33 @@ export function useConnectionsPage() {
   const deleteDescription = computed(() => {
     const s = pendingDelete.value
     if (!s) return ''
-    return `This will permanently delete the connection "${s.name}" from ~/.awog/mcp-servers/${s.id}.json and purge any keychain secrets it owns. Agents using it will lose access.`
+    return `This will permanently delete the connection "${s.name}" from ~/.awog/sources/${s.slug}/ and purge any keychain secrets it owns. Agents using it will lose access.`
   })
   const confirmDelete = async () => {
     const s = pendingDelete.value
     if (!s) return
-    const wasId = s.id
+    const wasSlug = s.slug
     pendingDelete.value = null
     try {
-      await store.deleteServer(s.id)
-      if (selectedId.value === wasId) {
-        selectedId.value = store.mcpServers[0]?.id ?? null
+      await store.deleteSource(s.slug)
+      if (selectedSlug.value === wasSlug) {
+        selectedSlug.value = store.sources[0]?.slug ?? null
       }
-      pushToast(`Deleted ${s.id}`, 'success')
+      pushToast(`Deleted ${s.slug}`, 'success')
     } catch (err) {
       console.error('[connections] delete failed', err)
       pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
     }
   }
 
-  // Per-server stderr ring buffer (Logs view).
-  const stderrOf = (id: string): string[] => store.mcpStderr[id] ?? []
-
   return {
     // store-backed
-    servers: computed(() => store.mcpServers),
-    stderrOf,
+    sources: computed(() => store.sources),
     accountId,
     available: computed(() => store.available),
     // selection
-    selectedServer,
-    selectServer,
+    selectedSource,
+    selectSource,
     // hydrate
     refreshing,
     refresh,
@@ -185,9 +201,9 @@ export function useConnectionsPage() {
     onSave,
     // runtime
     onToggle,
-    onRestart,
     onToggleTool,
-    testServer: store.testServer,
+    runTest,
+    runVerify,
     // delete
     pendingDelete,
     askDelete,

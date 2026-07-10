@@ -43,7 +43,8 @@ type WorkflowDto = {
   edges?: { from: string; to: string }[]
 }
 type ProjectDto = { id: string; name: string; path: string }
-type ConnectionDto = { id: string; name: string; enabled?: boolean }
+// Source list slice (ADR 0060 `source.list`) — only the fields the modal binds.
+type SourceDto = { id: string; name: string; enabled?: boolean }
 
 function mockWorkflows(): WorkflowOption[] {
   return [
@@ -104,8 +105,8 @@ export function useNewTaskData() {
         sc.request<{ projects: ProjectDto[] }>('projects.list', {}).catch(() => ({
           projects: [] as ProjectDto[],
         })),
-        sc.request<{ servers: ConnectionDto[] }>('mcp.list', {}).catch(() => ({
-          servers: [] as ConnectionDto[],
+        sc.request<{ sources: SourceDto[] }>('source.list', {}).catch(() => ({
+          sources: [] as SourceDto[],
         })),
       ])
       workflows.value = (wf.workflows ?? []).map((w) => ({
@@ -118,7 +119,7 @@ export function useNewTaskData() {
         edges: w.edges ?? [],
       }))
       projects.value = (pr.projects ?? []).map((p) => ({ id: p.id, name: p.name, path: p.path }))
-      connections.value = (mc.servers ?? [])
+      connections.value = (mc.sources ?? [])
         .filter((s) => s.enabled !== false)
         .map((s) => ({ id: s.id, name: s.name }))
     } catch (err) {

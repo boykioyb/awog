@@ -2,217 +2,222 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 
-// Connections store — dual-path live (MCP servers, ADR 0025 — flat global
-// "Sources" list, NO service enum/tier). When the Electron bridge is available
-// `loadServers()` pulls the snapshot list over IPC; an `mcp.status` subscription
-// keeps each server's status/tools/resources/lastError fresh, an
-// `mcp.stderr-line` subscription fills a 100-line stderr ring buffer per server,
-// and an `mcp-servers.fs-changed` subscription re-hydrates when configs are
-// edited outside the app. Browser-dev seeds a small mock. Mirrors stores/skills.ts
-// + stores/agents.ts dual-path pattern.
+// Connections store — dual-path live over the `source.*` RPC surface (ADR 0060,
+// "Craft Sources" model). A Source is an external data connection stored per
+// folder at ~/.awog/sources/<slug>/. In P1 only the `mcp` kind carries a runtime;
+// `api`/`local` land in later phases but round-trip through the store already.
 //
-// Dashboard compatibility: the Home dashboard (composables/useHomeDashboard.ts)
-// binds `servers` (id/name/status) + calls `loadServers()`. Those stay exactly
-// as before — the richer `McpServer` slice lives alongside, and `servers` is
-// derived from it so a single load feeds both surfaces.
+// There is NO live process behind a source: status is the PERSISTED result of the
+// last `source.test`/auth run (`connectionStatus`), not a running child. So the
+// store subscribes only to `sources.fs-changed` (re-hydrate on out-of-band edits)
+// — the old `mcp.status`/`mcp.stderr-line` live channels are gone.
+//
+// External consumers (useAgentsPage MCP picker + useProjectLlmDefaults whitelist)
+// bind `servers` (id/name/status) + `mcpServers` + `loadServers()`; those names
+// are kept as thin aliases over the source-centric internals so this rewire stays
+// scoped to the Connections surface. Browser-dev seeds a small mock.
 
-export type ConnectionStatus = 'running' | 'starting' | 'idle' | 'error' | 'disabled'
-export type ConnectionTransport = 'stdio' | 'http' | 'sse'
-export type ConnectionTrust = 'allow' | 'prompt' | 'deny'
+export type SourceType = 'mcp' | 'api' | 'local'
+export type SourceTransport = 'http' | 'sse' | 'stdio'
+export type SourceTrust = 'allow' | 'prompt' | 'deny'
+export type SourceConnectionStatus =
+  | 'connected'
+  | 'needs_auth'
+  | 'failed'
+  | 'untested'
+  | 'local_disabled'
 
-export type ConnectionTool = {
-  name: string
-  description: string
-}
-
-export type ConnectionResource = {
-  uri: string
-  mime: string
-}
-
-// Optional auth probe (mirror of sidecar McpHealthCheck): a read-only tool the
+// Optional auth probe (mirror of sidecar SourceHealthCheck): a read-only tool the
 // Test runs after the handshake to verify the token actually authenticates.
-export type McpHealthCheck = {
+export type SourceHealthCheck = {
   tool: string
   args?: Record<string, unknown>
 }
 
-// Full MCP server entity (mirror of sidecar McpServerSnapshot —
-// apps/desktop/sidecar/src/types/shared.ts). NOT imported from the sidecar
-// package; the store owns its own slice. Config fields (id..deniedTools) round-
-// trip to disk; runtime fields (status/tools/resources/lastError/lastStartedAt)
-// are rebuilt by the McpManager and stripped before `mcp.upsert`.
-export type McpServer = {
-  id: string
-  name: string
-  description: string
-  transport: ConnectionTransport
+// A tool / resource surfaced by a `source.test` outcome. Runtime-only — never
+// persisted on the config.
+export type SourceTool = { name: string; description: string }
+export type SourceResource = { uri: string; mime: string }
+
+// ── Per-kind config blocks (mirror of sidecar types/shared.ts) ────────────────
+
+export type McpSourceBlock = {
+  transport?: SourceTransport
+  // http/sse
+  url?: string
+  authType?: 'oauth' | 'bearer' | 'none'
+  clientId?: string
+  headers?: Record<string, string>
+  headerNames?: string[]
+  // stdio
   command?: string
   args?: string[]
   env?: Record<string, string>
   cwd?: string
-  url?: string
-  headers?: Record<string, string>
-  enabled: boolean
-  autoStart: boolean
-  timeoutMs: number
-  trust: ConnectionTrust
-  deniedTools?: string[]
-  healthCheck?: McpHealthCheck
-  // runtime (sidecar-owned)
-  status: ConnectionStatus
-  tools: ConnectionTool[]
-  resources: ConnectionResource[]
-  lastError?: string
-  lastStartedAt?: string
 }
 
-// Dashboard-compat slice — the only shape the Home tiles consume.
+export type ApiSourceBlock = {
+  baseUrl: string
+  authType: 'bearer' | 'header' | 'query' | 'basic' | 'oauth' | 'none'
+  headerName?: string
+  headerNames?: string[]
+  queryParam?: string
+  authScheme?: string
+  defaultHeaders?: Record<string, string>
+  testEndpoint?: {
+    method: 'GET' | 'POST'
+    path: string
+    body?: Record<string, unknown>
+    headers?: Record<string, string>
+  }
+  renewEndpoint?: {
+    path: string
+    method?: 'GET' | 'POST'
+    body?: Record<string, unknown>
+    headers?: Record<string, string>
+    tokenField?: string
+    expiresInField?: string
+    fallbackTtlSecs?: number
+  }
+  oauth?: {
+    authorizationUrl: string
+    tokenUrl: string
+    clientId: string
+    clientSecret?: string
+    scopes?: string[]
+    audience?: string
+    extraParams?: Record<string, string>
+  }
+  googleService?: 'gmail' | 'calendar' | 'drive' | 'docs' | 'sheets' | 'youtube' | 'searchconsole'
+  googleScopes?: string[]
+  googleOAuthClientId?: string
+  googleOAuthClientSecret?: string
+  slackService?: 'messaging' | 'channels' | 'users' | 'files' | 'full'
+  slackUserScopes?: string[]
+  microsoftService?: 'outlook' | 'microsoft-calendar' | 'onedrive' | 'teams' | 'sharepoint'
+  microsoftScopes?: string[]
+}
+
+export type LocalSourceBlock = {
+  path: string
+  format?: string
+}
+
+// Fields shared by every source kind. Config fields round-trip to disk; the
+// status fields (isAuthenticated..lastTestedAt) are written by `source.test`.
+// NO `autoStart` — lifecycle is a lazy pool (ADR 0060 D-3).
+export type SourceBase = {
+  id: string
+  slug: string
+  name: string
+  provider: string
+  enabled: boolean
+  icon?: string
+  tagline?: string
+  description?: string
+  isAuthenticated?: boolean
+  connectionStatus?: SourceConnectionStatus
+  connectionError?: string
+  lastTestedAt?: number
+  createdAt?: number
+  updatedAt?: number
+  timeoutMs: number
+  deniedTools?: string[]
+  trust: SourceTrust
+  healthCheck?: SourceHealthCheck
+}
+
+export type McpSource = SourceBase & { type: 'mcp'; mcp: McpSourceBlock }
+export type ApiSource = SourceBase & { type: 'api'; api: ApiSourceBlock }
+export type LocalSource = SourceBase & { type: 'local'; local: LocalSourceBlock }
+
+// Discriminated union on `type` — mirror of the sidecar SourceConfig.
+export type Source = McpSource | ApiSource | LocalSource
+
+// The shape a save accepts (the editor builds a full SourceConfig).
+export type SourceInput = Source
+
+// Dashboard/agent-picker compat slice — the only shape those surfaces consume.
 export type Connection = {
   id: string
   name: string
-  status: ConnectionStatus
+  status: SourceConnectionStatus
 }
 
-// Config-only draft a save accepts. The editor builds this; the store strips
-// runtime fields before sending to `mcp.upsert`.
-export type McpServerInput = McpServer
-
 // Outcome of the optional post-handshake auth probe.
-export type McpProbeResult = {
+export type SourceProbeResult = {
   ok: boolean
   tool: string
   error?: string
 }
 
-// Result of an ephemeral connection probe (`mcp.test`). `ok` reflects the
-// handshake; `probe` (when a healthCheck is configured) reports whether the
-// token actually authenticated.
-export type McpTestResult = {
+// Result of `source.test` (mirror of sidecar SourceTestOutcome). `supported`
+// distinguishes "tested and failed" from "kind not testable yet" (api/local in P1).
+export type SourceTestOutcome = {
   ok: boolean
-  tools?: ConnectionTool[]
-  resources?: ConnectionResource[]
+  supported: boolean
+  status: SourceConnectionStatus
+  isAuthenticated?: boolean
+  tools?: SourceTool[]
+  resources?: SourceResource[]
   error?: string
   stderr?: string[]
-  probe?: McpProbeResult
+  probe?: SourceProbeResult
 }
 
-// Runtime fields rebuilt by the McpManager — never sent to `mcp.upsert` (the
-// sidecar zod schema rejects them).
-const RUNTIME_KEYS = ['status', 'tools', 'resources', 'lastError', 'lastStartedAt'] as const
-
-// Drop runtime fields, returning the config-only shape `mcp.upsert`/`mcp.test`
-// accept. Mirrors stripRuntimeFields from the old UI workspace store.
-function stripRuntimeFields(s: McpServer): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const k of Object.keys(s) as Array<keyof McpServer>) {
-    if ((RUNTIME_KEYS as readonly string[]).includes(k)) continue
-    out[k] = s[k]
-  }
-  return out
+// The transport a source speaks (mcp only carries one; api/local report their kind).
+export function sourceTransport(s: Source): string {
+  if (s.type === 'mcp') return s.mcp.transport ?? 'http'
+  return s.type
 }
 
-const STATUS_VALUES: ReadonlyArray<ConnectionStatus> = [
-  'running',
-  'starting',
-  'idle',
-  'error',
-  'disabled',
-]
-
-const isStatus = (v: unknown): v is ConnectionStatus =>
-  typeof v === 'string' && (STATUS_VALUES as readonly string[]).includes(v)
-
-type McpStatusEvent = {
-  id: string
-  status?: ConnectionStatus
-  lastError?: string
-  tools?: ConnectionTool[]
-  resources?: ConnectionResource[]
-  lastStartedAt?: string
-}
-
-const isStatusEvent = (raw: unknown): raw is McpStatusEvent => {
-  if (!raw || typeof raw !== 'object') return false
-  const p = raw as Record<string, unknown>
-  return typeof p.id === 'string'
-}
-
-type McpStderrEvent = { id: string; line: string }
-
-const isStderrEvent = (raw: unknown): raw is McpStderrEvent => {
-  if (!raw || typeof raw !== 'object') return false
-  const p = raw as Record<string, unknown>
-  return typeof p.id === 'string' && typeof p.line === 'string'
-}
-
-function mockServers(): McpServer[] {
+function mockSources(): Source[] {
   return [
     {
-      id: 'github',
+      id: 'github_00000000',
+      slug: 'github',
       name: 'github',
+      provider: 'github',
       description: 'GitHub MCP — repos, issues, PRs.',
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-github'],
-      env: { GITHUB_PERSONAL_ACCESS_TOKEN: 'secret:GITHUB_PERSONAL_ACCESS_TOKEN' },
+      type: 'mcp',
       enabled: true,
-      autoStart: true,
       timeoutMs: 30000,
       trust: 'prompt',
-      status: 'running',
-      tools: [
-        { name: 'create_issue', description: 'Open a new issue in a repository.' },
-        { name: 'search_repositories', description: 'Search repositories by query.' },
-      ],
-      resources: [],
+      connectionStatus: 'connected',
+      isAuthenticated: true,
+      mcp: {
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-github'],
+        env: { GITHUB_PERSONAL_ACCESS_TOKEN: 'secret:GITHUB_PERSONAL_ACCESS_TOKEN' },
+      },
     },
     {
-      id: 'filesystem',
-      name: 'filesystem',
-      description: 'Local filesystem MCP — read/write within a root.',
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/me/notes'],
-      enabled: true,
-      autoStart: true,
-      timeoutMs: 30000,
-      trust: 'allow',
-      status: 'running',
-      tools: [
-        { name: 'read_file', description: 'Read a file from the allowed root.' },
-        { name: 'write_file', description: 'Write a file inside the allowed root.' },
-      ],
-      resources: [],
-    },
-    {
-      id: 'linear',
+      id: 'linear_00000000',
+      slug: 'linear',
       name: 'linear',
+      provider: 'linear',
       description: 'Linear MCP over HTTP.',
-      transport: 'http',
-      url: 'https://mcp.linear.app/sse',
-      headers: { Authorization: 'secret:LINEAR_KEY' },
+      type: 'mcp',
       enabled: true,
-      autoStart: false,
       timeoutMs: 30000,
       trust: 'prompt',
-      status: 'idle',
-      tools: [],
-      resources: [],
+      connectionStatus: 'needs_auth',
+      isAuthenticated: false,
+      mcp: { transport: 'http', url: 'https://mcp.linear.app/sse', headers: {} },
     },
     {
-      id: 'notion',
+      id: 'notion_00000000',
+      slug: 'notion',
       name: 'notion',
+      provider: 'notion',
       description: 'Notion MCP over HTTP.',
-      transport: 'http',
-      url: 'https://mcp.notion.com',
+      type: 'mcp',
       enabled: false,
-      autoStart: false,
       timeoutMs: 30000,
       trust: 'prompt',
-      status: 'disabled',
-      tools: [],
-      resources: [],
+      connectionStatus: 'untested',
+      mcp: { transport: 'http', url: 'https://mcp.notion.com' },
     },
   ]
 }
@@ -221,104 +226,105 @@ export const useConnectionsStore = defineStore('connections', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const mcpServers = ref<McpServer[]>(sc.available ? [] : mockServers())
-  // 100-line stderr ring buffer per server id, surfaced in the detail Logs view.
-  const mcpStderr = ref<Record<string, string[]>>({})
+  const sources = ref<Source[]>(sc.available ? [] : mockSources())
   const loaded = ref(false)
 
   let unlisten: UnlistenFn | null = null
 
-  // Dashboard-compat derived slice — the only shape the Home tiles bind to.
+  // Dashboard/agent-picker compat slice (id/name/status).
   const servers = computed<Connection[]>(() =>
-    mcpServers.value.map((s) => ({ id: s.id, name: s.name || s.id, status: s.status })),
+    sources.value.map((s) => ({
+      id: s.id,
+      name: s.name || s.slug,
+      status: s.connectionStatus ?? 'untested',
+    })),
   )
 
-  const serverById = (id: string): McpServer | undefined =>
-    mcpServers.value.find((s) => s.id === id)
+  // Alias kept for useProjectLlmDefaults' MCP whitelist (reads id/name/enabled).
+  const mcpServers = computed<Source[]>(() => sources.value)
 
-  // Upsert a snapshot in place (used by the status event + every mutating RPC).
-  function applySnapshot(server: McpServer): void {
-    const idx = mcpServers.value.findIndex((s) => s.id === server.id)
-    if (idx >= 0) mcpServers.value[idx] = server
-    else mcpServers.value.push(server)
+  const sourceBySlug = (slug: string): Source | undefined =>
+    sources.value.find((s) => s.slug === slug)
+
+  // Upsert a source in place (keyed by slug), used by every mutating RPC.
+  function applySource(source: Source): void {
+    const idx = sources.value.findIndex((s) => s.slug === source.slug)
+    if (idx >= 0) sources.value[idx] = source
+    else sources.value.push(source)
   }
 
-  async function loadServers(): Promise<void> {
+  async function loadSources(): Promise<void> {
     if (!available.value) {
       loaded.value = true
       return
     }
     try {
-      const res = await sc.request<{ servers: McpServer[] }>('mcp.list')
-      mcpServers.value = Array.isArray(res.servers) ? res.servers : []
+      const res = await sc.request<{ sources: Source[] }>('source.list')
+      sources.value = Array.isArray(res.sources) ? res.sources : []
     } catch (err) {
-      console.warn('[connections] loadServers failed', err)
+      console.warn('[connections] loadSources failed', err)
     } finally {
       loaded.value = true
       void subscribe()
     }
   }
 
-  // Create-or-update. Strips runtime fields before sending. Browser-dev mutates
-  // the local list only (id auto-filled when blank).
-  async function saveServer(data: McpServerInput): Promise<McpServer> {
-    const isUpdate = mcpServers.value.some((s) => s.id === data.id)
+  // Create-or-update, keyed by slug. Browser-dev mutates the local list only
+  // (id/slug auto-filled when blank).
+  async function saveSource(data: SourceInput): Promise<Source> {
+    const isUpdate = sources.value.some((s) => s.slug === data.slug)
     if (available.value) {
-      const res = await sc.request<{ server: McpServer }>('mcp.upsert', {
-        server: stripRuntimeFields(data),
+      const res = await sc.request<{ source: Source }>('source.upsert', {
+        source: data,
         mode: isUpdate ? 'update' : 'create',
       })
-      applySnapshot(res.server)
-      return res.server
+      applySource(res.source)
+      return res.source
     }
     // Browser-dev fallback.
-    const next: McpServer = { ...data, id: data.id || `mcp${Date.now()}` }
-    applySnapshot(next)
+    const slug = data.slug || `src${Date.now()}`
+    const next: Source = { ...data, slug, id: data.id || `${slug}_00000000` }
+    applySource(next)
     return next
   }
 
-  async function deleteServer(id: string): Promise<void> {
+  async function deleteSource(slug: string): Promise<void> {
     if (available.value) {
       try {
-        await sc.request('mcp.delete', { id })
+        await sc.request('source.delete', { slug })
       } catch (err) {
-        console.warn('[connections] deleteServer failed', err)
+        console.warn('[connections] deleteSource failed', err)
       }
     }
-    mcpServers.value = mcpServers.value.filter((s) => s.id !== id)
-    delete mcpStderr.value[id]
+    sources.value = sources.value.filter((s) => s.slug !== slug)
   }
 
-  async function toggleServer(id: string): Promise<void> {
-    const target = serverById(id)
+  async function toggleSource(slug: string): Promise<void> {
+    const target = sourceBySlug(slug)
     if (!target) return
     const nextEnabled = !target.enabled
     if (available.value) {
-      const res = await sc.request<{ server: McpServer }>('mcp.toggle', {
-        id,
+      const res = await sc.request<{ source: Source }>('source.toggle', {
+        slug,
         enabled: nextEnabled,
       })
-      applySnapshot(res.server)
+      applySource(res.source)
       return
     }
-    // Browser-dev fallback — derive a plausible status.
     target.enabled = nextEnabled
-    if (!nextEnabled) target.status = 'disabled'
-    else target.status = target.autoStart ? 'running' : 'idle'
-    if (nextEnabled) target.lastError = undefined
   }
 
-  async function toggleToolDeny(id: string, toolName: string): Promise<void> {
-    const target = serverById(id)
+  async function toggleToolDeny(slug: string, toolName: string): Promise<void> {
+    const target = sourceBySlug(slug)
     if (!target) return
     const isDenied = target.deniedTools?.includes(toolName) ?? false
     if (available.value) {
-      const res = await sc.request<{ server: McpServer }>('mcp.toggle-tool', {
-        id,
+      const res = await sc.request<{ source: Source }>('source.toggleTool', {
+        slug,
         toolName,
         denied: !isDenied,
       })
-      applySnapshot(res.server)
+      applySource(res.source)
       return
     }
     // Browser-dev fallback — mutate the denied set in place.
@@ -328,24 +334,25 @@ export const useConnectionsStore = defineStore('connections', () => {
     target.deniedTools = next.size > 0 ? [...next].sort() : undefined
   }
 
-  async function restartServer(id: string): Promise<void> {
-    if (available.value) {
-      const res = await sc.request<{ server: McpServer }>('mcp.restart', { id })
-      applySnapshot(res.server)
-      return
-    }
-    const s = serverById(id)
-    if (s) s.status = 'starting'
-  }
-
-  // Ephemeral connection probe — spawns a one-shot MCP handshake and returns the
-  // detected tools/resources without persisting. Browser-dev returns an offline
-  // result so the caller can surface a friendly message.
-  async function testServer(data: McpServerInput): Promise<McpTestResult> {
+  // Test a PERSISTED source by slug (the source must be saved first — the sidecar
+  // persists the outcome back onto the config + auto-enables a clean run). Applies
+  // the refreshed source so status/enabled reflect immediately. Browser-dev
+  // returns an offline outcome.
+  async function testSource(
+    slug: string,
+  ): Promise<{ source: Source | null; outcome: SourceTestOutcome }> {
     if (!available.value) {
-      return { ok: false, error: 'Engine offline — cannot test' }
+      return {
+        source: sourceBySlug(slug) ?? null,
+        outcome: { ok: false, supported: false, status: 'untested', error: 'Engine offline' },
+      }
     }
-    return sc.request<McpTestResult>('mcp.test', { server: stripRuntimeFields(data) })
+    const res = await sc.request<{ source: Source | null; outcome: SourceTestOutcome }>(
+      'source.test',
+      { slug },
+    )
+    if (res.source) applySource(res.source)
+    return res
   }
 
   async function subscribe(): Promise<void> {
@@ -353,31 +360,10 @@ export const useConnectionsStore = defineStore('connections', () => {
     try {
       unlisten = await sc.onEvent((evt) => {
         if (!evt) return
-        if (evt.type === 'mcp.status' && isStatusEvent(evt.payload)) {
-          const p = evt.payload
-          const target = serverById(p.id)
-          if (!target) {
-            // Unseen server (e.g. created out-of-band) → re-hydrate the list.
-            void loadServers()
-            return
-          }
-          if (isStatus(p.status)) target.status = p.status
-          target.lastError = p.lastError
-          if (Array.isArray(p.tools)) target.tools = p.tools
-          if (Array.isArray(p.resources)) target.resources = p.resources
-          if (typeof p.lastStartedAt === 'string') target.lastStartedAt = p.lastStartedAt
-          return
-        }
-        if (evt.type === 'mcp.stderr-line' && isStderrEvent(evt.payload)) {
-          const { id, line } = evt.payload
-          const ring = mcpStderr.value[id] ?? []
-          ring.push(line)
-          if (ring.length > 100) ring.splice(0, ring.length - 100)
-          mcpStderr.value[id] = ring
-          return
-        }
-        if (evt.type === 'mcp-servers.fs-changed') {
-          void loadServers()
+        // A source has no live process — the only channel is the fs watcher, which
+        // fires when a config/guide/permissions file changes out-of-band.
+        if (evt.type === 'sources.fs-changed') {
+          void loadSources()
         }
       })
     } catch {
@@ -388,20 +374,21 @@ export const useConnectionsStore = defineStore('connections', () => {
 
   return {
     // state
-    mcpServers,
-    mcpStderr,
-    servers,
+    sources,
     loaded,
     available,
+    // external-compat getters
+    servers,
+    mcpServers,
     // getters
-    serverById,
+    sourceBySlug,
     // actions
-    loadServers,
-    saveServer,
-    deleteServer,
-    toggleServer,
+    loadSources,
+    loadServers: loadSources,
+    saveSource,
+    deleteSource,
+    toggleSource,
     toggleToolDeny,
-    restartServer,
-    testServer,
+    testSource,
   }
 })

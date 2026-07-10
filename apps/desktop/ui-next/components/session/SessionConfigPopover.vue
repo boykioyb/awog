@@ -130,7 +130,7 @@
               width: '7px',
               height: '7px',
               borderRadius: '50%',
-              background: m.status === 'running' ? 'var(--green)' : 'var(--textFaint)',
+              background: m.status === 'connected' ? 'var(--green)' : 'var(--textFaint)',
             }"
           />
           <span class="mcpn">{{ m.name }}</span>
@@ -213,11 +213,11 @@ const TOOL_GROUPS: [string, string[]][] = [
 ]
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
 
-// Mock MCP list for browser-dev (no bridge). Real servers come from mcp.list.
+// Mock MCP list for browser-dev (no bridge). Real sources come from source.list.
 const MCP_FALLBACK: [string, string][] = [
-  ['github', 'running'],
-  ['filesystem', 'running'],
-  ['linear', 'idle'],
+  ['github', 'connected'],
+  ['filesystem', 'connected'],
+  ['linear', 'needs_auth'],
 ]
 
 const cfgTab = ref<'General' | 'Tools' | 'MCP'>('General')
@@ -268,11 +268,11 @@ onMounted(async () => {
   if (!sc.available) return
   try {
     const res = await sc.request<{
-      servers: { id: string; name: string; enabled: boolean; status: string }[]
-    }>('mcp.list')
-    mcpReal.value = (res.servers ?? [])
+      sources: { id: string; name: string; enabled: boolean; connectionStatus?: string }[]
+    }>('source.list')
+    mcpReal.value = (res.sources ?? [])
       .filter((s) => s.enabled)
-      .map((s) => ({ id: s.id, name: s.name, status: s.status }))
+      .map((s) => ({ id: s.id, name: s.name, status: s.connectionStatus ?? 'untested' }))
   } catch {
     // Leave empty — the MCP tab shows its empty state.
   }

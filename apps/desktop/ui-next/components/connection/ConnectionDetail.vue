@@ -3,11 +3,11 @@
     <!-- header: name + transport tag + status pill + actions -->
     <div class="dh">
       <span class="sdot" :style="{ background: statusColor }" />
-      <div class="dt">{{ server.name || server.id }}</div>
-      <span class="tag mono">{{ server.transport }}</span>
+      <div class="dt">{{ source.name || source.slug }}</div>
+      <span class="tag mono">{{ transport }}</span>
       <span class="chip cnd-status">
         <span class="cnd-statusdot" :style="{ background: statusColor }" />
-        {{ t('connections.status.' + server.status) }}
+        {{ t('connections.status.' + status) }}
       </span>
       <span style="flex: 1" />
       <button
@@ -22,14 +22,6 @@
           style="width: 14px; height: 14px"
         />
       </button>
-      <button
-        v-if="server.enabled"
-        class="iconbtn cnd-act"
-        :title="t('connections.detail.restart')"
-        @click="emit('restart')"
-      >
-        <Icon name="refresh" style="width: 14px; height: 14px" />
-      </button>
       <button class="iconbtn cnd-act" :title="t('connections.detail.edit')" @click="emit('edit')">
         <Icon name="edit" style="width: 14px; height: 14px" />
       </button>
@@ -43,7 +35,7 @@
     </div>
 
     <div class="dscroll">
-      <p v-if="server.description" class="cnd-desc">{{ server.description }}</p>
+      <p v-if="source.description" class="cnd-desc">{{ source.description }}</p>
 
       <!-- test result banner -->
       <div v-if="testResult" class="cnd-banner" :class="{ ok: bannerOk, err: !bannerOk }">
@@ -68,12 +60,12 @@
         </div>
       </div>
 
-      <!-- last error banner -->
-      <div v-if="server.lastError" class="cnd-banner err">
+      <!-- persisted connection error (from the last test) -->
+      <div v-if="source.connectionError" class="cnd-banner err">
         <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
         <div class="cnd-banner-body">
           <div class="cnd-banner-title">{{ t('connections.detail.lastError') }}</div>
-          <div class="mono cnd-banner-sum">{{ server.lastError }}</div>
+          <div class="mono cnd-banner-sum">{{ source.connectionError }}</div>
         </div>
       </div>
 
@@ -83,20 +75,18 @@
           <span class="cnd-ctl-label">{{ t('connections.detail.enabled') }}</span>
           <span
             class="tog2 sm"
-            :class="{ off: !server.enabled }"
+            :class="{ off: !source.enabled }"
             :title="t('connections.enableToggle')"
             @click="emit('toggle')"
           />
         </div>
         <div class="cnd-ctl">
-          <span class="cnd-ctl-label">{{ t('connections.detail.autoStart') }}</span>
-          <span class="chip">
-            {{ server.autoStart ? t('connections.detail.on') : t('connections.detail.onDemand') }}
-          </span>
+          <span class="cnd-ctl-label">{{ t('connections.detail.trust') }}</span>
+          <span class="chip">{{ source.trust }}</span>
         </div>
         <div class="cnd-ctl">
-          <span class="cnd-ctl-label">{{ t('connections.detail.trust') }}</span>
-          <span class="chip">{{ server.trust }}</span>
+          <span class="cnd-ctl-label">{{ t('connections.detail.lastTested') }}</span>
+          <span class="chip">{{ lastTestedLabel }}</span>
         </div>
       </div>
 
@@ -112,7 +102,7 @@
 
       <!-- tools (per-tool deny) -->
       <div class="sech">{{ toolsTitle }}</div>
-      <div v-if="server.tools.length === 0" class="fd">{{ t('connections.detail.noTools') }}</div>
+      <div v-if="toolRows.length === 0" class="fd">{{ t('connections.detail.noTools') }}</div>
       <template v-else>
         <div class="cnd-toolsearch">
           <Icon name="search" style="width: 13px; height: 13px; color: var(--textDim)" />
@@ -161,26 +151,6 @@
         </div>
       </template>
 
-      <!-- resources -->
-      <template v-if="server.resources.length">
-        <div class="sech">
-          {{ t('connections.detail.resources', { n: server.resources.length }) }}
-        </div>
-        <div class="cnd-tools">
-          <div v-for="res in server.resources" :key="res.uri" class="cnd-res">
-            <Icon name="tag" style="width: 11px; height: 11px; flex: 0 0 auto" />
-            <span class="mono cnd-res-uri">{{ res.uri }}</span>
-            <span class="cnd-res-mime">{{ res.mime }}</span>
-          </div>
-        </div>
-      </template>
-
-      <!-- logs (stderr ring buffer) -->
-      <template v-if="stderr.length">
-        <div class="sech">{{ t('connections.detail.logs', { n: stderr.length }) }}</div>
-        <pre class="cnd-pre cnd-logs">{{ stderr.join('\n') }}</pre>
-      </template>
-
       <!-- secret note -->
       <div class="sech">{{ t('connections.sech.secret') }}</div>
       <div class="fd">
@@ -193,51 +163,59 @@
 </template>
 
 <script setup lang="ts">
-// Connection (MCP) detail pane — port of the old UI McpDetail logic, rendered in
-// prototype CSS (.dh header + .dscroll body, matching skills/agents detail).
-// Status pill + transport tag in the header; per-server enable/restart/test +
-// per-tool deny actions emit to the page; secret values are masked on display.
+// Source detail pane (ADR 0060 P1) — rewired from the old McpDetail. There is no
+// live process: the status pill reflects the PERSISTED `connectionStatus` (last
+// `source.test`/auth result), and there is no restart / stderr-logs section. The
+// Test button runs `source.test` against the already-persisted source and, on a
+// clean run, surfaces the detected tools so they can be denied per-tool.
 import { computed, ref, watch } from 'vue'
-import type {
-  ConnectionStatus,
-  ConnectionTool,
-  McpServer,
-  McpTestResult,
-} from '~/stores/connections'
+import type { Source, SourceConnectionStatus, SourceTestOutcome } from '~/stores/connections'
+import { sourceTransport } from '~/stores/connections'
 
 const props = defineProps<{
-  server: McpServer
-  stderr: string[]
+  source: Source
 }>()
 
 const emit = defineEmits<{
   edit: []
   delete: []
   toggle: []
-  restart: []
   'toggle-tool': [toolName: string]
-  test: [done: (result: McpTestResult) => void]
+  test: [done: (outcome: SourceTestOutcome) => void]
 }>()
 
 const { t } = useI18n()
 
-const STATUS_COLORS: Record<ConnectionStatus, string> = {
-  running: 'var(--green)',
-  starting: 'var(--amber)',
-  idle: 'var(--textDim)',
-  error: 'var(--danger)',
-  disabled: 'var(--textFaint)',
+const STATUS_COLORS: Record<SourceConnectionStatus, string> = {
+  connected: 'var(--green)',
+  needs_auth: 'var(--amber)',
+  failed: 'var(--danger)',
+  untested: 'var(--textDim)',
+  local_disabled: 'var(--textFaint)',
 }
-const statusColor = computed(() => STATUS_COLORS[props.server.status])
+const status = computed<SourceConnectionStatus>(() => props.source.connectionStatus ?? 'untested')
+const statusColor = computed(() => STATUS_COLORS[status.value])
+const transport = computed(() => sourceTransport(props.source))
+
+const lastTestedLabel = computed(() => {
+  const at = props.source.lastTestedAt
+  if (!at) return t('connections.detail.testedNever')
+  return new Date(at).toLocaleString()
+})
 
 // --- configuration summary ------------------------------------------------
 const configSummary = computed(() => {
-  if (props.server.transport === 'stdio') {
-    const cmd = props.server.command ?? ''
-    const args = (props.server.args ?? []).join(' ')
-    return [cmd, args].filter(Boolean).join(' ') || '—'
+  const s = props.source
+  if (s.type === 'mcp') {
+    if ((s.mcp.transport ?? 'http') === 'stdio') {
+      const cmd = s.mcp.command ?? ''
+      const args = (s.mcp.args ?? []).join(' ')
+      return [cmd, args].filter(Boolean).join(' ') || '—'
+    }
+    return s.mcp.url ?? '—'
   }
-  return props.server.url ?? '—'
+  if (s.type === 'api') return s.api.baseUrl || '—'
+  return s.local.path || '—'
 })
 
 // Mask secret-ish values on display (placeholder refs + token-named keys).
@@ -256,41 +234,59 @@ const maskSecret = (key: string, raw: string): string => {
 }
 
 const configRows = computed<{ key: string; value: string }[]>(() => {
+  const s = props.source
   const rows: { key: string; value: string }[] = []
-  if (props.server.transport === 'stdio') {
-    if (props.server.cwd) rows.push({ key: 'cwd', value: props.server.cwd })
-    for (const [k, v] of Object.entries(props.server.env ?? {})) {
-      rows.push({ key: `env.${k}`, value: maskSecret(k, v) })
+  if (s.type === 'mcp') {
+    if ((s.mcp.transport ?? 'http') === 'stdio') {
+      if (s.mcp.cwd) rows.push({ key: 'cwd', value: s.mcp.cwd })
+      for (const [k, v] of Object.entries(s.mcp.env ?? {})) {
+        rows.push({ key: `env.${k}`, value: maskSecret(k, v) })
+      }
+    } else {
+      for (const [k, v] of Object.entries(s.mcp.headers ?? {})) {
+        rows.push({ key: `header.${k}`, value: maskSecret(k, v) })
+      }
     }
-  } else {
-    for (const [k, v] of Object.entries(props.server.headers ?? {})) {
-      rows.push({ key: `header.${k}`, value: maskSecret(k, v) })
-    }
+  } else if (s.type === 'api') {
+    rows.push({ key: 'authType', value: s.api.authType })
   }
-  rows.push({ key: 'timeoutMs', value: String(props.server.timeoutMs) })
+  rows.push({ key: 'timeoutMs', value: String(s.timeoutMs) })
   return rows
 })
 
 // --- tools ----------------------------------------------------------------
+// A source has no persisted tools list — the deny-list shows tools detected by
+// the most recent Test in this session, unioned with any already-denied names so
+// an existing deny is always visible/reversible even before a fresh test.
+const detectedTools = ref<{ name: string; description: string }[]>([])
+const toolRows = computed<{ name: string; description: string }[]>(() => {
+  const byName = new Map<string, { name: string; description: string }>()
+  for (const tool of detectedTools.value) byName.set(tool.name, tool)
+  for (const name of props.source.deniedTools ?? []) {
+    if (!byName.has(name)) byName.set(name, { name, description: '' })
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+})
+
 const toolFilter = ref('')
-const filteredTools = computed<ConnectionTool[]>(() => {
+const filteredTools = computed(() => {
   const q = toolFilter.value.trim().toLowerCase()
-  if (!q) return props.server.tools
-  return props.server.tools.filter(
+  if (!q) return toolRows.value
+  return toolRows.value.filter(
     (tool) => tool.name.toLowerCase().includes(q) || tool.description.toLowerCase().includes(q),
   )
 })
-const deniedCount = computed(() => props.server.deniedTools?.length ?? 0)
+const deniedCount = computed(() => props.source.deniedTools?.length ?? 0)
 const toolsTitle = computed(() => {
-  const total = props.server.tools.length
+  const total = toolRows.value.length
   if (deniedCount.value === 0) return t('connections.detail.toolsCount', { n: total })
   return t('connections.detail.toolsDenied', { n: total, d: deniedCount.value })
 })
-const isDenied = (name: string): boolean => props.server.deniedTools?.includes(name) ?? false
+const isDenied = (name: string): boolean => props.source.deniedTools?.includes(name) ?? false
 
 // --- test -----------------------------------------------------------------
 const testing = ref(false)
-const testResult = ref<McpTestResult | null>(null)
+const testResult = ref<SourceTestOutcome | null>(null)
 const testSummary = computed(() => {
   const r = testResult.value
   if (!r) return ''
@@ -327,21 +323,23 @@ const onTest = () => {
   if (testing.value) return
   testing.value = true
   testResult.value = null
-  emit('test', (result: McpTestResult) => {
-    testResult.value = result
+  emit('test', (outcome: SourceTestOutcome) => {
+    testResult.value = outcome
+    if (outcome.tools) detectedTools.value = outcome.tools
     testing.value = false
   })
 }
 
 // The detail pane is a single reused instance (LibraryView slot is not keyed),
-// so transient per-connection state must reset when the shown server changes —
-// otherwise one connection's "Connection OK" banner / tool filter leaks onto the next.
+// so transient per-source state must reset when the shown source changes —
+// otherwise one source's banner / detected tools leak onto the next.
 watch(
-  () => props.server.id,
+  () => props.source.slug,
   () => {
     testResult.value = null
     testing.value = false
     toolFilter.value = ''
+    detectedTools.value = []
   },
 )
 </script>
@@ -433,9 +431,6 @@ watch(
   max-height: 8rem;
   overflow-y: auto;
   white-space: pre-wrap;
-}
-.cnd-logs {
-  max-height: 12rem;
 }
 .cnd-controls {
   display: grid;
@@ -559,29 +554,6 @@ watch(
 .cnd-tool-btn.denied {
   color: var(--danger);
   border-color: var(--dangerBorder);
-}
-.cnd-res {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 11px;
-  border-radius: 9px;
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-}
-.cnd-res-uri {
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
-  font-size: 0.8846rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cnd-res-mime {
-  font-size: 0.8462rem;
-  color: var(--textDim);
 }
 .spin {
   animation: cnd-spin 0.9s linear infinite;
