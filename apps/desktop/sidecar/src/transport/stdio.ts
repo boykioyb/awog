@@ -54,7 +54,13 @@ export function resolveHostResponse(rid: number, result: unknown, error?: HostEr
   else pending.resolve(result)
 }
 
-export function startStdioLoop(onLine: LineHandler): Interface {
+export function startStdioLoop(
+  onLine: LineHandler,
+  // Called on stdin close so the caller can flush durable state (e.g. pending session
+  // writes) BEFORE the process exits. When omitted we exit immediately (back-compat).
+  // When provided, the handler owns the exit — we do not call process.exit here.
+  onClose?: () => void | Promise<void>,
+): Interface {
   const rl = createInterface({
     input: process.stdin,
     crlfDelay: Infinity,
@@ -71,10 +77,11 @@ export function startStdioLoop(onLine: LineHandler): Interface {
     })
   })
 
-  // Tauri exit → stdin close → graceful shutdown (ADR 0008).
+  // Host exit → stdin close → graceful shutdown (ADR 0008).
   rl.on('close', () => {
     log.info('stdin closed, shutting down')
-    process.exit(0)
+    if (onClose) void onClose()
+    else process.exit(0)
   })
 
   return rl

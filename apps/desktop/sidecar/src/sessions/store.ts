@@ -1,604 +1,150 @@
-// Event-sourced session storage. Each session lives in its own JSONL file at
-// ~/.awog/sessions/<sessionId>.jsonl — every line is exactly one append-only
-// SessionEvent. Snapshots are derived by folding the event log on load; this
-// keeps writes O(1) and crash-safe (partial last line is skipped by fold).
+// Session storage facade (craft-parity single-file JSONL, ADR 0061 storage phase).
 //
-// Delete is logical: a `session.deleted` event marks the file as tombstoned
-// but the file itself is preserved for forensics. A future `sessions.purge`
-// command can physically remove tombstoned files.
+// This module used to BE the event-sourced store (one append-only SessionEvent per
+// line, folded on load). It has been CUT OVER to a thin facade over `sessionManager`
+// + the single-file header+messages format (sessions/jsonl.ts + session-manager.ts):
+// line 1 is a SessionHeader with pre-computed list fields, lines 2+ are the messages.
+//
+// The exported function names + signatures are preserved so every consumer
+// (methods/sessions.*.ts, activity.summary.ts, dashboard.usage.ts, usage/rollup.ts)
+// compiles unchanged. Each entry point awaits `sessionManager.ensureLoaded()` first,
+// which runs the legacy→new migration + loadAllFromDisk exactly once — so the Map is
+// populated (and its startup clear() has already happened) before any read or write.
 
-import { mkdir, readdir, appendFile, readFile, writeFile, rename, open } from 'node:fs/promises'
-import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
-import { join } from 'node:path'
-import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import type {
   Session,
   SessionCompaction,
   SessionMessage,
-  SessionRestingStatus,
-  SessionStep,
   SessionSummary,
 } from '../types/shared.js'
+import { readSessionJsonl, readSessionMessages, sessionFilePath } from './jsonl.js'
+import { sessionManager, type SessionMetadataPatch } from './session-manager.js'
 
-type SessionMetadataPatch = Partial<
-  Pick<
-    Session,
-    | 'title'
-    | 'pinned'
-    | 'projectId'
-    | 'settings'
-    | 'invitedAgentIds'
-    | 'disabledTools'
-    | 'mcpServerIds'
-    | 'aboutTaskId'
-    | 'aboutGhUrl'
-    | 'pinnedContext'
-    | 'workspaceFolder'
-    | 'budget'
-    | 'parentSessionId'
-    | 'forkFromMessageId'
-    | 'sdkSessionId'
-  >
->
+// ─── CRUD facade ──────────────────────────────────────────────────────────────
 
-export type SessionEvent =
-  | { type: 'session.created'; at: string; session: Session }
-  | { type: 'session.metadata.updated'; at: string; patch: SessionMetadataPatch }
-  | { type: 'message.appended'; at: string; message: SessionMessage }
-  // Byte-minimal mid-stream partial (root fix for O(steps²) JSONL bloat). Carries
-  // ONLY the text + steps appended SINCE the previous progress event for this
-  // message id — never the whole growing message. The final `message.appended`
-  // (same id) then replaces the delta-accumulated partial with the authoritative
-  // snapshot. Pre-fix every throttled snapshot re-serialised the full steps[]
-  // array, so one 491-step turn grew a session file to 1.2 GB — past V8's max
-  // string length, which made the file unreadable and the session vanish from
-  // the UI list. Crash-safety is preserved: a hard kill mid-turn leaves the
-  // accumulated deltas, which the fold replays into a partial reply.
-  | { type: 'message.progress'; at: string; id: string; textDelta?: string; steps?: SessionStep[] }
-  // Drop every message AFTER `keepThroughId` (inclusive of that message — it is
-  // kept). `null` empties the transcript. Backs edit-and-resend / regenerate
-  // (sessions.truncate RPC) and the conversation half of Rewind. Append-only:
-  // the dropped lines stay in the file but the fold rebuilds the shorter list.
-  | { type: 'session.truncated'; at: string; keepThroughId: string | null }
-  // Context-compaction checkpoint (ADR 0047). Records the summary of older turns
-  // and the id of the first message kept verbatim. Does NOT touch `messages` —
-  // the full transcript stays for the UI; only the model context is cut (in
-  // buildContext). Latest event wins (a later compaction subsumes the prior).
-  | { type: 'session.compacted'; at: string; compaction: SessionCompaction }
-  | { type: 'session.deleted'; at: string }
-
-const SESSIONS_DIR_NAME = sanitizeChild('sessions')
-
-function sessionsDir(): string {
-  return join(awogHome(), SESSIONS_DIR_NAME)
-}
-
-function sessionFile(id: string): string {
-  // sanitizeChild rejects '/', '\\', '..'. Defence in depth even though
-  // callers should already validate sessionId at the RPC boundary.
-  const safe = sanitizeChild(id)
-  return join(sessionsDir(), `${safe}.jsonl`)
-}
-
-async function ensureDir(): Promise<void> {
-  await mkdir(sessionsDir(), { recursive: true, mode: 0o700 })
-}
-
-interface FsError extends Error {
-  code?: string
-}
-
-function isMissing(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as FsError).code === 'ENOENT'
-}
-
-// Per-session in-memory lock to serialise concurrent appends from the same
-// process. Node fs append is atomic per write on POSIX up to PIPE_BUF, but we
-// also do read-then-fold elsewhere and want a consistent ordering guarantee.
-const SESSION_LOCKS = new Map<string, Promise<unknown>>()
-
-async function withLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
-  const prev = SESSION_LOCKS.get(id) ?? Promise.resolve()
-  const next = prev.then(fn, fn) as Promise<T>
-  SESSION_LOCKS.set(id, next)
-  try {
-    return await next
-  } finally {
-    if (SESSION_LOCKS.get(id) === next) SESSION_LOCKS.delete(id)
-  }
-}
-
-function parseLine(line: string, file: string, lineNo: number): SessionEvent | null {
-  const trimmed = line.trim()
-  if (!trimmed) return null
-  try {
-    return JSON.parse(trimmed) as SessionEvent
-  } catch (err) {
-    log.warn('jsonl: bad line skipped', {
-      file,
-      lineNo,
-      err: err instanceof Error ? err.message : String(err),
-    })
-    return null
-  }
-}
-
-type FoldState = { snapshot: Session | null; deleted: boolean }
-
-// Apply one event to the running fold state, in place. Extracted so the same
-// reducer drives both the in-memory `fold` and the streaming `foldFile`.
-function applyEvent(state: FoldState, e: SessionEvent): void {
-  if (e.type === 'session.created') {
-    state.snapshot = { ...e.session, messages: [...(e.session.messages ?? [])] }
-  } else if (e.type === 'session.metadata.updated') {
-    if (!state.snapshot) return
-    state.snapshot = { ...state.snapshot, ...e.patch, updatedAt: e.at }
-  } else if (e.type === 'message.appended') {
-    if (!state.snapshot) return
-    const current = state.snapshot
-    // Upsert by message id. A turn may be appended several times — the user
-    // message once, then the assistant message as partial → … → final snapshot
-    // (same id) so a cancel/crash mid-stream still persists the truncated
-    // reply. Replacing in place keeps order; last write wins. Legacy logs have
-    // a unique id per event, so this collapses to a plain push for them.
-    const idx = current.messages.findIndex((m) => m.id === e.message.id)
-    const messages =
-      idx >= 0
-        ? current.messages.map((m, i) => (i === idx ? e.message : m))
-        : [...current.messages, e.message]
-    state.snapshot = { ...current, messages, updatedAt: e.at }
-  } else if (e.type === 'message.progress') {
-    if (!state.snapshot) return
-    const current = state.snapshot
-    const idx = current.messages.findIndex((m) => m.id === e.id)
-    // Lazily materialise the assistant message on the first delta so a crash
-    // before any `message.appended` still surfaces the partial reply.
-    const base: SessionMessage =
-      idx >= 0 ? current.messages[idx] : { id: e.id, role: 'agent', text: '', at: e.at }
-    let steps = base.steps
-    if (e.steps && e.steps.length) {
-      // Merge step deltas by id (a running → done re-emit replaces in place).
-      const merged = [...(base.steps ?? [])]
-      for (const s of e.steps) {
-        const si = merged.findIndex((x) => x.id === s.id)
-        if (si >= 0) merged[si] = s
-        else merged.push(s)
-      }
-      steps = merged
-    }
-    const next: SessionMessage = {
-      ...base,
-      text: (base.text ?? '') + (e.textDelta ?? ''),
-      at: e.at,
-      ...(steps && steps.length ? { steps } : {}),
-    }
-    const messages =
-      idx >= 0
-        ? current.messages.map((m, i) => (i === idx ? next : m))
-        : [...current.messages, next]
-    state.snapshot = { ...current, messages, updatedAt: e.at }
-  } else if (e.type === 'session.truncated') {
-    if (!state.snapshot) return
-    // `current` has sdkSessionId dropped: a real truncation rewrites history, so
-    // the Claude SDK resume handle is stale (the SDK store still holds the removed
-    // turns). Dropping it makes the next Claude turn seed a fresh SDK session from
-    // the truncated JSONL (ADR 0058). state.snapshot is only reassigned when we
-    // actually truncate; an unknown keepThroughId leaves it untouched (so the
-    // sdkSessionId is preserved on a stale/garbage event).
-    const { sdkSessionId: _staleSdk, ...current } = state.snapshot
-    if (e.keepThroughId === null) {
-      state.snapshot = { ...current, messages: [], updatedAt: e.at }
-    } else {
-      const idx = current.messages.findIndex((m) => m.id === e.keepThroughId)
-      // Unknown id → no-op (never silently drop the whole transcript on a
-      // stale/garbage event). Found → keep up to and including it.
-      if (idx >= 0) {
-        state.snapshot = { ...current, messages: current.messages.slice(0, idx + 1), updatedAt: e.at }
-      }
-    }
-  } else if (e.type === 'session.compacted') {
-    if (!state.snapshot) return
-    // Drop sdkSessionId: a compaction supersedes the Claude SDK session (its store
-    // still holds the full pre-compaction history). Clearing it makes the next
-    // Claude turn re-seed a FRESH SDK session from [summary + kept turns] (ADR
-    // 0058); no-op for the Pi path (which has no sdkSessionId).
-    const { sdkSessionId: _supersededSdk, ...current } = state.snapshot
-    // Defence: only accept a checkpoint whose cut point still exists in the
-    // transcript (never strand the runtime on a dangling id). Messages stay
-    // untouched — the cut is applied in buildContext (Pi) / re-seed (SDK), not here.
-    const known = current.messages.some((m) => m.id === e.compaction.firstKeptMessageId)
-    if (known) state.snapshot = { ...current, compaction: e.compaction, updatedAt: e.at }
-  } else if (e.type === 'session.deleted') {
-    state.deleted = true
-  }
-}
-
-// Stream the JSONL line-by-line and fold incrementally. Streaming (not
-// `readFile(..., 'utf8')`) is mandatory: a single string is capped at V8's
-// MAX_STRING_LENGTH (~512 MB), so a large session file would throw
-// `Invalid string length` and — caught in listSessions — silently disappear
-// from the UI. readline also bounds peak memory to the folded snapshot, not the
-// whole file.
-async function foldFile(file: string): Promise<Session | null> {
-  const state: FoldState = { snapshot: null, deleted: false }
-  const rl = createInterface({
-    input: createReadStream(file, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  })
-  let lineNo = 0
-  for await (const line of rl) {
-    lineNo += 1
-    const evt = parseLine(line, file, lineNo)
-    if (evt) applyEvent(state, evt)
-  }
-  return state.deleted ? null : state.snapshot
-}
-
+// Full session (with messages), or null when missing/deleted. Lazy-loads the
+// transcript on first access; the runner's resume path folds this when the UI
+// sends an empty history array.
 export async function loadSession(id: string): Promise<Session | null> {
-  const file = sessionFile(id)
-  try {
-    return await foldFile(file)
-  } catch (err) {
-    if (isMissing(err)) return null
-    throw err
-  }
-}
-
-// Newest first. updatedAt is ISO-8601 so lexicographic sort matches time order.
-function byUpdatedDesc(a: { updatedAt: string; createdAt: string }, b: typeof a): number {
-  const ta = a.updatedAt || a.createdAt
-  const tb = b.updatedAt || b.createdAt
-  if (ta === tb) return 0
-  return ta < tb ? 1 : -1
-}
-
-// Fold EVERY session file into a full Session (with messages). Heavy — reads all
-// transcripts — so this is for on-demand full-text search only (sessions.search).
-// The list/startup path uses listSessionSummaries (the index) instead (ADR 0048).
-export async function listFullSessions(): Promise<Session[]> {
-  let entries: string[]
-  try {
-    entries = await readdir(sessionsDir())
-  } catch (err) {
-    if (isMissing(err)) return []
-    throw err
-  }
-  const sessions: Session[] = []
-  for (const name of entries) {
-    if (!name.endsWith('.jsonl')) continue
-    const file = join(sessionsDir(), name)
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      const snap = await foldFile(file)
-      if (snap) sessions.push(snap)
-    } catch (err) {
-      log.warn('jsonl: failed to read session file', {
-        file,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-  sessions.sort(byUpdatedDesc)
-  return sessions
-}
-
-// ─── Session index (ADR 0048) ──────────────────────────────────────────────
-// Derived cache of SessionSummary[] at ~/.awog/sessions/index.json so the list
-// reads KB instead of folding every transcript. Updated incrementally on
-// appendEvent; rebuilt by folding all files only when missing/corrupt.
-
-const INDEX_FILE_NAME = 'index.json'
-const PREVIEW_MAX = 140
-
-function indexFile(): string {
-  return join(sessionsDir(), INDEX_FILE_NAME)
-}
-
-// Resting status of a session from its LAST message — the sidecar mirror of the
-// UI's statusFromMessages (stores/sessions.ts). An error turn → 'error'; an
-// UNANSWERED top-level AskUserQuestion → 'awaiting' (subagent questions carry
-// parentId and never gate the whole session); any other finished agent turn →
-// 'done'; a trailing user/system message with history → 'done'; no messages →
-// 'idle'. Never 'streaming' — that is live-only. Deriving from the last message
-// is exact because appends/upserts always target the tail.
-function statusFromLast(last: SessionMessage | undefined): SessionRestingStatus {
-  if (!last) return 'idle'
-  if (last.role !== 'agent') return 'done'
-  if (last.error) return 'error'
-  const awaiting = last.steps?.some(
-    (st) =>
-      !st.parentId &&
-      st.kind === 'question' &&
-      (st.questions?.length ?? 0) > 0 &&
-      !(st.answers?.length ?? 0),
-  )
-  return awaiting ? 'awaiting' : 'done'
-}
-
-function summarize(s: Session): SessionSummary {
-  const last = s.messages[s.messages.length - 1]
-  const summary: SessionSummary = {
-    id: s.id,
-    title: s.title,
-    projectId: s.projectId,
-    createdAt: s.createdAt,
-    updatedAt: s.updatedAt,
-    invitedAgentIds: s.invitedAgentIds ?? [],
-    pendingAgentIds: s.pendingAgentIds ?? [],
-    settings: s.settings,
-    messageCount: s.messages.length,
-    status: statusFromLast(last),
-  }
-  if (s.pinned !== undefined) summary.pinned = s.pinned
-  if (s.disabledTools !== undefined) summary.disabledTools = s.disabledTools
-  if (s.mcpServerIds !== undefined) summary.mcpServerIds = s.mcpServerIds
-  if (s.aboutTaskId !== undefined) summary.aboutTaskId = s.aboutTaskId
-  if (s.aboutGhUrl !== undefined) summary.aboutGhUrl = s.aboutGhUrl
-  if (s.parentSessionId !== undefined) summary.parentSessionId = s.parentSessionId
-  if (s.compaction) summary.hasCompaction = true
-  if (last?.text) summary.lastPreview = last.text.slice(0, PREVIEW_MAX)
-  return summary
-}
-
-// In-memory authoritative copy once loaded; null = not yet loaded this process.
-let indexCache: Map<string, SessionSummary> | null = null
-// Serialise writes to the single shared index.json (cross-session).
-let indexFlushChain: Promise<unknown> = Promise.resolve()
-
-function flushIndex(): Promise<void> {
-  const snapshot = indexCache ? [...indexCache.values()] : []
-  const next = indexFlushChain.then(async () => {
-    await ensureDir()
-    const tmp = `${indexFile()}.${process.pid}.tmp`
-    await writeFile(tmp, JSON.stringify(snapshot), { encoding: 'utf8', mode: 0o600 })
-    await rename(tmp, indexFile())
-  })
-  indexFlushChain = next.catch(() => undefined)
-  return next
-}
-
-async function rebuildIndex(): Promise<Map<string, SessionSummary>> {
-  const map = new Map<string, SessionSummary>()
-  let entries: string[]
-  try {
-    entries = await readdir(sessionsDir())
-  } catch (err) {
-    if (isMissing(err)) {
-      indexCache = map
-      return map
-    }
-    throw err
-  }
-  for (const name of entries) {
-    if (!name.endsWith('.jsonl')) continue
-    const file = join(sessionsDir(), name)
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      const snap = await foldFile(file)
-      if (snap) map.set(snap.id, summarize(snap))
-    } catch (err) {
-      log.warn('index: failed to fold session during rebuild', {
-        file,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-  indexCache = map
-  await flushIndex()
-  return map
-}
-
-async function loadIndex(): Promise<Map<string, SessionSummary>> {
-  if (indexCache) return indexCache
-  let raw: string
-  try {
-    raw = await readFile(indexFile(), 'utf8')
-  } catch (err) {
-    if (isMissing(err)) return rebuildIndex()
-    throw err
-  }
-  try {
-    const arr: unknown = JSON.parse(raw)
-    if (!Array.isArray(arr)) throw new Error('index.json is not an array')
-    // Backfill: `status` (resting session state) was added after index.json
-    // shipped. A cache written before it lacks the field on every row → re-fold
-    // once so existing sessions badge awaiting/error/done in the list without
-    // being opened. One-time cost on upgrade (same as a first-run rebuild).
-    const needsStatus = (arr as SessionSummary[]).some(
-      (s) => s && typeof s.id === 'string' && s.status === undefined,
-    )
-    if (needsStatus) return rebuildIndex()
-    const map = new Map<string, SessionSummary>()
-    for (const s of arr as SessionSummary[]) {
-      if (s && typeof s.id === 'string') map.set(s.id, s)
-    }
-    indexCache = map
-    return map
-  } catch (err) {
-    log.warn('index: corrupt index.json, rebuilding', {
-      err: err instanceof Error ? err.message : String(err),
-    })
-    return rebuildIndex()
-  }
-}
-
-// Apply one just-appended event to the in-memory index, then flush. Mirrors
-// applyEvent but only the list projection. Rare events (truncate/compact) re-fold
-// the one file for an exact messageCount. Returns without flushing for events
-// that don't affect the list (e.g. message.progress).
-async function touchIndex(sessionId: string, evt: SessionEvent): Promise<void> {
-  const map = await loadIndex()
-  const prev = map.get(sessionId)
-  if (evt.type === 'session.created') {
-    map.set(evt.session.id, summarize({ ...evt.session, messages: evt.session.messages ?? [] }))
-  } else if (evt.type === 'session.metadata.updated') {
-    if (!prev) return
-    map.set(sessionId, {
-      ...prev,
-      ...(evt.patch.title !== undefined ? { title: evt.patch.title } : {}),
-      ...(evt.patch.projectId !== undefined ? { projectId: evt.patch.projectId } : {}),
-      ...(evt.patch.settings !== undefined ? { settings: evt.patch.settings } : {}),
-      ...(evt.patch.pinned !== undefined ? { pinned: evt.patch.pinned } : {}),
-      ...(evt.patch.invitedAgentIds !== undefined
-        ? { invitedAgentIds: evt.patch.invitedAgentIds }
-        : {}),
-      ...(evt.patch.disabledTools !== undefined ? { disabledTools: evt.patch.disabledTools } : {}),
-      ...(evt.patch.mcpServerIds !== undefined ? { mcpServerIds: evt.patch.mcpServerIds } : {}),
-      ...(evt.patch.aboutTaskId !== undefined ? { aboutTaskId: evt.patch.aboutTaskId } : {}),
-      ...(evt.patch.aboutGhUrl !== undefined ? { aboutGhUrl: evt.patch.aboutGhUrl } : {}),
-      ...(evt.patch.parentSessionId !== undefined
-        ? { parentSessionId: evt.patch.parentSessionId }
-        : {}),
-      updatedAt: evt.at,
-    })
-  } else if (evt.type === 'message.appended') {
-    if (!prev) return
-    // The appended message is always the tail (append or in-place upsert of the
-    // last message), so its resting status is the session's — recompute it here so
-    // a finished/errored/parked turn updates the list badge without a full re-fold.
-    map.set(sessionId, {
-      ...prev,
-      updatedAt: evt.at,
-      messageCount: prev.messageCount + 1,
-      status: statusFromLast(evt.message),
-      ...(evt.message.text ? { lastPreview: evt.message.text.slice(0, PREVIEW_MAX) } : {}),
-    })
-  } else if (evt.type === 'session.truncated' || evt.type === 'session.compacted') {
-    const snap = await foldFile(sessionFile(sessionId))
-    if (snap) map.set(sessionId, summarize(snap))
-    else map.delete(sessionId)
-  } else if (evt.type === 'session.deleted') {
-    map.delete(sessionId)
-  } else {
-    return // message.progress / anything else: not list-relevant
-  }
-  await flushIndex()
-}
-
-export async function listSessionSummaries(): Promise<SessionSummary[]> {
-  const map = await loadIndex()
-  return [...map.values()].sort(byUpdatedDesc)
-}
-
-export async function appendEvent(sessionId: string, evt: SessionEvent): Promise<void> {
-  await withLock(sessionId, async () => {
-    await ensureDir()
-    const file = sessionFile(sessionId)
-    await appendFile(file, `${JSON.stringify(evt)}\n`, { encoding: 'utf8', mode: 0o600 })
-  })
-  // Keep the list index in sync (ADR 0048), after the event is durably appended.
-  // Best-effort: the index is a derived cache, so a failure here never blocks the
-  // write — listSessionSummaries can always rebuild from the JSONL files.
-  try {
-    await touchIndex(sessionId, evt)
-  } catch (err) {
-    log.warn('index: touch failed', {
-      sessionId,
-      type: evt.type,
-      err: err instanceof Error ? err.message : String(err),
-    })
-  }
+  await sessionManager.ensureLoaded()
+  return sessionManager.getSession(id)
 }
 
 export async function createSession(session: Session): Promise<void> {
-  const evt: SessionEvent = {
-    type: 'session.created',
-    at: new Date().toISOString(),
-    session,
-  }
-  await appendEvent(session.id, evt)
+  await sessionManager.ensureLoaded()
+  await sessionManager.createSession(session)
 }
 
 export async function updateSessionMetadata(
   id: string,
   patch: SessionMetadataPatch,
 ): Promise<void> {
-  const evt: SessionEvent = {
-    type: 'session.metadata.updated',
-    at: new Date().toISOString(),
-    patch,
-  }
-  await appendEvent(id, evt)
+  await sessionManager.ensureLoaded()
+  await sessionManager.updateMetadata(id, patch)
 }
 
+// Append (or upsert-by-id) a message. The manager warms the in-memory cache and
+// enqueues a DEBOUNCED (500ms-coalesced) atomic write — that debounce is the
+// crash-safety/periodic flush for mid-turn partials.
 export async function appendMessage(sessionId: string, message: SessionMessage): Promise<void> {
-  // Guard against persisting messages for a session that was never created
-  // (or already tombstoned). This is a soft check — we re-fold the file —
-  // not authoritative. Race scenario is documented in sessions.send-message.ts.
-  const existing = await loadSession(sessionId)
-  if (!existing) {
-    log.warn('appendMessage: session not found or deleted, skipping', { sessionId })
-    return
-  }
-  const evt: SessionEvent = {
-    type: 'message.appended',
-    at: new Date().toISOString(),
-    message,
-  }
-  await appendEvent(sessionId, evt)
+  await sessionManager.ensureLoaded()
+  await sessionManager.appendMessage(sessionId, message)
 }
 
+// Drop every message AFTER `keepThroughId` (that message is kept). `null` empties
+// the transcript. An unknown id is a NO-OP (never wipe on a stale/garbage id).
+// Drops sdkSessionId (ADR 0058): a real truncation rewrites history, so the Claude
+// SDK resume handle is stale — the next Claude turn re-seeds from the truncated JSONL.
 export async function truncateSession(
   sessionId: string,
   keepThroughId: string | null,
 ): Promise<void> {
-  // Soft guard like appendMessage: don't append a truncate for a session that
-  // was never created or is already tombstoned.
-  const existing = await loadSession(sessionId)
-  if (!existing) {
-    log.warn('truncateSession: session not found or deleted, skipping', { sessionId })
+  await sessionManager.ensureLoaded()
+  const session = await sessionManager.getSession(sessionId)
+  if (!session) {
+    log.warn('truncateSession: session not found, skipping', { sessionId })
     return
   }
-  const evt: SessionEvent = {
-    type: 'session.truncated',
-    at: new Date().toISOString(),
-    keepThroughId,
+  let messages: SessionMessage[]
+  if (keepThroughId === null) {
+    messages = []
+  } else {
+    const idx = session.messages.findIndex((m) => m.id === keepThroughId)
+    // Unknown id → no-op: leave the transcript (and sdkSessionId) untouched.
+    if (idx < 0) return
+    messages = session.messages.slice(0, idx + 1)
   }
-  await appendEvent(sessionId, evt)
+  const { sdkSessionId: _staleSdk, ...rest } = session
+  await sessionManager.saveSession({ ...rest, messages })
 }
 
-// Persist a context-compaction checkpoint (ADR 0047). `at` is taken from the
-// caller-supplied compaction so the event time and the snapshot field agree.
+// Persist a context-compaction checkpoint (ADR 0047). Guards against a dangling
+// cut point (only applies when firstKeptMessageId still exists in the transcript).
+// Drops sdkSessionId (ADR 0058): the compaction supersedes the Claude SDK session,
+// so the next Claude turn re-seeds a fresh, smaller SDK session.
 export async function compactSession(
   sessionId: string,
   compaction: SessionCompaction,
 ): Promise<void> {
-  // Soft guard like appendMessage / truncateSession.
-  const existing = await loadSession(sessionId)
-  if (!existing) {
-    log.warn('compactSession: session not found or deleted, skipping', { sessionId })
+  await sessionManager.ensureLoaded()
+  const session = await sessionManager.getSession(sessionId)
+  if (!session) {
+    log.warn('compactSession: session not found, skipping', { sessionId })
     return
   }
-  const evt: SessionEvent = {
-    type: 'session.compacted',
-    at: compaction.at,
-    compaction,
-  }
-  await appendEvent(sessionId, evt)
+  const known = session.messages.some((m) => m.id === compaction.firstKeptMessageId)
+  if (!known) return
+  const { sdkSessionId: _supersededSdk, ...rest } = session
+  await sessionManager.saveSession({ ...rest, compaction })
 }
 
+// Physically delete a session (file + map entry). Unlike the old logical tombstone,
+// no purge step is needed afterwards.
 export async function deleteSession(id: string): Promise<void> {
-  const evt: SessionEvent = {
-    type: 'session.deleted',
-    at: new Date().toISOString(),
+  await sessionManager.ensureLoaded()
+  await sessionManager.deleteSession(id)
+}
+
+// ─── List / search ─────────────────────────────────────────────────────────────
+
+// Lightweight list-row projections, newest first — from the resident header map,
+// no transcript reads (ADR 0048).
+export async function listSessionSummaries(): Promise<SessionSummary[]> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.getSessions()
+}
+
+// Full sessions (with messages), newest first. Heavy — reads every transcript — so
+// this is for on-demand full-text search only (sessions.search). Reads each file
+// TRANSIENTLY (readSessionJsonl) instead of sessionManager.getSession, so a search
+// does NOT permanently hydrate every transcript into the warm map (reviewer #4).
+export async function listFullSessions(): Promise<Session[]> {
+  await sessionManager.ensureLoaded()
+  const summaries = sessionManager.getSessions()
+  const sessions: Session[] = []
+  for (const s of summaries) {
+    const parsed = readSessionJsonl(sessionFilePath(s.id))
+    if (!parsed) continue
+    // Strip the 4 pre-computed header fields → Omit<Session, 'messages'>, attach body.
+    const { messageCount: _mc, preview: _pv, status: _st, lastPreview: _lp, ...meta } = parsed.header
+    sessions.push({ ...meta, messages: parsed.messages })
   }
-  await appendEvent(id, evt)
+  return sessions
 }
 
 // ─── Bounded token-usage aggregation (dashboard.usage) ──────────────────────
-// One token-bearing assistant turn extracted from a session log: the timestamp
-// it completed and the summed tokens of its `usage` bucket.
+// One token-bearing assistant turn extracted from a session: the timestamp it
+// completed and the summed tokens of its `usage` bucket.
 export interface UsageEntry {
-  // ms epoch — `completedAt` if present, else parsed from the event `at`.
+  // ms epoch — `completedAt` if present, else parsed from the message `at`.
   at: number
   // inputTokens + outputTokens + cacheRead + cacheWrite of the turn.
   tokens: number
 }
 
-// Sum the four token buckets of a SessionMessage.usage. Cache buckets count
-// toward context usage too, so they are included (see CLAUDE memory note).
+// Sum the four token buckets of a SessionMessage.usage. Cache buckets count toward
+// context usage too, so they are included (see CLAUDE memory note).
 function sumUsageTokens(usage: SessionMessage['usage']): number {
   if (!usage) return 0
   return (
@@ -609,103 +155,50 @@ function sumUsageTokens(usage: SessionMessage['usage']): number {
   )
 }
 
-// How far back to read each JSONL file from its end before giving up. The
-// dashboard window is at most ~48h, and a turn writes one `message.appended`
-// line; this caps the tail read so we never walk a multi-GB transcript from the
-// front. Sized generously to absorb very chatty days.
-const USAGE_TAIL_CHUNK = 256 * 1024
-const USAGE_MAX_TAIL_BYTES = 8 * 1024 * 1024
-
-// Read a JSONL file backwards from EOF in chunks, yielding parsed events newest
-// line first. We never load the whole file (a session log can reach GBs); we
-// stop as soon as `shouldStop(evt)` returns true or the tail budget is spent.
-// Partial line handling: a chunk boundary may split a line, so we keep the
-// leftover head and prepend it to the next (earlier) chunk.
-async function* readEventsBackwards(
-  file: string,
-  shouldStop: (evt: SessionEvent) => boolean,
-): AsyncGenerator<SessionEvent> {
-  const handle = await open(file, 'r')
-  try {
-    const { size } = await handle.stat()
-    let pos = size
-    let carry = '' // bytes after the last newline of the chunk just read
-    let bytesRead = 0
-    while (pos > 0) {
-      const chunkSize = Math.min(USAGE_TAIL_CHUNK, pos)
-      pos -= chunkSize
-      bytesRead += chunkSize
-      const buf = Buffer.alloc(chunkSize)
-      // eslint-disable-next-line no-await-in-loop
-      await handle.read(buf, 0, chunkSize, pos)
-      const text = buf.toString('utf8') + carry
-      const lines = text.split('\n')
-      // The first element is a (possibly partial) head line that continues into
-      // the previous chunk — defer it unless we've reached the file start.
-      carry = pos > 0 ? (lines.shift() ?? '') : ''
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const evt = parseLine(lines[i], file, -1)
-        if (!evt) continue
-        if (shouldStop(evt)) return
-        yield evt
-      }
-      if (bytesRead >= USAGE_MAX_TAIL_BYTES) return
-    }
-    if (carry) {
-      const evt = parseLine(carry, file, -1)
-      if (evt && !shouldStop(evt)) yield evt
-    }
-  } finally {
-    await handle.close()
+// Resolve the effective timestamp of an assistant turn — its own `completedAt`
+// (ms epoch) if present, else the message `at` (ISO-8601) parsed to ms.
+function messageTimeMs(msg: SessionMessage): number {
+  if (typeof msg.completedAt === 'number' && Number.isFinite(msg.completedAt)) {
+    return msg.completedAt
   }
+  return Date.parse(msg.at)
 }
 
 // Collect every token-bearing assistant turn whose timestamp is >= windowStartMs
-// across all sessions, reading each JSONL tail-first and stopping at the window
-// edge. Bounded by ~recent activity, not total history. Dedupes by message id
-// (a turn may be re-appended partial → final; reading backwards, the first hit
-// is the newest/authoritative snapshot).
+// across all sessions. Uses the resident headers to skip sessions untouched since
+// the window start, then reads that session's messages from disk (bounded — the
+// single-file format keeps files small; only recently-touched sessions are read).
+// In the new format each message appears once, so the dedupe-by-id is trivially
+// satisfied (kept for parity with the return contract).
 export async function collectUsageSince(windowStartMs: number): Promise<UsageEntry[]> {
-  // Use the lightweight index to skip sessions untouched since the window start
-  // (updatedAt is ISO-8601 → Date.parse). The index is a derived cache; if a
-  // session is missing from it the worst case is we under-count, which is fine
-  // for a best-effort dashboard.
-  const summaries = await listSessionSummaries()
+  await sessionManager.ensureLoaded()
+  const summaries = sessionManager.getSessions()
   const entries: UsageEntry[] = []
   for (const s of summaries) {
     const updatedMs = Date.parse(s.updatedAt || s.createdAt)
     if (Number.isFinite(updatedMs) && updatedMs < windowStartMs) continue
-    const file = sessionFile(s.id)
-    const seen = new Set<string>()
+    // Best-effort: a single unreadable transcript (readSessionMessages throws on a real
+    // read error — infosec F1) must not crash the whole dashboard rollup.
+    let messages: SessionMessage[]
     try {
-      // eslint-disable-next-line no-await-in-loop
-      for await (const evt of readEventsBackwards(file, (e) => {
-        // Stop once we cross below the window: events are append-only in time
-        // order, so the first too-old event means everything earlier is too old.
-        const t = Date.parse(e.at)
-        return Number.isFinite(t) && t < windowStartMs
-      })) {
-        if (evt.type !== 'message.appended') continue
-        const msg = evt.message
-        if (msg.role !== 'agent' || !msg.usage) continue
-        if (seen.has(msg.id)) continue // newest snapshot already counted
-        seen.add(msg.id)
-        const tokens = sumUsageTokens(msg.usage)
-        if (tokens <= 0) continue
-        // Prefer the turn's own completedAt (ms epoch) over the event `at`.
-        const at =
-          typeof msg.completedAt === 'number' && Number.isFinite(msg.completedAt)
-            ? msg.completedAt
-            : Date.parse(evt.at)
-        if (!Number.isFinite(at) || at < windowStartMs) continue
-        entries.push({ at, tokens })
-      }
+      messages = readSessionMessages(sessionFilePath(s.id))
     } catch (err) {
-      if (isMissing(err)) continue
       log.warn('usage: failed to read session tail', {
         sessionId: s.id,
         err: err instanceof Error ? err.message : String(err),
       })
+      continue
+    }
+    const seen = new Set<string>()
+    for (const msg of messages) {
+      if (msg.role !== 'agent' || !msg.usage) continue
+      if (seen.has(msg.id)) continue
+      seen.add(msg.id)
+      const tokens = sumUsageTokens(msg.usage)
+      if (tokens <= 0) continue
+      const at = messageTimeMs(msg)
+      if (!Number.isFinite(at) || at < windowStartMs) continue
+      entries.push({ at, tokens })
     }
   }
   return entries
@@ -716,7 +209,7 @@ export async function collectUsageSince(windowStartMs: number): Promise<UsageEnt
 // (provider / model / accountId). Heavier than UsageEntry (the dashboard tile),
 // but the Activity page needs the per-model + per-account breakdown.
 export interface SessionTurnUsage {
-  at: number // ms epoch — completedAt if present, else event `at`
+  at: number // ms epoch — completedAt if present, else message `at`
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
@@ -726,6 +219,9 @@ export interface SessionTurnUsage {
   accountId: string
   // Owning session id — lets the Activity page group usage by session.
   sessionId: string
+  // Owning project id (empty string when the session is not scoped to a project).
+  // Lets the Activity page filter usage by project.
+  projectId: string
 }
 
 // Stable sentinel for a turn whose account id was never recorded (legacy turn +
@@ -735,66 +231,58 @@ export interface SessionTurnUsage {
 export const UNKNOWN_ACCOUNT_ID = 'unknown'
 
 // Collect detailed per-turn usage for every session touched in [windowStartMs,
-// windowEndMs]. Reads each JSONL tail-first and stops at the window edge (bounded
-// by recent activity, not total history — same strategy as collectUsageSince).
-// Per-turn provider/model/accountId fall back to the session's current settings
-// when a legacy turn omits them (back-compat). Dedupes by message id.
+// windowEndMs]. Same skip-by-updatedAt + read-messages strategy as
+// collectUsageSince. Per-turn provider/model/accountId fall back to the session's
+// current settings when a legacy turn omits them (back-compat). Dedupes by id.
 export async function collectSessionTurnsSince(
   windowStartMs: number,
   windowEndMs: number,
 ): Promise<SessionTurnUsage[]> {
-  const summaries = await listSessionSummaries()
+  await sessionManager.ensureLoaded()
+  const summaries = sessionManager.getSessions()
   const out: SessionTurnUsage[] = []
   for (const s of summaries) {
     const updatedMs = Date.parse(s.updatedAt || s.createdAt)
-    // Skip sessions untouched since the window start (the index is a derived
-    // cache; a miss only under-counts, acceptable for a best-effort report).
     if (Number.isFinite(updatedMs) && updatedMs < windowStartMs) continue
-    const file = sessionFile(s.id)
     // Fallbacks from the session's current settings (a legacy turn omits the
     // per-turn fields). provider/accountId are non-secret ids only.
     const fallbackProvider = s.settings?.provider ?? 'anthropic'
     const fallbackModel = s.settings?.modelId ?? ''
     const fallbackAccountId = s.settings?.accountId ?? UNKNOWN_ACCOUNT_ID
-    const seen = new Set<string>()
+    // Best-effort: skip a session whose transcript can't be read (infosec F1).
+    let messages: SessionMessage[]
     try {
-      // eslint-disable-next-line no-await-in-loop
-      for await (const evt of readEventsBackwards(file, (e) => {
-        const t = Date.parse(e.at)
-        return Number.isFinite(t) && t < windowStartMs
-      })) {
-        if (evt.type !== 'message.appended') continue
-        const msg = evt.message
-        if (msg.role !== 'agent' || !msg.usage) continue
-        if (seen.has(msg.id)) continue
-        seen.add(msg.id)
-        const at =
-          typeof msg.completedAt === 'number' && Number.isFinite(msg.completedAt)
-            ? msg.completedAt
-            : Date.parse(evt.at)
-        if (!Number.isFinite(at) || at < windowStartMs || at > windowEndMs) continue
-        const inputTokens = msg.usage.inputTokens || 0
-        const outputTokens = msg.usage.outputTokens || 0
-        const cacheReadTokens = msg.usage.cacheReadTokens || 0
-        const cacheWriteTokens = msg.usage.cacheWriteTokens || 0
-        if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens <= 0) continue
-        out.push({
-          at,
-          inputTokens,
-          outputTokens,
-          cacheReadTokens,
-          cacheWriteTokens,
-          provider: fallbackProvider,
-          model: msg.modelUsed || fallbackModel,
-          accountId: msg.accountId ?? fallbackAccountId,
-          sessionId: s.id,
-        })
-      }
+      messages = readSessionMessages(sessionFilePath(s.id))
     } catch (err) {
-      if (isMissing(err)) continue
       log.warn('activity: failed to read session tail', {
         sessionId: s.id,
         err: err instanceof Error ? err.message : String(err),
+      })
+      continue
+    }
+    const seen = new Set<string>()
+    for (const msg of messages) {
+      if (msg.role !== 'agent' || !msg.usage) continue
+      if (seen.has(msg.id)) continue
+      seen.add(msg.id)
+      const at = messageTimeMs(msg)
+      if (!Number.isFinite(at) || at < windowStartMs || at > windowEndMs) continue
+      const inputTokens = msg.usage.inputTokens || 0
+      const outputTokens = msg.usage.outputTokens || 0
+      const cacheReadTokens = msg.usage.cacheReadTokens || 0
+      const cacheWriteTokens = msg.usage.cacheWriteTokens || 0
+      if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens <= 0) continue
+      out.push({
+        at,
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        cacheWriteTokens,
+        provider: fallbackProvider,
+        model: msg.modelUsed || fallbackModel,
+        accountId: msg.accountId ?? fallbackAccountId,
+        sessionId: s.id,
+        projectId: s.projectId ?? '',
       })
     }
   }

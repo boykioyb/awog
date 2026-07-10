@@ -223,6 +223,14 @@ export interface SessionAttachment {
   size?: string
   mime?: string
   url?: string
+  // Basename of the externalized attachment file under the session's `attachments/`
+  // dir (~/.awog/sessions/{id}/attachments/{storedFile}). Present IFF the image/PDF
+  // bytes were moved out of the inline base64 `url` at the JSONL PERSISTENCE boundary
+  // (ADR 0062 optional phase). This is a storage-layer detail: sessions/jsonl.ts drops
+  // `url` from the persisted line when it sets `storedFile`, and restores `url` from
+  // the stored file on read — so runtime/context-builder + the UI always see a
+  // fully-populated `url` and never observe `storedFile`.
+  storedFile?: string
   // UTF-8 text content of a text-based file (or a large pasted-text block). The
   // runtime delivers this to the model as a delimited text block (buildContext);
   // the UI also uses it for the in-app text preview. Absent for images (which use
@@ -393,9 +401,10 @@ export interface Session {
 }
 
 // Lightweight list-row projection of a Session WITHOUT `messages` (ADR 0048).
-// `sessions.list` returns these from sessions/index.json so app startup reads KB
-// instead of folding every transcript into RAM. Open a session → `sessions.get`
-// for the full Session with messages.
+// `sessions.list` returns these from the per-file SessionHeader line (ADR 0061
+// single-file storage) so app startup reads KB of headers instead of loading every
+// transcript into RAM. Open a session → `sessions.get` for the full Session with
+// messages.
 // Resting (persisted) status of a session, derived from its last message so the
 // list can badge awaiting/error/done WITHOUT loading the transcript. Never
 // 'streaming' — that is a live-only state the UI tracks from stream events; a
@@ -436,6 +445,27 @@ export interface SessionSummary {
   // exact after a fold-based rebuild.
   messageCount: number
   // Trimmed preview of the last message text, for list subtitles.
+  lastPreview?: string
+}
+
+// Line 1 of a session's {id}.jsonl in the single-file storage model
+// (craft-parity core, built alongside the event-sourced store — see
+// sessions/jsonl.ts). Carries EVERY persistent Session field EXCEPT `messages`
+// (which live on lines 2+, one per line) PLUS the pre-computed list fields, so
+// the session list loads from KB of headers instead of folding every transcript.
+// `Omit<Session, 'messages'>` keeps this in lockstep with Session — any new
+// persistent field on Session flows through automatically.
+export interface SessionHeader extends Omit<Session, 'messages'> {
+  // Number of messages on lines 2+ (pre-computed for the list badge).
+  messageCount: number
+  // Sanitized first ~140 chars of the first user message, for the list subtitle.
+  preview?: string
+  // Resting status derived from the last message (idle/done/awaiting/error) — the
+  // same derivation as the event-sourced store's summarize(), so an un-opened
+  // session badges its true state without loading the transcript.
+  status: SessionRestingStatus
+  // Trimmed preview of the LAST message text, for list subtitles (mirrors
+  // SessionSummary.lastPreview).
   lastPreview?: string
 }
 

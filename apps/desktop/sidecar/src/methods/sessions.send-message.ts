@@ -7,12 +7,7 @@ import {
   unregisterAborter,
   type RunStreamResult,
 } from '../sessions/runner.js'
-import {
-  appendMessage,
-  appendEvent,
-  loadSession,
-  updateSessionMetadata,
-} from '../sessions/store.js'
+import { appendMessage, loadSession, updateSessionMetadata } from '../sessions/store.js'
 import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
@@ -1017,10 +1012,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // re-nests on hydrate.
   let accumulatedText = ''
   const collectedSteps = new Map<string, SessionStep>()
-  // High-water marks for the byte-minimal progress deltas (see persistProgress):
-  // each throttled write appends only the text + steps added since the last one.
-  let persistedTextLen = 0
-  let persistedStepCount = 0
+  // Cheap change-detection for the throttled partial persist (see persistProgress):
+  // skip the in-memory upsert + enqueue when nothing grew since the last call.
+  let lastPersistedTextLen = 0
+  let lastPersistedStepCount = 0
 
   // Ordered timeline parts (ADR 0032): reply-text runs interleaved with steps in
   // arrival order. This is the minimalist-agent `applyEvent` reducer — a tool/step
@@ -1064,10 +1059,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   }
 
   // Append the authoritative FINAL snapshot of the assistant turn (full text +
-  // steps + parts + usage). Upserts by message id over any mid-stream
-  // `message.progress` deltas — last write wins. Called once per turn at every
-  // exit (success, cancel, error). appendEvent has no re-fold guard; if the
-  // session was deleted mid-turn the fold tombstones this anyway.
+  // steps + parts + usage). appendMessage upserts by message id over any mid-stream
+  // partial written by persistProgress — last write wins. Called once per turn at
+  // every exit (success, cancel, error). appendMessage no-ops if the session was
+  // deleted mid-turn (it is no longer in the manager's map).
   const persistAgent = async (opts: { result?: RunStreamResult; error?: string }) => {
     const steps = [...collectedSteps.values()]
     const message: SessionMessage = {
@@ -1116,11 +1111,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       message.canceled = true
     }
     try {
-      await appendEvent(params.sessionId, {
-        type: 'message.appended',
-        at: new Date().toISOString(),
-        message,
-      })
+      await appendMessage(params.sessionId, message)
     } catch (err) {
       log.warn('failed to persist agent message', {
         sessionId: params.sessionId,
@@ -1129,28 +1120,32 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     }
   }
 
-  // Append a byte-minimal progress delta: ONLY the text + steps added since the
-  // previous call, never the whole growing message. This is the root fix for the
-  // O(steps²) JSONL bloat — pre-fix each throttled snapshot re-serialised the
-  // full accumulated steps[], so a long turn could balloon a session file into
-  // the gigabytes. The final `message.appended` snapshot (below) supersedes these
-  // deltas by id; a hard kill mid-turn leaves them so the fold still rebuilds the
-  // partial reply. Fire-and-forget: the per-session append lock serialises writes.
+  // Persist the CURRENT partial assistant message (id, full accumulated text +
+  // steps + parts). appendMessage upserts it in the manager's warm cache and
+  // enqueues a DEBOUNCED (500ms-coalesced) atomic write — the single-file format
+  // rewrites the whole transcript per save, so there is no per-tick JSONL bloat
+  // (the root cause the old byte-minimal `message.progress` delta worked around).
+  // That debounce IS the crash-safety/periodic flush: a hard kill mid-turn leaves
+  // the last coalesced partial on disk, which a reload surfaces as the partial
+  // reply. The authoritative final snapshot (persistAgent) upserts over this by id.
+  // Fire-and-forget; cheap early-return when nothing grew since the last call.
   const persistProgress = () => {
     const steps = [...collectedSteps.values()]
-    const newSteps = steps.slice(persistedStepCount)
-    const textDelta = accumulatedText.slice(persistedTextLen)
-    if (!newSteps.length && !textDelta) return
-    persistedTextLen = accumulatedText.length
-    persistedStepCount = steps.length
-    void appendEvent(params.sessionId, {
-      type: 'message.progress',
-      at: new Date().toISOString(),
+    if (accumulatedText.length === lastPersistedTextLen && steps.length === lastPersistedStepCount) {
+      return
+    }
+    lastPersistedTextLen = accumulatedText.length
+    lastPersistedStepCount = steps.length
+    const partial: SessionMessage = {
       id: params.messageId,
-      ...(textDelta ? { textDelta } : {}),
-      ...(newSteps.length ? { steps: newSteps } : {}),
-    }).catch((err) => {
-      log.warn('failed to persist progress delta', {
+      role: 'agent',
+      text: accumulatedText,
+      at: new Date().toISOString(),
+      ...(steps.length > 0 ? { steps } : {}),
+      ...(parts.length > 0 ? { parts } : {}),
+    }
+    void appendMessage(params.sessionId, partial).catch((err) => {
+      log.warn('failed to persist partial agent message', {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       })
