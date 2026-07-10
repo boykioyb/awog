@@ -39,6 +39,22 @@ export type SourceHealthCheck = {
 export type SourceTool = { name: string; description: string }
 export type SourceResource = { uri: string; mime: string }
 
+// One row of the detail Tools section (mirror of the sidecar `source.tools`
+// outcome). `name` is the AWOG-canonical `mcp__<id>__<tool>`; the UI strips the
+// `mcp__<id>__` prefix for display. `allowed` is whether the tool passes this
+// source's own permissions.json auto-scope (read-only view — never a credential).
+export type SourceToolInfo = { name: string; description: string; allowed: boolean }
+export type SourceToolsResult = { tools: SourceToolInfo[]; error?: string }
+
+// Parsed permissions.json for the detail Permissions section (mirror of the
+// sidecar SourcePermissions). Read-only scoping rules, never credentials.
+export type SourcePermissions = {
+  allowedMcpPatterns?: string[]
+  allowedApiEndpoints?: { method: string; path: string }[]
+  allowedBashPatterns?: string[]
+  allowedWritePaths?: string[]
+}
+
 // ── Per-kind config blocks (mirror of sidecar types/shared.ts) ────────────────
 
 export type McpSourceBlock = {
@@ -187,6 +203,30 @@ export type SourceOAuthResult =
 export function sourceTransport(s: Source): string {
   if (s.type === 'mcp') return s.mcp.transport ?? 'http'
   return s.type
+}
+
+// Colored-dot palette for a connection status, keyed to the prototype theme
+// tokens (CSS custom properties — the ui-next theming surface; NOT hardcoded hex).
+// Single source of truth for the list dot, the detail pill, and SourceStatusDot.
+export const SOURCE_STATUS_COLORS: Record<SourceConnectionStatus, string> = {
+  connected: 'var(--green)',
+  needs_auth: 'var(--amber)',
+  failed: 'var(--danger)',
+  untested: 'var(--textDim)',
+  local_disabled: 'var(--textFaint)',
+}
+
+// Effective connection status for a source (mirror of Craft's
+// deriveConnectionStatus). An explicit persisted `connectionStatus` wins;
+// otherwise infer from auth — `authType` none/undefined ⇒ connected, else
+// `isAuthenticated ? connected : needs_auth`. AWOG does not model the
+// local-mcp-disabled toggle yet, so the `local_disabled` branch is omitted here
+// (a persisted `connectionStatus` still surfaces it).
+export function deriveStatus(s: Source): SourceConnectionStatus {
+  if (s.connectionStatus) return s.connectionStatus
+  const authType = s.type === 'mcp' ? s.mcp.authType : s.type === 'api' ? s.api.authType : undefined
+  if (authType === undefined || authType === 'none') return 'connected'
+  return s.isAuthenticated ? 'connected' : 'needs_auth'
 }
 
 function mockSources(): Source[] {
@@ -425,6 +465,64 @@ export const useConnectionsStore = defineStore('connections', () => {
     }
   }
 
+  // ── Detail read-only sections (ADR 0060 P5) ──────────────────────────────
+  // Thin reads for the Craft-style detail sections. All three are pure reads —
+  // no config mutation, no secret crosses the boundary (only tool names/desc,
+  // permission scoping rules, guide markdown). Browser-dev returns small stubs so
+  // the sections can be exercised offline.
+
+  // Tools section: the source's tools + per-source allowed/blocked (source.tools).
+  async function fetchTools(slug: string): Promise<SourceToolsResult> {
+    if (!available.value) {
+      const target = sourceBySlug(slug)
+      if (target?.type === 'mcp') {
+        return {
+          tools: [
+            {
+              name: `mcp__${target.id}__list_repos`,
+              description: 'List repositories.',
+              allowed: true,
+            },
+            {
+              name: `mcp__${target.id}__create_issue`,
+              description: 'Open an issue.',
+              allowed: false,
+            },
+          ],
+        }
+      }
+      if (target?.type === 'api') {
+        return {
+          tools: [
+            {
+              name: `mcp__${target.id}__api_${target.slug}`,
+              description: 'REST API tool.',
+              allowed: true,
+            },
+          ],
+        }
+      }
+      return { tools: [] }
+    }
+    return sc.request<SourceToolsResult>('source.tools', { slug })
+  }
+
+  // Permissions section: the parsed permissions.json, or null when none exists.
+  async function fetchPermissions(slug: string): Promise<SourcePermissions | null> {
+    if (!available.value) return null
+    const res = await sc.request<{ permissions: SourcePermissions | null }>('source.permissions', {
+      slug,
+    })
+    return res.permissions
+  }
+
+  // Documentation section: the raw guide.md markdown, or null when none exists.
+  async function fetchGuide(slug: string): Promise<string | null> {
+    if (!available.value) return null
+    const res = await sc.request<{ guide: string | null }>('source.guide', { slug })
+    return res.guide
+  }
+
   // Start an OAuth authorization for a remote (http/sse) MCP source (ADR 0060 P2).
   // LONG-LIVED: the RPC resolves only after the user authorizes in their browser
   // (or the flow is cancelled). The sidecar emits `source.oauth-url` mid-flow —
@@ -525,6 +623,9 @@ export const useConnectionsStore = defineStore('connections', () => {
     toggleToolDeny,
     testSource,
     setApiCredential,
+    fetchTools,
+    fetchPermissions,
+    fetchGuide,
     startOAuth,
     cancelOAuth,
   }

@@ -10,21 +10,17 @@
     >
       <template #row="{ item }">
         <div class="lrow">
-          <span
-            class="sdot"
-            :style="{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              flex: '0 0 auto',
-              background: statusColor(item.connectionStatus),
-            }"
-          />
+          <SourceAvatar :source="item" size="sm" />
           <span class="ttl">{{ item.name || item.slug }}</span>
-          <span class="tag mono" style="padding: 1px 6px">{{ sourceTransport(item) }}</span>
+          <span class="tag crow-type">{{ t('connections.typeBadge.' + item.type) }}</span>
+          <SourceStatusDot
+            :status="deriveStatus(item)"
+            :error-message="item.connectionError"
+            size="sm"
+          />
         </div>
         <div class="sub">
-          {{ t('connections.status.' + (item.connectionStatus ?? 'untested')) }}
+          {{ item.tagline || item.provider || sourceTransport(item) }}
         </div>
       </template>
 
@@ -34,7 +30,6 @@
           @edit="openEditor(item)"
           @delete="askDelete(item)"
           @toggle="onToggle(item)"
-          @toggle-tool="(tool) => onToggleTool(item, tool)"
           @test="(done) => runTest(item, done)"
           @oauth="(done) => runOAuth(item, done)"
           @cancel-oauth="cancelOAuth(item)"
@@ -89,9 +84,11 @@
 import ConnectionDetail from '~/components/connection/ConnectionDetail.vue'
 import ConnectionEditor from '~/components/connection/ConnectionEditor.vue'
 import ConnectionPromptCreator from '~/components/connection/ConnectionPromptCreator.vue'
+import SourceAvatar from '~/components/connection/SourceAvatar.vue'
+import SourceStatusDot from '~/components/connection/SourceStatusDot.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import { useConnectionsPage } from '~/composables/useConnectionsPage'
-import { sourceTransport, type SourceConnectionStatus } from '~/stores/connections'
+import { deriveStatus, sourceTransport } from '~/stores/connections'
 
 const { t } = useI18n()
 
@@ -108,7 +105,6 @@ const {
   closeEditor,
   onSave,
   onToggle,
-  onToggleTool,
   runTest,
   runVerify,
   runOAuth,
@@ -121,14 +117,12 @@ const {
   toasts,
   toastColor,
 } = useConnectionsPage()
-
-const STATUS_COLORS: Record<SourceConnectionStatus, string> = {
-  connected: 'var(--green)',
-  needs_auth: 'var(--amber)',
-  failed: 'var(--danger)',
-  untested: 'var(--textDim)',
-  local_disabled: 'var(--textFaint)',
-}
-const statusColor = (status: SourceConnectionStatus | undefined): string =>
-  STATUS_COLORS[status ?? 'untested']
 </script>
+
+<style scoped>
+.crow-type {
+  font-size: 12px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+}
+</style>

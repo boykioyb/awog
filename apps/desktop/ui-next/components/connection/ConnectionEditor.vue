@@ -53,6 +53,27 @@
 
       <div class="cne-grid">
         <div class="cne-field">
+          <label class="cne-label">{{ t('connections.editor.icon') }}</label>
+          <input
+            v-model="draft.icon"
+            class="cne-input"
+            :placeholder="t('connections.editor.iconPh')"
+            spellcheck="false"
+          />
+          <div class="cne-hint">{{ t('connections.editor.iconHint') }}</div>
+        </div>
+        <div class="cne-field">
+          <label class="cne-label">{{ t('connections.editor.tagline') }}</label>
+          <input
+            v-model="draft.tagline"
+            class="cne-input"
+            :placeholder="t('connections.editor.taglinePh')"
+          />
+        </div>
+      </div>
+
+      <div class="cne-grid">
+        <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.trust') }}</label>
           <AppSelect v-model="trustSelect" :options="trustOptions" width="100%" />
         </div>
@@ -322,6 +343,20 @@
         </div>
       </template>
 
+      <!-- ── Local source ──────────────────────────────────────────────── -->
+      <template v-else-if="draft.type === 'local'">
+        <div class="cne-field">
+          <label class="cne-label">{{ t('connections.editor.path') }}</label>
+          <input
+            v-model="draft.localPath"
+            class="cne-input mono"
+            :placeholder="t('connections.editor.pathPh')"
+            spellcheck="false"
+          />
+          <div class="cne-hint">{{ t('connections.editor.pathHint') }}</div>
+        </div>
+      </template>
+
       <button
         type="button"
         class="cne-toggle"
@@ -405,6 +440,8 @@ import type {
   ApiCredentialInput,
   ApiSource,
   ApiSourceBlock,
+  LocalSource,
+  LocalSourceBlock,
   McpSource,
   McpSourceBlock,
   Source,
@@ -415,8 +452,8 @@ import type {
   SourceTrust,
 } from '~/stores/connections'
 
-// Kinds the form can build (local is disabled until P4).
-type EditorSourceType = 'mcp' | 'api'
+// Kinds the form can build.
+type EditorSourceType = 'mcp' | 'api' | 'local'
 // Transport variants the mcp form edits (sse is folded into http on load).
 type EditorTransport = 'http' | 'stdio'
 // Auth mode for mcp http/sse sources (mirror of McpSourceBlock.authType).
@@ -444,7 +481,7 @@ const { t } = useI18n()
 const typeOptions = computed<AppSelectOption[]>(() => [
   { value: 'mcp', label: t('connections.type.mcp') },
   { value: 'api', label: t('connections.type.api') },
-  { value: 'local', label: t('connections.type.local'), disabled: true },
+  { value: 'local', label: t('connections.type.local') },
 ])
 const transportOptions: AppSelectOption[] = [
   { value: 'stdio', label: 'stdio' },
@@ -466,6 +503,8 @@ type Draft = {
   name: string
   provider: string
   description: string
+  icon: string
+  tagline: string
   // mcp
   transport: EditorTransport
   authType: EditorAuthType
@@ -481,6 +520,8 @@ type Draft = {
   apiAuthScheme: string
   apiTestMethod: 'GET' | 'POST'
   apiTestPath: string
+  // local
+  localPath: string
   // shared
   enabled: boolean
   timeoutMs: number
@@ -494,6 +535,8 @@ const makeDefaults = (): Draft => ({
   name: '',
   provider: '',
   description: '',
+  icon: '',
+  tagline: '',
   transport: 'stdio',
   authType: 'none',
   command: 'npx',
@@ -507,6 +550,7 @@ const makeDefaults = (): Draft => ({
   apiAuthScheme: 'Bearer',
   apiTestMethod: 'GET',
   apiTestPath: '',
+  localPath: '',
   enabled: true,
   timeoutMs: 30000,
   trust: 'prompt',
@@ -514,11 +558,13 @@ const makeDefaults = (): Draft => ({
 
 const fromSource = (s: Source): Draft => {
   const d = makeDefaults()
-  d.type = s.type === 'api' ? 'api' : 'mcp'
+  d.type = s.type
   d.slug = s.slug
   d.name = s.name
   d.provider = s.provider
   d.description = s.description ?? ''
+  d.icon = s.icon ?? ''
+  d.tagline = s.tagline ?? ''
   d.enabled = s.enabled
   d.timeoutMs = s.timeoutMs
   d.trust = s.trust
@@ -538,6 +584,8 @@ const fromSource = (s: Source): Draft => {
     d.apiAuthScheme = s.api.authScheme ?? 'Bearer'
     d.apiTestMethod = s.api.testEndpoint?.method ?? 'GET'
     d.apiTestPath = s.api.testEndpoint?.path ?? ''
+  } else if (s.type === 'local') {
+    d.localPath = s.local.path
   }
   return d
 }
@@ -765,6 +813,8 @@ const canSave = computed(() => {
   } else if (draft.value.type === 'api') {
     if (!draft.value.apiBaseUrl.trim()) return false
     if (!apiTestBodyValid.value) return false
+  } else if (draft.value.type === 'local') {
+    if (!draft.value.localPath.trim()) return false
   }
   return true
 })
@@ -884,6 +934,14 @@ const buildApiPayload = (): ApiSource => {
   return { ...baseFields('api'), type: 'api', api }
 }
 
+// Assemble the local `SourceConfig` payload. `format` (if any) round-trips via
+// the spread so an edit never drops it.
+const buildLocalPayload = (): LocalSource => {
+  const prevLocal = props.source?.type === 'local' ? props.source.local : undefined
+  const local: LocalSourceBlock = { ...(prevLocal ?? {}), path: draft.value.localPath.trim() }
+  return { ...baseFields('local'), type: 'local', local }
+}
+
 // Shared base fields for every kind. Persisted last-test status is carried over on
 // edit so a save doesn't wipe the last-test result.
 function baseFields(type: EditorSourceType): SourceBase {
@@ -901,6 +959,8 @@ function baseFields(type: EditorSourceType): SourceBase {
     updatedAt: now,
   }
   if (draft.value.description.trim()) base.description = draft.value.description.trim()
+  if (draft.value.icon.trim()) base.icon = draft.value.icon.trim()
+  if (draft.value.tagline.trim()) base.tagline = draft.value.tagline.trim()
   // deniedTools only apply to mcp (api has no tool list).
   if (type === 'mcp' && draft.value.deniedTools?.length) {
     base.deniedTools = [...draft.value.deniedTools]
@@ -915,8 +975,11 @@ function baseFields(type: EditorSourceType): SourceBase {
   return base
 }
 
-const buildPayload = (): SourceInput =>
-  draft.value.type === 'api' ? buildApiPayload() : buildMcpPayload()
+const buildPayload = (): SourceInput => {
+  if (draft.value.type === 'api') return buildApiPayload()
+  if (draft.value.type === 'local') return buildLocalPayload()
+  return buildMcpPayload()
+}
 
 const onVerify = async () => {
   if (!canVerify.value || verifying.value) return
