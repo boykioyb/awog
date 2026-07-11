@@ -191,6 +191,15 @@
   "connections.editor.testPathPh": "/v1/me",
   "connections.editor.testBodyPh": "Body dạng JSON, vd { \"query\": \"hello\" }",
   "connections.editor.testBodyInvalid": "Body phải là object JSON hợp lệ.",
+  "connections.editor.setupTitle": "Cài đặt nhanh",
+
+  "connections.picker.title": "Thêm connection",
+  "connections.picker.scratch": "Tạo từ đầu",
+  "connections.picker.scratchSub": "Tự cấu hình nguồn MCP, API hoặc local",
+  "connections.picker.ai": "Mô tả bằng AI",
+  "connections.picker.aiSub": "Nói bạn cần gì — trợ lý sẽ viết config",
+  "connections.picker.orPick": "Hoặc bắt đầu từ một nhà cung cấp phổ biến",
+  "connections.picker.empty": "Không có nhà cung cấp nào.",
 
   "connections.creator.title": "Connection mới",
   "connections.creator.subtitle": "Trình cài MCP source",

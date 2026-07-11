@@ -191,6 +191,15 @@
   "connections.editor.testPathPh": "/v1/me",
   "connections.editor.testBodyPh": "Body as JSON, e.g. { \"query\": \"hello\" }",
   "connections.editor.testBodyInvalid": "Body must be a valid JSON object.",
+  "connections.editor.setupTitle": "Quick setup",
+
+  "connections.picker.title": "Add a connection",
+  "connections.picker.scratch": "Start from scratch",
+  "connections.picker.scratchSub": "Build an MCP, API, or local source by hand",
+  "connections.picker.ai": "Describe with AI",
+  "connections.picker.aiSub": "Tell the assistant what you need — it writes the config",
+  "connections.picker.orPick": "Or start from a common provider",
+  "connections.picker.empty": "No providers available.",
 
   "connections.creator.title": "New connection",
   "connections.creator.subtitle": "MCP source installer",

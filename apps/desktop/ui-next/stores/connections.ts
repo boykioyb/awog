@@ -153,6 +153,22 @@ export type Source = McpSource | ApiSource | LocalSource
 // The shape a save accepts (the editor builds a full SourceConfig).
 export type SourceInput = Source
 
+// One entry of the "add a source" preset catalog (mirror of the sidecar
+// PresetMeta — UI-parity area 3). Display + routing metadata surfaced by
+// `source.listPresets` and rendered in the picker (SourceAvatar + name +
+// tagline). `setupHint` is one line of provider guidance shown in the editor once
+// a preset seeds it. No secret is ever involved.
+export type SourcePresetMeta = {
+  id: string
+  slug: string
+  name: string
+  provider: string
+  type: SourceType
+  tagline?: string
+  icon?: string
+  setupHint?: string
+}
+
 // Dashboard/agent-picker compat slice — the only shape those surfaces consume.
 export type Connection = {
   id: string
@@ -307,6 +323,212 @@ function mockSources(): Source[] {
   ]
 }
 
+// Browser-dev preset catalog (mirror of the sidecar preset-catalog.ts). Only used
+// when the engine is offline so the picker + editor-seeding flow can be exercised
+// without a sidecar. NEVER carries a real secret — env keys are empty strings.
+type PresetMockEntry = { meta: SourcePresetMeta; build: () => Source }
+
+function presetMockBase(meta: SourcePresetMeta, enabled: boolean): SourceBase {
+  const b: SourceBase = {
+    id: meta.id,
+    slug: meta.slug,
+    name: meta.name,
+    provider: meta.provider,
+    enabled,
+    timeoutMs: 30000,
+    trust: 'prompt',
+  }
+  if (meta.icon) b.icon = meta.icon
+  if (meta.tagline) b.tagline = meta.tagline
+  return b
+}
+
+const PRESET_MOCKS: PresetMockEntry[] = [
+  {
+    meta: {
+      id: 'linear',
+      slug: 'linear',
+      name: 'Linear',
+      provider: 'linear',
+      type: 'mcp',
+      tagline: 'Issue tracking, sprint planning, and project management',
+      icon: '📐',
+      setupHint: 'Connect with OAuth from the connection detail after saving.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[0]!.meta, false),
+      type: 'mcp',
+      mcp: { transport: 'http', url: 'https://mcp.linear.app', authType: 'oauth' },
+    }),
+  },
+  {
+    meta: {
+      id: 'github',
+      slug: 'github',
+      name: 'GitHub',
+      provider: 'github',
+      type: 'mcp',
+      tagline: 'Repositories, issues, pull requests, and code search',
+      icon: '🐙',
+      setupHint: 'Needs a Personal Access Token (bearer) — add an Authorization header on Verify.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[1]!.meta, false),
+      type: 'mcp',
+      mcp: { transport: 'http', url: 'https://api.githubcopilot.com/mcp/', authType: 'bearer' },
+    }),
+  },
+  {
+    meta: {
+      id: 'notion',
+      slug: 'notion',
+      name: 'Notion',
+      provider: 'notion',
+      type: 'mcp',
+      tagline: 'Docs, wikis, and databases',
+      icon: '📔',
+      setupHint: 'Connect with OAuth from the connection detail after saving.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[2]!.meta, false),
+      type: 'mcp',
+      mcp: { transport: 'http', url: 'https://mcp.notion.com', authType: 'oauth' },
+    }),
+  },
+  {
+    meta: {
+      id: 'slack',
+      slug: 'slack',
+      name: 'Slack',
+      provider: 'slack',
+      type: 'mcp',
+      tagline: 'Channels, messages, and files',
+      icon: '💬',
+      setupHint: 'Connect with OAuth from the connection detail after saving.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[3]!.meta, false),
+      type: 'mcp',
+      mcp: { transport: 'http', url: 'https://mcp.slack.com', authType: 'oauth' },
+    }),
+  },
+  {
+    meta: {
+      id: 'google',
+      slug: 'google',
+      name: 'Google Workspace',
+      provider: 'google',
+      type: 'api',
+      tagline: 'Gmail, Calendar, Drive, Docs, and Sheets',
+      icon: '✉️',
+      setupHint: 'Google APIs use OAuth with your own client credentials.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[4]!.meta, false),
+      type: 'api',
+      api: { baseUrl: 'https://www.googleapis.com/', authType: 'oauth' },
+    }),
+  },
+  {
+    meta: {
+      id: 'microsoft',
+      slug: 'microsoft',
+      name: 'Microsoft 365',
+      provider: 'microsoft',
+      type: 'api',
+      tagline: 'Outlook, Calendar, OneDrive, Teams, and SharePoint',
+      icon: '🪟',
+      setupHint: 'Microsoft Graph uses OAuth with your own app registration.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[5]!.meta, false),
+      type: 'api',
+      api: { baseUrl: 'https://graph.microsoft.com/v1.0/', authType: 'oauth' },
+    }),
+  },
+  {
+    meta: {
+      id: 'exa',
+      slug: 'exa',
+      name: 'Exa',
+      provider: 'exa',
+      type: 'api',
+      tagline: 'Neural web search',
+      icon: '🔍',
+      setupHint: 'Paste your Exa API key on Verify.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[6]!.meta, false),
+      type: 'api',
+      api: {
+        baseUrl: 'https://api.exa.ai/',
+        authType: 'header',
+        headerName: 'x-api-key',
+        testEndpoint: { method: 'POST', path: 'search', body: { query: 'test', numResults: 1 } },
+      },
+    }),
+  },
+  {
+    meta: {
+      id: 'brave',
+      slug: 'brave-search',
+      name: 'Brave Search',
+      provider: 'brave',
+      type: 'mcp',
+      tagline: 'Web and local search via the Brave Search API',
+      icon: '🦁',
+      setupHint: 'Set BRAVE_API_KEY in Env vars (stored in the OS keychain).',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[7]!.meta, false),
+      type: 'mcp',
+      mcp: {
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-brave-search'],
+        env: { BRAVE_API_KEY: '' },
+      },
+    }),
+  },
+  {
+    meta: {
+      id: 'memory',
+      slug: 'memory',
+      name: 'Memory',
+      provider: 'memory',
+      type: 'mcp',
+      tagline: 'Persistent knowledge-graph memory (no auth required)',
+      icon: '🧠',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[8]!.meta, true),
+      type: 'mcp',
+      mcp: {
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-memory'],
+      },
+    }),
+  },
+  {
+    meta: {
+      id: 'filesystem',
+      slug: 'filesystem',
+      name: 'Filesystem',
+      provider: 'filesystem',
+      type: 'local',
+      tagline: 'Read/write files inside a local folder you choose',
+      icon: '📁',
+      setupHint: 'Set the folder path to expose. File access is scoped to this folder.',
+    },
+    build: () => ({
+      ...presetMockBase(PRESET_MOCKS[9]!.meta, true),
+      type: 'local',
+      local: { path: '~' },
+    }),
+  },
+]
+
 export const useConnectionsStore = defineStore('connections', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
@@ -399,6 +621,29 @@ export const useConnectionsStore = defineStore('connections', () => {
       loaded.value = true
       void subscribe()
     }
+  }
+
+  // Preset catalog for the "add a source" picker (UI-parity area 3). `listPresets`
+  // returns the display metadata; `discoverPreset` returns a ready-to-edit draft
+  // for a chosen provider (correct block pre-filled) + its meta (for setupHint).
+  // No secret ever crosses the boundary — env keys are seeded empty. Browser-dev
+  // serves the mock catalog so the flow works offline.
+  async function listPresets(): Promise<SourcePresetMeta[]> {
+    if (!available.value) return PRESET_MOCKS.map((e) => e.meta)
+    const res = await sc.request<{ presets: SourcePresetMeta[] }>('source.listPresets')
+    return Array.isArray(res.presets) ? res.presets : []
+  }
+
+  async function discoverPreset(
+    presetId: string,
+  ): Promise<{ preset: Source; meta: SourcePresetMeta } | null> {
+    if (!available.value) {
+      const entry = PRESET_MOCKS.find((e) => e.meta.id === presetId)
+      return entry ? { preset: entry.build(), meta: entry.meta } : null
+    }
+    return sc.request<{ preset: Source; meta: SourcePresetMeta }>('source.discoverPreset', {
+      presetId,
+    })
   }
 
   // Create-or-update, keyed by slug. Browser-dev mutates the local list only
@@ -696,6 +941,8 @@ export const useConnectionsStore = defineStore('connections', () => {
     // actions
     loadSources,
     loadServers: loadSources,
+    listPresets,
+    discoverPreset,
     saveSource,
     deleteSource,
     toggleSource,

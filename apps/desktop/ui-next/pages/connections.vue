@@ -6,7 +6,7 @@
       :search-text="(c) => c.slug + c.name + (c.description ?? '') + sourceTransport(c)"
       :placeholder="t('connections.search')"
       show-new
-      @new="openCreator"
+      @new="openAddPicker"
     >
       <template #row="{ item }">
         <div class="lrow">
@@ -40,6 +40,16 @@
       </template>
     </LibraryView>
 
+    <!-- add flow — first step: pick a starting point (blank / AI / preset) -->
+    <ConnectionAddPicker
+      :open="addPickerOpen"
+      :presets="presets"
+      @close="closeAddPicker"
+      @scratch="startFromScratch"
+      @ai="startFromAi"
+      @pick="onPickPreset"
+    />
+
     <!-- create (chat-driven config authoring) -->
     <ConnectionPromptCreator
       :open="creatorOpen"
@@ -48,10 +58,12 @@
       @turn="onCreatorTurn"
     />
 
-    <!-- edit (form) -->
+    <!-- edit (form) — seeded with a preset draft when one was chosen -->
     <ConnectionEditor
       :open="editorOpen"
       :source="editTarget"
+      :seed="seedSource"
+      :setup-hint="seedSetupHint"
       :verify="runVerify"
       @save="onSave"
       @cancel="closeEditor"
@@ -84,6 +96,7 @@
 // `source.*`. Shell from <LibraryView>; all state + handlers live in
 // useConnectionsPage (page-controller). Status is the persisted last-test result,
 // not a live process.
+import ConnectionAddPicker from '~/components/connection/ConnectionAddPicker.vue'
 import ConnectionDetail from '~/components/connection/ConnectionDetail.vue'
 import ConnectionEditor from '~/components/connection/ConnectionEditor.vue'
 import ConnectionPromptCreator from '~/components/connection/ConnectionPromptCreator.vue'
@@ -106,12 +119,20 @@ const statusColor = (s: Source): string => SOURCE_STATUS_COLORS[deriveStatus(s)]
 const {
   sources,
   accountId,
+  addPickerOpen,
+  presets,
+  openAddPicker,
+  closeAddPicker,
+  startFromScratch,
+  startFromAi,
+  onPickPreset,
   creatorOpen,
-  openCreator,
   onCreatorTurn,
   onCreatorClose,
   editorOpen,
   editTarget,
+  seedSource,
+  seedSetupHint,
   openEditor,
   closeEditor,
   onSave,

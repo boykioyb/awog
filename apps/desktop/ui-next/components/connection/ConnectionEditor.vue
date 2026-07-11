@@ -6,6 +6,16 @@
     @close="emit('cancel')"
   >
     <div class="cne">
+      <!-- Preset setup hint — shown only when a catalog provider seeded this new
+           form (never on edit). Provider-specific guidance from the catalog. -->
+      <div v-if="setupHint && !isExisting" class="cne-setup">
+        <Icon name="bulb" style="width: 14px; height: 14px; flex: 0 0 auto" />
+        <div class="cne-setup-tx">
+          <span class="cne-setup-t">{{ t('connections.editor.setupTitle') }}</span>
+          <span>{{ setupHint }}</span>
+        </div>
+      </div>
+
       <!-- top-level source type: switches the whole form (mcp vs api). Locked on
            edit — changing an existing source's kind would orphan its config. -->
       <div class="cne-field">
@@ -466,6 +476,14 @@ type HeaderMode = 'single' | 'multi'
 const props = defineProps<{
   open: boolean
   source: Source | null
+  // Preset draft that PREFILLS the form for a NEW connection (UI-parity area 3).
+  // Distinct from `source` (the edit target): a seed keeps the source "new"
+  // (editable slug, generated id) while pre-filling every field from a catalog
+  // provider. `source` wins when both are set (edit path). null → a blank form.
+  seed?: Source | null
+  // One line of provider-specific guidance shown as a banner when a preset seeded
+  // the form (from the catalog meta). Empty/absent → no banner.
+  setupHint?: string
   // Injected so the editor never imports the store (SoC). Save-first: persists the
   // draft (+ api credential), then runs `source.test` by slug and resolves it.
   verify: (data: SourceInput, credential?: ApiCredentialInput) => Promise<SourceTestOutcome>
@@ -609,15 +627,20 @@ const apiTestBodyOf = (s: Source | null): string => {
   return body && Object.keys(body).length > 0 ? JSON.stringify(body, null, 2) : ''
 }
 
-const draft = ref<Draft>(initDraft(props.source))
-const argsText = ref(mcpArgsOf(props.source).join('\n'))
-const envEntries = ref<KvEntry[]>(toEntries(mcpEnvOf(props.source)))
-const headerEntries = ref<KvEntry[]>(toEntries(mcpHeadersOf(props.source)))
+// The source that PREFILLS the form: the edit target (`source`) wins; else the
+// preset `seed` (a new source). Used for every field seed below + the re-seed
+// watch. `isExisting` still keys off `source` alone, so a seeded preset stays new.
+const seedOf = (): Source | null => props.source ?? props.seed ?? null
+
+const draft = ref<Draft>(initDraft(seedOf()))
+const argsText = ref(mcpArgsOf(seedOf()).join('\n'))
+const envEntries = ref<KvEntry[]>(toEntries(mcpEnvOf(seedOf())))
+const headerEntries = ref<KvEntry[]>(toEntries(mcpHeadersOf(seedOf())))
 
 // Api form working state.
-const defaultHeaderEntries = ref<KvEntry[]>(toEntries(apiDefaultHeadersOf(props.source)))
-const multiHeaderEntries = ref<KvEntry[]>(namesToEntries(apiHeaderNamesOf(props.source)))
-const apiTestBodyText = ref<string>(apiTestBodyOf(props.source))
+const defaultHeaderEntries = ref<KvEntry[]>(toEntries(apiDefaultHeadersOf(seedOf())))
+const multiHeaderEntries = ref<KvEntry[]>(namesToEntries(apiHeaderNamesOf(seedOf())))
+const apiTestBodyText = ref<string>(apiTestBodyOf(seedOf()))
 // Write-only credential inputs — always blank on open (a stored credential is
 // never readable), so a non-empty value means the user intends to (over)write.
 const credValue = ref('')
@@ -626,8 +649,8 @@ const credPassword = ref('')
 
 // Optional mcp auth probe (healthCheck): a tool name + JSON args Verify runs after
 // the handshake to verify the token actually authenticates.
-const healthTool = ref<string>(props.source?.healthCheck?.tool ?? '')
-const healthArgsText = ref<string>(healthArgsToText(props.source?.healthCheck?.args))
+const healthTool = ref<string>(seedOf()?.healthCheck?.tool ?? '')
+const healthArgsText = ref<string>(healthArgsToText(seedOf()?.healthCheck?.args))
 
 // Tools detected by the last Verify — populate the mcp health-check picker (a
 // source carries no persisted tools list).
@@ -728,23 +751,25 @@ const apiTestMethodSelect = computed<string>({
   },
 })
 
-// Re-seed every time the modal opens or the target source changes.
+// Re-seed every time the modal opens, the target source changes, or a preset seed
+// changes (start-from-scratch vs pick-a-provider both open the same editor).
 watch(
-  () => [props.open, props.source] as const,
+  () => [props.open, props.source, props.seed] as const,
   ([isOpen]) => {
     if (!isOpen) return
-    draft.value = initDraft(props.source)
-    argsText.value = mcpArgsOf(props.source).join('\n')
-    envEntries.value = toEntries(mcpEnvOf(props.source))
-    headerEntries.value = toEntries(mcpHeadersOf(props.source))
-    defaultHeaderEntries.value = toEntries(apiDefaultHeadersOf(props.source))
-    multiHeaderEntries.value = namesToEntries(apiHeaderNamesOf(props.source))
-    apiTestBodyText.value = apiTestBodyOf(props.source)
+    const seed = seedOf()
+    draft.value = initDraft(seed)
+    argsText.value = mcpArgsOf(seed).join('\n')
+    envEntries.value = toEntries(mcpEnvOf(seed))
+    headerEntries.value = toEntries(mcpHeadersOf(seed))
+    defaultHeaderEntries.value = toEntries(apiDefaultHeadersOf(seed))
+    multiHeaderEntries.value = namesToEntries(apiHeaderNamesOf(seed))
+    apiTestBodyText.value = apiTestBodyOf(seed)
     credValue.value = ''
     credUsername.value = ''
     credPassword.value = ''
-    healthTool.value = props.source?.healthCheck?.tool ?? ''
-    healthArgsText.value = healthArgsToText(props.source?.healthCheck?.args)
+    healthTool.value = seed?.healthCheck?.tool ?? ''
+    healthArgsText.value = healthArgsToText(seed?.healthCheck?.args)
     detectedTools.value = []
     verifyResult.value = null
     verifyProbe.value = null
@@ -1047,6 +1072,26 @@ function namesToEntries(names: string[]): KvEntry[] {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+.cne-setup {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--accentDim);
+  border: 1px solid var(--accent);
+  color: var(--text);
+}
+.cne-setup-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.9231rem;
+  line-height: 1.5;
+}
+.cne-setup-t {
+  font-weight: 600;
 }
 .cne-grid {
   display: grid;

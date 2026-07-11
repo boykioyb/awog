@@ -9,6 +9,7 @@ import {
   type Source,
   type SourceInput,
   type SourceOAuthResult,
+  type SourcePresetMeta,
   type SourceTestOutcome,
 } from '~/stores/connections'
 
@@ -65,6 +66,57 @@ export function useConnectionsPage() {
     void refresh({ silent: true })
   })
 
+  // --- add flow (picker → scratch / AI / preset) ---------------------------
+  // The LibraryView "+" opens a picker offering three paths (UI-parity area 3):
+  // start blank, describe with AI, or pick a catalog provider (→ seed the editor
+  // with a pre-filled draft).
+  const addPickerOpen = ref(false)
+  const presets = ref<SourcePresetMeta[]>([])
+  let presetsLoaded = false
+  const loadPresets = async (): Promise<void> => {
+    try {
+      presets.value = await store.listPresets()
+      presetsLoaded = true
+    } catch (err) {
+      console.error('[connections] listPresets failed', err)
+    }
+  }
+  const openAddPicker = () => {
+    addPickerOpen.value = true
+    if (!presetsLoaded) void loadPresets()
+  }
+  const closeAddPicker = () => {
+    addPickerOpen.value = false
+  }
+  const startFromScratch = () => {
+    addPickerOpen.value = false
+    openNew()
+  }
+  const startFromAi = () => {
+    addPickerOpen.value = false
+    openCreator()
+  }
+  // Fetch the pre-filled draft for a chosen provider and open the editor seeded
+  // with it (new source: editable slug + generated id). The setupHint is surfaced
+  // as a banner in the editor.
+  const onPickPreset = async (id: string) => {
+    try {
+      const res = await store.discoverPreset(id)
+      if (!res) return
+      seedSource.value = res.preset
+      seedSetupHint.value = res.meta.setupHint ?? ''
+      editTarget.value = null
+      addPickerOpen.value = false
+      editorOpen.value = true
+    } catch (err) {
+      console.error('[connections] discoverPreset failed', err)
+      pushToast(
+        `Could not load preset: ${err instanceof Error ? err.message : 'see console'}`,
+        'error',
+      )
+    }
+  }
+
   // --- create (chat-driven) ------------------------------------------------
   const creatorOpen = ref(false)
   const openCreator = () => {
@@ -83,17 +135,27 @@ export function useConnectionsPage() {
   // --- edit (form) ---------------------------------------------------------
   const editorOpen = ref(false)
   const editTarget = ref<Source | null>(null)
+  // Preset draft seeding a NEW connection (from the picker) + its setup hint. Both
+  // clear whenever the editor opens for edit / scratch so a stale seed never leaks.
+  const seedSource = ref<Source | null>(null)
+  const seedSetupHint = ref('')
   const openEditor = (s: Source) => {
     editTarget.value = s
+    seedSource.value = null
+    seedSetupHint.value = ''
     editorOpen.value = true
   }
   const openNew = () => {
     editTarget.value = null
+    seedSource.value = null
+    seedSetupHint.value = ''
     editorOpen.value = true
   }
   const closeEditor = () => {
     editorOpen.value = false
     editTarget.value = null
+    seedSource.value = null
+    seedSetupHint.value = ''
   }
   // Save the source config, then (for an `api` source whose credential fields were
   // actually filled) persist the credential to the keychain. The credential is
@@ -231,6 +293,14 @@ export function useConnectionsPage() {
     // hydrate
     refreshing,
     refresh,
+    // add flow (picker)
+    addPickerOpen,
+    presets,
+    openAddPicker,
+    closeAddPicker,
+    startFromScratch,
+    startFromAi,
+    onPickPreset,
     // create
     creatorOpen,
     openCreator,
@@ -239,6 +309,8 @@ export function useConnectionsPage() {
     // edit
     editorOpen,
     editTarget,
+    seedSource,
+    seedSetupHint,
     openEditor,
     openNew,
     closeEditor,
