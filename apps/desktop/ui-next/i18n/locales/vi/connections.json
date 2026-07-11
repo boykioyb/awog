@@ -77,9 +77,15 @@
 
   "connections.edit.saving": "Đang lưu…",
 
+  "connections.menu.more": "Thêm tác vụ",
+  "connections.menu.edit": "Chỉnh sửa",
+  "connections.menu.showInFolder": "Hiện trong thư mục",
+  "connections.menu.delete": "Xoá",
+
   "connections.detail.test": "Kiểm tra kết nối",
   "connections.detail.edit": "Sửa connection",
   "connections.detail.delete": "Xoá connection",
+  "connections.detail.showInFolder": "Hiện trong thư mục",
   "connections.detail.testOk": "Kết nối OK",
   "connections.detail.testFail": "Kết nối thất bại",
   "connections.detail.authFail": "Kết nối được, nhưng xác thực thất bại",

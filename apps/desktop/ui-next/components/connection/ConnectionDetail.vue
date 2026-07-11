@@ -48,6 +48,14 @@
             style="width: 13px; height: 13px"
           />
         </button>
+        <button
+          v-if="canReveal"
+          class="iconbtn cnd-act"
+          :title="t('connections.detail.showInFolder')"
+          @click="emit('reveal')"
+        >
+          <Icon name="folder" style="width: 13px; height: 13px" />
+        </button>
         <button class="iconbtn cnd-act" :title="t('connections.detail.edit')" @click="emit('edit')">
           <Icon name="edit" style="width: 13px; height: 13px" />
         </button>
@@ -360,6 +368,7 @@ import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import SourceAvatar from '~/components/connection/SourceAvatar.vue'
 import SourceStatusDot from '~/components/connection/SourceStatusDot.vue'
 import { useConnectionDetail } from '~/composables/useConnectionDetail'
+import { useSidecar } from '~/composables/useSidecar'
 import type { Source, SourceOAuthResult, SourceTestOutcome } from '~/stores/connections'
 
 const props = defineProps<{
@@ -369,6 +378,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   edit: []
   delete: []
+  reveal: []
   toggle: []
   test: [done: (outcome: SourceTestOutcome) => void]
   oauth: [done: (result: SourceOAuthResult) => void]
@@ -376,6 +386,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// "Show in folder" only works inside the Electron shell (main derives the path).
+// In browser dev the bridge is absent, so hide the affordance rather than fail.
+const canReveal = useSidecar().available
 
 // Derived display + the three read-only sections (Connection/Tools/Permissions/Doc).
 const {

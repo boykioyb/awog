@@ -1,4 +1,5 @@
 import { computed, onMounted, ref } from 'vue'
+import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { useI18n } from '~/composables/useI18n'
 import { useSidecar } from '~/composables/useSidecar'
 import { useToasts } from '~/composables/useToasts'
@@ -282,6 +283,47 @@ export function useConnectionsPage() {
     }
   }
 
+  // --- show in folder ------------------------------------------------------
+  // Reveal a source's on-disk folder (~/.awog/sources/<slug>) in the OS file
+  // manager. Only available inside the Electron shell — the row/detail affordance
+  // is hidden/disabled otherwise (`canReveal`), so this is a defensive no-op.
+  const canReveal = sc.available
+  const revealSource = async (s: Source): Promise<void> => {
+    if (!canReveal) return
+    try {
+      await sc.revealSourceFolder(s.slug)
+    } catch (err) {
+      console.error('[connections] reveal failed', err)
+      pushToast(
+        `Could not open folder: ${err instanceof Error ? err.message : 'see console'}`,
+        'error',
+      )
+    }
+  }
+
+  // --- per-source row menu (⋯ button + right-click) ------------------------
+  // Craft-style SourceMenu: Edit / Show in folder / Delete. Reuses the shared
+  // ContextMenu primitive; the actions delegate to the existing edit/delete
+  // handlers so there is a single source of truth per action.
+  const rowMenu = useContextMenu<Source>()
+  const openRowMenu = (e: MouseEvent, s: Source) => rowMenu.open(e, s)
+  const rowMenuItems = computed<MenuItem[]>(() => {
+    const rows: MenuItem[] = [{ id: 'edit', label: t('connections.menu.edit'), icon: 'edit' }]
+    if (canReveal) {
+      rows.push({ id: 'reveal', label: t('connections.menu.showInFolder'), icon: 'folder' })
+    }
+    rows.push({ separator: true })
+    rows.push({ id: 'delete', label: t('connections.menu.delete'), icon: 'trash', danger: true })
+    return rows
+  })
+  const onRowMenuSelect = (id: string) => {
+    const s = rowMenu.target.value
+    if (!s) return
+    if (id === 'edit') openEditor(s)
+    else if (id === 'reveal') void revealSource(s)
+    else if (id === 'delete') askDelete(s)
+  }
+
   return {
     // store-backed
     sources: computed(() => store.sources),
@@ -329,6 +371,13 @@ export function useConnectionsPage() {
     cancelDelete,
     deleteDescription,
     confirmDelete,
+    // show in folder + row menu
+    canReveal,
+    revealSource,
+    rowMenu,
+    openRowMenu,
+    rowMenuItems,
+    onRowMenuSelect,
     // toasts
     toasts,
     toastColor,

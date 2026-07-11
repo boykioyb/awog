@@ -93,6 +93,13 @@ export function useSidecar() {
     await api.revealPath(workspaceRoot, path)
   }
 
+  // Reveal a source's folder (~/.awog/sources/<slug>) in the OS file manager.
+  // Only the slug crosses IPC; the main process derives + validates the path.
+  const revealSourceFolder = async (slug: string): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.revealSourceFolder(slug)
+  }
+
   // Open a workspace-relative file with the OS default handler (dir → file
   // manager). Same workspace validation as revealPath.
   const openPath = async (workspaceRoot: string, path: string): Promise<void> => {
@@ -172,6 +179,7 @@ export function useSidecar() {
     onEvent,
     openExternal,
     revealPath,
+    revealSourceFolder,
     openPath,
     openFileExternal,
     isVscodeAvailable,

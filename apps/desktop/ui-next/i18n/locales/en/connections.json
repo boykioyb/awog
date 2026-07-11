@@ -77,9 +77,15 @@
 
   "connections.edit.saving": "Saving…",
 
+  "connections.menu.more": "More actions",
+  "connections.menu.edit": "Edit",
+  "connections.menu.showInFolder": "Show in folder",
+  "connections.menu.delete": "Delete",
+
   "connections.detail.test": "Test connection",
   "connections.detail.edit": "Edit connection",
   "connections.detail.delete": "Delete connection",
+  "connections.detail.showInFolder": "Show in folder",
   "connections.detail.testOk": "Connection OK",
   "connections.detail.testFail": "Connection failed",
   "connections.detail.authFail": "Connected, but auth failed",

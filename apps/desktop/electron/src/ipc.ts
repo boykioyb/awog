@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ipcMain, shell, dialog, type BrowserWindow } from 'electron'
@@ -19,6 +20,14 @@ import { isVscodeAvailable, openInVscode } from './vscode'
 // that could launch local files or other apps from untrusted content —
 // file:, javascript:, data:, and custom protocol handlers (security invariant #7).
 const OPEN_EXTERNAL_SAFE_SCHEME = /^(?:https?|mailto):/i
+
+// A source's on-disk folder is ~/.awog/sources/<slug>. The renderer only ever
+// knows the slug, so "reveal in folder" passes a slug (never a path): main
+// derives the absolute path itself so untrusted renderer input can't aim the
+// reveal at an arbitrary location (security invariant #2). This charset mirrors
+// the sidecar's SOURCE_SLUG_RE and, by forbidding separators + dots, makes path
+// traversal impossible; the startsWith check below is defence in depth.
+const SOURCE_SLUG_RE = /^[a-z0-9-]+$/
 
 type RequestPayload = { method: string; params?: unknown }
 type PathPayload = { root: string; path: string }
@@ -78,6 +87,21 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('shell:revealPath', async (_e, { root, path }: PathPayload) => {
     shell.showItemInFolder(resolveInsideWorkspace(root, path))
+  })
+
+  // Reveal a source's folder (~/.awog/sources/<slug>) in the OS file manager.
+  // Takes a SLUG ONLY — the path is derived + validated here, never trusted from
+  // the renderer. Mirrors the sidecar's awogHome() = resolve(homedir(), '.awog').
+  ipcMain.handle('shell:revealSourceFolder', async (_e, slug: string) => {
+    if (typeof slug !== 'string' || !SOURCE_SLUG_RE.test(slug)) {
+      throw new Error(`invalid source slug: ${String(slug)}`)
+    }
+    const sourcesDir = join(homedir(), '.awog', 'sources')
+    const target = join(sourcesDir, slug)
+    if (!target.startsWith(sourcesDir + sep)) {
+      throw new Error(`source path escapes sources dir: ${target}`)
+    }
+    shell.showItemInFolder(target)
   })
 
   ipcMain.handle('shell:openPath', async (_e, { root, path }: PathPayload) => {

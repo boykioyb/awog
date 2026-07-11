@@ -9,21 +9,30 @@
       @new="openAddPicker"
     >
       <template #row="{ item }">
-        <div class="lrow">
-          <SourceAvatar :source="item" size="sm" />
-          <span class="ttl">{{ item.name || item.slug }}</span>
-          <span class="tag crow-type">{{ t('connections.typeBadge.' + item.type) }}</span>
-          <span
-            v-if="deriveStatus(item) !== 'connected'"
-            class="tag crow-status"
-            :style="{ color: statusColor(item), borderColor: statusColor(item) }"
-            :title="item.connectionError || undefined"
-          >
-            {{ t('connections.statusBadge.' + deriveStatus(item)) }}
-          </span>
-        </div>
-        <div class="sub">
-          {{ item.tagline || item.provider || sourceTransport(item) }}
+        <div class="crow" @contextmenu.prevent="openRowMenu($event, item)">
+          <div class="lrow">
+            <SourceAvatar :source="item" size="sm" />
+            <span class="ttl">{{ item.name || item.slug }}</span>
+            <span class="tag crow-type">{{ t('connections.typeBadge.' + item.type) }}</span>
+            <span
+              v-if="deriveStatus(item) !== 'connected'"
+              class="tag crow-status"
+              :style="{ color: statusColor(item), borderColor: statusColor(item) }"
+              :title="item.connectionError || undefined"
+            >
+              {{ t('connections.statusBadge.' + deriveStatus(item)) }}
+            </span>
+            <button
+              class="iconbtn crow-menu"
+              :title="t('connections.menu.more')"
+              @click.stop="openRowMenu($event, item)"
+            >
+              <Icon name="dots" style="width: 13px; height: 13px" />
+            </button>
+          </div>
+          <div class="sub">
+            {{ item.tagline || item.provider || sourceTransport(item) }}
+          </div>
         </div>
       </template>
 
@@ -32,6 +41,7 @@
           :source="item"
           @edit="openEditor(item)"
           @delete="askDelete(item)"
+          @reveal="revealSource(item)"
           @toggle="onToggle(item)"
           @test="(done) => runTest(item, done)"
           @oauth="(done) => runOAuth(item, done)"
@@ -39,6 +49,16 @@
         />
       </template>
     </LibraryView>
+
+    <!-- per-source action menu (⋯ button + right-click): Edit / Show in folder /
+         Delete — Craft SourceMenu parity -->
+    <ContextMenu
+      :open="!!rowMenu.pos.value"
+      :position="rowMenu.pos.value ?? { x: 0, y: 0 }"
+      :items="rowMenuItems"
+      @close="rowMenu.close"
+      @select="onRowMenuSelect"
+    />
 
     <!-- add flow — first step: pick a starting point (blank / AI / preset) -->
     <ConnectionAddPicker
@@ -146,6 +166,11 @@ const {
   cancelDelete,
   deleteDescription,
   confirmDelete,
+  revealSource,
+  rowMenu,
+  openRowMenu,
+  rowMenuItems,
+  onRowMenuSelect,
   toasts,
   toastColor,
 } = useConnectionsPage()
@@ -161,5 +186,23 @@ const {
   font-size: 12px;
   padding: 1px 6px;
   background: transparent;
+}
+/* Per-source ⋯ menu button — reveals on row hover (mirrors the app's .hoveract
+   pattern: kept in layout so fading it in never shifts the badges). */
+.crow-menu {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.libli:hover .crow-menu {
+  opacity: 1;
+}
+.crow-menu:hover {
+  background: var(--bgHover);
+  color: var(--text);
 }
 </style>

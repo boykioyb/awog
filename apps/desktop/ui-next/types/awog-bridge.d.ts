@@ -41,6 +41,9 @@ export interface AwogBridge {
   onEvent(handler: (event: AwogEngineEvent) => void): () => void
   openExternal(url: string): Promise<void>
   revealPath(root: string, path: string): Promise<void>
+  // Reveal a source's folder (~/.awog/sources/<slug>) in the OS file manager.
+  // Takes a SLUG only — main derives + validates the path (never renderer input).
+  revealSourceFolder(slug: string): Promise<void>
   openPath(root: string, path: string): Promise<void>
   // Open a workspace file in the default browser (file:// URL, path validated).
   openFileExternal(root: string, path: string): Promise<void>

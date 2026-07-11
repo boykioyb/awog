@@ -55,6 +55,10 @@ const awog = {
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   revealPath: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:revealPath', { root, path }),
+  // Reveal a source's folder (~/.awog/sources/<slug>) — main derives + validates
+  // the path from the slug (the renderer never passes a path).
+  revealSourceFolder: (slug: string): Promise<void> =>
+    ipcRenderer.invoke('shell:revealSourceFolder', slug),
   openPath: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:openPath', { root, path }),
   openFileExternal: (root: string, path: string): Promise<void> =>
