@@ -2,7 +2,8 @@
 //
 // Lưu trữ: ~/.awog/usage/daily/<YYYY-MM-DD>.json — mỗi local-day một file. Nội
 // dung là map bucket key → 4 token bucket + turns:
-//   key = "<accountId>|<provider>|<model>|<source>"   (source = session | task)
+//   key = "<accountId>|<provider>|<model>|<source>|<projectId>"
+//   (source = session | task; projectId = '' khi không thuộc dự án nào)
 //
 // Guardrail bất biến (BẮT BUỘC):
 //   - Ngày < hôm nay là BẤT BIẾN → tính một lần, ghi cache (frozen:true), lần
@@ -32,9 +33,15 @@ export interface UsageBucket {
 
 export type UsageSource = 'session' | 'task'
 
+// Version của schema cache. Tăng khi format bucket key đổi để cache cũ (key
+// thiếu thành phần mới) bị bỏ + tính lại thay vì parse sai.
+//   v1 → key = account|provider|model|source
+//   v2 → key = account|provider|model|source|projectId  (thêm filter dự án)
+const ROLLUP_VERSION = 2
+
 // File rollup một ngày trên đĩa.
 interface DailyRollupFile {
-  version: 1
+  version: typeof ROLLUP_VERSION
   date: string // YYYY-MM-DD (local)
   computedAt: string // ISO
   // true ⇒ ngày đã đóng băng (quá khứ) → đọc cache, không tính lại.
@@ -118,24 +125,28 @@ export function bucketKey(
   provider: string,
   model: string,
   source: UsageSource,
+  projectId: string,
 ): string {
-  return `${accountId}|${provider}|${model}|${source}`
+  return `${accountId}|${provider}|${model}|${source}|${projectId}`
 }
 
-// Giải mã bucket key → 4 thành phần. '|' không xuất hiện trong id/provider/model
-// AWOG, nên split an toàn; phần thừa (nếu model có '|') gộp lại vào model.
+// Giải mã bucket key → 5 thành phần. '|' không xuất hiện trong id/provider/
+// source/projectId AWOG, nên split an toàn; phần thừa (nếu model có '|') gộp lại
+// vào model. source + projectId là 2 token cuối (không chứa '|').
 export function parseBucketKey(key: string): {
   accountId: string
   provider: string
   model: string
   source: UsageSource
+  projectId: string
 } {
   const parts = key.split('|')
   const accountId = parts[0] ?? ''
   const provider = parts[1] ?? ''
-  const source = (parts[parts.length - 1] ?? 'session') as UsageSource
-  const model = parts.slice(2, parts.length - 1).join('|')
-  return { accountId, provider, model, source }
+  const projectId = parts[parts.length - 1] ?? ''
+  const source = (parts[parts.length - 2] ?? 'session') as UsageSource
+  const model = parts.slice(2, parts.length - 2).join('|')
+  return { accountId, provider, model, source, projectId }
 }
 
 function addInto(target: Record<string, UsageBucket>, key: string, add: UsageBucket): void {
@@ -178,14 +189,15 @@ async function readDaily(date: string): Promise<DailyRollupFile | null> {
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
     const f = parsed as Record<string, unknown>
-    if (f.version !== 1 || typeof f.date !== 'string' || typeof f.frozen !== 'boolean') return null
+    if (f.version !== ROLLUP_VERSION || typeof f.date !== 'string' || typeof f.frozen !== 'boolean')
+      return null
     if (!f.buckets || typeof f.buckets !== 'object') return null
     const buckets: Record<string, UsageBucket> = {}
     for (const [k, v] of Object.entries(f.buckets as Record<string, unknown>)) {
       if (isUsageBucket(v)) buckets[k] = v
     }
     return {
-      version: 1,
+      version: ROLLUP_VERSION,
       date: f.date,
       computedAt: typeof f.computedAt === 'string' ? f.computedAt : new Date().toISOString(),
       frozen: f.frozen,
@@ -219,7 +231,7 @@ async function computeDay(dateKey: string): Promise<Record<string, UsageBucket>>
 
   const turns = await collectSessionTurnsSince(startMs, windowEndMs)
   for (const t of turns) {
-    addInto(buckets, bucketKey(t.accountId, t.provider, t.model, 'session'), {
+    addInto(buckets, bucketKey(t.accountId, t.provider, t.model, 'session', t.projectId), {
       inputTokens: t.inputTokens,
       outputTokens: t.outputTokens,
       cacheReadTokens: t.cacheReadTokens,
@@ -230,7 +242,7 @@ async function computeDay(dateKey: string): Promise<Record<string, UsageBucket>>
 
   const runs = await collectTaskRunsSince(startMs, windowEndMs)
   for (const r of runs) {
-    addInto(buckets, bucketKey(r.accountId, r.provider, r.model, 'task'), {
+    addInto(buckets, bucketKey(r.accountId, r.provider, r.model, 'task', r.projectId), {
       inputTokens: r.inputTokens,
       outputTokens: r.outputTokens,
       cacheReadTokens: r.cacheReadTokens,
@@ -256,7 +268,7 @@ async function bucketsForDay(dateKey: string, isToday: boolean): Promise<Record<
     const buckets = await computeDay(dateKey)
     try {
       await writeDaily({
-        version: 1,
+        version: ROLLUP_VERSION,
         date: dateKey,
         computedAt: new Date().toISOString(),
         frozen: true,

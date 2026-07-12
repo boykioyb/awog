@@ -21,6 +21,8 @@ const Params = z.object({
   range: z.enum(['1d', '7d', '30d', '90d', 'all']).default('7d'),
   // Lọc theo account (id). Bỏ ⇒ tất cả account.
   accountId: z.string().optional(),
+  // Lọc theo dự án (id). Bỏ ⇒ tất cả dự án.
+  projectId: z.string().optional(),
 })
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -80,6 +82,7 @@ async function buildBySession(
   toMs: number,
   accountIndex: Map<string, { label: string; provider: ProviderName }>,
   filterAccountId: string | undefined,
+  filterProjectId: string | undefined,
   overrides: ReturnType<typeof parsePricingOverrides>,
   remote: Awaited<ReturnType<typeof loadRemotePricingMap>>,
 ): Promise<ActivityBySession[]> {
@@ -92,10 +95,11 @@ async function buildBySession(
 
   const bySessionMap = new Map<string, SessionAcc>()
   for (const t of turns) {
-    // Same account guardrails as the rollup path: drop orphan-account turns and
-    // apply the account filter so numbers stay consistent across the page.
+    // Same guardrails as the rollup path: drop orphan-account turns and apply the
+    // account + project filters so numbers stay consistent across the page.
     if (!accountIndex.has(t.accountId)) continue
     if (filterAccountId !== undefined && t.accountId !== filterAccountId) continue
+    if (filterProjectId !== undefined && t.projectId !== filterProjectId) continue
 
     const tokens = t.inputTokens + t.outputTokens + t.cacheReadTokens + t.cacheWriteTokens
     const price = getEffectivePricing(t.model, overrides, remote)
@@ -208,7 +212,7 @@ register('activity.summary', async (raw): Promise<ActivitySummary> => {
     let dayTokens = 0
     let dayCost = 0
     for (const [key, bucket] of Object.entries(day.buckets)) {
-      const { accountId, provider, model } = parseBucketKey(key)
+      const { accountId, provider, model, projectId } = parseBucketKey(key)
       // Bỏ usage của account mồ côi (đã logout/xoá khỏi credentials): nếu giữ,
       // chúng làm phồng tổng mà không có dòng nhận diện / chọn được trong UI →
       // tổng không khớp bảng BY ACCOUNT. Loại khỏi MỌI số liệu (totals + by* +
@@ -216,6 +220,8 @@ register('activity.summary', async (raw): Promise<ActivitySummary> => {
       if (!accountIndex.has(accountId)) continue
       // Lọc account: bỏ qua bucket không khớp khi filter bật.
       if (params.accountId !== undefined && accountId !== params.accountId) continue
+      // Lọc dự án: bỏ qua bucket không khớp khi filter bật.
+      if (params.projectId !== undefined && projectId !== params.projectId) continue
 
       const tokens = totalTokens(bucket)
       const price = getEffectivePricing(model, overrides, remote)
@@ -309,6 +315,7 @@ register('activity.summary', async (raw): Promise<ActivitySummary> => {
     toMs,
     accountIndex,
     params.accountId,
+    params.projectId,
     overrides,
     remote,
   )

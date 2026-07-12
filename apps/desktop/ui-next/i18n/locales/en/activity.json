@@ -11,6 +11,7 @@
   "activity.range.long.90d": "Last 90 days",
   "activity.range.long.all": "All time",
   "activity.account.all": "All accounts",
+  "activity.project.all": "All projects",
   "activity.error": "Showing fallback data — {msg}",
 
   "activity.cards.totalTokens": "Total tokens",

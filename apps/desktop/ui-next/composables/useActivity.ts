@@ -11,6 +11,7 @@
 import { computed, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useAccounts } from '~/composables/useAccounts'
+import { useProjects } from '~/composables/useProjects'
 
 // Time range selector value — mirrors the sidecar contract.
 export type ActivityRange = '1d' | '7d' | '30d' | '90d' | 'all'
@@ -98,6 +99,19 @@ export type ActivityChartBar = {
 }
 
 const ACCOUNT_ALL = 'all' as const
+const PROJECT_ALL = 'all' as const
+
+// Client-side memo of successful summaries, keyed by range|accountId|projectId.
+// Flipping ranges (1d/7d/30d…) or reopening the modal within the TTL serves the
+// cached result instantly — no IPC round-trip and no bySession JSONL re-scan.
+// Module-level so it survives ActivityView's v-if remount; the short TTL bounds
+// staleness for the live "today" bucket (a running session keeps spending).
+const SUMMARY_TTL_MS = 30_000
+const summaryCache = new Map<string, { summary: ActivitySummary; at: number }>()
+
+function summaryCacheKey(range: ActivityRange, accountId: string, projectId: string): string {
+  return `${range}|${accountId}|${projectId}`
+}
 
 // ── Compact + currency formatting (module-level pure helpers) ──
 
@@ -364,14 +378,21 @@ function normalize(raw: unknown, range: ActivityRange): ActivitySummary {
 export function useActivity() {
   const sc = useSidecar()
   const { accounts } = useAccounts()
+  const { projects } = useProjects()
 
   const range = ref<ActivityRange>('7d')
   // 'all' = no account filter; otherwise a real account id from useAccounts.
   const accountId = ref<string>(ACCOUNT_ALL)
+  // 'all' = no project filter; otherwise a real project id from useProjects.
+  const projectId = ref<string>(PROJECT_ALL)
   // By-session table sort: most-used (default) or least-used.
   const sessionSort = ref<SessionSort>('most')
   const summary = ref<ActivitySummary>(sc.available ? emptySummary(range.value) : mockSummary('7d'))
   const loading = ref(false)
+  // True only until the very first summary lands. The cards show "…" during this
+  // one; after that a range/filter switch keeps the previous numbers visible while
+  // the new ones load (stale-while-revalidate) so the view never blanks/flickers.
+  const initialLoad = ref(sc.available)
   const error = ref<string | null>(null)
 
   // Account filter options for the AppSelect (All + each real account).
@@ -380,32 +401,103 @@ export function useActivity() {
     ...accounts.value.map((a) => ({ id: a.id, label: a.label, display: a.display })),
   ])
 
-  async function fetchSummary(): Promise<void> {
+  // Low-level fetch for one (range, account, project) combo — serves the memo when
+  // fresh, else hits the sidecar and stores the result. Never touches summary /
+  // loading, so it doubles as the prefetch primitive. Returns null when offline.
+  async function requestSummary(
+    r: ActivityRange,
+    acc: string,
+    proj: string,
+    force: boolean,
+  ): Promise<ActivitySummary | null> {
+    if (!sc.available) return null
+    const key = summaryCacheKey(r, acc, proj)
+    if (!force) {
+      const hit = summaryCache.get(key)
+      if (hit && Date.now() - hit.at < SUMMARY_TTL_MS) return hit.summary
+    }
+    const res = await sc.request<unknown>('activity.summary', {
+      range: r,
+      ...(acc !== ACCOUNT_ALL ? { accountId: acc } : {}),
+      ...(proj !== PROJECT_ALL ? { projectId: proj } : {}),
+    })
+    const norm = normalize(res, r)
+    summaryCache.set(key, { summary: norm, at: Date.now() })
+    return norm
+  }
+
+  // Load the summary for the CURRENT selection into the view. `force` bypasses the
+  // memo. A stale-response guard drops any result whose selection changed while it
+  // was in flight (fast range flipping) so late arrivals never clobber the view.
+  async function fetchSummary(force = false): Promise<void> {
     if (!sc.available) {
       summary.value = mockSummary(range.value)
+      initialLoad.value = false
       return
     }
+    const r = range.value
+    const acc = accountId.value
+    const proj = projectId.value
+    const selectionCurrent = (): boolean =>
+      r === range.value && acc === accountId.value && proj === projectId.value
+
+    // Memo hit → swap instantly, no loading flash.
+    const key = summaryCacheKey(r, acc, proj)
+    const hit = force ? undefined : summaryCache.get(key)
+    if (hit && Date.now() - hit.at < SUMMARY_TTL_MS) {
+      summary.value = hit.summary
+      error.value = null
+      loading.value = false
+      initialLoad.value = false
+      return
+    }
+
     loading.value = true
     error.value = null
     try {
-      const res = await sc.request<unknown>('activity.summary', {
-        range: range.value,
-        ...(accountId.value !== ACCOUNT_ALL ? { accountId: accountId.value } : {}),
-      })
-      summary.value = normalize(res, range.value)
+      const norm = await requestSummary(r, acc, proj, force)
+      if (!selectionCurrent()) return // superseded by a newer selection — discard
+      if (norm) summary.value = norm
     } catch (err) {
+      if (!selectionCurrent()) return
       // Method not yet implemented (parallel work) or a transient failure: keep
       // the page usable with the mock seed rather than an empty/broken screen.
       console.warn('[activity] activity.summary failed', err)
-      summary.value = mockSummary(range.value)
+      summary.value = mockSummary(r)
       error.value = err instanceof Error ? err.message : 'Failed to load activity'
     } finally {
-      loading.value = false
+      if (selectionCurrent()) {
+        loading.value = false
+        initialLoad.value = false
+      }
     }
   }
 
-  // Re-fetch when the range or account filter changes (immediate first load).
-  watch([range, accountId], () => void fetchSummary(), { immediate: true })
+  // Warm every range for the current account/project combo in the background so a
+  // range switch is instant (the "precompute" the user expects). Sequential —
+  // cheapest range first ('all' scans the most history) — to avoid firing five
+  // concurrent JSONL scans; already-fresh combos are skipped by the memo.
+  async function prefetchAll(): Promise<void> {
+    if (!sc.available) return
+    const acc = accountId.value
+    const proj = projectId.value
+    for (const r of ACTIVITY_RANGES) {
+      // Bail if the filter combo changed under us — a new prefetch pass took over.
+      if (acc !== accountId.value || proj !== projectId.value) return
+      // The visible range is already handled by fetchSummary — don't double-fetch.
+      if (r === range.value) continue
+      try {
+        await requestSummary(r, acc, proj, false)
+      } catch {
+        // Best-effort warm-up; the on-demand fetch will surface any real error.
+      }
+    }
+  }
+
+  // Re-fetch the visible selection when range or a filter changes (immediate first
+  // load), and warm the other ranges whenever the filter combo changes.
+  watch([range, accountId, projectId], () => void fetchSummary(), { immediate: true })
+  watch([accountId, projectId], () => void prefetchAll(), { immediate: true })
 
   // ── Derived view ──
 
@@ -468,10 +560,13 @@ export function useActivity() {
     // state
     range,
     accountId,
+    projectId,
     sessionSort,
     accountOptions,
     accounts,
+    projects,
     loading,
+    initialLoad,
     error,
     available: sc.available,
     // derived

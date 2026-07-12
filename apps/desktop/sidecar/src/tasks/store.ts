@@ -396,6 +396,9 @@ export interface TaskRunUsageRecord {
   provider: string
   model: string
   accountId: string
+  // Owning project id (empty string for a legacy/unknown task). Lets the Activity
+  // page filter usage by project, mirroring SessionTurnUsage.
+  projectId: string
 }
 
 const TASK_UNKNOWN_ACCOUNT_ID = 'unknown'
@@ -433,6 +436,11 @@ export async function collectTaskRunsSince(
       })
       continue
     }
+    // Resolve the owning project once per task (snapshot is cached). Empty string
+    // when the task or its projectId is missing (legacy/corrupt) — treated as
+    // "no project" by the Activity filter.
+    // eslint-disable-next-line no-await-in-loop
+    const projectId = (await loadTask(id))?.projectId ?? ''
     const lines = raw.split('\n')
     for (let i = 0; i < lines.length; i += 1) {
       const evt = parseLine(lines[i] ?? '', file, i + 1)
@@ -455,6 +463,7 @@ export async function collectTaskRunsSince(
         provider: u.provider,
         model: u.model,
         accountId: u.accountId ?? TASK_UNKNOWN_ACCOUNT_ID,
+        projectId,
       })
     }
   }

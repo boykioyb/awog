@@ -22,6 +22,12 @@
           </span>
         </div>
         <AppSelect
+          v-model="projectId"
+          :options="projectSelectOptions"
+          :placeholder="t('activity.project.all')"
+          width="200px"
+        />
+        <AppSelect
           v-model="accountId"
           :options="accountSelectOptions"
           :placeholder="t('activity.account.all')"
@@ -40,7 +46,7 @@
     <div class="actcards">
       <div class="tile actcard">
         <div class="actclbl">{{ t('activity.cards.totalTokens') }}</div>
-        <div class="actcbig mono">{{ loading ? '…' : formatTokens(totals.totalTokens) }}</div>
+        <div class="actcbig mono">{{ initialLoad ? '…' : formatTokens(totals.totalTokens) }}</div>
         <div class="actcsub">
           {{
             t('activity.cards.tokenBreak', {
@@ -53,7 +59,7 @@
       <div class="tile actcard">
         <div class="actclbl">{{ t('activity.cards.totalCost') }}</div>
         <div class="actcbig mono" style="color: var(--accent)">
-          {{ loading ? '…' : formatCost(totals.costUsd) }}
+          {{ initialLoad ? '…' : formatCost(totals.costUsd) }}
         </div>
         <div class="actcsub">
           {{
@@ -66,7 +72,7 @@
       </div>
       <div class="tile actcard">
         <div class="actclbl">{{ t('activity.cards.turns') }}</div>
-        <div class="actcbig mono">{{ loading ? '…' : formatTokens(totals.turns) }}</div>
+        <div class="actcbig mono">{{ initialLoad ? '…' : formatTokens(totals.turns) }}</div>
         <div class="actcsub">{{ t('activity.cards.turnsSub') }}</div>
       </div>
     </div>
@@ -267,10 +273,12 @@ async function goToSession(engineId: string): Promise<void> {
 const {
   range,
   accountId,
+  projectId,
   sessionSort,
   accountOptions,
   accounts,
-  loading,
+  projects,
+  initialLoad,
   error,
   totals,
   chartBars,
@@ -291,6 +299,12 @@ const accountSelectOptions = computed(() =>
       : { value: o.id, label: o.display },
   ),
 )
+
+// AppSelect options: localized "All projects" + each project's name.
+const projectSelectOptions = computed(() => [
+  { value: 'all', label: t('activity.project.all') },
+  ...projects.value.map((p) => ({ value: p.id, label: p.name })),
+])
 
 // Only Anthropic/OpenAI accounts have a usage surface (useAccountUsage no-ops
 // otherwise) — list those for the rate-limit panel.

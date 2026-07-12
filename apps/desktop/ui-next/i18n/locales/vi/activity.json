@@ -11,6 +11,7 @@
   "activity.range.long.90d": "90 ngày qua",
   "activity.range.long.all": "Toàn bộ thời gian",
   "activity.account.all": "Tất cả tài khoản",
+  "activity.project.all": "Tất cả dự án",
   "activity.error": "Đang hiển thị dữ liệu dự phòng — {msg}",
 
   "activity.cards.totalTokens": "Tổng token",
