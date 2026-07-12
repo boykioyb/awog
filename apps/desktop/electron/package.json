@@ -1,7 +1,7 @@
 {
   "name": "@awog/desktop",
   "private": true,
-  "version": "0.23.4",
+  "version": "0.24.0",
   "description": "AWOG Electron desktop shell (main process + IPC bridge)",
   "author": "AWOG",
   "repository": "github:boykioyb/awog",
