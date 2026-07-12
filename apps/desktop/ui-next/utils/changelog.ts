@@ -30,6 +30,71 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.0',
+    date: '2026-07-12',
+    highlight: {
+      en: 'Connections is rebuilt as Sources — add MCP, API, or local sources, connect them with one-click OAuth, and turn any REST API into agent tools. Plus faster sessions, in-app merge-conflict resolution, and per-project usage.',
+      vi: 'Connections được dựng lại thành Sources — thêm nguồn MCP, API hoặc local, kết nối bằng OAuth một chạm, và biến bất kỳ REST API nào thành công cụ cho agent. Kèm phiên nhanh hơn, giải quyết xung đột merge ngay trong app, và thống kê dùng theo dự án.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Connections is now Sources: the page is rebuilt around a Sources model — add MCP, API, or local sources, each with its own folder, an editable guide and permissions, real provider icons, and a live status dot.',
+        vi: 'Connections giờ là Sources: trang được dựng lại quanh mô hình Sources — thêm nguồn MCP, API hoặc local, mỗi nguồn có thư mục riêng, guide và permissions chỉnh sửa được, icon nhà cung cấp thật, và chấm trạng thái trực tiếp.',
+      },
+      {
+        kind: 'added',
+        en: 'One-click OAuth with automatic token refresh for remote MCP and API sources — sign in once and stay connected.',
+        vi: 'OAuth một chạm kèm tự động làm mới token cho nguồn MCP và API từ xa — đăng nhập một lần và luôn giữ kết nối.',
+      },
+      {
+        kind: 'added',
+        en: 'Add-source catalog: pick from a catalog of provider presets when adding a new source.',
+        vi: 'Danh mục thêm nguồn: chọn từ danh mục preset nhà cung cấp khi thêm một nguồn mới.',
+      },
+      {
+        kind: 'added',
+        en: 'Turn any REST API into agent tools: point AWOG at an endpoint and it becomes callable tools for your agents, with per-source permissions and trust.',
+        vi: 'Biến bất kỳ REST API nào thành công cụ cho agent: trỏ AWOG tới một endpoint và nó trở thành các công cụ gọi được cho agent, kèm permissions và mức tin cậy theo từng nguồn.',
+      },
+      {
+        kind: 'added',
+        en: 'Reveal a source’s folder in Finder and act on it from a row menu, and edit its guide and permissions right in the UI.',
+        vi: 'Hiện thư mục của một nguồn trong Finder và thao tác từ menu dòng, và chỉnh guide cùng permissions ngay trong giao diện.',
+      },
+      {
+        kind: 'improved',
+        en: 'Sessions load faster and more smoothly, backed by new storage with a warm cache and human-readable session names and links.',
+        vi: 'Phiên tải nhanh và mượt hơn, nhờ lưu trữ mới với cache ấm sẵn cùng tên và liên kết phiên dễ đọc.',
+      },
+      {
+        kind: 'changed',
+        en: 'Session replies now stream Craft-style — full text in chunky updates with a live processing indicator. Prefer the smooth character-by-character reveal? Turn the typewriter back on in Settings.',
+        vi: 'Phản hồi trong phiên giờ chạy kiểu Craft — hiện toàn văn theo từng cụm kèm chỉ báo đang xử lý trực tiếp. Thích kiểu gõ chữ mượt từng ký tự? Bật lại typewriter trong Cài đặt.',
+      },
+      {
+        kind: 'added',
+        en: 'See what’s running at a glance: the tray lists sessions that are working right now, and a session’s tab dot pulses in its project color while it runs.',
+        vi: 'Nhìn là biết cái gì đang chạy: khay hệ thống liệt kê các phiên đang chạy ngay lúc này, và chấm trên tab của phiên nhấp nháy theo màu dự án khi đang chạy.',
+      },
+      {
+        kind: 'added',
+        en: 'Resolve merge conflicts inside AWOG: pick “ours” or “theirs” per conflict, or edit inline, then mark the file resolved.',
+        vi: 'Giải quyết xung đột merge ngay trong AWOG: chọn “của mình” hoặc “của họ” cho từng xung đột, hoặc sửa trực tiếp, rồi đánh dấu file đã giải quyết.',
+      },
+      {
+        kind: 'added',
+        en: 'Activity can now filter usage by project, so tokens, turns, and cost stay consistent for the project you care about.',
+        vi: 'Hoạt động giờ lọc được mức dùng theo dự án, để số token, số lượt và chi phí nhất quán cho đúng dự án bạn quan tâm.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The context gauge no longer over-counts after you compact a session, so compacting visibly frees up space.',
+        vi: 'Thước ngữ cảnh không còn đếm dư sau khi bạn nén một phiên, nên việc nén thực sự giải phóng chỗ trống thấy rõ.',
+      },
+    ],
+  },
+  {
     version: '0.23.4',
     date: '2026-07-08',
     highlight: {
