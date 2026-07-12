@@ -30,7 +30,7 @@
   "sessions.command.notice.mode": "Mode → {mode}",
   "sessions.command.notice.compacting": "Compacting the conversation…",
   "sessions.command.notice.compacted": "Conversation compacted — context freed",
-  "sessions.command.notice.nothingToCompact": "Nothing to compact — the conversation is already short",
+  "sessions.command.notice.nothingToCompact": "Nothing more to compact — only recent messages remain, kept so you can continue",
   "sessions.command.notice.compactFailed": "Compaction failed — the conversation is unchanged",
   "sessions.style.group.default": "Default",
   "sessions.style.group.fast": "Fast & concise",

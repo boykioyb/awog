@@ -1,7 +1,7 @@
-// Transcript-wide collapse/expand broadcast for tool steps + clusters.
+// Transcript-wide collapse/expand broadcast for tool steps + activity sections.
 // A module-level reactive signal (mode + monotonically increasing seq) acts as a
 // one-shot broadcast: SessionTranscript flips it, every SessionStepItem /
-// SessionCluster `watch`es `seq` and forces its own open/closed state to match
+// SessionTurnActivities `watch`es `seq` and forces its own open/closed state to match
 // `mode`. Bumping seq (instead of toggling a shared boolean) re-fires the watcher
 // even when the requested mode equals the previous one, so a second "expand all"
 // still re-opens steps the user closed manually in between. Pure UI state → a

@@ -30,7 +30,7 @@
   "sessions.command.notice.mode": "Chế độ → {mode}",
   "sessions.command.notice.compacting": "Đang nén hội thoại…",
   "sessions.command.notice.compacted": "Đã nén hội thoại — giải phóng ngữ cảnh",
-  "sessions.command.notice.nothingToCompact": "Không có gì để nén — hội thoại còn ngắn",
+  "sessions.command.notice.nothingToCompact": "Không còn gì để nén thêm — chỉ còn các tin nhắn gần đây, được giữ nguyên để bạn tiếp tục",
   "sessions.command.notice.compactFailed": "Nén thất bại — hội thoại không đổi",
   "sessions.style.group.default": "Mặc định",
   "sessions.style.group.fast": "Nhanh & gọn",

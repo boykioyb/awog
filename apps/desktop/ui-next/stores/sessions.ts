@@ -2133,6 +2133,12 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
 
+    // Composing + sending here is definitive "I'm reading this": clear any unread flag
+    // a prior turn set (e.g. it settled while the window was blurred, so flagSettledUnread
+    // marked it) — otherwise the tab / NavRail / list badges linger on the session the
+    // user is actively chatting in. Covers both the immediate send and the re-queue path.
+    s.unread = false
+
     // Concurrency guard — never run two turns at once. A turn already streaming here
     // means a racing turn-start reached us mid-flight: the two finalize signals (the
     // done event + the RPC resolve) can BOTH call drainQueue, and the `await` above lets
@@ -2929,6 +2935,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     void subscribe()
     void hydrate()
     startStallWatchdog()
+    // Returning to the window clears the OPEN session's unread flag. A turn that
+    // settled while the app was blurred flags it (flagSettledUnread's focus check),
+    // but coming back to look at it IS reading it — the symmetric clear. Background
+    // sessions keep their dot until opened. App-lifetime listener (store is a
+    // singleton), so no teardown — matches subscribe()/hydrate() above.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', () => {
+        const s = active.value
+        if (s?.unread) s.unread = false
+      })
+    }
   } else {
     // Browser-dev: sessions are seeded synchronously from the mock; seed the tabs
     // from them (hydrate, which normally does this, is IPC-only).

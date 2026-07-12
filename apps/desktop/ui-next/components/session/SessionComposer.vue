@@ -1357,6 +1357,16 @@ function onPaste(e: ClipboardEvent) {
   border-color: var(--accentBorder);
   box-shadow: 0 0 0 3px var(--accentDim);
 }
+/* Hard-cap the composer input height. A paste that stays BELOW the paste-as-file
+   threshold is inserted inline; without a ceiling the auto-grow (grow(), capped at
+   640px) can still make the box tall enough to push the toolbar / Execute·Stop
+   buttons off-screen on a shorter window. Cap to a fraction of the viewport (scales
+   with window height, reacts to resize) and scroll internally past it. Overrides the
+   global `textarea.ci { max-height: none }` (prototype.css) — the scoped selector's
+   [data-v] wins on specificity. */
+textarea.ci {
+  max-height: 40vh;
+}
 /* Tactile press: primary + icon action buttons dip slightly when pressed, and the
    primary's hover brightness now eases in instead of snapping. */
 .btn,

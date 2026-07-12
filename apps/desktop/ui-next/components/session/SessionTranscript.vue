@@ -45,6 +45,11 @@
             :fallback-when="fallbackWhen"
           />
         </TransitionGroup>
+        <!-- Session-level "working" indicator (craft ProcessingIndicator parity):
+             cycling status word + elapsed, shown below the in-flight turn while the
+             model is actively generating (hidden when parked on a question/permission
+             gate — SessionMessageItem shows "Waiting…" for that). -->
+        <SessionProcessingIndicator v-if="working" :started-at="workingStartedAt" />
       </template>
     </div>
     <!-- Jump-to-top / jump-to-bottom: each shows only when there's somewhere to go
@@ -80,7 +85,7 @@
 // bottom on new content while the user is at the bottom ("stick to bottom"); if
 // they scroll up to read history it leaves their position alone. Floating
 // jump-to-top / jump-to-bottom controls overlay the bottom-right.
-import type { SessionMessage } from '~/composables/useSessionsData'
+import { questionAnswered, type SessionMessage } from '~/composables/useSessionsData'
 
 const props = defineProps<{
   messages: SessionMessage[]
@@ -90,6 +95,27 @@ const props = defineProps<{
   loading?: boolean
 }>()
 const { t } = useI18n()
+
+// ── "Working" state for the session-level ProcessingIndicator ──
+// Derived from the last assistant message (mirrors SessionMessageItem's byline logic,
+// which reads the message's own blocks rather than the laggy session status). The
+// indicator shows only while the model is actively generating; when the turn is parked
+// on an unanswered question or a pending permission the byline shows "Waiting…" instead.
+const lastAssistant = computed(() => {
+  const m = props.messages[props.messages.length - 1]
+  return m && m.role === 'assistant' ? m : null
+})
+const parked = computed(() => {
+  const m = lastAssistant.value
+  if (!m) return false
+  return m.blocks.some(
+    (b) =>
+      (b.kind === 'question' && !questionAnswered(b)) ||
+      (b.kind === 'perm' && b.status === 'pending'),
+  )
+})
+const working = computed(() => !!lastAssistant.value?.streaming && !parked.value)
+const workingStartedAt = computed(() => lastAssistant.value?.startedAt)
 
 // Fold-all toggle: alternates collapse/expand on every click. Steps & clusters are
 // collapsed by default, so the button starts in "collapsed" — first click expands.

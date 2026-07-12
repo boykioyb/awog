@@ -9,6 +9,15 @@
       <span class="tname">{{ block.tool }}</span>
       <span class="starg">{{ block.target }}</span>
       <SessionStepResult :text="isTodo ? todoCount : block.result" />
+      <!-- Live per-tool elapsed (craft ActivityRow parity): surfaces only once a running
+           tool has been going ≥2s, so fast reads/edits stay quiet. -->
+      <span
+        v-if="showElapsed"
+        class="stepela"
+        style="font-size: 12px; opacity: 0.55; font-variant-numeric: tabular-nums"
+      >
+        {{ elapsedSec }}s
+      </span>
       <button
         v-if="topFileTarget"
         class="stepview"
@@ -114,6 +123,39 @@ import type { StepBlock } from '~/composables/useSessionsData'
 
 const props = defineProps<{ block: StepBlock }>()
 const { t } = useI18n()
+
+// Live per-tool elapsed (craft ActivityRow parity, ADR 0061 Pha 5). Once a running
+// step has been going ≥2s, show a subtle "Xs" ticker so long-running tools read as
+// busy; fast tools never surface it. Client-side — timed from when the row first saw
+// 'running', which is accurate for a live turn (historical steps are already done).
+const running = computed(() => props.block.status === 'running')
+const elapsedSec = ref(0)
+let startAt = 0
+let stepTimer: ReturnType<typeof setInterval> | null = null
+function stopStepTimer() {
+  if (stepTimer) {
+    clearInterval(stepTimer)
+    stepTimer = null
+  }
+}
+watch(
+  running,
+  (on) => {
+    if (on) {
+      startAt = performance.now()
+      elapsedSec.value = 0
+      stopStepTimer()
+      stepTimer = setInterval(() => {
+        elapsedSec.value = Math.floor((performance.now() - startAt) / 1000)
+      }, 1000)
+    } else {
+      stopStepTimer()
+    }
+  },
+  { immediate: true },
+)
+onBeforeUnmount(stopStepTimer)
+const showElapsed = computed(() => running.value && elapsedSec.value >= 2)
 
 // Shared full-window PreviewModal (provided by SessionDetail). Lets a file-op step
 // open the file it touched without expanding the step or leaving the transcript.

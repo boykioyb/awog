@@ -193,7 +193,9 @@ const DEFAULT_SESSIONS: SessionSettings = {
   notificationsEnabled: true,
   autoCompact: true,
   assistantBubble: true,
-  typewriter: true,
+  // Default OFF = craft-style streaming (full text, 300ms chunky re-parse + buffer gate,
+  // ADR 0061). Turn ON to restore AWOG's smooth char-by-char typewriter reveal.
+  typewriter: false,
   reducedMotion: false,
   refeedImages: true,
   pasteAsFile: true,

@@ -33,41 +33,30 @@
         <SessionAttachmentChip v-for="(a, k) in message.att" :key="k" :att="a" />
       </div>
     </div>
-    <div class="mmeta">
-      <template v-if="streaming">
-        <span class="strdot" :class="{ pulse: streamingActive }" />
-        <template v-if="streamingActive">
-          <span class="strshimmer">{{ t('sessions.message.streaming') }}</span>
-          {{ elapsedLabel }}
-        </template>
-        <template v-else>
-          <span class="strshimmer">{{ t('sessions.message.waiting') }}</span>
-        </template>
-      </template>
-      <template v-else>
-        {{ fmt(message.at) }} · {{ tokLabel }} tok
-        <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
-      </template>
-    </div>
-    <div class="hoveract">
-      <span class="ha" :title="t('sessions.message.copy')" @click="copyText">
-        <Icon name="copy" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.fullscreen')" @click="openFullscreen">
-        <Icon name="maximize" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.edit')" @click="editMsg">
-        <Icon name="edit" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.resend')" @click="resend">
-        <Icon name="send" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.rewind')" @click="rewind">
-        <Icon name="rewind" style="width: 13px; height: 13px" />
-      </span>
-      <span class="ha" :title="t('sessions.message.fork')" @click="fork">
-        <Icon name="fork" style="width: 13px; height: 13px" />
-      </span>
+    <!-- Footer (standardized with the assistant): byline + persistent actions below the
+         bubble, right-aligned — replaces the old floating hover pill. -->
+    <div class="mmeta mmetarow">
+      <span class="mmetatxt">{{ fmt(message.at) }} · {{ tokLabel }} tok</span>
+      <div class="hoveract bottom">
+        <span class="ha" :title="t('sessions.message.copy')" @click="copyText">
+          <Icon name="copy" style="width: 13px; height: 13px" />
+        </span>
+        <span class="ha" :title="t('sessions.message.fullscreen')" @click="openFullscreen">
+          <Icon name="maximize" style="width: 13px; height: 13px" />
+        </span>
+        <span class="ha" :title="t('sessions.message.edit')" @click="editMsg">
+          <Icon name="edit" style="width: 13px; height: 13px" />
+        </span>
+        <span class="ha" :title="t('sessions.message.resend')" @click="resend">
+          <Icon name="send" style="width: 13px; height: 13px" />
+        </span>
+        <span class="ha" :title="t('sessions.message.rewind')" @click="rewind">
+          <Icon name="rewind" style="width: 13px; height: 13px" />
+        </span>
+        <span class="ha" :title="t('sessions.message.fork')" @click="fork">
+          <Icon name="fork" style="width: 13px; height: 13px" />
+        </span>
+      </div>
     </div>
   </div>
 
@@ -86,29 +75,30 @@
         {{ a.label }}
       </span>
     </div>
-    <div ref="bodyEl" class="abody" :class="{ bubble: showBubble }">
+    <!-- The whole assistant turn sits in ONE elevated bubble (craft-style card): the
+         collapsed activity section ("N steps") + the final response together, so they
+         read as one unit. The response caps its own height + scrolls inside the card. -->
+    <div class="abody" :class="{ bubble: showBubble }">
       <template v-for="(g, gi) in grouped" :key="g.key">
-        <SessionCluster v-if="g.type === 'cluster'" :steps="g.steps" />
-        <SessionStepItem v-else-if="g.type === 'step'" :block="g.step" />
+        <!-- Collapsible activity section (tools + thinking + intermediate commentary),
+             craft TurnCard body. -->
+        <SessionTurnActivities
+          v-if="g.type === 'activities'"
+          :entries="g.entries"
+          :preview="g.preview"
+        />
+        <!-- The prominent final answer (craft's ResponseCard) — bubbled per the
+             assistantBubble pref. Carries §8 quote highlights + caret. -->
         <SessionTextBlock
           v-else-if="g.type === 'text'"
           :text="g.text"
           :highlights="highlightsForBlock(g.blockIndex)"
           :streaming="streaming"
           :caret="streaming && gi === grouped.length - 1"
+          :bubble="showBubble"
         />
-        <div
-          v-else-if="g.type === 'thinking'"
-          class="blk think"
-          :class="{ col: !thinkExpanded.has(gi) }"
-        >
-          <div class="thh" @click="toggleThink(gi)">
-            <Icon name="chev" style="width: 12px; height: 12px" />
-            <Icon name="brain" class="thinkic" style="width: 13px; height: 13px" />
-            {{ t('sessions.thinking') }}
-          </div>
-          <div class="thb">{{ g.text }}</div>
-        </div>
+        <!-- Latest TodoWrite checklist, rendered inline once the docked banner yields. -->
+        <SessionStepItem v-else-if="g.type === 'todo'" :block="g.step" />
         <!-- Turn error (stopReason 'error') — surface the provider message + a one-click
              retry (re-run this turn) instead of a silent empty bubble. -->
         <div v-else-if="g.type === 'error'" class="merr">
@@ -123,38 +113,26 @@
         </div>
         <SessionGateCard v-else :block="g.gate" />
       </template>
-    </div>
-    <!-- Floating pill at the top-right of the reply: only earns its place on a TALL
-         reply (>500px) where the bottom action row would otherwise be a scroll away.
-         Never while streaming (would collide with the byline; actions aren't valid yet). -->
-    <div v-if="showTopActions" class="hoveract top">
-      <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
-        <Icon :name="a.icon" style="width: 13px; height: 13px" />
-      </span>
-    </div>
-    <!-- Meta row at the bottom: timestamp/byline on the left, the same actions inline
-         on the right — reachable at the end of a long reply without scrolling up. -->
-    <div class="mmeta mmetarow">
-      <span class="mmetatxt">
-        <template v-if="streaming">
-          <span class="strdot" :class="{ pulse: streamingActive }" />
-          <template v-if="streamingActive">
-            <span class="strshimmer">{{ t('sessions.message.streaming') }}</span>
-            {{ elapsedLabel }}
-          </template>
-          <template v-else>
+      <!-- Action footer INSIDE the card (craft ResponseCard footer): HIDDEN while
+           actively generating (the SessionProcessingIndicator below the turn is the cue
+           then). Parked on a gate → static "Waiting…"; done → byline (left) + always-
+           visible actions (right), a full-width bar at the card's bottom edge. -->
+      <div v-if="!streamingActive" class="mmeta mmetarow" :class="{ footer: !streaming }">
+        <span class="mmetatxt">
+          <template v-if="streaming">
+            <span class="strdot" />
             <span class="strshimmer">{{ t('sessions.message.waiting') }}</span>
           </template>
-        </template>
-        <template v-else>
-          {{ fmt(message.at) }} · {{ tokLabel }} tok
-          <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
-        </template>
-      </span>
-      <div v-if="showBottomActions" class="hoveract bottom">
-        <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
-          <Icon :name="a.icon" style="width: 13px; height: 13px" />
+          <template v-else>
+            {{ fmt(message.at) }} · {{ tokLabel }} tok
+            <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
+          </template>
         </span>
+        <div v-if="showBottomActions" class="hoveract bottom">
+          <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
+            <Icon :name="a.icon" style="width: 13px; height: 13px" />
+          </span>
+        </div>
       </div>
     </div>
   </div>
@@ -171,6 +149,14 @@ import type {
   Followup,
 } from '~/composables/useSessionsData'
 import type { BlockHighlight } from './SessionTextBlock.vue'
+import type { ActivityEntry } from './SessionTurnActivities.vue'
+import {
+  finalResponseIndex,
+  responseIndex,
+  deriveTurnPhase,
+  getPreviewText,
+  blockRole,
+} from '~/utils/session-turns'
 
 const props = defineProps<{ message: SessionMessage; fallbackWhen: string; msgIndex: number }>()
 const { t } = useI18n()
@@ -198,58 +184,71 @@ const showBubble = computed(
 // NOT destroyed+recreated when the grouping reshapes mid-stream (which would reset
 // its collapsed state → "clicking does nothing" while a turn streams).
 type Grouped =
-  | { key: string; type: 'cluster'; steps: StepBlock[] }
-  | { key: string; type: 'step'; step: StepBlock }
+  | { key: string; type: 'activities'; entries: ActivityEntry[]; preview: string }
   | { key: string; type: 'text'; text: string; blockIndex: number }
-  | { key: string; type: 'thinking'; text: string }
+  | { key: string; type: 'todo'; step: StepBlock }
   | { key: string; type: 'error'; text: string }
   | { key: string; type: 'gate'; gate: AssistantBlock }
 
 const blockKey = (b: AssistantBlock, bi: number): string =>
   'eid' in b && b.eid ? b.eid : `${b.kind}-${bi}`
 
-// groupBlocks (~1452): collapse consecutive plain steps (no sub) into a cluster.
-// Text groups carry their original `message.blocks` index so §8 highlights can be
-// matched back to the exact block they were quoted from.
+// groupBlocks (craft TurnCard parity, ADR 0061): bucket the turn's blocks via
+// blockRole — consecutive "activity" blocks (tool steps + thinking + intermediate
+// commentary) collapse into one SessionTurnActivities section; the final response
+// text, gates (plan/question/perm/steer), errors and the inline TodoWrite checklist
+// render standalone in place. `key` is a STABLE per-group identity (engine eid where
+// available, else kind+position) so a component is NOT destroyed+recreated when the
+// grouping reshapes mid-stream (which would reset its collapsed state).
 const grouped = computed<Grouped[]>(() => {
   if (props.message.role !== 'assistant') return []
+  const blocks = props.message.blocks
+  // While a tool-using turn still streams, a trailing text stays inside the activities
+  // (it may be commentary before the next tool) — don't promote it to the response yet.
+  const finalIdx = responseIndex(blocks, !!props.message.streaming)
+  const phase = deriveTurnPhase(props.message)
   const out: Grouped[] = []
-  let run: StepBlock[] = []
-  let runBi = -1
+  let run: ActivityEntry[] = []
+  let runBlocks: AssistantBlock[] = []
+  let runKey = ''
   const flush = () => {
     if (!run.length) return
-    const first = run[0]
-    if (run.length === 1 && first)
-      out.push({ key: blockKey(first, runBi), type: 'step', step: first })
-    else out.push({ key: `cluster-${first?.eid ?? runBi}`, type: 'cluster', steps: run })
+    out.push({
+      key: `acts-${runKey}`,
+      type: 'activities',
+      entries: run,
+      preview: getPreviewText(runBlocks, phase, (k, p) => t(k, p ?? {})),
+    })
     run = []
-    runBi = -1
+    runBlocks = []
+    runKey = ''
   }
-  props.message.blocks.forEach((b, bi) => {
+  blocks.forEach((b, bi) => {
     // TodoWrite note steps carry the checklist for the docked SessionTodoPanel. Render
     // the LATEST one inline as its own step ONLY once the live banner has yielded (turn
     // ended / all items done) — never while the banner shows it, and never the older
-    // intermediate snapshots (which would pile up as duplicate "Todos" rows). When not
-    // rendered, skip without flushing so the tool steps around it still cluster.
+    // intermediate snapshots. When skipped, don't flush so surrounding activities stay grouped.
     if (b.kind === 'step' && b.todos !== undefined) {
       if (b === inlineTodoStep.value) {
         flush()
-        out.push({ key: blockKey(b, bi), type: 'step', step: b })
+        out.push({ key: blockKey(b, bi), type: 'todo', step: b })
       }
       return
     }
-    if (b.kind === 'step' && !b.sub) {
-      if (!run.length) runBi = bi
-      run.push(b)
+    // Collapsible activity = tool step + thinking + intermediate commentary text.
+    if (blockRole(b, bi, finalIdx) === 'activity') {
+      if (!run.length) runKey = blockKey(b, bi)
+      if (b.kind === 'step') run.push({ key: blockKey(b, bi), kind: 'step', step: b })
+      else if (b.kind === 'thinking')
+        run.push({ key: blockKey(b, bi), kind: 'thinking', text: b.text })
+      else if (b.kind === 'text') run.push({ key: `text-${bi}`, kind: 'text', text: b.text })
+      runBlocks.push(b)
       return
     }
     flush()
-    if (b.kind === 'step') out.push({ key: blockKey(b, bi), type: 'step', step: b })
+    if (b.kind === 'error') out.push({ key: blockKey(b, bi), type: 'error', text: b.text })
     else if (b.kind === 'text')
       out.push({ key: `text-${bi}`, type: 'text', text: b.text, blockIndex: bi })
-    else if (b.kind === 'thinking')
-      out.push({ key: blockKey(b, bi), type: 'thinking', text: b.text })
-    else if (b.kind === 'error') out.push({ key: blockKey(b, bi), type: 'error', text: b.text })
     else out.push({ key: blockKey(b, bi), type: 'gate', gate: b })
   })
   flush()
@@ -268,14 +267,6 @@ const tokLabel = computed(() => {
   const n = Math.round((chars || 1) / 3)
   return n > 999 ? (n / 1000).toFixed(0) + 'k' : String(n)
 })
-
-// Thinking blocks collapse-by-default; track expanded group indices in a reactive Set
-// (.think.col hides .thb). Keyed by `gi` so multiple thinking blocks toggle independently.
-const thinkExpanded = reactive(new Set<number>())
-const toggleThink = (gi: number) => {
-  if (thinkExpanded.has(gi)) thinkExpanded.delete(gi)
-  else thinkExpanded.add(gi)
-}
 
 // Message actions (mock-backed via the sessions store). The transcript passes each
 // item its absolute index in the active session's message list (row.i) so buttons
@@ -307,18 +298,11 @@ const parkedOnGate = computed(() => {
 })
 const streamingActive = computed(() => streaming.value && !parkedOnGate.value)
 
-// ── Action-toolbar visibility ────────────────────────────────────────────────
-// Never on an in-flight reply: the actions (quote/fork/regen…) aren't valid until
-// the turn finishes, and the floating top pill would collide with the "Streaming…"
-// byline (the empty body collapses both onto the same line). The TOP pill is also
-// gated on a tall reply — on a short one the inline bottom row is right there, so a
-// second floating copy is just clutter.
-const TALL_REPLY_PX = 500
-const bodyEl = useTemplateRef<HTMLElement>('bodyEl')
-const bodyHeight = ref(0)
-let bodyRO: ResizeObserver | null = null
+// ── Action-footer visibility ─────────────────────────────────────────────────
+// Actions (copy/quote/fork/regen…) are shown only once the turn is done: they aren't
+// valid mid-stream, and the footer would collide with the working indicator. When
+// done they're persistent (no hover needed) — see the `.footer` styles.
 const showBottomActions = computed(() => !streaming.value)
-const showTopActions = computed(() => !streaming.value && bodyHeight.value > TALL_REPLY_PX)
 
 const nowTick = ref(Date.now())
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
@@ -335,21 +319,8 @@ watch(
   },
   { immediate: true },
 )
-// Track the rendered reply height (drives showTopActions). The body grows as the
-// reply streams in, so observe it rather than measure once. Only assistant rows
-// have `.abody`; for others bodyEl is null and the top pill stays hidden anyway.
-onMounted(() => {
-  const el = bodyEl.value
-  if (!el) return
-  bodyRO = new ResizeObserver(() => {
-    bodyHeight.value = el.offsetHeight
-  })
-  bodyRO.observe(el)
-})
 onBeforeUnmount(() => {
   if (elapsedTimer) clearInterval(elapsedTimer)
-  bodyRO?.disconnect()
-  bodyRO = null
 })
 
 function formatElapsed(ms: number): string {
@@ -402,15 +373,21 @@ const highlightsForBlock = (blockIndex: number): BlockHighlight[] =>
     .filter((x) => x.fu.blockIndex == null || x.fu.blockIndex === blockIndex)
     .map((x) => ({ fu: x.fu, label: x.label }))
 
-// Plain text — user: raw; assistant: concatenated text blocks.
+// Presentable message text for copy / fullscreen / edit. For an assistant turn this is
+// ONLY the final response (the answer) — intermediate commentary lives in the collapsed
+// activity section and must NOT leak into fullscreen/copy. Falls back to all text runs
+// joined when the turn has no clean final response (e.g. it ended on a tool). User /
+// system messages are their raw text.
 const plainText = computed(() => {
   const m = props.message
-  if (m.role === 'assistant')
-    return m.blocks
-      .filter((b): b is TextBlock => b.kind === 'text')
-      .map((b) => b.text)
-      .join('\n\n')
-  return m.text
+  if (m.role !== 'assistant') return m.text
+  const idx = finalResponseIndex(m.blocks)
+  const resp = idx >= 0 ? m.blocks[idx] : undefined
+  if (resp && resp.kind === 'text') return resp.text
+  return m.blocks
+    .filter((b): b is TextBlock => b.kind === 'text')
+    .map((b) => b.text)
+    .join('\n\n')
 })
 
 function act(fn: (id: number, i: number) => void) {
@@ -495,33 +472,11 @@ const msgActions = computed(() => [
   text-overflow: ellipsis;
 }
 
-/* Hover actions: a cohesive floating toolbar (pill) overlaying the message's top
-   corner on hover — no reserved row below every message (the old invisible 26px row
-   was the big inter-message gap). Position-relative host + absolute toolbar. */
+/* Message actions live in a PERSISTENT footer row (byline + actions) for both the
+   assistant turn card and the user bubble — no floating hover pill. */
 .maw,
 .urow {
   position: relative;
-}
-.hoveract {
-  position: absolute;
-  top: -9px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  padding: 1px 3px;
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
-}
-.maw .hoveract {
-  right: 0;
-}
-/* User bubble is right-aligned (.urow align-self:flex-end), so its hover pill must
-   hug the bubble's top-right — not float off at the row's far-left edge. */
-.urow .hoveract {
-  right: 0;
 }
 /* Bubble width: the prototype caps .mu at max-width:74%, but that % resolves against
    .urow — which shrinks to its widest child. For a short message the meta line
@@ -532,9 +487,10 @@ const msgActions = computed(() => [
 .mu {
   max-width: 100%;
 }
-/* The bottom copy (assistant only) sits inline on the meta row — same actions, no
-   floating pill chrome, right-aligned next to the byline so it hugs the reply end. */
-.maw .hoveract.bottom {
+/* The action set sits inline on the footer row (assistant + user) — no floating pill
+   chrome, pushed to the right next to the byline. PERSISTENT (opacity:1, overriding the
+   prototype's hover-only fade) so the controls are discoverable without hovering. */
+.hoveract.bottom {
   position: static;
   top: auto;
   right: auto;
@@ -543,12 +499,28 @@ const msgActions = computed(() => [
   background: none;
   border: none;
   box-shadow: none;
+  opacity: 1;
 }
 /* Meta row holds the byline (left) + inline action set (right). */
 .mmetarow {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+/* Footer variant (turn done): a hairline top rule + breathing room separates the
+   action row from the reply, matching craft's ResponseCard footer. */
+/* Action footer. In a bubble it's a full-width bar flush to the card's bottom edge
+   (negative margins cancel the card padding; the card's overflow:hidden clips it to the
+   radius) with a hairline top divider — craft's ResponseCard footer. Without a bubble it
+   degrades to a plain inset row. Actions stay persistent (see .maw .hoveract.bottom). */
+.mmetarow.footer {
+  margin-top: 2px;
+  padding: 0 4px;
+}
+.abody.bubble .mmetarow.footer {
+  margin: 0 -14px -11px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
 }
 .mmetatxt {
   min-width: 0;
@@ -576,19 +548,18 @@ const msgActions = computed(() => [
   flex-direction: column;
   gap: 9px;
 }
+/* Unified turn card (Settings → Sessions · Assistant bubble): wraps the collapsed
+   activity section + the final response in one elevated, left-tailed card. */
 .abody.bubble {
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: 16px;
   border-bottom-left-radius: 5px;
   padding: 11px 14px;
+  /* Clip the full-bleed footer bar to the card's rounded corners. */
+  overflow: hidden;
 }
-/* Brain glyph on the Thinking header — subtle, consistent with the step icons. */
-.thinkic {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-/* Streaming byline dot: pulses while actively generating, static when parked. */
+/* Byline dot — shown only when a turn is parked on a gate (next to "Waiting…"). */
 .strdot {
   display: inline-block;
   width: 7px;
@@ -598,24 +569,6 @@ const msgActions = computed(() => [
   margin-right: 5px;
   vertical-align: middle;
   opacity: 0.5;
-}
-.strdot.pulse {
-  opacity: 1;
-  animation: strpulse 1.4s ease-in-out infinite;
-}
-@keyframes strpulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .strdot.pulse {
-    animation: none;
-  }
 }
 
 /* Turn-error alert: danger-tinted box with the provider message + a retry button. */
