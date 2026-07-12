@@ -14,6 +14,7 @@ export type SessionTab = {
   name: string
   color: string
   unread: number // sessions needing attention (unread / awaiting) — drives the amber badge
+  running: boolean // a session in this project is actively streaming — drives the live dot pulse
   active: boolean
   closable: boolean // the Default tab is not user-closable
 }
@@ -34,12 +35,24 @@ export function useSessionTabs() {
     return out
   })
 
+  // Projects with at least one actively streaming session — drives the live pulse on
+  // the tab dot, so a background project working is visible even when its tab isn't
+  // active. Only 'streaming' counts as running ('awaiting' is already the amber badge).
+  const runningByProject = computed<Record<string, boolean>>(() => {
+    const out: Record<string, boolean> = {}
+    for (const s of store.sessions) {
+      if (s.status === 'streaming') out[s.project] = true
+    }
+    return out
+  })
+
   const tabs = computed<SessionTab[]>(() =>
     store.openProjectTabs.map((id) => ({
       id,
       name: id === '' ? t('sessions.defaultProject') : projectName(id),
       color: id === '' ? PROJECT_COLOR_DEFAULT : colorOf(id),
       unread: unreadByProject.value[id] ?? 0,
+      running: runningByProject.value[id] ?? false,
       active: id === store.activeTab,
       closable: id !== '',
     })),

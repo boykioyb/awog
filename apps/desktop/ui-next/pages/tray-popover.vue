@@ -111,6 +111,11 @@ const today = ref<{ tokens: number; cost: number }>({ tokens: 0, cost: 0 })
 const rateLimitsRaw = ref<{ id: string; label: string; entries: UsageEntry[] }[]>([])
 const rlLoading = ref(false)
 const refreshNonce = ref(0)
+// Sessions with a turn in flight RIGHT NOW, from the sidecar (sessions.activeTurns).
+// The `streaming` status is live-only in the main window and never persisted, so a
+// hydrated snapshot can't tell us what's running — this RPC (backed by the in-flight
+// aborter registry) is the source of truth and is independent of our stale list.
+const runningSessions = ref<{ engineId: string; title: string }[]>([])
 
 const tokenLabel = computed(() => formatTokens(today.value.tokens))
 const costLabel = computed(() => formatCost(today.value.cost))
@@ -145,15 +150,14 @@ const running = computed<Row[]>(() => {
       color: 'var(--accent)',
       cmd: { kind: 'task', id: task.id },
     })
-  for (const s of sessions.sessions)
-    if (s.status === 'streaming' && s.engineId)
-      out.push({
-        key: `s-${s.id}`,
-        title: s.title,
-        meta: t('tray.streaming'),
-        color: STATUS_COLOR.streaming,
-        cmd: { kind: 'session', engineId: s.engineId },
-      })
+  for (const s of runningSessions.value)
+    out.push({
+      key: `s-${s.engineId}`,
+      title: s.title || t('tray.untitledSession'),
+      meta: t('tray.streaming'),
+      color: STATUS_COLOR.streaming,
+      cmd: { kind: 'session', engineId: s.engineId },
+    })
   return out
 })
 
@@ -182,11 +186,15 @@ const attention = computed<Row[]>(() => {
 // Recent: newest first (the list is already recency-ordered), excluding the
 // streaming/awaiting sessions already surfaced in Running / Needs action.
 const recent = computed(() => {
+  const runningIds = new Set(runningSessions.value.map((r) => r.engineId))
   const out: { id: number; engineId: string; title: string; when: string; color: string }[] = []
   for (const s of sessions.sessions) {
     if (s.status === 'streaming' || s.status === 'awaiting') continue
     // Need the stable engine id to route the click to the main window's store.
     if (!s.engineId) continue
+    // Skip sessions already surfaced in Running (their in-flight state comes from the
+    // sidecar, not the — possibly stale — resting status on this row).
+    if (runningIds.has(s.engineId)) continue
     out.push({
       id: s.id,
       engineId: s.engineId,
@@ -198,6 +206,18 @@ const recent = computed(() => {
   }
   return out
 })
+
+async function fetchActiveTurns(): Promise<void> {
+  if (!sc.available) return
+  try {
+    const res = await sc.request<{ sessions: { engineId: string; title: string }[] }>(
+      'sessions.activeTurns',
+    )
+    runningSessions.value = Array.isArray(res.sessions) ? res.sessions : []
+  } catch {
+    // keep last value
+  }
+}
 
 async function fetchUsage(): Promise<void> {
   if (!sc.available) return
@@ -241,6 +261,7 @@ function refreshAll(): void {
   refreshNonce.value++
   void fetchUsage()
   void fetchRateLimits()
+  void fetchActiveTurns()
   void sessions.hydrate?.()
   void tasks.loadTasks()
 }

@@ -8,5 +8,6 @@
   "sessions.tabs.addProject": "Open a project tab",
   "sessions.tabs.overflow": "All open tabs",
   "sessions.tabs.noProjects": "No more projects to open",
-  "sessions.tabs.unread": "{n} needing attention"
+  "sessions.tabs.unread": "{n} needing attention",
+  "sessions.tabs.running": "Session running"
 }

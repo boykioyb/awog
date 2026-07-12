@@ -6,6 +6,7 @@
   "tray.todayUsage": "Hôm nay {cost} · {tokens} tok",
   "tray.loading": "Đang tải…",
   "tray.streaming": "đang chạy",
+  "tray.untitledSession": "Phiên chưa đặt tên",
   "tray.awaitingReply": "chờ trả lời",
   "tray.awaitingApproval": "chờ duyệt",
   "tray.empty.limits": "Chưa có giới hạn provider",

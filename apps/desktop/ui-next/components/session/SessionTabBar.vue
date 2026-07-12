@@ -13,7 +13,14 @@
         @keydown="onTabKeydown($event, tab.id, i)"
         @contextmenu.prevent="openTabCtx(tab.id, $event)"
       >
-        <span class="stab-dot" :style="{ background: tab.color }" />
+        <span
+          class="stab-dot"
+          :class="{ running: tab.running }"
+          :style="{ background: tab.color, '--stab-dot': tab.color }"
+          :role="tab.running ? 'img' : undefined"
+          :aria-label="tab.running ? t('sessions.tabs.running') : undefined"
+          :title="tab.running ? t('sessions.tabs.running') : undefined"
+        />
         <span class="stab-nm">{{ tab.name }}</span>
         <span
           v-if="tab.unread"
@@ -66,7 +73,11 @@
     <!-- Overflow: jump to any open tab (when the strip scrolls). -->
     <div v-if="overflowMenu" class="smenu stabs-drop" @click.stop>
       <div v-for="tab in tabs" :key="tab.id" class="mi" @click="jumpTab(tab.id)">
-        <span class="stab-dot" :style="{ background: tab.color }" />
+        <span
+          class="stab-dot"
+          :class="{ running: tab.running }"
+          :style="{ background: tab.color, '--stab-dot': tab.color }"
+        />
         {{ tab.name }}
         <Icon v-if="tab.active" name="check" class="ck" style="width: 13px; height: 13px" />
       </div>
@@ -425,6 +436,24 @@ async function pDeleteAll() {
   border-radius: 99px;
   flex: 0 0 auto;
 }
+/* A session in this project is actively streaming → soft ring pulses out from the
+   dot in the PROJECT's own color (var(--stab-dot), set inline), keeping project
+   identity while matching the app's streaming .pulse convention. Only box-shadow
+   animates (no layout/reflow). */
+.stab-dot.running {
+  animation: stab-dot-pulse 1.8s ease-out infinite;
+}
+@keyframes stab-dot-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--stab-dot) 50%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--stab-dot) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--stab-dot) 0%, transparent);
+  }
+}
 .stab-nm {
   white-space: nowrap;
   overflow: hidden;
@@ -573,6 +602,9 @@ async function pDeleteAll() {
   .stab-x,
   .ctxsw .swatch {
     transition: none;
+  }
+  .stab-dot.running {
+    animation: none;
   }
 }
 </style>

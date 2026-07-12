@@ -6,6 +6,7 @@
   "tray.todayUsage": "Today {cost} · {tokens} tok",
   "tray.loading": "Loading…",
   "tray.streaming": "streaming",
+  "tray.untitledSession": "Untitled session",
   "tray.awaitingReply": "awaiting reply",
   "tray.awaitingApproval": "awaiting approval",
   "tray.empty.limits": "No provider limits to show",

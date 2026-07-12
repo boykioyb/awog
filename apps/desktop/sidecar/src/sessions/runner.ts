@@ -65,6 +65,18 @@ export function isTurnActive(sessionId: string, messageId: string): boolean {
   return !!turn && turn.sessionId === sessionId
 }
 
+// Distinct sessionIds (engine ids) with a turn currently in flight. The tray
+// popover is a separate renderer with no live engine events, and a session's
+// `streaming` state is live-only in the main window (never persisted — a hydrated
+// snapshot never reads back as streaming). This registry is the single source of
+// truth for "running right now", so the tray polls it (sessions.activeTurns) to
+// list active sessions on open.
+export function activeSessionIds(): string[] {
+  const ids = new Set<string>()
+  for (const turn of ACTIVE_ABORTERS.values()) ids.add(turn.sessionId)
+  return [...ids]
+}
+
 // Abort EVERY in-flight turn on a session; returns how many were aborted.
 // Why session-wide and not just one messageId: a turn can hang (e.g. a stalled
 // provider stream that never yields another chunk) and hold the per-session
