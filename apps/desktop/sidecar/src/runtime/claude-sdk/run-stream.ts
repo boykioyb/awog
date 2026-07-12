@@ -441,19 +441,15 @@ export async function runStreamClaude(
     0,
     (append?.length ?? 0) - systemPromptLen - memoryFilesLen - customAgentsLen - skillsLen,
   )
-  // Transcript the SDK context holds: kept turns from the compaction cut onward
-  // (or the whole transcript when uncompacted) + the summary. Mirrors the Pi path's
-  // `JSON.stringify(context.messages)` estimate so /compact visibly shrinks the gauge.
-  let keptMsgs = args.history
-  let summaryLen = 0
-  if (args.compaction) {
-    const cutIdx = args.history.findIndex((m) => m.id === args.compaction!.firstKeptMessageId)
-    if (cutIdx >= 0) {
-      keptMsgs = args.history.slice(cutIdx)
-      summaryLen = args.compaction.summary.length
-    }
-  }
-  const historyLen = JSON.stringify(keptMsgs).length + summaryLen + args.pendingText.length
+  // Transcript the SDK context holds: kept turns from the compaction cut onward (or
+  // the whole transcript when uncompacted) + the summary — measured TEXT-ONLY via
+  // renderHistoryPrefix (exactly what we seed the SDK with). We must NOT
+  // JSON.stringify the raw SessionMessages: their `steps[]`/`parts[]` carry UI-only
+  // tool I/O (full file contents, terminal output) that is NEVER replayed to the
+  // model, which would inflate the gauge far past what is sent and never shrink on
+  // /compact. Mirrors the Pi path's historyToAgentMessages estimate.
+  const historyLen =
+    renderHistoryPrefix(args.history, args.compaction).length + args.pendingText.length
   const contextChars: ContextChars = {
     systemPrompt: systemPromptLen,
     instructions: instructionsLen,

@@ -569,12 +569,16 @@ async function runCompact(
       })
       return notice('Compaction failed — the conversation is unchanged.')
     }
-    // Post-compaction context `history` estimate = [summary + kept turns], mirroring
-    // the per-turn contextChars.history estimate. Lets the caller drop the context
-    // gauge the instant the checkpoint lands (before the next turn).
+    // Post-compaction context `history` estimate = [kept turns + summary], measured
+    // the SAME way as the per-turn `contextChars.history` above: TEXT-ONLY, via
+    // historyToAgentMessages. We must NOT JSON.stringify the raw SessionMessages —
+    // their `steps[]`/`parts[]` carry UI-only tool I/O (full file contents, terminal
+    // output) that is NEVER replayed to the model, so counting them would inflate the
+    // gauge far past what is actually sent and make /compact look like a no-op.
     const cutIdx = args.history.findIndex((m) => m.id === cut.firstKeptMessageId)
     const keptMsgs = cutIdx >= 0 ? args.history.slice(cutIdx) : args.history
-    const compactedHistoryChars = JSON.stringify(keptMsgs).length + res.value.length
+    const compactedHistoryChars =
+      JSON.stringify(historyToAgentMessages(keptMsgs)).length + res.value.length
     return {
       ...notice('Context compacted.'),
       compaction: {
