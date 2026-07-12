@@ -19,6 +19,14 @@ export type GitFile = { f: string; st: string }
 // side disambiguates which diff to load and which actions apply.
 export type GitSelection = { path: string; staged: boolean }
 
+// Right-pane selection for the Git page. A normal file row renders a diff, a
+// conflicted file row renders the conflict resolver. Discriminated union so the
+// pane branches cleanly without carrying stray fields.
+export type GitRightPaneSel =
+  | { kind: 'file'; path: string; staged: boolean }
+  | { kind: 'conflict'; path: string }
+  | null
+
 export type CommitRef = { t: 'head' | 'remote' | 'branch' | 'tag'; n: string }
 
 export type Commit = {
@@ -149,6 +157,7 @@ export type GitState = {
   commitSel: string | null
   unstaged: GitFile[]
   staged: GitFile[]
+  conflicted: GitFile[]
   commits: Commit[]
 }
 
@@ -187,6 +196,7 @@ export function createGitState(): GitState {
     commitSel: null,
     unstaged: [],
     staged: [],
+    conflicted: [],
     commits: [],
   }
 }
@@ -203,6 +213,16 @@ export function shortPath(p: string): [string, string] {
 
 export function baseNameOf(p: string): string {
   return shortPath(p)[1]
+}
+
+// Image extensions whose git diff is binary ("Binary files differ", no hunks) →
+// the diff viewer renders an inline <img> preview instead of empty diff text.
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif'])
+
+export function isImagePath(p: string): boolean {
+  const dot = p.lastIndexOf('.')
+  if (dot < 0) return false
+  return IMAGE_EXTS.has(p.slice(dot + 1).toLowerCase())
 }
 
 export function statusColor(st: string): string {

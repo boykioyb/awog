@@ -11,7 +11,12 @@
       <span v-if="additions > 0" class="chip" style="color: var(--add)">+{{ additions }}</span>
       <span v-if="deletions > 0" class="chip" style="color: var(--del)">−{{ deletions }}</span>
       <span style="flex: 1" />
-      <span class="gtoggle" :title="t('git.diff.toggleMode')" @click="emit('toggle-diff-mode')">
+      <span
+        v-if="!isImage"
+        class="gtoggle"
+        :title="t('git.diff.toggleMode')"
+        @click="emit('toggle-diff-mode')"
+      >
         {{ diffMode === 'split' ? t('git.diff.split') : t('git.diff.unified') }}
       </span>
       <button class="btn sm" @click="onPrimary">
@@ -19,7 +24,20 @@
         {{ staged ? t('git.diff.unstageFile') : t('git.diff.stageFile') }}
       </button>
     </div>
-    <div class="dscroll">
+
+    <!-- Image preview: an image row has a binary git diff (no hunks); show the
+         on-disk bytes as an <img> instead of empty diff text. -->
+    <div v-if="isImage" class="dscroll dimgscroll">
+      <div v-if="imageLoading" class="empty">
+        <div class="et">{{ t('git.diff.imageLoading') }}</div>
+      </div>
+      <img v-else-if="imageSrc" :src="imageSrc" :alt="baseName" class="dimg" />
+      <div v-else class="empty">
+        <div class="et">{{ t('git.diff.imageUnavailable') }}</div>
+      </div>
+    </div>
+
+    <div v-else class="dscroll">
       <div class="codeview">
         <div v-if="diffMode === 'split'" class="cvsplit">
           <div class="cvspane">
@@ -58,6 +76,10 @@ const props = defineProps<{
   file: string | null
   diff: DiffLine[]
   diffMode: DiffMode
+  // Image row: render an inline <img> preview instead of the (binary/empty) diff.
+  isImage?: boolean
+  imageSrc?: string | null
+  imageLoading?: boolean
   // The selected row's section: staged → show "Unstage file" + hide per-hunk
   // stage (hunk-level unstage isn't supported yet).
   staged?: boolean
@@ -167,5 +189,21 @@ const splitRight = computed<DiffRow[]>(() => {
   border-radius: 0;
   margin: 0;
   background: transparent;
+}
+
+/* Image preview — center the bitmap in the scroll area, with breathing room and a
+   checkerboard-free neutral surface so transparent PNGs read against the theme. */
+.dimgscroll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: auto;
+}
+.dimg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
 }
 </style>

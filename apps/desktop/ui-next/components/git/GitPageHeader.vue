@@ -54,8 +54,15 @@
     <template v-if="!notARepo">
       <!-- Merge / rebase in progress -->
       <template v-if="isMerging || isRebasing">
+        <span class="gconflicthint" :class="{ ready: !hasConflict }">
+          {{
+            hasConflict
+              ? t('git.conflict.banner.resolve', { count: conflictedCount, action: completeLabel })
+              : t('git.conflict.banner.ready', { action: completeLabel })
+          }}
+        </span>
         <button class="btn sm" :disabled="hasConflict" @click="emit('complete-merge')">
-          {{ isRebasing ? t('git.header.continueRebase') : t('git.header.completeMerge') }}
+          {{ completeLabel }}
         </button>
         <button class="btn sm gdanger" @click="emit('abort-merge')">
           {{ isRebasing ? t('git.header.abortRebase') : t('git.header.abortMerge') }}
@@ -262,6 +269,8 @@ const props = defineProps<{
   isMerging: boolean
   isRebasing: boolean
   hasConflict: boolean
+  // Number of files still conflicted — interpolated into the merge/rebase banner.
+  conflictedCount: number
   notARepo: boolean
   syncOp: SyncOp | null
   // The gh account fetch/pull/push authenticate as ('' = the default identity).
@@ -306,6 +315,12 @@ const syncLabel = computed(() => {
   const base = t(`git.ops.${s.op}ing`)
   return s.pct != null ? `${base} ${s.pct}%` : base
 })
+
+// Label of the finalise action, reused by the banner text and the button so both
+// stay in sync with the merge vs rebase variant.
+const completeLabel = computed(() =>
+  props.isRebasing ? t('git.header.continueRebase') : t('git.header.completeMerge'),
+)
 
 const currentProject = computed(() => props.projects.find((p) => p.id === props.currentProjectId))
 
@@ -371,6 +386,17 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <style scoped>
+/* Merge/rebase banner instruction — danger tone while conflicts remain, muted
+   once resolved. No hex: colors from prototype.css theme vars. */
+.gconflicthint {
+  color: var(--danger);
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.gconflicthint.ready {
+  color: var(--textDim);
+}
+
 /* Spinner for the in-flight fetch/pull/push button (no rotate keyframe in the
    shared prototype.css). Disabled under reduced-motion. */
 .gspin {

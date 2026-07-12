@@ -11,11 +11,13 @@ import type {
   Stash,
 } from '~/components/git/git-types'
 import { DEMO_DIFF, DEMO_DIFF2, createGitState } from '~/components/git/git-types'
+import { useFsApi } from '~/composables/useFsApi'
 import { useGitApi } from '~/composables/useGitApi'
 import type {
   GitIdentity,
   GitStreamingOp,
   PushParams,
+  ReadConflictFileResult,
   SetIdentityParams,
   SidecarGitBranch,
   SidecarGitCommit,
@@ -212,6 +214,7 @@ export const useGitStore = defineStore('git', () => {
   const stashes = ref<Stash[]>(seed.stashes)
   const staged = ref<GitFile[]>(seed.staged)
   const unstaged = ref<GitFile[]>(seed.unstaged)
+  const conflicted = ref<GitFile[]>(seed.conflicted)
   const commits = ref<Commit[]>(seed.commits)
   const isMerging = ref<boolean>(seed.isMerging)
   const isRebasing = ref<boolean>(seed.isRebasing)
@@ -392,12 +395,15 @@ export const useGitStore = defineStore('git', () => {
       const status = await useGitApi().status(root)
       const nextStaged: GitFile[] = []
       const nextUnstaged: GitFile[] = []
+      const nextConflicted: GitFile[] = []
       for (const f of status.files) {
-        if (f.stageState === 'staged') nextStaged.push(adaptFile(f))
+        if (f.stageState === 'conflicted') nextConflicted.push(adaptFile(f))
+        else if (f.stageState === 'staged') nextStaged.push(adaptFile(f))
         else nextUnstaged.push(adaptFile(f))
       }
       staged.value = nextStaged
       unstaged.value = nextUnstaged
+      conflicted.value = nextConflicted
       isMerging.value = status.isMerging
       isRebasing.value = status.isRebasing
       isDetached.value = status.detached
@@ -414,6 +420,7 @@ export const useGitStore = defineStore('git', () => {
         notARepo.value = true
         staged.value = []
         unstaged.value = []
+        conflicted.value = []
         commits.value = []
         branches.value = []
         remotes.value = []
@@ -1126,10 +1133,16 @@ export const useGitStore = defineStore('git', () => {
       return
     }
     try {
-      await useGitApi().completeMerge(workspaceRoot())
+      // Rebase and merge share one header entry point; branch on `isRebasing`
+      // so a rebase advances via `rebaseContinue` (which may stop at the next
+      // conflicting commit) while a merge finalises via `completeMerge`.
+      if (isRebasing.value) await useGitApi().rebaseContinue(workspaceRoot())
+      else await useGitApi().completeMerge(workspaceRoot())
+      // loadAll re-derives hasConflict; a rebase that hit the next commit's
+      // conflict will re-open the resolver for the new batch.
       await loadAll()
     } catch (err) {
-      reportError('completeMerge', err)
+      reportError(isRebasing.value ? 'rebaseContinue' : 'completeMerge', err)
     }
   }
 
@@ -1146,6 +1159,42 @@ export const useGitStore = defineStore('git', () => {
       await loadAll()
     } catch (err) {
       reportError('abortMerge', err)
+    }
+  }
+
+  // ─── Conflict resolution ────────────────────────────────────────────────────
+  // These three actions intentionally break the "swallow into reportError" pattern
+  // used by other git actions: loadConflictFile throws raw so the resolver can
+  // branch on `gitCode` (ENCODING_UNSUPPORTED / ENOENT), and resolveConflict/
+  // resolveConflictBinary re-throw after reporting so the component keeps the
+  // resolver open on a desync/MERGE_CONFLICT instead of silently closing (CR-10,
+  // CR-13).
+
+  const loadConflictFile = (path: string): Promise<ReadConflictFileResult> =>
+    useGitApi().readConflictFile(workspaceRoot(), path)
+
+  const resolveConflict = async (
+    path: string,
+    resolutions: Array<{ blockIndex: number; choice: 'ours' | 'theirs' }>,
+  ): Promise<void> => {
+    if (!available.value) return
+    try {
+      await useGitApi().resolveFile(workspaceRoot(), { path, resolutions })
+      await loadStatus()
+    } catch (err) {
+      reportError('resolveFile', err)
+      throw err
+    }
+  }
+
+  const resolveConflictBinary = async (path: string, choice: 'ours' | 'theirs'): Promise<void> => {
+    if (!available.value) return
+    try {
+      await useGitApi().resolveFileBinary(workspaceRoot(), { path, choice })
+      await loadStatus()
+    } catch (err) {
+      reportError('resolveFileBinary', err)
+      throw err
     }
   }
 
@@ -1374,6 +1423,25 @@ export const useGitStore = defineStore('git', () => {
     } catch (err) {
       console.warn('[git] loadDiff failed', err)
       return []
+    }
+  }
+
+  // Image preview for a working-tree file: git renders binary diffs as
+  // "Binary files differ" (no hunks), so an image row shows nothing in the diff
+  // viewer. Instead read the on-disk copy as a base64 data URL and let the viewer
+  // render an <img>. Returns null when unavailable (no root / over cap / deleted /
+  // read error) → the viewer falls back to an "unavailable" placeholder.
+  const loadImageDataUrl = async (path: string): Promise<string | null> => {
+    if (!available.value) return null
+    const root = workspaceRoot()
+    if (!root) return null
+    try {
+      const res = await useFsApi().readFileBase64(root, path)
+      if (res.truncated || !res.base64) return null
+      return `data:${res.mimeType};base64,${res.base64}`
+    } catch (err) {
+      console.warn('[git] loadImageDataUrl failed', err)
+      return null
     }
   }
 
@@ -1642,6 +1710,7 @@ export const useGitStore = defineStore('git', () => {
     stashes,
     staged,
     unstaged,
+    conflicted,
     commits,
     isMerging,
     isRebasing,
@@ -1703,6 +1772,9 @@ export const useGitStore = defineStore('git', () => {
     rebase,
     completeMerge,
     abortMerge,
+    loadConflictFile,
+    resolveConflict,
+    resolveConflictBinary,
     stashSave,
     stashApply,
     stashPop,
@@ -1717,6 +1789,7 @@ export const useGitStore = defineStore('git', () => {
     ignore,
     savePatch,
     loadDiff,
+    loadImageDataUrl,
     loadCommitDiff,
     stageHunk,
     unstageHunk,

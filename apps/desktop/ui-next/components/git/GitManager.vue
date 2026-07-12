@@ -45,6 +45,7 @@
           :is-merging="store.isMerging"
           :is-rebasing="store.isRebasing"
           :has-conflict="store.hasConflict"
+          :conflicted-count="store.conflicted.length"
           :not-a-repo="store.notARepo"
           :sync-op="store.syncOp"
           :gh-account="store.activeGhAccount"
@@ -56,7 +57,7 @@
           @push="openPush"
           @cancel="(op) => store.cancel(op)"
           @complete-merge="() => store.completeMerge()"
-          @abort-merge="() => store.abortMerge()"
+          @abort-merge="onAbortMerge"
           @open-identity="() => (identityOpen = true)"
           @open-account="openAccountSetting"
         />
@@ -75,11 +76,13 @@
             <GitChangesList
               :staged="store.staged"
               :unstaged="store.unstaged"
+              :conflicted="store.conflicted"
               :ch-tree="chTree"
               :sel="selectedFile"
               :width="midW"
               @toggle-tree="chTree = !chTree"
-              @select="(f, s) => (selectedFile = { path: f, staged: s })"
+              @select="(f, s) => (selectedFile = { kind: 'file', path: f, staged: s })"
+              @select-conflict="(f) => (selectedFile = { kind: 'conflict', path: f })"
               @discard="onDiscard"
               @discard-all="onDiscardAll"
               @toggle-stage="onToggleStage"
@@ -90,28 +93,41 @@
             />
             <div class="grsz" :class="{ drag: midDragging }" @pointerdown="onMidResize" />
             <div class="detail">
-              <GitDiffViewer
-                :file="selectedFile?.path ?? null"
-                :diff="diffLines"
-                :diff-mode="diffMode"
-                :staged="selectedFile?.staged ?? false"
-                @toggle-diff-mode="diffMode = diffMode === 'split' ? 'unified' : 'split'"
-                @stage-file="onStageFile"
-                @unstage-file="onUnstageFile"
-                @stage-hunk="onStageHunk"
-                @unstage-hunk="onUnstageHunk"
+              <!-- Conflicted file → 2-way resolver (replaces the diff viewer). A
+                   normal file row keeps the diff viewer + commit panel below. -->
+              <GitConflictResolver
+                v-if="selectedFile?.kind === 'conflict'"
+                :key="selectedFile.path"
+                :path="selectedFile.path"
+                @resolved="onConflictResolved"
               />
-              <GitCommitPanel
-                :msg="store.commitMessage"
-                :staged-count="store.staged.length"
-                :commits-count="store.commits.length"
-                :generating="store.isGeneratingCommit"
-                :committing="store.isCommitting"
-                @update-msg="(v) => (store.commitMessage = v)"
-                @commit="() => store.commit(store.commitMessage)"
-                @amend="() => store.amend(store.commitMessage)"
-                @generate="() => store.generateCommitMessage()"
-              />
+              <template v-else>
+                <GitDiffViewer
+                  :file="selectedFile?.kind === 'file' ? selectedFile.path : null"
+                  :diff="diffLines"
+                  :diff-mode="diffMode"
+                  :is-image="selectedIsImage"
+                  :image-src="imageSrc"
+                  :image-loading="imageLoading"
+                  :staged="selectedFile?.kind === 'file' ? selectedFile.staged : false"
+                  @toggle-diff-mode="diffMode = diffMode === 'split' ? 'unified' : 'split'"
+                  @stage-file="onStageFile"
+                  @unstage-file="onUnstageFile"
+                  @stage-hunk="onStageHunk"
+                  @unstage-hunk="onUnstageHunk"
+                />
+                <GitCommitPanel
+                  :msg="store.commitMessage"
+                  :staged-count="store.staged.length"
+                  :commits-count="store.commits.length"
+                  :generating="store.isGeneratingCommit"
+                  :committing="store.isCommitting"
+                  @update-msg="(v) => (store.commitMessage = v)"
+                  @commit="() => store.commit(store.commitMessage)"
+                  @amend="() => store.amend(store.commitMessage)"
+                  @generate="() => store.generateCommitMessage()"
+                />
+              </template>
             </div>
           </template>
 
@@ -239,11 +255,12 @@ import type {
   DiffLine,
   DiffMode,
   GitFile,
+  GitRightPaneSel,
   GitSection,
-  GitSelection,
   MenuItem,
   SectionOpen,
 } from '~/components/git/git-types'
+import { isImagePath } from '~/components/git/git-types'
 import type { PushParams } from '~/composables/useGitApi'
 import { type DeleteBranchResult, useGitStore } from '~/stores/git'
 
@@ -385,9 +402,10 @@ const bcol = reactive<Record<string, boolean>>({})
 const chTree = ref(true)
 const diffMode = ref<DiffMode>('unified')
 const ctab = ref<CommitTab>('commit')
-// The selected working-tree row + its section (staged vs unstaged). A partially
-// staged file is in both sections, so the side determines which diff/actions apply.
-const selectedFile = ref<GitSelection | null>(null)
+// The selected right-pane target: a working-tree file (diff, keyed by staged side)
+// or a conflicted file (resolver). A partially staged file is in both sections, so
+// the side determines which diff/actions apply. `null` = nothing selected.
+const selectedFile = ref<GitRightPaneSel>(null)
 const commitSel = ref<string | null>(null)
 const identityOpen = ref(false)
 const remoteAddOpen = ref(false)
@@ -448,10 +466,40 @@ const isHistory = computed(
 // Working-tree diff for the selected file. The selected side (staged vs unstaged)
 // decides whether to load the index-vs-HEAD diff or the working-tree diff.
 const diffLines = ref<DiffLine[]>([])
+// Image preview: an image row has a binary git diff (no hunks) → render its
+// on-disk bytes as an <img> instead of empty diff text.
+const selectedIsImage = computed(
+  () => selectedFile.value?.kind === 'file' && isImagePath(selectedFile.value.path),
+)
+const imageSrc = ref<string | null>(null)
+const imageLoading = ref(false)
 watch(
   selectedFile,
   async (f) => {
-    diffLines.value = f ? await store.loadDiff(f.path, f.staged) : []
+    // Only a `file` selection has a diff; a `conflict` selection renders the
+    // resolver (which loads its own content) and needs no working-tree diff.
+    if (f?.kind !== 'file') {
+      diffLines.value = []
+      imageSrc.value = null
+      imageLoading.value = false
+      return
+    }
+    if (isImagePath(f.path)) {
+      diffLines.value = []
+      imageSrc.value = null
+      imageLoading.value = true
+      const src = await store.loadImageDataUrl(f.path)
+      // Guard against a stale resolve: a newer selection may have superseded this
+      // one while the file read was in flight.
+      if (selectedFile.value === f) {
+        imageSrc.value = src
+        imageLoading.value = false
+      }
+      return
+    }
+    imageSrc.value = null
+    imageLoading.value = false
+    diffLines.value = await store.loadDiff(f.path, f.staged)
   },
   { immediate: true },
 )
@@ -488,7 +536,7 @@ function onSelectSection(next: GitSection) {
 // mutation that leaves `selectedFile` pointing at the same row (e.g. stage hunk).
 function reloadDiff() {
   const f = selectedFile.value
-  if (!f) {
+  if (f?.kind !== 'file') {
     diffLines.value = []
     return
   }
@@ -500,7 +548,29 @@ function reloadDiff() {
 // A whole-file stage/unstage moves the file out of its current section; if it was
 // selected there, drop the selection (the user re-picks the side they want).
 function clearSelectionFor(file: string) {
-  if (selectedFile.value?.path === file) selectedFile.value = null
+  const f = selectedFile.value
+  if (f?.kind === 'file' && f.path === file) selectedFile.value = null
+}
+
+// A conflicted file was resolved (staged) → close the resolver; the store already
+// ran loadStatus, so the file has left the Conflicted section. When the last
+// conflict clears, the header banner/Complete button re-enable reactively.
+function onConflictResolved() {
+  selectedFile.value = null
+}
+
+// Abort the whole merge/rebase — confirm first (destructive: in-progress resolver
+// picks are lost, working tree reverts). On abort the resolver is closed so the
+// right pane returns to an empty diff.
+async function onAbortMerge() {
+  const ok = await confirm({
+    title: t('git.header.' + (store.isRebasing ? 'abortRebase' : 'abortMerge')),
+    description: t('git.conflict.abortConfirm'),
+    kind: 'danger',
+  })
+  if (!ok) return
+  if (selectedFile.value?.kind === 'conflict') selectedFile.value = null
+  await store.abortMerge()
 }
 
 async function onToggleStage(file: string, staged: boolean) {
@@ -544,7 +614,8 @@ async function onDiscardAll(files: string[]) {
   })
   if (!ok) return
   for (const file of files) await store.discardFile(file)
-  if (selectedFile.value && files.includes(selectedFile.value.path)) selectedFile.value = null
+  const sel = selectedFile.value
+  if (sel?.kind === 'file' && files.includes(sel.path)) selectedFile.value = null
   reloadDiff()
 }
 
@@ -563,7 +634,7 @@ async function onUnstageAll() {
 // remaining unstaged hunks.
 async function onStageHunk(hunkIndex: number) {
   const f = selectedFile.value
-  if (!f || f.staged) return
+  if (f?.kind !== 'file' || f.staged) return
   await store.stageHunk(f.path, hunkIndex)
   reloadDiff()
 }
@@ -572,7 +643,7 @@ async function onStageHunk(hunkIndex: number) {
 // reload shows the remaining staged hunks.
 async function onUnstageHunk(hunkIndex: number) {
   const f = selectedFile.value
-  if (!f || !f.staged) return
+  if (f?.kind !== 'file' || !f.staged) return
   await store.unstageHunk(f.path, hunkIndex)
   reloadDiff()
 }
@@ -672,17 +743,25 @@ const menuItems = computed<MenuItem[]>(() => {
       { id: 'history', label: t('git.ctx.history') },
       sep,
     ]
+    // Per-file staging + list-wide select-all/deselect-all (check/uncheck every
+    // row = stage/unstage all). Both appear whenever the other side is non-empty
+    // so "Select all" / "Deselect all" reads as a pair regardless of the clicked
+    // side.
     if (tgt.staged) {
-      items.push(
-        { id: 'unstage', label: t('git.ctx.unstage'), hint: '⌘U' },
-        { id: 'unstage-all', label: t('git.ctx.unstageAll'), hint: '⌥⇧⌘U' },
-      )
+      items.push({ id: 'unstage', label: t('git.ctx.unstage'), hint: '⌘U' })
+      if (store.staged.length)
+        items.push({ id: 'deselect-all', label: t('git.ctx.deselectAll'), hint: '⌥⇧⌘U' })
+      if (store.unstaged.length)
+        items.push({ id: 'select-all', label: t('git.ctx.selectAll'), hint: '⌥⇧⌘S' })
     } else {
       items.push(
         { id: 'stage', label: t('git.ctx.stage'), hint: '⌘S' },
         { id: 'discard', label: t('git.ctx.discard'), danger: true, hint: '⇧⌘D' },
-        { id: 'stage-all', label: t('git.ctx.stageAll'), hint: '⌥⇧⌘S' },
       )
+      if (store.unstaged.length)
+        items.push({ id: 'select-all', label: t('git.ctx.selectAll'), hint: '⌥⇧⌘S' })
+      if (store.staged.length)
+        items.push({ id: 'deselect-all', label: t('git.ctx.deselectAll'), hint: '⌥⇧⌘U' })
     }
     items.push(
       sep,
@@ -848,8 +927,8 @@ function dispatchFile(id: string, file: string) {
   if (id === 'stage') void onStageFile(file)
   else if (id === 'unstage') void onToggleStage(file, true)
   else if (id === 'discard') void onDiscard(file)
-  else if (id === 'stage-all') void onStageAll()
-  else if (id === 'unstage-all') void onUnstageAll()
+  else if (id === 'select-all') void onStageAll()
+  else if (id === 'deselect-all') void onUnstageAll()
   else if (id === 'stash') store.stashSave()
   else if (id === 'copy') copy(file)
   else if (id === 'open') void store.openFile(file)
@@ -902,7 +981,8 @@ async function dispatchFolder(id: string, path: string, isStaged: boolean) {
     })
     if (!ok) return
     await store.discardPaths(files)
-    if (selectedFile.value && files.includes(selectedFile.value.path)) selectedFile.value = null
+    const sel = selectedFile.value
+    if (sel?.kind === 'file' && files.includes(sel.path)) selectedFile.value = null
     reloadDiff()
   } else if (id === 'ignore') {
     void store.ignore([`${path}/`])
