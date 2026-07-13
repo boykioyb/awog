@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.2',
+    date: '2026-07-13',
+    highlight: {
+      en: 'Response styles now apply reliably, unread sessions stand out in the list, and Mermaid diagrams gain a Fit button plus fixed Shift-scroll zoom.',
+      vi: 'Kiểu trả lời giờ áp dụng đáng tin cậy, phiên chưa đọc nổi bật trong danh sách, và sơ đồ Mermaid có nút Vừa khung cùng zoom Shift-cuộn đã sửa.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Response styles (Pirate, Hacker 80s, and the rest) now actually apply — a bug sent the display name instead of the internal id, so the style was silently ignored. Sessions that already had a style set work too.',
+        vi: 'Kiểu trả lời (Pirate, Hacker 80s và các kiểu khác) giờ thực sự được áp dụng — một lỗi đã gửi tên hiển thị thay vì id nội bộ nên kiểu bị bỏ qua âm thầm. Các phiên đã đặt kiểu từ trước cũng hoạt động.',
+      },
+      {
+        kind: 'improved',
+        en: 'Unread sessions in the list now get a status-colored highlight (done, awaiting input, or failed) so a session that changed while you were away stands out at a glance.',
+        vi: 'Phiên chưa đọc trong danh sách giờ được tô nền theo trạng thái (xong, chờ nhập, hoặc lỗi) để phiên thay đổi khi bạn vắng mặt nổi bật ngay từ cái nhìn đầu tiên.',
+      },
+      {
+        kind: 'improved',
+        en: 'The running-project dot on session tabs pulses more clearly and is no longer clipped at the edge of the tab strip.',
+        vi: 'Chấm báo dự án đang chạy trên các tab phiên nhấp nháy rõ hơn và không còn bị cắt ở mép dải tab.',
+      },
+      {
+        kind: 'added',
+        en: 'Mermaid diagrams get a dedicated "Fit to view" button that scales the whole diagram into the frame, separate from "Reset to 100%".',
+        vi: 'Sơ đồ Mermaid có thêm nút "Vừa khung" riêng để thu toàn bộ sơ đồ vào khung, tách khỏi nút "Về 100%".',
+      },
+      {
+        kind: 'fixed',
+        en: 'Mermaid diagrams: holding Shift while scrolling now zooms both in and out — previously it only ever zoomed out.',
+        vi: 'Sơ đồ Mermaid: giữ Shift trong khi cuộn giờ phóng to lẫn thu nhỏ — trước đây chỉ thu nhỏ được.',
+      },
+    ],
+  },
+  {
     version: '0.24.1',
     date: '2026-07-13',
     highlight: {
