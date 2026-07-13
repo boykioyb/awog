@@ -1,7 +1,7 @@
 <template>
   <div
     class="li"
-    :class="{ on: active, sel: selected }"
+    :class="[{ on: active, sel: selected, unread: session.unread }, statusClass]"
     :data-sid="session.id"
     @click="onRowClick"
     @contextmenu.prevent="onCtx"
@@ -159,6 +159,9 @@ async function askRemove() {
 
 const statusColor = computed(() => STATUS_COLOR[props.session.status])
 const statusLabel = computed(() => t(`sessions.status.${props.session.status}`))
+// Drives the status-tinted row background (see the `.st-*` rules) — a clearer
+// at-a-glance signal than the tiny status dot, which for `done` is near-invisible.
+const statusClass = computed(() => `st-${props.session.status}`)
 // Badge fill/text/border per status (see BADGE_STYLE). Kept separate from the dot's
 // STATUS_COLOR so the badge can read as a proper colored chip while the dot stays muted.
 const badgeStyle = computed(() => BADGE_STYLE[props.session.status])
@@ -260,6 +263,32 @@ input.ttl {
   padding: 2px 7px;
   outline: none;
   font: inherit;
+}
+
+/* UNREAD rows get a status-colored background so a session that settled or produced
+   output while you weren't looking stands out (the tiny status dot — `textFaint` for
+   `done` — was easy to miss). ONLY unread rows are tinted, so a long, mostly-read list
+   stays calm; the tint color still says what happened (accent = done, amber = needs
+   input, danger = failed). Each status sets `--li-tint`; the `.unread` rule paints it,
+   hover falls back to the standard surface. Gated `:not(.on):not(.sel)` so the active /
+   selected rows keep their own accent treatment. Read rows keep the plain list styling. */
+.li.st-done {
+  --li-tint: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.li.st-streaming {
+  --li-tint: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.li.st-awaiting {
+  --li-tint: color-mix(in srgb, var(--amber) 16%, transparent);
+}
+.li.st-error {
+  --li-tint: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.li.unread:not(.on):not(.sel) {
+  background: var(--li-tint, var(--bgHover));
+}
+.li.unread:not(.on):not(.sel):hover {
+  background: var(--bgHover);
 }
 
 /* Right-aligned group in the sub-row: indicator chips + status badge, badge rightmost. */

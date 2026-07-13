@@ -3,6 +3,11 @@
        app.vue; every <Icon name="x"/> references #i-x via <use>. -->
   <svg width="0" height="0" style="position: absolute" aria-hidden="true">
     <defs>
+      <symbol id="i-scan" viewBox="0 0 24 24">
+        <path
+          d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"
+        />
+      </symbol>
       <symbol id="i-home" viewBox="0 0 24 24">
         <rect x="3" y="3" width="7" height="9" rx="1.5" />
         <rect x="14" y="3" width="7" height="5" rx="1.5" />

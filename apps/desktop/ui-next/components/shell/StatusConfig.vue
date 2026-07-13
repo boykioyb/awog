@@ -77,17 +77,17 @@
           </div>
           <div
             v-for="row in grp.rows"
-            :key="row.id"
+            :key="row.slug"
             class="mi sty"
-            :class="{ cur: row.id === activeStyleId }"
-            @click="pickStyle(row.id)"
+            :class="{ cur: row.slug === activeStyleId }"
+            @click="pickStyle(row.slug)"
           >
             <Icon :name="row.icon" class="styicon" />
             <div class="stytext">
               <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
               <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
             </div>
-            <Icon v-if="row.id === activeStyleId" name="check" class="styck" />
+            <Icon v-if="row.slug === activeStyleId" name="check" class="styck" />
           </div>
         </template>
         <label class="nmk" style="padding: 0 11px 9px" @click.stop="toggleNoMd">
@@ -147,8 +147,8 @@ function pickThink(v: ThinkingLevel) {
   selectThink(v)
   close()
 }
-function pickStyle(id: string) {
-  selectStyle(id)
+function pickStyle(slug: string) {
+  selectStyle(slug)
   close()
 }
 </script>

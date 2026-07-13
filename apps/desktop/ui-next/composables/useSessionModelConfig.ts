@@ -53,7 +53,24 @@ const RESPONSE_STYLES: StyleGroup[] = [
     ],
   },
 ]
-const STYLE_SLUG = new Map(RESPONSE_STYLES.flatMap((g) => g.rows).map((r) => [r.id, r.slug]))
+const ALL_STYLE_ROWS = RESPONSE_STYLES.flatMap((g) => g.rows)
+const STYLE_SLUGS = new Set(ALL_STYLE_ROWS.map((r) => r.slug))
+// Display label (`row.id`, e.g. "Pirate") → engine slug ("pirate"). A pre-fix bug
+// stored/sent the label as `responseStyle`, so we translate it back here.
+const SLUG_BY_LABEL = new Map(ALL_STYLE_ROWS.map((r) => [r.id, r.slug]))
+
+// Canonicalize a stored/selected style value to the ENGINE SLUG (a STYLE_DIRECTIVES
+// key in the sidecar), or 'Default' for no-style. THE engine only knows slugs
+// ('pirate', 'hacker-80s', …), so this is what must be sent as `responseStyle`.
+// Accepts: a slug (passthrough), a display label (the identity the UI wrongly
+// persisted before this fix → mapped back so old sessions round-trip), or the
+// Default/Normal sentinels. An unknown value passes through and degrades to
+// "no style" in the sidecar rather than erroring.
+export function normalizeStyleSlug(value: string | undefined | null): string {
+  if (!value || value === 'Default' || value === 'Normal' || value === 'normal') return 'Default'
+  if (STYLE_SLUGS.has(value)) return value
+  return SLUG_BY_LABEL.get(value) ?? value
+}
 
 export function useSessionModelConfig(session: () => Session) {
   const { t } = useI18n()
@@ -103,18 +120,23 @@ export function useSessionModelConfig(session: () => Session) {
   }
 
   // ── Response style + no-markdown ──
+  // Identity is the engine SLUG throughout (matches the sidecar STYLE_DIRECTIVES +
+  // the persisted `responseStyle`); the display label comes from i18n. 'Default'
+  // (no style) surfaces as the 'normal' row for highlight/label purposes.
   const activeStyleId = computed(() => {
-    const st = session().style
-    return st && st !== 'Default' ? st : 'Normal'
+    const slug = normalizeStyleSlug(session().style)
+    return slug === 'Default' ? 'normal' : slug
   })
   const styleName = computed(() => {
-    const st = session().style
-    const slug = st && st !== 'Default' ? (STYLE_SLUG.get(st) ?? null) : 'normal'
-    return slug ? t(`sessions.style.${slug}.name`) : (st ?? t('sessions.style.normal.name'))
+    const slug = normalizeStyleSlug(session().style)
+    if (slug === 'Default') return t('sessions.style.normal.name')
+    // Known slug → localized name; an unknown legacy value shows raw (no missing key).
+    return STYLE_SLUGS.has(slug) ? t(`sessions.style.${slug}.name`) : slug
   })
   const noMd = computed(() => session().noMarkdown ?? false)
-  function selectStyle(id: string) {
-    store.setStyle(session().id, id === 'Normal' ? 'Default' : id)
+  // Receives the row's SLUG. 'normal' collapses to the 'Default' no-style sentinel.
+  function selectStyle(slug: string) {
+    store.setStyle(session().id, slug === 'normal' ? 'Default' : slug)
   }
   function toggleNoMd() {
     store.setNoMarkdown(session().id, !noMd.value)

@@ -14,6 +14,9 @@
         <button class="mmb" :title="t('common.zoomIn')" @click="zoomBy(0.2)">
           <Icon name="plus" style="width: 13px; height: 13px" />
         </button>
+        <button class="mmb" :title="t('common.fit')" @click="fit">
+          <Icon name="scan" style="width: 13px; height: 13px" />
+        </button>
         <span class="mmsep" />
         <button
           class="mmb"
@@ -25,6 +28,7 @@
       </div>
 
       <div
+        ref="vpRef"
         class="mmdvp"
         @wheel="onWheelZoom"
         @pointerdown="onPointerDown"
@@ -67,10 +71,34 @@ let mermaidUid = 0
 const props = defineProps<{ code: string }>()
 const { t } = useI18n()
 const { isDark } = useTheme()
-const { scale, tx, ty, zoomBy, reset, onPointerDown, onPointerMove, onPointerUp } = useZoomPan({
-  min: 0.3,
-  max: 6,
-})
+const { scale, tx, ty, zoomBy, setScale, reset, onPointerDown, onPointerMove, onPointerUp } =
+  useZoomPan({
+    min: 0.3,
+    max: 6,
+  })
+
+// Viewport element — measured by fit() to size the diagram to the frame.
+const vpRef = useTemplateRef<HTMLElement>('vpRef')
+
+// Fit: scale the diagram so it sits WHOLE inside the viewport, then re-center. The
+// stage forces the SVG to the stage width (`.mmdstage :deep(svg){width:100%}`), so at
+// 100% only the HEIGHT can overflow (a tall diagram); fit shrinks that to frame it.
+// Derived from the SVG's own aspect ratio (viewBox) vs the viewport box — at scale s the
+// SVG renders w=s·vpW, h=s·vpW/aspect, so fitting both gives s=min(1, vpH·aspect/vpW).
+// Falls back to reset() (100%) when the SVG can't be measured yet.
+function fit() {
+  const vp = vpRef.value
+  const svg = vp?.querySelector('svg')
+  if (!vp || !svg) return reset()
+  const vb = svg.viewBox?.baseVal
+  const aspect = vb && vb.width > 0 && vb.height > 0 ? vb.width / vb.height : 0
+  const vpW = vp.clientWidth
+  const vpH = vp.clientHeight
+  if (!aspect || !vpW || !vpH) return reset()
+  tx.value = 0
+  ty.value = 0
+  setScale(Math.min(1, (vpH * aspect) / vpW))
+}
 
 const svg = ref('')
 const error = ref('')
@@ -98,7 +126,12 @@ const stageStyle = computed(() => ({
 function onWheelZoom(e: WheelEvent) {
   if (!e.shiftKey) return
   e.preventDefault()
-  zoomBy(e.deltaY < 0 ? 0.1 : -0.1)
+  // Holding Shift makes the OS/browser deliver the wheel as HORIZONTAL scroll — the
+  // delta lands on deltaX and deltaY is ~0. Reading deltaY alone then always saw
+  // "not < 0", so both scroll directions only ever zoomed OUT. Use whichever axis
+  // actually carries the delta (its sign still encodes up=in / down=out).
+  const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+  zoomBy(delta < 0 ? 0.1 : -0.1)
 }
 
 // Per-instance token guards against a stale async render (theme/code changed

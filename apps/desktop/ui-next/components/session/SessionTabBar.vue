@@ -441,17 +441,20 @@ async function pDeleteAll() {
    identity while matching the app's streaming .pulse convention. Only box-shadow
    animates (no layout/reflow). */
 .stab-dot.running {
-  animation: stab-dot-pulse 1.8s ease-out infinite;
+  animation: stab-dot-pulse 1.3s ease-in-out infinite;
 }
+/* Breathe the dot's OWN opacity (unmistakable + never clipped by the tab strip's
+   overflow, unlike a pure box-shadow ring) plus an expanding ring in the project
+   color. */
 @keyframes stab-dot-pulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--stab-dot) 50%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 5px color-mix(in srgb, var(--stab-dot) 0%, transparent);
-  }
+  0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--stab-dot) 0%, transparent);
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--stab-dot) 65%, transparent);
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--stab-dot) 0%, transparent);
   }
 }
 .stab-nm {
@@ -603,8 +606,11 @@ async function pDeleteAll() {
   .ctxsw .swatch {
     transition: none;
   }
+  /* No motion, but keep a STATIC halo so a running project is still visible (dropping
+     the cue entirely would hide it for reduced-motion users). */
   .stab-dot.running {
     animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--stab-dot) 35%, transparent);
   }
 }
 </style>

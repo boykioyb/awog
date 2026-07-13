@@ -8,6 +8,7 @@ import {
   questionAnswered,
 } from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
+import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
@@ -758,7 +759,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       model: modelDisplay(dto.settings?.modelId),
       account: accountDisplay(dto),
       // Persisted per-session config (sessions.upsert ↔ sessions.list round-trip).
-      style: dto.settings?.responseStyle || 'Default',
+      // Canonicalize to the engine slug: an old session may have persisted the
+      // display label (pre-fix bug) — normalize so it round-trips + re-applies.
+      style: normalizeStyleSlug(dto.settings?.responseStyle),
       // Resting status from the sidecar (derived from the last message) so the list
       // badges awaiting/error/done without opening the session. Fallback for a
       // legacy index.json missing the field: a session with messages is a finished
@@ -2410,9 +2413,13 @@ export const useSessionsStore = defineStore('sessions', () => {
       mode,
     }
     if (s.accountId) settings.accountId = s.accountId
-    // Response style (ADR 0046): a non-Default style id is the directive; the
-    // no-markdown modifier rides alongside. Omit when Default/unset = "Normal".
-    if (s.style && s.style !== 'Default') settings.responseStyle = s.style
+    // Response style (ADR 0046): send the ENGINE SLUG (STYLE_DIRECTIVES key) — the
+    // sidecar keys its directives by slug, so sending the display label silently
+    // dropped the style. normalizeStyleSlug guards any stale label in s.style.
+    // Omitted when Default/unset = "Normal" (no directive). The no-markdown
+    // modifier rides alongside.
+    const styleSlug = normalizeStyleSlug(s.style)
+    if (styleSlug !== 'Default') settings.responseStyle = styleSlug
     if (s.noMarkdown) settings.responseStyleNoMarkdown = true
     return settings
   }
