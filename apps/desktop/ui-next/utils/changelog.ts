@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.1',
+    date: '2026-07-13',
+    highlight: {
+      en: 'Stability fixes for sessions: finished replies always settle, forking a running session opens clean, diagrams no longer hijack scrolling, and a frozen engine now auto-recovers.',
+      vi: 'Sửa ổn định cho phiên: câu trả lời xong luôn kết thúc gọn, fork một phiên đang chạy mở ra sạch, sơ đồ không còn nuốt thao tác cuộn, và engine bị treo giờ tự phục hồi.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'A finished reply could stay stuck showing the "working" spinner with the timer still counting — the turn now always settles and the indicator stops.',
+        vi: 'Câu trả lời đã xong đôi khi kẹt ở trạng thái "đang chạy" với đồng hồ vẫn đếm — lượt trả lời giờ luôn kết thúc gọn và chỉ báo dừng lại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Forking a session while it was running opened the new session stuck "running" so you could not send messages — the fork now opens as a clean, ready session.',
+        vi: 'Fork một phiên khi nó đang chạy khiến phiên mới bị kẹt "đang chạy" và không gửi được tin nhắn — fork giờ mở ra như một phiên sạch, sẵn sàng.',
+      },
+      {
+        kind: 'improved',
+        en: 'Diagrams no longer capture your scroll: scrolling over a diagram moves the conversation as expected. Hold Shift while scrolling to zoom a diagram in or out.',
+        vi: 'Sơ đồ không còn nuốt thao tác cuộn: cuộn qua sơ đồ sẽ cuộn cuộc trò chuyện như mong đợi. Giữ Shift trong khi cuộn để phóng to/thu nhỏ sơ đồ.',
+      },
+      {
+        kind: 'improved',
+        en: 'The app now detects an unresponsive engine and restarts it automatically, instead of leaving a session stuck forever.',
+        vi: 'Ứng dụng giờ phát hiện engine không phản hồi và tự khởi động lại, thay vì để một phiên kẹt mãi.',
+      },
+      {
+        kind: 'added',
+        en: 'Git: a "Discard all" action in the changes context menu reverts every working-tree change at once.',
+        vi: 'Git: thao tác "Discard all" trong menu chuột phải của phần thay đổi hoàn tác mọi thay đổi working tree cùng lúc.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Long file paths and URLs in a message now wrap inside the bubble instead of overflowing past its edge.',
+        vi: 'Đường dẫn tệp và URL dài trong tin nhắn giờ xuống dòng gọn trong khung thay vì tràn ra ngoài mép.',
+      },
+    ],
+  },
+  {
     version: '0.24.0',
     date: '2026-07-12',
     highlight: {
