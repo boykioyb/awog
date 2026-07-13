@@ -25,6 +25,11 @@ type FilePreviewApi = {
   // else null. Used to gate file-chip highlighting on actual existence — a merely
   // *proposed* filename in prose must not linkify.
   resolve: (path: string) => Promise<string | null>
+  // Resolve a markdown image src (a path relative to the workspace root) to a
+  // base64 data: URL by reading the file bytes, or null when it can't be resolved
+  // (browser-dev, climbs out of the workspace, missing, non-image, over the size
+  // cap). Lets the transcript render `![alt](tasks/…/shot.png)` images inline.
+  imageSrc: (src: string) => Promise<string | null>
 }
 const KEY: InjectionKey<FilePreviewApi> = Symbol('filePreview')
 
@@ -152,7 +157,64 @@ export function provideFilePreview(
     if (!r) return null
     return matchPath(r, detected, touchedPaths.value)
   }
-  provide(KEY, { open, shorten, resolve })
+
+  // ── markdown image inlining (workspace-relative → base64 data URL) ───────────
+  // Chat markdown images reference workspace files by a path relative to the
+  // session's workspace root (e.g. a QA report's evidence screenshots:
+  // `![RFQ](tasks/…/ac-001-rfq.png)`). The renderer resolves that against the page
+  // origin (app://bundle/… or the dev server), not the workspace, so the <img>
+  // 404s and renders a broken icon. Read the bytes through the sidecar and return a
+  // data: URL. Cached per normalized path; '' negative-caches a miss so per-frame
+  // re-renders don't re-read. Mirrors usePreviewModal's markdown image resolution,
+  // but anchored at the workspace root (the session cwd), not a file's directory.
+  const imageCache = new Map<string, string>()
+  // Absolute/remote schemes are already loadable — only local relative refs resolve.
+  const ABSOLUTE_SCHEME = /^(?:https?:|data:|blob:|app:|file:)/i
+  // Normalize a relative ref against the workspace root, collapsing '.'/'..'; a ref
+  // that climbs out of the root returns null (invariant #2, defence-in-depth on top
+  // of the sidecar's assertInsideWorkspace).
+  const normalizeAsset = (src: string): string | null => {
+    let s = src.split(/[?#]/)[0] ?? ''
+    try {
+      s = decodeURIComponent(s)
+    } catch {
+      // not valid percent-encoding → use the raw string
+    }
+    const out: string[] = []
+    for (const seg of s.replace(/^\/+/, '').split('/')) {
+      if (!seg || seg === '.') continue
+      if (seg === '..') {
+        if (!out.length) return null
+        out.pop()
+        continue
+      }
+      out.push(seg)
+    }
+    return out.length ? out.join('/') : null
+  }
+  const imageSrc: FilePreviewApi['imageSrc'] = async (rawSrc) => {
+    const r = root.value
+    if (!r) return null
+    const s = (rawSrc ?? '').trim()
+    if (!s || ABSOLUTE_SCHEME.test(s)) return null
+    const rel = normalizeAsset(s)
+    if (!rel) return null
+    const cached = imageCache.get(rel)
+    if (cached !== undefined) return cached || null
+    try {
+      const res = await fs.readFileBase64(r, rel)
+      const url =
+        res.base64 && !res.truncated && res.mimeType.startsWith('image/')
+          ? `data:${res.mimeType};base64,${res.base64}`
+          : ''
+      imageCache.set(rel, url)
+      return url || null
+    } catch {
+      imageCache.set(rel, '') // negative-cache a missing / out-of-root file
+      return null
+    }
+  }
+  provide(KEY, { open, shorten, resolve, imageSrc })
 }
 
 // No host (markdown rendered outside a session transcript) → links are inert.
@@ -160,6 +222,7 @@ const NOOP: FilePreviewApi = {
   open: () => undefined,
   shorten: (p) => p,
   resolve: () => Promise.resolve(null),
+  imageSrc: () => Promise.resolve(null),
 }
 
 // Leaf-side API, injected from the nearest provideFilePreview ancestor.

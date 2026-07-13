@@ -177,6 +177,42 @@ function linkifyFilePaths(el: HTMLElement) {
   })
 }
 
+// Markdown images reference workspace files by a path relative to the session's workspace
+// root (e.g. a QA report's evidence screenshots: `![RFQ](tasks/…/ac-001-rfq.png)`). The
+// renderer would resolve that relative src against the PAGE origin (app://bundle/… or the
+// dev server) — not the workspace — so the <img> 404s and shows a broken icon. Read the
+// real bytes via the sidecar (filePreview.imageSrc → data: URL) and swap the src in. Runs
+// after each subtree rebuild; the renderToken guard drops a write whose nodes a later
+// streaming frame already replaced. Reads are cached in useFilePreview, so re-renders
+// re-apply the resolved src without re-reading. Absolute/remote srcs are left untouched.
+function resolveImages(el: HTMLElement) {
+  const imgs = Array.from(el.querySelectorAll('img'))
+  if (!imgs.length) return
+  const token = renderToken
+  for (const img of imgs) {
+    const raw = (img.getAttribute('src') ?? '').trim()
+    if (!raw || /^(?:https?:|data:|blob:|app:|file:)/i.test(raw)) continue // already loadable
+    // Stop the doomed relative-URL load (a flashed broken icon against the page origin)
+    // while the real bytes are read from the workspace.
+    img.removeAttribute('src')
+    img.classList.add('imgloading')
+    void filePreview.imageSrc(raw).then((url) => {
+      if (token !== renderToken || !img.isConnected) return // subtree replaced while reading
+      img.classList.remove('imgloading')
+      if (url) {
+        img.src = url
+      } else {
+        // Unresolved (missing file / browser-dev / over cap) → a compact placeholder with
+        // the alt text or filename instead of the browser's broken-image icon.
+        const ph = document.createElement('span')
+        ph.className = 'imgmissing'
+        ph.textContent = img.getAttribute('alt') || raw.split('/').pop() || raw
+        img.replaceWith(ph)
+      }
+    })
+  }
+}
+
 // Rebuild the subtree from the sanitized HTML, then re-apply marks + copy buttons. Runs on
 // mount and whenever the HTML or highlights change (flush:'post' so the DOM is in place).
 //
@@ -205,6 +241,7 @@ function rerender() {
   applyMarks(el)
   addCopyButtons(el)
   linkifyFilePaths(el)
+  resolveImages(el)
 }
 onMounted(rerender)
 watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
@@ -403,5 +440,28 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
 }
 .mdinline :deep(img) {
   max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+/* Bytes are being read from the workspace — the relative src is removed so the browser
+   doesn't flash a broken icon; show a neutral box until the data: URL lands. */
+.mdinline :deep(img.imgloading) {
+  min-width: 120px;
+  min-height: 72px;
+  background: var(--bgInput);
+}
+/* Fallback for an image that couldn't be resolved/read — a compact dashed chip with the
+   alt/filename instead of the browser's broken-image icon. */
+.mdinline :deep(.imgmissing) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--textDim);
+  font-family: var(--code);
+  font-size: 0.92em;
 }
 </style>
