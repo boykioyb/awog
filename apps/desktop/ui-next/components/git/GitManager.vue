@@ -613,10 +613,19 @@ async function onDiscardAll(files: string[]) {
     confirmLabel: t('git.discard.confirm'),
   })
   if (!ok) return
-  for (const file of files) await store.discardFile(file)
+  // One batched API call + one status reload (vs. N per-file discards).
+  await store.discardPaths(files)
   const sel = selectedFile.value
   if (sel?.kind === 'file' && files.includes(sel.path)) selectedFile.value = null
   reloadDiff()
+}
+
+// Context-menu "Discard all" — list-wide counterpart to Select all / Deselect
+// all: revert every working-tree change across both sections. A partially staged
+// file appears in both, so de-dup the union before confirming/discarding.
+function onDiscardAllChanges() {
+  const all = [...new Set([...store.staged, ...store.unstaged].map((x) => x.f))]
+  void onDiscardAll(all)
 }
 
 async function onStageAll() {
@@ -763,6 +772,10 @@ const menuItems = computed<MenuItem[]>(() => {
       if (store.staged.length)
         items.push({ id: 'deselect-all', label: t('git.ctx.deselectAll'), hint: '⌥⇧⌘U' })
     }
+    // List-wide discard: the destructive counterpart to Select all / Deselect
+    // all — reverts EVERY working-tree change (staged + unstaged) after one
+    // confirm. Shown whenever there is any change on either side.
+    if (count) items.push({ id: 'discard-all', label: t('git.ctx.discardAll'), danger: true })
     items.push(
       sep,
       { label: t('git.ctx.ignore'), children: ignore },
@@ -929,6 +942,7 @@ function dispatchFile(id: string, file: string) {
   else if (id === 'discard') void onDiscard(file)
   else if (id === 'select-all') void onStageAll()
   else if (id === 'deselect-all') void onUnstageAll()
+  else if (id === 'discard-all') void onDiscardAllChanges()
   else if (id === 'stash') store.stashSave()
   else if (id === 'copy') copy(file)
   else if (id === 'open') void store.openFile(file)

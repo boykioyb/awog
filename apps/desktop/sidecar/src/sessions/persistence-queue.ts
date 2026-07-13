@@ -21,6 +21,13 @@ import {
 
 const DEBOUNCE_MS = 500
 
+// A persist rewrites the WHOLE transcript SYNCHRONOUSLY (readSessionHeader reads the
+// full file; serializeSessionJsonl re-stringifies + re-externalizes every message),
+// which can block the engine's event loop on a large session — the prime suspect for
+// the post-turn freeze the engine heartbeat now recovers from (see electron engine.ts).
+// Log any write slower than this with a sub-step breakdown so a recurrence is named.
+const SLOW_WRITE_WARN_MS = 800
+
 type PendingWrite = {
   data: Session
   timer: ReturnType<typeof setTimeout>
@@ -130,6 +137,9 @@ class SessionPersistenceQueue {
       const sessionDir = dirname(filePath)
       await mkdir(sessionDir, { recursive: true, mode: 0o700 })
 
+      // Sub-step timing (see SLOW_WRITE_WARN_MS): the header build/read + serialize are
+      // the SYNCHRONOUS phases that can block the event loop; the write/rename are async.
+      const t0 = Date.now()
       const localHeader = createSessionHeader(data)
       const diskHeader = readSessionHeader(filePath)
       const previousSig = this.lastWrittenHeaderSignature.get(sessionId)
@@ -148,7 +158,9 @@ class SessionPersistenceQueue {
       // rename is recognised as our own write, not an external edit.
       this.lastWrittenHeaderSignature.set(sessionId, headerMetadataSignature(header))
 
+      const tHeader = Date.now()
       const body = serializeSessionJsonl(data, attachmentsDir(sessionId), header)
+      const tSerialize = Date.now()
       const tmpFile = `${filePath}.tmp`
       await writeFile(tmpFile, body, { encoding: 'utf-8', mode: 0o600 })
       // POSIX rename over an existing file is atomic (no window with no file). Windows
@@ -161,6 +173,19 @@ class SessionPersistenceQueue {
         }
       }
       await rename(tmpFile, filePath)
+
+      const totalMs = Date.now() - t0
+      if (totalMs >= SLOW_WRITE_WARN_MS) {
+        log.warn('persistence-queue: slow session write', {
+          sessionId,
+          messageCount: data.messages.length,
+          bytes: body.length,
+          totalMs,
+          headerMs: tHeader - t0, // createSessionHeader + readSessionHeader (sync, full-file)
+          serializeMs: tSerialize - tHeader, // JSON.stringify + attachment externalize (sync)
+          writeMs: Date.now() - tSerialize, // writeFile + rename (async I/O)
+        })
+      }
     } catch (err) {
       log.error('persistence-queue: failed to write session', {
         sessionId,

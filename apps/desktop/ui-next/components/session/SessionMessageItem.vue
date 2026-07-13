@@ -486,6 +486,12 @@ const msgActions = computed(() => [
    transcript. */
 .mu {
   max-width: 100%;
+  /* Break long unbreakable tokens (file:// paths, URLs, underscored filenames) so they
+     wrap inside the bubble instead of spilling past its right edge. overflow-wrap is
+     inherited, so this covers the plain-text + link segments SessionLinkedText renders
+     directly into .mu. min-width:0 lets the flex bubble actually shrink to wrap. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 /* The action set sits inline on the footer row (assistant + user) — no floating pill
    chrome, pushed to the right next to the byline. PERSISTENT (opacity:1, overriding the

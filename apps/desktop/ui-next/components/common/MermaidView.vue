@@ -58,7 +58,7 @@ let mermaidUid = 0
 </script>
 
 <script setup lang="ts">
-// Renders one Mermaid diagram as live SVG with wheel-zoom (Ctrl/Cmd) + drag-pan.
+// Renders one Mermaid diagram as live SVG with Shift+wheel-zoom + drag-pan.
 // mermaid is dynamically imported (heavy, client-only) and re-rendered on theme
 // change. Each render uses a PROCESS-WIDE unique id: mermaid keeps global state and
 // renders through a temp element keyed by id, so two diagrams sharing an id (the
@@ -89,10 +89,14 @@ const stageStyle = computed(() => ({
   transform: `translate(${tx.value}px, ${ty.value}px)`,
 }))
 
-// Scroll wheel over the diagram zooms it (preventDefault stops it from also scrolling the
-// transcript). To scroll the feed past a diagram, move the cursor off the viewport — or use
-// the toolbar ± / fit buttons. Finer steps than the toolbar so wheel zoom feels smooth.
+// Wheel zoom is gated on SHIFT so a plain scroll passes straight through to the
+// transcript — previously EVERY wheel over a diagram was captured (preventDefault +
+// zoom), so scrolling the feed "stuck" the moment the cursor crossed a diagram. Now:
+// Shift+wheel zooms (preventDefault, finer steps than the toolbar for smoothness); a
+// bare wheel is left alone so `.mmdvp` (overflow:hidden, no inner scroll) lets it bubble
+// to the transcript. The toolbar ± buttons remain the modifier-free way to zoom.
 function onWheelZoom(e: WheelEvent) {
+  if (!e.shiftKey) return
   e.preventDefault()
   zoomBy(e.deltaY < 0 ? 0.1 : -0.1)
 }

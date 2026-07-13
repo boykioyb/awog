@@ -27,6 +27,23 @@ const RESTART_DELAY_MS = 500
 const CRASH_WINDOW_MS = 10_000
 const MAX_CONSECUTIVE_CRASHES = 5
 
+// Liveness heartbeat. A WEDGED engine — event loop blocked, or a deadlock that
+// stops it processing stdin — keeps the child ALIVE yet stops answering RPCs and
+// never emits `exit`, so the crash recovery below never fires. Every pending
+// request then hangs forever with no timeout: the in-flight turn's `sendMessage`
+// AND the UI's stall-watchdog `turnActive` probe both dangle, so a finished reply
+// is stranded on "Streaming…" with the timer running and nothing can recover it.
+// We ping the engine periodically; after MAX consecutive unanswered pings we treat
+// it as wedged and kill it, converting the freeze into the normal `exit` path
+// (reject pending → engine.crashed → auto-restart) that the UI already recovers.
+//
+// Trigger is a consecutive-MISS COUNT, never a wall-clock delta: OS sleep pauses
+// these timers together with the engine's event loop, so a slept engine simply
+// answers the next ping on wake instead of being mistaken for a freeze.
+const HEARTBEAT_INTERVAL_MS = 10_000
+const HEARTBEAT_TIMEOUT_MS = 7_000 // wait for one pong before counting a miss
+const MAX_MISSED_HEARTBEATS = 3 // ~3 misses in a row (~30s silent) → wedged → kill
+
 type InboundMessage = {
   id?: number
   method?: string
@@ -38,6 +55,10 @@ type InboundMessage = {
 type Pending = {
   resolve: (value: unknown) => void
   reject: (error: RpcErrorShape) => void
+  // Diagnostics only: which method + when it was sent, so a freeze dump can name
+  // the RPC(s) that were in flight when the engine stopped answering.
+  method: string
+  startedAt: number
 }
 
 class Engine {
@@ -64,6 +85,17 @@ class Engine {
   private lastExitAt = 0
 
   private restartTimer: ReturnType<typeof setTimeout> | null = null
+
+  // Liveness heartbeat state (see constants above). `missedHeartbeats` counts
+  // consecutive unanswered pings; a pong resets it to 0.
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+  private missedHeartbeats = 0
+
+  // Diagnostics: wall-clock of the last stdout line the engine produced (any RPC
+  // response OR event). Goes stale while the engine is silent — logged in the
+  // freeze dump so we can see how long it had been unresponsive.
+  private lastStdoutAt = 0
 
   start(): void {
     if (this.child) return
@@ -97,6 +129,7 @@ class Engine {
 
     child.on('exit', (code) => {
       log.warn('engine exited', { code })
+      this.stopHeartbeat()
       const err: RpcErrorShape = { code: -32000, message: `engine exited (code ${code})` }
       this.pending.forEach((p) => p.reject(err))
       this.pending.clear()
@@ -111,10 +144,100 @@ class Engine {
     })
 
     this.child = child
+    this.startHeartbeat()
   }
 
   private emitEvent(event: EngineEvent): void {
     this.listeners.forEach((listener) => listener(event))
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat()
+    this.missedHeartbeats = 0
+    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), HEARTBEAT_INTERVAL_MS)
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
+  }
+
+  // One heartbeat round: ping the engine and race the pong against a timeout. A
+  // pong resets the miss counter; a timeout increments it and — once MAX
+  // consecutive misses accumulate — kills the wedged child so `exit` drives
+  // recovery. A REJECTED ping means the child already exited (that path owns
+  // recovery), so it just settles without counting a miss.
+  private sendHeartbeat(): void {
+    if (!this.child || this.stopping) return
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      this.missedHeartbeats += 1
+      log.warn('engine heartbeat missed', {
+        consecutive: this.missedHeartbeats,
+        ...this.freezeContext(),
+      })
+      if (this.missedHeartbeats >= MAX_MISSED_HEARTBEATS) this.killWedged()
+    }, HEARTBEAT_TIMEOUT_MS)
+    this.request('ping', null).then(
+      () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.missedHeartbeats = 0
+      },
+      () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+      },
+    )
+  }
+
+  // The engine stopped answering pings → its event loop is wedged (a slept machine
+  // answers on wake, so repeated misses mean a real freeze). It won't run its JS
+  // SIGTERM handler while wedged, so SIGTERM alone can hang; escalate to SIGKILL
+  // after a short grace. The resulting `exit` rejects every pending RPC (unblocking
+  // the stranded UI turn) and schedules the restart.
+  private killWedged(): void {
+    if (this.stopping || !this.child) return
+    const child = this.child
+    log.error('engine unresponsive — killing to force restart', {
+      missed: this.missedHeartbeats,
+      ...this.freezeContext(),
+    })
+    this.stopHeartbeat()
+    child.kill('SIGTERM')
+    setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        // already gone — nothing to escalate
+      }
+    }, 2_000)
+  }
+
+  // Snapshot of what the engine was doing when it stopped answering — logged on a
+  // heartbeat miss / wedge so the next freeze can be root-caused. `pending` groups
+  // in-flight RPCs by method with a count + oldest age (excluding the heartbeat's
+  // own ping, which merely piles up while wedged), pointing at the stuck call.
+  private freezeContext(): {
+    sinceStdoutMs: number
+    pending: Record<string, { count: number; oldestMs: number }>
+  } {
+    const now = Date.now()
+    const pending: Record<string, { count: number; oldestMs: number }> = {}
+    for (const p of this.pending.values()) {
+      if (p.method === 'ping') continue
+      const age = now - p.startedAt
+      const entry = (pending[p.method] ??= { count: 0, oldestMs: 0 })
+      entry.count += 1
+      if (age > entry.oldestMs) entry.oldestMs = age
+    }
+    return { sinceStdoutMs: this.lastStdoutAt ? now - this.lastStdoutAt : -1, pending }
   }
 
   // Restart the engine after an unexpected exit, guarding against a crash loop:
@@ -146,6 +269,7 @@ class Engine {
 
   // Re-frame stdout chunks on '\n'; each complete line is one JSON-RPC envelope.
   private onStdout(chunk: string): void {
+    this.lastStdoutAt = Date.now()
     this.stdoutBuf += chunk
     let idx = this.stdoutBuf.indexOf('\n')
     while (idx >= 0) {
@@ -222,7 +346,7 @@ class Engine {
     this.nextId += 1
     const payload = `${JSON.stringify({ jsonrpc: '2.0', id, method, params: params ?? null })}\n`
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      this.pending.set(id, { resolve, reject, method, startedAt: Date.now() })
       this.child!.stdin.write(payload)
     })
   }
@@ -234,6 +358,7 @@ class Engine {
 
   stop(): void {
     this.stopping = true
+    this.stopHeartbeat()
     if (this.restartTimer) {
       clearTimeout(this.restartTimer)
       this.restartTimer = null

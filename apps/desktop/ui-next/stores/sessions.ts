@@ -2208,6 +2208,16 @@ export const useSessionsStore = defineStore('sessions', () => {
       blocks: [],
     }
     s.msgs.push(placeholder)
+    // Re-read the just-pushed element as the REACTIVE array proxy and mutate THAT
+    // from here on. Mutating the raw `placeholder` local directly (placeholder.streaming
+    // = false at finalize) does NOT trigger Vue reactivity — only writes through the
+    // array's reactive proxy do (the live streaming path already goes through it via
+    // findStreamingMsg). Using the raw ref made a finalize that ran via the RPC resolve
+    // — rather than the done-event path, which re-reads the proxy — non-reactive: the
+    // reply completed but the "working" indicator + elapsed timer never stopped, and the
+    // done event / stall watchdog could no longer see it as streaming (raw was already
+    // false) to recover it. Index right after push is provably the placeholder.
+    const live = (s.msgs[s.msgs.length - 1] ?? placeholder) as AssistantMessage
     s.status = 'streaming'
 
     // Kick off the AI title NOW, in parallel with the turn — titling from the user's
@@ -2310,13 +2320,13 @@ export const useSessionsStore = defineStore('sessions', () => {
       // Reconcile the reply text from the authoritative ordered `parts` (per-run),
       // never by stamping the whole reply onto the trailing block (which merged
       // every run + duplicated earlier ones around a step/subagent card).
-      reconcileReplyText(placeholder, result.text, result.parts)
-      placeholder.streaming = false
-      placeholder.completedAt = Date.now()
+      reconcileReplyText(live, result.text, result.parts)
+      live.streaming = false
+      live.completedAt = Date.now()
       // Surface a graceful provider `error` stop or a pre-turn budget refusal as an
       // error block. Idempotent with the session.message.done path (whichever lands
       // first wins; the RPC response here can be dropped/late) — see surfaceTurnError.
-      surfaceTurnError(placeholder, result.stopReason, result.errorMessage)
+      surfaceTurnError(live, result.stopReason, result.errorMessage)
       // A budget-refused turn never reached the model: don't merge its zero usage
       // (that would wipe the context-window snapshot), don't drain the queue (the
       // next message would be refused too), and don't auto-title (a model call that
@@ -2351,8 +2361,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       }
     } catch (err) {
       flushText(s.engineId, messageId)
-      placeholder.streaming = false
-      placeholder.completedAt = Date.now()
+      live.streaming = false
+      live.completedAt = Date.now()
       const canceled = err instanceof SidecarError && err.code === -32023
       if (!canceled) {
         let message = 'Unknown error'
@@ -2364,7 +2374,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Idempotent with the session.message.done path (the sidecar now emits a
         // terminal 'error' event on throw too, so the alert shows even if this reject
         // is dropped). Whichever lands first owns the single error block.
-        pushErrorBlock(placeholder, message)
+        pushErrorBlock(live, message)
       }
       s.status = statusFromMessages(s.msgs)
       // A user-cancel (-32023) is self-aware — don't flag unread. A real error does.
@@ -2851,9 +2861,22 @@ export const useSessionsStore = defineStore('sessions', () => {
       unread: false,
       msgs,
       loaded: true,
+      // Reset the source's LIVE run-state: the clone is a fresh idle session, not a
+      // continuation of the source's in-flight turn. `...s` copies `status`, so forking
+      // a RUNNING session used to inherit `status: 'streaming'` — which locks the
+      // composer (Send → Stop/Queue, so new messages silently queue instead of sending)
+      // and shows the fork stuck "running" with no turn to ever settle it. Derive the
+      // status from the cloned (all-finalized) messages instead.
+      status: statusFromMessages(msgs),
     }
     delete branch.engineId
     delete branch.queue
+    // Drop the rest of the source's transient run/UI state so the fork opens clean:
+    // an in-flight `/compact`, a fetch-in-progress skeleton, and staged follow-up quotes
+    // all belong to the source session, not the branch.
+    delete branch.compacting
+    branch.loading = false
+    delete branch.followups
     // Record fork lineage: the branch's parent is THIS session (override any lineage
     // copied via `...s`). forkFromMessageId = the engine id of the fork point (the
     // last kept message). Drives the fork-tree graph; persisted via upsert.

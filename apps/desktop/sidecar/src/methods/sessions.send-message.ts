@@ -1341,6 +1341,17 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // not awaiting keeps the UI finalize snappy.
   if (cwd) void captureSnapshot(params.sessionId, params.messageId, cwd)
 
+  // Breadcrumb bracketing the post-turn finalize path (persist → done emit →
+  // snapshot). Paired with run-stream's "chat stream done": if that logged but this
+  // did NOT, the engine froze INSIDE this handler; if both logged yet the engine went
+  // silent, the freeze is on a later timer callback (debounce persist / usage poll),
+  // not here. Diagnoses the post-turn freeze the engine heartbeat recovers from.
+  log.info('chat turn finalized', {
+    sessionId: params.sessionId,
+    messageId: params.messageId,
+    stopReason: result.stopReason,
+  })
+
   const turnCostUsd = computeTurnCostUsd(result.modelUsed, result.usage)
   return {
     messageId: params.messageId,
