@@ -37,7 +37,7 @@
         <div v-else-if="error" class="mmderr">
           <Icon name="alert" style="width: 15px; height: 15px" />
           <span>{{ error }}</span>
-          <pre class="mmdsrc">{{ code }}</pre>
+          <pre class="mmdsrc">{{ source }}</pre>
         </div>
         <div v-else class="mmdwait">{{ t('common.mermaid.rendering') }}</div>
       </div>
@@ -75,6 +75,12 @@ const { scale, tx, ty, zoomBy, reset, onPointerDown, onPointerMove, onPointerUp 
 const svg = ref('')
 const error = ref('')
 
+// Leading/trailing blank lines occasionally ride along on the fenced source (e.g. a stray
+// leading newline shifts every diagnostic line number by one — a 5-line diagram reporting a
+// parse error "on line 6"). Strip them so mermaid sees clean source and any surfaced error
+// points at the real line. Trailing blank lines are inert but dropped for the same tidiness.
+const source = computed(() => props.code.replace(/^\s*\n/, '').replace(/\s+$/, ''))
+
 // Zoom by widening the stage (svg is width:100%) so the SVG re-renders as crisp
 // vector at any size; pan stays on transform. CSS transform:scale() would rasterize
 // the SVG at its base size and blur when enlarged.
@@ -95,6 +101,25 @@ function onWheelZoom(e: WheelEvent) {
 // mid-render) overwriting the latest result. (The render-id counter `mermaidUid` is
 // module-scoped — see the companion <script> block above — so ids never collide.)
 let renderToken = 0
+
+// Self-heal transient failures. A diagram can briefly reach us as INCOMPLETE source: the
+// transcript renders a fence as a live diagram once its closing ``` arrives, but a
+// non-monotonic streaming update (a settle race in the store) can hand us a half-formed
+// body for a frame — which mermaid rejects with a parse error ("...Event outbound ^"),
+// even though the finalized source is valid. Rather than flash a scary error card, a failed
+// render retries within a short grace window (the `code` prop almost always settles to valid
+// meanwhile, re-rendering via the watch below); the error surfaces only if the SAME source
+// stays invalid across every attempt — i.e. a genuinely malformed diagram.
+const MAX_RENDER_ATTEMPTS = 3
+const RETRY_DELAY_MS = 350
+let attempts = 0
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+function clearRetry() {
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+}
 
 // Best-effort repair for common LLM mermaid slips, run ONLY after a parse failure — so a
 // valid diagram renders on the first pass untouched and this can never corrupt it (the
@@ -201,7 +226,9 @@ function fixNodeContrast(svgMarkup: string): string {
 
 async function render() {
   const myToken = ++renderToken
-  if (!props.code.trim()) {
+  clearRetry()
+  const src = source.value
+  if (!src) {
     svg.value = ''
     error.value = t('common.mermaid.empty')
     return
@@ -215,12 +242,12 @@ async function render() {
     })
     let out = ''
     try {
-      out = (await mermaid.render(`mmd-${++mermaidUid}`, props.code)).svg
+      out = (await mermaid.render(`mmd-${++mermaidUid}`, src)).svg
     } catch (first) {
       // Retry once with a repaired source; if it's a no-op or still fails, surface the
       // ORIGINAL parse error so the message points at the real line.
-      const repaired = repairMermaid(props.code)
-      if (repaired === props.code) throw first
+      const repaired = repairMermaid(src)
+      if (repaired === src) throw first
       try {
         out = (await mermaid.render(`mmd-${++mermaidUid}`, repaired)).svg
       } catch {
@@ -235,10 +262,24 @@ async function render() {
     }
     svg.value = fixNodeContrast(out)
     error.value = ''
+    attempts = 0
   } catch (e) {
     if (myToken !== renderToken) return
-    // mermaid throws a descriptive parse error — surface it (the failure used to be
-    // silent when an id collision produced empty output instead of throwing).
+    attempts++
+    if (attempts < MAX_RENDER_ATTEMPTS) {
+      // Likely a still-settling source (see the self-heal note above). Stay on the quiet
+      // "rendering" placeholder and retry; a `code`-prop update meanwhile re-renders via
+      // the watch and resets the count, so a diagram that becomes valid never flashes red.
+      clearRetry()
+      retryTimer = setTimeout(() => {
+        retryTimer = null
+        render()
+      }, RETRY_DELAY_MS)
+      return
+    }
+    // Stably invalid across every attempt → a genuinely malformed diagram. Surface the
+    // descriptive parse error (the failure used to be silent when an id collision produced
+    // empty output instead of throwing).
     error.value = e instanceof Error ? e.message : String(e)
     svg.value = ''
     console.warn('[mermaid] render failed', e)
@@ -246,14 +287,15 @@ async function render() {
 }
 
 onMounted(render)
-// New diagram → reset zoom/pan so it starts framed at 100%. Theme toggle keeps zoom.
-watch(
-  () => props.code,
-  () => {
-    reset()
-    render()
-  },
-)
+// New diagram → reset zoom/pan so it starts framed at 100%, and restart the self-heal
+// attempt count (a fresh source deserves its own grace window). Watch the NORMALISED source
+// so pure whitespace churn (leading/trailing blank lines coming and going mid-stream)
+// doesn't trigger a needless re-render. Theme toggle keeps zoom.
+watch(source, () => {
+  attempts = 0
+  reset()
+  render()
+})
 watch(isDark, render)
 
 // Fullscreen: blow the diagram up to a fixed full-window overlay (above the preview
@@ -271,7 +313,10 @@ function onFsKey(e: KeyboardEvent) {
   }
 }
 onMounted(() => window.addEventListener('keydown', onFsKey, true))
-onBeforeUnmount(() => window.removeEventListener('keydown', onFsKey, true))
+onBeforeUnmount(() => {
+  clearRetry()
+  window.removeEventListener('keydown', onFsKey, true)
+})
 </script>
 
 <style scoped>
