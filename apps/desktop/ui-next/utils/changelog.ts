@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.3',
+    date: '2026-07-15',
+    highlight: {
+      en: 'SSH Manager arrives: a full SSH client built in, an assistant that can drive your SSH sessions, one-click PR summaries in Git, and customizable keyboard shortcuts.',
+      vi: 'Ra mắt SSH Manager: một trình SSH đầy đủ ngay trong app, trợ lý có thể lái phiên SSH của bạn, tạo tóm tắt PR một chạm trong Git, và phím tắt tùy chỉnh được.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'SSH Manager (a new SSH section): manage all your servers in one place — organize hosts into folders with tags, open interactive terminals (several panes per host), browse and transfer files over SFTP, set up port forwarding, manage keys and passphrases, and import your existing ~/.ssh/config. Passwords and keys stay in your OS keychain — never written to config files or git.',
+        vi: 'SSH Manager (mục SSH mới): quản lý mọi máy chủ ở một nơi — sắp xếp host vào thư mục kèm thẻ, mở terminal tương tác (nhiều pane mỗi host), duyệt và chuyển file qua SFTP, thiết lập chuyển tiếp cổng, quản lý khóa và passphrase, và nhập ~/.ssh/config sẵn có. Mật khẩu và khóa nằm trong OS keychain — không bao giờ ghi vào file cấu hình hay git.',
+      },
+      {
+        kind: 'added',
+        en: 'Let the assistant work over SSH: attach a host to a chat session and it can run commands and move files on the server for you; or, inside the SSH screen, dock a chat beside a live terminal and watch it type and run commands there (co-pilot mode).',
+        vi: 'Cho trợ lý làm việc qua SSH: gắn một host vào phiên chat để nó chạy lệnh và chuyển file trên máy chủ giúp bạn; hoặc ngay trong màn SSH, ghim một phiên chat cạnh terminal đang chạy và xem nó gõ, chạy lệnh trực tiếp (chế độ co-pilot).',
+      },
+      {
+        kind: 'added',
+        en: 'Git — "Create PR summary": right-click a branch to generate a ready-to-paste pull-request title and description — pick the base branch, edit in place, and copy.',
+        vi: 'Git — "Create PR summary": chuột phải một nhánh để tạo tiêu đề và mô tả pull request dán được ngay — chọn nhánh gốc, sửa tại chỗ, và sao chép.',
+      },
+      {
+        kind: 'improved',
+        en: 'Git branches now sort by most recent commit, so what you are actively working on floats to the top.',
+        vi: 'Nhánh Git giờ sắp xếp theo commit gần nhất, nên nhánh bạn đang làm nổi lên trên cùng.',
+      },
+      {
+        kind: 'added',
+        en: 'Customizable keyboard shortcuts: rebind the global shortcuts (command palette, toggle terminal, open Git, new session, and more) in Settings → Keyboard, with conflict and reserved-key checks.',
+        vi: 'Phím tắt tùy chỉnh: gán lại các phím tắt toàn cục (bảng lệnh, bật/tắt terminal, mở Git, phiên mới, v.v.) trong Cài đặt → Bàn phím, có kiểm tra trùng và phím bị hệ thống giữ.',
+      },
+      {
+        kind: 'changed',
+        en: '"Connections" is now called "Sources", with a new activity log that shows tool calls and a clearer secrets panel.',
+        vi: '"Connections" nay đổi tên thành "Sources", kèm nhật ký hoạt động hiển thị các lần gọi công cụ và bảng quản lý secret rõ ràng hơn.',
+      },
+      {
+        kind: 'improved',
+        en: 'A round of polish to make the app feel more at home on macOS.',
+        vi: 'Một đợt tinh chỉnh để app trông tự nhiên hơn trên macOS.',
+      },
+    ],
+  },
+  {
     version: '0.24.2',
     date: '2026-07-13',
     highlight: {
