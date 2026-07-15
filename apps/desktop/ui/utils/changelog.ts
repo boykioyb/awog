@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.4',
+    date: '2026-07-15',
+    highlight: {
+      en: 'Polish and fixes for the new SSH tools, smarter notifications, and pages that keep their state as you move around.',
+      vi: 'Tinh chỉnh và sửa lỗi cho bộ công cụ SSH mới, thông báo thông minh hơn, và các trang giữ nguyên trạng thái khi bạn chuyển qua lại.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Notifications now open the right thing: clicking a "turn finished", "needs your reply", or "task needs approval" notification jumps straight to that exact session or task, instead of only bringing the window forward.',
+        vi: 'Thông báo giờ mở đúng thứ cần: bấm vào thông báo "đã xong lượt", "cần bạn trả lời" hay "task cần duyệt" sẽ nhảy thẳng tới đúng phiên hoặc task đó, thay vì chỉ đưa cửa sổ lên trước.',
+      },
+      {
+        kind: 'improved',
+        en: 'Pages keep their state as you navigate: leaving Sessions or SSH and coming back keeps your open terminals, connections, scroll position, and filters exactly as you left them.',
+        vi: 'Các trang giữ nguyên trạng thái khi chuyển qua lại: rời Sessions hay SSH rồi quay lại vẫn giữ nguyên terminal đang mở, kết nối, vị trí cuộn và bộ lọc như lúc bạn rời đi.',
+      },
+      {
+        kind: 'changed',
+        en: 'SSH co-pilot always runs commands live in view: in co-pilot mode the assistant now runs every command in the terminal you are watching (targeting the exact pane you have focused), so nothing runs out of sight.',
+        vi: 'SSH co-pilot luôn chạy lệnh ngay trước mắt bạn: ở chế độ co-pilot, trợ lý giờ chạy mọi lệnh trong terminal bạn đang xem (đúng pane bạn đang focus), nên không có gì chạy ngoài tầm nhìn.',
+      },
+      {
+        kind: 'changed',
+        en: 'Response styles: replaced "git log" with a new "Step by Step" style (a numbered, do-this-then-that walkthrough), and refined "Mentor" to use analogies only when they genuinely help.',
+        vi: 'Kiểu trả lời: thay "git log" bằng kiểu "Step by Step" mới (hướng dẫn đánh số, làm lần lượt từng bước), và tinh chỉnh "Mentor" để chỉ ví von khi thật sự giúp hiểu.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Plan mode works mid-chat: turning on plan mode partway through a conversation now takes effect reliably (previously it could be ignored after the first message).',
+        vi: 'Plan mode chạy đúng giữa chừng: bật plan mode giữa cuộc trò chuyện giờ có hiệu lực ổn định (trước đây có thể bị bỏ qua sau tin nhắn đầu).',
+      },
+      {
+        kind: 'fixed',
+        en: 'Small display fixes: no more clipped bottom row in the terminal, and chat task-list checkboxes render cleanly like on GitHub.',
+        vi: 'Sửa hiển thị nhỏ: terminal không còn bị cắt dòng cuối, và checkbox danh sách công việc trong chat giờ hiển thị gọn như trên GitHub.',
+      },
+    ],
+  },
+  {
     version: '0.24.3',
     date: '2026-07-15',
     highlight: {
