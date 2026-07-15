@@ -135,6 +135,11 @@ const props = defineProps<{
   transport?: TerminalTransport
 }>()
 
+// Report the ACTIVE pane's live backend id to the parent. The SSH co-pilot binds
+// its ssh_terminal_run to exactly the shell the user is watching (not a store guess).
+// Harmless for the session panel / global dock (they ignore it).
+const emit = defineEmits<{ conn: [id: string | null] }>()
+
 const { t } = useI18n()
 const sc = useSidecar()
 const api = useTerminalApi()
@@ -254,6 +259,12 @@ const activePaneOf = (tab: TerminalTab): Pane | undefined => {
   const id = tab.activePaneId ?? paneIdsOf(tab)[0]
   return id ? panes.get(id) : undefined
 }
+// Emit the active pane's live backend id (terminalId isn't reactive — panes live in
+// a plain Map — so we push it imperatively on create / pane-switch / tab-switch / close).
+const emitActiveConn = (): void => {
+  const tab = activeTabId.value ? tabById(activeTabId.value) : undefined
+  emit('conn', (tab && activePaneOf(tab)?.terminalId) ?? null)
+}
 // Run `fn` over each live Pane of a tab (in tree order).
 const forEachPane = (tab: TerminalTab, fn: (pane: Pane) => void): void => {
   for (const id of paneIdsOf(tab)) {
@@ -303,6 +314,7 @@ const createPty = async (pane: Pane, cols: number, rows: number): Promise<void> 
   try {
     const result = await tr.create(cols, rows)
     pane.terminalId = result.id
+    emitActiveConn()
   } catch (err) {
     errorMsg.value =
       err instanceof Error ? err.message : t('sessions.workspace.terminal.unavailable')
@@ -492,6 +504,7 @@ const renameTab = async (tabId: string): Promise<void> => {
 const setActive = (id: string): void => {
   if (id === activeTabId.value) return
   activeTabId.value = id
+  emitActiveConn()
   nextTick(() => syncTab(id))
 }
 
@@ -501,6 +514,7 @@ const setActivePane = (tabId: string, paneId: string): void => {
   const tab = tabById(tabId)
   if (!tab || tab.activePaneId === paneId) return
   tab.activePaneId = paneId
+  emitActiveConn()
 }
 
 // Close just one pane of a split tab (kills its shell); closing the last pane closes
@@ -516,7 +530,10 @@ const closePane = (tabId: string, paneId: string): void => {
   if (pane) disposePane(pane)
   panes.delete(paneId)
   tab.layout = removeLeaf(tab.layout, paneId)
-  if (tab.activePaneId === paneId) tab.activePaneId = paneIdsOf(tab)[0] ?? null
+  if (tab.activePaneId === paneId) {
+    tab.activePaneId = paneIdsOf(tab)[0] ?? null
+    emitActiveConn()
+  }
   // Remaining panes grow back; re-attach + refit + refocus the active one.
   nextTick(() => {
     reattachAll()
@@ -540,6 +557,7 @@ const closeTab = (id: string): void => {
   // Activate the neighbour that slid into this slot (or the previous one).
   const next = tabs.value[idx] ?? tabs.value[idx - 1] ?? null
   activeTabId.value = next?.id ?? null
+  emitActiveConn()
   if (next) nextTick(() => syncTab(next.id))
 }
 
@@ -880,6 +898,12 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Breathing-room gutter for the terminal(s). Lives HERE, not on `.wsterm-box`,
+     because FitAddon measures the box's padding-inclusive clientHeight and would
+     consume box padding (→ extra clipped row). Panes isn't measured, so this is a
+     true gap. Painted with the terminal bg so it reads as internal padding. */
+  padding: 6px 10px 12px;
+  background: var(--wsterm-bg, var(--bg));
 }
 /* While a pane is being dragged or a splitter resized, suppress selection across the
    whole widget (the grabbing/resize cursor itself is set on <body>). */

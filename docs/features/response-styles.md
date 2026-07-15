@@ -26,7 +26,7 @@ Người dùng muốn điều khiển **giọng văn + định dạng** câu tr�
 
 13 style built-in, nhóm theo mục đích (id là contract giữa UI ↔ sidecar):
 
-**⚡ Khi cần nhanh, gọn:** `military`, `caveman`, `reality-check`, `git-log`, `socratic`, `bluf`
+**⚡ Khi cần nhanh, gọn:** `military`, `caveman`, `reality-check`, `step-by-step`, `socratic`, `bluf`
 **😄 Cho vui:** `yoda`, `pirate`, `hacker-80s`, `dad-joke`
 **🧠 Khi cần hiểu thật sự:** `rubber-duck`, `feynman`, `first-principles`
 

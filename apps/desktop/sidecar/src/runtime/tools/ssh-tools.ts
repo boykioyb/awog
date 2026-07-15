@@ -261,33 +261,33 @@ export function createSshTools(opts: CreateSshToolsOptions): AgentTool[] {
     },
   }
 
-  const tools: AgentTool[] = [
+  // Co-pilot dock (terminalConnId set): drive the WATCHED shell via ssh_terminal_run.
+  // It REPLACES the headless ssh_exec (not offered alongside) so the agent can't run
+  // commands invisibly — every command types + runs LIVE in the terminal the user
+  // sees. Host-fixed to that shell's connId (no `host` param).
+  const terminalTool: AgentTool<typeof TerminalParams, SshExecDetails> = {
+    name: 'ssh_terminal_run',
+    label: 'SSH terminal',
+    description:
+      'Run a shell command on the remote SSH host the user is watching — it types and runs ' +
+      'LIVE in their terminal and you get back its stdout/stderr + exit code. This is the ONLY ' +
+      'way to run commands here; the user follows along. Runs on the REMOTE machine, not locally.',
+    parameters: TerminalParams,
+    executionMode: 'sequential',
+    async execute(_id, params): Promise<AgentToolResult<SshExecDetails>> {
+      const { text, exitCode } = await runSshTerminal(terminalConnId ?? '', params.command)
+      return { content: [{ type: 'text', text }], details: { command: params.command, exitCode } }
+    },
+  }
+
+  // Exec tool: the watched-terminal driver in the dock, else the headless host-param
+  // exec. File read/list/write stay host-param either way.
+  const runTool: AgentTool = terminalConnId ? (terminalTool as AgentTool) : (execTool as AgentTool)
+  return [
     listHostsTool as AgentTool,
-    execTool as AgentTool,
+    runTool,
     listTool as AgentTool,
     readTool as AgentTool,
     writeTool as AgentTool,
   ]
-
-  // Co-pilot dock (terminalConnId set): ADD a tool that drives the WATCHED terminal
-  // (runInShell) so the user follows along live. Host-fixed to that shell's connId.
-  if (terminalConnId) {
-    const terminalTool: AgentTool<typeof TerminalParams, SshExecDetails> = {
-      name: 'ssh_terminal_run',
-      label: 'SSH terminal',
-      description:
-        'Run a shell command IN the terminal the user is watching (their live SSH shell) — it ' +
-        'types and runs LIVE, and you get back its output + exit code. Prefer this over ssh_exec ' +
-        'when the user is watching so they can follow along. Runs on the REMOTE machine.',
-      parameters: TerminalParams,
-      executionMode: 'sequential',
-      async execute(_id, params): Promise<AgentToolResult<SshExecDetails>> {
-        const { text, exitCode } = await runSshTerminal(terminalConnId, params.command)
-        return { content: [{ type: 'text', text }], details: { command: params.command, exitCode } }
-      },
-    }
-    tools.push(terminalTool as AgentTool)
-  }
-
-  return tools
 }

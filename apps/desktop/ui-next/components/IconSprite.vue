@@ -172,6 +172,9 @@
       <symbol id="i-listul" viewBox="0 0 24 24">
         <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
       </symbol>
+      <symbol id="i-listol" viewBox="0 0 24 24">
+        <path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
+      </symbol>
       <symbol id="i-maximize" viewBox="0 0 24 24">
         <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
       </symbol>

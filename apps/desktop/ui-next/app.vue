@@ -2,7 +2,11 @@
   <div>
     <IconSprite />
     <NuxtLayout>
-      <NuxtPage />
+      <!-- keepalive: pages persist across navigation (desktop-app feel) — leaving a
+           page must NOT lose its UI state or tear down live things (Sessions
+           transcript/active session, SSH terminals + connections, scroll, filters).
+           A page can opt out with definePageMeta({ keepalive: false }). -->
+      <NuxtPage keepalive />
     </NuxtLayout>
   </div>
 </template>

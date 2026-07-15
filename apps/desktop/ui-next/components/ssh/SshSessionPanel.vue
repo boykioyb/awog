@@ -113,9 +113,10 @@ import SessionTranscript from '~/components/session/SessionTranscript.vue'
 import StatusConfig from '~/components/shell/StatusConfig.vue'
 import type { SlashCommandRef } from '~/composables/useSessionsData'
 
-const props = withDefaults(defineProps<{ hostId: string; visible?: boolean }>(), {
-  visible: true,
-})
+const props = withDefaults(
+  defineProps<{ hostId: string; visible?: boolean; terminalConnId?: string }>(),
+  { visible: true, terminalConnId: undefined },
+)
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
@@ -138,11 +139,13 @@ const hostSessions = computed(() =>
 // ── Terminal picker ──────────────────────────────────────────────────────────
 const shells = computed(() => ssh.shellsForHost(props.hostId))
 const pickedConnId = ref<string | null>(null)
-// The shell the agent drives: the user's pick if still live, else the host's primary.
+// The shell the agent drives: the user's explicit pick if still live, else the ACTUAL
+// visible pane connId bubbled from the terminal (props.terminalConnId — authoritative,
+// not a store guess), else the host's primary live connId.
 const boundConnId = computed(() => {
   const picked = pickedConnId.value
   if (picked && shells.value.includes(picked)) return picked
-  return ssh.connIdForHost(props.hostId) ?? ''
+  return props.terminalConnId ?? ssh.connIdForHost(props.hostId) ?? ''
 })
 const termLabel = computed(() => {
   if (!boundConnId.value) return t('ssh.session.noTerminal')

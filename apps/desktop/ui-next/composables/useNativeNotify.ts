@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useSettingsStore } from '~/stores/settings'
+import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
 import type { Session } from '~/composables/useSessionsData'
 
 // ── Native notifications (§9 globals) ────────────────────────────────────────
@@ -22,6 +23,7 @@ export function useNativeNotify() {
   const store = useSessionsStore()
   const tasks = useTasksStore()
   const settings = useSettingsStore()
+  const { openSession, openTask } = useSessionTaskLink()
   const { sessions } = storeToRefs(store)
   const { t } = useI18n()
 
@@ -59,6 +61,40 @@ export function useNativeNotify() {
     return document.hidden || !document.hasFocus()
   }
 
+  // Spawn one native notification wired so a click both focuses the window AND
+  // routes to the thing it is about (`navigate`). Without the route, clicking a
+  // notification only raised the window and left whatever session/task was last
+  // open — never the one the notification named (the bug this fixes). Both focus
+  // and navigation are best-effort; navigation still runs in-renderer even when
+  // the OS blocks window.focus(), so the target is selected once the user looks.
+  function spawn(title: string, body: string, tag: string, navigate: () => void): void {
+    try {
+      const n = new Notification(title, { body, tag })
+      n.onclick = () => {
+        try {
+          window.focus()
+        } catch {
+          /* noop */
+        }
+        navigate()
+      }
+    } catch {
+      // Construction can throw if permission was revoked mid-flight — swallow.
+    }
+  }
+
+  // Navigate to a session by its stable engineId (falls back to selecting the
+  // numeric client id + switching to the Sessions page when the engineId is not
+  // yet known). Cross-window/tray parity: never key navigation off the numeric id.
+  function goToSession(s: Session): void {
+    if (s.engineId) {
+      void openSession(s.engineId)
+      return
+    }
+    store.setActive(s.id)
+    void navigateTo('/sessions')
+  }
+
   async function notifyTurn(s: Session) {
     if (!notificationsOn() || !supported || !windowIsHidden()) return
     const perm = await ensurePermission()
@@ -70,39 +106,22 @@ export function useNativeNotify() {
     const body = isError
       ? t('palette.notify.turnError.body', { title: s.title })
       : t('palette.notify.turnDone.body', { title: s.title })
-    try {
-      const n = new Notification(title, { body, tag: `awog-session-${s.id}` })
-      // Focusing the window on click is best-effort; ignore if blocked.
-      n.onclick = () => {
-        try {
-          window.focus()
-        } catch {
-          /* noop */
-        }
-      }
-    } catch {
-      // Construction can throw if permission was revoked mid-flight — swallow.
-    }
+    spawn(title, body, `awog-session-${s.id}`, () => goToSession(s))
   }
 
   // Generic attention notification (session needs reply/permission, or task
-  // needs approval). Same focus + permission gate as notifyTurn.
-  async function notifyAttention(title: string, body: string, tag: string): Promise<void> {
+  // needs approval). Same focus + permission gate as notifyTurn; `navigate` opens
+  // the specific session/task the notification is about.
+  async function notifyAttention(
+    title: string,
+    body: string,
+    tag: string,
+    navigate: () => void,
+  ): Promise<void> {
     if (!notificationsOn() || !supported || !windowIsHidden()) return
     const perm = await ensurePermission()
     if (perm !== 'granted' || !windowIsHidden()) return
-    try {
-      const n = new Notification(title, { body, tag })
-      n.onclick = () => {
-        try {
-          window.focus()
-        } catch {
-          /* noop */
-        }
-      }
-    } catch {
-      // Permission revoked mid-flight — swallow.
-    }
+    spawn(title, body, tag, navigate)
   }
 
   // Watch the whole list shallowly: we only need each session's id+status. A
@@ -131,11 +150,14 @@ export function useNativeNotify() {
           const full = sessions.value.find((x) => x.id === s.id)
           if (full) void notifyTurn(full)
         } else if (prev !== 'awaiting' && s.status === 'awaiting') {
-          void notifyAttention(
-            t('palette.notify.attention.reply.title'),
-            t('palette.notify.attention.reply.body', { title: s.title }),
-            `awog-att-ses-${s.id}`,
-          )
+          const full = sessions.value.find((x) => x.id === s.id)
+          if (full)
+            void notifyAttention(
+              t('palette.notify.attention.reply.title'),
+              t('palette.notify.attention.reply.body', { title: s.title }),
+              `awog-att-ses-${s.id}`,
+              () => goToSession(full),
+            )
         }
       }
       // Drop removed sessions so the map doesn't grow unbounded.
@@ -163,6 +185,7 @@ export function useNativeNotify() {
           t('palette.notify.attention.approve.title'),
           t('palette.notify.attention.approve.body', { title: x.title }),
           `awog-att-task-${x.id}`,
+          () => void openTask(x.id),
         )
       }
       for (const id of [...seenAwaitingTasks]) if (!live.has(id)) seenAwaitingTasks.delete(id)

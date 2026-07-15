@@ -145,7 +145,11 @@
              ResizeObserver picks up to refit (never v-if on SshTerminal). -->
         <div class="sshx-tbody" :class="{ split: sftpOpen[tab.id] || sessionOpen[tab.id] }">
           <div class="sshx-tshell">
-            <SshTerminal :host-id="tab.hostId" :visible="store.activeTab === tab.id" />
+            <SshTerminal
+              :host-id="tab.hostId"
+              :visible="store.activeTab === tab.id"
+              @conn="(id) => (termConn[tab.id] = id)"
+            />
           </div>
           <template v-if="sftpOpen[tab.id]">
             <div
@@ -178,6 +182,7 @@
               <SshSessionPanel
                 :host-id="tab.hostId"
                 :visible="store.activeTab === tab.id"
+                :terminal-conn-id="termConn[tab.id] ?? undefined"
                 @close="sessionOpen[tab.id] = false"
               />
             </div>
@@ -259,6 +264,9 @@ const tabUserHost = (hostId: string): string => {
 // SFTP split state is PER terminal tab (keyed by tab id) and local to the shell —
 // toggling it only resizes the split, never unmounts the live SshTerminal. Pruned
 // when a tab closes so the map can't leak stale keys.
+// Active pane connId per tab (bubbled from SshTerminal) → the co-pilot drives the
+// EXACT shell the user is watching, not a store guess.
+const termConn = reactive<Record<string, string | null>>({})
 const sftpOpen = reactive<Record<string, boolean>>({})
 // Co-pilot session split state — PER tab, mutually exclusive with SFTP (both dock
 // on the right). Local to the shell; the session itself lives in the sessions store.

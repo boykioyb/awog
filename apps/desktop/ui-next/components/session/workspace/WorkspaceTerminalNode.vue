@@ -245,12 +245,10 @@ const nodeKey = (node: LayoutNode): string =>
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  /* Breathing room so the shell text isn't flush against the edges. The box paints
-     the TERMINAL background (--wsterm-bg, set by WorkspaceTerminal to match the xterm
-     theme) under the padding, so the gutter reads as internal padding rather than a
-     page-colour frame. xterm's fit addon measures the padded content box → cols/rows
-     still fit exactly. */
-  padding: 6px 10px;
+  /* NO padding here: xterm's FitAddon measures this box's clientHeight (padding
+     INCLUSIVE), so padding is consumed by the fit — it adds an extra row that renders
+     into the padding and gets clipped by overflow:hidden. The breathing-room gutter
+     lives on the parent `.wsterm-panes` (which xterm does NOT measure). */
   background: var(--wsterm-bg, var(--bg));
 }
 .wsterm-box.pane-active {

@@ -88,6 +88,11 @@ import SshWorkspace from '~/components/ssh/SshWorkspace.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import { useSshPage } from '~/composables/useSshPage'
 
+// Keep the page (its live terminals + SSH connections) alive across navigation —
+// leaving /ssh must NOT tear down open shells (WorkspaceTerminal kills panes in
+// onBeforeUnmount, which KeepAlive turns into onDeactivated → connections survive).
+definePageMeta({ keepalive: true })
+
 const {
   hosts,
   identities,

@@ -405,6 +405,18 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
 .mdinline :deep(li > ol) {
   margin: 3px 0 0;
 }
+/* GFM task lists (`- [ ]`): marked emits `<li><input type=checkbox> …>` with no class,
+   so the `ul { list-style: disc }` above paints a bullet AND the checkbox. The checkbox
+   IS the marker — drop the disc and the list indent so items sit flush (like GitHub),
+   and give the box some breathing room from its label. */
+.mdinline :deep(ul:has(> li > input[type='checkbox'])) {
+  list-style: none;
+  padding-left: 0;
+}
+.mdinline :deep(li > input[type='checkbox']) {
+  margin: 0 7px 0 0;
+  vertical-align: middle;
+}
 .mdinline :deep(a) {
   color: var(--accent);
   text-decoration: underline;

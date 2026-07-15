@@ -38,20 +38,34 @@ const HOST_DESC = 'SSH host id to target (call ssh_list_hosts first to see avail
 // Build the `awogssh` SDK MCP server. `terminalConnId` (co-pilot dock) ADDS the
 // watched-terminal tool. Caller adds it under the map key `awogssh`.
 export function buildSshToolsSdkServer(terminalConnId?: string): McpSdkServerConfigWithInstance {
-  // Co-pilot dock: run in the WATCHED shell (connId). Built only when bound so the
-  // array's element type includes it without a mismatched .push (exactOptional).
-  const terminalTools = terminalConnId
+  // Dock (terminalConnId): ssh_terminal_run drives the WATCHED shell and REPLACES the
+  // headless ssh_exec (not offered alongside) so the agent can't run commands
+  // invisibly — the user sees every command run live. Outside the dock: headless
+  // host-param ssh_exec. Built as a 1-item array so the tools literal's element type
+  // includes whichever without a mismatched push (exactOptionalPropertyTypes).
+  const runTools = terminalConnId
     ? [
         tool(
           'ssh_terminal_run',
-          'Run a shell command IN the terminal the user is watching (their live SSH shell) — it ' +
-            'types and runs LIVE, and you get back its output + exit code. Prefer this over ' +
-            'ssh_exec when the user is watching so they can follow along. Runs on the REMOTE machine.',
+          'Run a shell command on the remote SSH host the user is watching — it types and runs ' +
+            'LIVE in their terminal and you get back its stdout/stderr + exit code. This is the ' +
+            'ONLY way to run commands here; the user follows along. Runs on the REMOTE machine.',
           { command: z.string().describe('Shell command to run live in the watched terminal.') },
           async (args) => textResult((await runSshTerminal(terminalConnId, args.command)).text),
         ),
       ]
-    : []
+    : [
+        tool(
+          'ssh_exec',
+          'Run a shell command on a configured SSH host (by `host` id) and capture stdout, ' +
+            'stderr, and exit code. Runs on the REMOTE machine, not locally.',
+          {
+            host: z.string().describe(HOST_DESC),
+            command: z.string().describe('Shell command to run on the remote host (runs remotely).'),
+          },
+          async (args) => textResult((await runSshExec(args.host, args.command)).text),
+        ),
+      ]
 
   return createSdkMcpServer({
     name: 'awogssh',
@@ -64,16 +78,7 @@ export function buildSshToolsSdkServer(terminalConnId?: string): McpSdkServerCon
         {},
         async () => textResult((await runSshListHosts()).text),
       ),
-      tool(
-        'ssh_exec',
-        'Run a shell command on a configured SSH host (by `host` id) and capture stdout, stderr, ' +
-          'and exit code. Runs on the REMOTE machine, not locally.',
-        {
-          host: z.string().describe(HOST_DESC),
-          command: z.string().describe('Shell command to run on the remote host (runs remotely).'),
-        },
-        async (args) => textResult((await runSshExec(args.host, args.command)).text),
-      ),
+      ...runTools,
       tool(
         'ssh_list_dir',
         'List a directory on a configured SSH host (by `host` id).',
@@ -107,7 +112,6 @@ export function buildSshToolsSdkServer(terminalConnId?: string): McpSdkServerCon
         },
         async (args) => textResult((await runSshWrite(args.host, args.path, args.content)).text),
       ),
-      ...terminalTools,
     ],
   })
 }

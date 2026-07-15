@@ -278,12 +278,15 @@ export async function runStreamClaude(
     args.settings.responseStyleNoMarkdown,
   )
   const inPlanMode = args.settings.mode === 'plan'
-  const appendParts = [
-    args.systemPrompt,
-    args.systemPromptAppend,
-    rulesPrompt,
-    inPlanMode ? PLAN_MODE_PROMPT : undefined,
-  ].filter((p): p is string => typeof p === 'string' && p.length > 0)
+  // PLAN_MODE_PROMPT is NOT appended here — like the response style, it rides on
+  // the turn prompt instead (see below). Plan mode can be toggled on mid-session,
+  // but the SDK freezes the append at session creation and ignores it on `resume`,
+  // so a frozen append would never reach the model when plan is enabled after the
+  // first turn. Re-sending it per turn matches the Pi path (which rebuilds its
+  // append every turn).
+  const appendParts = [args.systemPrompt, args.systemPromptAppend, rulesPrompt].filter(
+    (p): p is string => typeof p === 'string' && p.length > 0,
+  )
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
 
   // 4-mode permission gate (ADR 0058 P4): reuse the Pi-path makeBeforeToolCall +
@@ -333,6 +336,11 @@ export async function runStreamClaude(
   // message (params.text) is persisted to our transcript, so this SDK-only prompt
   // shaping never pollutes the visible session history.
   if (stylePrompt) promptText = `${stylePrompt}\n\n${promptText}`
+  // Plan-mode directive on the turn prompt for the same frozen-append reason: plan
+  // can be toggled mid-session, so a system-prompt append would be ignored on
+  // `resume`. Prepended last → sits at the front of the turn so the model reliably
+  // presents its plan via ExitPlanMode instead of writing it as plain text.
+  if (inPlanMode) promptText = `${PLAN_MODE_PROMPT}\n\n${promptText}`
 
   // Attachments (images / text files) need the streaming-input block form — the
   // string prompt can't carry them. Returns the plain string when nothing usable

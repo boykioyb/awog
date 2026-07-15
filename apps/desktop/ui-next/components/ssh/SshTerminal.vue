@@ -6,6 +6,7 @@
     :visible="visible"
     :transport="transport"
     :unavailable-label="t('ssh.terminal.unavailable')"
+    @conn="(id) => emit('conn', id)"
   />
 </template>
 
@@ -24,6 +25,8 @@ import type { TerminalTransport } from '~/composables/useTerminalApi'
 const props = withDefaults(defineProps<{ hostId: string; visible?: boolean }>(), {
   visible: true,
 })
+// Bubble the active pane's live connId up so the co-pilot drives THIS exact shell.
+const emit = defineEmits<{ conn: [id: string | null] }>()
 
 const { t } = useI18n()
 const sc = useSidecar()

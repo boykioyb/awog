@@ -30,7 +30,7 @@ const RESPONSE_STYLES: StyleGroup[] = [
       { id: 'Military', slug: 'military', icon: 'shield' },
       { id: 'Caveman', slug: 'caveman', icon: 'zap' },
       { id: 'Reality Check', slug: 'reality-check', icon: 'search' },
-      { id: 'git log', slug: 'git-log', icon: 'git' },
+      { id: 'Step by Step', slug: 'step-by-step', icon: 'listol' },
       { id: 'Socratic', slug: 'socratic', icon: 'help' },
       { id: 'BLUF', slug: 'bluf', icon: 'pin' },
       { id: 'Checklist', slug: 'checklist', icon: 'listul' },
@@ -63,6 +63,10 @@ const RESPONSE_STYLES: StyleGroup[] = [
 ]
 const ALL_STYLE_ROWS = RESPONSE_STYLES.flatMap((g) => g.rows)
 const STYLE_SLUGS = new Set(ALL_STYLE_ROWS.map((r) => r.slug))
+// Styles that once existed but were removed from the catalog (their directive is gone
+// from the sidecar too). Map them to Normal so an old session that still stores one
+// degrades cleanly in the UI — matching the sidecar's "unknown id → no style".
+const REMOVED_STYLE_SLUGS = new Set(['git-log', 'git log'])
 // Display label (`row.id`, e.g. "Pirate") → engine slug ("pirate"). A pre-fix bug
 // stored/sent the label as `responseStyle`, so we translate it back here.
 const SLUG_BY_LABEL = new Map(ALL_STYLE_ROWS.map((r) => [r.id, r.slug]))
@@ -76,6 +80,7 @@ const SLUG_BY_LABEL = new Map(ALL_STYLE_ROWS.map((r) => [r.id, r.slug]))
 // "no style" in the sidecar rather than erroring.
 export function normalizeStyleSlug(value: string | undefined | null): string {
   if (!value || value === 'Default' || value === 'Normal' || value === 'normal') return 'Default'
+  if (REMOVED_STYLE_SLUGS.has(value)) return 'Default'
   if (STYLE_SLUGS.has(value)) return value
   return SLUG_BY_LABEL.get(value) ?? value
 }
