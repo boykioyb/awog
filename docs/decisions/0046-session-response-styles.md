@@ -39,6 +39,11 @@ Persist trong `SessionSettings.responseStyle` + `responseStyleNoMarkdown` (per-s
 
 **Đánh đổi / nợ:** id style phải đồng bộ thủ công giữa `sidecar/src/style/styles.ts` (directive) và `ui/utils/response-styles.ts` (hiển thị) — lệch thì sidecar trả undefined (an toàn, mất style âm thầm). Style label/hint giữ hằng số tiếng Anh trong catalog (mirror `MODE_OPTIONS`/`SESSION_COMMANDS` — bề mặt composer hiện chưa i18n), khác quy ước i18n chung; migrate sang i18n khi i18n-hoá toàn bộ composer.
 
+## Cập nhật
+
+- **2026-07-15 — +8 style + info-popover.** Bổ sung 8 style built-in vào đúng 3 nhóm hiện có (không tạo nhóm mới): **fast** — `checklist`, `code-first`; **deep** — `devils-advocate`, `mentor`, `pair`; **fun** — `noir`, `speedrun`, `corporate`. Nâng tổng lên **21 style**. Directive vẫn CHỈ sống ở `sidecar/src/style/styles.ts`; UI (`ui-next`) chỉ gửi slug + cờ `noMarkdown`; slug lạ vẫn degrade "no style". Catalog hiển thị đồng bộ ở `ui-next/composables/useSessionModelConfig.ts` (thay cho `ui/utils/response-styles.ts` — build cũ, không cập nhật). Label/hint/desc đã i18n-hoá (`en/vi` `sessions-composer.json`), khác ghi chú "chưa i18n" ở phần Hệ quả (đã migrate cho bề mặt style picker mới ở status bar).
+- Kèm **info-popover mô tả**: mỗi row style trong `StatusConfig.vue` có nút `info` (icon `i-info`) mở card mô tả (title = name, body = key mới `.desc`), chỉ 1 card mở tại một thời điểm, đóng bằng bấm lại / Esc / chọn style / đóng menu. Card neo BÊN TRÁI menu style (ngoài vùng `overflow-y:auto` của menu) để không bị clip / tràn mép phải. A11y: nút `type=button` + `aria-label` (`sessions.style.infoLabel`) + `aria-expanded`; card `role=dialog` + `aria-labelledby`/`aria-describedby`.
+
 ## Tham chiếu
 
 - Spec: [docs/features/response-styles.md](../features/response-styles.md)

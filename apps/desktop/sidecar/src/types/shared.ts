@@ -151,6 +151,16 @@ export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
 
 export type AgentMode = 'ask' | 'accept-edits' | 'plan' | 'execute'
 
+// Per-session SSH tool approval mode (ADR 0064 P2). Governs the gated SSH tools
+// (ssh_exec / ssh_write_file) INDEPENDENTLY of the session AgentMode — running a
+// command or writing a file on a REMOTE host is higher-consequence than a local
+// workspace edit, so it has its own mandatory gate:
+//   'prompt'  → ask before every gated SSH call (default).
+//   'session' → ask once, then auto-allow that tool for the rest of the session.
+//   'auto'    → run gated SSH tools without prompting.
+// The read-only SSH tools (ssh_read_file / ssh_list_dir) are never gated.
+export type SshApprovalMode = 'prompt' | 'session' | 'auto'
+
 export interface SessionSettings {
   provider: ProviderName
   modelId: string
@@ -162,6 +172,8 @@ export interface SessionSettings {
   // from output (stacks on a style or applies alone). Sessions only.
   responseStyle?: string
   responseStyleNoMarkdown?: boolean
+  // SSH tool approval mode (ADR 0064 P2). Undefined = 'prompt' (ask every call).
+  sshApprovalMode?: SshApprovalMode
 }
 
 // One ordered slice of an assistant turn (ADR 0032). Either a run of reply text
@@ -386,6 +398,12 @@ export interface Session {
   // normal chat session. The reverse link (task → its discussion sessions) is
   // derived by filtering sessions on aboutTaskId — not stored on the task.
   aboutTaskId?: string
+  // SSH host this session was opened to work with (ADR 0064, P1). When set,
+  // buildContext injects a <linked_ssh_host> block (the host's connection info +
+  // metadata, NO secrets) each turn so the agent knows which machine the user is
+  // asking about. Absent for a normal chat. The reverse link (host → its sessions)
+  // is derived by filtering sessions on aboutSshHostId — not stored on the host.
+  aboutSshHostId?: string
   // GitHub issue/PR this session was opened from ("New session" on an issue/PR
   // row). Full github.com URL — a back-reference surfaced in the UI; not injected
   // into the model context. Absent for a normal chat.
@@ -432,6 +450,8 @@ export interface SessionSummary {
   // can badge / navigate without loading the full transcript. Mirrors
   // Session.aboutTaskId.
   aboutTaskId?: string
+  // SSH host this session works with (ADR 0064) — mirrors Session.aboutSshHostId.
+  aboutSshHostId?: string
   // GitHub issue/PR this session was opened from — mirrors Session.aboutGhUrl.
   aboutGhUrl?: string
   // Fork parent (its session id) — surfaced on the list row so the fork-tree graph
@@ -655,6 +675,19 @@ export interface McpResource {
   uri: string
   mime: string
 }
+
+// One line of the connection-test activity log (ADR 0060 P5 — the Tools section's
+// live progress console). `info` = an AWOG step ("Spawning process…", "Handshake
+// complete — 12 tools"); `stderr` = a raw line the MCP server printed to stderr;
+// `error` = the failure that ended the run. Invariant 1: a step message NEVER
+// contains an injected token / header value / env secret (only the command, url,
+// and counts — all of which the UI already shows elsewhere).
+export type SourceLogLevel = 'info' | 'stderr' | 'error'
+export interface SourceLogLine {
+  level: SourceLogLevel
+  message: string
+}
+export type SourceLog = (line: SourceLogLine) => void
 
 // Optional auth probe: a read-only tool call the connection Test runs AFTER the
 // MCP handshake to verify the token actually authenticates (the handshake +

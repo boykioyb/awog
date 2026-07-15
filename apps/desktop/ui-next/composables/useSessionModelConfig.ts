@@ -33,6 +33,8 @@ const RESPONSE_STYLES: StyleGroup[] = [
       { id: 'git log', slug: 'git-log', icon: 'git' },
       { id: 'Socratic', slug: 'socratic', icon: 'help' },
       { id: 'BLUF', slug: 'bluf', icon: 'pin' },
+      { id: 'Checklist', slug: 'checklist', icon: 'listul' },
+      { id: 'Code First', slug: 'code-first', icon: 'code' },
     ],
   },
   {
@@ -42,6 +44,9 @@ const RESPONSE_STYLES: StyleGroup[] = [
       { id: 'Pirate', slug: 'pirate', icon: 'flag' },
       { id: '80s Hacker', slug: 'hacker-80s', icon: 'save' },
       { id: 'Dad Joke', slug: 'dad-joke', icon: 'smile' },
+      { id: 'Noir', slug: 'noir', icon: 'moon' },
+      { id: 'Speedrun', slug: 'speedrun', icon: 'forward' },
+      { id: 'Corporate', slug: 'corporate', icon: 'globe' },
     ],
   },
   {
@@ -50,6 +55,9 @@ const RESPONSE_STYLES: StyleGroup[] = [
       { id: 'Rubber Duck', slug: 'rubber-duck', icon: 'message' },
       { id: 'Feynman', slug: 'feynman', icon: 'bulb' },
       { id: 'First Principles', slug: 'first-principles', icon: 'layers' },
+      { id: "Devil's Advocate", slug: 'devils-advocate', icon: 'alert' },
+      { id: 'Mentor', slug: 'mentor', icon: 'brain' },
+      { id: 'Pair', slug: 'pair', icon: 'fork' },
     ],
   },
 ]

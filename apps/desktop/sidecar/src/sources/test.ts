@@ -25,6 +25,7 @@ import type {
   McpTool,
   SourceConfig,
   SourceConnectionStatus,
+  SourceLog,
 } from '../types/shared.js'
 
 // The per-source test result surfaced to the UI. `supported` distinguishes
@@ -79,15 +80,18 @@ function mcpConnectParams(source: McpSource): McpConnectParams {
 // short-circuits to needs_auth without a request. Never throws.
 async function testApiSource(
   source: ApiSource,
-  opts: { timeoutMs?: number },
+  opts: { timeoutMs?: number; onLog?: SourceLog },
 ): Promise<SourceTestOutcome> {
   const api = source.api
+  const onLog = opts.onLog
 
   if (!api.baseUrl) {
+    onLog?.({ level: 'error', message: 'api source has no baseUrl' })
     return { ok: false, supported: true, status: 'failed', error: 'api source has no baseUrl' }
   }
   const baseGuard = ssrfCheck(api.baseUrl)
   if (!baseGuard.ok) {
+    onLog?.({ level: 'error', message: `baseUrl blocked: ${baseGuard.reason}` })
     return { ok: false, supported: true, status: 'failed', error: `baseUrl blocked: ${baseGuard.reason}` }
   }
 
@@ -97,8 +101,10 @@ async function testApiSource(
   let cred: ApiCredential | null = null
   let oauthHeaders: Record<string, string> | undefined
   if (api.authType === 'oauth') {
+    onLog?.({ level: 'info', message: 'Resolving OAuth token (auto-refresh if expired)' })
     const token = await getFreshToken(source)
     if (!token) {
+      onLog?.({ level: 'error', message: 'No valid OAuth token — connect first' })
       return {
         ok: false,
         supported: true,
@@ -111,6 +117,7 @@ async function testApiSource(
   } else if (api.authType !== 'none') {
     cred = await loadApiCredential(source.id)
     if (!cred) {
+      onLog?.({ level: 'error', message: 'No credential stored — add one before testing' })
       return {
         ok: false,
         supported: true,
@@ -138,16 +145,27 @@ async function testApiSource(
 
   const guard = ssrfCheck(url)
   if (!guard.ok) {
+    onLog?.({ level: 'error', message: `request blocked: ${guard.reason}` })
     return { ok: false, supported: true, status: 'failed', error: `request blocked: ${guard.reason}` }
   }
 
   const timeoutMs = opts.timeoutMs ?? source.timeoutMs
+  // Invariant 1: `authType: 'query'` bakes the API key into the URL query string
+  // (api-tools buildApiRequest) — strip the query before logging so no secret is
+  // echoed. The path/origin is safe (baseUrl is already shown in the info table);
+  // auth headers baked into `init` are never touched.
+  const safeUrl = url.split('?')[0]
+  onLog?.({ level: 'info', message: `Probe ${method} ${safeUrl} (timeout ${timeoutMs}ms)` })
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
     const res = await fetch(url, { ...init, signal: ctrl.signal })
     // Free the socket — we classify by status only.
     await res.body?.cancel().catch(() => {})
+    onLog?.({
+      level: res.ok ? 'info' : 'stderr',
+      message: `Response: HTTP ${res.status} ${res.statusText}`.trim(),
+    })
     if (res.ok) {
       return { ok: true, supported: true, status: 'connected', isAuthenticated: true }
     }
@@ -176,6 +194,7 @@ async function testApiSource(
       : err instanceof Error
         ? err.message
         : String(err)
+    onLog?.({ level: 'error', message: `Request failed: ${msg}` })
     return { ok: false, supported: true, status: 'failed', isAuthenticated: false, error: msg }
   } finally {
     clearTimeout(timer)
@@ -185,9 +204,13 @@ async function testApiSource(
 // Probe a local (filesystem) source (ADR 0060 D-6, P4): the configured `path`
 // must expand to an absolute path that exists AND is a readable directory →
 // connected; otherwise → failed. Never throws.
-async function testLocalSource(source: LocalSource): Promise<SourceTestOutcome> {
+async function testLocalSource(
+  source: LocalSource,
+  onLog?: SourceLog,
+): Promise<SourceTestOutcome> {
   const abs = resolveLocalPath(source.local.path)
   if (!abs) {
+    onLog?.({ level: 'error', message: `Invalid path (contains ".."): ${source.local.path}` })
     return {
       ok: false,
       supported: true,
@@ -195,11 +218,14 @@ async function testLocalSource(source: LocalSource): Promise<SourceTestOutcome> 
       error: `Invalid path (contains "..": ${source.local.path}). Use an absolute or ~-anchored folder.`,
     }
   }
+  onLog?.({ level: 'info', message: `Checking folder — ${abs}` })
   try {
     const st = await stat(abs)
     if (!st.isDirectory()) {
+      onLog?.({ level: 'error', message: `Not a directory: ${abs}` })
       return { ok: false, supported: true, status: 'failed', error: `Not a directory: ${abs}` }
     }
+    onLog?.({ level: 'info', message: 'Folder exists and is readable' })
     return { ok: true, supported: true, status: 'connected' }
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code
@@ -211,21 +237,23 @@ async function testLocalSource(source: LocalSource): Promise<SourceTestOutcome> 
           : err instanceof Error
             ? err.message
             : String(err)
+    onLog?.({ level: 'error', message: reason })
     return { ok: false, supported: true, status: 'failed', error: reason }
   }
 }
 
 // Run the connectivity test for a source. mcp + api + local are supported. Never
-// throws — a failure is an outcome.
+// throws — a failure is an outcome. `opts.onLog` (optional) streams coarse-grained
+// progress lines to the caller (source.tools' live console) — a pure observer.
 export async function testSource(
   source: SourceConfig,
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; onLog?: SourceLog } = {},
 ): Promise<SourceTestOutcome> {
   if (source.type === 'api') {
     return testApiSource(source, opts)
   }
   if (source.type === 'local') {
-    return testLocalSource(source)
+    return testLocalSource(source, opts.onLog)
   }
 
   // Only `mcp` remains (the union is exhausted above).
@@ -237,8 +265,10 @@ export async function testSource(
   // resolved by mcpManager.test via expandSecrets — unchanged.
   const transport = source.mcp.transport ?? 'http'
   if (transport !== 'stdio' && source.mcp.authType === 'oauth') {
+    opts.onLog?.({ level: 'info', message: 'Resolving OAuth token (auto-refresh if expired)' })
     const token = await getFreshToken(source)
     if (!token) {
+      opts.onLog?.({ level: 'error', message: 'No valid OAuth token — connect first' })
       return {
         ok: false,
         supported: true,

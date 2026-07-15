@@ -16,6 +16,7 @@ import { useGitApi } from '~/composables/useGitApi'
 import type {
   GitIdentity,
   GitStreamingOp,
+  PrSummaryResult,
   PushParams,
   ReadConflictFileResult,
   SetIdentityParams,
@@ -93,6 +94,7 @@ function adaptBranch(b: SidecarGitBranch): BranchInfo {
     ahead: b.ahead,
     behind: b.behind,
     upstream: b.upstream ?? undefined,
+    lastCommitAt: b.lastCommitAt || undefined,
   }
 }
 
@@ -703,6 +705,31 @@ export const useGitStore = defineStore('git', () => {
     repo.value = label
     if (!available.value) return
     await loadAll()
+  }
+
+  // Make the store ready for a second consumer (the global PR summary host) that
+  // opens outside the Git page/modal — without disturbing GitManager's own
+  // subscribe lifecycle. Cold store → load projects + subscribe once; then scope
+  // to the hinted project (matched by id or name, like GitManager). Idempotent: a
+  // no-op when already scoped there with data loaded.
+  const ensureScoped = async (projectHint: string | null): Promise<void> => {
+    if (!available.value) return
+    const cold = projects.value.length === 0
+    if (cold) {
+      await loadProjects()
+      if (!unlisten) await subscribe()
+    }
+    let targetId = currentProjectId.value
+    if (projectHint) {
+      const match =
+        projects.value.find((p) => p.id === projectHint) ??
+        projects.value.find((p) => p.name === projectHint)
+      if (match) targetId = match.id
+    }
+    if (!targetId && projects.value[0]) targetId = projects.value[0].id
+    if (targetId && (targetId !== currentProjectId.value || cold || branches.value.length === 0)) {
+      await setProject(targetId)
+    }
   }
 
   // ─── Staging (working tree) ─────────────────────────────────────────────────
@@ -1572,6 +1599,89 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
+  // ─── PR-summary commit-rule files ────────────────────────────────────────────
+  // Directories a project may keep its commit convention in, most-preferred first.
+  // The PR summary modal lists the `.md` files here so the user can pick which rule
+  // governs the generated PR title (per-project, not just the global app setting).
+  const PR_RULE_DIRS = ['.awog/rules', '.claude/rules'] as const
+
+  // Workspace-relative paths of candidate rule files (git-commit.md floated first
+  // within each dir). Empty when unavailable / none exist. Missing dirs are skipped.
+  const listPrRuleFiles = async (): Promise<string[]> => {
+    if (!available.value) return []
+    const root = workspaceRoot()
+    if (!root) return []
+    const fs = useFsApi()
+    const perDir = await Promise.all(
+      PR_RULE_DIRS.map(async (dir) => {
+        try {
+          const { entries } = await fs.listDir(root, dir)
+          return entries
+            .filter((e) => e.kind === 'file' && e.name.toLowerCase().endsWith('.md'))
+            .map((e) => e.path)
+            .sort((a, b) => {
+              const rank = (p: string) => (/(^|\/)git-commit\.md$/i.test(p) ? 0 : 1)
+              return rank(a) - rank(b) || a.localeCompare(b)
+            })
+        } catch {
+          // Directory absent in this project — skip it.
+          return []
+        }
+      }),
+    )
+    return perDir.flat()
+  }
+
+  // The commit rule to bind the PR title to. A picked rule FILE wins; else the
+  // global app setting (empty rulePath = the modal's "Default" choice). Capped to
+  // the sidecar's title-rule limit.
+  const TITLE_RULE_MAX = 16_000
+  const resolvePrTitleRule = async (rulePath?: string): Promise<string> => {
+    if (rulePath) {
+      try {
+        const res = await useFsApi().readFile(workspaceRoot(), rulePath, TITLE_RULE_MAX)
+        const content = res.content.trim()
+        if (content) return content.slice(0, TITLE_RULE_MAX)
+      } catch (err) {
+        // Fall back to the app setting rather than failing the whole generation.
+        console.warn('[git] readFile PR rule failed', err)
+      }
+    }
+    return useSettingsStore().git.commitMessageRule || DEFAULT_COMMIT_MESSAGE_RULE
+  }
+
+  // ─── Generate PR summary (title + markdown description) ──────────────────────
+  // One-shot LLM summary of `head` against `base`: commits + diff + touched
+  // requirement/plan docs → { title, description }. `opts.rulePath` picks the
+  // commit-rule file that governs the title. Throws on failure so the modal can
+  // surface the error (unlike the swallow-into-lastError mutations).
+  const generatePrSummary = async (
+    head: string,
+    base: string,
+    opts: { rulePath?: string } = {},
+  ): Promise<PrSummaryResult> => {
+    if (!available.value) {
+      // Browser-dev mock: a plausible summary so the modal is exercisable offline.
+      return {
+        title: `feat: merge ${head} into ${base}`,
+        description: [
+          '## Summary',
+          `Changes from \`${head}\` proposed for \`${base}\`.`,
+          '',
+          '## Changes',
+          '- (mock) sidecar unavailable — no diff analysed',
+          '',
+          '## Test plan',
+          '- [ ] Run the app and verify the branch behaves as expected',
+        ].join('\n'),
+        model: 'mock',
+        truncated: false,
+      }
+    }
+    const titleRule = await resolvePrTitleRule(opts.rulePath)
+    return useGitApi().generatePrSummary(workspaceRoot(), { head, base, titleRule })
+  }
+
   // ─── Identity (user.name / user.email) ──────────────────────────────────────
   // Commit identity at the global (~/.gitconfig) and repo-local scopes. Read on
   // demand by the Git Identity modal (not part of loadAll). Mock mode returns a
@@ -1748,6 +1858,7 @@ export const useGitStore = defineStore('git', () => {
     unsubscribe,
     setProject,
     setRepo,
+    ensureScoped,
     stageFile,
     unstageFile,
     discardFile,
@@ -1798,6 +1909,8 @@ export const useGitStore = defineStore('git', () => {
     openInVscode,
     vscodeAvailable,
     openPrFor,
+    generatePrSummary,
+    listPrRuleFiles,
     loadIdentity,
     saveIdentity,
   }

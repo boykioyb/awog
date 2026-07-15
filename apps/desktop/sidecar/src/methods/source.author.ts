@@ -53,6 +53,10 @@ const Params = z.object({
   userText: z.string().min(1).max(8_000),
   accountId: z.string().min(1).max(120).optional(),
   modelId: ModelSchema.optional(),
+  // Edit mode (ADR 0060): the current config JSON of the source being refined.
+  // When present the system prompt tells the model to update that slug in place
+  // instead of creating a new one.
+  editConfig: z.string().max(20_000).optional(),
 })
 
 function renderTranscript(
@@ -76,17 +80,28 @@ function exampleSource(slug: string): string {
   return JSON.stringify({ id: `${slug}_00000000`, slug, ...draft }, null, 2)
 }
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(editContext?: string): string {
   const fs = exampleSource('filesystem')
   const gh = exampleSource('github')
   const dir = `${awogHome()}/sources`
+  const editBlock = editContext
+    ? `\n\nYOU ARE EDITING AN EXISTING SOURCE. Its current config is below — apply the user's requested
+changes and re-Write the UPDATED config.json to the SAME path (keep the same slug + id). Do not
+create a new slug. Then update guide.md to match if the change affects usage.
+
+Current config:
+\`\`\`json
+${editContext}
+\`\`\``
+    : ''
   return `You are a Source installer working inside AWOG (Pha 1: MCP sources over stdio/http only).
 
-Your job: figure out what MCP server the user wants, then create a config file at:
+Your job: figure out what MCP server the user wants, then create TWO files in the per-source folder:
 
-  ${dir}/<slug>/config.json
+  ${dir}/<slug>/config.json   — the machine config (SourceConfig JSON)
+  ${dir}/<slug>/guide.md      — short human documentation for the source
 
-The JSON is a SourceConfig with type:"mcp". It MUST contain:
+The config JSON is a SourceConfig with type:"mcp". It MUST contain:
 - "id": "\${slug}_<8 hex>" (stable id; keep the slug prefix)
 - "slug": matching the <slug> folder name
 - "type": "mcp"
@@ -106,18 +121,52 @@ For arbitrary stdio servers (e.g. "@modelcontextprotocol/server-postgres"), buil
 with: id, slug, name, provider, description, type:"mcp", enabled, timeoutMs: 30000, trust:"prompt",
 and an "mcp" block: { "transport": "stdio", "command": "npx", "args": [...], "env": {...} }.
 
+CRITICAL — the stdio "command" MUST be a program that ITSELF speaks the MCP protocol over stdio (an
+"MCP server"): an npx package, a python/uv script, or a binary that implements MCP. It is NOT a raw
+shell, transport, or remote-access tool. NEVER set "command" (on its own) to: ssh, scp, docker, kubectl,
+bash, sh, telnet, nc — these open a shell/pipe, not an MCP server, so the very first JSON-RPC handshake
+line is executed as a shell command and the connection fails (e.g. "-bash: jsonrpc:2.0: command not found").
+
+Reaching a REMOTE host (SSH/VPS) or a container is NOT by itself an MCP source. If the user asks for that:
+- Only write a config if you can name a REAL MCP server to run. Two valid shapes:
+  (a) an MCP server that lives ON the remote, piped over ssh —
+      command:"ssh", args:[<ssh opts>, "user@host", "<remote MCP-server launch command>"] — ONLY if the
+      user confirms such a server exists on the remote;
+  (b) a LOCAL MCP server that bridges SSH (an "ssh MCP server" package), with host/port/user/key via env.
+- If you do NOT know a concrete MCP server for the task, DO NOT invent one and DO NOT write a bare
+  \`ssh user@host\` config. Ask ONE clarifying question instead (e.g. "Which MCP server should run this —
+  is one installed on the VPS, or should I use an SSH-MCP-server package? paste its command/name") and
+  write NOTHING until the user answers.
+- NEVER guess or fabricate an npm package name for a niche/unknown server. When unsure, ask.
+
+SECRETS — never handle a raw token yourself:
+- If the server needs an API key / token / password, DO NOT ask the user to paste it in this chat,
+  and NEVER write the literal secret into the config. Instead write a keychain REFERENCE as the
+  ENTIRE value: "secret:<KEY>" where <KEY> matches ^[A-Za-z][A-Za-z0-9_.-]*$.
+  · stdio → an env entry, e.g. "env": { "GITHUB_TOKEN": "secret:GITHUB_TOKEN" }
+  · http  → a header whose whole value is the ref, e.g. "headers": { "Authorization": "secret:AUTH_TOKEN" }
+    (and set the mcp "authType" to "bearer"). If the server wants a scheme prefix like "Bearer ", tell
+    the user in guide.md to include it when they enter the value.
+- After you write the config, AWOG shows the user a secure input to enter each secret value (stored in
+  the OS keychain). So your job is only to declare WHICH secrets are needed via "secret:<KEY>" refs.
+
+guide.md content (concise markdown, ~10-25 lines): a one-line summary, what the source is for, the main
+tools/capabilities it exposes, setup/auth steps (including which "secret:<KEY>" values the user must
+provide and how to obtain them), and one short usage example. Plain markdown only — no front-matter.
+
 Hard rules:
 - slug MUST match ^[a-z0-9-]+$ (lowercase, hyphens). Pick a short readable one; id = "\${slug}_<8 hex>".
+- The stdio "command" MUST be an actual MCP server (see CRITICAL above) — never a bare ssh/scp/docker/shell.
 - Only "stdio" or "http" transport (inside the mcp block). Never "sse".
 - Do NOT include an "autoStart" field — it no longer exists.
 - The "args" array MUST NOT include a literal "~" path — expand it explicitly
   (a real absolute path like /Users/you/notes, or leave a TODO for the user;
   never bake "~" because shells don't expand inside spawn argv).
-- Write the file ONLY to ${dir}/<slug>/config.json. Never to any other path.
-- Use the Write tool (not Bash). Write the file as pretty-printed JSON.
+- Write files ONLY to ${dir}/<slug>/config.json and ${dir}/<slug>/guide.md. Never any other path.
+- Use the Write tool (not Bash). Write config.json as pretty-printed JSON; write config.json FIRST, then guide.md.
 - If the user is vague, ask ONE concise clarifying question (which server? what path?). Don't interrogate.
-- After Write succeeds, end with one sentence: "Created <slug> — testing the connection." Nothing else.
-- Never call Read on existing config files unless the user asks to inspect them.`
+- After both files are written, end with one sentence: "Created <slug> — testing the connection." Nothing else.
+- Never call Read on existing config files unless the user asks to inspect them.${editBlock}`
 }
 
 // Run source.test against the just-written config and stream a `verify` step the
@@ -185,7 +234,7 @@ register('source.author', async (raw) => {
     {
       accountId: params.accountId,
       modelId,
-      systemPrompt: buildSystemPrompt(),
+      systemPrompt: buildSystemPrompt(params.editConfig),
       prompt: transcript,
     },
     {
@@ -222,6 +271,9 @@ register('source.author', async (raw) => {
   const result = {
     messageId: params.messageId,
     text: res.text,
+    // The slug the model just wrote (null if it only asked a question). The UI
+    // uses it to fetch pending secrets + prompt for their values after the turn.
+    slug: writtenSlug,
     modelUsed: res.modelUsed || modelId,
     usage: { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens },
     stopReason: res.stopReason,

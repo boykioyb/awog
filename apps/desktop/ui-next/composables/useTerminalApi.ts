@@ -5,6 +5,21 @@ import { useSidecar } from './useSidecar'
 
 export type TerminalSessionRef = { terminalId: string; sessionId: string }
 
+// Pluggable backend for WorkspaceTerminal. The default backend is a local PTY
+// (terminal.*); an SSH backend (ssh.*) supplies the same shape so one xterm
+// widget drives both (ADR 0063). `create` opens a channel and returns its opaque
+// id; `dataEvent`/`exitEvent` are the sidecar event types to route on; `idField`
+// is the payload key carrying that id (`terminalId` for PTY, `connId` for SSH).
+export interface TerminalTransport {
+  create: (cols: number, rows: number) => Promise<{ id: string }>
+  write: (id: string, data: string) => Promise<unknown>
+  resize: (id: string, cols: number, rows: number) => Promise<unknown>
+  kill: (id: string) => Promise<unknown>
+  dataEvent: string
+  exitEvent: string
+  idField: string
+}
+
 export function useTerminalApi() {
   const sidecar = useSidecar()
   return {

@@ -216,7 +216,9 @@ const DEFAULT_AUTO_UPDATE: AutoUpdateSettings = {
 
 const DEFAULT_APPEARANCE: AppearanceExtras = {
   themeFamily: 'awog',
-  sansFamily: 'geist',
+  // System stack (SF Pro / Segoe UI) by default so the desktop app renders in the
+  // OS UI font and reads as native. Geist / Inter stay opt-in in Appearance.
+  sansFamily: 'system',
   fontWeight: 400,
   surfaceDepth: 'standard',
   liquidGlass: false,
@@ -244,6 +246,8 @@ const DEFAULT_WORKSPACE_PATH = '/Users/kyro/.awog'
 
 // --- persistence (single key; providers excluded — sidecar is their truth) ---
 const STORAGE_KEY = 'awog-settings-v1'
+// One-shot marker: flip installs that still carry the old Geist default to System.
+const SANS_NATIVE_MIGRATION_KEY = 'awog-sans-native-v1'
 
 interface PersistShape {
   workspacePath: string
@@ -264,7 +268,21 @@ function loadPersisted(): Partial<PersistShape> {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? (parsed as Partial<PersistShape>) : {}
+    if (!parsed || typeof parsed !== 'object') return {}
+    const blob = parsed as Partial<PersistShape>
+    // One-time migration: the app shipped with Geist as the default UI font, which
+    // reads as a web app rather than a native desktop one. Flip persisted installs
+    // that still carry that old default to the System stack (SF Pro / Segoe UI)
+    // once. A user who re-picks Geist afterwards keeps it — the marker stops this
+    // from re-flipping on every load.
+    if (
+      !window.localStorage.getItem(SANS_NATIVE_MIGRATION_KEY) &&
+      blob.appearance?.sansFamily === 'geist'
+    ) {
+      blob.appearance = { ...blob.appearance, sansFamily: 'system' }
+      window.localStorage.setItem(SANS_NATIVE_MIGRATION_KEY, '1')
+    }
+    return blob
   } catch {
     return {}
   }

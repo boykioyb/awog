@@ -22,7 +22,7 @@ import { createInterface } from 'node:readline'
 import { log } from '../util/logger.js'
 import { HttpMcpClient, ssrfCheck } from './http-client.js'
 import { expandSecrets } from './secrets.js'
-import type { McpHealthCheck, McpTool, McpResource } from '../types/shared.js'
+import type { McpHealthCheck, McpTool, McpResource, SourceLog } from '../types/shared.js'
 
 // Environment vars we pass through to children. Everything else is dropped —
 // notably ANTHROPIC_API_KEY, OAuth tokens, and any leaked credential.
@@ -322,44 +322,79 @@ class McpManager {
   // `opts.timeoutMs` overrides the handshake budget. Default is the params'
   // `timeoutMs`. The author-verify passes a larger value because a first
   // `npx -y <pkg>` run also downloads the package before it can speak MCP.
-  async test(params: McpConnectParams, opts: { timeoutMs?: number } = {}): Promise<McpTestOutcome> {
+  //
+  // `opts.onLog` (optional) receives coarse-grained progress lines + the child's
+  // raw stderr live, so a caller (source.tools) can stream a "what it's doing"
+  // console to the UI. It is a pure observer — never affects the outcome.
+  async test(
+    params: McpConnectParams,
+    opts: { timeoutMs?: number; onLog?: SourceLog } = {},
+  ): Promise<McpTestOutcome> {
     const timeoutMs = opts.timeoutMs ?? params.timeoutMs
+    const onLog = opts.onLog
     if (params.transport === 'sse') {
       return { ok: false, error: 'sse transport not supported yet' }
     }
     if (params.transport === 'http') {
-      return this.testHttp(params, timeoutMs)
+      return this.testHttp(params, timeoutMs, onLog)
     }
-    return this.testStdio(params, timeoutMs)
+    return this.testStdio(params, timeoutMs, onLog)
   }
 
-  private async testStdio(params: McpConnectParams, timeoutMs: number): Promise<McpTestOutcome> {
+  private async testStdio(
+    params: McpConnectParams,
+    timeoutMs: number,
+    onLog?: SourceLog,
+  ): Promise<McpTestOutcome> {
+    const cmd = [params.command ?? '', ...(params.args ?? [])].filter(Boolean).join(' ')
+    // Command + args are safe to echo (already shown in the Connection info table);
+    // the child's env — where `secret:` refs expand — is NEVER logged.
+    onLog?.({ level: 'info', message: `Spawning: ${cmd || '(no command)'}` })
     let child: ChildProcessWithoutNullStreams
     try {
       child = await spawnChild(params)
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      const message = err instanceof Error ? err.message : String(err)
+      onLog?.({ level: 'error', message: `Spawn failed: ${message}` })
+      return { ok: false, error: message }
     }
     const stderr: string[] = []
     const stderrRl = createInterface({ input: child.stderr, crlfDelay: Infinity })
     stderrRl.on('line', (line) => {
       if (stderr.length < STDERR_RING_SIZE) stderr.push(line)
+      onLog?.({ level: 'stderr', message: line })
     })
     const client = new StdioMcpClient(child)
     try {
+      onLog?.({ level: 'info', message: `Handshake — initialize + tools/list (timeout ${timeoutMs}ms)` })
       const { tools, resources } = await handshake(client, timeoutMs)
+      onLog?.({
+        level: 'info',
+        message: `Handshake complete — ${tools.length} tool(s), ${resources.length} resource(s)`,
+      })
       // Run the auth probe (if configured) on the SAME live child so it inherits
       // the token env — then tear the child down.
-      const probe = params.healthCheck
-        ? await probeHealth(client, params.healthCheck, timeoutMs)
-        : undefined
+      let probe: McpProbeResult | undefined
+      if (params.healthCheck) {
+        onLog?.({ level: 'info', message: `Auth probe — calling ${params.healthCheck.tool}` })
+        probe = await probeHealth(client, params.healthCheck, timeoutMs)
+        onLog?.({
+          level: probe.ok ? 'info' : 'error',
+          message: probe.ok
+            ? `Auth probe passed (${probe.tool})`
+            : `Auth probe failed (${probe.tool}): ${probe.error ?? 'rejected'}`,
+        })
+      }
       this.killChild(child)
+      onLog?.({ level: 'info', message: 'Closed connection' })
       return { ok: true, tools, resources, stderr, ...(probe ? { probe } : {}) }
     } catch (err) {
       this.killChild(child)
+      const message = err instanceof Error ? err.message : String(err)
+      onLog?.({ level: 'error', message: `Handshake failed: ${message}` })
       return {
         ok: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: message,
         stderr,
       }
     }
@@ -373,24 +408,48 @@ class McpManager {
     }
   }
 
-  private async testHttp(params: McpConnectParams, timeoutMs: number): Promise<McpTestOutcome> {
+  private async testHttp(
+    params: McpConnectParams,
+    timeoutMs: number,
+    onLog?: SourceLog,
+  ): Promise<McpTestOutcome> {
     if (!params.url) {
+      onLog?.({ level: 'error', message: 'http transport requires url' })
       return { ok: false, error: 'http transport requires url' }
     }
+    onLog?.({ level: 'info', message: `Connecting (HTTP) — ${params.url}` })
     const guard = ssrfCheck(params.url)
     if (!guard.ok) {
-      return { ok: false, error: `SSRF guard rejected URL: ${guard.reason}` }
+      const message = `SSRF guard rejected URL: ${guard.reason}`
+      onLog?.({ level: 'error', message })
+      return { ok: false, error: message }
     }
+    // Header values (Authorization bearer, `secret:` header refs) are NEVER logged.
     const expandedHeaders = await expandSecrets(params.id, params.headers)
     const client = new HttpMcpClient(params.url, expandedHeaders)
     try {
+      onLog?.({ level: 'info', message: `Handshake — initialize + tools/list (timeout ${timeoutMs}ms)` })
       const { tools, resources } = await handshake(client, timeoutMs)
-      const probe = params.healthCheck
-        ? await probeHealth(client, params.healthCheck, timeoutMs)
-        : undefined
+      onLog?.({
+        level: 'info',
+        message: `Handshake complete — ${tools.length} tool(s), ${resources.length} resource(s)`,
+      })
+      let probe: McpProbeResult | undefined
+      if (params.healthCheck) {
+        onLog?.({ level: 'info', message: `Auth probe — calling ${params.healthCheck.tool}` })
+        probe = await probeHealth(client, params.healthCheck, timeoutMs)
+        onLog?.({
+          level: probe.ok ? 'info' : 'error',
+          message: probe.ok
+            ? `Auth probe passed (${probe.tool})`
+            : `Auth probe failed (${probe.tool}): ${probe.error ?? 'rejected'}`,
+        })
+      }
       return { ok: true, tools, resources, ...(probe ? { probe } : {}) }
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      const message = err instanceof Error ? err.message : String(err)
+      onLog?.({ level: 'error', message: `Handshake failed: ${message}` })
+      return { ok: false, error: message }
     }
   }
 

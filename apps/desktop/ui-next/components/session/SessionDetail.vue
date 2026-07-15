@@ -125,6 +125,29 @@
       <Icon name="chev" class="aboutbar-chev" />
     </button>
 
+    <!-- Work banner (ADR 0064): this session was opened to work with an SSH host.
+         The approval selector governs the agent's mutating SSH tools (P2). -->
+    <div v-if="session.aboutSshHostId" class="sshbar">
+      <button class="aboutbar sshbar-open" @click="openSshHost(session.aboutSshHostId)">
+        <Icon name="ssh" class="aboutbar-icn" />
+        <span class="aboutbar-lbl">{{ t('sessions.detail.aboutSshHost') }}</span>
+        <span class="aboutbar-title">{{ aboutSshHostName }}</span>
+        <Icon name="chev" class="aboutbar-chev" />
+      </button>
+      <div class="sshbar-approval">
+        <span class="sshbar-approval-lbl">{{ t('sessions.detail.sshApproval.label') }}</span>
+        <AppSelect
+          :model-value="sshApprovalMode"
+          :options="sshApprovalOptions"
+          width="132px"
+          @update:model-value="onSshApprovalMode"
+        />
+      </div>
+      <p v-if="sshApprovalMode === 'auto'" class="sshbar-warn">
+        {{ t('sessions.detail.sshApproval.autoWarn') }}
+      </p>
+    </div>
+
     <!-- chat + right-docked panel share a row (.wptop); the bottom-docked panel
          stacks full-width beneath them. Right and bottom are independent panel
          instances so e.g. Terminal (bottom) and Files (right) coexist. -->
@@ -279,7 +302,13 @@
 // usage + config popovers reuse the `.dproj` dropdown pattern (one menu open at a
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are mock.
-import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsData'
+import type {
+  Session,
+  SessionAttachment,
+  SlashCommandRef,
+  SshApprovalMode,
+} from '~/composables/useSessionsData'
+import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import { previewKindFromAttachment, usePreview, type PreviewRef } from '~/composables/usePreview'
@@ -319,7 +348,7 @@ async function askRemove() {
 // Discuss link (ADR 0055): when this session was opened to discuss a task, show a
 // banner with the task title (resolved from the tasks store) → click opens it.
 const tasksStore = useTasksStore()
-const { openTask } = useSessionTaskLink()
+const { openTask, openSshHost } = useSessionTaskLink()
 const aboutTask = computed(() =>
   props.session.aboutTaskId ? tasksStore.taskById(props.session.aboutTaskId) : undefined,
 )
@@ -327,6 +356,31 @@ const aboutTaskTitle = computed(() => aboutTask.value?.title ?? props.session.ab
 onMounted(() => {
   if (props.session.aboutTaskId && !aboutTask.value) void tasksStore.loadTasks()
 })
+
+// Work link (ADR 0064): when this session was opened to work with an SSH host,
+// show a banner with the host name (resolved from the ssh store) → click opens
+// the SSH page. Falls back to the raw id if the host was deleted.
+const sshStore = useSshStore()
+const aboutSshHost = computed(() =>
+  props.session.aboutSshHostId ? sshStore.hostById(props.session.aboutSshHostId) : undefined,
+)
+const aboutSshHostName = computed(() => aboutSshHost.value?.name ?? props.session.aboutSshHostId)
+onMounted(() => {
+  if (props.session.aboutSshHostId && !aboutSshHost.value) void sshStore.loadAll()
+})
+
+// Per-session SSH tool approval mode (ADR 0064 P2). Governs the agent's mutating
+// SSH tools (ssh_exec / ssh_write_file); 'prompt' by default. Takes effect on the
+// next turn (engine reads it per turn).
+const sshApprovalMode = computed<SshApprovalMode>(() => props.session.sshApprovalMode ?? 'prompt')
+const sshApprovalOptions = computed<AppSelectOption[]>(() => [
+  { label: t('sessions.detail.sshApproval.prompt'), value: 'prompt' },
+  { label: t('sessions.detail.sshApproval.session'), value: 'session' },
+  { label: t('sessions.detail.sshApproval.auto'), value: 'auto' },
+])
+function onSshApprovalMode(v: string) {
+  store.setSshApprovalMode(props.session.id, v as SshApprovalMode)
+}
 
 // Single popover open at a time (project switcher · config · workspace). The shared
 // backdrop closes whichever is open.
@@ -814,6 +868,29 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 .aboutbar-chev {
   flex: 0 0 auto;
   opacity: 0.6;
+}
+/* SSH work banner (ADR 0064): the open-host button + per-session approval selector
+   (governs the agent's mutating ssh_exec / ssh_write_file). */
+.sshbar {
+  margin: 0 14px 8px;
+}
+.sshbar-open {
+  margin: 0 0 6px;
+  width: 100%;
+}
+.sshbar-approval {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+}
+.sshbar-approval-lbl {
+  color: var(--textMuted);
+}
+.sshbar-warn {
+  margin: 6px 2px 0;
+  color: var(--amber);
+  line-height: 1.4;
 }
 /* Two-axis dock: .chatwrap stacks the top row (chat + right panel) over the
    full-width bottom panel; .wptop is the horizontal row the prototype's .chatwrap

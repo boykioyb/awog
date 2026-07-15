@@ -58,7 +58,13 @@
         @click="picked = f.f"
         @contextmenu.prevent="emit('context-file', $event, f.f)"
       >
-        <span class="gm" :style="{ color: statusColor(f.st) }">{{ f.st }}</span>
+        <span
+          class="gsti"
+          :style="{ color: statusVisual(f.st).color }"
+          :title="t(`git.fileStatus.${statusVisual(f.st).key}`)"
+        >
+          <Icon :name="statusVisual(f.st).icon" />
+        </span>
         <span class="gnm2">
           <span class="gp">{{ dir(f.f) }}</span>
           <span class="gn">{{ base(f.f) }}</span>
@@ -90,7 +96,7 @@
 // Git commit detail — COMMIT / CHANGES / FILE TREE tabs.
 // Ported from commitDetail in awog-prototype.html.
 import type { Commit, CommitTab, DiffLine, DiffRow, GitFile } from './git-types'
-import { avatarOf, baseNameOf, shortPath, statusColor } from './git-types'
+import { avatarOf, baseNameOf, shortPath, statusVisual } from './git-types'
 
 const props = defineProps<{
   commit: Commit

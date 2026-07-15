@@ -127,6 +127,14 @@ export interface RunNonStreamArgs {
   // Linked project id (when any). Scopes the Task tool's subagent menu to the
   // user tiers + this project's agent tiers (ADR 0030).
   projectId?: string
+  // Linked SSH host id (ADR 0064 P2). When set, the Pi runtime pushes the scoped
+  // SSH tools (ssh_exec / ssh_read_file / ssh_list_dir / ssh_write_file) targeting
+  // this host; the mutating ones are gated via settings.sshApprovalMode.
+  aboutSshHostId?: string
+  // SSH terminal co-pilot (ADR 0064): the connId of the interactive shell the user
+  // is watching. When set (docked session in /ssh), the runtime swaps ssh_exec for
+  // ssh_terminal_run (drives THIS visible PTY via sshManager.runInShell).
+  sshTerminalConnId?: string
   // Permission gate. The runtime's beforeToolCall hook bridges this to the UI
   // permission RPC — callers (sessions.send-message) must always supply it for
   // gated modes.

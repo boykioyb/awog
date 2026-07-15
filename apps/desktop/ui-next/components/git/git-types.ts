@@ -19,6 +19,11 @@ export type GitFile = { f: string; st: string }
 // side disambiguates which diff to load and which actions apply.
 export type GitSelection = { path: string; staged: boolean }
 
+// Modifier state carried on a working-tree row click. `meta` (⌘ on macOS / Ctrl
+// elsewhere) turns a click into a multi-select toggle; a plain click single-
+// selects. Selection is a pure highlight for bulk ops — it never stages.
+export type SelMods = { meta: boolean }
+
 // Right-pane selection for the Git page. A normal file row renders a diff, a
 // conflicted file row renders the conflict resolver. Discriminated union so the
 // pane branches cleanly without carrying stray fields.
@@ -72,6 +77,8 @@ export function sectionKey(s: GitSection): string {
 }
 
 // A branch row (local or remote-tracking). `ahead/behind` drive the sidebar hint.
+// `lastCommitAt` (committer date, ISO-strict) drives the recency sort — the most
+// recently active branches float to the top of the Branches section.
 export type BranchInfo = {
   name: string
   current?: boolean
@@ -79,6 +86,7 @@ export type BranchInfo = {
   ahead?: number
   behind?: number
   upstream?: string | null
+  lastCommitAt?: string
 }
 
 export type RemoteInfo = { name: string; fetchUrl: string; pushUrl: string }
@@ -227,6 +235,36 @@ export function isImagePath(p: string): boolean {
 
 export function statusColor(st: string): string {
   return st === 'A' ? 'var(--add)' : st === 'D' ? 'var(--del)' : 'var(--mod)'
+}
+
+// Visual for one working-tree status char: a scannable icon + theme color + i18n
+// label key. Replaces the raw porcelain letter ("?", "M", "A"…) — a colored glyph
+// reads faster and "?" no longer looks like an error. `key` maps to
+// `git.fileStatus.<key>` for the tooltip so color is never the only channel.
+export type StatusVisual = { icon: string; color: string; key: string }
+
+export function statusVisual(st: string): StatusVisual {
+  switch (st) {
+    case 'A':
+      return { icon: 'plus', color: 'var(--add)', key: 'added' }
+    case '?':
+      return { icon: 'plus', color: 'var(--add)', key: 'untracked' }
+    case 'C':
+      return { icon: 'copy', color: 'var(--add)', key: 'copied' }
+    case 'D':
+      return { icon: 'trash', color: 'var(--del)', key: 'deleted' }
+    case 'R':
+      return { icon: 'move', color: 'var(--mod)', key: 'renamed' }
+    case 'T':
+      return { icon: 'edit', color: 'var(--mod)', key: 'typeChanged' }
+    case 'U':
+      return { icon: 'alert', color: 'var(--danger)', key: 'conflicted' }
+    case 'I':
+      return { icon: 'file', color: 'var(--textDim)', key: 'ignored' }
+    case 'M':
+    default:
+      return { icon: 'edit', color: 'var(--mod)', key: 'modified' }
+  }
 }
 
 export function avatarOf(a: string): string {

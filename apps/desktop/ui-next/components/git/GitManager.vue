@@ -79,10 +79,12 @@
               :conflicted="store.conflicted"
               :ch-tree="chTree"
               :sel="selectedFile"
+              :sel-unstaged="selUnstaged"
+              :sel-staged="selStaged"
               :width="midW"
               @toggle-tree="chTree = !chTree"
-              @select="(f, s) => (selectedFile = { kind: 'file', path: f, staged: s })"
-              @select-conflict="(f) => (selectedFile = { kind: 'conflict', path: f })"
+              @select="onSelect"
+              @select-conflict="(f) => selectConflict(f)"
               @discard="onDiscard"
               @discard-all="onDiscardAll"
               @toggle-stage="onToggleStage"
@@ -259,6 +261,7 @@ import type {
   GitSection,
   MenuItem,
   SectionOpen,
+  SelMods,
 } from '~/components/git/git-types'
 import { isImagePath } from '~/components/git/git-types'
 import type { PushParams } from '~/composables/useGitApi'
@@ -405,8 +408,73 @@ const ctab = ref<CommitTab>('commit')
 // The selected right-pane target: a working-tree file (diff, keyed by staged side)
 // or a conflicted file (resolver). A partially staged file is in both sections, so
 // the side determines which diff/actions apply. `null` = nothing selected.
-const selectedFile = ref<GitRightPaneSel>(null)
 const commitSel = ref<string | null>(null)
+
+// ── Working-tree multi-selection ──────────────────────────────────────────
+// A pure selection for bulk operations — it highlights rows and never stages.
+// Scoped to ONE zone at a time (`selZone`: true=staged, false=unstaged) so a bulk
+// action always maps to a single verb; selecting in the other zone resets it. The
+// diff-focused row (`selectedFile`) is separate: plain-click both single-selects
+// and opens the diff; ⌘/Ctrl-click toggles membership without losing the others.
+const selectedFile = ref<GitRightPaneSel>(null)
+const selZone = ref<boolean | null>(null)
+const selPaths = ref<Set<string>>(new Set())
+const NO_SEL: Set<string> = new Set()
+
+// Per-zone view of the selection (empty for the inactive zone).
+const selUnstaged = computed(() => (selZone.value === false ? selPaths.value : NO_SEL))
+const selStaged = computed(() => (selZone.value === true ? selPaths.value : NO_SEL))
+
+// A ⌘/Ctrl-guarded multi-selection over the clicked file's zone — the target for
+// bulk Stage/Unstage/Discard, or null when the click is a plain single selection.
+function selectionFor(file: string, staged: boolean): string[] | null {
+  if (selZone.value !== staged || selPaths.value.size <= 1 || !selPaths.value.has(file)) return null
+  return [...selPaths.value]
+}
+
+function onSelect(file: string, staged: boolean, mods: SelMods) {
+  if (mods.meta) {
+    // ⌘/Ctrl-click → toggle membership; a different zone starts a fresh selection.
+    const next = new Set(selZone.value === staged ? selPaths.value : [])
+    if (next.has(file)) next.delete(file)
+    else next.add(file)
+    selPaths.value = next
+    selZone.value = next.size ? staged : null
+  } else {
+    // Plain click → single selection.
+    selPaths.value = new Set([file])
+    selZone.value = staged
+  }
+  // Focus (diff pane) always follows the clicked file.
+  selectedFile.value = { kind: 'file', path: file, staged }
+}
+
+// A conflicted row opens the resolver — clear any working-tree multi-selection.
+function selectConflict(file: string) {
+  clearSelection()
+  selectedFile.value = { kind: 'conflict', path: file }
+}
+
+// Select all / Deselect all — pure selection, no staging (restores the menu items
+// under their true meaning: the old "Select all" secretly staged everything).
+function selectAllInZone(staged: boolean) {
+  const files = staged ? store.staged : store.unstaged
+  selPaths.value = new Set(files.map((f) => f.f))
+  selZone.value = files.length ? staged : null
+}
+function clearSelection() {
+  if (selPaths.value.size) selPaths.value = new Set()
+  selZone.value = null
+}
+// A file left its zone (staged/unstaged/discarded) → drop it from the selection so
+// no stale highlight lingers.
+function dropFromSelection(file: string) {
+  if (!selPaths.value.has(file)) return
+  const next = new Set(selPaths.value)
+  next.delete(file)
+  selPaths.value = next
+  if (!next.size) selZone.value = null
+}
 const identityOpen = ref(false)
 const remoteAddOpen = ref(false)
 // Remote whose detail pane should open straight into URL-edit mode (set by the
@@ -414,6 +482,9 @@ const remoteAddOpen = ref(false)
 const remoteEditName = ref<string | null>(null)
 const branchCreateOpen = ref(false)
 const pushOpen = ref(false)
+// The PR summary modal is app-wide (GitPrSummaryHost in the layout) so ⌘I can open
+// it too; the branch context menu just drives it via this shared store.
+const prSummary = usePrSummaryModal()
 
 // Single push entry point — header / remote pane / branch+remote context menus
 // all open the options dialog (target remote/branch, force, tags, set-upstream)
@@ -550,6 +621,8 @@ function reloadDiff() {
 function clearSelectionFor(file: string) {
   const f = selectedFile.value
   if (f?.kind === 'file' && f.path === file) selectedFile.value = null
+  // The file also left its zone, so drop it from any multi-selection.
+  dropFromSelection(file)
 }
 
 // A conflicted file was resolved (staged) → close the resolver; the store already
@@ -617,6 +690,20 @@ async function onDiscardAll(files: string[]) {
   await store.discardPaths(files)
   const sel = selectedFile.value
   if (sel?.kind === 'file' && files.includes(sel.path)) selectedFile.value = null
+  clearSelection()
+  reloadDiff()
+}
+
+// Bulk stage / unstage a multi-selection (⌘-click set or Select-all). Discarding a
+// selection reuses onDiscardAll (confirm + batched discardPaths + clear).
+async function onStageSelected(files: string[]) {
+  await store.stagePaths(files)
+  clearSelection()
+  reloadDiff()
+}
+async function onUnstageSelected(files: string[]) {
+  await store.unstagePaths(files)
+  clearSelection()
   reloadDiff()
 }
 
@@ -630,11 +717,13 @@ function onDiscardAllChanges() {
 
 async function onStageAll() {
   await store.stageAll()
+  clearSelection()
   reloadDiff()
 }
 
 async function onUnstageAll() {
   await store.unstageAll()
+  clearSelection()
   reloadDiff()
 }
 
@@ -743,38 +832,49 @@ const menuItems = computed<MenuItem[]>(() => {
       { id: 'ignore:folder', label: t('git.ctx.ignoreFolder') },
     ]
     const items: MenuItem[] = [
-      { id: 'open', label: t('git.ctx.open'), hint: '⌥⇧⌘O' },
+      { id: 'open', label: t('git.ctx.open') },
       { label: t('git.ctx.openWith'), children: openWith },
-      { id: 'external-diff', label: t('git.ctx.externalDiff'), hint: '⌘D' },
+      { id: 'external-diff', label: t('git.ctx.externalDiff') },
       { id: 'finder', label: t('git.ctx.showInFinder') },
       sep,
       { id: 'blame', label: t('git.ctx.blame') },
       { id: 'history', label: t('git.ctx.history') },
       sep,
     ]
-    // Per-file staging + list-wide select-all/deselect-all (check/uncheck every
-    // row = stage/unstage all). Both appear whenever the other side is non-empty
-    // so "Select all" / "Deselect all" reads as a pair regardless of the clicked
-    // side.
+    // Staging acts on the ⌘-click multi-selection when the clicked file is part of
+    // one (labelled with a count); otherwise on the clicked file alone. Selection
+    // itself — Select all / Deselect all — is PURE: it highlights rows for a
+    // following action and NEVER stages. Stage all / Unstage all always act on the
+    // whole zone, independent of the selection.
+    const bulk = selectionFor(tgt.file, tgt.staged)
+    const n = bulk?.length ?? 0
     if (tgt.staged) {
-      items.push({ id: 'unstage', label: t('git.ctx.unstage'), hint: '⌘U' })
-      if (store.staged.length)
-        items.push({ id: 'deselect-all', label: t('git.ctx.deselectAll'), hint: '⌥⇧⌘U' })
-      if (store.unstaged.length)
-        items.push({ id: 'select-all', label: t('git.ctx.selectAll'), hint: '⌥⇧⌘S' })
+      items.push({
+        id: 'unstage',
+        label: bulk ? t('git.ctx.unstageN', { n }) : t('git.ctx.unstage'),
+      })
     } else {
       items.push(
-        { id: 'stage', label: t('git.ctx.stage'), hint: '⌘S' },
-        { id: 'discard', label: t('git.ctx.discard'), danger: true, hint: '⇧⌘D' },
+        { id: 'stage', label: bulk ? t('git.ctx.stageN', { n }) : t('git.ctx.stage') },
+        {
+          id: 'discard',
+          label: bulk ? t('git.ctx.discardN', { n }) : t('git.ctx.discard'),
+          danger: true,
+        },
       )
-      if (store.unstaged.length)
-        items.push({ id: 'select-all', label: t('git.ctx.selectAll'), hint: '⌥⇧⌘S' })
-      if (store.staged.length)
-        items.push({ id: 'deselect-all', label: t('git.ctx.deselectAll'), hint: '⌥⇧⌘U' })
     }
-    // List-wide discard: the destructive counterpart to Select all / Deselect
-    // all — reverts EVERY working-tree change (staged + unstaged) after one
-    // confirm. Shown whenever there is any change on either side.
+    items.push(sep)
+    if ((tgt.staged ? store.staged.length : store.unstaged.length) > 1) {
+      items.push({ id: 'select-all', label: t('git.ctx.selectAll') })
+    }
+    if (selZone.value === tgt.staged && selPaths.value.size) {
+      items.push({ id: 'deselect-all', label: t('git.ctx.deselectAll') })
+    }
+    if (store.unstaged.length) items.push({ id: 'stage-all', label: t('git.changes.stageAll') })
+    if (store.staged.length) items.push({ id: 'unstage-all', label: t('git.changes.unstageAll') })
+    // List-wide discard: the destructive counterpart to Stage all / Unstage all —
+    // reverts EVERY working-tree change (staged + unstaged) after one confirm.
+    // Shown whenever there is any change on either side.
     if (count) items.push({ id: 'discard-all', label: t('git.ctx.discardAll'), danger: true })
     items.push(
       sep,
@@ -783,7 +883,7 @@ const menuItems = computed<MenuItem[]>(() => {
       { id: 'stash', label: t('git.ctx.stashFile', { n: count }) },
       { id: 'save-patch', label: t('git.ctx.savePatch') },
       sep,
-      { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' },
+      { id: 'copy', label: t('git.ctx.copyPath') },
     )
     return items
   }
@@ -799,7 +899,7 @@ const menuItems = computed<MenuItem[]>(() => {
         { id: 'ignore', label: t('git.ctxFolder.ignore') },
       )
     }
-    items.push(sep, { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' })
+    items.push(sep, { id: 'copy', label: t('git.ctx.copyPath') })
     return items
   }
 
@@ -812,7 +912,7 @@ const menuItems = computed<MenuItem[]>(() => {
       { id: 'open:code', label: t('git.ctx.openInVscode') },
       { id: 'finder', label: t('git.ctx.showInFinder') },
       sep,
-      { id: 'copy', label: t('git.ctx.copyPath'), hint: '⌘C' },
+      { id: 'copy', label: t('git.ctx.copyPath') },
     ]
   }
 
@@ -835,7 +935,7 @@ const menuItems = computed<MenuItem[]>(() => {
       },
       { id: 'save-patch', label: t('git.ctx.savePatch') },
       sep,
-      { id: 'copy-sha', label: t('git.ctx.copySha'), hint: '⌘C' },
+      { id: 'copy-sha', label: t('git.ctx.copySha') },
       { id: 'copy-msg', label: t('git.ctx.copyMessage') },
     ]
   }
@@ -850,6 +950,7 @@ const menuItems = computed<MenuItem[]>(() => {
         sep,
         { id: 'merge', label: t('git.ctx.merge', { name: cur }), icon: 'merge' },
         { id: 'create-pr', label: t('git.ctx.createPr'), icon: 'fork' },
+        { id: 'pr-summary', label: t('git.ctx.prSummary'), icon: 'sparkles' },
         sep,
         { id: 'copy', label: t('git.ctx.copy'), icon: 'copy' },
       ]
@@ -880,6 +981,7 @@ const menuItems = computed<MenuItem[]>(() => {
       { id: 'rename', label: t('git.ctx.rename'), icon: 'edit' },
       { id: 'create-tag', label: t('git.ctx.createTag'), icon: 'tag' },
       { id: 'create-pr', label: t('git.ctx.createPr'), icon: 'fork' },
+      { id: 'pr-summary', label: t('git.ctx.prSummary'), icon: 'sparkles' },
       sep,
       { id: 'copy', label: t('git.ctx.copy'), icon: 'copy' },
     )
@@ -924,7 +1026,7 @@ function onMenuSelect(id: string) {
   const tgt = menu.value?.target
   menu.value = null
   if (!tgt) return
-  if (tgt.kind === 'file') dispatchFile(id, tgt.file)
+  if (tgt.kind === 'file') dispatchFile(id, tgt.file, tgt.staged)
   else if (tgt.kind === 'commit-file') dispatchCommitFile(id, tgt.file)
   else if (tgt.kind === 'folder') void dispatchFolder(id, tgt.path, tgt.staged)
   else if (tgt.kind === 'branch') dispatchBranch(id, tgt.branch)
@@ -936,12 +1038,16 @@ function onMenuSelect(id: string) {
 
 const copy = (s: string) => void navigator.clipboard?.writeText(s).catch(() => {})
 
-function dispatchFile(id: string, file: string) {
-  if (id === 'stage') void onStageFile(file)
-  else if (id === 'unstage') void onToggleStage(file, true)
-  else if (id === 'discard') void onDiscard(file)
-  else if (id === 'select-all') void onStageAll()
-  else if (id === 'deselect-all') void onUnstageAll()
+function dispatchFile(id: string, file: string, staged: boolean) {
+  // Bulk when the clicked file is part of a ⌘-click multi-selection; else single.
+  const bulk = selectionFor(file, staged)
+  if (id === 'stage') void (bulk ? onStageSelected(bulk) : onStageFile(file))
+  else if (id === 'unstage') void (bulk ? onUnstageSelected(bulk) : onToggleStage(file, true))
+  else if (id === 'discard') void (bulk ? onDiscardAll(bulk) : onDiscard(file))
+  else if (id === 'select-all') selectAllInZone(staged)
+  else if (id === 'deselect-all') clearSelection()
+  else if (id === 'stage-all') void onStageAll()
+  else if (id === 'unstage-all') void onUnstageAll()
   else if (id === 'discard-all') void onDiscardAllChanges()
   else if (id === 'stash') store.stashSave()
   else if (id === 'copy') copy(file)
@@ -1101,6 +1207,7 @@ function dispatchBranch(id: string, b: BranchInfo) {
       onSubmit: (name) => void store.tagCreate(name),
     })
   else if (id === 'create-pr') void store.openPrFor(b.name)
+  else if (id === 'pr-summary') prSummary.open(store.currentProjectId, b.name)
   else if (id === 'pin') pins.toggle(b.name)
   else if (id === 'pull') store.pull()
   else if (id === 'push') openPush()

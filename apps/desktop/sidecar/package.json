@@ -20,6 +20,7 @@
     "chokidar": "^5.0.0",
     "node-pty": "^1.1.0",
     "readdirp": "^5.0.0",
+    "ssh2": "^1.17.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

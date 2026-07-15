@@ -35,6 +35,7 @@
     <ActivityModal />
     <WhatsNewModal />
     <SessionGitModal />
+    <GitPrSummaryHost />
     <ProjectQuickViewModal />
     <SessionExportModal />
     <SessionForkTreeModal />
@@ -65,7 +66,7 @@ import { useCommandPalette } from '~/composables/useCommandPalette'
 // Also the single app-lifetime mount point for the §9 globals: ⌘K command
 // palette, prompt-edit overlay, and the native turn-complete notification watcher.
 
-const { toggle, isOpen, close } = useCommandPalette()
+const { isOpen, close } = useCommandPalette()
 const route = useRoute()
 
 // Compact responsive shell (≤1100px): nav rail + list become off-canvas drawers.
@@ -82,20 +83,21 @@ useNativeNotify()
 // attention) + route tray menu clicks. No-op outside Electron.
 useTrayStatus()
 
-// Global ⌘K / Ctrl+K toggle (+ Esc to close while open). Bound at the window so it
-// fires regardless of focus; ignore the browser's own find shortcut by handling K
-// ourselves and preventing default.
+// App-lifetime global shortcuts: ⌘J terminal · ⌘G Git modal · ⌘T new session ·
+// ⌘H session Files view (self-registers its own window keydown listener).
+useGlobalShortcuts()
+
+// Esc handling for the §9 globals: close the command palette, else dismiss an open
+// responsive drawer. The ⌘K palette toggle + the other global shortcuts live in
+// useGlobalShortcuts (keymap-driven); Esc stays here because it also drives the
+// palette + drawers owned by this layout.
 function onKeydown(e: KeyboardEvent) {
-  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-    e.preventDefault()
-    toggle()
-    return
-  }
-  if (e.key === 'Escape' && isOpen.value) {
+  if (e.key !== 'Escape') return
+  if (isOpen.value) {
     close()
     return
   }
-  if (e.key === 'Escape' && (navOpen.value || listOpen.value)) closeDrawers()
+  if (navOpen.value || listOpen.value) closeDrawers()
 }
 
 onMounted(() => {

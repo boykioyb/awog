@@ -387,12 +387,23 @@ const sectionOpenWithSearch = computed(() => ({
 // ── Local branches → collapsible folder tree (group by `/` prefix) ──
 const localBranches = computed(() => props.branches.filter((b) => !b.remote))
 
+// Recency (committer date) as a sortable epoch; unknown/invalid dates sink to the
+// bottom. Drives the "most recently used branches float to the top" ordering — and
+// a folder inherits the max recency of its branches, so it floats up with them.
+const branchTs = (b: BranchInfo): number => {
+  const ms = b.lastCommitAt ? Date.parse(b.lastCommitAt) : Number.NaN
+  return Number.isNaN(ms) ? 0 : ms
+}
+
 // ── Pinned local branches (floated to the top) ──
 const pinnedSet = computed(() => new Set(props.pinned))
 const isPinned = (name: string) => pinnedSet.value.has(name)
-// Only branches that still exist, honoring the active search filter.
+// Only branches that still exist, honoring the active search filter — most
+// recently used first.
 const pinnedBranches = computed(() =>
-  localBranches.value.filter((b) => isPinned(b.name) && (!hasSearch.value || matchBranch(b.name))),
+  localBranches.value
+    .filter((b) => isPinned(b.name) && (!hasSearch.value || matchBranch(b.name)))
+    .sort((a, b) => branchTs(b) - branchTs(a)),
 )
 
 // Pinned branches are lifted into their own group, so exclude them from the tree.
@@ -415,41 +426,70 @@ type BranchRow =
       depth: number
     }
 
+type BranchEntry =
+  | { kind: 'branch'; ts: number; branch: BranchInfo }
+  | { kind: 'folder'; ts: number; name: string; children: BranchInfo[] }
+
 const branchRows = computed<BranchRow[]>(() => {
   const roots: BranchInfo[] = []
-  const folders: Record<string, BranchInfo[]> = {}
-  const order: string[] = []
+  const folders = new Map<string, BranchInfo[]>()
   for (const b of filteredLocal.value) {
     const i = b.name.indexOf('/')
     if (i < 0) roots.push(b)
     else {
       const f = b.name.slice(0, i)
-      if (!folders[f]) {
-        folders[f] = []
-        order.push(f)
-      }
-      folders[f]!.push(b)
+      const arr = folders.get(f)
+      if (arr) arr.push(b)
+      else folders.set(f, [b])
     }
   }
-  const rows: BranchRow[] = []
-  for (const b of roots) {
-    rows.push({ kind: 'branch', key: b.name, branch: b, label: b.name, depth: 0 })
+
+  // Top-level entries (a root branch or a folder). Each folder's recency = the
+  // most recent committer date among its branches, and its children are sorted by
+  // recency too — so a recently-used branch pulls its folder up with it.
+  const entries: BranchEntry[] = roots.map((b) => ({
+    kind: 'branch',
+    ts: branchTs(b),
+    branch: b,
+  }))
+  for (const [name, children] of folders) {
+    const sorted = [...children].sort((a, b) => branchTs(b) - branchTs(a))
+    const ts = sorted.reduce((max, b) => Math.max(max, branchTs(b)), 0)
+    entries.push({ kind: 'folder', ts, name, children: sorted })
   }
-  for (const f of order) {
+  // Recency desc; break ties by name so equal-recency rows stay stable.
+  entries.sort((a, b) => {
+    if (b.ts !== a.ts) return b.ts - a.ts
+    const an = a.kind === 'branch' ? a.branch.name : a.name
+    const bn = b.kind === 'branch' ? b.branch.name : b.name
+    return an.localeCompare(bn)
+  })
+
+  const rows: BranchRow[] = []
+  for (const e of entries) {
+    if (e.kind === 'branch') {
+      rows.push({
+        kind: 'branch',
+        key: e.branch.name,
+        branch: e.branch,
+        label: e.branch.name,
+        depth: 0,
+      })
+      continue
+    }
     // While searching, every folder is forced open.
-    const collapsed = hasSearch.value ? false : !!props.branchCollapsed[f]
-    const children = folders[f] ?? []
+    const collapsed = hasSearch.value ? false : !!props.branchCollapsed[e.name]
     rows.push({
       kind: 'folder',
-      key: `f:${f}`,
-      name: f,
-      label: f,
-      count: children.length,
+      key: `f:${e.name}`,
+      name: e.name,
+      label: e.name,
+      count: e.children.length,
       collapsed,
       depth: 0,
     })
     if (!collapsed) {
-      for (const b of children) {
+      for (const b of e.children) {
         rows.push({
           kind: 'branch',
           key: b.name,

@@ -51,6 +51,7 @@ type LegacySessionMetadataPatch = Partial<
     | 'disabledTools'
     | 'mcpServerIds'
     | 'aboutTaskId'
+    | 'aboutSshHostId'
     | 'aboutGhUrl'
     | 'pinnedContext'
     | 'workspaceFolder'

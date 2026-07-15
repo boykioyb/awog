@@ -31,6 +31,8 @@ import { fileRefPrompt, TODO_USAGE_PROMPT, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT
 import { makeConfabulationFollowUp } from './confabulation-guard.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
+import { createSshTools } from './tools/ssh-tools.js'
+import { listHosts } from '../ssh/store.js'
 import { listWorkflows } from '../workflows/store.js'
 import { makeBeforeToolCall, withTurnBudget } from './permission.js'
 import { toReasoning } from './thinking.js'
@@ -188,6 +190,10 @@ export async function runStreamPi(
         ...(args.promptSourceIds ? { promptSourceIds: args.promptSourceIds } : {}),
         ...(args.sourceToolPatterns ? { toolPatterns: args.sourceToolPatterns } : {}),
       },
+      // Per-session SSH approval mode (ADR 0064): gates the SSH tools independently of
+      // `mode`/`autoApprove`. Default 'prompt'. The gate keys the remembered allowance
+      // by the per-call `host` arg (unified model).
+      args.settings.sshApprovalMode ?? 'prompt',
     ),
     args.budget,
     Date.now(),
@@ -273,6 +279,25 @@ export async function runStreamPi(
         workflows,
       }),
     )
+  }
+
+  // SSH tools (ADR 0064): unified MCP-style model — available in ANY session that has
+  // SSH hosts configured (host is a per-call param via ssh_list_hosts). ssh_exec /
+  // ssh_write_file (mutating) + ssh_read_file / ssh_list_dir (read) are gated via
+  // permission.ts + settings.sshApprovalMode; 'auto' runs without a prompt, plan mode
+  // blocks the mutating ones. The co-pilot dock also gets ssh_terminal_run bound to
+  // the watched shell (args.sshTerminalConnId). TOP LEVEL only. Honour
+  // allowedTools/disabledTools like any tool.
+  if ((await listHosts()).some((h) => h.agentEnabled !== false)) {
+    const filter = {
+      ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+      ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+    }
+    const sshTools = createSshTools({
+      sessionId: args.sessionId,
+      ...(args.sshTerminalConnId ? { terminalConnId: args.sshTerminalConnId } : {}),
+    }).filter((t) => isToolAllowed(t.name, filter))
+    tools.push(...sshTools)
   }
 
   const { context, prompt } = buildContext(

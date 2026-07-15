@@ -28,6 +28,7 @@ import type {
   SessionStatus,
   SessionUsage,
   SlashCommandRef,
+  SshApprovalMode,
   StepBlock,
   SubAgent,
   ThinkingLevel,
@@ -184,6 +185,8 @@ type EngineSessionSettings = {
   level?: ThinkingLevel
   responseStyle?: string
   responseStyleNoMarkdown?: boolean
+  // Per-session SSH tool approval mode (ADR 0064 P2).
+  sshApprovalMode?: SshApprovalMode
 }
 type SessionSummaryDto = {
   id: string
@@ -196,6 +199,8 @@ type SessionSummaryDto = {
   mcpServerIds?: string[]
   // Task this session discusses (ADR 0055) — mirrors sidecar SessionSummary.
   aboutTaskId?: string
+  // SSH host this session works with (ADR 0064) — mirrors sidecar SessionSummary.
+  aboutSshHostId?: string
   // GitHub issue/PR this session was opened from — mirrors sidecar SessionSummary.
   aboutGhUrl?: string
   // Fork parent (its session id) — mirrors sidecar SessionSummary; drives fork tree.
@@ -777,9 +782,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.settings?.accountId) session.accountId = dto.settings.accountId
     if (dto.settings?.level) session.thinkingLevel = dto.settings.level
     if (dto.settings?.responseStyleNoMarkdown) session.noMarkdown = true
+    if (dto.settings?.sshApprovalMode) session.sshApprovalMode = dto.settings.sshApprovalMode
     if (dto.disabledTools) session.disabledTools = [...dto.disabledTools]
     if (dto.mcpServerIds) session.mcpServerIds = [...dto.mcpServerIds]
     if (dto.aboutTaskId) session.aboutTaskId = dto.aboutTaskId
+    if (dto.aboutSshHostId) session.aboutSshHostId = dto.aboutSshHostId
     if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
     if (dto.parentSessionId) session.parentSessionId = dto.parentSessionId
     return session
@@ -1200,6 +1207,40 @@ export const useSessionsStore = defineStore('sessions', () => {
     return id
   }
 
+  // Create a session bound to an SSH host to work with (ADR 0064, P1). Mirrors
+  // createForTask() but seeds aboutSshHostId so the sidecar injects the
+  // <linked_ssh_host> context each turn and the UI shows the "working with host"
+  // banner. Returns the new client id so the caller (SSH → "Open in session") can
+  // navigate to it.
+  function createForSshHost(hostId: string, projectId?: string, title?: string): number {
+    const id = newClientId()
+    const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
+    const session: Session = {
+      id,
+      title: title ?? '',
+      project: projectId ?? '',
+      model,
+      account: acct?.display ?? 'hoatq · Anthropic',
+      style: 'Default',
+      status: 'idle',
+      when: 'vừa xong',
+      mode: modeDisplay(settingsStore.defaults.mode),
+      thinkingLevel: level,
+      msgs: [],
+      loaded: true,
+      aboutSshHostId: hostId,
+    }
+    if (acct) session.accountId = acct.id
+    if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
+    sessions.value.unshift(session)
+    activate(id)
+    if (useIpc) {
+      session.engineId = engineIdFor(id)
+      pushUpsert(session, 'create')
+    }
+    return id
+  }
+
   function remove(id: number) {
     const s = byId(id)
     const wasActive = activeId.value === id
@@ -1276,6 +1317,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
+  // Attach/detach the SSH host a session works with (ADR 0064). hostId → link (agent
+  // gets the scoped ssh_* tools next turn); null → detach. Clear is persisted as ''
+  // (buildUpsert sends aboutSshHostId when defined, so the sidecar patch clears it).
+  function setAboutSshHost(id: number, hostId: string | null) {
+    const s = byId(id)
+    if (!s) return
+    s.aboutSshHostId = hostId ?? ''
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+
   function setMode(id: number, mode: string) {
     const s = byId(id)
     if (s) {
@@ -1339,6 +1390,23 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s) return
     s.noMarkdown = value
     if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+  // SSH tool approval mode (ADR 0064 P2). Persisted as metadata; takes effect on
+  // the next turn via engineSettings (the sidecar reads it per turn).
+  function setSshApprovalMode(id: number, mode: SshApprovalMode) {
+    const s = byId(id)
+    if (!s) return
+    s.sshApprovalMode = mode
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+  // SSH terminal co-pilot (ADR 0064): bind/unbind the visible terminal connId this
+  // session drives. TRANSIENT — no upsert (the connId is ephemeral); only forwarded
+  // per-turn in sendMessage. The docked SSH session panel calls this reactively.
+  function setSshTerminalConnId(id: number, connId: string | null) {
+    const s = byId(id)
+    if (!s) return
+    if (connId) s.sshTerminalConnId = connId
+    else delete s.sshTerminalConnId
   }
   function setDisabledTools(id: number, names: string[]) {
     const s = byId(id)
@@ -2099,6 +2167,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.disabledTools) session.disabledTools = s.disabledTools
     if (s.mcpServerIds !== undefined) session.mcpServerIds = s.mcpServerIds
     if (s.aboutTaskId) session.aboutTaskId = s.aboutTaskId
+    // Send when defined (incl. '' = detach) so the sidecar patch can CLEAR the link;
+    // omitted only for sessions that never linked a host (undefined). See setAboutSshHost.
+    if (s.aboutSshHostId !== undefined) session.aboutSshHostId = s.aboutSshHostId
     if (s.aboutGhUrl) session.aboutGhUrl = s.aboutGhUrl
     if (s.pinnedContext) session.pinnedContext = s.pinnedContext
     if (s.workspaceFolder) session.workspaceFolder = s.workspaceFolder
@@ -2312,6 +2383,12 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Discuss link (ADR 0055): the sidecar injects this task's output + trace
         // as <linked_task> context so the agent can reason about its results.
         ...(s.aboutTaskId ? { aboutTaskId: s.aboutTaskId } : {}),
+        // Work link (ADR 0064): the sidecar injects this SSH host's connection info
+        // as <linked_ssh_host> context so the agent knows the machine.
+        ...(s.aboutSshHostId ? { aboutSshHostId: s.aboutSshHostId } : {}),
+        // Co-pilot: the visible terminal to drive (ssh_terminal_run). Ephemeral, so
+        // forwarded per-turn only (never persisted via upsert).
+        ...(s.sshTerminalConnId ? { sshTerminalConnId: s.sshTerminalConnId } : {}),
         // Pinned working-set: sidecar reads these files (path-sanitized) + notes
         // each turn and injects a <pinned_context> block.
         ...(hasPinnedContext(s.pinnedContext) ? { pinnedContext: s.pinnedContext } : {}),
@@ -2421,6 +2498,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     const styleSlug = normalizeStyleSlug(s.style)
     if (styleSlug !== 'Default') settings.responseStyle = styleSlug
     if (s.noMarkdown) settings.responseStyleNoMarkdown = true
+    // SSH tool approval mode (ADR 0064 P2) — only forwarded when set to a
+    // non-default; the sidecar defaults to 'prompt'. Meaningful only when the
+    // session links an SSH host, but harmless to send otherwise.
+    if (s.sshApprovalMode && s.sshApprovalMode !== 'prompt') {
+      settings.sshApprovalMode = s.sshApprovalMode
+    }
     return settings
   }
 
@@ -3019,6 +3102,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setActive,
     create,
     createForTask,
+    createForSshHost,
     remove,
     rename,
     regenerateTitle,
@@ -3033,6 +3117,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     setStyle,
     setThinking,
     setNoMarkdown,
+    setSshApprovalMode,
+    setAboutSshHost,
+    setSshTerminalConnId,
     setDisabledTools,
     setMcpServerIds,
     addPinnedFile,

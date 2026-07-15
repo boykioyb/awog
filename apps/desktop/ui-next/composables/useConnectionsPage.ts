@@ -118,9 +118,20 @@ export function useConnectionsPage() {
     }
   }
 
-  // --- create (chat-driven) ------------------------------------------------
+  // --- create / refine (chat-driven) ---------------------------------------
   const creatorOpen = ref(false)
+  // When set, the creator refines this existing source in place (edit-with-AI).
+  // Cleared for a fresh "describe with AI" create.
+  const creatorEditSource = ref<Source | null>(null)
   const openCreator = () => {
+    creatorEditSource.value = null
+    creatorOpen.value = true
+  }
+  // Open the chat creator to refine an existing connection (from the form editor's
+  // "Refine with AI"). Closes the form editor so only one modal is up.
+  const openCreatorForEdit = (s: Source) => {
+    editorOpen.value = false
+    creatorEditSource.value = s
     creatorOpen.value = true
   }
   const onCreatorTurn = () => {
@@ -130,6 +141,7 @@ export function useConnectionsPage() {
   }
   const onCreatorClose = () => {
     creatorOpen.value = false
+    creatorEditSource.value = null
     void refresh()
   }
 
@@ -343,9 +355,11 @@ export function useConnectionsPage() {
     startFromScratch,
     startFromAi,
     onPickPreset,
-    // create
+    // create / refine
     creatorOpen,
+    creatorEditSource,
     openCreator,
+    openCreatorForEdit,
     onCreatorTurn,
     onCreatorClose,
     // edit

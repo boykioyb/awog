@@ -58,6 +58,9 @@ const SessionSchema = z.object({
   // Task this session was opened to discuss (ADR 0055). Set at create time for a
   // "Discuss in session" session; absent for a normal chat.
   aboutTaskId: z.string().optional(),
+  // SSH host this session works with (ADR 0064). Set at create time for an
+  // "Open in session" session; absent for a normal chat.
+  aboutSshHostId: z.string().optional(),
   // GitHub issue/PR URL this session was opened from ("New session" on a row).
   aboutGhUrl: z.string().optional(),
   // Files/notes re-fed into every turn (pinned context).
@@ -111,6 +114,7 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.disabledTools !== undefined) base.disabledTools = parsed.disabledTools
   if (parsed.mcpServerIds !== undefined) base.mcpServerIds = parsed.mcpServerIds
   if (parsed.aboutTaskId !== undefined) base.aboutTaskId = parsed.aboutTaskId
+  if (parsed.aboutSshHostId !== undefined) base.aboutSshHostId = parsed.aboutSshHostId
   if (parsed.aboutGhUrl !== undefined) base.aboutGhUrl = parsed.aboutGhUrl
   const budget = toBudget(parsed.budget)
   if (budget) base.budget = budget
@@ -167,6 +171,7 @@ register('sessions.upsert', async (raw) => {
   if (session.disabledTools !== undefined) patch.disabledTools = session.disabledTools
   if (session.mcpServerIds !== undefined) patch.mcpServerIds = session.mcpServerIds
   if (session.aboutTaskId !== undefined) patch.aboutTaskId = session.aboutTaskId
+  if (session.aboutSshHostId !== undefined) patch.aboutSshHostId = session.aboutSshHostId
   if (session.aboutGhUrl !== undefined) patch.aboutGhUrl = session.aboutGhUrl
   if (session.pinnedContext !== undefined) patch.pinnedContext = session.pinnedContext
   if (session.workspaceFolder !== undefined) patch.workspaceFolder = session.workspaceFolder

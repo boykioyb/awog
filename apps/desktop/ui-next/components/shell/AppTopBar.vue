@@ -77,8 +77,10 @@ const title = computed(() => {
   return titleKey ? t(titleKey) : 'AWOG'
 })
 
-// Global "New" → start a fresh session (the primary work entity; create() also
-// selects it) and land on the Sessions page.
+// Global "New" → always start a fresh DEFAULT (global, no-project) session and land
+// on the Sessions page. This header button is the neutral "clean slate" entry point;
+// project scoping is intentionally left to ⌘T + the page "+" (which follow the
+// current project). Do NOT pass activeTab here.
 const sessions = useSessionsStore()
 function onNew() {
   sessions.create()

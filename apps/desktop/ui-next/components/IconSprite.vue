@@ -49,6 +49,10 @@
         <path d="M12 7V2M9 5h6M7 11h10v4a5 5 0 0 1-10 0z" />
         <path d="M12 20v2" />
       </symbol>
+      <symbol id="i-ssh" viewBox="0 0 24 24">
+        <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <path d="M7 9l3 3-3 3M13 15h4" />
+      </symbol>
       <symbol id="i-hooks" viewBox="0 0 24 24">
         <path d="M13 2L4.5 12.5a1 1 0 0 0 .8 1.5H11l-1 8 8.5-10.5a1 1 0 0 0-.8-1.5H12z" />
       </symbol>
@@ -241,6 +245,9 @@
       <symbol id="i-move" viewBox="0 0 24 24">
         <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
       </symbol>
+      <symbol id="i-forward" viewBox="0 0 24 24">
+        <path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" />
+      </symbol>
       <symbol id="i-dots" viewBox="0 0 24 24">
         <circle cx="5" cy="12" r="1" />
         <circle cx="12" cy="12" r="1" />
@@ -298,6 +305,13 @@
         <polygon points="12 2 2 7 12 12 22 7 12 2" />
         <polyline points="2 17 12 22 22 17" />
         <polyline points="2 12 12 17 22 12" />
+      </symbol>
+      <!-- info (lucide) — response-style description popover trigger. Dot is a
+           filled circle (not a round-cap `h.01`) so the "i" reads crisply at 14px. -->
+      <symbol id="i-info" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="12" x2="12" y2="16" />
+        <circle cx="12" cy="8" r=".85" fill="currentColor" stroke="none" />
       </symbol>
     </defs>
   </svg>

@@ -1,30 +1,49 @@
-/* AWOG design system — ported verbatim from awog-prototype.html (the UI spec).
-   Theme tokens on :root (dark, default) + body.light (light). Do not hand-edit
-   colors here loosely; this file IS the prototype's source of truth for look&feel.
-   Toggle dark/light via the `light` class on <body> (see useTheme). */
+/* AWOG design system — based on awog-prototype.html (the UI spec).
+   Theme tokens on :root (dark, default) + body.light (light). Toggle dark/light via
+   the `light` class on <body> (see useTheme).
+   NOTE: the surface + border + label ramps below were retuned off the prototype's
+   original near-black values toward the native macOS system-gray ladder (elevated
+   grays instead of pure black; translucent white/black hairline separators instead
+   of solid borders; Apple neutral label grays). This makes the desktop app read as
+   native rather than a web app. The accent (emerald) is the AWOG brand and stays. */
   :root{
-    --bg:#0a0a0a; --bgPanel:#0b0b0b; --bgEl:#161616; --bgHover:#1a1a1a; --bgActive:#1f1f1f;
-    --bgRail:#080808; --bgSubtle:#131313; --bgInput:#161616; --bgCanvas:#111;
-    --border:#222; --borderStrong:#2e2e2e;
-    --text:#fafafa; --textMuted:#a3a3a3; --textDim:#737373; --textFaint:#525252;
+    --bg:#1c1c1e; --bgPanel:#1e1e20; --bgEl:#29292b; --bgHover:#2e2e30; --bgActive:#38383b;
+    --bgRail:#161618; --bgSubtle:#242426; --bgInput:#262628; --bgCanvas:#202022;
+    --border:rgba(255,255,255,.09); --borderStrong:rgba(255,255,255,.15); --borderFocus:var(--accentBorder);
+    --text:#f5f5f7; --textMuted:#a1a1a6; --textDim:#86868b; --textFaint:#6e6e73;
+    /* Elevation ramp — soft, layered, theme-aware (light overrides in body.light).
+       Native depth comes from shadow, not borders; --ease is the Apple-ish smooth
+       ease-out used for micro-interactions. */
+    --shadow-sm:0 1px 2px rgba(0,0,0,.28),0 2px 5px rgba(0,0,0,.22);
+    --shadow-md:0 2px 6px rgba(0,0,0,.3),0 10px 24px rgba(0,0,0,.36);
+    --shadow-lg:0 8px 24px rgba(0,0,0,.4),0 24px 64px rgba(0,0,0,.5);
+    --ease:cubic-bezier(.32,.72,0,1);
     --accent:#10b981; --accentText:#021410; --accentDim:rgba(16,185,129,.14); --accentBorder:rgba(16,185,129,.42);
     --amber:#f59e0b; --amberDim:rgba(245,158,11,.12); --amberBorder:rgba(245,158,11,.4);
-    --blue:#60a5fa; --violet:#a78bfa; --danger:#ef4444; --dangerDim:rgba(239,68,68,.1); --green:#22c55e;
+    --blue:#60a5fa; --violet:#a78bfa; --danger:#ef4444; --dangerDim:rgba(239,68,68,.1); --dangerBg:rgba(239,68,68,.14); --dangerBorder:rgba(239,68,68,.42); --green:#22c55e;
     --add:#86efac; --addBg:rgba(34,197,94,.15); --del:#fca5a5; --delBg:rgba(239,68,68,.14); --mod:#fbbf24;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   body.light{
-    /* Cool-slate neutrals (was warm stone) — fresher, brighter surfaces. */
-    --bg:#f0f4fa; --bgPanel:#f9fbfe; --bgEl:#ffffff; --bgHover:#ecf1f8; --bgActive:#e3eaf4;
-    --bgRail:#eef3fa; --bgSubtle:#f6f9fd; --bgInput:#ffffff; --bgCanvas:#eef3fa;
-    --border:#e4eaf2; --borderStrong:#d0d9e6;
-    --text:#0f172a; --textMuted:#475569; --textDim:#64748b; --textFaint:#94a3b8;
+    /* Near-white, content-first (was a flat light-gray #f2f2f7 that still read as
+       "office gray" on the big chrome panes — top bar, detail header, list). Base
+       is barely-off-white; sidebars/cards are PURE white; depth comes entirely from
+       the shadow ramp + hairlines. Gray survives only as hover/active tints. */
+    --bg:#fafbfc; --bgPanel:#ffffff; --bgEl:#ffffff; --bgHover:#f0f1f4; --bgActive:#e6e8ec;
+    --bgRail:#f7f8fa; --bgSubtle:#f7f8fa; --bgInput:#ffffff; --bgCanvas:#f3f4f6;
+    --border:rgba(0,0,0,.08); --borderStrong:rgba(0,0,0,.14);
+    --text:#1d1d1f; --textMuted:#4b4b50; --textDim:#6e6e73; --textFaint:#8e8e93;
+    /* Soft gray shadows — this is where the bright OrbStack-style depth reads.
+       Tuned to stay visible on the near-white base (a .05 shadow vanishes there). */
+    --shadow-sm:0 1px 2px rgba(0,0,0,.07),0 2px 6px rgba(0,0,0,.08);
+    --shadow-md:0 2px 8px rgba(0,0,0,.08),0 12px 28px rgba(0,0,0,.12);
+    --shadow-lg:0 10px 30px rgba(0,0,0,.14),0 24px 64px rgba(0,0,0,.18);
     --accent:#059669; --accentText:#ffffff; --accentDim:rgba(5,150,105,.1); --accentBorder:rgba(5,150,105,.4);
     --add:#16a34a; --addBg:rgba(22,163,74,.13); --del:#dc2626; --delBg:rgba(220,38,38,.11); --mod:#b45309;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;background:#000;color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;line-height:1.5}
   body{padding:20px;display:flex;flex-direction:column;align-items:center;transition:background .2s}
   /* Global scrollbar — thin, rounded, themed (Chromium + Firefox) */
   *{scrollbar-width:thin;scrollbar-color:var(--borderStrong) transparent}
@@ -46,11 +65,11 @@
   .brand{display:flex;align-items:center;gap:9px;padding:6px 8px 12px}
   .logo{width:25px;height:25px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#0e9488);display:grid;place-items:center;flex:0 0 auto}
   .logo .icn{width:14px;height:14px;stroke:var(--accentText);stroke-width:2.3}
-  .brand .nm{font-weight:700;font-size: 1.0769rem;letter-spacing:-.01em}.brand .nm span{color:var(--textDim);font-weight:500}
+  .brand .nm{font-weight:650;font-size: 1.0769rem;letter-spacing:-.01em}.brand .nm span{color:var(--textDim);font-weight:500}
   .navg{font-size: 0.7692rem;font-family:var(--code);letter-spacing:.08em;text-transform:uppercase;color:var(--textFaint);padding:11px 9px 4px}
   .ni{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;color:var(--textMuted);font-size: 1rem;cursor:pointer;user-select:none;border:1px solid transparent}
   .ni:hover{background:var(--bgHover);color:var(--text)}
-  .ni.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 3px 0 0 var(--accent);color:var(--text)}
+  .ni.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 2px 0 0 var(--accent);color:var(--text)}
   .ni .bdg{margin-left:auto;font-family:var(--code);font-size: 0.7692rem;min-width:17px;height:17px;padding:0 4px;border-radius:5px;display:grid;place-items:center;background:var(--bgActive);color:var(--textDim)}
   .ni .bdg.run{background:var(--accentDim);color:var(--accent);border:1px solid var(--accentBorder)}
   .ni .bdg.wait{background:var(--amberDim);color:var(--amber);border:1px solid var(--amberBorder)}
@@ -89,7 +108,7 @@
   .lscroll{overflow-y:auto;flex:1;padding:7px}
   .li{padding:9px 10px;border-radius:9px;cursor:pointer;margin-bottom:3px;border:1px solid transparent}
   .li:hover{background:var(--bgHover)}
-  .li.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 3px 0 0 var(--accent)}
+  .li.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 2px 0 0 var(--accent)}
   .li.on .ttl{color:var(--text);font-weight:650}
   .li .lrow{display:flex;align-items:center;gap:8px}
   .li .sdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
@@ -121,7 +140,7 @@
   .th{display:flex;align-items:center;gap:8px;margin-bottom:13px}.th .icn{width:15px;height:15px;color:var(--textDim)}
   .th .tt{font-size: 0.9231rem;font-family:var(--code);letter-spacing:.04em;text-transform:uppercase;color:var(--textDim)}
   .th .ct{margin-left:auto;font-size: 0.8462rem;font-family:var(--code);color:var(--textFaint)}.th .ct a{color:var(--accent);text-decoration:none;cursor:pointer}
-  .stat .big{font-size: 2.4615rem;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .stat .big{font-size: 2.4615rem;font-weight:650;letter-spacing:-.02em;line-height:1}
   .stat .lbl{font-size: 0.8462rem;font-family:var(--code);text-transform:uppercase;letter-spacing:.05em;color:var(--textDim);margin-bottom:9px}
   .stat .sub{font-size: 0.8462rem;color:var(--textFaint);margin-top:auto;font-family:var(--code);padding-top:9px}
   .await{display:flex;flex-direction:column;gap:9px}
@@ -145,7 +164,7 @@
   .ritem .mt{display:flex;justify-content:space-between;margin-top:6px;font-size: 0.7692rem;font-family:var(--code);color:var(--textFaint)}
   .spark{display:flex;align-items:flex-end;gap:4px;height:58px;margin-top:4px}
   .spark i{flex:1;background:var(--accent);opacity:.42;border-radius:3px 3px 0 0;min-height:3px}.spark i.hi{opacity:.85}
-  .usage{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px}.usage .u1{font-size: 1.3846rem;font-weight:700}.usage .u2{font-size: 0.8462rem;font-family:var(--code);color:var(--textDim)}
+  .usage{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px}.usage .u1{font-size: 1.3846rem;font-weight:650}.usage .u2{font-size: 0.8462rem;font-family:var(--code);color:var(--textDim)}
   .grow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)}.grow:first-of-type{border-top:none}
   .grow .rn{font-size: 1rem;font-weight:600}.grow .br{font-size: 0.8462rem;font-family:var(--code);color:var(--textDim)}
   .gchip{font-family:var(--code);font-size: 0.7692rem;padding:2px 7px;border-radius:99px;border:1px solid var(--border);color:var(--textDim)}
@@ -573,6 +592,19 @@
   .stylemenu .mi.sty.cur .styicon{color:var(--accent)}
   .stylemenu .mi.sty.cur .nm2{color:var(--accent)}
   .stylemenu .styck{width:14px;height:14px;flex:none;margin-left:auto;align-self:center;color:var(--accent)}
+  /* Per-row info button + its description card (StatusConfig). Text column grows so the
+     info button + check pin to the right. Card reuses .smenu bg/border/shadow tokens. */
+  .stylemenu .mi.sty .stytext{flex:1}
+  .stylemenu .styinfo{flex:none;align-self:center;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--textDim);cursor:pointer;opacity:0;transition:opacity .12s ease,background .12s ease,color .12s ease}
+  .stylemenu .mi.sty:hover .styinfo,.stylemenu .styinfo:focus-visible,.stylemenu .styinfo[aria-expanded=true]{opacity:1}
+  .stylemenu .styinfo:hover{background:var(--bgHover);color:var(--text)}
+  .stylemenu .styinfo[aria-expanded=true]{background:var(--accentDim);color:var(--accent)}
+  .stylemenu .styinfo:focus{outline:none}
+  .stylemenu .styinfo:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .stylemenu .styinfoicon{width:14px;height:14px}
+  .styinfocard{background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:10px;padding:11px 12px;box-shadow:0 16px 44px rgba(0,0,0,.5);width:230px}
+  .styinfocard .styinfotitle{font-weight:600;color:var(--text);margin-bottom:5px}
+  .styinfocard .styinfobody{font-size: 0.8846rem;line-height:1.5;color:var(--textMuted)}
 
   /* Batch A: mode · steer/queue · follow-up · error */
   .mode-Plan{border-color:var(--amberBorder)!important;color:var(--amber)!important}
@@ -662,7 +694,7 @@
   /* generic library master-detail */
   .libwrap{flex:1;min-width:0;overflow:hidden}
   .libli{padding:9px 11px;border-radius:9px;cursor:pointer;margin-bottom:3px;border:1px solid transparent}
-  .libli:hover{background:var(--bgHover)}.libli.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 3px 0 0 var(--accent)}
+  .libli:hover{background:var(--bgHover)}.libli.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 2px 0 0 var(--accent)}
   .libli.on .ttl{color:var(--text);font-weight:650}
   .libli .lrow{display:flex;align-items:center;gap:8px}
   .libli .ttl{font-size: 1rem;font-weight:550;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -725,7 +757,7 @@
   /* Projects overview — metrics + cards */
   .pstats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
   .pstat{flex:1;min-width:84px;border:1px solid var(--border);border-radius:11px;background:var(--bgEl);padding:11px 13px}
-  .pv{font-size: 1.6923rem;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .pv{font-size: 1.6923rem;font-weight:650;letter-spacing:-.02em;line-height:1}
   .pl2{font-size: 0.7692rem;font-family:var(--code);color:var(--textDim);text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
   .pcard{border:1px solid var(--border);border-radius:12px;background:var(--bgEl);padding:12px 15px;margin-bottom:12px}
   .pcardh{display:flex;align-items:center;gap:8px;font-size: 0.8462rem;font-family:var(--code);text-transform:uppercase;letter-spacing:.05em;color:var(--textDim);margin-bottom:6px}

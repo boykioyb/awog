@@ -31,7 +31,7 @@
   "home.agents.working": "● đang làm",
   "home.agents.empty": "Chưa có agent",
   "home.connections.count": "{n} MCP",
-  "home.connections.empty": "Chưa có kết nối",
+  "home.connections.empty": "Chưa có nguồn",
   "home.connections.status.running": "đang chạy",
   "home.connections.status.starting": "đang khởi động",
   "home.connections.status.idle": "nghỉ",

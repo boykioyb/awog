@@ -29,7 +29,15 @@ import { listProjects } from './projects/store.js'
 const DEBOUNCE_MS = 500
 const RESCAN_PROJECTS_MS = 30_000 // re-check registered projects every 30s
 
-type WatchKind = 'agents' | 'skills' | 'sources' | 'hooks' | 'rules' | 'commands'
+type WatchKind =
+  | 'agents'
+  | 'skills'
+  | 'sources'
+  | 'hooks'
+  | 'rules'
+  | 'commands'
+  | 'ssh-hosts'
+  | 'ssh-identities'
 
 interface Watcher {
   close: () => Promise<void> | void
@@ -78,6 +86,8 @@ function userDirs(): DirSpec[] {
     { kind: 'hooks', dir: join(awogHome(), 'hooks') },
     { kind: 'rules', dir: join(awogHome(), 'rules') },
     { kind: 'commands', dir: join(awogHome(), 'commands') },
+    { kind: 'ssh-hosts', dir: join(awogHome(), 'ssh-hosts') },
+    { kind: 'ssh-identities', dir: join(awogHome(), 'ssh-identities') },
   ]
 }
 
@@ -251,6 +261,10 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   if (kind === 'rules') return lower.endsWith('.md')
   // commands: a slash-command Markdown file (atomic .md.tmp.<pid> filtered out).
   if (kind === 'commands') return lower.endsWith('.md')
+  // ssh: a host/identity config .json (atomic .json.tmp.<pid> filtered out).
+  if (kind === 'ssh-hosts' || kind === 'ssh-identities') {
+    return lower.endsWith('.json') && !lower.includes('.tmp.')
+  }
   return false
 }
 

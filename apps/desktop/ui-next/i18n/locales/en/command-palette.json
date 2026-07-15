@@ -18,7 +18,7 @@
   "palette.cmd.goCommands": "Go to Commands",
   "palette.cmd.goRules": "Go to Rules",
   "palette.cmd.goHooks": "Go to Hooks",
-  "palette.cmd.goConnections": "Go to Connections",
+  "palette.cmd.goConnections": "Go to Sources",
   "palette.cmd.goSettings": "Go to Settings",
   "palette.cmd.goTemplates": "Go to Templates",
   "palette.session.jump": "Jump to session",

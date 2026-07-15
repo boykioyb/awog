@@ -7,6 +7,7 @@
     <SettingsWorkspace v-else-if="active === 'workspace'" />
     <SettingsGit v-else-if="active === 'git'" />
     <SettingsSessions v-else-if="active === 'sessions'" />
+    <SettingsKeymap v-else-if="active === 'keymap'" />
     <SettingsAbout v-else />
   </div>
 </template>

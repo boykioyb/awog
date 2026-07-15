@@ -22,7 +22,15 @@
               <div v-if="m.steps && m.steps.length" class="lcp-steps">
                 <CreatorStepRow v-for="s in m.steps" :key="s.id" :step="s" />
               </div>
-              <div class="lcp-text">{{ m.text }}</div>
+              <!-- User text stays verbatim (their own input); the agent reply renders as
+                   sanitized markdown so **bold**, lists, code, links etc. don't show raw. -->
+              <div v-if="m.role === 'user'" class="lcp-text">{{ m.text }}</div>
+              <div v-else-if="m.text" class="lcp-text lcp-md mdwrap">
+                <template v-for="(seg, si) in segmentsFor(m.text)" :key="si">
+                  <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+                  <SessionMarkdownHtml v-else :html="seg.html" />
+                </template>
+              </div>
             </div>
           </template>
 
@@ -30,14 +38,21 @@
             <div v-if="streamingSteps.length" class="lcp-steps">
               <CreatorStepRow v-for="s in streamingSteps" :key="s.id" :step="s" />
             </div>
-            <div class="lcp-text">
-              {{ streamingText }}
+            <div class="lcp-text lcp-md mdwrap">
+              <template v-for="(seg, si) in streamingSegments" :key="si">
+                <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+                <SessionMarkdownHtml v-else :html="seg.html" />
+              </template>
               <span class="lcp-caret">▋</span>
             </div>
           </div>
 
           <div v-if="error" class="lcp-err">{{ error }}</div>
         </div>
+
+        <!-- Area-specific panel docked above the composer (e.g. the Connections
+             secret-entry step after a config is written). Empty by default. -->
+        <slot name="below-log" />
 
         <div class="lcp-foot">
           <div class="lcp-box">
@@ -90,7 +105,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import CreatorStepRow from '~/components/library/CreatorStepRow.vue'
+import SessionMarkdownHtml from '~/components/session/SessionMarkdownHtml.vue'
+import MermaidView from '~/components/common/MermaidView.vue'
 import { usePromptCreator } from '~/composables/usePromptCreator'
+import { useMarkdown } from '~/composables/useMarkdown'
 
 const props = withDefaults(
   defineProps<{
@@ -108,6 +126,9 @@ const props = withDefaults(
     // Initial scope picker value when the panel opens (e.g. a projectId from the
     // per-group "+" button). Defaults to 'global'.
     initialScope?: string
+    // Extra params merged into every author RPC call (e.g. a source-edit context).
+    // Passed straight through to usePromptCreator. Optional.
+    extraParams?: Record<string, unknown>
   }>(),
   {
     projects: () => [],
@@ -116,6 +137,7 @@ const props = withDefaults(
     placeholder: '',
     iteratePlaceholder: '',
     initialScope: 'global',
+    extraParams: undefined,
   },
 )
 
@@ -123,8 +145,10 @@ const emit = defineEmits<{
   // Closing the panel — the page should re-hydrate its list because the author
   // RPC may have written a new file to disk during the conversation.
   close: []
-  // Fired after each completed turn (also a hint to re-hydrate live).
-  turn: []
+  // Fired after each completed turn (also a hint to re-hydrate live). Carries the
+  // raw `<method>.done` payload so a caller can act on author-specific extras
+  // (e.g. the written source slug → prompt for its secrets).
+  turn: [meta?: Record<string, unknown> | null]
 }>()
 
 const { t } = useI18n()
@@ -137,8 +161,17 @@ const creator = usePromptCreator({
   method: props.method,
   scope: () => scope.value,
   accountId: () => props.accountId,
+  extraParams: () => props.extraParams ?? {},
 })
-const { messages, streamingText, streamingSteps, error, isStreaming, send } = creator
+const { messages, streamingText, streamingSteps, error, isStreaming, send, lastDone } = creator
+
+// Agent replies render as sanitized markdown (same pipeline as the session
+// transcript): split into ordered HTML runs + mermaid fences. Finalized messages
+// parse once per render (cheap — the creator transcript is short); the live
+// streaming reply re-parses each frame it grows.
+const { renderMarkdown } = useMarkdown()
+const segmentsFor = (text: string) => renderMarkdown(text)
+const streamingSegments = computed(() => renderMarkdown(streamingText.value))
 
 const sendEnabled = computed(() => !isStreaming.value && promptText.value.trim().length > 0)
 
@@ -156,7 +189,7 @@ const onSend = async () => {
   if (!text || isStreaming.value) return
   promptText.value = ''
   await send(text)
-  emit('turn')
+  emit('turn', lastDone.value)
   scrollToBottom()
 }
 
@@ -260,7 +293,19 @@ onBeforeUnmount(() => creator.teardown())
 }
 .lcp-msg.agent .lcp-text {
   color: var(--textMuted);
-  white-space: pre-wrap;
+}
+/* Rendered-markdown agent reply: SessionMarkdownHtml carries the prose styling
+   (.mdinline :deep); here we just space consecutive segments (a prose run + a
+   mermaid diagram, etc.) like the transcript's .mdwrap. No pre-wrap — the markdown
+   owns block layout now. */
+.lcp-md {
+  color: var(--text);
+}
+.lcp-md > * + * {
+  margin-top: 10px;
+}
+.lcp-md .lcp-caret {
+  margin-left: 2px;
 }
 .lcp-steps {
   display: flex;

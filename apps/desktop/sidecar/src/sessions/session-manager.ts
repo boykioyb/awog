@@ -37,6 +37,7 @@ type SessionMetadataPatch = Partial<
     | 'disabledTools'
     | 'mcpServerIds'
     | 'aboutTaskId'
+    | 'aboutSshHostId'
     | 'aboutGhUrl'
     | 'pinnedContext'
     | 'workspaceFolder'
@@ -105,6 +106,7 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.disabledTools !== undefined) summary.disabledTools = h.disabledTools
   if (h.mcpServerIds !== undefined) summary.mcpServerIds = h.mcpServerIds
   if (h.aboutTaskId !== undefined) summary.aboutTaskId = h.aboutTaskId
+  if (h.aboutSshHostId !== undefined) summary.aboutSshHostId = h.aboutSshHostId
   if (h.aboutGhUrl !== undefined) summary.aboutGhUrl = h.aboutGhUrl
   if (h.parentSessionId !== undefined) summary.parentSessionId = h.parentSessionId
   if (h.compaction) summary.hasCompaction = true

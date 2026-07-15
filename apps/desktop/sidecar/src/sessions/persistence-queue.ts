@@ -44,6 +44,7 @@ type HeaderMetadataSignature = {
   disabledTools: string[] | undefined
   mcpServerIds: string[] | undefined
   aboutTaskId: string | undefined
+  aboutSshHostId: string | undefined
   aboutGhUrl: string | undefined
 }
 
@@ -55,6 +56,7 @@ function headerMetadataSignature(header: SessionHeader): string {
     disabledTools: header.disabledTools,
     mcpServerIds: header.mcpServerIds,
     aboutTaskId: header.aboutTaskId,
+    aboutSshHostId: header.aboutSshHostId,
     aboutGhUrl: header.aboutGhUrl,
   }
   return JSON.stringify(sig)
@@ -76,6 +78,7 @@ function mergeHeaderWithExternalMetadata(
     ...(disk.disabledTools !== undefined ? { disabledTools: disk.disabledTools } : {}),
     ...(disk.mcpServerIds !== undefined ? { mcpServerIds: disk.mcpServerIds } : {}),
     ...(disk.aboutTaskId !== undefined ? { aboutTaskId: disk.aboutTaskId } : {}),
+    ...(disk.aboutSshHostId !== undefined ? { aboutSshHostId: disk.aboutSshHostId } : {}),
     ...(disk.aboutGhUrl !== undefined ? { aboutGhUrl: disk.aboutGhUrl } : {}),
   }
 }

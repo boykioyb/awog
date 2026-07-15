@@ -18,7 +18,7 @@
   "palette.cmd.goCommands": "Tới Commands",
   "palette.cmd.goRules": "Tới Rules",
   "palette.cmd.goHooks": "Tới Hooks",
-  "palette.cmd.goConnections": "Tới Connections",
+  "palette.cmd.goConnections": "Tới Sources",
   "palette.cmd.goSettings": "Tới Settings",
   "palette.cmd.goTemplates": "Tới Templates",
   "palette.session.jump": "Mở phiên",

@@ -87,6 +87,17 @@
               <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
               <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
             </div>
+            <button
+              class="styinfo"
+              type="button"
+              :aria-label="
+                t('sessions.style.infoLabel', { name: t(`sessions.style.${row.slug}.name`) })
+              "
+              :aria-expanded="infoSlug === row.slug"
+              @click.stop="toggleInfo(row.slug)"
+            >
+              <Icon name="info" class="styinfoicon" />
+            </button>
             <Icon v-if="row.slug === activeStyleId" name="check" class="styck" />
           </div>
         </template>
@@ -94,6 +105,21 @@
           <span class="tog2 sm" :class="{ off: !noMd }" />
           {{ t('sessions.config.noMarkdown') }}
         </label>
+      </div>
+      <!-- Description popover for the highlighted style row. Rendered as a sibling of
+           the style menu (which has overflow-y:auto and would CLIP a child card) and
+           anchored to the LEFT of the menu so it never runs off the window's right
+           edge. Position lives in the scoped <style> (mirrors .sb-menu). -->
+      <div
+        v-if="openChip === 'style' && infoSlug"
+        class="styinfocard"
+        role="dialog"
+        aria-labelledby="styinfo-title"
+        aria-describedby="styinfo-body"
+        @click.stop
+      >
+        <div id="styinfo-title" class="styinfotitle">{{ infoName }}</div>
+        <div id="styinfo-body" class="styinfobody">{{ infoDesc }}</div>
       </div>
     </span>
 
@@ -148,9 +174,30 @@ function pickThink(v: ThinkingLevel) {
   close()
 }
 function pickStyle(slug: string) {
+  infoSlug.value = null
   selectStyle(slug)
   close()
 }
+
+// ── Style description popover ──
+// Which style row's info card is open (one at a time), or null.
+const infoSlug = ref<string | null>(null)
+const infoName = computed(() => (infoSlug.value ? t(`sessions.style.${infoSlug.value}.name`) : ''))
+const infoDesc = computed(() => (infoSlug.value ? t(`sessions.style.${infoSlug.value}.desc`) : ''))
+function toggleInfo(slug: string) {
+  infoSlug.value = infoSlug.value === slug ? null : slug
+}
+// Close the card whenever the style menu closes or another chip opens (covers the
+// backdrop click, pickStyle, and remote opens — close() is shared so we can't hook it).
+watch(openChip, () => {
+  infoSlug.value = null
+})
+// Esc dismisses the open description card.
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && infoSlug.value) infoSlug.value = null
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <style scoped>
@@ -183,6 +230,16 @@ function pickStyle(slug: string) {
   position: fixed;
   inset: 0;
   z-index: 94;
+}
+/* Style description card: absolute (like .sb-menu), opens UPWARD, sits to the LEFT of
+   the 272px-wide style menu (272 + 8px gap) so it clears the window's right edge and
+   escapes the menu's overflow-y clip. Trade-off: on a very narrow window it can near
+   the left edge, but the style chip lives in the bar's right cluster so there is room. */
+.styinfocard {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 280px;
+  z-index: 96;
 }
 .mi {
   width: 100%;

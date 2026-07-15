@@ -44,7 +44,21 @@ export type SourceResource = { uri: string; mime: string }
 // `mcp__<id>__` prefix for display. `allowed` is whether the tool passes this
 // source's own permissions.json auto-scope (read-only view — never a credential).
 export type SourceToolInfo = { name: string; description: string; allowed: boolean }
-export type SourceToolsResult = { tools: SourceToolInfo[]; error?: string }
+
+// One line of the connection-test activity log (mirror of the sidecar
+// SourceLogLine). `info` = an AWOG step, `stderr` = a raw line the MCP server
+// printed, `error` = the failure that ended the run. Streamed live over the
+// `source.tools-log` event while `source.tools` runs, and also returned in full
+// on the result (`log`) so a late subscriber still gets the transcript.
+export type SourceLogLevel = 'info' | 'stderr' | 'error'
+export type SourceLogLine = { level: SourceLogLevel; message: string }
+export type SourceToolsResult = { tools: SourceToolInfo[]; error?: string; log?: SourceLogLine[] }
+
+// A credential the source declares (`secret:<KEY>` ref) but the keychain has no
+// value for yet (mirror of the sidecar source.pendingSecrets PendingSecret).
+// `field` is the env var / header it fills (display); `key` is the keychain key
+// to write via source.setSecret. Drives the chat-creator secret step.
+export type SourcePendingSecret = { key: string; field: string }
 
 // Parsed permissions.json for the detail Permissions section (mirror of the
 // sidecar SourcePermissions). Read-only scoping rules, never credentials.
@@ -753,6 +767,25 @@ export const useConnectionsStore = defineStore('connections', () => {
     return sc.request<{ ok: boolean }>('source.setApiCredential', args)
   }
 
+  // Which `secret:<KEY>` refs a source still needs a value for (chat-creator
+  // secret step). Browser-dev has no keychain → nothing pending.
+  async function fetchPendingSecrets(slug: string): Promise<SourcePendingSecret[]> {
+    if (!available.value) return []
+    const res = await sc.request<{ secrets: SourcePendingSecret[] }>('source.pendingSecrets', {
+      slug,
+    })
+    return Array.isArray(res.secrets) ? res.secrets : []
+  }
+
+  // Persist a single mcp secret to the OS keychain (source.setSecret). Keyed by
+  // the source's STABLE id; the value NEVER round-trips (write-only). The config
+  // already holds the matching `secret:<KEY>` ref, so no config write is needed.
+  // Browser-dev is a no-op (no keychain).
+  async function setSecret(sourceId: string, key: string, value: string): Promise<void> {
+    if (!available.value) return
+    await sc.request('source.setSecret', { sourceId, key, value })
+  }
+
   // Re-fetch a single source and patch it in place (used after an OAuth flow so
   // the freshly-persisted status/error shows immediately — the fs watcher fires
   // too, but this is deterministic and scoped).
@@ -773,39 +806,89 @@ export const useConnectionsStore = defineStore('connections', () => {
   // the sections can be exercised offline.
 
   // Tools section: the source's tools + per-source allowed/blocked (source.tools).
-  async function fetchTools(slug: string): Promise<SourceToolsResult> {
+  // `onLog` (optional) receives the connection-test activity lines LIVE while the
+  // sidecar handshake runs — the sidecar emits `source.tools-log` events keyed by
+  // slug for the duration of the RPC. We register a scoped listener around the
+  // request and tear it down in `finally`, so only the active detail pane observes
+  // the stream. The full transcript also rides back on the result (`log`).
+  async function fetchTools(
+    slug: string,
+    onLog?: (line: SourceLogLine) => void,
+  ): Promise<SourceToolsResult> {
     if (!available.value) {
-      const target = sourceBySlug(slug)
-      if (target?.type === 'mcp') {
-        return {
-          tools: [
-            {
-              name: `mcp__${target.id}__list_repos`,
-              description: 'List repositories.',
-              allowed: true,
-            },
-            {
-              name: `mcp__${target.id}__create_issue`,
-              description: 'Open an issue.',
-              allowed: false,
-            },
-          ],
-        }
-      }
-      if (target?.type === 'api') {
-        return {
-          tools: [
-            {
-              name: `mcp__${target.id}__api_${target.slug}`,
-              description: 'REST API tool.',
-              allowed: true,
-            },
-          ],
-        }
-      }
-      return { tools: [] }
+      return fetchToolsMock(slug, onLog)
     }
-    return sc.request<SourceToolsResult>('source.tools', { slug })
+    let unlistenLog: UnlistenFn | null = null
+    if (onLog) {
+      try {
+        unlistenLog = await sc.onEvent((evt) => {
+          if (evt?.type !== 'source.tools-log') return
+          const payload = evt.payload as { slug?: string; line?: SourceLogLine }
+          if (payload?.slug === slug && payload.line) onLog(payload.line)
+        })
+      } catch {
+        unlistenLog = null
+      }
+    }
+    try {
+      return await sc.request<SourceToolsResult>('source.tools', { slug })
+    } finally {
+      unlistenLog?.()
+    }
+  }
+
+  // Browser-dev fallback: synthesize a short live log (small delays so the console
+  // animates) + a couple of tools, mirroring the sidecar shape.
+  async function fetchToolsMock(
+    slug: string,
+    onLog?: (line: SourceLogLine) => void,
+  ): Promise<SourceToolsResult> {
+    const target = sourceBySlug(slug)
+    const log: SourceLogLine[] = []
+    const step = async (line: SourceLogLine, delay = 220): Promise<void> => {
+      await new Promise((r) => setTimeout(r, delay))
+      log.push(line)
+      onLog?.(line)
+    }
+    if (target?.type === 'mcp') {
+      await step({ level: 'info', message: `Testing MCP connection — ${slug}` })
+      await step({ level: 'info', message: 'Handshake — initialize + tools/list' })
+      await step({ level: 'stderr', message: 'server: listening on stdio' })
+      await step({ level: 'info', message: 'Handshake complete — 2 tool(s), 0 resource(s)' })
+      return {
+        tools: [
+          {
+            name: `mcp__${target.id}__list_repos`,
+            description: 'List repositories.',
+            allowed: true,
+          },
+          {
+            name: `mcp__${target.id}__create_issue`,
+            description: 'Open an issue.',
+            allowed: false,
+          },
+        ],
+        log,
+      }
+    }
+    if (target?.type === 'api') {
+      await step({
+        level: 'info',
+        message: `API source — one flexible tool for ${target.api.baseUrl}`,
+      })
+      return {
+        tools: [
+          {
+            name: `mcp__${target.id}__api_${target.slug}`,
+            description: 'REST API tool.',
+            allowed: true,
+          },
+        ],
+        log,
+      }
+    }
+    await step({ level: 'info', message: 'Local source — exposes files, not callable tools.' })
+    return { tools: [], log }
   }
 
   // Permissions section: the parsed permissions.json, or null when none exists.
@@ -949,6 +1032,8 @@ export const useConnectionsStore = defineStore('connections', () => {
     toggleToolDeny,
     testSource,
     setApiCredential,
+    fetchPendingSecrets,
+    setSecret,
     fetchTools,
     fetchPermissions,
     fetchGuide,

@@ -128,6 +128,14 @@ function linkifyFilePaths(el: HTMLElement) {
   // "Page not found" (e.g. an extensionless doc path). So we always preventDefault
   // and route it to the file preview, even when filePathOf doesn't recognise an
   // extension (the modal surfaces a clear "could not load" if it isn't a readable file).
+  //
+  // The href the model wrote and the file that actually opens can differ: the click
+  // resolves through the real workspace index (bare / under- / over-qualified paths map
+  // to the actual file). To keep the tooltip honest — hover shows exactly what will open,
+  // not a stale written path — each link holds a mutable `target` that the async resolve
+  // below refines to the real path. A single click handler reads the holder, so refining
+  // never double-binds (which would open two previews).
+  const links: { holder: { target: string }; a: HTMLElement; path: string }[] = []
   for (const a of Array.from(el.querySelectorAll('a'))) {
     let href = (a.getAttribute('href') ?? '').trim()
     if (!href || href.startsWith('#')) continue // in-page anchor — leave alone
@@ -140,9 +148,14 @@ function linkifyFilePaths(el: HTMLElement) {
       // malformed escape sequence — keep the raw href
     }
     const path = filePathOf(href)
+    const holder = { target: path ?? href }
     a.classList.add('filelink')
-    a.title = t('sessions.preview.openFile', { path: path ?? href })
-    a.addEventListener('click', openAt(path ?? href))
+    a.title = t('sessions.preview.openFile', { path: holder.target })
+    a.addEventListener('click', (e) => {
+      e.preventDefault()
+      filePreview.open(holder.target)
+    })
+    if (path) links.push({ holder, a: a as HTMLElement, path })
   }
   // Collect inline-code file-path candidates, then resolve them against the real
   // workspace index — only the ones that exist become chips.
@@ -152,8 +165,21 @@ function linkifyFilePaths(el: HTMLElement) {
     const path = filePathOf(code.textContent ?? '')
     if (path) candidates.push({ code: code as HTMLElement, path })
   }
-  if (!candidates.length) return
+  if (!candidates.length && !links.length) return
   const token = renderToken
+  // Refine links: swap the tooltip to the resolved real path so display == destination.
+  // A link stays clickable regardless (an unresolved href still opens → clear "could not
+  // load" in the modal), so unlike chips we don't gate on existence — only the tooltip
+  // and the click target are upgraded when a real file is found.
+  void Promise.all(links.map((l) => filePreview.resolve(l.path))).then((resolved) => {
+    if (token !== renderToken) return // subtree replaced while resolving — nodes are stale
+    links.forEach((l, i) => {
+      const real = resolved[i]
+      if (!real) return
+      l.holder.target = real
+      l.a.title = t('sessions.preview.openFile', { path: real })
+    })
+  })
   void Promise.all(candidates.map((c) => filePreview.resolve(c.path))).then((resolved) => {
     if (token !== renderToken) return // subtree replaced while resolving — nodes are stale
     candidates.forEach((c, i) => {

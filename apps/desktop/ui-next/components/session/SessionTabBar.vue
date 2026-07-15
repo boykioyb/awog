@@ -142,6 +142,24 @@
                 :title="c.label"
                 @click="pSetColor(c.token)"
               />
+              <!-- Custom color: a <label> wrapping a hidden native color input so
+                   clicking the swatch opens the OS color picker anchored right here.
+                   When a custom hex is active the swatch shows it; otherwise a
+                   palette glyph hints "pick your own". -->
+              <label
+                class="swatch custom"
+                :class="{ on: pctxCustom }"
+                :style="pctxCustom ? { background: pctxColor } : undefined"
+                :title="t('sessions.pctx.colorCustom')"
+              >
+                <Icon v-if="!pctxCustom" name="palette" style="width: 11px; height: 11px" />
+                <input
+                  type="color"
+                  class="ctxcolorinput"
+                  :value="customColorValue"
+                  @input="onCustomColorInput"
+                />
+              </label>
               <span
                 class="swatch clear"
                 :class="{ on: pctxColor === PROJECT_COLOR_DEFAULT }"
@@ -194,6 +212,7 @@
 import type { Project } from '~/types'
 import ProjectLlmDefaultsModal from '~/components/project/ProjectLlmDefaultsModal.vue'
 import {
+  isCustomColor,
   PROJECT_COLOR_DEFAULT,
   PROJECT_COLOR_PALETTE,
   useProjectColors,
@@ -274,6 +293,11 @@ function openTabCtx(id: string, e: MouseEvent) {
 // Default tab '' carries no project id / on-disk path).
 const pctxIsProject = computed(() => !!pctx.value && pctx.value.id !== '')
 const pctxColor = computed(() => (pctx.value?.id ? colorOf(pctx.value.id) : PROJECT_COLOR_DEFAULT))
+// True when the active project's dot uses a user-picked hex (not a palette token).
+const pctxCustom = computed(() => isCustomColor(pctxColor.value))
+// Native <input type="color"> only accepts `#rrggbb`; seed it with the current
+// custom hex, else a neutral start so the OS picker opens somewhere sensible.
+const customColorValue = computed(() => (pctxCustom.value ? pctxColor.value : '#888888'))
 const pctxPath = computed<string | null>(() => (pctx.value?.id ? projectPath(pctx.value.id) : null))
 const pctxCount = computed(() =>
   pctx.value ? store.sessions.filter((s) => s.project === pctx.value!.id).length : 0,
@@ -319,6 +343,12 @@ function pCloseAll() {
 
 function pSetColor(token: string | null) {
   if (pctx.value?.id) setColor(pctx.value.id, token)
+}
+// Native color picker → store the raw hex (fires live as the user drags in the
+// OS picker, so the dot updates immediately). The menu stays open throughout.
+function onCustomColorInput(e: Event) {
+  const value = (e.target as HTMLInputElement).value
+  if (pctx.value?.id) setColor(pctx.value.id, value)
 }
 function pNewSession() {
   const id = pctx.value?.id
@@ -431,30 +461,31 @@ async function pDeleteAll() {
   border-radius: 6px;
 }
 .stab-dot {
+  position: relative;
   width: 8px;
   height: 8px;
   border-radius: 99px;
   flex: 0 0 auto;
 }
-/* A session in this project is actively streaming → soft ring pulses out from the
-   dot in the PROJECT's own color (var(--stab-dot), set inline), keeping project
-   identity while matching the app's streaming .pulse convention. Only box-shadow
-   animates (no layout/reflow). */
-.stab-dot.running {
-  animation: stab-dot-pulse 1.3s ease-in-out infinite;
+/* A session in this project is actively streaming → a spinner arc rotates around
+   the dot in the PROJECT's own color (var(--stab-dot), set inline): an unmistakable
+   "work in progress" cue that keeps project identity. The old opacity-breathe +
+   expanding box-shadow ring read as subtle AND its ring was clipped by the strip's
+   overflow-x:auto — the arc sits inside the dot's footprint (inset -3px) so it's
+   never clipped. Only `transform` animates (GPU, no reflow). */
+.stab-dot.running::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: var(--stab-dot, var(--accent));
+  border-right-color: var(--stab-dot, var(--accent));
+  animation: stab-dot-spin 0.7s linear infinite;
 }
-/* Breathe the dot's OWN opacity (unmistakable + never clipped by the tab strip's
-   overflow, unlike a pure box-shadow ring) plus an expanding ring in the project
-   color. */
-@keyframes stab-dot-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--stab-dot) 65%, transparent);
-  }
-  50% {
-    opacity: 0.5;
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--stab-dot) 0%, transparent);
+@keyframes stab-dot-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 .stab-nm {
@@ -595,6 +626,36 @@ async function pDeleteAll() {
 .ctxsw .swatch.clear {
   background: transparent;
 }
+/* Custom-color swatch: a rainbow hint when no custom hex is picked, else it wears
+   the chosen color (background set inline). Relative so the native input overlays it. */
+.ctxsw .swatch.custom {
+  position: relative;
+  overflow: hidden;
+  color: var(--text);
+  background: conic-gradient(
+    from 0deg,
+    #f87171,
+    #fbbf24,
+    #34d399,
+    #60a5fa,
+    #a78bfa,
+    #f472b6,
+    #f87171
+  );
+}
+/* The native color input fills the swatch, fully transparent — clicking the swatch
+   opens the OS picker anchored here. */
+.ctxsw .swatch.custom .ctxcolorinput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
 .ctxmenu .mi.danger {
   color: var(--danger);
 }
@@ -606,11 +667,12 @@ async function pDeleteAll() {
   .ctxsw .swatch {
     transition: none;
   }
-  /* No motion, but keep a STATIC halo so a running project is still visible (dropping
-     the cue entirely would hide it for reduced-motion users). */
-  .stab-dot.running {
+  /* No spin, but keep a STATIC full ring so a running project is still visible
+     (dropping the cue entirely would hide it for reduced-motion users). */
+  .stab-dot.running::after {
     animation: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--stab-dot) 35%, transparent);
+    border-color: var(--stab-dot, var(--accent));
+    opacity: 0.6;
   }
 }
 </style>

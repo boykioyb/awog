@@ -40,6 +40,8 @@ import { buildStylePrompt } from '../../style/styles.js'
 import { createClaudeEventAdapter } from './event-adapter.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { buildSourceToolsSdkServer } from './source-sdk-server.js'
+import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
+import { listHosts } from '../../ssh/store.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -300,6 +302,10 @@ export async function runStreamClaude(
         ...(args.promptSourceIds ? { promptSourceIds: args.promptSourceIds } : {}),
         ...(args.sourceToolPatterns ? { toolPatterns: args.sourceToolPatterns } : {}),
       },
+      // Per-session SSH approval mode (ADR 0064). The SSH tools are bridged as an MCP
+      // server below; the gate matches their `mcp__awogssh__ssh_*` names (sshToolName)
+      // and keys the allowance by the `host` arg — same gate as Pi.
+      args.settings.sshApprovalMode ?? 'prompt',
     ),
     args.budget,
     Date.now(),
@@ -347,11 +353,17 @@ export async function runStreamClaude(
     args.abortController?.signal,
     args.sourceApiEndpoints,
   )
+  // SSH tools are offered whenever the user has an agent-enabled host (unified model).
+  const sshHostsExist = (await listHosts()).some((h) => h.agentEnabled !== false)
   const allServers = {
     ...(mcpServers ?? {}),
     ...apiServers,
     // source_* conversational setup tools → mcp__awog__source_*.
     awog: buildSourceToolsSdkServer(),
+    // SSH agent tools (ADR 0064) → mcp__awogssh__ssh_* — available when SSH hosts are
+    // configured (host is a per-call param; mirrors the Pi run-stream guard). Gated by
+    // sshApprovalMode. The co-pilot dock adds ssh_terminal_run (watched shell).
+    ...(sshHostsExist ? { awogssh: buildSshToolsSdkServer(args.sshTerminalConnId) } : {}),
   }
   const claudeBinary = resolveClaudeBinary()
 

@@ -15,7 +15,8 @@
   "nav.activity": "Hoạt động",
   "nav.projects": "Projects",
   "nav.git": "Git",
-  "nav.connections": "Connections",
+  "nav.connections": "Sources",
+  "nav.ssh": "SSH",
   "nav.hooks": "Hooks",
   "nav.settings": "Settings",
   "nav.collapse": "Thu gọn / mở rộng sidebar"

@@ -121,6 +121,9 @@ const commands = computed<PaletteCommand[]>(() => {
     icon: MessageSquarePlus,
     section: 'session',
     run: () => {
+      // Generic "New session" command → a global DEFAULT (no-project) session, like
+      // the header "New" button. Project scoping is intentionally only on ⌘T + the
+      // page "+", not on this generic affordance. Do NOT pass activeTab here.
       store.create()
       void navigateTo('/sessions')
     },

@@ -41,49 +41,53 @@ body {
    different contrast vs the base background. `standard` = the prototype defaults
    (no override). Set by SettingsAppearance via body[data-surface]. */
 body[data-surface='flat'] {
-  --bgPanel: #0a0a0a;
-  --bgEl: #101010;
-  --bgHover: #161616;
-  --bgActive: #1a1a1a;
-  --bgSubtle: #0d0d0d;
-  --bgInput: #101010;
-  --bgCanvas: #0c0c0c;
-  --border: #1a1a1a;
-  --borderStrong: #262626;
+  --bgPanel: #1c1c1e;
+  --bgEl: #202022;
+  --bgHover: #26262a;
+  --bgActive: #303034;
+  --bgSubtle: #1e1e20;
+  --bgInput: #202022;
+  --bgCanvas: #1a1a1c;
+  --border: rgba(255, 255, 255, 0.06);
+  --borderStrong: rgba(255, 255, 255, 0.12);
 }
 body[data-surface='deep'] {
-  --bgPanel: #0d0d0d;
-  --bgEl: #1e1e1e;
-  --bgHover: #242424;
-  --bgActive: #2a2a2a;
-  --bgSubtle: #181818;
-  --bgInput: #1e1e1e;
-  --bgCanvas: #161616;
-  --border: #2e2e2e;
-  --borderStrong: #3c3c3c;
+  --bgPanel: #1a1a1c;
+  --bgEl: #2f2f32;
+  --bgHover: #37373b;
+  --bgActive: #404044;
+  --bgSubtle: #242427;
+  --bgInput: #2f2f32;
+  --bgCanvas: #202022;
+  --border: rgba(255, 255, 255, 0.11);
+  --borderStrong: rgba(255, 255, 255, 0.18);
 }
+/* Light surface-depth variants — kept near-white (user rejects gray). Flat = the
+   flattest (panels = pure white on the near-white base, softest hairlines); Deep =
+   a hair more base tint + crisper borders so white cards pop, but still bright, NOT
+   the dull mid-gray it used to be. */
 body.light[data-surface='flat'] {
-  --bgPanel: #eef2f8;
-  --bgEl: #f4f7fb;
-  --bgHover: #e8eef6;
-  --bgActive: #dde6f1;
-  --bgSubtle: #f4f7fb;
-  --bgInput: #f4f7fb;
-  --bgCanvas: #ebf0f7;
-  --border: #e6ebf2;
-  --borderStrong: #d4dde8;
+  --bgPanel: #ffffff;
+  --bgEl: #ffffff;
+  --bgHover: #f0f1f4;
+  --bgActive: #e6e8ec;
+  --bgSubtle: #fafbfc;
+  --bgInput: #ffffff;
+  --bgCanvas: #f4f5f7;
+  --border: rgba(0, 0, 0, 0.06);
+  --borderStrong: rgba(0, 0, 0, 0.12);
 }
 body.light[data-surface='deep'] {
-  --bg: #e7edf5;
-  --bgPanel: #fbfcfe;
+  --bg: #f4f5f8;
+  --bgPanel: #ffffff;
   --bgEl: #ffffff;
-  --bgHover: #eef3fa;
-  --bgActive: #dfe7f2;
-  --bgSubtle: #f3f7fc;
+  --bgHover: #e9ebef;
+  --bgActive: #dfe2e8;
+  --bgSubtle: #fafbfc;
   --bgInput: #ffffff;
-  --bgCanvas: #e9eff6;
-  --border: #d9e1ec;
-  --borderStrong: #c2cdde;
+  --bgCanvas: #eef0f3;
+  --border: rgba(0, 0, 0, 0.1);
+  --borderStrong: rgba(0, 0, 0, 0.16);
 }
 
 /* Full-window column shell: the NavRail|main row (.app) fills the space above the
@@ -623,16 +627,35 @@ body.light[data-surface='deep'] {
   background: var(--bgHover);
 }
 
-/* Stage checkbox in file rows. */
-.gck {
+/* Leading status glyph on a file row — a colored icon (see statusVisual) that
+   replaces the raw porcelain letter. Fixed box so filenames align regardless of
+   which status; color is set inline from the theme token, glyph strokes inherit
+   it via currentColor. */
+.gsti {
   flex: 0 0 auto;
-  width: 13px;
-  height: 13px;
-  cursor: pointer;
-  accent-color: var(--accent);
+  display: grid;
+  place-items: center;
+  width: 16px;
+}
+.gsti .icn {
+  width: 14px;
+  height: 14px;
 }
 
-/* Collapsible status section header (Staged / Changes). */
+/* Trailing per-row actions (stage/unstage + discard) — grouped so they reveal
+   together on row hover via the shared `.gstage` opacity rule. */
+.growact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.gstage.gdiscard:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Collapsible zone header (Unstaged / Staged). */
 .gstatsec {
   display: flex;
   align-items: center;
@@ -640,6 +663,68 @@ body.light[data-surface='deep'] {
   padding: 8px 10px 5px;
   cursor: pointer;
   user-select: none;
+}
+/* Pushes the zone actions (discard-all + Stage/Unstage) to the right edge. */
+.gstatsp {
+  flex: 1;
+}
+
+/* Zone-wide Stage / Unstage button — the explicit verb that replaced the
+   stage-checkbox. Subtle by default; the unstaged "Stage" leans accent on hover
+   as the zone's primary action. */
+.gsecbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--textDim);
+  font-family: var(--sans);
+  font-size: 0.8462rem;
+  cursor: pointer;
+}
+.gsecbtn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--borderStrong);
+  background: var(--bgHover);
+}
+.gsecbtn.stage:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accentBorder);
+  background: var(--accentDim);
+}
+.gsecbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.gsecbtn .icn {
+  width: 12px;
+  height: 12px;
+}
+
+/* Multi-selected row (⌘/Ctrl-click or Select all) — a pure selection highlight,
+   never a staged state: accent left-bar on every selected row, accent-tint fill
+   only on the non-focused ones so the diff-focused row keeps its `.on` surface. */
+.gfile.msel {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.gfile.msel:not(.on) {
+  background: var(--accentDim);
+}
+
+/* Empty zone hint + the hairline that splits the two zones. */
+.gsecempty {
+  padding: 3px 12px 9px 28px;
+  color: var(--textFaint);
+  font-size: 0.8462rem;
+}
+.gzonediv {
+  height: 1px;
+  margin: 8px 6px;
+  background: var(--border);
 }
 .gstatsec .gchv {
   flex: 0 0 auto;
@@ -911,8 +996,8 @@ textarea.gcpta {
    The prototype renders every uppercase "eyebrow" label (section headers, group
    labels, stat captions) in the monospace `--code` font — a terminal aesthetic
    that reads as semantically wrong (and harder to read) for plain UI labels like
-   "CẤU HÌNH" / "REPOS". Flip just this header family to the UI sans font, keeping
-   the uppercase + letter-spacing that gives the structural rhythm. Monospace
+   "CẤU HÌNH" / "REPOS". Flip this header family to the UI sans font (casing is
+   handled in the Casing note below). Monospace
    stays for genuine technical strings: paths (.mono/.kvv.mono), SHAs, branch
    names, timestamps, counts/badges, code/diff/terminal. App-wide for consistency
    across every page, not just Projects.
@@ -922,7 +1007,13 @@ textarea.gcpta {
    (siblings `.palg`/`.grph .gnm` already declare 600). Pin the whole family to
    600 (semibold) — the heading tier in the scale; 700 stays reserved for numbers
    /badges. An explicit weight also keeps headers above body even when the user
-   raises the base body weight in Appearance. */
+   raises the base body weight in Appearance.
+
+   Casing: the prototype also FORCED these to uppercase with wide tracking — a
+   web/marketing "eyebrow" look. Native macOS section headers (Finder/System
+   Settings sidebars) are sentence-case semibold. Strings are authored normally
+   (e.g. "Library") and only CSS uppercased them, so `text-transform:none` renders
+   them as authored — reading as a UI title, not a machine string. */
 .navg,
 .sech,
 .gsec,
@@ -933,9 +1024,15 @@ textarea.gcpta {
 .pcardh,
 .th .tt,
 .stat .lbl,
-.grph .gnm {
+.grph .gnm,
+.gsidetitle,
+.gstatlbl,
+.gcplbl,
+.gchtitle {
   font-family: var(--sans);
   font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 /* Issue/PR rows: the "new session" action reveals on row hover (and keyboard
@@ -993,4 +1090,103 @@ textarea.gcpta {
   overflow-y: hidden;
   margin: 0.5em 0;
   padding-bottom: 2px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Native depth + motion pass (OrbStack-inspired). Elevated surfaces float on the
+   soft, theme-aware shadow ramp (prototype.css `--shadow-*`, per theme) instead
+   of leaning on 1px borders; the one clickable card type lifts on hover; radii
+   are a touch larger; overlays share the ramp so they're soft on light; long-read
+   panes breathe a little more. Recessed transcript wells (--bgSubtle sub-cards:
+   .step/.stepc/.cluster/.gcard) intentionally get NO shadow — they read as inset,
+   not floating. Transitions here inherit the reduced-motion kill-switch above.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Elevated cards (all on --bgEl / white) — float with the soft shadow. */
+.tile,
+.rowi,
+.tcard,
+.pcard,
+.pstat,
+.authcard,
+.mu {
+  box-shadow: var(--shadow-sm);
+}
+/* Larger, softer corners → more physical, less "web card". */
+.tile,
+.tcard,
+.pcard {
+  border-radius: 14px;
+}
+.rowi,
+.pstat {
+  border-radius: 13px;
+}
+
+/* The one clearly-clickable card (templates / project grid) gets a smooth hover
+   lift — transform + shadow only, no reflow. Press settles it back fast. */
+.tcard {
+  transition:
+    transform 0.16s var(--ease),
+    box-shadow 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+.tcard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border);
+}
+.tcard:active {
+  transform: translateY(0);
+  transition-duration: 0.05s;
+}
+
+/* Overlays share the elevation ramp so they're soft on light (the hardcoded
+   rgba(0,0,0,.5) prototype shadows were dark-only and read as heavy grey slabs on
+   a light background). */
+.smenu,
+.pop,
+.toast {
+  box-shadow: var(--shadow-md);
+}
+.setmodal,
+.pal,
+.codepanel,
+.lbimg {
+  box-shadow: var(--shadow-lg);
+}
+.pal,
+.codepanel {
+  border-radius: 16px;
+}
+.wnode {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Smoother state changes on the common interactive surfaces (was a mix of .12s
+   linear / none). Eased, ~140ms — the Apple-ish micro-interaction feel. */
+.ni,
+.li,
+.libli,
+.gsi,
+.gfile,
+.setni,
+.smenu .mi,
+.seg span,
+.btn,
+.iconbtn,
+.chip {
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease),
+    border-color 0.14s var(--ease),
+    filter 0.14s var(--ease);
+}
+
+/* Breathe: long-read detail / scroll panes get a little more air (was 18px). */
+.dscroll {
+  padding: 22px;
+}
+.scroll {
+  padding: 20px;
 }

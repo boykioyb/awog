@@ -1,4 +1,4 @@
-// Response styles (ADR 0046). 13 built-in conversational styles the user can
+// Response styles (ADR 0046). 21 built-in conversational styles the user can
 // pick per session. The chosen style's directive is appended to the agent system
 // prompt for the turn (augment, never replace — like rules/inject.ts), so it
 // changes only the TONE + FORMATTING of the prose, not technical correctness.
@@ -37,6 +37,20 @@ const STYLE_DIRECTIVES: Record<string, string> = {
     'Use the Feynman technique. Explain to a curious 12-year-old with no CS background. No jargon without an immediate plain-English definition. Build intuition before detail.',
   'first-principles':
     'Use first-principles thinking. Break every problem down to its fundamentals. Do not accept conventional solutions without examining why they work. Build reasoning from the ground up.',
+  checklist:
+    'Respond as an actionable checklist. Every item a "- [ ]" task, imperative verb first, one concrete step per line. No prose paragraphs. Code unchanged.',
+  'code-first':
+    'Lead with the code. One line of context above the block if needed, caveats as brief bullets below. Let the code carry the explanation; comment where intent is non-obvious. Technical accuracy intact.',
+  'devils-advocate':
+    "Play devil's advocate. Argue against the proposed approach as strongly as you honestly can — surface failure modes, hidden costs, the case for NOT doing it. End with the single strongest counter-argument. Here to stress-test, not to please. Technical accuracy intact; code unchanged.",
+  mentor:
+    'Answer like a senior mentor. State the "why" behind the "what", use one concrete analogy, then give a small concrete next step the reader can try right now. Warm but honest about mistakes. Code unchanged.',
+  pair: 'Pair-program out loud. Narrate the reasoning as you go — "try X… that breaks Y… so Z instead". Show the dead ends briefly, not just the final answer. Technical accuracy intact; code unchanged.',
+  noir: 'Narrate like a hard-boiled noir detective. Terse, moody, first-person. The bug is the perp, the stack trace the crime scene. Atmospheric but technically exact; code unchanged.',
+  speedrun:
+    'Narrate like a speedrunner. Call the optimal route, skip the cutscenes, flag the "skips" and "timesaves". Fast, hype, exact; code unchanged.',
+  corporate:
+    'Respond in maximum corporate buzzword-speak — synergy, leverage, circle back, action items — while keeping the technical content 100% correct underneath. Code unchanged.',
 }
 
 // Modifier (the skill's "terminal CLI / no markdown" option). Stacks on top of a

@@ -1,5 +1,6 @@
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from '~/composables/useI18n'
+import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import {
   deriveStatus,
   SOURCE_STATUS_COLORS,
@@ -7,6 +8,7 @@ import {
   useConnectionsStore,
   type Source,
   type SourceConnectionStatus,
+  type SourceLogLine,
   type SourcePermissions,
   type SourceToolInfo,
 } from '~/stores/connections'
@@ -21,14 +23,18 @@ import {
 // A tool row with its `mcp__<id>__` prefix stripped for display.
 export type DisplayTool = SourceToolInfo & { display: string }
 
-// One row of the Connection info table.
-export type ConnectionRow = { key: string; value: string; mono?: boolean }
+// One row of the Connection info card. `secretKey` (when set) means the value is a
+// keychain reference — the UI renders it as a masked value + a keychain badge
+// naming the key, instead of an inline "(keychain · KEY)" string.
+export type ConnectionRow = { key: string; value: string; mono?: boolean; secretKey?: string }
 
-// Mask secret-ish values on display (placeholder refs + token-named keys).
+// Mask secret-ish values on display (placeholder refs + token-named keys). A
+// `secret:KEY` reference returns masked dots + the key name (rendered as a badge);
+// an inline token gets partially masked.
 const SECRET_KEY_RE = /(token|secret|password|passwd|pwd|api[_-]?key|access[_-]?key|pat|auth)/i
-function maskSecret(key: string, raw: string): string {
-  if (!raw) return ''
-  if (raw.startsWith('secret:')) return `•••••• (keychain · ${raw.slice('secret:'.length)})`
+function maskValue(key: string, raw: string): { value: string; secretKey?: string } {
+  if (!raw) return { value: '' }
+  if (raw.startsWith('secret:')) return { value: '••••••', secretKey: raw.slice('secret:'.length) }
   let v = raw.replace(/Bearer\s+[A-Za-z0-9_-]{8,}/g, 'Bearer ••••••')
   if (SECRET_KEY_RE.test(key)) {
     v =
@@ -36,11 +42,12 @@ function maskSecret(key: string, raw: string): string {
         ? '•'.repeat(v.length)
         : `${'•'.repeat(Math.min(8, v.length - 4))}${v.slice(-4)}`
   }
-  return v
+  return { value: v }
 }
 
 export function useConnectionDetail(getSource: () => Source) {
   const store = useConnectionsStore()
+  const sc = useSidecar()
   const { t } = useI18n()
 
   const source = computed(() => getSource())
@@ -80,12 +87,12 @@ export function useConnectionDetail(getSource: () => Source) {
       if ((s.mcp.transport ?? 'http') === 'stdio') {
         if (s.mcp.cwd) rows.push({ key: 'cwd', value: s.mcp.cwd, mono: true })
         for (const [k, v] of Object.entries(s.mcp.env ?? {})) {
-          rows.push({ key: `env.${k}`, value: maskSecret(k, v), mono: true })
+          rows.push({ key: `env.${k}`, mono: true, ...maskValue(k, v) })
         }
       } else {
         rows.push({ key: 'authType', value: s.mcp.authType ?? 'none', mono: true })
         for (const [k, v] of Object.entries(s.mcp.headers ?? {})) {
-          rows.push({ key: `header.${k}`, value: maskSecret(k, v), mono: true })
+          rows.push({ key: `header.${k}`, mono: true, ...maskValue(k, v) })
         }
       }
     } else if (s.type === 'api') {
@@ -114,6 +121,12 @@ export function useConnectionDetail(getSource: () => Source) {
   const toolsLoading = ref(false)
   const toolsError = ref<string | null>(null)
   const tools = ref<DisplayTool[]>([])
+  // The connection-test activity log for the Tools section: filled LIVE via the
+  // fetchTools `onLog` callback while the handshake runs, then replaced by the
+  // authoritative transcript the RPC returns. A generation counter guards against
+  // a stale in-flight fetch (source switched) writing into the current log.
+  const toolsLog = ref<SourceLogLine[]>([])
+  let toolsGen = 0
 
   const stripPrefix = (name: string): string => {
     const prefix = `mcp__${source.value.id}__`
@@ -123,19 +136,28 @@ export function useConnectionDetail(getSource: () => Source) {
   async function loadTools(): Promise<void> {
     if (!showTools.value) {
       tools.value = []
+      toolsLog.value = []
       return
     }
+    const gen = ++toolsGen
     toolsLoading.value = true
     toolsError.value = null
     tools.value = []
+    toolsLog.value = []
     try {
-      const res = await store.fetchTools(source.value.slug)
+      const res = await store.fetchTools(source.value.slug, (line) => {
+        if (gen === toolsGen) toolsLog.value = [...toolsLog.value, line]
+      })
+      if (gen !== toolsGen) return
       tools.value = res.tools.map((tool) => ({ ...tool, display: stripPrefix(tool.name) }))
       toolsError.value = res.error ?? null
+      // Prefer the authoritative transcript (covers any line missed live).
+      if (res.log?.length) toolsLog.value = res.log
     } catch (err) {
+      if (gen !== toolsGen) return
       toolsError.value = err instanceof Error ? err.message : String(err)
     } finally {
-      toolsLoading.value = false
+      if (gen === toolsGen) toolsLoading.value = false
     }
   }
 
@@ -274,18 +296,42 @@ export function useConnectionDetail(getSource: () => Source) {
     permsError.value = null
   }
 
-  // Refetch every section whenever the shown source changes (the detail pane is a
-  // single reused instance — LibraryView does not key the slot).
+  // Refetch every section when the shown source changes (slug) OR its config is
+  // re-persisted (updatedAt bump). The detail pane is a single reused instance
+  // (LibraryView doesn't key the slot), and an in-place edit — notably "Refine
+  // with AI", which rewrites config.json + re-verifies — keeps the same slug, so a
+  // slug-only watch would leave Tools/Permissions/Documentation stale. Watching
+  // updatedAt makes those sections update live once the store re-hydrates. Only a
+  // real source switch resets an in-progress inline edit.
   watch(
-    () => source.value.slug,
-    () => {
-      resetEdits()
+    [() => source.value.slug, () => source.value.updatedAt],
+    (curr, prev) => {
+      if (curr[0] !== prev?.[0]) resetEdits()
       void loadTools()
       void loadPermissions()
       void loadGuide()
     },
     { immediate: true },
   )
+
+  // guide.md carries no config `updatedAt`, so an edit that only rewrites the
+  // documentation (no config change) wouldn't trip the watch above. The sources
+  // filesystem watcher fires `sources.fs-changed` on any source-folder write, so
+  // re-read the (cheap) guide then — keeps Documentation live for doc-only edits.
+  let unlistenFs: UnlistenFn | null = null
+  onMounted(async () => {
+    if (!sc.available) return
+    try {
+      unlistenFs = await sc.onEvent((evt) => {
+        if (evt?.type === 'sources.fs-changed') void loadGuide()
+      })
+    } catch {
+      unlistenFs = null
+    }
+  })
+  onUnmounted(() => {
+    unlistenFs?.()
+  })
 
   return {
     status,
@@ -301,6 +347,7 @@ export function useConnectionDetail(getSource: () => Source) {
     toolsLoading,
     toolsError,
     tools,
+    toolsLog,
     // permissions
     permsLoading,
     permissions,

@@ -56,6 +56,7 @@ export interface AwogBridge {
   // Absolute on-disk path of a dropped File/folder (Electron webUtils). '' when
   // the File has no real filesystem origin (e.g. synthetic/clipboard blob).
   getPathForFile(file: File): string
+  pickFile(opts?: AwogSavePathOpts): Promise<string | null>
   savePath(opts?: AwogSavePathOpts): Promise<string | null>
   // Auto-update (ADR 0028).
   getAppInfo(): Promise<AwogAppInfo>

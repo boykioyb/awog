@@ -413,6 +413,16 @@
     </div>
 
     <template #footer>
+      <button
+        v-if="isExisting"
+        class="btn cne-ai"
+        :title="t('connections.editor.refineAiHint')"
+        @click="emit('refine-ai')"
+      >
+        <Icon name="sparkles" style="width: 13px; height: 13px" />
+        {{ t('connections.editor.refineAi') }}
+      </button>
+      <span style="flex: 1" />
       <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
       <button class="btn pri" :disabled="!canSave" @click="onSave">
         {{ t('connections.editor.save') }}
@@ -492,6 +502,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [source: SourceInput, credential?: ApiCredentialInput]
   cancel: []
+  // Hand the current (existing) source off to the chat creator to refine with AI.
+  'refine-ai': []
 }>()
 
 const { t } = useI18n()

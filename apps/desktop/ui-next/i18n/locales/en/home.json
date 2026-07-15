@@ -31,7 +31,7 @@
   "home.agents.working": "● working",
   "home.agents.empty": "No agents",
   "home.connections.count": "{n} MCP",
-  "home.connections.empty": "No connections",
+  "home.connections.empty": "No sources",
   "home.connections.status.running": "running",
   "home.connections.status.starting": "starting",
   "home.connections.status.idle": "idle",

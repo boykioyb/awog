@@ -281,6 +281,13 @@ export type QueuedMessage = {
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
 
+// How the agent's mutating SSH tools (ssh_exec / ssh_write_file) are approved for a
+// session linked to an SSH host (ADR 0064 P2). Mirrors the sidecar SshApprovalMode.
+//   prompt  — ask before every remote command / write (default, safest)
+//   session — ask once per tool, then remember for the rest of the session
+//   auto    — run without prompting (explicit opt-in; the UI warns)
+export type SshApprovalMode = 'prompt' | 'session' | 'auto'
+
 export type Session = {
   id: number
   title: string
@@ -333,6 +340,19 @@ export type Session = {
   // "Discuss in session" action on a Task; drives the SessionDetail banner + the
   // sidecar <linked_task> context injection. Round-trips through sessions.upsert.
   aboutTaskId?: string
+  // SSH host this session works with (ADR 0064, P1). Set when created via the
+  // "Open in session" action on an SSH host; drives the SessionDetail banner + the
+  // sidecar <linked_ssh_host> context injection. Round-trips through sessions.upsert.
+  aboutSshHostId?: string
+  // Approval mode for the agent's mutating SSH tools (ADR 0064 P2). Only meaningful
+  // when aboutSshHostId is set. Forwarded per-turn in engine settings; the sidecar
+  // defaults to 'prompt' when unset.
+  sshApprovalMode?: SshApprovalMode
+  // SSH terminal co-pilot (ADR 0064): connId of the visible interactive shell this
+  // session drives. TRANSIENT (renderer-only, NOT persisted) — set by the docked SSH
+  // session panel; forwarded per-turn in sendMessage so the agent gets
+  // ssh_terminal_run targeting THIS terminal instead of headless ssh_exec.
+  sshTerminalConnId?: string
   // GitHub issue/PR URL this session was opened from ("New session" on an issue/PR
   // row). Surfaced in the Info panel as a link; round-trips through sessions.upsert.
   aboutGhUrl?: string

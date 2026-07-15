@@ -160,6 +160,33 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return result.canceled ? [] : result.filePaths
   })
 
+  // Pick a single existing FILE (e.g. an SSH private key). Returns its absolute
+  // path or null on cancel. Optional filters narrow the picker (ADR 0063).
+  ipcMain.handle('dialog:pickFile', async (_e, opts: SavePathOpts = {}): Promise<string | null> => {
+    const win = getWindow()
+    // Expand a leading ~ so callers can point at hidden dirs (e.g. ~/.ssh, where
+    // private keys live) and the dialog opens right there rather than treating ~
+    // literally. showHiddenFiles surfaces dotfiles inside that dir.
+    const defaultPath = opts.defaultPath
+      ? opts.defaultPath === '~'
+        ? homedir()
+        : opts.defaultPath.startsWith('~/')
+          ? join(homedir(), opts.defaultPath.slice(2))
+          : opts.defaultPath
+      : undefined
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile', 'showHiddenFiles'],
+      ...(opts.title ? { title: opts.title } : {}),
+      ...(defaultPath ? { defaultPath } : {}),
+      ...(opts.filters ? { filters: opts.filters } : {}),
+    }
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
   // Pick a save location only — the engine writes the file (e.g. git format-patch
   // stays inside the workspace, invariant #3). Mirrors Tauri's plugin-dialog save.
   ipcMain.handle('dialog:savePath', async (_e, opts: SavePathOpts = {}): Promise<string | null> => {

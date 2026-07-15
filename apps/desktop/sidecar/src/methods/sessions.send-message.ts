@@ -10,6 +10,7 @@ import {
 import { appendMessage, loadSession, updateSessionMetadata } from '../sessions/store.js'
 import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
+import { buildLinkedSshHostBlock } from '../sessions/linked-ssh-host.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { loadProject } from '../projects/store.js'
 import {
@@ -78,6 +79,9 @@ const SessionSettingsSchema = z.object({
   // Response style (ADR 0046) — built-in style id + no-markdown modifier.
   responseStyle: z.string().optional(),
   responseStyleNoMarkdown: z.boolean().optional(),
+  // SSH tool approval mode (ADR 0064 P2). Gates the linked-host SSH tools. Default
+  // 'prompt' (omitted) — ask before every gated SSH call.
+  sshApprovalMode: z.enum(['prompt', 'session', 'auto']).optional(),
 })
 
 // User attachment on the outgoing message (L1: untrusted UI payload). Image
@@ -163,6 +167,15 @@ const Params = z.object({
   // <linked_task> block (the task's status + per-phase output) is injected into
   // this turn's systemPromptAppend so the agent can reason about the results.
   aboutTaskId: z.string().optional(),
+  // Work link (ADR 0064, P1): the SSH host this session works with. When set, a
+  // <linked_ssh_host> block (the host's connection info + metadata, NO secrets) is
+  // injected into this turn's systemPromptAppend so the agent knows the machine.
+  aboutSshHostId: z.string().optional(),
+  // SSH terminal co-pilot (ADR 0064): the connId of the interactive shell the user
+  // is watching (docked session in /ssh). When set, the agent gets ssh_terminal_run
+  // (drives THIS visible terminal) instead of the headless ssh_exec. Ephemeral —
+  // the UI sends the currently-targeted terminal each turn (not persisted).
+  sshTerminalConnId: z.string().optional(),
   // Session-pinned working-set: files (workspace-relative paths, read fresh each
   // turn) + free-text notes, injected as a <pinned_context> block. Mirrors the
   // session's persisted pinnedContext; forwarded each turn (same trust model as
@@ -239,6 +252,7 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
   if (parsed.responseStyleNoMarkdown !== undefined) {
     base.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown
   }
+  if (parsed.sshApprovalMode !== undefined) base.sshApprovalMode = parsed.sshApprovalMode
   return base
 }
 
@@ -865,6 +879,18 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     }
   }
 
+  // Work link (ADR 0064, P1): when this session works with an SSH host, inject the
+  // host's connection info as a <linked_ssh_host> block (NO secrets). Rebuilt each
+  // turn so an edited host stays fresh. Best-effort — a missing host yields no block.
+  if (params.aboutSshHostId) {
+    const linkedSshHost = await buildLinkedSshHostBlock(params.aboutSshHostId)
+    if (linkedSshHost) {
+      systemPromptAppend = systemPromptAppend
+        ? `${systemPromptAppend}\n\n${linkedSshHost}`
+        : linkedSshHost
+    }
+  }
+
   // Pinned context (session working-set): prepend so it leads the appended context
   // and rules (added later in run-stream) can still override it. Read fresh each
   // turn so edits to a pinned file take effect on the next message.
@@ -1178,6 +1204,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(cwd ? { cwd } : {}),
         ...(params.projectId ? { projectId: params.projectId } : {}),
+        // Linked SSH host (ADR 0064 P2): the Pi runtime pushes the scoped SSH tools
+        // for this host. sshApprovalMode rides along in `settings`.
+        ...(params.aboutSshHostId ? { aboutSshHostId: params.aboutSshHostId } : {}),
+        ...(params.sshTerminalConnId ? { sshTerminalConnId: params.sshTerminalConnId } : {}),
         ...(params.disabledTools && params.disabledTools.length
           ? { disabledTools: params.disabledTools }
           : {}),

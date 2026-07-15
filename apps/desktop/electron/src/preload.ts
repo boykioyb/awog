@@ -75,6 +75,8 @@ const awog = {
   // supported replacement (runs in the sandboxed preload). Returns '' if the
   // File did not originate from a real filesystem entry.
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+  pickFile: (opts?: SavePathOpts): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:pickFile', opts ?? {}),
   savePath: (opts?: SavePathOpts): Promise<string | null> =>
     ipcRenderer.invoke('dialog:savePath', opts ?? {}),
 

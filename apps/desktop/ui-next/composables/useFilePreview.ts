@@ -98,28 +98,43 @@ export function provideFilePreview(
   }
   const baseName = (p: string): string => p.split('/').pop() || p
   // Map a written path to a REAL workspace-relative path, or null when no file
-  // matches. Tries, in order: the path as-is, a suffix match (wrong-base relative),
-  // then a unique-ish basename match (shortest path wins). Returns null when the
-  // file index is empty/unavailable so callers can tell "exists" from "can't verify".
+  // matches. Match tiers, most-specific first (directory-preserving beats basename-only,
+  // because a bare filename can collide with same-named files all over the repo):
+  //   1. exact full path — authoritative.
+  //   2. directory-preserving match — the written path and a real file share a full
+  //      trailing segment. Covers an UNDER-qualified link (`architecture/data-model.md`
+  //      → `docs/architecture/data-model.md`, real path longer) AND an OVER-qualified one
+  //      anchored at an ancestor cwd (`awog/docs/x.md` → `docs/x.md`, written path longer
+  //      — memory: session-file-link-path-base). Requires the shorter side to carry a
+  //      directory, so it never degenerates into a basename guess.
+  //   3. basename-only — last resort, no directory info survives.
+  // Within tiers 2 & 3 the session's touched files (its working context) win over an
+  // arbitrary global hit, then the shortest path. Returns null when the file index is
+  // empty/unavailable so callers can tell "exists" from "can't verify".
   async function matchPath(r: string, raw: string, hints: string[]): Promise<string | null> {
     const files = await workspaceFiles(r)
     if (!files.length) return null
     let p = raw
     if (p.startsWith(r + '/') || p.startsWith(r + '\\')) p = p.slice(r.length) // absolute-in-root
     p = p.replace(/^[/\\]+/, '')
-    if (files.includes(p)) return p // exact full path wins (authoritative)
+    if (files.includes(p)) return p // tier 1 — exact full path wins
+
+    // tier 2 — directory-preserving. Both branches keep at least one directory segment
+    // from the shorter side, so `plan.md` (bare) falls through to tier 3 instead of
+    // matching every `*/plan.md`.
+    const dirMatch = (f: string): boolean =>
+      f === p ||
+      (p.includes('/') && f.endsWith('/' + p)) || // link under-qualified: real path longer
+      (f.includes('/') && p.endsWith('/' + f)) // link over-qualified: ancestor-cwd prefix
+    const hintDir = hints.find(dirMatch)
+    if (hintDir) return hintDir
+    const globalDir = files.filter(dirMatch).sort((a, b) => a.length - b.length)
+    if (globalDir[0]) return globalDir[0]
+
+    // tier 3 — basename-only, prefer a touched file over an arbitrary same-named one.
     const base = baseName(p)
-    // Anchor to the model's working context BEFORE the global fallbacks: a relative
-    // link like `[plan.md](plan.md)` is relative to the doc it's about, so in a repo
-    // with dozens of same-named files the one the SESSION actually touched (wrote/
-    // edited) is the right target — not an arbitrary global basename hit. Suffix match
-    // first (handles `e-contracts/plan.md` → `tasks/e-contracts/plan.md`), then bare
-    // basename. A touched path exists on disk even when untracked, so no git gating.
-    const hint =
-      hints.find((h) => h === p || h.endsWith('/' + p)) ?? hints.find((h) => baseName(h) === base)
-    if (hint) return hint
-    const suffix = files.find((f) => f === p || f.endsWith('/' + p))
-    if (suffix) return suffix
+    const hintBase = hints.find((h) => baseName(h) === base)
+    if (hintBase) return hintBase
     const hits = files.filter((f) => baseName(f) === base).sort((a, b) => a.length - b.length)
     return hits[0] ?? null
   }

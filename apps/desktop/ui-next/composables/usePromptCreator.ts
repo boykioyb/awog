@@ -42,6 +42,9 @@ export type PromptCreatorConfig = {
   // Account id passed to the author RPC (provider account). Null → no account
   // connected, the send is refused with a clear error.
   accountId: () => string | null
+  // Extra params merged into every author RPC call (e.g. a source-edit context).
+  // Reactive getter so the caller can vary it per turn. Optional.
+  extraParams?: () => Record<string, unknown>
 }
 
 type AuthorChunkPayload = { messageId: string; delta: string }
@@ -72,6 +75,9 @@ export function usePromptCreator(config: PromptCreatorConfig) {
   const streamingSteps = ref<CreatorStep[]>([])
   const error = ref<string | null>(null)
   const isStreaming = ref(false)
+  // Raw payload of the last `<method>.done` event — carries any author-specific
+  // extras (e.g. the written source slug) the caller acts on after a turn.
+  const lastDone = ref<Record<string, unknown> | null>(null)
 
   const currentMessageId = ref<string | null>(null)
   let unlisten: UnlistenFn | null = null
@@ -108,6 +114,7 @@ export function usePromptCreator(config: PromptCreatorConfig) {
       // Server-authoritative text overrides the accumulated stream (handles
       // runtimes that skip partial deltas for short replies).
       if (evt.payload.text) streamingText.value = evt.payload.text
+      lastDone.value = evt.payload as Record<string, unknown>
     }
   }
 
@@ -148,6 +155,7 @@ export function usePromptCreator(config: PromptCreatorConfig) {
     messages.value = [...messages.value, { role: 'user', text: trimmed }]
     streamingText.value = ''
     streamingSteps.value = []
+    lastDone.value = null
     isStreaming.value = true
 
     const messageId = `pc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
@@ -163,6 +171,7 @@ export function usePromptCreator(config: PromptCreatorConfig) {
         userText: trimmed,
         accountId,
         scope: config.scope(),
+        ...(config.extraParams?.() ?? {}),
       })
       messages.value = [
         ...messages.value,
@@ -193,6 +202,7 @@ export function usePromptCreator(config: PromptCreatorConfig) {
     error,
     isStreaming,
     canSend,
+    lastDone,
     // lifecycle
     subscribe,
     teardown,

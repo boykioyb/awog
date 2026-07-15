@@ -22,6 +22,13 @@ export const PROJECT_COLOR_PALETTE: { token: string; label: string }[] = [
 // Neutral fallback for projects the user hasn't colored.
 export const PROJECT_COLOR_DEFAULT = 'var(--textDim)'
 
+// A stored value is "custom" when it's a raw hex the user picked from the native
+// color picker (e.g. `#ff5733`) — i.e. not a theme token from the palette and not
+// the neutral default. Used by the picker UI to highlight the custom swatch.
+export function isCustomColor(value: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(value)
+}
+
 function read(): Record<string, string> {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')

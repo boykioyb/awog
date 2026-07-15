@@ -34,5 +34,24 @@ export function useSessionTaskLink() {
     await navigateTo('/sessions')
   }
 
-  return { openSession, openTask, discussInSession }
+  // Create a fresh session bound to an SSH host (aboutSshHostId) and navigate to it
+  // (ADR 0064). The sidecar injects the host's connection info as <linked_ssh_host>
+  // context each turn, and (P2) the agent gets scoped SSH tools (ssh_exec / SFTP)
+  // governed by the session's sshApprovalMode.
+  async function discussInSshSession(
+    hostId: string,
+    projectId: string,
+    title: string,
+  ): Promise<void> {
+    sessions.createForSshHost(hostId, projectId, title)
+    await navigateTo('/sessions')
+  }
+
+  // Open the SSH page (used by the SessionDetail "working with host" banner). The
+  // host is selected there via the page's own selection; this just navigates.
+  async function openSshHost(_hostId: string): Promise<void> {
+    await navigateTo('/ssh')
+  }
+
+  return { openSession, openTask, discussInSession, discussInSshSession, openSshHost }
 }

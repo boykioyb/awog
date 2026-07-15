@@ -71,62 +71,57 @@
       </template>
 
       <!-- Ops. While an op is in flight all three disable; the active one shows a
-           spinner + progress and gains an adjacent cancel (✕) so a hung
-           fetch/pull/push can be aborted instead of spinning forever. -->
-      <button class="btn sm" :disabled="busy" @click="emit('fetch')">
-        <Icon
-          name="refresh"
-          :class="{ gspin: syncOp?.op === 'fetch' }"
-          style="width: 13px; height: 13px"
-        />
-        {{ syncOp?.op === 'fetch' ? syncLabel : t('git.ops.fetch') }}
-      </button>
-      <button
-        v-if="syncOp?.op === 'fetch'"
-        class="btn sm gdanger"
-        :title="t('git.ops.cancel')"
-        @click="emit('cancel', 'fetch')"
-      >
-        <Icon name="x" style="width: 13px; height: 13px" />
-      </button>
-      <button class="btn sm" :disabled="busy" @click="emit('pull')">
-        <Icon
+           spinner + progress and gains an attached cancel (✕) — grouped in .gop and
+           edge-joined so "Push ✕" reads as one control, not a detached box. -->
+      <span class="gop">
+        <button class="btn sm" :disabled="busy" @click="emit('fetch')">
+          <span v-if="syncOp?.op === 'fetch'" class="gspin-ring" />
+          <Icon v-else name="refresh" style="width: 13px; height: 13px" />
+          {{ syncOp?.op === 'fetch' ? syncLabel : t('git.ops.fetch') }}
+        </button>
+        <button
+          v-if="syncOp?.op === 'fetch'"
+          class="gopx"
+          :title="t('git.ops.cancel')"
+          @click="emit('cancel', 'fetch')"
+        >
+          <Icon name="x" style="width: 13px; height: 13px" />
+        </button>
+      </span>
+      <span class="gop">
+        <button class="btn sm" :disabled="busy" @click="emit('pull')">
+          <span v-if="syncOp?.op === 'pull'" class="gspin-ring" />
+          {{ syncOp?.op === 'pull' ? syncLabel : t('git.ops.pullWord') }}
+          <span v-if="!syncOp && behind" class="mono" style="font-size: 0.8462rem">
+            ↓{{ behind }}
+          </span>
+        </button>
+        <button
           v-if="syncOp?.op === 'pull'"
-          name="refresh"
-          class="gspin"
-          style="width: 13px; height: 13px"
-        />
-        {{ syncOp?.op === 'pull' ? syncLabel : t('git.ops.pullWord') }}
-        <span v-if="!syncOp && behind" class="mono" style="font-size: 0.8462rem">
-          ↓{{ behind }}
-        </span>
-      </button>
-      <button
-        v-if="syncOp?.op === 'pull'"
-        class="btn sm gdanger"
-        :title="t('git.ops.cancel')"
-        @click="emit('cancel', 'pull')"
-      >
-        <Icon name="x" style="width: 13px; height: 13px" />
-      </button>
-      <button class="btn pri sm" :disabled="busy" @click="emit('push')">
-        <Icon
+          class="gopx"
+          :title="t('git.ops.cancel')"
+          @click="emit('cancel', 'pull')"
+        >
+          <Icon name="x" style="width: 13px; height: 13px" />
+        </button>
+      </span>
+      <span class="gop">
+        <button class="btn pri sm" :disabled="busy" @click="emit('push')">
+          <span v-if="syncOp?.op === 'push'" class="gspin-ring" />
+          {{ syncOp?.op === 'push' ? syncLabel : t('git.ops.pushWord') }}
+          <span v-if="!syncOp && ahead" class="mono" style="font-size: 0.8462rem">
+            ↑{{ ahead }}
+          </span>
+        </button>
+        <button
           v-if="syncOp?.op === 'push'"
-          name="refresh"
-          class="gspin"
-          style="width: 13px; height: 13px"
-        />
-        {{ syncOp?.op === 'push' ? syncLabel : t('git.ops.pushWord') }}
-        <span v-if="!syncOp && ahead" class="mono" style="font-size: 0.8462rem">↑{{ ahead }}</span>
-      </button>
-      <button
-        v-if="syncOp?.op === 'push'"
-        class="btn sm gdanger"
-        :title="t('git.ops.cancel')"
-        @click="emit('cancel', 'push')"
-      >
-        <Icon name="x" style="width: 13px; height: 13px" />
-      </button>
+          class="gopx"
+          :title="t('git.ops.cancel')"
+          @click="emit('cancel', 'push')"
+        >
+          <Icon name="x" style="width: 13px; height: 13px" />
+        </button>
+      </span>
 
       <span class="gsep" />
 
@@ -143,7 +138,7 @@
         </span>
       </button>
 
-      <button class="btn sm" :title="t('git.header.identity')" @click="emit('open-identity')">
+      <button class="btn sm gicon" :title="t('git.header.identity')" @click="emit('open-identity')">
         <Icon name="settings" style="width: 13px; height: 13px" />
       </button>
     </template>
@@ -397,18 +392,80 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   color: var(--textDim);
 }
 
-/* Spinner for the in-flight fetch/pull/push button (no rotate keyframe in the
-   shared prototype.css). Disabled under reduced-motion. */
-.gspin {
-  animation: gspin 0.8s linear infinite;
+/* ── Toolbar controls share one height + radius so the row reads as a single
+   system. Before, pickers (.chip, 3px padding) sat next to ops (.btn.sm, 5px
+   padding) at visibly different heights ("cái to cái nhỏ"). ── */
+.gbar .btn,
+.gbar .chip {
+  height: 28px;
+  border-radius: 7px;
+}
+.gbar .btn.sm {
+  padding: 0 11px;
+}
+.gbar .chip {
+  padding: 0 10px;
+}
+/* Icon-only toolbar buttons (identity settings) → square + centered. */
+.gbar .gicon {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* ── Op + cancel = one joined segment. The ✕ used to be a separate bordered
+   button set off by the row's 9px gap, so it floated detached beside Push. Each
+   op is now grouped with its cancel and their edges are butted so "Push ✕" reads
+   as one control. The 9px row gap still separates Fetch / Pull / Push groups. ── */
+.gop {
+  display: inline-flex;
+  align-items: stretch;
+}
+.gop:has(> .gopx) > .btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.gopx {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 28px;
+  margin-left: -1px;
+  border: 1px solid var(--border);
+  border-radius: 0 7px 7px 0;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+.gopx:hover {
+  background: var(--dangerBg);
+  border-color: var(--dangerBorder);
+}
+
+/* In-flight fetch/pull/push spinner. A clean CSS arc (3/4 ring in the button's own
+   currentColor) reads as a proper loading spinner — the old rotating "refresh"
+   glyph looked wobbly/loose. Only transform animates (GPU, no reflow). */
+.gspin-ring {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  opacity: 0.9;
+  animation: gspin 0.6s linear infinite;
 }
 @keyframes gspin {
   to {
     transform: rotate(360deg);
   }
 }
+/* Reduced motion: no spin, but keep a static arc so "working" is still shown. */
 @media (prefers-reduced-motion: reduce) {
-  .gspin {
+  .gspin-ring {
     animation: none;
   }
 }

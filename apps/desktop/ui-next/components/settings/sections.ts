@@ -10,6 +10,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'workspace', labelKey: 'settings.nav.workspace', icon: 'folder' },
   { id: 'git', labelKey: 'settings.nav.git', icon: 'git' },
   { id: 'sessions', labelKey: 'settings.nav.sessions', icon: 'sessions' },
+  { id: 'keymap', labelKey: 'settings.nav.keymap', icon: 'commands' },
   { id: 'about', labelKey: 'settings.nav.about', icon: 'alert' },
 ] as const
 

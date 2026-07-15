@@ -117,10 +117,35 @@ if (!gotLock) {
 // File/Edit/View/Window/Help bar entirely. macOS: the menu lives in the system
 // bar (not the window), so keep a MINIMAL one so ⌘C/⌘V/⌘X/⌘A/⌘Q/⌘W still work —
 // dropping it breaks those shortcuts.
+//
+// The default `role: 'appMenu'` binds ⌘H to "Hide", and on macOS a menu
+// accelerator is consumed before the key event reaches the web view — so the
+// renderer could never see ⌘H. AWOG's global shortcuts use ⌘H to open the
+// session Files view, so we rebuild the app submenu with a Hide item that has NO
+// accelerator (Hide stays in the menu, just loses its shortcut). Every other
+// standard item keeps its role + default accelerator.
 function setupAppMenu(): void {
   if (process.platform === 'darwin') {
     Menu.setApplicationMenu(
-      Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]),
+      Menu.buildFromTemplate([
+        {
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'services' },
+            { type: 'separator' },
+            // Hide without ⌘H — freed for the renderer's Files shortcut.
+            { label: `Hide ${app.name}`, click: () => app.hide() },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' },
+          ],
+        },
+        { role: 'editMenu' },
+        { role: 'windowMenu' },
+      ]),
     )
   } else {
     Menu.setApplicationMenu(null)

@@ -172,6 +172,13 @@ export interface CommitResult {
   sha7: string
 }
 
+export interface PrSummaryResult {
+  title: string
+  description: string
+  model: string
+  truncated: boolean
+}
+
 export interface BranchCreateParams {
   name: string
   from?: string
@@ -403,6 +410,10 @@ export function useGitApi() {
         'git.generateCommitMessage',
         { workspaceRoot, ...params },
       ),
+    generatePrSummary: (
+      workspaceRoot: string,
+      params: { head: string; base: string; titleRule?: string },
+    ) => sidecar.request<PrSummaryResult>('git.generatePrSummary', { workspaceRoot, ...params }),
     stashSave: (workspaceRoot: string, params: StashSaveParams) =>
       sidecar.request<StashSaveResult>('git.stashSave', { workspaceRoot, ...params }),
     stashPop: (workspaceRoot: string, index: number) =>
