@@ -44,7 +44,11 @@
               :title="t('sessions.export.promptHint')"
               @click="format = 'prompt'"
             >
-              <Icon name="sparkles" style="width: 12px; height: 12px" />
+              <Icon
+                name="sparkles"
+                :class="{ 'expseg-busy': promptLoading }"
+                style="width: 12px; height: 12px"
+              />
               {{ t('sessions.export.prompt') }}
             </button>
           </div>
@@ -101,17 +105,29 @@
         </div>
 
         <div class="expmodal-body">
-          <div v-if="format === 'prompt' && promptLoading" class="expgen">
-            <Icon name="sparkles" class="expgen-spin" style="width: 20px; height: 20px" />
-            <span>{{ t('sessions.export.promptGenerating') }}</span>
-          </div>
-          <div v-else-if="format === 'prompt' && promptError" class="expgen err">
-            <span>{{ promptError }}</span>
-            <button class="expbtn" @click="onRegenerate">
-              <Icon name="refresh" style="width: 13px; height: 13px" />
-              {{ t('sessions.export.retry') }}
-            </button>
-          </div>
+          <template v-if="format === 'prompt'">
+            <div v-if="promptError" class="expgen err">
+              <span>{{ promptError }}</span>
+              <button class="expbtn" @click="onRegenerate">
+                <Icon name="refresh" style="width: 13px; height: 13px" />
+                {{ t('sessions.export.retry') }}
+              </button>
+            </div>
+            <div v-else-if="promptLoading && !promptText" class="expgen">
+              <Icon name="sparkles" class="expgen-spin" style="width: 20px; height: 20px" />
+              <span>{{ t('sessions.export.promptGenerating') }}</span>
+            </div>
+            <!-- Editable so the user can tweak the prompt before copy/save. Readonly
+                 while streaming (deltas append programmatically); editable once done. -->
+            <textarea
+              v-else
+              v-model="promptText"
+              class="exppromptarea"
+              :readonly="promptLoading"
+              :aria-label="t('sessions.export.prompt')"
+              spellcheck="false"
+            />
+          </template>
           <pre v-else class="exppreview">{{ content }}</pre>
         </div>
       </div>
@@ -187,14 +203,20 @@ const contentReady = computed(
   () => format.value !== 'prompt' || (!promptLoading.value && !!promptText.value),
 )
 
-// One-shot summarize the session into a reusable handoff prompt (session's own model).
+// Streaming summarize of the session into a reusable handoff prompt. Deltas append to
+// promptText live (the textarea shows it building); the returned string is the
+// authoritative final text in case any chunk was dropped.
 async function generatePrompt(): Promise<void> {
   const id = sessionId.value
   if (id == null) return
   promptLoading.value = true
   promptError.value = ''
+  promptText.value = ''
   try {
-    promptText.value = await store.summarizeToPrompt(id)
+    const full = await store.summarizeToPrompt(id, (delta) => {
+      promptText.value += delta
+    })
+    promptText.value = full
   } catch (err) {
     promptError.value = err instanceof Error ? err.message : t('sessions.export.promptFailed')
     promptText.value = ''
@@ -429,6 +451,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 12px;
   line-height: 1.55;
   color: var(--text);
+}
+/* Prompt mode: editable text area filling the body — user can tweak before copy/save.
+   resize:none because the modal body governs the height (single-purpose modal input). */
+.exppromptarea {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--code);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Prompt tab icon pulses while the summary is streaming — a loading cue on the tab. */
+.expseg-busy {
+  color: var(--accent);
+  animation: expgen-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .expseg-busy {
+    animation: none;
+  }
 }
 /* Prompt-mode placeholder: centered generating / error state. */
 .expgen {

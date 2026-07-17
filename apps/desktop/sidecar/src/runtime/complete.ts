@@ -10,7 +10,12 @@
 //     so a no-tools completeSimple cannot reach parity. authorPi drives
 //     runAgentLoop (like runtime/invoke.ts) and forwards deltas + tool steps.
 
-import { completeSimple, type AssistantMessage, type Message } from '@earendil-works/pi-ai'
+import {
+  completeSimple,
+  streamSimple,
+  type AssistantMessage,
+  type Message,
+} from '@earendil-works/pi-ai'
 import { runAgentLoop, type AgentEvent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
@@ -100,6 +105,45 @@ export async function completePi(args: CompleteArgs): Promise<string> {
       throw new RpcError(-32021, `model error: ${result.errorMessage ?? 'unknown'}`)
     }
     return concatText(result)
+  } catch (err) {
+    throw mapErr(err, 'completion')
+  }
+}
+
+// Streaming pure-text one-shot. Same shape as completePi but forwards each text
+// delta via onDelta as it arrives (the caller relays them to the UI) and returns
+// the full text at the end. No tools — the model just generates. Used by the
+// summarize-prompt method so the Export dialog shows the prompt building live
+// instead of a blank spinner.
+export async function streamCompletePi(
+  args: CompleteArgs,
+  onDelta: (delta: string) => void,
+): Promise<string> {
+  const { account, settings, model, getApiKey } = await resolveForRun(args)
+  const apiKey = await getApiKey(settings.provider)
+  if (!apiKey) throw new RpcError(-32020, 'AUTH_EXPIRED: re-authenticate via Settings')
+
+  log.info('one-shot stream (pi)', { model: settings.modelId, account: account.id })
+
+  try {
+    const events = streamSimple(
+      model,
+      {
+        systemPrompt: args.systemPrompt,
+        messages: [{ role: 'user', content: args.prompt, timestamp: Date.now() }],
+      },
+      { apiKey, onResponse: (resp) => recordCodexUsageFromHeaders(account.id, resp.headers) },
+    )
+    let text = ''
+    for await (const ev of events) {
+      if (ev.type === 'text_delta' && ev.delta.length > 0) {
+        text += ev.delta
+        onDelta(ev.delta)
+      } else if (ev.type === 'error') {
+        throw new RpcError(-32021, `model error: ${ev.error.errorMessage ?? 'unknown'}`)
+      }
+    }
+    return text
   } catch (err) {
     throw mapErr(err, 'completion')
   }

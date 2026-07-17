@@ -2780,10 +2780,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     return res.text
   }
 
-  // Distill the whole session into ONE self-contained handoff prompt (one-shot LLM,
-  // session's own model). Used by the Export dialog's "Prompt" mode. Throws on failure
-  // so the caller can surface it; the transcript is read sidecar-side (needs engineId).
-  async function summarizeToPrompt(id: number): Promise<string> {
+  // Distill the whole session into ONE self-contained handoff prompt (streaming
+  // one-shot LLM). Used by the Export dialog's "Prompt" mode. When onDelta is given,
+  // text chunks are forwarded live as the model generates; the returned string is the
+  // authoritative full text. Throws on failure so the caller can surface it; the
+  // transcript is read sidecar-side (needs engineId).
+  let summarizeSeq = 0
+  async function summarizeToPrompt(id: number, onDelta?: (delta: string) => void): Promise<string> {
     const s = byId(id)
     if (!s) throw new Error('Session not found')
     if (!useIpc || !s.engineId) {
@@ -2791,13 +2794,27 @@ export const useSessionsStore = defineStore('sessions', () => {
       return `Continue the session "${s.title}".`
     }
     const settings = engineSettings(s)
-    const res = await sc.request<{ text: string }>('sessions.summarizePrompt', {
-      sessionId: s.engineId,
-      provider: settings.provider,
-      modelId: settings.modelId,
-      ...(s.accountId ? { accountId: s.accountId } : {}),
-    })
-    return res.text
+    const requestId = `sum-${s.engineId}-${++summarizeSeq}`
+    let unlistenChunks: (() => void) | undefined
+    if (onDelta) {
+      unlistenChunks = await sc.onEvent((evt) => {
+        if (evt.type !== 'sessions.summarizePrompt.chunk') return
+        const p = evt.payload as { requestId?: string; delta?: string }
+        if (p.requestId === requestId && typeof p.delta === 'string') onDelta(p.delta)
+      })
+    }
+    try {
+      const res = await sc.request<{ text: string }>('sessions.summarizePrompt', {
+        requestId,
+        sessionId: s.engineId,
+        provider: settings.provider,
+        modelId: settings.modelId,
+        ...(s.accountId ? { accountId: s.accountId } : {}),
+      })
+      return res.text
+    } finally {
+      unlistenChunks?.()
+    }
   }
 
   // Summarize the first exchange into a concise title + rename. Best-effort: any
