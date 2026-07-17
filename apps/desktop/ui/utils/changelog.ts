@@ -30,6 +30,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.6',
+    date: '2026-07-17',
+    highlight: {
+      en: 'Export a session as one ready-to-reuse prompt, and a fix that keeps a folder from splitting into two projects.',
+      vi: 'Xuất một session thành một prompt sẵn sàng tái sử dụng, và bản sửa để một thư mục không bị tách thành hai project.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'New "Prompt" export mode: turn a whole session into one self-contained prompt you can paste into a fresh chat to pick up the work — goal, key decisions, current state, and next steps. Copy it or save it as a .prompt.md file.',
+        vi: 'Chế độ xuất "Prompt" mới: biến cả một session thành một prompt độc lập để bạn dán vào cuộc trò chuyện mới và tiếp tục công việc — mục tiêu, quyết định chính, trạng thái hiện tại và các bước tiếp theo. Copy hoặc lưu thành file .prompt.md.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Re-adding a folder you already have as a project no longer splits it into two same-named projects with the sessions stranded on one of them — the existing project is reused instead.',
+        vi: 'Thêm lại một thư mục đã là project không còn tách nó thành hai project trùng tên với các session mắc kẹt ở một bên — project sẵn có được dùng lại.',
+      },
+    ],
+  },
+  {
     version: '0.24.5',
     date: '2026-07-17',
     highlight: {
