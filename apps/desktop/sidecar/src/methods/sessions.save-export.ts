@@ -15,9 +15,17 @@ const MAX_CONTENT_BYTES = 16 * 1024 * 1024 // 16 MB — a transcript export, not
 
 const Params = z.object({
   sessionId: z.string().min(1),
-  format: z.enum(['md', 'html']),
+  format: z.enum(['md', 'html', 'prompt']),
   content: z.string().max(MAX_CONTENT_BYTES),
 })
+
+// File extension per export format. The summary "prompt" is plain markdown text, so
+// it saves as `.prompt.md` — distinct from a full `.md` transcript export.
+const EXT: Record<'md' | 'html' | 'prompt', string> = {
+  md: 'md',
+  html: 'html',
+  prompt: 'prompt.md',
+}
 
 // Slugify a session title into a safe filename stem: keep alnum/dash/underscore,
 // collapse the rest to single dashes, trim, bound length. Always non-empty.
@@ -47,7 +55,7 @@ register('sessions.save-export', async (raw) => {
   await mkdir(dir, { recursive: true, mode: 0o700 })
 
   const shortId = params.sessionId.slice(0, 8)
-  const filename = `${slugify(session.title)}-${shortId}.${params.format}`
+  const filename = `${slugify(session.title)}-${shortId}.${EXT[params.format]}`
   const path = join(dir, filename)
   await writeFile(path, params.content, { encoding: 'utf8', mode: 0o600 })
 

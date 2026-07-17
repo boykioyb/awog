@@ -36,14 +36,39 @@
               <Icon name="code" style="width: 12px; height: 12px" />
               {{ t('sessions.export.html') }}
             </button>
+            <button
+              class="expseg-btn"
+              :class="{ on: format === 'prompt' }"
+              role="tab"
+              :aria-selected="format === 'prompt'"
+              :title="t('sessions.export.promptHint')"
+              @click="format = 'prompt'"
+            >
+              <Icon name="sparkles" style="width: 12px; height: 12px" />
+              {{ t('sessions.export.prompt') }}
+            </button>
           </div>
           <span style="flex: 1" />
           <span v-if="status" class="expstatus" :class="{ err: statusErr }">{{ status }}</span>
-          <button class="expbtn" @click="onCopy">
+          <button
+            v-if="format === 'prompt'"
+            class="expbtn"
+            :disabled="promptLoading"
+            @click="onRegenerate"
+          >
+            <Icon name="refresh" style="width: 13px; height: 13px" />
+            {{ t('sessions.export.regenerate') }}
+          </button>
+          <button class="expbtn" :disabled="!contentReady" @click="onCopy">
             <Icon name="copy" style="width: 13px; height: 13px" />
             {{ t('sessions.export.copy') }}
           </button>
-          <button class="expbtn pri" :disabled="!canSave" :title="saveTitle" @click="onSave">
+          <button
+            class="expbtn pri"
+            :disabled="!canSave || !contentReady"
+            :title="saveTitle"
+            @click="onSave"
+          >
             <Icon name="save" style="width: 13px; height: 13px" />
             {{ t('sessions.export.save') }}
           </button>
@@ -76,7 +101,18 @@
         </div>
 
         <div class="expmodal-body">
-          <pre class="exppreview">{{ content }}</pre>
+          <div v-if="format === 'prompt' && promptLoading" class="expgen">
+            <Icon name="sparkles" class="expgen-spin" style="width: 20px; height: 20px" />
+            <span>{{ t('sessions.export.promptGenerating') }}</span>
+          </div>
+          <div v-else-if="format === 'prompt' && promptError" class="expgen err">
+            <span>{{ promptError }}</span>
+            <button class="expbtn" @click="onRegenerate">
+              <Icon name="refresh" style="width: 13px; height: 13px" />
+              {{ t('sessions.export.retry') }}
+            </button>
+          </div>
+          <pre v-else class="exppreview">{{ content }}</pre>
         </div>
       </div>
     </div>
@@ -115,21 +151,61 @@ const statusErr = ref(false)
 // The last successful save — drives the readable "saved" bar + its file actions.
 const saved = ref<SaveResult | null>(null)
 
+// 'prompt' mode: the LLM-generated summary prompt + its async state. Cached so toggling
+// formats doesn't re-run the model — Regenerate forces a fresh one.
+const promptText = ref('')
+const promptLoading = ref(false)
+const promptError = ref('')
+
 const session = computed(() => store.sessions.find((s) => s.id === sessionId.value) ?? null)
 
 // Make sure the transcript is loaded (a session exported from the list context menu
 // may not be the active one). Reset the dialog state each time it (re)opens.
 watch(sessionId, (id) => {
   resetState()
+  promptText.value = ''
+  promptError.value = ''
   format.value = 'md'
   if (id != null) void store.ensureLoaded(id)
 })
 
-// A saved export belongs to one format; switching format invalidates it (the file
-// on disk no longer matches the visible content), so clear the saved bar.
-watch(format, resetState)
+// Switching format invalidates the saved bar. Entering 'prompt' the first time (per
+// session) kicks off the summary; a cached prompt is reused on later toggles.
+watch(format, (f) => {
+  resetState()
+  if (f === 'prompt' && !promptText.value && !promptLoading.value) void generatePrompt()
+})
 
-const content = computed(() => (session.value ? buildContent(session.value, format.value) : ''))
+const content = computed(() => {
+  if (!session.value) return ''
+  if (format.value === 'prompt') return promptText.value
+  return buildContent(session.value, format.value)
+})
+
+// Copy/Save need real content — for 'prompt' that means the async summary finished.
+const contentReady = computed(
+  () => format.value !== 'prompt' || (!promptLoading.value && !!promptText.value),
+)
+
+// One-shot summarize the session into a reusable handoff prompt (session's own model).
+async function generatePrompt(): Promise<void> {
+  const id = sessionId.value
+  if (id == null) return
+  promptLoading.value = true
+  promptError.value = ''
+  try {
+    promptText.value = await store.summarizeToPrompt(id)
+  } catch (err) {
+    promptError.value = err instanceof Error ? err.message : t('sessions.export.promptFailed')
+    promptText.value = ''
+  } finally {
+    promptLoading.value = false
+  }
+}
+
+function onRegenerate(): void {
+  void generatePrompt()
+}
 
 const saveTitle = computed(() => (canSave ? '' : t('sessions.export.saveUnavailable')))
 
@@ -353,5 +429,37 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 12px;
   line-height: 1.55;
   color: var(--text);
+}
+/* Prompt-mode placeholder: centered generating / error state. */
+.expgen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--textDim);
+  text-align: center;
+}
+.expgen.err {
+  color: var(--danger);
+}
+.expgen-spin {
+  color: var(--accent);
+  animation: expgen-pulse 1.2s ease-in-out infinite;
+}
+@keyframes expgen-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .expgen-spin {
+    animation: none;
+  }
 }
 </style>

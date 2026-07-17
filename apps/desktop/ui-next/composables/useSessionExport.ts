@@ -14,7 +14,10 @@ import type { AssistantBlock, Session } from '~/composables/useSessionsData'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
 import { useSidecar } from '~/composables/useSidecar'
 
-export type ExportFormat = 'md' | 'html'
+// 'md' / 'html' are built client-side from the transcript; 'prompt' is an LLM-generated
+// summary the modal supplies directly (buildContent never renders it). All three are
+// valid save-export formats (the sidecar picks the file extension).
+export type ExportFormat = 'md' | 'html' | 'prompt'
 
 // Result of a successful save: the absolute path (for display / copy) plus the
 // base + workspace-relative path the reveal / open-in-editor IPC validates against.
@@ -171,7 +174,11 @@ ${body}
   }
 
   function buildContent(session: Session, format: ExportFormat): string {
-    return format === 'html' ? buildHtml(session) : buildMarkdown(session)
+    if (format === 'html') return buildHtml(session)
+    // 'prompt' content is LLM-generated (async) — the modal supplies it directly and
+    // never calls buildContent for it; return '' defensively.
+    if (format === 'prompt') return ''
+    return buildMarkdown(session)
   }
 
   // Copy to the OS clipboard. Returns false when the clipboard API is unavailable

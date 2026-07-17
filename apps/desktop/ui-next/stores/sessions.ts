@@ -2780,6 +2780,26 @@ export const useSessionsStore = defineStore('sessions', () => {
     return res.text
   }
 
+  // Distill the whole session into ONE self-contained handoff prompt (one-shot LLM,
+  // session's own model). Used by the Export dialog's "Prompt" mode. Throws on failure
+  // so the caller can surface it; the transcript is read sidecar-side (needs engineId).
+  async function summarizeToPrompt(id: number): Promise<string> {
+    const s = byId(id)
+    if (!s) throw new Error('Session not found')
+    if (!useIpc || !s.engineId) {
+      // Browser-dev / no engine: no model to call — return a crude placeholder.
+      return `Continue the session "${s.title}".`
+    }
+    const settings = engineSettings(s)
+    const res = await sc.request<{ text: string }>('sessions.summarizePrompt', {
+      sessionId: s.engineId,
+      provider: settings.provider,
+      modelId: settings.modelId,
+      ...(s.accountId ? { accountId: s.accountId } : {}),
+    })
+    return res.text
+  }
+
   // Summarize the first exchange into a concise title + rename. Best-effort: any
   // failure keeps the "New session" placeholder. Reads persisted messages on the
   // sidecar, so call only after the first turn has finalized.
@@ -3124,6 +3144,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     remove,
     rename,
     regenerateTitle,
+    summarizeToPrompt,
     setProject,
     setWorkspaceFolder,
     clearWorkspaceFolder,
