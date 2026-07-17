@@ -30,6 +30,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.7',
+    date: '2026-07-17',
+    highlight: {
+      en: 'The "Prompt" session export now streams as it writes, generates faster, and is editable before you copy or save.',
+      vi: 'Xuất session dạng "Prompt" giờ hiện dần khi đang viết, tạo nhanh hơn, và chỉnh sửa được trước khi copy hay lưu.',
+    },
+    items: [
+      {
+        kind: 'improved',
+        en: 'The "Prompt" export now streams the summary live as it\'s written — with a loading cue on the tab — instead of waiting behind a blank spinner, and it uses a faster model, so the prompt shows up much sooner.',
+        vi: 'Xuất "Prompt" giờ hiển thị bản tóm tắt chạy dần khi đang viết — kèm chỉ báo đang tải trên tab — thay vì chờ sau một spinner trống, và dùng model nhanh hơn, nên prompt xuất hiện sớm hơn nhiều.',
+      },
+      {
+        kind: 'added',
+        en: 'You can now edit the generated prompt directly in the export dialog before copying or saving it.',
+        vi: 'Bạn giờ có thể chỉnh sửa prompt được tạo ngay trong hộp thoại xuất trước khi copy hoặc lưu.',
+      },
+    ],
+  },
+  {
     version: '0.24.6',
     date: '2026-07-17',
     highlight: {
