@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.5',
+    date: '2026-07-17',
+    highlight: {
+      en: 'Sort your sessions your way, live "last active" times, and an unread badge on the app icon.',
+      vi: 'Sắp xếp session theo ý bạn, thời gian "hoạt động gần nhất" cập nhật trực tiếp, và huy hiệu chưa đọc trên icon ứng dụng.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Sort your session list by most recently updated, most recently created, or title (A → Z) — your choice is remembered across restarts.',
+        vi: 'Sắp xếp danh sách session theo cập nhật gần nhất, mới tạo gần nhất, hoặc tên (A → Z) — lựa chọn được ghi nhớ qua các lần khởi động lại.',
+      },
+      {
+        kind: 'improved',
+        en: 'Session times now tick live: a row\'s "3m / 2h / 1d" label advances on its own instead of freezing at whatever it showed when the list loaded.',
+        vi: 'Thời gian session giờ cập nhật trực tiếp: nhãn "3m / 2h / 1d" của mỗi dòng tự trôi theo thời gian thay vì đứng yên ở giá trị lúc mở danh sách.',
+      },
+      {
+        kind: 'added',
+        en: 'The app icon shows an unread badge — a red count on the Dock/taskbar for sessions that finished while you were away (macOS & Linux).',
+        vi: 'Icon ứng dụng hiển thị huy hiệu chưa đọc — số đỏ trên Dock/taskbar cho các session hoàn tất khi bạn vắng mặt (macOS & Linux).',
+      },
+      {
+        kind: 'fixed',
+        en: 'Multi-select is easier: the action bar stays visible the whole time you\'re selecting so "Select all" and Exit are always reachable, and "Select all" flips to "Deselect all" once everything is picked.',
+        vi: 'Chọn nhiều dễ hơn: thanh thao tác luôn hiển thị suốt lúc chọn nên "Chọn tất cả" và Thoát luôn trong tầm với, và "Chọn tất cả" đổi thành "Bỏ chọn tất cả" khi đã chọn hết.',
+      },
+      {
+        kind: 'improved',
+        en: 'Cleaner plans: in plan mode the assistant no longer repeats its plan as a second block of text, and stops after presenting it to wait for your approval.',
+        vi: 'Kế hoạch gọn hơn: ở plan mode, trợ lý không còn lặp lại kế hoạch thành một khối chữ thứ hai, và dừng sau khi trình bày để chờ bạn duyệt.',
+      },
+    ],
+  },
+  {
     version: '0.24.4',
     date: '2026-07-15',
     highlight: {
