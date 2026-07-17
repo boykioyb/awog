@@ -1,6 +1,6 @@
 {
   "name": "awog",
-  "version": "0.24.5",
+  "version": "0.24.6",
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "description": "AWOG — Artifact Workflow Orchestrate Guild (local-first AI team OS)",

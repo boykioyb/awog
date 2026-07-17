@@ -2,7 +2,7 @@
   "name": "awog-ui",
   "private": true,
   "type": "module",
-  "version": "0.24.5",
+  "version": "0.24.6",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
