@@ -31,7 +31,7 @@ type TrayCommand =
   // never matches the main window's store (separate id counters per renderer).
   | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
-type TrayModel = { macTitle: string; tooltip: string }
+type TrayModel = { macTitle: string; tooltip: string; unreadCount: number }
 
 const awog = {
   // Returns the JSON-RPC result, or rejects with the RpcErrorShape so the

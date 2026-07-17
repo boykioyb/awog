@@ -52,7 +52,7 @@
         {{ session.title }}
       </span>
       <span v-if="session.unread && !editing" class="undot" :title="t('sessions.item.unread')" />
-      <span v-if="!editing" class="tm">{{ session.when }}</span>
+      <span v-if="!editing" class="tm">{{ timeLabel }}</span>
     </div>
     <div class="sub">
       <span v-if="!hideProject" class="tag projtag" style="padding: 1px 6px">{{ projName }}</span>
@@ -156,6 +156,14 @@ async function askRemove() {
   })
   if (ok) store.remove(props.session.id)
 }
+
+// LIVE relative-time label derived from the raw `updatedAt` + a shared ticking clock,
+// so an untouched row's "3m → 2h → 1d" advances on its own instead of freezing at its
+// hydrate-time value. Falls back to the snapshot `when` for mock sessions (no updatedAt).
+const now = useNow()
+const timeLabel = computed(() =>
+  props.session.updatedAt ? relativeTime(props.session.updatedAt, now.value) : props.session.when,
+)
 
 const statusColor = computed(() => STATUS_COLOR[props.session.status])
 const statusLabel = computed(() => t(`sessions.status.${props.session.status}`))

@@ -109,7 +109,7 @@
   .li{padding:9px 10px;border-radius:9px;cursor:pointer;margin-bottom:3px;border:1px solid transparent}
   .li:hover{background:var(--bgHover)}
   .li.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 2px 0 0 var(--accent)}
-  .li.on .ttl{color:var(--text);font-weight:650}
+  .li.on .ttl{color:var(--text)}
   .li .lrow{display:flex;align-items:center;gap:8px}
   .li .sdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
   .li .ttl{font-size: 1rem;font-weight:550;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

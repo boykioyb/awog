@@ -7,6 +7,7 @@
   "sessions.sidebar.selectExit": "Exit select mode",
   "sessions.sidebar.selected": "{n} selected",
   "sessions.sidebar.selectAll": "Select all",
+  "sessions.sidebar.deselectAll": "Deselect all",
   "sessions.sidebar.clearSelection": "Clear selection",
   "sessions.sidebar.deleteSelected": "Delete selected",
   "sessions.sidebar.attachments": "{n} attachments",

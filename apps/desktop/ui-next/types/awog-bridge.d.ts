@@ -32,7 +32,7 @@ export type AwogTrayCommand =
   // resolve to the wrong session (or none) in the main window.
   | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
-export type AwogTrayModel = { macTitle: string; tooltip: string }
+export type AwogTrayModel = { macTitle: string; tooltip: string; unreadCount: number }
 
 export interface AwogBridge {
   // Resolves with the JSON-RPC result, or rejects with { code, message, data }.

@@ -38,6 +38,8 @@ export function useTrayStatus() {
         running || attention || unread
           ? t('tray.tooltip.busy', { running, attention, unread })
           : 'AWOG',
+      // Dock badge count (Telegram-style) — the finished-but-unread sessions.
+      unreadCount: unread,
     }
   })
 

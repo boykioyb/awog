@@ -16,8 +16,9 @@ export type TrayCommand =
   | { kind: 'task'; id: string }
 
 // Pushed from the renderer (useTrayStatus). Only the glanceable indicator —
-// the popover computes its own detailed view.
-export type TrayModel = { macTitle: string; tooltip: string }
+// the popover computes its own detailed view. `unreadCount` drives the Dock/taskbar
+// badge (Telegram-style red bubble) — the number of finished-but-unread sessions.
+export type TrayModel = { macTitle: string; tooltip: string; unreadCount: number }
 
 type TrayDeps = {
   // Show + focus the main window (creating it if it was closed).
@@ -45,8 +46,12 @@ export function setupTray(d: TrayDeps): void {
   tray.on('right-click', () => tray?.popUpContextMenu(buildMenu()))
 }
 
-// Apply the renderer's indicator: tooltip + (macOS) the running-count title.
+// Apply the renderer's indicator: Dock badge + tooltip + (macOS) the running-count title.
 export function updateTray(next: TrayModel): void {
+  // Dock/taskbar badge = unread-session count (Telegram-style red bubble). Set BEFORE
+  // the tray guard so it shows even if the tray icon failed to create. setBadgeCount(0)
+  // clears it; macOS shows the number, Linux/Unity too, Windows is a no-op.
+  app.setBadgeCount(Math.max(0, next.unreadCount ?? 0))
   if (!tray) return
   tray.setToolTip(next.tooltip || 'AWOG')
   // macOS-only text beside the menu-bar icon. Guard — undefined elsewhere.

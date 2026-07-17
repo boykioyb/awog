@@ -53,7 +53,7 @@
     <div v-if="showFilters" class="sfdrawer">
       <div class="csrow">
         <span class="cslbl">{{ t('sessions.filter.groupBy') }}</span>
-        <div class="csval" style="position: relative" @click.stop="groupMenu = !groupMenu">
+        <div class="csval" style="position: relative" @click.stop="openGroupMenu">
           {{ groupByLabel }}
           <Icon name="chev" style="width: 13px; height: 13px" />
           <div
@@ -62,13 +62,8 @@
             style="position: absolute; top: 116%; left: 0; right: 0; z-index: 50"
             @click.stop
           >
-            <div
-              v-for="[value, label] in GROUPBY"
-              :key="value"
-              class="mi"
-              @click="selectGroup(value)"
-            >
-              {{ label }}
+            <div v-for="[value] in GROUPBY" :key="value" class="mi" @click="selectGroup(value)">
+              {{ t(`sessions.group.${value}`) }}
               <Icon
                 v-if="value === groupBy"
                 name="check"
@@ -79,28 +74,70 @@
           </div>
         </div>
       </div>
+      <div class="csrow">
+        <span class="cslbl">{{ t('sessions.filter.sortBy') }}</span>
+        <div class="csval" style="position: relative" @click.stop="openSortMenu">
+          {{ sortByLabel }}
+          <Icon name="chev" style="width: 13px; height: 13px" />
+          <div
+            v-if="sortMenu"
+            class="smenu"
+            style="position: absolute; top: 116%; left: 0; right: 0; z-index: 50"
+            @click.stop
+          >
+            <div v-for="value in SORTBY" :key="value" class="mi" @click="selectSort(value)">
+              {{ t(`sessions.sort.${value}`) }}
+              <Icon
+                v-if="value === sortBy"
+                name="check"
+                class="ck"
+                style="width: 13px; height: 13px"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div v-if="selectedCount" class="bulkbar">
-      <span class="lcbox on" :title="t('sessions.sidebar.selectAll')" @click="selectAllFiltered">
-        <Icon name="check" style="width: 11px; height: 11px" />
+    <!-- Bulk bar shows whenever select mode is ON — even with 0 selected — so
+         select-all and the exit affordance are always reachable. (A context-menu
+         "Select" that later ends up with 0 selected used to hide the bar entirely,
+         stranding the user in select mode with no way to select-all or exit.) -->
+    <div v-if="store.selecting" class="bulkbar">
+      <span
+        class="bulkall"
+        :title="
+          allFilteredSelected ? t('sessions.sidebar.deselectAll') : t('sessions.sidebar.selectAll')
+        "
+        @click="selectAllFiltered"
+      >
+        <span class="lcbox" :class="{ on: allFilteredSelected }">
+          <Icon v-if="allFilteredSelected" name="check" style="width: 11px; height: 11px" />
+        </span>
+        <span>
+          {{
+            selectedCount
+              ? t('sessions.sidebar.selected', { n: selectedCount })
+              : t('sessions.sidebar.selectAll')
+          }}
+        </span>
       </span>
-      <span>{{ t('sessions.sidebar.selected', { n: selectedCount }) }}</span>
       <span style="flex: 1" />
       <span
-        class="del"
-        :title="t('sessions.sidebar.clearSelection')"
-        @click="store.clearSelection()"
-      >
-        <Icon name="x" style="width: 13px; height: 13px" />
-      </span>
-      <span
+        v-if="selectedCount"
         class="del"
         :title="t('sessions.sidebar.deleteSelected')"
         style="color: var(--danger)"
         @click="askBulkRemove"
       >
         <Icon name="trash" style="width: 13px; height: 13px" />
+      </span>
+      <span
+        class="del"
+        :title="t('sessions.sidebar.selectExit')"
+        @click="store.setSelectMode(false)"
+      >
+        <Icon name="x" style="width: 13px; height: 13px" />
       </span>
     </div>
 
@@ -167,7 +204,11 @@
       />
     </div>
 
-    <div v-if="groupMenu" style="position: fixed; inset: 0; z-index: 40" @click="closeMenus" />
+    <div
+      v-if="groupMenu || sortMenu"
+      style="position: fixed; inset: 0; z-index: 40"
+      @click="closeMenus"
+    />
 
     <!-- Right-click context menu (one shared menu, positioned at the cursor). -->
     <template v-if="ctx">
@@ -235,7 +276,7 @@
 // select mode + bulk bar, and a per-row context menu. The page passes
 // `store.tabSessions` (the active tab's sessions), so this list is always scoped to
 // one project; rows hide their project label since the tab already names it.
-import type { Session } from '~/composables/useSessionsData'
+import type { Session, SortBy } from '~/composables/useSessionsData'
 import { PROJECT_COLOR_DEFAULT } from '~/composables/useProjectColors'
 import { placeMenu } from '~/utils/context-menu'
 
@@ -243,7 +284,7 @@ const props = defineProps<{ sessions: Session[]; activeId: number | null; listWi
 const emit = defineEmits<{ select: [id: number] }>()
 
 const { t } = useI18n()
-const { GROUPBY, providerOf } = useSessionsData()
+const { GROUPBY, SORTBY, providerOf } = useSessionsData()
 const { projectPath } = useProjects()
 const store = useSessionsStore()
 const sc = useSidecar()
@@ -272,16 +313,32 @@ function readGroupBy(): string {
   return v && GROUPBY.some(([value]) => value === v) ? v : 'none'
 }
 
+// Sort-by also persists across restarts. Default 'updated' — matches the sidecar's
+// newest-updated-first list order, so an unset preference looks like today's order.
+const STORAGE_SORTBY = 'awog.sessions.filter.sortBy'
+
+function readSortBy(): SortBy {
+  const v = localStorage.getItem(STORAGE_SORTBY)
+  return v && (SORTBY as readonly string[]).includes(v) ? (v as SortBy) : 'updated'
+}
+
 const filter = ref('')
 const groupBy = ref(readGroupBy())
+const sortBy = ref<SortBy>(readSortBy())
 const showFilters = ref(false)
 
 watch(groupBy, (v) => localStorage.setItem(STORAGE_GROUPBY, v))
+watch(sortBy, (v) => localStorage.setItem(STORAGE_SORTBY, v))
 
 // Multi-select mode (§1) lives in the store (the tab context menu also enters it);
 // when on, every row shows its checkbox and a row click toggles selection. The bulk
 // bar appears whenever ≥1 session is selected.
 const selectedCount = computed(() => store.selectedIds.size)
+// Whether every currently-visible (filtered) row is selected — drives the select-all
+// toggle's checked state + its title (Select all ↔ Deselect all).
+const allFilteredSelected = computed(
+  () => filtered.value.length > 0 && filtered.value.every((s) => store.selectedIds.has(s.id)),
+)
 function toggleSelectMode() {
   store.setSelectMode(!store.selecting)
 }
@@ -296,20 +353,45 @@ function selectAllFiltered() {
     })
 }
 
-// Group-by dropdown open state (backdrop pattern mirrors SessionDetail `.dproj`).
+// Group-by / sort-by dropdown open state (backdrop pattern mirrors SessionDetail
+// `.dproj`). Only one is open at a time — opening one closes the other.
 const groupMenu = ref(false)
+const sortMenu = ref(false)
+function openGroupMenu() {
+  groupMenu.value = !groupMenu.value
+  sortMenu.value = false
+}
+function openSortMenu() {
+  sortMenu.value = !sortMenu.value
+  groupMenu.value = false
+}
 
 // Per-group collapse state, keyed by the group's stable key (groupKeyOf).
 const collapsed = ref<Record<string, boolean>>({})
 
 const groupByLabel = computed(() => t(`sessions.group.${groupBy.value}`))
+const sortByLabel = computed(() => t(`sessions.sort.${sortBy.value}`))
+
+// Epoch ms of an ISO timestamp (0 when missing/invalid) — for the time-based sorts.
+function tsOf(iso?: string): number {
+  const n = iso ? Date.parse(iso) : NaN
+  return Number.isNaN(n) ? 0 : n
+}
+// Secondary comparator per sort mode; pinned-first is applied ahead of it.
+const SORT_CMP: Record<SortBy, (a: Session, b: Session) => number> = {
+  updated: (a, b) => tsOf(b.updatedAt) - tsOf(a.updatedAt),
+  created: (a, b) => tsOf(b.createdAt) - tsOf(a.createdAt),
+  title: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
+}
 
 const filtered = computed(() => {
   const f = props.sessions.filter((s) => s.title.toLowerCase().includes(filter.value.toLowerCase()))
-  // Pinned-first, otherwise preserve the incoming order (stable sort). Applies to
-  // the flat list and — since buckets are filled from this order — keeps pinned
-  // sessions at the top within each group too.
-  return f.slice().sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
+  const cmp = SORT_CMP[sortBy.value]
+  // Pinned-first, then the chosen sort. Applies to the flat list and — since buckets
+  // are filled from this order — keeps pinned sessions atop each group too.
+  return f
+    .slice()
+    .sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false) || cmp(a, b))
 })
 
 // Incremental render windows — keep the DOM small on large histories.
@@ -322,7 +404,7 @@ const groupLoad = useGroupLoadMore()
 // OR when the project tab switches — otherwise a large window grown in the previous
 // tab would try to mount hundreds of rows for the new project at once. A new session
 // appearing in the live store (same tab) must NOT reset the window.
-watch([filter, groupBy, () => store.activeTab], () => {
+watch([filter, groupBy, sortBy, () => store.activeTab], () => {
   reset()
   groupLoad.reset()
 })
@@ -362,8 +444,13 @@ function selectGroup(value: string) {
   groupBy.value = value
   groupMenu.value = false
 }
+function selectSort(value: SortBy) {
+  sortBy.value = value
+  sortMenu.value = false
+}
 function closeMenus() {
   groupMenu.value = false
+  sortMenu.value = false
 }
 
 // ── Right-click context menu ───────────────────────────────────────────────────
@@ -488,6 +575,14 @@ function toggleFoldAll() {
 }
 .bulkbar .lcbox {
   cursor: pointer;
+}
+/* Left cluster (checkbox + label) is one hit target for select-all / deselect-all. */
+.bulkall {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  min-width: 0;
 }
 /* Context menu: a `.smenu`-styled popover pinned at the cursor (fixed), above all. */
 .ctxbackdrop {

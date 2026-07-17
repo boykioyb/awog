@@ -7,6 +7,7 @@
   "sessions.sidebar.selectExit": "Thoát chế độ chọn",
   "sessions.sidebar.selected": "Đã chọn {n}",
   "sessions.sidebar.selectAll": "Chọn tất cả",
+  "sessions.sidebar.deselectAll": "Bỏ chọn tất cả",
   "sessions.sidebar.clearSelection": "Bỏ chọn",
   "sessions.sidebar.deleteSelected": "Xoá các session đã chọn",
   "sessions.sidebar.attachments": "{n} tệp đính kèm",

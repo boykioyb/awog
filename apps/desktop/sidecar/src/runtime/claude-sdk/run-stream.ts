@@ -55,9 +55,16 @@ import {
 
 // Plan-mode nudge (mirrors the Pi path). The gate blocks all writes/exec in plan
 // mode, so tell the model to investigate read-only then present its plan via the
-// SDK's native ExitPlanMode tool instead of attempting edits.
+// SDK's native ExitPlanMode tool instead of attempting edits. Two clauses matter
+// on THIS path specifically: (1) "do not restate the plan in plain text" — the
+// ExitPlanMode input is rendered as the plan card, so a prose copy just duplicates
+// it in the reply bubble; (2) "STOP after ExitPlanMode, add no further reply" —
+// we run bypassPermissions (own gate), so unlike native plan mode the SDK
+// auto-approves ExitPlanMode and would otherwise let the model keep going.
 const PLAN_MODE_PROMPT = `<plan-mode>
-You are in PLAN MODE. Use ONLY read-only tools (Read, Grep, Glob) to investigate — every write or shell command is blocked. When you have a concrete approach, call the \`ExitPlanMode\` tool with your plan as markdown (a short rationale + numbered steps) and stop for the user's approval. Do not attempt edits.
+You are in PLAN MODE. You may ONLY use read-only tools (Read, Grep, Glob) to investigate the task — every write or shell command is blocked.
+
+When you have understood the task and formed a concrete approach, call the \`ExitPlanMode\` tool with your plan as markdown: a short rationale followed by a numbered or bulleted list of the steps you intend to take. Do NOT write code or restate the plan in plain text — the plan you pass to \`ExitPlanMode\` is shown to the user directly, so writing it again as a normal reply only duplicates it. Once you call \`ExitPlanMode\`, STOP: do not begin implementing and do not add any further reply — wait for the user to approve.
 </plan-mode>`
 
 // Permission gate on the Claude SDK path. The SDK's own `canUseTool` callback is

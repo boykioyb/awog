@@ -301,6 +301,11 @@ export type Session = {
   style: string
   status: SessionStatus
   when: string
+  // Raw ISO timestamps from the sidecar summary — drive the list "Sort by"
+  // (created / updated). `when` stays the display label derived from updatedAt.
+  // Optional: unset in mock mode / a legacy summary written before the field shipped.
+  createdAt?: string
+  updatedAt?: string
   unread?: boolean
   pinned?: boolean
   mode?: string
@@ -430,6 +435,12 @@ const GROUPBY: [string, string][] = [
   ['unread', 'Unread'],
   ['none', 'None (phẳng)'],
 ]
+
+// Sort options for the list within a tab. Time fields sort newest-first; `title`
+// sorts A→Z (locale-aware). Labels come from i18n (sessions.sort.*); `updated` is
+// the default (matches the sidecar's newest-updated-first list order).
+export const SORTBY = ['updated', 'created', 'title'] as const
+export type SortBy = (typeof SORTBY)[number]
 
 // Workspace views — [name, icon sprite id, shortcut]
 const WPVIEWS: [string, string, string][] = [
@@ -804,6 +815,7 @@ export function useSessionsData() {
     CIRCLED,
     ACCOUNTS,
     GROUPBY,
+    SORTBY,
     FTREE,
     DEMO_DIFF,
     SESSIONS,

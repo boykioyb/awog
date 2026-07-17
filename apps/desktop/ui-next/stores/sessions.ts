@@ -193,6 +193,9 @@ type SessionSummaryDto = {
   title: string
   projectId: string | null
   updatedAt: string
+  // Session creation time (sidecar SessionSummary.createdAt) — drives the list
+  // "Sort by → Created". Optional for back-compat with a summary written before it.
+  createdAt?: string
   pinned?: boolean
   settings?: EngineSessionSettings
   disabledTools?: string[]
@@ -779,6 +782,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       msgs: [],
       loaded: false,
     }
+    if (dto.createdAt) session.createdAt = dto.createdAt
+    if (dto.updatedAt) session.updatedAt = dto.updatedAt
     if (dto.settings?.accountId) session.accountId = dto.settings.accountId
     if (dto.settings?.level) session.thinkingLevel = dto.settings.level
     if (dto.settings?.responseStyleNoMarkdown) session.noMarkdown = true
@@ -792,18 +797,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     return session
   }
 
-  // Rough relative-time label (the prototype uses crude strings like "3m").
+  // Snapshot relative-time label for `when` at hydrate. NOTE: this is a one-shot
+  // snapshot — the session LIST renders its own LIVE label off `updatedAt` + useNow
+  // (see SessionListItem), so it never goes stale. `when` remains for the other,
+  // lower-churn consumers (tray, fork graph, home dashboard's parseWhen).
   function relativeWhen(iso?: string): string {
-    if (!iso) return 'vừa xong'
-    const then = Date.parse(iso)
-    if (Number.isNaN(then)) return 'vừa xong'
-    const sec = Math.max(0, Math.floor((Date.now() - then) / 1000))
-    if (sec < 60) return 'vừa xong'
-    const min = Math.floor(sec / 60)
-    if (min < 60) return `${min}m`
-    const hr = Math.floor(min / 60)
-    if (hr < 24) return `${hr}h`
-    return `${Math.floor(hr / 24)}d`
+    return relativeTime(iso)
   }
 
   // ── Load (IPC) ────────────────────────────────────────────────────────────
@@ -1153,6 +1152,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       id,
       title: 'New session',
       project: projectId ?? '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       model,
       account: acct?.display ?? 'hoatq · Anthropic',
       style: 'Default',
@@ -1195,6 +1196,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       msgs: [],
       loaded: true,
       aboutTaskId: taskId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
     if (acct) session.accountId = acct.id
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
@@ -1229,6 +1232,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       msgs: [],
       loaded: true,
       aboutSshHostId: hostId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
     if (acct) session.accountId = acct.id
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
@@ -2039,6 +2044,10 @@ export const useSessionsStore = defineStore('sessions', () => {
           const s = byEngineId(p.sessionId)
           if (s) {
             s.status = statusFromMessages(s.msgs)
+            // A turn just settled = the session was updated. Mirror the sidecar's
+            // updatedAt bump so the list's live time label + "Updated" sort reflect it
+            // (covers background/live turns not started via this client's sendMessage).
+            s.updatedAt = new Date().toISOString()
             flagSettledUnread(s)
             // Drain the next queued message ONLY on a clean finish. A failed
             // ('error'), refused ('budget-exceeded'), or user-aborted ('aborted')
@@ -2212,6 +2221,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     // marked it) — otherwise the tab / NavRail / list badges linger on the session the
     // user is actively chatting in. Covers both the immediate send and the re-queue path.
     s.unread = false
+    // Stamp last-activity so the list "Updated" sort + live time label track chatting
+    // (the sidecar re-stamps on persist; this keeps the client order fresh until reload).
+    // The list label is derived reactively from `updatedAt`, so we must NOT freeze a
+    // "vừa xong" string onto `when` here — that used to strand the row on "vừa xong".
+    s.updatedAt = new Date().toISOString()
 
     // Concurrency guard — never run two turns at once. A turn already streaming here
     // means a racing turn-start reached us mid-flight: the two finalize signals (the
@@ -2958,6 +2972,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       // and shows the fork stuck "running" with no turn to ever settle it. Derive the
       // status from the cloned (all-finalized) messages instead.
       status: statusFromMessages(msgs),
+      // A fork is a brand-new session created now — override the timestamps copied
+      // from the source via `...s` so it sorts as freshly created / updated.
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
     delete branch.engineId
     delete branch.queue
