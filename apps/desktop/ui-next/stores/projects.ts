@@ -161,6 +161,15 @@ export const useProjectsStore = defineStore('projects', () => {
   // Register an existing local folder as a project. The sidecar validates the
   // path exists + is a directory; it throws an Error the caller surfaces.
   async function linkProject(input: LinkProjectInput): Promise<Project> {
+    // Dedup by PATH: if this folder is already registered, reuse that project instead
+    // of minting a suffixed id ("…-2") for the same folder. Without this, re-linking a
+    // folder split it into two same-named projects — the original kept the sessions
+    // while the duplicate's Sessions tab looked empty (only the overview's name-match
+    // borrowed the original's sessions). Trailing slash normalized so "/x" == "/x/".
+    const norm = (p: string) => p.replace(/\/+$/, '')
+    const existing = projects.value.find((p) => norm(p.path) === norm(input.path))
+    if (existing) return existing
+
     const draft: Project = {
       id: uniqueId(input.name),
       name: input.name,

@@ -49,8 +49,14 @@ export function useProjectView(getProjectId: () => string | null): ComputedRef<P
       .filter((a) => a.source === 'project' && a.projectId === p.id)
       .map((a) => a.name || a.id)
 
+    // Match sessions to this project by its canonical id, plus a fallback by NAME for
+    // legacy sessions that stored the name as projectId — but ONLY when the name
+    // uniquely identifies a project. Otherwise two same-named projects would each
+    // "borrow" the other's sessions in the overview while the Sessions tab (strict id)
+    // showed them empty — the split-project bug. (linkProject now dedups by path too.)
+    const nameUnique = projectsStore.projects.filter((x) => x.name === p.name).length === 1
     const sessions = sessionsStore.sessions.filter(
-      (s) => s.project === p.id || s.project === p.name,
+      (s) => s.project === p.id || (nameUnique && s.project === p.name),
     )
     const ses = sessions.slice(0, 6).map((s) => ({ id: s.id, t: s.title, w: s.when }))
     const anyRunning = sessions.some((s) => s.status === 'streaming' || s.status === 'awaiting')
