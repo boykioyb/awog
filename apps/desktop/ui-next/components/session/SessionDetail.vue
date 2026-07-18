@@ -272,6 +272,7 @@
           rows="3"
           autofocus
           :placeholder="t('sessions.quote.notePlaceholder')"
+          @keydown.enter.exact.prevent="saveQuote"
           @keydown.enter.meta.prevent="saveQuote"
           @keydown.enter.ctrl.prevent="saveQuote"
           @keydown.esc="notePop = null"
