@@ -18,8 +18,10 @@
   "vpn.log.title": "Log — {name}",
   "vpn.log.empty": "Chưa có log — bấm Kết nối để xem output của openvpn.",
   "vpn.log.clear": "Xoá log",
-  "vpn.card.credsUserPass": "User/mật khẩu",
-  "vpn.card.credsPassphrase": "Passphrase khoá",
+  "vpn.card.credsSaved": "Đã lưu",
+  "vpn.card.credsSavedHint": "Thông tin đăng nhập đã lưu trong OS keychain",
+  "vpn.card.credsMissing": "Chưa lưu",
+  "vpn.card.credsMissingHint": "VPN này cần tên đăng nhập & mật khẩu nhưng chưa lưu — kết nối sẽ lỗi",
   "vpn.card.noConfig": "—",
 
   "vpn.status.up": "Đang bật",

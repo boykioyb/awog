@@ -18,8 +18,10 @@
   "vpn.log.title": "Log — {name}",
   "vpn.log.empty": "No log yet — connect to see the openvpn output.",
   "vpn.log.clear": "Clear",
-  "vpn.card.credsUserPass": "User/pass",
-  "vpn.card.credsPassphrase": "Key passphrase",
+  "vpn.card.credsSaved": "Saved",
+  "vpn.card.credsSavedHint": "Login is stored in the OS keychain",
+  "vpn.card.credsMissing": "No login",
+  "vpn.card.credsMissingHint": "This VPN needs a username & password, but none is saved — connecting will fail",
   "vpn.card.noConfig": "—",
 
   "vpn.status.up": "Up",

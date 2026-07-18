@@ -14,13 +14,17 @@
       <div class="vpn-meta">
         <span class="vpn-path mono">{{ configLabel }}</span>
         <span class="vpn-chip">{{ authLabel }}</span>
-        <span v-if="profile.hasUserPass" class="vpn-cred">
-          <Icon name="shield" style="width: 10px; height: 10px" />
-          {{ t('vpn.card.credsUserPass') }}
+        <span v-if="credState === 'saved'" class="vpn-cred" :title="t('vpn.card.credsSavedHint')">
+          <Icon name="check" style="width: 10px; height: 10px" />
+          {{ t('vpn.card.credsSaved') }}
         </span>
-        <span v-if="profile.hasKeyPassphrase" class="vpn-cred">
-          <Icon name="shield" style="width: 10px; height: 10px" />
-          {{ t('vpn.card.credsPassphrase') }}
+        <span
+          v-else-if="credState === 'missing'"
+          class="vpn-cred warn"
+          :title="t('vpn.card.credsMissingHint')"
+        >
+          <Icon name="alert" style="width: 10px; height: 10px" />
+          {{ t('vpn.card.credsMissing') }}
         </span>
         <span v-for="tag in tags" :key="tag" class="vpn-tag">{{ tag }}</span>
       </div>
@@ -79,7 +83,7 @@
 // One VPN profile, rendered as a bordered card row (mirror of SshHostCard, styled
 // like the keychain/snippet rows so the VPN section reads consistently). Monogram
 // tile + name + last-known status badge on the top line; config file + auth-mode
-// chip + credential-set chips + tags beneath. Edit / Delete actions on the right.
+// chip + credential-state chip (saved / missing) + tags beneath. Actions on the right.
 // Presentational — mutations bubble to the section via events. Nothing reads a
 // secret (only the has* booleans are shown).
 import { computed } from 'vue'
@@ -112,6 +116,18 @@ const statusLabel = computed(() => t(`vpn.status.${props.status}`))
 const authLabel = computed(() =>
   props.profile.authMode === 'user-pass' ? t('vpn.auth.userPass') : t('vpn.auth.none'),
 )
+// Credential STATE — distinct from the auth-mode chip (which says HOW it authenticates,
+// not whether the secret is stored). Avoids the confusing "user/pass" + "user/pass"
+// duplication: this reports storage, not the auth type.
+//   'saved'   → a username/password or key passphrase is in the keychain
+//   'missing' → authenticates by user/pass but none is stored (connect will fail)
+//   'none'    → cert/config auth with nothing to store → no chip
+const credState = computed<'saved' | 'missing' | 'none'>(() => {
+  const p = props.profile
+  if (p.hasUserPass || p.hasKeyPassphrase) return 'saved'
+  if (p.authMode === 'user-pass') return 'missing'
+  return 'none'
+})
 // Show just the .ovpn filename (the full path can be long); fall back to a dash.
 const configLabel = computed(() => {
   const p = props.profile.configPath?.trim()
@@ -211,11 +227,17 @@ const avatarStyle = computed(() => {
   align-items: center;
   gap: 4px;
   font-size: 12px;
+  font-weight: 500;
   line-height: 1;
   padding: 3px 8px;
   border-radius: 99px;
   color: var(--accent);
   background: var(--accentDim);
+}
+/* No credentials stored for a user/pass VPN — a heads-up that connect will fail. */
+.vpn-cred.warn {
+  color: var(--amber);
+  background: var(--amberDim);
 }
 .vpn-tag {
   padding: 1px 7px;
