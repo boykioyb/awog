@@ -326,6 +326,10 @@
         <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
         <line x1="2" y1="2" x2="22" y2="22" />
       </symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24">
+        <path d="m4 17 6-6-6-6" />
+        <line x1="12" y1="19" x2="20" y2="19" />
+      </symbol>
     </defs>
   </svg>
 </template>

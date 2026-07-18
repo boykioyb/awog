@@ -26,6 +26,14 @@
       </div>
     </div>
     <button
+      class="vpn-act"
+      :title="t('vpn.card.log')"
+      :aria-label="t('vpn.card.log')"
+      @click="emit('log')"
+    >
+      <Icon name="terminal" style="width: 13px; height: 13px" />
+    </button>
+    <button
       v-if="status === 'up'"
       class="vpn-act vpn-conn on"
       :title="t('vpn.card.disconnect')"
@@ -93,6 +101,7 @@ const emit = defineEmits<{
   delete: []
   connect: []
   disconnect: []
+  log: []
 }>()
 
 const { t } = useI18n()

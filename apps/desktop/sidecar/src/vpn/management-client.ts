@@ -163,10 +163,13 @@ export class ManagementClient {
     })
   }
 
-  // Subscribe to real-time state THEN release the hold (order matters — releasing
-  // first could miss the credential query per design §3.3).
+  // Subscribe to real-time state + log, THEN release the hold (order matters —
+  // releasing first could miss the credential query per design §3.3). `log on all`
+  // streams openvpn's log (plus the backlog) as `>LOG:` events so the UI can show
+  // what "connecting…" is actually doing.
   async start(): Promise<void> {
     await this.command('state on')
+    this.write('log on all')
     this.write('hold release')
   }
 

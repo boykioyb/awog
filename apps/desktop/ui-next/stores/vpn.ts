@@ -154,11 +154,27 @@ export const useVpnStore = defineStore('vpn', () => {
   // status while a tunnel has a live record on the sidecar.
   const runtime = ref<Record<string, VpnRuntimeState>>({})
 
+  // Live openvpn log lines per profile id (from the sanitized vpn:log event), capped
+  // to the most recent LOG_CAP so a long-running tunnel can't grow the buffer forever.
+  // Lets the user see what "connecting…" is actually doing.
+  const LOG_CAP = 500
+  const logs = ref<Record<string, string[]>>({})
+
   let unlisten: UnlistenFn | null = null
 
   // --- getters ---------------------------------------------------------------
   const profileById = (id: string): VpnProfile | undefined =>
     profiles.value.find((p) => p.id === id)
+
+  const logsOf = (id: string): string[] => logs.value[id] ?? []
+  function appendLog(id: string, line: string): void {
+    const next = [...(logs.value[id] ?? []), line]
+    if (next.length > LOG_CAP) next.splice(0, next.length - LOG_CAP)
+    logs.value = { ...logs.value, [id]: next }
+  }
+  function clearLog(id: string): void {
+    logs.value = { ...logs.value, [id]: [] }
+  }
 
   // Effective status: live runtime record wins over the profile's persisted status,
   // which wins over 'down' (a profile never brought up this session).
@@ -267,6 +283,7 @@ export const useVpnStore = defineStore('vpn', () => {
   // card to 'connecting' immediately. Throws on prompt-cancel / auth-fail so the
   // caller can surface it. Browser-dev just flips the mock status.
   async function up(id: string): Promise<void> {
+    clearLog(id) // fresh attempt → drop the previous connection's log
     if (!available.value) {
       applyRuntime({ id, status: 'up', refCount: 0, upAt: Date.now() })
       return
@@ -335,6 +352,11 @@ export const useVpnStore = defineStore('vpn', () => {
           void loadAll()
           return
         }
+        if (evt.type === 'vpn:log') {
+          const p = evt.payload as { id?: string; line?: string }
+          if (p?.id && typeof p.line === 'string') appendLog(p.id, p.line)
+          return
+        }
         if (evt.type === 'vpn:status-changed') {
           const p = evt.payload as VpnRuntimeState
           if (p?.id) applyRuntime(p)
@@ -357,6 +379,8 @@ export const useVpnStore = defineStore('vpn', () => {
     errorOf,
     isUp,
     isBusy,
+    logsOf,
+    clearLog,
     // actions
     loadAll,
     saveProfile,

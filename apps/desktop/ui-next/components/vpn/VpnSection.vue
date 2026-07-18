@@ -33,6 +33,7 @@
           @delete="askDelete(p)"
           @connect="onConnect(p)"
           @disconnect="onDisconnect(p)"
+          @log="openLog(p)"
         />
       </div>
     </div>
@@ -44,6 +45,14 @@
       :draft="importDraft"
       @save="onSave"
       @cancel="editorOpen = false"
+    />
+
+    <VpnLogModal
+      :id="logProfile?.id ?? null"
+      :open="logOpen"
+      :name="logProfile?.name ?? ''"
+      :status="logProfile ? store.statusOf(logProfile.id) : 'down'"
+      @close="logOpen = false"
     />
   </div>
 </template>
@@ -58,6 +67,7 @@ import { onMounted, ref } from 'vue'
 import VpnCard from '~/components/vpn/VpnCard.vue'
 import VpnEditor, { type VpnCredentialSecret } from '~/components/vpn/VpnEditor.vue'
 import VpnEmptyState from '~/components/vpn/VpnEmptyState.vue'
+import VpnLogModal from '~/components/vpn/VpnLogModal.vue'
 import { useConfirm } from '~/composables/useConfirm'
 import { pushActionToast } from '~/composables/useActionToasts'
 import { pickFile } from '~/composables/useFolderPicker'
@@ -83,6 +93,14 @@ function openEdit(profile: VpnProfile): void {
   importDraft.value = null
   editing.value = profile
   editorOpen.value = true
+}
+
+// --- log viewer ------------------------------------------------------------
+const logOpen = ref(false)
+const logProfile = ref<VpnProfile | null>(null)
+function openLog(profile: VpnProfile): void {
+  logProfile.value = profile
+  logOpen.value = true
 }
 
 // --- import (.ovpn dry-run, P4) --------------------------------------------
