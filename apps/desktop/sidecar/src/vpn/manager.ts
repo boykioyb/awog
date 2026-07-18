@@ -706,6 +706,23 @@ class VpnManager {
     emit('vpn:status-changed', this.toState(record, error))
   }
 
+  // Tail openvpn's own --log file — the elevated process writes ALL its output there,
+  // including the early/fatal errors that never reach the management >LOG: stream — and
+  // push it to the log viewer as vpn:log lines. Best-effort: the file may not exist
+  // (failure before spawn) or be unreadable; the emitted reason line still explains it.
+  private async flushOpenvpnLog(record: VpnRuntimeRecord): Promise<void> {
+    let text: string
+    try {
+      text = await readFile(record.logFile, 'utf8')
+    } catch {
+      return
+    }
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
+    for (const line of lines.slice(-200)) {
+      emit('vpn:log', { id: record.id, line: sanitizeLogLine(line) })
+    }
+  }
+
   // Idempotent terminal failure: latch `error` (or clean `down` on prompt cancel),
   // reject the readiness park, emit + persist, and release resources.
   private fail(id: string, err: unknown, kind: 'error' | 'down'): void {
@@ -713,7 +730,15 @@ class VpnManager {
     if (!record) return
     const message = sanitizeVpnError(err)
     record.status = kind
-    if (kind === 'error') record.lastError = message
+    if (kind === 'error') {
+      record.lastError = message
+      // The failure often predates the management >LOG: stream (bad config, or a
+      // spawn/elevation/socket failure), leaving realtime logs empty. Dump openvpn's
+      // own --log file, then the reason as the last line, so the viewer explains it.
+      void this.flushOpenvpnLog(record).finally(() =>
+        emit('vpn:log', { id, line: `✖ ${sanitizeLogLine(message)}` }),
+      )
+    }
     this.settleReady(id, err instanceof Error ? err : new Error(message))
     this.emitStatus(record, kind === 'error' ? message : undefined)
     void this.persistStatus(id, kind, kind === 'error' ? message : undefined)
