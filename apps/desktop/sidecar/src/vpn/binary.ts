@@ -24,17 +24,20 @@ const CANDIDATES: Record<string, readonly string[]> = {
   ],
 }
 
-// Realpath-resolved allowlist directories the final binary must live under. Built
-// from CANDIDATES so the allowlist and the probe list can never drift apart.
-function allowedRealDirs(platform: NodeJS.Platform): readonly string[] {
-  const list = CANDIDATES[platform] ?? []
-  // Directory portion of each candidate, normalised for the platform separator.
-  const sep = platform === 'win32' ? '\\' : '/'
-  return list.map((p) => p.slice(0, p.lastIndexOf(sep)))
+// Trusted, root/admin-owned install PREFIXES the resolved binary must live under.
+// A symlink (which the CANDIDATE probe paths often are — Homebrew links
+// `/opt/homebrew/sbin/openvpn` → `…/Cellar/openvpn/<ver>/sbin/openvpn`) is allowed
+// as long as its realpath stays under one of these standard software prefixes, so
+// it can't be redirected to a binary in `/tmp` or a home dir. A non-privileged
+// principal cannot plant a binary under these on a normal install.
+const ALLOWED_PREFIXES: Record<string, readonly string[]> = {
+  darwin: ['/opt/homebrew/', '/usr/local/', '/opt/local/', '/usr/'],
+  linux: ['/usr/', '/opt/'],
+  win32: ['C:\\Program Files\\', 'C:\\Program Files (x86)\\'],
 }
 
-// One valid path is a REGULAR file, EXECUTABLE, whose realpath still sits in an
-// allowed directory (so a symlink can't redirect us to an attacker-controlled
+// One valid path is a REGULAR file, EXECUTABLE, whose realpath still sits under a
+// trusted install prefix (so a symlink can't redirect us to an attacker-controlled
 // binary). Returns the realpath when valid, else null.
 async function validateCandidate(
   candidate: string,
@@ -48,10 +51,9 @@ async function validateCandidate(
     if (platform !== 'win32') {
       await access(resolved, fsConstants.X_OK)
     }
-    const dirs = allowedRealDirs(platform)
-    const sep = platform === 'win32' ? '\\' : '/'
-    const resolvedDir = resolved.slice(0, resolved.lastIndexOf(sep))
-    const ok = dirs.some((d) => d === resolvedDir)
+    const prefixes = ALLOWED_PREFIXES[platform] ?? []
+    const target = platform === 'win32' ? resolved.toLowerCase() : resolved
+    const ok = prefixes.some((p) => target.startsWith(platform === 'win32' ? p.toLowerCase() : p))
     return ok ? resolved : null
   } catch {
     return null
