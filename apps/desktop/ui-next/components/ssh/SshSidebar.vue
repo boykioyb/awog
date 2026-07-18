@@ -58,6 +58,7 @@ const items: { key: SshSection; icon: string; label: string }[] = [
   background: transparent;
   color: var(--textDim);
   font-size: 0.9231rem;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition:
