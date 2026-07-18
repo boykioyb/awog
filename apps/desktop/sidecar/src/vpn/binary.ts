@@ -60,6 +60,20 @@ async function validateCandidate(
   }
 }
 
+// A REGULAR, EXECUTABLE file — no prefix check (the caller already vouches for the
+// source). Used for the bundled binary the Electron main process points us at.
+async function validateExecutable(candidate: string): Promise<string | null> {
+  try {
+    const resolved = await realpath(candidate)
+    const info = await stat(resolved)
+    if (!info.isFile()) return null
+    if (process.platform !== 'win32') await access(resolved, fsConstants.X_OK)
+    return resolved
+  } catch {
+    return null
+  }
+}
+
 let resolvePromise: Promise<string | null> | null = null
 
 // Lazily detect the openvpn binary once and memoize. Returns the validated
@@ -67,6 +81,15 @@ let resolvePromise: Promise<string | null> | null = null
 export async function resolveOpenvpnBinary(): Promise<string | null> {
   if (!resolvePromise) {
     resolvePromise = (async () => {
+      // A BUNDLED openvpn: the Electron main process sets AWOG_OPENVPN_BIN to the
+      // signed binary shipped inside the app (not UI/operator-supplied, so it is
+      // trusted after an is-executable check). Lets us drop the install step once we
+      // ship the binary — the tunnel still needs an admin prompt to create the tun.
+      const bundled = process.env.AWOG_OPENVPN_BIN
+      if (bundled) {
+        const valid = await validateExecutable(bundled)
+        if (valid) return valid
+      }
       const platform = process.platform
       const candidates = CANDIDATES[platform]
       if (!candidates) return null
