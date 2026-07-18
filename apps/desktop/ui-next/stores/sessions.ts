@@ -1559,6 +1559,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s.queue.length) delete s.queue
   }
 
+  // Revise the text of a still-queued message before it drains. In-memory only, like
+  // enqueue/dequeue — the queue is transient session state (no IPC / persistence).
+  function editQueued(id: number, i: number, text: string) {
+    const item = byId(id)?.queue?.[i]
+    if (item) item.text = text
+  }
+
   // Persist the composer's unsent text per session (in-memory) so switching
   // sessions doesn't drop a half-typed draft. No IPC: this is transient UI state.
   function setDraft(id: number, text: string) {
@@ -3193,6 +3200,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     // queue
     enqueue,
     dequeue,
+    editQueued,
     drainQueue,
     sendQueuedNow,
     setDraft,

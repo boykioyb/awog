@@ -31,26 +31,50 @@
         </div>
       </div>
 
-      <!-- queued messages (gửi sau) — shown while the active turn is busy -->
+      <!-- queued messages (gửi sau) — shown while the active turn is busy; a text
+           message can be edited inline before it drains -->
       <div v-if="queued.length" class="attc qattc">
         <span
           v-for="(q, i) in queued"
           :key="i"
           class="att qatt"
-          :title="t('sessions.composer.queued')"
+          :class="{ editing: editingQueued === i }"
+          :title="editingQueued === i ? '' : t('sessions.composer.queued')"
         >
           <Icon name="clock" style="width: 11px; height: 11px" />
-          <span class="attn">{{ queuedLabel(q) }}</span>
-          <span
-            class="qsend"
-            :title="t('sessions.composer.queuedSendNow')"
-            @click.stop="sendQueuedNow(i)"
-          >
-            <Icon name="send" style="width: 11px; height: 11px" />
-          </span>
-          <span class="x" :title="t('sessions.composer.queuedRemove')" @click.stop="dequeue(i)">
-            ×
-          </span>
+          <textarea
+            v-if="editingQueued === i"
+            :ref="focusQueuedInput"
+            v-model="queuedDraft"
+            class="qedit"
+            rows="1"
+            @input="onQueuedInput"
+            @keydown.enter.exact.prevent="saveQueuedEdit"
+            @keydown.esc.prevent="cancelQueuedEdit"
+            @blur="saveQueuedEdit"
+            @click.stop
+          />
+          <template v-else>
+            <span class="attn">{{ queuedLabel(q) }}</span>
+            <span
+              v-if="q.text && !q.command"
+              class="qsend"
+              :title="t('sessions.composer.queuedEdit')"
+              @click.stop="startQueuedEdit(i)"
+            >
+              <Icon name="edit" style="width: 11px; height: 11px" />
+            </span>
+            <span
+              class="qsend"
+              :title="t('sessions.composer.queuedSendNow')"
+              @click.stop="sendQueuedNow(i)"
+            >
+              <Icon name="send" style="width: 11px; height: 11px" />
+            </span>
+            <span class="x" :title="t('sessions.composer.queuedRemove')" @click.stop="dequeue(i)">
+              ×
+            </span>
+          </template>
         </span>
       </div>
 
@@ -810,6 +834,43 @@ function dequeue(i: number) {
 function sendQueuedNow(i: number) {
   if (store.activeId != null) void store.sendQueuedNow(store.activeId, i)
 }
+
+// Inline-edit a queued text message before it drains. Only one chip edits at a time.
+const editingQueued = ref<number | null>(null)
+const queuedDraft = ref('')
+// Stable function ref (called on mount/unmount, not on every keystroke): focus the
+// editor, put the caret at the end, and size it to its content.
+function focusQueuedInput(el: unknown): void {
+  if (!(el instanceof HTMLTextAreaElement)) return
+  el.focus()
+  el.setSelectionRange(el.value.length, el.value.length)
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+function onQueuedInput(e: Event): void {
+  const el = e.target as HTMLTextAreaElement
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+function startQueuedEdit(i: number) {
+  const q = queued.value[i]
+  if (!q || q.command) return
+  queuedDraft.value = q.text
+  editingQueued.value = i
+}
+// Commit the edit (Enter / blur). No-op on empty or unchanged; the × still removes.
+function saveQueuedEdit() {
+  const i = editingQueued.value
+  if (i == null) return
+  editingQueued.value = null
+  const q = queued.value[i]
+  const text = queuedDraft.value.trim()
+  if (store.activeId == null || !q || !text || text === q.text) return
+  store.editQueued(store.activeId, i, text)
+}
+function cancelQueuedEdit() {
+  editingQueued.value = null
+}
 // A queued slash command previews as its compact invocation, not the expanded body.
 // A quote-only queued message (empty draft) previews its note, else the quoted text.
 function queuedLabel(q: QueuedMessage): string {
@@ -1472,6 +1533,26 @@ textarea.ci {
   border-color: var(--accentBorder);
   background: var(--accentDim);
 }
+/* While editing a queued message, the chip reads as active + gives the editor room. */
+.qatt.editing {
+  border-color: var(--accent);
+}
+/* Inline editor for a queued message — blends into the chip, grows with its content. */
+.qedit {
+  flex: 1 1 auto;
+  min-width: 160px;
+  max-width: 340px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  color: var(--accent);
+  font: inherit;
+  line-height: 1.4;
+}
 /* Enhance spinner while the one-shot rewrite is in flight (local rotation — the
    prototype `.spin` is a pulsing dot scoped under .steph, not a rotator). */
 .enhicon {
@@ -1503,6 +1584,13 @@ textarea.ci {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+/* Uniform 28px height for every primary composer action (Send / Stop / split / the
+   locked "compacting" button) so text and icon-only buttons line up with each other
+   and with the 28px toolbar icon buttons — otherwise their computed heights differ
+   and the streaming Stop + split group looks misaligned. */
+.btn.pri.sm {
+  height: 28px;
 }
 /* Locked Send while /compact runs — reads as processing (dimmed, not clickable). */
 .btn.pri.sm:disabled {

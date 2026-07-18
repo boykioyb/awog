@@ -6,6 +6,7 @@
   "sessions.composer.queued": "Đã xếp hàng",
   "sessions.composer.queuedRemove": "Bỏ khỏi hàng đợi",
   "sessions.composer.queuedSendNow": "Gửi ngay — dừng turn hiện tại",
+  "sessions.composer.queuedEdit": "Sửa tin nhắn",
   "sessions.composer.steer": "Chèn",
   "sessions.composer.steerHint": "Chèn vào lượt đang chạy",
   "sessions.composer.steerDone": "Đã chèn vào lượt đang chạy",

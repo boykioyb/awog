@@ -6,6 +6,7 @@
   "sessions.composer.queued": "Queued",
   "sessions.composer.queuedRemove": "Remove from queue",
   "sessions.composer.queuedSendNow": "Send now — stops the current turn",
+  "sessions.composer.queuedEdit": "Edit message",
   "sessions.composer.steer": "Insert",
   "sessions.composer.steerHint": "Insert into the running turn",
   "sessions.composer.steerDone": "Inserted into the running turn",
