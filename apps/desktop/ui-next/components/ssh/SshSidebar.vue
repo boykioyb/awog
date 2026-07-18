@@ -28,6 +28,7 @@ const store = useSshStore()
 
 const items: { key: SshSection; icon: string; label: string }[] = [
   { key: 'hosts', icon: 'conn', label: 'ssh.nav.hosts' },
+  { key: 'vpn', icon: 'globe', label: 'vpn.nav.section' },
   { key: 'keychain', icon: 'shield', label: 'ssh.nav.keychain' },
   { key: 'forwarding', icon: 'forward', label: 'ssh.nav.forwarding' },
   { key: 'snippets', icon: 'commands', label: 'ssh.nav.snippets' },

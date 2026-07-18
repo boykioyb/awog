@@ -81,6 +81,7 @@
             @edit="(id) => emit('edit-identity', id)"
             @delete="(id) => emit('delete-identity', id)"
           />
+          <VpnSection v-else-if="store.sshSection === 'vpn'" />
           <SshForwardingSection v-else-if="store.sshSection === 'forwarding'" />
           <SshEmptyState
             v-else-if="store.sshSection === 'known-hosts'"
@@ -215,6 +216,7 @@ import SshSftpBrowser from '~/components/ssh/SshSftpBrowser.vue'
 import SshSnippetsSection from '~/components/ssh/SshSnippetsSection.vue'
 import SshSidebar from '~/components/ssh/SshSidebar.vue'
 import SshTerminal from '~/components/ssh/SshTerminal.vue'
+import VpnSection from '~/components/vpn/VpnSection.vue'
 import { hostAccent, useSshStore, type SshHost, type SshIdentity } from '~/stores/ssh'
 
 defineProps<{ hosts: SshHost[]; identities: SshIdentity[] }>()

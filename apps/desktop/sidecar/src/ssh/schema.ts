@@ -90,6 +90,10 @@ export const SshHostConfigSchema = z.object({
   agentEnabled: z.boolean().optional(),
   // Ref another host used as a bastion (ssh2 native chaining, NOT ProxyCommand).
   jumpHostId: z.string().regex(SSH_ID_RE).optional(),
+  // Ref a VpnProfile that must be up before this host is reachable (ADR 0065). On
+  // connect the sidecar brings the VPN up (ref-counted, shared across hosts) then
+  // ssh2 reaches the host via OS routing. Wired in P3.
+  vpnId: z.string().regex(SSH_ID_RE).optional(),
   portForwards: z.array(PortForwardSchema).max(50).optional(),
   options: SshHostOptionsSchema.optional(),
   // Last-known runtime status (persisted so the card shows something on reload).

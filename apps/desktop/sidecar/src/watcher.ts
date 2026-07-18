@@ -38,6 +38,7 @@ type WatchKind =
   | 'commands'
   | 'ssh-hosts'
   | 'ssh-identities'
+  | 'vpn-profiles'
 
 interface Watcher {
   close: () => Promise<void> | void
@@ -88,6 +89,7 @@ function userDirs(): DirSpec[] {
     { kind: 'commands', dir: join(awogHome(), 'commands') },
     { kind: 'ssh-hosts', dir: join(awogHome(), 'ssh-hosts') },
     { kind: 'ssh-identities', dir: join(awogHome(), 'ssh-identities') },
+    { kind: 'vpn-profiles', dir: join(awogHome(), 'vpn-profiles') },
   ]
 }
 
@@ -261,8 +263,8 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   if (kind === 'rules') return lower.endsWith('.md')
   // commands: a slash-command Markdown file (atomic .md.tmp.<pid> filtered out).
   if (kind === 'commands') return lower.endsWith('.md')
-  // ssh: a host/identity config .json (atomic .json.tmp.<pid> filtered out).
-  if (kind === 'ssh-hosts' || kind === 'ssh-identities') {
+  // ssh/vpn: a config .json (atomic .json.tmp.<pid> filtered out).
+  if (kind === 'ssh-hosts' || kind === 'ssh-identities' || kind === 'vpn-profiles') {
     return lower.endsWith('.json') && !lower.includes('.tmp.')
   }
   return false

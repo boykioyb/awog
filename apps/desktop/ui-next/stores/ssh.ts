@@ -141,8 +141,16 @@ export interface SshHostKeyPrompt {
   status: 'unknown' | 'changed'
 }
 
-// Left-sidebar sections of the Termius-style SSH workspace.
-export type SshSection = 'hosts' | 'keychain' | 'forwarding' | 'known-hosts' | 'snippets' | 'logs'
+// Left-sidebar sections of the Termius-style SSH workspace. `vpn` is the VPN
+// Manager pane (ADR 0065) — reachability tier that sits alongside the SSH sections.
+export type SshSection =
+  | 'hosts'
+  | 'vpn'
+  | 'keychain'
+  | 'forwarding'
+  | 'known-hosts'
+  | 'snippets'
+  | 'logs'
 
 // Stable id: filename-safe + keychain account segment (mirror of SSH_ID_RE).
 const SSH_ID_RE = /^[a-z0-9][a-z0-9_-]{0,120}$/
