@@ -20,6 +20,7 @@ import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
+import { vpnManager } from '../vpn/manager.js'
 import { loadHost, loadIdentity, saveHost } from './store.js'
 import { loadSshCredential } from './credentials.js'
 import {
@@ -307,6 +308,10 @@ export interface SshConnectionRecord {
   hostId: string
   client: Ssh2Client
   jumpClient?: Ssh2Client
+  // The VpnProfile this connection acquired via vpnManager.ensureUp (ADR 0065 P3).
+  // Present ONLY when the host has a vpnId AND the ensureUp succeeded — teardown
+  // release()s exactly this ref (so a connection that never acquired never releases).
+  vpnId?: string
   // Interactive shell channel — present ONLY for a `connect()` (terminal) session.
   // A headless agent connection (connectHeadless, ADR 0064 P2) opens no shell:
   // exec + SFTP run on `client` directly, so `stream` is absent there.
@@ -637,6 +642,23 @@ class SshManager {
     })
   }
 
+  // Bring up the host's VPN (ref-counted, shared across hosts) BEFORE ssh2 dials so
+  // OS routing is already in place — one admin prompt for the first host, none for
+  // the rest (ADR 0065 P3). Returns the vpnId that was acquired (to release on
+  // teardown), or undefined when the host has no VPN. Throws a clear error on
+  // bring-up failure so the connect fails WITHOUT leaking a ref (ensureUp never
+  // increments on its failure paths).
+  private async acquireVpn(host: SshHostConfig): Promise<string | undefined> {
+    const vpnId = host.vpnId
+    if (!vpnId) return undefined
+    try {
+      await vpnManager.ensureUp(vpnId)
+      return vpnId
+    } catch (err) {
+      throw new Error(`VPN "${vpnId}" could not be brought up: ${sanitizeMessage(err)}`)
+    }
+  }
+
   async connect(params: {
     hostId: string
     cols: number
@@ -648,7 +670,11 @@ class SshManager {
 
     const connId = this.genId()
     let jumpClient: Ssh2Client | undefined
+    // Set once acquireVpn succeeds; cleared once the record owns the ref. On any
+    // failure BEFORE the record exists we release it here so it can't leak.
+    let acquiredVpnId: string | undefined
     try {
+      acquiredVpnId = await this.acquireVpn(host)
       const chain = await this.establishChain(ssh2, host, connId)
       jumpClient = chain.jumpClient
       const stream = await this.openShell(chain.client, params.cols, params.rows)
@@ -662,8 +688,10 @@ class SshManager {
         createdAt: now,
         lastActivityAt: now,
         ...(chain.jumpClient ? { jumpClient: chain.jumpClient } : {}),
+        ...(acquiredVpnId ? { vpnId: acquiredVpnId } : {}),
       }
       this.connections.set(connId, record)
+      acquiredVpnId = undefined // ownership transferred to the record (teardown releases)
 
       stream.on('data', (chunk) => {
         record.lastActivityAt = Date.now()
@@ -691,6 +719,8 @@ class SshManager {
       this.ensureSweep()
       return { connId }
     } catch (err) {
+      // Release the VPN ref if we acquired one but never handed it to a record.
+      if (acquiredVpnId) vpnManager.release(acquiredVpnId)
       try {
         jumpClient?.end()
       } catch {
@@ -726,7 +756,9 @@ class SshManager {
       })
 
     let jumpClient: Ssh2Client | undefined
+    let acquiredVpnId: string | undefined
     try {
+      acquiredVpnId = await this.acquireVpn(host)
       const chain = await this.establishChain(ssh2, host, connId, makeVerifier)
       jumpClient = chain.jumpClient
 
@@ -738,8 +770,10 @@ class SshManager {
         createdAt: now,
         lastActivityAt: now,
         ...(chain.jumpClient ? { jumpClient: chain.jumpClient } : {}),
+        ...(acquiredVpnId ? { vpnId: acquiredVpnId } : {}),
       }
       this.connections.set(connId, record)
+      acquiredVpnId = undefined // ownership transferred to the record (teardown releases)
 
       chain.client.on('error', (err) => {
         this.emitStatus(connId, host.id, 'error', sanitizeMessage(err))
@@ -754,6 +788,7 @@ class SshManager {
       this.ensureSweep()
       return connId
     } catch (err) {
+      if (acquiredVpnId) vpnManager.release(acquiredVpnId)
       try {
         jumpClient?.end()
       } catch {
@@ -1004,6 +1039,10 @@ class SshManager {
     const record = this.connections.get(connId)
     if (!record) return
     this.connections.delete(connId)
+    // Drop this connection's VPN reference (ADR 0065 P3). release() never throws and
+    // no-ops if the tunnel is already gone; when the last ref clears AND the profile
+    // opted into autoDown, the VPN tears itself down.
+    if (record.vpnId) vpnManager.release(record.vpnId)
     this.fireTeardown(connId)
     try {
       record.stream?.end()
@@ -1039,6 +1078,7 @@ class SshManager {
 
   shutdown(): void {
     for (const record of this.connections.values()) {
+      if (record.vpnId) vpnManager.release(record.vpnId)
       this.fireTeardown(record.connId)
       try {
         record.stream?.end()

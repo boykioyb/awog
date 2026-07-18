@@ -62,6 +62,10 @@ export interface SshHost {
   // enabled (backward-compat); false = hidden from agents.
   agentEnabled?: boolean
   jumpHostId?: string
+  // Ref a VpnProfile that must be up before this host is reachable (ADR 0065 P3).
+  // On connect the sidecar brings the VPN up (ref-counted, shared across hosts)
+  // then ssh2 reaches the host via OS routing.
+  vpnId?: string
   portForwards?: PortForward[]
   options?: SshHostOptions
   connectionStatus?: SshConnectionStatus

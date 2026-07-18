@@ -89,6 +89,14 @@
         <AppSelect v-model="jumpHostSelect" :options="jumpHostOptions" width="100%" />
       </div>
 
+      <!-- VPN (ADR 0065 P3) — a VpnProfile brought up (shared, ref-counted) before
+           ssh2 dials this host, so the host is reachable via OS routing. -->
+      <div class="sse-field">
+        <label class="sse-label">{{ t('ssh.editor.vpn') }}</label>
+        <AppSelect v-model="vpnSelect" :options="vpnOptions" width="100%" />
+        <div class="sse-hint">{{ t('ssh.editor.vpnHint') }}</div>
+      </div>
+
       <div class="sse-field">
         <label class="sse-label">{{ t('ssh.editor.tags') }}</label>
         <input
@@ -135,6 +143,7 @@ import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { SshAuthMethod, SshHost, SshIdentity } from '~/stores/ssh'
+import { useVpnStore } from '~/stores/vpn'
 import type { SshHostSecret } from '~/composables/useSshPage'
 
 const props = defineProps<{
@@ -152,6 +161,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const vpnStore = useVpnStore()
 
 const isExisting = computed(() => !!props.host)
 
@@ -163,6 +173,7 @@ const user = ref('')
 const authMethod = ref<SshAuthMethod>('agent')
 const identityId = ref('')
 const jumpHostId = ref('')
+const vpnId = ref('')
 const folder = ref('')
 const tagsText = ref('')
 // Whether session agents can use this host as an SSH tool (default on for new hosts).
@@ -183,6 +194,10 @@ const jumpHostOptions = computed<AppSelectOption[]>(() => [
   ...props.hosts
     .filter((h) => h.id !== props.host?.id)
     .map((h) => ({ value: h.id, label: h.name })),
+])
+const vpnOptions = computed<AppSelectOption[]>(() => [
+  { value: '', label: t('ssh.editor.vpnNone') },
+  ...vpnStore.profiles.map((p) => ({ value: p.id, label: p.name })),
 ])
 
 // Folder = pick an existing one (reused across hosts) OR add a new one. Existing
@@ -235,12 +250,21 @@ const jumpHostSelect = computed<string>({
     jumpHostId.value = v
   },
 })
+const vpnSelect = computed<string>({
+  get: () => vpnId.value,
+  set: (v) => {
+    vpnId.value = v
+  },
+})
 
 // Re-seed every time the modal opens or the edit target / seed folder changes.
 watch(
   () => [props.open, props.host, props.seedFolder] as const,
   ([isOpen]) => {
     if (!isOpen) return
+    // Populate the VPN picker on demand — the store is only loaded when the VPN tab
+    // is opened, so an edit that never visited it would otherwise show an empty list.
+    if (!vpnStore.loaded) void vpnStore.loadAll()
     const h = props.host
     name.value = h?.name ?? ''
     hostName.value = h?.host ?? ''
@@ -249,6 +273,7 @@ watch(
     authMethod.value = h?.authMethod ?? 'agent'
     identityId.value = h?.identityId ?? ''
     jumpHostId.value = h?.jumpHostId ?? ''
+    vpnId.value = h?.vpnId ?? ''
     folder.value = h?.folder ?? props.seedFolder ?? ''
     // Existing folder (incl. a seeded group) → pick mode; the AppSelect shows it.
     folderMode.value = 'select'
@@ -280,6 +305,7 @@ const buildHost = (): SshHost => {
   }
   if (authMethod.value === 'key' && identityId.value) base.identityId = identityId.value
   if (jumpHostId.value) base.jumpHostId = jumpHostId.value
+  if (vpnId.value) base.vpnId = vpnId.value
   if (folder.value.trim()) base.folder = folder.value.trim()
   const tags = parseTags(tagsText.value)
   if (tags.length) base.tags = tags
