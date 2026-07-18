@@ -11,6 +11,8 @@ import type { VpnRuntimeState } from '../vpn/manager.js'
 const Params = z.object({ id: z.string().regex(VPN_ID_RE).optional() })
 
 register('vpn.status', async (raw): Promise<{ states: VpnRuntimeState[] }> => {
-  const { id } = Params.parse(raw)
+  // `id` is optional, so a no-args call (refreshStatus) arrives as null/undefined —
+  // coerce to {} so the whole-inventory snapshot doesn't fail "Invalid params".
+  const { id } = Params.parse(raw ?? {})
   return { states: await vpnStatusStates(id) }
 })
