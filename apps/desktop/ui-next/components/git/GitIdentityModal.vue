@@ -309,7 +309,7 @@ watch(
   color: var(--text);
 }
 .gid-proj {
-  font-weight: 400;
+  font-weight: 500;
   color: var(--textDim);
 }
 .gid-hint {

@@ -1821,7 +1821,7 @@ textarea.ci {
 }
 .pinreuse-clear {
   margin-left: auto;
-  font-weight: 400;
+  font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
   cursor: pointer;
