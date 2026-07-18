@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { homedir } from 'node:os'
 import { log } from './logger'
-import { enginePath } from './paths'
+import { enginePath, openvpnBinPath } from './paths'
 
 // Engine process bridge — the Electron counterpart of the old Rust `sidecar.rs`.
 //
@@ -107,9 +107,16 @@ class Engine {
     // (e.g. `find . -name '*.md'` hitting only sidecar/node_modules) instead of the
     // user's natural space. Engine/UI asset paths resolve absolutely (see paths.ts),
     // so cwd never affects resource loading.
+    // Point the sidecar at the bundled openvpn (if shipped) so it works without a
+    // system install. Absent → the sidecar's own allowlist finds a system openvpn.
+    const openvpnBin = openvpnBinPath()
     const child = spawn(process.execPath, [enginePath()], {
       cwd: homedir(),
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        ...(openvpnBin ? { AWOG_OPENVPN_BIN: openvpnBin } : {}),
+      },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 

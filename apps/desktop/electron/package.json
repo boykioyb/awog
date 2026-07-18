@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo \"no lint\"",
     "dist": "node scripts/pack.mjs",
+    "vendor:openvpn": "node scripts/vendor-openvpn.mjs",
     "rebuild": "electron-rebuild -f -w node-pty --module-dir ../sidecar/dist"
   },
   "dependencies": {

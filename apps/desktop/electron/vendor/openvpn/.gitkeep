@@ -1,0 +1,3 @@
+# Keeps the vendor/openvpn dir present so electron-builder always has a valid
+# extraResources source. Per-platform binaries are populated by
+# `pnpm vendor:openvpn` and are gitignored (not committed).

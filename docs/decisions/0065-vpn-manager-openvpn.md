@@ -48,7 +48,7 @@ User đã chốt: **AWOG tự spawn `openvpn`**, chạy trên **macOS/Linux/Wind
 - (+) Mở khoá SSH tới server nằm sau OpenVPN; tái dùng plumbing keychain/store/RPC/events/watcher có sẵn.
 - (+) **1 VPN dùng chung N host** qua ref-count; keepalive tự phục hồi khi rớt.
 - (+) Management-interface giữ **cred off-disk** và điều khiển được tiến trình elevated (giải quyết vấn đề mất stdout).
-- (−) Phụ thuộc **binary `openvpn` cài sẵn** của OS (không bundle) — thiếu thì hướng dẫn cài (`brew install openvpn` / gói distro / OpenVPN Windows).
+- (~) **Bundle `openvpn` kèm app** để user khỏi tự cài (2026-07-18): exec một binary GPL là aggregation (hợp lệ), nên ship openvpn **relocatable** per platform+arch qua `extraResources` (`vendor/openvpn/<plat>-<arch>/`), chuẩn bị bằng `scripts/vendor-openvpn.mjs` (copy dylib + `install_name_tool`→@loader_path trên mac / `patchelf $ORIGIN` Linux / DLL cạnh exe Windows). Electron main set `AWOG_OPENVPN_BIN` → `resolveOpenvpnBinary` ưu tiên bản bundled, **fallback allowlist system** nếu chưa vendor. **Build machine** vẫn cần openvpn làm nguồn (brew/…); **end user thì không**. Bundle bỏ được bước *cài* NHƯNG **không bỏ được prompt admin** (openvpn cần root tạo tun). Lưu ý: khi bật signing/notarize macOS, binary + dylib nhúng phải được ký cùng app.
 - (−) **Prompt admin mỗi lần VPN lên** (chấp nhận vì 1 lần/phiên); chỉ Phase-2 helper mới bỏ hẳn.
 - (−) Surface bảo mật lớn: **spawn tiến trình đặc quyền + sửa route OS + cred VPN + socket điều khiển** → **infosec audit bắt buộc**. macOS `osascript` AppleScript string cần escape cẩn thận.
 - (−) **Windows** prompt-based (UAC `Start-Process`) khó theo dõi tiến trình elevated → dựa vào management + pidfile; có thể phải chuyển OpenVPN service ở Phase sau (ghi rõ risk trong spec).

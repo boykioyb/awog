@@ -3,3 +3,7 @@ release/
 node_modules/
 # Bundled RTK binary — downloaded + checksum-verified by scripts/fetch-rtk.mjs (ADR 0031)
 resources/rtk/
+# Vendored openvpn binaries — produced per platform by scripts/vendor-openvpn.mjs
+# (ADR 0065). Keep the dir (.gitkeep) so electron-builder always has a valid source.
+vendor/openvpn/*
+!vendor/openvpn/.gitkeep

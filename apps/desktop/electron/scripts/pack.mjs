@@ -44,6 +44,12 @@ run('pnpm', ['--filter', '@awog/sidecar', 'build'], repoRoot)
 run('pnpm', ['exec', 'electron-rebuild', '-f', '-w', 'node-pty', '--module-dir', '../sidecar/dist'], electronDir, { optional: true })
 // 4. Electron main/preload
 run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], electronDir)
+// 4.5 Vendor a relocatable openvpn for this host (VPN Manager, ADR 0065). Optional:
+//     a build machine without openvpn simply ships without it and the app falls back
+//     to a system install. Skip with AWOG_SKIP_VENDOR_OPENVPN=1.
+if (process.env.AWOG_SKIP_VENDOR_OPENVPN !== '1') {
+  run('node', ['scripts/vendor-openvpn.mjs'], electronDir, { optional: true })
+}
 // 5. Package. Default to --publish never for local builds; CI passes
 //    --publish always. (With a `publish` config present, electron-builder would
 //    otherwise try to build update-info and crash when no repo/token is set.)

@@ -27,6 +27,14 @@ extraResources:
     to: ui
   - from: ../sidecar/dist
     to: sidecar
+  # Bundled openvpn per platform+arch (VPN Manager, ADR 0065). Populated by
+  # `pnpm vendor:openvpn` (scripts/vendor-openvpn.mjs) before packaging; the dir
+  # may be empty (only a .gitkeep), in which case the app falls back to a system
+  # openvpn. Filtered to this host's platform so a build never ships another OS's binary.
+  - from: vendor/openvpn
+    to: openvpn
+    filter:
+      - '${platform}-${arch}/**'
   - from: build/tray.png
     to: tray.png
   - from: build/trayTemplate.png

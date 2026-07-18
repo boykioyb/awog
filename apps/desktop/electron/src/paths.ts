@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 
@@ -32,6 +33,21 @@ export function uiDir(): string {
 
 export function preloadPath(): string {
   return join(__dirname, 'preload.js')
+}
+
+// Bundled openvpn binary shipped as an extraResource so users don't have to install
+// it themselves (VPN Manager, ADR 0065). Populated per platform+arch by
+// scripts/vendor-openvpn.mjs into vendor/openvpn/<platform>-<arch>/. Returns the
+// path only when it actually exists — otherwise the sidecar falls back to a system
+// install. Bundling removes the *install* step; the tunnel still needs an admin
+// prompt (openvpn must be root to create the tun device).
+export function openvpnBinPath(): string | null {
+  const slot = `${process.platform}-${process.arch}`
+  const exe = process.platform === 'win32' ? 'openvpn.exe' : 'openvpn'
+  const base = app.isPackaged
+    ? join(process.resourcesPath, 'openvpn', slot, exe)
+    : join(__dirname, '..', 'vendor', 'openvpn', slot, exe)
+  return existsSync(base) ? base : null
 }
 
 // Tray icon. macOS uses a monochrome TEMPLATE image (transparent bg, auto
