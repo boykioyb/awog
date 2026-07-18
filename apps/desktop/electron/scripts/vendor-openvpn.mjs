@@ -87,34 +87,59 @@ function otoolDeps(file) {
     .map((l) => l.trim().split(' (')[0].trim())
     .filter(Boolean)
 }
+// Resolve a dependency load-path to the absolute SOURCE file. Absolute paths are
+// used verbatim; @loader_path/@rpath are resolved relative to the referrer's own
+// source dir (Homebrew keeps a keg's sibling dylibs, e.g. libssl → libcrypto, in the
+// same lib dir), with ../lib as a fallback for @rpath.
+function resolveDepSrc(dep, referrerSrcDir) {
+  if (dep.startsWith('/')) return dep
+  if (dep.startsWith('@loader_path/')) return join(referrerSrcDir, dep.slice('@loader_path/'.length))
+  if (dep.startsWith('@rpath/')) {
+    const rest = dep.slice('@rpath/'.length)
+    for (const cand of [join(referrerSrcDir, rest), join(referrerSrcDir, '..', 'lib', rest)]) {
+      if (existsSync(cand)) return cand
+    }
+  }
+  return null
+}
 function macRelocate(srcBin) {
   const mainDest = join(destDir, 'openvpn')
   copyFileSync(srcBin, mainDest)
   chmodSync(mainDest, 0o755)
-  const queue = [mainDest]
-  const seen = new Set()
+  // Track each copied file's ORIGINAL dir so @loader_path deps resolve correctly.
+  const queue = [{ dest: mainDest, srcDir: dirname(srcBin) }]
+  const copied = new Set() // basenames already bundled
+  const modified = [mainDest] // files whose signature install_name_tool invalidated
   while (queue.length) {
-    const target = queue.shift()
-    for (const dep of otoolDeps(target)) {
+    const { dest, srcDir } = queue.shift()
+    for (const dep of otoolDeps(dest)) {
       if (isSystemDylibMac(dep)) continue
-      if (!dep.startsWith('/')) {
-        // @rpath/@loader_path — brew keg deps are normally absolute; warn if not.
-        info(`WARN: non-absolute dep on ${basename(target)}: ${dep} (may need manual rpath fix)`)
-        continue
-      }
       const base = basename(dep)
-      const destLib = join(destDir, base)
-      if (!seen.has(base)) {
-        seen.add(base)
-        if (!existsSync(dep)) fail(`dependency not found on disk: ${dep}`)
-        copyFileSync(dep, destLib)
+      if (!copied.has(base)) {
+        const src = resolveDepSrc(dep, srcDir)
+        if (!src || !existsSync(src)) {
+          info(`WARN: could not resolve ${dep} (from ${basename(dest)}) — skipping`)
+          continue
+        }
+        const destLib = join(destDir, base)
+        copyFileSync(src, destLib)
         chmodSync(destLib, 0o644)
         sh('install_name_tool', ['-id', `@loader_path/${base}`, destLib])
-        queue.push(destLib)
+        copied.add(base)
+        modified.push(destLib)
+        queue.push({ dest: destLib, srcDir: dirname(src) })
       }
-      sh('install_name_tool', ['-change', dep, `@loader_path/${base}`, target])
+      // Point this reference at the bundled sibling (skip if already correct).
+      if (dep !== `@loader_path/${base}`) {
+        sh('install_name_tool', ['-change', dep, `@loader_path/${base}`, dest])
+      }
     }
   }
+  // CRITICAL on Apple Silicon: install_name_tool invalidates each file's ad-hoc code
+  // signature, and arm64 dyld REFUSES to load an unsigned/invalidly-signed Mach-O
+  // (the process is killed → exit=null). Re-sign every modified file ad-hoc; sign the
+  // main executable last (after its dylibs).
+  for (const f of [...modified].reverse()) sh('codesign', ['--force', '--sign', '-', f])
   return mainDest
 }
 
