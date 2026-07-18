@@ -47,8 +47,8 @@
   "vpn.editor.save": "Save",
 
   "vpn.editor.creds.title": "Credentials",
-  "vpn.editor.creds.hint": "Stored in the OS keychain — never written to config, disk, or git.",
-  "vpn.editor.creds.keepHint": "Stored in the OS keychain. Leave a field blank to keep its existing value.",
+  "vpn.editor.creds.hint": "Kept on your machine only.",
+  "vpn.editor.creds.keepHint": "Kept on your machine only.",
   "vpn.editor.creds.username": "Username",
   "vpn.editor.creds.usernamePh": "VPN username",
   "vpn.editor.creds.password": "Password",

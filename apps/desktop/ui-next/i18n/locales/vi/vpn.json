@@ -47,8 +47,8 @@
   "vpn.editor.save": "Lưu",
 
   "vpn.editor.creds.title": "Thông tin đăng nhập",
-  "vpn.editor.creds.hint": "Lưu trong OS keychain — không bao giờ ghi vào config, đĩa hay git.",
-  "vpn.editor.creds.keepHint": "Lưu trong OS keychain. Để trống một ô để giữ giá trị hiện có.",
+  "vpn.editor.creds.hint": "Chỉ lưu trên máy bạn.",
+  "vpn.editor.creds.keepHint": "Chỉ lưu trên máy bạn.",
   "vpn.editor.creds.username": "Tên đăng nhập",
   "vpn.editor.creds.usernamePh": "Tên đăng nhập VPN",
   "vpn.editor.creds.password": "Mật khẩu",

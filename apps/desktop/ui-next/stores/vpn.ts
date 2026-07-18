@@ -51,6 +51,13 @@ export interface VpnCredentialInput {
   keyPassphrase?: string
 }
 
+// The stored credential read back for the editor to prefill (vpn.getCredential).
+export interface VpnCredentialView {
+  username?: string
+  password?: string
+  keyPassphrase?: string
+}
+
 // Draft returned by `vpn.importOvpn` — a dry-run parse of a .ovpn (NO secret). Seeds a
 // NEW-profile editor; the user completes credentials before saving.
 export interface VpnImportDraft {
@@ -296,12 +303,25 @@ export const useVpnStore = defineStore('vpn', () => {
     }
   }
 
-  // --- credentials (WRITE-ONLY) ----------------------------------------------
-  // The secret is written to the OS keychain and never returned. Browser-dev has
-  // no keychain, so this is a no-op there (the mock UI can't store a real secret).
+  // --- credentials -----------------------------------------------------------
+  // Written to the OS keychain. Browser-dev has no keychain, so this is a no-op
+  // there (the mock UI can't store a real secret).
   async function setCredential(input: VpnCredentialInput): Promise<void> {
     if (!available.value) return
     await sc.request('vpn.setCredential', input)
+  }
+
+  // Read a profile's stored credential back so the editor can prefill it — the
+  // user's own VPN login, shown like a password manager (see vpn.get-credential.ts
+  // for the security rationale). Returns {} in browser-dev / on any failure.
+  async function getCredential(id: string): Promise<VpnCredentialView> {
+    if (!available.value) return {}
+    try {
+      return await sc.request<VpnCredentialView>('vpn.getCredential', { id })
+    } catch (err) {
+      console.warn('[vpn] getCredential failed', err)
+      return {}
+    }
   }
 
   // --- event subscription ----------------------------------------------------
@@ -343,6 +363,7 @@ export const useVpnStore = defineStore('vpn', () => {
     deleteProfile,
     importOvpn,
     setCredential,
+    getCredential,
     refreshStatus,
     up,
     down,
