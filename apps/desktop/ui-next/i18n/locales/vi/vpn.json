@@ -3,6 +3,9 @@
 
   "vpn.section.title": "VPN",
   "vpn.new": "VPN mới",
+  "vpn.import.button": "Nhập .ovpn",
+  "vpn.import.pickTitle": "Chọn file .ovpn để nhập",
+  "vpn.import.failed": "Không nhập được .ovpn: {error}",
   "vpn.empty.title": "Chưa có hồ sơ VPN nào",
   "vpn.empty.body": "Thêm hồ sơ OpenVPN để giữ tunnel luôn bật và truy cập host nằm sau nó.",
 

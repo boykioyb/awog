@@ -166,7 +166,7 @@ import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { pickFile } from '~/composables/useFolderPicker'
-import type { VpnAuthMode, VpnProfile } from '~/stores/vpn'
+import type { VpnAuthMode, VpnImportDraft, VpnProfile } from '~/stores/vpn'
 
 // The editor emits its raw secret parts; the section maps them to vpn.setCredential.
 export type VpnCredentialSecret = { username?: string; password?: string; keyPassphrase?: string }
@@ -175,6 +175,9 @@ const props = defineProps<{
   open: boolean
   profile: VpnProfile | null
   profiles: VpnProfile[]
+  // NEW-profile seed from a .ovpn import (P4). Only used when `profile` is null; seeds
+  // name / configPath / authMode, leaving folder / tags / credentials for the user.
+  draft?: VpnImportDraft | null
 }>()
 
 const emit = defineEmits<{
@@ -242,13 +245,15 @@ const folderSelect = computed<string>({
 
 // Re-seed every time the modal opens or the edit target changes.
 watch(
-  () => [props.open, props.profile] as const,
+  () => [props.open, props.profile, props.draft] as const,
   ([isOpen]) => {
     if (!isOpen) return
     const p = props.profile
-    name.value = p?.name ?? ''
-    configPath.value = p?.configPath ?? ''
-    authMode.value = p?.authMode ?? 'none'
+    // An import draft seeds a NEW profile only (an existing profile always wins).
+    const d = p ? null : props.draft
+    name.value = p?.name ?? d?.name ?? ''
+    configPath.value = p?.configPath ?? d?.configPath ?? ''
+    authMode.value = p?.authMode ?? d?.authMode ?? 'none'
     folder.value = p?.folder ?? ''
     folderMode.value = 'select'
     tagsText.value = (p?.tags ?? []).join(', ')

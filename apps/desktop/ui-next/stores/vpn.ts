@@ -51,6 +51,14 @@ export interface VpnCredentialInput {
   keyPassphrase?: string
 }
 
+// Draft returned by `vpn.importOvpn` — a dry-run parse of a .ovpn (NO secret). Seeds a
+// NEW-profile editor; the user completes credentials before saving.
+export interface VpnImportDraft {
+  name: string
+  configPath: string
+  authMode: VpnAuthMode
+}
+
 // Live runtime state (P1) — the wire shape of `vpn.status` + the
 // `vpn:status-changed` event. NEVER carries ports / pw-file paths / secrets.
 export interface VpnRuntimeState {
@@ -104,6 +112,15 @@ function slugify(name: string): string {
     .replace(/-+$/, '')
     .slice(0, 110)
   return base || 'vpn'
+}
+
+// Filename stem (basename minus the last extension), e.g. "/vpn/office.ovpn" →
+// "office". Handles both POSIX and Windows separators — used to name a browser-dev
+// import draft when there is no engine to parse the config.
+function stemFromPath(path: string): string {
+  const base = path.split(/[\\/]/).pop() ?? path
+  const dot = base.lastIndexOf('.')
+  return dot > 0 ? base.slice(0, dot) : base
 }
 
 // A valid, unique id for a new profile: slugify(name), then append a short numeric
@@ -209,6 +226,20 @@ export const useVpnStore = defineStore('vpn', () => {
     profiles.value = profiles.value.filter((p) => p.id !== id)
   }
 
+  // --- import (.ovpn dry-run, P4) --------------------------------------------
+  // Parse a .ovpn into a NEW-profile draft (name / configPath / authMode) WITHOUT
+  // writing anything. The sidecar runs the root-RCE validation + parse and rejects a
+  // hostile config (the caller surfaces the thrown reason). NEVER returns a secret —
+  // the user fills in credentials in the editor. Browser-dev (no engine) derives a
+  // minimal draft from the filename so the editor still opens offline.
+  async function importOvpn(path: string): Promise<VpnImportDraft> {
+    if (available.value) {
+      const res = await sc.request<{ draft: VpnImportDraft }>('vpn.importOvpn', { path })
+      return res.draft
+    }
+    return { name: stemFromPath(path), configPath: path, authMode: 'none' }
+  }
+
   // --- live control (P1) -----------------------------------------------------
   // Seed the live runtime map from the sidecar (called after loadAll). Merges
   // persisted-only profiles server-side, so this is the source of truth on load.
@@ -310,6 +341,7 @@ export const useVpnStore = defineStore('vpn', () => {
     loadAll,
     saveProfile,
     deleteProfile,
+    importOvpn,
     setCredential,
     refreshStatus,
     up,

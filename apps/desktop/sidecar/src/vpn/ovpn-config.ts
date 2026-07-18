@@ -19,7 +19,8 @@
 
 import { access, readFile, realpath, stat } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
-import { dirname, isAbsolute } from 'node:path'
+import { basename, dirname, isAbsolute } from 'node:path'
+import type { VpnAuthMode } from './schema.js'
 
 // Directives that can execute a script or load a binary as root, or that would
 // let the profile override our management socket. Matched case-insensitively on
@@ -167,4 +168,47 @@ export async function validateOvpnConfig(
   assertDirectivesSafe(directiveLines(text))
 
   return { configPath: real, dir: dirname(real) }
+}
+
+// A NEW-profile draft derived from a .ovpn — VPN Manager P4 import (dry-run). Holds
+// ONLY non-secret metadata; never any key/cert material.
+export interface OvpnDraft {
+  name: string
+  configPath: string
+  authMode: VpnAuthMode
+}
+
+// Filename stem, e.g. "/vpn/office.ovpn" → "office". Used as the draft display name.
+function stemFromPath(p: string): string {
+  const base = basename(p)
+  const dot = base.lastIndexOf('.')
+  return dot > 0 ? base.slice(0, dot) : base
+}
+
+// `auth-user-pass` WITHOUT a file argument means openvpn will PROMPT for user/pass,
+// which we push via the management interface → authMode 'user-pass'. With a file
+// argument the creds come from that file, and with no such directive the profile
+// authenticates via cert/config → authMode 'none' either way.
+function detectAuthMode(directives: { name: string; rest: string }[]): VpnAuthMode {
+  for (const { name, rest } of directives) {
+    if (name === 'auth-user-pass' && rest.length === 0) return 'user-pass'
+  }
+  return 'none'
+}
+
+// Dry-run parse of a .ovpn into a NEW-profile draft (VPN Manager P4). Runs the full
+// validateOvpnConfig root-RCE guard first (throws OvpnValidationError on reject), so a
+// hostile config can never seed a profile. Then derives non-secret metadata only:
+// name (filename stem), the canonical realpath, and authMode. The second read is of
+// the just-validated canonical path and feeds ONLY non-exec metadata — connect time
+// (vpn.up) re-validates from scratch, so a TOCTOU swap here can't cause exec. NEVER
+// reads or returns any key/cert material or secret.
+export async function deriveOvpnDraft(path: string): Promise<OvpnDraft> {
+  const { configPath } = await validateOvpnConfig(path)
+  const text = await readFile(configPath, 'utf8')
+  return {
+    name: stemFromPath(configPath),
+    configPath,
+    authMode: detectAuthMode(directiveLines(text)),
+  }
 }

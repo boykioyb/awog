@@ -3,10 +3,16 @@
     <div class="vpnx-top">
       <span class="vpnx-title">{{ t('vpn.section.title') }}</span>
       <span class="vpnx-count">{{ store.profiles.length }}</span>
-      <button class="btn pri sm vpnx-new" :title="t('vpn.new')" @click="openNew">
-        <Icon name="plus" style="width: 13px; height: 13px" />
-        {{ t('vpn.new') }}
-      </button>
+      <div class="vpnx-actions">
+        <button v-if="canPick" class="btn sm" :title="t('vpn.import.button')" @click="openImport">
+          <Icon name="download" style="width: 13px; height: 13px" />
+          {{ t('vpn.import.button') }}
+        </button>
+        <button class="btn pri sm" :title="t('vpn.new')" @click="openNew">
+          <Icon name="plus" style="width: 13px; height: 13px" />
+          {{ t('vpn.new') }}
+        </button>
+      </div>
     </div>
 
     <div class="vpnx-scroll">
@@ -35,6 +41,7 @@
       :open="editorOpen"
       :profile="editing"
       :profiles="store.profiles"
+      :draft="importDraft"
       @save="onSave"
       @cancel="editorOpen = false"
     />
@@ -53,7 +60,8 @@ import VpnEditor, { type VpnCredentialSecret } from '~/components/vpn/VpnEditor.
 import VpnEmptyState from '~/components/vpn/VpnEmptyState.vue'
 import { useConfirm } from '~/composables/useConfirm'
 import { pushActionToast } from '~/composables/useActionToasts'
-import { useVpnStore, type VpnProfile } from '~/stores/vpn'
+import { pickFile } from '~/composables/useFolderPicker'
+import { useVpnStore, type VpnImportDraft, type VpnProfile } from '~/stores/vpn'
 
 const { t } = useI18n()
 const store = useVpnStore()
@@ -62,14 +70,40 @@ const { confirm } = useConfirm()
 // --- editor ----------------------------------------------------------------
 const editorOpen = ref(false)
 const editing = ref<VpnProfile | null>(null)
+// Seed for a NEW profile parsed from a .ovpn import (P4); cleared on every other open
+// so a stale draft never bleeds into a fresh New/Edit.
+const importDraft = ref<VpnImportDraft | null>(null)
 
 function openNew(): void {
+  importDraft.value = null
   editing.value = null
   editorOpen.value = true
 }
 function openEdit(profile: VpnProfile): void {
+  importDraft.value = null
   editing.value = profile
   editorOpen.value = true
+}
+
+// --- import (.ovpn dry-run, P4) --------------------------------------------
+// Native picker → dry-run parse (sidecar validates + rejects a hostile config) →
+// open the editor pre-filled in new-profile mode. Nothing is written until the user
+// saves. The button is hidden without a native picker (browser-dev), so this only
+// runs inside the Electron shell.
+const canPick = ref(typeof window !== 'undefined' && !!window.awog)
+async function openImport(): Promise<void> {
+  const picked = await pickFile({
+    title: t('vpn.import.pickTitle'),
+    filters: [{ name: 'OpenVPN', extensions: ['ovpn', 'conf'] }],
+  })
+  if (!picked) return
+  try {
+    importDraft.value = await store.importOvpn(picked)
+    editing.value = null
+    editorOpen.value = true
+  } catch (err) {
+    pushActionToast(t('vpn.import.failed', { error: errText(err) }), 'error')
+  }
 }
 
 // Save the profile, then (only when a credential was actually entered) persist it
@@ -167,8 +201,11 @@ onMounted(() => {
   color: var(--textDim);
   background: var(--bgHover);
 }
-.vpnx-new {
+.vpnx-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .vpnx-scroll {
   flex: 1;

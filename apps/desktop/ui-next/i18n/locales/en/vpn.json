@@ -3,6 +3,9 @@
 
   "vpn.section.title": "VPN",
   "vpn.new": "New VPN",
+  "vpn.import.button": "Import .ovpn",
+  "vpn.import.pickTitle": "Select an .ovpn to import",
+  "vpn.import.failed": "Could not import .ovpn: {error}",
   "vpn.empty.title": "No VPN profiles yet",
   "vpn.empty.body": "Add an OpenVPN profile to keep a tunnel up and reach hosts behind it.",
 
