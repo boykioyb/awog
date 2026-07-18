@@ -20,7 +20,13 @@ import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import { installHint, resolveOpenvpnBinary } from './binary.js'
 import { validateOvpnConfig } from './ovpn-config.js'
-import { bindTestFreePort, buildOpenvpnArgv, runtimePaths, writePwFile } from './launch.js'
+import {
+  bindTestFreePort,
+  buildOpenvpnArgv,
+  runtimePaths,
+  writePrivateConfig,
+  writePwFile,
+} from './launch.js'
 import { ManagementClient } from './management-client.js'
 import { ElevationCancelled, selectAdapter } from './elevation/adapter.js'
 import { listProfiles, loadProfile, saveProfile } from './store.js'
@@ -53,6 +59,7 @@ interface VpnRuntimeRecord {
   pwFile: string
   pidFile: string
   logFile: string
+  configFile: string // sidecar-private validated .ovpn copy (infosec F2)
   refCount: number // P3 — number of SSH connections sharing this tunnel
   startedAt: number
   keepalive: boolean // profile flag (P2) — auto-restart on unexpected process death
@@ -144,13 +151,18 @@ function sanitizeLogLine(line: string): string {
 }
 
 // Derive the wire state for a profile that has NO live record (persisted status).
+// A live tunnel ALWAYS has a live record, so a persisted `up`/`connecting` with no
+// record means the sidecar restarted out from under an orphaned openvpn it can no
+// longer control — report `down` rather than a misleading `up` the user can't stop
+// (infosec F4). Only `error`/`down` persist meaningfully across a restart.
 export function persistedStateOf(profile: VpnProfileConfig): VpnRuntimeState {
-  const status: VpnRuntimeStatus = profile.status ?? 'down'
+  const persisted = profile.status ?? 'down'
+  const status: VpnRuntimeStatus = persisted === 'up' || persisted === 'connecting' ? 'down' : persisted
   return {
     id: profile.id,
     status,
     refCount: 0,
-    ...(profile.statusError ? { error: profile.statusError } : {}),
+    ...(status !== 'down' && profile.statusError ? { error: profile.statusError } : {}),
   }
 }
 
@@ -349,13 +361,17 @@ class VpnManager {
     const binary = await resolveOpenvpnBinary()
     if (!binary) throw new Error(`OpenVPN unavailable — ${installHint()}`)
 
-    const { configPath, dir } = await validateOvpnConfig(profile.configPath)
+    // `content` = the exact validated bytes; openvpn parses our private copy of them
+    // (infosec F2), never the user-writable original. `dir` is the original config
+    // dir, kept for `--cd` so relative ca/cert/key still resolve.
+    const { dir, content } = await validateOvpnConfig(profile.configPath)
     const cred = await loadVpnCredential(id) // in-memory only; may be null
 
-    // 3. Allocate runtime files (0700 dir, 0600 pw-file).
+    // 3. Allocate runtime files (0700 dir, 0600 pw-file + private config copy).
     const paths = runtimePaths(id)
     await mkdir(paths.dir, { recursive: true, mode: 0o700 })
     await safeUnlink(paths.pidFile) // drop a stale pid from a previous run
+    await writePrivateConfig(paths.configFile, content)
     const port = await bindTestFreePort()
     const mgmtPw = randomBytes(24).toString('base64url')
     await writePwFile(paths.pwFile, mgmtPw)
@@ -368,6 +384,7 @@ class VpnManager {
       pwFile: paths.pwFile,
       pidFile: paths.pidFile,
       logFile: paths.logFile,
+      configFile: paths.configFile,
       refCount: 0,
       startedAt: Date.now(),
       keepalive: profile.keepalive,
@@ -389,8 +406,9 @@ class VpnManager {
     })
 
     // 5. Build argv + spawn elevated. A prompt cancel → clean `down`, not `error`.
+    // openvpn reads the PRIVATE copy; --cd stays the original dir for relative certs.
     const argv = buildOpenvpnArgv({
-      configPath,
+      configPath: paths.configFile,
       ovpnDir: dir,
       port,
       pwFile: paths.pwFile,
@@ -726,6 +744,7 @@ class VpnManager {
     record.mgmt?.destroy()
     void safeUnlink(record.pwFile)
     void safeUnlink(record.pidFile)
+    void safeUnlink(record.configFile)
   }
 
   // Best-effort persist of last-known status onto the profile JSON (design §1.1).

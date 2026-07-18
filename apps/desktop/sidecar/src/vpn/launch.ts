@@ -20,6 +20,7 @@ export interface VpnRuntimePaths {
   pwFile: string
   pidFile: string
   logFile: string
+  configFile: string
 }
 
 // Per-profile runtime directory + file paths. `id` is sanitized (schema VPN_ID_RE
@@ -31,12 +32,25 @@ export function runtimePaths(id: string): VpnRuntimePaths {
     pwFile: join(dir, 'mgmt.pw'),
     pidFile: join(dir, 'openvpn.pid'),
     logFile: join(dir, 'openvpn.log'),
+    // Sidecar-private copy of the VALIDATED .ovpn — openvpn reads THIS (infosec F2),
+    // so the bytes root parses are exactly the bytes we validated (no swap window).
+    configFile: join(dir, 'config.ovpn'),
   }
 }
 
+// Atomically write the validated .ovpn bytes to the sidecar-private config file
+// (mode 0600 in the 0700 runtime dir). Closes the validate→spawn content-swap race:
+// openvpn reads this file, not the user-writable original.
+export async function writePrivateConfig(configFile: string, content: string): Promise<void> {
+  const tmp = `${configFile}.tmp.${process.pid}`
+  await writeFile(tmp, content, { encoding: 'utf8', mode: 0o600 })
+  await chmod(tmp, 0o600)
+  await rename(tmp, configFile)
+}
+
 export interface OpenvpnArgvOptions {
-  configPath: string // canonical, validated .ovpn (realpath)
-  ovpnDir: string // dirname(configPath) — for --cd so relative ca/cert/key resolve
+  configPath: string // the sidecar-private validated copy (see writePrivateConfig)
+  ovpnDir: string // the ORIGINAL config dir — for --cd so relative ca/cert/key resolve
   port: number
   pwFile: string
   pidFile: string

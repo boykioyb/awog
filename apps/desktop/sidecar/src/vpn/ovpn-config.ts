@@ -45,6 +45,33 @@ const DENY_DIRECTIVES = new Set([
   // single-file validation (could smuggle plugin/iproute). A managed client .ovpn
   // never needs nested includes — inline it instead.
   'config',
+  // Loaders that dlopen a shared object into the ROOT process — NOT gated by
+  // `--script-security` (infosec F1b). `pkcs11-providers` + `engine` load libraries;
+  // the rest are arbitrary root file-write / clobber primitives.
+  'pkcs11-providers',
+  'engine',
+  'status',
+  'ifconfig-pool-persist',
+  'tls-export-cert',
+])
+
+// Inline `<tag>…</tag>` blocks whose body is opaque PEM / key material (NOT
+// directives) — their bodies are skipped. Any OTHER angle-bracket block (e.g.
+// `<connection>`) IS parsed by openvpn as directives, so we parse it too (infosec
+// F6) rather than skipping it blind.
+const OPAQUE_BLOCKS = new Set([
+  'ca',
+  'cert',
+  'key',
+  'tls-auth',
+  'tls-crypt',
+  'tls-crypt-v2',
+  'dh',
+  'pkcs12',
+  'secret',
+  'extra-certs',
+  'http-proxy-user-pass',
+  'pkcs11-id',
 ])
 
 export class OvpnValidationError extends Error {
@@ -71,39 +98,57 @@ function assertPathCharset(p: string): void {
   }
 }
 
+interface Directive {
+  name: string // normalized: leading `--` stripped, lowercased
+  rest: string
+  raw: string // the raw first whitespace-token, verbatim (for the evasion check)
+}
+
 // Split an .ovpn into directive lines, skipping comments (`#`/`;`) and the bodies
-// of inline `<tag>…</tag>` blocks (cert/key PEM must not be parsed as directives).
-function directiveLines(text: string): { name: string; rest: string }[] {
-  const out: { name: string; rest: string }[] = []
-  let blockTag: string | null = null
+// of OPAQUE inline `<tag>…</tag>` blocks (cert/key PEM must not be parsed as
+// directives). Structural blocks like `<connection>` are NOT skipped — openvpn
+// parses their inner lines as directives, so we do too (infosec F6).
+function directiveLines(text: string): Directive[] {
+  const out: Directive[] = []
+  let opaqueTag: string | null = null
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim()
     if (line.length === 0) continue
-    if (blockTag) {
-      if (line.toLowerCase() === `</${blockTag}>`) blockTag = null
+    if (opaqueTag) {
+      if (line.toLowerCase() === `</${opaqueTag}>`) opaqueTag = null
       continue
     }
     if (line.startsWith('#') || line.startsWith(';')) continue
     const openBlock = /^<([a-z0-9-]+)>$/i.exec(line)
     if (openBlock) {
-      blockTag = openBlock[1].toLowerCase()
+      // Opaque (PEM) block → skip its body. Structural block (e.g. <connection>) →
+      // just skip the marker line and keep parsing its inner directives.
+      const tag = openBlock[1].toLowerCase()
+      if (OPAQUE_BLOCKS.has(tag)) opaqueTag = tag
       continue
     }
+    if (/^<\/[a-z0-9-]+>$/i.test(line)) continue // stray close marker (e.g. </connection>)
     // First whitespace-delimited token = directive name; keep the remainder for
     // directives whose value we inspect (script-security / dev / dev-type). Strip a
-    // leading `--` so a `--iproute`/`--plugin` form can't slip past the denylist
-    // (openvpn tolerates the dashed form in a config file).
+    // leading `--` so a `--iproute`/`--plugin` form can't slip past the denylist.
     const spaceIdx = line.search(/\s/)
-    const rawName = spaceIdx === -1 ? line : line.slice(0, spaceIdx)
-    const name = rawName.replace(/^--/, '').toLowerCase()
+    const raw = spaceIdx === -1 ? line : line.slice(0, spaceIdx)
+    const name = raw.replace(/^--/, '').toLowerCase()
     const rest = spaceIdx === -1 ? '' : line.slice(spaceIdx + 1).trim()
-    out.push({ name, rest })
+    out.push({ name, rest, raw })
   }
   return out
 }
 
-function assertDirectivesSafe(directives: { name: string; rest: string }[]): void {
-  for (const { name, rest } of directives) {
+function assertDirectivesSafe(directives: Directive[]): void {
+  for (const { name, rest, raw } of directives) {
+    // EVASION GUARD (infosec F1a). openvpn's parser strips `"`/`'` quoting and `\`
+    // escapes from EVERY token including the directive name, so `"plugin"` acts as
+    // `plugin` while dodging a string denylist. A legitimate directive NAME never
+    // contains a quote or backslash — reject any that does, before matching.
+    if (/["'\\]/.test(raw)) {
+      throw new OvpnValidationError('.ovpn has a quoted or escaped directive name (not allowed)')
+    }
     if (DENY_DIRECTIVES.has(name)) {
       throw new OvpnValidationError(`.ovpn contains a disallowed directive: ${name}`)
     }
@@ -139,7 +184,7 @@ function assertDirectivesSafe(directives: { name: string; rest: string }[]): voi
 // OvpnValidationError with a clear, secret-free reason on any failure.
 export async function validateOvpnConfig(
   path: string,
-): Promise<{ configPath: string; dir: string }> {
+): Promise<{ configPath: string; dir: string; content: string }> {
   if (!isAbsolute(path)) {
     throw new OvpnValidationError('config path must be absolute')
   }
@@ -167,7 +212,9 @@ export async function validateOvpnConfig(
   const text = await readFile(real, 'utf8')
   assertDirectivesSafe(directiveLines(text))
 
-  return { configPath: real, dir: dirname(real) }
+  // Return the validated bytes so the caller can spawn openvpn against a private
+  // copy (infosec F2) — validated-content == executed-content, no re-read race.
+  return { configPath: real, dir: dirname(real), content: text }
 }
 
 // A NEW-profile draft derived from a .ovpn — VPN Manager P4 import (dry-run). Holds
@@ -199,16 +246,13 @@ function detectAuthMode(directives: { name: string; rest: string }[]): VpnAuthMo
 // Dry-run parse of a .ovpn into a NEW-profile draft (VPN Manager P4). Runs the full
 // validateOvpnConfig root-RCE guard first (throws OvpnValidationError on reject), so a
 // hostile config can never seed a profile. Then derives non-secret metadata only:
-// name (filename stem), the canonical realpath, and authMode. The second read is of
-// the just-validated canonical path and feeds ONLY non-exec metadata — connect time
-// (vpn.up) re-validates from scratch, so a TOCTOU swap here can't cause exec. NEVER
-// reads or returns any key/cert material or secret.
+// name (filename stem), the canonical realpath, and authMode — from the SAME bytes
+// validateOvpnConfig already read (no second read). NEVER returns key/cert material.
 export async function deriveOvpnDraft(path: string): Promise<OvpnDraft> {
-  const { configPath } = await validateOvpnConfig(path)
-  const text = await readFile(configPath, 'utf8')
+  const { configPath, content } = await validateOvpnConfig(path)
   return {
     name: stemFromPath(configPath),
     configPath,
-    authMode: detectAuthMode(directiveLines(text)),
+    authMode: detectAuthMode(directiveLines(content)),
   }
 }
