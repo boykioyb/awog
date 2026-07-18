@@ -215,6 +215,7 @@ const formatTestResult = (result: AccountTestResult): string => {
 }
 .acrlabel {
   font-size: 1em;
+  font-weight: 500;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;

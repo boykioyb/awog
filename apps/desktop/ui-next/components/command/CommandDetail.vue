@@ -176,6 +176,7 @@ const sourcePath = computed(() => {
 }
 .cmd-toggle-label {
   font-size: 0.8846rem;
+  font-weight: 500;
   color: var(--textDim);
 }
 .cmd-seg {

@@ -111,6 +111,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   flex: 1;
   min-width: 0;
   font-size: 0.9231rem;
+  font-weight: 500;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;

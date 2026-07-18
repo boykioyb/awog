@@ -546,6 +546,7 @@ const onSave = () => {
 }
 .age-mcpname {
   font-size: 0.9231rem;
+  font-weight: 500;
   color: var(--text);
 }
 .age-mcpempty {

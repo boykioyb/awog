@@ -172,6 +172,7 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-name {
   font-size: 0.9231rem;
+  font-weight: 500;
   color: var(--text);
   flex: 0 0 auto;
   overflow: hidden;

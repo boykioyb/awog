@@ -221,6 +221,7 @@ onMounted(() => {
   border-bottom: 1px solid var(--border);
 }
 .codetab {
+  font-weight: 500;
   display: flex;
   align-items: center;
   gap: 6px;

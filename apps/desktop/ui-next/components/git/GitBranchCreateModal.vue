@@ -126,6 +126,7 @@ watch(
   flex: none;
   width: 52px;
   font-size: 1em;
+  font-weight: 500;
   color: var(--textDim);
 }
 .gbc-nobase {

@@ -220,6 +220,7 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   color: var(--textDim);
   font-family: var(--code);
   font-size: 0.8462rem;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -296,6 +297,7 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   color: var(--accent);
   cursor: pointer;
   font-size: 0.9231rem;
+  font-weight: 500;
 }
 .wsprev-extbtn:hover {
   background: var(--accentDim);

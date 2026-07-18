@@ -111,6 +111,7 @@ const entries = computed<Entry[]>(() => {
   flex: 1;
 }
 .wstasks-label {
+  font-weight: 500;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;

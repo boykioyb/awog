@@ -464,6 +464,7 @@ const confirmRerun = () => {
   margin-bottom: -1px;
   color: var(--textDim);
   font-size: 0.9231rem;
+  font-weight: 500;
   cursor: pointer;
 }
 .tpc-tab.on {

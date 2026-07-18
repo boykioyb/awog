@@ -269,6 +269,7 @@ const connectFirst = () => {
   letter-spacing: 0.03em;
 }
 .sshx-grouphdr-name {
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

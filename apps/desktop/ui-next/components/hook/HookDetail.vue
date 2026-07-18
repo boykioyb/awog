@@ -247,6 +247,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 }
 .hkd-ctl-label {
   font-size: 0.8462rem;
+  font-weight: 500;
   color: var(--textDim);
 }
 .hkd-ctl-val {

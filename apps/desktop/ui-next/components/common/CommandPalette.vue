@@ -328,6 +328,7 @@ watch(activeIndex, (i) => {
   flex: 1;
   min-width: 0;
   font-size: 1em;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

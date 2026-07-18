@@ -138,6 +138,7 @@ const toggleSecret = async (i: number) => {
 <style scoped>
 .lkv-label {
   font-size: 0.8846rem;
+  font-weight: 500;
   color: var(--textDim);
   margin-bottom: 8px;
 }

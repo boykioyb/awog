@@ -181,6 +181,7 @@ const dayTitle = (d: CostDay): string =>
   border-radius: 8px;
 }
 .wscost-segbtn {
+  font-weight: 500;
   padding: 3px 10px;
   border: 1px solid transparent;
   border-radius: 6px;

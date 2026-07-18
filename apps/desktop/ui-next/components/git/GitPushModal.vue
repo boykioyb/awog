@@ -237,6 +237,7 @@ function submit() {
   flex: none;
   width: 56px;
   font-size: 1em;
+  font-weight: 500;
   color: var(--textDim);
 }
 .gbc-nobase {

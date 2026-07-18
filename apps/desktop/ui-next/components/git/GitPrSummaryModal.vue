@@ -553,6 +553,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
 }
 .prm-segbtn {
   font-size: 1em;
+  font-weight: 500;
   padding: 3px 10px;
   border-radius: 6px;
   border: 1px solid transparent;

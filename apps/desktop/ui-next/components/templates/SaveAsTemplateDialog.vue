@@ -226,6 +226,7 @@ const onSave = async () => {
 }
 .tpd-kind-label {
   font-size: 0.9615rem;
+  font-weight: 500;
   color: var(--text);
 }
 .tpd-count {

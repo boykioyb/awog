@@ -116,6 +116,7 @@ watch(
   flex: none;
   width: 48px;
   font-size: 1em;
+  font-weight: 500;
   color: var(--textDim);
 }
 .gpm-input {

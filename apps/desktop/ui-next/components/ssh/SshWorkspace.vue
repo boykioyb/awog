@@ -353,6 +353,7 @@ watch(
   background: transparent;
   color: var(--textDim);
   font-size: 0.9231rem;
+  font-weight: 500;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -528,6 +529,7 @@ watch(
   background: transparent;
   color: var(--textDim);
   font-size: 0.8846rem;
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.12s,

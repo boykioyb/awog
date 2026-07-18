@@ -1771,6 +1771,7 @@ textarea.ci {
   padding: 5px 8px;
   color: var(--text);
   font-size: 12px;
+  font-weight: 500;
 }
 .pinreuse-iconbtn {
   display: inline-flex;
@@ -1863,5 +1864,6 @@ textarea.ci {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+  font-weight: 500;
 }
 </style>

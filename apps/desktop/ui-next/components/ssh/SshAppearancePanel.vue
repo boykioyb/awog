@@ -245,6 +245,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .tap-preset-name {
   flex: 1 1 auto;
   font-size: 0.9231rem;
+  font-weight: 500;
 }
 .tap-check {
   flex: 0 0 auto;

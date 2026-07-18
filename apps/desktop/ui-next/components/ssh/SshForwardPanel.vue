@@ -215,6 +215,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 .ssh-fp-head-t {
+  font-weight: 600;
   flex: 1;
   min-width: 0;
 }

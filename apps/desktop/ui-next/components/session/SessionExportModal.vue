@@ -351,6 +351,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   gap: 4px;
 }
 .expseg-btn {
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -382,6 +383,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: var(--danger);
 }
 .expbtn {
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   gap: 6px;

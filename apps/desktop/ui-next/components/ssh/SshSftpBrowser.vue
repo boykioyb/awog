@@ -359,6 +359,7 @@ onMounted(() => void load())
   border-bottom: 1px solid var(--border);
 }
 .ssh-sf-head-t {
+  font-weight: 600;
   min-width: 0;
 }
 .ssh-sf-empty {

@@ -271,6 +271,7 @@ onBeforeUnmount(unbindListeners)
   border-radius: 7px;
   padding: 5px 11px;
   font-size: 1em;
+  font-weight: 500;
   color: var(--textDim);
   background: transparent;
   cursor: pointer;

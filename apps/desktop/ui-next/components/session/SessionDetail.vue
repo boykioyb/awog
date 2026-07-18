@@ -855,6 +855,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   color: var(--accent);
 }
 .aboutbar-lbl {
+  font-weight: 500;
   flex: 0 0 auto;
   color: var(--textMuted);
 }
@@ -886,6 +887,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   padding: 0 2px;
 }
 .sshbar-approval-lbl {
+  font-weight: 500;
   color: var(--textMuted);
 }
 .sshbar-warn {

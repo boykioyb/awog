@@ -950,6 +950,7 @@ watch(
 }
 .cnd-tool-name {
   font-size: 0.9231rem;
+  font-weight: 500;
   color: var(--text);
 }
 .cnd-tool-desc {

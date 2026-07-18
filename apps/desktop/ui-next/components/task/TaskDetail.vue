@@ -340,6 +340,7 @@ const formattedTime = computed(() => {
   color: var(--textDim);
 }
 .td-discuss-title {
+  font-weight: 500;
   flex: 1;
   min-width: 0;
   overflow: hidden;

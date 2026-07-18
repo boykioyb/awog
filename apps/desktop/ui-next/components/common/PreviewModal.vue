@@ -554,6 +554,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 8px;
 }
 .pvbtn {
+  font-weight: 500;
   padding: 7px 14px;
   border-radius: 8px;
   border: 1px solid var(--border);

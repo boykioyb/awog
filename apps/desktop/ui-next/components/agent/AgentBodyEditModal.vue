@@ -227,6 +227,7 @@ const onApply = () => {
 }
 .abe-pname {
   font-size: 0.9615rem;
+  font-weight: 500;
   color: var(--text);
 }
 .abe-pdesc {

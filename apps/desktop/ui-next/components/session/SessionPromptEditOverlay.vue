@@ -159,6 +159,7 @@ watch(
   padding: 6px 13px;
   border-radius: 7px;
   font-size: 1em;
+  font-weight: 500;
   cursor: pointer;
   border: 1px solid var(--border);
   background: transparent;

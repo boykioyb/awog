@@ -334,6 +334,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   width: 13px;
 }
 .sshsess-row-title {
+  font-weight: 500;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -408,6 +409,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   cursor: default;
 }
 .sshsess-term-lbl {
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

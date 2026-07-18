@@ -348,6 +348,7 @@ const onRetry = (): void => {
   align-items: center;
   gap: 5px;
   font-size: 1rem;
+  font-weight: 500;
   padding: 6px 11px;
   border: 1px solid var(--border);
   border-radius: 8px;

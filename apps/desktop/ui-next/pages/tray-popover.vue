@@ -464,6 +464,7 @@ function formatResetsIn(ms: number | undefined): string {
   animation: tppulse 1.4s ease-in-out infinite;
 }
 .tp-rtitle {
+  font-weight: 500;
   flex: 1;
   min-width: 0;
   white-space: nowrap;

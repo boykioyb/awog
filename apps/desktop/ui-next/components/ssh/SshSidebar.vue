@@ -78,6 +78,7 @@ const items: { key: SshSection; icon: string; label: string }[] = [
   outline-offset: 1px;
 }
 .sshx-side-label {
+  font-weight: 500;
   flex: 1;
   min-width: 0;
   white-space: nowrap;

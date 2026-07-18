@@ -488,6 +488,7 @@ const forwardLabel = (fwd: PortForward): string => {
   color: var(--text);
 }
 .ssh-linkbtn-text {
+  font-weight: 500;
   color: var(--accent);
 }
 .ssh-err {

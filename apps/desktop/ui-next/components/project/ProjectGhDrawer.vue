@@ -706,6 +706,7 @@ function relativeWhen(iso: string): string {
   color: var(--textDim);
   cursor: pointer;
   font-size: 1em;
+  font-weight: 500;
   white-space: nowrap;
   transition: color 0.12s ease;
 }

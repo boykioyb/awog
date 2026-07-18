@@ -37,6 +37,7 @@ const options = computed<AppSelectOption[]>(() => [
 .lsp-label {
   flex: 0 0 auto;
   font-size: 0.8846rem;
+  font-weight: 500;
   color: var(--textDim);
 }
 .lsp :deep(.asel) {

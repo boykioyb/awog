@@ -307,6 +307,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
 }
 .wfi-gate-lbl {
   font-size: 0.8462rem;
+  font-weight: 500;
   color: var(--textDim);
   margin-bottom: 4px;
 }

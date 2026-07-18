@@ -211,6 +211,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   display: inline-flex;
 }
 .sb-cfg-lbl {
+  font-weight: 500;
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;

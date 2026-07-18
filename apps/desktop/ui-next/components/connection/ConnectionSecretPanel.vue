@@ -125,6 +125,7 @@ const onSave = () => {
 }
 .csp-label {
   font-size: 0.8462rem;
+  font-weight: 500;
   color: var(--textMuted);
 }
 .csp-input {
