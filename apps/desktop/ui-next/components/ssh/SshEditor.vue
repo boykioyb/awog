@@ -8,8 +8,19 @@
     <div class="sse">
       <div class="sse-grid">
         <div class="sse-field">
-          <label class="sse-label">{{ t('ssh.editor.name') }}</label>
-          <input v-model="name" class="sse-input" :placeholder="t('ssh.editor.namePh')" />
+          <label class="sse-label">
+            {{ t('ssh.editor.name') }}
+            <span class="sse-req" aria-hidden="true">*</span>
+          </label>
+          <input
+            v-model="name"
+            class="sse-input"
+            :class="{ 'has-err': touched.name && nameError }"
+            :placeholder="t('ssh.editor.namePh')"
+            :aria-invalid="touched.name && !!nameError"
+            @blur="touched.name = true"
+          />
+          <div v-if="touched.name && nameError" class="sse-err">{{ nameError }}</div>
         </div>
         <div class="sse-field">
           <label class="sse-label">{{ t('ssh.editor.folder') }}</label>
@@ -26,28 +37,55 @@
 
       <div class="sse-grid sse-grid-host">
         <div class="sse-field">
-          <label class="sse-label">{{ t('ssh.editor.host') }}</label>
+          <label class="sse-label">
+            {{ t('ssh.editor.host') }}
+            <span class="sse-req" aria-hidden="true">*</span>
+          </label>
           <input
             v-model="hostName"
             class="sse-input mono"
+            :class="{ 'has-err': touched.host && hostError }"
             :placeholder="t('ssh.editor.hostPh')"
             spellcheck="false"
+            :aria-invalid="touched.host && !!hostError"
+            @blur="touched.host = true"
           />
+          <div v-if="touched.host && hostError" class="sse-err">{{ hostError }}</div>
         </div>
         <div class="sse-field">
-          <label class="sse-label">{{ t('ssh.editor.port') }}</label>
-          <input v-model.number="port" type="number" min="1" max="65535" class="sse-input mono" />
+          <label class="sse-label">
+            {{ t('ssh.editor.port') }}
+            <span class="sse-req" aria-hidden="true">*</span>
+          </label>
+          <input
+            v-model.number="port"
+            type="number"
+            min="1"
+            max="65535"
+            class="sse-input mono"
+            :class="{ 'has-err': touched.port && portError }"
+            :aria-invalid="touched.port && !!portError"
+            @blur="touched.port = true"
+          />
+          <div v-if="touched.port && portError" class="sse-err">{{ portError }}</div>
         </div>
       </div>
 
       <div class="sse-field">
-        <label class="sse-label">{{ t('ssh.editor.user') }}</label>
+        <label class="sse-label">
+          {{ t('ssh.editor.user') }}
+          <span class="sse-req" aria-hidden="true">*</span>
+        </label>
         <input
           v-model="user"
           class="sse-input mono"
+          :class="{ 'has-err': touched.user && userError }"
           :placeholder="t('ssh.editor.userPh')"
           spellcheck="false"
+          :aria-invalid="touched.user && !!userError"
+          @blur="touched.user = true"
         />
+        <div v-if="touched.user && userError" class="sse-err">{{ userError }}</div>
       </div>
 
       <div class="sse-field">
@@ -63,21 +101,35 @@
         <div class="sse-hint">{{ t('ssh.editor.identityHint') }}</div>
       </div>
 
-      <!-- Write-only host password (password auth). Blank on open + omitted when
-           left blank, so an empty submit never clobbers a stored credential. -->
+      <!-- Host password (password auth). Prefilled from the keychain when editing and
+           revealable behind the eye toggle — the user's own login, shown like a password
+           manager. Omitted on save when left blank so it never clobbers a stored value. -->
       <div v-if="authMethod === 'password'" class="sse-secret">
         <div class="sse-secret-head">
           <Icon name="shield" style="width: 13px; height: 13px; color: var(--accent)" />
           <span class="sse-secret-title">{{ t('ssh.editor.password') }}</span>
         </div>
-        <input
-          v-model="password"
-          type="password"
-          class="sse-input mono"
-          :placeholder="t('ssh.editor.passwordPh')"
-          spellcheck="false"
-          autocomplete="off"
-        />
+        <div class="sse-pw">
+          <input
+            v-model="password"
+            :type="showPassword ? 'text' : 'password'"
+            class="sse-input mono has-eye"
+            :placeholder="t('ssh.editor.passwordPh')"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button
+            type="button"
+            class="sse-eye"
+            :class="{ on: showPassword }"
+            :title="showPassword ? t('ssh.editor.hidePassword') : t('ssh.editor.showPassword')"
+            :aria-label="showPassword ? t('ssh.editor.hidePassword') : t('ssh.editor.showPassword')"
+            :aria-pressed="showPassword"
+            @click="showPassword = !showPassword"
+          >
+            <Icon :name="showPassword ? 'eye-off' : 'eye'" style="width: 15px; height: 15px" />
+          </button>
+        </div>
         <div class="sse-hint">
           {{ isExisting ? t('ssh.editor.secretHintKeep') : t('ssh.editor.secretHint') }}
         </div>
@@ -139,10 +191,10 @@
 // WRITE-ONLY password field (never read back — emitted separately from the config
 // and OMITTED when blank so an empty submit keeps any stored credential). The id is
 // auto-generated by the store on create (never shown/edited here).
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
-import type { SshAuthMethod, SshHost, SshIdentity } from '~/stores/ssh'
+import { useSshStore, type SshAuthMethod, type SshHost, type SshIdentity } from '~/stores/ssh'
 import { useVpnStore } from '~/stores/vpn'
 import type { SshHostSecret } from '~/composables/useSshPage'
 
@@ -162,6 +214,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const vpnStore = useVpnStore()
+const sshStore = useSshStore()
 
 const isExisting = computed(() => !!props.host)
 
@@ -179,6 +232,10 @@ const tagsText = ref('')
 // Whether session agents can use this host as an SSH tool (default on for new hosts).
 const agentEnabled = ref(true)
 const password = ref('')
+// Reveal toggle for the host password (shown like a password manager, prefilled below).
+const showPassword = ref(false)
+// Which required fields have been blurred — gates when their inline error appears.
+const touched = reactive({ name: false, host: false, user: false, port: false })
 
 const authMethodOptions = computed<AppSelectOption[]>(() => [
   { value: 'agent', label: t('ssh.auth.agent') },
@@ -281,15 +338,40 @@ watch(
     // undefined (legacy host) → enabled; explicit false → off.
     agentEnabled.value = h?.agentEnabled !== false
     password.value = ''
+    // Re-mask on every open so a previously revealed secret doesn't linger visible.
+    showPassword.value = false
+    // Fresh form → clear validation touch state so no error shows before interaction.
+    touched.name = false
+    touched.host = false
+    touched.user = false
+    touched.port = false
+    // Editing an existing password-auth host → prefill its stored password (the user's
+    // own login, like a password manager). Guarded so a fast open→switch can't apply a
+    // stale credential to the wrong host.
+    if (h && h.authMethod === 'password') {
+      const forId = h.id
+      void sshStore.getCredential('host', forId).then((cred) => {
+        if (!props.open || props.host?.id !== forId) return
+        password.value = cred.password ?? ''
+      })
+    }
   },
   { immediate: true },
 )
 
-const canSave = computed(() => {
-  if (!name.value.trim() || !hostName.value.trim() || !user.value.trim()) return false
+// Per-field validation. Errors only surface once a field is touched (blurred) so a
+// fresh form isn't shouting — the red `*` already flags that it's required.
+const nameError = computed(() => (name.value.trim() ? '' : t('ssh.editor.nameRequired')))
+const hostError = computed(() => (hostName.value.trim() ? '' : t('ssh.editor.hostRequired')))
+const userError = computed(() => (user.value.trim() ? '' : t('ssh.editor.userRequired')))
+const portError = computed(() => {
   const p = port.value
-  return Number.isInteger(p) && p >= 1 && p <= 65535
+  return Number.isInteger(p) && p >= 1 && p <= 65535 ? '' : t('ssh.editor.portInvalid')
 })
+
+const canSave = computed(
+  () => !nameError.value && !hostError.value && !userError.value && !portError.value,
+)
 
 const buildHost = (): SshHost => {
   const now = new Date().toISOString()
@@ -386,6 +468,54 @@ function parseTags(text: string): string[] {
 }
 .sse-input:focus {
   border-color: var(--accent);
+}
+.sse-input.has-err,
+.sse-input.has-err:focus {
+  border-color: var(--danger);
+}
+/* Required-field marker + inline validation error. */
+.sse-req {
+  color: var(--danger);
+  font-weight: 700;
+}
+.sse-err {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--danger);
+}
+/* Masked password field + its reveal toggle (mirrors VpnEditor's .vpe-eye). */
+.sse-pw {
+  position: relative;
+}
+.sse-input.has-eye {
+  padding-right: 38px;
+}
+.sse-eye {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease;
+}
+.sse-eye:hover,
+.sse-eye.on {
+  opacity: 1;
+  color: var(--text);
 }
 .sse-hint {
   font-size: 0.8462rem;

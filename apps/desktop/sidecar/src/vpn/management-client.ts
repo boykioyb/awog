@@ -15,6 +15,11 @@
 
 import net from 'node:net'
 
+// How long start() waits for the `ENTER PASSWORD:` prompt before proceeding anyway.
+// openvpn prompts within milliseconds of connect; the grace only guards a build that
+// somehow never prompts, so it never leaves the connect hung.
+const PASSWORD_HANDSHAKE_GRACE_MS = 2_000
+
 // Quote + escape a management command argument: wrap in double quotes, escape a
 // literal backslash then a literal double-quote (order matters).
 function q(v: string): string {
@@ -42,10 +47,29 @@ export class ManagementClient {
 
   private pending: PendingCommand[] = []
 
+  // The mgmt socket answers `ENTER PASSWORD:` with the socket password as the FIRST
+  // line — openvpn reads whatever we write first AS the password. start() must not send
+  // any command until that handshake is done, or `state on` gets read as a bad password
+  // and openvpn closes the socket (the connect then hangs to timeout). These gate it.
+  private passwordSent = false
+
+  private passwordWaiters: (() => void)[] = []
+
   // Wired by VpnManager BEFORE start() so no async event is missed.
   onState?: (fields: string[]) => void // fields[1] is the state name (CONNECTED / EXITING / …)
 
   onAuthNeeded?: (kind: 'Auth' | 'Private Key') => void
+
+  // STATIC challenge — the .ovpn has `static-challenge`, so openvpn asks for the OTP
+  // together with the password up front (`Need 'Auth' ... SC:<echo>,<prompt>`). The
+  // reply is a single SCRV1-encoded password (see pushUserPassWithOtp). `echo` = show
+  // the code as typed.
+  onStaticChallenge?: (prompt: string, echo: boolean) => void
+
+  // DYNAMIC challenge (CRV1) — the SERVER rejected the first auth with a challenge
+  // (`Verification Failed: 'Auth' ['CRV1:<flags>:<state>:<user>:<prompt>']`). The reply
+  // is a CRV1-encoded password carrying the opaque `state` (see pushChallengeResponse).
+  onDynamicChallenge?: (state: string, prompt: string, echo: boolean) => void
 
   onAuthFailed?: (reason: string) => void
 
@@ -81,6 +105,15 @@ export class ManagementClient {
 
   private frame(chunk: string): void {
     this.buf += chunk
+    // The `ENTER PASSWORD:` prompt is sent WITHOUT a trailing newline (it waits for input
+    // on the same line), so it never becomes a complete line below. Detect + answer it on
+    // the raw buffer, exactly once — otherwise the password is never sent and the first
+    // command we write gets read AS the password, failing auth and dropping the socket.
+    if (!this.passwordSent && this.buf.includes('ENTER PASSWORD:')) {
+      this.buf = this.buf.replace('ENTER PASSWORD:', '')
+      this.write(this.mgmtPassword)
+      this.markPasswordSent()
+    }
     let i: number
     while ((i = this.buf.indexOf('\n')) >= 0) {
       const line = this.buf.slice(0, i).replace(/\r$/, '') // some builds emit CRLF
@@ -91,8 +124,10 @@ export class ManagementClient {
 
   private handleLine(line: string): void {
     if (line.startsWith('ENTER PASSWORD:')) {
-      // Socket auth must be answered before any command reply is meaningful.
+      // Socket auth must be answered before any command reply is meaningful. openvpn
+      // reads this FIRST line as the password — release start()'s commands only now.
       this.write(this.mgmtPassword)
+      this.markPasswordSent()
       return
     }
     if (line.startsWith('>')) {
@@ -108,7 +143,12 @@ export class ManagementClient {
         this.pending.shift()
         head.resolve(head.lines)
       }
+      return
     }
+    // No pending command owns this reply. Surface an unsolicited ERROR (e.g. a bad
+    // management password) so a failed handshake shows in the log instead of a bare
+    // "connection closed".
+    if (line.startsWith('ERROR:')) this.onLog?.(line)
   }
 
   private notify(line: string): void {
@@ -124,9 +164,22 @@ export class ManagementClient {
         break
       }
       case 'PASSWORD': {
-        if (/^Need 'Auth'/.test(rest)) this.onAuthNeeded?.('Auth')
-        else if (/^Need 'Private Key'/.test(rest)) this.onAuthNeeded?.('Private Key')
-        else if (/^Verification Failed/.test(rest)) this.onAuthFailed?.(rest)
+        if (/^Need 'Auth'/.test(rest)) {
+          // `SC:<echo>,<prompt>` suffix ⇒ static challenge (OTP wanted with the
+          // password). Otherwise a plain user/pass query.
+          const sc = /\bSC:([01]),([\s\S]*)$/.exec(rest)
+          if (sc) this.onStaticChallenge?.(sc[2] ?? '', sc[1] === '1')
+          else this.onAuthNeeded?.('Auth')
+        } else if (/^Need 'Private Key'/.test(rest)) {
+          this.onAuthNeeded?.('Private Key')
+        } else if (/^Verification Failed/.test(rest)) {
+          // A server-initiated dynamic challenge rides on the auth-failure line as
+          // `['CRV1:<flags>:<state>:<user_b64>:<prompt>']`. Extract state + prompt; a
+          // failure WITHOUT a CRV1 payload is a real auth reject.
+          const crv = /\['CRV1:([^:]*):([^:]*):([^:]*):([\s\S]*)'\]\s*$/.exec(rest)
+          if (crv) this.onDynamicChallenge?.(crv[2] ?? '', crv[4] ?? '', (crv[1] ?? '').includes('E'))
+          else this.onAuthFailed?.(rest)
+        }
         break
       }
       case 'HOLD': {
@@ -163,14 +216,52 @@ export class ManagementClient {
     })
   }
 
+  // Resolve once the mgmt-socket password has been sent (openvpn prompts `ENTER
+  // PASSWORD:` right after connect). Falls back after a grace so a build that never
+  // prompts can't hang the connect.
+  private waitForPasswordSent(timeoutMs: number): Promise<void> {
+    if (this.passwordSent) return Promise.resolve()
+    return new Promise<void>((resolvePromise) => {
+      const t = setTimeout(resolvePromise, timeoutMs)
+      t.unref?.()
+      this.passwordWaiters.push(() => {
+        clearTimeout(t)
+        resolvePromise()
+      })
+    })
+  }
+
+  private markPasswordSent(): void {
+    this.passwordSent = true
+    const waiters = this.passwordWaiters
+    this.passwordWaiters = []
+    for (const w of waiters) w()
+  }
+
   // Subscribe to real-time state + log, THEN release the hold (order matters —
   // releasing first could miss the credential query per design §3.3). `log on all`
-  // streams openvpn's log (plus the backlog) as `>LOG:` events so the UI can show
-  // what "connecting…" is actually doing.
+  // streams openvpn's log (+ backlog) as `>LOG:` events over the SOCKET — reliable
+  // regardless of the root-owned --log file's perms — so the viewer shows what
+  // "connecting…" is doing. ALL fire-and-forget after the password handshake: awaiting
+  // a command reply here can hang forever if openvpn closes the socket (state/log/hold
+  // status ride the async `>` bus anyway), and sending before the password is answered
+  // makes openvpn read `state on` as a bad password and drop the socket.
   async start(): Promise<void> {
-    await this.command('state on')
+    await this.waitForPasswordSent(PASSWORD_HANDSHAKE_GRACE_MS)
+    this.write('state on')
     this.write('log on all')
     this.write('hold release')
+  }
+
+  // Reconnect-and-reap: connect() must have run first. Wait for the mgmt password
+  // handshake (proving this really IS an openvpn), then SIGTERM it. Used to kill a root
+  // openvpn whose ORIGINAL mgmt client already disconnected — openvpn keeps the port
+  // LISTENING, so this needs no admin prompt and can't hit the wrong pid. If no `ENTER
+  // PASSWORD:` prompt arrives within the grace, it is NOT openvpn → leave it alone.
+  async reap(graceMs: number): Promise<void> {
+    await this.waitForPasswordSent(graceMs)
+    if (!this.passwordSent) return
+    this.terminate()
   }
 
   // The ONLY clean stop a non-root sidecar has over a root openvpn: ask it to
@@ -194,6 +285,23 @@ export class ManagementClient {
     this.write(`password "Private Key" ${q(stripNewlines(passphrase))}`)
   }
 
+  // STATIC-challenge reply (invariant #1 — off-disk). The password field encodes BOTH
+  // the password and the OTP as `SCRV1:base64(pass):base64(otp)`; base64 sidesteps any
+  // char issue, and q() still quotes it for the control channel.
+  pushUserPassWithOtp(user: string, pass: string, otp: string): void {
+    const b64 = (s: string): string => Buffer.from(stripNewlines(s), 'utf8').toString('base64')
+    this.write(`username "Auth" ${q(stripNewlines(user))}`)
+    this.write(`password "Auth" ${q(`SCRV1:${b64(pass)}:${b64(otp)}`)}`)
+  }
+
+  // DYNAMIC-challenge (CRV1) reply. The password field is `CRV1::<state>::<otp>` where
+  // `state` is the opaque token openvpn handed us in the challenge. Username is the
+  // ORIGINAL username (openvpn re-queries Auth after the server's challenge).
+  pushChallengeResponse(user: string, state: string, otp: string): void {
+    this.write(`username "Auth" ${q(stripNewlines(user))}`)
+    this.write(`password "Auth" ${q(`CRV1::${stripNewlines(state)}::${stripNewlines(otp)}`)}`)
+  }
+
   // Tear down the socket + listeners (idempotent). Called by manager cleanup.
   destroy(): void {
     const sock = this.sock
@@ -204,6 +312,28 @@ export class ManagementClient {
       sock.destroy()
     } catch {
       // already destroyed
+    }
+  }
+
+  // SIGTERM the (root) openvpn AND release the socket, flush-safe. Unlike stop()+
+  // destroy(), sock.end(data) writes the SIGTERM command THEN half-closes gracefully,
+  // so the command is flushed before the socket goes away — a plain destroy() right
+  // after a write can drop it. Used by manager cleanup on FAIL/timeout: without it the
+  // root openvpn keeps running as a zombie, holding a utun interface + routes that
+  // break every other VPN client (the "Error calling protect() method on socket").
+  terminate(): void {
+    const sock = this.sock
+    if (!sock) return
+    this.sock = null
+    try {
+      sock.removeAllListeners()
+      sock.end('signal SIGTERM\n')
+    } catch {
+      try {
+        sock.destroy()
+      } catch {
+        // already gone
+      }
     }
   }
 }

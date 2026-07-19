@@ -24,7 +24,8 @@ User đã chốt: **AWOG tự spawn `openvpn`**, chạy trên **macOS/Linux/Wind
 3. **Điều khiển qua OpenVPN management interface** — KHÔNG sở hữu stdout của child. Khi elevate, tiến trình con bị **tách security context** (osascript trả output cuối cùng; UAC `Start-Process` mất handle) → không parse được stdout live. Nên spawn `openvpn --management 127.0.0.1 <randomPort> --management-hold --management-query-passwords` (có **management password file** chmod 600) và sidecar (không đặc quyền) **connect vào socket localhost** để:
    - **Readiness** = poll `state` → `CONNECTED`.
    - **Đẩy credential qua management** (`--management-query-passwords`) → **cred KHÔNG bao giờ ghi ra đĩa**.
-   - **Stop** = `signal SIGTERM`; **health** = `state` + kiểm pid; **log** đọc qua management (sanitize trước khi lên UI).
+   - **MFA/OTP**: hỗ trợ **static-challenge** (`SC:` → reply `SCRV1:base64(pass):base64(otp)`) và **dynamic CRV1** (server-initiated → reply `CRV1::<state>::<otp>`). Sidecar park kết nối, emit `vpn:auth-challenge` (prompt sanitize, **không** kèm mã), UI nhập → `vpn.submitChallenge` → đẩy vào socket. Mã OTP đi **một chiều** UI → sidecar → openvpn, không log/emit/lưu (invariant #1).
+   - **Stop** = `signal SIGTERM`; **health** = `state` + kiểm pid; **log** đọc qua management (sanitize trước khi lên UI). **Fail/timeout** cũng phải `signal SIGTERM` (`ManagementClient.terminate()`) — nếu chỉ đóng socket, openvpn root thành **zombie** giữ tun/route, phá mọi VPN client khác.
    - Management socket bind `127.0.0.1` + password (invariant #6 — no port public; chống tiến trình local khác chiếm quyền điều khiển VPN).
 
 4. **Nâng quyền = prompt-based, tách adapter theo OS** (Phase 1, không helper):

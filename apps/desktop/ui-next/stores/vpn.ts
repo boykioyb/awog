@@ -77,6 +77,16 @@ export interface VpnRuntimeState {
   error?: string
 }
 
+// An MFA/OTP prompt the tunnel is parked on — the wire shape of `vpn:auth-challenge`.
+// `prompt` is the (sanitized) server-supplied text, `echo` = show the code as typed.
+// The CODE itself never rides this event — it only flows UI → vpn.submitChallenge.
+export interface VpnAuthChallenge {
+  id: string
+  kind: 'static' | 'dynamic'
+  prompt: string
+  echo: boolean
+}
+
 // Theme token per persisted status — drives the card status dot. A missing status
 // is treated as idle/down (this is last-known only when there's no live record).
 export const VPN_STATUS_COLORS: Record<VpnStatus, string> = {
@@ -160,11 +170,17 @@ export const useVpnStore = defineStore('vpn', () => {
   const LOG_CAP = 500
   const logs = ref<Record<string, string[]>>({})
 
+  // Pending MFA/OTP challenge per profile id (from vpn:auth-challenge). Cleared when
+  // the code is submitted or the tunnel leaves 'connecting' (up / down / error).
+  const challenges = ref<Record<string, VpnAuthChallenge>>({})
+
   let unlisten: UnlistenFn | null = null
 
   // --- getters ---------------------------------------------------------------
   const profileById = (id: string): VpnProfile | undefined =>
     profiles.value.find((p) => p.id === id)
+
+  const challengeOf = (id: string): VpnAuthChallenge | undefined => challenges.value[id]
 
   const logsOf = (id: string): string[] => logs.value[id] ?? []
   function appendLog(id: string, line: string): void {
@@ -187,6 +203,16 @@ export const useVpnStore = defineStore('vpn', () => {
 
   function applyRuntime(state: VpnRuntimeState): void {
     runtime.value = { ...runtime.value, [state.id]: state }
+    // A challenge is only meaningful mid-connect — clear it once the tunnel settles
+    // (up / down / error) so a stale MFA modal never lingers after cancel or failure.
+    if (state.status !== 'connecting' && challenges.value[state.id]) clearChallenge(state.id)
+  }
+
+  function clearChallenge(id: string): void {
+    if (!challenges.value[id]) return
+    const next = { ...challenges.value }
+    delete next[id]
+    challenges.value = next
   }
 
   // Upsert in place (keyed by id) so a mutating RPC keeps list order stable.
@@ -284,6 +310,7 @@ export const useVpnStore = defineStore('vpn', () => {
   // caller can surface it. Browser-dev just flips the mock status.
   async function up(id: string): Promise<void> {
     clearLog(id) // fresh attempt → drop the previous connection's log
+    clearChallenge(id) // and any stale MFA prompt from a prior attempt
     if (!available.value) {
       applyRuntime({ id, status: 'up', refCount: 0, upAt: Date.now() })
       return
@@ -318,6 +345,16 @@ export const useVpnStore = defineStore('vpn', () => {
     } finally {
       applyRuntime({ id, status: 'down', refCount: 0 })
     }
+  }
+
+  // --- MFA/OTP challenge ------------------------------------------------------
+  // Answer a pending authenticator prompt. The code travels UI → sidecar → openvpn
+  // only; it is never stored or echoed. Clear the local prompt optimistically — the
+  // next vpn:auth-challenge (wrong code) or vpn:status-changed (settled) re-drives it.
+  async function submitChallenge(id: string, code: string): Promise<void> {
+    clearChallenge(id)
+    if (!available.value) return
+    await sc.request('vpn.submitChallenge', { id, code })
   }
 
   // --- credentials -----------------------------------------------------------
@@ -357,6 +394,11 @@ export const useVpnStore = defineStore('vpn', () => {
           if (p?.id && typeof p.line === 'string') appendLog(p.id, p.line)
           return
         }
+        if (evt.type === 'vpn:auth-challenge') {
+          const p = evt.payload as VpnAuthChallenge
+          if (p?.id) challenges.value = { ...challenges.value, [p.id]: p }
+          return
+        }
         if (evt.type === 'vpn:status-changed') {
           const p = evt.payload as VpnRuntimeState
           if (p?.id) applyRuntime(p)
@@ -381,6 +423,7 @@ export const useVpnStore = defineStore('vpn', () => {
     isBusy,
     logsOf,
     clearLog,
+    challengeOf,
     // actions
     loadAll,
     saveProfile,
@@ -391,6 +434,7 @@ export const useVpnStore = defineStore('vpn', () => {
     refreshStatus,
     up,
     down,
+    submitChallenge,
   }
 })
 

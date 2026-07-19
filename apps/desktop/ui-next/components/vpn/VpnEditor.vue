@@ -8,8 +8,19 @@
     <div class="vpe">
       <div class="vpe-grid">
         <div class="vpe-field">
-          <label class="vpe-label">{{ t('vpn.editor.name') }}</label>
-          <input v-model="name" class="vpe-input" :placeholder="t('vpn.editor.namePh')" />
+          <label class="vpe-label">
+            {{ t('vpn.editor.name') }}
+            <span class="vpe-req" aria-hidden="true">*</span>
+          </label>
+          <input
+            v-model="name"
+            class="vpe-input"
+            :class="{ 'has-err': touched.name && nameError }"
+            :placeholder="t('vpn.editor.namePh')"
+            :aria-invalid="touched.name && !!nameError"
+            @blur="touched.name = true"
+          />
+          <div v-if="touched.name && nameError" class="vpe-err">{{ nameError }}</div>
         </div>
         <div class="vpe-field">
           <label class="vpe-label">{{ t('vpn.editor.folder') }}</label>
@@ -25,19 +36,26 @@
       </div>
 
       <div class="vpe-field">
-        <label class="vpe-label">{{ t('vpn.editor.configPath') }}</label>
+        <label class="vpe-label">
+          {{ t('vpn.editor.configPath') }}
+          <span class="vpe-req" aria-hidden="true">*</span>
+        </label>
         <div class="vpe-path-row">
           <input
             v-model="configPath"
             class="vpe-input mono"
+            :class="{ 'has-err': touched.configPath && configError }"
             :placeholder="t('vpn.editor.configPathPh')"
             spellcheck="false"
+            :aria-invalid="touched.configPath && !!configError"
+            @blur="touched.configPath = true"
           />
           <button v-if="canBrowse" type="button" class="btn sm vpe-browse" @click="browseConfig">
             <Icon name="folder" style="width: 12px; height: 12px" />
             {{ t('vpn.editor.browse') }}
           </button>
         </div>
+        <div v-if="touched.configPath && configError" class="vpe-err">{{ configError }}</div>
         <div class="vpe-hint">{{ t('vpn.editor.configPathHint') }}</div>
       </div>
 
@@ -67,41 +85,48 @@
           <span class="vpe-secret-title">{{ t('vpn.editor.creds.title') }}</span>
         </div>
 
-        <div class="vpe-field">
-          <label class="vpe-sub-label">{{ t('vpn.editor.creds.username') }}</label>
-          <input
-            v-model="username"
-            class="vpe-input mono"
-            :placeholder="t('vpn.editor.creds.usernamePh')"
-            spellcheck="false"
-            autocomplete="off"
-          />
-        </div>
-
-        <div class="vpe-field">
-          <label class="vpe-sub-label">{{ t('vpn.editor.creds.password') }}</label>
-          <div class="vpe-pw">
+        <!-- Username + password apply ONLY to "Username & password" auth. In "config /
+             cert" mode the tunnel authenticates via its embedded cert, so showing these
+             would be misleading (this is exactly the mode where they must NOT appear). -->
+        <template v-if="authMode === 'user-pass'">
+          <div class="vpe-field">
+            <label class="vpe-sub-label">{{ t('vpn.editor.creds.username') }}</label>
             <input
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              class="vpe-input mono has-eye"
-              :placeholder="t('vpn.editor.creds.passwordPh')"
+              v-model="username"
+              class="vpe-input mono"
+              :placeholder="t('vpn.editor.creds.usernamePh')"
               spellcheck="false"
               autocomplete="off"
             />
-            <button
-              type="button"
-              class="vpe-eye"
-              :class="{ on: showPassword }"
-              :title="showPassword ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')"
-              :aria-label="showPassword ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')"
-              :aria-pressed="showPassword"
-              @click="showPassword = !showPassword"
-            >
-              <Icon :name="showPassword ? 'eye-off' : 'eye'" style="width: 15px; height: 15px" />
-            </button>
           </div>
-        </div>
+
+          <div class="vpe-field">
+            <label class="vpe-sub-label">{{ t('vpn.editor.creds.password') }}</label>
+            <div class="vpe-pw">
+              <input
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                class="vpe-input mono has-eye"
+                :placeholder="t('vpn.editor.creds.passwordPh')"
+                spellcheck="false"
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                class="vpe-eye"
+                :class="{ on: showPassword }"
+                :title="showPassword ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')"
+                :aria-label="
+                  showPassword ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')
+                "
+                :aria-pressed="showPassword"
+                @click="showPassword = !showPassword"
+              >
+                <Icon :name="showPassword ? 'eye-off' : 'eye'" style="width: 15px; height: 15px" />
+              </button>
+            </div>
+          </div>
+        </template>
 
         <div class="vpe-field">
           <label class="vpe-sub-label">{{ t('vpn.editor.creds.keyPassphrase') }}</label>
@@ -151,7 +176,7 @@
 // login, shown like a password manager — masked behind a reveal toggle) and are
 // emitted separately from the config so the page persists them via vpn.setCredential.
 // The id is auto-generated by the store on create (never shown).
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { pickFile } from '~/composables/useFolderPicker'
@@ -188,6 +213,8 @@ const tagsText = ref('')
 const username = ref('')
 const password = ref('')
 const keyPassphrase = ref('')
+// Which required fields have been blurred — gates when their inline error appears.
+const touched = reactive<{ name: boolean; configPath: boolean }>({ name: false, configPath: false })
 // Reveal toggles for the two masked secret fields (eye button).
 const showPassword = ref(false)
 const showPassphrase = ref(false)
@@ -253,6 +280,9 @@ watch(
     // Re-mask on every open so a previously revealed secret doesn't linger visible.
     showPassword.value = false
     showPassphrase.value = false
+    // Fresh form → clear validation touch state so no error shows before interaction.
+    touched.name = false
+    touched.configPath = false
     // Editing an existing profile → prefill its stored credential (the user's own
     // VPN login, like a password manager). Guarded so a fast open→switch can't apply
     // a stale credential to the wrong profile.
@@ -279,6 +309,13 @@ const browseConfig = async (): Promise<void> => {
   })
   if (picked) configPath.value = picked
 }
+
+// Required-field validation. The error only surfaces once a field has been touched
+// (blurred) so a freshly opened form isn't shouting — the red `*` already flags that
+// it's required. `touched` is declared up with the form state (the re-seed watch resets
+// it). Empty check mirrors canSave.
+const nameError = computed(() => (name.value.trim() ? '' : t('vpn.editor.nameRequired')))
+const configError = computed(() => (configPath.value.trim() ? '' : t('vpn.editor.configRequired')))
 
 const canSave = computed(() => name.value.trim().length > 0 && configPath.value.trim().length > 0)
 
@@ -397,6 +434,23 @@ function parseTags(text: string): string[] {
 }
 .vpe-input:focus {
   border-color: var(--accent);
+}
+.vpe-input.has-err {
+  border-color: var(--danger);
+}
+.vpe-input.has-err:focus {
+  border-color: var(--danger);
+}
+/* Required-field marker + inline validation error. */
+.vpe-req {
+  color: var(--danger);
+  font-weight: 700;
+}
+.vpe-err {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--danger);
 }
 /* Masked secret field + its 👁 reveal toggle (mirrors SettingsKeyRow's .keyeye). */
 .vpe-pw {

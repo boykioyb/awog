@@ -54,6 +54,16 @@
       :status="logProfile ? store.statusOf(logProfile.id) : 'down'"
       @close="logOpen = false"
     />
+
+    <VpnChallengeModal
+      v-if="activeChallenge"
+      :open="true"
+      :name="store.profileById(activeChallenge.id)?.name ?? activeChallenge.id"
+      :prompt="activeChallenge.prompt"
+      :echo="activeChallenge.echo"
+      @submit="onChallengeSubmit"
+      @cancel="onChallengeCancel"
+    />
   </div>
 </template>
 
@@ -63,8 +73,9 @@
 // toasts rather than bubbling to a page controller). Lists every OpenVPN profile
 // as a card with New / Edit / Delete. Live up/down control is P1 — the persisted
 // status is shown as a badge only. Nothing reads a secret.
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import VpnCard from '~/components/vpn/VpnCard.vue'
+import VpnChallengeModal from '~/components/vpn/VpnChallengeModal.vue'
 import VpnEditor, { type VpnCredentialSecret } from '~/components/vpn/VpnEditor.vue'
 import VpnEmptyState from '~/components/vpn/VpnEmptyState.vue'
 import VpnLogModal from '~/components/vpn/VpnLogModal.vue'
@@ -179,6 +190,33 @@ async function onDisconnect(profile: VpnProfile): Promise<void> {
   } catch (err) {
     pushActionToast(t('vpn.toast.disconnectFailed', { error: errText(err) }), 'error')
   }
+}
+
+// --- MFA/OTP challenge -------------------------------------------------------
+// At most one tunnel connects at a time, so surface the first pending challenge.
+const activeChallenge = computed(() => {
+  for (const p of store.profiles) {
+    const ch = store.challengeOf(p.id)
+    if (ch) return ch
+  }
+  return undefined
+})
+
+async function onChallengeSubmit(code: string): Promise<void> {
+  const ch = activeChallenge.value
+  if (!ch) return
+  try {
+    await store.submitChallenge(ch.id, code)
+  } catch (err) {
+    pushActionToast(t('vpn.toast.connectFailed', { error: errText(err) }), 'error')
+  }
+}
+
+// Cancel = give up on this connection (openvpn is parked at AUTH waiting for the code).
+async function onChallengeCancel(): Promise<void> {
+  const ch = activeChallenge.value
+  if (!ch) return
+  await store.down(ch.id)
 }
 
 function errText(err: unknown): string {

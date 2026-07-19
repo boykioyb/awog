@@ -54,8 +54,18 @@ Cho phép AWOG **tạo + keepalive kết nối OpenVPN** và cho **nhiều SSH h
 | `vpn.down` | `{ id }` | `{ ok }` |
 | `vpn.status` | `{ id? }` | `{ states }` |
 | `vpn.importOvpn` | `{ path }` | `{ candidate }` (dry-run parse) — **P4** |
+| `vpn.submitChallenge` | `{ id, code }` | `{ ok }` — trả lời MFA/OTP; **code không echo/log** |
 
-Events: `vpn:status-changed`, `vpn:log` (sanitized), `vpn-profiles.fs-changed`.
+Events: `vpn:status-changed`, `vpn:log` (sanitized), `vpn:auth-challenge`, `vpn-profiles.fs-changed`.
+
+### MFA / OTP (Authenticator)
+
+Nhiều VPN yêu cầu mã Authenticator ở bước AUTH — nếu không trả, openvpn kẹt tới khi timeout. Hỗ trợ 2 kiểu challenge của OpenVPN qua management interface:
+
+- **Static challenge** — `.ovpn` có `static-challenge`; openvpn hỏi mã CÙNG mật khẩu: `>PASSWORD:Need 'Auth' username/password SC:<echo>,<prompt>`. Trả 1 password mã hoá `SCRV1:base64(pass):base64(otp)`.
+- **Dynamic challenge (CRV1)** — server từ chối lần đầu kèm challenge: `>PASSWORD:Verification Failed: 'Auth' ['CRV1:<flags>:<state>:<user>:<prompt>']`. Trả `username` gốc + password `CRV1::<state>::<otp>`.
+
+Luồng: sidecar phát hiện challenge → **park** kết nối (giãn timeout sang `CHALLENGE_TIMEOUT_MS`=120s vì chờ người, không phải mạng) → emit `vpn:auth-challenge { id, kind, prompt, echo }` (prompt đã sanitize; **không** chứa mã) → UI mở `VpnChallengeModal` → người dùng nhập → `vpn.submitChallenge` → sidecar đẩy SCRV1/CRV1 vào socket management. **Mã OTP đi một chiều UI → sidecar → openvpn; không bao giờ log/emit/lưu (invariant #1).** Cancel = `vpn.down` (bỏ kết nối đang park).
 
 ## Phân pha
 

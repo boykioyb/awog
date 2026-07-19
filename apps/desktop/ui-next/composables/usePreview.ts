@@ -39,7 +39,7 @@ export type PreviewRef = {
 // duplicated in 5 places (Files tab, Diff, folder tree, attachment chip, composer).
 const RE_IMAGE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
 const RE_PDF = /\.pdf$/i
-const RE_MD = /\.(md|markdown)$/i
+const RE_MD = /\.(md|markdown|mdx)$/i
 const RE_HTML = /\.html?$/i
 
 export function previewKindFromPath(path: string): PreviewRef['kind'] {

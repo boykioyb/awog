@@ -19,7 +19,7 @@ import { emit } from '../transport/stdio.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import { installHint, resolveOpenvpnBinary } from './binary.js'
-import { validateOvpnConfig } from './ovpn-config.js'
+import { legacyDataCiphersCompat, validateOvpnConfig } from './ovpn-config.js'
 import {
   bindTestFreePort,
   buildOpenvpnArgv,
@@ -52,10 +52,22 @@ interface ReadyPark {
   timer: NodeJS.Timeout
 }
 
+// An MFA/OTP challenge awaiting the user's code. Held in-memory on the record while
+// the connect is PARKED (the connect timer is extended). `state` is the opaque token
+// for a dynamic (CRV1) challenge; absent for a static one.
+interface AuthChallenge {
+  kind: 'static' | 'dynamic'
+  prompt: string
+  echo: boolean
+  state?: string
+  sentOtp: boolean
+}
+
 interface VpnRuntimeRecord {
   id: string
   status: VpnRuntimeStatus
   mgmtPort: number
+  mgmtPw: string // per-run loopback mgmt password — kept to RECONNECT + reap a stuck openvpn
   pwFile: string
   pidFile: string
   logFile: string
@@ -73,10 +85,20 @@ interface VpnRuntimeRecord {
   lastError?: string
   ready?: ReadyPark
   downResolve?: () => void
+  // In-memory only (never emitted). Retained for the tunnel's lifetime so an MFA
+  // challenge can rebuild the SCRV1/CRV1 reply from the same login openvpn queried.
+  cred?: VpnCredential | null
+  challenge?: AuthChallenge
 }
 
 const CONNECT_TIMEOUT_MS = 60_000
+// A parked MFA challenge waits on the human, not the network — give the user longer
+// than the plain connect budget to read the app, open their authenticator, and type.
+const CHALLENGE_TIMEOUT_MS = 120_000
 const MGMT_CONNECT_TIMEOUT_MS = 5_000
+// How long the reconnect-reap waits for openvpn's `ENTER PASSWORD:` prompt before giving
+// up (proves the listener is really openvpn before it SIGTERMs anything).
+const REAP_HANDSHAKE_GRACE_MS = 2_000
 const MGMT_CONNECT_RETRY_MS = 200
 const DOWN_GRACE_MS = 5_000
 const MAX_LOG_LINES_PER_SEC = 20
@@ -381,6 +403,7 @@ class VpnManager {
       id,
       status: 'connecting',
       mgmtPort: port,
+      mgmtPw,
       pwFile: paths.pwFile,
       pidFile: paths.pidFile,
       logFile: paths.logFile,
@@ -392,6 +415,7 @@ class VpnManager {
       stopping: false,
       logWindowStart: 0,
       logCount: 0,
+      cred,
     }
     this.runtimes.set(id, record)
     this.emitStatus(record)
@@ -404,9 +428,15 @@ class VpnManager {
       timer.unref?.()
       record.ready = { resolve: resolvePromise, reject, timer }
     })
+    // The timer (or a mgmt handler) can reject readyPromise BEFORE we reach `await
+    // readyPromise` below — e.g. while still awaiting the elevation prompt / attach. A
+    // no-op catch marks it handled so that early rejection never becomes an
+    // unhandledRejection; the real `await readyPromise` still surfaces it to the caller.
+    void readyPromise.catch(() => {})
 
     // 5. Build argv + spawn elevated. A prompt cancel → clean `down`, not `error`.
     // openvpn reads the PRIVATE copy; --cd stays the original dir for relative certs.
+    const dataCiphers = legacyDataCiphersCompat(content)
     const argv = buildOpenvpnArgv({
       configPath: paths.configFile,
       ovpnDir: dir,
@@ -414,15 +444,18 @@ class VpnManager {
       pwFile: paths.pwFile,
       pidFile: paths.pidFile,
       logFile: paths.logFile,
+      ...(dataCiphers ? { dataCiphers } : {}),
     })
     const adapter = selectAdapter()
 
     try {
       const { pid } = await adapter.spawnElevated(binary, argv)
       if (pid !== undefined) record.pid = pid
+      emit('vpn:log', { id, line: '→ openvpn started (elevated). Connecting to the management socket…' })
 
       // 6. Attach management (retry ECONNREFUSED ≤5s), register handlers, release hold.
       await this.attachManagement(record, port, mgmtPw, cred)
+      emit('vpn:log', { id, line: '→ Management connected. Waiting for the tunnel to come up…' })
 
       // 8. Resolve on the first CONNECTED (handlers drive readyPromise).
       await readyPromise
@@ -462,6 +495,9 @@ class VpnManager {
     // Register handlers BEFORE start() (design §3.3) or we miss the cred query.
     mgmt.onState = (fields) => this.onStateLine(record.id, fields)
     mgmt.onAuthNeeded = (kind) => this.onAuthNeeded(record.id, kind, cred)
+    mgmt.onStaticChallenge = (prompt, echo) => this.onChallenge(record.id, 'static', prompt, echo)
+    mgmt.onDynamicChallenge = (state, prompt, echo) =>
+      this.onChallenge(record.id, 'dynamic', prompt, echo, state)
     mgmt.onAuthFailed = () => this.onAuthFailed(record.id)
     mgmt.onFatal = (reason) => this.onFatal(record.id, reason)
     mgmt.onLog = (line) => this.onLog(record.id, line)
@@ -474,6 +510,17 @@ class VpnManager {
 
   private onStateLine(id: string, fields: string[]): void {
     const state = fields[1]
+    // Surface the connection state machine to the log viewer (WAIT / AUTH / GET_CONFIG /
+    // ASSIGN_IP / ADD_ROUTES / CONNECTED / RECONNECTING …). This is the clearest signal
+    // of WHERE a connection stalls — and it rides the mgmt socket, so it shows even when
+    // openvpn's own >LOG: lines are sparse or the --log file is unreadable.
+    if (state) {
+      const detail = fields.slice(2).filter((f) => f).join(' ')
+      emit('vpn:log', {
+        id,
+        line: sanitizeLogLine(`[state] ${state}${detail ? ` — ${detail}` : ''}`),
+      })
+    }
     if (state === 'CONNECTED') void this.onConnected(id)
     else if (state === 'EXITING') this.onExiting(id)
     else this.onReconnectingState(id, state)
@@ -519,6 +566,10 @@ class VpnManager {
     const record = this.runtimes.get(id)
     if (!record?.mgmt) return
     if (kind === 'Auth') {
+      // A dynamic (CRV1) challenge is in flight: openvpn re-queried Auth AFTER the
+      // server's challenge. Re-pushing plain creds would just fail-loop — wait for the
+      // user's OTP (submitChallenge answers this pending query with the CRV1 reply).
+      if (record.challenge?.kind === 'dynamic' && !record.challenge.sentOtp) return
       if (!cred?.username || !cred.password) {
         this.fail(id, new Error('VPN requires a username and password, but none is stored'), 'error')
         return
@@ -531,6 +582,82 @@ class VpnManager {
       }
       record.mgmt.pushKeyPassphrase(cred.keyPassphrase)
     }
+  }
+
+  // MFA/OTP — openvpn is asking for an authenticator code (static SC: or dynamic CRV1).
+  // Park the connect (the code comes from the human, not the network), extend the
+  // ready timer, and surface a challenge to the UI. The prompt is L1-untrusted server
+  // text → sanitize before it crosses the wire; the code itself only travels the other
+  // way (UI → submitChallenge), never sidecar → UI (invariant #1).
+  private onChallenge(
+    id: string,
+    kind: 'static' | 'dynamic',
+    prompt: string,
+    echo: boolean,
+    state?: string,
+  ): void {
+    const record = this.runtimes.get(id)
+    if (!record?.mgmt) return
+    // A static challenge encodes the OTP TOGETHER with the password (SCRV1), so it is
+    // useless without a stored username + password. Fail fast + clearly instead of
+    // popping an OTP modal that can never succeed (the profile is likely still on the
+    // "In config / cert" auth mode with no credentials saved).
+    if (kind === 'static' && (!record.cred?.username || !record.cred.password)) {
+      this.fail(
+        id,
+        new Error(
+          'This VPN needs a username & password plus the authenticator code, but no ' +
+            'login is stored. Set the profile to "Username & password" and save your login.',
+        ),
+        'error',
+      )
+      return
+    }
+    const clean = sanitizeLogLine(prompt).slice(0, 200)
+    record.challenge = { kind, prompt: clean, echo, sentOtp: false, ...(state ? { state } : {}) }
+    this.armReadyTimer(record, CHALLENGE_TIMEOUT_MS, 'VPN auth code was not entered in time')
+    emit('vpn:log', { id, line: `[auth] a verification code is required` })
+    emit('vpn:auth-challenge', { id, kind, prompt: clean, echo })
+  }
+
+  // Answer a pending MFA challenge with the user-entered code (RPC vpn.submitChallenge).
+  // Static → SCRV1(pass, otp); dynamic → CRV1(state, otp). Restores the normal connect
+  // timeout so a slow post-OTP handshake still fails cleanly. The code is never logged.
+  submitChallenge(id: string, code: string): void {
+    const record = this.runtimes.get(id)
+    if (!record?.mgmt || !record.challenge) {
+      throw new RpcError(-32602, 'no VPN auth challenge is pending')
+    }
+    const ch = record.challenge
+    const cred = record.cred
+    if (ch.kind === 'static') {
+      if (!cred?.username || !cred.password) {
+        this.fail(id, new Error('VPN requires a username and password, but none is stored'), 'error')
+        return
+      }
+      record.mgmt.pushUserPassWithOtp(cred.username, cred.password, code)
+    } else {
+      if (!cred?.username) {
+        this.fail(id, new Error('VPN requires a username, but none is stored'), 'error')
+        return
+      }
+      record.mgmt.pushChallengeResponse(cred.username, ch.state ?? '', code)
+    }
+    ch.sentOtp = true
+    delete record.challenge
+    this.armReadyTimer(record, CONNECT_TIMEOUT_MS, 'VPN connection timed out')
+    emit('vpn:log', { id, line: `[auth] verification code submitted — verifying…` })
+  }
+
+  // Re-arm the readiness park's timer in place (keeps the same resolve/reject). Used to
+  // pause the connect timeout while parked on an MFA challenge, then restore it.
+  private armReadyTimer(record: VpnRuntimeRecord, ms: number, message: string): void {
+    const ready = record.ready
+    if (!ready) return
+    clearTimeout(ready.timer)
+    const timer = setTimeout(() => this.fail(record.id, new Error(message), 'error'), ms)
+    timer.unref?.()
+    ready.timer = timer
   }
 
   private onAuthFailed(id: string): void {
@@ -706,10 +833,10 @@ class VpnManager {
     emit('vpn:status-changed', this.toState(record, error))
   }
 
-  // Tail openvpn's own --log file — the elevated process writes ALL its output there,
-  // including the early/fatal errors that never reach the management >LOG: stream — and
-  // push it to the log viewer as vpn:log lines. Best-effort: the file may not exist
-  // (failure before spawn) or be unreadable; the emitted reason line still explains it.
+  // Dump openvpn's own --log file (best-effort) — the elevated process writes ALL its
+  // output there, including early/fatal errors. Used on FAILURE as a fallback in case
+  // the >LOG: stream never started (spawn/socket failure) or was blocked by the
+  // root-owned file's perms. May be empty/unreadable; the reason line still explains it.
   private async flushOpenvpnLog(record: VpnRuntimeRecord): Promise<void> {
     let text: string
     try {
@@ -732,9 +859,9 @@ class VpnManager {
     record.status = kind
     if (kind === 'error') {
       record.lastError = message
-      // The failure often predates the management >LOG: stream (bad config, or a
-      // spawn/elevation/socket failure), leaving realtime logs empty. Dump openvpn's
-      // own --log file, then the reason as the last line, so the viewer explains it.
+      // The failure often predates / bypasses the >LOG: stream (bad config, spawn/
+      // socket failure). Dump openvpn's own --log file as a fallback, then the reason
+      // as the last line, so the viewer explains it.
       void this.flushOpenvpnLog(record).finally(() =>
         emit('vpn:log', { id, line: `✖ ${sanitizeLogLine(message)}` }),
       )
@@ -766,10 +893,37 @@ class VpnManager {
       record.ready.reject(new Error('VPN connection torn down'))
       delete record.ready
     }
-    record.mgmt?.destroy()
+    // SIGTERM the root openvpn (not just close our socket) so it removes its tun
+    // interface + routes and exits. A FAIL/timeout reaches cleanup() while openvpn is
+    // still alive; a bare destroy() would orphan it as a root zombie that breaks every
+    // other VPN client. down()'s stop() already SIGTERM'd — terminate() is then a no-op.
+    record.mgmt?.terminate()
+    // Belt-and-suspenders: the SIGTERM above went nowhere if our live socket had ALREADY
+    // closed (a failed handshake drops it) — openvpn would keep running as a root zombie.
+    // openvpn keeps its mgmt port LISTENING after a client leaves, so reconnect + reap it
+    // (no admin prompt, targets the exact process). Idempotent: if openvpn is already
+    // exiting from the SIGTERM, this connect just fails harmlessly.
+    if (record.mgmtPw) void this.reapOrphan(record.mgmtPort, record.mgmtPw)
     void safeUnlink(record.pwFile)
     void safeUnlink(record.pidFile)
     void safeUnlink(record.configFile)
+  }
+
+  // Reconnect to a (possibly orphaned) openvpn's management socket and SIGTERM it, so a
+  // connection whose live socket already died never leaves a root zombie holding a utun
+  // (which breaks every other VPN client). Best-effort + fully swallowed: openvpn keeps
+  // the port listening after a client leaves, but if it is already gone the connect just
+  // fails. reap() only signals once it has seen openvpn's own password prompt.
+  private async reapOrphan(port: number, pw: string): Promise<void> {
+    const mgmt = new ManagementClient()
+    try {
+      await mgmt.connect(port, pw)
+      await mgmt.reap(REAP_HANDSHAKE_GRACE_MS)
+    } catch {
+      // Already gone / unreachable — nothing to reap.
+    } finally {
+      mgmt.destroy()
+    }
   }
 
   // Best-effort persist of last-known status onto the profile JSON (design §1.1).

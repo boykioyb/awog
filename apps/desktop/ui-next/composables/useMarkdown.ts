@@ -1,4 +1,4 @@
-import katex from 'katex'
+import katex, { type KatexOptions } from 'katex'
 import { marked, type Tokens, type TokensList } from 'marked'
 import markedKatex from 'marked-katex-extension'
 import { createHighlighter, createJavaScriptRegexEngine, type Highlighter } from 'shiki'
@@ -138,15 +138,29 @@ function ensureHighlighter() {
     })
 }
 
+// Shared KaTeX options for every math path (inline `$…$`, block `$$…$$`, ```latex fences).
+// `strict` is a FUNCTION so ONLY an unrenderable character fails the render — every other
+// non-strict nag is silently ignored. Failing hard on `unknownSymbol` is deliberate:
+// marked-katex-extension false-positives on prose that merely CONTAINS `$` (currency like
+// "$5 … $10", or Vietnamese/CJK text caught between two dollar signs). Such a span isn't
+// real math; without this KaTeX floods the console with "unknownSymbol" AND (unconditional,
+// not gated by strict) "No character metrics" warnings and typesets garbled letters.
+// throwOnError:true turns that into a thrown error the callers catch → fall back to the RAW
+// source text, so a non-math `$…$` renders verbatim and the console stays clean. KaTeX still
+// escapes input and (trust:false) emits no author HTML → v-html-safe.
+const KATEX_OPTS: KatexOptions = {
+  throwOnError: true,
+  strict: (errorCode) => (errorCode === 'unknownSymbol' ? 'error' : 'ignore'),
+}
+
 // A ```latex / ```tex fenced block renders as a typeset display equation (the system
-// prompt advertises this alongside `$$…$$`). KaTeX escapes its input and (trust:false)
-// emits no author HTML → v-html-safe; throwOnError:false renders malformed source in an
-// error color rather than throwing. On a hard katex failure, fall back to plain code.
+// prompt advertises this alongside `$$…$$`). On any render failure (malformed LaTeX or an
+// unrenderable character) fall back to plain code so the source stays readable.
 function renderMathBlock(src: string): string {
   try {
     return katex.renderToString(src.trim(), {
+      ...KATEX_OPTS,
       displayMode: true,
-      throwOnError: false,
       output: 'htmlAndMathml',
     })
   } catch {
@@ -195,15 +209,32 @@ function configure() {
       },
     },
   })
-  // LaTeX math: `$…$` inline + `$$…$$` block, rendered to static HTML by KaTeX. The
-  // extension registers its own inlineKatex/blockKatex tokens (NOT `html` tokens), so the
-  // raw-HTML stripping above leaves them intact; KaTeX escapes its input and — with the
-  // default trust:false — emits no author HTML, so the output is v-html-safe (same trust
-  // boundary as the sanitized markdown). throwOnError:false renders malformed LaTeX in an
-  // error color instead of aborting the whole parse (robust for LLM output). An unclosed
-  // delimiter mid-stream simply fails to tokenize → shows as literal `$…` text until the
-  // closing `$` arrives (no flashing broken math), mirroring the mermaid streaming rule.
-  marked.use(markedKatex({ throwOnError: false }))
+  // LaTeX math: `$…$` inline + `$$…$$` block. We keep marked-katex-extension's tokenizers
+  // (its `$`-delimiter boundary rules; it registers inlineKatex/blockKatex tokens — NOT
+  // `html` tokens — so the raw-HTML stripping above leaves them intact) but REPLACE the
+  // renderer: an unrenderable span (see KATEX_OPTS — chiefly prose that merely contains `$`)
+  // degrades to its RAW source text instead of throwing/aborting the parse or spamming the
+  // console. KaTeX output is v-html-safe (escaped input, trust:false → no author HTML), same
+  // trust boundary as the sanitized markdown. An unclosed delimiter mid-stream never tokenizes
+  // → shows as literal `$…` until the closing `$` arrives (mirrors the mermaid streaming rule).
+  const mathExt = markedKatex()
+  // markedKatex's entries are both tokenizer AND renderer, but marked types `extensions`
+  // as a tokenizer|renderer UNION (neither branch exposes both `level` and `renderer`);
+  // cast to the concrete shape we mutate.
+  type KatexEntry = { level?: 'block' | 'inline'; renderer?: (token: Tokens.Generic) => string }
+  for (const ext of (mathExt.extensions ?? []) as KatexEntry[]) {
+    const nl = ext.level === 'block' ? '\n' : ''
+    ext.renderer = (token) => {
+      const t = token as Tokens.Generic & { text: string; displayMode?: boolean }
+      try {
+        return katex.renderToString(t.text, { ...KATEX_OPTS, displayMode: !!t.displayMode }) + nl
+      } catch {
+        // Not real math (unrenderable char) or malformed → show the source verbatim.
+        return escapeHtml(t.raw) + nl
+      }
+    }
+  }
+  marked.use(mathExt)
 }
 
 // ── Per-block render cache (streaming jank fix) ──

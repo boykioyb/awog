@@ -1,5 +1,5 @@
 import { inject, provide, type InjectionKey, type MaybeRefOrGetter } from 'vue'
-import { usePreview, type PreviewRef } from './usePreview'
+import { usePreview, previewKindFromPath, type PreviewRef } from './usePreview'
 import { useWorkspaceData } from './useWorkspaceData'
 import { useFsApi } from './useFsApi'
 import { useSessionTouchedPaths } from './useSessionTouchedPaths'
@@ -56,13 +56,6 @@ export function filePathOf(raw: string): string | null {
   if (/^\.+$/.test(path)) return null // not a bare ".", ".."
   if (/^\d+(\.\d+)+$/.test(path)) return null // not a version like 1.2.3
   return path
-}
-
-function kindFromName(name: string): PreviewRef['kind'] {
-  if (/\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i.test(name)) return 'image'
-  if (/\.pdf$/i.test(name)) return 'pdf'
-  if (/\.(md|markdown|mdx)$/i.test(name)) return 'markdown'
-  return 'text'
 }
 
 // Resolve the active session's workspace root once and provide the file-preview API
@@ -148,7 +141,7 @@ export function provideFilePreview(
     // "could not load". Without a root (browser-dev) degrade to a placeholder.
     const path = r ? ((await matchPath(r, detected, touchedPaths.value)) ?? detected) : detected
     const name = baseName(path)
-    const item: PreviewRef = { name, kind: kindFromName(name) }
+    const item: PreviewRef = { name, kind: previewKindFromPath(name) }
     if (r) {
       item.workspaceRoot = r
       item.path = path

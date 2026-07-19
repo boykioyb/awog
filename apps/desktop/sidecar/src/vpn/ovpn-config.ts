@@ -243,6 +243,29 @@ function detectAuthMode(directives: { name: string; rest: string }[]): VpnAuthMo
   return 'none'
 }
 
+// openvpn 2.6+ refuses any negotiated data cipher not in `--data-ciphers` (default is
+// AEAD-only: AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305). Legacy servers still push a CBC
+// cipher via the deprecated `cipher` directive, which 2.7 no longer folds into the allow
+// list — so the tunnel dies with "negotiated cipher not allowed … not in DEFAULT" right
+// after ASSIGN_IP. When a config declares such a legacy `cipher` (and no explicit
+// `data-ciphers` of its own), return a list that PREFERS the AEAD defaults but also
+// ALLOWS the declared legacy cipher — matching OpenVPN Connect / openvpn 2.5. null when
+// no compat is needed (modern cipher, or the config already sets data-ciphers).
+const AEAD_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305'
+const MODERN_CIPHERS = new Set(['AES-256-GCM', 'AES-128-GCM', 'CHACHA20-POLY1305'])
+
+export function legacyDataCiphersCompat(content: string): string | null {
+  let legacy: string | null = null
+  for (const { name, rest } of directiveLines(content)) {
+    if (name === 'data-ciphers') return null // the config controls the list explicitly
+    if (name === 'cipher' && rest) {
+      const c = (rest.split(/\s+/)[0] ?? '').toUpperCase()
+      if (c && !MODERN_CIPHERS.has(c)) legacy = c
+    }
+  }
+  return legacy ? `${AEAD_DATA_CIPHERS}:${legacy}` : null
+}
+
 // Dry-run parse of a .ovpn into a NEW-profile draft (VPN Manager P4). Runs the full
 // validateOvpnConfig root-RCE guard first (throws OvpnValidationError on reject), so a
 // hostile config can never seed a profile. Then derives non-secret metadata only:

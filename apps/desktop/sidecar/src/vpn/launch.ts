@@ -55,6 +55,9 @@ export interface OpenvpnArgvOptions {
   pwFile: string
   pidFile: string
   logFile: string
+  // Optional `--data-ciphers` value: set to allow a legacy CBC cipher a modern openvpn
+  // would otherwise refuse (see legacyDataCiphersCompat). Omitted → openvpn's defaults.
+  dataCiphers?: string
 }
 
 // Assemble the openvpn argv (design §3.1). Order matters: --config is pulled in
@@ -85,9 +88,19 @@ export function buildOpenvpnArgv(opts: OpenvpnArgvOptions): string[] {
     '3',
   ]
 
+  // Allow a legacy (CBC) cipher when the config declares one — a modern openvpn rejects
+  // it by default and drops the tunnel right after ASSIGN_IP. AEAD stays preferred.
+  if (opts.dataCiphers) {
+    argv.push('--data-ciphers', opts.dataCiphers)
+  }
+
   // Per-platform device. NEVER --daemon (breaks macOS `& echo $!` pid capture).
   if (process.platform === 'darwin') {
-    argv.push('--dev', 'utun')
+    // `--dev-type tun` is REQUIRED alongside `--dev utun`: openvpn infers the device
+    // type from the first 3 chars of the dev name, and "utun" ≠ "tun", so without an
+    // explicit type it dies with "problem with tun vs. tap setting" right after the TLS
+    // handshake. The explicit type makes utun a valid tun device.
+    argv.push('--dev-type', 'tun', '--dev', 'utun')
   } else if (process.platform === 'win32') {
     argv.push('--windows-driver', 'wintun')
   }

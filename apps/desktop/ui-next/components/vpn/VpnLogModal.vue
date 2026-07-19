@@ -8,7 +8,7 @@
     </template>
 
     <div ref="scroller" class="vlog-body">
-      <div v-if="!lines.length" class="vlog-empty">{{ t('vpn.log.empty') }}</div>
+      <div v-if="!lines.length" class="vlog-empty">{{ emptyText }}</div>
       <pre v-else class="vlog-pre">{{ lines.join('\n') }}</pre>
     </div>
 
@@ -46,6 +46,11 @@ const lines = computed(() => (props.id ? store.logsOf(props.id) : []))
 const title = computed(() => t('vpn.log.title', { name: props.name }))
 const statusColor = computed(() => VPN_STATUS_COLORS[props.status])
 const statusLabel = computed(() => t(`vpn.status.${props.status}`))
+// While connecting, openvpn output streams in shortly (it may still be authorizing /
+// starting) — so don't tell the user to "click Connect" (they already did).
+const emptyText = computed(() =>
+  props.status === 'connecting' ? t('vpn.log.waiting') : t('vpn.log.empty'),
+)
 
 function onClear(): void {
   if (props.id) store.clearLog(props.id)

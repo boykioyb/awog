@@ -375,6 +375,22 @@ export const useSshStore = defineStore('ssh', () => {
     await sc.request('ssh.setCredential', input)
   }
 
+  // Read a stored credential back so an editor can prefill it (the user's own login,
+  // shown like a password manager — see ssh.get-credential.ts for the rationale).
+  // Returns {} in browser-dev / on any failure.
+  async function getCredential(
+    scope: 'host' | 'identity',
+    id: string,
+  ): Promise<{ password?: string; passphrase?: string; privateKey?: string }> {
+    if (!available.value) return {}
+    try {
+      return await sc.request('ssh.getCredential', { scope, id })
+    } catch (err) {
+      console.warn('[ssh] getCredential failed', err)
+      return {}
+    }
+  }
+
   // --- import from ~/.ssh/config ---------------------------------------------
   // Dry-run parse; returns the importable candidates without touching disk.
   async function importConfig(): Promise<SshConfigCandidate[]> {
@@ -540,6 +556,7 @@ export const useSshStore = defineStore('ssh', () => {
     saveIdentity,
     deleteIdentity,
     setCredential,
+    getCredential,
     importConfig,
     importConfigApply,
     openTerminal,

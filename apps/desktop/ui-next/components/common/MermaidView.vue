@@ -201,8 +201,104 @@ function repairMermaid(src: string): string {
       if (t.startsWith('"') || !/[(){}[\]]/.test(t)) return whole
       return `|"${t.replace(/"/g, "'")}"|`
     })
+    // (3) Quote node labels whose text carries shape punctuation or a pipe: an
+    // unquoted `Z[[] empty]` reads `[[` as a subroutine shape that never finds `]]`
+    // ("got 'SQE'"). `Z["[] empty"]` takes the text literally. See quoteNodeLabels.
+    out = quoteNodeLabels(out)
   }
   return out
+}
+
+// ── flowchart node-label quoting (repair helper) ─────────────────────────────
+// open shape token → its accepted closing tokens. Two-char shapes come first so a
+// genuine subroutine/stadium/cylinder/… wins when it actually closes; the one-char
+// fallback covers a rectangle/round/rhombus whose label merely STARTS with a bracket.
+const MMD_SHAPES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ['([', ['])']],
+  ['[[', [']]']],
+  ['[(', [')]']],
+  ['((', ['))']],
+  ['{{', ['}}']],
+  ['[/', ['/]', '\\]']],
+  ['[\\', ['\\]', '/]']],
+  ['[', [']']],
+  ['(', [')']],
+  ['{', ['}']],
+  ['>', [']']],
+]
+// Statement lines that never carry an inline node definition — skipped wholesale so a
+// subgraph title / classDef / style value is never rewritten.
+const MMD_SKIP_LINE =
+  /^\s*(?:flowchart|graph|subgraph|end\b|classDef|class\b|style\b|linkStyle|direction|click|%%)/
+// Label text that needs quoting: any shape punctuation or a pipe.
+const MMD_NEEDS_QUOTE = /[[\](){}|]/
+// A close token is the node's real end only when a statement boundary follows it (end
+// of line, or a link/edge operator / `; : & @ |` start).
+const MMD_BOUNDARY = /^[-=.<~&;:|@]/
+
+// Is the next non-space thing after `pos` a statement boundary? Empty (EOL) counts.
+function mmdBoundaryAt(line: string, pos: number): boolean {
+  const rest = line.slice(pos).replace(/^\s+/, '')
+  return rest === '' || MMD_BOUNDARY.test(rest)
+}
+
+// Earliest close token (from `closes`) at/after `from` that lands on a boundary, or
+// null when this shape never closes cleanly — the caller then tries a shorter open
+// token, so `[[…]` with no `]]` degrades to a `[…]` rectangle. Scanning to a
+// boundary (not the first close) means a `]` INSIDE the label isn't mistaken for the
+// node's end: `A[x] --> B` closes A at the `]` before ` -->`, not before it.
+function mmdNodeEnd(
+  line: string,
+  from: number,
+  closes: readonly string[],
+): { end: number; close: string } | null {
+  for (let j = from; j < line.length; j++) {
+    for (const close of closes) {
+      if (line.startsWith(close, j) && mmdBoundaryAt(line, j + close.length))
+        return { end: j, close }
+    }
+  }
+  return null
+}
+
+function quoteNodeLabelsInLine(line: string): string {
+  let res = ''
+  let i = 0
+  while (i < line.length) {
+    // A node opener is a shape token immediately preceded by an id char (ASCII or
+    // unicode letter/number/underscore).
+    if (/[\p{L}\p{N}_]/u.test(line[i - 1] ?? '')) {
+      let handled = false
+      for (const [open, closes] of MMD_SHAPES) {
+        if (!line.startsWith(open, i)) continue
+        const labelStart = i + open.length
+        const found = mmdNodeEnd(line, labelStart, closes)
+        if (!found) continue // shape doesn't close here — fall through to a shorter one
+        const label = line.slice(labelStart, found.end)
+        const quoted =
+          label.trimStart().startsWith('"') || !MMD_NEEDS_QUOTE.test(label)
+            ? label
+            : `"${label.replace(/"/g, "'")}"`
+        res += open + quoted + found.close
+        i = found.end + found.close.length
+        handled = true
+        break
+      }
+      if (handled) continue
+    }
+    res += line[i]
+    i++
+  }
+  return res
+}
+
+// Quote every inline node label that would trip the parser, one statement line at a
+// time (labels never span lines in flowchart source — `<br/>` is literal text).
+function quoteNodeLabels(src: string): string {
+  return src
+    .split('\n')
+    .map((line) => (MMD_SKIP_LINE.test(line) ? line : quoteNodeLabelsInLine(line)))
+    .join('\n')
 }
 
 // Parse a CSS colour (hex #rgb/#rrggbb or rgb()) to [r,g,b] 0–255, or null.
