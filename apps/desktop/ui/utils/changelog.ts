@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.8',
+    date: '2026-07-19',
+    highlight: {
+      en: 'VPN connections now prompt for your multi-factor / one-time code, with a smoother SSH login editor and steadier diagram & math rendering.',
+      vi: 'Kết nối VPN giờ hỏi mã xác thực đa yếu tố / mã một lần, kèm trình sửa đăng nhập SSH mượt hơn và render sơ đồ & công thức toán ổn định hơn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'VPN connections that need a multi-factor or one-time code now show a prompt during connect — type the code from your authenticator and the tunnel finishes connecting. The code is sent only to the VPN server, never stored or logged.',
+        vi: 'Kết nối VPN cần mã xác thực đa yếu tố hoặc mã một lần giờ hiện ô nhập khi đang kết nối — nhập mã từ ứng dụng xác thực của bạn và đường hầm sẽ kết nối xong. Mã chỉ gửi tới máy chủ VPN, không lưu hay ghi log.',
+      },
+      {
+        kind: 'improved',
+        en: 'The VPN log now shows a "waiting for output" hint and live connection-state lines, so a slow connect visibly keeps progressing.',
+        vi: 'Nhật ký VPN giờ hiện gợi ý "đang chờ output" và các dòng trạng thái kết nối trực tiếp, để một kết nối chậm vẫn thấy đang tiến triển.',
+      },
+      {
+        kind: 'added',
+        en: 'The SSH host editor can now reveal a saved password or key passphrase (behind a show/hide toggle) so you can check or update it without retyping.',
+        vi: 'Trình sửa host SSH giờ có thể hiển thị mật khẩu hoặc passphrase khoá đã lưu (qua nút hiện/ẩn) để bạn xem lại hoặc cập nhật mà không phải gõ lại.',
+      },
+      {
+        kind: 'improved',
+        en: 'The VPN and SSH editors now flag missing or invalid fields (name, host, user, port, config path) before you save.',
+        vi: 'Trình sửa VPN và SSH giờ báo các trường thiếu hoặc không hợp lệ (tên, host, user, port, đường dẫn cấu hình) trước khi lưu.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Diagrams whose node labels contain brackets, parentheses, or a pipe now render instead of showing a parse error.',
+        vi: 'Sơ đồ có nhãn node chứa dấu ngoặc vuông, ngoặc tròn hoặc dấu gạch đứng giờ hiển thị được thay vì báo lỗi phân tích.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Ordinary text with dollar signs (like "$5 to $10") is no longer mistaken for a math formula and rendered as garbled symbols.',
+        vi: 'Văn bản thường có dấu đô la (như "$5 tới $10") không còn bị nhầm là công thức toán và hiển thị thành ký hiệu lộn xộn.',
+      },
+    ],
+  },
+  {
     version: '0.24.7',
     date: '2026-07-17',
     highlight: {
