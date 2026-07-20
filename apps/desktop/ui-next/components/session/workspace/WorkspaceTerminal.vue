@@ -323,11 +323,6 @@ const createPty = async (pane: Pane, cols: number, rows: number): Promise<void> 
     pane.creating = false
   }
 
-  const instance = pane.term
-  instance.onData((data) => {
-    if (pane.terminalId) tr.write(pane.terminalId, data).catch(() => undefined)
-  })
-
   // Flush buffered early output that belongs to this PTY; drop the rest of the
   // buffer (events for other panes are buffered on their own pane).
   const buffered = pane.pending
@@ -378,6 +373,15 @@ const initPane = async (pane: Pane): Promise<void> => {
   instance.loadAddon(pane.fit)
   instance.open(container)
   pane.term = instance
+
+  // Input → PTY. Registered ONCE per xterm instance (its `term.dispose()` drops it
+  // on close). It reads `pane.terminalId` lazily, so it keeps working after a
+  // reconnect (new PTY id). It must NOT live in createPty — that runs again on every
+  // reconnect and would stack a second handler, doubling every keystroke (ll → llll).
+  instance.onData((data) => {
+    const tr = activeTransport.value
+    if (pane.terminalId) tr.write(pane.terminalId, data).catch(() => undefined)
+  })
 
   // Copy only: xterm doesn't copy its selection on its own, so bind Cmd+C (mac) /
   // Ctrl+Shift+C (win/linux) when there IS a selection; plain Ctrl+C stays SIGINT.
