@@ -266,6 +266,24 @@ export function legacyDataCiphersCompat(content: string): string | null {
   return legacy ? `${AEAD_DATA_CIPHERS}:${legacy}` : null
 }
 
+// Directives through which a config declares its OWN dead-peer / keepalive policy.
+// `keepalive N M` expands to `--ping N --ping-restart M`; `--ping-exit` opts into
+// exit-on-timeout on purpose. If any is present we must NOT inject our own default.
+const KEEPALIVE_DIRECTIVES = new Set(['keepalive', 'ping', 'ping-restart', 'ping-exit'])
+
+// True when the config defines NO keepalive/ping directive at all. Such a config has
+// no way to notice a silently-dropped link: the tunnel hangs `up` on a dead socket,
+// or the root process later exits — which forces a full re-elevation (another admin
+// prompt). The caller then injects a conservative `--ping`/`--ping-restart` so openvpn
+// detects the drop and restarts IN-PROCESS (SIGUSR1, same root process, no re-prompt).
+// Gated on the config so an explicit keepalive policy is never overridden.
+export function needsPingDefault(content: string): boolean {
+  for (const { name } of directiveLines(content)) {
+    if (KEEPALIVE_DIRECTIVES.has(name)) return false
+  }
+  return true
+}
+
 // Dry-run parse of a .ovpn into a NEW-profile draft (VPN Manager P4). Runs the full
 // validateOvpnConfig root-RCE guard first (throws OvpnValidationError on reject), so a
 // hostile config can never seed a profile. Then derives non-secret metadata only:

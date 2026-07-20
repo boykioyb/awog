@@ -205,6 +205,8 @@ A thin line-framer over `net.Socket`. Cross-platform (TCP form). One instance pe
 --writepid  <PIDFILE>                 # recover real pid (mac echo $! is primary; this is the fallback)
 --log       <LOGFILE>                 # optional; sanitized before UI (--verb ≤ 3)
 --verb 3
+--persist-tun --persist-key           # survive a ping-restart IN-PROCESS (keep tun+keys) — no re-elevation
+--ping 10 --ping-restart 60           # ONLY when the config has no keepalive/ping of its own (needsPingDefault)
 # + platform: macOS `--dev utun` | Windows `--windows-driver wintun` | Linux (built-in tun)
 # NEVER --daemon (breaks macOS `& echo $!` pid capture)
 ```

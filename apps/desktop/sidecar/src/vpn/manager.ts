@@ -19,7 +19,7 @@ import { emit } from '../transport/stdio.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import { installHint, resolveOpenvpnBinary } from './binary.js'
-import { legacyDataCiphersCompat, validateOvpnConfig } from './ovpn-config.js'
+import { legacyDataCiphersCompat, needsPingDefault, validateOvpnConfig } from './ovpn-config.js'
 import {
   bindTestFreePort,
   buildOpenvpnArgv,
@@ -445,6 +445,7 @@ class VpnManager {
       pidFile: paths.pidFile,
       logFile: paths.logFile,
       ...(dataCiphers ? { dataCiphers } : {}),
+      pingDefault: needsPingDefault(content),
     })
     const adapter = selectAdapter()
 

@@ -40,7 +40,7 @@ Cho phép AWOG **tạo + keepalive kết nối OpenVPN** và cho **nhiều SSH h
 - Spawn `openvpn --config <ovpn> --management 127.0.0.1 <randomPort> --management-hold --management-query-passwords --auth-nocache` **qua elevation adapter theo OS** (§ADR 0065 §4).
 - Sidecar connect **management socket** (localhost + password) → `state on` → chờ `CONNECTED` = ready; đẩy cred khi được hỏi; `signal SIGTERM` để stop; poll `state` + pid cho health.
 - **Ref-count** per VPN: `ensureUp` (park chờ ready/prompt) tăng count; `release` giảm; 0 → giữ up hoặc auto-down.
-- **Keepalive**: `--keepalive` native + auto-restart backoff khi pid chết (nếu `profile.keepalive`).
+- **Keepalive**: `--persist-tun --persist-key` (luôn) + `--ping/--ping-restart` mặc định (chỉ khi config không tự khai keepalive/ping) → tunnel rớt tạm được openvpn khôi phục **in-process** (SIGUSR1), root process không thoát nên **không hỏi lại admin password**. Auto-restart backoff (re-elevate) chỉ còn cho trường hợp pid chết thật (nếu `profile.keepalive`).
 
 ## RPC (`vpn.*`)
 
