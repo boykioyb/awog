@@ -58,7 +58,17 @@ export interface OpenvpnArgvOptions {
   // Optional `--data-ciphers` value: set to allow a legacy CBC cipher a modern openvpn
   // would otherwise refuse (see legacyDataCiphersCompat). Omitted → openvpn's defaults.
   dataCiphers?: string
+  // When true, the config declares no keepalive/ping policy of its own, so we inject a
+  // conservative dead-peer detector (see needsPingDefault). Omitted/false → leave the
+  // config's own keepalive/ping intact.
+  pingDefault?: boolean
 }
+
+// Conservative default dead-peer detection (matches the common `keepalive 10 60`):
+// ping every 10s, and if none is seen back for 60s restart the tunnel. Only injected
+// when the config declares no keepalive/ping of its own (see needsPingDefault).
+const DEFAULT_PING_INTERVAL_S = '10'
+const DEFAULT_PING_RESTART_S = '60'
 
 // Assemble the openvpn argv (design §3.1). Order matters: --config is pulled in
 // at its position, so every hardening flag AFTER it (script-security, dev) wins
@@ -86,12 +96,26 @@ export function buildOpenvpnArgv(opts: OpenvpnArgvOptions): string[] {
     opts.logFile,
     '--verb',
     '3',
+    // Survive transient drops WITHOUT the root process exiting: on a ping-restart
+    // openvpn re-establishes the tunnel IN-PROCESS (SIGUSR1), keeping the tun device
+    // (--persist-tun) and loaded keys (--persist-key). This is the linchpin of "enter
+    // the admin password once": a process that never exits is never re-elevated. Both
+    // are additive booleans — harmless if the config already sets them.
+    '--persist-tun',
+    '--persist-key',
   ]
 
   // Allow a legacy (CBC) cipher when the config declares one — a modern openvpn rejects
   // it by default and drops the tunnel right after ASSIGN_IP. AEAD stays preferred.
   if (opts.dataCiphers) {
     argv.push('--data-ciphers', opts.dataCiphers)
+  }
+
+  // Inject dead-peer detection only when the config has none of its own — otherwise a
+  // dropped link is never noticed (tunnel hangs `up`, or the process later dies and
+  // re-prompts for admin). With it, openvpn restarts in-process and self-heals silently.
+  if (opts.pingDefault) {
+    argv.push('--ping', DEFAULT_PING_INTERVAL_S, '--ping-restart', DEFAULT_PING_RESTART_S)
   }
 
   // Per-platform device. NEVER --daemon (breaks macOS `& echo $!` pid capture).
