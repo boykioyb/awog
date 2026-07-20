@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.9',
+    date: '2026-07-20',
+    highlight: {
+      en: 'Fixes duplicated typing when an SSH terminal reconnects, and keeps VPN connections steady so you enter your admin password only once.',
+      vi: 'Sửa lỗi gõ bị lặp khi terminal SSH kết nối lại, và giữ kết nối VPN ổn định để bạn chỉ nhập mật khẩu quản trị một lần.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'SSH terminals no longer duplicate your keystrokes after a session reconnects — typing "ll" now sends "ll", not "llll".',
+        vi: 'Terminal SSH không còn nhân đôi phím bạn gõ sau khi phiên kết nối lại — gõ "ll" giờ gửi đúng "ll", không phải "llll".',
+      },
+      {
+        kind: 'fixed',
+        en: 'VPN connections now recover from brief network drops on their own instead of asking for your admin password again — you enter it just once when you first connect.',
+        vi: 'Kết nối VPN giờ tự phục hồi khi mạng chập chờn thay vì hỏi lại mật khẩu quản trị — bạn chỉ cần nhập một lần lúc bắt đầu kết nối.',
+      },
+      {
+        kind: 'improved',
+        en: 'VPN tunnels are steadier on flaky networks: a dropped link is detected and re-established automatically, keeping your SSH sessions alive.',
+        vi: 'Đường hầm VPN ổn định hơn trên mạng chập chờn: link rớt được phát hiện và tự thiết lập lại, giữ cho phiên SSH của bạn không bị đứt.',
+      },
+    ],
+  },
+  {
     version: '0.24.8',
     date: '2026-07-19',
     highlight: {
