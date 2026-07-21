@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.10',
+    date: '2026-07-21',
+    highlight: {
+      en: 'The SSH file browser becomes a full file manager, snippets run right inside the terminal, and math in notes renders reliably everywhere.',
+      vi: 'Trình duyệt tệp SSH trở thành một trình quản lý tệp đầy đủ, snippet chạy ngay trong terminal, và công thức toán trong ghi chú hiển thị ổn định ở mọi nơi.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'The SSH file browser is now a full file manager: right-click for rename, duplicate, copy/move, compress, extract, permissions, change owner, download, and delete — plus choose which columns to show and select multiple files at once.',
+        vi: 'Trình duyệt tệp SSH giờ là một trình quản lý tệp đầy đủ: nhấp chuột phải để đổi tên, nhân bản, sao chép/di chuyển, nén, giải nén, đổi quyền, đổi chủ sở hữu, tải xuống và xóa — kèm chọn cột hiển thị và chọn nhiều tệp cùng lúc.',
+      },
+      {
+        kind: 'added',
+        en: 'Download remote files through a native "Save as" dialog, and drag files from your computer straight into the panel to upload them.',
+        vi: 'Tải tệp từ xa qua hộp thoại "Lưu thành" gốc của hệ điều hành, và kéo tệp từ máy của bạn thẳng vào bảng để tải lên.',
+      },
+      {
+        kind: 'added',
+        en: 'A Snippets panel now docks in the SSH terminal so you can run your saved commands straight into the current shell.',
+        vi: 'Bảng Snippets giờ gắn ngay trong terminal SSH để bạn chạy các lệnh đã lưu thẳng vào shell hiện tại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Math and LaTeX in your notes now render reliably everywhere, including the tray window — the required fonts are bundled instead of fetched.',
+        vi: 'Công thức toán và LaTeX trong ghi chú giờ hiển thị ổn định ở mọi nơi, kể cả cửa sổ khay hệ thống — phông chữ cần thiết được đóng gói sẵn thay vì tải về.',
+      },
+      {
+        kind: 'fixed',
+        en: 'New sessions now check the quota of the account they will actually use — a project with its own LLM account is no longer blocked just because your global default account hit its limit.',
+        vi: 'Phiên mới giờ kiểm tra hạn mức của đúng tài khoản mà nó sẽ dùng — một dự án có tài khoản LLM riêng không còn bị chặn chỉ vì tài khoản mặc định toàn cục của bạn đã hết hạn mức.',
+      },
+    ],
+  },
+  {
     version: '0.24.9',
     date: '2026-07-20',
     highlight: {
