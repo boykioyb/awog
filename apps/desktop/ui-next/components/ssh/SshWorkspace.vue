@@ -114,25 +114,35 @@
           <div class="sshx-tbar-actions">
             <button
               class="sshx-tbar-btn"
-              :class="{ on: sessionOpen[tab.id] }"
+              :class="{ on: activeDock[tab.id] === 'snippets' }"
+              :title="t('ssh.nav.snippets')"
+              :aria-label="t('ssh.nav.snippets')"
+              @click="toggleDock(tab.id, 'snippets')"
+            >
+              <Icon name="commands" style="width: 13px; height: 13px" />
+              <span>{{ t('ssh.nav.snippets') }}</span>
+            </button>
+            <button
+              class="sshx-tbar-btn"
+              :class="{ on: activeDock[tab.id] === 'session' }"
               :title="t('ssh.session.copilotTitle')"
               :aria-label="t('ssh.session.copilotTitle')"
-              @click="toggleSession(tab.id)"
+              @click="toggleDock(tab.id, 'session')"
             >
               <Icon name="sessions" style="width: 13px; height: 13px" />
               <span>{{ t('ssh.tterm.session') }}</span>
             </button>
             <button
               class="sshx-tbar-btn"
-              :class="{ on: sftpOpen[tab.id] }"
-              :disabled="!store.connIdForHost(tab.hostId) && !sftpOpen[tab.id]"
+              :class="{ on: activeDock[tab.id] === 'sftp' }"
+              :disabled="!store.connIdForHost(tab.hostId) && activeDock[tab.id] !== 'sftp'"
               :title="
                 store.connIdForHost(tab.hostId)
                   ? t('ssh.section.sftp')
                   : t('ssh.tterm.connectFirst')
               "
               :aria-label="t('ssh.section.sftp')"
-              @click="toggleSftp(tab.id)"
+              @click="toggleDock(tab.id, 'sftp')"
             >
               <Icon name="folder" style="width: 13px; height: 13px" />
               <span>{{ t('ssh.tterm.sftp') }}</span>
@@ -144,7 +154,7 @@
              browser (bottom ~42%) when toggled. The terminal stays MOUNTED the
              whole time — only the shell container's flex-basis changes, which its
              ResizeObserver picks up to refit (never v-if on SshTerminal). -->
-        <div class="sshx-tbody" :class="{ split: sftpOpen[tab.id] || sessionOpen[tab.id] }">
+        <div class="sshx-tbody" :class="{ split: !!activeDock[tab.id] }">
           <div class="sshx-tshell">
             <SshTerminal
               :host-id="tab.hostId"
@@ -152,7 +162,9 @@
               @conn="(id) => (termConn[tab.id] = id)"
             />
           </div>
-          <template v-if="sftpOpen[tab.id]">
+          <!-- One of three right-docked panels (mutually exclusive): SFTP browser,
+               co-pilot session, or the snippets library. Each shares the splitter. -->
+          <template v-if="activeDock[tab.id]">
             <div
               class="sshx-tsplit"
               role="separator"
@@ -161,30 +173,28 @@
               @pointerdown="startResize(tab.id, $event)"
             />
             <div class="sshx-tside" :style="sideStyle(tab.id)">
-              <SshSftpBrowser
-                v-if="store.connIdForHost(tab.hostId)"
-                :conn-id="store.connIdForHost(tab.hostId) ?? ''"
-                @close="sftpOpen[tab.id] = false"
-              />
-              <div v-else class="sshx-tsftp-note">{{ t('ssh.tterm.connectToBrowse') }}</div>
-            </div>
-          </template>
-          <!-- Co-pilot session docked on the RIGHT (mutually exclusive with SFTP). The
-               agent drives the terminal on the left via ssh_terminal_run. -->
-          <template v-else-if="sessionOpen[tab.id]">
-            <div
-              class="sshx-tsplit"
-              role="separator"
-              aria-orientation="vertical"
-              :title="t('ssh.tterm.resize')"
-              @pointerdown="startResize(tab.id, $event)"
-            />
-            <div class="sshx-tside" :style="sideStyle(tab.id)">
+              <template v-if="activeDock[tab.id] === 'sftp'">
+                <SshSftpBrowser
+                  v-if="store.connIdForHost(tab.hostId)"
+                  :conn-id="store.connIdForHost(tab.hostId) ?? ''"
+                  @close="activeDock[tab.id] = null"
+                />
+                <div v-else class="sshx-tsftp-note">{{ t('ssh.tterm.connectToBrowse') }}</div>
+              </template>
               <SshSessionPanel
+                v-else-if="activeDock[tab.id] === 'session'"
                 :host-id="tab.hostId"
                 :visible="store.activeTab === tab.id"
                 :terminal-conn-id="termConn[tab.id] ?? undefined"
-                @close="sessionOpen[tab.id] = false"
+                @close="activeDock[tab.id] = null"
+              />
+              <!-- Snippets write into the EXACT shell on screen (termConn = the
+                   active pane's live connId), never the store's "primary" guess —
+                   otherwise Run silently hits an off-screen shell. -->
+              <SshSnippetsPanel
+                v-else-if="activeDock[tab.id] === 'snippets'"
+                :conn-id="termConn[tab.id] ?? ''"
+                @close="activeDock[tab.id] = null"
               />
             </div>
           </template>
@@ -213,6 +223,7 @@ import SshHostGrid from '~/components/ssh/SshHostGrid.vue'
 import SshKeychainSection from '~/components/ssh/SshKeychainSection.vue'
 import SshSessionPanel from '~/components/ssh/SshSessionPanel.vue'
 import SshSftpBrowser from '~/components/ssh/SshSftpBrowser.vue'
+import SshSnippetsPanel from '~/components/ssh/SshSnippetsPanel.vue'
 import SshSnippetsSection from '~/components/ssh/SshSnippetsSection.vue'
 import SshSidebar from '~/components/ssh/SshSidebar.vue'
 import SshTerminal from '~/components/ssh/SshTerminal.vue'
@@ -263,23 +274,17 @@ const tabUserHost = (hostId: string): string => {
   return host ? `${host.user}@${host.host}` : ''
 }
 
-// SFTP split state is PER terminal tab (keyed by tab id) and local to the shell —
-// toggling it only resizes the split, never unmounts the live SshTerminal. Pruned
-// when a tab closes so the map can't leak stale keys.
+// Right-dock state is PER terminal tab (keyed by tab id) and local to the shell.
+// The three docks — SFTP browser / co-pilot session / snippets — are mutually
+// exclusive (all dock on the right); toggling only resizes the split, never
+// unmounts the live SshTerminal. Pruned when a tab closes so the map can't leak.
 // Active pane connId per tab (bubbled from SshTerminal) → the co-pilot drives the
 // EXACT shell the user is watching, not a store guess.
 const termConn = reactive<Record<string, string | null>>({})
-const sftpOpen = reactive<Record<string, boolean>>({})
-// Co-pilot session split state — PER tab, mutually exclusive with SFTP (both dock
-// on the right). Local to the shell; the session itself lives in the sessions store.
-const sessionOpen = reactive<Record<string, boolean>>({})
-const toggleSftp = (tabId: string): void => {
-  sftpOpen[tabId] = !sftpOpen[tabId]
-  if (sftpOpen[tabId]) sessionOpen[tabId] = false
-}
-const toggleSession = (tabId: string): void => {
-  sessionOpen[tabId] = !sessionOpen[tabId]
-  if (sessionOpen[tabId]) sftpOpen[tabId] = false
+type DockKind = 'sftp' | 'session' | 'snippets'
+const activeDock = reactive<Record<string, DockKind | null>>({})
+const toggleDock = (tabId: string, kind: DockKind): void => {
+  activeDock[tabId] = activeDock[tabId] === kind ? null : kind
 }
 
 // Right-panel (SFTP / session) width per tab, in px — resizable by dragging the
@@ -315,8 +320,7 @@ const startResize = (tabId: string, e: PointerEvent): void => {
 watch(
   () => store.terminalTabs.map((tab) => tab.id),
   (ids) => {
-    for (const key of Object.keys(sftpOpen)) if (!ids.includes(key)) delete sftpOpen[key]
-    for (const key of Object.keys(sessionOpen)) if (!ids.includes(key)) delete sessionOpen[key]
+    for (const key of Object.keys(activeDock)) if (!ids.includes(key)) delete activeDock[key]
   },
 )
 </script>

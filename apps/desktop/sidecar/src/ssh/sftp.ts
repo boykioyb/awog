@@ -22,6 +22,7 @@ import { homedir } from 'node:os'
 import { dirname, join, posix, resolve, sep } from 'node:path'
 import { emit } from '../transport/stdio.js'
 import { RpcError } from '../transport/rpc.js'
+import { log } from '../util/logger.js'
 import {
   sanitizeMessage,
   sshManager,
@@ -41,7 +42,12 @@ export type SftpEntry = {
   type: SftpEntryType
   size: number
   mtime: number
+  atime: number
   mode: number
+  // Numeric POSIX ownership from the SFTP stat. Owner/group NAMES + ctime are not
+  // in the SFTP protocol; they're enriched best-effort by statx() (see below).
+  uid: number
+  gid: number
 }
 
 // ─── Per-connId SFTP session cache ───────────────────────────────────────────
@@ -268,7 +274,10 @@ export async function sftpList(connId: string, path: string): Promise<{ entries:
       type: entryType(e.attrs),
       size: e.attrs.size,
       mtime: Math.round(e.attrs.mtime * 1000), // SFTP seconds → JS milliseconds
+      atime: Math.round(e.attrs.atime * 1000),
       mode: e.attrs.mode,
+      uid: e.attrs.uid,
+      gid: e.attrs.gid,
     })),
   }
 }
@@ -382,4 +391,255 @@ export async function sftpUpload(
   })
   prog.finish()
   return { ok: true, bytes: prog.bytes }
+}
+
+// ─── Native SFTP metadata / create (NO shell) ────────────────────────────────
+
+// Change permission bits over the SFTP protocol directly — no remote shell is
+// invoked, so there is no command-injection surface here. `mode` is validated to
+// the standard permission range at the RPC boundary.
+export async function sftpChmod(connId: string, path: string, mode: number): Promise<{ ok: true }> {
+  const sftp = await openSftp(connId)
+  const remote = sanitizeRemotePath(path)
+  await new Promise<void>((res, rej) => {
+    sftp.chmod(remote, mode, (err) => (err ? rej(new Error(sanitizeMessage(err))) : res()))
+  })
+  return { ok: true }
+}
+
+// Create a new EMPTY file. Uses the exclusive-create flag ('wx') so an existing
+// path is a fast-fail rather than a silent truncate (mirrors mkdir semantics).
+export async function sftpCreateFile(connId: string, path: string): Promise<{ ok: true }> {
+  const sftp = await openSftp(connId)
+  const remote = sanitizeRemotePath(path)
+  await new Promise<void>((res, rej) => {
+    sftp.writeFile(remote, '', { encoding: 'utf8', flag: 'wx' }, (err) =>
+      err ? rej(new Error(sanitizeMessage(err))) : res(),
+    )
+  })
+  return { ok: true }
+}
+
+// ─── Shell-backed operations (copy / archive / chown / enrichment) ────────────
+//
+// SFTP has no native primitive for these, so they run a one-shot command over
+// the SSH connection via sshManager.exec. THIS IS A COMMAND-INJECTION SINK: the
+// remote runs the string through its login shell. Every path/name that originates
+// from the UI is passed through shellQuote(); the subcommand + option flags are
+// fixed constants chosen HERE (never sent from the UI), and enum/charset params
+// are validated at the RPC boundary before reaching these builders.
+
+// POSIX single-quote escaping: wrap in single quotes and replace every embedded
+// quote with the '\'' sequence. Renders any byte sequence (spaces, ;, $(), `, |,
+// newlines) inert to the remote shell.
+export function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
+// Run a remote command and throw its stderr on a non-zero exit (fail-fast — the
+// caller surfaces the message to the UI; nothing is swallowed). Output is already
+// capped + timed by sshManager.exec.
+async function execChecked(connId: string, command: string): Promise<string> {
+  const { stdout, stderr, code } = await sshManager.exec(connId, command)
+  if (code !== 0) {
+    throw new Error((stderr || stdout || `command exited with code ${code}`).trim())
+  }
+  return stdout
+}
+
+// `cd <dir> && ` prefix so archive/enrichment commands run relative to a browsed
+// directory with clean basenames. Home-relative '.' needs no cd (exec already
+// starts in the login home dir).
+function cdPrefix(dir: string): string {
+  return dir && dir !== '.' ? `cd ${shellQuote(dir)} && ` : ''
+}
+
+export type CompressFormat = 'zip' | 'tar.gz' | 'tar.bz2' | 'tar.xz' | 'rar' | '7z'
+
+// Copy files/dirs (recursive). `sources` + `dest` are full remote paths
+// (home-relative or absolute) — exec starts in the login home dir.
+export async function sftpCopy(
+  connId: string,
+  sources: string[],
+  dest: string,
+): Promise<{ ok: true }> {
+  if (!sources.length) throw new RpcError(-32602, 'no sources to copy')
+  const args = sources.map((s) => shellQuote(sanitizeRemotePath(s))).join(' ')
+  await execChecked(connId, `cp -R -- ${args} ${shellQuote(sanitizeRemotePath(dest))}`)
+  return { ok: true }
+}
+
+// Archive `entries` (basenames within `cwd`) into `archiveName` (within `cwd`).
+export async function sftpCompress(
+  connId: string,
+  cwd: string,
+  format: CompressFormat,
+  entries: string[],
+  archiveName: string,
+): Promise<{ ok: true }> {
+  if (!entries.length) throw new RpcError(-32602, 'no entries to compress')
+  const cd = cdPrefix(sanitizeRemotePath(cwd))
+  const a = shellQuote(sanitizeRemotePath(archiveName))
+  const items = entries.map((e) => shellQuote(sanitizeRemotePath(e))).join(' ')
+  const cmd: Record<CompressFormat, string> = {
+    zip: `${cd}zip -r -q -- ${a} ${items}`,
+    'tar.gz': `${cd}tar -czf ${a} -- ${items}`,
+    'tar.bz2': `${cd}tar -cjf ${a} -- ${items}`,
+    'tar.xz': `${cd}tar -cJf ${a} -- ${items}`,
+    rar: `${cd}rar a -- ${a} ${items}`,
+    '7z': `${cd}7z a -- ${a} ${items}`,
+  }
+  await execChecked(connId, cmd[format])
+  return { ok: true }
+}
+
+// Extract `archive` (basename within `cwd`) into `cwd` (or a subdir). Format is
+// derived from the archive extension — NOT trusted from the UI.
+export async function sftpExtract(
+  connId: string,
+  cwd: string,
+  archive: string,
+  dest?: string,
+): Promise<{ ok: true }> {
+  const cd = cdPrefix(sanitizeRemotePath(cwd))
+  const a = shellQuote(sanitizeRemotePath(archive))
+  const destDir = dest && dest.trim() ? sanitizeRemotePath(dest) : '.'
+  const d = shellQuote(destDir)
+  const lower = archive.toLowerCase()
+  let cmd: string
+  // `-d <exdir>` MUST precede `--`; after `--` unzip treats it as a member-name
+  // pattern (dest silently ignored → nothing extracted).
+  if (lower.endsWith('.zip')) cmd = `${cd}unzip -o -d ${d} -- ${a}`
+  else if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) cmd = `${cd}tar -xzf ${a} -C ${d}`
+  else if (lower.endsWith('.tar.bz2') || lower.endsWith('.tbz2') || lower.endsWith('.tbz'))
+    cmd = `${cd}tar -xjf ${a} -C ${d}`
+  else if (lower.endsWith('.tar.xz') || lower.endsWith('.txz')) cmd = `${cd}tar -xJf ${a} -C ${d}`
+  else if (lower.endsWith('.tar')) cmd = `${cd}tar -xf ${a} -C ${d}`
+  else if (lower.endsWith('.rar')) cmd = `${cd}unrar x -o+ ${a} ${d}/`
+  else if (lower.endsWith('.7z')) cmd = `${cd}7z x -y ${shellQuote('-o' + destDir)} -- ${a}`
+  else if (lower.endsWith('.gz')) cmd = `${cd}gzip -dk -- ${a}`
+  else if (lower.endsWith('.bz2')) cmd = `${cd}bzip2 -dk -- ${a}`
+  else if (lower.endsWith('.xz')) cmd = `${cd}xz -dk -- ${a}`
+  else throw new RpcError(-32602, `unsupported archive format: ${archive}`)
+  await execChecked(connId, cmd)
+  return { ok: true }
+}
+
+const OWNER_RE = /^[A-Za-z0-9._-]+$/
+
+// Change owner (and optionally group). Usually needs root — a non-privileged
+// failure surfaces its "Operation not permitted" message unchanged.
+export async function sftpChown(
+  connId: string,
+  targets: string[],
+  owner: string,
+  group?: string,
+  recursive?: boolean,
+): Promise<{ ok: true }> {
+  if (!targets.length) throw new RpcError(-32602, 'no targets')
+  if (!OWNER_RE.test(owner)) throw new RpcError(-32602, 'invalid owner')
+  if (group != null && group !== '' && !OWNER_RE.test(group)) {
+    throw new RpcError(-32602, 'invalid group')
+  }
+  const spec = group ? `${owner}:${group}` : owner
+  const files = targets.map((f) => shellQuote(sanitizeRemotePath(f))).join(' ')
+  const flag = recursive ? '-R ' : ''
+  await execChecked(connId, `chown ${flag}-- ${shellQuote(spec)} ${files}`)
+  return { ok: true }
+}
+
+// Probe which archive tools exist on the remote (constant command, no UI input),
+// so the UI can grey out unavailable compress/extract formats.
+export async function sftpToolcheck(connId: string): Promise<{ tools: string[] }> {
+  // Trailing `; :` forces exit 0 — otherwise the loop inherits the last iteration's
+  // status (non-zero when the last probed tool is missing), which execChecked would
+  // treat as failure and drop the whole result → every format shows "not installed".
+  const out = await execChecked(
+    connId,
+    'for t in zip unzip tar gzip bzip2 xz rar unrar 7z 7za; do command -v "$t" >/dev/null 2>&1 && echo "$t"; done; :',
+  )
+  const tools = out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  return { tools }
+}
+
+// ─── Enrichment: owner/group NAMES + ctime (best-effort) ──────────────────────
+// SFTP gives numeric uid/gid + mtime/atime, but no owner/group name and no ctime.
+// We shell out to `stat` for these. Fully optional: on any failure the UI falls
+// back to numeric uid/gid and hides the Changed column.
+
+type StatFlavor = 'gnu' | 'bsd' | 'none'
+const statFlavors = new Map<string, StatFlavor>()
+sshManager.onTeardown((connId) => statFlavors.delete(connId))
+
+async function detectStatFlavor(connId: string): Promise<StatFlavor> {
+  const cached = statFlavors.get(connId)
+  if (cached) return cached
+  let flavor: StatFlavor = 'none'
+  try {
+    const out = await execChecked(
+      connId,
+      "if stat -c '%U' . >/dev/null 2>&1; then echo gnu; elif stat -f '%Su' . >/dev/null 2>&1; then echo bsd; else echo none; fi",
+    )
+    const v = out.trim()
+    if (v === 'gnu' || v === 'bsd') flavor = v
+  } catch {
+    flavor = 'none'
+  }
+  statFlavors.set(connId, flavor)
+  return flavor
+}
+
+// Cap on how many entries we enrich in one `stat` call (bounds ARG_MAX + parse).
+const STATX_CAP = 1000
+
+export type SftpMeta = { owner: string; group: string; ctime: number }
+
+// Enrich the entries in `dir` (given their basenames) with owner/group names +
+// ctime (ms). Returns a name→meta map; entries beyond the cap are simply omitted
+// (UI keeps its numeric fallback for them).
+export async function sftpStatx(
+  connId: string,
+  dir: string,
+  names: string[],
+): Promise<{ meta: Record<string, SftpMeta> }> {
+  const flavor = await detectStatFlavor(connId)
+  if (flavor === 'none' || !names.length) return { meta: {} }
+
+  const capped = names.slice(0, STATX_CAP)
+  if (names.length > STATX_CAP) {
+    log.warn(`ssh.sftp.statx: enriching first ${STATX_CAP} of ${names.length} entries in ${dir}`)
+  }
+
+  const cd = cdPrefix(sanitizeRemotePath(dir))
+  const args = capped.map((n) => shellQuote(sanitizeRemotePath(n))).join(' ')
+  // NAME is placed LAST so a tab inside a filename can't shift the other columns:
+  // owner/group/ctime never contain tabs, so we split off exactly 3 fields.
+  const fmt =
+    flavor === 'gnu' ? "--printf '%U\\t%G\\t%Z\\t%n\\n'" : "-f '%Su\\t%Sg\\t%c\\t%N'"
+  let out: string
+  try {
+    out = await execChecked(connId, `${cd}stat ${fmt} -- ${args}`)
+  } catch (err) {
+    log.warn(`ssh.sftp.statx failed: ${err instanceof Error ? err.message : String(err)}`)
+    return { meta: {} }
+  }
+
+  const meta: Record<string, SftpMeta> = {}
+  for (const line of out.split('\n')) {
+    if (!line) continue
+    const parts = line.split('\t')
+    if (parts.length < 4) continue
+    const [owner, group, ctimeRaw, ...rest] = parts
+    const name = rest.join('\t')
+    const ctimeSec = Number.parseInt(ctimeRaw, 10)
+    meta[name] = {
+      owner,
+      group,
+      ctime: Number.isFinite(ctimeSec) ? ctimeSec * 1000 : 0,
+    }
+  }
+  return { meta }
 }

@@ -782,6 +782,11 @@ watch(
   (v) => {
     if (!v || !activeTabId.value) return
     syncTab(activeTabId.value)
+    // Re-publish the active pane's live backend id whenever this terminal is
+    // shown — an earlier emit may have fired null (pane switch before the PTY
+    // resolved), which would strand consumers (SFTP/snippets/co-pilot) on a stale
+    // fallback connId.
+    emitActiveConn()
   },
 )
 

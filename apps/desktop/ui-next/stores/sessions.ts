@@ -1121,8 +1121,19 @@ export const useSessionsStore = defineStore('sessions', () => {
   // refuse to spawn it (returns null) — the single gate for every "+" callsite.
   // Disabled / under threshold → always creates.
   function create(projectId?: string): number | null {
-    if (newSessionsBlocked.value) {
-      notifyBlocked?.(defaultAccountAndModel().acct?.label ?? '', 'create')
+    // Resolve the account THIS session would actually use — a project's "Session LLM
+    // defaults" win over the global default — and gate quota on THAT account, not the
+    // global default. Otherwise a maxed global-default account wrongly blocks a
+    // project bound to a different, under-quota account (per-account is the point).
+    const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
+    const q = settingsStore.quota
+    if (
+      q.enabled &&
+      q.blockNewSessionsOnThreshold &&
+      acct &&
+      quotaPctForAccount(acct.id) >= q.threshold
+    ) {
+      notifyBlocked?.(acct.label ?? acct.display ?? '', 'create')
       return null
     }
     // Dedup: don't pile up empties when "+" is clicked repeatedly. A blank "New
@@ -1144,10 +1155,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       return blank.id
     }
     const id = newClientId()
-    // Project "Session LLM defaults" (when set) seed account/model/effort/MCP; else
-    // the global Settings → Defaults. Mode stays the global default (projects don't
-    // pin a mode).
-    const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
+    // acct/model/level/mcpServerIds were resolved above (project defaults → global).
     const session: Session = {
       id,
       title: 'New session',

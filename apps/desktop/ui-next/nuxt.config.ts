@@ -47,9 +47,13 @@ export default defineNuxtConfig({
     '@vue-flow/core/dist/theme-default.css',
     '@vue-flow/controls/dist/style.css',
     '@vue-flow/minimap/dist/style.css',
-    // KaTeX styles for LaTeX math in markdown (useMarkdown). Fonts ship as local
-    // woff2 assets → Vite bundles them, no network fetch (works under app://).
-    'katex/dist/katex.min.css',
+    // KaTeX styles for LaTeX math in markdown (useMarkdown). We import a GENERATED
+    // copy with every font inlined as a data: URI (scripts/inline-katex-fonts.mjs)
+    // instead of the vendor katex.min.css: in dev Vite rewrites the vendor CSS's
+    // url(fonts/*.woff2) to absolute dev-origin URLs that 404/ERR_CONNECTION_REFUSED
+    // from the tray-popover window or after a dev-server restart. Inlined = zero
+    // network fetch, so math renders under dev, `nuxt build`, and app://.
+    '~/assets/css/katex.css',
   ],
   devtools: { enabled: true },
   // 3031 so ui-next can run side-by-side with the legacy ui (3030) during rebuild.

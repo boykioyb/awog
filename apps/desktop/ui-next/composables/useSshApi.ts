@@ -13,8 +13,18 @@ export interface SftpEntry {
   type: SftpEntryType
   size: number
   mtime: number
+  atime: number
   mode: number
+  uid: number
+  gid: number
 }
+// Enrichment (owner/group NAMES + ctime) resolved best-effort via ssh.sftp.statx.
+export interface SftpMeta {
+  owner: string
+  group: string
+  ctime: number
+}
+export type CompressFormat = 'zip' | 'tar.gz' | 'tar.bz2' | 'tar.xz' | 'rar' | '7z'
 export interface SshForwardInfo {
   forwardId: string
   connId: string
@@ -74,6 +84,57 @@ export function useSshApi() {
         connId,
         localPath,
         remotePath,
+      }),
+
+    // ── SFTP file-manager ops ──
+    sftpChmod: (connId: string, path: string, mode: number) =>
+      sidecar.request<{ ok: true }>('ssh.sftp.chmod', { connId, path, mode }),
+    sftpCreateFile: (connId: string, path: string) =>
+      sidecar.request<{ ok: true }>('ssh.sftp.createFile', { connId, path }),
+    sftpCopy: (connId: string, sources: string[], dest: string) =>
+      sidecar.request<{ ok: true }>('ssh.sftp.copy', { connId, sources, dest }),
+    sftpCompress: (
+      connId: string,
+      cwd: string,
+      format: CompressFormat,
+      entries: string[],
+      archiveName: string,
+    ) =>
+      sidecar.request<{ ok: true }>('ssh.sftp.compress', {
+        connId,
+        cwd,
+        format,
+        entries,
+        archiveName,
+      }),
+    sftpExtract: (connId: string, cwd: string, archive: string, dest?: string) =>
+      sidecar.request<{ ok: true }>('ssh.sftp.extract', {
+        connId,
+        cwd,
+        archive,
+        ...(dest != null ? { dest } : {}),
+      }),
+    sftpChown: (
+      connId: string,
+      targets: string[],
+      owner: string,
+      group?: string,
+      recursive?: boolean,
+    ) =>
+      sidecar.request<{ ok: true }>('ssh.sftp.chown', {
+        connId,
+        targets,
+        owner,
+        ...(group != null ? { group } : {}),
+        ...(recursive != null ? { recursive } : {}),
+      }),
+    sftpToolcheck: (connId: string) =>
+      sidecar.request<{ tools: string[] }>('ssh.sftp.toolcheck', { connId }),
+    sftpStatx: (connId: string, dir: string, names: string[]) =>
+      sidecar.request<{ meta: Record<string, SftpMeta> }>('ssh.sftp.statx', {
+        connId,
+        dir,
+        names,
       }),
 
     // ── port forwarding (P4) ──

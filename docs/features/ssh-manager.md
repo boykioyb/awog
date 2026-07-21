@@ -101,3 +101,25 @@ Events: `ssh:data`, `ssh:exit`, `ssh:status-changed`, `ssh:host-key-prompt`, `ss
 ## Bảo mật (xem ADR 0063 §Decision)
 
 Secret keychain-only; host-key TOFU; local-forward 127.0.0.1; jump native (no ProxyCommand shell); SFTP local path guard. **Infosec audit bắt buộc trước release** (surface network + exec + keychain + FS).
+
+## SFTP file-manager + Snippets dock (mở rộng, 2026-07-21)
+
+Nâng SFTP từ list phẳng thành file-manager, và cho chạy Snippets ngay trong terminal.
+
+### Snippets dock
+
+Terminal tab (`SshWorkspace.vue`) trước chỉ dock được **SFTP** hoặc **Session co-pilot** bên phải; nay thêm dock thứ 3 **Snippets** (state `activeDock` 3 giá trị loại trừ nhau, chung splitter). `SshSnippetsPanel.vue` gắn cứng vào connection của tab hiện tại → Run ghi thẳng `command\n` vào shell đó (không cần target picker như `SshSnippetsSection` ở màn Hosts). Thư viện dùng chung store `sshSnippets` (localStorage, renderer-only — không secret nào qua IPC).
+
+### SFTP ops mới (sidecar)
+
+Native SFTP (không shell): `chmod`, tạo file rỗng (`createFile`, flag `wx`). Exec-based (build lệnh **server-side**, subcommand hằng, mọi path qua `shellQuote` POSIX, `format` là enum allowlist, owner/group validate charset): `copy` (cp -R), `compress` (zip/tar.gz/tar.bz2/tar.xz + rar/7z), `extract` (tự nhận theo đuôi), `chown`, `toolcheck` (dò binary nén sẵn có), `statx` (enrichment owner/group **name** + ctime qua `stat`, best-effort — SFTP protocol không có các trường này). Move = loop `rename`; bulk delete = loop `delete`. `SftpEntry` bổ sung `atime/uid/gid`.
+
+### SFTP UI (renderer)
+
+Bảng cột **tuỳ biến** (Name luôn hiện + Size/Permissions/Owner/Group/Modified/Accessed/Changed, chọn qua dropdown, persist localStorage). **Multi-select highlight thuần** (⌘/Ctrl toggle, Shift range — selection ≠ action). Double-click mở (thư mục→điều hướng, file→preview qua `usePreview`). **Right-click context menu**: Open/preview, Download, Rename, Duplicate, Copy to…/Move to… (folder picker), Compress ▸ (item mờ khi thiếu binary), Extract here, New file/folder, Permissions (chmod modal), Change owner (chown modal), Open terminal here, Copy path/name, Delete. Thanh bulk khi có selection. Logic tách ở `useSftpBrowser` (controller) + `useSftpContextMenu`; modal `SftpChmodModal`/`SftpChownModal`/`SftpPathPickerModal`.
+
+**Download / Upload:** Download dùng **native save dialog** (`window.awog.savePath`) để chọn nơi lưu (fallback text-prompt ở browser-dev). **Kéo-thả từ OS**: thả file từ trình quản lý tệp vào panel SFTP → upload vào thư mục hiện tại (lấy path thật qua `webUtils.getPathForFile`, stream qua `fastPut`). Cả hai tái dùng RPC `ssh.sftp.download/upload` với guard `assertInsideHome` — nguồn/đích phải nằm trong home dir (file ngoài home báo lỗi rõ).
+
+### Bảo mật (bắt buộc rà — surface exec)
+
+`ssh.exec` chạy chuỗi shell trên remote → mọi op exec-based là sink command-injection, được vô hiệu hoá bằng `shellQuote` từng path + subcommand/flag hằng + validate enum/charset. chown thường cần root → lỗi permission được surface nguyên văn (không nuốt). **Infosec audit lại trước release.**

@@ -27,3 +27,17 @@ export async function pickFile(opts: PickFileOptions = {}): Promise<string | nul
   if (!api) return null
   return api.pickFile(opts)
 }
+
+// Native save dialog (`window.awog.savePath`) — pick a destination path/name for
+// a file to be written. Returns null on cancel, or in a plain browser (dev).
+export async function saveFilePath(opts: PickFileOptions = {}): Promise<string | null> {
+  const api = typeof window !== 'undefined' ? window.awog : undefined
+  if (!api) return null
+  return api.savePath(opts)
+}
+
+// Whether the Electron bridge is present (used to choose a native dialog over a
+// text-prompt fallback).
+export function hasBridge(): boolean {
+  return typeof window !== 'undefined' && !!window.awog
+}

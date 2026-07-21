@@ -101,6 +101,10 @@ export interface Ssh2SftpStats {
   size: number
   atime: number
   mtime: number
+  // POSIX ownership ids — ssh2's Stats carries these numeric fields (SFTP has no
+  // owner/group NAMES; those are resolved best-effort via `statx`, see sftp.ts).
+  uid: number
+  gid: number
   isDirectory(): boolean
   isFile(): boolean
   isSymbolicLink(): boolean
@@ -135,6 +139,8 @@ export interface Ssh2Sftp {
   rename(from: string, to: string, cb: (err: Ssh2Error | undefined) => void): void
   unlink(path: string, cb: (err: Ssh2Error | undefined) => void): void
   rmdir(path: string, cb: (err: Ssh2Error | undefined) => void): void
+  // Change permission bits natively over SFTP (no shell) — used by sftpChmod.
+  chmod(path: string, mode: number, cb: (err: Ssh2Error | undefined) => void): void
   fastGet(
     remotePath: string,
     localPath: string,
