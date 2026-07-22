@@ -160,6 +160,25 @@ function parseBase64DataUrl(url: string): { mime: string; base64: string } | nul
   return { mime: m[1] ?? '', base64: m[2] ?? '' }
 }
 
+// Best-effort MIME from a filename extension. Fallback for rehydrate when the persisted
+// attachment carries no `mime` — sessions saved before the UI began sending it kept the
+// mime only inside the (dropped) data URL, so on read it defaulted to octet-stream. The
+// original filename IS persisted, so its extension recovers the correct type. Covers the
+// image/PDF types the composer attaches; anything else stays undefined (→ octet-stream).
+const EXT_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+}
+function mimeFromName(name: string | undefined): string | undefined {
+  const ext = name?.split('.').pop()?.toLowerCase()
+  return ext ? EXT_MIME[ext] : undefined
+}
+
 // A session's attachments dir derived from the path of its session.jsonl (siblings):
 // {sessionDir}/session.jsonl → {sessionDir}/attachments. The read/write functions know
 // only the file path, so this keeps them in step with attachmentsDir(id).
@@ -196,7 +215,12 @@ function externalizeAttachmentsForWrite(
     if (!parsed) return att
     try {
       mkdirSync(attsDir, { recursive: true, mode: 0o700 })
-      const fileName = sanitizeChild(att.id)
+      // Namespace the stored file by message id. The UI mints attachment ids per
+      // MESSAGE (`att-0`, `att-1`, …), so two messages in the same session collide on
+      // the shared attachments/ dir — a later turn's `att-0` would overwrite an earlier
+      // turn's, silently swapping its image on reload. Prefixing with the (session-
+      // unique) message id keeps each turn's bytes distinct.
+      const fileName = sanitizeChild(`${message.id}-${att.id}`)
       writeFileSync(join(attsDir, fileName), Buffer.from(parsed.base64, 'base64'), {
         mode: 0o600,
       })
@@ -226,7 +250,7 @@ function rehydrateAttachmentsForRead(message: SessionMessage, attsDir: string): 
     if (!att.storedFile || att.url !== undefined) continue
     try {
       const bytes = readFileSync(join(attsDir, sanitizeChild(att.storedFile)))
-      const mime = att.mime || 'application/octet-stream'
+      const mime = att.mime || mimeFromName(att.name) || 'application/octet-stream'
       att.url = `data:${mime};base64,${bytes.toString('base64')}`
     } catch (err) {
       log.warn('jsonl: externalized attachment file missing on read', {

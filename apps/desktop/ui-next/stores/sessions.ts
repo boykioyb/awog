@@ -2345,6 +2345,11 @@ export const useSessionsStore = defineStore('sessions', () => {
           id: `att-${i}`,
           name: a.name,
           type: a.img ? ('image' as const) : ('file' as const),
+          // Persist the MIME so a JSONL reload reconstructs the right data URL. The
+          // mime otherwise lives only inside the base64 `url`, which the sidecar drops
+          // when it externalizes the bytes — leaving reload to fall back to
+          // application/octet-stream (memory: session-image-attachments).
+          ...(a.mime ? { mime: a.mime } : {}),
         }
         const dataUrl = a.dataUrl ?? (a.src?.startsWith('data:') ? a.src : undefined)
         if (a.img) return dataUrl ? { ...base, url: dataUrl } : null

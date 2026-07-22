@@ -64,13 +64,25 @@ export function provideFilePreview(
   projectName: MaybeRefOrGetter<string | undefined>,
   session: MaybeRefOrGetter<Session>,
 ): void {
-  const { root } = useWorkspaceData(projectName)
+  const { root, resolve: resolveRoot } = useWorkspaceData(projectName)
   const { open: openPreview } = usePreview()
   const fs = useFsApi()
   // Files the session wrote/edited — the model's working context. Used to anchor a
   // bare/relative link (`[plan.md](plan.md)`) to the file it's really about instead of
   // an arbitrary same-named file elsewhere in the repo (memory: session-file-link-path-base).
   const { touchedPaths } = useSessionTouchedPaths(session, root)
+
+  // The project→path lookup (useWorkspaceData) resolves ASYNCHRONOUSLY. When a
+  // historical transcript mounts before it lands, `root` is still null — reading it
+  // directly here would bail early and permanently degrade the run (workspace images
+  // → a "missing" placeholder that never retries; file paths → not linkified), because
+  // nothing re-runs these resolvers when root arrives later. Await the idempotent,
+  // cache-warm resolve once so the first render waits it out instead of giving up.
+  async function ensureRoot(): Promise<string | null> {
+    if (root.value) return root.value
+    await resolveRoot()
+    return root.value
+  }
 
   // Lazy, root-keyed cache of every workspace file path (`git ls-files`). Used to
   // resolve a model-written path that doesn't map 1:1 to a real file — a bare
@@ -135,7 +147,7 @@ export function provideFilePreview(
   const open: FilePreviewApi['open'] = async (rawPath) => {
     const detected = filePathOf(rawPath) ?? rawPath.trim()
     if (!detected) return
-    const r = root.value
+    const r = await ensureRoot()
     // With a root, resolve against the real file tree (handles bare names / wrong
     // base); fall back to the written path so the modal can still surface a clear
     // "could not load". Without a root (browser-dev) degrade to a placeholder.
@@ -161,7 +173,7 @@ export function provideFilePreview(
   const resolve: FilePreviewApi['resolve'] = async (rawPath) => {
     const detected = filePathOf(rawPath)
     if (!detected) return null
-    const r = root.value
+    const r = await ensureRoot()
     if (!r) return null
     return matchPath(r, detected, touchedPaths.value)
   }
@@ -201,7 +213,7 @@ export function provideFilePreview(
     return out.length ? out.join('/') : null
   }
   const imageSrc: FilePreviewApi['imageSrc'] = async (rawSrc) => {
-    const r = root.value
+    const r = await ensureRoot()
     if (!r) return null
     const s = (rawSrc ?? '').trim()
     if (!s || ABSOLUTE_SCHEME.test(s)) return null
