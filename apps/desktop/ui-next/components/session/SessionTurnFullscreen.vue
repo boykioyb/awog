@@ -82,8 +82,16 @@ const onScroll = () => {
   atBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 40
 }
 
+// Cheap trigger that still tracks realtime: the block count AND the text length of the
+// last block. While the model appends deltas into the same trailing block the array
+// length stays constant — watching length alone would regress realtime autoscroll (③),
+// so we include the last block's text length as the streaming signal.
 watch(
-  () => props.grouped,
+  () => {
+    const g = props.grouped
+    const last = g[g.length - 1]
+    return [g.length, last && 'text' in last ? last.text.length : 0]
+  },
   () => {
     if (!props.streaming || !atBottom.value) return
     nextTick(() => {
@@ -91,7 +99,6 @@ watch(
       if (el) el.scrollTop = el.scrollHeight
     })
   },
-  { deep: true },
 )
 
 const onKey = (e: KeyboardEvent) => {
