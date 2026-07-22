@@ -1,5 +1,5 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
-import { useSidecar, SidecarUnavailableError } from '~/composables/useSidecar'
+import { useSidecar, SidecarUnavailableError, type UnlistenFn } from '~/composables/useSidecar'
 import { useProjects } from '~/composables/useProjects'
 import type { FsEntry } from '~/composables/useFsApi'
 
@@ -37,7 +37,14 @@ export type ComposerSkill = {
 }
 
 // ── Module-scope caches (shared across every composer instance) ───────────────
-type CacheEntry<T> = { items: Ref<T[]>; loaded: boolean; inFlight: Promise<void> | null }
+// `refetch` holds the last fetch closure for a key so a fs-changed event can
+// re-run it — the catalogs are otherwise loaded exactly once (see invalidate()).
+type CacheEntry<T> = {
+  items: Ref<T[]>
+  loaded: boolean
+  inFlight: Promise<void> | null
+  refetch: (() => Promise<void>) | null
+}
 const fileCache = new Map<string, CacheEntry<FsEntry>>()
 const agentCache = new Map<string, CacheEntry<ComposerAgent>>()
 const commandCache = new Map<string, CacheEntry<ComposerCommand>>()
@@ -46,15 +53,52 @@ const skillCache = new Map<string, CacheEntry<ComposerSkill>>()
 const entryFor = <T>(cache: Map<string, CacheEntry<T>>, key: string): CacheEntry<T> => {
   let entry = cache.get(key)
   if (!entry) {
-    entry = { items: ref<T[]>([]) as Ref<T[]>, loaded: false, inFlight: null }
+    entry = { items: ref<T[]>([]) as Ref<T[]>, loaded: false, inFlight: null, refetch: null }
     cache.set(key, entry)
   }
   return entry
 }
 
+// Clear every cached entry's loaded flag and re-run its last fetch so a skill /
+// command / agent created, edited, or deleted outside the composer shows up in
+// the `/` and `@` menus without an app reload. Without this the catalogs stay
+// frozen at their first-load contents for the whole app lifetime — the dedicated
+// /skills, /commands, /agents stores subscribe to these same events, but the
+// composer keeps its own module-scope cache and must invalidate it too.
+function invalidate<T>(cache: Map<string, CacheEntry<T>>): void {
+  for (const entry of cache.values()) {
+    entry.loaded = false
+    if (entry.refetch) void entry.refetch()
+  }
+}
+
+// Single module-scope subscription (registered by the first composer instance
+// with a live engine) that invalidates the matching catalog on its fs-changed.
+let fsUnlisten: UnlistenFn | null = null
+let fsSubscribing = false
+async function ensureFsSubscription(sc: ReturnType<typeof useSidecar>): Promise<void> {
+  if (fsUnlisten || fsSubscribing || !sc.available) return
+  fsSubscribing = true
+  try {
+    fsUnlisten = await sc.onEvent((evt) => {
+      if (!evt) return
+      if (evt.type === 'skills.fs-changed') invalidate(skillCache)
+      else if (evt.type === 'commands.fs-changed') invalidate(commandCache)
+      else if (evt.type === 'agents.fs-changed') invalidate(agentCache)
+    })
+  } catch {
+    fsUnlisten = null
+  } finally {
+    fsSubscribing = false
+  }
+}
+
 export function useComposerData(projectId: Ref<string | null> | ComputedRef<string | null>) {
   const sc = useSidecar()
   const { projectPath } = useProjects()
+
+  // Keep the `/` + `@` catalogs live when skills/commands/agents change on disk.
+  void ensureFsSubscription(sc)
 
   // Project tier param: pass the bound project id so {project}/.awog agents,
   // commands, skills are scanned alongside the global tier (empty = global only).
@@ -70,7 +114,9 @@ export function useComposerData(projectId: Ref<string | null> | ComputedRef<stri
     fetcher: () => Promise<T[]>,
   ): Ref<T[]> {
     const entry = entryFor(cache, key)
-    if (!entry.loaded && !entry.inFlight && sc.available) {
+    // Remember how to (re)load this key so a fs-changed event can refresh it.
+    entry.refetch = () => {
+      if (entry.inFlight) return entry.inFlight
       entry.inFlight = fetcher()
         .then((items) => {
           entry.items.value = items
@@ -85,7 +131,9 @@ export function useComposerData(projectId: Ref<string | null> | ComputedRef<stri
         .finally(() => {
           entry.inFlight = null
         })
+      return entry.inFlight
     }
+    if (!entry.loaded && !entry.inFlight && sc.available) void entry.refetch()
     return entry.items
   }
 
