@@ -231,7 +231,7 @@
   "sessions.message.waiting": "Đang chờ…",
   "sessions.message.copy": "Sao chép",
   "sessions.message.fullscreen": "Toàn màn hình",
-  "sessions.message.fullscreenTurn": "Toàn màn hình toàn bộ phản hồi",
+  "sessions.message.fullscreenTurn": "Toàn màn hình cả lượt",
   "sessions.message.fullscreenName": "Tin nhắn",
   "sessions.message.fork": "Fork sang session mới",
   "sessions.message.edit": "Sửa & gửi lại",

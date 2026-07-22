@@ -231,7 +231,7 @@
   "sessions.message.waiting": "Waiting…",
   "sessions.message.copy": "Copy",
   "sessions.message.fullscreen": "Full screen",
-  "sessions.message.fullscreenTurn": "Full screen (whole response)",
+  "sessions.message.fullscreenTurn": "Full screen (whole turn)",
   "sessions.message.fullscreenName": "Message",
   "sessions.message.fork": "Fork to a new session",
   "sessions.message.edit": "Edit & resend",
