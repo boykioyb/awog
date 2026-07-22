@@ -8,6 +8,8 @@
   "sessions.tabs.addProject": "Mở tab dự án",
   "sessions.tabs.overflow": "Mọi tab đang mở",
   "sessions.tabs.noProjects": "Không còn dự án để mở",
+  "sessions.tabs.searchPlaceholder": "Tìm dự án…",
+  "sessions.tabs.noMatch": "Không có dự án khớp",
   "sessions.tabs.unread": "{n} cần chú ý",
   "sessions.tabs.running": "Đang chạy phiên"
 }

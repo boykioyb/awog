@@ -143,19 +143,44 @@
 
     <div class="lscroll">
       <template v-if="groupBy === 'none'">
-        <div v-if="filtered.length" class="grpitems" style="padding-top: 5px">
-          <SessionListItem
-            v-for="s in visible"
-            :key="s.id"
-            :session="s"
-            :active="s.id === activeId"
-            :selecting="store.selecting"
-            hide-project
-            :rename-req="renameReq"
-            @click="$emit('select', s.id)"
-            @ctxmenu="(p) => openCtx(p, s)"
-          />
-        </div>
+        <template v-if="filtered.length">
+          <div class="grpitems" style="padding-top: 5px">
+            <SessionListItem
+              v-for="s in flatPage.items"
+              :key="s.id"
+              :session="s"
+              :active="s.id === activeId"
+              :selecting="store.selecting"
+              hide-project
+              :rename-req="renameReq"
+              @click="$emit('select', s.id)"
+              @ctxmenu="(p) => openCtx(p, s)"
+            />
+          </div>
+          <div v-if="flatPage.totalPages > 1" class="pager">
+            <button
+              class="pgbtn"
+              type="button"
+              :disabled="flatPage.page <= 1"
+              :title="t('sessions.list.pagePrev')"
+              @click="setPage(FLAT_KEY, flatPage.page - 1)"
+            >
+              <Icon name="chev" class="pg-prev" />
+            </button>
+            <span class="pglbl">
+              {{ t('sessions.list.pageOf', { page: flatPage.page, total: flatPage.totalPages }) }}
+            </span>
+            <button
+              class="pgbtn"
+              type="button"
+              :disabled="flatPage.page >= flatPage.totalPages"
+              :title="t('sessions.list.pageNext')"
+              @click="setPage(FLAT_KEY, flatPage.page + 1)"
+            >
+              <Icon name="chev" class="pg-next" />
+            </button>
+          </div>
+        </template>
         <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
       </template>
       <template v-else>
@@ -171,11 +196,11 @@
               <Icon name="chev" class="gchv" />
               <span class="pdot" :style="{ background: grp.dot }" />
               <span class="gnm">{{ grp.label }}</span>
-              <span class="gct">{{ grp.items.length }}</span>
+              <span class="gct">{{ grp.total }}</span>
             </div>
             <div class="grpitems">
               <SessionListItem
-                v-for="s in grp.visible"
+                v-for="s in grp.items"
                 :key="s.id"
                 :session="s"
                 :active="s.id === activeId"
@@ -185,23 +210,34 @@
                 @click="$emit('select', s.id)"
                 @ctxmenu="(p) => openCtx(p, s)"
               />
-              <LoadMoreSentinel
-                v-if="grp.hasMore"
-                :remaining="grp.remaining"
-                @load="groupLoad.loadMore(grp.key)"
-              />
+              <div v-if="grp.totalPages > 1" class="pager">
+                <button
+                  class="pgbtn"
+                  type="button"
+                  :disabled="grp.page <= 1"
+                  :title="t('sessions.list.pagePrev')"
+                  @click="setPage(grp.key, grp.page - 1)"
+                >
+                  <Icon name="chev" class="pg-prev" />
+                </button>
+                <span class="pglbl">
+                  {{ t('sessions.list.pageOf', { page: grp.page, total: grp.totalPages }) }}
+                </span>
+                <button
+                  class="pgbtn"
+                  type="button"
+                  :disabled="grp.page >= grp.totalPages"
+                  :title="t('sessions.list.pageNext')"
+                  @click="setPage(grp.key, grp.page + 1)"
+                >
+                  <Icon name="chev" class="pg-next" />
+                </button>
+              </div>
             </div>
           </div>
         </template>
         <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
       </template>
-
-      <LoadMoreSentinel
-        v-if="groupBy === 'none' && hasMore"
-        auto
-        :remaining="remaining"
-        @load="loadMore()"
-      />
     </div>
 
     <div
@@ -394,19 +430,48 @@ const filtered = computed(() => {
     .sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false) || cmp(a, b))
 })
 
-// Incremental render windows — keep the DOM small on large histories.
-//  • Flat (groupBy='none'): a single bottom window that grows on scroll.
-//  • Grouped: each bucket shows GROUP_PAGE_SIZE rows with its own "load more".
+// Per-group pagination (UI-5) — a controlled page instead of infinite/virtual scroll.
+// Each group (and the flat list, keyed as FLAT_KEY) tracks its own zero-based page
+// index in `pageIndex`; only the current page's rows render, keeping the DOM small.
 // Bulk/select actions still operate on the full `filtered` set, not what's rendered.
-const { visible, hasMore, remaining, loadMore, reset } = useLoadMore(() => filtered.value)
-const groupLoad = useGroupLoadMore()
-// Snap back to the first page when the query narrows (so results show from the top)
-// OR when the project tab switches — otherwise a large window grown in the previous
-// tab would try to mount hundreds of rows for the new project at once. A new session
-// appearing in the live store (same tab) must NOT reset the window.
+const SESSIONS_PAGE_SIZE = 20
+const FLAT_KEY = '__flat__'
+
+// Zero-based page index keyed by group key (FLAT_KEY for the flat list). Absent
+// keys fall back to page 0. Reassigning the record (not mutating) keeps readers
+// reactive — same discipline as useGroupLoadMore's limits map.
+const pageIndex = ref<Record<string, number>>({})
+const pageOf = (key: string) => pageIndex.value[key] ?? 0
+// Total pages for a bucket of `count` items (≥1 so an empty bucket still reads "1/1").
+const totalPagesOf = (count: number) => Math.max(1, Math.ceil(count / SESSIONS_PAGE_SIZE))
+// Clamp + set a group's page. Consumers pass 1-based page numbers (the UI shows
+// "Page X / Y"); we store zero-based. next/prev overshoot is clamped here, so the
+// pager buttons can stay dumb.
+function setPage(key: string, page1Based: number) {
+  const items = key === FLAT_KEY ? filtered.value.length : groupCount(key)
+  const max = totalPagesOf(items)
+  const clamped = Math.min(Math.max(page1Based, 1), max)
+  pageIndex.value = { ...pageIndex.value, [key]: clamped - 1 }
+}
+
+// Snap every group + the flat list back to page 1 (clear the map) when the query
+// narrows (results from the top) OR when group/sort/tab changes — otherwise a page
+// index from the previous view would point past a smaller result set. A new session
+// appearing live in the same tab must NOT reset paging (handled by not watching
+// `filtered` here — only the user-driven controls).
 watch([filter, groupBy, sortBy, () => store.activeTab], () => {
-  reset()
-  groupLoad.reset()
+  pageIndex.value = {}
+})
+
+// The flat list's current page: the 20-row slice plus its 1-based page / total for
+// the pager. Clamps the stored index against live count so a deletion that empties
+// the last page falls back to a valid page without needing a separate watcher.
+const flatPage = computed(() => {
+  const all = filtered.value
+  const totalPages = totalPagesOf(all.length)
+  const page = Math.min(pageOf(FLAT_KEY), totalPages - 1)
+  const start = page * SESSIONS_PAGE_SIZE
+  return { items: all.slice(start, start + SESSIONS_PAGE_SIZE), page: page + 1, totalPages }
 })
 
 // Stable identity for a bucket. Project grouping is gone (the tab is the project),
@@ -422,7 +487,9 @@ function groupLabelOf(key: string): string {
   return key
 }
 
-const groups = computed(() => {
+// Filtered sessions bucketed by group key (full buckets, not yet paginated).
+// `groups` slices these to the current page; `groupCount` reads sizes for clamping.
+const buckets = computed(() => {
   const map = new Map<string, Session[]>()
   filtered.value.forEach((s) => {
     const k = groupKeyOf(s)
@@ -430,15 +497,33 @@ const groups = computed(() => {
     if (bucket) bucket.push(s)
     else map.set(k, [s])
   })
-  return [...map.entries()].map(([key, items]) => ({
-    key,
-    label: groupLabelOf(key),
-    // Per-group window (.items = full group, .visible = first GROUP_PAGE_SIZE).
-    ...groupLoad.windowOf(key, items),
-    // No per-bucket color (provider/model/unread aren't projects) — neutral dot.
-    dot: PROJECT_COLOR_DEFAULT,
-  }))
+  return map
 })
+function groupCount(key: string): number {
+  return buckets.value.get(key)?.length ?? 0
+}
+
+const groups = computed(() =>
+  [...buckets.value.entries()].map(([key, all]) => {
+    const totalPages = totalPagesOf(all.length)
+    // Clamp against live size so deleting the last row on a group's final page
+    // falls back to a valid page (per-group clamp, no separate watcher).
+    const page = Math.min(pageOf(key), totalPages - 1)
+    const start = page * SESSIONS_PAGE_SIZE
+    return {
+      key,
+      label: groupLabelOf(key),
+      // Header count reflects the whole group (all pages), not the current slice.
+      total: all.length,
+      // Only the current page's rows render (DOM stays small).
+      items: all.slice(start, start + SESSIONS_PAGE_SIZE),
+      page: page + 1,
+      totalPages,
+      // No per-bucket color (provider/model/unread aren't projects) — neutral dot.
+      dot: PROJECT_COLOR_DEFAULT,
+    }
+  }),
+)
 
 function selectGroup(value: string) {
   groupBy.value = value
@@ -634,5 +719,62 @@ function toggleFoldAll() {
 .ltop .iconbtn {
   width: 28px;
   height: 28px;
+}
+/* Per-group / flat pager: prev/next + "Page X / Y" at the bottom of a list section.
+   Centered, subtle — sits under the rows like the old load-more link but with
+   explicit page control. */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 2px 0 6px;
+  padding: 2px 0;
+}
+.pgbtn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    background 0.12s;
+}
+.pgbtn:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--bgHover);
+}
+.pgbtn:disabled {
+  color: var(--textFaint);
+  cursor: default;
+  opacity: 0.5;
+}
+.pgbtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.pgbtn .icn {
+  width: 14px;
+  height: 14px;
+}
+/* The sprite only ships a down-chevron; rotate it into left/right arrows. */
+.pg-prev {
+  transform: rotate(90deg);
+}
+.pg-next {
+  transform: rotate(-90deg);
+}
+.pglbl {
+  font-size: 12px;
+  font-family: var(--code);
+  line-height: 1;
+  color: var(--textDim);
+  min-width: 68px;
+  text-align: center;
 }
 </style>

@@ -5,11 +5,17 @@
         v-for="(tab, i) in tabs"
         :key="tab.id"
         class="stab"
-        :class="{ on: tab.active }"
+        :class="{
+          on: tab.active,
+          dragging: dragId === tab.id,
+          'drop-before': dropIndex === i,
+          'drop-after': dropIndex === tabs.length && i === tabs.length - 1,
+        }"
+        :data-tab-index="i"
         role="tab"
         :aria-selected="tab.active"
         :tabindex="tab.active ? 0 : -1"
-        @click="setActiveTab(tab.id)"
+        @pointerdown="onTabPointerDown($event, tab.id, i)"
         @keydown="onTabKeydown($event, tab.id, i)"
         @contextmenu.prevent="openTabCtx(tab.id, $event)"
       >
@@ -34,6 +40,7 @@
           class="stab-x"
           :aria-label="t('sessions.tabs.closeName', { name: tab.name })"
           :title="t('sessions.tabs.close')"
+          @pointerdown.stop
           @click.stop="closeTab(tab.id)"
           @keydown.stop
         >
@@ -60,14 +67,32 @@
       <Icon name="chev" style="width: 14px; height: 14px" />
     </button>
 
-    <!-- "+" project picker: projects not already open as a tab. -->
+    <!-- "+" project picker: projects not already open as a tab. A sticky search input
+         filters by name (substring, case-insensitive); Enter opens the highlighted
+         (first) match, Esc closes + clears. -->
     <div v-if="addMenu" class="smenu stabs-drop" @click.stop>
-      <template v-if="openableProjects.length">
-        <div v-for="p in openableProjects" :key="p.id" class="mi" @click="pickProject(p.id)">
-          {{ p.id === '' ? t('sessions.defaultProject') : p.name }}
+      <input
+        ref="addSearchEl"
+        v-model="addQuery"
+        class="stabs-search"
+        type="text"
+        :placeholder="t('sessions.tabs.searchPlaceholder')"
+        :aria-label="t('sessions.tabs.searchPlaceholder')"
+        @keydown.enter.prevent="pickFirstMatch"
+        @keydown.esc.prevent="closeMenus"
+      />
+      <div class="stabs-droplist">
+        <template v-if="filteredOpenable.length">
+          <div v-for="p in filteredOpenable" :key="p.id" class="mi" @click="pickProject(p.id)">
+            <span class="stabs-nm">{{ p.name }}</span>
+            <span v-if="p.dupePath" class="stabs-path">{{ p.dupePath }}</span>
+          </div>
+        </template>
+        <div v-else-if="openableProjects.length" class="stabs-empty">
+          {{ t('sessions.tabs.noMatch') }}
         </div>
-      </template>
-      <div v-else class="stabs-empty">{{ t('sessions.tabs.noProjects') }}</div>
+        <div v-else class="stabs-empty">{{ t('sessions.tabs.noProjects') }}</div>
+      </div>
     </div>
 
     <!-- Overflow: jump to any open tab (when the strip scrolls). -->
@@ -251,12 +276,165 @@ function onTabKeydown(e: KeyboardEvent, id: string, index: number) {
   }
 }
 
+// ── Drag-to-reorder tabs (native pointer, no dependency) ────────────────────────
+// Mirrors the composer's `onResize` pattern: pointerdown → setPointerCapture →
+// pointermove/up. A click (movement under DRAG_THRESHOLD) still just activates the
+// tab; crossing the threshold begins a reorder drag with an insertion indicator and
+// edge auto-scroll. Reorder mutates order only via the store action (SoC) — the
+// component never touches `openProjectTabs` directly.
+const DRAG_THRESHOLD = 5 // px of movement before a press becomes a drag (vs a click)
+const EDGE_ZONE = 32 // px from a strip edge that triggers auto-scroll while dragging
+const EDGE_SPEED = 12 // px per frame auto-scroll step
+const dragId = ref<string | null>(null) // tab currently being dragged (null = none)
+const dropIndex = ref<number | null>(null) // insertion slot (0..tabs.length) or null
+let dragStartX = 0
+let dragStarted = false
+let dragPointerId = 0
+let dragEl: HTMLElement | null = null
+let edgeRaf = 0
+let edgeDir = 0 // -1 scroll left, +1 scroll right, 0 none
+let lastClientX = 0 // most recent pointer x (drives dropIndex while edge-scrolling)
+
+function tabRects(): { index: number; left: number; right: number }[] {
+  const els = tablistEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')
+  if (!els) return []
+  return Array.from(els).map((el) => {
+    const r = el.getBoundingClientRect()
+    return { index: Number(el.dataset.tabIndex), left: r.left, right: r.right }
+  })
+}
+// Insertion slot for a pointer x: before the first tab whose midpoint is past x, else
+// at the end.
+function computeDropIndex(clientX: number): number {
+  const rects = tabRects()
+  for (const r of rects) {
+    if (clientX < (r.left + r.right) / 2) return r.index
+  }
+  return tabs.value.length
+}
+function stepEdgeScroll() {
+  const el = tablistEl.value
+  if (!el || edgeDir === 0) {
+    edgeRaf = 0
+    return
+  }
+  el.scrollLeft += edgeDir * EDGE_SPEED
+  // Tabs slide under a stationary pointer while the strip scrolls, so the drop slot
+  // changes even with no pointermove — recompute it against the last known x each
+  // frame so the insertion indicator tracks the real drop position during scroll.
+  if (dragStarted) dropIndex.value = computeDropIndex(lastClientX)
+  edgeRaf = requestAnimationFrame(stepEdgeScroll)
+}
+function updateEdgeScroll(clientX: number) {
+  const el = tablistEl.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  const overflowing = el.scrollWidth > el.clientWidth + 1
+  let dir = 0
+  if (overflowing) {
+    if (clientX < r.left + EDGE_ZONE) dir = -1
+    else if (clientX > r.right - EDGE_ZONE) dir = 1
+  }
+  edgeDir = dir
+  if (dir !== 0 && edgeRaf === 0) edgeRaf = requestAnimationFrame(stepEdgeScroll)
+}
+function stopEdgeScroll() {
+  edgeDir = 0
+  if (edgeRaf) cancelAnimationFrame(edgeRaf)
+  edgeRaf = 0
+}
+
+function onTabPointerDown(e: PointerEvent, id: string, index: number) {
+  // Only left button starts an interaction; right-click is the context menu.
+  if (e.button !== 0) return
+  // Capture the pointer on the tab element IMMEDIATELY (mirrors onWpResize/onResize):
+  // this guarantees every subsequent pointermove/up is routed to `dragEl` even while the
+  // press is still under the drag threshold. Attaching listeners to `window` before
+  // capture (the old model) dropped pre-threshold moves in Electron/Chromium, so the
+  // drag branch never armed. The px threshold only distinguishes a click from a drag —
+  // it never gates whether we capture.
+  dragEl = e.currentTarget as HTMLElement
+  dragStartX = e.clientX
+  dragStarted = false
+  dragPointerId = e.pointerId
+  dragEl.setPointerCapture(dragPointerId)
+  const move = (ev: PointerEvent) => {
+    lastClientX = ev.clientX
+    if (!dragStarted) {
+      if (tabs.value.length < 2) return // nothing to reorder with a single tab
+      if (Math.abs(ev.clientX - dragStartX) < DRAG_THRESHOLD) return
+      // Crossed the threshold → this press is a drag: close any open menu, mark lifted.
+      dragStarted = true
+      closeMenus()
+      pctx.value = null
+      dragId.value = id
+    }
+    dropIndex.value = computeDropIndex(ev.clientX)
+    updateEdgeScroll(ev.clientX)
+  }
+  const cleanup = () => {
+    dragEl?.removeEventListener('pointermove', move)
+    dragEl?.removeEventListener('pointerup', up)
+    dragEl?.removeEventListener('pointercancel', up)
+    if (dragEl?.hasPointerCapture(dragPointerId)) dragEl.releasePointerCapture(dragPointerId)
+    stopEdgeScroll()
+    dragId.value = null
+    dropIndex.value = null
+    dragEl = null
+  }
+  const up = (ev: PointerEvent) => {
+    if (!dragStarted) {
+      // A press that never crossed the threshold → a plain click: activate the tab
+      // (preserves the previous @click behavior; the drag never armed).
+      setActiveTab(id)
+    } else {
+      const to = computeDropIndex(ev.clientX)
+      // The drop slot counts positions in the CURRENT order; dropping just after the
+      // dragged tab's own slot is a no-op, so map it to the from index.
+      const target = to > index ? to - 1 : to
+      store.reorderTabs(id, target)
+    }
+    cleanup()
+  }
+  dragEl.addEventListener('pointermove', move)
+  dragEl.addEventListener('pointerup', up)
+  dragEl.addEventListener('pointercancel', up)
+}
+onBeforeUnmount(stopEdgeScroll)
+
 // ── "+" picker + overflow dropdowns ─────────────────────────────────────────────
 const addMenu = ref(false)
 const overflowMenu = ref(false)
+// Transient search query for the "+" picker (reset every open — not sticky, matching
+// SessionList's transient filter). The highlighted item is always the first match.
+const addQuery = ref('')
+const addSearchEl = useTemplateRef<HTMLInputElement>('addSearchEl')
+
+// Openable projects filtered by the search query (substring, case-insensitive). Names
+// that collide within the filtered set get a secondary path line to tell them apart
+// (OQ 1.a); the Default entry ('') matches on its localized label.
+const filteredOpenable = computed<{ id: string; name: string; dupePath?: string }[]>(() => {
+  const q = addQuery.value.trim().toLowerCase()
+  const matched = q
+    ? openableProjects.value.filter((p) => p.name.toLowerCase().includes(q))
+    : openableProjects.value.slice()
+  const nameCounts = new Map<string, number>()
+  for (const p of matched) nameCounts.set(p.name, (nameCounts.get(p.name) ?? 0) + 1)
+  return matched.map((p) => {
+    if (p.id !== '' && (nameCounts.get(p.name) ?? 0) > 1) {
+      return { ...p, dupePath: projectPath(p.id) ?? undefined }
+    }
+    return { id: p.id, name: p.name }
+  })
+})
+
 function toggleAdd() {
   addMenu.value = !addMenu.value
   overflowMenu.value = false
+  if (addMenu.value) {
+    addQuery.value = ''
+    nextTick(() => addSearchEl.value?.focus())
+  }
 }
 function toggleOverflow() {
   overflowMenu.value = !overflowMenu.value
@@ -265,10 +443,18 @@ function toggleOverflow() {
 function closeMenus() {
   addMenu.value = false
   overflowMenu.value = false
+  addQuery.value = ''
 }
 function pickProject(id: string) {
   setActiveTab(id)
   addMenu.value = false
+  addQuery.value = ''
+}
+// Enter in the search input → open the highlighted (first) filtered match; no-op when
+// the filter yields nothing.
+function pickFirstMatch() {
+  const first = filteredOpenable.value[0]
+  if (first) pickProject(first.id)
 }
 function jumpTab(id: string) {
   setActiveTab(id)
@@ -421,12 +607,16 @@ async function pDeleteAll() {
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
+  /* No native touch/pen pan on the strip — the reorder drag owns the horizontal
+     gesture (mirrors .stab). Wheel scroll is unaffected. */
+  touch-action: none;
 }
 .stabs-scroll::-webkit-scrollbar {
   display: none;
 }
 /* One tab: flat by default, accent underline + brighter text when active. */
 .stab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -437,6 +627,7 @@ async function pDeleteAll() {
   color: var(--textDim);
   border-bottom: 2px solid transparent;
   user-select: none;
+  touch-action: none;
 }
 /* Hover only on inactive tabs — the active tab keeps its accent tint (no gray
    fill swap on hover). */
@@ -459,6 +650,28 @@ async function pDeleteAll() {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: 6px;
+}
+/* The lifted tab during a drag-reorder: dimmed so the insertion indicator reads. */
+.stab.dragging {
+  opacity: 0.4;
+}
+/* Insertion indicator — a thin accent bar at the drop slot (before / after a tab). */
+.stab.drop-before::before,
+.stab.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  z-index: 1;
+}
+.stab.drop-before::before {
+  left: -2px;
+}
+.stab.drop-after::after {
+  right: -2px;
 }
 .stab-dot {
   position: relative;
@@ -561,12 +774,51 @@ async function pDeleteAll() {
   top: 100%;
   right: 8px;
   z-index: 50;
-  min-width: 180px;
+  min-width: 220px;
   max-height: 60vh;
   overflow-y: auto;
 }
 .stabs-drop .stab-dot {
   margin-right: 2px;
+}
+/* Sticky search field pinned to the top of the "+" picker (list scrolls under it). */
+.stabs-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bgPanel);
+  color: var(--text);
+  outline: none;
+}
+.stabs-search::placeholder {
+  color: var(--textFaint);
+}
+.stabs-droplist {
+  padding: 2px 0;
+}
+.stabs-droplist .mi {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.stabs-nm {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+/* Secondary path line, only shown to disambiguate same-named projects (OQ 1.a). */
+.stabs-path {
+  color: var(--textFaint);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .stabs-empty {
   padding: 8px 12px;

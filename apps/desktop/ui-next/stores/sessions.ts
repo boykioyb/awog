@@ -1003,6 +1003,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     openProjectTabs.value = ['']
     setActiveTab('')
   }
+  // Move the tab `fromId` to `toIndex` in the tab order (drag-to-reorder in the tab
+  // bar). Reassigns `openProjectTabs` (persisted via the watch) so `closeTabsToRight`
+  // and friends keep working against the new index order. Active tab / per-tab memory
+  // are untouched — reorder never changes which tab is selected. Dropping back to the
+  // same slot is a no-op (no redundant persist).
+  function reorderTabs(fromId: string, toIndex: number) {
+    const tabs = openProjectTabs.value
+    const from = tabs.indexOf(fromId)
+    if (from < 0) return
+    const clamped = Math.max(0, Math.min(toIndex, tabs.length - 1))
+    if (from === clamped) return
+    const next = tabs.slice()
+    next.splice(from, 1)
+    next.splice(clamped, 0, fromId)
+    openProjectTabs.value = next
+  }
 
   // Seed the open-tab set + active tab/session from the loaded sessions, reconciled
   // with the persisted tabs. Persisted tabs are kept only when they still have ≥1
@@ -3158,6 +3174,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     closeOtherTabs,
     closeTabsToRight,
     closeAllTabs,
+    reorderTabs,
     setActiveTab,
     // quota / usage (Settings → Usage quota)
     usagePct,

@@ -135,6 +135,14 @@
         </div>
       </div>
     </div>
+    <SessionTurnFullscreen
+      v-if="turnFullscreenOpen"
+      :title="fullscreenTitle"
+      :grouped="grouped"
+      :streaming="streaming"
+      :highlights-for-block="highlightsForBlock"
+      @close="turnFullscreenOpen = false"
+    />
   </div>
 </template>
 
@@ -183,7 +191,7 @@ const showBubble = computed(
 // kind+position fallback) — used as the v-for key so a step/cluster component is
 // NOT destroyed+recreated when the grouping reshapes mid-stream (which would reset
 // its collapsed state → "clicking does nothing" while a turn streams).
-type Grouped =
+export type Grouped =
   | { key: string; type: 'activities'; entries: ActivityEntry[]; preview: string }
   | { key: string; type: 'text'; text: string; blockIndex: number }
   | { key: string; type: 'todo'; step: StepBlock }
@@ -429,14 +437,36 @@ const openFullscreen = () => {
   })
 }
 
+// UI-3 — fullscreen the WHOLE turn (activities + gates + final response), rendered live
+// via SessionTurnFullscreen (reuses `grouped` for realtime streaming). Distinct from
+// openFullscreen above, which shows only the final response text in the PreviewModal.
+const turnFullscreenOpen = ref(false)
+const openTurnFullscreen = () => {
+  turnFullscreenOpen.value = true
+}
+const fullscreenTitle = computed(
+  () => store.active?.title?.trim() || t('sessions.message.fullscreenName'),
+)
+// Guard: if the turn is emptied out (rewind/fork/delete) while open, close the overlay so
+// it never renders a stale/empty tree.
+watch(
+  () => grouped.value.length,
+  (n) => {
+    if (n === 0) turnFullscreenOpen.value = false
+  },
+)
+
 // One action set, rendered twice (floating pill at the top + inline on the meta
 // row at the bottom) so the actions are reachable without scrolling a long reply.
 const msgActions = computed(() => [
   { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
-  // Full screen only earns a slot when there's prose to read (skip tool-only turns).
+  // Response-only fullscreen (PreviewModal) — only earns a slot when there's prose to read.
   ...(plainText.value.trim()
     ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
     : []),
+  // Whole-turn fullscreen (activities + gates + response) — always shown for an assistant
+  // turn, incl. tool-only turns that have no final response (AC3.9).
+  { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
   { icon: 'quote', title: t('sessions.message.quote'), run: quote },
   { icon: 'refresh', title: t('sessions.message.regen'), run: regen },
   { icon: 'settings', title: t('sessions.message.retryModel'), run: retry },
