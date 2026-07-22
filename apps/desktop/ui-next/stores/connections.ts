@@ -203,6 +203,9 @@ export type SourceProbeResult = {
   ok: boolean
   tool: string
   error?: string
+  // The probe tool's returned text (truncated) on success — shown as a preview so
+  // the user can confirm the token returns real data.
+  preview?: string
 }
 
 // Write-only credential entry for an `api` source (ADR 0060 P3). Maps 1:1 onto
@@ -660,21 +663,30 @@ export const useConnectionsStore = defineStore('connections', () => {
     })
   }
 
-  // Create-or-update, keyed by slug. Browser-dev mutates the local list only
-  // (id/slug auto-filled when blank).
-  async function saveSource(data: SourceInput): Promise<Source> {
-    const isUpdate = sources.value.some((s) => s.slug === data.slug)
+  // Create-or-update, keyed by slug. `renameFrom` (the source's previous slug) is
+  // passed when the user edited the ID/slug of an existing source: the sidecar
+  // renames the on-disk folder and keeps the id, so the old list entry + icon
+  // cache must be dropped here. Browser-dev mutates the local list only.
+  async function saveSource(data: SourceInput, renameFrom?: string): Promise<Source> {
+    const renaming = !!renameFrom && renameFrom !== data.slug
+    const isUpdate = renaming || sources.value.some((s) => s.slug === data.slug)
     if (available.value) {
       const res = await sc.request<{ source: Source }>('source.upsert', {
         source: data,
         mode: isUpdate ? 'update' : 'create',
+        ...(renaming ? { renameFrom } : {}),
       })
+      if (renaming && renameFrom) {
+        sources.value = sources.value.filter((s) => s.slug !== renameFrom)
+        invalidateIcon(renameFrom)
+      }
       applySource(res.source)
       return res.source
     }
     // Browser-dev fallback.
     const slug = data.slug || `src${Date.now()}`
     const next: Source = { ...data, slug, id: data.id || `${slug}_00000000` }
+    if (renaming && renameFrom) sources.value = sources.value.filter((s) => s.slug !== renameFrom)
     applySource(next)
     return next
   }

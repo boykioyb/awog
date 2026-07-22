@@ -36,10 +36,13 @@
             :value="draft.slug"
             placeholder="e.g. github"
             spellcheck="false"
-            :disabled="isExisting"
             @input="onSlugInput"
           />
-          <div class="cne-hint">{{ t('connections.editor.slugHint') }}</div>
+          <div class="cne-hint">
+            {{
+              isExisting ? t('connections.editor.slugRenameHint') : t('connections.editor.slugHint')
+            }}
+          </div>
         </div>
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.name') }}</label>
@@ -149,10 +152,24 @@
             <AppSelect v-model="authTypeSelect" :options="authTypeOptions" width="100%" />
             <div class="cne-hint">{{ t('connections.editor.authTypeHint') }}</div>
           </div>
-          <!-- oauth tokens come from the sign-in flow (Connect on the detail pane),
-               so the manual header/token rows are hidden for authType:'oauth'. -->
+          <!-- Bearer: a single Token field — the user pastes only the token and
+               AWOG sends `Authorization: Bearer <token>` (the scheme is added at
+               the send layer). 'none': raw header rows for custom auth. 'oauth':
+               tokens come from the sign-in flow (Connect on the detail pane). -->
+          <div v-if="draft.authType === 'bearer'" class="cne-field">
+            <label class="cne-label">{{ t('connections.editor.credentialToken') }}</label>
+            <input
+              v-model="mcpBearerToken"
+              type="password"
+              class="cne-input mono"
+              :placeholder="t('connections.editor.mcpBearerPh')"
+              spellcheck="false"
+              autocomplete="off"
+            />
+            <div class="cne-hint">{{ mcpBearerHint }}</div>
+          </div>
           <LibraryKvEditor
-            v-if="draft.authType !== 'oauth'"
+            v-else-if="draft.authType !== 'oauth'"
             v-model="headerEntries"
             :label="t('connections.editor.headers')"
             :secret-mode="secretMode"
@@ -407,6 +424,12 @@
           }}
         </span>
       </div>
+      <!-- Preview mode: the actual data the probe tool returned, so the user can
+           confirm the token yields real content (not just a non-error). -->
+      <details v-if="verifyProbe?.ok && verifyProbe.preview" class="cne-preview">
+        <summary>{{ t('connections.editor.probePreview', { tool: verifyProbe.tool }) }}</summary>
+        <pre class="cne-pre">{{ verifyProbe.preview }}</pre>
+      </details>
       <pre v-if="verifyResult?.stderr?.length" class="cne-pre">{{
         verifyResult.stderr.join('\n')
       }}</pre>
@@ -659,6 +682,12 @@ const credValue = ref('')
 const credUsername = ref('')
 const credPassword = ref('')
 
+// Write-only bearer token for an mcp http/sse source (mirrors the api `credValue`
+// pattern): blank on open, a non-empty value overwrites, blank keeps the stored
+// token. Stored as the BARE token in `headers.Authorization`; the `Bearer ` scheme
+// is added at the send layer (sidecar applyBearerScheme).
+const mcpBearerToken = ref('')
+
 // Optional mcp auth probe (healthCheck): a tool name + JSON args Verify runs after
 // the handshake to verify the token actually authenticates.
 const healthTool = ref<string>(seedOf()?.healthCheck?.tool ?? '')
@@ -803,6 +832,16 @@ const credentialHint = computed(() =>
     : t('connections.editor.credentialHint'),
 )
 
+// Bearer token hint: "keep" variant when a token is already stored on this source.
+const mcpBearerStored = computed(
+  () => props.source?.type === 'mcp' && !!props.source.mcp.headers?.Authorization,
+)
+const mcpBearerHint = computed(() =>
+  mcpBearerStored.value
+    ? t('connections.editor.mcpBearerHintKeep')
+    : t('connections.editor.mcpBearerHint'),
+)
+
 // mcp auth-probe tool picker: the detected tools (populated after Verify) plus a
 // "none" option. The currently-configured tool is kept even if it's not detected.
 const hasDetectedTools = computed(() => detectedTools.value.length > 0)
@@ -898,8 +937,19 @@ const buildMcpPayload = (): McpSource => {
   } else {
     mcp.url = draft.value.url.trim()
     mcp.authType = draft.value.authType
-    // OAuth tokens come from the sign-in flow, not manual header rows.
-    if (draft.value.authType !== 'oauth') {
+    if (draft.value.authType === 'bearer') {
+      // Store the BARE token (strip any scheme the user pasted out of habit); the
+      // `Bearer ` prefix is added at the send layer. A typed value overwrites; a
+      // blank field on an existing source keeps the stored token untouched.
+      const typed = mcpBearerToken.value.trim().replace(/^bearer\s+/i, '')
+      if (typed) {
+        mcp.headers = { Authorization: typed }
+      } else if (props.source?.type === 'mcp' && props.source.mcp.headers?.Authorization) {
+        mcp.headers = { Authorization: props.source.mcp.headers.Authorization }
+      }
+    } else if (draft.value.authType !== 'oauth') {
+      // None / custom auth: raw header rows. OAuth tokens come from the sign-in
+      // flow, not manual header rows.
       const headers = fromEntries(headerEntries.value)
       if (Object.keys(headers).length > 0) mcp.headers = headers
     }
@@ -1205,6 +1255,20 @@ function namesToEntries(names: string[]): KvEntry[] {
   max-height: 8rem;
   overflow-y: auto;
   white-space: pre-wrap;
+}
+.cne-preview > summary {
+  font-size: 0.8462rem;
+  color: var(--textDim);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+.cne-preview > summary:hover {
+  color: var(--text);
+}
+.cne-preview > .cne-pre {
+  margin-top: 6px;
+  max-height: 14rem;
 }
 .spin {
   animation: cne-spin 0.9s linear infinite;

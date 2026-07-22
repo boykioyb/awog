@@ -7,11 +7,15 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { SourceConfigSchema } from '../sources/schema.js'
-import { loadSource, saveSource } from '../sources/store.js'
+import { loadSource, saveSource, renameSource } from '../sources/store.js'
 
 const Params = z.object({
   source: SourceConfigSchema,
   mode: z.enum(['create', 'update']),
+  // Old slug when the user renamed the source (the slug = on-disk folder). Present
+  // only on an update that changes the slug; the folder is renamed and the `id`
+  // (keychain + whitelist key) is kept so secrets/references survive.
+  renameFrom: z.string().min(1).max(64).optional(),
 })
 
 register('source.upsert', async (raw) => {
@@ -35,12 +39,30 @@ register('source.upsert', async (raw) => {
     }
   }
 
-  const existing = await loadSource(incoming.slug)
-  if (params.mode === 'create' && existing) {
-    throw new RpcError(-32602, `source slug already exists: ${incoming.slug}`)
-  }
-  if (params.mode === 'update' && !existing) {
-    throw new RpcError(-32602, `source not found: ${incoming.slug}`)
+  const renameFrom = params.renameFrom
+  if (params.mode === 'update' && renameFrom && renameFrom !== incoming.slug) {
+    // Slug change on an existing source → rename the on-disk folder. The `id`
+    // (keychain account prefix + agent/session whitelist key) is unchanged, so
+    // stored secrets and references keep resolving. Guard both ends.
+    const from = await loadSource(renameFrom)
+    if (!from) {
+      throw new RpcError(-32602, `source not found: ${renameFrom}`)
+    }
+    if (from.id !== incoming.id) {
+      throw new RpcError(-32602, 'source id must not change on rename')
+    }
+    if (await loadSource(incoming.slug)) {
+      throw new RpcError(-32602, `source slug already exists: ${incoming.slug}`)
+    }
+    await renameSource(renameFrom, incoming.slug)
+  } else {
+    const existing = await loadSource(incoming.slug)
+    if (params.mode === 'create' && existing) {
+      throw new RpcError(-32602, `source slug already exists: ${incoming.slug}`)
+    }
+    if (params.mode === 'update' && !existing) {
+      throw new RpcError(-32602, `source not found: ${incoming.slug}`)
+    }
   }
 
   await saveSource(incoming)

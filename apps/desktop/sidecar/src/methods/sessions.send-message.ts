@@ -33,6 +33,7 @@ import {
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
+import { applyBearerScheme } from '../mcp/auth-headers.js'
 import { assertInsideWorkspace } from '../git/path-sanitize.js'
 import { SKIP_DIRS } from '../fs/skip-dirs.js'
 import { getEffectivePricing, cost as priceCost } from '../pricing/catalog.js'
@@ -787,7 +788,10 @@ register('sessions.sendMessage', async (raw) => {
       } else if (transport === 'http') {
         if (!s.mcp.url) continue
         // eslint-disable-next-line no-await-in-loop
-        const expandedHeaders = await expandSecrets(s.id, s.mcp.headers)
+        const expandedHeaders = applyBearerScheme(
+          s.mcp.authType,
+          await expandSecrets(s.id, s.mcp.headers),
+        )
         // Layer a fresh `Authorization: Bearer <token>` (refreshed if near
         // expiry) on top of the static headers for oauth sources — ADR 0060 D-4.
         // No-op for bearer/none. Runs per turn, so a refreshed token takes effect

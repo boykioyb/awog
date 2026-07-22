@@ -22,6 +22,7 @@ import {
   buildLocalSourcesNote,
 } from '../sources/gate.js'
 import { expandSecrets } from '../mcp/secrets.js'
+import { applyBearerScheme } from '../mcp/auth-headers.js'
 import { log } from '../util/logger.js'
 import type { Agent, AgentSource, LocalSource, ProviderName } from '../types/shared.js'
 import type {
@@ -156,7 +157,10 @@ async function buildRuntimeSources(
       } else if (transport === 'http') {
         if (!s.mcp.url) continue
         // eslint-disable-next-line no-await-in-loop
-        const expandedHeaders = await expandSecrets(s.id, s.mcp.headers)
+        const expandedHeaders = applyBearerScheme(
+          s.mcp.authType,
+          await expandSecrets(s.id, s.mcp.headers),
+        )
         // Layer a fresh OAuth Bearer token (refreshed if near expiry) on top of
         // the static headers for oauth sources — ADR 0060 D-4. No-op for
         // bearer/none. Runs per node resolve, so a refreshed token takes effect.

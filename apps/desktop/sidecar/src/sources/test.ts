@@ -67,6 +67,9 @@ function mcpConnectParams(source: McpSource): McpConnectParams {
   } else {
     if (source.mcp.url !== undefined) params.url = source.mcp.url
     if (source.mcp.headers !== undefined) params.headers = source.mcp.headers
+    // Carries the 'bearer' hint so the manager prefixes a bare token with
+    // `Bearer ` after secret expansion (applyBearerScheme).
+    if (source.mcp.authType !== undefined) params.authType = source.mcp.authType
   }
   if (source.healthCheck) params.healthCheck = source.healthCheck
   return params

@@ -176,7 +176,8 @@ export function useConnectionsPage() {
   // one. Keyed by the SAVED source id (stable across slug edits).
   const onSave = async (data: SourceInput, credential?: ApiCredentialInput) => {
     try {
-      const saved = await store.saveSource(data)
+      // Editing an existing source's slug renames its folder — pass the old slug.
+      const saved = await store.saveSource(data, editTarget.value?.slug)
       selectedSlug.value = saved.slug
       if (credential) await store.setApiCredential({ sourceId: saved.id, ...credential })
       pushToast(`Saved ${saved.slug}`, 'success')
@@ -229,7 +230,7 @@ export function useConnectionsPage() {
     data: SourceInput,
     credential?: ApiCredentialInput,
   ): Promise<SourceTestOutcome> => {
-    const saved = await store.saveSource(data)
+    const saved = await store.saveSource(data, editTarget.value?.slug)
     selectedSlug.value = saved.slug
     if (credential) await store.setApiCredential({ sourceId: saved.id, ...credential })
     const { outcome } = await store.testSource(saved.slug)

@@ -22,6 +22,7 @@ import { createInterface } from 'node:readline'
 import { log } from '../util/logger.js'
 import { HttpMcpClient, ssrfCheck } from './http-client.js'
 import { expandSecrets } from './secrets.js'
+import { applyBearerScheme } from './auth-headers.js'
 import type { McpHealthCheck, McpTool, McpResource, SourceLog } from '../types/shared.js'
 
 // Environment vars we pass through to children. Everything else is dropped —
@@ -42,6 +43,9 @@ export interface McpConnectParams {
   cwd?: string | undefined
   url?: string | undefined
   headers?: Record<string, string> | undefined
+  // http/sse auth mode. 'bearer' → the Authorization header holds a bare token
+  // that applyBearerScheme prefixes with `Bearer ` after secret expansion.
+  authType?: 'oauth' | 'bearer' | 'none' | undefined
   timeoutMs: number
   healthCheck?: McpHealthCheck | undefined
 }
@@ -80,6 +84,10 @@ export interface McpProbeResult {
   ok: boolean
   tool: string
   error?: string
+  // The tool's returned text on success (truncated by extractCallText) — surfaced
+  // as a "preview" so the UI can show the real response, confirming the token
+  // returns actual data rather than only that the call didn't error.
+  preview?: string
 }
 
 // Full test outcome: handshake result (tools/resources) plus the optional auth
@@ -287,7 +295,8 @@ async function probeHealth(
         error: extractCallText(res.content) || 'tool returned an error',
       }
     }
-    return { ok: true, tool: hc.tool }
+    const preview = extractCallText(res?.content)
+    return { ok: true, tool: hc.tool, ...(preview ? { preview } : {}) }
   } catch (err) {
     return { ok: false, tool: hc.tool, error: err instanceof Error ? err.message : String(err) }
   }
@@ -425,7 +434,12 @@ class McpManager {
       return { ok: false, error: message }
     }
     // Header values (Authorization bearer, `secret:` header refs) are NEVER logged.
-    const expandedHeaders = await expandSecrets(params.id, params.headers)
+    // Prefix a bare `authType:'bearer'` token with `Bearer ` (post-expand; no-op
+    // for oauth/none or an already-schemed value).
+    const expandedHeaders = applyBearerScheme(
+      params.authType,
+      await expandSecrets(params.id, params.headers),
+    )
     const client = new HttpMcpClient(params.url, expandedHeaders)
     try {
       onLog?.({ level: 'info', message: `Handshake — initialize + tools/list (timeout ${timeoutMs}ms)` })

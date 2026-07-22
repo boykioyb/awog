@@ -170,6 +170,17 @@ export async function deleteSource(slug: string): Promise<void> {
   }
 }
 
+// Rename a source's folder (slug change). Moves ~/.awog/sources/<from>/ → <to>/
+// in a single fs.rename so config.json + guide.md + permissions.json + icon.*
+// move together. The source `id` (keychain account prefix + agent/session
+// whitelist key) is NOT touched, so stored secrets and references survive — only
+// the on-disk folder name changes. Throws if the target already exists (POSIX
+// rename over a non-empty dir fails; the caller also pre-checks for a clear error).
+export async function renameSource(fromSlug: string, toSlug: string): Promise<void> {
+  if (fromSlug === toSlug) return
+  await rename(sourceDir(fromSlug), sourceDir(toSlug))
+}
+
 // Line-based parser for guide.md. Extracts the sections agents consume
 // (Scope / Guidelines / Context / API Notes) plus a `## Cache` ```json``` block.
 // Mirrors Craft's parseGuideMarkdown but avoids its `\Z` anchor (a no-op in JS).
