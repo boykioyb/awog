@@ -617,26 +617,56 @@ function onCommand(builtinId: string) {
   }
 }
 
-// Composer height: `composerH` is the floor the user drags to; `grow` auto-sizes the
-// textarea to its content between that floor and a max (mirrors the prototype handle).
-const composerH = ref(40)
+// Composer height. Two mechanisms used to fight each other: auto-grow forced the box
+// up to a hard 640px ceiling (ignoring a smaller height the user just dragged to), and
+// the JS ceilings (640/560) disagreed with the CSS `max-height: 40vh`. Now MANUAL
+// resize wins over auto-grow (userSizedManually flag) and there is a SINGLE max source:
+// 40vh, computed in px at runtime to keep JS clamp in sync with the CSS `40vh`.
+const COMPOSER_MIN_H = 40
+// Runtime px equivalent of the CSS `textarea.ci { max-height: 40vh }` — one source of
+// truth (DRY). Re-derived on window resize so the clamp tracks a shrinking viewport.
+const composerMaxH = ref(Math.round(window.innerHeight * 0.4))
+const composerH = ref(COMPOSER_MIN_H)
+// True once the user has dragged the resize handle: auto-grow must NOT override the
+// height they chose. Reset to false on send / clear draft / seed (back to auto-grow).
+const userSizedManually = ref(false)
 const resizing = ref(false)
 function grow() {
   const el = ta.value
   if (!el) return
+  if (userSizedManually.value) {
+    // Manual override: hold the user's chosen height (clamped), scroll content inside.
+    el.style.height = `${Math.min(Math.max(composerH.value, COMPOSER_MIN_H), composerMaxH.value)}px`
+    return
+  }
+  // Auto-grow: fit content between MIN and MAX (40vh), then scroll internally.
   el.style.height = 'auto'
-  el.style.height = `${Math.max(composerH.value, Math.min(el.scrollHeight, 640))}px`
+  el.style.height = `${Math.min(Math.max(el.scrollHeight, COMPOSER_MIN_H), composerMaxH.value)}px`
 }
 function onResize(e: PointerEvent) {
   e.preventDefault()
   resizing.value = true
+  // Baseline from the textarea's ACTUAL rendered height, not `composerH`: in auto-grow
+  // mode grow() sizes the box off scrollHeight without writing back to composerH, so it
+  // stays stale at COMPOSER_MIN_H. Using it as the baseline would snap a tall (paste-max)
+  // box down to min on the first move. offsetHeight matches how grow() sets el.style.height
+  // (both border-box under box-sizing:border-box), so delta tracks the cursor 1:1. Seed
+  // composerH with it BEFORE flipping to manual so the clamped hold picks up the real size.
+  const el = ta.value
+  const startH = el
+    ? Math.min(Math.max(el.offsetHeight, COMPOSER_MIN_H), composerMaxH.value)
+    : composerH.value
+  composerH.value = startH
+  userSizedManually.value = true
   const startY = e.clientY
-  const startH = composerH.value
   const handle = e.currentTarget as HTMLElement
   handle.setPointerCapture(e.pointerId)
   const move = (ev: PointerEvent) => {
-    // Drag up → taller.
-    composerH.value = Math.max(40, Math.min(560, startH - (ev.clientY - startY)))
+    // Drag up → taller. Clamp against the single MIN/MAX (40vh) source.
+    composerH.value = Math.min(
+      Math.max(COMPOSER_MIN_H, startH - (ev.clientY - startY)),
+      composerMaxH.value,
+    )
     grow()
   }
   const up = () => {
@@ -647,7 +677,18 @@ function onResize(e: PointerEvent) {
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
 }
-onMounted(grow)
+// Window resize → re-derive the 40vh px ceiling and re-clamp so the input never pushes
+// the toolbar / Execute·Stop off a shortened window.
+function onWindowResize() {
+  composerMaxH.value = Math.round(window.innerHeight * 0.4)
+  composerH.value = Math.min(composerH.value, composerMaxH.value)
+  grow()
+}
+onMounted(() => {
+  grow()
+  window.addEventListener('resize', onWindowResize)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', onWindowResize))
 
 // Quote / edit on a message seeds the composer draft (store.seedComposer reassigns a
 // new object so this fires every time, even for identical text).
@@ -655,6 +696,9 @@ watch(
   () => store.draftSeed,
   (seed) => {
     draft.value = seed.text
+    // Seeded draft returns to auto-grow so the whole seed (welcome starter / quote /
+    // edit) is shown without being capped by a stale manual height (OQ 4.b).
+    userSizedManually.value = false
     // Grow + focus so a seeded draft (welcome starter / quote / edit) lands ready
     // to type/send, cursor at the end.
     nextTick(() => {
@@ -936,6 +980,7 @@ async function sendNow() {
   closeAutocomplete()
   emit('send', outgoing, command)
   draft.value = ''
+  userSizedManually.value = false
   nextTick(grow)
 }
 
@@ -966,6 +1011,7 @@ async function onQueue() {
   store.enqueue(store.activeId, outgoing, props.attachments, command)
   for (let i = props.attachments.length - 1; i >= 0; i--) emit('remove-att', i)
   draft.value = ''
+  userSizedManually.value = false
   nextTick(grow)
 }
 
@@ -975,6 +1021,7 @@ async function onSteer() {
   const text = draft.value
   if (!text.trim() || store.activeId == null) return
   draft.value = ''
+  userSizedManually.value = false
   closeAutocomplete()
   await store.steer(store.activeId, text)
   showNotice(t('sessions.composer.steerDone'))
@@ -1419,12 +1466,12 @@ function onPaste(e: ClipboardEvent) {
   box-shadow: 0 0 0 3px var(--accentDim);
 }
 /* Hard-cap the composer input height. A paste that stays BELOW the paste-as-file
-   threshold is inserted inline; without a ceiling the auto-grow (grow(), capped at
-   640px) can still make the box tall enough to push the toolbar / Execute·Stop
-   buttons off-screen on a shorter window. Cap to a fraction of the viewport (scales
-   with window height, reacts to resize) and scroll internally past it. Overrides the
-   global `textarea.ci { max-height: none }` (prototype.css) — the scoped selector's
-   [data-v] wins on specificity. */
+   threshold is inserted inline; without a ceiling the auto-grow (grow()) can still make
+   the box tall enough to push the toolbar / Execute·Stop buttons off-screen on a
+   shorter window. `40vh` is the SINGLE max source: grow()/onResize clamp against the
+   px equivalent (composerMaxH = innerHeight * 0.4, re-derived on resize) so JS and CSS
+   agree. Scrolls internally past it. Overrides the global `textarea.ci { max-height:
+   none }` (prototype.css) — the scoped selector's [data-v] wins on specificity. */
 textarea.ci {
   max-height: 40vh;
 }
