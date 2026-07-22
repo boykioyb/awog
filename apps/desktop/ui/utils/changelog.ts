@@ -30,6 +30,66 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.11',
+    date: '2026-07-22',
+    highlight: {
+      en: 'A big round of session polish — searchable and reorderable tabs, full-screen responses, and "Copy path" / "Open in Finder" that finally point to the right folder — plus a redesigned Clone-from-Git form.',
+      vi: 'Một loạt cải thiện lớn cho phiên — thẻ tìm kiếm và sắp xếp được, xem toàn màn hình, và "Sao chép đường dẫn" / "Mở trong Finder" cuối cùng trỏ đúng thư mục — cùng biểu mẫu Clone-từ-Git thiết kế lại.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Session tabs are now searchable and reorderable: search your projects when adding a tab, and drag tabs to arrange them the way you like.',
+        vi: 'Thẻ phiên giờ có thể tìm kiếm và sắp xếp lại: tìm dự án khi thêm thẻ, và kéo các thẻ để sắp xếp theo ý bạn.',
+      },
+      {
+        kind: 'added',
+        en: 'Open any response in a full-screen view to read long answers comfortably.',
+        vi: 'Mở bất kỳ câu trả lời nào ở chế độ toàn màn hình để đọc các phản hồi dài thoải mái hơn.',
+      },
+      {
+        kind: 'added',
+        en: 'The "Copy path" and "Open in Finder" actions on a session now point to the real session folder on disk instead of the project folder.',
+        vi: 'Hai thao tác "Sao chép đường dẫn" và "Mở trong Finder" trên một phiên giờ trỏ đúng thư mục thật của phiên trên đĩa thay vì thư mục dự án.',
+      },
+      {
+        kind: 'added',
+        en: 'Redesigned "Clone from Git": paste a remote URL and AWOG fills in the project name and clone destination, detects the language and description from GitHub, and can write the description for you with AI.',
+        vi: 'Thiết kế lại "Clone từ Git": dán URL remote và AWOG tự điền tên dự án và nơi lưu, phát hiện ngôn ngữ và mô tả từ GitHub, và có thể viết mô tả giúp bạn bằng AI.',
+      },
+      {
+        kind: 'added',
+        en: 'Connections that authenticate with a bearer token now have a dedicated Token field, you can rename a source without losing its stored token, and the health-check probe shows a preview of the response so you can confirm your token works.',
+        vi: 'Các kết nối xác thực bằng bearer token giờ có ô Token riêng, bạn có thể đổi tên một nguồn mà không mất token đã lưu, và bước kiểm tra sức khỏe hiển thị bản xem trước phản hồi để bạn xác nhận token hoạt động.',
+      },
+      {
+        kind: 'improved',
+        en: 'The session list now paginates within each group, so long lists stay fast and easy to scan.',
+        vi: 'Danh sách phiên giờ phân trang trong mỗi nhóm, giúp các danh sách dài luôn nhanh và dễ xem.',
+      },
+      {
+        kind: 'improved',
+        en: 'The message composer no longer grows out of control on long prompts — its height is capped and you can drag the handle to resize it back down to the minimum.',
+        vi: 'Ô soạn tin nhắn không còn phình to mất kiểm soát khi prompt dài — chiều cao được giới hạn và bạn có thể kéo tay cầm để thu nhỏ về mức tối thiểu.',
+      },
+      {
+        kind: 'improved',
+        en: 'Annotation flow polish: the input focuses automatically when you start a note, the note popover can be dragged and resized, and right-clicking selected text shows the Quote button right at your cursor.',
+        vi: 'Cải thiện luồng chú thích: ô nhập tự động focus khi bạn bắt đầu ghi chú, cửa sổ ghi chú có thể kéo và đổi kích thước, và nhấp chuột phải vào văn bản đã chọn hiển thị nút Trích dẫn ngay tại con trỏ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'New skills, commands, and agents now appear in the composer "/" and "@" menus immediately, without needing to reload the app.',
+        vi: 'Kỹ năng, lệnh và agent mới giờ xuất hiện ngay trong menu "/" và "@" của ô soạn tin, không cần tải lại ứng dụng.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Workspace images and pasted image attachments now render reliably after reopening a session, instead of sometimes showing a broken-image placeholder.',
+        vi: 'Ảnh trong workspace và ảnh dán đính kèm giờ hiển thị ổn định sau khi mở lại một phiên, thay vì đôi khi hiện ảnh lỗi.',
+      },
+    ],
+  },
+  {
     version: '0.24.10',
     date: '2026-07-21',
     highlight: {
