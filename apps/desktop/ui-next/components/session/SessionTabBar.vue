@@ -293,6 +293,7 @@ let dragPointerId = 0
 let dragEl: HTMLElement | null = null
 let edgeRaf = 0
 let edgeDir = 0 // -1 scroll left, +1 scroll right, 0 none
+let lastClientX = 0 // most recent pointer x (drives dropIndex while edge-scrolling)
 
 function tabRects(): { index: number; left: number; right: number }[] {
   const els = tablistEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')
@@ -318,6 +319,10 @@ function stepEdgeScroll() {
     return
   }
   el.scrollLeft += edgeDir * EDGE_SPEED
+  // Tabs slide under a stationary pointer while the strip scrolls, so the drop slot
+  // changes even with no pointermove — recompute it against the last known x each
+  // frame so the insertion indicator tracks the real drop position during scroll.
+  if (dragStarted) dropIndex.value = computeDropIndex(lastClientX)
   edgeRaf = requestAnimationFrame(stepEdgeScroll)
 }
 function updateEdgeScroll(clientX: number) {
@@ -354,6 +359,7 @@ function onTabPointerDown(e: PointerEvent, id: string, index: number) {
   dragPointerId = e.pointerId
   dragEl.setPointerCapture(dragPointerId)
   const move = (ev: PointerEvent) => {
+    lastClientX = ev.clientX
     if (!dragStarted) {
       if (tabs.value.length < 2) return // nothing to reorder with a single tab
       if (Math.abs(ev.clientX - dragStartX) < DRAG_THRESHOLD) return
