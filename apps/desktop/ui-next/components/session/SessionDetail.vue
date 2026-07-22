@@ -567,6 +567,10 @@ const NOTE_POP_EDGE = 8
 const notePos = ref<{ x: number; y: number } | null>(null)
 const noteSize = ref<{ w: number; h: number } | null>(null)
 const notePopDragging = ref(false)
+// Teardown for an in-flight note drag/resize gesture. Set on each gesture start,
+// invoked (and cleared) on pointerup and on unmount — so listeners + pointer capture
+// don't leak if the popover tears down mid-drag (session switch, keyboard save, etc.).
+let activeNoteCleanup: (() => void) | null = null
 
 // Once moved/resized, anchor by explicit top-left (drop the selection-anchored
 // transform) so drag coords map intuitively; otherwise use the selection anchor.
@@ -682,11 +686,15 @@ function onNoteDragStart(ev: PointerEvent) {
       y: Math.max(NOTE_POP_EDGE, Math.min(maxY, e.clientY - grabY)),
     }
   }
-  const onUp = () => {
+  const cleanup = () => {
     notePopDragging.value = false
     handle.removeEventListener('pointermove', onMove)
     handle.removeEventListener('pointerup', onUp)
+    if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId)
+    if (activeNoteCleanup === cleanup) activeNoteCleanup = null
   }
+  const onUp = () => cleanup()
+  activeNoteCleanup = cleanup
   handle.addEventListener('pointermove', onMove)
   handle.addEventListener('pointerup', onUp)
 }
@@ -710,19 +718,34 @@ function onNoteResizeStart(ev: PointerEvent) {
   const onMove = (e: PointerEvent) => {
     const maxW = Math.min(WP_SIDE.max, window.innerWidth - NOTE_POP_MARGIN)
     const maxH = window.innerHeight - NOTE_POP_MARGIN
-    noteSize.value = {
-      w: Math.max(NOTE_POP_MIN_WIDTH, Math.min(maxW, startW + (e.clientX - startX))),
-      h: Math.max(NOTE_POP_MIN_HEIGHT, Math.min(maxH, startH + (e.clientY - startY))),
+    const w = Math.max(NOTE_POP_MIN_WIDTH, Math.min(maxW, startW + (e.clientX - startX)))
+    const h = Math.max(NOTE_POP_MIN_HEIGHT, Math.min(maxH, startH + (e.clientY - startY)))
+    noteSize.value = { w, h }
+    // Re-clamp the top-left so growing near the right/bottom edge doesn't push the
+    // popover (and its Save button) off-screen. Keep it fully inside the viewport.
+    const pos = notePos.value ?? { x: box.left, y: box.top }
+    const maxX = window.innerWidth - w - NOTE_POP_EDGE
+    const maxY = window.innerHeight - h - NOTE_POP_EDGE
+    notePos.value = {
+      x: Math.max(NOTE_POP_EDGE, Math.min(maxX, pos.x)),
+      y: Math.max(NOTE_POP_EDGE, Math.min(maxY, pos.y)),
     }
   }
-  const onUp = () => {
+  const cleanup = () => {
     notePopDragging.value = false
     handle.removeEventListener('pointermove', onMove)
     handle.removeEventListener('pointerup', onUp)
+    if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId)
+    if (activeNoteCleanup === cleanup) activeNoteCleanup = null
   }
+  const onUp = () => cleanup()
+  activeNoteCleanup = cleanup
   handle.addEventListener('pointermove', onMove)
   handle.addEventListener('pointerup', onUp)
 }
+// Tear down a live note drag/resize gesture if the component unmounts mid-drag, so the
+// captured pointer + document listeners don't leak (mirrors the composer/tab cleanup).
+onBeforeUnmount(() => activeNoteCleanup?.())
 // Save → add the follow-up (with note). The in-place highlight is painted reactively by
 // SessionTextBlock via the CSS Custom Highlight API once the follow-up lands in state, so
 // there's no DOM mutation here (which would otherwise strip the rendered markdown).
