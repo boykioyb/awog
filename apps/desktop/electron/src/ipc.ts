@@ -29,6 +29,25 @@ const OPEN_EXTERNAL_SAFE_SCHEME = /^(?:https?|mailto):/i
 // traversal impossible; the startsWith check below is defence in depth.
 const SOURCE_SLUG_RE = /^[a-z0-9-]+$/
 
+// A session's on-disk folder is ~/.awog/sessions/<engineId> (mirror the sidecar's
+// sessionDir(id) in sessions/jsonl.ts — keep both in sync if the layout changes).
+// engineId is a slug ("ses-…", charset [a-z0-9-] from utils/session-slug.ts), so we
+// reuse SOURCE_SLUG_RE: forbidding separators + dots makes traversal impossible, and
+// the startsWith check is defence in depth. The renderer only ever passes the
+// engineId — main derives the absolute path so untrusted input can't aim it
+// elsewhere (security invariants #2 + #4).
+function sessionDirFromId(engineId: string): string {
+  if (typeof engineId !== 'string' || !SOURCE_SLUG_RE.test(engineId)) {
+    throw new Error(`invalid session id: ${String(engineId)}`)
+  }
+  const sessionsDir = join(homedir(), '.awog', 'sessions')
+  const target = join(sessionsDir, engineId)
+  if (!target.startsWith(sessionsDir + sep)) {
+    throw new Error(`session path escapes sessions dir: ${target}`)
+  }
+  return target
+}
+
 type RequestPayload = { method: string; params?: unknown }
 type PathPayload = { root: string; path: string }
 type PickFolderOpts = { title?: string; defaultPath?: string }
@@ -103,6 +122,22 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
     shell.showItemInFolder(target)
   })
+
+  // Reveal a session's folder (~/.awog/sessions/<engineId>) in the OS file manager.
+  // Like revealSourceFolder, takes an ID (slug) ONLY — main derives + validates the
+  // path via sessionDirFromId (never trusts a path from the renderer). We do NOT stat
+  // the dir here (extra I/O + race); the renderer gates on engineId != null (spec AC5).
+  ipcMain.handle('shell:revealSessionFolder', async (_e, engineId: string) => {
+    shell.showItemInFolder(sessionDirFromId(engineId))
+  })
+
+  // Absolute on-disk path of a session's folder, for the renderer to copy to the
+  // clipboard. Same derive + validate as revealSessionFolder — the renderer never
+  // builds the path itself (invariant #4); it must be absolute (~ doesn't expand in
+  // terminals/file managers), which is the whole point of "Copy path".
+  ipcMain.handle('shell:sessionFolderPath', async (_e, engineId: string): Promise<string> =>
+    sessionDirFromId(engineId),
+  )
 
   ipcMain.handle('shell:openPath', async (_e, { root, path }: PathPayload) => {
     const target = resolveInsideWorkspace(root, path)

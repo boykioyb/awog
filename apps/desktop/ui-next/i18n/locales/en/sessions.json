@@ -40,6 +40,7 @@
   "sessions.ctx.copyPath": "Copy path",
   "sessions.ctx.openFinder": "Open in Finder",
   "sessions.ctx.copyId": "Copy session ID",
+  "sessions.ctx.notSaved": "Session not saved yet",
   "sessions.ctx.export": "Export…",
   "sessions.ctx.delete": "Delete",
   "sessions.export.title": "Export session",
