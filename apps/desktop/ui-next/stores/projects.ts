@@ -52,6 +52,17 @@ export interface ProjectInspectResult {
   path: string
 }
 
+// Best-effort git-remote inspection (clone form pre-fill). `detected` is true only
+// when repo metadata (language/description) was actually resolved via gh; false →
+// name-only (non-GitHub remote, or gh unavailable / no access).
+export interface RemoteInspectResult {
+  name: string
+  language: string
+  description: string
+  defaultBranch: string
+  detected: boolean
+}
+
 // A sidecar-safe project id: lowercase alphanumeric + hyphens, 3–64 chars
 // (matches projects.upsert ProjectIdSchema). Derive from the name, then guarantee
 // uniqueness within the current roster.
@@ -156,6 +167,37 @@ export const useProjectsStore = defineStore('projects', () => {
       console.warn('[projects] inspect failed', err)
       return null
     }
+  }
+
+  // Inspect a git REMOTE (clone form pre-fill): repo name always, + language /
+  // description / default branch for GitHub repos via `gh repo view`. Best-effort:
+  // null in browser-dev or on failure so the caller falls back to name-only.
+  async function inspectRemote(gitRemote: string): Promise<RemoteInspectResult | null> {
+    if (!available.value || !gitRemote.trim()) return null
+    try {
+      return await sc.request<RemoteInspectResult>('projects.inspectRemote', { gitRemote })
+    } catch (err) {
+      console.warn('[projects] inspectRemote failed', err)
+      return null
+    }
+  }
+
+  // AI-generate a one-line project description (clone/link form). Returns the
+  // generated text, or null in browser-dev / on failure so the UI keeps the field.
+  async function generateDescription(input: {
+    name: string
+    language?: string
+    gitRemote?: string
+    hint?: string
+  }): Promise<string | null> {
+    if (!available.value || !input.name.trim()) return null
+    const res = await sc.request<{ description: string }>('projects.generateDescription', {
+      name: input.name,
+      ...(input.language ? { language: input.language } : {}),
+      ...(input.gitRemote ? { gitRemote: input.gitRemote } : {}),
+      ...(input.hint ? { hint: input.hint } : {}),
+    })
+    return res.description
   }
 
   // Register an existing local folder as a project. The sidecar validates the
@@ -270,6 +312,8 @@ export const useProjectsStore = defineStore('projects', () => {
     // actions
     hydrate,
     inspectPath,
+    inspectRemote,
+    generateDescription,
     linkProject,
     cloneProject,
     updateProject,

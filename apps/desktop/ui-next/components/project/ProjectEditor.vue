@@ -7,8 +7,11 @@
     @close="emit('cancel')"
   >
     <div class="pe">
+      <!-- Field order differs per mode via flex `order` (the .pe column):
+           clone → git remote (1) · clone dest (2) · name+language (3) · description (5);
+           existing/edit → name+language (1) · path (2) · git remote (4) · description (5). -->
       <!-- Source (create only): link existing folder vs clone a git remote. -->
-      <div v-if="!project" class="pe-field">
+      <div v-if="!project" class="pe-field" :style="{ order: 0 }">
         <label class="pe-label">{{ t('projects.editor.source') }}</label>
         <div class="pe-src">
           <button
@@ -29,7 +32,7 @@
         </div>
       </div>
 
-      <div class="pe-grid">
+      <div class="pe-grid" :style="{ order: nameOrder }">
         <div class="pe-field" style="grid-column: span 2">
           <label class="pe-label">{{ t('projects.editor.name') }}</label>
           <input
@@ -50,7 +53,7 @@
         </div>
       </div>
 
-      <div class="pe-field">
+      <div class="pe-field" :style="{ order: 2 }">
         <label class="pe-label">
           {{ isClone ? t('projects.editor.dest') : t('projects.editor.path') }}
         </label>
@@ -78,14 +81,18 @@
         </div>
       </div>
 
-      <div v-if="isClone || project" class="pe-grid">
+      <div v-if="isClone || project" class="pe-grid" :style="{ order: gitOrder }">
         <div class="pe-field" style="grid-column: span 2">
-          <label class="pe-label">{{ t('projects.editor.gitRemote') }}</label>
+          <label class="pe-label">
+            {{ t('projects.editor.gitRemote') }}
+            <span v-if="detecting" class="pe-detecting">{{ t('projects.editor.detecting') }}</span>
+          </label>
           <input
             v-model="draft.gitRemote"
             class="pe-input mono"
             placeholder="git@github.com:org/repo.git"
             :disabled="busy"
+            @blur="onRemoteBlur"
           />
         </div>
         <div class="pe-field">
@@ -99,8 +106,24 @@
         </div>
       </div>
 
-      <div class="pe-field">
-        <label class="pe-label">{{ t('projects.editor.description') }}</label>
+      <div class="pe-field" :style="{ order: 5 }">
+        <div class="pe-labelrow">
+          <label class="pe-label">{{ t('projects.editor.description') }}</label>
+          <button
+            type="button"
+            class="pe-genbtn"
+            :disabled="busy || generating || !draft.name.trim()"
+            :title="t('projects.editor.genDescHint')"
+            @click="onGenerateDescription"
+          >
+            <Icon
+              :name="generating ? 'refresh' : 'sparkles'"
+              :class="{ spin: generating }"
+              style="width: 12px; height: 12px"
+            />
+            {{ t('projects.editor.genDesc') }}
+          </button>
+        </div>
         <textarea
           v-model="draft.description"
           class="pe-input pe-ta"
@@ -108,9 +131,10 @@
           :placeholder="t('projects.editor.descriptionPh')"
           :disabled="busy"
         />
+        <div v-if="genError" class="pe-hint" style="color: var(--danger)">{{ genError }}</div>
       </div>
 
-      <div v-if="busy || error" class="pe-status" :class="{ err: !!error }">
+      <div v-if="busy || error" class="pe-status" :class="{ err: !!error }" :style="{ order: 6 }">
         <div v-if="busy" class="pe-busy">
           <span class="pe-dot" />
           {{ progress || (isClone ? t('projects.editor.cloning') : t('projects.editor.saving')) }}
@@ -135,7 +159,7 @@
 // the page-controller. Emits a discriminated save payload.
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
-import type { ProjectInspectResult } from '~/stores/projects'
+import type { ProjectInspectResult, RemoteInspectResult } from '~/stores/projects'
 import type { Project } from '~/types'
 import type { ProjectEditorDraft, ProjectEditorSavePayload } from './types'
 
@@ -147,6 +171,13 @@ const props = defineProps<{
   progress: string
   canBrowse: boolean
   inspect: (path: string) => Promise<ProjectInspectResult | null>
+  inspectRemote: (gitRemote: string) => Promise<RemoteInspectResult | null>
+  generateDescription: (input: {
+    name: string
+    language?: string
+    gitRemote?: string
+    hint?: string
+  }) => Promise<string | null>
   browse: (title: string) => Promise<string | null>
 }>()
 
@@ -156,6 +187,16 @@ const { t } = useI18n()
 
 const importMode = ref<'existing' | 'clone'>('existing')
 const isClone = computed(() => !props.project && importMode.value === 'clone')
+
+// Field ordering (flex `order` on the .pe column). Clone puts the git remote first
+// (name/language/dest derive from it); existing/edit keeps name+language first.
+const nameOrder = computed(() => (isClone.value ? 3 : 1))
+const gitOrder = computed(() => (isClone.value ? 1 : 4))
+
+// Remote-detection + AI-description state.
+const detecting = ref(false)
+const generating = ref(false)
+const genError = ref('')
 
 const importOptions = [
   {
@@ -199,6 +240,9 @@ watch(
     if (!isOpen) return
     draft.value = props.project ? fromProject(props.project) : makeBlank()
     importMode.value = 'existing'
+    detecting.value = false
+    generating.value = false
+    genError.value = ''
   },
 )
 
@@ -239,10 +283,72 @@ const onBrowse = async () => {
     isClone.value ? t('projects.editor.pickParent') : t('projects.editor.pickFolder'),
   )
   if (!picked) return
+  if (isClone.value) {
+    // The picked folder is the PARENT; the clone lands in <parent>/<repo>. Append
+    // the repo name (from the remote, else the typed project name) when known.
+    const repo = repoNameFromRemote(draft.value.gitRemote) || draft.value.name.trim()
+    draft.value.path = repo ? `${picked.replace(/\/$/, '')}/${repo}` : picked
+    return
+  }
   draft.value.path = picked
-  if (importMode.value === 'existing' && !props.project) {
+  if (!props.project) {
     const info = await props.inspect(picked)
     if (info) applyInspect(info)
+  }
+}
+
+// Folder-safe repo name from a git remote URL (client-side, no network): last path
+// segment sans a trailing `.git`. Powers the immediate name + clone-dest pre-fill.
+const repoNameFromRemote = (remote: string): string => {
+  const s = remote
+    .trim()
+    .replace(/\/$/, '')
+    .replace(/\.git$/, '')
+  return s.split(/[/:]/).filter(Boolean).pop() ?? ''
+}
+
+// On git-remote blur (clone mode, new project): derive name + clone destination
+// from the URL immediately, then fetch repo metadata (language + description) via
+// gh — filling only fields the user hasn't typed. Never clobbers user input.
+const onRemoteBlur = async () => {
+  if (props.project || !isClone.value) return
+  const remote = draft.value.gitRemote.trim()
+  if (!remote) return
+  const repo = repoNameFromRemote(remote)
+  if (repo && !draft.value.name) draft.value.name = repo
+  if (repo && (!draft.value.path.trim() || draft.value.path.trim() === '~/code/')) {
+    draft.value.path = `~/code/${repo}`
+  }
+  detecting.value = true
+  try {
+    const info = await props.inspectRemote(remote)
+    if (!info) return
+    if (!draft.value.name) draft.value.name = info.name
+    if (info.language && !draft.value.language) draft.value.language = info.language
+    if (info.description && !draft.value.description) draft.value.description = info.description
+  } finally {
+    detecting.value = false
+  }
+}
+
+// AI-generate the description from the current name/language/remote (+ refine any
+// existing text). Optional convenience — failure surfaces inline, never blocks.
+const onGenerateDescription = async () => {
+  if (props.busy || generating.value || !draft.value.name.trim()) return
+  generating.value = true
+  genError.value = ''
+  try {
+    const desc = await props.generateDescription({
+      name: draft.value.name.trim(),
+      ...(draft.value.language.trim() ? { language: draft.value.language.trim() } : {}),
+      ...(draft.value.gitRemote.trim() ? { gitRemote: draft.value.gitRemote.trim() } : {}),
+      ...(draft.value.description.trim() ? { hint: draft.value.description.trim() } : {}),
+    })
+    if (desc) draft.value.description = desc
+  } catch (err) {
+    genError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    generating.value = false
   }
 }
 
@@ -305,6 +411,49 @@ const onSubmit = () => {
 .pe-hint {
   font-size: 0.8462rem;
   color: var(--textDim);
+}
+.pe-labelrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pe-detecting {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 0.8462rem;
+  color: var(--textDim);
+}
+.pe-genbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--textDim);
+  font-size: 0.8462rem;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+.pe-genbtn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accentBorder);
+}
+.pe-genbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.spin {
+  animation: pe-spin 0.9s linear infinite;
+}
+@keyframes pe-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .pe-src {
   display: grid;

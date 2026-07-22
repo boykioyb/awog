@@ -41,6 +41,8 @@
       :progress="editorProgress"
       :can-browse="canBrowse"
       :inspect="inspectPath"
+      :inspect-remote="inspectRemote"
+      :generate-description="generateDescription"
       :browse="browseFolder"
       @save="onSave"
       @cancel="closeEditor"
@@ -124,6 +126,8 @@ const {
   closeEditor,
   onSave,
   inspectPath,
+  inspectRemote,
+  generateDescription,
   browseFolder,
   canBrowse,
   llmOpen,

@@ -51,6 +51,8 @@
     :progress="actions.editorProgress.value"
     :can-browse="actions.canBrowse.value"
     :inspect="actions.inspectPath"
+    :inspect-remote="actions.inspectRemote"
+    :generate-description="actions.generateDescription"
     :browse="actions.browseFolder"
     @save="actions.onSave"
     @cancel="actions.closeEditor"

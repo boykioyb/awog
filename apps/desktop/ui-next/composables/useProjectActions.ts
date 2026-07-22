@@ -1,5 +1,9 @@
 import { computed, ref } from 'vue'
-import { useProjectsStore, type ProjectInspectResult } from '~/stores/projects'
+import {
+  useProjectsStore,
+  type ProjectInspectResult,
+  type RemoteInspectResult,
+} from '~/stores/projects'
 import { useTemplatesStore } from '~/stores/templates'
 import { useSidecar } from '~/composables/useSidecar'
 import { useI18n } from '~/composables/useI18n'
@@ -119,6 +123,14 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
   // Inspect + folder-pick proxies the editor uses.
   const inspectPath = (path: string): Promise<ProjectInspectResult | null> =>
     store.inspectPath(path)
+  const inspectRemote = (gitRemote: string): Promise<RemoteInspectResult | null> =>
+    store.inspectRemote(gitRemote)
+  const generateDescription = (input: {
+    name: string
+    language?: string
+    gitRemote?: string
+    hint?: string
+  }): Promise<string | null> => store.generateDescription(input)
   const browseFolder = (title: string): Promise<string | null> => pickFolder({ title })
   const canBrowse = computed(() => sc.available)
 
@@ -242,6 +254,8 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
     closeEditor,
     onSave,
     inspectPath,
+    inspectRemote,
+    generateDescription,
     browseFolder,
     canBrowse,
     // llm
