@@ -44,6 +44,12 @@ export interface AwogBridge {
   // Reveal a source's folder (~/.awog/sources/<slug>) in the OS file manager.
   // Takes a SLUG only — main derives + validates the path (never renderer input).
   revealSourceFolder(slug: string): Promise<void>
+  // Reveal a session's folder (~/.awog/sessions/<engineId>) — takes the engineId
+  // only; main derives + validates the path (never renderer input).
+  revealSessionFolder(engineId: string): Promise<void>
+  // Absolute on-disk path of a session's folder (for "Copy path" → clipboard).
+  // Same derive + validate as revealSessionFolder.
+  sessionFolderPath(engineId: string): Promise<string>
   openPath(root: string, path: string): Promise<void>
   // Open a workspace file in the default browser (file:// URL, path validated).
   openFileExternal(root: string, path: string): Promise<void>

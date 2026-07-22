@@ -100,6 +100,20 @@ export function useSidecar() {
     await api.revealSourceFolder(slug)
   }
 
+  // Reveal a session's folder (~/.awog/sessions/<engineId>) in the OS file manager.
+  // Only the engineId crosses IPC; the main process derives + validates the path.
+  const revealSessionFolder = async (engineId: string): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.revealSessionFolder(engineId)
+  }
+
+  // Absolute on-disk path of a session's folder, for "Copy path" → clipboard. Main
+  // derives + validates from the engineId (the renderer never builds the path).
+  const sessionFolderPath = async (engineId: string): Promise<string> => {
+    if (!api) throw new SidecarUnavailableError()
+    return api.sessionFolderPath(engineId)
+  }
+
   // Open a workspace-relative file with the OS default handler (dir → file
   // manager). Same workspace validation as revealPath.
   const openPath = async (workspaceRoot: string, path: string): Promise<void> => {
@@ -180,6 +194,8 @@ export function useSidecar() {
     openExternal,
     revealPath,
     revealSourceFolder,
+    revealSessionFolder,
+    sessionFolderPath,
     openPath,
     openFileExternal,
     isVscodeAvailable,

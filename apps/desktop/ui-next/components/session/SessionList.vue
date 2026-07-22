@@ -248,11 +248,11 @@
           {{ t('sessions.ctx.export') }}
         </div>
         <div class="ctxsep" />
-        <div v-if="ctxPath" class="mi" @click="ctxCopyPath">
+        <div class="mi" @click="ctxCopyPath">
           <Icon name="copy" style="width: 13px; height: 13px" />
           {{ t('sessions.ctx.copyPath') }}
         </div>
-        <div v-if="ctxPath" class="mi" @click="ctxOpenFinder">
+        <div v-if="canOpenFinder" class="mi" @click="ctxOpenFinder">
           <Icon name="folder" style="width: 13px; height: 13px" />
           {{ t('sessions.ctx.openFinder') }}
         </div>
@@ -278,6 +278,7 @@
 // one project; rows hide their project label since the tab already names it.
 import type { Session, SortBy } from '~/composables/useSessionsData'
 import { PROJECT_COLOR_DEFAULT } from '~/composables/useProjectColors'
+import { pushActionToast } from '~/composables/useActionToasts'
 import { placeMenu } from '~/utils/context-menu'
 
 const props = defineProps<{ sessions: Session[]; activeId: number | null; listWidth: number }>()
@@ -285,7 +286,6 @@ const emit = defineEmits<{ select: [id: number] }>()
 
 const { t } = useI18n()
 const { GROUPBY, SORTBY, providerOf } = useSessionsData()
-const { projectPath } = useProjects()
 const store = useSessionsStore()
 const sc = useSidecar()
 const { confirm } = useConfirm()
@@ -501,19 +501,40 @@ function ctxDuplicate() {
   }
   ctx.value = null
 }
-// Resolved absolute path of the right-clicked session's project (null = unknown /
-// browser-dev). Gates the "Copy path" + "Open in Finder" items.
-const ctxPath = computed<string | null>(() =>
-  ctx.value ? projectPath(ctx.value.session.project) : null,
-)
-function ctxCopyPath() {
-  if (ctxPath.value) void navigator.clipboard.writeText(ctxPath.value)
+// The right-clicked session's on-disk engineId ("ses-…" slug). A session only has
+// one once it's been persisted (first message sent); until then Copy path / Open in
+// Finder have no real folder to point at, so both items gate on this (spec AC5).
+// NB: this is the SESSION folder (~/.awog/sessions/<engineId>), not the project path
+// the items used to (wrongly) copy — the session dir is independent of any project.
+const ctxSessionId = computed<string | null>(() => ctx.value?.session.engineId ?? null)
+// Open in Finder needs the Electron shell (browser-dev has no OS file manager), so the
+// item is hidden there. When shown but the session isn't persisted yet (no engineId),
+// the handler toasts "not saved" — symmetric with Copy path, no silently-missing item.
+const canOpenFinder = computed(() => sc.available)
+async function ctxCopyPath() {
+  const engineId = ctxSessionId.value
   ctx.value = null
+  if (!engineId) {
+    pushActionToast(t('sessions.ctx.notSaved'), 'info')
+    return
+  }
+  // Main derives the absolute path from the engineId (invariant #4). Browser-dev
+  // has no bridge → sessionFolderPath throws; degrade to a no-op toast.
+  try {
+    const path = sc.available ? await sc.sessionFolderPath(engineId) : null
+    if (path) await navigator.clipboard.writeText(path)
+  } catch {
+    // best-effort: bridge unavailable or clipboard blocked → no-op
+  }
 }
 function ctxOpenFinder() {
-  const path = ctxPath.value
-  if (path && sc.available) sc.openPath(path, '.').catch(() => undefined)
+  const engineId = ctxSessionId.value
   ctx.value = null
+  if (!engineId) {
+    pushActionToast(t('sessions.ctx.notSaved'), 'info')
+    return
+  }
+  if (sc.available) void sc.revealSessionFolder(engineId).catch(() => undefined)
 }
 function ctxCopyId() {
   if (ctx.value) {

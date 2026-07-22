@@ -59,6 +59,13 @@ const awog = {
   // the path from the slug (the renderer never passes a path).
   revealSourceFolder: (slug: string): Promise<void> =>
     ipcRenderer.invoke('shell:revealSourceFolder', slug),
+  // Reveal a session's folder (~/.awog/sessions/<engineId>) — main derives +
+  // validates the path from the engineId (the renderer never passes a path).
+  revealSessionFolder: (engineId: string): Promise<void> =>
+    ipcRenderer.invoke('shell:revealSessionFolder', engineId),
+  // Absolute path of a session's folder (for "Copy path") — same derive + validate.
+  sessionFolderPath: (engineId: string): Promise<string> =>
+    ipcRenderer.invoke('shell:sessionFolderPath', engineId),
   openPath: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:openPath', { root, path }),
   openFileExternal: (root: string, path: string): Promise<void> =>
