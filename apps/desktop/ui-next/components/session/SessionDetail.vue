@@ -173,7 +173,12 @@
             @pointerdown="(e) => onWpResize(e, 'left')"
           />
         </template>
-        <div class="chat" @mouseup="onSelectQuote" @mousedown="quoteSel = null">
+        <div
+          class="chat"
+          @mouseup="onSelectQuote"
+          @mousedown="onChatMouseDown"
+          @contextmenu="onQuoteContextMenu"
+        >
           <SessionTodoPanel :session="session" />
           <SessionTranscript
             :messages="session.msgs"
@@ -261,16 +266,21 @@
     <!-- note popover for a selection quote -->
     <template v-if="notePop">
       <div class="notebackdrop" @mousedown="notePop = null" />
-      <div class="notepop" :style="{ left: `${notePop.x}px`, top: `${notePop.y}px` }">
-        <div class="npq">
+      <div
+        class="notepop"
+        :class="{ moved: notePos, dragging: notePopDragging }"
+        :style="notePopStyle"
+        @mousedown.stop
+      >
+        <div class="npq" @pointerdown="onNoteDragStart">
           <Icon name="quote" style="width: 12px; height: 12px" />
           <span class="npex">{{ notePop.text }}</span>
         </div>
         <textarea
+          ref="noteInput"
           v-model="noteText"
           class="npinput"
           rows="3"
-          autofocus
           :placeholder="t('sessions.quote.notePlaceholder')"
           @keydown.enter.exact.prevent="saveQuote"
           @keydown.enter.meta.prevent="saveQuote"
@@ -281,6 +291,7 @@
           <button class="npbtn" @click="notePop = null">{{ t('common.close') }}</button>
           <button class="npbtn pri" @click="saveQuote">{{ t('sessions.quote.save') }}</button>
         </div>
+        <div class="npresize" @pointerdown="onNoteResizeStart" />
       </div>
     </template>
 
@@ -543,29 +554,95 @@ type SelQuote = { text: string; src: number; x: number; y: number }
 const quoteSel = ref<SelQuote | null>(null)
 const notePop = ref<SelQuote | null>(null)
 const noteText = ref('')
+const noteInput = ref<HTMLTextAreaElement | null>(null)
 
-function onSelectQuote() {
+// Note popover drag/resize state (AN-2). When the user drags the header or resizes,
+// we switch from selection-anchored (`transform: translate(-50%,-100%)`) to explicit
+// top-left coords + fixed size. Ephemeral — reset to defaults each time it opens.
+const NOTE_POP_DEFAULT_WIDTH = 280
+const NOTE_POP_MIN_WIDTH = 240
+const NOTE_POP_MIN_HEIGHT = 160
+const NOTE_POP_MARGIN = 16
+const NOTE_POP_EDGE = 8
+const notePos = ref<{ x: number; y: number } | null>(null)
+const noteSize = ref<{ w: number; h: number } | null>(null)
+const notePopDragging = ref(false)
+
+// Once moved/resized, anchor by explicit top-left (drop the selection-anchored
+// transform) so drag coords map intuitively; otherwise use the selection anchor.
+const notePopStyle = computed<Record<string, string>>(() => {
+  const np = notePop.value
+  if (!np) return {}
+  const size = noteSize.value
+  const w = size ? `${size.w}px` : `${NOTE_POP_DEFAULT_WIDTH}px`
+  const h = size ? `${size.h}px` : ''
+  const pos = notePos.value
+  if (pos) return { left: `${pos.x}px`, top: `${pos.y}px`, width: w, ...(h ? { height: h } : {}) }
+  return { left: `${np.x}px`, top: `${np.y}px`, width: w }
+})
+
+// Auto-focus the note textarea once the popover mounts (AN-1). The HTML `autofocus`
+// attribute only fires on the initial page load, but `.notepop` is inserted
+// dynamically via v-if — so focus it manually each time it opens, caret at the end.
+function focusNoteInput() {
+  nextTick(() => {
+    const el = noteInput.value
+    if (!el) return
+    el.focus()
+    const len = el.value.length
+    el.setSelectionRange(len, len)
+  })
+}
+
+// Validate the current selection lives inside a message and extract its text +
+// source index + bounding rect. Returns null when there is no valid selection.
+// Shared by the mouseup (onSelectQuote) and right-click (onQuoteContextMenu) triggers.
+function resolveSelectionQuote(): { text: string; src: number; rect: DOMRect } | null {
   const sel = window.getSelection()
   const text = sel?.toString().trim() ?? ''
-  if (!sel || sel.rangeCount === 0 || !text) {
-    quoteSel.value = null
-    return
-  }
+  if (!sel || sel.rangeCount === 0 || !text) return null
   const range = sel.getRangeAt(0)
   const node = range.commonAncestorContainer
   const startEl = node instanceof HTMLElement ? node : node.parentElement
   const msgEl = startEl?.closest('[data-mi]')
-  if (!(msgEl instanceof HTMLElement)) {
+  if (!(msgEl instanceof HTMLElement)) return null
+  return { text, src: Number(msgEl.dataset.mi), rect: range.getBoundingClientRect() }
+}
+
+// mouseup: anchor the floating Quote button to the top-centre of the selection.
+// Guard to left-click only — right-click also fires `mouseup` (button=2) after
+// `contextmenu`, which would otherwise overwrite the cursor-anchored position set by
+// `onQuoteContextMenu` and make the button jump back (AN-3).
+function onSelectQuote(e: MouseEvent) {
+  if (e.button !== 0) return
+  const q = resolveSelectionQuote()
+  if (!q) {
     quoteSel.value = null
     return
   }
-  const rect = range.getBoundingClientRect()
   quoteSel.value = {
-    text,
-    src: Number(msgEl.dataset.mi),
-    x: rect.left + rect.width / 2,
-    y: rect.top - 8,
+    text: q.text,
+    src: q.src,
+    x: q.rect.left + q.rect.width / 2,
+    y: q.rect.top - 8,
   }
+}
+
+// Right-click (AN-3): show the Quote button at the cursor. Only prevent the default
+// context menu when there is a valid selection inside a message — otherwise leave the
+// platform menu intact. Ignored while the note popover is already open.
+function onQuoteContextMenu(e: MouseEvent) {
+  if (notePop.value) return
+  const q = resolveSelectionQuote()
+  if (!q) return
+  e.preventDefault()
+  quoteSel.value = { text: q.text, src: q.src, x: e.clientX, y: e.clientY }
+}
+
+// Left-click clears the floating Quote button; right-click must NOT clear it, or it
+// would wipe `quoteSel` before `contextmenu` re-sets it (mousedown fires first).
+function onChatMouseDown(e: MouseEvent) {
+  if (e.button === 0) quoteSel.value = null
 }
 // Quote button → open the note popover at the same spot (keeps the captured range).
 function openNote() {
@@ -573,6 +650,78 @@ function openNote() {
   notePop.value = { ...quoteSel.value }
   noteText.value = ''
   quoteSel.value = null
+  // No persist: reset to default (selection-anchored, default width, auto height).
+  notePos.value = null
+  noteSize.value = null
+  notePopDragging.value = false
+  focusNoteInput()
+}
+
+// Drag the popover by its header. Native pointer + setPointerCapture (mirrors
+// onWpResize). Switches to top-left anchoring; keeps `noteText` (no textarea remount).
+function onNoteDragStart(ev: PointerEvent) {
+  ev.preventDefault()
+  const handle = ev.currentTarget as HTMLElement
+  const pop = handle.closest('.notepop') as HTMLElement | null
+  if (!pop) return
+  handle.setPointerCapture(ev.pointerId)
+  notePopDragging.value = true
+  const box = pop.getBoundingClientRect()
+  // Anchor to current top-left so the popover doesn't jump when switching modes.
+  if (!notePos.value) notePos.value = { x: box.left, y: box.top }
+  if (!noteSize.value) noteSize.value = { w: box.width, h: box.height }
+  const grabX = ev.clientX - notePos.value.x
+  const grabY = ev.clientY - notePos.value.y
+  const onMove = (e: PointerEvent) => {
+    const w = noteSize.value?.w ?? box.width
+    const h = noteSize.value?.h ?? box.height
+    const maxX = window.innerWidth - w - NOTE_POP_EDGE
+    const maxY = window.innerHeight - h - NOTE_POP_EDGE
+    notePos.value = {
+      x: Math.max(NOTE_POP_EDGE, Math.min(maxX, e.clientX - grabX)),
+      y: Math.max(NOTE_POP_EDGE, Math.min(maxY, e.clientY - grabY)),
+    }
+  }
+  const onUp = () => {
+    notePopDragging.value = false
+    handle.removeEventListener('pointermove', onMove)
+    handle.removeEventListener('pointerup', onUp)
+  }
+  handle.addEventListener('pointermove', onMove)
+  handle.addEventListener('pointerup', onUp)
+}
+
+// Resize the popover via the bottom-right handle. Clamp width [240, min(560, vw−16)]
+// and height [160, vh−16].
+function onNoteResizeStart(ev: PointerEvent) {
+  ev.preventDefault()
+  const handle = ev.currentTarget as HTMLElement
+  const pop = handle.closest('.notepop') as HTMLElement | null
+  if (!pop) return
+  handle.setPointerCapture(ev.pointerId)
+  notePopDragging.value = true
+  const box = pop.getBoundingClientRect()
+  if (!notePos.value) notePos.value = { x: box.left, y: box.top }
+  if (!noteSize.value) noteSize.value = { w: box.width, h: box.height }
+  const startX = ev.clientX
+  const startY = ev.clientY
+  const startW = noteSize.value.w
+  const startH = noteSize.value.h
+  const onMove = (e: PointerEvent) => {
+    const maxW = Math.min(WP_SIDE.max, window.innerWidth - NOTE_POP_MARGIN)
+    const maxH = window.innerHeight - NOTE_POP_MARGIN
+    noteSize.value = {
+      w: Math.max(NOTE_POP_MIN_WIDTH, Math.min(maxW, startW + (e.clientX - startX))),
+      h: Math.max(NOTE_POP_MIN_HEIGHT, Math.min(maxH, startH + (e.clientY - startY))),
+    }
+  }
+  const onUp = () => {
+    notePopDragging.value = false
+    handle.removeEventListener('pointermove', onMove)
+    handle.removeEventListener('pointerup', onUp)
+  }
+  handle.addEventListener('pointermove', onMove)
+  handle.addEventListener('pointerup', onUp)
 }
 // Save → add the follow-up (with note). The in-place highlight is painted reactively by
 // SessionTextBlock via the CSS Custom Highlight API once the follow-up lands in state, so
@@ -996,12 +1145,24 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
+/* Once dragged/resized, anchor by explicit top-left (drop the selection transform). */
+.notepop.moved {
+  transform: none;
+}
+.notepop.dragging {
+  user-select: none;
+}
 .npq {
   display: flex;
   align-items: flex-start;
   gap: 6px;
   color: var(--accent);
   font-size: 0.8462rem;
+  cursor: grab;
+  touch-action: none;
+}
+.notepop.dragging .npq {
+  cursor: grabbing;
 }
 .npq svg {
   flex-shrink: 0;
@@ -1027,6 +1188,12 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   line-height: 1.4;
   font-family: var(--sans);
 }
+/* When the popover has an explicit height (resized), grow the textarea to fill and
+   let the popover own the sizing — its own resize handle replaces textarea resize. */
+.notepop.moved .npinput {
+  flex: 1 1 auto;
+  resize: none;
+}
 .npinput:focus {
   border-color: var(--accentBorder);
 }
@@ -1048,5 +1215,23 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 .npbtn.pri {
   background: var(--accent);
   color: var(--bg);
+}
+/* Bottom-right resize handle (single corner — AN-2 / OQ-B3). */
+.npresize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(
+    135deg,
+    transparent 0 50%,
+    var(--border) 50% 60%,
+    transparent 60% 75%,
+    var(--border) 75% 85%,
+    transparent 85%
+  );
 }
 </style>
