@@ -58,8 +58,8 @@
       @cancel="cancelDelete"
     />
 
-    <!-- host-key TOFU prompt (P2): parked connect awaits the user's decision -->
-    <SshHostKeyModal :open="!!pendingHostKey" :prompt="pendingHostKey" @confirm="confirmHostKey" />
+    <!-- host-key TOFU prompt (P2) is rendered app-wide by SshHostKeyHost in the
+         default layout — the parked connect awaits the user's decision there. -->
 
     <!-- transient toasts -->
     <div
@@ -81,7 +81,6 @@
 // the overlays (editors, import, delete confirm, host-key TOFU, toasts) and wires
 // the workspace's action events to useSshPage (page-controller).
 import SshEditor from '~/components/ssh/SshEditor.vue'
-import SshHostKeyModal from '~/components/ssh/SshHostKeyModal.vue'
 import SshIdentityEditor from '~/components/ssh/SshIdentityEditor.vue'
 import SshImportPicker from '~/components/ssh/SshImportPicker.vue'
 import SshWorkspace from '~/components/ssh/SshWorkspace.vue'
@@ -121,8 +120,6 @@ const {
   deleteDescription,
   confirmDelete,
   onConnect,
-  pendingHostKey,
-  confirmHostKey,
   rowMenu,
   openRowMenu,
   rowMenuItems,

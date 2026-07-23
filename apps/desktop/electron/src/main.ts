@@ -4,6 +4,7 @@ import { browser, registerBrowserHostHandlers } from './browser'
 import { registerIpc } from './ipc'
 import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
 import { loadShellEnv } from './shell-env'
+import { registerMediaProtocol } from './media'
 import { trayPopover } from './popover'
 import { setupTray, updateTray, type TrayCommand, type TrayModel } from './tray'
 import { setupUpdater } from './updater'
@@ -90,6 +91,8 @@ if (!gotLock) {
     // Expose the browser.* reverse-channel handlers so the sidecar's browser_tool
     // can drive the embedded Chromium (ADR 0043). The window itself is lazy.
     registerBrowserHostHandlers()
+    // media:// stream protocol for in-app video/audio preview (must run post-ready).
+    registerMediaProtocol()
     registerIpc(getWindow)
     setupUpdater(getWindow)
     registerLogTailIpc(getWindow)

@@ -43,6 +43,9 @@
     <ConfirmDialogHost />
     <TextPromptHost />
     <QuotaGuardHost />
+    <!-- SSH host-key TOFU prompt, app-wide: an SSH connect from the global terminal
+         dock (or anywhere) can surface the prompt off the /ssh page. -->
+    <SshHostKeyHost />
     <ActionToastHost />
     <OnboardingWizard />
     <TourHost />

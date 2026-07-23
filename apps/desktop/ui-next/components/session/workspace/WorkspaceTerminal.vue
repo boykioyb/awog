@@ -41,9 +41,19 @@
           class="wsterm-tab-add"
           :title="t('sessions.workspace.terminal.newTab')"
           :aria-label="t('sessions.workspace.terminal.newTab')"
-          @click="addTab(true)"
+          @click.stop="onAddClick"
         >
           <Plus :size="13" />
+        </button>
+        <!-- VSCode-style split button: splits the active pane to the right. The tab
+             context menu still offers split-down + rename/duplicate. -->
+        <button
+          class="wsterm-tab-add"
+          :title="t('sessions.workspace.terminal.splitRight')"
+          :aria-label="t('sessions.workspace.terminal.splitRight')"
+          @click="splitActive"
+        >
+          <Icon name="dock-right" style="width: 14px; height: 14px" />
         </button>
       </div>
 
@@ -64,6 +74,16 @@
       :items="menuItems"
       @close="menu.close"
       @select="onMenuSelect"
+    />
+
+    <!-- New-tab dropdown (only when the host supplies `newTabMenu`, e.g. the global
+         dock's "New shell" + SSH hosts). Otherwise "+" just adds a default tab. -->
+    <ContextMenu
+      :open="!!addMenu.pos.value"
+      :position="addMenu.pos.value ?? { x: 0, y: 0 }"
+      :items="addMenuItems"
+      @close="addMenu.close"
+      @select="onAddMenuSelect"
     />
   </div>
 </template>
@@ -96,7 +116,11 @@ import { Terminal, type ITheme } from '@xterm/xterm'
 import { Plus, X } from 'lucide-vue-next'
 import { useTerminalAppearanceStore } from '~/stores/terminalAppearance'
 import { useSidecar, type SidecarEvent, type UnlistenFn } from '~/composables/useSidecar'
-import { useTerminalApi, type TerminalTransport } from '~/composables/useTerminalApi'
+import {
+  useTerminalApi,
+  type TerminalTabKind,
+  type TerminalTransport,
+} from '~/composables/useTerminalApi'
 import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { useTextPrompt } from '~/composables/useTextPrompt'
 import WorkspaceTerminalNode, {
@@ -129,10 +153,16 @@ const props = defineProps<{
   // Optional empty-state text when the engine bridge is absent. Defaults to the
   // session wording; the global dock passes its own (no "this session" phrasing).
   unavailableLabel?: string
-  // Optional backend override. Absent → the local PTY (terminal.*) — unchanged
-  // for the session panel + global dock. Provided (e.g. the SSH backend) → that
-  // adapter drives create/write/resize/kill + which events to route on.
+  // Default backend for NEW tabs. Absent → the local PTY (terminal.*) — the
+  // session panel + global dock's local shells. Provided (e.g. the SSH backend)
+  // → every new tab runs on that adapter (SshTerminal: all tabs = one host).
+  // Individual tabs may still override this via `newTabMenu` (mixed local + SSH).
   transport?: TerminalTransport
+  // Optional "+" dropdown: when non-empty, the new-tab button opens a menu of
+  // tab kinds (each with its own transport) instead of adding a plain default
+  // tab. The global dock supplies "New shell" + one entry per saved SSH host, so
+  // local and SSH tabs coexist in the one dock. Absent → "+" adds a default tab.
+  newTabMenu?: TerminalTabKind[]
 }>()
 
 // Report the ACTIVE pane's live backend id to the parent. The SSH co-pilot binds
@@ -145,9 +175,11 @@ const sc = useSidecar()
 const api = useTerminalApi()
 const { prompt } = useTextPrompt()
 
-// The local-PTY backend (default). `create` maps the cwd + grouping key onto
-// terminal.create and normalizes its `terminalId` to the transport's `id`.
-const defaultTransport: TerminalTransport = {
+// The local-PTY backend. `create` maps the cwd + grouping key onto terminal.create
+// and normalizes its `terminalId` to the transport's `id`. A single stable object
+// shared by every local tab (it reads props.root lazily at create time); its
+// identity also marks a tab as "local" → gated on a resolved cwd (canCreatePane).
+const localTransport: TerminalTransport = {
   create: (cols, rows) =>
     api.create(props.root ?? '~', props.ptyKey, cols, rows).then((r) => ({ id: r.terminalId })),
   write: (id, data) => api.write(id, data),
@@ -157,10 +189,9 @@ const defaultTransport: TerminalTransport = {
   exitEvent: 'terminal.exit',
   idField: 'terminalId',
 }
-const activeTransport = computed<TerminalTransport>(() => props.transport ?? defaultTransport)
-// The PTY backend needs a resolved cwd before spawning; a custom transport (SSH)
-// carries its own target, so it may spawn as soon as it's visible + ready.
-const canCreate = computed(() => (props.transport ? true : props.root != null))
+// Transport for tabs the host doesn't override: props.transport wins (SshTerminal
+// makes every tab SSH), else the local PTY.
+const defaultTransport = (): TerminalTransport => props.transport ?? localTransport
 
 const errorMsg = ref<string | null>(null)
 
@@ -241,6 +272,9 @@ type TerminalTab = {
   label: string | null
   layout: LayoutNode
   activePaneId: string | null
+  // Backend all this tab's panes run on (local PTY or an SSH channel). Set at
+  // create time; every pane of the tab shares it (a split = another channel).
+  transport: TerminalTransport
 }
 
 const tabs = ref<TerminalTab[]>([])
@@ -259,6 +293,12 @@ const activePaneOf = (tab: TerminalTab): Pane | undefined => {
   const id = tab.activePaneId ?? paneIdsOf(tab)[0]
   return id ? panes.get(id) : undefined
 }
+// A pane runs on its owning tab's transport; canCreatePane gates the spawn on a
+// resolved cwd for local tabs (a custom/SSH transport carries its own target).
+const transportOf = (pane: Pane): TerminalTransport =>
+  tabById(pane.tabId)?.transport ?? defaultTransport()
+const canCreatePane = (pane: Pane): boolean =>
+  transportOf(pane) === localTransport ? props.root != null : true
 // Emit the active pane's live backend id (terminalId isn't reactive — panes live in
 // a plain Map — so we push it imperatively on create / pane-switch / tab-switch / close).
 const emitActiveConn = (): void => {
@@ -275,7 +315,7 @@ const forEachPane = (tab: TerminalTab, fn: (pane: Pane) => void): void => {
 
 // ── Event routing ─────────────────────────────────────────────────────────────
 const routeEvent = (pane: Pane, evt: SidecarEvent): void => {
-  const tr = activeTransport.value
+  const tr = transportOf(pane)
   const payload = evt.payload as Record<string, unknown>
   if (payload?.[tr.idField] !== pane.terminalId || !pane.term) return
   if (evt.type === tr.dataEvent && typeof payload.chunk === 'string') {
@@ -287,16 +327,19 @@ const routeEvent = (pane: Pane, evt: SidecarEvent): void => {
   }
 }
 
+// One shared listener for every transport (local PTY + SSH). Each pane declares its
+// own transport, so route by matching THAT pane's data/exit event types + id field:
+// a local pane ignores ssh:* events and vice-versa. Events for a not-yet-bound pane
+// are buffered on it (same-transport only) so the first burst isn't lost.
 const onSidecarEvent = (evt: SidecarEvent): void => {
-  const tr = activeTransport.value
-  if (evt.type !== tr.dataEvent && evt.type !== tr.exitEvent) return
-  const payload = evt.payload as Record<string, unknown>
   for (const pane of panes.values()) {
+    const tr = transportOf(pane)
+    if (evt.type !== tr.dataEvent && evt.type !== tr.exitEvent) continue
     if (!pane.terminalId) {
-      // Not yet bound — buffer for whichever pane claims this id once it knows it.
       pane.pending.push(evt)
       continue
     }
+    const payload = evt.payload as Record<string, unknown>
     if (pane.terminalId === payload?.[tr.idField]) {
       routeEvent(pane, evt)
       return
@@ -308,8 +351,8 @@ const onSidecarEvent = (evt: SidecarEvent): void => {
 // Spawn the PTY at the pane's real fitted size. The shared data listener is already
 // attached (see ensureListener) so no early output is dropped.
 const createPty = async (pane: Pane, cols: number, rows: number): Promise<void> => {
-  if (pane.terminalId || pane.creating || !pane.term || !canCreate.value) return
-  const tr = activeTransport.value
+  if (pane.terminalId || pane.creating || !pane.term || !canCreatePane(pane)) return
+  const tr = transportOf(pane)
   pane.creating = true
   try {
     const result = await tr.create(cols, rows)
@@ -343,7 +386,9 @@ const syncSize = (pane: Pane): void => {
   if (!pane.terminalId) {
     void createPty(pane, cols, rows)
   } else {
-    activeTransport.value.resize(pane.terminalId, cols, rows).catch(() => undefined)
+    transportOf(pane)
+      .resize(pane.terminalId, cols, rows)
+      .catch(() => undefined)
   }
 }
 
@@ -379,7 +424,7 @@ const initPane = async (pane: Pane): Promise<void> => {
   // reconnect (new PTY id). It must NOT live in createPty — that runs again on every
   // reconnect and would stack a second handler, doubling every keystroke (ll → llll).
   instance.onData((data) => {
-    const tr = activeTransport.value
+    const tr = transportOf(pane)
     if (pane.terminalId) tr.write(pane.terminalId, data).catch(() => undefined)
   })
 
@@ -412,7 +457,10 @@ const initPane = async (pane: Pane): Promise<void> => {
 const disposePane = (pane: Pane): void => {
   pane.resizeObserver?.disconnect()
   pane.resizeObserver = null
-  if (pane.terminalId) activeTransport.value.kill(pane.terminalId).catch(() => undefined)
+  if (pane.terminalId)
+    transportOf(pane)
+      .kill(pane.terminalId)
+      .catch(() => undefined)
   pane.terminalId = null
   pane.term?.dispose()
   pane.term = null
@@ -451,7 +499,11 @@ const initTabPanes = (tabId: string): void => {
 }
 
 // ── Tab / pane actions ──────────────────────────────────────────────────────────
-const addTab = (activate: boolean, label: string | null = null): string => {
+const addTab = (
+  activate: boolean,
+  label: string | null = null,
+  transport: TerminalTransport = defaultTransport(),
+): string => {
   const tabId = nextId('t')
   const pane = new Pane(nextId('p'), tabId)
   panes.set(pane.id, pane)
@@ -460,6 +512,7 @@ const addTab = (activate: boolean, label: string | null = null): string => {
     label,
     layout: { kind: 'leaf', paneId: pane.id },
     activePaneId: pane.id,
+    transport,
   })
   if (activate || !activeTabId.value) activeTabId.value = tabId
   // The container mounts on next tick; the :ref callback then drives init.
@@ -473,7 +526,8 @@ const duplicateTab = (tabId: string): void => {
   const label = source?.label
     ? t('sessions.workspace.terminal.duplicateLabel', { name: source.label })
     : null
-  addTab(true, label)
+  // Same transport → duplicating an SSH tab yields another shell to the same host.
+  addTab(true, label, source?.transport)
 }
 
 // Split the tab's active leaf along `dir` (row = new pane to the right, col = below).
@@ -760,6 +814,44 @@ const onMenuSelect = (id: string): void => {
   else if (id === 'split-down') splitTab(tabId, 'col')
 }
 
+// New-tab "+" dropdown. With a `newTabMenu` the button opens a menu of tab kinds
+// (each carrying its own transport); without one it just adds a default tab.
+const addMenu = useContextMenu<true>()
+const addMenuItems = computed<MenuItem[]>(
+  () => props.newTabMenu?.map((k) => ({ id: k.id, label: k.label, icon: k.icon })) ?? [],
+)
+const onAddClick = (e: MouseEvent): void => {
+  if (props.newTabMenu?.length) addMenu.open(e, true)
+  else addTab(true)
+}
+const onAddMenuSelect = (id: string): void => {
+  const kind = props.newTabMenu?.find((k) => k.id === id)
+  if (!kind) return
+  // A transport-bearing (SSH) kind uses its own label (host name); a plain local
+  // kind gets the positional default label.
+  addTab(true, kind.transport ? kind.label : null, kind.transport)
+}
+
+// Toolbar split button (VSCode-style): split the active tab's active pane to the
+// right. Down-split stays in the tab context menu. Same code path as the menu.
+const splitActive = (): void => {
+  if (activeTabId.value) splitTab(activeTabId.value, 'row')
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+// Write `text` into the ACTIVE tab's active pane using that pane's own transport
+// (local PTY or SSH). Exposed for the global dock's snippets rail: run a snippet
+// against whatever shell the user is currently looking at. No-op if no live pane.
+function runText(text: string): void {
+  const tab = activeTabId.value ? tabById(activeTabId.value) : undefined
+  const pane = tab ? activePaneOf(tab) : undefined
+  if (!pane?.terminalId) return
+  transportOf(pane)
+    .write(pane.terminalId, text)
+    .catch(() => undefined)
+}
+defineExpose({ runText })
+
 // ── Wiring ────────────────────────────────────────────────────────────────────
 // Live-apply terminal appearance to every open pane. Fires only when the user
 // changes preset / size / font (the default 'system'/13/mono values are stable →
@@ -800,6 +892,14 @@ watch([() => props.ready, () => props.visible], () => {
 onMounted(() => {
   if (!tabs.value.length) addTab(true)
   if (props.visible && props.ready && activeTabId.value) initTabPanes(activeTabId.value)
+})
+
+// Restored from <KeepAlive> (the global dock caches one instance per project). The
+// cached DOM was detached while inactive, so xterm's measured size is stale — refit
+// the visible active tab. PTYs + xterm survived (deactivate ≠ unmount), so nothing
+// is re-created here.
+onActivated(() => {
+  if (props.visible && activeTabId.value) nextTick(() => syncTab(activeTabId.value!))
 })
 
 onBeforeUnmount(() => {
@@ -879,13 +979,15 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  /* Stretch to the tab's height so the hover fill is a pill of the SAME box as a
+     tab (not a short, loose rect). Radius + spacing match the tabs too. */
+  align-self: stretch;
+  width: 24px;
   flex: 0 0 auto;
-  margin-left: 2px;
   border: none;
   background: transparent;
   color: var(--textDim);
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
   transition:
     background 0.12s,

@@ -58,6 +58,46 @@
             :title="shownItem.name"
           />
 
+          <!-- video: native player. effectiveSrc streams via media:// (Range-backed,
+               seekable) for workspace files, or an in-memory blob for drag-drops. -->
+          <div
+            v-else-if="shownItem.kind === 'video' && effectiveSrc && !mediaError"
+            class="pvmediavp"
+          >
+            <video
+              :src="effectiveSrc"
+              class="pvvideo"
+              controls
+              preload="metadata"
+              playsinline
+              @error="onMediaError"
+            />
+          </div>
+
+          <!-- audio: native player centered on a file card. -->
+          <div
+            v-else-if="shownItem.kind === 'audio' && effectiveSrc && !mediaError"
+            class="pvaudiovp"
+          >
+            <Icon name="play" style="width: 40px; height: 40px" />
+            <div class="pvename">{{ shownItem.name }}</div>
+            <audio
+              :src="effectiveSrc"
+              class="pvaudioel"
+              controls
+              preload="metadata"
+              @error="onMediaError"
+            />
+          </div>
+
+          <!-- media unavailable: unsupported codec / decode error / no source →
+               keep the toolbar (workspace files can still "open externally"). -->
+          <div v-else-if="shownItem.kind === 'video' || shownItem.kind === 'audio'" class="pvempty">
+            <Icon name="play" style="width: 40px; height: 40px" />
+            <div class="pvename">{{ shownItem.name }}</div>
+            <div class="pvehint">{{ t('common.preview.mediaError') }}</div>
+          </div>
+
           <!-- markdown rendered: outline (TOC) sidebar + scrollable content -->
           <template v-else-if="shownItem.kind === 'markdown' && view === 'render'">
             <aside v-if="headings.length" class="mdoutline">
@@ -246,6 +286,8 @@ const {
   effectiveText,
   effectiveSrc,
   monacoLang,
+  mediaError,
+  onMediaError,
   editorValue,
   editorReadOnly,
   onEditorChange,
@@ -457,6 +499,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 100%;
   height: 100%;
   border: 0;
+}
+/* Video — fills the body (flush), letterboxed on a black canvas. The player is
+   sized to the container (100% × 100%) with object-fit:contain rather than
+   max-width/height so it can't overflow the viewport (which would push the native
+   control bar below the fold). display:block avoids the inline baseline gap. */
+.pvmediavp {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+.pvvideo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* Audio — centered file card in the (non-flush) body. */
+.pvaudiovp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: auto 0;
+  padding: 40px 20px;
+  color: var(--textDim);
+}
+.pvaudioel {
+  width: min(460px, 80vw);
 }
 /* HTML render — sandboxed iframe fills the body; white canvas (browser default) so
    a page without its own background stays readable in dark mode. */

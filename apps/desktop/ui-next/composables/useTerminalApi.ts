@@ -20,6 +20,18 @@ export interface TerminalTransport {
   idField: string
 }
 
+// One entry in WorkspaceTerminal's "+" new-tab dropdown. `transport` omitted →
+// the host's default backend (local PTY); provided → the new tab runs on that
+// transport (e.g. an SSH channel to a saved host). `icon` is an Icon name. The
+// host (GlobalTerminalHost) owns the list so WorkspaceTerminal stays unaware of
+// SSH/projects — it just spawns a tab with whatever transport it's handed.
+export interface TerminalTabKind {
+  id: string
+  label: string
+  icon?: string
+  transport?: TerminalTransport
+}
+
 export function useTerminalApi() {
   const sidecar = useSidecar()
   return {

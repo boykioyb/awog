@@ -1,6 +1,6 @@
 import { computed, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import type { PreviewRef } from '~/composables/usePreview'
-import { usePreview, previewKindFromPath } from '~/composables/usePreview'
+import { usePreview, previewKindFromPath, mediaFileUrl } from '~/composables/usePreview'
 import { useSidecar } from '~/composables/useSidecar'
 import { useI18n } from '~/composables/useI18n'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
@@ -149,6 +149,16 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   let loadSeq = 0
 
   const isBinaryKind = (k: PreviewRef['kind']) => k === 'image' || k === 'pdf'
+  // Video/audio never go through the base64 reader — they stream via media://
+  // (or an in-memory `src`) and are decoded by the native <video>/<audio> element.
+  const isMediaKind = (k: PreviewRef['kind']) => k === 'video' || k === 'audio'
+
+  // Set when the media element can't decode the source (unsupported codec, read
+  // error) → the modal swaps the player for an "open externally" placeholder.
+  const mediaError = ref(false)
+  function onMediaError() {
+    mediaError.value = true
+  }
 
   async function loadFromWorkspace(it: PreviewRef) {
     const seq = ++loadSeq
@@ -185,6 +195,11 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
         loadedLang.value = res.language
         truncated.value = res.truncated
         loadStatus.value = 'idle'
+        // Code/config files (kind 'text') open ready to edit — no read-only gate,
+        // no extra "Edit" click. Markdown/html keep their rendered preview as the
+        // default and edit on demand. Skip a truncated read: saving would drop the
+        // unread tail. (seq check above guarantees `it` is still the current item.)
+        if (it.kind === 'text' && isEditableFile.value && !truncated.value) startEdit()
       }
     } catch {
       if (seq !== loadSeq) return
@@ -193,7 +208,18 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   }
   // Effective content: prefer freshly-loaded workspace data, fall back to in-memory.
   const effectiveText = computed(() => loadedText.value ?? item.value?.text ?? '')
-  const effectiveSrc = computed(() => loadedSrc.value ?? item.value?.src ?? '')
+  const effectiveSrc = computed(() => {
+    const it = item.value
+    // Media streams from a URL, never base64: an in-memory `src` (drag-dropped
+    // blob) wins; otherwise a workspace file resolves to its media:// URL.
+    if (it && isMediaKind(it.kind)) {
+      if (it.src) return it.src
+      if (it.workspaceRoot && it.path && sc.available)
+        return mediaFileUrl(it.workspaceRoot, it.path)
+      return ''
+    }
+    return loadedSrc.value ?? it?.src ?? ''
+  })
   const effectiveLang = computed(() => item.value?.language ?? loadedLang.value)
 
   const monacoLang = computed(() => {
@@ -397,12 +423,15 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   })
 
   // ── minimize (park to the corner dock) ───────────────────────────────────────
-  // Offered while viewing (not editing — a snapshot would drop the draft). Captures
-  // the current view + markdown scroll so restore lands where the user left off.
-  const canMinimize = computed(() => !!item.value && !editMode.value)
+  // Offered unless there are UNSAVED edits — the dock snapshot doesn't carry a
+  // draft, so minimizing mid-edit would drop it. A clean editor (e.g. a code file
+  // that auto-opened in edit mode but wasn't touched) can still be parked; restore
+  // re-loads it. Captures the current view + markdown scroll so restore lands where
+  // the user left off.
+  const canMinimize = computed(() => !!item.value && !dirty.value)
   function minimize() {
     const it = item.value
-    if (!it || editMode.value) return
+    if (!it || dirty.value) return
     const scrollTop =
       it.kind === 'markdown' && view.value === 'render'
         ? (outline.mdScroll.value?.scrollTop ?? 0)
@@ -516,6 +545,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       chatAttach.available.value &&
       item.value != null &&
       item.value.kind !== 'file' &&
+      // Media has no attachable payload (its src is a stream URL, not data the
+      // model can read) — exclude it from "Add to chat".
+      !isMediaKind(item.value.kind) &&
       (!!effectiveText.value || !!effectiveSrc.value),
   )
   function addToChat() {
@@ -643,18 +675,23 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     return {
       flush:
         !statusMessage.value &&
-        (it.kind === 'image' || it.kind === 'pdf' || htmlRender.value || showCode.value),
+        (it.kind === 'image' ||
+          it.kind === 'pdf' ||
+          it.kind === 'video' ||
+          htmlRender.value ||
+          showCode.value),
       mdrender: it.kind === 'markdown' && view.value === 'render' && !statusMessage.value,
       // Folder tree fills the body (left-aligned, own scroll) — not the centered prose layout.
       tree: it.kind === 'folder',
     }
   })
 
-  // Header icon: clip (image) · folder (folder tree) · doc (everything else).
+  // Header icon: clip (image) · folder (folder tree) · play (media) · doc (else).
   const headIcon = computed(() => {
     const k = item.value?.kind
     if (k === 'image') return 'clip'
     if (k === 'folder') return 'folder'
+    if (k === 'video' || k === 'audio') return 'play'
     return 'rules'
   })
 
@@ -662,6 +699,10 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   const hasBar = computed(() => {
     const it = item.value
     if (!it || statusMessage.value) return false
+    // Media plays through the native <video>/<audio> controls — the floating bar
+    // has no playback controls and would just sit over them, so hide it. Only when
+    // the media can't play do we show the bar (so "open externally" stays reachable).
+    if (isMediaKind(it.kind)) return mediaError.value && hasWorkspaceFile.value
     return ['image', 'markdown', 'html', 'text'].includes(it.kind) || hasWorkspaceFile.value
   })
 
@@ -714,13 +755,16 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       loadedSrc.value = null
       loadedLang.value = undefined
       truncated.value = false
+      mediaError.value = false
       for (const k of Object.keys(mdImages)) delete mdImages[k]
       // Reset folder-tree state on every item change; load the root when a folder opens.
       for (const k of Object.keys(treeChildren)) delete treeChildren[k]
       treeExpanded.clear()
       treeSelected.value = null
       treeLoading.value = false
-      if (it && it.workspaceRoot && it.path && sc.available) void loadFromWorkspace(it)
+      // Media streams via media:// (effectiveSrc) — never through the base64 reader.
+      if (it && it.workspaceRoot && it.path && sc.available && !isMediaKind(it.kind))
+        void loadFromWorkspace(it)
       if (it?.kind === 'folder' && it.workspaceRoot && sc.available) {
         void loadTreeDir(it.workspaceRoot, '')
       }
@@ -762,6 +806,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     effectiveText,
     effectiveSrc,
     monacoLang,
+    // media (video/audio)
+    mediaError,
+    onMediaError,
     // image transform
     scale,
     imgStyle,

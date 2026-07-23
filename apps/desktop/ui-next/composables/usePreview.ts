@@ -15,9 +15,10 @@ import { ref } from 'vue'
 export type PreviewRef = {
   name: string
   // 'folder' renders a lazy file tree of `workspaceRoot` (dragged working folder);
-  // 'html' renders a sandboxed iframe (render) with a raw (Monaco) toggle; all other
-  // kinds render a single file.
-  kind: 'image' | 'pdf' | 'markdown' | 'text' | 'file' | 'html' | 'folder'
+  // 'html' renders a sandboxed iframe (render) with a raw (Monaco) toggle;
+  // 'video' / 'audio' stream through the media:// protocol (workspace files) or an
+  // in-memory `src` (drag-dropped blob); all other kinds render a single file.
+  kind: 'image' | 'pdf' | 'markdown' | 'text' | 'file' | 'html' | 'folder' | 'video' | 'audio'
   // Object URL / data URL for images and PDFs (drag-dropped / inlined files).
   src?: string
   // In-memory source for markdown / text (drag-dropped files, mock data).
@@ -41,13 +42,28 @@ const RE_IMAGE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
 const RE_PDF = /\.pdf$/i
 const RE_MD = /\.(md|markdown|mdx)$/i
 const RE_HTML = /\.html?$/i
+// Formats Chromium can play; the media:// handler (electron/src/media.ts) serves
+// the matching MIME. mkv/mov depend on codec — the modal falls back gracefully.
+const RE_VIDEO = /\.(mp4|m4v|webm|ogv|mov|mkv)$/i
+const RE_AUDIO = /\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i
 
 export function previewKindFromPath(path: string): PreviewRef['kind'] {
   if (RE_IMAGE.test(path)) return 'image'
   if (RE_PDF.test(path)) return 'pdf'
   if (RE_MD.test(path)) return 'markdown'
   if (RE_HTML.test(path)) return 'html'
+  if (RE_VIDEO.test(path)) return 'video'
+  if (RE_AUDIO.test(path)) return 'audio'
   return 'text'
+}
+
+// Build the media:// URL for a workspace video/audio file. The Electron main
+// process (apps/desktop/electron/src/media.ts) serves this scheme with HTTP Range
+// support so the file streams + seeks instead of being base64-inlined. Keep this
+// URL shape in sync with that handler.
+export function mediaFileUrl(workspaceRoot: string, path: string): string {
+  const qs = `root=${encodeURIComponent(workspaceRoot)}&path=${encodeURIComponent(path)}`
+  return `media://awog/?${qs}`
 }
 
 // Attachment variant: image/pdf are decided by the carried data (img flag / mime),
@@ -61,6 +77,10 @@ export function previewKindFromAttachment(a: {
 }): PreviewRef['kind'] {
   if (a.img) return 'image'
   if (a.src && (a.mime === 'application/pdf' || RE_PDF.test(a.name))) return 'pdf'
+  // Media is playable only when it carries a source (blob/object/data URL); a
+  // dropped media file with no inline `src` falls through to an opaque file card.
+  if (a.src && RE_VIDEO.test(a.name)) return 'video'
+  if (a.src && RE_AUDIO.test(a.name)) return 'audio'
   if (a.text == null) return 'file'
   if (RE_MD.test(a.name)) return 'markdown'
   if (RE_HTML.test(a.name)) return 'html'

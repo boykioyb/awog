@@ -5,7 +5,7 @@
        tab has been split (paneCount > 1). -->
   <div
     v-if="leaf"
-    :ref="(el) => ctx.setContainer(leaf!.paneId, el)"
+    :ref="(el) => leaf && ctx.setContainer(leaf.paneId, el)"
     class="wsterm-box"
     :class="{
       'pane-active': multi && leaf.paneId === ctx.activePaneId(tabId),

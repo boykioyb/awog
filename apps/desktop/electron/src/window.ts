@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, net, protocol, shell } from 'electron'
 import { log } from './logger'
+import { MEDIA_SCHEME } from './media'
 import { DEV_URL, preloadPath, uiDir } from './paths'
 
 // Custom scheme for serving the packaged Nuxt SPA. Registered as privileged so
@@ -12,10 +13,20 @@ const APP_SCHEME = 'app'
 const APP_ORIGIN = `${APP_SCHEME}://bundle`
 
 export function registerAppProtocolScheme(): void {
+  // registerSchemesAsPrivileged accepts a single call with every custom scheme —
+  // list the SPA bundle scheme and the media stream scheme together here.
   protocol.registerSchemesAsPrivileged([
     {
       scheme: APP_SCHEME,
       privileges: { standard: true, secure: true, supportFetchAPI: true },
+    },
+    {
+      // media:// streams workspace video/audio into the preview (see media.ts).
+      // `stream: true` lets the handler return a non-buffered streaming Response
+      // body; standard + secure so <video>/<audio> treat it as a normal, seekable,
+      // same-privilege source.
+      scheme: MEDIA_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
     },
   ])
 }

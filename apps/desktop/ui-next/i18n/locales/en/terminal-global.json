@@ -1,6 +1,9 @@
 {
   "terminalGlobal.title": "Terminal",
   "terminalGlobal.close": "Close terminal",
+  "terminalGlobal.collapse": "Minimize terminal",
+  "terminalGlobal.expand": "Expand terminal",
+  "terminalGlobal.newShell": "New shell",
   "terminalGlobal.resize": "Drag to resize",
   "terminalGlobal.cwdHint": "Working directory: home (~)",
   "terminalGlobal.unavailable": "Terminal unavailable — open AWOG in the desktop app"

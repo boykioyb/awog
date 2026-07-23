@@ -1,10 +1,10 @@
-import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ipcMain, shell, dialog, type BrowserWindow } from 'electron'
 import { engine, type RpcErrorShape } from './engine'
 import { isVscodeAvailable, openInVscode } from './vscode'
+import { resolveInsideWorkspace } from './workspace-scope'
 
 // IPC router — the Electron counterpart of the old Rust `commands.rs`.
 // Renderer reaches these only through the `window.awog` contextBridge (preload).
@@ -65,21 +65,6 @@ function normalizeError(err: unknown): RpcErrorShape {
     return err as RpcErrorShape
   }
   return { code: -32603, message: err instanceof Error ? err.message : String(err) }
-}
-
-// Validate that `relPath` resolves to a real path inside `root`. Canonicalize
-// both sides (realpath resolves `..` + symlinks) and require descendant-ship —
-// mirrors the sidecar's assertInsideWorkspace + the old Rust
-// resolve_inside_workspace (security invariant #2).
-function resolveInsideWorkspace(root: string, relPath: string): string {
-  if (!root) throw new Error('workspace root is empty')
-  if (!relPath) throw new Error('path is empty')
-  const rootCanon = realpathSync(root)
-  const targetCanon = realpathSync(join(rootCanon, relPath))
-  if (targetCanon !== rootCanon && !targetCanon.startsWith(rootCanon + sep)) {
-    throw new Error(`path escapes workspace: ${targetCanon}`)
-  }
-  return targetCanon
 }
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
