@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.24.12',
+    date: '2026-07-23',
+    highlight: {
+      en: 'The terminal dock got a big upgrade — a separate set of tabs per project, SSH connections right in the dock, reusable command snippets, and split panes — plus video and audio files now play inside the preview.',
+      vi: 'Dock terminal được nâng cấp lớn — mỗi dự án một bộ thẻ riêng, mở SSH ngay trong dock, thư viện lệnh tái dùng, và chia đôi khung — cùng với video/âm thanh giờ phát ngay trong ô xem trước.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'The global terminal now keeps a separate set of tabs for each project, so switching projects no longer loses your running shells.',
+        vi: 'Terminal chung giờ giữ bộ thẻ riêng cho từng dự án, nên chuyển dự án không còn làm mất các shell đang chạy.',
+      },
+      {
+        kind: 'added',
+        en: 'Open SSH connections right in the terminal dock, next to your local shells — from any page.',
+        vi: 'Mở kết nối SSH ngay trong dock terminal, cạnh các shell cục bộ — từ bất kỳ trang nào.',
+      },
+      {
+        kind: 'added',
+        en: 'Save reusable command snippets per project or globally, and run them into the active tab with one click.',
+        vi: 'Lưu các đoạn lệnh tái dùng theo dự án hoặc dùng chung, và chạy vào thẻ đang mở chỉ với một cú nhấp.',
+      },
+      {
+        kind: 'added',
+        en: 'Split any terminal into side-by-side panes with a new split button.',
+        vi: 'Chia terminal thành các khung cạnh nhau bằng nút chia mới.',
+      },
+      {
+        kind: 'improved',
+        en: 'Minimize the terminal dock to a slim bar to reclaim screen space without closing your shells.',
+        vi: 'Thu nhỏ dock terminal thành thanh mảnh để lấy lại không gian màn hình mà không đóng shell.',
+      },
+      {
+        kind: 'added',
+        en: 'Preview video and audio files right inside AWOG — large media streams and scrubs smoothly instead of failing to load.',
+        vi: 'Xem trước video và âm thanh ngay trong AWOG — media lớn phát và tua mượt thay vì lỗi không tải được.',
+      },
+    ],
+  },
+  {
     version: '0.24.11',
     date: '2026-07-22',
     highlight: {
