@@ -20,9 +20,11 @@ export function useHooksPage() {
   // Project list for the scope picker + tier hints (id/name).
   const projectList = computed(() => projects.value.map((p) => ({ id: p.id, name: p.name })))
 
-  // The active Anthropic account id drives the LLM creator/config/script flows;
-  // null → the panels fall back to a friendly "connect an account" message.
-  const accountId = computed(() => settings.activeAccount('anthropic')?.id ?? null)
+  // Provider-agnostic creator account (mirrors Sessions' default resolution); the
+  // creator panel reads the full object, the config/script modals only the id.
+  // Null id → the panels surface a "connect an account" message.
+  const account = computed(() => settings.resolveCreatorAccount())
+  const accountId = computed(() => account.value.accountId)
 
   // --- selection -----------------------------------------------------------
   const selectedKey = ref<string | null>(null)
@@ -240,6 +242,7 @@ export function useHooksPage() {
     hooks: computed(() => store.hooks),
     hookKey: store.hookKey,
     projectList,
+    account,
     accountId,
     // selection
     selectedHook,

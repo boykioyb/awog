@@ -98,7 +98,7 @@
     <!-- create / refine (chat-driven config authoring) -->
     <ConnectionPromptCreator
       :open="creatorOpen"
-      :account-id="accountId"
+      :account="account"
       :edit-source="creatorEditSource"
       @close="onCreatorClose"
       @turn="onCreatorTurn"
@@ -188,7 +188,7 @@ const statusColor = (s: Source): string => SOURCE_STATUS_COLORS[deriveStatus(s)]
 
 const {
   sources,
-  accountId,
+  account,
   addPickerOpen,
   presets,
   openAddPicker,

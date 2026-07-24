@@ -2,7 +2,7 @@
   <LibraryCreatorPanel
     :open="open"
     method="agents.author"
-    :account-id="accountId"
+    :account="account"
     :projects="projects"
     :initial-scope="initialScope"
     :title="t('agents.creator.title')"
@@ -21,11 +21,12 @@
 // AGENT.md (YAML frontmatter + markdown body) to the chosen scope's dir; the
 // page re-hydrates on close / each turn. Mirrors SkillPromptCreator.
 import LibraryCreatorPanel from '~/components/library/LibraryCreatorPanel.vue'
+import type { CreatorAccountKind, ProviderName } from '~/stores/settings'
 
 withDefaults(
   defineProps<{
     open: boolean
-    accountId: string | null
+    account: { accountId: string | null; provider: ProviderName; kind: CreatorAccountKind }
     projects: { id: string; name: string }[]
     initialScope?: string
   }>(),

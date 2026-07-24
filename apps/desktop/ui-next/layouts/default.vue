@@ -62,6 +62,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCommandPalette } from '~/composables/useCommandPalette'
+import { useSettingsStore } from '~/stores/settings'
 
 // Shell layout: NavRail | (TopBar + page body). Ported from awog-prototype.html
 // `.app > .side + .main > .top + .body`. NavRail/AppTopBar auto-imported.
@@ -106,6 +107,11 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   initResponsiveShell()
+  // FM1: hydrate the account safe-view early & globally so creators don't show a
+  // false "no active account". Fire-and-forget — does not block first paint;
+  // hydrateFromSidecar no-ops when the sidecar is offline and dedups if called
+  // again (§12.2). Errors are swallowed inside the store, so no .catch needed.
+  void useSettingsStore().hydrateFromSidecar()
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>

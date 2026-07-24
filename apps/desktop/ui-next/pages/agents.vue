@@ -39,7 +39,7 @@
     <!-- create (chat-driven AGENT.md authoring) -->
     <AgentPromptCreator
       :open="creatorOpen"
-      :account-id="accountId"
+      :account="account"
       :projects="projectList"
       :initial-scope="creatorScope"
       @close="onCreatorClose"
@@ -114,6 +114,7 @@ const {
   agents,
   agentKey,
   projectList,
+  account,
   accountId,
   mcpServers,
   creatorOpen,
