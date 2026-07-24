@@ -44,6 +44,21 @@ For any request that takes more than a couple of steps, use the \`TodoWrite\` to
 Before you end your turn, reconcile the checklist with what you actually did: mark every item you have genuinely finished as \`completed\`, and do not leave an already-finished item stuck at \`in_progress\`. NEVER mark an item \`completed\` that you did not actually finish — if you stop with work still remaining, leave those items \`pending\` or \`in_progress\` and say what is left. When you pause to wait for the user (a question or an approval gate), leave that item \`in_progress\` until you resume, then mark it \`completed\` once you continue.
 </todo-list>`
 
+// Background-exec nudge (ADR 0066, sessions only). Models trained on Claude Code
+// assume Bash can run in the background and that they'll be "notified when it's
+// done" — but until this feature that was a confabulation (AWOG's Bash was a
+// one-shot with a hard 600s cap), so a build kicked off "in the background" just
+// left the turn dead. Now the primitive is REAL: this tells the model to use it
+// for long commands and to actually poll/await rather than assume. Appended only
+// when backgroundExec is wired (chat sessions, not plan mode).
+export const BACKGROUND_EXEC_PROMPT = `<background-commands>
+For a command that runs longer than a couple of minutes (builds, full test runs, dev servers, long installs), call \`Bash\` with \`run_in_background: true\`. It returns a \`shellId\` immediately and the command keeps running detached — it is NOT subject to the normal command timeout, and it does not block you.
+
+To check on a background command, call \`BashOutput\` with its \`shell_id\`: you get its accumulated output and whether it is still running or has exited (with the exit code). Poll it rather than guessing. When a background command finishes, the session is notified so you can continue — but never claim a background command succeeded or report its results until you have actually read them via \`BashOutput\` and seen it exit. Do not fabricate an exit code or output you have not observed.
+
+Use a foreground \`Bash\` (the default) for short commands — background exec is only for genuinely long-running work.
+</background-commands>`
+
 // File-reference nudge (sessions only). The chat UI turns file paths written in
 // inline code into clickable links that open a preview, but it can only resolve a
 // path it can anchor to the workspace root. Models tend to write the bare basename

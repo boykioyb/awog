@@ -27,7 +27,13 @@ import { buildContext, historyToAgentMessages } from './context-builder.js'
 import { computeCutPoint } from './compaction.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
-import { fileRefPrompt, TODO_USAGE_PROMPT, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from './prompts.js'
+import {
+  BACKGROUND_EXEC_PROMPT,
+  fileRefPrompt,
+  TODO_USAGE_PROMPT,
+  TOOL_DISCIPLINE_PROMPT,
+  VERIFY_PROMPT,
+} from './prompts.js'
 import { makeConfabulationFollowUp } from './confabulation-guard.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
@@ -117,6 +123,12 @@ export async function runStreamPi(
       // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
       ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),
       ...(args.sourceApiEndpoints ? { sourceApiEndpoints: args.sourceApiEndpoints } : {}),
+      // Background exec (ADR 0066): sessions only. Bash gains run_in_background +
+      // a BashOutput tool; a background command outlives the turn and the session
+      // is woken when it exits. Not in plan mode (Bash is read-only-blocked there).
+      ...(!inPlanMode && args.sessionId
+        ? { backgroundExec: { sessionId: args.sessionId } }
+        : {}),
     },
     args.abortController?.signal,
     // Wire the interactive AskUserQuestion handler (chat only). The tool parks
@@ -161,6 +173,9 @@ export async function runStreamPi(
     // Act through tools, don't narrate (see prompts.ts). Off in plan mode —
     // PLAN_MODE_PROMPT governs that read-only path.
     inPlanMode ? undefined : TOOL_DISCIPLINE_PROMPT,
+    // Background exec guidance (ADR 0066): only when the primitive is actually
+    // wired (sessions, not plan mode) — mirrors the backgroundExec filter above.
+    !inPlanMode && args.sessionId ? BACKGROUND_EXEC_PROMPT : undefined,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
     // Co-author trailer convention (Git `commitCoAuthor`). Pi has no built-in

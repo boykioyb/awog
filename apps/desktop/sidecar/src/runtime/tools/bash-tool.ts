@@ -14,38 +14,44 @@
 import { spawn } from 'node:child_process'
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
-import { resolveBashShell } from './shell.js'
+import { resolveBashShell, filteredShellEnv } from './shell.js'
+import {
+  startBackground,
+  BackgroundLimitError,
+  type BgShellMeta,
+} from '../../sessions/bg-registry.js'
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_TIMEOUT_MS = 600_000
 const MAX_OUTPUT_BYTES = 64 * 1024
-
-// Env allowlist mirrors git/runner.ts — the child inherits only what it needs
-// to find tools, never AWOG's credential env.
-const ALLOW_ENV = ['PATH', 'HOME', 'SHELL', 'LANG', 'LC_ALL', 'SystemRoot', 'USERPROFILE', 'TMPDIR'] as const
-
-function filteredEnv(): NodeJS.ProcessEnv {
-  const out: NodeJS.ProcessEnv = {}
-  for (const k of ALLOW_ENV) {
-    const v = process.env[k]
-    if (v !== undefined) out[k] = v
-  }
-  // Defense-in-depth for AWOG invariant #5 (no telemetry): set the widely-honored
-  // DO_NOT_TRACK standard so any tool the agent shells out to can never phone home.
-  out.DO_NOT_TRACK = '1'
-  return out
-}
 
 const BashParams = Type.Object({
   command: Type.String({ description: 'The shell command to run (executed via a POSIX shell, e.g. sh/bash -c).' }),
   timeout: Type.Optional(
     Type.Number({ description: `Timeout in ms (default ${DEFAULT_TIMEOUT_MS}, max ${MAX_TIMEOUT_MS}).` }),
   ),
+  run_in_background: Type.Optional(
+    Type.Boolean({
+      description:
+        'Run the command detached in the background instead of waiting for it. ' +
+        'Returns a shellId immediately (no 600s cap). Poll its output with BashOutput; ' +
+        'the session is notified when it exits. Use for long tasks (builds, test runs, servers). ' +
+        'Only honored in a chat session.',
+    }),
+  ),
 })
 
 interface BashDetails {
   command: string
   exitCode: number | null
+  shellId?: string
+}
+
+// Background exec context (ADR 0066). Set ONLY by the chat runtime (sessions) —
+// a session can be woken when the command exits. Absent for tasks/subagents, so
+// run_in_background silently degrades to synchronous there.
+export interface BashBackgroundContext {
+  sessionId: string
 }
 
 function clampOutput(buf: string): string {
@@ -53,13 +59,54 @@ function clampOutput(buf: string): string {
   return `${buf.slice(0, MAX_OUTPUT_BYTES)}\n…(output truncated)`
 }
 
-export function createBashTool(cwd: string): AgentTool<typeof BashParams, BashDetails> {
+export function createBashTool(
+  cwd: string,
+  bg?: BashBackgroundContext,
+): AgentTool<typeof BashParams, BashDetails> {
   return {
     name: 'Bash',
     label: 'Run',
-    description: 'Run a shell command in the workspace directory and capture its output.',
+    description: bg
+      ? 'Run a shell command in the workspace directory and capture its output. ' +
+        'Pass run_in_background:true for long-running commands (builds, test runs, dev servers) ' +
+        'to run detached and continue without blocking; poll with BashOutput.'
+      : 'Run a shell command in the workspace directory and capture its output.',
     parameters: BashParams,
     async execute(_id, params, signal): Promise<AgentToolResult<BashDetails>> {
+      // Background branch (ADR 0066): only in a chat session. Spawns detached and
+      // returns immediately — the turn's abort signal must NOT kill it.
+      if (params.run_in_background === true && bg) {
+        try {
+          const meta: BgShellMeta = await startBackground({
+            sessionId: bg.sessionId,
+            cwd,
+            command: params.command,
+          })
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  `Started in the background (shellId: ${meta.shellId}). This does NOT block — ` +
+                  `the command keeps running detached. Poll its output with ` +
+                  `BashOutput({ shell_id: "${meta.shellId}" }); you'll be notified when it exits ` +
+                  `so you can continue. Don't wait on it here.`,
+              },
+            ],
+            details: { command: params.command, exitCode: null, shellId: meta.shellId },
+          }
+        } catch (err) {
+          const text =
+            err instanceof BackgroundLimitError
+              ? `${err.message} Wait for a background command to finish (check BashOutput) before starting another.`
+              : `Failed to start background command: ${err instanceof Error ? err.message : String(err)}`
+          return {
+            content: [{ type: 'text', text }],
+            details: { command: params.command, exitCode: null },
+          }
+        }
+      }
+
       const timeout = Math.min(params.timeout ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
       // Resolve the platform shell once (memoized): `sh -c` on POSIX, git-bash
       // `bash -c` on Windows, `cmd.exe /c` as a last-resort Windows fallback.
@@ -67,7 +114,7 @@ export function createBashTool(cwd: string): AgentTool<typeof BashParams, BashDe
       return new Promise<AgentToolResult<BashDetails>>((resolveResult) => {
         const child = spawn(shell.bin, [shell.flag, params.command], {
           cwd,
-          env: filteredEnv(),
+          env: filteredShellEnv(),
           windowsHide: true,
         })
         let stdout = ''

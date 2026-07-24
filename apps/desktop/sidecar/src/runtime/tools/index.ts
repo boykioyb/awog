@@ -28,6 +28,7 @@ import {
 } from './fs-tools.js'
 import { createNotebookEditTool, createNotebookReadTool } from './notebook-tools.js'
 import { createBashTool } from './bash-tool.js'
+import { createBashOutputTool } from './bash-output-tool.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
@@ -69,6 +70,13 @@ export interface ToolFilter {
   // Gates NON-GET calls of that source's `mcp__<id>__api_<slug>` tool to a
   // matching rule (GET always allowed). Absent/empty = no api-call gating.
   sourceApiEndpoints?: Record<string, CompiledApiEndpoint[]>
+  // Background exec context (ADR 0066): when set, the Bash tool accepts
+  // run_in_background and a BashOutput tool is added so the model can poll it.
+  // Set ONLY by the chat runtime (sessions) — a session can be woken when a
+  // background command exits. Never set for tasks/subagents/one-shot, so
+  // run_in_background silently degrades to synchronous there. Not a filter per se,
+  // but threaded here alongside the other per-turn tool-assembly options.
+  backgroundExec?: { sessionId: string }
 }
 
 // Whether a tool name survives the filter: allowedTools (intersect when set) +
@@ -138,7 +146,10 @@ export function createAwogToolDefinitions(
     createWriteTool(cwd),
     createEditTool(cwd),
     createMultiEditTool(cwd),
-    createBashTool(cwd),
+    createBashTool(cwd, filter.backgroundExec),
+    // BashOutput: poll a background shell (ADR 0066). Sessions only (paired with
+    // Bash's run_in_background), and only when backgroundExec is set.
+    ...(filter.backgroundExec ? [createBashOutputTool(filter.backgroundExec.sessionId)] : []),
     createGrepTool(cwd),
     createGlobTool(cwd),
     createNotebookReadTool(cwd),

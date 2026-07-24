@@ -320,5 +320,13 @@
   "sessions.quota.aborted": "Stopped running sessions on {account} — 5-hour usage limit reached.",
   "sessions.quota.blocked": "New session blocked — {account} has reached its 5-hour usage limit. Wait for the window to reset or switch account.",
   "sessions.quota.blockedSend": "Can't send — {account} has reached its 5-hour usage limit.",
-  "sessions.quota.blockedSendNotice": "5-hour usage limit reached — can't send. Wait for the window to reset or switch account."
+  "sessions.quota.blockedSendNotice": "5-hour usage limit reached — can't send. Wait for the window to reset or switch account.",
+  "sessions.bg.running": "running",
+  "sessions.bg.exit": "exit {code}",
+  "sessions.bg.interrupted": "interrupted",
+  "sessions.bg.stop": "Stop background command",
+  "sessions.bg.wake.title": "Background task finished",
+  "sessions.bg.wake.titleN": "{n} background tasks finished",
+  "sessions.bg.wake.continue": "Continue",
+  "sessions.bg.wake.dismiss": "Dismiss"
 }

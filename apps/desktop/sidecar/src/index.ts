@@ -21,6 +21,8 @@ import './methods/sessions.compact.js'
 import './methods/sessions.cancel.js'
 import './methods/sessions.turn-active.js'
 import './methods/sessions.active-turns.js'
+import './methods/sessions.background-list.js'
+import './methods/sessions.background-kill.js'
 import './methods/sessions.steer.js'
 import './methods/sessions.permission.js'
 import './methods/sessions.answer-question.js'
@@ -254,6 +256,7 @@ import { migrateMcpServersToSources } from './sources/migrate.js'
 import { sessionManager } from './sessions/session-manager.js'
 import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
+import { reloadBackgroundShells } from './sessions/bg-registry.js'
 import { ensureUserPath } from './util/spawn-path.js'
 
 // Last-resort crash guards. A broken pipe from a spawned child (e.g. the Claude
@@ -438,3 +441,15 @@ void awogWatcher.start()
 // Resume queued/running tasks from their durable frontier (ADR 0024 restart-
 // safety). waiting_approval / completed / failed tasks are left untouched.
 void resumeOnBoot()
+
+// Adopt background shells from a previous run (ADR 0066 restart-safety): resume
+// polling for ones still running, finalize orphans, sweep stale exited dirs.
+// Synchronous fs scan — cheap; must run AFTER the session store warms so the
+// dirs it reads are the current ones. Best-effort; never blocks boot.
+try {
+  reloadBackgroundShells()
+} catch (err) {
+  log.warn('boot: background-shell reload failed', {
+    err: err instanceof Error ? err.message : String(err),
+  })
+}

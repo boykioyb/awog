@@ -118,6 +118,31 @@ type EngineStep = {
 
 type SessionChunkPayload = { sessionId: string; messageId: string; delta: string }
 type SessionStepPayload = { sessionId: string; messageId: string; step: EngineStep }
+
+// Background shell (ADR 0066). A long-running Bash(run_in_background) command.
+export type BgShellStatus = 'running' | 'exited' | 'exited-unknown'
+export type BgShellState = {
+  shellId: string
+  command: string
+  startedAt: string
+  status: BgShellStatus
+  exitCode: number | null
+}
+// Event payloads for session.background-started / session.background-done.
+type BackgroundStartedPayload = {
+  sessionId: string
+  shellId: string
+  command: string
+  startedAt: string
+}
+type BackgroundDonePayload = {
+  sessionId: string
+  shellId: string
+  command: string
+  status: BgShellStatus
+  exitCode: number | null
+  outputTail: string
+}
 type PermissionRequestPayload = {
   sessionId: string
   messageId: string
@@ -154,6 +179,22 @@ const isPermissionPayload = (raw: unknown): raw is PermissionRequestPayload => {
     typeof p.messageId === 'string' &&
     typeof p.requestId === 'string' &&
     typeof p.toolName === 'string'
+  )
+}
+const isBgStartedPayload = (raw: unknown): raw is BackgroundStartedPayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return (
+    typeof p.sessionId === 'string' &&
+    typeof p.shellId === 'string' &&
+    typeof p.command === 'string'
+  )
+}
+const isBgDonePayload = (raw: unknown): raw is BackgroundDonePayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return (
+    typeof p.sessionId === 'string' && typeof p.shellId === 'string' && typeof p.status === 'string'
   )
 }
 
@@ -1602,8 +1643,15 @@ export const useSessionsStore = defineStore('sessions', () => {
   // and the session is idle/done.
   function drainQueue(id: number) {
     const s = byId(id)
-    if (!s?.queue || !s.queue.length) return
+    if (!s) return
     if (s.status === 'streaming' || s.status === 'awaiting') return
+    if (!s.queue || !s.queue.length) {
+      // Idle with an empty queue — the moment to auto-continue a finished
+      // background command (ADR 0066 P2). No-op unless the setting is on and a
+      // wake is pending. Placed here so it fires after user-queued messages drain.
+      if (s.engineId) maybeAutoContinue(s.engineId)
+      return
+    }
     const head = s.queue.shift()
     if (!s.queue.length) delete s.queue
     // Pass the item's own quote snapshot as an override so draining doesn't consume
@@ -1976,6 +2024,115 @@ export const useSessionsStore = defineStore('sessions', () => {
     target: string
   } | null>(null)
 
+  // Background shells (ADR 0066), keyed by session engineId. Populated by the
+  // session.background-* events + hydrated on session open (loadBackgroundShells).
+  // Transient — not persisted; the sidecar's registry is the source of truth.
+  const bgShells = ref<Record<string, BgShellState[]>>({})
+  const bgShellsFor = (engineId: string): BgShellState[] => bgShells.value[engineId] ?? []
+
+  function upsertBgShell(engineId: string, shell: BgShellState): void {
+    const list = bgShells.value[engineId] ?? []
+    const idx = list.findIndex((s) => s.shellId === shell.shellId)
+    if (idx >= 0) list[idx] = shell
+    else list.push(shell)
+    bgShells.value[engineId] = list
+  }
+
+  // Hydrate a session's background shells from the sidecar (events only cover
+  // shells changed after the listener attached; a reload needs this).
+  async function loadBackgroundShells(engineId: string): Promise<void> {
+    if (!useIpc) return
+    try {
+      const res = await sc.request<{ shells: BgShellState[] }>('sessions.backgroundList', {
+        sessionId: engineId,
+      })
+      bgShells.value[engineId] = res.shells
+    } catch (err) {
+      console.warn('[sessions] backgroundList failed', err)
+    }
+  }
+
+  async function killBackgroundShell(engineId: string, shellId: string): Promise<void> {
+    if (!useIpc) return
+    try {
+      await sc.request('sessions.backgroundKill', { sessionId: engineId, shellId })
+    } catch (err) {
+      console.warn('[sessions] backgroundKill failed', err)
+    }
+  }
+
+  // ─── Reactive wake (ADR 0066 P2) ──────────────────────────────────────────
+  // A finished background command that hasn't yet driven a continuation turn.
+  // Keyed by engineId. Renderer-driven: on session.background-done we record one,
+  // then either auto-continue (setting on + session idle) or surface a "Continue"
+  // card (notify-only, default). The sidecar has no turn primitive of its own —
+  // sessions are renderer-driven — so the wake reuses the normal sendMessage path.
+  type PendingWake = {
+    shellId: string
+    command: string
+    status: BgShellStatus
+    exitCode: number | null
+    outputTail: string
+  }
+  const pendingWakes = ref<Record<string, PendingWake[]>>({})
+  const pendingWakesFor = (engineId: string): PendingWake[] => pendingWakes.value[engineId] ?? []
+  // Synchronous launch latch: bridges the async gap in sendMessage (it awaits a
+  // usage read BEFORE pushing the streaming placeholder), so two near-simultaneous
+  // background completions can't both start a turn under auto-continue. Cleared the
+  // moment the turn's placeholder is pushed (runEngineTurn), after which
+  // sendMessage's own streaming guard takes over.
+  const autoWakeStarting = new Set<string>()
+
+  // Build the injected turn text from a batch of finished commands. Framed as a
+  // system event (not the user talking) so the model reads it as context and
+  // resumes the plan. The output tail is capped upstream (bg-registry, 64KB).
+  function buildWakePrompt(wakes: PendingWake[]): string {
+    const parts = wakes.map((w) => {
+      const head =
+        w.status === 'exited'
+          ? `Background command \`${w.command}\` (${w.shellId}) exited with code ${w.exitCode ?? '?'}.`
+          : `Background command \`${w.command}\` (${w.shellId}) was interrupted (exit status unknown).`
+      return `${head}\n\nOutput:\n${w.outputTail || '(no output)'}`
+    })
+    return (
+      `[background task finished]\n\n${parts.join('\n\n---\n\n')}\n\n` +
+      `The background work above has finished. Review the output and continue with the plan.`
+    )
+  }
+
+  // Fire the pending wakes for a session as one continuation turn — auto-continue
+  // path. Only when the setting is on AND the session is idle (no live/queued turn);
+  // otherwise leaves them pending for the card / a later flush on turn end.
+  function maybeAutoContinue(engineId: string): void {
+    if (!settingsStore.sessions.autoContinueOnBackground) return
+    if (autoWakeStarting.has(engineId)) return
+    const s = byEngineId(engineId)
+    if (!s) return
+    if (s.status === 'streaming' || s.status === 'awaiting' || s.compacting) return
+    if (s.queue?.length) return
+    const wakes = pendingWakes.value[engineId]
+    if (!wakes || !wakes.length) return
+    delete pendingWakes.value[engineId]
+    autoWakeStarting.add(engineId)
+    // Backstop clear: if the turn never starts (e.g. quota-blocked, so runEngineTurn
+    // is never reached), the latch must still release. runEngineTurn clears it early
+    // (on placeholder push); this covers the no-start path.
+    void sendMessage(s.id, buildWakePrompt(wakes)).finally(() => autoWakeStarting.delete(engineId))
+  }
+
+  // User clicked "Continue" on the wake card (notify-only path).
+  function continueFromBackground(engineId: string): void {
+    const s = byEngineId(engineId)
+    const wakes = pendingWakes.value[engineId]
+    if (!s || !wakes || !wakes.length) return
+    delete pendingWakes.value[engineId]
+    void sendMessage(s.id, buildWakePrompt(wakes))
+  }
+
+  function dismissBackgroundWakes(engineId: string): void {
+    delete pendingWakes.value[engineId]
+  }
+
   // Single app-lifetime subscription to engine events (set up at store init).
   let unlisten: (() => void) | null = null
   async function subscribe(): Promise<void> {
@@ -2044,6 +2201,45 @@ export const useSessionsStore = defineStore('sessions', () => {
             m.blocks.push(block)
           }
           s.status = 'awaiting'
+          return
+        }
+        if (evt.type === 'session.background-started') {
+          if (!isBgStartedPayload(evt.payload)) return
+          const p = evt.payload
+          upsertBgShell(p.sessionId, {
+            shellId: p.shellId,
+            command: p.command,
+            startedAt: p.startedAt,
+            status: 'running',
+            exitCode: null,
+          })
+          return
+        }
+        if (evt.type === 'session.background-done') {
+          if (!isBgDonePayload(evt.payload)) return
+          const p = evt.payload
+          const existing = bgShellsFor(p.sessionId).find((sh) => sh.shellId === p.shellId)
+          upsertBgShell(p.sessionId, {
+            shellId: p.shellId,
+            command: p.command,
+            startedAt: existing?.startedAt ?? '',
+            status: p.status,
+            exitCode: p.exitCode,
+          })
+          // Record a pending wake, then try to auto-continue (setting on + idle);
+          // otherwise it lingers for the "Continue" card, and — if the session is
+          // busy under auto-continue — flushes when the current turn finishes
+          // (drainQueue → maybeAutoContinue).
+          const wakes = pendingWakes.value[p.sessionId] ?? []
+          wakes.push({
+            shellId: p.shellId,
+            command: p.command,
+            status: p.status,
+            exitCode: p.exitCode,
+            outputTail: p.outputTail,
+          })
+          pendingWakes.value[p.sessionId] = wakes
+          maybeAutoContinue(p.sessionId)
           return
         }
         if (evt.type === 'session.message.done') {
@@ -2314,6 +2510,10 @@ export const useSessionsStore = defineStore('sessions', () => {
   // events into it; finalize / cancel / error stamps the bubble.
   async function runEngineTurn(s: Session, text: string, atts: SessionAttachment[]) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
+    // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
+    // wake paths already consumed it before calling here; a manual send means the
+    // user moved on, so a stale "Continue" card should not linger.
+    if (s.engineId) delete pendingWakes.value[s.engineId]
     const messageId = `m-${Date.now().toString(36)}-${(seq++).toString(36)}`
     // First exchange? (no prior assistant reply). Captured before the placeholder is
     // pushed. Drives early title generation below + the post-turn fallback.
@@ -2338,6 +2538,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // false) to recover it. Index right after push is provably the placeholder.
     const live = (s.msgs[s.msgs.length - 1] ?? placeholder) as AssistantMessage
     s.status = 'streaming'
+    // The turn is now genuinely streaming — release the auto-wake launch latch so
+    // sendMessage's own concurrency guard governs from here (ADR 0066 P2).
+    if (s.engineId) autoWakeStarting.delete(s.engineId)
 
     // Kick off the AI title NOW, in parallel with the turn — titling from the user's
     // opening message (passed directly, no dependency on the turn finishing or the
@@ -3165,6 +3368,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     selectedIds,
     selecting,
     pendingPermission,
+    // background shells (ADR 0066)
+    bgShellsFor,
+    loadBackgroundShells,
+    killBackgroundShell,
+    // background reactive wake (ADR 0066 P2)
+    pendingWakesFor,
+    continueFromBackground,
+    dismissBackgroundWakes,
     // project tabs (VSCode-style)
     openProjectTabs,
     activeTab,
