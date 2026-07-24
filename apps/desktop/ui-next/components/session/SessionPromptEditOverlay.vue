@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="pe">
-      <div v-if="state" class="pe-ovl" @click.self="cancel">
+      <div v-if="state" class="pe-ovl">
         <div class="pe-card" role="dialog" aria-modal="true">
           <div class="pe-head">
             <Pencil :size="14" class="pe-head-ic" />
@@ -17,7 +17,6 @@
             v-model="draft"
             class="pe-textarea"
             :placeholder="t('palette.edit.placeholder')"
-            @keydown.esc.prevent="cancel"
             @keydown.meta.enter.prevent="confirm"
             @keydown.ctrl.enter.prevent="confirm"
           />
@@ -60,6 +59,10 @@ function confirm() {
 function cancel() {
   cancelPromptEdit()
 }
+
+// ESC closes the overlay even when focus isn't inside the textarea (e.g. tabbed to
+// a button); gated on the open `state`.
+useEscToClose(() => !!state.value, cancel)
 
 // Seed the draft + focus whenever a new edit request opens.
 watch(

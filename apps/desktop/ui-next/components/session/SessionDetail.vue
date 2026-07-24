@@ -265,7 +265,7 @@
 
     <!-- note popover for a selection quote -->
     <template v-if="notePop">
-      <div class="notebackdrop" @mousedown="notePop = null" />
+      <div class="notebackdrop" />
       <div
         class="notepop"
         :class="{ moved: notePos, dragging: notePopDragging }"
@@ -285,7 +285,6 @@
           @keydown.enter.exact.prevent="saveQuote"
           @keydown.enter.meta.prevent="saveQuote"
           @keydown.enter.ctrl.prevent="saveQuote"
-          @keydown.esc="notePop = null"
         />
         <div class="nprow">
           <button class="npbtn" @click="notePop = null">{{ t('common.close') }}</button>
@@ -746,6 +745,17 @@ function onNoteResizeStart(ev: PointerEvent) {
 // Tear down a live note drag/resize gesture if the component unmounts mid-drag, so the
 // captured pointer + document listeners don't leak (mirrors the composer/tab cleanup).
 onBeforeUnmount(() => activeNoteCleanup?.())
+
+// ESC closes the note popover even when focus isn't inside its textarea (drag handle,
+// a button, the backdrop). Gated on `isActive` so a cached <KeepAlive> instance that
+// still holds an open popover (session switched away without closing it) can't swallow
+// ESC for the session now on screen.
+useEscToClose(
+  () => isActive.value && !!notePop.value,
+  () => {
+    notePop.value = null
+  },
+)
 // Save → add the follow-up (with note). The in-place highlight is painted reactively by
 // SessionTextBlock via the CSS Custom Highlight API once the follow-up lands in state, so
 // there's no DOM mutation here (which would otherwise strip the rendered markdown).
