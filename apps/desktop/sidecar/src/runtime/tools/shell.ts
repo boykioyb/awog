@@ -74,3 +74,30 @@ export function resolveBashShell(): Promise<ShellPlan> {
   if (!planPromise) planPromise = resolvePlan()
   return planPromise
 }
+
+// Env allowlist for shell-outs (the one-shot Bash tool AND the background-exec
+// registry, ADR 0066) — mirrors git/runner.ts. The child inherits only what it
+// needs to find tools, never AWOG's credential env.
+const ALLOW_ENV = [
+  'PATH',
+  'HOME',
+  'SHELL',
+  'LANG',
+  'LC_ALL',
+  'SystemRoot',
+  'USERPROFILE',
+  'TMPDIR',
+] as const
+
+// Build the filtered env for a spawned shell command. DO_NOT_TRACK is set as
+// defense-in-depth for AWOG invariant #5 (no telemetry): any tool the command
+// shells out to that honors the standard can never phone home.
+export function filteredShellEnv(): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {}
+  for (const k of ALLOW_ENV) {
+    const v = process.env[k]
+    if (v !== undefined) out[k] = v
+  }
+  out.DO_NOT_TRACK = '1'
+  return out
+}

@@ -5,6 +5,7 @@ import { deleteSnapshots } from '../sessions/snapshots.js'
 import { clearSessionPermissions } from '../sessions/permissions.js'
 import { releaseSessionMcp } from '../runtime/tools/mcp-tools.js'
 import { removeSdkSession } from '../runtime/claude-sdk/store.js'
+import { cleanupSessionBackground } from '../sessions/bg-registry.js'
 
 const Params = z.object({
   id: z.string().min(1),
@@ -28,6 +29,9 @@ register('sessions.delete', async (raw) => {
   // Tear down any session-pooled MCP children (e.g. a Playwright browser) so a
   // deleted session leaves no orphan process running for the sidecar lifetime.
   releaseSessionMcp(params.id)
+  // Kill any background shells (ADR 0066) + remove their on-disk bg/ dir so a
+  // deleted session leaves no detached process or leftover logs.
+  cleanupSessionBackground(params.id)
   // Best-effort: discard the session's Rewind snapshot tree (ADR 0038).
   await deleteSnapshots(params.id)
   return { ok: true }

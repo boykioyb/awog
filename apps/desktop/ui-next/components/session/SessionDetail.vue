@@ -185,6 +185,8 @@
             :fallback-when="session.when"
             :loading="!!session.loading"
           />
+          <SessionBackgroundWakeCard :session="session" />
+          <SessionBackgroundChips :session="session" />
           <SessionComposer
             :attachments="pendingAtt"
             @send="onSend"

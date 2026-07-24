@@ -3,6 +3,8 @@
   "settingsSessions.autoApprove.desc": "Bỏ qua bước duyệt cho các phase rủi ro thấp",
   "settingsSessions.notifications.name": "Thông báo",
   "settingsSessions.notifications.desc": "Hiện thông báo hệ thống khi task cần được duyệt",
+  "settingsSessions.autoContinueBg.name": "Tự tiếp tục sau tác vụ nền",
+  "settingsSessions.autoContinueBg.desc": "Khi một lệnh nền (Bash run_in_background) chạy xong và session đang rảnh, tự động chạy tiếp lượt. Tắt = hiện nút “Tiếp tục” để bạn tự bấm.",
   "settingsSessions.pasteAsFile.name": "Dán thành file",
   "settingsSessions.pasteAsFile.desc": "Đoạn dán dài sẽ thành tệp đính kèm thay vì nội dung inline",
   "settingsSessions.pasteThreshold.name": "Ngưỡng dán (ký tự)",

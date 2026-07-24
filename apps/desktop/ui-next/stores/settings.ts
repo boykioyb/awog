@@ -105,6 +105,10 @@ export interface SessionSettings {
   refeedImages: boolean
   pasteAsFile: boolean
   pasteThreshold: number
+  // Reactive wake (ADR 0066 P2): when a Bash(run_in_background) command finishes
+  // and the session is idle, auto-start a turn so the model continues. Default OFF
+  // = notify-only (a "Continue" card; the user clicks to resume).
+  autoContinueOnBackground: boolean
 }
 
 export interface QuotaWarningSettings {
@@ -209,6 +213,7 @@ const DEFAULT_SESSIONS: SessionSettings = {
   refeedImages: true,
   pasteAsFile: true,
   pasteThreshold: 2000,
+  autoContinueOnBackground: false,
 }
 
 const DEFAULT_QUOTA: QuotaWarningSettings = {

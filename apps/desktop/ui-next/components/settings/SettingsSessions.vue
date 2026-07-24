@@ -17,6 +17,13 @@
     </SettingsField>
 
     <SettingsField
+      :name="t('settingsSessions.autoContinueBg.name')"
+      :desc="t('settingsSessions.autoContinueBg.desc')"
+    >
+      <SettingsTog v-model="autoContinueOnBackground" />
+    </SettingsField>
+
+    <SettingsField
       :name="t('settings.sessions.autoCompact.name')"
       :desc="t('settings.sessions.autoCompact.desc')"
     >
@@ -139,7 +146,8 @@ const sessionToggle = (
     | 'typewriter'
     | 'reducedMotion'
     | 'refeedImages'
-    | 'pasteAsFile',
+    | 'pasteAsFile'
+    | 'autoContinueOnBackground',
 ) =>
   computed<boolean>({
     get: () => settings.sessions[key],
@@ -154,6 +162,7 @@ const typewriter = sessionToggle('typewriter')
 const reducedMotion = sessionToggle('reducedMotion')
 const refeedImages = sessionToggle('refeedImages')
 const pasteAsFile = sessionToggle('pasteAsFile')
+const autoContinueOnBackground = sessionToggle('autoContinueOnBackground')
 
 // SettingsNumber clamps to [min, max] on commit; the setter just persists.
 const pasteThreshold = computed<number>({
