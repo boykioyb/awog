@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.25.0',
+    date: '2026-07-24',
+    highlight: {
+      en: 'Sessions can now run commands in the background and automatically pick back up when they finish — plus smoother overlays, a self-growing composer, and fewer startup and terminal hiccups.',
+      vi: 'Phiên làm việc giờ có thể chạy lệnh ở chế độ nền và tự động tiếp tục khi lệnh xong — cùng lớp phủ mượt hơn, ô soạn tự giãn, và ít trục trặc khi khởi động hay dùng terminal.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'The assistant can now run long-running shell commands in the background and keep working — then automatically resume the moment they finish.',
+        vi: 'Trợ lý giờ có thể chạy các lệnh shell kéo dài ở chế độ nền và tiếp tục làm việc — rồi tự động quay lại ngay khi lệnh chạy xong.',
+      },
+      {
+        kind: 'added',
+        en: 'New session setting to choose whether a finished background task auto-continues the session or simply notifies you.',
+        vi: 'Thêm tùy chọn phiên để chọn: một tác vụ nền chạy xong sẽ tự động tiếp tục phiên hay chỉ báo cho bạn biết.',
+      },
+      {
+        kind: 'improved',
+        en: 'Session overlays (edit prompt, settings, create panels) now close with ESC and no longer dismiss on an accidental click outside.',
+        vi: 'Các lớp phủ trong phiên (sửa prompt, cài đặt, bảng tạo mới) giờ đóng bằng phím ESC và không còn bị tắt khi lỡ nhấp ra ngoài.',
+      },
+      {
+        kind: 'improved',
+        en: 'The chat composer grows automatically as you type longer messages.',
+        vi: 'Ô soạn tin nhắn tự giãn cao khi bạn gõ tin dài hơn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Switching projects no longer kills the shells running in the global terminal dock.',
+        vi: 'Chuyển dự án không còn làm mất các shell đang chạy trong dock terminal chung.',
+      },
+      {
+        kind: 'fixed',
+        en: 'No more false "No active account" message right after launch — accounts now load correctly on boot.',
+        vi: 'Không còn thông báo "Chưa có tài khoản" sai ngay sau khi mở app — tài khoản giờ được nạp đúng lúc khởi động.',
+      },
+    ],
+  },
+  {
     version: '0.24.12',
     date: '2026-07-23',
     highlight: {
