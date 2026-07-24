@@ -27,9 +27,8 @@ layouts/default.vue (.appwrap, flex column)
 ├── .app  (NavRail | main)            ← flex:1, bị đẩy LÊN khi dock mở
 ├── GlobalTerminalHost                ← flex:0 0 <height>px; v-show theo isOpen; collapsed → chỉ header
 │   ├── .gterm-main (flex:1)
-│   │   └── <KeepAlive :max=4>        ← cache 1 instance / project (LRU)
-│   │       └── WorkspaceTerminal     ← :key=projectKey, pty-key="global:<projectKey>"
-│   │           (root=cwd active session, new-tab-menu = New shell + hosts SSH)
+│   │   └── WorkspaceTerminal × N     ← v-for mountedKeys (LRU ≤6), v-show=active
+│   │       (mỗi project 1 instance mounted, pty-key="global:<key>", hidden = v-show)
 │   └── TerminalSnippetsRail (260px)  ← nút Snippets ở header toggle; project + Global tier
 ├── SshHostKeyHost                    ← host-key TOFU prompt app-wide (SSH connect từ dock bất kỳ trang)
 └── AppStatusBar (footer)             ← nút "Terminal" luôn hiện → toggle dock
@@ -39,20 +38,30 @@ Dock nằm **trong flex column** ngay trên status bar → khi mở nó **đẩy
 lên** (là panel thật, không overlay). `v-show` (display:none khi đóng) gỡ nó khỏi flex
 flow hoàn toàn mà vẫn **giữ terminal mounted** để PTY + scrollback sống qua đóng → mở.
 
-### Tách bộ tab theo project (KeepAlive)
+### Tách bộ tab theo project (multi-instance v-show, KHÔNG KeepAlive)
 
 `WorkspaceTerminal` giữ toàn bộ state tab/pane/PTY trong instance của nó. Để mỗi project
-có bộ tab riêng, `GlobalTerminalHost` bọc widget trong `<KeepAlive :max="4">` với
-`:key="projectKey"` (`= sessions.active?.project ?? '__home__'`) và `pty-key="global:<projectKey>"`:
+có bộ tab riêng, `GlobalTerminalHost` **mount đồng thời một instance / project đã ghé** và
+`v-show` chỉ hiện cái của project active (`projectKey = sessions.active?.project ?? '__home__'`,
+`pty-key="global:<key>"`):
 
-- Đổi project (active session sang project khác) → instance cũ **deactivate** (KeepAlive
-  giữ cache; `onBeforeUnmount` **không** chạy khi deactivate → PTY + shell **sống**), instance
-  project mới activate/mount. Quay lại project cũ → restore đúng bộ tab đã để lại.
-- `WorkspaceTerminal` thêm `onActivated` → refit tab active (DOM bị detach khi ở cache nên
-  size xterm cũ đã stale).
+```
+<WorkspaceTerminal v-for="key in mountedKeys" v-show="key === projectKey" :key="key" … />
+```
+
+- **Vì sao KHÔNG `<KeepAlive>`:** đặt `v-if` trên child của KeepAlive **phá cache** — đổi
+  project nó **unmount** (không deactivate) → `onBeforeUnmount` kill PTY → quay lại thấy shell
+  "renew". `v-show` thì **không bao giờ unmount** instance ẩn → tab + PTY sống nguyên.
+- `mountedKeys` là LRU (front = mới nhất), cap `MAX_MOUNTED=6`; một `watch([everOpened,
+  projectKey, termRoot])` (flush `pre`) đẩy project active lên đầu + nhớ cwd vào `rootByKey`.
+  Vượt 6 → cắt đuôi → instance đó **thật sự unmount** → `onBeforeUnmount` kill PTY của nó.
+- Đổi project → chỉ đổi `v-show`; instance cũ ẩn (display:none) vẫn chạy nền. `visible` prop
+  = `key===projectKey && isOpen && !collapsed` → khi hiện lại, watch `visible` refit + focus.
 - Hai session **cùng project** dùng chung 1 bộ tab (khóa theo project, không theo session).
   Không session/project → 1 bộ "home" (cwd `~`).
-- Vượt `max=4` project → LRU evict → instance thật sự unmount → `onBeforeUnmount` kill PTY.
+- **Snippet run** cần instance active: `termRefs` là `Map<projectKey, {runText}>` (function
+  ref `setTermRef`), `onRunSnippet` gọi `termRefs.get(projectKey)`. `activeConnId` chỉ nhận
+  `@conn` của instance active (`onConn` guard `key===projectKey`).
 
 ### Tách `WorkspaceTerminal` khỏi session (SoC)
 
@@ -177,12 +186,12 @@ home nằm hẳn ở sidecar. `terminalManager` giữ nguyên assert `isAbsolute
 - **Đóng (X):** `isOpen=false` → dock `display:none`, **không kill** PTY (widget vẫn mounted).
 - **Thu nhỏ (chevron):** `collapsed=true` → dock co còn header; PTY sống; click header/chevron bung lại.
 - **Mở lại:** `isOpen=true` → `visible` flip → refit + focus, dùng lại PTY cũ.
-- **Đổi project:** active session sang project khác → KeepAlive deactivate instance cũ (PTY sống)
-  + activate/mount instance project mới; quay lại → `onActivated` refit bộ tab cũ.
+- **Đổi project:** active session sang project khác → chỉ đổi `v-show` (instance cũ ẩn, PTY
+  chạy nền); project mới mount lần đầu / hiện lại instance đã có; quay lại → refit bộ tab cũ.
 - **Điều hướng trang:** host mount 1 lần ở layout → PTY **sống xuyên route**.
 - **Mở SSH:** "+" → chọn host → tab mới dùng transport SSH; host-key mới → `SshHostKeyHost` hỏi TOFU.
 - **Resize:** kéo mép trên → `setHeight` clamp + persist.
-- **Dọn dẹp:** sidecar idle-sweep kill shell idle > 30 phút; LRU evict project thứ 5; thoát app kill toàn bộ.
+- **Dọn dẹp:** sidecar idle-sweep kill shell idle > 30 phút; LRU evict project thứ 7 (>`MAX_MOUNTED=6`); thoát app kill toàn bộ.
 
 ## Bảo mật
 
@@ -213,5 +222,5 @@ Kế thừa các bất biến của [ADR 0019](../decisions/0019-pty-terminal-in
 
 ## Open questions
 
-- Số project cache tối đa (`KeepAlive max=4`) — có cần chỉnh/persist theo nhu cầu người dùng?
+- Số project mount tối đa (`MAX_MOUNTED=6`) — có cần chỉnh/persist theo nhu cầu người dùng?
 - Phím tắt mở/đóng dock global (vd `⌃\``) — chưa thêm.

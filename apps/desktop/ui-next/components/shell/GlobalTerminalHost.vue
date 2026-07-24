@@ -59,26 +59,25 @@
 
     <div v-show="!collapsed" class="gterm-body">
       <div class="gterm-main">
-        <!-- One WorkspaceTerminal instance PER project, cached by <KeepAlive> keyed
-             on the active session's project (or a home key when none). Switching
-             project deactivates the old instance (its PTYs survive — onBeforeUnmount
-             doesn't fire on KeepAlive deactivate) and activates/creates the new one,
-             so each project keeps its own tab set + live shells. `root` follows the
-             active session's cwd (dragged folder → project path → home). -->
-        <KeepAlive :max="4">
-          <WorkspaceTerminal
-            v-if="everOpened"
-            ref="termRef"
-            :key="projectKey"
-            :root="termRoot"
-            :ready="sc.available"
-            :pty-key="`global:${projectKey}`"
-            :visible="isOpen && !collapsed"
-            :new-tab-menu="newTabMenu"
-            :unavailable-label="t('terminalGlobal.unavailable')"
-            @conn="activeConnId = $event"
-          />
-        </KeepAlive>
+        <!-- One WorkspaceTerminal instance PER visited project, ALL mounted at once
+             and toggled with v-show — only the active project's is shown; the rest
+             stay mounted-but-hidden so their tab set + live PTYs survive a switch
+             away and back (v-show never unmounts). `mountedKeys` is an LRU capped at
+             MAX_MOUNTED. Each instance's `root` follows the cwd it was last active
+             with; new tabs spawn there while already-open tabs keep their own cwd. -->
+        <WorkspaceTerminal
+          v-for="key in mountedKeys"
+          v-show="key === projectKey"
+          :key="key"
+          :ref="(el) => setTermRef(key, el)"
+          :root="rootByKey[key] ?? '~'"
+          :ready="sc.available"
+          :pty-key="`global:${key}`"
+          :visible="key === projectKey && isOpen && !collapsed"
+          :new-tab-menu="newTabMenu"
+          :unavailable-label="t('terminalGlobal.unavailable')"
+          @conn="onConn(key, $event)"
+        />
       </div>
 
       <!-- Project-scoped snippets rail (current project + the shared Global tier).
@@ -98,11 +97,12 @@
 <script setup lang="ts">
 // Global terminal dock — single app-lifetime mount in the default layout. The
 // status bar's always-visible Terminal button toggles it via useGlobalTerminal.
-// Its cwd + tab set FOLLOW the active session's project: each project gets its
-// own cached WorkspaceTerminal (KeepAlive keyed by project), so returning to a
-// project restores the exact terminals you left there. Falls back to a single
-// "home" terminal (cwd "~") when no session/project is open. The heavy PTY +
-// xterm logic is reused from the (session-agnostic) WorkspaceTerminal.
+// Its cwd + tab set FOLLOW the active session's project: each visited project gets
+// its OWN WorkspaceTerminal instance, all mounted at once and toggled by v-show
+// (see `mountedKeys` — NOT <KeepAlive>, whose v-if child would unmount + kill PTYs
+// on switch), so returning to a project restores the exact terminals you left. Falls
+// back to a single "home" terminal (cwd "~") when no session/project is open. The
+// heavy PTY + xterm logic is reused from the (session-agnostic) WorkspaceTerminal.
 import { ChevronDown, ChevronUp, ScrollText, X } from 'lucide-vue-next'
 import { useGlobalTerminal } from '~/composables/useGlobalTerminal'
 import { useSidecar } from '~/composables/useSidecar'
@@ -127,12 +127,31 @@ const {
   setHeight,
 } = useGlobalTerminal()
 
-// Ref to the active project's WorkspaceTerminal instance (KeepAlive keeps the ref
-// pointed at whichever is currently rendered). Used to run snippets into its
-// active tab. The exposed shape is just runText.
-const termRef = useTemplateRef<{ runText: (text: string) => void }>('termRef')
 // Live backend id of the active tab's active pane (null → no shell to run into).
 const activeConnId = ref<string | null>(null)
+
+// One WorkspaceTerminal instance per project, mounted simultaneously and toggled
+// with v-show (NOT <KeepAlive> — a `v-if` child defeats its caching, unmounting the
+// instance on project switch → PTYs killed → the shell "renews" on return). A hidden
+// v-show'd instance is never unmounted, so its tabs + live PTYs survive untouched.
+// `mountedKeys` is an LRU of visited project keys (front = most recent), capped so a
+// heavy fleet of projects can't grow terminals without bound.
+const MAX_MOUNTED = 6
+const mountedKeys = ref<string[]>([])
+// Last-resolved cwd per key (drives `root` for each instance; the active key's entry
+// tracks the live termRoot, so new tabs spawn in the right project).
+const rootByKey = reactive<Record<string, string>>({})
+// Exposed { runText } of each mounted instance, keyed by project — so a snippet runs
+// against the ACTIVE project's terminal. Non-reactive (function-ref bookkeeping).
+const termRefs = new Map<string, { runText: (text: string) => void }>()
+function setTermRef(key: string, el: unknown): void {
+  if (el) termRefs.set(key, el as { runText: (text: string) => void })
+  else termRefs.delete(key)
+}
+// Only the active project's terminal reports its live conn (hidden ones are ignored).
+function onConn(key: string, id: string | null): void {
+  if (key === projectKey.value) activeConnId.value = id
+}
 
 // Expand the roll-up when the collapsed header bar is clicked (buttons stop
 // propagation, so only the bar itself triggers this).
@@ -150,9 +169,29 @@ const sessions = useSessionsStore()
 const { root: projectRoot } = useWorkspaceData(() => sessions.active?.project)
 const termRoot = computed(() => sessions.active?.workspaceFolder || projectRoot.value || '~')
 
-// Stable per-project key for <KeepAlive> + the PTY grouping key. Two sessions in
-// the same project share one terminal set; no project → a single "home" set.
+// Stable per-project key (also the PTY grouping key). Two sessions in the same
+// project share one terminal set; no project → a single "home" set.
 const projectKey = computed(() => sessions.active?.project ?? '__home__')
+
+// Register the active project once the dock has been opened: remember its cwd and
+// move it to the front of the LRU (mounting it if new). Default `flush: 'pre'` runs
+// before the render, so a freshly-activated project is in `mountedKeys` on the same
+// tick it becomes active. Dropping past MAX_MOUNTED unmounts the least-recent one
+// (its onBeforeUnmount kills that project's PTYs — the intended bound).
+watch(
+  [everOpened, projectKey, termRoot],
+  ([ever, key, root]) => {
+    if (!ever) return
+    rootByKey[key] = root
+    const i = mountedKeys.value.indexOf(key)
+    if (i >= 0) mountedKeys.value.splice(i, 1)
+    mountedKeys.value.unshift(key)
+    if (mountedKeys.value.length > MAX_MOUNTED) {
+      for (const dropped of mountedKeys.value.splice(MAX_MOUNTED)) delete rootByKey[dropped]
+    }
+  },
+  { immediate: true },
+)
 
 // Real project for snippet scoping (null = no project → only Global snippets).
 const { projectName } = useProjects()
@@ -161,10 +200,10 @@ const currentProjectLabel = computed(() =>
   currentProject.value ? projectName(currentProject.value) : '',
 )
 
-// Run a snippet: append a newline so it executes, then write into the active tab
-// via WorkspaceTerminal (which picks the right transport for local vs SSH tabs).
+// Run a snippet: append a newline so it executes, then write into the ACTIVE
+// project's terminal (which picks the right transport for local vs SSH tabs).
 function onRunSnippet(command: string): void {
-  termRef.value?.runText(`${command}\n`)
+  termRefs.get(projectKey.value)?.runText(`${command}\n`)
 }
 
 // Toggle the snippets rail; opening it while collapsed also expands the dock so
