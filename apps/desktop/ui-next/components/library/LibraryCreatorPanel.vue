@@ -58,6 +58,7 @@
           <div class="lcp-box">
             <LibraryScopePicker v-model="scope" :projects="projects" />
             <textarea
+              ref="taRef"
               v-model="promptText"
               class="lcp-ta"
               rows="2"
@@ -158,6 +159,19 @@ const { t } = useI18n()
 const scope = ref('global')
 const promptText = ref('')
 const logRef = ref<HTMLElement | null>(null)
+const taRef = ref<HTMLTextAreaElement | null>(null)
+
+// Auto-grow the composer from ~2 lines up to a cap, then scroll internally — so a
+// long pasted prompt is readable instead of trapped in a 2-row box. Height floor is
+// enforced by the `.lcp-ta` min-height; JS only drives the upward growth.
+const TEXTAREA_MAX_HEIGHT = 200
+const autoGrowTextarea = () => {
+  const el = taRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)}px`
+}
+watch(promptText, () => nextTick(autoGrowTextarea))
 
 const creator = usePromptCreator({
   method: props.method,
@@ -341,6 +355,9 @@ onBeforeUnmount(() => creator.teardown())
 }
 .lcp-ta {
   width: 100%;
+  min-height: 2.6em;
+  max-height: 200px;
+  overflow-y: auto;
   background: transparent;
   border: 0;
   outline: none;

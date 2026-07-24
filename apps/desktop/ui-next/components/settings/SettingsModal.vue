@@ -27,7 +27,7 @@
 // (.setmodalhd + .settwo). The nav + pane are the same components the page used;
 // open/section state lives in useSettingsModal so the NavRail trigger drives it.
 // Accounts hydrate from the sidecar each time the modal opens.
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { watch } from 'vue'
 import { SETTINGS_SECTIONS } from '~/components/settings/sections'
 import { useSettingsStore } from '~/stores/settings'
 
@@ -39,11 +39,7 @@ watch(open, (isOpen) => {
   if (isOpen) settings.hydrateFromSidecar().catch(() => {})
 })
 
-function onKey(e: KeyboardEvent) {
-  if (open.value && e.key === 'Escape') closeSettings()
-}
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+useEscToClose(() => open.value, closeSettings, { preventDefault: false })
 </script>
 
 <style scoped>

@@ -27,7 +27,6 @@
 // centered card with a titled header, a body slot, and an optional footer slot
 // for action buttons). Used by every library feature's editor / body-edit
 // dialog. Escape + scrim close (unless `lockScrim` is set for in-flight flows).
-import { onBeforeUnmount, onMounted } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -49,11 +48,13 @@ const widthPx = `${props.width}px`
 const onScrim = () => {
   if (!props.lockScrim) emit('close')
 }
-const onKey = (e: KeyboardEvent) => {
-  if (props.open && e.key === 'Escape' && !props.lockScrim) emit('close')
-}
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+useEscToClose(
+  () => props.open && !props.lockScrim,
+  () => emit('close'),
+  {
+    preventDefault: false,
+  },
+)
 </script>
 
 <style scoped>
