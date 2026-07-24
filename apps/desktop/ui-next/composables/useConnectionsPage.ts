@@ -27,9 +27,9 @@ export function useConnectionsPage() {
   const { t } = useI18n()
   const { toasts, pushToast, toastColor } = useToasts()
 
-  // Active Anthropic account drives the chat-driven creator; null → the panel
-  // shows a "connect an account" hint and refuses to send.
-  const accountId = computed(() => settings.activeAccount('anthropic')?.id ?? null)
+  // Provider-agnostic creator account (mirrors Sessions' default resolution). Null
+  // id → the panel shows a "connect an account" hint and refuses to send.
+  const account = computed(() => settings.resolveCreatorAccount())
 
   // --- selection -----------------------------------------------------------
   const selectedSlug = ref<string | null>(null)
@@ -340,7 +340,7 @@ export function useConnectionsPage() {
   return {
     // store-backed
     sources: computed(() => store.sources),
-    accountId,
+    account,
     available: computed(() => store.available),
     // selection
     selectedSource,

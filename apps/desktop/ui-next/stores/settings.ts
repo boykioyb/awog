@@ -17,6 +17,15 @@ import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
 // SoC: orchestrates IPC + persistence only; no DOM / no SDK imports.
 
 export type ProviderName = 'anthropic' | 'openai' | 'google'
+// Fixed provider order for deterministic cross-provider account resolution.
+const PROVIDER_ORDER = ['anthropic', 'openai', 'google'] as const satisfies readonly ProviderName[]
+// Outcome classification for resolveCreatorAccount — data shape of this store, not a
+// shared UI type (stays out of types/index.ts). The UI maps `kind` → wording.
+export type CreatorAccountKind =
+  | 'active'
+  | 'fallback-provider-first'
+  | 'fallback-cross-provider'
+  | 'none'
 export type AuthMode = 'oauth' | 'apikey'
 export type AccountStatus = 'connected' | 'expired' | 'disconnected'
 // Wire protocol a custom endpoint speaks. 'anthropic-messages' = Anthropic
@@ -386,22 +395,60 @@ export const useSettingsStore = defineStore('settings', () => {
   const keyFingerprint = (provider: ProviderName): string =>
     activeAccount(provider)?.fingerprint ?? ''
 
+  // Resolve the account a chat-driven creator (Skills/Agents/Commands/… "create by
+  // chat") should use. Provider-agnostic: mirrors Sessions' defaultsForNewSession
+  // (sessions.ts) minus the project-pinned branch, since creator libraries have no
+  // project context. `kind` classifies the outcome so the UI can pick wording; the
+  // store stays out of the presentation layer (SoC — no message strings here).
+  const resolveCreatorAccount = (): {
+    accountId: string | null
+    provider: ProviderName
+    kind: CreatorAccountKind
+  } => {
+    const p = defaults.provider
+    // 1. active account of the default provider (matches Sessions' isActive branch).
+    const active = activeAccount(p)
+    if (active) return { accountId: active.id, provider: p, kind: 'active' }
+    // 2. first connected account of the default provider (Sessions' inProvider[0]).
+    const first = providers[p].accounts[0]
+    if (first) return { accountId: first.id, provider: p, kind: 'fallback-provider-first' }
+    // 3. cross-provider fallback — first provider (fixed order) with any account,
+    //    preferring its active account. Deterministic vs Sessions' flat accounts[0].
+    for (const q of PROVIDER_ORDER) {
+      const acct = activeAccount(q) ?? providers[q].accounts[0]
+      if (acct) return { accountId: acct.id, provider: q, kind: 'fallback-cross-provider' }
+    }
+    // 4. nothing connected anywhere.
+    return { accountId: null, provider: p, kind: 'none' }
+  }
+
   // --- account/auth IPC actions ---
+  // Dedup concurrent hydrations: boot fire-and-forget (default.vue) + the lazy guard
+  // in usePromptCreator.send() can race. Reuse the in-flight promise while running,
+  // then reset — never memo the result, so later calls re-fetch newly connected
+  // accounts. The idempotent merge below keeps repeated calls safe.
+  let inFlight: Promise<void> | null = null
   async function hydrateFromSidecar(): Promise<void> {
     const sidecar = useSidecar()
     if (!sidecar.available) return
-    try {
-      const res = await sidecar.request<AccountsListResponse>('accounts.list')
-      ;(Object.keys(providers) as ProviderName[]).forEach((p) => {
-        const incoming = res.providers?.[p]
-        if (!incoming) return
-        providers[p].accounts = Array.isArray(incoming.accounts) ? incoming.accounts : []
-        providers[p].activeAccountId =
-          typeof incoming.activeAccountId === 'string' ? incoming.activeAccountId : null
-      })
-    } catch (err) {
-      console.warn('[settings] hydrateFromSidecar failed', err)
-    }
+    if (inFlight) return inFlight
+    inFlight = (async () => {
+      try {
+        const res = await sidecar.request<AccountsListResponse>('accounts.list')
+        ;(Object.keys(providers) as ProviderName[]).forEach((p) => {
+          const incoming = res.providers?.[p]
+          if (!incoming) return
+          providers[p].accounts = Array.isArray(incoming.accounts) ? incoming.accounts : []
+          providers[p].activeAccountId =
+            typeof incoming.activeAccountId === 'string' ? incoming.activeAccountId : null
+        })
+      } catch (err) {
+        console.warn('[settings] hydrateFromSidecar failed', err)
+      } finally {
+        inFlight = null
+      }
+    })()
+    return inFlight
   }
 
   function mergeAccount(provider: ProviderName, account: ProviderAccount, makeActive: boolean) {
@@ -565,6 +612,7 @@ export const useSettingsStore = defineStore('settings', () => {
     githubAutoFetchMs,
     // getters
     activeAccount,
+    resolveCreatorAccount,
     isProviderConnected,
     keyFingerprint,
     workspaceDockOf,

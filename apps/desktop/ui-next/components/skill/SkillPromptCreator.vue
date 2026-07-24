@@ -2,7 +2,7 @@
   <LibraryCreatorPanel
     :open="open"
     method="skills.author"
-    :account-id="accountId"
+    :account="account"
     :projects="projects"
     :initial-scope="initialScope"
     :title="t('skills.creator.title')"
@@ -21,11 +21,12 @@
 // to the chosen scope's dir; the page re-hydrates on close / each turn. This is
 // the reference each sibling feature mirrors (swap method + i18n keys).
 import LibraryCreatorPanel from '~/components/library/LibraryCreatorPanel.vue'
+import type { CreatorAccountKind, ProviderName } from '~/stores/settings'
 
 withDefaults(
   defineProps<{
     open: boolean
-    accountId: string | null
+    account: { accountId: string | null; provider: ProviderName; kind: CreatorAccountKind }
     projects: { id: string; name: string }[]
     initialScope?: string
   }>(),

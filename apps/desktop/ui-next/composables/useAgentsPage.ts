@@ -23,9 +23,11 @@ export function useAgentsPage() {
   // Project list for the scope picker + tier hints (id/name).
   const projectList = computed(() => projects.value.map((p) => ({ id: p.id, name: p.name })))
 
-  // The active Anthropic account id drives the LLM creator/body-edit flows; null
-  // → the panels fall back to a friendly "connect an account" message.
-  const accountId = computed(() => settings.activeAccount('anthropic')?.id ?? null)
+  // Provider-agnostic creator account (mirrors Sessions' default resolution); the
+  // creator panel reads the full object, the body-edit modal only the id. Null id
+  // → the panels surface a "connect an account" message.
+  const account = computed(() => settings.resolveCreatorAccount())
+  const accountId = computed(() => account.value.accountId)
 
   // Connections (MCP servers) for the editor whitelist picker — id/name only.
   const mcpServers = computed(() => connections.servers)
@@ -195,6 +197,7 @@ export function useAgentsPage() {
     agents: computed(() => store.agents),
     agentKey: store.agentKey,
     projectList,
+    account,
     accountId,
     mcpServers,
     // selection

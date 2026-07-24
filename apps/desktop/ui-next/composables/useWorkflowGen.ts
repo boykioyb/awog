@@ -136,7 +136,9 @@ export function useWorkflowGen() {
   const agents = ref<WorkflowAgent[]>([])
   const skills = ref<WorkflowSkill[]>([])
 
-  const accountId = computed(() => settings.activeAccount('anthropic')?.id ?? null)
+  // Provider-agnostic creator account (mirrors Sessions' default resolution); null
+  // → generate() falls back to a local mock draft.
+  const accountId = computed(() => settings.resolveCreatorAccount().accountId)
 
   // Load the agent + skill rosters for the palette / node picker, scoped to the
   // passed project ids (global tier always included). node.skillId scope is

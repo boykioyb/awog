@@ -2,7 +2,7 @@
   <LibraryCreatorPanel
     :open="open"
     method="source.author"
-    :account-id="accountId"
+    :account="account"
     :title="isEdit ? t('connections.creator.editTitle') : t('connections.creator.title')"
     :subtitle="isEdit ? t('connections.creator.editSubtitle') : t('connections.creator.subtitle')"
     :hint="isEdit ? t('connections.creator.editHint') : t('connections.creator.hint')"
@@ -45,10 +45,11 @@ import { computed, ref, watch } from 'vue'
 import LibraryCreatorPanel from '~/components/library/LibraryCreatorPanel.vue'
 import ConnectionSecretPanel from '~/components/connection/ConnectionSecretPanel.vue'
 import { useConnectionsStore, type Source, type SourcePendingSecret } from '~/stores/connections'
+import type { CreatorAccountKind, ProviderName } from '~/stores/settings'
 
 const props = defineProps<{
   open: boolean
-  accountId: string | null
+  account: { accountId: string | null; provider: ProviderName; kind: CreatorAccountKind }
   // When set, the creator refines this existing source in place (edit mode).
   editSource?: Source | null
 }>()

@@ -109,14 +109,16 @@ import SessionMarkdownHtml from '~/components/session/SessionMarkdownHtml.vue'
 import MermaidView from '~/components/common/MermaidView.vue'
 import { usePromptCreator } from '~/composables/usePromptCreator'
 import { useMarkdown } from '~/composables/useMarkdown'
+import type { CreatorAccountKind, ProviderName } from '~/stores/settings'
 
 const props = withDefaults(
   defineProps<{
     open: boolean
     // Author RPC, e.g. 'skills.author'. Stream events are `<method>.chunk|step|done`.
     method: string
-    // Account id for the author RPC, or null (no active account → send refused).
-    accountId: string | null
+    // Resolved creator account (provider-agnostic). A null accountId → send is
+    // refused with wording chosen from `kind` (see usePromptCreator.send).
+    account: { accountId: string | null; provider: ProviderName; kind: CreatorAccountKind }
     projects?: { id: string; name: string }[]
     title: string
     subtitle?: string
@@ -160,7 +162,7 @@ const logRef = ref<HTMLElement | null>(null)
 const creator = usePromptCreator({
   method: props.method,
   scope: () => scope.value,
-  accountId: () => props.accountId,
+  account: () => props.account,
   extraParams: () => props.extraParams ?? {},
 })
 const { messages, streamingText, streamingSteps, error, isStreaming, send, lastDone } = creator

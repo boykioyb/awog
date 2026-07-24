@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { useSettingsStore, type CreatorAccountKind, type ProviderName } from '~/stores/settings'
+import { PROVIDER_DISPLAY } from '~/composables/useSessionsData'
 
 // Generic streaming AI-creation base — drives the chat-driven "create an entity
 // by describing it" flow shared by every library feature (skills, agents,
@@ -39,9 +41,11 @@ export type PromptCreatorConfig = {
   // `scope` is resolved server-side: 'global' or a projectId. Reactive getter so
   // the panel's scope picker can change it before each send.
   scope: () => string
-  // Account id passed to the author RPC (provider account). Null → no account
-  // connected, the send is refused with a clear error.
-  accountId: () => string | null
+  // Resolved creator account (provider-agnostic, see settings.resolveCreatorAccount).
+  // Reactive getter so it tracks live account/default-provider changes. A null
+  // accountId (after the lazy hydrate guard) refuses the send with wording chosen
+  // from `kind`.
+  account: () => { accountId: string | null; provider: ProviderName; kind: CreatorAccountKind }
   // Extra params merged into every author RPC call (e.g. a source-edit context).
   // Reactive getter so the caller can vary it per turn. Optional.
   extraParams?: () => Record<string, unknown>
@@ -69,6 +73,7 @@ const isDone = (raw: unknown): raw is AuthorDonePayload => {
 
 export function usePromptCreator(config: PromptCreatorConfig) {
   const sc = useSidecar()
+  const settings = useSettingsStore()
 
   const messages = ref<CreatorMessage[]>([])
   const streamingText = ref('')
@@ -143,11 +148,23 @@ export function usePromptCreator(config: PromptCreatorConfig) {
     const trimmed = text.trim()
     if (!trimmed || isStreaming.value) return
 
-    const accountId = config.accountId()
-    if (!sc.available || !accountId) {
-      error.value = !sc.available
-        ? 'Engine offline — chat unavailable. Run the desktop app.'
-        : 'No active account. Connect one in Settings.'
+    // Offline stays a hard stop without touching the sidecar (AC-GUARD.3).
+    if (!sc.available) {
+      error.value = 'Engine offline — chat unavailable. Run the desktop app.'
+      return
+    }
+    let { accountId, provider, kind } = config.account()
+    if (!accountId) {
+      // Lazy guard: boot hydrate may not have finished yet. Re-fetch (deduped) then
+      // re-read the reactive resolver before deciding it's really empty (AC-GUARD.1).
+      await settings.hydrateFromSidecar()
+      ;({ accountId, provider, kind } = config.account())
+    }
+    if (!accountId) {
+      error.value =
+        kind === 'none'
+          ? 'No account connected. Connect a provider in Settings.'
+          : `No active account for ${PROVIDER_DISPLAY[provider] ?? provider}. Set one active in Settings.`
       return
     }
 

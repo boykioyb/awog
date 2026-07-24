@@ -37,7 +37,7 @@
     <!-- create (chat-driven SKILL.md authoring) -->
     <SkillPromptCreator
       :open="creatorOpen"
-      :account-id="accountId"
+      :account="account"
       :projects="projectList"
       :initial-scope="creatorScope"
       @close="onCreatorClose"
@@ -106,6 +106,7 @@ const {
   skills,
   skillKey,
   projectList,
+  account,
   accountId,
   creatorOpen,
   creatorScope,
