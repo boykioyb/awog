@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PostToolUse hook: chạy `prettier --write` trên file vừa được Claude Edit/Write,
-# chỉ áp dụng cho file trong apps/desktop/ui/ với đuôi .ts/.vue/.js/.json/.md.
+# chỉ áp dụng cho file trong apps/desktop/ui-next/ với đuôi .ts/.vue/.js/.json/.md.
 #
 # Đầu vào: JSON từ Claude Code qua stdin, có field tool_input.file_path.
 # Đầu ra: silent khi thành công; in lỗi (nếu có) ra stderr để Claude thấy.
@@ -17,9 +17,9 @@ if [[ -z "${FILE_PATH:-}" ]]; then
   exit 0
 fi
 
-# Chỉ format file thuộc apps/desktop/ui/
+# Chỉ format file thuộc apps/desktop/ui-next/
 case "$FILE_PATH" in
-  */apps/desktop/ui/*) ;;
+  */apps/desktop/ui-next/*) ;;
   *) exit 0 ;;
 esac
 

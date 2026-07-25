@@ -76,7 +76,7 @@ Không `--no-verify`, không tắt rule lint để qua, không try/catch nuốt 
 - **Cấm `// @ts-ignore`.** Dùng `// @ts-expect-error <lý do>` khi bắt buộc và có ghi chú.
 - **Prefer `type`** cho object shape; **`interface`** chỉ khi cần extend hoặc declaration merging.
 - **Discriminated union** cho state nhiều biến thể; **`as const`** cho literal/enum-like.
-- **Type chia sẻ** đặt ở module type chung của package (vd. [apps/desktop/ui/types/index.ts](../../apps/desktop/ui/types/index.ts)); type nội bộ một file để tại chỗ.
+- **Type chia sẻ** đặt ở module type chung của package (vd. [apps/desktop/ui-next/types/index.ts](../../apps/desktop/ui-next/types/index.ts)); type nội bộ một file để tại chỗ.
 
 ```ts
 // good

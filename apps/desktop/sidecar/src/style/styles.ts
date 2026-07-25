@@ -6,7 +6,7 @@
 // Directives live ONLY here in the sidecar: the UI sends just the style id +
 // the no-markdown flag, never the prompt text, so there is no surface for
 // prompt-injection from a workspace file or the UI payload. The id set is the
-// contract with apps/desktop/ui/utils/response-styles.ts (display metadata); an
+// contract with apps/desktop/ui-next/composables/useSessionModelConfig.ts (display metadata); an
 // id the sidecar doesn't know degrades to "no style" rather than erroring.
 
 // One-line system-prompt directive per style id. Lifted from the user's

@@ -1,5 +1,5 @@
 // Map SDK tool_use / tool_result / thinking events to the UI's TraceNode shape
-// (apps/desktop/ui/types/index.ts). Sibling of sessions/step-mapper.ts but emits
+// (apps/desktop/ui-next/types/index.ts). Sibling of sessions/step-mapper.ts but emits
 // a tree node (agent → tool/subagent/thinking children) instead of a flat step.
 
 import type { TraceNode } from '../types/shared.js'

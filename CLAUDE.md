@@ -14,7 +14,7 @@ AWOG (**Artifact Workflow Orchestrate Guild**) là một AI Team Operating Syste
 4. [docs/architecture/data-model.md](docs/architecture/data-model.md), [docs/architecture/execution-model.md](docs/architecture/execution-model.md)
 5. [docs/architecture/tech-stack.md](docs/architecture/tech-stack.md) — stack chi tiết
 6. [docs/decisions/](docs/decisions/) — ADR (đọc khi cần hiểu *vì sao*)
-7. [apps/desktop/ui/README.md](apps/desktop/ui/README.md) — chi tiết Nuxt UI hiện tại
+7. [apps/desktop/ui-next/](apps/desktop/ui-next/) — Nuxt UI hiện tại (SPA rebuild theo prototype)
 
 ## Quy ước quan trọng
 
@@ -72,9 +72,9 @@ Pipeline điển hình: **PO → BA → PM → TL → developer → QA → revie
 
 ```bash
 # UI dev
-cd apps/desktop/ui
+cd apps/desktop/ui-next
 pnpm install
-pnpm dev            # http://localhost:3030
+pnpm dev            # http://localhost:3031
 pnpm typecheck      # vue-tsc strict
 pnpm lint           # ESLint 9 flat config (@nuxt/eslint + Vue + TS) + Prettier
 pnpm lint:fix       # auto-fix lint + format
@@ -82,30 +82,27 @@ pnpm format         # Prettier toàn bộ
 pnpm build
 ```
 
-> Repo dùng **pnpm workspaces** ([pnpm-workspace.yaml](apps/desktop/ui/pnpm-workspace.yaml)). Khi thêm dependency, chạy trong đúng package.
+> Repo dùng **pnpm workspaces** ([pnpm-workspace.yaml](pnpm-workspace.yaml)). Khi thêm dependency, chạy trong đúng package.
 
 ## File / thư mục quan trọng
 
 | Path | Vai trò |
 |---|---|
-| [apps/desktop/ui/app.vue](apps/desktop/ui/app.vue) | Root component |
-| [apps/desktop/ui/layouts/default.vue](apps/desktop/ui/layouts/default.vue) | Shell: NavRail + TopBar |
-| [apps/desktop/ui/stores/workspace.ts](apps/desktop/ui/stores/workspace.ts) | Pinia store chính (tasks/projects/agents/skills/workflows) |
-| [apps/desktop/ui/stores/settings.ts](apps/desktop/ui/stores/settings.ts) | API keys, workspace path, connectors |
-| [apps/desktop/ui/composables/useTheme.ts](apps/desktop/ui/composables/useTheme.ts) | Theme tokens (dark/light) |
-| [apps/desktop/ui/utils/themes.ts](apps/desktop/ui/utils/themes.ts) | 20+ theme token |
-| [apps/desktop/ui/utils/initial-data.ts](apps/desktop/ui/utils/initial-data.ts) | Mock data cho store |
-| [apps/desktop/ui/types/index.ts](apps/desktop/ui/types/index.ts) | Entity types (Task, Project, Agent, Skill, Workflow) |
+| [apps/desktop/ui-next/app.vue](apps/desktop/ui-next/app.vue) | Root component |
+| [apps/desktop/ui-next/layouts/default.vue](apps/desktop/ui-next/layouts/default.vue) | Shell: NavRail + TopBar |
+| [apps/desktop/ui-next/stores/](apps/desktop/ui-next/stores/) | Pinia stores tách theo domain (agents/skills/projects/tasks/workflows/sessions/git/settings…) |
+| [apps/desktop/ui-next/stores/settings.ts](apps/desktop/ui-next/stores/settings.ts) | API keys, workspace path, connectors |
+| [apps/desktop/ui-next/composables/useTheme.ts](apps/desktop/ui-next/composables/useTheme.ts) | Theme tokens (dark/light) |
+| [apps/desktop/ui-next/types/index.ts](apps/desktop/ui-next/types/index.ts) | Entity types (Task, Project, Agent, Skill, Workflow) |
 | [apps/desktop/sidecar/src/skills/](apps/desktop/sidecar/src/skills/) | Skill storage: 5-tier scan + atomic SKILL.md write + `loadSkillByIdAnyTier` |
 | [apps/desktop/sidecar/src/agents/](apps/desktop/sidecar/src/agents/) | Agent storage: 5-tier AGENT.md (both single-file + folder/AGENT.md layout) |
 | [apps/desktop/sidecar/src/mcp/](apps/desktop/sidecar/src/mcp/) | McpManager (stdio+http+idle stop), HttpMcpClient + SSRF guard, secrets helper, store |
 | [apps/desktop/sidecar/src/credentials/keychain.ts](apps/desktop/sidecar/src/credentials/keychain.ts) | OS keychain wrapper qua `@napi-rs/keyring` (dynamic import + graceful fallback) |
 | [apps/desktop/sidecar/src/watcher.ts](apps/desktop/sidecar/src/watcher.ts) | Filesystem watcher chokidar — emit `*.fs-changed` events |
 | [apps/desktop/sidecar/src/methods/](apps/desktop/sidecar/src/methods/) | 50+ RPC methods: skills.*, agents.*, mcp.*, sessions.*, projects.*, git.*, auth.*, accounts.* |
-| [apps/desktop/ui/components/skill/](apps/desktop/ui/components/skill/) | SkillDetail, SkillEditor, SkillPromptCreator (mini chat), SkillBodyEditModal |
-| [apps/desktop/ui/components/agent/](apps/desktop/ui/components/agent/) | AgentDetail, AgentEditor (MCP picker, source picker, body edit), AgentPromptCreator, AgentBodyEditModal |
-| [apps/desktop/ui/components/mcp/](apps/desktop/ui/components/mcp/) | McpDetail, McpEditor (KvEditor secret-mode), McpPromptCreator |
-| [apps/desktop/ui/components/markdown/MarkdownBodyView.vue](apps/desktop/ui/components/markdown/MarkdownBodyView.vue) | Shared section: preview/raw toggle + copy + edit, used by Skills/Agents detail |
+| [apps/desktop/ui-next/components/skill/](apps/desktop/ui-next/components/skill/) | SkillDetail, SkillEditor, SkillPromptCreator (mini chat), SkillBodyEditModal |
+| [apps/desktop/ui-next/components/agent/](apps/desktop/ui-next/components/agent/) | AgentDetail, AgentEditor (MCP picker, source picker, body edit), AgentPromptCreator, AgentBodyEditModal |
+| [apps/desktop/ui-next/components/connection/](apps/desktop/ui-next/components/connection/) | Connections/Sources UI (đổi tên từ MCP theo ADR 0025) |
 | [agentflow-prototype.tsx](agentflow-prototype.tsx) | React prototype gốc — dùng tham chiếu khi port |
 
 ## Quy tắc làm việc
@@ -119,7 +116,7 @@ pnpm build
 
 ## Trạng thái port (tham chiếu nhanh)
 
-Theo [apps/desktop/ui/README.md](apps/desktop/ui/README.md): Tasks, Projects, Workflows, Agents, Settings, Markdown editor, Theme system — đã port. **Skills** SKILL.md folder format ([ADR 0013](docs/decisions/0013-adopt-skill-md-format.md)) với 5-tier discovery + chat-driven creation. **Agents** AGENT.md 5-tier ([ADR 0015](docs/decisions/0015-agents-persisted-runtime-systemprompt.md)) với runtime injection systemPrompt + tools + skillIds + mcpServerIds (Pha 2A). **MCP Servers** stdio + http transport ([ADR 0014](docs/decisions/0014-mcp-servers-stdio-runtime.md)) + secret keychain ([ADR 0018](docs/decisions/0018-mcp-secret-keychain.md)) + per-agent whitelist + idle stop (tool call in-process qua `runtime/tools/mcp-tools.ts` dưới Pi SDK). **Context Providers** deprecated, fold vào MCP ([ADR 0016](docs/decisions/0016-deprecate-context-providers-fold-into-mcp.md)). **Filesystem watcher** trong sidecar (chokidar) auto-refresh UI khi file `.md`/`.json` thay đổi ngoài app. **Git Manager** M0..M7 wired ([ADR 0017](docs/decisions/0017-git-manager-ipc-contract.md)). **Tasks + Workflows** wired thật ([ADR 0024](docs/decisions/0024-task-execution-engine-ipc-contract.md)): Workflow Builder persist DAG ra đĩa; Task Execution Engine chạy node qua **Pi SDK** single runtime (parallel scheduler, trace stream, git auto-commit per phase, approve/rerun/discuss, restart-safe resume từ JSONL). Store `tasks`/`workflows` riêng, subscribe `task.*` events ở app-lifetime. **Session ↔ Task link 2 chiều** ([ADR 0055](docs/decisions/0055-session-task-link.md), [spec](docs/features/session-task-link.md)): `TaskSource` thêm biến thể `session` + `Session.aboutTaskId`, chiều ngược derive client-side; spawn task từ chat (nút "Run as task" + tool model `RunWorkflow` gated mutating, depth=1) và "Discuss in session" từ Task (chèn `<linked_task>` context mỗi turn). **Session Workspace Panel** ([spec](docs/features/workspace-panel.md)) — right-docked, 6 tab (Diff/Files/Plan/Terminal/Tasks/Preview); `fs.*` read-only + `terminal.*` PTY ([ADR 0019](docs/decisions/0019-pty-terminal-in-sidecar.md)). System tray cơ bản đã wire (Electron main); native notification dùng Notification API của renderer (Chromium). **LLM runtime** ([ADR 0029](docs/decisions/0029-migrate-llm-runtime-to-pi-sdk.md)): Pi SDK single multi-provider runtime (Anthropic/OpenAI/Google/custom) thay `@anthropic-ai/claude-agent-sdk`; Sessions + Tasks + 7 one-shot method dùng `runtime/tools/mcp-tools.ts` (in-process). Pha 2A completion: [docs/features/phase-2a.tasks.md](docs/features/phase-2a.tasks.md).
+Trạng thái ui-next: Tasks, Projects, Workflows, Agents, Settings, Markdown editor, Theme system — đã port. **Skills** SKILL.md folder format ([ADR 0013](docs/decisions/0013-adopt-skill-md-format.md)) với 5-tier discovery + chat-driven creation. **Agents** AGENT.md 5-tier ([ADR 0015](docs/decisions/0015-agents-persisted-runtime-systemprompt.md)) với runtime injection systemPrompt + tools + skillIds + mcpServerIds (Pha 2A). **MCP Servers** stdio + http transport ([ADR 0014](docs/decisions/0014-mcp-servers-stdio-runtime.md)) + secret keychain ([ADR 0018](docs/decisions/0018-mcp-secret-keychain.md)) + per-agent whitelist + idle stop (tool call in-process qua `runtime/tools/mcp-tools.ts` dưới Pi SDK). **Context Providers** deprecated, fold vào MCP ([ADR 0016](docs/decisions/0016-deprecate-context-providers-fold-into-mcp.md)). **Filesystem watcher** trong sidecar (chokidar) auto-refresh UI khi file `.md`/`.json` thay đổi ngoài app. **Git Manager** M0..M7 wired ([ADR 0017](docs/decisions/0017-git-manager-ipc-contract.md)). **Tasks + Workflows** wired thật ([ADR 0024](docs/decisions/0024-task-execution-engine-ipc-contract.md)): Workflow Builder persist DAG ra đĩa; Task Execution Engine chạy node qua **Pi SDK** single runtime (parallel scheduler, trace stream, git auto-commit per phase, approve/rerun/discuss, restart-safe resume từ JSONL). Store `tasks`/`workflows` riêng, subscribe `task.*` events ở app-lifetime. **Session ↔ Task link 2 chiều** ([ADR 0055](docs/decisions/0055-session-task-link.md), [spec](docs/features/session-task-link.md)): `TaskSource` thêm biến thể `session` + `Session.aboutTaskId`, chiều ngược derive client-side; spawn task từ chat (nút "Run as task" + tool model `RunWorkflow` gated mutating, depth=1) và "Discuss in session" từ Task (chèn `<linked_task>` context mỗi turn). **Session Workspace Panel** ([spec](docs/features/workspace-panel.md)) — right-docked, 6 tab (Diff/Files/Plan/Terminal/Tasks/Preview); `fs.*` read-only + `terminal.*` PTY ([ADR 0019](docs/decisions/0019-pty-terminal-in-sidecar.md)). System tray cơ bản đã wire (Electron main); native notification dùng Notification API của renderer (Chromium). **LLM runtime** ([ADR 0029](docs/decisions/0029-migrate-llm-runtime-to-pi-sdk.md)): Pi SDK single multi-provider runtime (Anthropic/OpenAI/Google/custom) thay `@anthropic-ai/claude-agent-sdk`; Sessions + Tasks + 7 one-shot method dùng `runtime/tools/mcp-tools.ts` (in-process). Pha 2A completion: [docs/features/phase-2a.tasks.md](docs/features/phase-2a.tasks.md).
 
 ## Khi user yêu cầu feature mới
 
@@ -127,4 +124,4 @@ Theo [apps/desktop/ui/README.md](apps/desktop/ui/README.md): Tasks, Projects, Wo
 2. Kiểm tra [docs/features/](docs/features/) — đã có spec chưa?
 3. Nếu chưa, đề xuất tạo spec ngắn trước khi code.
 4. Code theo [docs/coding/general.md](docs/coding/general.md) + [docs/coding/nuxt-frontend.md](docs/coding/nuxt-frontend.md), cập nhật store/types khi cần.
-5. Cập nhật [apps/desktop/ui/README.md](apps/desktop/ui/README.md) nếu thêm route/component mới đáng kể.
+5. Cập nhật [docs/architecture/system-overview.md](docs/architecture/system-overview.md) nếu thêm route/component mới đáng kể.

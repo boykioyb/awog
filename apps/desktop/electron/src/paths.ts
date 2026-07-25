@@ -14,7 +14,7 @@ import { app } from 'electron'
 //   ui        = <resources>/ui/index.html
 
 // Dev UI dev-server URL. Defaults to the ui-next rebuild (:3031); override with
-// AWOG_DEV_URL to point at the legacy ui (http://localhost:3030) or another host.
+// AWOG_DEV_URL to point at another Nuxt dev host.
 // See tasks/session-screen-checklist.md §10 (Electron → ui-next).
 export const DEV_URL = process.env.AWOG_DEV_URL ?? 'http://localhost:3031'
 

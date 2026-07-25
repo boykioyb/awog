@@ -143,7 +143,7 @@ export interface FsSearchMatch {
 }
 
 // ─── Session (chat) ────────────────────────────────────────────────────────
-// Mirror of UI shape (apps/desktop/ui/types/index.ts). Sidecar M4 keeps these
+// Mirror of UI shape (apps/desktop/ui-next/types/index.ts). Sidecar M4 keeps these
 // in-memory only via per-request snapshots from the UI.
 // TODO M6: persist sessions to JSONL; M4 keeps in-memory only.
 
@@ -227,7 +227,7 @@ export interface ContextChars {
 // User-attached file/image on a message. Images carry an inline `url` (a
 // base64 `data:` URL) so the preview survives a JSONL reload and so the runtime
 // can rebuild an image content block for the model. Mirrors the UI
-// SessionAttachment (apps/desktop/ui/types/index.ts) — kept structurally in sync.
+// SessionAttachment (apps/desktop/ui-next/types/index.ts) — kept structurally in sync.
 export interface SessionAttachment {
   id: string
   name: string
@@ -490,7 +490,7 @@ export interface SessionHeader extends Omit<Session, 'messages'> {
 }
 
 // ─── Session steps (tool use / thinking) ───────────────────────────────────
-// Mirrors apps/desktop/ui/types/index.ts SessionStep. Sidecar emits these via
+// Mirrors apps/desktop/ui-next/types/index.ts SessionStep. Sidecar emits these via
 // session.step notifications when the SDK reports tool_use / tool_result.
 
 export type SessionStepTool =
@@ -596,7 +596,7 @@ export interface SessionStep {
 }
 
 // ─── Project ───────────────────────────────────────────────────────────────
-// Mirror of UI shape (apps/desktop/ui/types/index.ts). Stored as plain JSON
+// Mirror of UI shape (apps/desktop/ui-next/types/index.ts). Stored as plain JSON
 // at ~/.awog/projects/<id>.json — see ADR 0012.
 
 // Per-project LLM defaults (mirror of UI ProjectLlmDefaults). New sessions in
@@ -911,7 +911,7 @@ export interface Agent {
 
 // ─── Workflow ────────────────────────────────────────────────────────────────
 // DAG template persisted as plain JSON at ~/.awog/workflows/<id>.json (ADR 0024
-// D-3). Mirror of UI shape (apps/desktop/ui/types/index.ts). A node carries the
+// D-3). Mirror of UI shape (apps/desktop/ui-next/types/index.ts). A node carries the
 // full agent identity tuple (id + source + projectId) so the engine can resolve
 // it via loadAgent at execution time (D-11).
 
@@ -974,7 +974,7 @@ export interface Workflow {
 // ─── Task (workflow instance) ────────────────────────────────────────────────
 // A Task is an instance of a Workflow bound to a Project. Persisted event-sourced
 // as JSONL at ~/.awog/tasks/<id>/events.log with a derived task.json snapshot
-// (ADR 0024 D-2). Mirror of UI shape (apps/desktop/ui/types/index.ts).
+// (ADR 0024 D-2). Mirror of UI shape (apps/desktop/ui-next/types/index.ts).
 
 export type TaskStatus =
   | 'queued'
@@ -1116,7 +1116,7 @@ export interface Task {
 // Persisted per-file JSON, two tiers (D-3): global ~/.awog/hooks/<id>.json +
 // project {project.path}/.awog/hooks/<id>.json. source/projectId are location-
 // derived (NOT stored in the file), mirroring Workflows. Mirror of UI shape
-// (apps/desktop/ui/types/index.ts).
+// (apps/desktop/ui-next/types/index.ts).
 
 export type HookEvent =
   | 'task.before-start'

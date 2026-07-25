@@ -111,7 +111,7 @@ This is a **pnpm monorepo** (root [`package.json`](package.json) +
 awog/
 ├── apps/
 │   └── desktop/
-│       ├── ui/              # `awog-ui` — Nuxt 4 frontend + engine UI
+│       ├── ui-next/         # `awog-ui-next` — Nuxt 4 SPA frontend (shipping UI)
 │       ├── sidecar/         # `@awog/sidecar` — Node.js engine, stdio JSON-RPC
 │       └── electron/        # `@awog/desktop` — Electron shell + IPC bridge + updater
 ├── artifacts/
@@ -152,7 +152,7 @@ pnpm install                # install dependencies for every workspace package
 pnpm dev                    # build the sidecar, launch Electron, open the app window
 
 # Option 2 — UI only, in the browser (fast, no Electron)
-pnpm dev:ui                 # open http://localhost:3030 (engine calls are no-ops)
+pnpm dev:ui                 # open http://localhost:3031 (engine calls are no-ops)
 ```
 
 > **Note.** `pnpm dev:ui` runs the UI as a plain web app for fast iteration — engine calls
@@ -176,16 +176,15 @@ pnpm lint:fix               # auto-fix lint + format
 `AppImage` / `deb` (Linux). CI uploads them to a **draft** GitHub release for manual review
 before publishing.
 
-Pages, stores, themes, and the current port status are documented in
-[apps/desktop/ui/README.md](apps/desktop/ui/README.md).
+Pages, stores, and themes live under
+[apps/desktop/ui-next/](apps/desktop/ui-next/).
 
 ## Status
 
 The desktop app is fully wired on the Electron + Node.js sidecar stack — Sessions, Tasks &
 Workflows, Agents / Skills / Connections / Rules / Commands / Hooks, Projects & templates, the
 Git Manager, and auto-update are all functional. See the [Features](#features) section above for
-detail, and the per-area roadmap in
-[apps/desktop/ui/README.md](apps/desktop/ui/README.md#roadmap).
+detail.
 
 ## Contributing
 

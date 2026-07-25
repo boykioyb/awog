@@ -7,7 +7,7 @@
 
 set -u
 
-UI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/apps/desktop/ui"
+UI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/apps/desktop/ui-next"
 
 if [[ ! -f "$UI_DIR/package.json" ]]; then
   echo "[lint-check] UI package not found at $UI_DIR" >&2
@@ -19,4 +19,4 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 0
 fi
 
-cd "$UI_DIR" && pnpm exec eslint . --ext .ts,.vue,.js,.cjs --max-warnings 0
+cd "$UI_DIR" && pnpm exec eslint . --max-warnings 0

@@ -1,6 +1,6 @@
 # Coding Guide — Nuxt Frontend
 
-Quy ước cho **Nuxt 4 + Vue 3 + TypeScript + Pinia + VueFlow + TailwindCSS**. Áp dụng cho [apps/desktop/ui/](../../apps/desktop/ui/).
+Quy ước cho **Nuxt 4 + Vue 3 + TypeScript + Pinia + VueFlow + TailwindCSS**. Áp dụng cho [apps/desktop/ui-next/](../../apps/desktop/ui-next/).
 
 Quy ước cross-stack (TypeScript, đặt tên chung, Git, bảo mật): xem [general.md](./general.md). Tài liệu này **chỉ** ghi những thứ riêng cho frontend.
 
@@ -17,7 +17,7 @@ Quy ước cross-stack (TypeScript, đặt tên chung, Git, bảo mật): xem [g
 | Custom event | kebab-case | `@select-task`, `@phase-approve` |
 | Slot | kebab-case | `<slot name="header" />` |
 
-## Cấu trúc thư mục (`apps/desktop/ui/`)
+## Cấu trúc thư mục (`apps/desktop/ui-next/`)
 
 ```
 ui/
@@ -208,9 +208,9 @@ Khi cần `resize-none` ở chỗ mới, thêm comment 1 dòng nói lý do.
 
 Khi một page/SFC vượt ~250 dòng, **không** để logic phình trong `<script setup>`. Tách:
 
-1. **Markup lặp → component con** (vd [`AgentListItem.vue`](../../apps/desktop/ui/components/agent/AgentListItem.vue)).
-2. **UI/logic lặp giữa nhiều trang → composable dùng chung** (vd [`useToasts`](../../apps/desktop/ui/composables/useToasts.ts) gom toast của agents + skills). Rule of Three: 2 copy = tín hiệu, 3 = bắt buộc.
-3. **Toàn bộ state + computed + handler còn lại → page-controller composable** `useXxxManager()` (vd [`useSkillsManager`](../../apps/desktop/ui/composables/useSkillsManager.ts)). Page còn lại đúng `<template>` + một destructure:
+1. **Markup lặp → component con** (vd trong [`components/agent/`](../../apps/desktop/ui-next/components/agent/)).
+2. **UI/logic lặp giữa nhiều trang → composable dùng chung** (vd [`useToasts`](../../apps/desktop/ui-next/composables/useToasts.ts) gom toast của agents + skills). Rule of Three: 2 copy = tín hiệu, 3 = bắt buộc.
+3. **Toàn bộ state + computed + handler còn lại → page-controller composable** `useXxxManager()` (đặt trong [`composables/`](../../apps/desktop/ui-next/composables/)). Page còn lại đúng `<template>` + một destructure:
 
 ```vue
 <script setup lang="ts">
@@ -322,9 +322,9 @@ pnpm format:check  # check format không sửa
 > Format (semi, quote, printWidth…) **do Prettier lo** — không khai rule style trong ESLint.
 
 **File config nằm ở:**
-- [`apps/desktop/ui/eslint.config.mjs`](../../apps/desktop/ui/eslint.config.mjs) — flat config (extend `withNuxt` + rule dự án + Prettier)
-- [`apps/desktop/ui/nuxt.config.ts`](../../apps/desktop/ui/nuxt.config.ts) — bật module `@nuxt/eslint` (`stylistic: false`, `checker: false`)
-- [`apps/desktop/ui/.prettierrc`](../../apps/desktop/ui/.prettierrc) / [`.prettierignore`](../../apps/desktop/ui/.prettierignore)
+- [`apps/desktop/ui-next/eslint.config.mjs`](../../apps/desktop/ui-next/eslint.config.mjs) — flat config (extend `withNuxt` + rule dự án + Prettier)
+- [`apps/desktop/ui-next/nuxt.config.ts`](../../apps/desktop/ui-next/nuxt.config.ts) — bật module `@nuxt/eslint` (`stylistic: false`, `checker: false`)
+- [`apps/desktop/ui-next/.prettierrc`](../../apps/desktop/ui-next/.prettierrc)
 
 > Khi muốn thêm/đổi rule: sửa `eslint.config.mjs` + cập nhật bảng "Rule dự án" ở trên + nêu lý do trong PR.
 
@@ -337,6 +337,6 @@ pnpm format:check  # check format không sửa
 - [ ] `pnpm typecheck` pass
 - [ ] Không có `any`, `@ts-ignore` không lý do, `console.log` còn sót
 - [ ] Component mới có type cho props/emits đầy đủ
-- [ ] Cập nhật [apps/desktop/ui/README.md](../../apps/desktop/ui/README.md) khi thêm route/component đáng kể
-- [ ] Cập nhật [apps/desktop/ui/types/index.ts](../../apps/desktop/ui/types/index.ts) khi đổi entity shape
+- [ ] Cập nhật [docs/architecture/system-overview.md](../architecture/system-overview.md) khi thêm route/component đáng kể
+- [ ] Cập nhật [apps/desktop/ui-next/types/index.ts](../../apps/desktop/ui-next/types/index.ts) khi đổi entity shape
 - [ ] Theme color → đi qua `useTheme()`, không hardcode

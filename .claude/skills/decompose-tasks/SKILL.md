@@ -44,7 +44,7 @@ T1 (TL: ADR) → T2 (dev: types) → T3 (dev: store) → T4 (dev: UI) → T6 (QA
 - **Role:** developer
 - **Depends on:** T1
 - **Acceptance:**
-  - `apps/desktop/ui/types/index.ts` cập nhật.
+  - `apps/desktop/ui-next/types/index.ts` cập nhật.
   - `pnpm typecheck` pass.
 - **Risk:** —
 

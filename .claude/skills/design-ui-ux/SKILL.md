@@ -29,9 +29,9 @@ Mọi rule bên dưới phải tôn trọng convention sẵn có của AWOG. Đ�
 
 | Khía cạnh | AWOG đã có | Quy tắc |
 |---|---|---|
-| **Màu** | [`useTheme()`](../../../apps/desktop/ui/composables/useTheme.ts) + [20+ token](../../../apps/desktop/ui/utils/themes.ts) (`bg`, `text`, `textDim`, `border`, `bgHover`, `accent`, `danger`, `dangerBg`…) | **Không hardcode hex.** Màu theme đi qua inline `:style`, không class Tailwind màu. Light + dark luôn test cùng nhau. |
+| **Màu** | [`useTheme()`](../../../apps/desktop/ui-next/composables/useTheme.ts) — theme token CSS-var (`bg`, `text`, `textDim`, `border`, `bgHover`, `accent`, `danger`, `dangerBg`…) | **Không hardcode hex.** Màu theme đi qua inline `:style`, không class Tailwind màu. Light + dark luôn test cùng nhau. |
 | **Layout/spacing** | Tailwind 3 utility | Class Tailwind cho layout/spacing/typography; scale spacing nhất quán (4/8px rhythm). |
-| **Font-size** | [`useAppearance`](../../../apps/desktop/ui/composables/useAppearance.ts) `--font-size-base` (12→18px) | Body text dùng `text-[1em]` (scale theo setting). Badge/hint/count chip = `text-[12px]` fixed + `font-mono leading-none`. Không `text-xs`/`text-sm` cho text đọc được. |
+| **Font-size** | [`useAppearanceDom`](../../../apps/desktop/ui-next/composables/useAppearanceDom.ts) `--font-size-base` (12→18px) | Body text dùng `text-[1em]` (scale theo setting). Badge/hint/count chip = `text-[12px]` fixed + `font-mono leading-none`. Không `text-xs`/`text-sm` cho text đọc được. |
 | **Icon** | `lucide-vue-next` | **Không emoji làm icon.** Một bộ icon, stroke đồng nhất, size theo token. Detail header → icon-only `13px` + `title` attr. |
 | **Dropdown** | `AppSelect` | **Không `<select>` native** (WKWebView bỏ qua padding). Dùng `AppSelect` slot-based, cùng height `AppInput`. |
 | **Component lớn** | composable page-controller | SFC > ~250 dòng → đẩy state/logic vào `useXxxManager()`, template mỏng. Markup lặp → component con. |
@@ -52,7 +52,7 @@ Rút ra:
 ### Bước 2 — Quyết định design system (nhẹ, dùng catalog bên dưới)
 
 1. Chọn **style** từ [§ Catalog style](#catalog-chọn-nhanh) hợp loại sản phẩm (AWOG → minimalism / flat, glass tiết chế cho overlay).
-2. Chọn **màu** → map vào token `useTheme()` sẵn có; nếu thiếu token, thêm vào [themes.ts](../../../apps/desktop/ui/utils/themes.ts) (đừng hardcode tại component).
+2. Chọn **màu** → map vào token `useTheme()` sẵn có; nếu thiếu token, thêm token CSS-var qua [`useTheme()`](../../../apps/desktop/ui-next/composables/useTheme.ts) (đừng hardcode tại component).
 3. Chọn **typography**: 1 cặp heading/body, type scale nhất quán (12 14 16 18 24 32), weight phân cấp (600–700 heading, 400 body, 500 label).
 4. Định **effect** khớp style: shadow scale nhất quán, radius nhất quán, blur chỉ cho overlay (không trang trí).
 5. Liệt kê **anti-pattern** cần né cho bề mặt này (xem từng nhóm rule).

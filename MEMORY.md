@@ -28,7 +28,7 @@ _(Chưa có entry)_
 
 <!-- Tình trạng, mốc thời gian, quyết định đang chạy của dự án — đổi nhanh, cần update -->
 
-- [Trạng thái MVP hiện tại](#) — UI đang port React → Nuxt 4, engine + Tauri shell chưa wire. Mock data trong [stores/workspace.ts](apps/desktop/ui/stores/workspace.ts).
+- [Trạng thái MVP hiện tại](#) — UI đang port React → Nuxt 4, engine + Tauri shell chưa wire. Mock data trong [stores/](apps/desktop/ui-next/stores/) (tách theo domain).
 - [Tài liệu là tiếng Việt](#) — toàn bộ `docs/`, README, comment kỹ thuật viết tiếng Việt; code và identifier giữ tiếng Anh.
 
 ## Reference
@@ -38,7 +38,7 @@ _(Chưa có entry)_
 - [VISION](artifacts/VISION.md) — tầm nhìn sản phẩm đầy đủ
 - [Tài liệu chính](docs/README.md) — entry point cho requirements / design / architecture / decisions / features
 - [ADR](docs/decisions/) — lý do của mọi quyết định kiến trúc lớn
-- [UI README](apps/desktop/ui/README.md) — chi tiết stack frontend, route, store, theme
+- [UI overview](docs/architecture/system-overview.md) — kiến trúc + stack frontend, route, store, theme
 - [Coding guide](docs/coding/) — quy ước code (general + nuxt-frontend)
 - [Claude instructions](CLAUDE.md) — hướng dẫn riêng cho Claude Code
 

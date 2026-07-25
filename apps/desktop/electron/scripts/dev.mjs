@@ -5,8 +5,8 @@
 // Electron retries loading the dev URL until Nuxt is listening (see window.ts),
 // so we don't need to poll the port here. Killing Electron tears everything down.
 //
-// UI target is env-overridable so the legacy ui can still be launched:
-//   AWOG_UI_PKG=awog-ui AWOG_DEV_URL=http://localhost:3030 pnpm dev
+// The UI package + dev URL are env-overridable (AWOG_UI_PKG / AWOG_DEV_URL) for
+// serving an alternate Nuxt workspace; keep the two in sync (paths.ts).
 
 import { spawn } from 'node:child_process'
 import { userInfo } from 'node:os'
@@ -33,9 +33,8 @@ async function main() {
   await run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], { cwd: electronDir })
 
   const children = []
-  // Which Nuxt workspace package to serve. ui-next is the active rebuild; the
-  // legacy ui (awog-ui) stays launchable via AWOG_UI_PKG. Keep AWOG_DEV_URL in
-  // sync (paths.ts) when overriding the package.
+  // Which Nuxt workspace package to serve. ui-next is the shipping UI; override
+  // via AWOG_UI_PKG (keep AWOG_DEV_URL in sync, paths.ts) to serve another.
   const uiPkg = process.env.AWOG_UI_PKG ?? 'awog-ui-next'
   const nuxt = spawn('pnpm', ['--filter', uiPkg, 'dev'], {
     cwd: repoRoot,

@@ -41,7 +41,7 @@ Không có database trong MVP.
 
 ## Process Model
 
-- **Electron main process (Node)** là entry point: tạo `BrowserWindow` load Nuxt SPA (dev `http://localhost:3030`; prod custom protocol `app://` phục vụ `apps/desktop/ui/.output/public`), quản lý tray, notification, single-instance, lifecycle.
+- **Electron main process (Node)** là entry point: tạo `BrowserWindow` load Nuxt SPA (dev `http://localhost:3031`; prod custom protocol `app://` phục vụ `apps/desktop/ui-next/.output/public`), quản lý tray, notification, single-instance, lifecycle.
 - **Node.js engine** chạy process riêng do main spawn (`ELECTRON_RUN_AS_NODE`): host execution engine, giữ API key/OAuth token bên trong.
 - **Renderer (Chromium)** load Nuxt UI; gọi engine qua `window.awog.request(...)` → main relay vào engine theo NDJSON JSON-RPC.
 - Đóng cửa sổ ≠ thoát ứng dụng. Tray icon giữ engine sống để task dài tiếp tục chạy.

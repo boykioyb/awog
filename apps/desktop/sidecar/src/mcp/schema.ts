@@ -1,5 +1,5 @@
 // Zod schema for MCP server config. The on-disk shape is a subset of the UI
-// MCPServer type (apps/desktop/ui/types/index.ts) — runtime fields (status,
+// MCPServer type (apps/desktop/ui-next/types/index.ts) — runtime fields (status,
 // tools, resources, lastError) are NOT persisted; they live in the manager's
 // in-memory snapshot and are layered on top by mcp.list. See ADR 0014.
 
