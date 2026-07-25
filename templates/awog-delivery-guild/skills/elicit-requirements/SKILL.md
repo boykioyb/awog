@@ -54,15 +54,15 @@ Mỗi AC phải:
 
 ## UI behavior
 
-- **Component liên quan:** <list, ref [apps/desktop/ui/components/](../../apps/desktop/ui/components/)>
+- **Component liên quan:** <list, ref [apps/desktop/ui-next/components/](../../apps/desktop/ui-next/components/)>
 - **Route mới (nếu có):** ...
-- **State mới ở store:** ... (ref [stores/workspace.ts](../../apps/desktop/ui/stores/workspace.ts))
+- **State mới ở store:** ... (ref [stores/](../../apps/desktop/ui-next/stores/) — tách theo domain: agents/skills/projects/tasks/workflows/sessions/…)
 - **Theme token mới (nếu có):** ...
 - **Empty/loading/error state:** mô tả từng cái.
 
 ## Data shape
 
-- **Entity mới/đổi:** ref [types/index.ts](../../apps/desktop/ui/types/index.ts)
+- **Entity mới/đổi:** ref [types/index.ts](../../apps/desktop/ui-next/types/index.ts)
 - **File trên đĩa thay đổi:** path + format
 - **Event log thêm:** type + payload
 

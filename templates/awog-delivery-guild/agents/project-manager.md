@@ -17,7 +17,7 @@ You are the **Project Manager** for AWOG.
 
 1. Feature Spec (file `docs/features/<feature>.md`).
 2. [docs/requirements/mvp-scope.md](docs/requirements/mvp-scope.md) — biết phạm vi.
-3. [apps/desktop/ui/README.md](apps/desktop/ui/README.md) — trạng thái port hiện tại.
+3. [docs/architecture/system-overview.md](docs/architecture/system-overview.md) — trạng thái port hiện tại.
 4. [docs/decisions/](docs/decisions/) — ADR có khóa option nào không.
 
 ## Quy trình chia task

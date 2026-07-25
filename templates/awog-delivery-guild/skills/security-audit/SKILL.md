@@ -81,7 +81,7 @@ Theo template ở [infosec.md](../../agents/infosec.md#output).
 
 - **Áp:** UI Vue.
 - **Tìm:** `v-html` với input không kiểm soát; render markdown chứa script.
-- **AWOG nhạy cảm:** [MarkdownRenderer.vue](../../../apps/desktop/ui/components/MarkdownRenderer.vue), [MermaidBlock.vue](../../../apps/desktop/ui/components/MermaidBlock.vue). Mermaid SVG output kiểm soát được; markdown input từ user/file workspace là **L1**, KHÔNG được render qua `v-html` thẳng.
+- **AWOG nhạy cảm:** [SessionMarkdownHtml.vue](../../../apps/desktop/ui-next/components/session/SessionMarkdownHtml.vue), [MermaidView.vue](../../../apps/desktop/ui-next/components/common/MermaidView.vue). Mermaid SVG output kiểm soát được; markdown input từ user/file workspace là **L1**, KHÔNG được render qua `v-html` thẳng.
 - **Fix:** dùng renderer parse → AST → Vue node; sanitize HTML (DOMPurify) nếu bắt buộc inject.
 
 ### #04 — IDOR / Broken Object Access
@@ -210,7 +210,7 @@ Theo template ở [infosec.md](../../agents/infosec.md#output).
 ### AX2 — IPC Boundary Violation
 
 - **Invariant #4:** UI không gọi `fs`, `child_process`, model SDK trực tiếp.
-- **Check:** trong `apps/desktop/ui/`, không được có `import fs from 'fs'`, `child_process`, `@anthropic-ai/sdk`, etc.
+- **Check:** trong `apps/desktop/ui-next/`, không được có `import fs from 'fs'`, `child_process`, `@anthropic-ai/sdk`, etc.
 - **Phải:** đi qua sidecar IPC.
 
 ### AX3 — Workspace Path Escape

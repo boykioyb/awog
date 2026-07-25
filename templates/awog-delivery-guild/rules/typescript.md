@@ -12,7 +12,7 @@ enabled: true
 - **Prefer `type`** cho object shape; **`interface`** chỉ khi extend/merge.
 - **Discriminated union** cho state nhiều biến thể.
 - **`as const`** cho literal/enum-like.
-- Type chia sẻ → [apps/desktop/ui/types/index.ts](../../apps/desktop/ui/types/index.ts); type cục bộ → khai tại file.
+- Type chia sẻ → [apps/desktop/ui-next/types/index.ts](../../apps/desktop/ui-next/types/index.ts); type cục bộ → khai tại file.
 
 ## Đặt tên (cross-stack)
 

@@ -21,7 +21,7 @@ You are the **Business Analyst** for AWOG.
 4. [docs/architecture/data-model.md](docs/architecture/data-model.md) — biết entity hiện có.
 5. [docs/architecture/execution-model.md](docs/architecture/execution-model.md) — biết runtime.
 6. [docs/features/](docs/features/) — feature liên quan (để không trùng/conflict).
-7. [apps/desktop/ui/types/index.ts](apps/desktop/ui/types/index.ts) — entity shape thực tế.
+7. [apps/desktop/ui-next/types/index.ts](apps/desktop/ui-next/types/index.ts) — entity shape thực tế.
 
 ## Quy trình
 

@@ -6,7 +6,7 @@ enabled: true
 
 # Lint & Format
 
-Frontend (`apps/desktop/ui/`) dùng **ESLint 9 flat config (`@nuxt/eslint`) + Prettier**. Cấu hình: [`eslint.config.mjs`](../../apps/desktop/ui/eslint.config.mjs), [`.prettierrc`](../../apps/desktop/ui/.prettierrc). Base rule do `@nuxt/eslint` cấp (typescript-eslint + eslint-plugin-vue + Nuxt auto-import); **Prettier giữ vai trò format** (`stylistic: false` trong `nuxt.config.ts`).
+Frontend (`apps/desktop/ui-next/`) dùng **ESLint 9 flat config (`@nuxt/eslint`) + Prettier**. Cấu hình: [`eslint.config.mjs`](../../apps/desktop/ui-next/eslint.config.mjs), [`.prettierrc`](../../apps/desktop/ui-next/.prettierrc). Base rule do `@nuxt/eslint` cấp (typescript-eslint + eslint-plugin-vue + Nuxt auto-import); **Prettier giữ vai trò format** (`stylistic: false` trong `nuxt.config.ts`).
 
 ## Trước khi báo task xong
 
@@ -29,7 +29,7 @@ pnpm lint     # phải 0 error
 
 ## Rule dự án (thêm/override trên `@nuxt/eslint` base)
 
-Khai trong [`eslint.config.mjs`](../../apps/desktop/ui/eslint.config.mjs):
+Khai trong [`eslint.config.mjs`](../../apps/desktop/ui-next/eslint.config.mjs):
 
 - **Bật chặt hơn:** `@typescript-eslint/no-explicit-any` = error, `consistent-type-imports` = error (`prefer: type-imports`), `no-unused-vars` (ignore `^_`), `vue/component-name-in-template-casing` = PascalCase, `vue/block-order` (template→script→style), `vue/html-self-closing`.
 - **Tắt (idiomatic Vue / pattern dự án):** `vue/multi-word-component-names`, `vue/no-multiple-template-root` (Vue 3 fragment), `@typescript-eslint/no-dynamic-delete` (`delete record[key]` cho cache per-project), `@typescript-eslint/unified-signatures` (giữ 1 call-signature / event trong `defineEmits`).
@@ -39,4 +39,4 @@ Khai trong [`eslint.config.mjs`](../../apps/desktop/ui/eslint.config.mjs):
 
 ## Hook tự động
 
-Sau mỗi `Edit`/`Write` vào file trong `apps/desktop/ui/`, [.claude/hooks/format-after-edit.sh](../hooks/format-after-edit.sh) sẽ chạy `prettier --write` trên file đó. Nếu muốn tắt: gỡ hook khỏi [.claude/settings.json](../settings.json).
+Sau mỗi `Edit`/`Write` vào file trong `apps/desktop/ui-next/`, [.claude/hooks/format-after-edit.sh](../hooks/format-after-edit.sh) sẽ chạy `prettier --write` trên file đó. Nếu muốn tắt: gỡ hook khỏi [.claude/settings.json](../settings.json).

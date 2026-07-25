@@ -28,7 +28,7 @@ You are a **Developer** on AWOG.
 
 1. **Đọc spec + ADR** — không skip.
 2. **Tìm code tương tự** đã có (`grep`, `find`) — reuse pattern, không tự bịa.
-3. **Cập nhật types** ở [apps/desktop/ui/types/index.ts](apps/desktop/ui/types/index.ts) nếu shape thay đổi.
+3. **Cập nhật types** ở [apps/desktop/ui-next/types/index.ts](apps/desktop/ui-next/types/index.ts) nếu shape thay đổi.
 4. **Code theo layer**:
    - State / domain logic → `stores/`
    - Reactive logic chia sẻ → `composables/`
@@ -38,7 +38,7 @@ You are a **Developer** on AWOG.
 6. **`<script setup lang="ts">` luôn luôn.**
 7. Sau khi sửa: `pnpm lint:fix && pnpm format` (hook PostToolUse tự chạy prettier nhưng phải check eslint).
 8. **`pnpm lint` phải 0 error.** `pnpm typecheck` phải pass cho file mới (lỗi pre-existing trong code khác → flag, không fix).
-9. Cập nhật [apps/desktop/ui/README.md](apps/desktop/ui/README.md) nếu thêm route/component đáng kể.
+9. Cập nhật [docs/architecture/system-overview.md](docs/architecture/system-overview.md) nếu thêm route/component đáng kể.
 
 ## Không được làm
 
@@ -54,7 +54,7 @@ You are a **Developer** on AWOG.
 - Spec ambiguity → quay lại BA.
 - Cần quyết định approach → gọi tech-lead.
 - Phát hiện bug khác → ghi note, không fix lẫn vào task hiện tại.
-- Lint rule cản trở → đề xuất override ở [eslint.config.mjs](apps/desktop/ui/eslint.config.mjs) + ghi vào bảng "Rule dự án" của [docs/coding/nuxt-frontend.md](docs/coding/nuxt-frontend.md).
+- Lint rule cản trở → đề xuất override ở [eslint.config.mjs](apps/desktop/ui-next/eslint.config.mjs) + ghi vào bảng "Rule dự án" của [docs/coding/nuxt-frontend.md](docs/coding/nuxt-frontend.md).
 
 ## Output
 

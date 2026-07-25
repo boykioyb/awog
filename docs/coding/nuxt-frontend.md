@@ -226,31 +226,27 @@ const { filtered, selectedKey, editing, onSelect, pushToast /* … */ } = useSki
 
 ## Component/composable dùng chung
 
-Sau đợt refactor [ADR 0009](../decisions/0009-ui-consolidation-refactor.md) ([clarifications 0009a](../decisions/0009a-ui-consolidation-clarifications.md)), các primitive sau là **single source of truth** cho pattern lặp ở [apps/desktop/ui/](../../apps/desktop/ui/). Trước khi tự viết modal/input/list-detail mới, kiểm tra bảng dưới.
+> **Lưu ý lịch sử:** [ADR 0009](../decisions/0009-ui-consolidation-refactor.md) (primitive in-house BaseModal/AppInput/…) → [ADR 0041](../decisions/0041-in-house-design-system-shadcn-style.md) → [ADR 0044](../decisions/0044-adopt-shadcn-vue-real.md) (shadcn-vue) áp dụng cho `apps/desktop/ui` legacy — **đã xoá**. Bản UI hiện tại `apps/desktop/ui-next` **KHÔNG theo shadcn** (không có `components/ui/`): nó **port CSS prototype nguyên văn** (`assets/css/prototype.css`, class `.side/.bento/.ovl/…`) và dùng bộ primitive dùng chung riêng.
 
-| Primitive | Loại | Khi nào dùng | Khi nào KHÔNG dùng |
-|---|---|---|---|
-| [`BaseModal.vue`](../../apps/desktop/ui/components/BaseModal.vue) | Component | Mọi modal chrome (overlay + card + header X + footer). Trao ESC + backdrop + scroll lock. | Drawer side panel, context menu, fullscreen lightbox custom (cân nhắc nhưng có thể OK). |
-| `EditorShell.vue` *(PR-3)* | Component | Full-page editor cho entity (Agent/Skill/Command/Hook/Mcp/Project). Có dirty + Save/Cancel + `request-close`. | Markdown editor `pages/edit/[taskId].vue` (top toolbar đặc thù — xem ADR 0009a §4). |
-| `MasterDetailShell.vue` *(PR-2)* | Component | List trái + detail phải + `mobilePane`. 11 page CRUD entity. | Page có 3-pane (tree + 2 pane), top toolbar đặc thù, hoặc cấu trúc không-master-detail. |
-| [`SearchInput.vue`](../../apps/desktop/ui/components/SearchInput.vue) | Component | Search box có icon `Search` + `v-model`. Inline trong toolbar list. | Form input bình thường (dùng `AppInput`). |
-| [`AppInput.vue`](../../apps/desktop/ui/components/AppInput.vue) | Component | Text/email/password/number input + theme style + `invalid` state. Thay thế `inputStyle = computed(...)`. | Textarea (chưa abstract), select, file input. |
-| [`useEscape`](../../apps/desktop/ui/composables/useEscape.ts) | Composable | Đóng modal/popover khi ESC. Tự stack: modal trên cùng đóng trước. | Global shortcut không liên quan stacking — cần listener riêng. |
-| [`useClickOutside`](../../apps/desktop/ui/composables/useClickOutside.ts) | Composable | Đóng popover/menu khi click ra ngoài. Dùng `mousedown` (race-safe với button click trong). | Modal backdrop click (đã có trong `BaseModal`). |
-| [`useMockGenerator<T>`](../../apps/desktop/ui/composables/useMockGenerator.ts) | Composable | Mock generate entity từ prompt (Agent/Skill/...). Bọc empty-prompt guard + 400ms latency + `isGenerating`/`error`. Caller chỉ truyền pure `generate(prompt) => T`. | Generator có state phức tạp ngoài `value/loading/error` (multi-step, cancellable). |
-| [`usePromptCreator<TDraft>`](../../apps/desktop/ui/composables/usePromptCreator.ts) | Composable | Boilerplate cho 6 `{Entity}PromptCreator.vue`: `draft` ref + `onSubmit` + `onRegenerate`. Phối với một generator (`useAgentGenerator`, ...). | Tạo entity không có flow "generate → preview → save" 2 bước. |
-| [`PromptCreatorPanel.vue`](../../apps/desktop/ui/components/PromptCreatorPanel.vue) | Component | Khung popover floating tạo entity từ prompt: headline / textarea / Generate button / preview slot / actions slot. Theme + anchor positioning. | Form tạo entity inline thuần (không cần prompt-to-draft); modal full-screen có yêu cầu chrome khác. |
+Trước khi tự viết modal/select/menu/toast mới, đọc [`components/common/`](../../apps/desktop/ui-next/components/common/) + các composable-host dưới đây:
 
-**Theme token mới** trong [`utils/themes.ts`](../../apps/desktop/ui/utils/themes.ts):
+| Primitive (ui-next) | Loại | Dùng cho |
+|---|---|---|
+| Modal idiom `.ovl.on` + `<Teleport>` | Pattern CSS | Chrome modal (overlay + card). ESC-close, **KHÔNG** backdrop-dismiss; mỗi modal tự lo Esc (không có `useEscape` chung). |
+| [`PreviewModal.vue`](../../apps/desktop/ui-next/components/common/PreviewModal.vue) + [`usePreview`](../../apps/desktop/ui-next/composables/usePreview.ts) | Component + composable | Xem file (md/HTML/PDF/ảnh/code). **MỌI** read-file đi qua đây, không viewer riêng. |
+| [`ConfirmDialogHost.vue`](../../apps/desktop/ui-next/components/common/ConfirmDialogHost.vue) + [`useConfirm`](../../apps/desktop/ui-next/composables/useConfirm.ts) | Host + composable | Confirm / delete dialog. |
+| [`ContextMenu.vue`](../../apps/desktop/ui-next/components/common/ContextMenu.vue) + [`useFileContextMenu`](../../apps/desktop/ui-next/composables/useFileContextMenu.ts) | Component + composable | Right-click / click-open menu (click-open cần `.stop`). |
+| [`AppSelect.vue`](../../apps/desktop/ui-next/components/common/AppSelect.vue) | Component | Dropdown — **KHÔNG** native `<select>` (WKWebView bỏ padding). |
+| [`TextPromptHost.vue`](../../apps/desktop/ui-next/components/common/TextPromptHost.vue) + [`useTextPrompt`](../../apps/desktop/ui-next/composables/useTextPrompt.ts) | Host + composable | Input 1 dòng (rename, new file…). |
+| [`CommandPalette.vue`](../../apps/desktop/ui-next/components/common/CommandPalette.vue) + [`useCommandPalette`](../../apps/desktop/ui-next/composables/useCommandPalette.ts) | Component + composable | ⌘K palette. |
+| [`usePromptCreator`](../../apps/desktop/ui-next/composables/usePromptCreator.ts) + [`LibraryCreatorPanel.vue`](../../apps/desktop/ui-next/components/library/LibraryCreatorPanel.vue) | Composable + component | Tạo entity flow "generate → preview → save". |
+| [`useToasts`](../../apps/desktop/ui-next/composables/useToasts.ts) + [`ActionToastHost.vue`](../../apps/desktop/ui-next/components/common/ActionToastHost.vue) | Composable + host | Toast + action toast. |
+| [`LibraryView.vue`](../../apps/desktop/ui-next/components/library/LibraryView.vue) | Component | Master-detail (list trái + detail phải) dùng chung cho các page CRUD entity. |
+| [`Collapse.vue`](../../apps/desktop/ui-next/components/common/Collapse.vue) · [`MonacoEditor.vue`](../../apps/desktop/ui-next/components/common/MonacoEditor.vue) · [`MermaidView.vue`](../../apps/desktop/ui-next/components/common/MermaidView.vue) · [`MinimizeDock.vue`](../../apps/desktop/ui-next/components/common/MinimizeDock.vue) | Component | Collapse grid-rows, editor Monaco, mermaid, dock thu nhỏ. |
 
-| Token | Dùng cho |
-|---|---|
-| `t.overlay` | Backdrop modal/lightbox (rgba đen, khác giữa dark/light). |
-| `t.onAccent` | Text trên nền `accent`/`danger` button. |
-| `t.diffAdd` / `t.diffDel` | Markdown diff viewer line color. |
-| `t.statusOk` / `t.statusWarn` | Status indicator dot/badge. |
+**Theme:** ui-next **không có** `utils/themes.ts` (object token). Màu theme là **CSS var** trên `:root` (dark) / `body.light` (light) — port từ prototype; [`useTheme()`](../../apps/desktop/ui-next/composables/useTheme.ts) chỉ toggle class `light` + ghi đè `--accent*` inline. Không hardcode hex; màu theme đi qua var CSS / inline `:style` từ `useTheme`.
 
-> **Quy tắc:** thấy mình copy `fixed inset-0 backdrop-blur` lần thứ 2 → dừng, dùng `BaseModal`. Thấy copy `inputStyle = computed(...)` lần thứ 2 → dừng, dùng `AppInput`. Pattern lặp 3+ lần mà chưa có primitive → mở thảo luận extract, không tự viết bản thứ tư.
+> **Quy tắc:** thấy mình copy chrome `.ovl.on` hoặc dựng read-file viewer lần thứ 2 → dừng, dùng primitive `components/common/` tương ứng. Pattern lặp 3+ lần chưa có primitive → mở thảo luận extract, không tự viết bản thứ tư.
 
 ## VueFlow
 

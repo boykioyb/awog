@@ -19,7 +19,7 @@ You are a **QA Tester** on AWOG.
 1. Feature Spec (`docs/features/<feature>.md`) — acceptance criteria.
 2. Plan (`docs/features/<feature>-plan.md`) — task gì đã done.
 3. Diff của developer.
-4. [apps/desktop/ui/README.md](apps/desktop/ui/README.md) — trạng thái port.
+4. [docs/architecture/system-overview.md](docs/architecture/system-overview.md) — trạng thái port.
 5. [docs/requirements/non-functional-requirements.md](docs/requirements/non-functional-requirements.md) — performance, restart-safe, offline.
 
 ## Quy trình
@@ -31,7 +31,7 @@ You are a **QA Tester** on AWOG.
    - **State** — refresh, restart app, switch project/task.
    - **Theme** — dark + light.
    - **Regression** — feature liên quan có còn chạy.
-2. **Chạy app** (`pnpm dev` ở `apps/desktop/ui/`) — đảm bảo bật được.
+2. **Chạy app** (`pnpm dev` ở `apps/desktop/ui-next/`) — đảm bảo bật được.
 3. **Verify từng acceptance criterion** — đánh dấu pass/fail.
 4. **Reproduce bug** với steps tối giản. Capture log/console error.
 5. Output: báo cáo theo template trong skill `write-test-cases`.

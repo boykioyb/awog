@@ -31,7 +31,7 @@ Workflow chuẩn để **một task** đi từ "to-do" → "done" trên AWOG.
 
 ```bash
 # Tìm pattern tương tự
-grep -r "<keyword>" apps/desktop/ui/
+grep -r "<keyword>" apps/desktop/ui-next/
 # Hoặc Glob theo path
 ```
 
@@ -40,7 +40,7 @@ grep -r "<keyword>" apps/desktop/ui/
 
 ### 3. Cập nhật types (nếu shape đổi)
 
-- File: [apps/desktop/ui/types/index.ts](../../../apps/desktop/ui/types/index.ts)
+- File: [apps/desktop/ui-next/types/index.ts](../../../apps/desktop/ui-next/types/index.ts)
 - Naming: PascalCase, discriminated union khi nhiều biến thể.
 - Sau khi sửa: `pnpm typecheck` ngay để catch sớm.
 
@@ -89,7 +89,7 @@ pnpm dev
 
 ### 8. Update tài liệu chạm vào
 
-- [apps/desktop/ui/README.md](../../../apps/desktop/ui/README.md) nếu thêm route/component đáng kể.
+- [docs/architecture/system-overview.md](../../../docs/architecture/system-overview.md) nếu thêm route/component đáng kể.
 - [docs/coding/nuxt-frontend.md](../../../docs/coding/nuxt-frontend.md) nếu thêm rule lint mới.
 - Spec file: tick AC đã done.
 
