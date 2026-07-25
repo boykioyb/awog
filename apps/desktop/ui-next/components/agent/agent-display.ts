@@ -72,6 +72,10 @@ export const PROVIDERS: { id: ProviderName; label: string }[] = [
 // providers/anthropic/models-map + the sessions model catalog. Unknown ids fall
 // back to the raw id.
 const MODEL_LABELS: Record<string, string> = {
+  'claude-fable-5': 'Fable 5',
+  'claude-opus-5': 'Opus 5',
+  'claude-opus-5-1m': 'Opus 5 (1M)',
+  'claude-sonnet-5': 'Sonnet 5',
   'claude-opus-4-8': 'Opus 4.8',
   'claude-opus-4-8-1m': 'Opus 4.8 (1M)',
   'claude-opus-4-7': 'Opus 4.7',
@@ -94,9 +98,10 @@ export function modelDisplayName(modelId: string): string {
 // Per-provider model catalog (engine id + display label) for the editor picker.
 const PROVIDER_MODELS: Record<ProviderName, { id: string; label: string }[]> = {
   anthropic: [
-    { id: 'claude-opus-4-8', label: 'Opus 4.8' },
-    { id: 'claude-opus-4-8-1m', label: 'Opus 4.8 (1M)' },
-    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+    { id: 'claude-fable-5', label: 'Fable 5' },
+    { id: 'claude-opus-5', label: 'Opus 5' },
+    { id: 'claude-opus-5-1m', label: 'Opus 5 (1M)' },
+    { id: 'claude-sonnet-5', label: 'Sonnet 5' },
     { id: 'claude-haiku-4-5', label: 'Haiku 4.5' },
   ],
   openai: [

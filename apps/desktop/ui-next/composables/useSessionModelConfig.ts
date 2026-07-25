@@ -92,7 +92,7 @@ export function useSessionModelConfig(session: () => Session) {
   const { accounts, accountById, modelsForAccount } = useAccounts()
 
   // ── Model ──
-  const selectedModel = computed(() => session().model || 'Opus 4.8')
+  const selectedModel = computed(() => session().model || 'Opus 5')
   const selectedAccountId = computed(() => session().accountId ?? '')
   const selectedAccountDisplay = computed(() => session().account || '')
   const availableModels = computed(() => {

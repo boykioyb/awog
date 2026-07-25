@@ -39,17 +39,17 @@ type PricingFetchResponse = { models?: unknown; fetchedAt?: unknown; updated?: u
 function mockPricing(): ModelPrice[] {
   return [
     {
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       provider: 'Anthropic',
-      input: 15,
-      output: 75,
-      cacheRead: 1.5,
-      cacheWrite: 18.75,
+      input: 5,
+      output: 25,
+      cacheRead: 0.5,
+      cacheWrite: 6.25,
       isOverride: false,
       source: 'default',
     },
     {
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-5',
       provider: 'Anthropic',
       input: 3,
       output: 15,

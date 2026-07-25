@@ -45,7 +45,7 @@ import type {
   WorkflowNode,
 } from '../types/shared.js'
 
-const DEFAULT_MODEL = 'claude-opus-4-8'
+const DEFAULT_MODEL = 'claude-opus-5'
 const COMMIT_TEMPLATE = '[{phaseId}] {agentName}: {summary}'
 
 export interface NodeRunContext {

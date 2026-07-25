@@ -585,7 +585,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     return acct ? `${acct} · ${provider}` : `${provider}`
   }
   function modelDisplay(modelId?: string): string {
-    if (!modelId) return 'Opus 4.8'
+    if (!modelId) return 'Opus 5'
     return modelDisplayName(modelId)
   }
   function modeDisplay(mode?: string): string {
@@ -1144,7 +1144,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const modelId = ld?.modelId ?? g.modelId
     const level = ld?.level ?? g.thinkingLevel
     const mcpServerIds = ld?.mcpServerIds
-    if (!useIpc) return { acct: undefined, model: 'Opus 4.8', level, mcpServerIds }
+    if (!useIpc) return { acct: undefined, model: 'Opus 5', level, mcpServerIds }
     const wantProvider = PROVIDER_DISPLAY[provider] ?? 'Anthropic'
     const inProvider = accounts.value.filter((a) => a.provider === wantProvider)
     const acct =
@@ -1157,7 +1157,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Default model id (e.g. 'claude-opus-4-8') → display name; use it only when the
     // chosen account actually offers it, else the account's first model.
     const wantModel = modelDisplayName(modelId)
-    const model = available.includes(wantModel) ? wantModel : (available[0] ?? 'Opus 4.8')
+    const model = available.includes(wantModel) ? wantModel : (available[0] ?? 'Opus 5')
     return { acct, model, level, mcpServerIds }
   }
 
@@ -3010,7 +3010,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       return `${ctx}${text}`
     }
     const s = active.value
-    const settings = s ? engineSettings(s) : { provider: 'anthropic', modelId: 'claude-opus-4-8' }
+    const settings = s ? engineSettings(s) : { provider: 'anthropic', modelId: 'claude-opus-5' }
     const res = await sc.request<{ text: string }>('sessions.enhancePrompt', {
       text,
       provider: settings.provider,

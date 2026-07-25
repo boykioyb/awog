@@ -387,7 +387,7 @@ export type TreeDir = { d: string; ch?: TreeNode[] }
 export type TreeNode = TreeFile | TreeDir
 
 const PROVIDER_MODELS: Record<Provider, string[]> = {
-  Anthropic: ['Opus 4.8', 'Opus 4.8 (1M)', 'Sonnet 4.6', 'Haiku 4.5'],
+  Anthropic: ['Fable 5', 'Opus 5', 'Opus 5 (1M)', 'Sonnet 5', 'Haiku 4.5'],
   OpenAI: ['GPT-5', 'GPT-5 mini', 'o3', 'GPT-4.1'],
   Google: ['Gemini 2.5 Pro', 'Gemini 2.5 Flash', 'Gemini 2.0 Flash'],
 }
@@ -405,6 +405,10 @@ export const PROVIDER_DISPLAY: Record<string, Provider> = {
 // Engine modelId (e.g. `claude-opus-4-8`) → friendly display name. Best effort:
 // unknown ids fall back to the raw id (see modelDisplayName).
 export const MODEL_DISPLAY: Record<string, string> = {
+  'claude-fable-5': 'Fable 5',
+  'claude-opus-5': 'Opus 5',
+  'claude-opus-5-1m': 'Opus 5 (1M)',
+  'claude-sonnet-5': 'Sonnet 5',
   'claude-opus-4-8': 'Opus 4.8',
   'claude-opus-4-8-1m': 'Opus 4.8 (1M)',
   'claude-sonnet-4-6': 'Sonnet 4.6',
@@ -497,7 +501,7 @@ const SESSIONS: Session[] = [
     id: 1,
     title: 'Migrate session store → MCP pool',
     project: 'awog',
-    model: 'Opus 4.8',
+    model: 'Opus 5',
     account: 'hoatq · Anthropic',
     style: 'Default',
     status: 'awaiting',
@@ -631,7 +635,7 @@ const SESSIONS: Session[] = [
     id: 2,
     title: 'Byte-minimal JSONL persist',
     project: 'awog',
-    model: 'Opus 4.8',
+    model: 'Opus 5',
     account: 'hoatq · Anthropic',
     style: 'Default',
     status: 'done',
@@ -689,7 +693,7 @@ const SESSIONS: Session[] = [
     id: 3,
     title: 'Reuse MCP server child per session',
     project: 'awog',
-    model: 'Sonnet 4.6',
+    model: 'Sonnet 5',
     account: 'hoatq · Anthropic',
     style: 'Concise',
     status: 'done',
@@ -745,7 +749,7 @@ const SESSIONS: Session[] = [
     id: 6,
     title: '21-rule catalog mapping',
     project: 'vbsec',
-    model: 'Opus 4.8',
+    model: 'Opus 5',
     account: 'hoatq · Anthropic',
     style: 'Default',
     status: 'idle',
@@ -783,7 +787,7 @@ const SESSIONS: Session[] = [
     id: 4,
     title: 'Hide todo panel khi turn end',
     project: 'awog',
-    model: 'Opus 4.8',
+    model: 'Opus 5',
     account: 'hoatq · Anthropic',
     style: 'Default',
     status: 'done',

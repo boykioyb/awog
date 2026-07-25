@@ -131,7 +131,7 @@ function extractJson(raw: string): string {
 register('workflows.generate', async (raw) => {
   const params = Params.parse(raw)
 
-  const modelId = params.modelId ?? 'claude-sonnet-4-6'
+  const modelId = params.modelId ?? 'claude-sonnet-5'
 
   log.info('workflows.generate', {
     model: modelId,

@@ -59,7 +59,7 @@ Respond with ONLY a JSON object (no markdown fence, no prose) with this exact sh
   "id": "<kebab-case-slug>",
   "name": "<Title Case display name>",
   "description": "<1-sentence when-to-use summary>",
-  "model": "<claude-opus-4-7 | claude-sonnet-4-6 | claude-haiku-4-5 — pick what fits>",
+  "model": "<claude-opus-5 | claude-sonnet-5 | claude-haiku-4-5 — pick what fits>",
   "systemPrompt": "<the markdown body — persona instructions in second person>",
   "role": "<short tag like BA / DEV / Security — optional, can be empty>",
   "mcpServerIds": []
@@ -69,7 +69,7 @@ Rules:
 - id MUST be lowercase, kebab-case, matching ^[a-z0-9][a-z0-9-]*$.
 - description should explain WHEN to invoke the agent (1 sentence under 200 chars).
 - systemPrompt is the persona body in plain Markdown — start with "You are..." and cover voice, output style, anti-patterns. 3-8 sentences typical.
-- Default model is claude-sonnet-4-6 unless the request hints at a more capable / cheaper tier.
+- Default model is claude-sonnet-5 unless the request hints at a more capable / cheaper tier.
 - mcpServerIds should be empty unless the user explicitly listed MCP servers — these are managed via the editor picker.
 - Do NOT wrap your output in a code fence. Output the raw JSON object only.`
 
@@ -92,7 +92,7 @@ register('agents.generate', async (raw) => {
 
   // Sonnet is the default — system prompt revision is more nuanced than skill
   // drafting and worth the upgrade from Haiku.
-  const modelId = params.modelId ?? 'claude-sonnet-4-6'
+  const modelId = params.modelId ?? 'claude-sonnet-5'
 
   log.info('agents.generate', {
     model: modelId,

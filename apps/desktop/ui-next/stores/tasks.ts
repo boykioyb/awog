@@ -469,7 +469,7 @@ function mockDoneRuns(duration: string): TaskRun[] {
           id: 'tr-1',
           type: 'agent',
           name: 'agent',
-          model: 'Opus 4.8',
+          model: 'Opus 5',
           duration,
           children: [
             { id: 'tr-1-1', type: 'tool', tool: 'Read', input: 'types/index.ts', duration: '0.4s' },
@@ -502,7 +502,7 @@ function mockRunningRuns(): TaskRun[] {
           id: 'tr-live',
           type: 'agent',
           name: 'agent',
-          model: 'Opus 4.8',
+          model: 'Opus 5',
           duration: null,
           status: 'running',
           children: [
@@ -534,7 +534,7 @@ function mockApprovalRuns(): TaskRun[] {
           id: 'tr-appr',
           type: 'agent',
           name: 'developer',
-          model: 'Opus 4.8',
+          model: 'Opus 5',
           duration: '50s',
         },
       ],

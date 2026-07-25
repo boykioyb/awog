@@ -76,7 +76,7 @@ function mockAgents(): Agent[] {
       name: 'tech-lead',
       description: 'Quyết định kiến trúc, viết ADR (Context/Decision/Consequences).',
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       role: 'TL',
       systemPrompt:
         'Bạn là Tech Lead của AWOG. Quyết định kiến trúc, viết ADR, thiết kế ranh giới module qua UI/sidecar/storage. Output là ADR/design note, KHÔNG phải code.',
@@ -88,7 +88,7 @@ function mockAgents(): Agent[] {
       name: 'developer',
       description: 'Implement một dev task end-to-end theo coding-guide.',
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       role: 'DV',
       systemPrompt:
         'Bạn là Developer. Implement một task end-to-end theo coding-guide, chạy lint+typecheck trước khi báo xong.',
@@ -100,7 +100,7 @@ function mockAgents(): Agent[] {
       name: 'infosec',
       description: 'Audit theo 21-rule + 8 invariant AWOG. Read-only.',
       provider: 'anthropic',
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       role: 'IS',
       systemPrompt:
         'Bạn là Infosec. Audit theo 21-rule + 8 invariant AWOG. Read-only; xuất finding report (severity / file:line / fix).',

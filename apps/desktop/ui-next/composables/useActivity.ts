@@ -189,7 +189,7 @@ function mockSummary(range: ActivityRange): ActivitySummary {
     },
     byModel: [
       {
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
         provider: 'Anthropic',
         inputTokens: Math.round(totalTokens * 0.1),
         outputTokens: Math.round(totalTokens * 0.08),
@@ -234,7 +234,7 @@ function mockSummary(range: ActivityRange): ActivitySummary {
         sessionId: 'mock-s1',
         title: 'Refactor Activity page',
         provider: 'Anthropic',
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
         inputTokens: Math.round(totalTokens * 0.06),
         outputTokens: Math.round(totalTokens * 0.04),
         cacheReadTokens: Math.round(totalTokens * 0.22),
@@ -248,7 +248,7 @@ function mockSummary(range: ActivityRange): ActivitySummary {
         sessionId: 'mock-s2',
         title: 'Debug session switch lag',
         provider: 'Anthropic',
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
         inputTokens: Math.round(totalTokens * 0.04),
         outputTokens: Math.round(totalTokens * 0.03),
         cacheReadTokens: Math.round(totalTokens * 0.15),

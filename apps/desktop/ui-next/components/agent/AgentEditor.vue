@@ -235,7 +235,7 @@ const makeDefaults = (): Draft => ({
   description: '',
   provider: 'anthropic',
   accountId: '',
-  model: 'claude-sonnet-4-6',
+  model: 'claude-sonnet-5',
   systemPrompt: '',
   role: '',
   tools: [],

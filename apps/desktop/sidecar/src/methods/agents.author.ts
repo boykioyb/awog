@@ -60,7 +60,7 @@ Output format on disk (YAML frontmatter + Markdown body):
 ---
 name: Display Name                # required
 description: One-sentence summary shown in the agent picker. Required.
-model: claude-sonnet-4-6          # optional. One of: ${ANTHROPIC_MODELS.join(', ')}
+model: claude-sonnet-5           # optional. One of: ${ANTHROPIC_MODELS.join(', ')}
 role: BA                          # optional, short tag — AWOG extension
 mcpServerIds: []                  # optional, AWOG extension — per-agent MCP whitelist (leave [] unless user mentions specific MCP servers)
 ---
@@ -82,7 +82,7 @@ Hard rules:
 - Never modify or delete an existing agent unless the user explicitly asks.
 - Frontmatter MUST include name and description.
 - Body MUST be the system prompt itself (plain Markdown), not a description of the system prompt. No JSON wrapper, no code fences around the whole file.
-- Default model is claude-sonnet-4-6 unless the user asks otherwise.
+- Default model is claude-sonnet-5 unless the user asks otherwise.
 - Keep mcpServerIds as an empty array unless the user explicitly mentions MCP servers — those are managed via the editor picker.`
 }
 
@@ -101,7 +101,7 @@ async function resolveTarget(scope: string): Promise<{ agentsDir: string; cwd: s
 register('agents.author', async (raw) => {
   const params = Params.parse(raw)
 
-  const modelId = params.modelId ?? 'claude-sonnet-4-6'
+  const modelId = params.modelId ?? 'claude-sonnet-5'
   const { agentsDir, cwd } = await resolveTarget(params.scope)
   const systemPrompt = buildSystemPrompt(agentsDir)
 

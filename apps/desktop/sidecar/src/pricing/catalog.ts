@@ -32,10 +32,12 @@ export interface CatalogEntry extends ModelPriceRates {
 
 // Bảng giá mặc định. Cập nhật khi nhà cung cấp đổi giá. Giữ khoá = AWOG model id.
 //
-// Anthropic (anthropic.com/pricing, 2026-06):
-//   - Opus 4.x:   $15 input / $75 output ; cacheRead $1.50 ; cacheWrite $18.75
-//   - Sonnet 4.x: $3  input / $15 output ; cacheRead $0.30 ; cacheWrite $3.75
+// Anthropic (anthropic.com/pricing, 2026-07):
+//   - Fable 5:    $10 input / $50 output ; cacheRead $1.00 ; cacheWrite $12.50
+//   - Opus 5:     $5  input / $25 output ; cacheRead $0.50 ; cacheWrite $6.25
+//   - Sonnet 5:   $3  input / $15 output ; cacheRead $0.30 ; cacheWrite $3.75  (intro $2/$10 → 2026-08-31)
 //   - Haiku 4.5:  $1  input / $5  output ; cacheRead $0.10 ; cacheWrite $1.25
+//   - Legacy Opus 4.x: $15/$75 giữ nguyên (best-effort, không sửa trong bản upgrade này)
 // OpenAI (openai.com/api/pricing, 2026-06):
 //   - GPT-5.1:    $1.25 input / $10 output ; cacheRead $0.125 (no separate write)
 //   - GPT-5 mini: $0.25 input / $2  output ; cacheRead $0.025
@@ -47,7 +49,20 @@ export interface CatalogEntry extends ModelPriceRates {
 //   - Gemini 2.5 Flash: $0.30 input / $2.50 output ; cacheRead $0.075
 //   - Gemini 2.0 Flash: $0.10 input / $0.40 output ; cacheRead $0.025
 const DEFAULT_CATALOG: Record<string, CatalogEntry> = {
-  // ── Anthropic ──────────────────────────────────────────────────────────────
+  // ── Anthropic — "5" generation (current) ────────────────────────────────────
+  'claude-fable-5': { provider: 'anthropic', input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+  'claude-opus-5': { provider: 'anthropic', input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  // Biến thể 1M-context map về cùng giá Opus 5 base (chỉ khác beta header).
+  'claude-opus-5-1m': {
+    provider: 'anthropic',
+    input: 5,
+    output: 25,
+    cacheRead: 0.5,
+    cacheWrite: 6.25,
+  },
+  'claude-sonnet-5': { provider: 'anthropic', input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+
+  // ── Anthropic — legacy (still served) ───────────────────────────────────────
   'claude-opus-4-8': { provider: 'anthropic', input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
   // Biến thể 1M-context map về cùng giá Opus base (chỉ khác beta header).
   'claude-opus-4-8-1m': {

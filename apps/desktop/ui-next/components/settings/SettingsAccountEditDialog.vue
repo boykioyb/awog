@@ -88,7 +88,7 @@ import { useSettingsStore, type ProviderAccount, type ProviderName } from '~/sto
 // keys use the full catalog; a Codex subscription has no static catalog and uses
 // the account's own seeded models instead.
 const MODEL_CATALOG: Record<ProviderName, string[]> = {
-  anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  anthropic: ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
   openai: ['gpt-5.1', 'o3', 'gpt-4.1', 'gpt-5-mini'],
   google: ['gemini-3-pro', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
 }

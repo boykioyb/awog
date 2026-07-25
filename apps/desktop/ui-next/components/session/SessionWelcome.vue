@@ -64,7 +64,7 @@ const store = useSessionsStore()
 const { projectName } = useProjects()
 
 const projectLabel = computed(() => projectName(store.active?.project ?? ''))
-const model = computed(() => store.active?.model ?? 'Opus 4.8')
+const model = computed(() => store.active?.model ?? 'Opus 5')
 
 // Curated starter prompts (dev-tool oriented). Label/desc/prompt are i18n; icon
 // from the lucide sprite. Clicking loads the prompt into the composer draft.

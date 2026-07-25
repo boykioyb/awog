@@ -185,7 +185,7 @@ const DEFAULT_DEFAULTS: SessionDefaults = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   instructions: '',
   provider: 'anthropic',
-  modelId: 'claude-opus-4-8',
+  modelId: 'claude-opus-5',
   mode: 'ask',
   thinkingLevel: 'high',
 }

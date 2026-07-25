@@ -7,6 +7,12 @@ import type { ContextChars } from '~/composables/useSessionsData'
 // limit from it would wrongly snap 1M back to 200k. Source: Anthropic public
 // docs. Update when new models ship or a 1M-context flag is enabled.
 const CONTEXT_WINDOW: Record<string, number> = {
+  // "5" generation. Fable 5 ships a native 1M window (no beta header); Opus 5
+  // mirrors Opus 4.8 — 200k by default, 1M via the `-1m` variant + context-1m beta.
+  'claude-fable-5': 1_000_000,
+  'claude-opus-5': 200_000,
+  'claude-opus-5-1m': 1_000_000,
+  'claude-sonnet-5': 200_000,
   'claude-opus-4-8': 200_000,
   'claude-opus-4-8-1m': 1_000_000,
   'claude-opus-4-7': 200_000,

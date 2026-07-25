@@ -35,7 +35,7 @@ import type {
 } from '../types/shared.js'
 
 const CONCURRENCY_CAP = 4
-const DEFAULT_MODEL = 'claude-opus-4-8'
+const DEFAULT_MODEL = 'claude-opus-5'
 // Absolute ceiling on gate auto-loop iterations regardless of node config —
 // budget guard against a gate that never passes (ADR 0056 / security).
 const MAX_GATE_ITERATIONS_CEILING = 10

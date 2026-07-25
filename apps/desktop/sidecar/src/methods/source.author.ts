@@ -216,7 +216,7 @@ async function verifyWritten(messageId: string, slug: string): Promise<void> {
 register('source.author', async (raw) => {
   const params = Params.parse(raw)
 
-  const modelId = params.modelId ?? 'claude-sonnet-4-6'
+  const modelId = params.modelId ?? 'claude-sonnet-5'
 
   log.info('source.author start', {
     messageId: params.messageId,

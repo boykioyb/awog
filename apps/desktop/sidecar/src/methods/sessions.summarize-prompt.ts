@@ -33,7 +33,7 @@ const Params = z.object({
 // Fast, capable model per provider for the summary (mirrors the cheap-model strategy
 // in sessions.generateTitle). Absent → fall back to the session's own model.
 const FAST_MODEL: Partial<Record<ProviderName, string>> = {
-  anthropic: 'claude-sonnet-4-6',
+  anthropic: 'claude-sonnet-5',
 }
 
 const SUMMARY_SYS = `You distill a coding/agent assistant conversation into ONE self-contained prompt that a FRESH assistant — with no access to this conversation — can act on to continue the work.

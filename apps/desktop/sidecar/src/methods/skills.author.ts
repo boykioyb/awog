@@ -105,7 +105,7 @@ async function resolveTarget(scope: string): Promise<{ skillsDir: string; cwd: s
 register('skills.author', async (raw) => {
   const params = Params.parse(raw)
 
-  const modelId = params.modelId ?? 'claude-sonnet-4-6'
+  const modelId = params.modelId ?? 'claude-sonnet-5'
   const { skillsDir, cwd } = await resolveTarget(params.scope)
   const systemPrompt = buildSystemPrompt(skillsDir)
 
