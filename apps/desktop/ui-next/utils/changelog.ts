@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.25.1',
+    date: '2026-07-26',
+    highlight: {
+      en: 'Adds the new Claude 5 model generation — Opus 5, Sonnet 5, Fable 5 — with Opus 5 as the new default, plus a 1M-context Opus 5 variant.',
+      vi: 'Bổ sung thế hệ mô hình Claude 5 mới — Opus 5, Sonnet 5, Fable 5 — với Opus 5 làm mặc định mới, cùng biến thể Opus 5 ngữ cảnh 1M.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'New Claude 5 models are available in the model picker: Fable 5, Opus 5, Opus 5 (1M context), and Sonnet 5 — alongside Haiku 4.5.',
+        vi: 'Các mô hình Claude 5 mới đã có trong bộ chọn mô hình: Fable 5, Opus 5, Opus 5 (ngữ cảnh 1M) và Sonnet 5 — bên cạnh Haiku 4.5.',
+      },
+      {
+        kind: 'changed',
+        en: 'New sessions and tasks now default to Opus 5, the most capable model.',
+        vi: 'Phiên và tác vụ mới giờ mặc định dùng Opus 5, mô hình mạnh nhất.',
+      },
+      {
+        kind: 'improved',
+        en: 'Model pricing and context-window details are updated for the Claude 5 lineup; existing sessions and agents on older models keep working.',
+        vi: 'Thông tin giá và cửa sổ ngữ cảnh được cập nhật cho dòng Claude 5; các phiên và agent đang dùng mô hình cũ vẫn hoạt động bình thường.',
+      },
+    ],
+  },
+  {
     version: '0.25.0',
     date: '2026-07-24',
     highlight: {
