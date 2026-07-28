@@ -9,6 +9,8 @@
   "settings.nav.keymap": "Bàn phím",
   "settings.nav.about": "Giới thiệu",
 
+  "settings.saved": "Đã lưu cài đặt",
+
   "settings.keymap.heading": "Phím tắt",
   "settings.keymap.sub": "Chỉnh lại các phím tắt toàn cục. Bấm Đổi phím rồi nhấn tổ hợp mới (Esc để huỷ). Tổ hợp phải có phím bổ trợ (⌘/Ctrl, Alt hoặc kết hợp).",
   "settings.keymap.rebind": "Đổi phím",

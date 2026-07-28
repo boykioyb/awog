@@ -39,6 +39,20 @@ watch(open, (isOpen) => {
   if (isOpen) settings.hydrateFromSidecar().catch(() => {})
 })
 
+// Debounced "saved" toast: any persisted setting change bumps settings.savedTick.
+// Show one toast after the change settles (so typing a textarea gives a single
+// toast, not one per keystroke), and only while the modal is open — the edit came
+// from the Settings UI, not a background persist (e.g. a workspace-dock drag).
+let savedToastTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => settings.savedTick,
+  () => {
+    if (!open.value) return
+    if (savedToastTimer) clearTimeout(savedToastTimer)
+    savedToastTimer = setTimeout(() => pushActionToast(t('settings.saved'), 'success'), 500)
+  },
+)
+
 useEscToClose(() => open.value, closeSettings, { preventDefault: false })
 </script>
 
