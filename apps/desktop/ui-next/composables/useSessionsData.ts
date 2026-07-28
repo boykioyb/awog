@@ -387,9 +387,23 @@ export type TreeDir = { d: string; ch?: TreeNode[] }
 export type TreeNode = TreeFile | TreeDir
 
 const PROVIDER_MODELS: Record<Provider, string[]> = {
-  Anthropic: ['Fable 5', 'Opus 5', 'Opus 5 (1M)', 'Sonnet 5', 'Haiku 4.5'],
-  OpenAI: ['GPT-5', 'GPT-5 mini', 'o3', 'GPT-4.1'],
-  Google: ['Gemini 2.5 Pro', 'Gemini 2.5 Flash', 'Gemini 2.0 Flash'],
+  Anthropic: [
+    'Opus 5',
+    'Opus 5 (1M)',
+    'Sonnet 5',
+    'Opus 4.8',
+    'Opus 4.8 (1M)',
+    'Sonnet 4.6',
+    'Haiku 4.5',
+  ],
+  OpenAI: ['GPT-5.5', 'GPT-5.5 Pro', 'GPT-5.4 mini', 'GPT-5.1', 'o4-mini', 'GPT-4.1'],
+  Google: [
+    'Gemini 3.5 Flash',
+    'Gemini 3.1 Pro',
+    'Gemini 2.5 Pro',
+    'Gemini 2.5 Flash',
+    'Gemini 2.0 Flash',
+  ],
 }
 const providerOf = (account: string): Provider =>
   (account.split(' · ')[1] as Provider | undefined) ?? 'Anthropic'
@@ -413,10 +427,17 @@ export const MODEL_DISPLAY: Record<string, string> = {
   'claude-opus-4-8-1m': 'Opus 4.8 (1M)',
   'claude-sonnet-4-6': 'Sonnet 4.6',
   'claude-haiku-4-5': 'Haiku 4.5',
+  'gpt-5.5': 'GPT-5.5',
+  'gpt-5.5-pro': 'GPT-5.5 Pro',
+  'gpt-5.4-mini': 'GPT-5.4 mini',
+  'gpt-5.1': 'GPT-5.1',
+  'o4-mini': 'o4-mini',
   'gpt-5': 'GPT-5',
   'gpt-5-mini': 'GPT-5 mini',
   o3: 'o3',
   'gpt-4.1': 'GPT-4.1',
+  'gemini-3.5-flash': 'Gemini 3.5 Flash',
+  'gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
   'gemini-2.5-pro': 'Gemini 2.5 Pro',
   'gemini-2.5-flash': 'Gemini 2.5 Flash',
   'gemini-2.0-flash': 'Gemini 2.0 Flash',

@@ -67,18 +67,58 @@ function buildCustomModel(
   }
 }
 
+// Pi's bundled catalog can predate a just-released model (Opus 5 / Sonnet 5 are
+// newer than the pinned pi-ai, which stops at the 4.x family + Fable 5). For
+// those, getModel returns `undefined` (it does NOT throw) — so we clone the
+// nearest known model and override the differing fields, letting the new id
+// resolve without waiting for a pi-ai bump. Auto-skipped once Pi's catalog
+// includes the id (getModel returns it directly and this is never reached).
+function fallbackAnthropicModel(apiModel: string): Model<Api> | undefined {
+  const clone = (baseId: string, over: Partial<Model<Api>>): Model<Api> | undefined => {
+    let base: Model<Api> | undefined
+    try {
+      base = getModel('anthropic', baseId as never) as Model<Api> | undefined
+    } catch {
+      base = undefined
+    }
+    // Spread inherits the base's api/compat/reasoning/input/headers so Pi sees a
+    // fully-formed model; `over` patches only what differs for the new tier.
+    return base ? { ...base, ...over } : undefined
+  }
+  switch (apiModel) {
+    case 'claude-opus-5':
+      // Same tier as Opus 4.8: $5/$25, 1M ctx, 128k out, adaptive thinking.
+      return clone('claude-opus-4-8', { id: 'claude-opus-5', name: 'Claude Opus 5' })
+    case 'claude-sonnet-5':
+      // Sonnet-tier price ($3/$15, inherited) but 128k max output (Pi's 4.6 = 64k).
+      return clone('claude-sonnet-4-6', {
+        id: 'claude-sonnet-5',
+        name: 'Claude Sonnet 5',
+        maxTokens: 128_000,
+      })
+    default:
+      return undefined
+  }
+}
+
 // Resolve the built-in Anthropic Model from Pi's catalog. AWOG ids map 1:1 to
 // Pi catalog ids after alias normalisation + the 1M rewrite.
 function buildAnthropicModel(modelId: string): Model<Api> {
   const normalized = normalizeModelId(modelId)
   const { model: apiModel, betas } = resolveModelRequest(normalized)
-  let model: Model<Api>
+  // getModel is typed against the literal catalog keys; apiModel is a runtime
+  // string already validated via isAnthropicModel upstream. Cast at the
+  // boundary. It returns `undefined` for ids missing from Pi's catalog (older
+  // pinned versions may not throw) — treat both undefined and throw as "unknown
+  // to Pi" and fall back to an AWOG-owned spec.
+  let model: Model<Api> | undefined
   try {
-    // getModel is typed against the literal catalog keys; apiModel is a runtime
-    // string already validated via isAnthropicModel upstream. Cast at the
-    // boundary — getModel throws if the id is genuinely unknown to Pi.
-    model = getModel('anthropic', apiModel as never) as Model<Api>
+    model = getModel('anthropic', apiModel as never) as Model<Api> | undefined
   } catch {
+    model = undefined
+  }
+  if (!model) model = fallbackAnthropicModel(apiModel)
+  if (!model) {
     throw new RpcError(-32015, `unknown anthropic model: ${modelId}`)
   }
   // Apply the 1M-context beta via model.headers (Pi has no betas field). Clone
