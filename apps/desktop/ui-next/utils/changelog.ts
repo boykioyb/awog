@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.25.2',
+    date: '2026-07-28',
+    highlight: {
+      en: 'Models are now organized by provider, with a new "Available models" section — fetch the latest models from Anthropic, OpenAI, and Google and choose which ones appear in your pickers.',
+      vi: 'Mô hình giờ được tổ chức theo nhà cung cấp, cùng mục "Available models" mới — tải danh sách mô hình mới nhất từ Anthropic, OpenAI và Google và chọn mô hình nào hiển thị trong bộ chọn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'A new "Available models" section in Settings → Models & Keys lets you browse models per provider, turn individual models on or off, and fetch the latest list directly from the provider\'s API.',
+        vi: 'Mục "Available models" mới trong Cài đặt → Models & Keys cho phép bạn duyệt mô hình theo nhà cung cấp, bật/tắt từng mô hình, và tải danh sách mới nhất trực tiếp từ API của nhà cung cấp.',
+      },
+      {
+        kind: 'changed',
+        en: 'Model choices are now shared across all accounts of the same provider instead of being kept per account, so your enabled models stay consistent everywhere they are picked.',
+        vi: 'Lựa chọn mô hình giờ dùng chung cho mọi tài khoản của cùng một nhà cung cấp thay vì cấu hình riêng từng tài khoản, nên các mô hình bạn bật luôn nhất quán ở mọi nơi.',
+      },
+      {
+        kind: 'improved',
+        en: 'Adding a Claude or built-in account no longer asks you to maintain a manual model list — models come straight from the provider catalog.',
+        vi: 'Thêm tài khoản Claude hay tài khoản tích hợp sẵn không còn bắt bạn tự nhập danh sách mô hình — mô hình lấy trực tiếp từ danh mục của nhà cung cấp.',
+      },
+      {
+        kind: 'improved',
+        en: 'The default-model pickers in Settings now use a compact dropdown, keeping the layout tidy as the list of available models grows.',
+        vi: 'Bộ chọn mô hình mặc định trong Cài đặt giờ dùng dropdown gọn gàng, giữ bố cục ngăn nắp khi danh sách mô hình khả dụng tăng lên.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Dragging to pan a Mermaid diagram no longer accidentally selects its label text.',
+        vi: 'Kéo để di chuyển sơ đồ Mermaid không còn vô tình bôi đen chữ trên nhãn của sơ đồ.',
+      },
+    ],
+  },
+  {
     version: '0.25.1',
     date: '2026-07-26',
     highlight: {
