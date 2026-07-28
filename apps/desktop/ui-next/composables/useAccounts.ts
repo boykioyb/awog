@@ -23,8 +23,14 @@ export type AccountOption = {
   providerDisplay: string
   // "label · Provider" — what the chips/lists render.
   display: string
-  // Engine modelIds the account exposes (when the sidecar reports them).
+  // Engine modelIds the account exposes (when the sidecar reports them). Only
+  // honoured for CUSTOM endpoints — built-in providers share one per-provider
+  // catalog (see modelsForAccount), so an account's curated list no longer
+  // restricts the picker for anthropic/openai/google.
   modelIds?: string[]
+  // Custom endpoint (has its own baseURL). Such an account exposes models the
+  // provider catalog doesn't know, so its `modelIds` stay authoritative.
+  custom?: boolean
   // True when this is the active account of its provider bucket (sidecar
   // `activeAccountId`). Drives the default pick for a NEW session so it honours
   // the user's "Set active" choice instead of the first account in the bucket —
@@ -34,7 +40,7 @@ export type AccountOption = {
 
 // Sidecar accounts.list shapes (confirmed — apps/desktop/sidecar/src/methods/
 // accounts.list.ts). We only consume id/label/models per provider bucket.
-type AccountSafeDto = { id: string; label: string; models?: string[] }
+type AccountSafeDto = { id: string; label: string; models?: string[]; baseURL?: string }
 type AccountsListDto = {
   providers: Record<string, { accounts: AccountSafeDto[]; activeAccountId: string | null }>
 }
@@ -61,6 +67,7 @@ function flatten(dto: AccountsListDto): AccountOption[] {
         display: `${a.label} · ${provider}`,
       }
       if (a.models?.length) opt.modelIds = a.models
+      if (a.baseURL) opt.custom = true
       if (a.id === bucket.activeAccountId) opt.isActive = true
       out.push(opt)
     }
@@ -117,10 +124,14 @@ export function useAccounts() {
   const accountByDisplay = (display: string): AccountOption | undefined =>
     accounts.value.find((a) => a.display === display)
 
-  // Models for an account: prefer its explicit engine modelIds (→ display names);
-  // else the per-provider display catalog.
+  // Models for an account. Models belong to the PROVIDER, not the account: every
+  // built-in account of a provider shares one per-provider catalog. Only a CUSTOM
+  // endpoint (its own baseURL) keeps its curated `modelIds`, since it exposes
+  // models the provider catalog doesn't know.
   const modelsForAccount = (account: AccountOption | undefined): string[] => {
-    if (account?.modelIds?.length) return account.modelIds.map((id) => MODEL_DISPLAY[id] ?? id)
+    if (account?.custom && account.modelIds?.length) {
+      return account.modelIds.map((id) => MODEL_DISPLAY[id] ?? id)
+    }
     return modelsForProvider(account?.provider ?? 'Anthropic')
   }
 
