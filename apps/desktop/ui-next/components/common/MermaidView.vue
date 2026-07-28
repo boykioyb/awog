@@ -205,6 +205,15 @@ function repairMermaid(src: string): string {
     // unquoted `Z[[] empty]` reads `[[` as a subroutine shape that never finds `]]`
     // ("got 'SQE'"). `Z["[] empty"]` takes the text literally. See quoteNodeLabels.
     out = quoteNodeLabels(out)
+    // (4) A quoted label whose text STARTS with a backtick puts mermaid into
+    // markdown-string mode (`id["`md`"]`), and an UNBALANCED leading run aborts the
+    // lexer — e.g. an LLM diagram whose label literally shows ```` ```mermaid ```` gives
+    // "Lexical error … Unrecognized text". Only a backtick immediately after the opening
+    // `"` triggers this (a backtick later in the label is inert), so escape just the
+    // leading run to the entity code `#96;` — mermaid renders `#nn;` as that character, so
+    // the label reads as literal backticks. Runs LAST: steps (2)/(3) can newly quote a
+    // label whose text begins with a backtick, creating the `"`+backtick trigger here.
+    out = out.replace(/"(`+)/g, (_m, ticks: string) => `"${'#96;'.repeat(ticks.length)}`)
   }
   return out
 }
