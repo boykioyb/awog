@@ -5,7 +5,7 @@
     <!-- App identity + version. When an update is actionable, the primary action
          (Download / Open download page / Restart) sits next to "Check now". -->
     <SettingsField :name="t('settings.about.appName')" :desc="versionLine">
-      <div class="keyrow">
+      <div class="keyrow justify-end">
         <button
           v-if="action"
           class="btn sm pri"
@@ -30,7 +30,7 @@
     <!-- Onboarding — re-run the setup wizard / replay the interface tour. Closes
          this modal first so the wizard + spotlight render over the shell. -->
     <SettingsField :name="t('onboarding.settings.name')" :desc="t('onboarding.settings.desc')">
-      <div class="keyrow">
+      <div class="keyrow justify-end">
         <button class="btn sm" @click="onRerunSetup">
           <Icon name="sparkles" />
           {{ t('onboarding.settings.rerunSetup') }}

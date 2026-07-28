@@ -41,7 +41,7 @@
       :name="t('settingsDefaults.model.name')"
       :desc="t('settingsDefaults.model.desc')"
     >
-      <SettingsSeg v-model="modelId" :options="modelOptions" />
+      <AppSelect v-model="modelId" :options="modelOptions" />
     </SettingsField>
 
     <SettingsProjectModelDefault />

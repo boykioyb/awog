@@ -6,7 +6,7 @@
   >
     <div class="flex flex-wrap items-center justify-end gap-2">
       <SettingsSeg v-model="provider" :options="PROVIDER_OPTIONS" />
-      <SettingsSeg v-model="modelId" :options="modelOptions" />
+      <AppSelect v-model="modelId" :options="modelOptions" />
       <button
         class="btn pri sm"
         type="button"

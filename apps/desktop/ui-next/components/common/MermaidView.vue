@@ -548,6 +548,10 @@ onBeforeUnmount(() => {
   place-items: center;
   cursor: grab;
   touch-action: none;
+  /* The diagram is a pan surface — dragging must not select its label text (the
+     blue highlight that appears while panning). Non-selectable throughout. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .mmdvp:active {
   cursor: grabbing;
