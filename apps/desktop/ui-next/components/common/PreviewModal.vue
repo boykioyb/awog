@@ -8,7 +8,15 @@
       <div class="pvcard">
         <div class="pvhead">
           <Icon :name="headIcon" style="width: 13px; height: 13px" />
-          <span class="pvname">{{ shownItem.name }}</span>
+          <span class="pvname" :title="absPath">{{ headerPath }}</span>
+          <button
+            v-if="hasWorkspaceFile"
+            class="pvx pvcopy"
+            :title="t('common.preview.copyPath')"
+            @click="copyPath"
+          >
+            <Icon name="copy" style="width: 13px; height: 13px" />
+          </button>
           <span v-if="dirty" class="pvdirty" :title="t('common.preview.unsaved')">●</span>
           <span v-if="meta" class="pvmeta">{{ meta }}</span>
           <span v-if="truncated" class="pvtrunc" :title="t('common.preview.truncated')">
@@ -113,7 +121,13 @@
                 {{ h.text }}
               </a>
             </aside>
-            <div ref="mdScroll" class="mdscroll" @scroll="onScroll">
+            <div
+              ref="mdScroll"
+              class="mdscroll"
+              @scroll="onScroll"
+              @mouseup="onPvSelect"
+              @mousedown="onPvMouseDown"
+            >
               <div class="mdbody" :style="{ maxWidth: mdMaxWidth }">
                 <template v-for="(seg, i) in segments" :key="i">
                   <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
@@ -177,6 +191,18 @@
             </div>
           </div>
         </div>
+
+        <!-- highlight prose in a rendered markdown preview → floating Translate button -->
+        <button
+          v-if="pvSel"
+          class="pvseltr"
+          :style="{ left: `${pvSel.x}px`, top: `${pvSel.y}px` }"
+          @mousedown.prevent
+          @click="onPvTranslate"
+        >
+          <Icon name="globe" style="width: 13px; height: 13px" />
+          {{ t('translate.action') }}
+        </button>
 
         <PreviewToolbar v-if="hasBar" :ctrl="ctrl" />
 
@@ -251,6 +277,7 @@ import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import PreviewToolbar from '~/components/common/PreviewToolbar.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreviewModal } from '~/composables/usePreviewModal'
+import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 import { loadMonaco } from '~/utils/monaco-loader'
 
 // Backward-compatible alias: callers (e.g. SessionDetail) import `PreviewItem`.
@@ -308,8 +335,27 @@ const {
   minimize,
   close,
   onKey,
+  copyPath,
+  hasWorkspaceFile,
 } = ctrl
 const { headings, activeHeading, goto, onScroll, mdMaxWidth } = ctrl.outline
+
+// Header shows the file's path (workspace-relative) instead of the bare name, so
+// the user sees where the file lives. `absPath` is the absolute path — used for
+// the tooltip and copied by the copy button (ctrl.copyPath). In-memory previews
+// (no workspace file) fall back to the bare name with no copy button.
+const headerPath = computed(() => {
+  const it = shownItem.value
+  if (!it) return ''
+  return it.path || it.name
+})
+const absPath = computed(() => {
+  const it = shownItem.value
+  if (it && hasWorkspaceFile.value && it.workspaceRoot && it.path) {
+    return `${it.workspaceRoot.replace(/[/\\]+$/, '')}/${it.path}`
+  }
+  return headerPath.value
+})
 
 // Focus the rename/move input when its dialog opens.
 const renameInput = useTemplateRef<HTMLInputElement>('renameInput')
@@ -331,8 +377,51 @@ watch(
   { immediate: true },
 )
 
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+// Selection-to-translate on the rendered markdown prose (no project → app-default
+// LLM). Only the `.mdbody` render surface participates; the raw/Monaco/HTML-iframe
+// views have their own selection models and are out of scope.
+const translate = useSelectionTranslate()
+const pvSel = ref<{ text: string; x: number; y: number } | null>(null)
+
+function resolvePvSelection(): { text: string; rect: DOMRect } | null {
+  const sel = window.getSelection()
+  const text = sel?.toString().trim() ?? ''
+  if (!sel || sel.rangeCount === 0 || !text) return null
+  const range = sel.getRangeAt(0)
+  const node = range.commonAncestorContainer
+  const el = node instanceof HTMLElement ? node : node.parentElement
+  if (!el?.closest('.mdbody')) return null
+  return { text, rect: range.getBoundingClientRect() }
+}
+function onPvSelect(e: MouseEvent) {
+  if (e.button !== 0) return
+  const r = resolvePvSelection()
+  pvSel.value = r ? { text: r.text, x: r.rect.left + r.rect.width / 2, y: r.rect.top - 8 } : null
+}
+function onPvMouseDown(e: MouseEvent) {
+  if (e.button === 0) pvSel.value = null
+}
+function onPvTranslate() {
+  const s = pvSel.value
+  if (!s) return
+  const sel = window.getSelection()
+  const rect =
+    sel && sel.rangeCount > 0
+      ? sel.getRangeAt(0).getBoundingClientRect()
+      : { left: s.x, top: s.y, bottom: s.y, width: 0 }
+  translate.open(s.text, rect)
+  pvSel.value = null
+}
+
+// Let the shared translation popover consume ESC first (it closes itself); only
+// then does ESC close the preview. Preview mounts before the popover, so this
+// guard runs before the popover's own ESC handler on the common case.
+function onKeyGuarded(e: KeyboardEvent) {
+  if (e.key === 'Escape' && translate.active.value) return
+  onKey(e)
+}
+onMounted(() => window.addEventListener('keydown', onKeyGuarded))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 </script>
 
 <style scoped>
@@ -366,6 +455,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+.pvcopy {
+  flex: none;
 }
 .pvdirty {
   color: var(--amber);
@@ -475,6 +567,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex-direction: column;
   align-items: center;
   padding: 26px 22px 86px;
+}
+/* Floating Translate button next to a text selection in the rendered markdown
+   (anchored to viewport coords; sits above the preview card, under the shared
+   translation popover teleported to body). */
+.pvseltr {
+  position: fixed;
+  z-index: 120;
+  transform: translate(-50%, -100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  color: var(--text);
+  background: var(--bgEl);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.pvseltr:hover {
+  border-color: var(--accentBorder);
+  color: var(--accent);
 }
 .pvimgvp {
   width: 100%;

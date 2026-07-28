@@ -1,0 +1,9 @@
+{
+  "translate.action": "Translate",
+  "translate.title": "Translation",
+  "translate.loading": "Translating…",
+  "translate.error": "Translation failed",
+  "translate.retry": "Retry",
+  "translate.copy": "Copy",
+  "translate.copied": "Copied"
+}

@@ -123,6 +123,17 @@ export interface AutoUpdateSettings {
   lastCheckedAt: string | null
 }
 
+// LLM used by the selection-to-translate feature (docs/features/selection-translate.md).
+// `followAppDefault` true → resolve like a session (project llmDefaults → app
+// defaults); false → use the pinned provider/account/model below. accountId
+// undefined = the provider's active account.
+export interface TranslateSettings {
+  followAppDefault: boolean
+  provider: ProviderName
+  accountId?: string
+  modelId: string
+}
+
 // Where the Session workspace panel docks, configured PER VIEW (Diff/Files/…).
 // 'right' = column to the right of the chat (default); 'bottom' = full-width row
 // below the chat. Resize sizes are kept per orientation so switching dock keeps a
@@ -228,6 +239,14 @@ const DEFAULT_AUTO_UPDATE: AutoUpdateSettings = {
   lastCheckedAt: null,
 }
 
+// Default to following the session default; when a user pins a custom model, seed
+// a cheap one (translation is short + high-volume).
+const DEFAULT_TRANSLATE: TranslateSettings = {
+  followAppDefault: true,
+  provider: 'anthropic',
+  modelId: 'claude-haiku-4-5',
+}
+
 const DEFAULT_APPEARANCE: AppearanceExtras = {
   themeFamily: 'awog',
   // System stack (SF Pro / Segoe UI) by default so the desktop app renders in the
@@ -274,6 +293,7 @@ interface PersistShape {
   workspacePanel: WorkspacePanelLayout
   githubAccount: string
   githubAutoFetchMs: number
+  translate: TranslateSettings
 }
 
 function loadPersisted(): Partial<PersistShape> {
@@ -349,6 +369,14 @@ export const useSettingsStore = defineStore('settings', () => {
   })
   const githubAccount = ref(persisted.githubAccount ?? '')
   const githubAutoFetchMs = ref(persisted.githubAutoFetchMs ?? 1_800_000)
+  const translate = reactive<TranslateSettings>({ ...DEFAULT_TRANSLATE, ...persisted.translate })
+
+  // Bumped whenever a persisted slice is saved (see the watch below). Lets the
+  // Settings modal render a debounced "saved" toast without re-declaring the
+  // slice list. Not itself watched/persisted, so bumping never re-triggers the
+  // persist. Only increments on real changes (the watch has no `immediate`, so
+  // the initial hydrate from localStorage doesn't tick it).
+  const savedTick = ref(0)
 
   // Persist all preference slices as one blob whenever any of them change.
   watch(
@@ -363,6 +391,7 @@ export const useSettingsStore = defineStore('settings', () => {
       workspacePanel,
       githubAccount,
       githubAutoFetchMs,
+      translate,
     ],
     () => {
       if (typeof window === 'undefined') return
@@ -377,12 +406,14 @@ export const useSettingsStore = defineStore('settings', () => {
         workspacePanel,
         githubAccount: githubAccount.value,
         githubAutoFetchMs: githubAutoFetchMs.value,
+        translate,
       }
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(blob))
       } catch {
         // Quota/availability errors are non-fatal — settings stay in memory.
       }
+      savedTick.value += 1
     },
     { deep: true },
   )
@@ -578,6 +609,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const updateQuota = (patch: Partial<QuotaWarningSettings>) => Object.assign(quota, patch)
   const updateAutoUpdate = (patch: Partial<AutoUpdateSettings>) => Object.assign(autoUpdate, patch)
   const updateAppearance = (patch: Partial<AppearanceExtras>) => Object.assign(appearance, patch)
+  const updateTranslate = (patch: Partial<TranslateSettings>) => Object.assign(translate, patch)
   const setWorkspacePath = (path: string) => {
     workspacePath.value = path
   }
@@ -615,6 +647,8 @@ export const useSettingsStore = defineStore('settings', () => {
     workspacePanel,
     githubAccount,
     githubAutoFetchMs,
+    translate,
+    savedTick,
     // getters
     activeAccount,
     resolveCreatorAccount,
@@ -641,6 +675,7 @@ export const useSettingsStore = defineStore('settings', () => {
     updateQuota,
     updateAutoUpdate,
     updateAppearance,
+    updateTranslate,
     setWorkspacePath,
     setGithubAccount,
     setWorkspaceDock,

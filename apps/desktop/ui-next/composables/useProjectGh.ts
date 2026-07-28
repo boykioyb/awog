@@ -10,6 +10,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
+import { LANG_LABEL, type TranslateLang } from '~/composables/useSelectionTranslate'
 
 export type GhKind = 'issue' | 'pr'
 export type GhListState = 'open' | 'closed' | 'merged' | 'all'
@@ -89,14 +90,8 @@ export interface GhSegmentState {
 // Comments come before PR reviews; a review segment is keyed `r<index>` so its
 // cache never collides with a comment at the same index.
 export type GhSegmentId = 'title' | 'body' | number | `r${number}`
-// Translation targets, ordered by priority (vi, en, ja). LANG_LABEL maps each to
-// the language NAME the gh.translate / gh.* RPC expects.
-export type TranslateLang = 'vi' | 'en' | 'ja'
-const LANG_LABEL: Record<TranslateLang, string> = {
-  vi: 'Vietnamese',
-  en: 'English',
-  ja: 'Japanese',
-}
+// TranslateLang / LANG_LABEL now live in useSelectionTranslate (shared with the
+// selection-to-translate feature). `orig` = show the untranslated source.
 export type ViewLang = 'orig' | TranslateLang
 
 // A parsed per-file section of a raw unified diff (split on `diff --git`). `patch`

@@ -1,0 +1,9 @@
+{
+  "translate.action": "Dịch",
+  "translate.title": "Bản dịch",
+  "translate.loading": "Đang dịch…",
+  "translate.error": "Dịch thất bại",
+  "translate.retry": "Thử lại",
+  "translate.copy": "Sao chép",
+  "translate.copied": "Đã sao chép"
+}

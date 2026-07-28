@@ -44,6 +44,8 @@
       <SettingsSeg v-model="modelId" :options="modelOptions" />
     </SettingsField>
 
+    <SettingsProjectModelDefault />
+
     <SettingsField
       :name="t('settings.defaults.mode.name')"
       :desc="t('settings.defaults.mode.desc')"
@@ -64,6 +66,43 @@
     >
       <SettingsSeg v-model="composerSendKey" :options="['Enter', '⇧Enter']" />
     </SettingsField>
+
+    <!-- Translation model (selection-to-translate, docs/features/selection-translate.md) -->
+    <div class="sech">{{ t('settingsDefaults.translate.heading') }}</div>
+
+    <SettingsField
+      :name="t('settingsDefaults.translate.follow.name')"
+      :desc="t('settingsDefaults.translate.follow.desc')"
+    >
+      <SettingsTog v-model="trFollowAppDefault" />
+    </SettingsField>
+
+    <template v-if="!trFollowAppDefault">
+      <SettingsField
+        :name="t('settingsDefaults.translate.provider.name')"
+        :desc="t('settingsDefaults.translate.provider.desc')"
+      >
+        <SettingsSeg v-model="trProvider" :options="PROVIDER_OPTIONS" />
+      </SettingsField>
+
+      <SettingsField
+        :name="t('settingsDefaults.translate.account.name')"
+        :desc="t('settingsDefaults.translate.account.desc')"
+      >
+        <AppSelect v-model="trAccountId" :options="trAccountOptions" />
+      </SettingsField>
+
+      <SettingsField
+        :name="t('settingsDefaults.translate.model.name')"
+        :desc="t('settingsDefaults.translate.model.desc')"
+      >
+        <AppSelect
+          v-model="trModelId"
+          :options="trModelOptions"
+          :placeholder="t('settingsDefaults.translate.model.ph')"
+        />
+      </SettingsField>
+    </template>
   </div>
 </template>
 
@@ -78,11 +117,33 @@ import {
   modelsForProvider,
   type ThinkingLevel,
 } from '~/composables/useSessionsData'
+import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
+import { useTranslateSettings } from '~/composables/useTranslateSettings'
 import type { AgentMode, ProviderName } from '~/stores/settings'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
 const { defaults, appearance } = storeToRefs(settings)
+
+// Translation-model section (selection-to-translate). Account/model pickers show
+// only when NOT following the app default.
+const {
+  followAppDefault: trFollowAppDefault,
+  provider: trProvider,
+  accountId: trAccountId,
+  modelId: trModelId,
+  accounts: trAccounts,
+  availableModelIds: trAvailableModelIds,
+  modelLabel: trModelLabel,
+} = useTranslateSettings()
+
+const trAccountOptions = computed<AppSelectOption[]>(() => [
+  { value: '__active', label: t('settingsDefaults.translate.account.active') },
+  ...trAccounts.value.map((a) => ({ value: a.id, label: a.label || a.fingerprint })),
+])
+const trModelOptions = computed<AppSelectOption[]>(() =>
+  trAvailableModelIds.value.map((id) => ({ value: id, label: trModelLabel(id) })),
+)
 
 // Provider id ↔ display (seg stores the engine id; label is the proper noun).
 const PROVIDER_OPTIONS = [

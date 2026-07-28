@@ -370,9 +370,9 @@ import type {
   GhSegmentId,
   GhSegmentState,
   GhThread,
-  TranslateLang,
   ViewLang,
 } from '~/composables/useProjectGh'
+import type { TranslateLang } from '~/composables/useSelectionTranslate'
 import { ghLabelStyle } from '~/utils/gh-label'
 
 const { isDark } = useTheme()

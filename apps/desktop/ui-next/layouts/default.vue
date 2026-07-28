@@ -55,6 +55,11 @@
          navigation between pages (docs/features/minimize-dock.md). -->
     <PreviewModal />
     <MinimizeDock />
+
+    <!-- Shared "translate the highlighted text" popover (selection-to-translate).
+         Mounted once here so any surface can pop a translation via
+         useSelectionTranslate() (docs/features/selection-translate.md). -->
+    <SelectionTranslatePopover />
   </div>
 </template>
 

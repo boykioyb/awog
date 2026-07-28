@@ -125,7 +125,7 @@ import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import ProjectGhMarkdown from './ProjectGhMarkdown.vue'
 import type { MenuItem } from '~/composables/useContextMenu'
 import { useContextMenu } from '~/composables/useContextMenu'
-import type { TranslateLang } from '~/composables/useProjectGh'
+import type { TranslateLang } from '~/composables/useSelectionTranslate'
 
 const props = defineProps<{
   modelValue: string

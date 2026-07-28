@@ -253,17 +253,22 @@
       </div>
     </div>
 
-    <!-- Select (highlight) text in a message → floating Quote button by the selection -->
-    <button
+    <!-- Select (highlight) text in a message → floating action bar (Quote + Translate) -->
+    <div
       v-if="quoteSel"
-      class="selquote"
+      class="selactions"
       :style="{ left: `${quoteSel.x}px`, top: `${quoteSel.y}px` }"
       @mousedown.prevent
-      @click="openNote"
     >
-      <Icon name="quote" style="width: 13px; height: 13px" />
-      {{ t('sessions.quote.action') }}
-    </button>
+      <button class="selquote" @click="openNote">
+        <Icon name="quote" style="width: 13px; height: 13px" />
+        {{ t('sessions.quote.action') }}
+      </button>
+      <button class="selquote" @click="onTranslate">
+        <Icon name="globe" style="width: 13px; height: 13px" />
+        {{ t('translate.action') }}
+      </button>
+    </div>
 
     <!-- note popover for a selection quote -->
     <template v-if="notePop">
@@ -326,6 +331,7 @@ import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import { previewKindFromAttachment, usePreview, type PreviewRef } from '~/composables/usePreview'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
+import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
@@ -334,6 +340,7 @@ const { projects, projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
+const translate = useSelectionTranslate()
 
 // Whether THIS instance is the one currently shown. Under <KeepAlive> (pages/sessions
 // caches recent detail instances so switching back is instant) inactive instances stay
@@ -660,6 +667,20 @@ function openNote() {
   noteSize.value = null
   notePopDragging.value = false
   focusNoteInput()
+}
+// Translate button → open the shared translation popover anchored to the live
+// selection rect (`@mousedown.prevent` on the action bar keeps the range alive).
+// LLM defaults resolve from the session's project (→ app defaults).
+function onTranslate() {
+  const q = quoteSel.value
+  if (!q) return
+  const sel = window.getSelection()
+  const rect =
+    sel && sel.rangeCount > 0
+      ? sel.getRangeAt(0).getBoundingClientRect()
+      : { left: q.x, top: q.y, bottom: q.y, width: 0 }
+  translate.open(q.text, rect, props.session.project)
+  quoteSel.value = null
 }
 
 // Drag the popover by its header. Native pointer + setPointerCapture (mirrors
@@ -1140,11 +1161,16 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   border: 1px solid var(--accentBorder);
   border-radius: 10px;
 }
-/* Floating quote button next to a text selection (anchored to viewport coords). */
-.selquote {
+/* Floating action bar next to a text selection (anchored to viewport coords). */
+.selactions {
   position: fixed;
   z-index: 80;
   transform: translate(-50%, -100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.selquote {
   display: inline-flex;
   align-items: center;
   gap: 5px;
