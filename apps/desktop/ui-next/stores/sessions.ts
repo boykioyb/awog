@@ -8,6 +8,7 @@ import {
   questionAnswered,
 } from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
+import type { AccountOption } from '~/composables/useAccounts'
 import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import { useSettingsStore } from '~/stores/settings'
@@ -34,6 +35,11 @@ import type {
   ThinkingLevel,
   Todo,
 } from '~/composables/useSessionsData'
+
+// An actionable button the store attaches to a quota-block toast (e.g. "switch account
+// & retry"). The store builds the closure (it knows the alternative account + retry);
+// the guard renders the label and calls run() on click.
+export type QuotaAction = { label: string; run: () => void }
 
 // Sessions store — dual-path. When the Electron bridge is available (`sc.available`)
 // every action drives the real sidecar over IPC and folds the engine's streaming
@@ -504,9 +510,15 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // Block-reason notifier (registered by useQuotaGuard). The store owns the gate in
   // create() but has no i18n, so the guard registers a callback to push a localised
-  // "blocked" toast when a new session is refused. No-op until registered.
-  let notifyBlocked: ((account: string, kind: 'create' | 'send') => void) | null = null
-  function onQuotaBlocked(fn: (account: string, kind: 'create' | 'send') => void): void {
+  // "blocked" toast when a new session is refused. The optional `action` (create only)
+  // carries a one-click "switch to an under-quota account & retry" button. No-op until
+  // registered.
+  let notifyBlocked:
+    | ((account: string, kind: 'create' | 'send', action?: QuotaAction) => void)
+    | null = null
+  function onQuotaBlocked(
+    fn: (account: string, kind: 'create' | 'send', action?: QuotaAction) => void,
+  ): void {
     notifyBlocked = fn
   }
 
@@ -1177,21 +1189,48 @@ export const useSessionsStore = defineStore('sessions', () => {
   // and the account this session would use has crossed its 5-hour usage threshold,
   // refuse to spawn it (returns null) — the single gate for every "+" callsite.
   // Disabled / under threshold → always creates.
-  function create(projectId?: string): number | null {
+  function create(projectId?: string, forcedAccountId?: string): number | null {
     // Resolve the account THIS session would actually use — a project's "Session LLM
     // defaults" win over the global default — and gate quota on THAT account, not the
     // global default. Otherwise a maxed global-default account wrongly blocks a
     // project bound to a different, under-quota account (per-account is the point).
-    const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
-    const q = settingsStore.quota
-    if (
-      q.enabled &&
-      q.blockNewSessionsOnThreshold &&
-      acct &&
-      quotaPctForAccount(acct.id) >= q.threshold
-    ) {
-      notifyBlocked?.(acct.label ?? acct.display ?? '', 'create')
-      return null
+    const base = defaultsForNewSession(projectId)
+    const { level, mcpServerIds } = base
+    let acct = base.acct
+    let model = base.model
+    if (forcedAccountId) {
+      // "Switch account & retry" (quota block): the user explicitly picked this
+      // account via the toast action, so create on it and skip the gate. The model
+      // follows the chosen account (keep the resolved default when it offers it).
+      const forced = accountById(forcedAccountId)
+      if (forced) {
+        acct = forced
+        const available = modelsForAccount(forced)
+        if (!available.includes(model)) model = available[0] ?? model
+      }
+    } else {
+      const q = settingsStore.quota
+      if (
+        q.enabled &&
+        q.blockNewSessionsOnThreshold &&
+        acct &&
+        quotaPctForAccount(acct.id) >= q.threshold
+      ) {
+        // Offer a one-click switch to another under-quota account on the SAME provider
+        // (when the user has one): the toast action moves the default there and retries.
+        const maxed = acct
+        const alt = accounts.value.find(
+          (a) =>
+            a.provider === maxed.provider &&
+            a.id !== maxed.id &&
+            quotaPctForAccount(a.id) < q.threshold,
+        )
+        const action: QuotaAction | undefined = alt
+          ? { label: alt.label, run: () => void switchAccountAndCreate(maxed, alt, projectId) }
+          : undefined
+        notifyBlocked?.(maxed.label, 'create', action)
+        return null
+      }
     }
     // Dedup: don't pile up empties when "+" is clicked repeatedly. A blank "New
     // session" (fully loaded, no messages, no half-typed draft, idle, and not bound
@@ -1208,6 +1247,12 @@ export const useSessionsStore = defineStore('sessions', () => {
         !s.aboutGhUrl,
     )
     if (blank) {
+      // On an explicit account retry (quota "switch account"), make sure the reused
+      // blank lands on the chosen account — otherwise a blank left on the maxed account
+      // would silently defeat the switch.
+      if (forcedAccountId && acct && blank.accountId !== acct.id) {
+        selectAccount(blank.id, { id: acct.id, display: acct.display })
+      }
       activate(blank.id)
       return blank.id
     }
@@ -1238,6 +1283,30 @@ export const useSessionsStore = defineStore('sessions', () => {
       pushUpsert(session, 'create')
     }
     return id
+  }
+
+  // Target of the quota-block toast's "switch account" action. Make the switch stick
+  // for future new sessions — move the provider's active account, and if THIS project
+  // pins the maxed account, repoint the pin too (otherwise the pin keeps winning and
+  // re-blocks) — then create the session on the chosen account (explicit id → bypasses
+  // the gate deterministically, no dependency on the active-account read propagating).
+  async function switchAccountAndCreate(
+    maxed: AccountOption,
+    alt: AccountOption,
+    projectId?: string,
+  ): Promise<void> {
+    const key = providerKeyOf(alt.provider)
+    if (key) await settingsStore.setActiveAccount(key, alt.id)
+    if (projectId) {
+      const proj = projectsStore.projectById(projectId)
+      if (proj?.llmDefaults?.accountId === maxed.id) {
+        await projectsStore.updateProject({
+          ...proj,
+          llmDefaults: { ...proj.llmDefaults, accountId: alt.id },
+        })
+      }
+    }
+    create(projectId, alt.id)
   }
 
   // Create a session bound to a task to discuss (ADR 0055). Mirrors create() but

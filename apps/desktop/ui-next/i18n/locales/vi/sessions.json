@@ -321,6 +321,7 @@
   "sessions.quota.blocked": "Đã chặn tạo session mới — {account} đã chạm hạn mức 5 giờ. Đợi cửa sổ reset hoặc đổi tài khoản.",
   "sessions.quota.blockedSend": "Không thể gửi tin — {account} đã chạm hạn mức 5 giờ.",
   "sessions.quota.blockedSendNotice": "Đã chạm hạn mức 5 giờ — không thể gửi. Đợi cửa sổ reset hoặc đổi tài khoản.",
+  "sessions.quota.switchTo": "Dùng {account}",
   "sessions.bg.running": "đang chạy",
   "sessions.bg.exit": "thoát {code}",
   "sessions.bg.interrupted": "gián đoạn",

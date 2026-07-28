@@ -321,6 +321,7 @@
   "sessions.quota.blocked": "New session blocked — {account} has reached its 5-hour usage limit. Wait for the window to reset or switch account.",
   "sessions.quota.blockedSend": "Can't send — {account} has reached its 5-hour usage limit.",
   "sessions.quota.blockedSendNotice": "5-hour usage limit reached — can't send. Wait for the window to reset or switch account.",
+  "sessions.quota.switchTo": "Use {account}",
   "sessions.bg.running": "running",
   "sessions.bg.exit": "exit {code}",
   "sessions.bg.interrupted": "interrupted",

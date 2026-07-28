@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionsStore } from '~/stores/sessions'
+import type { QuotaAction } from '~/stores/sessions'
 import { useSettingsStore } from '~/stores/settings'
 import { useAccounts } from '~/composables/useAccounts'
 
@@ -25,7 +26,7 @@ import { useAccounts } from '~/composables/useAccounts'
 // One app-lifetime mount (QuotaGuardHost in the layout). The toast queue is owned
 // here and rendered by the host. SoC: orchestrates store + settings + accounts only.
 
-export type QuotaToast = { id: string; text: string }
+export type QuotaToast = { id: string; text: string; action?: QuotaAction }
 
 const TOAST_TTL_MS = 6000
 const POLL_MS = 60_000
@@ -35,10 +36,13 @@ const toasts = ref<QuotaToast[]>([])
 
 // Push a quota toast. Exported (module-level, no Vue context needed) so the store
 // can surface the "new session blocked" reason from create() — the single gate —
-// without importing i18n into the store.
-export function pushQuotaToast(text: string): void {
+// without importing i18n into the store. An actionable toast (`action` present, e.g.
+// "switch account & retry") is NOT auto-dismissed — it waits for the user to click the
+// button or the toast body, so the action never vanishes mid-decision.
+export function pushQuotaToast(text: string, action?: QuotaAction): void {
   const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-  toasts.value = [...toasts.value, { id, text }]
+  toasts.value = [...toasts.value, action ? { id, text, action } : { id, text }]
+  if (action) return
   setTimeout(() => {
     toasts.value = toasts.value.filter((tt) => tt.id !== id)
   }, TOAST_TTL_MS)
@@ -58,11 +62,12 @@ export function useQuotaGuard() {
   // When the store refuses a new session (create) or a new turn (send) on an
   // over-quota account, surface the reason. The store owns the gate but has no i18n;
   // it passes the account label + which gate fired back.
-  store.onQuotaBlocked((account, kind) =>
+  store.onQuotaBlocked((account, kind, action) =>
     pushQuotaToast(
       t(kind === 'send' ? 'sessions.quota.blockedSend' : 'sessions.quota.blocked', {
         account: account || t('sessions.quota.account'),
       }),
+      action,
     ),
   )
 
