@@ -1,12 +1,6 @@
 import { computed } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
-import {
-  MODEL_DISPLAY,
-  modelDisplayName,
-  modelIdFromDisplay,
-  modelsForProvider,
-  PROVIDER_DISPLAY,
-} from '~/composables/useSessionsData'
+import { providerModelDisplayName, providerModelIds } from '~/composables/useProviderModels'
 import type { ProviderName } from '~/types'
 
 // Controller for the "Translation model" settings section (SettingsDefaults).
@@ -15,12 +9,6 @@ import type { ProviderName } from '~/types'
 // through settings.updateTranslate so the slice stays mutated in one place.
 
 const PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'google']
-
-function modelIdsForProvider(provider: ProviderName): string[] {
-  const display = PROVIDER_DISPLAY[provider]
-  if (!display) return []
-  return modelsForProvider(display).map((name) => modelIdFromDisplay(name))
-}
 
 export function useTranslateSettings() {
   const settings = useSettingsStore()
@@ -32,17 +20,19 @@ export function useTranslateSettings() {
 
   const accounts = computed(() => settings.providers[settings.translate.provider]?.accounts ?? [])
 
-  // Models the effective account serves (custom list) else the provider catalog.
+  // Models the CUSTOM endpoint serves (its own curated list) else the shared
+  // provider catalog. Built-in accounts share the provider list — legacy
+  // `account.models` no longer restricts the picker (models belong to the provider).
   const availableModelIds = computed<string[]>(() => {
     const p = settings.translate.provider
     const cfg = settings.providers[p]
     const id = settings.translate.accountId ?? cfg?.activeAccountId ?? null
-    const accountModels = cfg?.accounts.find((a) => a.id === id)?.models
-    if (accountModels && accountModels.length) return accountModels
-    return modelIdsForProvider(p)
+    const acct = cfg?.accounts.find((a) => a.id === id)
+    if (acct?.baseURL && acct.models?.length) return acct.models
+    return providerModelIds(p)
   })
 
-  const modelLabel = (id: string): string => MODEL_DISPLAY[id] ?? modelDisplayName(id)
+  const modelLabel = (id: string): string => providerModelDisplayName(id)
 
   function reconcileModel() {
     if (!availableModelIds.value.includes(settings.translate.modelId)) {

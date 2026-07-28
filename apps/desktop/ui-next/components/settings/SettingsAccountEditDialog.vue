@@ -80,30 +80,12 @@ import ModelListEditor from '~/components/settings/ModelListEditor.vue'
 import SettingsModelDialog from '~/components/settings/SettingsModelDialog.vue'
 import { useSettingsStore, type ProviderAccount, type ProviderName } from '~/stores/settings'
 
-// Edit dialog (kind = oauth | builtin-key | custom). oauth → label + curate
-// models; builtin-key → label + rotate key + curate models; custom → reuse the
-// CustomProviderForm. Ported from legacy SettingsAccountEditDialog.vue.
-
-// Per-provider engine model-id catalog for the curation suggestions. Built-in API
-// keys use the full catalog; a Codex subscription has no static catalog and uses
-// the account's own seeded models instead.
-const MODEL_CATALOG: Record<ProviderName, string[]> = {
-  anthropic: [
-    'claude-opus-5',
-    'claude-sonnet-5',
-    'claude-opus-4-8',
-    'claude-sonnet-4-6',
-    'claude-haiku-4-5',
-  ],
-  openai: ['gpt-5.5', 'gpt-5.5-pro', 'gpt-5.4-mini', 'gpt-5.1', 'o4-mini', 'gpt-4.1'],
-  google: [
-    'gemini-3.5-flash',
-    'gemini-3.1-pro-preview',
-    'gemini-2.5-pro',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-  ],
-}
+// Edit dialog (kind = oauth | builtin-key | custom). Since models belong to the
+// PROVIDER now (curate in Settings → "Available models"), built-in accounts no
+// longer curate a per-account list here: oauth → label; builtin-key → label +
+// rotate key; custom → reuse CustomProviderForm. The one exception is a Codex
+// subscription (openai OAuth), whose model set is distinct from the openai
+// provider catalog and stays account-scoped.
 
 const props = defineProps<{
   open: boolean
@@ -131,8 +113,10 @@ const kind = computed<'oauth' | 'custom' | 'builtin-key' | null>(() => {
 // A ChatGPT subscription (Codex): provider 'openai' + OAuth.
 const isCodex = computed(() => props.account?.authMode === 'oauth' && props.provider === 'openai')
 
-// Curatable on built-in key + any subscription (custom uses its own form).
-const showModels = computed(() => kind.value === 'builtin-key' || kind.value === 'oauth')
+// Only a Codex subscription curates a per-account model set (its models differ
+// from the openai provider catalog). All other built-in accounts follow the
+// shared provider catalog (Settings → "Available models"); custom uses its form.
+const showModels = computed(() => isCodex.value)
 
 const EMPTY_CUSTOM: CustomProviderInput = {
   label: '',
@@ -150,14 +134,8 @@ const customDraft = ref<CustomProviderInput>({ ...EMPTY_CUSTOM })
 const busy = ref(false)
 const error = ref('')
 
-// Codex has no static catalog here → use the account's own seeded set; other
-// providers use the static catalog.
-const catalogIds = computed(() =>
-  isCodex.value ? (props.account?.models ?? []) : MODEL_CATALOG[props.provider],
-)
-
-const sameSet = (a: string[], b: string[]): boolean =>
-  a.length === b.length && a.every((x) => b.includes(x))
+// Codex curation suggestions come from the account's own seeded set.
+const catalogIds = computed(() => props.account?.models ?? [])
 
 const canSave = computed(() => label.value.trim().length > 0)
 
@@ -178,9 +156,8 @@ const seed = () => {
       models: a.models ? [...a.models] : [],
     }
   } else if (showModels.value) {
-    // Show the effective list so the user can remove (hide) or add. Curated list
-    // if present, else the full catalog (so there's something to hide from).
-    modelsList.value = a.models?.length ? [...a.models] : [...catalogIds.value]
+    // Codex: show its seeded set so the user can remove (hide) or add.
+    modelsList.value = [...(a.models ?? [])]
   }
 }
 
@@ -201,16 +178,14 @@ const commit = async (patch: Parameters<typeof settings.updateAccount>[2]) => {
 
 const onSave = () => {
   if (!canSave.value || busy.value) return
-  if (kind.value === 'builtin-key' || kind.value === 'oauth') {
-    const list = modelsList.value.map((s) => s.trim()).filter(Boolean)
-    // Keeping the whole catalog == "all available" → store nothing so it tracks
-    // the live catalog. Codex has no static catalog, so it always stores the list.
-    const models = !isCodex.value && sameSet(list, catalogIds.value) ? [] : list
-    void commit(
-      kind.value === 'builtin-key'
-        ? { label: label.value.trim(), apiKey: apiKey.value.trim() || undefined, models }
-        : { label: label.value.trim(), models },
-    )
+  if (kind.value === 'builtin-key') {
+    // Models belong to the provider now — only the label + key are account-scoped.
+    void commit({ label: label.value.trim(), apiKey: apiKey.value.trim() || undefined })
+  } else if (kind.value === 'oauth' && isCodex.value) {
+    // Codex keeps its distinct model set (always stored — no provider catalog to
+    // fall back to).
+    const models = modelsList.value.map((s) => s.trim()).filter(Boolean)
+    void commit({ label: label.value.trim(), models })
   } else {
     void commit({ label: label.value.trim() })
   }

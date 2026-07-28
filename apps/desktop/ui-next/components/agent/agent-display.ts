@@ -1,8 +1,11 @@
 // Pure display helpers for the Agents feature — avatar color/initials, provider
 // + model friendly labels, and the per-provider engine-id model catalog used by
-// the editor's model picker. No store/IPC access (SoC: display only).
+// the editor's model picker. The model catalog + labels now come from the single
+// provider-model source (useProviderModels); these are thin re-exports so the
+// Agents feature keeps one import surface. No IPC in these helpers (SoC).
 import type { Agent } from '~/stores/agents'
 import type { ProviderName } from '~/stores/settings'
+import { providerModelDisplayName, providerModelsShown } from '~/composables/useProviderModels'
 
 // Deterministic accent palette keyed off the agent id hash (prototype AGCOL
 // vibe: translucent tint bg + bright foreground). var() tokens aren't usable in
@@ -68,68 +71,14 @@ export const PROVIDERS: { id: ProviderName; label: string }[] = [
   { id: 'google', label: 'Google' },
 ]
 
-// Engine model id → friendly display name. Aligned with the sidecar
-// providers/anthropic/models-map + the sessions model catalog. Unknown ids fall
-// back to the raw id.
-const MODEL_LABELS: Record<string, string> = {
-  'claude-fable-5': 'Fable 5',
-  'claude-opus-5': 'Opus 5',
-  'claude-opus-5-1m': 'Opus 5 (1M)',
-  'claude-sonnet-5': 'Sonnet 5',
-  'claude-opus-4-8': 'Opus 4.8',
-  'claude-opus-4-8-1m': 'Opus 4.8 (1M)',
-  'claude-opus-4-7': 'Opus 4.7',
-  'claude-opus-4-6': 'Opus 4.6',
-  'claude-sonnet-4-6': 'Sonnet 4.6',
-  'claude-haiku-4-5': 'Haiku 4.5',
-  'gpt-5.5': 'GPT-5.5',
-  'gpt-5.5-pro': 'GPT-5.5 Pro',
-  'gpt-5.4-mini': 'GPT-5.4 mini',
-  'gpt-5.1': 'GPT-5.1',
-  'o4-mini': 'o4-mini',
-  'gpt-5': 'GPT-5',
-  'gpt-5-mini': 'GPT-5 mini',
-  o3: 'o3',
-  'gpt-4.1': 'GPT-4.1',
-  'gemini-3.5-flash': 'Gemini 3.5 Flash',
-  'gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'gemini-2.0-flash': 'Gemini 2.0 Flash',
-}
-
+// Engine model id → friendly display name — delegates to the single provider-model
+// source. Unknown ids fall back to the raw id.
 export function modelDisplayName(modelId: string): string {
-  return MODEL_LABELS[modelId] ?? modelId
+  return providerModelDisplayName(modelId)
 }
 
-// Per-provider model catalog (engine id + display label) for the editor picker.
-const PROVIDER_MODELS: Record<ProviderName, { id: string; label: string }[]> = {
-  anthropic: [
-    { id: 'claude-opus-5', label: 'Opus 5' },
-    { id: 'claude-opus-5-1m', label: 'Opus 5 (1M)' },
-    { id: 'claude-sonnet-5', label: 'Sonnet 5' },
-    { id: 'claude-opus-4-8', label: 'Opus 4.8' },
-    { id: 'claude-opus-4-8-1m', label: 'Opus 4.8 (1M)' },
-    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-    { id: 'claude-haiku-4-5', label: 'Haiku 4.5' },
-  ],
-  openai: [
-    { id: 'gpt-5.5', label: 'GPT-5.5' },
-    { id: 'gpt-5.5-pro', label: 'GPT-5.5 Pro' },
-    { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
-    { id: 'gpt-5.1', label: 'GPT-5.1' },
-    { id: 'o4-mini', label: 'o4-mini' },
-    { id: 'gpt-4.1', label: 'GPT-4.1' },
-  ],
-  google: [
-    { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-    { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
-    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-  ],
-}
-
+// Per-provider model catalog (engine id + display label) for the editor picker —
+// the auto-filtered "modern" subset from the single provider-model source.
 export function modelsForProvider(provider: ProviderName): { id: string; label: string }[] {
-  return PROVIDER_MODELS[provider] ?? []
+  return providerModelsShown(provider).map((m) => ({ id: m.id, label: m.name }))
 }

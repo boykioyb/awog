@@ -148,13 +148,22 @@ export function toSafe(record: AccountRecord): AccountSafe {
   }
   if (record.baseURL) safe.baseURL = record.baseURL
   if (record.api) safe.api = record.api
+  // Models belong to the PROVIDER now (Provider Model Catalog) — a built-in
+  // account no longer curates a per-account list, so its stored `models` (legacy
+  // per-account curation) is NOT exposed; the UI reads the provider catalog. Only
+  // two account kinds still carry an account-scoped list:
+  //   - Codex subscription (OAuth + piOAuth): a distinct, subscription-eligible
+  //     set the provider catalog doesn't represent.
+  //   - Custom endpoint (baseURL): serves models the provider catalog can't know.
   if (record.models && record.models.length) {
-    // A ChatGPT subscription (Codex OAuth, marked by piOAuth) can't use every
-    // catalog model — drop the API-key-only ones so the picker never offers an
-    // unusable model. API-key accounts keep their configured list verbatim.
     const isCodex = record.authMode === 'oauth' && !!record.piOAuth
-    const models = isCodex ? codexSubscriptionModelIds(record.models) : record.models
-    if (models.length) safe.models = models
+    const isCustom = !!record.baseURL
+    if (isCodex) {
+      const models = codexSubscriptionModelIds(record.models)
+      if (models.length) safe.models = models
+    } else if (isCustom) {
+      safe.models = record.models
+    }
   }
   if (record.organization) safe.organization = record.organization
   if (record.account) safe.account = record.account

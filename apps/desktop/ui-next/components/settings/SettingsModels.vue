@@ -5,162 +5,172 @@
       :subtitle="t('settingsModels.intro')"
     />
 
-    <!-- ── Anthropic card (OAuth + advanced API key) ─────────────────────── -->
-    <div class="pcard">
-      <div class="pcardtop">
-        <span class="rx">
-          <Icon name="agents" style="width: 16px; height: 16px; color: var(--blue)" />
-        </span>
-        <div class="pcardinfo">
-          <div class="rt">{{ t('settingsModels.anthropic.name') }}</div>
-          <div class="rd">{{ t('settingsModels.anthropic.models') }}</div>
+    <SettingsSeg v-model="activeTab" :options="tabOptions" class="smtabs" />
+
+    <!-- ── Accounts tab: credentials per provider + custom endpoints ───────── -->
+    <div v-show="activeTab === 'accounts'" class="smgroup">
+      <!-- ── Anthropic card (OAuth + advanced API key) ─────────────────────── -->
+      <div class="pcard">
+        <div class="pcardtop">
+          <span class="rx">
+            <Icon name="agents" style="width: 16px; height: 16px; color: var(--blue)" />
+          </span>
+          <div class="pcardinfo">
+            <div class="rt">{{ t('settingsModels.anthropic.name') }}</div>
+            <div class="rd">{{ t('settingsModels.anthropic.models') }}</div>
+          </div>
+          <span class="chip pcardstatus">
+            <span
+              class="pcarddot"
+              :style="{ background: anthropicConnected ? 'var(--green)' : 'var(--textFaint)' }"
+            />
+            {{ anthropicHeaderStatus }}
+          </span>
         </div>
-        <span class="chip pcardstatus">
-          <span
-            class="pcarddot"
-            :style="{ background: anthropicConnected ? 'var(--green)' : 'var(--textFaint)' }"
-          />
-          {{ anthropicHeaderStatus }}
-        </span>
+
+        <!-- Empty state: prominent CTA -->
+        <template v-if="anthropicAccounts.length === 0">
+          <button class="btn pri pcardcta" type="button" @click="oauthOpen = true">
+            <Icon name="agents" style="width: 14px; height: 14px" />
+            {{ t('settingsModels.anthropic.signIn') }}
+          </button>
+          <div class="fd pcardhint">{{ t('settingsModels.anthropic.signInHint') }}</div>
+        </template>
+
+        <!-- Account list -->
+        <template v-else>
+          <div class="pcardlist">
+            <SettingsAccountRow
+              v-for="acc in anthropicAccounts"
+              :key="acc.id"
+              :account="acc"
+              :active="anthropicActiveId === acc.id"
+              :testing="testingIds.has(acc.id)"
+              :test-result="testResults[acc.id] ?? null"
+              reauthable
+              @set-active="onSetActive(acc.id)"
+              @edit="editAccount = acc"
+              @test="onTest(acc.id)"
+              @disconnect="onDisconnect(acc.id)"
+              @reauth="onReauth(acc.id)"
+            />
+          </div>
+          <button class="btn sm pcardadd" type="button" @click="oauthOpen = true">
+            <Icon name="plus" style="width: 13px; height: 13px" />
+            {{ t('settingsModels.account.addAnother') }}
+          </button>
+        </template>
+
+        <!-- Advanced — API key -->
+        <div class="smadvanced">
+          <button class="smadvtoggle" type="button" @click="advancedOpen = !advancedOpen">
+            <Icon
+              name="chev"
+              class="smchev"
+              :class="{ open: advancedOpen }"
+              style="width: 12px; height: 12px"
+            />
+            {{ t('settingsModels.anthropic.advancedToggle') }}
+          </button>
+          <div v-if="advancedOpen" class="smadvbody">
+            <div class="fd">{{ t('settingsModels.anthropic.advancedHint') }}</div>
+            <input
+              v-model="apiKeyLabel"
+              class="keyinp"
+              :placeholder="t('settingsModels.form.labelOptional')"
+            />
+            <div class="keyrow">
+              <input
+                v-model="apiKeyValue"
+                class="keyinp mono"
+                :type="apiKeyReveal ? 'text' : 'password'"
+                placeholder="sk-ant-…"
+                @keydown.enter="onAddApiKey"
+              />
+              <span
+                class="keyeye"
+                :title="
+                  apiKeyReveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')
+                "
+                @click="apiKeyReveal = !apiKeyReveal"
+              >
+                👁
+              </span>
+              <button
+                class="btn sm pri"
+                type="button"
+                :disabled="!apiKeyValue.trim() || apiKeyBusy"
+                @click="onAddApiKey"
+              >
+                {{ t('settingsModels.form.addKey') }}
+              </button>
+            </div>
+            <div v-if="apiKeyError" class="pcarderror">{{ apiKeyError }}</div>
+          </div>
+        </div>
       </div>
 
-      <!-- Empty state: prominent CTA -->
-      <template v-if="anthropicAccounts.length === 0">
-        <button class="btn pri pcardcta" type="button" @click="oauthOpen = true">
-          <Icon name="agents" style="width: 14px; height: 14px" />
-          {{ t('settingsModels.anthropic.signIn') }}
-        </button>
-        <div class="fd pcardhint">{{ t('settingsModels.anthropic.signInHint') }}</div>
-      </template>
+      <!-- ── OpenAI + Google ───────────────────────────────────────────────── -->
+      <SettingsProviderCard
+        provider="openai"
+        :name="t('settingsModels.openai.name')"
+        :models="t('settingsModels.openai.models')"
+        key-placeholder="sk-…"
+        codex
+      />
+      <SettingsProviderCard
+        provider="google"
+        :name="t('settingsModels.google.name')"
+        :models="t('settingsModels.google.models')"
+        key-placeholder="AIza…"
+      />
 
-      <!-- Account list -->
-      <template v-else>
-        <div class="pcardlist">
+      <!-- ── Custom endpoints ──────────────────────────────────────────────── -->
+      <div class="pcard">
+        <div class="pcardtop">
+          <span class="rx">
+            <Icon name="conn" style="width: 16px; height: 16px" />
+          </span>
+          <div class="pcardinfo">
+            <div class="rt">{{ t('settingsModels.custom.name') }}</div>
+            <div class="rd">{{ t('settingsModels.custom.models') }}</div>
+          </div>
+        </div>
+
+        <div v-if="customAccounts.length" class="pcardlist">
           <SettingsAccountRow
-            v-for="acc in anthropicAccounts"
+            v-for="acc in customAccounts"
             :key="acc.id"
             :account="acc"
             :active="anthropicActiveId === acc.id"
             :testing="testingIds.has(acc.id)"
             :test-result="testResults[acc.id] ?? null"
-            reauthable
+            :subtitle="customSubtitle(acc)"
             @set-active="onSetActive(acc.id)"
             @edit="editAccount = acc"
             @test="onTest(acc.id)"
             @disconnect="onDisconnect(acc.id)"
-            @reauth="onReauth(acc.id)"
           />
         </div>
-        <button class="btn sm pcardadd" type="button" @click="oauthOpen = true">
+
+        <div v-if="customFormOpen" class="smcustomform">
+          <CustomProviderForm
+            v-model="customDraft"
+            :submit-label="t('settingsModels.custom.addEndpoint')"
+            @submit="onAddCustom"
+            @cancel="customFormOpen = false"
+          />
+          <div v-if="customError" class="pcarderror">{{ customError }}</div>
+        </div>
+        <button v-else class="btn sm pcardadd" type="button" @click="customFormOpen = true">
           <Icon name="plus" style="width: 13px; height: 13px" />
-          {{ t('settingsModels.account.addAnother') }}
+          {{ t('settingsModels.custom.add') }}
         </button>
-      </template>
-
-      <!-- Advanced — API key -->
-      <div class="smadvanced">
-        <button class="smadvtoggle" type="button" @click="advancedOpen = !advancedOpen">
-          <Icon
-            name="chev"
-            class="smchev"
-            :class="{ open: advancedOpen }"
-            style="width: 12px; height: 12px"
-          />
-          {{ t('settingsModels.anthropic.advancedToggle') }}
-        </button>
-        <div v-if="advancedOpen" class="smadvbody">
-          <div class="fd">{{ t('settingsModels.anthropic.advancedHint') }}</div>
-          <input
-            v-model="apiKeyLabel"
-            class="keyinp"
-            :placeholder="t('settingsModels.form.labelOptional')"
-          />
-          <div class="keyrow">
-            <input
-              v-model="apiKeyValue"
-              class="keyinp mono"
-              :type="apiKeyReveal ? 'text' : 'password'"
-              placeholder="sk-ant-…"
-              @keydown.enter="onAddApiKey"
-            />
-            <span
-              class="keyeye"
-              :title="apiKeyReveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')"
-              @click="apiKeyReveal = !apiKeyReveal"
-            >
-              👁
-            </span>
-            <button
-              class="btn sm pri"
-              type="button"
-              :disabled="!apiKeyValue.trim() || apiKeyBusy"
-              @click="onAddApiKey"
-            >
-              {{ t('settingsModels.form.addKey') }}
-            </button>
-          </div>
-          <div v-if="apiKeyError" class="pcarderror">{{ apiKeyError }}</div>
-        </div>
       </div>
     </div>
 
-    <!-- ── OpenAI + Google ───────────────────────────────────────────────── -->
-    <SettingsProviderCard
-      provider="openai"
-      :name="t('settingsModels.openai.name')"
-      :models="t('settingsModels.openai.models')"
-      key-placeholder="sk-…"
-      codex
-    />
-    <SettingsProviderCard
-      provider="google"
-      :name="t('settingsModels.google.name')"
-      :models="t('settingsModels.google.models')"
-      key-placeholder="AIza…"
-    />
-
-    <!-- ── Custom endpoints ──────────────────────────────────────────────── -->
-    <div class="pcard">
-      <div class="pcardtop">
-        <span class="rx">
-          <Icon name="conn" style="width: 16px; height: 16px" />
-        </span>
-        <div class="pcardinfo">
-          <div class="rt">{{ t('settingsModels.custom.name') }}</div>
-          <div class="rd">{{ t('settingsModels.custom.models') }}</div>
-        </div>
-      </div>
-
-      <div v-if="customAccounts.length" class="pcardlist">
-        <SettingsAccountRow
-          v-for="acc in customAccounts"
-          :key="acc.id"
-          :account="acc"
-          :active="anthropicActiveId === acc.id"
-          :testing="testingIds.has(acc.id)"
-          :test-result="testResults[acc.id] ?? null"
-          :subtitle="customSubtitle(acc)"
-          @set-active="onSetActive(acc.id)"
-          @edit="editAccount = acc"
-          @test="onTest(acc.id)"
-          @disconnect="onDisconnect(acc.id)"
-        />
-      </div>
-
-      <div v-if="customFormOpen" class="smcustomform">
-        <CustomProviderForm
-          v-model="customDraft"
-          :submit-label="t('settingsModels.custom.addEndpoint')"
-          @submit="onAddCustom"
-          @cancel="customFormOpen = false"
-        />
-        <div v-if="customError" class="pcarderror">{{ customError }}</div>
-      </div>
-      <button v-else class="btn sm pcardadd" type="button" @click="customFormOpen = true">
-        <Icon name="plus" style="width: 13px; height: 13px" />
-        {{ t('settingsModels.custom.add') }}
-      </button>
-    </div>
+    <!-- ── Models tab: per-provider catalog + fetch + toggle ────────────────── -->
+    <SettingsProviderModels v-show="activeTab === 'models'" />
 
     <SettingsOAuthDialog
       :open="oauthOpen"
@@ -194,6 +204,8 @@ import SettingsAccountRow, {
 import SettingsAccountEditDialog from '~/components/settings/SettingsAccountEditDialog.vue'
 import SettingsOAuthDialog from '~/components/settings/SettingsOAuthDialog.vue'
 import SettingsProviderCard from '~/components/settings/SettingsProviderCard.vue'
+import SettingsProviderModels from '~/components/settings/SettingsProviderModels.vue'
+import SettingsSeg from '~/components/settings/SettingsSeg.vue'
 import { useSettingsStore, type ProviderAccount } from '~/stores/settings'
 
 const EMPTY_CUSTOM: CustomProviderInput = {
@@ -206,6 +218,15 @@ const EMPTY_CUSTOM: CustomProviderInput = {
 
 const { t } = useI18n()
 const settings = useSettingsStore()
+
+// Two tabs so the pane doesn't grow into one long scroll: credentials vs the
+// per-provider model catalog. v-show (not v-if) keeps each tab's local state
+// (SettingsProviderModels' provider selection) across switches.
+const activeTab = ref<'accounts' | 'models'>('accounts')
+const tabOptions = computed(() => [
+  { label: t('settingsModels.tabs.accounts'), value: 'accounts' },
+  { label: t('settingsModels.tabs.models'), value: 'models' },
+])
 
 const oauthOpen = ref(false)
 // When set, the OAuth dialog re-authenticates this existing account in place
@@ -374,6 +395,16 @@ const onOauthConnected = (account: ProviderAccount) => {
 
 <style scoped>
 .smodels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* Tab strip sits left-aligned under the header, not stretched full width. */
+.smtabs {
+  align-self: flex-start;
+}
+/* Keep the card spacing the parent flex gave the cards before they were grouped. */
+.smgroup {
   display: flex;
   flex-direction: column;
   gap: 12px;

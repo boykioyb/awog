@@ -1,11 +1,14 @@
 import type { ContextChars } from '~/composables/useSessionsData'
+import { providerModelContextWindow } from '~/composables/useProviderModels'
 
 // Per-model context window (input tokens), ported from apps/desktop/ui. The
 // window follows the user's SELECTED model id — which retains AWOG-internal
 // variants like `-1m`. The provider-reported base id collapses the 1M variant
 // (`claude-opus-4-8-1m` → `claude-opus-4-8` + a beta header), so deriving the
-// limit from it would wrongly snap 1M back to 200k. Source: Anthropic public
-// docs. Update when new models ship or a 1M-context flag is enabled.
+// limit from it would wrongly snap 1M back to 200k. This map is AUTHORITATIVE for
+// the ids it lists (it encodes the base-vs-1m convention that provider metadata
+// doesn't); a fetched model NOT listed here falls back to its catalog metadata
+// (see contextLimitFor). Source: Anthropic public docs.
 const CONTEXT_WINDOW: Record<string, number> = {
   // "5" generation. Fable 5 ships a native 1M window (no beta header); Opus 5
   // mirrors Opus 4.8 — 200k by default, 1M via the `-1m` variant + context-1m beta.
@@ -25,9 +28,14 @@ const DEFAULT_WINDOW = 200_000
 
 export function contextLimitFor(modelId: string | undefined): number {
   if (!modelId) return DEFAULT_WINDOW
-  // Exact match first so the 1M variant isn't shadowed by the `claude-opus-4-8`
-  // prefix, then fall back to a prefix match (versioned ids like `…-20251001`).
+  // 1. Exact hardcoded match first so the 1M variant isn't shadowed by the
+  //    `claude-opus-4-8` prefix (authoritative for the base-vs-1m convention).
   if (modelId in CONTEXT_WINDOW) return CONTEXT_WINDOW[modelId] ?? DEFAULT_WINDOW
+  // 2. Fetched catalog metadata — lets a newly-fetched model report its real
+  //    window instead of snapping to the default (Provider Model Catalog, Pha 4).
+  const fetched = providerModelContextWindow(modelId)
+  if (fetched) return fetched
+  // 3. Prefix match (versioned ids like `…-20251001`), else the default.
   const key = Object.keys(CONTEXT_WINDOW).find((k) => modelId.startsWith(k))
   return key ? (CONTEXT_WINDOW[key] ?? DEFAULT_WINDOW) : DEFAULT_WINDOW
 }

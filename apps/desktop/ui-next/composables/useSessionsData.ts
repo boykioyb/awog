@@ -6,6 +6,13 @@
 // fallback so the UI is browsable without the Electron shell + sidecar; in the
 // desktop app the live stores load real data over IPC and ignore these.
 
+import type { ProviderName } from '~/stores/settings'
+import {
+  providerModelsShown,
+  providerModelDisplayName,
+  providerModelIdFromDisplay,
+} from '~/composables/useProviderModels'
+
 export type Provider = 'Anthropic' | 'OpenAI' | 'Google'
 export type SessionStatus = 'idle' | 'streaming' | 'awaiting' | 'done' | 'error'
 
@@ -386,28 +393,9 @@ export type TreeFile = { f: string; st?: 'M' | 'A' }
 export type TreeDir = { d: string; ch?: TreeNode[] }
 export type TreeNode = TreeFile | TreeDir
 
-const PROVIDER_MODELS: Record<Provider, string[]> = {
-  Anthropic: [
-    'Opus 5',
-    'Opus 5 (1M)',
-    'Sonnet 5',
-    'Opus 4.8',
-    'Opus 4.8 (1M)',
-    'Sonnet 4.6',
-    'Haiku 4.5',
-  ],
-  OpenAI: ['GPT-5.5', 'GPT-5.5 Pro', 'GPT-5.4 mini', 'GPT-5.1', 'o4-mini', 'GPT-4.1'],
-  Google: [
-    'Gemini 3.5 Flash',
-    'Gemini 3.1 Pro',
-    'Gemini 2.5 Pro',
-    'Gemini 2.5 Flash',
-    'Gemini 2.0 Flash',
-  ],
-}
 const providerOf = (account: string): Provider =>
   (account.split(' · ')[1] as Provider | undefined) ?? 'Anthropic'
-const modelsFor = (account: string): string[] => PROVIDER_MODELS[providerOf(account)]
+const modelsFor = (account: string): string[] => modelsForProvider(providerOf(account))
 
 // Engine provider id (settings.provider) ↔ display name. Shared by the store
 // (engineSettings/summaryToSession) and useAccounts so both resolve identically.
@@ -416,38 +404,23 @@ export const PROVIDER_DISPLAY: Record<string, Provider> = {
   openai: 'OpenAI',
   google: 'Google',
 }
-// Engine modelId (e.g. `claude-opus-4-8`) → friendly display name. Best effort:
-// unknown ids fall back to the raw id (see modelDisplayName).
-export const MODEL_DISPLAY: Record<string, string> = {
-  'claude-fable-5': 'Fable 5',
-  'claude-opus-5': 'Opus 5',
-  'claude-opus-5-1m': 'Opus 5 (1M)',
-  'claude-sonnet-5': 'Sonnet 5',
-  'claude-opus-4-8': 'Opus 4.8',
-  'claude-opus-4-8-1m': 'Opus 4.8 (1M)',
-  'claude-sonnet-4-6': 'Sonnet 4.6',
-  'claude-haiku-4-5': 'Haiku 4.5',
-  'gpt-5.5': 'GPT-5.5',
-  'gpt-5.5-pro': 'GPT-5.5 Pro',
-  'gpt-5.4-mini': 'GPT-5.4 mini',
-  'gpt-5.1': 'GPT-5.1',
-  'o4-mini': 'o4-mini',
-  'gpt-5': 'GPT-5',
-  'gpt-5-mini': 'GPT-5 mini',
-  o3: 'o3',
-  'gpt-4.1': 'GPT-4.1',
-  'gemini-3.5-flash': 'Gemini 3.5 Flash',
-  'gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'gemini-2.0-flash': 'Gemini 2.0 Flash',
+// Reverse of PROVIDER_DISPLAY — friendly display name → engine provider id, to key
+// the provider-model catalog (which is keyed by ProviderName).
+const PROVIDER_NAME: Record<Provider, ProviderName> = {
+  Anthropic: 'anthropic',
+  OpenAI: 'openai',
+  Google: 'google',
 }
-// modelId → display (unknown → raw id). reverse maps a display back to a modelId.
-export const modelDisplayName = (modelId: string): string => MODEL_DISPLAY[modelId] ?? modelId
-export const modelIdFromDisplay = (display: string): string =>
-  Object.entries(MODEL_DISPLAY).find(([, name]) => name === display)?.[0] ?? display
-// Per-provider model catalog (display names) when an account has no explicit list.
-export const modelsForProvider = (provider: Provider): string[] => PROVIDER_MODELS[provider]
+// Model display/catalog helpers now delegate to the single provider-model catalog
+// (useProviderModels) — the source of truth shared by every picker. These thin
+// wrappers keep the historical sync signatures the many call sites depend on.
+// modelId → display (unknown → raw id); reverse maps a display back to a modelId.
+export const modelDisplayName = (modelId: string): string => providerModelDisplayName(modelId)
+export const modelIdFromDisplay = (display: string): string => providerModelIdFromDisplay(display)
+// Per-provider model catalog (display names) — the auto-filtered "modern" subset
+// the picker shows when an account has no explicit list.
+export const modelsForProvider = (provider: Provider): string[] =>
+  providerModelsShown(PROVIDER_NAME[provider]).map((m) => m.name)
 
 const ACCOUNTS = ['hoatq · Anthropic', 'team · OpenAI', 'personal · Google']
 
@@ -836,7 +809,6 @@ const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', 
 
 export function useSessionsData() {
   return {
-    PROVIDER_MODELS,
     CIRCLED,
     ACCOUNTS,
     GROUPBY,

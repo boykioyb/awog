@@ -88,8 +88,56 @@ async function liveAnthropic(
     .map((d) => ({ id: d.id, name: d.display_name ?? d.id, source: 'api' as const }))
 }
 
+// Live OpenAI model list (GET /v1/models, Bearer key). No display names in the
+// response, so name=id (the client's catalog supplies friendlier labels for known
+// ids on merge). Non-chat modalities (embeddings/audio/image/…) are filtered out.
+function isOpenAiChatModel(id: string): boolean {
+  const s = id.toLowerCase()
+  if (/(embedding|whisper|tts|dall-e|moderation|audio|realtime|transcribe|image|search)/.test(s))
+    return false
+  return /^(gpt-|o\d|chatgpt-)/.test(s)
+}
+async function liveOpenAI(apiKey: string): Promise<ModelInfo[]> {
+  const res = await fetch('https://api.openai.com/v1/models', {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) throw new Error(`openai /v1/models returned ${res.status}`)
+  const json = (await res.json()) as { data?: Array<{ id?: string }> }
+  return (json.data ?? [])
+    .map((d) => d.id)
+    .filter((id): id is string => typeof id === 'string' && isOpenAiChatModel(id))
+    .map((id) => ({ id, name: id, source: 'api' as const }))
+}
+
+// Live Google model list (GET /v1beta/models?key=…). Keep only models that can
+// generateContent (drops embeddings/aqa); id is the name minus the "models/" prefix.
+async function liveGoogle(apiKey: string): Promise<ModelInfo[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`google /v1beta/models returned ${res.status}`)
+  const json = (await res.json()) as {
+    models?: Array<{
+      name?: string
+      displayName?: string
+      supportedGenerationMethods?: string[]
+      inputTokenLimit?: number
+      outputTokenLimit?: number
+    }>
+  }
+  return (json.models ?? [])
+    .filter((m) => typeof m.name === 'string' && m.supportedGenerationMethods?.includes('generateContent'))
+    .map((m) => {
+      const id = m.name!.replace(/^models\//, '')
+      const info: ModelInfo = { id, name: m.displayName ?? id, source: 'api' }
+      if (typeof m.inputTokenLimit === 'number') info.contextWindow = m.inputTokenLimit
+      if (typeof m.outputTokenLimit === 'number') info.maxTokens = m.outputTokenLimit
+      return info
+    })
+}
+
 // Best-effort live fetch — returns [] on any failure so the Pi catalog still
-// shows. openai/google live fetch is Phase 3 (they fall back to Pi + extras).
+// shows. Only the built-in provider host is contacted (hardcoded per provider →
+// no user-supplied host → no SSRF); custom endpoints + Codex bearers are skipped.
 async function liveModels(provider: BuiltInProvider, accountId: string): Promise<ModelInfo[]> {
   try {
     const { cred } = await resolveCredential(provider, accountId)
@@ -97,6 +145,12 @@ async function liveModels(provider: BuiltInProvider, accountId: string): Promise
     if (cred.kind === 'apikey' && cred.baseURL) return []
     if (provider === 'anthropic') {
       return await liveAnthropic(cred.kind === 'oauth' ? cred : { kind: 'apikey', apiKey: cred.apiKey })
+    }
+    // openai/google are apikey-only. A Codex bearer (cred.codex) can't list the
+    // pay-as-you-go catalog, so skip it and fall back to Pi.
+    if (cred.kind === 'apikey' && !cred.codex) {
+      if (provider === 'openai') return await liveOpenAI(cred.apiKey)
+      if (provider === 'google') return await liveGoogle(cred.apiKey)
     }
     return []
   } catch (err) {

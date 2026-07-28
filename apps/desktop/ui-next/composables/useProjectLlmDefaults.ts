@@ -2,14 +2,8 @@ import { computed, ref, watch } from 'vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useSettingsStore } from '~/stores/settings'
 import { useConnectionsStore } from '~/stores/connections'
-import {
-  MODEL_DISPLAY,
-  modelDisplayName,
-  modelIdFromDisplay,
-  modelsForProvider,
-  PROVIDER_DISPLAY,
-  type ThinkingLevel,
-} from '~/composables/useSessionsData'
+import type { ThinkingLevel } from '~/composables/useSessionsData'
+import { providerModelDisplayName, providerModelIds } from '~/composables/useProviderModels'
 import type { ProjectLlmDefaults, ProviderName } from '~/types'
 
 // Controller for the per-project LLM-defaults form. Owns the draft + the
@@ -30,14 +24,6 @@ export interface LlmDefaultsDraft {
 
 const PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'google']
 const LEVELS: ThinkingLevel[] = ['low', 'medium', 'high', 'extra-high', 'max']
-
-// Map a display catalog name (e.g. "Opus 4.8") → engine modelId. Falls back to
-// the display string itself when unknown (custom endpoint ids round-trip as-is).
-function modelIdsForProvider(provider: ProviderName): string[] {
-  const display = PROVIDER_DISPLAY[provider]
-  if (!display) return []
-  return modelsForProvider(display).map((name) => modelIdFromDisplay(name))
-}
 
 export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen: () => boolean) {
   const store = useProjectsStore()
@@ -88,16 +74,18 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
 
   const accounts = computed(() => settings.providers[draft.value.provider]?.accounts ?? [])
 
-  // Models the effective account serves (custom list) else the provider catalog.
+  // Models the CUSTOM endpoint serves (its own curated list) else the shared
+  // provider catalog. Built-in accounts share the provider list — their legacy
+  // `account.models` no longer restricts the picker (models belong to the provider).
   const availableModelIds = computed<string[]>(() => {
     const cfg = settings.providers[draft.value.provider]
     const id = draft.value.accountId ?? cfg?.activeAccountId ?? null
-    const accountModels = cfg?.accounts.find((a) => a.id === id)?.models
-    if (accountModels && accountModels.length) return accountModels
-    return modelIdsForProvider(draft.value.provider)
+    const acct = cfg?.accounts.find((a) => a.id === id)
+    if (acct?.baseURL && acct.models?.length) return acct.models
+    return providerModelIds(draft.value.provider)
   })
 
-  const modelLabel = (id: string): string => MODEL_DISPLAY[id] ?? modelDisplayName(id)
+  const modelLabel = (id: string): string => providerModelDisplayName(id)
 
   const hasCustomDefaults = computed(() => !!project.value?.llmDefaults)
   const isProviderConnected = (p: ProviderName) => settings.isProviderConnected(p)

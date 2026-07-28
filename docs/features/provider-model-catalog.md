@@ -1,6 +1,6 @@
 # Provider Model Catalog (model theo provider + fetch)
 
-> Trạng thái: **Đang triển khai** (Pha 1). Thay mô hình "model curated theo account" bằng **model theo provider**, gom cấu hình về 1 nơi, thêm nút **Fetch** cập nhật list model từ live API + Pi catalog.
+> Trạng thái: **Hoàn tất** (Pha 1–4 ✅). Thay mô hình "model curated theo account" bằng **model theo provider**, gom cấu hình về 1 nơi, thêm nút **Fetch** cập nhật list model từ live API + Pi catalog.
 
 ## Vấn đề
 
@@ -32,7 +32,7 @@ AWOG extras (opus-5…) ──┘                                               
 ```
 
 - **Runtime resolve** vẫn qua `model-resolver.ts` (Pi getModel + clone-fallback cho id Pi chưa biết). Không đổi.
-- **Persist:** subset "enabled" per provider + snapshot fetched-list + fetchedAt → `~/.awog/provider-models.json` (sidecar) hoặc settings store. (Chốt ở Pha 2.)
+- **Persist:** subset "enabled" per provider + snapshot fetched-list + fetchedAt → **localStorage `awog.providerModels.v1`** (xem mục [Persist](#persist) ở Pha 4).
 
 ## Merge rule (models.list)
 
@@ -44,10 +44,13 @@ AWOG extras (opus-5…) ──┘                                               
 
 ## Pha
 
-- **Pha 1 (foundation):** sidecar `models.list` (Pi + extras + live API Anthropic). typecheck.
-- **Pha 2 (UI core):** `useProviderModels` store; rewire session chip + Settings picker + agent editor + project defaults đọc provider models; bỏ `account.models` khỏi session path (built-in).
-- **Pha 3 (Settings UX):** tách "Models (per provider)" section + nút Fetch + toggle; account editor bỏ ModelListEditor built-in; live API OpenAI/Google.
-- **Pha 4:** persist enabled subset + migrate `account.models` cũ; dọn hardcode `PROVIDER_MODELS`/`MODEL_CATALOG`; cập nhật pricing/context tự động từ metadata fetch.
+- **Pha 1 (foundation) ✅:** sidecar `models.list` (Pi + extras + live API Anthropic). typecheck.
+- **Pha 2 (UI core) ✅:** `composables/useProviderModels.ts` = single source (module-singleton reactive catalog seed bằng bundled default + `load(provider,{live,accountId})` → `models.list` + `shown()` auto-filter `isModernModelId`). Rewire session chip (Pha 2a: `useAccounts.modelsForAccount` → provider catalog, custom endpoint giữ `account.modelIds`), `useSessionsData` (`modelsForProvider`/`modelDisplayName`/`modelIdFromDisplay` delegate — giữ chữ ký sync), `agent-display`, project/translate defaults. Picker vẫn dùng display-name làm value; helper display↔id đọc từ catalog store nên id động round-trip. Chưa auto-load (nút Fetch = Pha 3).
+- **Pha 3 (Settings UX) ✅:** section "Available models" (`SettingsProviderModels.vue`) trong Models & Keys — seg chọn provider + list full `all()` + toggle enable/disable (persist localStorage `awog.providerModels.v1`, hydrate merge seed) + nút **Fetch** gọi `models.list {live, accountId active}`. Account editor bỏ ModelListEditor cho built-in (oauth Claude + builtin-key) — chỉ giữ cho **Codex** (openai OAuth, model set riêng) + custom endpoint; bỏ hardcode `MODEL_CATALOG`. project/translate defaults chỉ honor `account.models` khi là custom endpoint (có `baseURL`). Sidecar `models.list` thêm live **OpenAI** (`GET /v1/models`, lọc chat, skip Codex bearer) + **Google** (`/v1beta/models?key=`, lọc `generateContent`).
+- **Pha 4 ✅:** `toSafe` (sidecar) **thôi expose `account.models` cho built-in** (chỉ Codex + custom còn giữ) → "models thuộc provider" đúng tới biên API; field cũ trong credentials.json thành dead data vô hại (không mutate file nhạy cảm). `context-window.ts` **derive từ metadata fetch** làm fallback cho id chưa biết (map hardcode vẫn authoritative cho id đã liệt kê — giữ quy ước base-vs-`-1m`). Hardcode catalog UI đã sạch từ Pha 2/3 (chỉ còn hằng default-model đơn lẻ, đúng ý). **Pricing giữ nguyên**: giá không suy được từ `/v1/models` (metadata không có giá) — hệ thống giá đã có sẵn 3 tầng `default → remote (activity.pricing.fetch) → override (Settings modelPricing)`; model fetched-mới chưa có giá → `getEffectivePricing` trả null → caller flag `missingPrices` (graceful), user override tay được.
+
+### Persist
+Enabled-subset per provider + snapshot catalog fetched + fetchedAt lưu **localStorage** `awog.providerModels.v1` (UI-presentation cache, không phải engine setting — model gửi đi vẫn theo lựa chọn per-session/task). `hydrate()` merge **seed trước** để model mặc định của bản app mới không bị cache cũ che. (Có thể chuyển sang `~/.awog/provider-models.json` sidecar-authoritative sau nếu cần đồng bộ đa thiết bị.)
 
 ## Bảo mật
 

@@ -7,8 +7,8 @@
 // from the label so the UI stays fully interactive. SoC: orchestrates IPC only.
 import { computed, ref } from 'vue'
 import {
-  MODEL_DISPLAY,
   PROVIDER_DISPLAY,
+  modelDisplayName,
   modelsForProvider,
   useSessionsData,
   type Provider,
@@ -130,7 +130,7 @@ export function useAccounts() {
   // models the provider catalog doesn't know.
   const modelsForAccount = (account: AccountOption | undefined): string[] => {
     if (account?.custom && account.modelIds?.length) {
-      return account.modelIds.map((id) => MODEL_DISPLAY[id] ?? id)
+      return account.modelIds.map((id) => modelDisplayName(id))
     }
     return modelsForProvider(account?.provider ?? 'Anthropic')
   }
