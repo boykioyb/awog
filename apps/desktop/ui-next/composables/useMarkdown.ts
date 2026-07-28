@@ -145,12 +145,60 @@ function ensureHighlighter() {
 // "$5 … $10", or Vietnamese/CJK text caught between two dollar signs). Such a span isn't
 // real math; without this KaTeX floods the console with "unknownSymbol" AND (unconditional,
 // not gated by strict) "No character metrics" warnings and typesets garbled letters.
-// throwOnError:true turns that into a thrown error the callers catch → fall back to the RAW
-// source text, so a non-math `$…$` renders verbatim and the console stays clean. KaTeX still
+// throwOnError:true turns that into a thrown error → renderMath retries leniently for
+// unmistakable math (see below) and otherwise callers catch → fall back to the RAW source
+// text, so a non-math `$…$` renders verbatim and the console stays clean. KaTeX still
 // escapes input and (trust:false) emits no author HTML → v-html-safe.
 const KATEX_OPTS: KatexOptions = {
   throwOnError: true,
   strict: (errorCode) => (errorCode === 'unknownSymbol' ? 'error' : 'ignore'),
+}
+
+// A LaTeX control sequence (`\frac`, `\text`, `\alpha`, …). Its presence — or display mode
+// (`$$…$$` / a ```latex fence) — marks a span as UNMISTAKABLY math, as opposed to prose that
+// merely sits between `$` signs (which has neither).
+const hasLatexCommand = (s: string) => /\\[a-zA-Z]/.test(s)
+
+// Run a SYNCHRONOUS fn with KaTeX's "No character metrics for …" console.warn filtered out.
+// KaTeX logs one such warning per glyph it lacks font metrics for (chiefly Vietnamese
+// diacritics inside `\text{…}` — `ả`, `ộ`, `ế`, …); it is unconditional (not gated by
+// `strict`) and has no per-render off switch, so a Vietnamese equation would otherwise flood
+// the console every render. Only this one benign message is dropped — every other warning
+// passes through — and because KaTeX renders synchronously the temporary patch never
+// straddles unrelated logging.
+function quietMetricWarnings<T>(fn: () => T): T {
+  const origWarn = console.warn
+  console.warn = (...args: unknown[]) => {
+    if (typeof args[0] === 'string' && args[0].startsWith('No character metrics')) return
+    origWarn(...args)
+  }
+  try {
+    return fn()
+  } finally {
+    console.warn = origWarn
+  }
+}
+
+// Render one math span. The strict pass (KATEX_OPTS) rejects `unknownSymbol` to keep
+// accidental-`$` prose from typesetting as garbled math. But a hard `unknownSymbol` failure
+// on span that is unmistakably math is almost always a supported equation carrying an
+// unsupported GLYPH — chiefly Vietnamese diacritics inside `\text{…}` (e.g. `ả`, `ộ`, `ế`),
+// which KaTeX has no font metrics for. Retry those leniently so the equation typesets (the
+// browser font draws the glyph) instead of degrading to raw `$$…$$` source. Prose wrapped in
+// `$…$` has no command and no display mode → stays strict → throws → caller shows raw. Throws
+// only when BOTH passes fail, so callers keep their existing raw fallback.
+function renderMath(text: string, displayMode: boolean, output?: KatexOptions['output']): string {
+  const opts: KatexOptions = { ...KATEX_OPTS, displayMode, ...(output ? { output } : {}) }
+  try {
+    return katex.renderToString(text, opts)
+  } catch (err) {
+    if (displayMode || hasLatexCommand(text)) {
+      // Only this path actually typesets metric-less glyphs (strict mode throws before build),
+      // so suppress KaTeX's per-glyph "No character metrics" warnings here alone.
+      return quietMetricWarnings(() => katex.renderToString(text, { ...opts, strict: 'ignore' }))
+    }
+    throw err
+  }
 }
 
 // A ```latex / ```tex fenced block renders as a typeset display equation (the system
@@ -158,11 +206,7 @@ const KATEX_OPTS: KatexOptions = {
 // unrenderable character) fall back to plain code so the source stays readable.
 function renderMathBlock(src: string): string {
   try {
-    return katex.renderToString(src.trim(), {
-      ...KATEX_OPTS,
-      displayMode: true,
-      output: 'htmlAndMathml',
-    })
+    return renderMath(src.trim(), true, 'htmlAndMathml')
   } catch {
     return `<pre class="codeplain"><code>${escapeHtml(src)}</code></pre>`
   }
@@ -227,7 +271,7 @@ function configure() {
     ext.renderer = (token) => {
       const t = token as Tokens.Generic & { text: string; displayMode?: boolean }
       try {
-        return katex.renderToString(t.text, { ...KATEX_OPTS, displayMode: !!t.displayMode }) + nl
+        return renderMath(t.text, !!t.displayMode) + nl
       } catch {
         // Not real math (unrenderable char) or malformed → show the source verbatim.
         return escapeHtml(t.raw) + nl
