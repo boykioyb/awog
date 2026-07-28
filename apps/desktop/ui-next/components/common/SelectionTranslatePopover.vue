@@ -35,7 +35,13 @@
             <span>{{ t('translate.error') }}</span>
             <button class="sttbtn" @click="retry">{{ t('translate.retry') }}</button>
           </div>
-          <div v-else class="sttresult">{{ result }}</div>
+          <div v-else class="sttresult">
+            <template v-for="(seg, i) in resultSegments" :key="i">
+              <pre v-if="seg.type === 'mermaid'" class="sttcode"><code>{{ seg.code }}</code></pre>
+              <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
+              <div v-else class="sttmd" v-html="seg.html" />
+            </template>
+          </div>
         </div>
 
         <div v-if="!loading && !error && result" class="sttfoot">
@@ -53,9 +59,11 @@
 import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useEscToClose } from '~/composables/useEscToClose'
+import { useMarkdown } from '~/composables/useMarkdown'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 
 const { t } = useI18n()
+const { renderMarkdown } = useMarkdown()
 const {
   active,
   lang,
@@ -70,6 +78,10 @@ const {
   close,
   copyResult,
 } = useSelectionTranslate()
+
+// Render the translation as markdown (bold, inline code, lists) — model output is
+// sanitized by useMarkdown (raw HTML dropped, hrefs sanitized) → v-html-safe.
+const resultSegments = computed(() => (result.value ? renderMarkdown(result.value) : []))
 
 const POP_WIDTH = 340
 
@@ -181,9 +193,75 @@ useEscToClose(
   font-size: 1em;
   line-height: 1.5;
   color: var(--text);
-  white-space: pre-wrap;
   word-break: break-word;
   user-select: text;
+}
+/* Rendered-markdown prose inside the popover (sanitized HTML from useMarkdown). */
+.sttmd :deep(p) {
+  margin: 0 0 8px;
+}
+.sttmd :deep(strong) {
+  font-weight: 650;
+}
+.sttmd :deep(em) {
+  font-style: italic;
+}
+.sttmd :deep(a) {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.sttmd :deep(ul),
+.sttmd :deep(ol) {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.sttmd :deep(li) {
+  margin: 2px 0;
+}
+.sttmd :deep(h1),
+.sttmd :deep(h2),
+.sttmd :deep(h3),
+.sttmd :deep(h4) {
+  font-size: 1.05em;
+  font-weight: 650;
+  margin: 4px 0 6px;
+}
+.sttmd :deep(blockquote) {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  color: var(--textDim);
+}
+.sttmd :deep(code) {
+  font-family: var(--code, ui-monospace, monospace);
+  font-size: 0.92em;
+  background: var(--bgHover);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.sttmd :deep(pre) {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  background: var(--bgHover);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.sttmd :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+.sttmd :deep(> *:last-child),
+.sttmd :deep(li > *:last-child) {
+  margin-bottom: 0;
+}
+.sttcode {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bgHover);
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: var(--code, ui-monospace, monospace);
+  font-size: 0.92em;
 }
 .sttstatus {
   display: flex;
