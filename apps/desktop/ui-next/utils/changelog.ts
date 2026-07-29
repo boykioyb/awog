@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.26.0',
+    date: '2026-07-29',
+    highlight: {
+      en: 'Control a running session from your phone — pair a device once and watch, reply, or approve from anywhere on your own private network.',
+      vi: 'Điều khiển phiên đang chạy từ điện thoại — ghép thiết bị một lần rồi theo dõi, trả lời hay phê duyệt từ bất cứ đâu trên mạng riêng của bạn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Mobile remote control: scan a QR code to pair your phone, then open a live session from the phone to follow the transcript, send follow-up messages, and approve or reject permission, plan, and question prompts — so a run no longer waits for you to get back to your desk.',
+        vi: 'Điều khiển từ điện thoại: quét mã QR để ghép máy, rồi mở phiên đang chạy ngay trên điện thoại để theo dõi hội thoại, gửi tin nhắn tiếp theo, và phê duyệt hoặc từ chối các yêu cầu quyền, kế hoạch, câu hỏi — công việc không còn phải chờ bạn quay về bàn làm việc.',
+      },
+      {
+        kind: 'added',
+        en: 'Traffic stays inside your own Tailscale network — the phone talks straight to your machine, never through a cloud service, and a phone can only run in Ask or Plan mode so an approval step always happens.',
+        vi: 'Dữ liệu chỉ đi trong mạng Tailscale của riêng bạn — điện thoại nối thẳng tới máy bạn, không qua dịch vụ đám mây nào, và điện thoại chỉ chạy được ở chế độ Ask hoặc Plan nên luôn có bước phê duyệt.',
+      },
+      {
+        kind: 'added',
+        en: 'Remote control ships switched off. Turn it on in Settings → Devices when you want it; while it is off AWOG opens no port at all, and switching it back off disconnects every paired device on the spot.',
+        vi: 'Điều khiển từ xa mặc định tắt. Bật trong Cài đặt → Devices khi bạn cần; khi tắt, AWOG không mở cổng nào cả, và tắt lại là ngắt mọi thiết bị đã ghép ngay lập tức.',
+      },
+      {
+        kind: 'added',
+        en: 'A new Settings → Devices section lists every paired phone with when it was last seen, and revoking one cuts off its access immediately.',
+        vi: 'Mục Cài đặt → Devices mới liệt kê mọi điện thoại đã ghép kèm thời điểm hoạt động gần nhất; thu hồi một thiết bị là cắt quyền truy cập của nó ngay lập tức.',
+      },
+      {
+        kind: 'added',
+        en: 'Activity: expand any row of the by-session table to see that session spend day by day — tokens, turns and cost per day, always adding up to the row above.',
+        vi: 'Activity: mở rộng bất kỳ hàng nào trong bảng theo phiên để xem chi tiêu từng ngày của phiên đó — token, số lượt và chi phí mỗi ngày, luôn cộng đúng bằng hàng phía trên.',
+      },
+      {
+        kind: 'added',
+        en: 'A new "Auto" response style lets the assistant pick the style that fits each message on its own — direct for a quick fix, step by step for a walkthrough — and switch as the task changes. The playful personas are never picked automatically.',
+        vi: 'Kiểu trả lời "Auto" mới để trợ lý tự chọn kiểu hợp với từng tin nhắn — ngắn gọn khi cần sửa nhanh, từng bước khi cần hướng dẫn — và đổi theo tính chất công việc. Các kiểu vui nhộn không bao giờ được tự chọn.',
+      },
+      {
+        kind: 'improved',
+        en: 'Very large token counts now read as "2.45B" instead of "2446.1M", and every token figure — Activity, the context gauge, the Cost tab, the session panel — uses the same format.',
+        vi: 'Số token rất lớn giờ hiển thị "2.45B" thay vì "2446.1M", và mọi con số token — Activity, thước đo ngữ cảnh, tab Cost, bảng phiên — đều dùng chung một định dạng.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The range buttons in the session Cost tab no longer wrap or get squeezed when the panel is narrow or the font size is turned up.',
+        vi: 'Các nút chọn khoảng thời gian trong tab Cost của phiên không còn xuống dòng hay bị bóp lại khi bảng hẹp hoặc khi tăng cỡ chữ.',
+      },
+    ],
+  },
+  {
     version: '0.25.2',
     date: '2026-07-28',
     highlight: {
