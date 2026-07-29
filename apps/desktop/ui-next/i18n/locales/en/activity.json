@@ -54,6 +54,8 @@
   "activity.bySession.col.total": "Total tokens",
   "activity.bySession.col.turns": "Turns",
   "activity.bySession.col.cost": "Cost",
+  "activity.bySession.days.toggle": "Show daily breakdown",
+  "activity.bySession.days.meta": "{tokens} tokens · {turns} turns",
 
   "activity.rateLimit.title": "Provider rate limits",
   "activity.rateLimit.empty": "No accounts with a usage surface (Anthropic subscription or OpenAI Codex).",

@@ -73,9 +73,22 @@ export function contextTokensFromChars(cc: ContextChars | undefined): number {
   )
 }
 
-// Compact token count: <1k raw, <1M as `123k` / `1.2k`, else `1.00M`.
+// Drop trailing zeros from a fixed-decimal string ("4.00" → "4", "720.10" → "720.1").
+// Guarded on the dot so an integer string ("1000") is never truncated.
+function trimZeros(s: string): string {
+  return s.includes('.') ? s.replace(/\.?0+$/, '') : s
+}
+
+// Compact token count, single source of truth for every token/turn readout.
+// Precision shrinks as the unit grows so the string stays ~4-5 chars:
+//   842 · 1.5k · 266k · 4M · 16.92M · 720.1M · 2.45B
+// The billion tier matters: an agentic day is millions of cache-read tokens, so a
+// 7d Activity total lands in the billions and `2446.1M` is unreadable.
 export function formatTokenCount(n: number): string {
-  if (n < 1000) return String(n)
-  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`
-  return `${(n / 1_000_000).toFixed(2)}M`
+  if (!Number.isFinite(n)) return '0'
+  const abs = Math.abs(n)
+  if (abs < 1000) return String(Math.round(n))
+  if (abs < 1_000_000) return `${trimZeros((n / 1000).toFixed(abs < 10_000 ? 1 : 0))}k`
+  if (abs < 1_000_000_000) return `${trimZeros((n / 1_000_000).toFixed(abs < 10_000_000 ? 2 : 1))}M`
+  return `${trimZeros((n / 1_000_000_000).toFixed(2))}B`
 }

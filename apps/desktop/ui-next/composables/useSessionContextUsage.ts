@@ -41,9 +41,6 @@ export function useSessionContextUsage(session: () => Session) {
   const { t } = useI18n()
   const { fmtUsd } = useSessionCost()
 
-  // Compact token formatter: 1.2k / 999.
-  const kfmt = (n: number): string => (n > 999 ? `${(n / 1000).toFixed(1)}k` : String(n))
-
   // Cumulative session cost (USD). undefined → no priced turn yet.
   const sessionCost = computed(() => session().usage?.cost)
   const model = computed(() => session().model)
@@ -162,7 +159,6 @@ export function useSessionContextUsage(session: () => Session) {
   )
 
   return {
-    kfmt,
     fmtUsd,
     sessionCost,
     model,

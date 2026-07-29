@@ -12,6 +12,7 @@ import { computed, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useAccounts } from '~/composables/useAccounts'
 import { useProjects } from '~/composables/useProjects'
+import { formatTokenCount } from '~/utils/context-window'
 
 // Time range selector value — mirrors the sidecar contract.
 export type ActivityRange = '1d' | '7d' | '30d' | '90d' | 'all'
@@ -49,6 +50,16 @@ export type ActivityByAccount = {
   turns: number
 }
 
+// One active day inside a session's row — re-priced with the page's catalog and
+// filters, so the expanded days sum to the collapsed row (a session's own Cost
+// tab prices from persisted per-turn cost instead; the two can differ).
+export type ActivitySessionDay = {
+  date: string
+  totalTokens: number
+  costUsd: number
+  turns: number
+}
+
 export type ActivityBySession = {
   sessionId: string
   title: string
@@ -63,6 +74,7 @@ export type ActivityBySession = {
   costUsd: number
   turns: number
   lastAt: string
+  byDay: ActivitySessionDay[]
 }
 
 export type ActivityByDay = {
@@ -115,13 +127,10 @@ function summaryCacheKey(range: ActivityRange, accountId: string, projectId: str
 
 // ── Compact + currency formatting (module-level pure helpers) ──
 
-// Compact token formatting: 2_400_000 → "2.4M", 14_000 → "14k", 720 → "720".
+// Compact token formatting: 2_400_000_000 → "2.4B", 2_400_000 → "2.4M", 720 → "720".
+// Same rule as the session surfaces — one formatter, one source of truth.
 export function formatTokens(n: number): string {
-  if (!Number.isFinite(n)) return '0'
-  const abs = Math.abs(n)
-  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
-  if (abs >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`
-  return String(Math.round(n))
+  return formatTokenCount(n)
 }
 
 // USD cost: small amounts keep 4 decimals ($0.0021), larger keep 2 ($12.34).
@@ -174,6 +183,18 @@ function mockSummary(range: ActivityRange): ActivitySummary {
   const totalTokens = byDay.reduce((s, d) => s + d.totalTokens, 0)
   const costUsd = Number(byDay.reduce((s, d) => s + d.costUsd, 0).toFixed(4))
   const turns = dayCount * 18
+  // Spread a mock session's totals over the last `days` buckets so the row
+  // drill-down renders off-shell too.
+  const mockDays = (tok: number, cost: number, t: number, days: number): ActivitySessionDay[] => {
+    const picked = byDay.slice(-Math.min(days, byDay.length))
+    const n = Math.max(picked.length, 1)
+    return picked.map((d) => ({
+      date: d.date,
+      totalTokens: Math.round(tok / n),
+      costUsd: Number((cost / n).toFixed(4)),
+      turns: Math.round(t / n),
+    }))
+  }
   return {
     range,
     from: byDay[0]?.date ?? today.toISOString(),
@@ -243,6 +264,12 @@ function mockSummary(range: ActivityRange): ActivitySummary {
         costUsd: Number((costUsd * 0.38).toFixed(4)),
         turns: Math.round(turns * 0.34),
         lastAt: byDay[byDay.length - 1]?.date ?? today.toISOString(),
+        byDay: mockDays(
+          Math.round(totalTokens * 0.35),
+          costUsd * 0.38,
+          Math.round(turns * 0.34),
+          3,
+        ),
       },
       {
         sessionId: 'mock-s2',
@@ -257,6 +284,12 @@ function mockSummary(range: ActivityRange): ActivitySummary {
         costUsd: Number((costUsd * 0.26).toFixed(4)),
         turns: Math.round(turns * 0.28),
         lastAt: byDay[byDay.length - 2]?.date ?? today.toISOString(),
+        byDay: mockDays(
+          Math.round(totalTokens * 0.24),
+          costUsd * 0.26,
+          Math.round(turns * 0.28),
+          2,
+        ),
       },
       {
         sessionId: 'mock-s3',
@@ -271,6 +304,12 @@ function mockSummary(range: ActivityRange): ActivitySummary {
         costUsd: Number((costUsd * 0.08).toFixed(4)),
         turns: Math.round(turns * 0.12),
         lastAt: byDay[0]?.date ?? today.toISOString(),
+        byDay: mockDays(
+          Math.round(totalTokens * 0.09),
+          costUsd * 0.08,
+          Math.round(turns * 0.12),
+          1,
+        ),
       },
     ],
     byDay,
@@ -347,6 +386,17 @@ function normalize(raw: unknown, range: ActivityRange): ActivitySummary {
           costUsd: num(x.costUsd),
           turns: num(x.turns),
           lastAt: str(x.lastAt),
+          byDay: Array.isArray(x.byDay)
+            ? (x.byDay as unknown[]).map((d) => {
+                const y = (d ?? {}) as Record<string, unknown>
+                return {
+                  date: str(y.date),
+                  totalTokens: num(y.totalTokens),
+                  costUsd: num(y.costUsd),
+                  turns: num(y.turns),
+                }
+              })
+            : [],
         }
       })
     : []
@@ -387,6 +437,8 @@ export function useActivity() {
   const projectId = ref<string>(PROJECT_ALL)
   // By-session table sort: most-used (default) or least-used.
   const sessionSort = ref<SessionSort>('most')
+  // Session ids whose per-day drill-down is open in the by-session table.
+  const expandedSessions = ref(new Set<string>())
   const summary = ref<ActivitySummary>(sc.available ? emptySummary(range.value) : mockSummary('7d'))
   const loading = ref(false)
   // True only until the very first summary lands. The cards show "…" during this
@@ -498,6 +550,17 @@ export function useActivity() {
   // load), and warm the other ranges whenever the filter combo changes.
   watch([range, accountId, projectId], () => void fetchSummary(), { immediate: true })
   watch([accountId, projectId], () => void prefetchAll(), { immediate: true })
+  // A new window/filter means new rows — an open drill-down would otherwise show
+  // days that no longer belong to the row above it.
+  watch([range, accountId, projectId], () => expandedSessions.value.clear())
+
+  // Toggle a session's per-day drill-down (by-session table).
+  function toggleSessionDays(sessionId: string): void {
+    const open = expandedSessions.value
+    if (open.has(sessionId)) open.delete(sessionId)
+    else open.add(sessionId)
+  }
+  const isSessionExpanded = (sessionId: string): boolean => expandedSessions.value.has(sessionId)
 
   // ── Derived view ──
 
@@ -581,6 +644,8 @@ export function useActivity() {
     isEmpty,
     // actions
     fetchSummary,
+    isSessionExpanded,
+    toggleSessionDays,
     // formatters (re-exported for the template)
     formatTokens,
     formatCost,

@@ -206,29 +206,66 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="s in bySession" :key="s.sessionId">
-            <td class="tl">
-              <span
-                class="actseshttl actseshlink"
-                role="button"
-                tabindex="0"
-                :title="s.title"
-                @click="goToSession(s.sessionId)"
-                @keydown.enter="goToSession(s.sessionId)"
-              >
-                {{ s.title }}
-              </span>
-            </td>
-            <td class="tl">
-              <div class="actmdl">
-                <span class="mono">{{ s.model || '—' }}</span>
-                <span v-if="s.provider" class="tag">{{ s.provider }}</span>
-              </div>
-            </td>
-            <td class="tr mono">{{ formatTokens(s.totalTokens) }}</td>
-            <td class="tr mono">{{ formatTokens(s.turns) }}</td>
-            <td class="tr mono" style="color: var(--accent)">{{ formatCost(s.costUsd) }}</td>
-          </tr>
+          <template v-for="s in bySession" :key="s.sessionId">
+            <tr>
+              <td class="tl">
+                <div class="actsesnm">
+                  <button
+                    class="actsesx"
+                    :class="{ open: isSessionExpanded(s.sessionId) }"
+                    :disabled="!s.byDay.length"
+                    :aria-expanded="isSessionExpanded(s.sessionId)"
+                    :title="t('activity.bySession.days.toggle')"
+                    @click="toggleSessionDays(s.sessionId)"
+                  >
+                    <Icon name="chev" style="width: 12px; height: 12px" />
+                  </button>
+                  <span
+                    class="actseshttl actseshlink"
+                    role="button"
+                    tabindex="0"
+                    :title="s.title"
+                    @click="goToSession(s.sessionId)"
+                    @keydown.enter="goToSession(s.sessionId)"
+                  >
+                    {{ s.title }}
+                  </span>
+                </div>
+              </td>
+              <td class="tl">
+                <div class="actmdl">
+                  <span class="mono">{{ s.model || '—' }}</span>
+                  <span v-if="s.provider" class="tag">{{ s.provider }}</span>
+                </div>
+              </td>
+              <td class="tr mono">{{ formatTokens(s.totalTokens) }}</td>
+              <td class="tr mono">{{ formatTokens(s.turns) }}</td>
+              <td class="tr mono" style="color: var(--accent)">{{ formatCost(s.costUsd) }}</td>
+            </tr>
+            <!-- Drill-down: this session's spend split by day, newest first. Same
+                 pricing + filters as the row above, so the days sum to it. -->
+            <tr v-if="isSessionExpanded(s.sessionId)" class="actdaysrow">
+              <td colspan="5">
+                <div class="actdays">
+                  <div v-for="d in sessionDays(s)" :key="d.date" class="actday">
+                    <span class="actdaydate mono">{{ d.date }}</span>
+                    <span class="actdaybar">
+                      <i :style="{ width: `${dayPct(s, d.costUsd)}%` }" />
+                    </span>
+                    <span class="actdaymeta mono">
+                      {{
+                        t('activity.bySession.days.meta', {
+                          tokens: formatTokens(d.totalTokens),
+                          turns: d.turns,
+                        })
+                      }}
+                    </span>
+                    <span class="actdaycost mono">{{ formatCost(d.costUsd) }}</span>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -252,7 +289,7 @@
 // auto-import (components/common/AppSelect.vue). Rendered inside ActivityModal —
 // the modal body owns scrolling; this view is just the content.
 import { computed } from 'vue'
-import type { SessionSort } from '~/composables/useActivity'
+import type { ActivityBySession, SessionSort } from '~/composables/useActivity'
 import { ACTIVITY_RANGES, useActivity } from '~/composables/useActivity'
 
 // By-session sort options (most-used first / least-used first).
@@ -287,9 +324,24 @@ const {
   bySession,
   missingPriceSet,
   hasMissingPrices,
+  isSessionExpanded,
+  toggleSessionDays,
   formatTokens,
   formatCost,
 } = useActivity()
+
+// Drill-down rows newest first (byDay arrives oldest → newest), mirroring the
+// session's own Cost tab.
+const sessionDays = (s: ActivityBySession) => [...s.byDay].reverse()
+
+// Day bar width as % of this session's own peak day (min 3% so a cheap-but-
+// non-zero day is still visible). Scoped per session, not to the page total —
+// the point is the shape of one session's spend over time.
+function dayPct(s: ActivityBySession, costUsd: number): number {
+  const peak = s.byDay.reduce((m, d) => Math.max(m, d.costUsd), 0)
+  if (peak <= 0) return 0
+  return Math.max(3, Math.round((costUsd / peak) * 100))
+}
 
 // AppSelect options: localized "All accounts" + each account's display label.
 const accountSelectOptions = computed(() =>
@@ -517,5 +569,91 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .actseshlink:hover {
   color: var(--accent);
   text-decoration: underline;
+}
+/* Session name cell: expander + title. */
+.actsesnm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.actsesx {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--textFaint);
+  cursor: pointer;
+  /* Collapsed = pointing right; the sprite's chev points down. */
+  transform: rotate(-90deg);
+  transition:
+    transform 0.15s ease,
+    color 0.12s ease;
+}
+.actsesx.open {
+  transform: rotate(0deg);
+  color: var(--textDim);
+}
+.actsesx:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bgHover);
+}
+.actsesx:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+/* Per-day drill-down under a session row. */
+.actdaysrow > td {
+  padding: 0 14px 10px 38px;
+  background: var(--bgHover);
+}
+.actdays {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.actday {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+.actdaydate {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--textDim);
+}
+.actdaybar {
+  flex: 1 1 auto;
+  min-width: 40px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bgActive);
+  overflow: hidden;
+}
+.actdaybar > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.actdaymeta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--textFaint);
+}
+.actdaycost {
+  flex: 0 0 auto;
+  min-width: 64px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 </style>

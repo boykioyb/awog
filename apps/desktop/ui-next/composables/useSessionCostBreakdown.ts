@@ -64,8 +64,6 @@ export function useSessionCostBreakdown(session: () => Session) {
   const customFrom = ref('')
   const customTo = ref('')
 
-  // Compact token formatter: 1.2k / 999.
-  const kfmt = (n: number): string => (n > 999 ? `${(n / 1000).toFixed(1)}k` : String(n))
   // USD formatter — sub-cent turns shouldn't read $0.00 (mirrors useSessionCost).
   function fmtUsd(n: number | undefined): string {
     if (n == null) return '—'
@@ -164,7 +162,6 @@ export function useSessionCostBreakdown(session: () => Session) {
     firstDay,
     lastDay,
     maxDayCost,
-    kfmt,
     fmtUsd,
     refresh: fetchBreakdown,
   }

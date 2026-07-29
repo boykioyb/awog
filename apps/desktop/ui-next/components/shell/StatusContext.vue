@@ -45,7 +45,7 @@
             <div v-for="row in catRows" :key="row.key" class="catrow">
               <span class="catsq" :style="{ background: row.color }" />
               <span class="catlbl">{{ row.label }}</span>
-              <span class="catnum">{{ kfmt(row.tokens) }}</span>
+              <span class="catnum">{{ formatTokenCount(row.tokens) }}</span>
               <span class="catpct">{{ row.pct < 0.05 ? '0%' : `${row.pct.toFixed(1)}%` }}</span>
             </div>
           </div>
@@ -65,7 +65,7 @@
             <div v-if="memoryFilesOpen" class="ctxitems">
               <div v-for="it in memoryFilesList" :key="it.label" class="ctxitem">
                 <span class="ctxipath">{{ it.label }}</span>
-                <span class="ctxinum">{{ kfmt(it.tokens) }}</span>
+                <span class="ctxinum">{{ formatTokenCount(it.tokens) }}</span>
               </div>
             </div>
           </div>
@@ -83,7 +83,7 @@
             <div v-if="agentsOpen" class="ctxitems">
               <div v-for="it in agentsList" :key="it.label" class="ctxitem">
                 <span class="ctxipath">{{ it.label }}</span>
-                <span class="ctxinum">{{ kfmt(it.tokens) }}</span>
+                <span class="ctxinum">{{ formatTokenCount(it.tokens) }}</span>
               </div>
             </div>
           </div>
@@ -119,13 +119,13 @@
 import { computed, ref } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
 import { pushActionToast } from '~/composables/useActionToasts'
+import { formatTokenCount } from '~/utils/context-window'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
 const store = useSessionsStore()
 
 const {
-  kfmt,
   fmtUsd,
   sessionCost,
   model,

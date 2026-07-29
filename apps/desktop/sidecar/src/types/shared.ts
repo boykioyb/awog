@@ -1399,6 +1399,17 @@ export interface ActivityByDay {
   costUsd: number
 }
 
+// One local day of a single session's spend INSIDE the Activity window. Unlike
+// SessionCostDay (below) this is re-priced from the current catalog and honours
+// the page's account/project filters, so an expanded row always sums to its
+// parent row — the two must not be mixed in one view.
+export interface ActivitySessionDay {
+  date: string
+  totalTokens: number
+  costUsd: number
+  turns: number
+}
+
 // Per-session usage rollup for the range (Sessions only — tasks are grouped
 // separately). `model`/`provider` are the session's dominant model (most tokens).
 export interface ActivityBySession {
@@ -1417,6 +1428,9 @@ export interface ActivityBySession {
   turns: number
   // ISO of the session's most recent counted turn in range.
   lastAt: string
+  // Per-day split of the row above, oldest → newest, active days only (a day the
+  // session did not run is absent, not a zero row).
+  byDay: ActivitySessionDay[]
 }
 
 export interface ActivitySummary {

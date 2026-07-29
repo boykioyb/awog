@@ -4,7 +4,7 @@ import { loadSettings } from '../settings/store.js'
 import { loadCredentials } from '../credentials/store.js'
 import { cost, getEffectivePricing, parsePricingOverrides } from '../pricing/catalog.js'
 import { loadRemotePricingMap } from '../pricing/remote.js'
-import { parseBucketKey, rangeToWindow, rollupRange } from '../usage/rollup.js'
+import { localDayKey, parseBucketKey, rangeToWindow, rollupRange } from '../usage/rollup.js'
 import type { UsageBucket } from '../usage/rollup.js'
 import { collectSessionTurnsSince, listSessionSummaries } from '../sessions/store.js'
 import type {
@@ -12,6 +12,7 @@ import type {
   ActivityByDay,
   ActivityByModel,
   ActivityBySession,
+  ActivitySessionDay,
   ActivitySummary,
   ActivityTotals,
   ProviderName,
@@ -67,6 +68,8 @@ interface SessionAcc {
   lastAt: number
   // model id → tokens (to pick the session's dominant model) + its provider.
   models: Map<string, { tokens: number; provider: string }>
+  // local day key → that day's slice of this session (drill-down in the UI).
+  days: Map<string, ActivitySessionDay>
 }
 
 // Build the per-session usage breakdown for the window (Sessions only). Reads
@@ -128,6 +131,7 @@ async function buildBySession(
         turns: 0,
         lastAt: 0,
         models: new Map(),
+        days: new Map(),
       }
       bySessionMap.set(t.sessionId, acc)
     }
@@ -142,6 +146,17 @@ async function buildBySession(
     const m = acc.models.get(t.model)
     if (m) m.tokens += tokens
     else acc.models.set(t.model, { tokens, provider: t.provider })
+    // Per-day slice — same day key + same per-turn price as the row total, so
+    // the expanded days always add up to the collapsed row.
+    const dayKey = localDayKey(t.at)
+    const day = acc.days.get(dayKey)
+    if (day) {
+      day.totalTokens += tokens
+      day.costUsd += lineCost
+      day.turns += 1
+    } else {
+      acc.days.set(dayKey, { date: dayKey, totalTokens: tokens, costUsd: lineCost, turns: 1 })
+    }
   }
 
   const out: ActivityBySession[] = [...bySessionMap.values()].map((acc) => {
@@ -171,6 +186,7 @@ async function buildBySession(
       costUsd: acc.costUsd,
       turns: acc.turns,
       lastAt: new Date(acc.lastAt).toISOString(),
+      byDay: [...acc.days.values()].sort((a, b) => a.date.localeCompare(b.date)),
     }
   })
   // Default order: most tokens first (UI can re-sort).

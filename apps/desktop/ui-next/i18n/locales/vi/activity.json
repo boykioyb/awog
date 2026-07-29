@@ -54,6 +54,8 @@
   "activity.bySession.col.total": "Tổng token",
   "activity.bySession.col.turns": "Lượt",
   "activity.bySession.col.cost": "Chi phí",
+  "activity.bySession.days.toggle": "Xem chi tiết theo ngày",
+  "activity.bySession.days.meta": "{tokens} token · {turns} lượt",
 
   "activity.rateLimit.title": "Giới hạn theo nhà cung cấp",
   "activity.rateLimit.empty": "Không có tài khoản nào có dữ liệu usage (Anthropic subscription hoặc OpenAI Codex).",

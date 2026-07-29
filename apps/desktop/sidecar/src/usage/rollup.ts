@@ -81,7 +81,9 @@ function isMissing(err: unknown): boolean {
 // ─── Local-day helpers ───────────────────────────────────────────────────────
 // new Date() chạy theo timezone máy (OK cho sidecar). Day key = local YYYY-MM-DD.
 
-function localDayKey(ms: number): string {
+// Exported: every Activity surface that buckets by day MUST use this one, or a
+// per-session split stops summing to the daily rollup at midnight boundaries.
+export function localDayKey(ms: number): string {
   const d = new Date(ms)
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')

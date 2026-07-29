@@ -180,6 +180,7 @@
 import type { Session } from '~/composables/useSessionsData'
 import type { SessionContextFile } from '~/composables/useSessionContextFiles'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
+import { formatTokenCount } from '~/utils/context-window'
 import type { WorkspaceDockSide } from '~/stores/settings'
 
 const props = withDefaults(
@@ -294,7 +295,6 @@ function pickDock(side: WorkspaceDockSide) {
   dockMenuOpen.value = false
 }
 
-const kfmt = (n: number): string => (n > 999 ? `${(n / 1000).toFixed(1)}k` : String(n))
 const totalTok = computed(() => {
   const chars = props.session.msgs.reduce((a, m) => {
     if (m.role === 'assistant') {
@@ -333,7 +333,7 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
     { k: t('sessions.info.style'), v: s.style || 'Normal' },
     { k: t('sessions.info.mode'), v: s.mode || 'Ask' },
     { k: t('sessions.info.messages'), v: String(s.msgs.length) },
-    { k: t('sessions.info.tokens'), v: `${kfmt(totalTok.value)} / 200k` },
+    { k: t('sessions.info.tokens'), v: `${formatTokenCount(totalTok.value)} / 200k` },
     { k: t('sessions.info.updated'), v: s.when },
   ]
   // Cost has its own dedicated Cost tab (per-day + 1d/7d/30d/custom-range roll-up);

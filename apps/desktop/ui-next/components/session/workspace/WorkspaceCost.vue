@@ -56,7 +56,7 @@
         <div class="wscost-sub">
           {{
             t('sessions.workspace.cost.tokens', {
-              tokens: kfmt(rangeTotal.totalTokens),
+              tokens: formatTokenCount(rangeTotal.totalTokens),
               turns: rangeTotal.turns,
             })
           }}
@@ -109,6 +109,7 @@
 // useSessionCostBreakdown; this owns only presentation.
 import type { Session } from '~/composables/useSessionsData'
 import type { CostDay, CostRange } from '~/composables/useSessionCostBreakdown'
+import { formatTokenCount } from '~/utils/context-window'
 
 const props = defineProps<{ session: Session }>()
 
@@ -130,7 +131,6 @@ const {
   firstDay,
   lastDay,
   maxDayCost,
-  kfmt,
   fmtUsd,
   refresh,
 } = useSessionCostBreakdown(() => props.session)
@@ -153,7 +153,7 @@ const spanLabel = computed(() => {
 })
 
 const dayTitle = (d: CostDay): string =>
-  `${d.date} · ${fmtUsd(d.costUsd)} · ${kfmt(d.totalTokens)} tokens · ${d.turns} turns`
+  `${d.date} · ${fmtUsd(d.costUsd)} · ${formatTokenCount(d.totalTokens)} tokens · ${d.turns} turns`
 </script>
 
 <style scoped>
@@ -170,19 +170,31 @@ const dayTitle = (d: CostDay): string =>
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 /* Segmented control — transparent track, active pill = accent tint (not a gray
-   fill), per the AWOG surface-fill guidance. */
+   fill), per the AWOG surface-fill guidance.
+   The panel is narrow (322px by default) and the font size is user-scalable, so the
+   track scrolls sideways instead of squeezing the buttons until their labels wrap. */
 .wscost-seg {
-  display: inline-flex;
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.wscost-seg::-webkit-scrollbar {
+  display: none;
 }
 .wscost-segbtn {
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-weight: 500;
-  padding: 3px 10px;
+  padding: 3px 8px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -205,6 +217,7 @@ const dayTitle = (d: CostDay): string =>
 }
 .wscost-refresh {
   margin-left: auto;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -234,9 +247,13 @@ const dayTitle = (d: CostDay): string =>
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 132px;
+  min-width: 0;
   color: var(--textDim);
 }
 .wscost-datef input {
+  flex: 1 1 auto;
+  min-width: 0;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: 6px;

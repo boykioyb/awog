@@ -207,6 +207,36 @@ type ActivitySummaryResult = {
 - **`costUsd`** tính **tại query-time** từ token thô (rollup) × giá hiệu lực — đổi giá KHÔNG cần rebuild rollup.
 - **`missingPrices`** = các `modelId` (có tên thật) xuất hiện trong range mà `pricing.prices[modelId]` không có.
 
+### `bySession[]` + drill-down chi phí theo ngày
+
+> Bảng by-session được thêm sau bản spec gốc ở trên; shape thực tế là **field
+> phẳng** (`totalTokens`, `costUsd`, `turns`… không bọc trong `totals`) — đọc
+> [`ActivityBySession`](../../apps/desktop/sidecar/src/types/shared.ts) làm chuẩn.
+
+Mỗi hàng session mang thêm `byDay` để UI mở rộng xem chi phí **từng ngày** của
+riêng phiên đó (tương tự tab Cost trong session):
+
+```ts
+type ActivitySessionDay = {
+  date: string // local YYYY-MM-DD, cùng day key với rollup
+  totalTokens: number
+  costUsd: number
+  turns: number
+}
+```
+
+- **Chỉ ngày có hoạt động.** Ngày phiên không chạy thì vắng mặt, không phải row 0
+  (khác `byDay` cấp trang — cái đó cần liền mạch để vẽ chart).
+- **Bất biến cộng dồn:** `Σ byDay[].{costUsd, totalTokens, turns}` = đúng field
+  của hàng cha. Cùng một `lineCost` per-turn được cộng vào cả hai, nên filter
+  account/dự án áp cho hàng cha cũng áp cho ngày.
+- **Tính lại giá tại query-time** như phần còn lại của trang — **khác** với
+  `sessions.costBreakdown` (tab Cost trong session) vốn cộng `usage.costUsd` đã
+  persist lúc chạy. Hai con số có thể lệch khi giá catalog đổi; **không trộn hai
+  nguồn trong cùng một view**.
+- Nguồn quét là `collectSessionTurnsSince` (tail-first theo cửa sổ), KHÔNG dùng
+  rollup ngày đã freeze — rollup cố tình bỏ session id.
+
 ### Provider rate-limit panel — tái dùng `account.usage`
 
 - UI gọi [`account.usage({ provider, accountId?, force? })`](../../apps/desktop/sidecar/src/methods/account.usage.ts) cho provider/account đang quan tâm.
@@ -322,6 +352,19 @@ costUsd(total) = Σ costUsd(model)   // chỉ model có giá; model thiếu giá
 - **Given** history JSONL khổng lồ + range `all`
   **Then** request hoàn tất nhanh: ngày cũ đọc từ rollup cache (JSON nhỏ), chỉ "hôm nay" tail-read bounded; KHÔNG `JSON.parse` toàn transcript, KHÔNG OOM.
 - **Given** rollup cache **Then** mỗi ngày cũ tính tối đa 1 lần; "hôm nay" tính lại mỗi request (bounded).
+
+### AC-11 — Drill-down chi phí theo ngày của session
+
+- **Given** bảng "Theo phiên" có ít nhất một hàng
+  **When** bấm nút mũi tên đầu hàng
+  **Then** hàng mở ra danh sách ngày (mới nhất trước), mỗi ngày có: date, bar tỉ lệ theo **ngày đắt nhất của chính phiên đó**, tokens · số lượt, và cost.
+- **Given** một hàng đang mở
+  **Then** `Σ` cost/token/lượt của các ngày **bằng đúng** số ở hàng cha (và tổng các hàng bằng tổng trang).
+- **Given** đang mở drill-down
+  **When** đổi range / account / dự án
+  **Then** mọi hàng tự thu lại (dữ liệu cũ không dính vào cửa sổ mới).
+- **Given** phiên không có ngày nào trong cửa sổ (`byDay` rỗng)
+  **Then** nút mũi tên bị disable, không mở được hàng rỗng.
 
 ## Edge cases
 
