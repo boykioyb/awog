@@ -1,5 +1,7 @@
 // Response styles (ADR 0046). 21 built-in conversational styles the user can
-// pick per session. The chosen style's directive is appended to the agent system
+// pick per session, plus an `auto` meta-style (see AUTO_CANDIDATES below) that
+// lets the model self-select the fitting style each turn. The chosen style's
+// directive is appended to the agent system
 // prompt for the turn (augment, never replace — like rules/inject.ts), so it
 // changes only the TONE + FORMATTING of the prose, not technical correctness.
 //
@@ -58,6 +60,30 @@ const STYLE_DIRECTIVES: Record<string, string> = {
 const NO_MARKDOWN_DIRECTIVE =
   'Strip all markdown from your responses — no bold, no bullet points, no headers, no tables. Plain text only.'
 
+// The `auto` meta-style: instead of one fixed directive, the model picks the
+// single best-fitting style PER TURN from a curated menu. Only the "serious"
+// styles are offered — the "fun" personas (pirate/yoda/dad-joke/noir/speedrun/
+// corporate) and the gimmicky `caveman` are opt-in novelty and must never be
+// auto-applied to a real task. Order mirrors the UI catalog (fast group, then
+// deep group); directives are reused verbatim from STYLE_DIRECTIVES so there is
+// a single source of truth. Normal is the implicit fallback ("if none fits").
+export const AUTO_STYLE_ID = 'auto'
+const AUTO_CANDIDATES = [
+  'military',
+  'reality-check',
+  'step-by-step',
+  'socratic',
+  'bluf',
+  'checklist',
+  'code-first',
+  'rubber-duck',
+  'feynman',
+  'first-principles',
+  'devils-advocate',
+  'mentor',
+  'pair',
+] as const
+
 // Build the `<response-style>` block appended to the system prompt for a turn, or
 // undefined when no style and no modifier apply. Pure + synchronous (no disk):
 // styles are hardcoded, so the hot path costs a map lookup. An unknown styleId
@@ -66,8 +92,24 @@ export function buildStylePrompt(
   styleId: string | undefined,
   noMarkdown: boolean | undefined,
 ): string | undefined {
+  const noMdDirective = noMarkdown ? NO_MARKDOWN_DIRECTIVE : undefined
+
+  // Auto: the model self-selects the fitting style each turn from the curated
+  // menu. Directives are flattened to one line each for a scannable menu.
+  if (styleId === AUTO_STYLE_ID) {
+    const menu = AUTO_CANDIDATES.map(
+      (id) => `- [${id}] ${STYLE_DIRECTIVES[id].replace(/\s*\n\s*/g, ' ')}`,
+    ).join('\n')
+    return `<response-style>
+Adaptive style. For EACH of your responses in this conversation, silently pick the SINGLE style below that best fits the user's current message and the nature of the task, then answer in that style. Your choice may change from turn to turn as the task changes. Do NOT announce or label which style you picked — just answer in it. A style changes only the TONE and FORMATTING of your prose — never the technical correctness of your answer, and never the contents of code blocks (leave code exactly as it would otherwise be). It does not override any direct instruction in the current turn. If none clearly fits, answer normally: plain, direct, no forced persona.
+
+Styles to choose from:
+${menu}${noMdDirective ? `\n\n${noMdDirective}` : ''}
+</response-style>`
+  }
+
   const directive = styleId ? STYLE_DIRECTIVES[styleId] : undefined
-  const parts = [directive, noMarkdown ? NO_MARKDOWN_DIRECTIVE : undefined].filter(
+  const parts = [directive, noMdDirective].filter(
     (p): p is string => typeof p === 'string' && p.length > 0,
   )
   if (parts.length === 0) return undefined

@@ -23,7 +23,15 @@ const NO_THINK = new Set(['Haiku 4.5', 'GPT-4.1'])
 export type StyleRow = { id: string; slug: string; icon: string }
 export type StyleGroup = { key: string; rows: StyleRow[] }
 const RESPONSE_STYLES: StyleGroup[] = [
-  { key: 'default', rows: [{ id: 'Normal', slug: 'normal', icon: 'text' }] },
+  {
+    key: 'default',
+    rows: [
+      { id: 'Normal', slug: 'normal', icon: 'text' },
+      // Auto (ADR 0046): the model self-selects a serious style per turn — the
+      // sidecar resolves the 'auto' slug via buildStylePrompt (no fixed directive).
+      { id: 'Auto', slug: 'auto', icon: 'sparkles' },
+    ],
+  },
   {
     key: 'fast',
     rows: [
