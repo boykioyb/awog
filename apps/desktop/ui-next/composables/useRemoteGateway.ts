@@ -28,6 +28,8 @@ export function useRemoteGateway() {
 
   const connected = computed(() => status.value?.tailnet === 'connected')
   const host = computed(() => status.value?.host ?? '')
+  // Remote control is opt-in: until the user turns it on, main binds nothing.
+  const enabled = computed(() => status.value?.enabled === true)
 
   function errText(err: unknown): string {
     return err instanceof Error ? err.message : String(err)
@@ -41,6 +43,19 @@ export function useRemoteGateway() {
       devices.value = d
     } catch (err) {
       pushActionToast(t('settings.devices.loadFailed', { error: errText(err) }), 'error')
+    }
+  }
+
+  // Flip the gateway on/off. Main answers with the resulting status, so the panel
+  // reflects what actually happened (e.g. enabled but no tailnet yet). Turning it
+  // off also closes any open pairing — the code points at a host that is gone.
+  async function setEnabled(on: boolean): Promise<void> {
+    if (!gw) return
+    try {
+      status.value = await gw.setEnabled(on)
+      if (!on) pairing.value = null
+    } catch (err) {
+      pushActionToast(t('settings.devices.toggleFailed', { error: errText(err) }), 'error')
     }
   }
 
@@ -110,7 +125,9 @@ export function useRemoteGateway() {
     pairingBusy,
     connected,
     host,
+    enabled,
     refresh,
+    setEnabled,
     createPairing,
     closePairing,
     revokeDevice,

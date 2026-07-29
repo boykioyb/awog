@@ -4,6 +4,13 @@
   "settings.devices.title": "Thiết bị",
   "settings.devices.subtitle": "Ghép cặp điện thoại, máy tính bảng để điều khiển AWOG từ xa qua mạng Tailscale.",
 
+  "settings.devices.enable.name": "Điều khiển từ xa",
+  "settings.devices.enable.desc": "Cho phép thiết bị đã ghép kết nối tới máy này qua mạng Tailscale. Khi tắt, AWOG không mở cổng nào cả.",
+  "settings.devices.off": "Đang tắt",
+  "settings.devices.offTitle": "Điều khiển từ xa đang tắt",
+  "settings.devices.offHint": "Hiện không có gì lắng nghe trên mạng. Bật lên để ghép thiết bị và điều khiển phiên từ điện thoại; tắt lại sẽ ngắt mọi thiết bị đã ghép ngay lập tức.",
+  "settings.devices.toggleFailed": "Không đổi được trạng thái điều khiển từ xa: {error}",
+
   "settings.devices.tailnetConnected": "Đã kết nối Tailscale",
   "settings.devices.disconnected": "Chưa kết nối",
   "settings.devices.tailnetDisconnected": "Chưa thấy Tailscale — remote control tắt",

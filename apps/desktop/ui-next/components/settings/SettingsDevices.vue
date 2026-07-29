@@ -5,19 +5,25 @@
       :subtitle="t('settings.devices.subtitle')"
     />
 
+    <!-- Master switch — nothing listens on the network until this is on. -->
+    <SettingsField
+      :name="t('settings.devices.enable.name')"
+      :desc="t('settings.devices.enable.desc')"
+    >
+      <SettingsTog v-model="remoteEnabled" />
+    </SettingsField>
+
     <!-- Tailnet status + pair CTA -->
     <div class="dev-status">
       <span class="dev-badge" :style="badgeStyle">
         <span class="dev-dot" :style="{ background: dotColor }" />
-        {{
-          connected ? t('settings.devices.tailnetConnected') : t('settings.devices.disconnected')
-        }}
+        {{ statusLabel }}
       </span>
-      <code v-if="connected && host" class="dev-host">{{ host }}</code>
+      <code v-if="enabled && connected && host" class="dev-host">{{ host }}</code>
       <span style="flex: 1" />
       <button
         class="btn pri sm"
-        :disabled="!connected || pairingBusy"
+        :disabled="!enabled || !connected || pairingBusy"
         :title="t('settings.devices.pairNew')"
         @click="createPairing"
       >
@@ -26,8 +32,17 @@
       </button>
     </div>
 
+    <!-- Off banner — informational, not a problem to fix. -->
+    <div v-if="!enabled" class="dev-banner off">
+      <Icon name="alert" style="width: 15px; height: 15px" class="dev-banner-icon" />
+      <div>
+        <div class="dev-banner-title">{{ t('settings.devices.offTitle') }}</div>
+        <div class="dev-banner-hint">{{ t('settings.devices.offHint') }}</div>
+      </div>
+    </div>
+
     <!-- Disconnected banner -->
-    <div v-if="!connected" class="dev-banner">
+    <div v-else-if="!connected" class="dev-banner">
       <Icon name="alert" style="width: 15px; height: 15px" class="dev-banner-icon" />
       <div>
         <div class="dev-banner-title">{{ t('settings.devices.tailnetDisconnected') }}</div>
@@ -36,7 +51,7 @@
     </div>
 
     <!-- Tailscale setup guide: expanded while disconnected, collapsible for reference once connected. -->
-    <details class="dev-guide" :open="!connected">
+    <details class="dev-guide" :open="enabled && !connected">
       <summary class="dev-guide-sum">{{ t('settings.devices.guide.title') }}</summary>
       <ol class="dev-guide-steps">
         <li>
@@ -59,7 +74,7 @@
       <div class="dev-empty-body">{{ t('settings.devices.empty.body') }}</div>
       <button
         class="btn pri sm"
-        :disabled="!connected || pairingBusy"
+        :disabled="!enabled || !connected || pairingBusy"
         :title="t('settings.devices.pairNew')"
         @click="createPairing"
       >
@@ -125,14 +140,32 @@ const {
   pairingBusy,
   connected,
   host,
+  enabled,
+  setEnabled,
   createPairing,
   closePairing,
   revokeDevice,
 } = useRemoteGateway()
 
-const dotColor = computed(() => (connected.value ? 'var(--green)' : 'var(--textFaint)'))
+// Truth lives in main (persisted + drives the listener), so the switch writes
+// through IPC and re-reads the returned status rather than holding local state.
+const remoteEnabled = computed<boolean>({
+  get: () => enabled.value,
+  set: (on) => void setEnabled(on),
+})
+
+// Three states, in order of what the user must act on: off (their choice) →
+// no tailnet (needs Tailscale) → live.
+const isLive = computed(() => enabled.value && connected.value)
+const statusLabel = computed(() => {
+  if (!enabled.value) return t('settings.devices.off')
+  return connected.value
+    ? t('settings.devices.tailnetConnected')
+    : t('settings.devices.disconnected')
+})
+const dotColor = computed(() => (isLive.value ? 'var(--green)' : 'var(--textFaint)'))
 const badgeStyle = computed(() =>
-  connected.value
+  isLive.value
     ? { color: 'var(--green)', background: 'var(--addBg)', borderColor: 'var(--addBg)' }
     : { color: 'var(--textDim)', background: 'var(--bgHover)', borderColor: 'var(--border)' },
 )
@@ -184,10 +217,18 @@ function platformLabel(platform: string): string {
   background: var(--amberDim);
   margin-bottom: 14px;
 }
+/* Remote control switched off is a state, not a fault — neutral, not amber. */
+.dev-banner.off {
+  border-color: var(--border);
+  background: var(--bgSubtle);
+}
 .dev-banner-icon {
   color: var(--amber);
   flex: 0 0 auto;
   margin-top: 1px;
+}
+.dev-banner.off .dev-banner-icon {
+  color: var(--textFaint);
 }
 .dev-banner-title {
   font-size: 1rem;

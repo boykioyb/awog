@@ -101,6 +101,7 @@ phone. Toàn bộ nghiệp vụ tái dùng RPC + event stream có sẵn (không 
 | Approve | Approve/Reject 3 gate: permission park (`sessions.permission`), plan mode (approve→execute), `AskUserQuestion` (`sessions.answer-question`). |
 | Resume | Reconnect resume stream qua con trỏ offset JSONL (ADR 0062/0024). |
 | Bind | Gateway bind **tailnet-only, fail-closed** (không thấy tailnet → không bind). |
+| Opt-in | Công tắc **Remote control** ở `Settings → Devices` — **mặc định TẮT**; tắt = không bind cổng nào dù tailnet đang lên. |
 
 ### Ngoài phạm vi lần này (không đặc tả ở đây)
 
@@ -121,6 +122,10 @@ phone. Toàn bộ nghiệp vụ tái dùng RPC + event stream có sẵn (không 
 
 ### Flow A — Pairing lần đầu (golden path)
 
+0. **[D]** User bật công tắc **Remote control** (mặc định TẮT). Trạng thái persist ở
+   `~/.awog/remote-devices.json` (`{ enabled, devices }`); chỉ khi bật, main mới dò
+   interface tailnet và bind. Tắt lại → `closeServer()` ngắt mọi socket đang mở ngay
+   (tương đương revoke-all tạm thời, device token vẫn giữ) và `createPairing` bị từ chối.
 1. **[D]** User mở `Settings → Devices`. Panel hiện **trạng thái tailnet**:
    - Nếu phát hiện interface tailnet → badge "Tailnet: connected" + IP tailnet của máy.
    - Nếu **không** phát hiện → banner fail-closed "Chưa thấy Tailscale — không thể ghép

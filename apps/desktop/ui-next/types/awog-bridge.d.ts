@@ -46,6 +46,9 @@ export type AwogRemoteDevice = {
   lastSeenAt?: string
 }
 export type AwogGatewayStatus = {
+  // User opt-in for remote control. False → main binds no port at all, however
+  // the tailnet reads below.
+  enabled: boolean
   tailnet: 'connected' | 'disconnected'
   host: string | null
   port: number
@@ -59,6 +62,9 @@ export type AwogPairingInfo = {
 }
 export interface AwogGatewayBridge {
   status(): Promise<AwogGatewayStatus>
+  // Turn remote control on/off; off closes every live connection at once.
+  // Resolves with the resulting status.
+  setEnabled(on: boolean): Promise<AwogGatewayStatus>
   listDevices(): Promise<AwogRemoteDevice[]>
   // Rejects when the tailnet is not connected — there is no reachable host to
   // pair against, so the UI must gate this behind a connected status.

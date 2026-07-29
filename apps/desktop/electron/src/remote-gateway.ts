@@ -46,6 +46,8 @@ type ConnState = {
 type DeviceBudget = { sends: number[] }
 
 type GatewayStatus = {
+  // User opt-in (persisted). False → nothing is listening, whatever the tailnet does.
+  enabled: boolean
   tailnet: 'connected' | 'disconnected'
   host: string | null
   port: number
@@ -127,6 +129,12 @@ class RemoteGateway {
   // --- bind (F5) -----------------------------------------------------------
 
   private bindIfPossible(): void {
+    // Opt-in gate: a network listener must never appear because Tailscale happens
+    // to be running — only because the user turned remote control on.
+    if (!this.store.isEnabled()) {
+      if (this.boundAddress !== null) this.closeServer()
+      return
+    }
     const addr = findTailnetAddress()
     if (!addr) {
       if (this.boundAddress !== null) {
@@ -439,12 +447,28 @@ class RemoteGateway {
   // --- renderer IPC (Settings → Devices) -----------------------------------
 
   private status(): GatewayStatus {
+    // Report the tailnet independently of the binding: while remote control is
+    // off nothing is bound, but the panel should still say whether Tailscale is
+    // up — otherwise enabling it looks broken.
+    const addr = this.boundAddress ?? findTailnetAddress()
     return {
-      tailnet: this.boundAddress ? 'connected' : 'disconnected',
-      host: this.boundAddress,
+      enabled: this.store.isEnabled(),
+      tailnet: addr ? 'connected' : 'disconnected',
+      host: addr,
       port: PORT,
       bound: this.wss !== null,
     }
+  }
+
+  // Turn remote control on/off. Off closes every live socket immediately — a
+  // revoke-all in one switch — and the poll below stops re-binding.
+  private async setEnabled(on: boolean): Promise<void> {
+    if (on === this.store.isEnabled()) return
+    await this.store.setEnabled(on)
+    log.info('remote-gateway enabled changed', { enabled: on })
+    if (on) this.bindIfPossible()
+    else this.closeServer()
+    this.emitStatus()
   }
 
   private emitStatus(): void {
@@ -457,8 +481,13 @@ class RemoteGateway {
 
   private registerIpc(): void {
     ipcMain.handle('gateway:status', () => this.status())
+    ipcMain.handle('gateway:setEnabled', async (_e, on: boolean) => {
+      await this.setEnabled(on === true)
+      return this.status()
+    })
     ipcMain.handle('gateway:listDevices', () => this.store.list())
     ipcMain.handle('gateway:createPairing', () => {
+      if (!this.store.isEnabled()) throw new Error('remote control is off')
       if (!this.boundAddress) throw new Error('tailnet not connected')
       const { code, expiresAt } = this.store.createPairing()
       return { code, expiresAt, host: this.boundAddress, port: PORT }

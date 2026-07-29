@@ -4,6 +4,13 @@
   "settings.devices.title": "Devices",
   "settings.devices.subtitle": "Pair phones and tablets to control AWOG remotely over your Tailscale network.",
 
+  "settings.devices.enable.name": "Remote control",
+  "settings.devices.enable.desc": "Let paired devices reach this machine over your Tailscale network. While this is off, AWOG opens no port at all.",
+  "settings.devices.off": "Off",
+  "settings.devices.offTitle": "Remote control is off",
+  "settings.devices.offHint": "Nothing is listening on the network. Turn it on to pair a device and control sessions from your phone; turning it back off disconnects every paired device immediately.",
+  "settings.devices.toggleFailed": "Could not change remote control: {error}",
+
   "settings.devices.tailnetConnected": "Tailscale connected",
   "settings.devices.disconnected": "Disconnected",
   "settings.devices.tailnetDisconnected": "Tailscale not detected — remote control is off",

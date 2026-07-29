@@ -21,6 +21,10 @@ export type RemoteDevice = {
 
 type StoredDevice = RemoteDevice & { tokenHash: string }
 
+// On-disk shape. `enabled` is the user's opt-in for the whole gateway — remote
+// control must never open a port unasked, so a missing/corrupt file reads as OFF.
+type StoreFile = { enabled: boolean; devices: StoredDevice[] }
+
 type Pairing = { code: string; expiresAt: number; used: boolean }
 
 const STORE_FILE = join(homedir(), '.awog', 'remote-devices.json')
@@ -53,6 +57,8 @@ function safeEqualHex(a: string, b: string): boolean {
 export class DeviceStore {
   private devices: StoredDevice[] = []
 
+  private enabled = false
+
   // One active pairing challenge at a time (the UI shows one QR/code). Regenerating
   // replaces it, invalidating the previous code.
   private pairing: Pairing | null = null
@@ -61,21 +67,42 @@ export class DeviceStore {
     try {
       const raw = await readFile(STORE_FILE, 'utf8')
       const parsed = JSON.parse(raw) as unknown
-      this.devices = Array.isArray(parsed) ? (parsed as StoredDevice[]) : []
+      // A bare array is the pre-toggle layout — read the devices, keep remote
+      // control OFF until the user opts in explicitly.
+      if (Array.isArray(parsed)) {
+        this.devices = parsed as StoredDevice[]
+        this.enabled = false
+        return
+      }
+      const file = (parsed ?? {}) as Partial<StoreFile>
+      this.devices = Array.isArray(file.devices) ? file.devices : []
+      this.enabled = file.enabled === true
     } catch {
-      this.devices = [] // missing/corrupt → start empty (fail-safe, not fail-open)
+      // missing/corrupt → start empty + disabled (fail-safe, not fail-open)
+      this.devices = []
+      this.enabled = false
     }
   }
 
   private async persist(): Promise<void> {
     try {
       await mkdir(join(homedir(), '.awog'), { recursive: true })
-      await writeFile(STORE_FILE, JSON.stringify(this.devices, null, 2), { mode: 0o600 })
+      const file: StoreFile = { enabled: this.enabled, devices: this.devices }
+      await writeFile(STORE_FILE, JSON.stringify(file, null, 2), { mode: 0o600 })
     } catch (err) {
       log.error('remote-devices persist failed', {
         message: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+
+  isEnabled(): boolean {
+    return this.enabled
+  }
+
+  async setEnabled(on: boolean): Promise<void> {
+    this.enabled = on
+    await this.persist()
   }
 
   // Public metadata only — tokenHash never leaves this module.

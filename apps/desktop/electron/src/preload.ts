@@ -41,6 +41,7 @@ type RemoteDevice = {
   lastSeenAt?: string
 }
 type GatewayStatus = {
+  enabled: boolean
   tailnet: 'connected' | 'disconnected'
   host: string | null
   port: number
@@ -146,6 +147,8 @@ const awog = {
   // in main. Device tokens never cross this bridge (only public metadata).
   gateway: {
     status: (): Promise<GatewayStatus> => ipcRenderer.invoke('gateway:status'),
+    setEnabled: (on: boolean): Promise<GatewayStatus> =>
+      ipcRenderer.invoke('gateway:setEnabled', on),
     listDevices: (): Promise<RemoteDevice[]> => ipcRenderer.invoke('gateway:listDevices'),
     createPairing: (): Promise<PairingInfo> => ipcRenderer.invoke('gateway:createPairing'),
     revokeDevice: (id: string): Promise<boolean> => ipcRenderer.invoke('gateway:revokeDevice', id),
