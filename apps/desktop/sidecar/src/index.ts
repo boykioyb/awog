@@ -4,6 +4,7 @@ import { log } from './util/logger.js'
 
 // Side-effect imports register methods into the RPC registry.
 import './methods/ping.js'
+import './methods/system.methods.js'
 import './methods/auth.start-oauth.js'
 import './methods/auth.complete-oauth.js'
 import './methods/auth.start-oauth-codex.js'

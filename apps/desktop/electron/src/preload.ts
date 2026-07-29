@@ -32,6 +32,21 @@ type TrayCommand =
   | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
 type TrayModel = { macTitle: string; tooltip: string; unreadCount: number }
+// Mobile Remote Control (ADR 0067). Public device metadata only — no tokenHash.
+type RemoteDevice = {
+  id: string
+  label: string
+  platform: string
+  pairedAt: string
+  lastSeenAt?: string
+}
+type GatewayStatus = {
+  tailnet: 'connected' | 'disconnected'
+  host: string | null
+  port: number
+  bound: boolean
+}
+type PairingInfo = { code: string; expiresAt: number; host: string; port: number }
 
 const awog = {
   // Returns the JSON-RPC result, or rejects with the RpcErrorShape so the
@@ -125,6 +140,25 @@ const awog = {
   // Popover window forwards a clicked item; main relays it to the main window.
   sendTrayCommand: (cmd: TrayCommand): void => {
     ipcRenderer.send('tray:navigate', cmd)
+  },
+
+  // Mobile Remote Control (ADR 0067) — Settings → Devices talks to the WS gateway
+  // in main. Device tokens never cross this bridge (only public metadata).
+  gateway: {
+    status: (): Promise<GatewayStatus> => ipcRenderer.invoke('gateway:status'),
+    listDevices: (): Promise<RemoteDevice[]> => ipcRenderer.invoke('gateway:listDevices'),
+    createPairing: (): Promise<PairingInfo> => ipcRenderer.invoke('gateway:createPairing'),
+    revokeDevice: (id: string): Promise<boolean> => ipcRenderer.invoke('gateway:revokeDevice', id),
+    onDevicesChanged(handler: (devices: RemoteDevice[]) => void): () => void {
+      const listener = (_e: unknown, devices: RemoteDevice[]): void => handler(devices)
+      ipcRenderer.on('gateway:devices-changed', listener)
+      return () => ipcRenderer.removeListener('gateway:devices-changed', listener)
+    },
+    onStatusChanged(handler: (status: GatewayStatus) => void): () => void {
+      const listener = (_e: unknown, status: GatewayStatus): void => handler(status)
+      ipcRenderer.on('gateway:status-changed', listener)
+      return () => ipcRenderer.removeListener('gateway:status-changed', listener)
+    },
   },
 }
 

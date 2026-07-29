@@ -1,0 +1,49 @@
+{
+  "settings.nav.devices": "Devices",
+
+  "settings.devices.title": "Devices",
+  "settings.devices.subtitle": "Pair phones and tablets to control AWOG remotely over your Tailscale network.",
+
+  "settings.devices.tailnetConnected": "Tailscale connected",
+  "settings.devices.disconnected": "Disconnected",
+  "settings.devices.tailnetDisconnected": "Tailscale not detected — remote control is off",
+  "settings.devices.installHint": "Install and sign in to Tailscale on this machine, then reopen this panel. Devices on the same tailnet will be able to pair.",
+
+  "settings.devices.guide.title": "How to set up Tailscale",
+  "settings.devices.guide.step1": "Install Tailscale on this machine and sign in:",
+  "settings.devices.guide.step2": "Install the Tailscale app on your phone (App Store / Google Play) and sign in with the same account.",
+  "settings.devices.guide.step3": "Make sure both devices show \"Connected\" in Tailscale (same tailnet).",
+  "settings.devices.guide.step4": "Come back here — the badge turns to \"Tailscale connected\". Tap \"Pair new device\" and scan the QR with your phone.",
+  "settings.devices.guide.tip": "Your phone doesn't need the same Wi-Fi — Tailscale connects it even over cellular (4G/5G).",
+
+  "settings.devices.pairNew": "Pair new device",
+  "settings.devices.scanHint": "Scan this QR code with your device, or enter the code below manually.",
+  "settings.devices.codeFallback": "Manual code",
+  "settings.devices.expiresIn": "Expires in {time}",
+  "settings.devices.regenerate": "Generate new code",
+
+  "settings.devices.pair.title": "Pair a device",
+  "settings.devices.pair.expired": "This code has expired",
+
+  "settings.devices.revoke": "Revoke",
+  "settings.devices.revoked": "Revoked \"{label}\"",
+  "settings.devices.revokeFailed": "Could not revoke device: {error}",
+  "settings.devices.confirmRevoke.title": "Revoke device",
+  "settings.devices.confirmRevoke.body": "\"{label}\" will lose access immediately and must pair again to reconnect.",
+
+  "settings.devices.pairFailed": "Could not create a pairing code: {error}",
+  "settings.devices.loadFailed": "Could not load devices: {error}",
+
+  "settings.devices.pairedAt": "Paired {when}",
+  "settings.devices.lastSeen": "Last seen {when}",
+
+  "settings.devices.empty.title": "No devices paired yet",
+  "settings.devices.empty.body": "Pair a phone or tablet to drive AWOG sessions from anywhere on your tailnet.",
+
+  "settings.devices.platform.ios": "iOS",
+  "settings.devices.platform.android": "Android",
+  "settings.devices.platform.macos": "macOS",
+  "settings.devices.platform.windows": "Windows",
+  "settings.devices.platform.linux": "Linux",
+  "settings.devices.platform.web": "Web"
+}

@@ -38,6 +38,9 @@ function run(cmd, args, cwd, { optional = false } = {}) {
 run('pnpm', ['--filter', 'awog-ui-next', 'generate'], repoRoot)
 // 2. Engine bundle
 run('pnpm', ['--filter', '@awog/sidecar', 'build'], repoRoot)
+// 2.5 Mobile Remote Control PWA (ADR 0067) → ../remote-pwa/dist, shipped as the
+//     `remote-pwa` extraResource and served by the Remote Gateway over the tailnet.
+run('pnpm', ['--filter', '@awog/remote-pwa', 'build'], repoRoot)
 // 3. node-pty → Electron ABI (engine bundle lives at ../sidecar/dist).
 //    Optional: engine.ts loads node-pty lazily with a graceful fallback, so a
 //    rebuild failure only disables the terminal panel — it must not abort a release.

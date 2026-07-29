@@ -35,6 +35,16 @@ export function preloadPath(): string {
   return join(__dirname, 'preload.js')
 }
 
+// Static assets of the Mobile Remote Control PWA (ADR 0067, Wave 3). Served by the
+// Remote Gateway over HTTP on the tailnet interface. Dev: the separate remote-pwa
+// package's Vite `dist/`. Packaged: shipped as an extraResource `remote-pwa/`.
+export function remotePwaDir(): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'remote-pwa')
+  }
+  return join(__dirname, '..', '..', 'remote-pwa', 'dist')
+}
+
 // Bundled openvpn binary shipped as an extraResource so users don't have to install
 // it themselves (VPN Manager, ADR 0065). Populated per platform+arch by
 // scripts/vendor-openvpn.mjs into vendor/openvpn/<platform>-<arch>/. Returns the

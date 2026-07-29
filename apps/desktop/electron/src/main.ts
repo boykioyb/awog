@@ -5,6 +5,7 @@ import { registerIpc } from './ipc'
 import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
 import { loadShellEnv } from './shell-env'
 import { registerMediaProtocol } from './media'
+import { startRemoteGateway, stopRemoteGateway } from './remote-gateway'
 import { trayPopover } from './popover'
 import { setupTray, updateTray, type TrayCommand, type TrayModel } from './tray'
 import { setupUpdater } from './updater'
@@ -94,6 +95,9 @@ if (!gotLock) {
     // media:// stream protocol for in-app video/audio preview (must run post-ready).
     registerMediaProtocol()
     registerIpc(getWindow)
+    // Mobile Remote Control (ADR 0067): WS gateway bound to the tailnet only.
+    // Fail-closed — a no-op when Tailscale isn't up.
+    startRemoteGateway(getWindow)
     setupUpdater(getWindow)
     registerLogTailIpc(getWindow)
     openMainWindow()
@@ -112,6 +116,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     browser.close()
+    stopRemoteGateway()
     engine.stop()
   })
 }

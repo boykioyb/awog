@@ -53,6 +53,10 @@
         <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
         <path d="M7 9l3 3-3 3M13 15h4" />
       </symbol>
+      <symbol id="i-smartphone" viewBox="0 0 24 24">
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+        <path d="M12 18h.01" />
+      </symbol>
       <symbol id="i-hooks" viewBox="0 0 24 24">
         <path d="M13 2L4.5 12.5a1 1 0 0 0 .8 1.5H11l-1 8 8.5-10.5a1 1 0 0 0-.8-1.5H12z" />
       </symbol>

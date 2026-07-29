@@ -2,6 +2,7 @@ packages:
   - apps/desktop/ui-next
   - apps/desktop/sidecar
   - apps/desktop/electron
+  - apps/desktop/remote-pwa
 
 allowBuilds:
   '@parcel/watcher': true

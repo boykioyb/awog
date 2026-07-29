@@ -24,6 +24,14 @@ export function register(method: string, handler: Handler): void {
   registry.set(method, handler)
 }
 
+// Names of every registered RPC method. The Remote Gateway (Electron main) calls
+// `system.methods` at boot to validate its static allowlist against reality —
+// catching a typo'd method name (e.g. hyphen vs camelCase) as a fail-fast rather
+// than a silent fail-open. Registry is module-private, so this is the only way out.
+export function listMethods(): string[] {
+  return [...registry.keys()]
+}
+
 export async function dispatch(method: string, params: unknown): Promise<unknown> {
   const handler = registry.get(method)
   if (!handler) {

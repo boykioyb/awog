@@ -51,8 +51,9 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0060](./0060-connections-adopt-craft-sources-model.md) | Connections áp dụng mô hình "Sources" của Craft | Accepted |
 | [0061](./0061-session-craft-parity-render-model.md) | Session UI áp dụng model turn/activity + render pipeline của Craft | Accepted |
 | [0062](./0062-adopt-craft-session-storage-model.md) | Session storage áp dụng mô hình lưu + nạp của Craft (header + messages, warm cache) — amend 0048 | Accepted |
+| [0067](./0067-mobile-remote-control-transport.md) | Transport điều khiển session từ điện thoại = Tailscale/WireGuard mesh + Remote Gateway | Proposed |
 
-> Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần. Các ADR 0041–0058 đã tồn tại trong thư mục nhưng bảng này chưa backfill (index đang lạc hậu); ADR kế tiếp sau 0059 dùng 0060. ADR 0062 **amend** ADR 0048 (thay `index.json` bằng header per-file + warm cache); ADR kế tiếp sau 0062 dùng 0063.
+> Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần. Các ADR 0041–0058 và 0063–0066 đã tồn tại trong thư mục nhưng bảng này chưa backfill (index đang lạc hậu); ADR kế tiếp sau 0059 dùng 0060. ADR 0062 **amend** ADR 0048 (thay `index.json` bằng header per-file + warm cache); ADR kế tiếp sau 0067 dùng 0068.
 
 ## Template
 
