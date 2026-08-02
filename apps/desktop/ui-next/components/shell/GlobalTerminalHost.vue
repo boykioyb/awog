@@ -59,12 +59,12 @@
 
     <div v-show="!collapsed" class="gterm-body">
       <div class="gterm-main">
-        <!-- One WorkspaceTerminal instance PER visited project, ALL mounted at once
-             and toggled with v-show — only the active project's is shown; the rest
-             stay mounted-but-hidden so their tab set + live PTYs survive a switch
-             away and back (v-show never unmounts). `mountedKeys` is an LRU capped at
-             MAX_MOUNTED. Each instance's `root` follows the cwd it was last active
-             with; new tabs spawn there while already-open tabs keep their own cwd. -->
+        <!-- One WorkspaceTerminal instance PER open project tab, ALL mounted at once
+             and toggled with v-show — only the active tab's is shown; the rest stay
+             mounted-but-hidden so their tab set + live PTYs survive a switch away and
+             back (v-show never unmounts). Closing a project tab drops its instance
+             (killing its PTYs). Each instance's `root` follows the cwd it was last
+             active with; new tabs spawn there while already-open tabs keep their cwd. -->
         <WorkspaceTerminal
           v-for="key in mountedKeys"
           v-show="key === projectKey"
@@ -95,14 +95,18 @@
 </template>
 
 <script setup lang="ts">
-// Global terminal dock — single app-lifetime mount in the default layout. The
-// status bar's always-visible Terminal button toggles it via useGlobalTerminal.
-// Its cwd + tab set FOLLOW the active session's project: each visited project gets
-// its OWN WorkspaceTerminal instance, all mounted at once and toggled by v-show
-// (see `mountedKeys` — NOT <KeepAlive>, whose v-if child would unmount + kill PTYs
-// on switch), so returning to a project restores the exact terminals you left. Falls
-// back to a single "home" terminal (cwd "~") when no session/project is open. The
-// heavy PTY + xterm logic is reused from the (session-agnostic) WorkspaceTerminal.
+// Global terminal dock — single app-lifetime mount in the default layout. The status
+// bar's always-visible Terminal button toggles it via useGlobalTerminal. OPEN/CLOSE is
+// PER PROJECT (useGlobalTerminal.openByKey, keyed by the open tab): opening it in
+// project A and closing it in B is remembered independently — return to A → shown open;
+// stay on B → shown closed.
+// Its cwd + tab set FOLLOW the OPEN PROJECT TAB (sessions.activeTab): each open
+// project gets its OWN WorkspaceTerminal instance, all mounted at once and toggled
+// by v-show (see `mountedKeys` — NOT <KeepAlive>, whose v-if child would unmount +
+// kill PTYs on switch), so switching tabs restores the exact terminals you left and
+// closing a project tab disposes its terminal. Falls back to a single "home" terminal
+// (cwd "~") for the Default tab. The heavy PTY + xterm logic is reused from the
+// (session-agnostic) WorkspaceTerminal.
 import { ChevronDown, ChevronUp, ScrollText, X } from 'lucide-vue-next'
 import { useGlobalTerminal } from '~/composables/useGlobalTerminal'
 import { useSidecar } from '~/composables/useSidecar'
@@ -115,7 +119,7 @@ const { t } = useI18n()
 const sc = useSidecar()
 const {
   isOpen,
-  everOpened,
+  setActiveKey,
   height,
   collapsed,
   snippetsOpen,
@@ -134,9 +138,9 @@ const activeConnId = ref<string | null>(null)
 // with v-show (NOT <KeepAlive> — a `v-if` child defeats its caching, unmounting the
 // instance on project switch → PTYs killed → the shell "renews" on return). A hidden
 // v-show'd instance is never unmounted, so its tabs + live PTYs survive untouched.
-// `mountedKeys` is an LRU of visited project keys (front = most recent), capped so a
-// heavy fleet of projects can't grow terminals without bound.
-const MAX_MOUNTED = 6
+// `mountedKeys` holds one key per project the dock has shown; it is bounded by the
+// OPEN project tabs — closing a tab drops that project's terminal (see the prune
+// watch below). No arbitrary cap: "open tab" is the meaningful, self-limiting bound.
 const mountedKeys = ref<string[]>([])
 // Last-resolved cwd per key (drives `root` for each instance; the active key's entry
 // tracks the live termRoot, so new tabs spawn in the right project).
@@ -159,43 +163,68 @@ function onHeadClick(): void {
   if (collapsed.value) setCollapsed(false)
 }
 
-// Resolve the open session's cwd, mirroring the session engine's precedence
-// (sessions.send-message): dragged working folder → bound project's path → home.
-// `useWorkspaceData` maps the project name/id to its absolute root; a null root
-// (no/unknown project) or no open session falls through to "~". `termRoot` is
-// reactive, so switching sessions re-points it — new terminal tabs then spawn in
-// the new project while any already-open tab keeps its original cwd.
+// The dock FOLLOWS THE OPEN PROJECT TAB, not the active session. `sessions.activeTab`
+// is the projectId of the currently-selected tab ('' = the Default/home tab) — broader
+// than `sessions.active?.project`: a tab can be selected with no active session (empty
+// project), and switching tabs must move the terminal before any session is clicked.
+// Keying off the session's project instead would strand the dock on "home" whenever a
+// freshly-opened project tab has no active session yet.
+const HOME_KEY = '__home__'
 const sessions = useSessionsStore()
-const { root: projectRoot } = useWorkspaceData(() => sessions.active?.project)
-const termRoot = computed(() => sessions.active?.workspaceFolder || projectRoot.value || '~')
 
-// Stable per-project key (also the PTY grouping key). Two sessions in the same
-// project share one terminal set; no project → a single "home" set.
-const projectKey = computed(() => sessions.active?.project ?? '__home__')
+// Stable per-project key (also the PTY grouping key). Two sessions in the same project
+// share one terminal set; the Default tab ('') maps to a single "home" set.
+const projectKey = computed(() => sessions.activeTab || HOME_KEY)
 
-// Register the active project once the dock has been opened: remember its cwd and
-// move it to the front of the LRU (mounting it if new). Default `flush: 'pre'` runs
-// before the render, so a freshly-activated project is in `mountedKeys` on the same
-// tick it becomes active. Dropping past MAX_MOUNTED unmounts the least-recent one
-// (its onBeforeUnmount kills that project's PTYs — the intended bound).
+// cwd of the open tab's project ('' → undefined → "~"). When the active session belongs
+// to THIS tab, honor its dragged working-folder override; otherwise use the project's
+// on-disk path (two sessions of one project share the terminal). Reactive → switching
+// tabs re-points it; new terminal tabs spawn there while already-open tabs keep their cwd.
+const { root: projectRoot } = useWorkspaceData(() => sessions.activeTab || undefined)
+const termRoot = computed(() => {
+  const s = sessions.active
+  if (s && s.project === sessions.activeTab && s.workspaceFolder) return s.workspaceFolder
+  return projectRoot.value || '~'
+})
+
+// Keep the composable's notion of "active project" in sync with the open tab, so the
+// per-project open/close (isOpen) + open/close/toggle act on the project the dock is
+// showing. Declared BEFORE the mount watch so, on a tab switch, activeKey (and thus
+// isOpen) is updated before the mount watch reads isOpen in the same flush.
+watch(projectKey, setActiveKey, { immediate: true })
+
+// Mount a project's terminal the first time its dock is open for that project, then
+// keep it mounted (hidden via v-show) so its shell + scrollback survive a close→reopen
+// or a project switch. Pruned only when the project's TAB closes (below). `rootByKey`
+// always tracks the latest cwd so a later open spawns in the right place.
 watch(
-  [everOpened, projectKey, termRoot],
-  ([ever, key, root]) => {
-    if (!ever) return
+  [isOpen, projectKey, termRoot],
+  ([open, key, root]) => {
     rootByKey[key] = root
-    const i = mountedKeys.value.indexOf(key)
-    if (i >= 0) mountedKeys.value.splice(i, 1)
-    mountedKeys.value.unshift(key)
-    if (mountedKeys.value.length > MAX_MOUNTED) {
-      for (const dropped of mountedKeys.value.splice(MAX_MOUNTED)) delete rootByKey[dropped]
-    }
+    if (open && !mountedKeys.value.includes(key)) mountedKeys.value.push(key)
   },
   { immediate: true },
 )
 
+// Follow project open/close: when a project tab is closed, drop its terminal from
+// `mountedKeys` → the WorkspaceTerminal unmounts → its onBeforeUnmount kills that
+// project's PTYs. The home terminal (HOME_KEY, for the Default tab) is never a real
+// project tab, so it's kept as long as it's been visited. `openProjectTabs` is always
+// reassigned, so this shallow watch fires on every open/close.
+watch(
+  () => sessions.openProjectTabs,
+  (open) => {
+    const alive = new Set(open)
+    mountedKeys.value = mountedKeys.value.filter((k) => k === HOME_KEY || alive.has(k))
+    for (const key of Object.keys(rootByKey)) {
+      if (key !== HOME_KEY && !alive.has(key)) delete rootByKey[key]
+    }
+  },
+)
+
 // Real project for snippet scoping (null = no project → only Global snippets).
 const { projectName } = useProjects()
-const currentProject = computed(() => sessions.active?.project ?? null)
+const currentProject = computed(() => sessions.activeTab || null)
 const currentProjectLabel = computed(() =>
   currentProject.value ? projectName(currentProject.value) : '',
 )

@@ -1,24 +1,31 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
-// Shared, app-wide state for the GLOBAL terminal — a bottom dock mounted once in
-// the default layout (GlobalTerminalHost) that is reachable from the status bar
-// on every page, independent of any session. cwd defaults to the home directory
-// ("~", expanded by the sidecar). Mirrors useGitModal / useWorkspacePanel:
-// module-level refs are the single source of truth for every caller.
+// Shared, app-wide state for the terminal dock — a bottom dock mounted once in the
+// default layout (GlobalTerminalHost), reachable from the status bar on every page.
+// Module-level refs are the single source of truth for every caller (status bar
+// toggle, ⌘J shortcut, MinimizeDock, and the host itself).
 //
-// `everOpened` keeps the PTY alive across open/close — the host renders the
-// terminal once first opened, then only hides it (v-show) so reopening is
-// instant and the shell + scrollback survive. The sidecar idle-sweep reaps it
-// after 30 min idle; app shutdown kills it regardless.
+// OPEN/CLOSE IS PER PROJECT. `openByKey` maps a project key (GlobalTerminalHost's
+// `sessions.activeTab`, '' → '__home__') to whether the dock is open for THAT project,
+// so opening the terminal in project A and closing it in project B is remembered
+// independently: return to A → shown open; stay on B → shown closed. The host tells us
+// which project is active via `setActiveKey`; `isOpen` is that project's flag. Persisted
+// so the choice survives a reload.
 //
-// `collapsed` is the in-place "roll-up" minimize: the dock shrinks to just its
-// header bar (content hidden, PTY untouched) and clicking the header expands it
-// again. Distinct from `close` (hides the whole dock) — a collapsed dock is
-// still visible, just tiny. Persisted so the roll-up state survives reloads.
+// The host keeps a project's terminal mounted (v-show) once opened so the shell +
+// scrollback survive a close→reopen or a project switch; closing a project's TAB
+// disposes it. The sidecar idle-sweep reaps a PTY after 30 min idle; app shutdown kills
+// it regardless.
+//
+// `collapsed` is the in-place "roll-up" minimize (dock shrinks to its header; PTY
+// untouched). `height` / `collapsed` / `snippetsOpen` stay GLOBAL (shared across
+// projects) — only open/close is per-project. All three are persisted.
 
+const HOME_KEY = '__home__'
 const HEIGHT_KEY = 'awog-global-terminal-height'
 const COLLAPSED_KEY = 'awog-global-terminal-collapsed'
 const SNIPPETS_KEY = 'awog-global-terminal-snippets-open'
+const OPEN_MAP_KEY = 'awog-global-terminal-open-by-project'
 const DEFAULT_HEIGHT = 280
 const MIN_HEIGHT = 120
 const MAX_HEIGHT = 900
@@ -30,8 +37,29 @@ function loadHeight(): number {
   return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, raw))
 }
 
-const isOpen = ref(false)
-const everOpened = ref(false)
+// Per-project open state, persisted. A corrupt/absent value → empty map → every project
+// starts closed (matches the pre-feature "dock starts closed on load" behaviour).
+function loadOpenMap(): Record<string, boolean> {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(OPEN_MAP_KEY) ?? '{}')
+    if (parsed && typeof parsed === 'object') {
+      const out: Record<string, boolean> = {}
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'boolean') out[k] = v
+      }
+      return out
+    }
+  } catch {
+    // Corrupt value → every project closed.
+  }
+  return {}
+}
+
+// The project key the dock is currently showing (set by GlobalTerminalHost). Drives
+// which entry of `openByKey` is the live `isOpen`.
+const activeKey = ref(HOME_KEY)
+const openByKey = ref<Record<string, boolean>>(loadOpenMap())
 const height = ref(loadHeight())
 const collapsed = ref(
   typeof localStorage !== 'undefined' && localStorage.getItem(COLLAPSED_KEY) === '1',
@@ -40,22 +68,37 @@ const snippetsOpen = ref(
   typeof localStorage !== 'undefined' && localStorage.getItem(SNIPPETS_KEY) === '1',
 )
 
+// Open state of the ACTIVE project's dock (absent key → closed).
+const isOpen = computed(() => openByKey.value[activeKey.value] ?? false)
+
+function setOpen(key: string, value: boolean): void {
+  // Always reassign so the shallow ref fires; persist the per-project map.
+  openByKey.value = { ...openByKey.value, [key]: value }
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(OPEN_MAP_KEY, JSON.stringify(openByKey.value))
+  }
+}
+
 export function useGlobalTerminal() {
-  // Open the dock. Always expands the roll-up so clicking "Terminal" reveals the
-  // content (never a bare header bar).
+  // The host calls this whenever the open project changes so open/close/toggle act on
+  // the right project and `isOpen` reflects it. '' (Default tab) → the home key.
+  function setActiveKey(key: string): void {
+    activeKey.value = key || HOME_KEY
+  }
+  // Open the ACTIVE project's dock. Always expands the roll-up so clicking "Terminal"
+  // reveals the content (never a bare header bar).
   function open(): void {
-    everOpened.value = true
-    isOpen.value = true
+    setOpen(activeKey.value, true)
     setCollapsed(false)
   }
   function close(): void {
-    isOpen.value = false
+    setOpen(activeKey.value, false)
   }
   function toggle(): void {
     if (isOpen.value) close()
     else open()
   }
-  // Roll-up state: shrink the dock to its header (keeps the PTY alive).
+  // Roll-up state (global): shrink the dock to its header (keeps the PTY alive).
   function setCollapsed(v: boolean): void {
     collapsed.value = v
     if (typeof localStorage !== 'undefined') {
@@ -65,7 +108,7 @@ export function useGlobalTerminal() {
   function toggleCollapse(): void {
     setCollapsed(!collapsed.value)
   }
-  // Snippets rail (right side of the dock body).
+  // Snippets rail (global) — right side of the dock body.
   function setSnippetsOpen(v: boolean): void {
     snippetsOpen.value = v
     if (typeof localStorage !== 'undefined') {
@@ -75,7 +118,7 @@ export function useGlobalTerminal() {
   function toggleSnippets(): void {
     setSnippetsOpen(!snippetsOpen.value)
   }
-  // Clamp + persist the dock height (called while dragging the resize handle).
+  // Clamp + persist the dock height (global; called while dragging the resize handle).
   function setHeight(px: number): void {
     height.value = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)))
     if (typeof localStorage !== 'undefined') {
@@ -84,7 +127,7 @@ export function useGlobalTerminal() {
   }
   return {
     isOpen,
-    everOpened,
+    setActiveKey,
     height,
     collapsed,
     snippetsOpen,
