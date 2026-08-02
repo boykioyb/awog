@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.27.0',
+    date: '2026-08-02',
+    highlight: {
+      en: 'The session checklist is now yours to edit — tick items off yourself and the assistant picks up where you left it.',
+      vi: 'Checklist của phiên giờ bạn sửa được — tự tick xong việc, trợ lý sẽ tiếp tục từ đúng chỗ bạn để lại.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Tick off checklist items yourself: click a row to move it between pending, in progress and done. Your change sticks — the assistant sees the list you edited on its next reply instead of overwriting it.',
+        vi: 'Tự tick việc trong checklist: bấm vào một dòng để chuyển giữa chờ, đang làm và xong. Thay đổi của bạn được giữ — lượt trả lời sau trợ lý đọc đúng danh sách bạn đã sửa thay vì ghi đè lên.',
+      },
+      {
+        kind: 'improved',
+        en: 'The checklist no longer disappears when a reply finishes — exactly when you want to check where things stand. It stays pinned above the composer, shrinking to a one-line done/total strip while nothing is running, and also shows up in the Plan tab.',
+        vi: 'Checklist không còn biến mất khi trả lời xong — đúng lúc bạn muốn xem việc tới đâu. Nó nằm cố định phía trên ô soạn tin, thu lại thành một dòng xong/tổng khi không chạy gì, và cũng hiện trong tab Plan.',
+      },
+      {
+        kind: 'added',
+        en: 'Read Word and Excel files inside AWOG. Opening a .docx or .xlsx now shows the actual document — headings, lists, tables, images for Word; sheet tabs, formatted numbers and dates, merged cells for Excel — instead of asking you to open it in another app. Works for files on a remote server over SFTP too.',
+        vi: 'Đọc file Word và Excel ngay trong AWOG. Mở .docx hay .xlsx giờ hiện nội dung thật — tiêu đề, danh sách, bảng, hình với Word; tab sheet, số và ngày đã định dạng, ô gộp với Excel — thay vì bắt bạn mở bằng ứng dụng khác. Cả file trên máy chủ từ xa qua SFTP cũng xem được.',
+      },
+      {
+        kind: 'added',
+        en: 'Copy a document straight from the preview: plain text for Word, or the visible sheet as TSV for Excel — ready to paste into the chat.',
+        vi: 'Copy tài liệu ngay từ cửa sổ xem: văn bản thuần với Word, hoặc sheet đang xem dạng TSV với Excel — dán thẳng vào chat được.',
+      },
+      {
+        kind: 'added',
+        en: 'Click any image in a reply to open it full-window, with the same zoom and pan as an attachment — no more squinting at an inline screenshot.',
+        vi: 'Bấm vào ảnh bất kỳ trong câu trả lời để mở toàn màn hình, phóng to và kéo được như ảnh đính kèm — không phải nheo mắt nhìn ảnh chụp màn hình nhỏ nữa.',
+      },
+      {
+        kind: 'improved',
+        en: 'The terminal remembers whether it was open for each project. Open it while working on one project and it no longer pops up on all the others; closing a project tab closes its terminal with it.',
+        vi: 'Terminal nhớ trạng thái mở/đóng riêng cho từng dự án. Mở ở dự án này thì không còn bật lên ở mọi dự án khác; đóng tab dự án là terminal của nó đóng theo.',
+      },
+      {
+        kind: 'fixed',
+        en: 'An image in a reply that finished arriving while you were reading another session no longer stays a blank grey box when you come back.',
+        vi: 'Ảnh trong câu trả lời hoàn tất lúc bạn đang xem phiên khác không còn kẹt thành ô xám trống khi bạn quay lại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The reasoning-effort picker now offers the same five levels everywhere and reads in your language — the per-project one was missing "Extra high" and stayed in English.',
+        vi: 'Bộ chọn mức suy luận giờ có đủ năm mức giống nhau ở mọi nơi và hiển thị theo ngôn ngữ bạn chọn — trước đó bản trong dự án thiếu "Rất cao" và chỉ có tiếng Anh.',
+      },
+    ],
+  },
+  {
     version: '0.26.0',
     date: '2026-07-29',
     highlight: {
