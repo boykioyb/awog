@@ -166,6 +166,17 @@
       </button>
     </template>
 
+    <!-- docx: copy the extracted text · xlsx: copy the active sheet as TSV -->
+    <template v-else-if="item?.kind === 'doc' || item?.kind === 'sheet'">
+      <button
+        class="pvtb"
+        :title="t(item.kind === 'sheet' ? 'common.preview.copySheet' : 'common.preview.copyText')"
+        @click="copyContent()"
+      >
+        <Icon name="copy" style="width: 13px; height: 13px" />
+      </button>
+    </template>
+
     <!-- theme picker — only when the Monaco viewer is showing (code / raw markdown) -->
     <template v-if="showCode">
       <span class="pvsep" />

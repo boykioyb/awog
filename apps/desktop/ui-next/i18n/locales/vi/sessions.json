@@ -218,6 +218,7 @@
   "sessions.todo.title": "To-do",
   "sessions.todo.expand": "Mở danh sách",
   "sessions.todo.collapse": "Thu gọn danh sách",
+  "sessions.todo.cycle": "Bấm để đổi trạng thái (chờ → đang làm → xong)",
   "sessions.attachment.viewImage": "Xem ảnh",
   "sessions.attachment.remove": "Gỡ đính kèm",
   "sessions.attachment.preview": "Bấm để xem trước",

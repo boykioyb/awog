@@ -159,6 +159,11 @@
       <symbol id="i-file" viewBox="0 0 24 24">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
       </symbol>
+      <!-- table (lucide) — spreadsheet preview (xlsx) header + minimize pill. -->
+      <symbol id="i-table" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 10h18M9 10v10" />
+      </symbol>
       <symbol id="i-bold" viewBox="0 0 24 24">
         <path d="M6 4h8a4 4 0 0 1 0 8H6zM6 12h9a4 4 0 0 1 0 8H6z" />
       </symbol>

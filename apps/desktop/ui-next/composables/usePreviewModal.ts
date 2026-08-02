@@ -1,6 +1,13 @@
 import { computed, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import type { PreviewRef } from '~/composables/usePreview'
-import { usePreview, previewKindFromPath, mediaFileUrl } from '~/composables/usePreview'
+import {
+  usePreview,
+  previewKindFromPath,
+  mediaFileUrl,
+  isOfficeKind,
+} from '~/composables/usePreview'
+import { useOfficePreview } from '~/composables/useOfficePreview'
+import { base64ToBytes, type Bytes } from '~/utils/office-zip'
 import { useSidecar } from '~/composables/useSidecar'
 import { useI18n } from '~/composables/useI18n'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
@@ -40,7 +47,7 @@ interface FsFileBase64 {
   truncated: boolean
 }
 
-type LoadStatus = 'idle' | 'loading' | 'error' | 'tooLarge' | 'binary'
+type LoadStatus = 'idle' | 'loading' | 'error' | 'tooLarge' | 'binary' | 'officeError'
 type RenameMode = 'rename' | 'move'
 
 // A deferred yes/no prompt rendered by the modal (delete + discard-edits reuse it).
@@ -109,6 +116,8 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   const { current: sharedItem, close: closeShared, takeRestore } = usePreview()
   const chatAttach = useChatAttach()
   const dock = useMinimizeDock()
+  // Office (docx/xlsx) model + view state, parsed from the file's bytes.
+  const office = useOfficePreview()
 
   // Effective item: explicit prop wins, shared store is the fallback.
   const item = computed<PreviewRef | null>(() => props.item ?? sharedItem.value)
@@ -168,7 +177,18 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     loadedLang.value = undefined
     truncated.value = false
     try {
-      if (isBinaryKind(it.kind)) {
+      if (isOfficeKind(it.kind)) {
+        const res = await sc.request<FsFileBase64>('fs.readFileBase64', {
+          workspaceRoot: it.workspaceRoot,
+          path: it.path,
+        })
+        if (seq !== loadSeq) return
+        if (res.truncated || !res.base64) {
+          loadStatus.value = 'tooLarge'
+          return
+        }
+        await parseOffice(it, base64ToBytes(res.base64), seq)
+      } else if (isBinaryKind(it.kind)) {
         const res = await sc.request<FsFileBase64>('fs.readFileBase64', {
           workspaceRoot: it.workspaceRoot,
           path: it.path,
@@ -206,6 +226,32 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       loadStatus.value = 'error'
     }
   }
+
+  // Parse docx/xlsx bytes into the office model. A file we can't read (corrupt,
+  // encrypted, or a legacy .doc renamed to .docx) resolves to 'officeError', which
+  // keeps the toolbar so "open externally" is still one click away.
+  async function parseOffice(it: PreviewRef, bytes: Bytes, seq: number) {
+    const kind = it.kind === 'sheet' ? 'sheet' : 'doc'
+    const ok = await office.parse(kind, bytes)
+    if (seq !== loadSeq) return
+    loadStatus.value = ok ? 'idle' : 'officeError'
+  }
+
+  // In-memory office preview (attachment / SFTP download): the bytes live behind a
+  // data:/blob: URL rather than a workspace path.
+  async function loadOfficeFromSrc(it: PreviewRef) {
+    const seq = ++loadSeq
+    loadStatus.value = 'loading'
+    try {
+      const bytes = new Uint8Array(await (await fetch(it.src ?? '')).arrayBuffer())
+      if (seq !== loadSeq) return
+      await parseOffice(it, bytes, seq)
+    } catch {
+      if (seq !== loadSeq) return
+      loadStatus.value = 'officeError'
+    }
+  }
+
   // Effective content: prefer freshly-loaded workspace data, fall back to in-memory.
   const effectiveText = computed(() => loadedText.value ?? item.value?.text ?? '')
   const effectiveSrc = computed(() => {
@@ -315,7 +361,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   const isRelativeAsset = (src: string): boolean =>
     !!src && !/^(?:https?:|data:|blob:|app:|file:)/i.test(src)
 
-  // Directory of the markdown file relative to workspaceRoot ('' at root).
+  // Directory of the markdown file relative to workspaceRoot ('' at root). In-memory
+  // markdown (a fullscreened chat reply) has no file → '' , i.e. refs are anchored at
+  // the workspace root, matching how the transcript resolves the same text.
   function mdDir(): string {
     const p = item.value?.path ?? ''
     const i = p.lastIndexOf('/')
@@ -359,7 +407,8 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
 
   async function loadMdImages(): Promise<void> {
     const it = item.value
-    if (!it || it.kind !== 'markdown' || !it.workspaceRoot || !it.path || !sc.available) return
+    // A root is enough — `path` is optional (in-memory markdown resolves from the root).
+    if (!it || it.kind !== 'markdown' || !it.workspaceRoot || !sc.available) return
     const srcs = new Set<string>()
     for (const seg of rawSegments.value) {
       if (seg.type !== 'html') continue
@@ -535,9 +584,16 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       flash(t('common.preview.copyError'), true)
     }
   }
-  // Copy the visible text content (markdown/code/text), independent of file actions.
+  // What "copy" and "add to chat" hand over. Office kinds carry no text of their
+  // own — they project their parsed model (docx prose / sheet TSV), which is what
+  // makes a .docx spec or .xlsx table usable as chat context.
+  const plainText = computed(() =>
+    item.value && isOfficeKind(item.value.kind) ? office.text.value : effectiveText.value,
+  )
+
+  // Copy the visible text content (markdown/code/text/office), independent of file actions.
   async function copyContent() {
-    if (effectiveText.value) await navigator.clipboard.writeText(effectiveText.value)
+    if (plainText.value) await navigator.clipboard.writeText(plainText.value)
   }
 
   const canAddToChat = computed(
@@ -548,7 +604,7 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       // Media has no attachable payload (its src is a stream URL, not data the
       // model can read) — exclude it from "Add to chat".
       !isMediaKind(item.value.kind) &&
-      (!!effectiveText.value || !!effectiveSrc.value),
+      (!!plainText.value || !!effectiveSrc.value),
   )
   function addToChat() {
     const it = item.value
@@ -562,8 +618,8 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
         att.src = src
         if (it.kind === 'image') att.dataUrl = src // carried to the model
       }
-    } else if (effectiveText.value) {
-      att.text = effectiveText.value.slice(0, ATTACHMENT_TEXT_MAX)
+    } else if (plainText.value) {
+      att.text = plainText.value.slice(0, ATTACHMENT_TEXT_MAX)
     }
     chatAttach.request(att)
     flash(t('common.preview.addedToChat'))
@@ -651,10 +707,30 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
         return t('sessions.preview.tooLarge')
       case 'binary':
         return t('sessions.preview.binary')
+      case 'officeError':
+        return t('common.preview.officeError')
       default:
         return ''
     }
   })
+
+  // Parsed office models ready to render (both are null until a parse lands).
+  const showOfficeDoc = computed(
+    () =>
+      item.value?.kind === 'doc' &&
+      !statusMessage.value &&
+      (office.doc.value?.blocks.length ?? 0) > 0,
+  )
+  // A workbook keeps its grid even when the active sheet is blank, so the tab strip
+  // stays reachable (the empty state is shown inside the grid instead).
+  const showOfficeSheet = computed(
+    () => item.value?.kind === 'sheet' && !statusMessage.value && office.sheet.value != null,
+  )
+  // Only a Word document can parse to nothing renderable at all.
+  const officeEmpty = computed(
+    () =>
+      item.value?.kind === 'doc' && !statusMessage.value && office.doc.value?.blocks.length === 0,
+  )
 
   // Monaco shows for plain text and for the raw view of markdown / html.
   const showCode = computed(() => {
@@ -679,19 +755,23 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
           it.kind === 'pdf' ||
           it.kind === 'video' ||
           htmlRender.value ||
-          showCode.value),
+          showCode.value ||
+          // The sheet grid owns its scroll (sticky headers + bottom tab strip).
+          showOfficeSheet.value),
       mdrender: it.kind === 'markdown' && view.value === 'render' && !statusMessage.value,
       // Folder tree fills the body (left-aligned, own scroll) — not the centered prose layout.
       tree: it.kind === 'folder',
     }
   })
 
-  // Header icon: clip (image) · folder (folder tree) · play (media) · doc (else).
+  // Header icon: clip (image) · folder (folder tree) · play (media) · table (sheet)
+  // · doc (else).
   const headIcon = computed(() => {
     const k = item.value?.kind
     if (k === 'image') return 'clip'
     if (k === 'folder') return 'folder'
     if (k === 'video' || k === 'audio') return 'play'
+    if (k === 'sheet') return 'table'
     return 'rules'
   })
 
@@ -703,7 +783,10 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     // has no playback controls and would just sit over them, so hide it. Only when
     // the media can't play do we show the bar (so "open externally" stays reachable).
     if (isMediaKind(it.kind)) return mediaError.value && hasWorkspaceFile.value
-    return ['image', 'markdown', 'html', 'text'].includes(it.kind) || hasWorkspaceFile.value
+    return (
+      ['image', 'markdown', 'html', 'text', 'doc', 'sheet'].includes(it.kind) ||
+      hasWorkspaceFile.value
+    )
   })
 
   function fmtSize(n?: number): string {
@@ -756,7 +839,11 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       loadedLang.value = undefined
       truncated.value = false
       mediaError.value = false
+      office.reset()
       for (const k of Object.keys(mdImages)) delete mdImages[k]
+      // In-memory markdown (a fullscreened chat reply) has no async file load, so the
+      // effectiveText watcher below may not fire for it — resolve its images here.
+      if (it?.kind === 'markdown' && it.workspaceRoot && !it.path) void loadMdImages()
       // Reset folder-tree state on every item change; load the root when a folder opens.
       for (const k of Object.keys(treeChildren)) delete treeChildren[k]
       treeExpanded.clear()
@@ -765,6 +852,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
       // Media streams via media:// (effectiveSrc) — never through the base64 reader.
       if (it && it.workspaceRoot && it.path && sc.available && !isMediaKind(it.kind))
         void loadFromWorkspace(it)
+      // Office file with no workspace path (attachment / SFTP download): its bytes
+      // are behind the in-memory src.
+      else if (it && isOfficeKind(it.kind) && it.src) void loadOfficeFromSrc(it)
       if (it?.kind === 'folder' && it.workspaceRoot && sc.available) {
         void loadTreeDir(it.workspaceRoot, '')
       }
@@ -809,6 +899,11 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     // media (video/audio)
     mediaError,
     onMediaError,
+    // office (docx/xlsx)
+    office,
+    showOfficeDoc,
+    showOfficeSheet,
+    officeEmpty,
     // image transform
     scale,
     imgStyle,

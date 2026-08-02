@@ -218,6 +218,7 @@
   "sessions.todo.title": "To-do",
   "sessions.todo.expand": "Expand checklist",
   "sessions.todo.collapse": "Collapse checklist",
+  "sessions.todo.cycle": "Click to change status (pending → in progress → done)",
   "sessions.attachment.viewImage": "View image",
   "sessions.attachment.remove": "Remove attachment",
   "sessions.attachment.preview": "Click to preview",

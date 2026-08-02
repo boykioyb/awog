@@ -113,6 +113,7 @@
 // mutated only inside updateDefaults/updateAppearance (encapsulation).
 import {
   PROVIDER_DISPLAY,
+  THINKING_LEVELS,
   modelIdFromDisplay,
   modelsForProvider,
   type ThinkingLevel,
@@ -159,12 +160,9 @@ const modeOptions = computed(() => [
   { label: t('settingsDefaults.mode.acceptEdits'), value: 'accept-edits' },
   { label: t('settings.defaults.mode.execute'), value: 'execute' },
 ])
-const thinkingOptions = computed(() => [
-  { label: t('settings.defaults.thinking.low'), value: 'low' },
-  { label: t('settings.defaults.thinking.medium'), value: 'medium' },
-  { label: t('settings.defaults.thinking.high'), value: 'high' },
-  { label: t('settings.defaults.thinking.max'), value: 'max' },
-])
+const thinkingOptions = computed(() =>
+  THINKING_LEVELS.map((lv) => ({ label: t(`common.thinking.${lv}`), value: lv })),
+)
 
 // First model id of a provider — used to reset the model when the provider changes.
 const firstModelIdOf = (provider: ProviderName): string =>

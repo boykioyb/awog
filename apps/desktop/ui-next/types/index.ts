@@ -5,6 +5,13 @@ export type ProviderName = 'anthropic' | 'openai' | 'google'
 
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
 
+// Status of one checklist row (mirrors the sidecar TodoItem union in
+// sidecar/src/types/shared.ts). Declared HERE, not in a composable/store: both the
+// sessions domain (`Todo`) and the tasks store (`TodoItem`) build on it, and those
+// two dirs are auto-import roots — exporting the same name from both makes Nuxt
+// pick one at random and warn about the duplicate.
+export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+
 export interface ProjectLlmDefaults {
   provider: ProviderName
   modelId: string

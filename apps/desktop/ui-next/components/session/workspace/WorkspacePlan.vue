@@ -1,28 +1,43 @@
 <template>
   <div class="wsplan">
-    <div v-if="!plan" class="empty" style="padding: 30px">
+    <div v-if="!plan && !total" class="empty" style="padding: 30px">
       <div class="et">{{ t('sessions.workspace.plan.empty') }}</div>
     </div>
 
     <div v-else class="wsplan-body">
-      <div class="wsplan-head">
-        <span class="wsplan-title">{{ plan.title }}</span>
-        <span class="wsplan-badge" :style="badgeStyle">{{ statusLabel }}</span>
+      <template v-if="plan">
+        <div class="wsplan-head">
+          <span class="wsplan-title">{{ plan.title }}</span>
+          <span class="wsplan-badge" :style="badgeStyle">{{ statusLabel }}</span>
+        </div>
+        <SessionTextBlock :text="planMarkdown" />
+      </template>
+
+      <div v-if="total" class="wsplan-section" :class="{ sep: !!plan }">
+        <div class="wsplan-head">
+          <span class="wsplan-title">{{ t('sessions.workspace.plan.checklist') }}</span>
+          <span class="wsplan-count">{{ doneCount }}/{{ total }}</span>
+        </div>
+        <SessionTodoList :todos="todos" editable @cycle="cycleTodo" />
       </div>
-      <SessionTextBlock :text="planMarkdown" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Plan tab (§5/§10) — shows the active session's latest plan block (derived from
-// the assistant `plan` blocks in the transcript). Read-only view; approve/run is
+// Plan tab (§5/§10) — the active session's latest plan block plus its live checklist,
+// both derived from the transcript (assistant `plan` blocks / the latest TodoWrite).
+// One tab answers "what is the plan" and "how far along are we" together, so the
+// answer survives scrolling and turn boundaries. Read-only view; approve/run is
 // handled inline in the transcript gate cards. No mock data.
 import type { PlanBlock, Session } from '~/composables/useSessionsData'
 
 const props = defineProps<{ session: Session }>()
 
 const { t } = useI18n()
+
+// Same derivation the docked banner uses, so the two never disagree.
+const { todos, total, doneCount, cycleTodo } = useSessionTodo(() => props.session)
 
 // Latest plan block across the session, scanning messages + blocks newest-first.
 const plan = computed<PlanBlock | null>(() => {
@@ -87,5 +102,22 @@ const badgeStyle = computed(() =>
   line-height: 1;
   padding: 3px 7px;
   border-radius: 5px;
+}
+.wsplan-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Only rule off from the plan document above when there actually is one. */
+.wsplan-section.sep {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.wsplan-count {
+  margin-left: auto;
+  font-family: var(--code);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--textDim);
 }
 </style>

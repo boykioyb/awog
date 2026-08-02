@@ -308,6 +308,10 @@ type SessionGetDto = {
   }
   parentSessionId?: string
   forkFromMessageId?: string
+  // The session's current checklist (sidecar Session.todos) — the authoritative
+  // list the banner + Plan tab render, restored on open so progress survives a
+  // reload. Absent for a session that never had one.
+  todos?: EngineTodo[]
 }
 
 interface SendMessageResult {
@@ -919,6 +923,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (full.budget) target.budget = full.budget
         if (full.parentSessionId) target.parentSessionId = full.parentSessionId
         if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
+        // Restore the checklist so reopening a session shows where work stopped.
+        if (full.todos) target.todos = mapTodos(full.todos)
       }
       target.loaded = true
     } catch (err) {
@@ -1464,6 +1470,27 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s) return
     s.aboutSshHostId = hostId ?? ''
     if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+
+  // Replace a session's checklist with the user's edited list (optimistic, then
+  // persisted). Not part of pushUpsert: the checklist has its own RPC because the
+  // engine writes the same field from TodoWrite, and re-injects it into the next
+  // turn as <session_checklist> — which is what stops the model from overwriting
+  // a user's tick. `status` is the source of truth; `done` mirrors completed.
+  function setTodos(id: number, todos: Todo[]) {
+    const s = byId(id)
+    if (!s) return
+    // `status` is the source of truth; a legacy/mock Todo without one falls back to
+    // `done`, and `done` is re-derived from it so the two can never disagree.
+    const normalised = todos.map((td) => {
+      const status = td.status ?? (td.done ? 'completed' : 'pending')
+      return { t: td.t, status, done: status === 'completed' }
+    })
+    s.todos = normalised
+    pushRequest('sessions.updateTodos', {
+      sessionId: s.engineId,
+      todos: normalised.map((td) => ({ content: td.t, status: td.status })),
+    })
   }
 
   function setMode(id: number, mode: string) {
@@ -2226,6 +2253,11 @@ export const useSessionsStore = defineStore('sessions', () => {
           const lbl = evt.payload.step.label
           if (s && lbl === 'Enter plan' && s.mode !== 'Plan') s.mode = 'Plan'
           else if (s && lbl === 'Exit plan' && s.mode === 'Plan') s.mode = 'Ask'
+          // A TodoWrite step also updates the session's CURRENT checklist — the
+          // banner + Plan tab read that field (not the transcript) so a user edit
+          // stays visible. The engine persists the same list to Session.todos; this
+          // keeps an already-open session in sync without a re-read.
+          if (s && evt.payload.step.todos?.length) s.todos = mapTodos(evt.payload.step.todos)
           // A question step parks the turn → status awaiting.
           if (s && evt.payload.step.kind === 'question' && !evt.payload.step.answers) {
             s.status = 'awaiting'
@@ -3492,6 +3524,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setNoMarkdown,
     setSshApprovalMode,
     setAboutSshHost,
+    setTodos,
     setSshTerminalConnId,
     setDisabledTools,
     setMcpServerIds,

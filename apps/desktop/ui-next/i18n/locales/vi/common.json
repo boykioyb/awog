@@ -77,5 +77,17 @@
   "common.preview.browserError": "Không mở được bằng trình duyệt",
   "common.preview.pathCopied": "Đã sao chép đường dẫn",
   "common.preview.copyError": "Sao chép thất bại",
-  "common.preview.addedToChat": "Đã thêm vào chat"
+  "common.preview.addedToChat": "Đã thêm vào chat",
+  "common.preview.officeError": "Không đọc được tài liệu này — mở bằng ứng dụng ngoài để xem",
+  "common.preview.officeEmpty": "Tài liệu không có nội dung đọc được",
+  "common.preview.officeTruncated": "Tài liệu lớn — chỉ hiển thị phần đầu",
+  "common.preview.sheetEmpty": "Sheet này trống",
+  "common.preview.sheetMoreRows": "Xem thêm dòng (còn {n})",
+  "common.preview.copyText": "Copy nội dung",
+  "common.preview.copySheet": "Copy sheet (TSV)",
+  "common.thinking.low": "Thấp",
+  "common.thinking.medium": "Vừa",
+  "common.thinking.high": "Cao",
+  "common.thinking.extra-high": "Rất cao",
+  "common.thinking.max": "Tối đa"
 }

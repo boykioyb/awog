@@ -28,6 +28,7 @@
 | 20 | [rules](./rules.md) | v1 implemented (ADR 0033) |
 | 21 | [project-github](./project-github.md) | Draft (ADR 0049) — Issues + Pull Requests |
 | 22 | [global-terminal](./global-terminal.md) | Implemented (ui-next) — dock terminal toàn app, cwd home |
+| 23 | [office-preview](./office-preview.md) | Implemented (ui-next) — xem `.docx`/`.xlsx` trong PreviewModal, parser tự viết |
 
 ## Template
 

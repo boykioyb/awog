@@ -77,5 +77,17 @@
   "common.preview.browserError": "Couldn’t open in browser",
   "common.preview.pathCopied": "Path copied",
   "common.preview.copyError": "Copy failed",
-  "common.preview.addedToChat": "Added to chat"
+  "common.preview.addedToChat": "Added to chat",
+  "common.preview.officeError": "Couldn’t read this document — open it externally to view",
+  "common.preview.officeEmpty": "This document has no readable content",
+  "common.preview.officeTruncated": "Large document — showing the first part only",
+  "common.preview.sheetEmpty": "This sheet is empty",
+  "common.preview.sheetMoreRows": "Show more rows ({n} left)",
+  "common.preview.copyText": "Copy text",
+  "common.preview.copySheet": "Copy sheet (TSV)",
+  "common.thinking.low": "Low",
+  "common.thinking.medium": "Medium",
+  "common.thinking.high": "High",
+  "common.thinking.extra-high": "Extra high",
+  "common.thinking.max": "Max"
 }

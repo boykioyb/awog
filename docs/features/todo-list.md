@@ -17,20 +17,25 @@ Hiển thị **checklist công việc trực tiếp** của agent (tool `TodoWri
 | **System prompt** | `TODO_USAGE_PROMPT` ([runtime/prompts.ts](../../apps/desktop/sidecar/src/runtime/prompts.ts)) được append vào systemPrompt khi tool `TodoWrite` còn trong toolset (không bị `disabledTools`/lọc qua `allowedTools`). Áp dụng cho **Sessions** ([run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts)) lẫn **Tasks** ([invoke.ts](../../apps/desktop/sidecar/src/runtime/invoke.ts)). |
 | **Sessions UI** | `stepFromTodos` ([step-mapper.ts](../../apps/desktop/sidecar/src/sessions/step-mapper.ts)) tạo step `kind: 'note'` mang `todos: TodoItem[]` có cấu trúc; dùng **id ổn định `todo-list`** ([event-adapter.ts](../../apps/desktop/sidecar/src/runtime/event-adapter.ts)) → các lần gọi TodoWrite trong cùng lượt **upsert một panel tiến hóa**. Checklist **KHÔNG** render inline trong từng message — thay vào đó một **panel cấp session ghim trên composer** ([SessionTodoPanel.vue](../../apps/desktop/ui/components/session/SessionTodoPanel.vue), gắn trong [SessionChat.vue](../../apps/desktop/ui/components/session/SessionChat.vue)) derive todos từ note step `todos` **mới nhất trên toàn bộ messages**, render một checklist duy nhất (icon ✓/▸/○, completed gạch ngang + mờ), thu/mở được, tự ẩn khi rỗng hoặc đã xong hết. |
 | **Tasks engine** | `traceFromToolUse`/`traceFromToolResult` ([trace-mapper.ts](../../apps/desktop/sidecar/src/tasks/trace-mapper.ts)) đặc biệt hóa TodoWrite → `TraceNode` `type: 'todo'` mang `todos`. [TraceNodeItem.vue](../../apps/desktop/ui/components/phase/TraceNodeItem.vue) render checklist trong cây trace. |
+| **Shared state** ([ADR 0069](../decisions/0069-editable-session-checklist.md)) | Checklist thôi là mirror read-only của model. `Session.todos` là field authoritative duy nhất: `TodoWrite` ghi vào đó qua `ToolFilter.todoSink` (chỉ chat runtime cấp sink — Tasks giữ ACK), user ghi qua RPC `sessions.updateTodos`, và list đã persist được inject lại **mỗi turn** dưới dạng `<session_checklist>` ([todo-context.ts](../../apps/desktop/sidecar/src/sessions/todo-context.ts)) nên thao tác của user không bị lần `TodoWrite` kế tiếp ghi đè. |
 
 Parse dùng chung qua [runtime/todos.ts](../../apps/desktop/sidecar/src/runtime/todos.ts) (`parseTodos` + `countDone`) — input là model response (L1) nên validate phòng thủ, không throw.
 
 ## Data shape
 
-`TodoItem = { content: string; status: 'pending' | 'in_progress' | 'completed' }` — khai ở [shared.ts](../../apps/desktop/sidecar/src/types/shared.ts) (sidecar) + mirror [ui/types/index.ts](../../apps/desktop/ui/types/index.ts). Gắn vào `SessionStep.todos` (khi `kind === 'note'`) và `TraceNode.todos` (khi `type === 'todo'`).
+`TodoItem = { content: string; status: 'pending' | 'in_progress' | 'completed' }` — khai ở [shared.ts](../../apps/desktop/sidecar/src/types/shared.ts) (sidecar) + mirror [ui/types/index.ts](../../apps/desktop/ui/types/index.ts). Gắn vào `SessionStep.todos` (khi `kind === 'note'`), `TraceNode.todos` (khi `type === 'todo'`), và **`Session.todos`** — checklist *hiện tại* của session, persist trong `SessionHeader` (line 1 của session JSONL). Step/trace là **log lịch sử**; `Session.todos` là **state hiện tại**.
 
 ## Hành vi
 
-- **Sessions**: một panel "TODOS" ghim cố định trên composer (ngoài vùng cuộn message), hiển thị checklist TodoWrite **mới nhất** của cả phiên. Vì bám note step mới nhất trên toàn bộ messages (không phải một bubble cố định), nó **luôn thấy khi cuộn message dài** và **vẫn cập nhật sau khi cancel rồi tiếp tục** (lượt mới ghi todos vào message mới, panel tự bắt). Panel là chỉ báo tiến độ **đang chạy**: chỉ hiện khi turn còn in-flight (kể cả đang park hỏi/permission, qua `isSessionStreaming`), tự ẩn khi session idle hoặc đã hoàn thành hết. Lý do gate theo trạng thái chạy: model thường kết thúc lượt mà để item cuối ở `in_progress` (không gọi TodoWrite chốt `completed`) — nếu chỉ dựa `done < total` thì panel kẹt mãi ở kiểu "3/4".
+- **Sessions**: panel "TODOS" ghim cố định trên composer (ngoài vùng cuộn message) + section Checklist trong tab **Plan** của Workspace Panel. Cả hai đọc `Session.todos` qua [useSessionTodo](../../apps/desktop/ui-next/composables/useSessionTodo.ts) (fallback về note step mới nhất cho session chưa có field này), nên **không bao giờ lệch nhau**.
+  - **Không tự ẩn khi turn kết thúc.** Panel hiện suốt khi session có checklist — đó chính là lúc user cần biết "tới đâu rồi". Mở rộng khi việc còn đang chạy (`isActive` = turn in-flight và còn item chưa xong), tự thu thành **strip một dòng `done/total`** khi không. Toggle tay vẫn sticky đến khi trạng thái activity thực sự đổi.
+  - **Row sửa được.** Click một row cycle `pending → in_progress → completed → pending` rồi persist cả list (`sessions.updateTodos`). Riêng step inline trong transcript giữ **read-only**: nó là bản ghi model viết ở thời điểm đó, không phải state hiện tại.
 - **Tasks**: mỗi lần gọi TodoWrite là một node `todo` trong trace (trace là log thời gian, giữ từng lần gọi).
 - **Legacy**: note step cũ chỉ có `detail.text` (chưa có `todos`) không còn surface trong Sessions (panel ghim chỉ đọc `todos`); nhánh fallback text trong StepItem vẫn giữ cho các nơi khác render note step trực tiếp.
 
 ## Ngoài phạm vi
 
-- Không có **todo store** riêng — checklist chỉ là step/trace render từ tool call (đúng comment builtin-stubs).
-- Không cho user sửa todo từ UI (read-only, do model làm chủ).
+- **Không** thêm/xoá/sửa nội dung item từ UI — chỉ cycle được trạng thái. Nội dung vẫn do model viết.
+- **Không** cưỡng chế model tôn trọng bản sửa của user: `<session_checklist>` là chỉ dẫn, không phải hard constraint (xem trade-off ở [ADR 0069](../decisions/0069-editable-session-checklist.md)).
+- **Không** có view tổng hợp checklist cấp project (nhiều session + task). Chờ dữ liệu dùng thật rồi quyết.
+- **Tasks không** persist checklist — tiến độ của task đã có DAG node status riêng, nên ở đó `TodoWrite` vẫn chỉ ACK.

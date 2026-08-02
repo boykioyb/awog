@@ -9,7 +9,7 @@ import { useSidecar } from '~/composables/useSidecar'
 import { useTextPrompt } from '~/composables/useTextPrompt'
 import { useConfirm } from '~/composables/useConfirm'
 import { useToasts } from '~/composables/useToasts'
-import { usePreview, previewKindFromPath } from '~/composables/usePreview'
+import { usePreview, previewKindFromPath, isOfficeKind } from '~/composables/usePreview'
 import { hasBridge, saveFilePath } from '~/composables/useFolderPicker'
 
 // SFTP browser controller (page-controller pattern). Owns cwd / listing / multi-
@@ -544,7 +544,9 @@ export function useSftpBrowser(connId: Ref<string>) {
     const kind = previewKindFromPath(e.name)
     try {
       const res = await api.sftpRead(connId.value, join(e.name))
-      if (kind === 'image' || kind === 'pdf') {
+      // Binary-backed kinds (image / pdf / office) preview from their bytes, so they
+      // travel as a data URL instead of a UTF-8 decode that would just be garbage.
+      if (kind === 'image' || kind === 'pdf' || isOfficeKind(kind)) {
         const extn = e.name.split('.').pop()?.toLowerCase() ?? ''
         const mime =
           kind === 'pdf' ? 'application/pdf' : (IMG_MIME[extn] ?? 'application/octet-stream')

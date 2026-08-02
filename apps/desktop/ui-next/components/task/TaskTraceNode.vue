@@ -84,7 +84,8 @@
 import { computed, ref } from 'vue'
 import Icon from '~/components/Icon.vue'
 import { useI18n } from '~/composables/useI18n'
-import type { TodoStatus, TraceNode } from '~/stores/tasks'
+import type { TraceNode } from '~/stores/tasks'
+import type { TodoStatus } from '~/types'
 
 defineOptions({ name: 'TaskTraceNode' })
 

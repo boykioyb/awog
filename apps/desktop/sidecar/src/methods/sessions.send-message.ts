@@ -11,6 +11,7 @@ import { appendMessage, loadSession, updateSessionMetadata } from '../sessions/s
 import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { buildLinkedSshHostBlock } from '../sessions/linked-ssh-host.js'
+import { buildSessionChecklistBlock } from '../sessions/todo-context.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { loadProject } from '../projects/store.js'
 import {
@@ -881,6 +882,21 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ? `${systemPromptAppend}\n\n${linkedTask}`
         : linkedTask
     }
+  }
+
+  // Editable checklist: inject the session's CURRENT checklist as a
+  // <session_checklist> block so a user edit made in the UI reaches the model
+  // instead of being overwritten by its next TodoWrite. Read from disk (not from
+  // the client payload) so the persisted list stays the single source of truth.
+  // Best-effort — no checklist, or an unreadable session, yields no block.
+  try {
+    const withTodos = await loadSession(params.sessionId)
+    const checklist = buildSessionChecklistBlock(withTodos?.todos)
+    if (checklist) {
+      systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${checklist}` : checklist
+    }
+  } catch {
+    /* best-effort: never block the turn on the checklist block */
   }
 
   // Work link (ADR 0064, P1): when this session works with an SSH host, inject the

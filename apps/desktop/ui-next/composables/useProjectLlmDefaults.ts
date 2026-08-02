@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useSettingsStore } from '~/stores/settings'
 import { useConnectionsStore } from '~/stores/connections'
+import { THINKING_LEVELS } from '~/composables/useSessionsData'
 import type { ThinkingLevel } from '~/composables/useSessionsData'
 import { providerModelDisplayName, providerModelIds } from '~/composables/useProviderModels'
 import type { ProjectLlmDefaults, ProviderName } from '~/types'
@@ -23,7 +24,7 @@ export interface LlmDefaultsDraft {
 }
 
 const PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'google']
-const LEVELS: ThinkingLevel[] = ['low', 'medium', 'high', 'extra-high', 'max']
+const LEVELS = THINKING_LEVELS
 
 export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen: () => boolean) {
   const store = useProjectsStore()

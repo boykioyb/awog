@@ -7,6 +7,7 @@
 // desktop app the live stores load real data over IPC and ignore these.
 
 import type { ProviderName } from '~/stores/settings'
+import type { TodoStatus } from '~/types'
 import {
   providerModelsShown,
   providerModelDisplayName,
@@ -197,7 +198,9 @@ export type GitMeta = {
 // One row in the model's live checklist (a TodoWrite `note` step). `t` = label,
 // `done` = completed (kept for the mock seed + simple checks); `status` carries the
 // full 3-state so the panel can show an in-progress marker, not just done/undone.
-export type Todo = { t: string; done: boolean; status?: 'pending' | 'in_progress' | 'completed' }
+// `TodoStatus` itself lives in ~/types (shared with the tasks store) — re-exporting
+// it from here would put the same name in two auto-import roots.
+export type Todo = { t: string; done: boolean; status?: TodoStatus }
 
 // One bulk-loaded memory file / custom agent / skill in the breakdown (label +
 // char size; ÷4 ≈ tokens). Drives the expandable MEMORY FILES / CUSTOM AGENTS
@@ -287,6 +290,18 @@ export type QueuedMessage = {
 
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
+
+// The one catalog every effort picker renders (Settings → Defaults, the session
+// status-bar chip, per-project LLM defaults), ordered low → max. Labels come from
+// the shared `common.thinking.<level>` i18n keys — keep both in one place so the
+// pickers can't drift apart (one used to omit 'extra-high' and show English only).
+export const THINKING_LEVELS: readonly ThinkingLevel[] = [
+  'low',
+  'medium',
+  'high',
+  'extra-high',
+  'max',
+]
 
 // How the agent's mutating SSH tools (ssh_exec / ssh_write_file) are approved for a
 // session linked to an SSH host (ADR 0064 P2). Mirrors the sidecar SshApprovalMode.

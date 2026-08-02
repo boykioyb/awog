@@ -1,15 +1,24 @@
 import type { Session, StepBlock, Todo } from '~/composables/useSessionsData'
+import type { TodoStatus } from '~/types'
 
-// Shared derivation of a session's live checklist. Both the docked SessionTodoPanel
-// (the banner) and the inline transcript step read from here so they agree on ONE
-// rule: the latest TodoWrite owns the display, it lives in the banner ONLY while the
-// turn is running with open items, and once it finishes (all done) or the turn ends
-// it renders inline as a normal step instead — never both at once, never flickering
-// up during a reply that doesn't touch todos.
+// Shared state of a session's checklist, for the docked SessionTodoPanel (the banner),
+// the Plan & Progress tab, and the inline transcript step.
+//
+// `Session.todos` is the CURRENT checklist and the single source of truth: the engine
+// writes it on every TodoWrite and the user writes it by ticking a row, so both edits
+// land in one place (see sidecar sessions/todo-context.ts). The transcript step is only
+// a fallback for a session with no persisted list yet (mock mode / a session last
+// written before the field shipped).
+//
+// The banner stays pinned for as long as a checklist exists — expanded while work is
+// active, collapsed to a one-line `done/total` strip once the turn ends. The inline
+// transcript step takes over the full list at that point, so exactly one expanded copy
+// is ever on screen; it renders the model's own snapshot as a historical record and is
+// deliberately NOT editable (edits belong to the current list, not the log).
 export function useSessionTodo(getSession: () => Session | null | undefined) {
-  // The current checklist = the most recent assistant TodoWrite (`note`) step. Scanning
-  // from the end (messages, then blocks) keeps it current across cancel/resume turn
-  // boundaries: a new turn's checklist lands in a new block and we pick it up.
+  // Fallback source only (see the header): the most recent assistant TodoWrite (`note`)
+  // step. Scanning from the end (messages, then blocks) keeps it current across
+  // cancel/resume turn boundaries. Also drives the inline transcript record.
   const latestTodoStep = computed<StepBlock | null>(() => {
     const s = getSession()
     if (!s) return null
@@ -25,7 +34,12 @@ export function useSessionTodo(getSession: () => Session | null | undefined) {
     return null
   })
 
-  const todos = computed<Todo[]>(() => latestTodoStep.value?.todos ?? getSession()?.todos ?? [])
+  // Persisted current list wins; the transcript snapshot is the back-compat fallback.
+  const todos = computed<Todo[]>(() => {
+    const s = getSession()
+    if (s?.todos?.length) return s.todos
+    return latestTodoStep.value?.todos ?? []
+  })
   const total = computed(() => todos.value.length)
   const doneCount = computed(() => todos.value.filter((td) => td.done).length)
   const allDone = computed(() => total.value > 0 && doneCount.value === total.value)
@@ -44,24 +58,56 @@ export function useSessionTodo(getSession: () => Session | null | undefined) {
     )
   })
 
-  // Banner = the live, in-progress checklist. Visible ONLY while the turn runs and the
-  // latest list still has open items. It yields the moment work finishes (all done) or
-  // the turn ends — the checklist then re-appears as the inline step below.
-  const bannerVisible = computed(() => total.value > 0 && isRunning.value && !allDone.value)
+  // Work is live: the turn is running and the latest list still has open items. This
+  // drives the banner's *shape*, not its presence — while active the banner owns the
+  // full expanded list.
+  const isActive = computed(() => total.value > 0 && isRunning.value && !allDone.value)
 
-  // The todo step to render inline in the transcript: the latest one, but only while it
-  // is NOT occupying the banner (so the checklist shows in exactly one place). Older,
-  // intermediate snapshots are never the latest, so they stay hidden.
+  // Banner = pinned progress affordance. Visible for as long as a checklist exists,
+  // including after the turn ends — that is exactly when the user asks "where are we?".
+  // It collapses itself to a one-line strip when work is no longer active (see
+  // SessionTodoPanel) so it never competes with the inline record below.
+  const bannerVisible = computed(() => total.value > 0)
+
+  // The todo step to render inline in the transcript: the latest one, but only once the
+  // banner has stopped owning the full expanded list (so exactly one expanded copy is
+  // on screen). Older, intermediate snapshots are never the latest, so they stay hidden.
   const inlineTodoStep = computed<StepBlock | null>(() =>
-    bannerVisible.value ? null : latestTodoStep.value,
+    isActive.value ? null : latestTodoStep.value,
   )
+
+  // Click order for a row: pending → in_progress → completed → pending. One control
+  // reaches all three states, so there is no separate "start"/"done" affordance.
+  const NEXT_STATUS: Record<TodoStatus, TodoStatus> = {
+    pending: 'in_progress',
+    in_progress: 'completed',
+    completed: 'pending',
+  }
+
+  // Advance one row and persist the whole list. Writes to the session's current
+  // checklist (never to the transcript record), so the next turn re-injects the edit
+  // and the model treats it as the state of the work rather than overwriting it.
+  function cycleTodo(index: number) {
+    const s = getSession()
+    if (!s) return
+    const current = todos.value
+    const row = current[index]
+    if (!row) return
+    const status = NEXT_STATUS[row.status ?? (row.done ? 'completed' : 'pending')]
+    const next = current.map((td, i) =>
+      i === index ? { ...td, status, done: status === 'completed' } : td,
+    )
+    useSessionsStore().setTodos(s.id, next)
+  }
 
   return {
     todos,
     total,
     doneCount,
+    cycleTodo,
     allDone,
     isRunning,
+    isActive,
     bannerVisible,
     latestTodoStep,
     inlineTodoStep,

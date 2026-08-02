@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { THINKING_LEVELS } from '~/composables/useSessionsData'
 import type { Session, ThinkingLevel } from '~/composables/useSessionsData'
 import type { AccountOption } from '~/composables/useAccounts'
 
@@ -7,14 +8,7 @@ import type { AccountOption } from '~/composables/useAccounts'
 // the per-turn Mode chip). Reads the given session, writes through store actions so
 // selections persist + drive engineSettings on the next turn. Pure orchestration.
 
-// Thinking (reasoning effort) levels + the models that don't support it.
-const THINK: [ThinkingLevel, string][] = [
-  ['low', 'Low'],
-  ['medium', 'Medium'],
-  ['high', 'High'],
-  ['extra-high', 'Extra high'],
-  ['max', 'Max'],
-]
+// Models with no reasoning support — the effort chip hides for these.
 const NO_THINK = new Set(['Haiku 4.5', 'GPT-4.1'])
 
 // Response-style catalog. `id` is the engine contract (sent via store.setStyle —
@@ -133,9 +127,16 @@ export function useSessionModelConfig(session: () => Session) {
   }
 
   // ── Reasoning effort (thinking) ──
+  // Same catalog + same localized labels as Settings → Defaults and the per-project
+  // LLM defaults, so the three pickers always offer the same wording and options.
+  const THINK = computed<[ThinkingLevel, string][]>(() =>
+    THINKING_LEVELS.map((lv) => [lv, t(`common.thinking.${lv}`)]),
+  )
   const thinkSupported = computed(() => !NO_THINK.has(selectedModel.value))
   const thinking = computed<ThinkingLevel>(() => session().thinkingLevel ?? 'high')
-  const thinkingLabel = computed(() => THINK.find(([v]) => v === thinking.value)?.[1] ?? 'High')
+  const thinkingLabel = computed(
+    () => THINK.value.find(([v]) => v === thinking.value)?.[1] ?? t('common.thinking.high'),
+  )
   function selectThink(v: ThinkingLevel) {
     if (thinkSupported.value) store.setThinking(session().id, v)
   }

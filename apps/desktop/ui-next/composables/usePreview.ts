@@ -17,8 +17,20 @@ export type PreviewRef = {
   // 'folder' renders a lazy file tree of `workspaceRoot` (dragged working folder);
   // 'html' renders a sandboxed iframe (render) with a raw (Monaco) toggle;
   // 'video' / 'audio' stream through the media:// protocol (workspace files) or an
-  // in-memory `src` (drag-dropped blob); all other kinds render a single file.
-  kind: 'image' | 'pdf' | 'markdown' | 'text' | 'file' | 'html' | 'folder' | 'video' | 'audio'
+  // in-memory `src` (drag-dropped blob); 'doc' (Word) / 'sheet' (Excel) are parsed
+  // from their OOXML bytes (utils/office-*); all other kinds render a single file.
+  kind:
+    | 'image'
+    | 'pdf'
+    | 'markdown'
+    | 'text'
+    | 'file'
+    | 'html'
+    | 'folder'
+    | 'video'
+    | 'audio'
+    | 'doc'
+    | 'sheet'
   // Object URL / data URL for images and PDFs (drag-dropped / inlined files).
   src?: string
   // In-memory source for markdown / text (drag-dropped files, mock data).
@@ -46,6 +58,10 @@ const RE_HTML = /\.html?$/i
 // the matching MIME. mkv/mov depend on codec — the modal falls back gracefully.
 const RE_VIDEO = /\.(mp4|m4v|webm|ogv|mov|mkv)$/i
 const RE_AUDIO = /\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i
+// OOXML only — the legacy binary .doc/.xls formats aren't parseable in-app and
+// keep falling through to the "binary file, open externally" placeholder.
+const RE_DOC = /\.(docx|docm|dotx)$/i
+const RE_SHEET = /\.(xlsx|xlsm|xltx)$/i
 
 export function previewKindFromPath(path: string): PreviewRef['kind'] {
   if (RE_IMAGE.test(path)) return 'image'
@@ -54,8 +70,14 @@ export function previewKindFromPath(path: string): PreviewRef['kind'] {
   if (RE_HTML.test(path)) return 'html'
   if (RE_VIDEO.test(path)) return 'video'
   if (RE_AUDIO.test(path)) return 'audio'
+  if (RE_DOC.test(path)) return 'doc'
+  if (RE_SHEET.test(path)) return 'sheet'
   return 'text'
 }
+
+/** True for the OOXML kinds that need raw bytes (not text) to preview. */
+export const isOfficeKind = (kind: PreviewRef['kind']): boolean =>
+  kind === 'doc' || kind === 'sheet'
 
 // Build the media:// URL for a workspace video/audio file. The Electron main
 // process (apps/desktop/electron/src/media.ts) serves this scheme with HTTP Range
@@ -81,6 +103,9 @@ export function previewKindFromAttachment(a: {
   // dropped media file with no inline `src` falls through to an opaque file card.
   if (a.src && RE_VIDEO.test(a.name)) return 'video'
   if (a.src && RE_AUDIO.test(a.name)) return 'audio'
+  // Office previews parse the bytes behind `src`; without one there's nothing to read.
+  if (a.src && RE_DOC.test(a.name)) return 'doc'
+  if (a.src && RE_SHEET.test(a.name)) return 'sheet'
   if (a.text == null) return 'file'
   if (RE_MD.test(a.name)) return 'markdown'
   if (RE_HTML.test(a.name)) return 'html'

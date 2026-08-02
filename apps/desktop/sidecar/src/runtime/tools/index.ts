@@ -34,6 +34,7 @@ import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createSourceTools } from './source-tools.js'
 import { createTodoWriteTool, createWebSearchTool } from './builtin-stubs.js'
+import type { TodoSink } from './builtin-stubs.js'
 import { createWebFetchTool } from './web-fetch-tool.js'
 import { createBrowserTool } from './browser-tool.js'
 import { wrapToolsWithHooks, type HookToolContext } from '../../hooks/tool-anchor.js'
@@ -77,6 +78,12 @@ export interface ToolFilter {
   // run_in_background silently degrades to synchronous there. Not a filter per se,
   // but threaded here alongside the other per-turn tool-assembly options.
   backgroundExec?: { sessionId: string }
+  // Checklist persistence: when set, TodoWrite also writes its list to the session's
+  // Session.todos, which is what lets the user edit the checklist and have the edit
+  // survive the model's next TodoWrite (sessions/todo-context.ts). Set ONLY by the
+  // chat runtime (sessions); tasks track progress through their own DAG, so there
+  // TodoWrite stays a pure ACK.
+  todoSink?: TodoSink
 }
 
 // Whether a tool name survives the filter: allowedTools (intersect when set) +
@@ -156,7 +163,9 @@ export function createAwogToolDefinitions(
     createNotebookEditTool(cwd),
     // Graceful stubs for Claude Code built-ins the OAuth model emits but AWOG
     // doesn't implement (ADR 0030) — avoids "Tool <name> not found".
-    createTodoWriteTool(),
+    // TodoWrite persists to Session.todos when the chat runtime supplies a sink,
+    // otherwise it is a pure ACK (see builtin-stubs).
+    createTodoWriteTool(filter.todoSink),
     createWebSearchTool(),
     // Real fetch over the SSRF-guarded HTTP path (ADR 0042).
     createWebFetchTool(),

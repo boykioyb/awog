@@ -138,6 +138,19 @@
             </div>
           </template>
 
+          <!-- docx → parsed block model rendered as a reading column -->
+          <OfficeDocView v-else-if="showOfficeDoc && officeDoc" :doc="officeDoc" />
+
+          <!-- xlsx → sheet grid + sheet tabs (fills the body, owns its scroll) -->
+          <OfficeSheetView v-else-if="showOfficeSheet" :office="office" />
+
+          <!-- office file that parsed to nothing readable (empty doc / empty sheet) -->
+          <div v-else-if="officeEmpty" class="pvempty">
+            <Icon :name="headIcon" style="width: 40px; height: 40px" />
+            <div class="pvename">{{ shownItem.name }}</div>
+            <div class="pvehint">{{ t('common.preview.officeEmpty') }}</div>
+          </div>
+
           <!-- html render → sandboxed, opaque-origin iframe (allow-scripts but NO
                allow-same-origin: the page's JS runs isolated, can't reach app:// or
                the parent). Relative/CDN assets won't resolve — "open in browser" is
@@ -274,6 +287,8 @@
 <script setup lang="ts">
 import MermaidView from '~/components/common/MermaidView.vue'
 import MonacoViewer from '~/components/common/MonacoViewer.vue'
+import OfficeDocView from '~/components/common/OfficeDocView.vue'
+import OfficeSheetView from '~/components/common/OfficeSheetView.vue'
 import PreviewToolbar from '~/components/common/PreviewToolbar.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreviewModal } from '~/composables/usePreviewModal'
@@ -315,6 +330,10 @@ const {
   monacoLang,
   mediaError,
   onMediaError,
+  office,
+  showOfficeDoc,
+  showOfficeSheet,
+  officeEmpty,
   editorValue,
   editorReadOnly,
   onEditorChange,
@@ -339,6 +358,9 @@ const {
   hasWorkspaceFile,
 } = ctrl
 const { headings, activeHeading, goto, onScroll, mdMaxWidth } = ctrl.outline
+// Unwrapped separately: `office` is a plain controller object, so its refs only
+// unwrap in the template once bound as a top-level name.
+const { doc: officeDoc } = ctrl.office
 
 // Header shows the file's path (workspace-relative) instead of the bare name, so
 // the user sees where the file lives. `absPath` is the absolute path — used for

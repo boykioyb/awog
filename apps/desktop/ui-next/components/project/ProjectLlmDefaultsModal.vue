@@ -60,7 +60,7 @@
             :class="{ on: ctrl.draft.value.level === lv }"
             @click="ctrl.setLevel(lv)"
           >
-            {{ t('projects.llm.level.' + lv) }}
+            {{ t('common.thinking.' + lv) }}
           </button>
         </div>
       </div>

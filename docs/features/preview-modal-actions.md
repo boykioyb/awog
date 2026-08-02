@@ -4,7 +4,8 @@
 > với **theme picker cho Monaco** + **9 thao tác file**, và refactor SFC theo
 > page-controller (nuxt-vue rule). Liên quan: [ADR 0053](../decisions/0053-monaco-themes-dependency.md)
 > (dependency `monaco-themes`), [ADR 0045](../decisions/0045-settings-json-file-persistence.md)
-> (persist `~/.awog/settings.json`), [workspace-panel](workspace-panel.md) (nguồn preview file).
+> (persist `~/.awog/settings.json`), [workspace-panel](workspace-panel.md) (nguồn preview file),
+> [office-preview](office-preview.md) (kind `doc`/`sheet` — `.docx`/`.xlsx`).
 
 ## Bối cảnh
 

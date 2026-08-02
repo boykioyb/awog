@@ -21,6 +21,8 @@ import { confirmOverageOrStop } from './overage-guard.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../sessions/runner.js'
+import { updateSessionMetadata } from '../sessions/store.js'
+import type { TodoItem } from '../types/shared.js'
 import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
 import { buildContext, historyToAgentMessages } from './context-builder.js'
@@ -105,6 +107,8 @@ export async function runStreamPi(
   // upstream). allowedTools/disabledTools filter both kinds uniformly. A failing
   // MCP server is skipped (warn) so it never blocks the turn.
   const inPlanMode = args.settings.mode === 'plan'
+  // Captured in a const so TS narrows it inside the todoSink closure below.
+  const todoSessionId = args.sessionId
   const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
@@ -128,6 +132,13 @@ export async function runStreamPi(
       // is woken when it exits. Not in plan mode (Bash is read-only-blocked there).
       ...(!inPlanMode && args.sessionId
         ? { backgroundExec: { sessionId: args.sessionId } }
+        : {}),
+      // Editable checklist: persist every TodoWrite as the session's current
+      // checklist so a user edit in the UI has something authoritative to write to
+      // and the next turn re-injects it (sessions/todo-context.ts). Sessions only.
+      // Allowed in plan mode too — planning is exactly when the checklist forms.
+      ...(todoSessionId
+        ? { todoSink: (todos: TodoItem[]) => updateSessionMetadata(todoSessionId, { todos }) }
         : {}),
     },
     args.abortController?.signal,

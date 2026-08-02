@@ -410,6 +410,14 @@ export interface Session {
   aboutGhUrl?: string
   // Latest context-compaction checkpoint (ADR 0047), or absent if never compacted.
   compaction?: SessionCompaction
+  // The session's CURRENT work checklist — the authoritative copy, written both by
+  // the model's TodoWrite (runtime ToolFilter.todoSink) and by the user's own edits
+  // (sessions.updateTodos). Re-injected as a <session_checklist> block on every turn
+  // (sessions/todo-context.ts) because the model otherwise only sees its own last
+  // TodoWrite in context and would silently overwrite a user edit. The transcript
+  // still records each TodoWrite step as history; this is only the current state.
+  // Absent for a session that never had a checklist.
+  todos?: TodoItem[]
   // Claude Agent SDK session id (ADR 0058, Anthropic path only). Set once the
   // first SDK turn runs and updated whenever the SDK rotates it; the next turn
   // passes it as `resume` so the SDK restores conversation history + compaction

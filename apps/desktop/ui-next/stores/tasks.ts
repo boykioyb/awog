@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import { useSettingsStore, type AutoCommitScope } from '~/stores/settings'
+import type { TodoStatus } from '~/types'
 
 // Tasks store — dual-path live. When the Electron bridge is available
 // (`sc.available`) `loadTasks()` pulls the real task list over IPC and a lazy
@@ -46,7 +47,9 @@ export type TaskSource =
   | { type: 'manual' }
   | { type: 'session'; sessionId: string; messageId?: string; connectionId?: string }
 
-export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+// `TodoStatus` comes from ~/types (shared with the sessions domain) and is NOT
+// re-exported: stores/ and composables/ are both auto-import roots, so the same
+// exported name in both makes Nuxt drop one and warn.
 export type TodoItem = { content: string; status: TodoStatus }
 
 // One node in the live execution trace tree (agent / subagent / tool / thinking /

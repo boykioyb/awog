@@ -46,6 +46,7 @@ type SessionMetadataPatch = Partial<
     | 'forkFromMessageId'
     | 'sdkSessionId'
     | 'compaction'
+    | 'todos'
   >
 >
 
