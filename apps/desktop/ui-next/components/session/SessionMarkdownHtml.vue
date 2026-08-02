@@ -25,6 +25,9 @@ const { t } = useI18n()
 const root = useTemplateRef<HTMLElement>('root')
 // Opens / shortens workspace file references in the markdown (from SessionDetail).
 const filePreview = useFilePreview()
+// Shared PreviewModal store — used for images that already carry a loadable src
+// (data:/http:), which have no workspace file for filePreview to resolve.
+const { open: openPreview } = usePreview()
 
 // Wrap each quoted excerpt in numbered <mark>s. A quote spanning multiple blocks yields one
 // range per block (locateMarks splits at block boundaries — an inline <mark> can't legally
@@ -203,6 +206,46 @@ function linkifyFilePaths(el: HTMLElement) {
   })
 }
 
+// Markdown renderers percent-encode non-ASCII src destinations — decode so the path
+// matches the real workspace file (mirrors the link handling in linkifyFilePaths).
+function decodeSrc(s: string): string {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s // malformed escape sequence — keep the raw string
+  }
+}
+
+// Clicking a transcript image opens it full-window in the shared PreviewModal (§7) — the
+// same viewer (zoom / pan / rotate) the attachment chips use, so an inline screenshot is
+// readable without leaving the session. A workspace image routes through filePreview.open
+// so the modal reads the real file (header path + copy path + open-externally); an
+// already-loadable src (data:/http:) is handed over inline. Listeners die with the subtree
+// on the next rerender, like the copy buttons.
+function makeImageClickable(img: HTMLImageElement, raw: string, workspacePath: string | null) {
+  if (img.closest('a')) return // wrapped in a link — that handler already owns the click
+  const openIt = (e: Event) => {
+    e.preventDefault()
+    if (workspacePath) {
+      filePreview.open(workspacePath)
+      return
+    }
+    const name = decodeSrc(raw).split(/[?#]/)[0]?.split('/').pop() || img.alt || 'image'
+    openPreview({ name, kind: 'image', src: raw })
+  }
+  img.classList.add('imgopen')
+  img.setAttribute('role', 'button')
+  img.setAttribute('tabindex', '0')
+  img.title = workspacePath
+    ? t('sessions.preview.openFile', { path: filePreview.shorten(workspacePath) })
+    : t('sessions.preview.openImage')
+  img.addEventListener('click', openIt)
+  img.addEventListener('keydown', (e) => {
+    const k = (e as KeyboardEvent).key
+    if (k === 'Enter' || k === ' ') openIt(e)
+  })
+}
+
 // Markdown images reference workspace files by a path relative to the session's workspace
 // root (e.g. a QA report's evidence screenshots: `![RFQ](tasks/…/ac-001-rfq.png)`). The
 // renderer would resolve that relative src against the PAGE origin (app://bundle/… or the
@@ -210,23 +253,40 @@ function linkifyFilePaths(el: HTMLElement) {
 // real bytes via the sidecar (filePreview.imageSrc → data: URL) and swap the src in. Runs
 // after each subtree rebuild; the renderToken guard drops a write whose nodes a later
 // streaming frame already replaced. Reads are cached in useFilePreview, so re-renders
-// re-apply the resolved src without re-reading. Absolute/remote srcs are left untouched.
+// re-apply the resolved src without re-reading. Absolute/remote srcs need no read — they
+// only get the click-to-preview handler. Every displayable image ends up clickable.
 function resolveImages(el: HTMLElement) {
   const imgs = Array.from(el.querySelectorAll('img'))
   if (!imgs.length) return
   const token = renderToken
   for (const img of imgs) {
     const raw = (img.getAttribute('src') ?? '').trim()
-    if (!raw || /^(?:https?:|data:|blob:|app:|file:)/i.test(raw)) continue // already loadable
+    if (!raw) continue
+    if (/^(?:https?:|data:|blob:|app:|file:)/i.test(raw)) {
+      makeImageClickable(img, raw, null) // already loadable — preview the src as-is
+      continue
+    }
     // Stop the doomed relative-URL load (a flashed broken icon against the page origin)
     // while the real bytes are read from the workspace.
     img.removeAttribute('src')
     img.classList.add('imgloading')
     void filePreview.imageSrc(raw).then((url) => {
-      if (token !== renderToken || !img.isConnected) return // subtree replaced while reading
+      // Only the render token may gate the write. It already proves the node belongs to
+      // the CURRENT subtree; an extra `img.isConnected` check would additionally require
+      // the node to be in the document — false for a <KeepAlive>-cached SessionDetail
+      // (pages/sessions caches 5 instances; a deactivated one's DOM is parked in Vue's
+      // detached storage container). A reply that finishes streaming while its session is
+      // cached-inactive would then drop the resolved src for good: coming back re-attaches
+      // the SAME nodes, and rerender() early-returns on unchanged html, so the image stays
+      // a blank .imgloading box forever. Writing src on a detached node is safe — it loads
+      // when re-attached.
+      if (token !== renderToken) return // subtree replaced while reading
       img.classList.remove('imgloading')
       if (url) {
         img.src = url
+        // Only a resolved image becomes clickable — a missing one is replaced by the
+        // placeholder below, which must not pretend to open anything.
+        makeImageClickable(img, raw, decodeSrc(raw).split(/[?#]/)[0] ?? raw)
       } else {
         // Unresolved (missing file / browser-dev / over cap) → a compact placeholder with
         // the alt text or filename instead of the browser's broken-image icon.
@@ -481,6 +541,22 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
   height: auto;
   border-radius: 6px;
   border: 1px solid var(--border);
+}
+/* Resolved image → click opens the full-window PreviewModal. zoom-in cursor + an accent
+   border on hover/focus is the whole affordance (no overlay chrome over the picture). */
+.mdinline :deep(img.imgopen) {
+  cursor: zoom-in;
+  transition: border-color 0.12s ease;
+}
+.mdinline :deep(img.imgopen:hover),
+.mdinline :deep(img.imgopen:focus-visible) {
+  border-color: var(--accent);
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mdinline :deep(img.imgopen) {
+    transition: none;
+  }
 }
 /* Bytes are being read from the workspace — the relative src is removed so the browser
    doesn't flash a broken icon; show a neutral box until the data: URL lands. */

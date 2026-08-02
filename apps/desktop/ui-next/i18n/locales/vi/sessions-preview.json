@@ -5,5 +5,6 @@
   "sessions.preview.binary": "Tệp nhị phân — mở bằng ứng dụng ngoài để xem",
   "sessions.preview.openAttachment": "Mở xem trước",
   "sessions.preview.openFile": "Mở {path}",
+  "sessions.preview.openImage": "Mở ảnh",
   "sessions.preview.pdfNote": "Trình xem nhúng không hỗ trợ điều hướng PDF nhiều trang"
 }

@@ -158,6 +158,7 @@ import type {
 } from '~/composables/useSessionsData'
 import type { BlockHighlight } from './SessionTextBlock.vue'
 import type { ActivityEntry } from './SessionTurnActivities.vue'
+import type { PreviewRef } from '~/composables/usePreview'
 import {
   finalResponseIndex,
   responseIndex,
@@ -426,14 +427,20 @@ const branch = () => act((id, i) => store.fork(id, i, 'branch'))
 // (usePreview, the SAME instance mounted in SessionDetail) as rendered markdown:
 // a read-only viewer with outline + scroll, the comfortable way to read a long
 // reply. No-op on an empty body.
+// Markdown images in a reply are workspace-relative (`![shot](tasks/…/x.png)`), the same
+// base the transcript resolves them against. The modal renders the text through its OWN
+// pipeline, so hand it the session's workspace root — without it every inline image
+// resolves against the app:// origin and renders as a broken icon.
 const { open: openPreview } = usePreview()
+const filePreview = useFilePreview()
 const openFullscreen = () => {
   const text = plainText.value
   if (!text.trim()) return
-  openPreview({
-    name: store.active?.title?.trim() || t('sessions.message.fullscreenName'),
-    kind: 'markdown',
-    text,
+  const name = store.active?.title?.trim() || t('sessions.message.fullscreenName')
+  void filePreview.root().then((root) => {
+    const item: PreviewRef = { name, kind: 'markdown', text }
+    if (root) item.workspaceRoot = root
+    openPreview(item)
   })
 }
 

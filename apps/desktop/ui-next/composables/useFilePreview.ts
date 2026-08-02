@@ -30,6 +30,11 @@ type FilePreviewApi = {
   // (browser-dev, climbs out of the workspace, missing, non-image, over the size
   // cap). Lets the transcript render `![alt](tasks/…/shot.png)` images inline.
   imageSrc: (src: string) => Promise<string | null>
+  // Absolute workspace root of the session (its cwd), resolved on demand (cached).
+  // Callers that hand a message's markdown to ANOTHER renderer — the fullscreen
+  // PreviewModal — need it to anchor relative image refs at the same base the
+  // transcript uses. null in browser-dev / a session with no project.
+  root: () => Promise<string | null>
 }
 const KEY: InjectionKey<FilePreviewApi> = Symbol('filePreview')
 
@@ -234,7 +239,7 @@ export function provideFilePreview(
       return null
     }
   }
-  provide(KEY, { open, shorten, resolve, imageSrc })
+  provide(KEY, { open, shorten, resolve, imageSrc, root: ensureRoot })
 }
 
 // No host (markdown rendered outside a session transcript) → links are inert.
@@ -243,6 +248,7 @@ const NOOP: FilePreviewApi = {
   shorten: (p) => p,
   resolve: () => Promise.resolve(null),
   imageSrc: () => Promise.resolve(null),
+  root: () => Promise.resolve(null),
 }
 
 // Leaf-side API, injected from the nearest provideFilePreview ancestor.
