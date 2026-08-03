@@ -85,6 +85,15 @@ function addCopyButtons(el: HTMLElement) {
   for (const pre of Array.from(el.querySelectorAll('pre'))) {
     const code = pre.querySelector('code')
     if (!code) continue
+    // Anchor the copy button to a non-scrolling wrapper around <pre>, NOT to <pre>
+    // itself. <pre> is the horizontal scroll container, and an absolutely-positioned
+    // child of it is placed against the FULL scrolled width — so on a wide block the
+    // button drifts left out of view as the user scrolls right (it never re-pins to the
+    // visible corner). The wrapper doesn't scroll, so the button stays pinned top-right.
+    const wrap = document.createElement('div')
+    wrap.className = 'codeblock'
+    pre.replaceWith(wrap)
+    wrap.appendChild(pre)
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'codecopy'
@@ -103,7 +112,7 @@ function addCopyButtons(el: HTMLElement) {
         btn.innerHTML = COPY_SVG
       }, COPY_RESET_MS)
     })
-    pre.appendChild(btn)
+    wrap.appendChild(btn)
   }
 }
 
@@ -394,9 +403,22 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
   border-color: var(--accent);
   outline: none;
 }
-.mdinline :deep(pre) {
+/* Non-scrolling wrapper around a code block's <pre> (added by addCopyButtons). The copy
+   button anchors to THIS (a sibling of <pre>), so it stays pinned to the visible
+   top-right corner when a wide block scrolls horizontally, instead of drifting with the
+   scrolled content. Owns the block's bottom margin (moved off <pre>). */
+.mdinline :deep(.codeblock) {
   position: relative;
   margin: 0 0 10px;
+}
+/* Zero the wrapper's bottom margin when it's the run's last child — mirrors the
+   `> :last-child` rule above (this rule comes later with equal specificity, so it would
+   otherwise re-introduce the 10px the design zeroes to avoid doubling the inter-segment gap). */
+.mdinline :deep(> .codeblock:last-child) {
+  margin-bottom: 0;
+}
+.mdinline :deep(pre) {
+  margin: 0;
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -430,7 +452,7 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
     color 0.12s ease,
     background 0.12s ease;
 }
-.mdinline :deep(pre:hover .codecopy),
+.mdinline :deep(.codeblock:hover .codecopy),
 .mdinline :deep(.codecopy:focus-visible) {
   opacity: 1;
 }

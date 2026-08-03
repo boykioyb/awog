@@ -82,6 +82,27 @@ watch(
     }
   },
 )
+// Stream-end flush: when the trailing block stops streaming, render the SETTLED text
+// synchronously instead of waiting on the throttle's trailing timer. That timer is the
+// only thing that would apply the final `props.text`, and it can be cleared on unmount or
+// fire after the block has been parked in <KeepAlive>'s detached store (pages/sessions
+// caches 5 SessionDetail instances) — leaving `renderSrc` pinned to a mid-stream value.
+// Because the instance is cached, navigating within the app never remounts it, so the
+// reply stays truncated until the app is restarted (a fresh mount re-seeds `renderSrc`
+// from the full text). Flushing here makes the final text authoritative the moment
+// streaming ends. `props.text` is already the settled full text by then (the store snaps
+// it before flipping `streaming` off).
+watch(
+  () => props.streaming,
+  (on, was) => {
+    if (!was || on) return
+    if (trailing) {
+      clearTimeout(trailing)
+      trailing = null
+    }
+    renderSrc.value = props.text
+  },
+)
 // Sanitized markdown segments (html runs + mermaid code), in document order. While
 // streaming, render granularly (one segment per block) so only the trailing, growing
 // block re-parses/rebuilds each frame; a finalized block parses once as a merged run.
