@@ -65,7 +65,9 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
             provider: ld.provider,
             accountId: ld.accountId,
             modelId: ld.modelId,
-            level: ld.level,
+            // undefined = inherit the global level → show it in the form so the
+            // control has a concrete value; save() re-drops it if still == global.
+            level: ld.level ?? settings.defaults.thinkingLevel,
             mcpServerIds: ld.mcpServerIds ? [...ld.mcpServerIds] : undefined,
           }
         : appDefault()
@@ -150,8 +152,13 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
       const llmDefaults: ProjectLlmDefaults = {
         provider: draft.value.provider,
         modelId: draft.value.modelId,
-        level: draft.value.level,
       }
+      // Pin the thinking level ONLY when it differs from the current global default;
+      // "same as global" stays inherited (undefined) so a later change to the global
+      // default still propagates to this project (else every save re-freezes the
+      // level, the bug where projects got stuck on an old global value).
+      if (draft.value.level !== settings.defaults.thinkingLevel)
+        llmDefaults.level = draft.value.level
       if (draft.value.accountId) llmDefaults.accountId = draft.value.accountId
       if (draft.value.mcpServerIds !== undefined)
         llmDefaults.mcpServerIds = [...draft.value.mcpServerIds]
