@@ -113,7 +113,15 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   const { t } = useI18n()
   const { renderMarkdown } = useMarkdown()
   const sc = useSidecar()
-  const { current: sharedItem, close: closeShared, takeRestore } = usePreview()
+  const {
+    current: sharedItem,
+    close: closeShared,
+    takeRestore,
+    push: pushShared,
+    replace: replaceShared,
+    back: backShared,
+    canGoBack,
+  } = usePreview()
   const chatAttach = useChatAttach()
   const dock = useMinimizeDock()
   // Office (docx/xlsx) model + view state, parsed from the file's bytes.
@@ -312,13 +320,37 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     const root = item.value?.workspaceRoot
     if (!root) return
     treeSelected.value = path
-    // Repoint the shared item → the load watcher fetches the file content.
-    sharedItem.value = {
+    // Navigate INTO the file (push history) → the load watcher fetches its content,
+    // and Back returns to this folder tree.
+    pushShared({
       name: path.split('/').pop() || path,
       kind: previewKindFromPath(path),
       workspaceRoot: root,
       path,
-    }
+    })
+  }
+
+  // A workspace/relative link clicked inside the RENDERED markdown → open the
+  // referenced file IN THIS modal (repoint the shared item) instead of letting the
+  // SPA router navigate to a dead route (a bare doc path like `tasks/…/review.md`
+  // has no page → 404 + "Go back home" nukes the session). Mirrors
+  // SessionMarkdownHtml's link handling; the shell-mounted modal has no
+  // useFilePreview index, so it resolves the href relative to the current file's
+  // dir (resolveMdAsset — same base the inline images use) under the item's
+  // workspaceRoot. External URLs / in-page anchors are filtered by the caller.
+  function openLink(href: string): void {
+    const root = item.value?.workspaceRoot
+    if (!root) return
+    const path = resolveMdAsset(href)
+    if (!path) return
+    // Navigate INTO the linked file (push history) so Back returns to the doc/response
+    // the link was clicked from.
+    pushShared({
+      name: path.split('/').pop() || path,
+      kind: previewKindFromPath(path),
+      workspaceRoot: root,
+      path,
+    })
   }
 
   const treeCtrl: FileTreeController = {
@@ -653,8 +685,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
         fromPath: it.path,
         toPath: to,
       })
-      // Repoint the shared item → the load watcher refetches the new path.
-      sharedItem.value = { ...it, path: to, name: to.split('/').pop() || to }
+      // Replace in place (NOT a history push) → the load watcher refetches the new
+      // path; Back must not return to the old path that no longer exists.
+      replaceShared({ ...it, path: to, name: to.split('/').pop() || to })
       closeRename()
       flash(t(rename.mode === 'move' ? 'common.preview.moved' : 'common.preview.renamed'))
     } catch (e) {
@@ -687,7 +720,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     if (!it?.workspaceRoot || !it.path) return
     try {
       await sc.request('fs.delete', { workspaceRoot: it.workspaceRoot, path: it.path })
-      doClose()
+      // Return to the parent frame (folder tree / doc) if we navigated in; otherwise
+      // close the modal.
+      if (!backShared()) doClose()
     } catch (e) {
       flash(errMessage(e) || t('common.preview.deleteError'), true)
     }
@@ -819,6 +854,26 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     }
     doClose()
   }
+  // Back one frame in the preview history (Back button + Esc when depth>0). Guards
+  // unsaved edits with the same discard confirm as close(), so going back never
+  // silently drops a draft.
+  function goBack() {
+    if (!canGoBack.value) return
+    if (dirty.value) {
+      confirmReq.value = {
+        titleKey: 'common.preview.discardTitle',
+        messageKey: 'common.preview.discardConfirm',
+        confirmKey: 'common.preview.discard',
+        danger: true,
+        run: () => {
+          cancelEdit()
+          backShared()
+        },
+      }
+      return
+    }
+    backShared()
+  }
 
   // Reset per-item view + edit state and (re)load when the previewed item changes.
   watch(
@@ -867,6 +922,8 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     if (e.key === 'Escape') {
       if (rename.open) closeRename()
       else if (confirmReq.value) cancelConfirm()
+      // Esc pops one history frame when we've navigated in; only closes at the root.
+      else if (canGoBack.value) goBack()
       else close()
     }
   }
@@ -930,6 +987,7 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     save,
     // file actions
     reveal,
+    openLink,
     openInBrowser,
     copyPath,
     copyContent,
@@ -952,6 +1010,8 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     actionMsg,
     actionErr,
     close,
+    canGoBack,
+    goBack,
     onKey,
   }
 }

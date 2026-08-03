@@ -19,6 +19,7 @@
 // boundary as v-html). Highlights not found in this run are simply skipped by locateMarks.
 import type { BlockHighlight } from './SessionTextBlock.vue'
 import { locateMarks, type QuoteMark } from '~/utils/quote-highlight'
+import { isInternalFileHref } from '~/utils/file-links'
 
 const props = defineProps<{ html: string; highlights?: BlockHighlight[] }>()
 const { t } = useI18n()
@@ -141,8 +142,7 @@ function linkifyFilePaths(el: HTMLElement) {
   const links: { holder: { target: string }; a: HTMLElement; path: string }[] = []
   for (const a of Array.from(el.querySelectorAll('a'))) {
     let href = (a.getAttribute('href') ?? '').trim()
-    if (!href || href.startsWith('#')) continue // in-page anchor — leave alone
-    if (/^([a-z][a-z\d+.-]*:\/\/|mailto:|tel:)/i.test(href)) continue // external — default handling
+    if (!isInternalFileHref(href)) continue // in-page anchor / external — leave alone
     // Markdown renderers percent-encode non-ASCII link destinations (e.g. Japanese
     // filenames) — decode so the path matches the real workspace file, not %E3%83…
     try {
