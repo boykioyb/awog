@@ -63,7 +63,7 @@ function nearestBlock(node: Node, root: HTMLElement): Element {
 // boundary we emit a SYNTHETIC space with a `null` map entry: it lets the needle (whose own
 // inter-block newlines normalized to spaces) match across blocks, while the `null` marks the
 // spot as un-wrappable so the caller splits the run there instead of spanning the boundary.
-function buildTextIndex(root: HTMLElement): { text: string; map: (CharPos | null)[] } {
+export function buildTextIndex(root: HTMLElement): { text: string; map: (CharPos | null)[] } {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let text = ''
   const map: (CharPos | null)[] = []

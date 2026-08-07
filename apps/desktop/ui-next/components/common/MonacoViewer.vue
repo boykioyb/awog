@@ -192,6 +192,19 @@ function retry(): void {
   void initEditor()
 }
 
+// Open Monaco's own find widget (⌘/Ctrl+F). The preview overlay calls this when the
+// key is pressed while a code file is shown but focus isn't yet inside the editor
+// (Monaco only self-binds ⌘F when focused). Returns false if the editor isn't ready
+// so the caller can leave the browser's default find alone instead of a dead no-op.
+function focusFind(): boolean {
+  const ed = editor.value
+  if (!ed) return false
+  ed.focus()
+  void ed.getAction('actions.find')?.run()
+  return true
+}
+defineExpose({ focusFind })
+
 onMounted(() => void initEditor())
 
 // Swap content/language without recreating the editor (item change / reload after

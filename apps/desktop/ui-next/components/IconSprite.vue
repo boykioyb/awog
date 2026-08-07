@@ -112,6 +112,7 @@
       <symbol id="i-act" viewBox="0 0 24 24"><path d="M3 12h4l2 6 4-14 2 8h6" /></symbol>
       <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
       <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
+      <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
       <symbol id="i-branch" viewBox="0 0 24 24">
         <circle cx="6" cy="6" r="2.5" />
         <circle cx="6" cy="18" r="2.5" />

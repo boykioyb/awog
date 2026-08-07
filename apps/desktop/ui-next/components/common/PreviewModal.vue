@@ -53,6 +53,18 @@
           </button>
         </div>
 
+        <PreviewFindBar
+          v-if="findOpen && shownItem.kind === 'markdown' && view === 'render'"
+          v-model:query="findQuery"
+          v-model:match-case="findMatchCase"
+          :total="findMatches.length"
+          :current="findMatches.length ? findCurrentIndex + 1 : 0"
+          :focus-tick="findFocusTick"
+          @next="nextMatch"
+          @prev="prevMatch"
+          @close="closeFind"
+        />
+
         <div class="pvbody" :class="bodyClass">
           <!-- status placeholder: workspace file loading / failed / too big / binary.
                Loading shows a spinner; the other states keep the file icon. -->
@@ -185,6 +197,7 @@
                Read-only unless edit mode is on (then `change`/`save` flow to the modal). -->
           <div v-else-if="showCode" class="pvcode">
             <MonacoViewer
+              ref="monacoRef"
               :value="editorValue"
               :language="monacoLang"
               :read-only="editorReadOnly"
@@ -307,6 +320,7 @@ import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import OfficeDocView from '~/components/common/OfficeDocView.vue'
 import OfficeSheetView from '~/components/common/OfficeSheetView.vue'
 import PreviewToolbar from '~/components/common/PreviewToolbar.vue'
+import PreviewFindBar from '~/components/common/PreviewFindBar.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreviewModal } from '~/composables/usePreviewModal'
 import { isInternalFileHref } from '~/utils/file-links'
@@ -378,7 +392,21 @@ const {
   reveal,
   openLink,
   hasWorkspaceFile,
+  monacoRef,
 } = ctrl
+// Find-in-page (markdown-render). State lives in ctrl.find; destructure the refs so
+// the template unwraps them (nested refs on a plain object don't auto-unwrap).
+const {
+  findOpen,
+  query: findQuery,
+  matchCase: findMatchCase,
+  matches: findMatches,
+  currentIndex: findCurrentIndex,
+  focusTick: findFocusTick,
+  nextMatch,
+  prevMatch,
+  closeFind,
+} = ctrl.find
 const { headings, activeHeading, goto, onScroll, mdMaxWidth } = ctrl.outline
 // Unwrapped separately: `office` is a plain controller object, so its refs only
 // unwrap in the template once bound as a top-level name.
