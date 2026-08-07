@@ -86,7 +86,6 @@ async function applyToAll() {
     const { ok, failed, firstError } = await projectsStore.applyModelToAllProjects({
       provider: provider.value as ProviderName,
       modelId: modelId.value,
-      level: settings.defaults.thinkingLevel,
     })
     if (ok > 0 && failed === 0) {
       pushActionToast(t('settingsDefaults.projectModel.applied', { model, n: ok }), 'success')

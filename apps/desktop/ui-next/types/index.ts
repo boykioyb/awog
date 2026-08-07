@@ -15,7 +15,10 @@ export type TodoStatus = 'pending' | 'in_progress' | 'completed'
 export interface ProjectLlmDefaults {
   provider: ProviderName
   modelId: string
-  level: ThinkingLevel
+  // undefined = follow the global default (Settings → Defaults → thinkingLevel).
+  // Pinned only when the project intentionally overrides the global level, so
+  // changing the global default later still propagates to non-pinned projects.
+  level?: ThinkingLevel
   accountId?: string
   // MCP server ids new sessions opt into. Mirrors `Session.mcpServerIds`:
   // undefined = all currently enabled servers (default); [] = none; [id…] =

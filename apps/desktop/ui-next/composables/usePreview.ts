@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 // Shared, app-wide preview state (§7). A single PreviewModal instance reads this
 // store so a chip rendered deep in the transcript can open the full-window viewer
@@ -113,6 +113,14 @@ export function previewKindFromAttachment(a: {
 }
 
 const current = ref<PreviewRef | null>(null)
+// Browser-style back history UNDER `current`. A frame is pushed when the user
+// navigates INTO a file from within an open preview (a link in the rendered
+// markdown, a file in the folder tree); Back / Esc pop it. A top-level open() resets
+// it — a new open is a new root, not a deeper frame. Kept in this store so `current`
+// stays the single "top of stack" every caller already reads.
+const stack = ref<PreviewRef[]>([])
+// Soft cap so a link cycle (A→B→A→…) can't grow history without bound.
+const STACK_MAX = 25
 
 // One-shot restore hint consumed by usePreviewModal right after (re)open. Carries
 // the view mode + scroll offset captured when a preview was minimized so restoring
@@ -121,16 +129,48 @@ export type PreviewRestore = { view: 'render' | 'raw'; scrollTop: number }
 const pendingRestore = ref<PreviewRestore | null>(null)
 
 export function usePreview() {
+  // True while there's a frame to go back to (drives the header Back button).
+  const canGoBack = computed(() => stack.value.length > 0)
+
   function open(item: PreviewRef) {
+    stack.value = [] // top-level open → new root
     current.value = item
     pendingRestore.value = null
   }
-  // Re-open a previously minimized item, replaying its captured view + scroll.
+  // Re-open a previously minimized item, replaying its captured view + scroll. The
+  // back history is transient (not parked with the dock snapshot) → restore lands at
+  // the root.
   function restore(item: PreviewRef, hint: PreviewRestore) {
+    stack.value = []
     current.value = item
     pendingRestore.value = hint
   }
+  // Navigate INTO a new item, keeping the current one as history.
+  function push(item: PreviewRef) {
+    if (current.value) {
+      stack.value.push(current.value)
+      if (stack.value.length > STACK_MAX) stack.value.shift()
+    }
+    current.value = item
+    pendingRestore.value = null
+  }
+  // Swap the top item in place (rename / move / reload): the SAME logical file at a
+  // new path/content, so it must NOT become a history frame (Back would otherwise
+  // land on a stale path that no longer exists).
+  function replace(item: PreviewRef) {
+    current.value = item
+    pendingRestore.value = null
+  }
+  // Pop one frame. Returns false when already at the root (nothing to go back to).
+  function back(): boolean {
+    const prev = stack.value.pop()
+    if (!prev) return false
+    current.value = prev
+    pendingRestore.value = null
+    return true
+  }
   function close() {
+    stack.value = []
     current.value = null
   }
   // Consume the pending hint (one-shot; clears itself).
@@ -139,5 +179,5 @@ export function usePreview() {
     pendingRestore.value = null
     return r
   }
-  return { current, open, restore, close, takeRestore }
+  return { current, canGoBack, open, restore, push, replace, back, close, takeRestore }
 }

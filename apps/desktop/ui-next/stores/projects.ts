@@ -2,13 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { primeProjectsCache } from '~/composables/useWorkspaceData'
-import type {
-  Project,
-  ProjectLlmDefaults,
-  ProjectsListResponse,
-  ProviderName,
-  ThinkingLevel,
-} from '~/types'
+import type { Project, ProjectLlmDefaults, ProjectsListResponse, ProviderName } from '~/types'
 
 // Projects store (ui-next) — dual-path live. The project entity is the registered
 // local folder roster persisted by the sidecar (~/.awog/projects/<id>.json).
@@ -312,8 +306,10 @@ export const useProjectsStore = defineStore('projects', () => {
   // Defaults → "model for all projects"). Overwrites each project's
   // provider/model with the chosen pair; drops accountId (falls to the
   // provider's active account, since the provider may change) but preserves
-  // provider-agnostic per-project choices (level, MCP whitelist, response
-  // style).
+  // provider-agnostic per-project choices (MCP whitelist, response style, and
+  // an explicitly pinned thinking level). Thinking level is NOT frozen from the
+  // global here — it keeps following the global default unless the project pinned
+  // its own.
   //
   // RESILIENT: `projects.upsert` re-validates the project's path exists on disk,
   // so a project whose folder was moved/deleted throws. We DON'T let one bad
@@ -322,7 +318,6 @@ export const useProjectsStore = defineStore('projects', () => {
   async function applyModelToAllProjects(input: {
     provider: ProviderName
     modelId: string
-    level: ThinkingLevel
   }): Promise<{ ok: number; failed: number; firstError?: string }> {
     let ok = 0
     let failed = 0
@@ -333,8 +328,13 @@ export const useProjectsStore = defineStore('projects', () => {
       const llmDefaults: ProjectLlmDefaults = {
         provider: input.provider,
         modelId: input.modelId,
-        level: prev?.level ?? input.level,
       }
+      // Thinking level follows the GLOBAL default unless the project explicitly
+      // pinned its own — carry an existing pin forward, but never freeze the global
+      // level in (that's the bug that stopped a later global change from
+      // propagating). Re-running this therefore also strips a previously frozen
+      // level, doubling as a one-click remediation.
+      if (prev?.level !== undefined) llmDefaults.level = prev.level
       if (prev?.mcpServerIds !== undefined) llmDefaults.mcpServerIds = prev.mcpServerIds
       if (prev?.responseStyle !== undefined) llmDefaults.responseStyle = prev.responseStyle
       if (prev?.responseStyleNoMarkdown !== undefined)

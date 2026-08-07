@@ -13,6 +13,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
 import { useZoomPan } from '~/composables/useZoomPan'
 import { useMarkdownOutline } from '~/composables/useMarkdownOutline'
+import { usePreviewFind } from '~/composables/usePreviewFind'
 import { ATTACHMENT_TEXT_MAX, useChatAttach } from '~/composables/useChatAttach'
 import { useMinimizeDock, previewDockId } from '~/composables/useMinimizeDock'
 import type { SessionAttachment, TreeNode } from '~/composables/useSessionsData'
@@ -113,7 +114,15 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
   const { t } = useI18n()
   const { renderMarkdown } = useMarkdown()
   const sc = useSidecar()
-  const { current: sharedItem, close: closeShared, takeRestore } = usePreview()
+  const {
+    current: sharedItem,
+    close: closeShared,
+    takeRestore,
+    push: pushShared,
+    replace: replaceShared,
+    back: backShared,
+    canGoBack,
+  } = usePreview()
   const chatAttach = useChatAttach()
   const dock = useMinimizeDock()
   // Office (docx/xlsx) model + view state, parsed from the file's bytes.
@@ -312,13 +321,37 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     const root = item.value?.workspaceRoot
     if (!root) return
     treeSelected.value = path
-    // Repoint the shared item → the load watcher fetches the file content.
-    sharedItem.value = {
+    // Navigate INTO the file (push history) → the load watcher fetches its content,
+    // and Back returns to this folder tree.
+    pushShared({
       name: path.split('/').pop() || path,
       kind: previewKindFromPath(path),
       workspaceRoot: root,
       path,
-    }
+    })
+  }
+
+  // A workspace/relative link clicked inside the RENDERED markdown → open the
+  // referenced file IN THIS modal (repoint the shared item) instead of letting the
+  // SPA router navigate to a dead route (a bare doc path like `tasks/…/review.md`
+  // has no page → 404 + "Go back home" nukes the session). Mirrors
+  // SessionMarkdownHtml's link handling; the shell-mounted modal has no
+  // useFilePreview index, so it resolves the href relative to the current file's
+  // dir (resolveMdAsset — same base the inline images use) under the item's
+  // workspaceRoot. External URLs / in-page anchors are filtered by the caller.
+  function openLink(href: string): void {
+    const root = item.value?.workspaceRoot
+    if (!root) return
+    const path = resolveMdAsset(href)
+    if (!path) return
+    // Navigate INTO the linked file (push history) so Back returns to the doc/response
+    // the link was clicked from.
+    pushShared({
+      name: path.split('/').pop() || path,
+      kind: previewKindFromPath(path),
+      workspaceRoot: root,
+      path,
+    })
   }
 
   const treeCtrl: FileTreeController = {
@@ -445,6 +478,35 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     ),
   )
   const outline = useMarkdownOutline(computed(() => `${view.value}:${segments.value.length}`))
+
+  // ── find-in-page (⌘/Ctrl+F) ──────────────────────────────────────────────────
+  // Custom search bar drives the markdown-render surface (`.mdbody`); Monaco/PDF use
+  // their own native find. `monacoRef` is the MonacoViewer's exposed { focusFind }.
+  const monacoRef = shallowRef<{ focusFind: () => boolean } | null>(null)
+  const find = usePreviewFind(
+    () => (outline.mdScroll.value?.querySelector('.mdbody') as HTMLElement | null) ?? null,
+  )
+  const isMarkdownRender = computed(
+    () => item.value?.kind === 'markdown' && view.value === 'render',
+  )
+  // Leaving the markdown-render surface (render→raw, or edit mode) tears down find.
+  watch(view, () => find.closeFind())
+
+  // The user's current text selection, but only when it lies inside the
+  // markdown-render surface (`.mdbody`) — used to prefill the find bar on ⌘/Ctrl+F.
+  // Collapsed to a single line + capped so a huge multi-line selection doesn't become
+  // an unwieldy query; empty string when there's nothing usable.
+  function selectionInMdBody(): string {
+    const sel = window.getSelection()
+    const raw = sel?.toString() ?? ''
+    if (!raw.trim() || !sel || sel.rangeCount === 0) return ''
+    const root = outline.mdScroll.value?.querySelector('.mdbody')
+    if (!root) return ''
+    const node = sel.getRangeAt(0).commonAncestorContainer
+    const el = node instanceof HTMLElement ? node : node.parentElement
+    if (!el || !root.contains(el)) return ''
+    return (raw.split('\n')[0] ?? '').replace(/\s+/g, ' ').trim().slice(0, 200)
+  }
 
   // (Re)resolve markdown images whenever the rendered content changes (file load,
   // on-disk edit, or switching to another markdown file).
@@ -653,8 +715,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
         fromPath: it.path,
         toPath: to,
       })
-      // Repoint the shared item → the load watcher refetches the new path.
-      sharedItem.value = { ...it, path: to, name: to.split('/').pop() || to }
+      // Replace in place (NOT a history push) → the load watcher refetches the new
+      // path; Back must not return to the old path that no longer exists.
+      replaceShared({ ...it, path: to, name: to.split('/').pop() || to })
       closeRename()
       flash(t(rename.mode === 'move' ? 'common.preview.moved' : 'common.preview.renamed'))
     } catch (e) {
@@ -687,7 +750,9 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     if (!it?.workspaceRoot || !it.path) return
     try {
       await sc.request('fs.delete', { workspaceRoot: it.workspaceRoot, path: it.path })
-      doClose()
+      // Return to the parent frame (folder tree / doc) if we navigated in; otherwise
+      // close the modal.
+      if (!backShared()) doClose()
     } catch (e) {
       flash(errMessage(e) || t('common.preview.deleteError'), true)
     }
@@ -819,11 +884,34 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     }
     doClose()
   }
+  // Back one frame in the preview history (Back button + Esc when depth>0). Guards
+  // unsaved edits with the same discard confirm as close(), so going back never
+  // silently drops a draft.
+  function goBack() {
+    if (!canGoBack.value) return
+    if (dirty.value) {
+      confirmReq.value = {
+        titleKey: 'common.preview.discardTitle',
+        messageKey: 'common.preview.discardConfirm',
+        confirmKey: 'common.preview.discard',
+        danger: true,
+        run: () => {
+          cancelEdit()
+          backShared()
+        },
+      }
+      return
+    }
+    backShared()
+  }
 
   // Reset per-item view + edit state and (re)load when the previewed item changes.
   watch(
     item,
     (it) => {
+      // Tear down find highlights + bar BEFORE Vue re-renders `.mdbody` for the new
+      // item, so no stale <mark> or highlight state carries over.
+      find.closeFind()
       // A minimize-dock restore replays the parked view + scroll; a plain open
       // resets to the default render view at the top.
       const hint = takeRestore()
@@ -864,9 +952,26 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
 
   function onKey(e: KeyboardEvent) {
     if (!item.value) return
+    // ⌘/Ctrl+F: markdown-render → AWOG find bar; Monaco → its own find widget; pdf +
+    // unsupported surfaces → leave the browser default (find can't reach them anyway).
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+      if (isMarkdownRender.value) {
+        e.preventDefault()
+        e.stopPropagation()
+        find.openFind(selectionInMdBody()) // prefill from selection when present
+      } else if (showCode.value && monacoRef.value?.focusFind()) {
+        e.preventDefault()
+      }
+      return
+    }
     if (e.key === 'Escape') {
-      if (rename.open) closeRename()
+      // Close the find bar first (shallowest layer the user just opened), then the
+      // usual rename → confirm → back-stack → close chain.
+      if (find.findOpen.value) find.closeFind()
+      else if (rename.open) closeRename()
       else if (confirmReq.value) cancelConfirm()
+      // Esc pops one history frame when we've navigated in; only closes at the root.
+      else if (canGoBack.value) goBack()
       else close()
     }
   }
@@ -930,6 +1035,7 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     save,
     // file actions
     reveal,
+    openLink,
     openInBrowser,
     copyPath,
     copyContent,
@@ -952,7 +1058,12 @@ export function usePreviewModal(props: { item: PreviewRef | null }, emit: Previe
     actionMsg,
     actionErr,
     close,
+    canGoBack,
+    goBack,
     onKey,
+    // find-in-page
+    find,
+    monacoRef,
   }
 }
 

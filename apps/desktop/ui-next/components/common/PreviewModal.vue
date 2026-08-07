@@ -7,6 +7,15 @@
     <div v-if="shownItem" class="ovl on pvovl" @click.self="close">
       <div class="pvcard">
         <div class="pvhead">
+          <button
+            v-if="canGoBack"
+            class="pvx"
+            :title="t('common.back')"
+            :aria-label="t('common.back')"
+            @click="goBack"
+          >
+            <Icon name="chev-left" style="width: 16px; height: 16px" />
+          </button>
           <Icon :name="headIcon" style="width: 13px; height: 13px" />
           <span class="pvname" :title="absPath">{{ headerPath }}</span>
           <button
@@ -16,6 +25,14 @@
             @click="copyPath"
           >
             <Icon name="copy" style="width: 13px; height: 13px" />
+          </button>
+          <button
+            v-if="hasWorkspaceFile"
+            class="pvx pvcopy"
+            :title="t('common.preview.reveal')"
+            @click="reveal"
+          >
+            <Icon name="folder" style="width: 13px; height: 13px" />
           </button>
           <span v-if="dirty" class="pvdirty" :title="t('common.preview.unsaved')">●</span>
           <span v-if="meta" class="pvmeta">{{ meta }}</span>
@@ -35,6 +52,18 @@
             <Icon name="x" style="width: 14px; height: 14px" />
           </button>
         </div>
+
+        <PreviewFindBar
+          v-if="findOpen && shownItem.kind === 'markdown' && view === 'render'"
+          v-model:query="findQuery"
+          v-model:match-case="findMatchCase"
+          :total="findMatches.length"
+          :current="findMatches.length ? findCurrentIndex + 1 : 0"
+          :focus-tick="findFocusTick"
+          @next="nextMatch"
+          @prev="prevMatch"
+          @close="closeFind"
+        />
 
         <div class="pvbody" :class="bodyClass">
           <!-- status placeholder: workspace file loading / failed / too big / binary.
@@ -128,7 +157,7 @@
               @mouseup="onPvSelect"
               @mousedown="onPvMouseDown"
             >
-              <div class="mdbody" :style="{ maxWidth: mdMaxWidth }">
+              <div class="mdbody" :style="{ maxWidth: mdMaxWidth }" @click="onMdClick">
                 <template v-for="(seg, i) in segments" :key="i">
                   <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
                   <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
@@ -168,6 +197,7 @@
                Read-only unless edit mode is on (then `change`/`save` flow to the modal). -->
           <div v-else-if="showCode" class="pvcode">
             <MonacoViewer
+              ref="monacoRef"
               :value="editorValue"
               :language="monacoLang"
               :read-only="editorReadOnly"
@@ -290,8 +320,10 @@ import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import OfficeDocView from '~/components/common/OfficeDocView.vue'
 import OfficeSheetView from '~/components/common/OfficeSheetView.vue'
 import PreviewToolbar from '~/components/common/PreviewToolbar.vue'
+import PreviewFindBar from '~/components/common/PreviewFindBar.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreviewModal } from '~/composables/usePreviewModal'
+import { isInternalFileHref } from '~/utils/file-links'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 import { loadMonaco } from '~/utils/monaco-loader'
 
@@ -353,10 +385,28 @@ const {
   canMinimize,
   minimize,
   close,
+  canGoBack,
+  goBack,
   onKey,
   copyPath,
+  reveal,
+  openLink,
   hasWorkspaceFile,
+  monacoRef,
 } = ctrl
+// Find-in-page (markdown-render). State lives in ctrl.find; destructure the refs so
+// the template unwraps them (nested refs on a plain object don't auto-unwrap).
+const {
+  findOpen,
+  query: findQuery,
+  matchCase: findMatchCase,
+  matches: findMatches,
+  currentIndex: findCurrentIndex,
+  focusTick: findFocusTick,
+  nextMatch,
+  prevMatch,
+  closeFind,
+} = ctrl.find
 const { headings, activeHeading, goto, onScroll, mdMaxWidth } = ctrl.outline
 // Unwrapped separately: `office` is a plain controller object, so its refs only
 // unwrap in the template once bound as a top-level name.
@@ -378,6 +428,20 @@ const absPath = computed(() => {
   }
   return headerPath.value
 })
+
+// Intercept clicks on links inside the rendered markdown preview. An internal
+// workspace/relative path would otherwise send the SPA router to a dead route
+// (404 → "Go back home" nukes the session), so open it in THIS modal instead —
+// matching how a file path opens from the transcript (SessionMarkdownHtml). External
+// URLs (http(s)/mailto/tel) and in-page anchors (#…) keep their default behaviour.
+function onMdClick(e: MouseEvent) {
+  const a = (e.target as HTMLElement | null)?.closest('a')
+  if (!a) return
+  const href = (a.getAttribute('href') ?? '').trim()
+  if (!isInternalFileHref(href)) return // external URL / #anchor → default handling
+  e.preventDefault()
+  openLink(href)
+}
 
 // Focus the rename/move input when its dialog opens.
 const renameInput = useTemplateRef<HTMLInputElement>('renameInput')
