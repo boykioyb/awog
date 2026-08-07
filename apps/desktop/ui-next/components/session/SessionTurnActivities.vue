@@ -26,9 +26,13 @@
             <div class="thb">{{ e.text }}</div>
           </div>
           <!-- Intermediate commentary (text the model wrote before a tool). Dimmed so it
-               reads as an activity, not the final answer. -->
+               reads as an activity, not the final answer. `streaming` is threaded through
+               so the stream-end flush fires here too: without it these blocks keep
+               props.streaming=false, the flush watch never runs, and a run whose renderSrc
+               was pinned mid-stream stays truncated until the app restarts (same defect the
+               response block's flush fixes). -->
           <div v-else class="tinter">
-            <SessionTextBlock :text="e.text" />
+            <SessionTextBlock :text="e.text" :streaming="streaming" />
           </div>
         </template>
       </div>
@@ -51,7 +55,7 @@ export type ActivityEntry =
   | { key: string; kind: 'thinking'; text: string }
   | { key: string; kind: 'text'; text: string }
 
-defineProps<{ entries: ActivityEntry[]; preview: string }>()
+defineProps<{ entries: ActivityEntry[]; preview: string; streaming?: boolean }>()
 const { t } = useI18n()
 
 // Collapsed-by-default: header click toggles the body (.tacts.col hides .tbody).

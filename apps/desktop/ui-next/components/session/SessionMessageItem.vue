@@ -86,6 +86,7 @@
           v-if="g.type === 'activities'"
           :entries="g.entries"
           :preview="g.preview"
+          :streaming="streaming"
         />
         <!-- The prominent final answer (craft's ResponseCard) — bubbled per the
              assistantBubble pref. Carries §8 quote highlights + caret. -->
