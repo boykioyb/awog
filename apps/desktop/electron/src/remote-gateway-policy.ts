@@ -201,6 +201,10 @@ const MAX_TITLE_SEED_CHARS = 4_000
 // sentinel. Charset-bounded here; an id the sidecar doesn't know degrades to "no
 // style" there, so the list itself doesn't have to be mirrored in the gateway.
 const STYLE_ID_RE = /^[A-Za-z0-9-]{1,64}$/
+// A session id addresses a directory the sidecar removes recursively, so it is
+// charset-bounded here too — same slug rule the popout windows use. Belt and
+// braces with `sanitizeChild`: neither layer may be the only one saying no.
+const SESSION_ID_RE = /^[a-z0-9-]+$/
 
 type ProjectRow = {
   id: string
@@ -523,7 +527,9 @@ export async function sanitizeRemoteParams(
       return await buildUpsert(request, raw)
     case 'sessions.delete': {
       const p = asObject(raw)
-      return { id: reqString(p.id ?? p.sessionId, 'id') }
+      const id = reqString(p.id ?? p.sessionId, 'id')
+      if (!SESSION_ID_RE.test(id)) throw new RemoteRejected('invalid session id')
+      return { id }
     }
     case 'sessions.generateTitle': {
       // Titling costs a model call: pin provider/model/account from the session

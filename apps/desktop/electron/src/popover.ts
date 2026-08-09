@@ -1,5 +1,5 @@
 import { BrowserWindow, screen, type Rectangle } from 'electron'
-import { loadAppRoute } from './window'
+import { applyNavigationGuards, loadAppRoute } from './window'
 import { preloadPath } from './paths'
 
 // Frameless popover window anchored under the tray icon — the styled tray UI
@@ -41,6 +41,10 @@ class TrayPopover {
         nodeIntegration: false,
       },
     })
+    // This window carries the same preload as the main one, so it needs the same
+    // guards: a `window.open` child would inherit the preload, and a plain link
+    // would navigate the popover itself off-origin while keeping it.
+    applyNavigationGuards(win)
     win.on('blur', () => {
       if (win.webContents.isDevToolsFocused()) return
       this.hide()
