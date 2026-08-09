@@ -36,6 +36,19 @@
         <span class="dttitle" :title="session.title">{{ session.title }}</span>
       </div>
 
+      <!-- Open the session's project folder in VS Code (falls back to the OS file
+           manager when `code` is unavailable). Hidden while the root is unresolved
+           (browser-dev / session with no project). -->
+      <button
+        v-if="codeRoot"
+        class="iconbtn"
+        :title="t('sessions.detail.openCode')"
+        style="width: 28px; height: 28px"
+        @click="openInCode"
+      >
+        <Icon name="code" style="width: 14px; height: 14px" />
+      </button>
+
       <!-- Config gear → Budget / Tools / MCP (Model · Account · Effort · Style moved
            to the status-bar chips). -->
       <span style="position: relative">
@@ -91,6 +104,20 @@
           </div>
         </div>
       </span>
+      <!-- Move this session to its own OS window (session-popout-window.md). Hidden
+           inside a popout — a window must not clone itself — and disabled mid-turn,
+           since a running turn streams into THIS renderer and can't be handed over. -->
+      <button
+        v-if="canOpenInWindow"
+        class="iconbtn"
+        :title="turnBusy ? t('sessions.window.busy') : t('sessions.window.open')"
+        style="width: 28px; height: 28px"
+        :disabled="turnBusy"
+        :style="turnBusy ? { opacity: 0.45, cursor: 'not-allowed' } : {}"
+        @click="openInWindow"
+      >
+        <Icon name="external" style="width: 14px; height: 14px" />
+      </button>
       <button
         class="iconbtn"
         :title="t('minimize.session')"
@@ -329,7 +356,11 @@ import type {
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import type { WorkspaceDockSide } from '~/stores/settings'
-import { previewKindFromAttachment, usePreview, type PreviewRef } from '~/composables/usePreview'
+import {
+  imageSiblingsFromAttachments,
+  previewRefFromAttachment,
+  usePreview,
+} from '~/composables/usePreview'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 
@@ -413,6 +444,22 @@ function openMenu(m: Menu) {
 // Project switcher (the `.dproj` crumb): the crumb shows the resolved project NAME
 // (session.project holds the engine projectId); selecting persists the id.
 const projName = computed(() => projectName(props.session.project))
+
+// Header "Open in VS Code" → the session's project folder, resolved the same way the
+// workspace tabs resolve it (name-or-id → path). Falls back to the OS file manager when
+// `code` isn't on PATH; no-op in browser-dev.
+const sc = useSidecar()
+const { root: codeRoot } = useWorkspaceData(() => props.session.project)
+async function openInCode() {
+  const root = codeRoot.value
+  if (!root || !sc.available) return
+  try {
+    if (await sc.isVscodeAvailable()) await sc.openInVscode(root, '.')
+    else await sc.openPath(root, '.')
+  } catch (err) {
+    console.warn('[sessions] open in code failed', err)
+  }
+}
 function selectProj(id: string) {
   store.setProject(props.session.id, id)
   menu.value = null
@@ -797,19 +844,9 @@ const { open: openPreview } = usePreview()
 function previewAtt(i: number) {
   const a = pendingAtt.value[i]
   if (!a) return
-  if (a.folder && a.path) {
-    openPreview({ name: a.name, kind: 'folder', workspaceRoot: a.path })
-    return
-  }
-  const pv: PreviewRef = {
-    name: a.name,
-    kind: previewKindFromAttachment(a),
-    src: a.src,
-    text: a.text,
-    size: a.size,
-    mime: a.mime,
-  }
-  openPreview(pv)
+  // Siblings = the other pending attachments, so ‹ › walks what the user just attached
+  // (these have no folder on disk to fall back to).
+  openPreview(previewRefFromAttachment(a), imageSiblingsFromAttachments(pendingAtt.value))
 }
 
 // Minimize this session to the corner dock as a live PiP tile (keeps tracking its
@@ -823,6 +860,24 @@ function minimizeSession() {
     title: props.session.title,
     sessionId: props.session.id,
   })
+}
+
+// Move this session to its own OS window (docs/features/session-popout-window.md).
+// Only a session the sidecar knows about can go: the popout is a fresh renderer that
+// re-reads the transcript from disk and addresses the session by its ENGINE id (the
+// numeric client id is per-renderer). Hidden inside a popout — `windowSessionId` is
+// set only there — so a window can't clone itself.
+const canOpenInWindow = computed(
+  () => sc.available && !store.windowSessionId && !!props.session.engineId,
+)
+// A turn in flight streams into THIS renderer's copy of the message, so handing the
+// session over mid-turn would strand it. Wait for the turn (or cancel it) first.
+const turnBusy = computed(
+  () => props.session.status === 'streaming' || props.session.status === 'awaiting',
+)
+function openInWindow() {
+  if (turnBusy.value) return
+  void store.openInWindow(props.session.id)
 }
 
 // Drag-drop file attach — the WHOLE detail is the drop target (not just the

@@ -63,6 +63,71 @@ file workspace thật mới có action. "Add to chat" gate riêng theo `canAddTo
 **Bảo vệ chỉnh sửa chưa lưu:** đóng modal khi `dirty` → confirm "discard?". Mọi mutation
 qua sidecar đã được `assertInsideWorkspace` gate (refuse `.git`, refuse clobber, refuse root).
 
+## Gallery ảnh (‹ › giữa các ảnh cùng thư mục)
+
+Mở một ảnh trong một loạt ảnh (folder render output, batch screenshot) rồi phải đóng — mở
+lại cho ảnh kế tiếp là điểm đau. Preview ảnh vì thế tự có gallery:
+
+- **Phạm vi = ngữ cảnh, KHÔNG phải thư mục.** Gallery luôn là tập sibling do **opener** truyền
+  vào (`usePreview().open(item, siblings)`). Đã thử liệt kê `fs.listDir` cả thư mục và **bỏ**:
+  nó kéo vào file không liên quan và vô nghĩa với attachment in-memory (chúng không có thư mục
+  nào). Nguồn sibling hiện có:
+  | Opener | Tập ảnh |
+  |---|---|
+  | Attachment trong message ([SessionAttachmentChip](../../apps/desktop/ui-next/components/session/SessionAttachmentChip.vue) ← prop `siblings`) | ảnh của **message đó** |
+  | Attachment đang chờ gửi (`SessionDetail.previewAtt`) | ảnh trong **composer tray** |
+  | Panel context-files (`useSessionContextFiles`) | ảnh trong **context của session** |
+  | Link / chip / ảnh inline trong chat (`useFilePreview.open`) | ảnh **của session** (xem dưới) |
+  | Files tab (`WorkspaceFiles.openFile`) | **mọi ảnh trong folder đó** — folder chính là ngữ cảnh người dùng đang xem; entries đã có sẵn trong tree nên không tốn IPC, và thứ tự ‹ › đúng bằng thứ tự tree hiển thị |
+  | Diff, SFTP, cửa sổ popout | không có → 1 ảnh, không ‹ › |
+- **Tập ảnh của session** ([useFilePreview](../../apps/desktop/ui-next/composables/useFilePreview.ts)):
+  derive từ chính transcript nên khớp thứ người dùng thấy — `touchedPaths` (file session
+  write/edit) + path ảnh **được nhắc trong text** của mọi message (user prose + text block của
+  assistant; step bỏ qua vì đã có trong touchedPaths), giữ **thứ tự transcript**. Cap 80 path /
+  8 thư mục.
+  - **Xác thực bằng `fs.listDir`, KHÔNG bằng `matchPath`.** `matchPath` dựa trên `fs.listFiles`
+    → `git ls-files`, nên ảnh render/gitignored (đúng case `output/remotion/*.png`) **vô hình**
+    với nó và gallery ra rỗng. `listDir` đọc filesystem thật: một ảnh model chỉ *đề xuất* mà
+    chưa ghi thì tự bị loại vì không có trên đĩa. Một `listDir` cho mỗi thư mục được nhắc, cache
+    theo `root::dir`.
+- **Nhận dạng item trong tập:** file workspace theo `workspaceRoot + path`, attachment
+  in-memory theo `src`, cuối cùng mới theo `name` (`sameEntry`).
+- **Mapper dùng chung** `previewRefFromAttachment` / `imageSiblingsFromAttachments` trong
+  [usePreview.ts](../../apps/desktop/ui-next/composables/usePreview.ts) — gom 3 bản copy
+  attachment→PreviewRef (bubble chip, composer tray, context-files panel).
+- **Điều khiển:** `‹ 3/8 ›` trong cụm ảnh của PreviewToolbar + phím `←`/`→` (bị bỏ qua khi
+  rename overlay / confirm / find bar đang giữ bàn phím). Cuộn vòng ở hai đầu.
+- **Không nháy khi chuyển ảnh.** Đọc file là async, nên đổi ảnh làm modal rơi về placeholder
+  "loading" một frame → **nhấp nháy**. Fix: cache data-URL (`Map`, cap 6, evict cũ nhất) +
+  prefetch 2 ảnh kề (và `new Image().src` để decode sẵn). Cache hit → `loadedSrc` set **ngay
+  trong tick đó**, `loadStatus` không bao giờ vào `loading`, `<img>` giữ nguyên element và chỉ
+  đổi `src`. Miss (bấm nhanh hơn prefetch) mới thấy placeholder như trước.
+- **CSS không sizing ảnh — chỉ zoom (JS) sizing.** Hai lần thử dùng `max-height: 100%` đều
+  thất bại: percentage max-height cần **grid area / flex container có chiều cao definite**, mà
+  cả flex item cao `100%` lẫn grid row `auto` đều không phải — row phình lên bằng natural
+  height của ảnh nên (1) không có gì bị constrain và (2) `place-items: center` vô nghĩa (item
+  cao bằng row), khiến ảnh dọc bị **neo đáy khung**. Layout hiện tại:
+  - `.pvimgvp` = khung cố định (`position: absolute; inset: 0` của `.pvbody`, `overflow: hidden`).
+  - `.pvimgcenter` = `left/top: 50%` + `translate(-50%, -50%)` → tâm hộp **luôn** trùng tâm
+    khung kể cả khi ảnh lớn hơn khung (grid/flex sẽ "safe align" về start trong trường hợp
+    này). Scale của ảnh quanh tâm nó ⇒ ảnh center ở mọi mức zoom.
+  - `.pvimg` = natural size (`max-width/height: none`) ⇒ **100% = 1:1 pixel**.
+  Đừng quay lại sizing ảnh bằng CSS percentage.
+- **Fit + auto-fit khi mở ảnh.**
+  - `fitImage()` đo **layout box** của `<img>` (`offsetWidth/offsetHeight` — không chịu ảnh
+    hưởng transform, tức natural size) so với client box của khung, KHÔNG
+    `getBoundingClientRect` (đã gồm transform). `scale = min(vw/w, vh/h)`; xoay 90° lẻ đảo
+    trục; reset pan về giữa.
+  - Mỗi ảnh **auto-fit một lần** khi bitmap có box (`@load` → `onImageLoad`), **shrink-only** —
+    đây là thứ làm ảnh *mở ra đã fit* (CSS render natural size nên không có nó ảnh dọc sẽ tràn
+    khung), ảnh nhỏ vẫn ở 1:1. Một lần / item nên `Reload` không giẫm lên zoom đang đặt.
+  - Nút Fit (icon `Scan`) fit **hai chiều**; nút `⤢` bên cạnh là reset 100% + xoá rotate/flip.
+- **Không đẩy back-stack.** Bước gallery dùng `replace()` chứ không `push()`: đi qua các ảnh
+  cùng folder không phải "đi vào" file mới, nên Back vẫn về đúng chỗ đã mở ảnh đầu tiên.
+  Mỗi bước `resetView()` (zoom/rotate/flip về mặc định).
+- Chỉ hiện khi thư mục có **>1** ảnh; folder không đọc được → không có gallery, ảnh đang xem
+  vẫn hiển thị bình thường.
+
 ## Quyết định / trade-off
 
 - **PreviewToolbar nhận controller object** (`:ctrl`) thay vì ~30 props — theo precedent

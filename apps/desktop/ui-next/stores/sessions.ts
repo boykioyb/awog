@@ -925,6 +925,14 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
         // Restore the checklist so reopening a session shows where work stopped.
         if (full.todos) target.todos = mapTodos(full.todos)
+        // Re-read the summary fields too: after a session comes back from a popout
+        // window (session-popout-window.md) this is the only refresh it gets, and the
+        // title / last-updated may well have changed there.
+        if (full.title) target.title = full.title
+        if (full.updatedAt) {
+          target.updatedAt = full.updatedAt
+          target.when = relativeWhen(full.updatedAt)
+        }
       }
       target.loaded = true
     } catch (err) {
@@ -2229,12 +2237,128 @@ export const useSessionsStore = defineStore('sessions', () => {
     delete pendingWakes.value[engineId]
   }
 
+  // ── Session popout windows (docs/features/session-popout-window.md) ─────────
+  // A session can be popped out into its own OS window. That is a HAND-OFF, not a
+  // mirror: exactly ONE renderer owns a session at a time, so a handed-off session is
+  // never streamed into — or approved twice from — two windows at once.
+  //
+  // `windowedEngineIds` is the set main broadcasts (same in every renderer);
+  // `windowSessionId` is set by pages/session.vue when THIS renderer *is* a popout.
+  const windowedEngineIds = ref<string[]>([])
+  const windowSessionId = ref<string | null>(null)
+
+  const isWindowed = (eid: string | undefined): boolean =>
+    !!eid && windowedEngineIds.value.includes(eid)
+  // The session this renderer must render as a hand-off placeholder: windowed, but
+  // not by this window.
+  const isHandedOff = (eid: string | undefined): boolean =>
+    isWindowed(eid) && eid !== windowSessionId.value
+
+  // Does this renderer own `eid`'s live state? A popout owns only its own session;
+  // the main window owns everything that isn't currently popped out.
+  const ownsSession = (eid: string): boolean =>
+    windowSessionId.value ? eid === windowSessionId.value : !isWindowed(eid)
+
+  // Bind this renderer to the session it pops out (called once by pages/session.vue,
+  // before the store can apply any event for it).
+  function bindWindowSession(eid: string): void {
+    windowSessionId.value = eid
+  }
+
+  // Open the session a popout window owns. Deliberately NOT activate(): the project
+  // tab set + active tab persist to localStorage, which is shared with the main
+  // window — a popout must not reshuffle the main window's tabs. Returns false when
+  // the id resolves to nothing (a stale/hand-edited URL, or a deleted session).
+  async function activateWindowSession(eid: string): Promise<boolean> {
+    bindWindowSession(eid)
+    await hydrate()
+    const s = byEngineId(eid)
+    if (!s) return false
+    activeId.value = s.id
+    s.unread = false
+    await ensureLoaded(s.id)
+    return true
+  }
+
+  // Give a session up to its new popout: snap any half-typed reply, stop owning its
+  // live state, and drop the cached transcript so it is re-read when it comes back.
+  function releaseSession(eid: string): void {
+    const s = byEngineId(eid)
+    if (!s) return
+    for (const m of s.msgs) {
+      if (m.role === 'assistant' && m.streaming && m.eid) {
+        flushText(eid, m.eid)
+        m.streaming = false
+      }
+    }
+    s.status = statusFromMessages(s.msgs)
+    s.loaded = false
+  }
+
+  // Take a session back after its popout closed. Everything that happened while it was
+  // away is on disk only (this renderer ignored its events), so force a re-read.
+  function reclaimSession(eid: string): void {
+    const s = byEngineId(eid)
+    if (!s) return
+    s.loaded = false
+    if (s.id === activeId.value) void ensureLoaded(s.id)
+  }
+
+  // Learn the current popout set + follow it. Fires on every renderer (main window and
+  // each popout), so ownership stays consistent without any window-to-window channel.
+  async function initSessionWindows(): Promise<void> {
+    if (!useIpc) return
+    sc.onSessionWindowsChanged((ids) => applyWindowedIds(ids))
+    try {
+      applyWindowedIds(await sc.listSessionWindows())
+    } catch (err) {
+      console.warn('[sessions] listSessionWindows failed', err)
+    }
+  }
+
+  function applyWindowedIds(ids: string[]): void {
+    const before = windowedEngineIds.value
+    windowedEngineIds.value = ids
+    // Newly popped out by another window → hand it over.
+    for (const eid of ids) {
+      if (!before.includes(eid) && eid !== windowSessionId.value) releaseSession(eid)
+    }
+    // Its window closed → take it back.
+    for (const eid of before) {
+      if (!ids.includes(eid)) reclaimSession(eid)
+    }
+  }
+
+  // Pop a session out into its own window (no-op off-shell). The window is addressed
+  // by engineId — the numeric client id is per-renderer and means nothing to another
+  // window — so a session that has never been persisted can't pop out.
+  async function openInWindow(id: number): Promise<void> {
+    const s = byId(id)
+    if (!s?.engineId || !useIpc) return
+    await sc.openSessionWindow(s.engineId, s.title)
+  }
+
+  // Bring a popped-out session back into this window (closing its popout hands it
+  // back; the windows-changed broadcast then reclaims + reloads it).
+  async function closeWindowFor(id: number): Promise<void> {
+    const s = byId(id)
+    if (!s?.engineId || !useIpc) return
+    await sc.closeSessionWindow(s.engineId)
+  }
+
   // Single app-lifetime subscription to engine events (set up at store init).
   let unlisten: (() => void) | null = null
   async function subscribe(): Promise<void> {
     if (!useIpc || unlisten) return
     try {
       unlisten = await sc.onEvent((evt) => {
+        // Ownership gate (session popout hand-off). Engine events reach EVERY window,
+        // but a session is live in exactly one of them: ignore the stream of a session
+        // this renderer doesn't own, so a handed-off turn is never applied twice (two
+        // transcripts diverging, a permission prompt raised in both windows). Events
+        // without a sessionId (engine.crashed / engine.fatal) always apply.
+        const eid = (evt.payload as { sessionId?: unknown } | null)?.sessionId
+        if (typeof eid === 'string' && !ownsSession(eid)) return
         if (evt.type === 'session.chunk') {
           if (!isChunk(evt.payload)) return
           appendDelta(evt.payload.sessionId, evt.payload.messageId, evt.payload.delta)
@@ -3442,6 +3566,9 @@ export const useSessionsStore = defineStore('sessions', () => {
   if (useIpc) {
     void subscribe()
     void hydrate()
+    // Learn which sessions are popped out BEFORE anything renders, so the main window
+    // never briefly shows a transcript it doesn't own (session-popout-window.md).
+    void initSessionWindows()
     startStallWatchdog()
     // Returning to the window clears the OPEN session's unread flag. A turn that
     // settled while the app was blurred flags it (flagSettledUnread's focus check),
@@ -3502,6 +3629,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     hydrate,
     ensureLoaded,
     openByEngineId,
+    // popout windows (docs/features/session-popout-window.md)
+    windowedEngineIds,
+    windowSessionId,
+    isWindowed,
+    isHandedOff,
+    bindWindowSession,
+    activateWindowSession,
+    openInWindow,
+    closeWindowFor,
     // crud
     setActive,
     create,

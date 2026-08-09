@@ -1,4 +1,4 @@
-import { inject, provide, type InjectionKey, type MaybeRefOrGetter } from 'vue'
+import { inject, provide, toValue, type InjectionKey, type MaybeRefOrGetter } from 'vue'
 import { usePreview, previewKindFromPath, type PreviewRef } from './usePreview'
 import { useWorkspaceData } from './useWorkspaceData'
 import { useFsApi } from './useFsApi'
@@ -107,6 +107,12 @@ export function provideFilePreview(
     }
   }
   const baseName = (p: string): string => p.split('/').pop() || p
+  // Strip a workspace-root prefix so a path written as absolute becomes root-relative
+  // (unchanged when it lies outside the root). A PreviewRef must carry the relative form:
+  // the modal builds "copy path" as `root + '/' + path` (an absolute path there would
+  // double the prefix) and the media:// stream URL the same way.
+  const relativeToRoot = (r: string, p: string): string =>
+    p.startsWith(r + '/') || p.startsWith(r + '\\') ? p.slice(r.length + 1) : p
   // Map a written path to a REAL workspace-relative path, or null when no file
   // matches. Match tiers, most-specific first (directory-preserving beats basename-only,
   // because a bare filename can collide with same-named files all over the repo):
@@ -124,8 +130,7 @@ export function provideFilePreview(
   async function matchPath(r: string, raw: string, hints: string[]): Promise<string | null> {
     const files = await workspaceFiles(r)
     if (!files.length) return null
-    let p = raw
-    if (p.startsWith(r + '/') || p.startsWith(r + '\\')) p = p.slice(r.length) // absolute-in-root
+    let p = relativeToRoot(r, raw) // absolute-in-root → relative
     p = p.replace(/^[/\\]+/, '')
     if (files.includes(p)) return p // tier 1 — exact full path wins
 
@@ -149,21 +154,129 @@ export function provideFilePreview(
     return hits[0] ?? null
   }
 
+  // ── session image set (the preview's ‹ › gallery) ────────────────────────────
+  // Clicking one image in a chat should let the user walk the OTHER images of the same
+  // session — not every file that happens to share a folder on disk. The set is derived from
+  // the transcript, so it matches what the user can see:
+  //   * paths the session wrote/edited (touchedPaths), and
+  //   * image paths mentioned in any message text (links, inline-code chips, markdown images).
+  //
+  // Existence is then verified with ONE fs.listDir per referenced directory rather than through
+  // matchPath's file index: that index comes from `git ls-files`, so a rendered/gitignored
+  // output (the usual case for a batch of frames under `output/`) is INVISIBLE to it and the
+  // gallery came out empty. listDir reads the real filesystem, and a mention the model merely
+  // proposed but never wrote is dropped because it isn't there.
+  const GALLERY_IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i
+  // Path-ish run of characters ending in an image extension. Kept closed (no spaces) — the
+  // same shape filePathOf accepts, which then does the real validation.
+  const IMAGE_MENTION_RE = /[\w./~@#+-]*\.(?:png|jpe?g|gif|webp|bmp|avif|svg)\b/gi
+  // Bound the work: a long session can mention a lot, and each new directory costs a listDir.
+  const GALLERY_MAX = 80
+  const GALLERY_DIRS_MAX = 8
+
+  // Directory listings, keyed `root::dir`, shared across gallery builds in this session.
+  const dirCache = new Map<string, Set<string>>()
+  async function dirFileNames(r: string, dir: string): Promise<Set<string>> {
+    const key = `${r}::${dir}`
+    const hit = dirCache.get(key)
+    if (hit) return hit
+    let names = new Set<string>()
+    try {
+      const res = await fs.listDir(r, dir || undefined)
+      names = new Set(res.entries.filter((e) => e.kind === 'file').map((e) => e.name))
+    } catch {
+      // unreadable dir → nothing from it qualifies
+    }
+    dirCache.set(key, names)
+    return names
+  }
+
+  const dirOf = (p: string): string => {
+    const i = p.lastIndexOf('/')
+    return i > 0 ? p.slice(0, i) : ''
+  }
+
+  // Candidates in transcript order: files the session wrote first (its own output, which is
+  // what a user steps through), then mentions as they appear.
+  function sessionImageCandidates(): string[] {
+    const out = new Set<string>()
+    for (const p of touchedPaths.value) if (GALLERY_IMAGE_EXT.test(p)) out.add(p)
+    const scan = (text: string): void => {
+      for (const raw of text.match(IMAGE_MENTION_RE) ?? []) {
+        const p = filePathOf(raw)
+        if (p) out.add(p)
+      }
+    }
+    for (const m of toValue(session).msgs) {
+      // A user turn carries its prose directly; an assistant turn keeps it in text blocks
+      // (steps are skipped — their targets are already covered by touchedPaths).
+      if (m.role === 'assistant') {
+        for (const b of m.blocks) if (b.kind === 'text') scan(b.text)
+      } else {
+        scan(m.text)
+      }
+      if (out.size >= GALLERY_MAX) break
+    }
+    return [...out].slice(0, GALLERY_MAX)
+  }
+
+  // Verified sibling set as PreviewRefs, always including the image being opened. [] when
+  // there is nothing to step through.
+  async function sessionImageSiblings(r: string, openedPath: string): Promise<PreviewRef[]> {
+    // Transcript order, so ‹ › walks the images the way the session lists them. The opened one
+    // is normally already among the mentions (that's what was clicked); it's only prepended
+    // when it isn't, so it can never be missing from its own gallery.
+    const mentioned = sessionImageCandidates()
+      .map((c) => relativeToRoot(r, c))
+      .filter((c) => GALLERY_IMAGE_EXT.test(c))
+    const candidates = mentioned.includes(openedPath) ? mentioned : [openedPath, ...mentioned]
+    // Cap the directories we're willing to probe, keeping the opened image's own dir first.
+    const dirs: string[] = [dirOf(openedPath)]
+    for (const c of candidates) {
+      const d = dirOf(c)
+      if (!dirs.includes(d) && dirs.length < GALLERY_DIRS_MAX) dirs.push(d)
+    }
+    const listings = new Map<string, Set<string>>()
+    await Promise.all(dirs.map(async (d) => listings.set(d, await dirFileNames(r, d))))
+
+    const paths: string[] = []
+    for (const c of candidates) {
+      if (paths.includes(c)) continue
+      if (c !== openedPath && !listings.get(dirOf(c))?.has(baseName(c))) continue
+      paths.push(c)
+    }
+    if (paths.length < 2) return []
+    return paths.map((path) => ({
+      name: baseName(path),
+      kind: 'image' as const,
+      workspaceRoot: r,
+      path,
+    }))
+  }
+
   const open: FilePreviewApi['open'] = async (rawPath) => {
     const detected = filePathOf(rawPath) ?? rawPath.trim()
     if (!detected) return
     const r = await ensureRoot()
     // With a root, resolve against the real file tree (handles bare names / wrong
-    // base); fall back to the written path so the modal can still surface a clear
-    // "could not load". Without a root (browser-dev) degrade to a placeholder.
-    const path = r ? ((await matchPath(r, detected, touchedPaths.value)) ?? detected) : detected
+    // base); fall back to the written path — made root-relative when it's an absolute
+    // path inside the workspace, which is the shape a PreviewRef must carry (an
+    // unmatched file, e.g. a build output not in the git index, used to keep its
+    // absolute path and broke "copy path" + the media:// stream URL) — so the modal can
+    // still surface a clear "could not load". Without a root (browser-dev) degrade to a
+    // placeholder.
+    const path = r
+      ? ((await matchPath(r, detected, touchedPaths.value)) ?? relativeToRoot(r, detected))
+      : detected
     const name = baseName(path)
     const item: PreviewRef = { name, kind: previewKindFromPath(name) }
     if (r) {
       item.workspaceRoot = r
       item.path = path
     }
-    openPreview(item)
+    // An image opens with the session's other images as its gallery (see above).
+    const siblings = r && item.kind === 'image' ? await sessionImageSiblings(r, path) : []
+    openPreview(item, siblings)
   }
   const shorten: FilePreviewApi['shorten'] = (path) => {
     const r = root.value

@@ -53,6 +53,27 @@ Ràng buộc AWOG:
   - Verify native build trong pipeline bundle sidecar runtime.
   - Gọi agent `infosec` + skill `security-audit` trên diff terminal trước merge.
 
+## Cập nhật 2026-08-09 — bỏ idle-kill & vòng đời shell
+
+Quyết định gốc mượn pattern **idle-stop của MCP** (cap 5 PTY/session + reap sau 30′ không
+I/O). Sai mô hình: MCP server là *pooled resource* (khởi động lại trong suốt), còn shell là
+*document của user*. Thực tế idle-kill giết shell user chỉ đơn giản là để mở đó, và tệ hơn,
+giết luôn lệnh chạy lâu nhưng im lặng (build/watch/ssh) — không terminal thật nào làm vậy.
+
+- **Bỏ hoàn toàn idle-kill** (`IDLE_TIMEOUT_MS`/sweep). Vòng đời PTY do UI sở hữu: đóng
+  tab/pane, unmount host; cộng `shutdown()` ở SIGTERM/SIGINT. Cap nâng 5 → **20/session**
+  (giữ vai trò abuse guard: 1 host = nhiều tab × nhiều pane sau khi có split).
+- **UI phải xử lý shell chết** (không còn "im lặng nuốt phím"): pane `exited` → in hint,
+  phím kế tiếp spawn shell mới trong cùng xterm; `engine.crashed`/`engine.restarted` retire
+  mọi `terminalId` stale; RPC lỗi `Unknown terminal` cũng chuyển pane sang `exited`.
+- **Env**: strip thêm `ELECTRON_RUN_AS_NODE`/`NODE_OPTIONS` (sidecar chạy `electron
+  --run-as-node`; rò sang shell làm hỏng `node`/`electron` user gõ), set `TERM_PROGRAM`,
+  `COLORTERM=truecolor`, `LANG` fallback. macOS spawn **login shell** (`-l`) như
+  Terminal.app/VS Code để `.zprofile` (Homebrew/nvm/pyenv PATH) được nạp.
+- **Chưa làm** (theo dõi tiếp): PTY vẫn chết theo sidecar restart và theo reload renderer —
+  muốn "keep session" đúng nghĩa cần scrollback buffer phía sidecar + `terminal.attach`
+  (reattach theo `ptyKey`). Xem phần "Việc cần làm tiếp".
+
 ## Tham chiếu
 
 - [docs/features/workspace-panel.md](../features/workspace-panel.md) — feature spec

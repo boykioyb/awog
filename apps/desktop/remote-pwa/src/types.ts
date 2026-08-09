@@ -98,6 +98,7 @@ export interface EngineMessage {
   at?: string
   steps?: SessionStep[]
   parts?: SessionMessagePart[]
+  attachments?: SessionAttachment[]
   error?: { message: string }
 }
 
@@ -107,6 +108,8 @@ export interface SessionSettings {
   level: string
   mode: string
   accountId?: string
+  responseStyle?: string
+  responseStyleNoMarkdown?: boolean
 }
 
 export interface FullSession {
@@ -116,6 +119,92 @@ export interface FullSession {
   updatedAt: string
   settings?: SessionSettings
   messages: EngineMessage[]
+  // Authoritative session checklist (ADR 0069) — the model writes it through
+  // TodoWrite, the user through sessions.updateTodos.
+  todos?: TodoItem[]
+}
+
+// User attachment on an outgoing message. Images carry an inline base64 `data:`
+// URL; the gateway strips `path` (a desktop filesystem path) before forwarding.
+export interface SessionAttachment {
+  id: string
+  name: string
+  type: 'file' | 'image'
+  size?: string
+  mime?: string
+  url?: string
+  preview?: string
+  width?: number
+  height?: number
+}
+
+// ─── Search ─────────────────────────────────────────────────────────────────
+
+export interface SessionSearchResult {
+  sessionId: string
+  sessionTitle: string
+  projectId: string | null
+  messageId: string
+  role: 'user' | 'agent' | 'system'
+  at: string
+  snippet: string
+}
+
+// ─── Bootstrap (gateway-local `remote.bootstrap`) ───────────────────────────
+
+export interface RemoteProject {
+  id: string
+  name: string
+  color?: string
+}
+
+export interface RemoteModel {
+  id: string
+  name: string
+}
+
+// Account IDENTITY only (id/label/status) — the gateway never sends credentials.
+export interface RemoteAccount {
+  id: string
+  label: string
+  status?: string
+  // Custom endpoints / Codex curate their own list; it wins over the provider catalog.
+  models?: string[]
+}
+
+export interface RemoteProviderEntry {
+  provider: string
+  models: RemoteModel[]
+  accounts: RemoteAccount[]
+  activeAccountId: string | null
+}
+
+export interface RemoteBootstrap {
+  projects: RemoteProject[]
+  providers: RemoteProviderEntry[]
+  defaults: { provider: string; modelId: string; level: string }
+}
+
+// What the session config sheet edits. '' means INHERIT — the gateway resolves it
+// from the project's LLM defaults, then the desktop defaults. `responseStyle`
+// 'Default' = no style.
+export interface SessionConfig {
+  provider: string
+  accountId: string
+  modelId: string
+  level: string
+  mode: 'ask' | 'plan'
+  responseStyle: string
+  responseStyleNoMarkdown: boolean
+}
+
+// What the PWA sends when creating a session — intent only. The gateway resolves
+// cwd/system prompt server-side and validates the account (see
+// remote-gateway-policy.ts).
+export interface NewSessionInput {
+  title?: string
+  projectId?: string | null
+  config: SessionConfig
 }
 
 // ─── Cost ───────────────────────────────────────────────────────────────────
@@ -216,6 +305,22 @@ export interface MessageDonePayload {
   text?: string
   stopReason?: string | null
   errorMessage?: string
+}
+
+export interface BackgroundStartedPayload {
+  sessionId: string
+  shellId: string
+  command: string
+  startedAt?: number
+}
+
+export interface BackgroundDonePayload {
+  sessionId: string
+  shellId: string
+  command: string
+  status: string
+  exitCode?: number | null
+  outputTail?: string
 }
 
 export interface GatewayEvent {

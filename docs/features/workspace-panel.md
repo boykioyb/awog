@@ -90,8 +90,17 @@ Approve/Reject hành động thẳng trên plan step (không qua `sessions.permi
 **Multi-tab:** [WorkspaceTerminalTab.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceTerminalTab.vue) là manager — tab strip (+ tạo / X xóa / double-click đổi tên / click chuyển), mỗi tab là 1 [WorkspaceTerminalInstance.vue](../../apps/desktop/ui/components/session/workspace/WorkspaceTerminalInstance.vue) (always-mounted, `v-show` active → PTY sống khi chuyển tab). Xóa tab cuối = đóng drawer.
 xterm UI ↔ `terminal.create/write/resize/kill/list` + event `terminal.data`/`terminal.exit`.
 PTY manager sidecar: [src/terminal/manager.ts](../../apps/desktop/sidecar/src/terminal/manager.ts) —
-`Map<terminalId, …>`, idle-kill 30′, cleanup ở SIGTERM/SIGINT. node-pty nạp **dynamic
+`Map<terminalId, …>`, **không idle-kill** (shell sống tới khi user đóng; xem
+[ADR 0019 § Cập nhật](../decisions/0019-pty-terminal-in-sidecar.md#cập-nhật-2026-08-09--bỏ-idle-kill--vòng-đời-shell)),
+cleanup ở SIGTERM/SIGINT. node-pty nạp **dynamic
 import + graceful fallback** → chưa cài/lỗi thì tab báo "unavailable", tab khác không sao.
+
+**Shell chết ≠ pane treo.** Khi PTY thoát (`exit`, process chết) hoặc engine restart
+(`engine.crashed`/`engine.restarted` → mọi `terminalId` thành stale), pane được đánh dấu
+`exited`: in `[… — nhấn phím bất kỳ để mở shell mới]`, giữ nguyên scrollback, và **phím
+bấm kế tiếp spawn shell mới** trong chính xterm đó. Resize KHÔNG tự hồi sinh shell user đã
+đóng. Write/resize RPC lỗi `Unknown terminal` cũng chuyển pane sang `exited` (phòng khi mất
+event) — trước đây lỗi bị nuốt im lặng nên pane trông sống mà gõ không ăn.
 
 ## RPC & Event mới (sidecar)
 
@@ -113,7 +122,8 @@ import + graceful fallback** → chưa cài/lỗi thì tab báo "unavailable", t
 - `fs.*` + PTY: `assertInsideWorkspace` (resolve absolute + startsWith + reject `..`/symlink-escape), `workspaceRoot` phải absolute.
 - Terminal: cwd **luôn** = workspaceRoot; shell binary cố định (`$SHELL`/default), arg array rỗng (không cmd-injection); `data` là byte opaque vào stdin PTY.
 - **Env strip trước `pty.spawn`**: xoá `CLAUDE_CODE_OAUTH_TOKEN`/`*_API_KEY` + mọi key `/(_TOKEN|_KEY|_SECRET)$/i` (invariant #1 — shell không `echo` được token).
-- Cap 5 PTY/session + idle-kill; PTY không persist (đúng restart-safe).
+- Cap 20 PTY/session (abuse guard — 1 host có nhiều tab × nhiều pane); **không** idle-kill; PTY không persist qua restart sidecar (đúng restart-safe).
+- Env strip thêm `ELECTRON_RUN_AS_NODE`/`NODE_OPTIONS` (sidecar chạy bằng `electron --run-as-node`, rò sang shell sẽ phá `node`/`electron` user gõ); set `TERM_PROGRAM=AWOG`, `COLORTERM=truecolor`, `LANG` fallback.
 - **Reveal / Open in VS Code**: chạy ở Electron main (không phải sidecar), path qua `resolveInsideWorkspace` trước khi `shell.showItemInFolder`/`spawn`; `code` binary resolve từ allowlist vị trí cài đặt theo OS, `spawn` arg-array (không shell string, không nhận input ngoài 'code' cho probe) → không cmd-injection.
 
 ## Types mới

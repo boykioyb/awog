@@ -20,6 +20,14 @@
         <span class="mmsep" />
         <button
           class="mmb"
+          :class="{ ok: copied }"
+          :title="copied ? t('common.copied') : t('common.mermaid.copySource')"
+          @click="copySource"
+        >
+          <Icon :name="copied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+        </button>
+        <button
+          class="mmb"
           :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
           @click="toggleFull"
         >
@@ -440,6 +448,22 @@ watch(source, () => {
 })
 watch(isDark, render)
 
+// Copy the diagram's mermaid source. Once rendered, the SVG can't be read back as text,
+// so the original fence body is only reachable through this button. Same affordance as the
+// transcript's code-block copy: the icon flips to a check for a beat, then reverts.
+const COPY_RESET_MS = 1200
+const copied = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | null = null
+function copySource() {
+  void navigator.clipboard.writeText(source.value)
+  copied.value = true
+  if (copyTimer) clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => {
+    copyTimer = null
+    copied.value = false
+  }, COPY_RESET_MS)
+}
+
 // Fullscreen: blow the diagram up to a fixed full-window overlay (above the preview
 // modal) so big graphs are readable; zoom/pan still apply inside it.
 const fullscreen = ref(false)
@@ -457,6 +481,7 @@ function onFsKey(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onFsKey, true))
 onBeforeUnmount(() => {
   clearRetry()
+  if (copyTimer) clearTimeout(copyTimer)
   window.removeEventListener('keydown', onFsKey, true)
 })
 </script>
@@ -511,6 +536,11 @@ onBeforeUnmount(() => {
 .mmb:hover {
   background: var(--bgHover);
   color: var(--text);
+}
+/* Copy confirmed — same green tick as the transcript's code-block copy button. */
+.mmb.ok,
+.mmb.ok:hover {
+  color: var(--add);
 }
 .mmz {
   height: 22px;

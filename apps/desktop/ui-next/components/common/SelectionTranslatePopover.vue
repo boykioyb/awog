@@ -35,7 +35,9 @@
             <span>{{ t('translate.error') }}</span>
             <button class="sttbtn" @click="retry">{{ t('translate.retry') }}</button>
           </div>
-          <div v-else class="sttresult">
+          <!-- Translated prose can carry the source's links; a workspace path must open in
+               the shared preview, never navigate the SPA (dead route → 404). -->
+          <div v-else class="sttresult" @click="onMdLinkClick">
             <template v-for="(seg, i) in resultSegments" :key="i">
               <pre v-if="seg.type === 'mermaid'" class="sttcode"><code>{{ seg.code }}</code></pre>
               <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
@@ -60,10 +62,12 @@ import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useEscToClose } from '~/composables/useEscToClose'
 import { useMarkdown } from '~/composables/useMarkdown'
+import { useMdFileLink } from '~/composables/useMdFileLink'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 
 const { t } = useI18n()
 const { renderMarkdown } = useMarkdown()
+const { onMdLinkClick } = useMdFileLink()
 const {
   active,
   lang,

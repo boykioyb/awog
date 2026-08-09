@@ -67,6 +67,9 @@
       <div class="dev-guide-tip">{{ t('settings.devices.guide.tip') }}</div>
     </details>
 
+    <!-- How an already-paired device gets back in (URL + QR, no pairing code). -->
+    <SettingsDeviceAccess v-if="enabled && connected && host" :host="host" :port="port" />
+
     <!-- Empty state -->
     <div v-if="!devices.length" class="dev-empty">
       <Icon name="smartphone" style="width: 28px; height: 28px" class="dev-empty-icon" />
@@ -120,6 +123,7 @@
 // empty state) plus a per-platform label + status colors. Browser-dev (no bridge)
 // simply shows the disconnected state — every action is a no-op.
 import { computed } from 'vue'
+import SettingsDeviceAccess from '~/components/settings/SettingsDeviceAccess.vue'
 import SettingsDevicePairModal from '~/components/settings/SettingsDevicePairModal.vue'
 import { useRemoteGateway } from '~/composables/useRemoteGateway'
 import { formatRelativeAgo } from '~/utils/relative-time'
@@ -140,6 +144,7 @@ const {
   pairingBusy,
   connected,
   host,
+  port,
   enabled,
   setEnabled,
   createPairing,

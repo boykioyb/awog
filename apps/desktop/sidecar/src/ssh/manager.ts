@@ -259,9 +259,11 @@ async function getSsh2(): Promise<Ssh2Module | null> {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const CONNECT_TIMEOUT_MS = 20_000
-// Reap connections with zero data activity (either direction) for this long.
-// Server output (e.g. tailing logs) resets the timer, so only truly silent
-// shells are collected (mirrors the terminal PTY manager).
+// Reap HEADLESS connections (the agent's exec/SFTP pool — `record.stream` unset)
+// with zero data activity for this long. An INTERACTIVE shell is exempt: it is a
+// terminal tab the user owns, and reaping it killed shells that were merely left
+// open — plus quiet long-running commands. Same rule as the PTY manager, which
+// dropped its idle sweep entirely.
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000
 const IDLE_SWEEP_MS = 60 * 1000
 // Default SSH keepalive for EVERY connection (interactive + headless agent). Ping
@@ -1072,6 +1074,7 @@ class SshManager {
     this.sweepTimer = setInterval(() => {
       const now = Date.now()
       for (const record of this.connections.values()) {
+        if (record.stream) continue // interactive shell — user-owned, never reaped
         if (now - record.lastActivityAt > IDLE_TIMEOUT_MS) this.teardown(record.connId)
       }
       if (this.connections.size === 0 && this.sweepTimer) {

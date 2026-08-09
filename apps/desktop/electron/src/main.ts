@@ -104,8 +104,10 @@ if (!gotLock) {
     setupTrayBridge()
 
     app.on('activate', () => {
-      // macOS: re-create the window when the dock icon is clicked and none open.
-      if (BrowserWindow.getAllWindows().length === 0) openMainWindow()
+      // macOS: re-create the MAIN window when the dock icon is clicked and it's gone.
+      // Keyed on `mainWindow`, not the window count — a popout left open (preview or
+      // session) would otherwise make the dock click a no-op with no way back in.
+      if (!mainWindow) openMainWindow()
     })
   })
 

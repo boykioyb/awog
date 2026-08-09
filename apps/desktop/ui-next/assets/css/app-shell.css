@@ -1190,3 +1190,49 @@ textarea.gcpta {
 .scroll {
   padding: 20px;
 }
+
+/* ── Markdown code-block copy button (utils/code-copy) ─────────────────────────
+   Every rendered-markdown surface (transcript, preview modal, library body, artifact
+   editor, GitHub drawer) wraps each <pre> in `.codeblock` and pins a `.codecopy` button
+   to its top-right corner. Styled globally so the control is identical everywhere instead
+   of being re-declared per surface. The wrapper carries NO margin — the surface's own
+   <pre> margin still applies (the transcript, whose <pre> margin is zeroed, adds it back
+   on `.codeblock` in its scoped styles). */
+.codeblock {
+  position: relative;
+}
+.codecopy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--textDim);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease,
+    background 0.12s ease;
+}
+.codeblock:hover .codecopy,
+.codecopy:focus-visible {
+  opacity: 1;
+}
+.codecopy:hover {
+  color: var(--text);
+  background: var(--bgHover);
+}
+.codecopy.ok {
+  color: var(--add);
+  opacity: 1;
+}
+.codecopy .icn {
+  width: 13px;
+  height: 13px;
+}

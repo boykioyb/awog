@@ -128,6 +128,50 @@ export function useSidecar() {
     await api.openFileExternal(workspaceRoot, path)
   }
 
+  // Open a workspace file in its own OS window (preview popout). Main validates the
+  // root/path pair (invariant #2) and focuses an existing window for the same file.
+  const openPreviewWindow = async (
+    workspaceRoot: string,
+    path: string,
+    name: string,
+  ): Promise<void> => {
+    if (!api) throw new SidecarUnavailableError()
+    await api.openPreviewWindow(workspaceRoot, path, name)
+  }
+
+  // Open a session in its own OS window (session popout). Main validates the engineId
+  // and focuses the window the session already has. No-op outside Electron so the
+  // browser-dev mock path just doesn't pop out.
+  const openSessionWindow = async (engineId: string, title: string): Promise<void> => {
+    if (!api?.openSessionWindow) return
+    await api.openSessionWindow(engineId, title)
+  }
+
+  // Close a session's popout ("bring it back here"); false when it had none open.
+  const closeSessionWindow = async (engineId: string): Promise<boolean> => {
+    if (!api?.closeSessionWindow) return false
+    return api.closeSessionWindow(engineId)
+  }
+
+  // Sessions currently owned by a popout window — read once on mount; live changes
+  // arrive through onSessionWindowsChanged.
+  const listSessionWindows = async (): Promise<string[]> => {
+    if (!api?.listSessionWindows) return []
+    return api.listSessionWindows()
+  }
+
+  const onSessionWindowsChanged = (handler: (engineIds: string[]) => void): UnlistenFn => {
+    if (!api?.onSessionWindowsChanged) return () => undefined
+    return api.onSessionWindowsChanged(handler)
+  }
+
+  // Close the window this renderer runs in — a preview/session popout's own ✕ / Esc.
+  // No-op outside the Electron shell.
+  const closeSelf = async (): Promise<void> => {
+    if (!api) return
+    await api.closeSelf()
+  }
+
   // Whether VS Code's `code` CLI is available — gates the "Open in VS Code"
   // file action. Returns false when running outside the Electron shell.
   const isVscodeAvailable = async (): Promise<boolean> => {
@@ -198,6 +242,12 @@ export function useSidecar() {
     sessionFolderPath,
     openPath,
     openFileExternal,
+    openPreviewWindow,
+    openSessionWindow,
+    closeSessionWindow,
+    listSessionWindows,
+    onSessionWindowsChanged,
+    closeSelf,
     isVscodeAvailable,
     openInVscode,
     getAppInfo,

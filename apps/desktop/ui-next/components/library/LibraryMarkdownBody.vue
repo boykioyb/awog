@@ -33,7 +33,14 @@
     </div>
 
     <div v-if="!content" class="lmb-empty">{{ emptyText || t('library.md.empty') }}</div>
-    <div v-else-if="viewMode === 'preview'" class="lmb-render mdbody">
+    <!-- A file-path link in the body opens in the shared preview when a workspace root is
+         known; either way the SPA router never sees it (dead route → 404). -->
+    <div
+      v-else-if="viewMode === 'preview'"
+      ref="mdBody"
+      class="lmb-render mdbody"
+      @click="onMdLinkClick"
+    >
       <template v-for="(seg, i) in segments" :key="i">
         <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
         <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
@@ -52,7 +59,9 @@
 // live), styled in prototype CSS.
 import { computed, ref } from 'vue'
 import MermaidView from '~/components/common/MermaidView.vue'
+import { useCodeCopy } from '~/composables/useCodeCopy'
 import { useMarkdown } from '~/composables/useMarkdown'
+import { useMdFileLink } from '~/composables/useMdFileLink'
 
 const props = withDefaults(
   defineProps<{
@@ -62,8 +71,12 @@ const props = withDefaults(
     allowEdit?: boolean
     editLabel?: string
     editTitle?: string
+    // Absolute workspace root the body's file-path links are anchored at, when the
+    // caller knows one (a project-scoped doc). Null → links are inert (a skill/agent
+    // body references files in no particular project).
+    workspaceRoot?: string | null
   }>(),
-  { emptyText: '', allowEdit: false, editLabel: '', editTitle: '' },
+  { emptyText: '', allowEdit: false, editLabel: '', editTitle: '', workspaceRoot: null },
 )
 
 // Emits the click anchor (button rect) so the caller can position a creator
@@ -72,12 +85,17 @@ const emit = defineEmits<{ 'edit-body': [anchor: { top: number; left: number } |
 
 const { t } = useI18n()
 const { renderMarkdown } = useMarkdown()
+const { onMdLinkClick } = useMdFileLink(() => props.workspaceRoot)
 
 type ViewMode = 'preview' | 'raw'
 const viewMode = ref<ViewMode>('preview')
 const copied = ref(false)
 
 const segments = computed(() => renderMarkdown(props.content ?? ''))
+
+// Per-code-block copy button (the header's Copy button copies the WHOLE body).
+const mdBody = useTemplateRef<HTMLElement>('mdBody')
+useCodeCopy(mdBody, () => segments.value)
 
 const onCopy = async () => {
   try {

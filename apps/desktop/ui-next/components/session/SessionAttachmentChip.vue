@@ -37,24 +37,19 @@
 // Clicking opens the shared full-window PreviewModal (§7) via usePreview() — the
 // single modal instance (mounted in SessionDetail) reads the shared store.
 import type { SessionAttachment } from '~/composables/useSessionsData'
-import { previewKindFromAttachment, type PreviewRef } from '~/composables/usePreview'
+import { imageSiblingsFromAttachments, previewRefFromAttachment } from '~/composables/usePreview'
 
-const props = defineProps<{ att: SessionAttachment }>()
+// `siblings` = every attachment on the same message. Handed to the preview so ‹ › steps
+// through THIS message's images instead of whatever else lives in their folder.
+const props = withDefaults(
+  defineProps<{ att: SessionAttachment; siblings?: SessionAttachment[] }>(),
+  { siblings: () => [] },
+)
 const { t } = useI18n()
 const { open } = usePreview()
 
 function openPreview() {
-  const a = props.att
-  if (a.folder && a.path) {
-    open({ kind: 'folder', name: a.name, workspaceRoot: a.path })
-    return
-  }
-  const item: PreviewRef = { name: a.name, kind: previewKindFromAttachment(a) }
-  if (a.src) item.src = a.src
-  if (a.text != null) item.text = a.text
-  if (a.size != null) item.size = a.size
-  if (a.mime) item.mime = a.mime
-  open(item)
+  open(previewRefFromAttachment(props.att), imageSiblingsFromAttachments(props.siblings))
 }
 </script>
 

@@ -29,6 +29,8 @@
 | 21 | [project-github](./project-github.md) | Draft (ADR 0049) — Issues + Pull Requests |
 | 22 | [global-terminal](./global-terminal.md) | Implemented (ui-next) — dock terminal toàn app, cwd home |
 | 23 | [office-preview](./office-preview.md) | Implemented (ui-next) — xem `.docx`/`.xlsx` trong PreviewModal, parser tự viết |
+| 24 | [preview-popout-window](./preview-popout-window.md) | Implemented (ui-next + electron) — mở file ra cửa sổ OS riêng, nhiều cửa sổ cùng lúc |
+| 25 | [session-popout-window](./session-popout-window.md) | Implemented (ui-next + electron) — mở session ra cửa sổ OS riêng, hand-off quyền sở hữu |
 
 ## Template
 

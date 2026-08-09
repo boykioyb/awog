@@ -9,7 +9,9 @@
   <!-- Rendered markdown preview (marked + mermaid; mirrors PreviewModal). -->
   <div v-else class="edview-md" :class="{ split: isSplit }">
     <div class="edview-mdscroll">
-      <div class="mdbody">
+      <!-- A file-path link in the doc opens in the shared PreviewModal; it must never
+           reach the SPA router (dead route → full-page 404). See useMdFileLink. -->
+      <div ref="mdBody" class="mdbody" @click="onMdLinkClick">
         <template v-for="(seg, i) in segments" :key="i">
           <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
           <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
@@ -26,23 +28,34 @@
 //   'preview' → markdown rendered via useMarkdown (raw HTML stripped) + live
 //               mermaid diagrams, styled like the shared PreviewModal prose.
 import MermaidView from '~/components/common/MermaidView.vue'
+import { useCodeCopy } from '~/composables/useCodeCopy'
 import { useMarkdown } from '~/composables/useMarkdown'
 import type { MdSegment } from '~/composables/useMarkdown'
+import { useMdFileLink } from '~/composables/useMdFileLink'
 
 const props = withDefaults(
   defineProps<{
     content: string
     mode: 'diff' | 'preview'
     isSplit?: boolean
+    // Absolute root of the task's project — a `backend/app/x.py` link in the artifact
+    // resolves under it and opens in the shared PreviewModal. Null while the project
+    // is still resolving (or unknown): the link click is then simply inert.
+    workspaceRoot?: string | null
   }>(),
-  { isSplit: false },
+  { isSplit: false, workspaceRoot: null },
 )
 
 const { renderMarkdown } = useMarkdown()
+const { onMdLinkClick } = useMdFileLink(() => props.workspaceRoot)
 
 const segments = computed<MdSegment[]>(() =>
   props.mode === 'preview' ? renderMarkdown(props.content) : [],
 )
+
+// Per-code-block copy button, same control as the transcript / preview modal.
+const mdBody = useTemplateRef<HTMLElement>('mdBody')
+useCodeCopy(mdBody, () => segments.value)
 
 type DiffLine = { text: string; kind: 'add' | 'del' | 'hunk' | 'meta' | 'ctx' }
 

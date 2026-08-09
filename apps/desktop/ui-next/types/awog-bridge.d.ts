@@ -94,6 +94,23 @@ export interface AwogBridge {
   openPath(root: string, path: string): Promise<void>
   // Open a workspace file in the default browser (file:// URL, path validated).
   openFileExternal(root: string, path: string): Promise<void>
+  // Open a workspace file in its own OS window (preview popout). Main validates the
+  // root/path pair against the workspace and focuses an already-open window for the
+  // same file instead of stacking a duplicate.
+  openPreviewWindow(root: string, path: string, name: string): Promise<void>
+  // Open a session in its own OS window (session popout). Main validates the engineId
+  // and focuses the window a session already has instead of stacking a duplicate.
+  openSessionWindow(engineId: string, title: string): Promise<void>
+  // Close a session's popout ("bring it back here"). Addressed BY SESSION ID, so a
+  // renderer can only ever close a session popout — never an arbitrary window.
+  closeSessionWindow(engineId: string): Promise<boolean>
+  // Sessions currently owned by a popout window (read once per renderer on mount).
+  listSessionWindows(): Promise<string[]>
+  // Live changes to that set; returns an unsubscribe function.
+  onSessionWindowsChanged(handler: (engineIds: string[]) => void): () => void
+  // Close the calling window (a preview popout closing itself). Main resolves the
+  // target from the IPC sender, so a renderer can never close another window.
+  closeSelf(): Promise<void>
   // Whether VS Code's `code` CLI is available on this machine.
   vscodeAvailable(): Promise<boolean>
   openInVscode(root: string, path: string): Promise<void>

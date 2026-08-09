@@ -86,6 +86,31 @@ const awog = {
     ipcRenderer.invoke('shell:openPath', { root, path }),
   openFileExternal: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:openFileExternal', { root, path }),
+  // Open a workspace file in its own OS window (preview popout). Main validates the
+  // root/path pair against the workspace before creating the window.
+  openPreviewWindow: (root: string, path: string, name: string): Promise<void> =>
+    ipcRenderer.invoke('preview:openWindow', { root, path, name }),
+  // Open a session in its own OS window (session popout). Main validates the engineId
+  // and focuses the window a session already has instead of stacking a duplicate.
+  openSessionWindow: (engineId: string, title: string): Promise<void> =>
+    ipcRenderer.invoke('session:openWindow', { engineId, title }),
+  // Close a session's popout ("bring it back here"). Addresses the window by SESSION
+  // id, so a renderer can only close a session popout — never an arbitrary window.
+  closeSessionWindow: (engineId: string): Promise<boolean> =>
+    ipcRenderer.invoke('session:closeWindow', engineId),
+  // Sessions currently owned by a popout window (read once on mount).
+  listSessionWindows: (): Promise<string[]> => ipcRenderer.invoke('session:listWindows'),
+  // Live changes to that set; returns an unsubscribe function.
+  onSessionWindowsChanged(handler: (engineIds: string[]) => void): () => void {
+    const listener = (_e: unknown, ids: string[]): void => handler(ids)
+    // Channel literal mirrors SESSION_WINDOWS_CHANGED in main's session-window.ts —
+    // this preload is sandboxed, so it can't import main-process modules.
+    ipcRenderer.on('session:windowsChanged', listener)
+    return () => ipcRenderer.removeListener('session:windowsChanged', listener)
+  },
+  // Close the calling window — used by a preview popout's own ✕ / Esc. Main resolves
+  // the target from the sender, so this can never close another window.
+  closeSelf: (): Promise<void> => ipcRenderer.invoke('window:closeSelf'),
   vscodeAvailable: (): Promise<boolean> => ipcRenderer.invoke('shell:vscodeAvailable'),
   openInVscode: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:openInVscode', { root, path }),

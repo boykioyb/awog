@@ -19,6 +19,7 @@
 // boundary as v-html). Highlights not found in this run are simply skipped by locateMarks.
 import type { BlockHighlight } from './SessionTextBlock.vue'
 import { locateMarks, type QuoteMark } from '~/utils/quote-highlight'
+import { attachCodeCopyButtons } from '~/utils/code-copy'
 import { isInternalFileHref } from '~/utils/file-links'
 
 const props = defineProps<{ html: string; highlights?: BlockHighlight[] }>()
@@ -74,47 +75,12 @@ function applyMarks(el: HTMLElement) {
   }
 }
 
-// Overlay a hover-revealed copy button on each code block. The button markup is a trusted
-// constant (icon sprite <use>), appended AFTER applyMarks so its (text-empty) node can't
-// interfere with quote matching. The subtree is rebuilt each rerender, so stale buttons +
-// their reset timers are detached and GC'd.
-const COPY_RESET_MS = 1200
-const COPY_SVG = '<svg class="icn"><use href="#i-copy"></use></svg>'
-const CHECK_SVG = '<svg class="icn"><use href="#i-check"></use></svg>'
-function addCopyButtons(el: HTMLElement) {
-  for (const pre of Array.from(el.querySelectorAll('pre'))) {
-    const code = pre.querySelector('code')
-    if (!code) continue
-    // Anchor the copy button to a non-scrolling wrapper around <pre>, NOT to <pre>
-    // itself. <pre> is the horizontal scroll container, and an absolutely-positioned
-    // child of it is placed against the FULL scrolled width — so on a wide block the
-    // button drifts left out of view as the user scrolls right (it never re-pins to the
-    // visible corner). The wrapper doesn't scroll, so the button stays pinned top-right.
-    const wrap = document.createElement('div')
-    wrap.className = 'codeblock'
-    pre.replaceWith(wrap)
-    wrap.appendChild(pre)
-    const btn = document.createElement('button')
-    btn.type = 'button'
-    btn.className = 'codecopy'
-    btn.title = t('common.copy')
-    btn.innerHTML = COPY_SVG
-    let reset: ReturnType<typeof setTimeout> | null = null
-    btn.addEventListener('click', () => {
-      void navigator.clipboard.writeText(code.textContent ?? '')
-      btn.classList.add('ok')
-      btn.title = t('common.copied')
-      btn.innerHTML = CHECK_SVG
-      if (reset) clearTimeout(reset)
-      reset = setTimeout(() => {
-        btn.classList.remove('ok')
-        btn.title = t('common.copy')
-        btn.innerHTML = COPY_SVG
-      }, COPY_RESET_MS)
-    })
-    wrap.appendChild(btn)
-  }
-}
+// Copy button per code block — shared with every other markdown surface (utils/code-copy).
+// Applied AFTER applyMarks so the button's (text-empty) node can't interfere with quote
+// matching. The subtree is rebuilt each rerender, so stale buttons + their reset timers are
+// detached and GC'd.
+const addCopyButtons = (el: HTMLElement) =>
+  attachCodeCopyButtons(el, { copy: t('common.copy'), copied: t('common.copied') })
 
 // Turn inline-code file references (e.g. `docs/x.md`, `tasks/#21/plan.md`) and
 // relative-path links into clickable chips that open the shared PreviewModal —
@@ -406,9 +372,9 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
 /* Non-scrolling wrapper around a code block's <pre> (added by addCopyButtons). The copy
    button anchors to THIS (a sibling of <pre>), so it stays pinned to the visible
    top-right corner when a wide block scrolls horizontally, instead of drifting with the
-   scrolled content. Owns the block's bottom margin (moved off <pre>). */
+   scrolled content — see app-shell.css for the shared button styling. Here the wrapper also
+   owns the block's bottom margin, since `:deep(pre)` below zeroes it. */
 .mdinline :deep(.codeblock) {
-  position: relative;
   margin: 0 0 10px;
 }
 /* Zero the wrapper's bottom margin when it's the run's last child — mirrors the
@@ -431,42 +397,6 @@ watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
   border: 0;
   padding: 0;
   font-size: 0.92em;
-}
-/* Per-code-block copy button — hover-revealed, top-right (mirrors Library/Preview copy). */
-.mdinline :deep(.codecopy) {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border-radius: 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease,
-    background 0.12s ease;
-}
-.mdinline :deep(.codeblock:hover .codecopy),
-.mdinline :deep(.codecopy:focus-visible) {
-  opacity: 1;
-}
-.mdinline :deep(.codecopy:hover) {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.mdinline :deep(.codecopy.ok) {
-  color: var(--add);
-  opacity: 1;
-}
-.mdinline :deep(.codecopy .icn) {
-  width: 13px;
-  height: 13px;
 }
 .mdinline :deep(ul),
 .mdinline :deep(ol) {

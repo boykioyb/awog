@@ -4,7 +4,14 @@
        stacking context / overflow). Single instance, driven by `item` prop or the
        shared usePreview() store. -->
   <Teleport to="body">
-    <div v-if="shownItem" class="ovl on pvovl" @click.self="close">
+    <!-- In a popout window the modal IS the window: no dim backdrop, and a click on the
+         (edge-to-edge) surface must not close it — the OS chrome / header ✕ own that. -->
+    <div
+      v-if="shownItem"
+      class="ovl on pvovl"
+      :class="{ pvwin: windowMode }"
+      @click.self="onOverlayClick"
+    >
       <div class="pvcard">
         <div class="pvhead">
           <button
@@ -41,6 +48,14 @@
           </span>
           <span style="flex: 1" />
           <button
+            v-if="canOpenInWindow"
+            class="pvx"
+            :title="t('common.preview.openInWindow')"
+            @click="openInWindow"
+          >
+            <Icon name="external" style="width: 14px; height: 14px" />
+          </button>
+          <button
             v-if="canMinimize"
             class="pvx"
             :title="t('common.preview.minimize')"
@@ -75,16 +90,29 @@
             <div class="pvehint">{{ statusMessage }}</div>
           </div>
 
-          <!-- image: zoom / pan / rotate / flip -->
+          <!-- image: zoom / pan / rotate / flip. The viewport + <img> are measured by
+               fitImage() (natural size vs frame), hence the refs. -->
           <div
             v-else-if="shownItem.kind === 'image' && effectiveSrc"
+            ref="imgVp"
             class="pvimgvp"
             @wheel="onWheel"
             @pointerdown="onPointerDown"
             @pointermove="onPointerMove"
             @pointerup="onPointerUp"
           >
-            <img :src="effectiveSrc" class="pvimg" :style="imgStyle" :alt="shownItem.name" />
+            <!-- .pvimgcenter keeps the picture centered even when it's bigger than the frame
+                 (see its CSS). @load: fit it to the frame once its box exists (onImageLoad). -->
+            <div class="pvimgcenter">
+              <img
+                ref="imgEl"
+                :src="effectiveSrc"
+                class="pvimg"
+                :style="imgStyle"
+                :alt="shownItem.name"
+                @load="onImageLoad"
+              />
+            </div>
           </div>
 
           <!-- pdf: native embedded viewer (Chromium). -->
@@ -157,7 +185,7 @@
               @mouseup="onPvSelect"
               @mousedown="onPvMouseDown"
             >
-              <div class="mdbody" :style="{ maxWidth: mdMaxWidth }" @click="onMdClick">
+              <div ref="mdBody" class="mdbody" :style="{ maxWidth: mdMaxWidth }" @click="onMdClick">
                 <template v-for="(seg, i) in segments" :key="i">
                   <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
                   <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
@@ -323,6 +351,7 @@ import PreviewToolbar from '~/components/common/PreviewToolbar.vue'
 import PreviewFindBar from '~/components/common/PreviewFindBar.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreviewModal } from '~/composables/usePreviewModal'
+import { useCodeCopy } from '~/composables/useCodeCopy'
 import { isInternalFileHref } from '~/utils/file-links'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 import { loadMonaco } from '~/utils/monaco-loader'
@@ -332,7 +361,13 @@ export type PreviewItem = PreviewRef
 
 // `item` is optional: the app-lifetime shell mount drives the modal purely from the
 // shared usePreview() store (no prop); the legacy in-component mount can still pass one.
-const props = withDefaults(defineProps<{ item?: PreviewRef | null }>(), { item: null })
+// `windowMode` is set by pages/preview.vue — the modal then fills a dedicated OS window
+// (popout) instead of overlaying the app: no dim backdrop, no minimize (the OS window
+// minimizes itself), no "open in window" action, and `close` closes that window.
+const props = withDefaults(defineProps<{ item?: PreviewRef | null; windowMode?: boolean }>(), {
+  item: null,
+  windowMode: false,
+})
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
@@ -371,6 +406,7 @@ const {
   onEditorChange,
   save,
   imgStyle,
+  onImageLoad,
   onWheel,
   onPointerDown,
   onPointerMove,
@@ -384,6 +420,8 @@ const {
   cancelConfirm,
   canMinimize,
   minimize,
+  canOpenInWindow,
+  openInWindow,
   close,
   canGoBack,
   goBack,
@@ -394,6 +432,12 @@ const {
   hasWorkspaceFile,
   monacoRef,
 } = ctrl
+
+// Backdrop click closes the overlay — but a popout has no backdrop to click past, so the
+// same click there is just a click on the window's own surface.
+function onOverlayClick() {
+  if (!props.windowMode) close()
+}
 // Find-in-page (markdown-render). State lives in ctrl.find; destructure the refs so
 // the template unwraps them (nested refs on a plain object don't auto-unwrap).
 const {
@@ -442,6 +486,12 @@ function onMdClick(e: MouseEvent) {
   e.preventDefault()
   openLink(href)
 }
+
+// Copy button on every code block of the rendered markdown — same control the transcript
+// shows. v-html owns those nodes, so the buttons are (re)attached whenever the segments
+// change (utils/code-copy is idempotent).
+const mdBody = useTemplateRef<HTMLElement>('mdBody')
+useCodeCopy(mdBody, () => segments.value)
 
 // Focus the rename/move input when its dialog opens.
 const renameInput = useTemplateRef<HTMLInputElement>('renameInput')
@@ -517,6 +567,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   padding: 0;
   cursor: default;
 }
+/* Popout window (pages/preview.vue): the modal IS the whole window, so drop `.ovl`'s dim
+   backdrop — there is nothing behind it to dim, and the wash only muddies the content. */
+.pvovl.pvwin {
+  background: var(--bg);
+}
 .pvcard {
   position: relative;
   display: flex;
@@ -588,6 +643,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   flex-direction: column;
   align-items: center;
   padding: 26px 22px 86px;
+  /* Positioning parent for the image viewport (see .pvimgvp) — it needs a definite box to
+     be absolutely sized against. */
+  position: relative;
 }
 .pvbody.flush {
   padding: 0;
@@ -676,12 +734,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   border-color: var(--accentBorder);
   color: var(--accent);
 }
+/* Image viewport — a fixed frame (absolute inset 0 of the body) that clips whatever the
+   image does. It deliberately does NOT try to size the image: the previous attempts
+   (`max-height: 100%` inside a grid) never worked, because a percentage max-height needs a
+   DEFINITE area and neither a percentage-height flex item nor an `auto` grid row is one — the
+   row grew to the image's natural height, so nothing was constrained AND `place-items: center`
+   had nothing to center (the item filled the row), which is why a tall image sat pinned at the
+   bottom of the frame. The image is now sized only by zoom (JS), never by CSS. */
 .pvimgvp {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  display: grid;
-  place-items: center;
   cursor: grab;
   touch-action: none;
   background: repeating-conic-gradient(var(--bgSubtle) 0% 25%, transparent 0% 50%) 50% / 22px 22px;
@@ -689,10 +752,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvimgvp:active {
   cursor: grabbing;
 }
+/* Centering that survives an oversized image: the wrapper is placed at the frame's centre
+   and shifted back by half of ITS OWN size, so its centre coincides with the frame's centre
+   whatever the image measures. Grid/flex centering can't be trusted here — an item bigger
+   than a scroll container gets "safe" aligned to the start instead. Since the image's own
+   scale is applied about its centre, the picture stays centred at every zoom level. */
+.pvimgcenter {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 0;
+}
+/* Natural size — so 100% means 1:1 pixels. Everything else (fit on open, zoom, pan, rotate,
+   flip) rides on the transform in `imgStyle`. */
 .pvimg {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  display: block;
+  max-width: none;
+  max-height: none;
   transform-origin: center center;
 }
 .pvpdf {

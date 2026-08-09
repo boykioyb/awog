@@ -1,56 +1,52 @@
 {
   "settings.nav.devices": "Thiết bị",
-
   "settings.devices.title": "Thiết bị",
   "settings.devices.subtitle": "Ghép cặp điện thoại, máy tính bảng để điều khiển AWOG từ xa qua mạng Tailscale.",
-
   "settings.devices.enable.name": "Điều khiển từ xa",
   "settings.devices.enable.desc": "Cho phép thiết bị đã ghép kết nối tới máy này qua mạng Tailscale. Khi tắt, AWOG không mở cổng nào cả.",
   "settings.devices.off": "Đang tắt",
   "settings.devices.offTitle": "Điều khiển từ xa đang tắt",
   "settings.devices.offHint": "Hiện không có gì lắng nghe trên mạng. Bật lên để ghép thiết bị và điều khiển phiên từ điện thoại; tắt lại sẽ ngắt mọi thiết bị đã ghép ngay lập tức.",
   "settings.devices.toggleFailed": "Không đổi được trạng thái điều khiển từ xa: {error}",
-
   "settings.devices.tailnetConnected": "Đã kết nối Tailscale",
   "settings.devices.disconnected": "Chưa kết nối",
   "settings.devices.tailnetDisconnected": "Chưa thấy Tailscale — remote control tắt",
   "settings.devices.installHint": "Cài đặt và đăng nhập Tailscale trên máy này, sau đó mở lại trang này. Các thiết bị cùng tailnet sẽ có thể ghép cặp.",
-
   "settings.devices.guide.title": "Cách thiết lập Tailscale",
   "settings.devices.guide.step1": "Cài Tailscale trên máy này rồi đăng nhập:",
   "settings.devices.guide.step2": "Cài app Tailscale trên điện thoại (App Store / Google Play) và đăng nhập cùng tài khoản.",
   "settings.devices.guide.step3": "Đảm bảo cả hai thiết bị đều \"Connected\" trong Tailscale (cùng tailnet).",
   "settings.devices.guide.step4": "Quay lại đây — badge chuyển sang \"Đã kết nối Tailscale\". Bấm \"Ghép thiết bị mới\" rồi quét QR trên điện thoại.",
   "settings.devices.guide.tip": "Điện thoại không cần cùng Wi-Fi — Tailscale kết nối được cả khi dùng 4G/5G.",
-
   "settings.devices.pairNew": "Ghép thiết bị mới",
   "settings.devices.scanHint": "Quét mã QR này bằng thiết bị của bạn, hoặc nhập mã bên dưới thủ công.",
   "settings.devices.codeFallback": "Mã thủ công",
   "settings.devices.expiresIn": "Hết hạn sau {time}",
   "settings.devices.regenerate": "Tạo mã mới",
-
   "settings.devices.pair.title": "Ghép cặp thiết bị",
   "settings.devices.pair.expired": "Mã này đã hết hạn",
-
   "settings.devices.revoke": "Thu hồi",
   "settings.devices.revoked": "Đã thu hồi \"{label}\"",
   "settings.devices.revokeFailed": "Không thể thu hồi thiết bị: {error}",
   "settings.devices.confirmRevoke.title": "Thu hồi thiết bị",
   "settings.devices.confirmRevoke.body": "\"{label}\" sẽ mất quyền truy cập ngay lập tức và phải ghép cặp lại để kết nối.",
-
   "settings.devices.pairFailed": "Không thể tạo mã ghép cặp: {error}",
   "settings.devices.loadFailed": "Không thể tải danh sách thiết bị: {error}",
-
   "settings.devices.pairedAt": "Ghép cặp {when}",
   "settings.devices.lastSeen": "Hoạt động {when}",
-
   "settings.devices.empty.title": "Chưa ghép thiết bị nào",
   "settings.devices.empty.body": "Ghép một điện thoại hoặc máy tính bảng để chạy session AWOG từ mọi nơi trong tailnet của bạn.",
-
   "settings.devices.platform.ios": "iOS",
   "settings.devices.platform.android": "Android",
   "settings.devices.platform.macos": "macOS",
   "settings.devices.platform.windows": "Windows",
   "settings.devices.platform.linux": "Linux",
-  "settings.devices.platform.web": "Web"
+  "settings.devices.platform.web": "Web",
+  "settings.devices.access.title": "Địa chỉ truy cập",
+  "settings.devices.access.hint": "Thiết bị đã ghép mở lại AWOG Remote bằng địa chỉ này — không cần ghép lại.",
+  "settings.devices.access.copy": "Chép",
+  "settings.devices.access.copied": "Đã chép",
+  "settings.devices.access.qr": "Hiện QR",
+  "settings.devices.access.hideQr": "Ẩn QR",
+  "settings.devices.access.qrHint": "Quét bằng camera điện thoại để mở lại app (mã này không chứa mã ghép nối)."
 }

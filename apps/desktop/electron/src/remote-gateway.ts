@@ -7,6 +7,7 @@ import { remotePwaDir } from './paths'
 import { createStaticHandler } from './remote-gateway-http'
 import { DeviceStore } from './remote-gateway-devices'
 import { findTailnetAddress, isTailnetAddress } from './remote-gateway-tailnet'
+import { handleLocalMethod, isLocalMethod } from './remote-gateway-catalog'
 import {
   REMOTE_ALLOWLIST,
   RemoteRejected,
@@ -31,6 +32,9 @@ const MAX_CONNS_PER_DEVICE = 3
 // from the phone. Cost is bounded by each session's own budget + device revoke +
 // auth lockout, not by throttling turns. Sends/hour stays only as a runaway guard.
 const MAX_SENDS_PER_HOUR = 600
+// Session lifecycle writes (create/rename/delete/checklist/titling). Cheap next to
+// a turn, but still worth a runaway guard — titling is a model call.
+const MAX_WRITES_PER_HOUR = 300
 const MAX_PAYLOAD_BYTES = 1_000_000 // F-3: cap WS frame size before parse
 const AUTH_DEADLINE_MS = 10_000 // F-2: terminate a socket that never authenticates
 const MAX_UNAUTH_CONNS = 16 // F-2: cap concurrent un-authenticated sockets
@@ -43,7 +47,17 @@ type ConnState = {
   ip: string
   authTimer: ReturnType<typeof setTimeout> | null
 }
-type DeviceBudget = { sends: number[] }
+type DeviceBudget = { sends: number[]; writes: number[] }
+
+// Turn-driving calls (feed the model) vs session-lifecycle writes — each gets its
+// own hourly window below.
+const TURN_DRIVING = new Set(['sessions.sendMessage', 'sessions.steer'])
+const LIFECYCLE_WRITES = new Set([
+  'sessions.upsert',
+  'sessions.delete',
+  'sessions.updateTodos',
+  'sessions.generateTitle',
+])
 
 type GatewayStatus = {
   // User opt-in (persisted). False → nothing is listening, whatever the tailnet does.
@@ -381,25 +395,39 @@ class RemoteGateway {
       return
     }
     const method = typeof frame.method === 'string' ? frame.method : ''
+    // Gateway-LOCAL method: composed + field-picked here, never forwarded raw
+    // (see remote-gateway-catalog.ts). Not on the engine allowlist by design.
+    if (isLocalMethod(method)) {
+      try {
+        const value = await handleLocalMethod(method, (m, p) => engine.request(m, p))
+        this.send(ws, { type: 'rpc-result', id, ok: true, value })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'error'
+        this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32000, message } })
+      }
+      return
+    }
     if (!isMethodAllowed(method)) {
       this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32601, message: 'method not allowed' } })
       return
     }
     const budget = this.budgetFor(state.deviceId)
     // F8 + text cap for turn-driving calls.
-    if (method === 'sessions.sendMessage') {
+    if (TURN_DRIVING.has(method)) {
       const text = (frame.params as { text?: unknown } | undefined)?.text
       if (typeof text === 'string' && Buffer.byteLength(text, 'utf8') > MAX_TEXT_BYTES) {
         this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32005, message: 'message too large' } })
         return
       }
-      const now = Date.now()
-      budget.sends = budget.sends.filter((t) => now - t < 3_600_000)
-      if (budget.sends.length >= MAX_SENDS_PER_HOUR) {
+      if (!this.spend(budget, 'sends', MAX_SENDS_PER_HOUR)) {
         this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32007, message: 'hourly send limit reached' } })
         return
       }
-      budget.sends.push(now)
+    } else if (LIFECYCLE_WRITES.has(method)) {
+      if (!this.spend(budget, 'writes', MAX_WRITES_PER_HOUR)) {
+        this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32007, message: 'hourly write limit reached' } })
+        return
+      }
     }
     let params: unknown
     try {
@@ -426,10 +454,23 @@ class RemoteGateway {
   private budgetFor(deviceId: string): DeviceBudget {
     let b = this.budgets.get(deviceId)
     if (!b) {
-      b = { sends: [] }
+      b = { sends: [], writes: [] }
       this.budgets.set(deviceId, b)
     }
     return b
+  }
+
+  // Sliding one-hour window: drop stale stamps, then take a slot if one is free.
+  private spend(budget: DeviceBudget, bucket: 'sends' | 'writes', limit: number): boolean {
+    const now = Date.now()
+    const kept = budget[bucket].filter((t) => now - t < 3_600_000)
+    if (kept.length >= limit) {
+      budget[bucket] = kept
+      return false
+    }
+    kept.push(now)
+    budget[bucket] = kept
+    return true
   }
 
   // --- event egress (F2) ---------------------------------------------------

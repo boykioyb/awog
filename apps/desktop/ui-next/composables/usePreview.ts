@@ -112,6 +112,38 @@ export function previewKindFromAttachment(a: {
   return 'text'
 }
 
+// One chat attachment mapped onto a PreviewRef — the shape the modal and the image gallery
+// consume. Structural param (not the SessionAttachment type) to keep this store free of
+// session imports. Shared by the bubble chips, the composer tray and the context-files panel
+// so all three open the same way and can hand each other's siblings to the gallery.
+export type AttachmentLike = {
+  name: string
+  img: boolean
+  src?: string
+  text?: string
+  size?: number
+  mime?: string
+  path?: string
+  folder?: boolean
+}
+export function previewRefFromAttachment(a: AttachmentLike): PreviewRef {
+  // A dragged folder previews as its lazy tree, rooted at its own path.
+  if (a.folder && a.path) return { name: a.name, kind: 'folder', workspaceRoot: a.path }
+  const item: PreviewRef = { name: a.name, kind: previewKindFromAttachment(a) }
+  if (a.src) item.src = a.src
+  if (a.text != null) item.text = a.text
+  if (a.size != null) item.size = a.size
+  if (a.mime) item.mime = a.mime
+  return item
+}
+
+// Image siblings of an attachment list, for the gallery's "context" scope: stepping an
+// attachment must walk the attachments it was opened with, not its folder on disk (it may
+// have none). Non-images are skipped — ‹ › only makes sense between pictures.
+export function imageSiblingsFromAttachments(list: readonly AttachmentLike[]): PreviewRef[] {
+  return list.map(previewRefFromAttachment).filter((r) => r.kind === 'image')
+}
+
 const current = ref<PreviewRef | null>(null)
 // Browser-style back history UNDER `current`. A frame is pushed when the user
 // navigates INTO a file from within an open preview (a link in the rendered
@@ -128,13 +160,21 @@ const STACK_MAX = 25
 export type PreviewRestore = { view: 'render' | 'raw'; scrollTop: number }
 const pendingRestore = ref<PreviewRestore | null>(null)
 
+// Sibling set of the opened item — "the images this one belongs to". Supplied by the OPENER
+// because only it knows the context: the composer's pending attachments, one message's
+// attachments, … The preview steps through this instead of the enclosing folder, which is the
+// wrong context for an attachment (it may not even be a workspace file). Empty → the modal
+// falls back to listing the item's folder.
+const gallery = ref<PreviewRef[]>([])
+
 export function usePreview() {
   // True while there's a frame to go back to (drives the header Back button).
   const canGoBack = computed(() => stack.value.length > 0)
 
-  function open(item: PreviewRef) {
+  function open(item: PreviewRef, siblings?: PreviewRef[]) {
     stack.value = [] // top-level open → new root
     current.value = item
+    gallery.value = siblings ?? []
     pendingRestore.value = null
   }
   // Re-open a previously minimized item, replaying its captured view + scroll. The
@@ -143,20 +183,23 @@ export function usePreview() {
   function restore(item: PreviewRef, hint: PreviewRestore) {
     stack.value = []
     current.value = item
+    gallery.value = []
     pendingRestore.value = hint
   }
-  // Navigate INTO a new item, keeping the current one as history.
+  // Navigate INTO a new item, keeping the current one as history. A different file is a
+  // different context, so the sibling set does NOT carry over.
   function push(item: PreviewRef) {
     if (current.value) {
       stack.value.push(current.value)
       if (stack.value.length > STACK_MAX) stack.value.shift()
     }
     current.value = item
+    gallery.value = []
     pendingRestore.value = null
   }
-  // Swap the top item in place (rename / move / reload): the SAME logical file at a
-  // new path/content, so it must NOT become a history frame (Back would otherwise
-  // land on a stale path that no longer exists).
+  // Swap the top item in place (rename / move / reload / a gallery step): the SAME logical
+  // context at a new path/content, so it must NOT become a history frame (Back would otherwise
+  // land on a stale path that no longer exists) and the sibling set stays as it is.
   function replace(item: PreviewRef) {
     current.value = item
     pendingRestore.value = null
@@ -166,12 +209,14 @@ export function usePreview() {
     const prev = stack.value.pop()
     if (!prev) return false
     current.value = prev
+    gallery.value = []
     pendingRestore.value = null
     return true
   }
   function close() {
     stack.value = []
     current.value = null
+    gallery.value = []
   }
   // Consume the pending hint (one-shot; clears itself).
   function takeRestore(): PreviewRestore | null {
@@ -179,5 +224,5 @@ export function usePreview() {
     pendingRestore.value = null
     return r
   }
-  return { current, canGoBack, open, restore, push, replace, back, close, takeRestore }
+  return { current, gallery, canGoBack, open, restore, push, replace, back, close, takeRestore }
 }

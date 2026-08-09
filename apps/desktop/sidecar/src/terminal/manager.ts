@@ -45,31 +45,53 @@ interface TerminalRecord {
   sessionId: string
   workspaceRoot: string
   createdAt: number
-  lastActivityAt: number
   pty: PtyProcess
 }
 
-const MAX_PER_SESSION = 5
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000 // kill shells idle > 30 min
-const IDLE_SWEEP_MS = 60 * 1000
+// Abuse guard only — a host may open several tabs AND split each into panes, so
+// this must stay well above any realistic layout. NOT a lifetime policy: a shell
+// lives until the user closes it (see the note on idle-kill below).
+const MAX_PER_SESSION = 20
 
 // Strip credentials before handing env to an interactive shell (invariant #1).
 const SENSITIVE_EXACT = new Set(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY'])
 const SENSITIVE_SUFFIX = /(_TOKEN|_KEY|_SECRET)$/i
+
+// The sidecar is launched as `electron --run-as-node`, so its env carries flags
+// that hijack any `node`/`electron` the USER runs from the shell (ELECTRON_RUN_AS_NODE
+// makes an electron binary behave as plain node; NODE_OPTIONS is inherited by every
+// node child). A real terminal must not leak the host process's runtime flags.
+const HOST_RUNTIME_VARS = ['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'ELECTRON_NO_ATTACH_CONSOLE']
 
 function sanitizedEnv(): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (value === undefined) continue
     if (SENSITIVE_EXACT.has(key) || SENSITIVE_SUFFIX.test(key)) continue
+    if (HOST_RUNTIME_VARS.includes(key)) continue
     out[key] = value
   }
+  // What a terminal emulator is expected to advertise (TERM itself is set by
+  // node-pty from `name`). Only fill LANG when absent — never override the user's.
+  out.TERM_PROGRAM = 'AWOG'
+  out.COLORTERM = 'truecolor'
+  if (!out.LANG) out.LANG = 'en_US.UTF-8'
   return out
 }
 
 function defaultShell(): string {
   if (process.platform === 'win32') return process.env.COMSPEC ?? 'powershell.exe'
   return process.env.SHELL ?? '/bin/bash'
+}
+
+// macOS GUI apps inherit a minimal env, so a non-login shell skips `.zprofile`
+// (Homebrew/nvm/pyenv PATH) — Terminal.app and VS Code both spawn a LOGIN shell
+// there for exactly this reason. Elsewhere the desktop session already exports
+// the profile, so a plain interactive shell (like most Linux emulators) is right.
+function shellArgs(shell: string): string[] {
+  if (process.platform !== 'darwin') return []
+  const name = shell.slice(shell.lastIndexOf('/') + 1)
+  return name === 'zsh' || name === 'bash' || name === 'fish' || name === 'sh' ? ['-l'] : []
 }
 
 let modulePromise: Promise<NodePtyModule | null> | null = null
@@ -96,8 +118,6 @@ class TerminalManager {
 
   private idCounter = 0
 
-  private sweepTimer: ReturnType<typeof setInterval> | null = null
-
   async create(params: {
     workspaceRoot: string
     sessionId: string
@@ -118,7 +138,8 @@ class TerminalManager {
     }
 
     const terminalId = `term-${Date.now().toString(36)}-${(this.idCounter += 1).toString(36)}`
-    const proc = pty.spawn(defaultShell(), [], {
+    const shell = defaultShell()
+    const proc = pty.spawn(shell, shellArgs(shell), {
       name: 'xterm-256color',
       cols: params.cols,
       rows: params.rows,
@@ -126,19 +147,16 @@ class TerminalManager {
       env: sanitizedEnv(),
     })
 
-    const now = Date.now()
     const record: TerminalRecord = {
       terminalId,
       sessionId: params.sessionId,
       workspaceRoot: params.workspaceRoot,
-      createdAt: now,
-      lastActivityAt: now,
+      createdAt: Date.now(),
       pty: proc,
     }
     this.terminals.set(terminalId, record)
 
     proc.onData((chunk) => {
-      record.lastActivityAt = Date.now()
       emit('terminal.data', { terminalId, sessionId: params.sessionId, chunk })
     })
     proc.onExit(({ exitCode, signal }) => {
@@ -146,14 +164,12 @@ class TerminalManager {
       emit('terminal.exit', { terminalId, sessionId: params.sessionId, exitCode, signal })
     })
 
-    this.ensureSweep()
     return { terminalId }
   }
 
   write(terminalId: string, data: string): void {
     const record = this.terminals.get(terminalId)
     if (!record) throw new Error('Unknown terminal')
-    record.lastActivityAt = Date.now()
     record.pty.write(data)
   }
 
@@ -180,22 +196,11 @@ class TerminalManager {
       .map((t) => ({ terminalId: t.terminalId, sessionId: t.sessionId, createdAt: t.createdAt }))
   }
 
-  private ensureSweep(): void {
-    if (this.sweepTimer) return
-    this.sweepTimer = setInterval(() => {
-      const now = Date.now()
-      for (const record of this.terminals.values()) {
-        if (now - record.lastActivityAt > IDLE_TIMEOUT_MS) this.kill(record.terminalId)
-      }
-      if (this.terminals.size === 0 && this.sweepTimer) {
-        clearInterval(this.sweepTimer)
-        this.sweepTimer = null
-      }
-    }, IDLE_SWEEP_MS)
-    // Don't keep the event loop alive solely for the sweep.
-    this.sweepTimer.unref?.()
-  }
-
+  // NO idle-kill. A shell is a user-owned document, not a pooled resource: reaping
+  // it after N minutes of silence killed shells the user had simply left open, and
+  // worse, killed long-running-but-quiet commands (build/watch/ssh) mid-flight —
+  // something no real terminal does. Lifetime is owned by the UI (close tab/pane,
+  // host unmount) plus shutdown() below; an idle PTY costs a sleeping process.
   shutdown(): void {
     for (const record of this.terminals.values()) {
       try {
@@ -205,10 +210,6 @@ class TerminalManager {
       }
     }
     this.terminals.clear()
-    if (this.sweepTimer) {
-      clearInterval(this.sweepTimer)
-      this.sweepTimer = null
-    }
   }
 }
 

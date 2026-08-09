@@ -28,6 +28,7 @@ export function useRemoteGateway() {
 
   const connected = computed(() => status.value?.tailnet === 'connected')
   const host = computed(() => status.value?.host ?? '')
+  const port = computed(() => status.value?.port ?? 0)
   // Remote control is opt-in: until the user turns it on, main binds nothing.
   const enabled = computed(() => status.value?.enabled === true)
 
@@ -125,6 +126,7 @@ export function useRemoteGateway() {
     pairingBusy,
     connected,
     host,
+    port,
     enabled,
     refresh,
     setEnabled,

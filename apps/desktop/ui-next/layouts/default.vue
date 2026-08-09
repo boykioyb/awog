@@ -28,38 +28,17 @@
     <!-- Global status bar — single app-lifetime mount, shows on every page. -->
     <AppStatusBar />
 
-    <!-- §9 globals: mounted once so they work on every page. -->
+    <!-- §9 globals: mounted once so they work on every page. The shared host stack
+         (confirm/toast/preview/session modals) lives in AppGlobalHosts so a session
+         popout window gets exactly the same set (docs/features/session-popout-window.md);
+         only the app-shell-only globals stay here. -->
     <CommandPalette />
-    <SessionPromptEditOverlay />
     <SettingsModal />
     <ActivityModal />
     <WhatsNewModal />
-    <SessionGitModal />
-    <GitPrSummaryHost />
-    <ProjectQuickViewModal />
-    <SessionExportModal />
-    <SessionForkTreeModal />
-    <NewTaskModalHost />
-    <ConfirmDialogHost />
-    <TextPromptHost />
-    <QuotaGuardHost />
-    <!-- SSH host-key TOFU prompt, app-wide: an SSH connect from the global terminal
-         dock (or anywhere) can surface the prompt off the /ssh page. -->
-    <SshHostKeyHost />
-    <ActionToastHost />
     <OnboardingWizard />
     <TourHost />
-
-    <!-- Shared full-window file preview + the corner "minimize dock" (parked
-         previews/sessions/tasks/terminal). Mounted once here so both survive
-         navigation between pages (docs/features/minimize-dock.md). -->
-    <PreviewModal />
-    <MinimizeDock />
-
-    <!-- Shared "translate the highlighted text" popover (selection-to-translate).
-         Mounted once here so any surface can pop a translation via
-         useSelectionTranslate() (docs/features/selection-translate.md). -->
-    <SelectionTranslatePopover />
+    <AppGlobalHosts />
   </div>
 </template>
 

@@ -30,7 +30,12 @@
         <SessionLinkedText :text="message.text" />
       </template>
       <div v-if="message.att && message.att.length" class="uatt">
-        <SessionAttachmentChip v-for="(a, k) in message.att" :key="k" :att="a" />
+        <SessionAttachmentChip
+          v-for="(a, k) in message.att"
+          :key="k"
+          :att="a"
+          :siblings="message.att"
+        />
       </div>
     </div>
     <!-- Footer (standardized with the assistant): byline + persistent actions below the

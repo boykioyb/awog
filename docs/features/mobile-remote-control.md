@@ -1,5 +1,9 @@
 # Feature Spec: Mobile Remote Control (P1 — View + Send + Approve + Pairing)
 
+> **P2 (2026-08-09):** steer/cancel/checklist/session-create + PWA parity đã code — xem
+> [§P2](#p2--session-control--create-code-landed-2026-08-09-chờ-infosec-re-audit).
+> Mở rộng allowlist ⇒ **infosec re-audit bắt buộc** trước release.
+>
 > **Status:** P1 code landed (2026-07-29) — chờ **infosec re-audit** + test chức năng end-to-end.
 > Đã implement: Remote Gateway (F1–F8) + Settings→Devices UI + PWA (`apps/desktop/remote-pwa`);
 > typecheck sạch. **Chưa chạy thử thật** (cần bật Tailscale + pair). Xem
@@ -604,9 +608,96 @@ Gateway đếm per-device: max 2 concurrent turn, ≤ 30 sendMessage/giờ, cap 
 ≤ 3 WS connection/device. Vượt → `error {code, message}`, không forward. `sessions.cancel` luôn
 reachable (không tính budget).
 
+---
+
+## P2 — Session control + create (code landed 2026-08-09, **chờ infosec re-audit**)
+
+> Mục tiêu: PWA **gần desktop hơn** — điều khiển lượt đang chạy, sửa checklist, tạo/đổi
+> tên/xoá session, đính kèm ảnh, tìm kiếm. **KHÔNG** mở Tasks (`tasks.*` vẫn ngoài allowlist).
+
+### Allowlist mở rộng (bắt buộc re-audit — quy tắc §Yêu cầu bảo mật)
+
+| Method | Param phone gửi | Gateway ép / bỏ |
+|---|---|---|
+| `sessions.steer` | `sessionId`, `messageId`, `text` (≤100KB) | cap độ dài; tính vào budget *sends* |
+| `sessions.updateTodos` | `sessionId`, `todos` | shape/cap do zod sidecar (200 × 2000 ký tự) |
+| `sessions.upsert` | `mode`, `sessionId?`, `title?`, `projectId?`, `settings.{provider,accountId,modelId,level,mode,responseStyle,responseStyleNoMarkdown}` | **gateway TỰ dựng `Session`** — phone không gửi object session. `projectId` phải khớp `projects.list`; field bỏ trống ⇒ **kế thừa** desktop defaults + `project.llmDefaults`; `accountId` **phải tồn tại trong `accounts.list` của provider đã chọn** (`null` = bỏ ghim), đổi provider ⇒ **xoá `accountId`**; `level` phải ∈ enum; `responseStyle` charset `[A-Za-z0-9-]{1,64}` (slug lạ → sidecar degrade "no style"); mode clamp `ask`/`plan`; `messages: []`. **Không thể** đặt `workspaceFolder`, `budget`, `pinnedContext`, `disabledTools`, `mcpServerIds`, fork lineage |
+| `sessions.delete` | `id` | chỉ `id` |
+| `sessions.generateTitle` | `sessionId`, `userText?` (≤4000) | **pin** `provider`/`modelId`/`accountId` từ session server-side |
+
+**Gateway-local (KHÔNG forward xuống sidecar):** `remote.bootstrap` →
+`{ projects:[{id,name,color?}], providers:[{provider, models:[{id,name}], accounts:[{id,label,status?,models?}], activeAccountId}], defaults }`.
+Compose từ `projects.list` + `accounts.list` + `models.list` + `settings.get` **ở main**, chỉ
+trả field đã pick — phone **không** thấy path trên đĩa, credential blob, `baseURL`, hay settings
+blob (account chỉ lộ **định danh** id/label/status). Cache 60s. Code:
+[remote-gateway-catalog.ts](../../apps/desktop/electron/src/remote-gateway-catalog.ts).
+
+**Budget (F8):** tách 2 cửa sổ trượt 1 giờ / device — *sends* (`sendMessage` + `steer`, 600/h,
+text ≤100KB) và *writes* (`upsert`/`delete`/`updateTodos`/`generateTitle`, 300/h).
+
+### PWA (apps/desktop/remote-pwa)
+
+- **Điều khiển lượt:** nút **Stop** (`sessions.cancel`) + gửi khi đang chạy = **steer** vào
+  lượt hiện tại. Reconnect giữa lượt (chưa biết `messageId`) → tin nhắn **xếp hàng**, gửi khi
+  lượt settle — không bao giờ mở lượt song song.
+- **Step mở rộng được:** chạm một step → xem `detail` thật (unified diff tô màu / nội dung file
+  / lệnh + output + exit code / danh sách kết quả / reasoning). Mặc định đóng như desktop; cắt
+  ở 160 dòng và **ghi rõ còn bao nhiêu dòng**.
+- **Checklist ghim (ADR 0069):** banner `done/total`, chạm một dòng để xoay trạng thái →
+  `sessions.updateTodos` (shared state, không bị model ghi đè).
+- **Composer:** chip mode **Ask/Plan**, đính kèm **ảnh** (chụp hoặc chọn — downscale 1280px/JPEG
+  0.8 trước khi gửi vì frame WS cap 1MB) và tệp văn bản (`preview`), textarea tự giãn.
+- **Session config đầy đủ như desktop** (`SessionConfigFields.vue` dùng chung cho New session +
+  sheet của session): **provider · account · model · thinking level · mode · response style ·
+  no-markdown**. Ở New session mỗi field có lựa chọn *Mặc định* = bỏ trống ⇒ kế thừa
+  `project.llmDefaults` rồi desktop defaults (gateway resolve). Account đổi ⇒ model list theo
+  account (custom endpoint/Codex có catalog riêng). `sendMessage` mang `responseStyle` persisted
+  của session xuống mỗi lượt.
+- **Session mới từ phone:** chọn project + config ở trên; tiêu đề trống → tự sinh sau lượt đầu
+  (`sessions.generateTitle` → persist qua `upsert`). Đổi tên / đổi config / xoá trong sheet của
+  session; header session hiện `project · model`.
+- **Danh sách:** tìm toàn văn (`sessions.search`, debounce 350ms), lọc theo project (tên + màu
+  thật), badge tổng số gate đang chờ, chip background shell (ADR 0066).
+- **RPC timeout:** `sendMessage` chạy **không timeout** (trước đây 30s ⇒ lượt dài hiện "Hết thời
+  gian chờ" dù vẫn đang chạy); các call khác giữ 30s.
+- **Bàn phím ảo (`viewport.ts`):** Enter = **xuống dòng** (⌘/Ctrl+Enter mới gửi — phím return
+  trên bàn phím ảo không được phép bắn một lượt). Bàn phím ảo **không** thu layout viewport
+  (iOS không bao giờ; Android chỉ khi `interactive-widget=resizes-content`) ⇒ composer bị che.
+  Fix: `visualViewport` → biến `--kb` (chiều cao bàn phím) + `--sab` (safe-area khi bàn phím mở
+  = 0); `.app` cao `calc(100% - var(--kb))`, bottom sheet/FAB/toast cũng trừ `--kb`; transcript
+  tự cuộn xuống đáy khi bàn phím lên.
+
+### Desktop — `Settings → Devices` bổ sung
+
+- Card **"Địa chỉ truy cập"** (`SettingsDeviceAccess.vue`) hiện khi remote control bật + tailnet
+  connected: URL `http://{tailnetIP}:47600/` + nút **Chép** + **QR** (toggle). Đây là cách thiết
+  bị **đã ghép** quay lại PWA sau khi đóng tab — device token nằm trong storage của trình duyệt
+  đó nên KHÔNG cần ghép lại. QR này **không chứa pairing code** (khác QR của modal ghép nối), nên
+  để trên màn hình cũng không cấp quyền gì.
+
+### PWA-native (thông báo + offline shell)
+
+- Service worker `public/sw.js`: cache **chỉ app shell** (navigation network-first, `/assets/*`
+  cache-first vì Vite hash tên file). **Không** cache dữ liệu session. Có luồng "có bản mới →
+  Cập nhật" trong Settings sheet.
+- Notification khi có **gate** hoặc **lượt xong** lúc app ở nền + badge số gate chờ.
+- ⚠️ **Giới hạn thật:** gateway phục vụ **HTTP** trên IP tailnet ⇒ trang **không phải secure
+  context** ⇒ trình duyệt **chặn** service worker + Notification + `setAppBadge`. Code đã
+  feature-detect: hiện tại degrade về **rung + badge in-app**, và tự bật đầy đủ khi PWA chạy sau
+  một tên **HTTPS** (vd `tailscale serve`). Settings sheet nói rõ trạng thái này thay vì để
+  toggle chết. *Cấp HTTPS cho gateway = việc riêng, chưa làm ở P2.*
+
+### Còn lại của P2 (chưa làm)
+
+- `tasks.*` từ phone (approve-phase/rerun/pause/resume) — **vẫn ngoài allowlist**.
+- Unit test khoá allowlist (chưa có test-runner ở `apps/desktop`).
+- Infosec re-audit cho 5 method mới + `remote.bootstrap` — **bắt buộc trước release**.
+
+---
+
 ## Out of scope (nhắc lại)
 
-- P2 (steer/cancel/session-create/task-approve từ phone), P3 (Web Push/audit log/device
+- P2 phần **Tasks** (approve-phase/rerun từ phone), P3 (Web Push/audit log/device
   management nâng cao).
 - Native app; relay/cloud; transport ngoài tailnet; multi-user/RBAC; raw fs write / terminal
   exec trực tiếp từ phone.

@@ -23,9 +23,23 @@
            running in the background); 5 keeps a handful of projects warm while switching
            between them. Shared singletons (chatAttach consumer, workspace footer bridge)
            are gated on the active instance inside SessionDetail so cached ones don't
-           cross-talk. -->
+           cross-talk.
+
+           A session popped out into its own window is owned by THAT window
+           (docs/features/session-popout-window.md) — the handoff card shows the way back
+           instead of a second, stale transcript, under one `handoff` key so the
+           placeholder is cached once, not per session.
+
+           NOTE: every comment must stay OUTSIDE <KeepAlive> — dev builds keep comment
+           nodes, and a comment counts as a child, so an inline one fails the compiler's
+           "expects exactly one child component" check. -->
       <KeepAlive :max="5">
-        <SessionDetail v-if="store.active" :key="store.active.id" :session="store.active" />
+        <SessionHandoffCard
+          v-if="store.active && store.isHandedOff(store.active.engineId)"
+          key="handoff"
+          :session="store.active"
+        />
+        <SessionDetail v-else-if="store.active" :key="store.active.id" :session="store.active" />
         <div v-else class="detail">
           <div class="empty">
             <span class="ei"><Icon name="sessions" style="width: 21px; height: 21px" /></span>

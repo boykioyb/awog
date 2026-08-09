@@ -57,6 +57,51 @@ function registerAppProtocolHandler(): void {
   })
 }
 
+// Navigation policy for every window that hosts the AWOG SPA (main window, preview
+// popouts). Applied per window so a secondary surface can't drift from the rules.
+//
+//   - External links (target="_blank" / window.open / an off-origin http(s) navigation,
+//     e.g. a link inside rendered issue/PR markdown) open in the OS browser, never
+//     inside the app shell.
+//   - An INTERNAL navigation that changes the path is refused. This is the last-resort
+//     net for the "a markdown link nukes the app" class of bug: a plain
+//     <a href="backend/app/x.py"> is a REAL document navigation, which throws the
+//     running SPA away and lands on the 404 route — every open session, panel and
+//     unsaved bit of UI state gone. The renderer intercepts those clicks
+//     (utils/file-links + useMdFileLink) and opens the file in the preview instead, but
+//     a surface that forgets must not be able to break the whole app. A same-path
+//     reload (⌘R, Vite full reload) still passes; a path CHANGE never can, since the
+//     SPA router only ever navigates via pushState.
+export function applyNavigationGuards(win: BrowserWindow): void {
+  const isInternalUrl = (url: string): boolean =>
+    url.startsWith(APP_ORIGIN) || url.startsWith(DEV_URL)
+  // Path of an in-app URL, for comparing "same document" vs "different route".
+  const pathOf = (url: string): string => {
+    try {
+      return new URL(url).pathname
+    } catch {
+      return url
+    }
+  }
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (e, url) => {
+    if (isInternalUrl(url)) {
+      if (pathOf(url) !== pathOf(win.webContents.getURL())) {
+        e.preventDefault()
+        log.warn('blocked in-app document navigation', { url })
+      }
+      return
+    }
+    if (/^https?:\/\//i.test(url)) {
+      e.preventDefault()
+      void shell.openExternal(url)
+    }
+  })
+}
+
 // Load a SPA route into an arbitrary window (dev URL or packaged app:// scheme).
 // Shared by secondary windows (e.g. the tray popover) so they reach the same
 // Nuxt app. Dev retries until the Nuxt server is up, mirroring loadDevUrl.
@@ -95,24 +140,7 @@ export function createMainWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show())
 
-  // External links open in the OS browser, never inside the app shell. Covers both
-  // `target="_blank"` / window.open (e.g. the GitHub drawer's "Open on GitHub" link)
-  // and full-page navigations to an off-origin http(s) URL (e.g. a link clicked
-  // inside rendered issue/PR markdown). Internal navigations (the SPA's own origin)
-  // are left alone; the SPA router uses pushState so it never hits will-navigate.
-  const isInternalUrl = (url: string): boolean =>
-    url.startsWith(APP_ORIGIN) || url.startsWith(DEV_URL)
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
-  win.webContents.on('will-navigate', (e, url) => {
-    if (isInternalUrl(url)) return
-    if (/^https?:\/\//i.test(url)) {
-      e.preventDefault()
-      void shell.openExternal(url)
-    }
-  })
+  applyNavigationGuards(win)
 
   // DevTools toggle (F12 / Ctrl+Shift+I / Cmd+Opt+I) — works in the PACKAGED app
   // too, since hiding the menu removed the default shortcut. Needed to diagnose

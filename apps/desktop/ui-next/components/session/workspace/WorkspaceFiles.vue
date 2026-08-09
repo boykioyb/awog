@@ -69,7 +69,7 @@
 import type { Session, TreeNode } from '~/composables/useSessionsData'
 import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
 import { useSidecar } from '~/composables/useSidecar'
-import { usePreview, previewKindFromPath } from '~/composables/usePreview'
+import { usePreview, previewKindFromPath, type PreviewRef } from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useFileContextMenu } from '~/composables/useFileContextMenu'
 import { useFsApi } from '~/composables/useFsApi'
@@ -176,15 +176,37 @@ async function createAtRoot(kind: 'file' | 'dir'): Promise<void> {
 }
 
 // Open a file in the shared PreviewModal (workspaceRoot + path → fs.readFile).
+//
+// For an IMAGE the enclosing FOLDER is the context the user is browsing, so the other images
+// of that folder go along as the preview's ‹ › gallery. They're already loaded (the tree's
+// own dir entries) — no extra IPC, and no guessing: what the tree shows is what steps.
 function openFile(path: string): void {
-  if (!root.value) return
+  const r = root.value
+  if (!r) return
   selectedPath.value = path
-  preview.open({
+  const item: PreviewRef = {
     name: path.split('/').pop() || path,
     kind: previewKindFromPath(path),
-    workspaceRoot: root.value,
+    workspaceRoot: r,
     path,
-  })
+  }
+  preview.open(item, item.kind === 'image' ? folderImages(path, r) : [])
+}
+
+// Sibling images of `path`, in the order the tree lists them.
+function folderImages(path: string, r: string): PreviewRef[] {
+  const i = path.lastIndexOf('/')
+  const dir = i > 0 ? path.slice(0, i) : ''
+  const images = (childrenByPath[dir] ?? []).filter(
+    (e) => e.kind === 'file' && previewKindFromPath(e.name) === 'image',
+  )
+  if (images.length < 2) return []
+  return images.map((e) => ({
+    name: e.name,
+    kind: 'image' as const,
+    workspaceRoot: r,
+    path: e.path,
+  }))
 }
 
 // Shared file context menu (right-click a tree row). Open a file → preview modal;

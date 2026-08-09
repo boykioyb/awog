@@ -25,8 +25,28 @@
     <!-- transient action feedback (copied / saved / error) -->
     <div v-if="actionMsg" class="pvmsg" :class="{ err: actionErr }">{{ actionMsg }}</div>
 
-    <!-- image: zoom / rotate / flip -->
+    <!-- image: gallery step (siblings in the same folder) / zoom / rotate / flip -->
     <template v-if="item?.kind === 'image'">
+      <template v-if="canStepImages">
+        <button
+          class="pvtb"
+          :title="t('common.preview.prevImage')"
+          :aria-label="t('common.preview.prevImage')"
+          @click="stepImage(-1)"
+        >
+          <ChevronLeft :size="15" />
+        </button>
+        <span class="pvz">{{ galleryLabel }}</span>
+        <button
+          class="pvtb"
+          :title="t('common.preview.nextImage')"
+          :aria-label="t('common.preview.nextImage')"
+          @click="stepImage(1)"
+        >
+          <ChevronRight :size="15" />
+        </button>
+        <span class="pvsep" />
+      </template>
       <button
         class="pvtb"
         :title="t('common.zoomOut')"
@@ -43,6 +63,16 @@
         @click="zoomBy(0.2)"
       >
         <ZoomIn :size="15" />
+      </button>
+      <!-- fit ≠ 100%: the CSS already contains an oversized image at scale 1, so fit is
+           what scales a SMALL image up to fill the frame (and re-centers either way). -->
+      <button
+        class="pvtb"
+        :title="t('common.fit')"
+        :aria-label="t('common.fit')"
+        @click="fitImage()"
+      >
+        <Scan :size="15" />
       </button>
       <button
         class="pvtb"
@@ -185,7 +215,9 @@
           <Icon name="palette" style="width: 14px; height: 14px" />
           <span class="pvz auto">{{ currentThemeLabel }}</span>
         </button>
-        <div v-if="open === 'theme'" class="pvmenu up" @click.stop>
+        <!-- right-aligned: the bar's home is the right corner, so a dropdown growing
+             rightwards would be clipped by the card's edge. -->
+        <div v-if="open === 'theme'" class="pvmenu up right" @click.stop>
           <template v-for="g in themeGroups" :key="g.key">
             <div v-if="g.items.length" class="pvmhd">{{ t(`common.preview.group.${g.key}`) }}</div>
             <button
@@ -292,6 +324,8 @@
 // only state it owns is which dropdown (theme/actions) is open. The theme list is
 // read straight from useMonacoTheme (module-level shared state).
 import {
+  ChevronLeft,
+  ChevronRight,
   EyeOff,
   FlipHorizontal2,
   FlipVertical2,
@@ -300,6 +334,7 @@ import {
   Maximize2,
   RotateCcw,
   RotateCw,
+  Scan,
   SlidersHorizontal,
   UnfoldHorizontal,
   ZoomIn,
@@ -329,6 +364,10 @@ const {
   flipV,
   zoomBy,
   resetView,
+  fitImage,
+  canStepImages,
+  galleryLabel,
+  stepImage,
   copyContent,
   reload,
   startEdit,
@@ -375,23 +414,32 @@ const themeGroups = [
 ]
 
 // ── Dock: draggable position + collapse-to-corner-icon ──────────────────────
-// The bar floats bottom-center by default (CSS); dragging the grip sets an
-// explicit position, and the hide button collapses it to a small corner icon.
-// Both are persisted (renderer-only) so the choice survives across previews;
-// the position is clamped on restore so a smaller window can't strand it.
+// The bar HOME is the bottom-right corner — the same corner the collapsed icon sits in,
+// so hide/show happens in place and the bar never lands over the reading column.
+//
+// Dragging the grip moves it, but the offset is stored against the RIGHT/BOTTOM edges
+// (not left/top) and only for the file currently open: it resets to the corner on the
+// next file and on the next app start. Previously the dragged left/top position was
+// persisted in localStorage forever, so every preview re-opened with the bar wherever it
+// had once been dropped — floating mid-content with nothing to anchor it, which is the
+// "it flies around" behaviour. Only `collapsed` is a real preference and stays persisted.
 const DOCK_KEY = 'awog.pv.toolbarDock'
+// Gap from the container edges — the corner home and the clamp margin while dragging.
+const EDGE = 18
+const MARGIN = 8
 const barRef = useTemplateRef<HTMLElement>('barRef')
 const collapsed = ref(false)
-const pos = ref<{ x: number; y: number } | null>(null)
+// Offset from the container's right/bottom edges; null → the CSS corner home.
+const pos = ref<{ right: number; bottom: number } | null>(null)
 const dragging = ref(false)
 
 const barStyle = computed(() =>
   pos.value
     ? {
-        left: `${pos.value.x}px`,
-        top: `${pos.value.y}px`,
-        right: 'auto',
-        bottom: 'auto',
+        right: `${pos.value.right}px`,
+        bottom: `${pos.value.bottom}px`,
+        left: 'auto',
+        top: 'auto',
         transform: 'none',
       }
     : {},
@@ -399,9 +447,17 @@ const barStyle = computed(() =>
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
+// Box the bar is positioned inside (`.pvcard`, its offsetParent) — pointer coordinates
+// are viewport-based, so they're converted through this rect.
+function containerRect(): DOMRect {
+  const parent = barRef.value?.offsetParent
+  if (parent instanceof HTMLElement) return parent.getBoundingClientRect()
+  return new DOMRect(0, 0, window.innerWidth, window.innerHeight)
+}
+
 function persist() {
   try {
-    localStorage.setItem(DOCK_KEY, JSON.stringify({ collapsed: collapsed.value, pos: pos.value }))
+    localStorage.setItem(DOCK_KEY, JSON.stringify({ collapsed: collapsed.value }))
   } catch {
     // ignore quota / denied storage — dock state is a non-critical preference
   }
@@ -419,55 +475,84 @@ function startDrag(ev: PointerEvent) {
   const handle = ev.currentTarget as HTMLElement
   handle.setPointerCapture(ev.pointerId)
   dragging.value = true
+  const box = containerRect()
   const rect = barRef.value?.getBoundingClientRect()
-  const startLeft = rect?.left ?? 0
-  const startTop = rect?.top ?? 0
-  const barW = rect?.width ?? 0
-  const barH = rect?.height ?? 0
+  // Where the bar sits right now, expressed the way it will be written back.
+  const startRight = rect ? box.right - rect.right : EDGE
+  const startBottom = rect ? box.bottom - rect.bottom : EDGE
+  const maxRight = Math.max(MARGIN, box.width - (rect?.width ?? 0) - MARGIN)
+  const maxBottom = Math.max(MARGIN, box.height - (rect?.height ?? 0) - MARGIN)
   const startX = ev.clientX
   const startY = ev.clientY
-  const M = 8
   const onMove = (e: PointerEvent) => {
+    // Dragging right/down DECREASES the right/bottom offsets — hence the minus.
     pos.value = {
-      x: clamp(startLeft + (e.clientX - startX), M, window.innerWidth - barW - M),
-      y: clamp(startTop + (e.clientY - startY), M, window.innerHeight - barH - M),
+      right: clamp(startRight - (e.clientX - startX), MARGIN, maxRight),
+      bottom: clamp(startBottom - (e.clientY - startY), MARGIN, maxBottom),
     }
   }
   const onUp = () => {
     dragging.value = false
     handle.removeEventListener('pointermove', onMove)
     handle.removeEventListener('pointerup', onUp)
-    persist()
   }
   handle.addEventListener('pointermove', onMove)
   handle.addEventListener('pointerup', onUp)
 }
 
+// A new file starts from the corner home again — a position dragged for one document
+// carries no meaning for the next one (and is what made the bar feel misplaced).
+watch(
+  () => item.value?.path ?? item.value?.name ?? '',
+  () => {
+    pos.value = null
+  },
+)
+
+// A shrinking window (or the popout being resized) must not push a dragged bar out of
+// view: re-clamp against the container, keeping the offsets it already has.
+function clampToContainer() {
+  if (!pos.value) return
+  const box = containerRect()
+  const rect = barRef.value?.getBoundingClientRect()
+  pos.value = {
+    right: clamp(
+      pos.value.right,
+      MARGIN,
+      Math.max(MARGIN, box.width - (rect?.width ?? 0) - MARGIN),
+    ),
+    bottom: clamp(
+      pos.value.bottom,
+      MARGIN,
+      Math.max(MARGIN, box.height - (rect?.height ?? 0) - MARGIN),
+    ),
+  }
+}
+
 onMounted(() => {
+  window.addEventListener('resize', clampToContainer)
   try {
     const raw = localStorage.getItem(DOCK_KEY)
     if (!raw) return
-    const saved = JSON.parse(raw) as { collapsed?: boolean; pos?: { x: number; y: number } | null }
+    // Only `collapsed` is restored. A legacy `pos` (absolute left/top from an older
+    // build) is deliberately ignored so the bar comes back to its corner home.
+    const saved = JSON.parse(raw) as { collapsed?: boolean }
     collapsed.value = !!saved.collapsed
-    // Keep a restored position at least partly on-screen (window may have shrunk).
-    if (saved.pos)
-      pos.value = {
-        x: clamp(saved.pos.x, 8, Math.max(8, window.innerWidth - 60)),
-        y: clamp(saved.pos.y, 8, Math.max(8, window.innerHeight - 60)),
-      }
   } catch {
     // ignore malformed persisted state — fall back to the default docking
   }
 })
+onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
 </script>
 
 <style scoped>
 /* Floating control bar — horizontally centered near the bottom of the window. */
 .pvbar {
   position: absolute;
+  /* Corner home — same corner as the collapsed icon (.pvbardock), so hide/show happens in
+     place, and clear of the centered reading column + a video's own centered controls. */
+  right: 18px;
   bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 5;
   display: flex;
   align-items: center;

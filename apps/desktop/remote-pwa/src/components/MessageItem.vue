@@ -15,12 +15,28 @@ const isSystem = computed(() => props.message.role === 'system')
 const empty = computed(
   () => props.message.role === 'agent' && props.message.blocks.length === 0,
 )
+
+const imageAttachments = computed(
+  () => props.message.attachments?.filter((a) => a.type === 'image' && !!a.url) ?? [],
+)
+const fileAttachments = computed(
+  () => props.message.attachments?.filter((a) => a.type !== 'image' || !a.url) ?? [],
+)
+const hasAttachments = computed(
+  () => imageAttachments.value.length > 0 || fileAttachments.value.length > 0,
+)
 </script>
 
 <template>
   <div class="msg" :class="{ user: isUser, system: isSystem }">
-    <div v-if="isUser || isSystem" class="bubble">
-      {{ message.blocks[0] && message.blocks[0].kind === 'text' ? message.blocks[0].text : '' }}
+    <div v-if="isUser || isSystem" class="stack">
+      <div v-if="hasAttachments" class="atts">
+        <img v-for="a in imageAttachments" :key="a.id" :src="a.url" :alt="a.name" />
+        <span v-for="a in fileAttachments" :key="a.id" class="doc">{{ a.name }}</span>
+      </div>
+      <div class="bubble">
+        {{ message.blocks[0] && message.blocks[0].kind === 'text' ? message.blocks[0].text : '' }}
+      </div>
     </div>
 
     <div v-else class="agent">
@@ -49,12 +65,46 @@ const empty = computed(
   display: flex;
   justify-content: flex-end;
 }
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 85%;
+}
+.msg.system .stack {
+  align-items: stretch;
+  max-width: 100%;
+}
+.atts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.atts img {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  display: block;
+}
+.doc {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
 .bubble {
   background: var(--accent-dim);
   color: var(--text);
   border-radius: 14px 14px 4px 14px;
   padding: 10px 13px;
-  max-width: 85%;
+  max-width: 100%;
   white-space: pre-wrap;
   word-break: break-word;
 }

@@ -261,27 +261,48 @@ class Gateway {
     })
   }
 
-  request<T>(method: string, params: unknown): Promise<T> {
+  // `timeoutMs: null` disables the stopwatch — for turn-driving calls
+  // (sessions.sendMessage) whose reply only lands when the whole turn finishes.
+  // A dropped socket still settles them via rejectAllPending.
+  request<T>(method: string, params: unknown, opts?: { timeoutMs?: number | null }): Promise<T> {
     if (this.phase.value !== 'ready' || !this.isOpen()) {
       return Promise.reject(new Error('Chưa kết nối'))
     }
     const id = ++this.rpcId
+    const timeoutMs = opts?.timeoutMs === undefined ? RPC_TIMEOUT_MS : opts.timeoutMs
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        if (this.pending.delete(id)) reject(new Error('Hết thời gian chờ'))
-      }, RPC_TIMEOUT_MS)
+      const timer =
+        timeoutMs === null
+          ? null
+          : setTimeout(() => {
+              if (this.pending.delete(id)) reject(new Error('Hết thời gian chờ'))
+            }, timeoutMs)
+      const clear = (): void => {
+        if (timer) clearTimeout(timer)
+      }
       this.pending.set(id, {
         resolve: (v) => {
-          clearTimeout(timer)
+          clear()
           resolve(v as T)
         },
         reject: (e) => {
-          clearTimeout(timer)
+          clear()
           reject(e)
         },
       })
       this.send({ type: 'rpc', id, method, params })
     })
+  }
+
+  // Drop the device token on this phone and fall back to the pairing screen. The
+  // desktop keeps its record until the user revokes it there (Settings → Devices);
+  // this is the phone-side half of "not my device any more".
+  forget(): void {
+    this.token = null
+    this.subs.clear()
+    this.revoked.value = false
+    this.phase.value = 'need-pair'
+    this.ws?.close()
   }
 
   subscribe(sessionId: string): void {

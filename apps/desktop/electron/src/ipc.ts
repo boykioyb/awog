@@ -1,8 +1,15 @@
 import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { ipcMain, shell, dialog, type BrowserWindow } from 'electron'
+import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import { engine, type RpcErrorShape } from './engine'
+import { openPreviewWindow } from './preview-window'
+import {
+  closeSessionWindow,
+  openSessionIds,
+  openSessionWindow,
+  sessionWindowList,
+} from './session-window'
 import { isVscodeAvailable, openInVscode } from './vscode'
 import { resolveInsideWorkspace } from './workspace-scope'
 
@@ -50,6 +57,8 @@ function sessionDirFromId(engineId: string): string {
 
 type RequestPayload = { method: string; params?: unknown }
 type PathPayload = { root: string; path: string }
+type PreviewWindowPayload = { root: string; path: string; name: string }
+type SessionWindowPayload = { engineId: string; title?: string }
 type PickFolderOpts = { title?: string; defaultPath?: string }
 type FileFilter = { name: string; extensions: string[] }
 type SavePathOpts = { title?: string; defaultPath?: string; filters?: FileFilter[] }
@@ -68,9 +77,18 @@ function normalizeError(err: unknown): RpcErrorShape {
 }
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
-  // Forward engine events to the renderer verbatim ({ type, payload }).
+  // Forward engine events verbatim ({ type, payload }) to the main window AND every
+  // session popout (session-window.ts): a popout is its own renderer driving a real
+  // session, so without the stream its transcript would freeze mid-turn. Each renderer
+  // applies only the sessions it owns (store `ownsSession`), so exactly one acts.
+  //
+  // Deliberately NOT every window: the tray popover is a passive snapshot renderer, and
+  // acting on this stream would make it a second driver (e.g. auto-continuing a
+  // background wake that the main window is already continuing).
   engine.onEvent((event) => {
-    getWindow()?.webContents.send('engine:event', event)
+    for (const win of [getWindow(), ...sessionWindowList()]) {
+      if (win && !win.isDestroyed()) win.webContents.send('engine:event', event)
+    }
   })
 
   ipcMain.handle('engine:request', async (_e, payload: RequestPayload): Promise<RequestResult> => {
@@ -140,6 +158,47 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('shell:openFileExternal', async (_e, { root, path }: PathPayload) => {
     const target = resolveInsideWorkspace(root, path)
     await shell.openExternal(pathToFileURL(target).href)
+  })
+
+  // Pop a workspace file out of the shared PreviewModal into its own OS window
+  // (docs/features/preview-popout-window.md). openPreviewWindow validates the
+  // root/path pair against the workspace before creating anything, so an escaping
+  // path rejects here instead of opening a window.
+  ipcMain.handle('preview:openWindow', async (_e, payload: PreviewWindowPayload) => {
+    const { root, path, name } = payload ?? {}
+    if (typeof root !== 'string' || typeof path !== 'string' || typeof name !== 'string') {
+      throw new Error('preview window needs { root, path, name }')
+    }
+    openPreviewWindow({ workspaceRoot: root, path, name })
+  })
+
+  // Pop a session out of the main window into its own OS window
+  // (docs/features/session-popout-window.md). The engineId is charset-validated in
+  // openSessionWindow before anything is created; re-opening the same session focuses
+  // the window it already has.
+  ipcMain.handle('session:openWindow', async (_e, payload: SessionWindowPayload) => {
+    const { engineId, title } = payload ?? {}
+    if (typeof engineId !== 'string') throw new Error('session window needs { engineId }')
+    openSessionWindow({ engineId, title: typeof title === 'string' ? title : '' })
+  })
+
+  // "Bring it back here" — close a session's popout from the main window. Addresses a
+  // window this app opened BY SESSION ID (never a window handle), so a renderer can
+  // only ever close a session popout, not an arbitrary window.
+  ipcMain.handle('session:closeWindow', async (_e, engineId: string): Promise<boolean> =>
+    closeSessionWindow(engineId),
+  )
+
+  // Sessions currently owned by a popout window. Polled once per renderer on mount
+  // (a window that opens later still learns the current set); live changes ride the
+  // SESSION_WINDOWS_CHANGED broadcast.
+  ipcMain.handle('session:listWindows', async (): Promise<string[]> => openSessionIds())
+
+  // Close the window that made the call (a preview popout closing itself from its
+  // in-page ✕ / Esc). Derived from the sender — the renderer can't name a window,
+  // so it can never close another one.
+  ipcMain.handle('window:closeSelf', async (e) => {
+    BrowserWindow.fromWebContents(e.sender)?.close()
   })
 
   // Whether the VS Code CLI can be located on this machine. Drives whether the

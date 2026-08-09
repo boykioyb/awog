@@ -283,6 +283,15 @@
           <Icon name="save" style="width: 13px; height: 13px" />
           {{ t('sessions.ctx.export') }}
         </div>
+        <!-- Move the session to its own OS window / bring it back (popout hand-off). -->
+        <div v-if="ctxCanWindow" class="mi" @click="ctxWindow">
+          <Icon name="external" style="width: 13px; height: 13px" />
+          {{
+            store.isWindowed(ctx.session.engineId)
+              ? t('sessions.ctx.bringBackWindow')
+              : t('sessions.ctx.openWindow')
+          }}
+        </div>
         <div class="ctxsep" />
         <div class="mi" @click="ctxCopyPath">
           <Icon name="copy" style="width: 13px; height: 13px" />
@@ -631,6 +640,23 @@ function ctxCopyId() {
 function ctxExport() {
   if (ctx.value) exportModal.open(ctx.value.session.id)
   ctx.value = null
+}
+
+// Popout hand-off (docs/features/session-popout-window.md): move the row's session to
+// its own OS window, or — when it already has one — close that window to bring it back
+// here. Offered only for a session the sidecar knows about (it is addressed by engine
+// id) and never mid-turn, matching the header button's gate.
+const ctxCanWindow = computed(() => {
+  const s = ctx.value?.session
+  if (!s?.engineId || !sc.available) return false
+  return store.isWindowed(s.engineId) || (s.status !== 'streaming' && s.status !== 'awaiting')
+})
+function ctxWindow() {
+  const s = ctx.value?.session
+  ctx.value = null
+  if (!s) return
+  if (store.isWindowed(s.engineId)) void store.closeWindowFor(s.id)
+  else void store.openInWindow(s.id)
 }
 async function ctxDelete() {
   const s = ctx.value?.session

@@ -59,6 +59,15 @@
       <span class="smeta">{{ session.model }}</span>
       <!-- Indicators + status badge, grouped on the far right (status rightmost). -->
       <span class="subright">
+        <!-- Popped out into its own OS window: this row is a pointer, the live view
+             is over there (docs/features/session-popout-window.md). -->
+        <span
+          v-if="store.isWindowed(session.engineId)"
+          class="lindchip"
+          :title="t('sessions.window.inWindow')"
+        >
+          <Icon name="external" style="width: 11px; height: 11px" />
+        </span>
         <span v-if="indicators.length" class="lind">
           <span v-for="ind in indicators" :key="ind.key" class="lindchip" :title="ind.title">
             <Icon :name="ind.icon" style="width: 11px; height: 11px" />

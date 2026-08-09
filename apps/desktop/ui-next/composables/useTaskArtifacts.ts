@@ -6,6 +6,7 @@
 // engine-owned, edited via the Project Code Workspace if needed). SoC: IPC only.
 import { computed, ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import { loadProjects } from '~/composables/useWorkspaceData'
 import type {
   EditorFileKind,
   EditorViewMode,
@@ -22,6 +23,9 @@ type WorkflowSlice = { nodes: NodeSlice[] }
 type TaskSlice = {
   id: string
   title: string
+  // The project the task ran in — resolved to an absolute path so a file-path link
+  // inside an artifact can open the real file in the shared PreviewModal.
+  projectId?: string
   workflowSnapshot?: WorkflowSlice
   phases: Record<string, PhaseSlice>
 }
@@ -40,6 +44,10 @@ export function useTaskArtifacts(taskId: string) {
 
   const task = ref<TaskSlice | null>(null)
   const loaded = ref(false)
+  // Absolute path of the task's project (from the shared, cached projects roster).
+  // Anchors the file-path links an artifact writes (`backend/app/x.py`) so clicking
+  // one opens the real file instead of navigating the SPA to a dead route.
+  const workspaceRoot = ref<string | null>(null)
   const selectedName = ref<string>('')
   const activeView = ref<EditorViewMode>('split')
 
@@ -154,10 +162,16 @@ export function useTaskArtifacts(taskId: string) {
       // Auto-select the first artifact when none chosen yet.
       if (!selectedName.value && files.value[0]) selectedName.value = files.value[0].name
     }
+    const projectId = task.value?.projectId
+    if (projectId) {
+      const projects = await loadProjects()
+      workspaceRoot.value = projects.find((p) => p.id === projectId)?.path ?? null
+    }
   }
 
   return {
     taskTitle: computed(() => task.value?.title ?? ''),
+    workspaceRoot: computed(() => workspaceRoot.value),
     loaded: computed(() => loaded.value),
     available: sc.available,
     files,

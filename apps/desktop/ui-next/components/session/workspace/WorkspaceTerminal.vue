@@ -256,6 +256,13 @@ class Pane {
 
   creating = false
 
+  // The backend shell is gone (user typed `exit`, the process died, or the engine
+  // restarted under us) while the xterm + its scrollback stay on screen. A dead pane
+  // never auto-respawns on a stray resize — it waits for a keystroke, exactly like
+  // "press any key to close/restart" in VS Code / iTerm. Without this flag the pane
+  // silently swallowed every keystroke and looked frozen.
+  exited = false
+
   pending: SidecarEvent[] = []
 
   constructor(id: string, tabId: string) {
@@ -313,6 +320,37 @@ const forEachPane = (tab: TerminalTab, fn: (pane: Pane) => void): void => {
   }
 }
 
+// ── Death + restart ───────────────────────────────────────────────────────────
+// Mark a pane's shell gone and tell the user how to get it back. Idempotent: a
+// second cause (exit event, then a rejected write) must not print the notice twice.
+const markDead = (pane: Pane, notice: string): void => {
+  if (pane.exited) return
+  pane.exited = true
+  pane.terminalId = null
+  pane.pending = []
+  pane.term?.write(
+    `\r\n\x1b[90m[${notice} — ${t('sessions.workspace.terminal.restartHint')}]\x1b[0m\r\n`,
+  )
+  emitActiveConn()
+}
+
+// Spawn a fresh shell into the SAME xterm (scrollback kept, like reusing a tab).
+const restartPane = (pane: Pane): void => {
+  if (!pane.exited || pane.creating) return
+  pane.exited = false
+  syncSize(pane)
+}
+
+// A backend id that no longer exists — the engine restarted (or the shell was
+// reaped) while the pane still held its old id. Distinguishable from a transient
+// RPC failure, and the only case where a rejected write means "this pane is dead".
+const isStaleBackendError = (err: unknown): boolean =>
+  err instanceof Error && /unknown (terminal|connection)/i.test(err.message)
+
+const onBackendError = (pane: Pane, err: unknown): void => {
+  if (isStaleBackendError(err)) markDead(pane, t('sessions.workspace.terminal.disconnected'))
+}
+
 // ── Event routing ─────────────────────────────────────────────────────────────
 const routeEvent = (pane: Pane, evt: SidecarEvent): void => {
   const tr = transportOf(pane)
@@ -322,23 +360,38 @@ const routeEvent = (pane: Pane, evt: SidecarEvent): void => {
     pane.term.write(payload.chunk)
   } else if (evt.type === tr.exitEvent) {
     const code = typeof payload.exitCode === 'number' ? payload.exitCode : 0
-    pane.term.write(`\r\n\x1b[90m[${t('sessions.workspace.terminal.exited')} ${code}]\x1b[0m\r\n`)
-    pane.terminalId = null
+    markDead(pane, `${t('sessions.workspace.terminal.exited')} ${code}`)
   }
 }
 
 // One shared listener for every transport (local PTY + SSH). Each pane declares its
 // own transport, so route by matching THAT pane's data/exit event types + id field:
-// a local pane ignores ssh:* events and vice-versa. Events for a not-yet-bound pane
-// are buffered on it (same-transport only) so the first burst isn't lost.
+// a local pane ignores ssh:* events and vice-versa. Events for a pane whose spawn is
+// still in flight are buffered on it (same-transport only) so the first burst isn't
+// lost. Only `creating` panes buffer: a DEAD pane used to buffer every event of every
+// other pane forever (unbounded growth, all of it discarded on flush).
 const onSidecarEvent = (evt: SidecarEvent): void => {
+  // The engine died and came back: every terminalId we hold is stale, so writes
+  // would be swallowed forever and the panes would look frozen. Retire them all;
+  // the visible tab respawns immediately (below), hidden ones on first keystroke.
+  if (evt.type === 'engine.crashed' || evt.type === 'engine.restarted') {
+    for (const pane of panes.values()) {
+      if (pane.term) markDead(pane, t('sessions.workspace.terminal.engineRestarted'))
+    }
+    if (evt.type === 'engine.restarted' && props.visible && activeTabId.value) {
+      const tab = tabById(activeTabId.value)
+      if (tab) forEachPane(tab, restartPane)
+    }
+    return
+  }
   for (const pane of panes.values()) {
     const tr = transportOf(pane)
     if (evt.type !== tr.dataEvent && evt.type !== tr.exitEvent) continue
-    if (!pane.terminalId) {
+    if (pane.creating) {
       pane.pending.push(evt)
       continue
     }
+    if (!pane.terminalId) continue
     const payload = evt.payload as Record<string, unknown>
     if (pane.terminalId === payload?.[tr.idField]) {
       routeEvent(pane, evt)
@@ -351,7 +404,7 @@ const onSidecarEvent = (evt: SidecarEvent): void => {
 // Spawn the PTY at the pane's real fitted size. The shared data listener is already
 // attached (see ensureListener) so no early output is dropped.
 const createPty = async (pane: Pane, cols: number, rows: number): Promise<void> => {
-  if (pane.terminalId || pane.creating || !pane.term || !canCreatePane(pane)) return
+  if (pane.terminalId || pane.creating || pane.exited || !pane.term || !canCreatePane(pane)) return
   const tr = transportOf(pane)
   pane.creating = true
   try {
@@ -384,11 +437,13 @@ const syncSize = (pane: Pane): void => {
   }
   const { cols, rows } = pane.term
   if (!pane.terminalId) {
+    // Skipped for a dead pane (createPty guards on `exited`) — a window resize must
+    // not silently resurrect a shell the user closed.
     void createPty(pane, cols, rows)
   } else {
     transportOf(pane)
       .resize(pane.terminalId, cols, rows)
-      .catch(() => undefined)
+      .catch((err: unknown) => onBackendError(pane, err))
   }
 }
 
@@ -409,6 +464,8 @@ const initPane = async (pane: Pane): Promise<void> => {
   const instance = new Terminal({
     fontSize: appearance.fontSize,
     fontFamily: appearance.fontFamily,
+    // xterm defaults to 1000 lines — a single verbose build scrolls that away.
+    scrollback: 10_000,
     cursorBlink: true,
     macOptionClickForcesSelection: true,
     rightClickSelectsWord: true,
@@ -424,8 +481,15 @@ const initPane = async (pane: Pane): Promise<void> => {
   // reconnect (new PTY id). It must NOT live in createPty — that runs again on every
   // reconnect and would stack a second handler, doubling every keystroke (ll → llll).
   instance.onData((data) => {
+    // Dead shell: the keystroke starts a new one instead of vanishing (the old
+    // behaviour — an inert pane that looked alive but ate every key).
+    if (pane.exited) {
+      restartPane(pane)
+      return
+    }
     const tr = transportOf(pane)
-    if (pane.terminalId) tr.write(pane.terminalId, data).catch(() => undefined)
+    if (pane.terminalId)
+      tr.write(pane.terminalId, data).catch((err: unknown) => onBackendError(pane, err))
   })
 
   // Copy only: xterm doesn't copy its selection on its own, so bind Cmd+C (mac) /

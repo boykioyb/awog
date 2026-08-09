@@ -46,6 +46,7 @@
               :content="content"
               mode="preview"
               :is-split="effectiveView === 'split'"
+              :workspace-root="workspaceRoot"
             />
           </template>
         </div>
@@ -93,6 +94,7 @@ const taskId = String(route.params.taskId)
 
 const {
   taskTitle,
+  workspaceRoot,
   loaded,
   files,
   currentFile,

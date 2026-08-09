@@ -191,7 +191,8 @@ home nằm hẳn ở sidecar. `terminalManager` giữ nguyên assert `isAbsolute
 - **Điều hướng trang:** host mount 1 lần ở layout → PTY **sống xuyên route**.
 - **Mở SSH:** "+" → chọn host → tab mới dùng transport SSH; host-key mới → `SshHostKeyHost` hỏi TOFU.
 - **Resize:** kéo mép trên → `setHeight` clamp + persist.
-- **Dọn dẹp:** sidecar idle-sweep kill shell idle > 30 phút; LRU evict project thứ 7 (>`MAX_MOUNTED=6`); thoát app kill toàn bộ.
+- **Dọn dẹp:** **không** idle-kill (shell sống tới khi user đóng — xem [ADR 0019 § Cập nhật](../decisions/0019-pty-terminal-in-sidecar.md#cập-nhật-2026-08-09--bỏ-idle-kill--vòng-đời-shell)); đóng tab project → unmount instance → kill PTY của project đó; thoát app kill toàn bộ.
+- **Shell chết / engine restart:** pane in hint + giữ scrollback, **phím kế tiếp mở shell mới** trong chính pane đó (không còn treo im lặng).
 
 ## Bảo mật
 
@@ -201,7 +202,8 @@ Kế thừa các bất biến của [ADR 0019](../decisions/0019-pty-terminal-in
 - **Env nhạy cảm bị strip** trước khi spawn shell (`*_TOKEN/_KEY/_SECRET`, OAuth/API key) →
   shell tương tác không thể `echo` credential (invariant #1).
 - Shell binary cố định (`$SHELL`/default), arg array rỗng — không nối shell string.
-- Mỗi `pty-key="global:<projectKey>"` cap 5 PTY (`MAX_PER_SESSION`) — tách theo project.
+- Mỗi `pty-key="global:<projectKey>"` cap 20 PTY (`MAX_PER_SESSION`, abuse guard cho nhiều tab × nhiều pane) — tách theo project.
+- **Env runtime của host bị strip** (`ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`) — shell của user không thừa hưởng cờ chạy của sidecar.
 - **Tab SSH** kế thừa bất biến [ADR 0063](../decisions/0063-ssh-manager-ssh2-runtime.md): credential (mật khẩu/passphrase/
   private key) **chỉ** trong OS keychain, không rời sidecar; host-key TOFU trước khi kết nối lần đầu.
 
@@ -210,7 +212,7 @@ Kế thừa các bất biến của [ADR 0019](../decisions/0019-pty-terminal-in
 - **Một nút "Terminal" duy nhất ở footer = global** (cwd `~`), tránh trùng nhãn với
   terminal trong session. Terminal project-scoped vẫn truy cập qua view picker của panel.
 - **PTY persist qua đóng/mở** (mô hình giống integrated terminal của VSCode) — đóng dock
-  không mất phiên shell; idle-sweep + thoát app lo việc reap.
+  không mất phiên shell; đóng tab project + thoát app lo việc reap.
 - **Tách widget thay vì copy** — logic PTY là một "tri thức" duy nhất; tham số hóa
   cwd + grouping key cho cả 2 host (đúng SoC: widget không biết session/project).
 

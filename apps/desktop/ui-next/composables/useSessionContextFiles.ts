@@ -15,8 +15,9 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { Session, SessionAttachment } from '~/composables/useSessionsData'
 import {
   usePreview,
-  previewKindFromAttachment,
+  imageSiblingsFromAttachments,
   previewKindFromPath,
+  previewRefFromAttachment,
   type PreviewRef,
 } from '~/composables/usePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
@@ -82,6 +83,11 @@ export function useSessionContextFiles(session: MaybeRefOrGetter<Session | null 
     return out
   })
 
+  // Attachments currently listed by the panel — the sibling set handed to an attachment
+  // preview so its ‹ › steps through this context, not a folder on disk.
+  const attachmentsOf = (): SessionAttachment[] =>
+    contextFiles.value.flatMap((f) => (f.kind === 'attachment' ? [f.att] : []))
+
   // Open a context file in the shared PreviewModal.
   function openContextFile(file: SessionContextFile): void {
     if (file.kind === 'folder') {
@@ -90,13 +96,9 @@ export function useSessionContextFiles(session: MaybeRefOrGetter<Session | null 
       return
     }
     if (file.kind === 'attachment') {
-      const a = file.att
-      const item: PreviewRef = { name: a.name, kind: previewKindFromAttachment(a) }
-      if (a.src) item.src = a.src
-      if (a.text != null) item.text = a.text
-      if (a.size != null) item.size = a.size
-      if (a.mime) item.mime = a.mime
-      open(item)
+      // Siblings = the other attachments of this session's context, so stepping stays inside
+      // the set the panel is showing.
+      open(previewRefFromAttachment(file.att), imageSiblingsFromAttachments(attachmentsOf()))
       return
     }
     // Pinned: read from the resolved workspace root (degrades to a placeholder when

@@ -5,7 +5,7 @@
        Vue-owned node, not v-html) so the scoped .ghmd styles apply, mirroring
        SessionMarkdownHtml; each mermaid fence renders as a live, zoomable <MermaidView>
        diagram — the same renderer the session transcript uses. -->
-  <div class="ghmdbody">
+  <div class="ghmdbody" @click="onMdLinkClick">
     <template v-for="(seg, i) in segments" :key="i">
       <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
       <div v-else :ref="(el) => setSegHtml(el, seg.html)" class="ghmdseg" />
@@ -20,10 +20,24 @@
 // imperatively (no v-html); mermaid fences reuse <MermaidView> so issue/PR prose gets
 // live diagrams instead of the plain code card they fell back to before.
 import { useMarkdown } from '~/composables/useMarkdown'
+import { useMdFileLink } from '~/composables/useMdFileLink'
+import { attachCodeCopyButtons } from '~/utils/code-copy'
 
-const props = defineProps<{ source: string }>()
+const props = withDefaults(
+  defineProps<{
+    source: string
+    // Absolute root of the project the issue/PR belongs to, when the caller knows it —
+    // a repo-relative path in the body then opens in the shared preview.
+    workspaceRoot?: string | null
+  }>(),
+  { workspaceRoot: null },
+)
 
+const { t } = useI18n()
 const { renderMarkdown } = useMarkdown()
+// A repo-relative path in an issue/PR body (`docs/x.md`) must not navigate the SPA;
+// GitHub URLs are external and keep their default (open-in-browser) behaviour.
+const { onMdLinkClick } = useMdFileLink(() => props.workspaceRoot)
 
 const segments = computed(() => renderMarkdown(props.source || ''))
 
@@ -36,6 +50,8 @@ function setSegHtml(el: unknown, html: string): void {
   if (!node || written.get(node) === html) return
   written.set(node, html)
   node.innerHTML = html
+  // Re-attach the per-code-block copy button: innerHTML just dropped the previous ones.
+  attachCodeCopyButtons(node, { copy: t('common.copy'), copied: t('common.copied') })
 }
 </script>
 

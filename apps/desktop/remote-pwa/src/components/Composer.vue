@@ -1,38 +1,262 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { MAX_ATTACHMENT_BYTES, toAttachment } from '../attachments'
+import { showToast } from '../store'
+import { errMsg } from '../util'
+import type { ComposerMode } from '../store'
+import type { SessionAttachment } from '../types'
 
-const emit = defineEmits<{ (e: 'send', text: string): void }>()
+const props = defineProps<{
+  // A turn is in flight: the primary action becomes "steer into the running turn"
+  // and a stop button appears (the desktop's send/steer split).
+  streaming: boolean
+  mode: ComposerMode
+  disabled?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'send', text: string, attachments: SessionAttachment[]): void
+  (e: 'steer', text: string): void
+  (e: 'stop'): void
+  (e: 'update:mode', mode: ComposerMode): void
+}>()
+
+const MAX_ATTACHMENTS = 4
+
+// Inline base64/text rides in the same WS frame as the message, and the gateway
+// caps a frame at 1 MB — budget the whole batch, not just each file.
+const payloadBytes = (a: SessionAttachment): number =>
+  (a.url?.length ?? 0) + (a.preview?.length ?? 0)
 
 const text = ref('')
-const canSend = computed(() => text.value.trim().length > 0)
+const attachments = ref<SessionAttachment[]>([])
+const busy = ref(false)
+const box = ref<HTMLTextAreaElement | null>(null)
+const filePicker = ref<HTMLInputElement | null>(null)
+const cameraPicker = ref<HTMLInputElement | null>(null)
 
-function send(): void {
+const canSend = computed(
+  () => !props.disabled && (text.value.trim().length > 0 || attachments.value.length > 0),
+)
+
+// Grow with the content up to the CSS max-height, then scroll.
+watch(text, () => {
+  void nextTick(() => {
+    const el = box.value
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`
+  })
+})
+
+function submit(): void {
   if (!canSend.value) return
-  emit('send', text.value)
+  const body = text.value
+  if (props.streaming) {
+    // Steering carries text only — attachments belong to a new turn.
+    emit('steer', body)
+  } else {
+    emit('send', body, attachments.value)
+    attachments.value = []
+  }
   text.value = ''
+}
+
+async function pick(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const files = [...(input.files ?? [])]
+  input.value = ''
+  if (!files.length) return
+  busy.value = true
+  let used = attachments.value.reduce((n, a) => n + payloadBytes(a), 0)
+  for (const file of files) {
+    if (attachments.value.length >= MAX_ATTACHMENTS) {
+      showToast(`Tối đa ${MAX_ATTACHMENTS} tệp đính kèm`)
+      break
+    }
+    try {
+      // eslint-disable-next-line no-await-in-loop -- sequential keeps peak memory low on a phone
+      const att = await toAttachment(file)
+      if (used + payloadBytes(att) > MAX_ATTACHMENT_BYTES) {
+        showToast('Tổng dung lượng đính kèm vượt giới hạn một tin nhắn')
+        break
+      }
+      used += payloadBytes(att)
+      attachments.value.push(att)
+    } catch (e) {
+      showToast(errMsg(e))
+    }
+  }
+  busy.value = false
+}
+
+function remove(id: string): void {
+  attachments.value = attachments.value.filter((a) => a.id !== id)
+}
+
+function toggleMode(): void {
+  emit('update:mode', props.mode === 'plan' ? 'ask' : 'plan')
 }
 </script>
 
 <template>
-  <div class="composer">
-    <textarea
-      v-model="text"
-      rows="1"
-      placeholder="Nhắn cho agent…"
-      @keydown.enter.exact.prevent="send"
+  <div class="wrap">
+    <div v-if="attachments.length" class="atts">
+      <div v-for="a in attachments" :key="a.id" class="att">
+        <img v-if="a.type === 'image' && a.url" :src="a.url" alt="" />
+        <span v-else class="doc">{{ a.name }}</span>
+        <button class="rm" title="Bỏ" @click="remove(a.id)">✕</button>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button
+        class="chip"
+        :class="{ on: mode === 'plan' }"
+        :title="mode === 'plan' ? 'Chế độ Plan' : 'Chế độ Ask'"
+        @click="toggleMode"
+      >
+        {{ mode === 'plan' ? 'Plan' : 'Ask' }}
+      </button>
+      <span v-if="streaming" class="hint muted">Gửi = chen vào lượt đang chạy</span>
+    </div>
+
+    <div class="composer">
+      <button class="icon" title="Đính kèm" :disabled="busy" @click="filePicker?.click()">
+        <span v-if="busy" class="spin" />
+        <span v-else>＋</span>
+      </button>
+      <button class="icon" title="Chụp ảnh" :disabled="busy" @click="cameraPicker?.click()">◉</button>
+
+      <!-- Enter inserts a NEWLINE (a phone keyboard's return key must not fire a
+           turn); ⌘/Ctrl+Enter sends, for when a hardware keyboard is attached. -->
+      <textarea
+        ref="box"
+        v-model="text"
+        rows="1"
+        enterkeyhint="enter"
+        :placeholder="streaming ? 'Chen thêm hướng dẫn…' : 'Nhắn cho agent…'"
+        @keydown.enter.meta.prevent="submit"
+        @keydown.enter.ctrl.prevent="submit"
+      />
+
+      <button
+        v-if="streaming"
+        class="stop"
+        title="Dừng lượt"
+        @click="emit('stop')"
+      >
+        ■
+      </button>
+      <button
+        class="send"
+        :class="{ steer: streaming }"
+        :disabled="!canSend"
+        :title="streaming ? 'Chen vào lượt' : 'Gửi'"
+        @click="submit"
+      >
+        {{ streaming ? '↯' : '↑' }}
+      </button>
+    </div>
+
+    <input
+      ref="filePicker"
+      type="file"
+      accept="image/*,text/*,.md,.json,.log,.yaml,.yml,.ts,.js,.vue,.py,.go,.rs"
+      multiple
+      hidden
+      @change="pick"
     />
-    <button class="send" :disabled="!canSend" title="Gửi" @click="send">↑</button>
+    <input ref="cameraPicker" type="file" accept="image/*" capture="environment" hidden @change="pick" />
   </div>
 </template>
 
 <style scoped>
+.wrap {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  /* --sab collapses to 0 while the keyboard is up (viewport.ts) — home-bar
+     padding there would just push the composer off-screen. */
+  padding-bottom: var(--sab, env(safe-area-inset-bottom));
+}
+.atts {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 0;
+  overflow-x: auto;
+}
+.att {
+  position: relative;
+  flex-shrink: 0;
+}
+.att img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  display: block;
+}
+.doc {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  max-width: 140px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+.chip {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.chip.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.hint {
+  font-size: 12px;
+}
 .composer {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border);
-  background: var(--bg);
+  padding: 8px 12px 10px;
 }
 textarea {
   flex: 1;
@@ -49,21 +273,46 @@ textarea {
 textarea:focus {
   border-color: var(--accent);
 }
-.send {
+.icon {
+  width: 38px;
+  height: 42px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.send,
+.stop {
   width: 42px;
   height: 42px;
   flex-shrink: 0;
   border: none;
   border-radius: 50%;
-  background: var(--accent);
-  color: #04120d;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.send {
+  background: var(--accent);
+  color: #04120d;
+}
+.send.steer {
+  background: var(--warn);
+  color: #1a1204;
+}
 .send:disabled {
   opacity: 0.4;
+}
+.stop {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 13px;
 }
 </style>
