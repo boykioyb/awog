@@ -30,6 +30,81 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.28.0',
+    date: '2026-08-09',
+    highlight: {
+      en: 'Sessions and files can now be pulled out into windows of their own — watch a long run on a second screen while you keep working in the main window.',
+      vi: 'Phiên chat và file giờ tách ra được thành cửa sổ riêng — theo dõi một lượt chạy dài trên màn hình thứ hai trong khi vẫn làm việc ở cửa sổ chính.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Open a session in its own window. Click the window icon in the session header (or right-click a session in the list) and it moves out into a real OS window you can drag to another screen — with the same composer, transcript and workspace panel. Open as many as you like, one window per session; the main window shows a card to focus it or bring it back.',
+        vi: 'Mở một phiên ra cửa sổ riêng. Bấm biểu tượng cửa sổ ở đầu phiên (hoặc chuột phải một phiên trong danh sách) là nó tách ra thành cửa sổ thật của hệ điều hành, kéo sang màn hình khác được — vẫn đủ ô soạn tin, nội dung chat và bảng workspace. Mở bao nhiêu cũng được, mỗi phiên một cửa sổ; cửa sổ chính hiện thẻ để bạn quay lại hoặc đưa phiên về chỗ cũ.',
+      },
+      {
+        kind: 'added',
+        en: 'Open a file preview in its own window too — read a spec side by side with the chat instead of behind it. Every preview feature comes along: markdown with diagrams and outline, code, images, PDF, media, Office files, editing and renaming.',
+        vi: 'Cửa sổ xem file cũng tách riêng được — đọc tài liệu song song với chat thay vì bị nó che. Mọi tính năng của cửa sổ xem đều đi theo: markdown kèm sơ đồ và mục lục, code, ảnh, PDF, media, file Office, sửa và đổi tên.',
+      },
+      {
+        kind: 'added',
+        en: 'Browse images without closing the preview: ‹ › (or ← →) steps through the other images in the same context — the folder you opened it from, the images in a message, or the ones attached to the session.',
+        vi: 'Xem loạt ảnh mà không cần đóng cửa sổ: ‹ › (hoặc phím ← →) chuyển qua các ảnh cùng ngữ cảnh — thư mục bạn vừa mở, ảnh trong một tin nhắn, hay ảnh đang đính vào phiên.',
+      },
+      {
+        kind: 'improved',
+        en: 'Images open already fitted to the window and no longer flicker when you step between them, and 100% zoom now really is pixel-for-pixel.',
+        vi: 'Ảnh mở ra là đã vừa khung, chuyển giữa các ảnh không còn nháy, và mức zoom 100% giờ đúng nghĩa một-đổi-một pixel.',
+      },
+      {
+        kind: 'added',
+        en: 'From your phone: stop a running reply, or send while it is running to steer it mid-turn. Tap a step to see what actually happened (diff, file contents, command output), tick off checklist items, and search across sessions.',
+        vi: 'Từ điện thoại: dừng một lượt đang chạy, hoặc gửi tin ngay khi đang chạy để lái lượt đó giữa chừng. Chạm một bước để xem thực sự đã làm gì (diff, nội dung file, output lệnh), tick việc trong checklist, và tìm kiếm xuyên các phiên.',
+      },
+      {
+        kind: 'added',
+        en: 'Start a new session from your phone: pick the project, provider, account, model, thinking level, mode and response style — or leave them on Default to inherit your desktop settings. You can also rename, reconfigure and delete sessions, and attach photos to a message.',
+        vi: 'Tạo phiên mới ngay trên điện thoại: chọn dự án, nhà cung cấp, tài khoản, model, mức suy nghĩ, chế độ và phong cách trả lời — hoặc để Mặc định để kế thừa cấu hình trên máy. Đổi tên, đổi cấu hình và xoá phiên cũng làm được, và đính ảnh vào tin nhắn.',
+      },
+      {
+        kind: 'improved',
+        en: 'Settings → Devices now shows the address to reopen AWOG Remote on a paired phone, with a copy button and a QR code — no pairing again just because you closed the tab.',
+        vi: 'Cài đặt → Thiết bị giờ hiện địa chỉ để mở lại AWOG Remote trên điện thoại đã ghép nối, kèm nút chép và mã QR — đóng tab rồi không phải ghép lại từ đầu.',
+      },
+      {
+        kind: 'fixed',
+        en: 'On the phone, a long reply no longer reports a timeout while it is still running, and the on-screen keyboard stops covering the message box (Enter adds a line break; ⌘/Ctrl+Enter sends).',
+        vi: 'Trên điện thoại, lượt trả lời dài không còn báo hết thời gian chờ trong khi vẫn đang chạy, và bàn phím ảo không còn che ô soạn tin (Enter là xuống dòng; ⌘/Ctrl+Enter mới gửi).',
+      },
+      {
+        kind: 'fixed',
+        en: 'Terminals no longer close themselves. A shell now lives until you close it — a long, quiet build or an ssh session left open is not killed off after 30 minutes any more. If a shell does die, the pane says so and the next key you press starts a fresh one, instead of silently swallowing what you type.',
+        vi: 'Terminal không còn tự đóng. Shell sống tới khi bạn đóng nó — một lệnh build im lặng chạy lâu hay phiên ssh để đó không còn bị đóng sau 30 phút. Nếu shell chết thật, khung terminal báo rõ và phím bấm kế tiếp mở shell mới, thay vì nuốt im lặng những gì bạn gõ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The terminal on macOS now starts as a login shell, so tools installed via Homebrew, nvm or pyenv are on PATH just like in Terminal.app.',
+        vi: 'Terminal trên macOS giờ khởi động dạng login shell, nên công cụ cài qua Homebrew, nvm hay pyenv có sẵn trong PATH y như trong Terminal.app.',
+      },
+      {
+        kind: 'improved',
+        en: 'Copy a code block with one click everywhere it appears — chat, library, project README and the editor preview — and copy the source of a diagram straight from the diagram.',
+        vi: 'Chép một khối code bằng một cú bấm ở mọi nơi nó xuất hiện — chat, thư viện, README dự án và khung xem của trình soạn thảo — và chép mã nguồn của sơ đồ ngay trên sơ đồ.',
+      },
+      {
+        kind: 'added',
+        en: 'Open the session’s project folder in VS Code straight from the session header.',
+        vi: 'Mở thư mục dự án của phiên bằng VS Code ngay từ đầu phiên chat.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Security: deleting a session now strictly checks the name it was given, so a request can only ever remove the one session it names — never the folder holding all of them.',
+        vi: 'Bảo mật: xoá một phiên giờ kiểm tra chặt tên được đưa vào, nên một yêu cầu chỉ có thể xoá đúng phiên nó gọi tên — không bao giờ chạm tới thư mục chứa toàn bộ phiên.',
+      },
+    ],
+  },
+  {
     version: '0.27.0',
     date: '2026-08-02',
     highlight: {
