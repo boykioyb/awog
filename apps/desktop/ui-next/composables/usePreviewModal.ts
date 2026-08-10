@@ -128,6 +128,7 @@ export function usePreviewModal(
     replace: replaceShared,
     back: backShared,
     canGoBack,
+    openEpoch,
   } = usePreview()
   const chatAttach = useChatAttach()
   const dock = useMinimizeDock()
@@ -301,6 +302,9 @@ export function usePreviewModal(
   // Set when the media element can't decode the source (unsupported codec, read
   // error) → the modal swaps the player for an "open externally" placeholder.
   const mediaError = ref(false)
+  // Bumped on reload; rides in the media:// URL so the element re-requests the stream
+  // (an identical src is a no-op to <video>/<audio>). Reset per item by the watcher.
+  const mediaReloadKey = ref(0)
   function onMediaError() {
     mediaError.value = true
   }
@@ -313,9 +317,17 @@ export function usePreviewModal(
   // the next/previous image while the current one is on screen so forward/back stepping is
   // normally a cache hit. Capped by count, evicting oldest-first, since a decoded data URL
   // is ~1.4× the file size and these are full-resolution renders.
+  //
+  // The cache lives for ONE preview session only. The modal is mounted app-wide
+  // (AppGlobalHosts), so a cache that survived across opens served the bytes read the FIRST
+  // time a path was previewed — a file regenerated on disk under the same name (a re-rendered
+  // thumbnail) then kept showing the old picture forever. `openEpoch` (bumped by
+  // usePreview's open/restore/close) drops it at every session boundary, while push/replace/
+  // back — i.e. gallery stepping, the only thing the cache exists for — keep it warm.
   const DATA_URL_CACHE_MAX = 6
   const dataUrlCache = new Map<string, string>()
   const cacheKey = (it: PreviewRef): string => `${it.workspaceRoot ?? ''}::${it.path ?? ''}`
+  let cachedEpoch = openEpoch.value
 
   function cachedDataUrl(it: PreviewRef | null): string | null {
     if (!it?.workspaceRoot || !it.path) return null
@@ -350,7 +362,9 @@ export function usePreviewModal(
   // live <img> together with the zoom that fits it. Until that tick the previous image stays
   // painted, so a gallery step is a straight cut with no intermediate state. The loading
   // placeholder is only used when there is nothing on screen yet (first open of the modal).
-  async function showImage(it: PreviewRef): Promise<void> {
+  // `keepView`: a reload of the SAME picture keeps the zoom/rotation the user set — only a
+  // new item earns the automatic fit.
+  async function showImage(it: PreviewRef, opts?: { keepView?: boolean }): Promise<void> {
     const seq = ++loadSeq
     if (!loadedSrc.value) loadStatus.value = 'loading'
     try {
@@ -370,11 +384,13 @@ export function usePreviewModal(
       // image, and the natural size is read from the probe either way.
       await probe.decode().catch(() => undefined)
       if (seq !== loadSeq) return
-      autoFitFor = itemKey(it) // this IS the item's automatic fit — @load must not redo it
-      rotate.value = 0
-      flipH.value = false
-      flipV.value = false
-      applyImageFit(probe.naturalWidth, probe.naturalHeight, { shrinkOnly: true })
+      if (!opts?.keepView) {
+        autoFitFor = itemKey(it) // this IS the item's automatic fit — @load must not redo it
+        rotate.value = 0
+        flipH.value = false
+        flipV.value = false
+        applyImageFit(probe.naturalWidth, probe.naturalHeight, { shrinkOnly: true })
+      }
       loadedSrc.value = url
       loadStatus.value = 'idle'
     } catch {
@@ -473,7 +489,7 @@ export function usePreviewModal(
     if (it && isMediaKind(it.kind)) {
       if (it.src) return it.src
       if (it.workspaceRoot && it.path && sc.available)
-        return mediaFileUrl(it.workspaceRoot, it.path)
+        return mediaFileUrl(it.workspaceRoot, it.path, mediaReloadKey.value)
       return ''
     }
     return loadedSrc.value ?? it?.src ?? ''
@@ -578,12 +594,77 @@ export function usePreviewModal(
   // Bumped on reload to force the HTML iframe to re-create (re-run its scripts even
   // when the content string is unchanged).
   const htmlReloadKey = ref(0)
-  // Re-fetch the file from disk (HTML preview "reload"): pick up on-disk edits and
-  // re-render. Bumping the key also re-runs an unchanged page's scripts.
-  function reload(): void {
-    htmlReloadKey.value += 1
+
+  // ── reload ───────────────────────────────────────────────────────────────────
+  // Anything on disk can be rewritten under the preview — a re-rendered thumbnail, a
+  // regenerated report, a re-encoded clip — and the path stays the same, so nothing tells
+  // the modal to look again. Reload is that "look again", offered for every workspace
+  // preview (an in-memory attachment has no file to re-read → no button).
+  const canReload = computed(() => {
     const it = item.value
-    if (it && it.workspaceRoot && it.path && sc.available) void loadFromWorkspace(it)
+    if (!it || !sc.available || !it.workspaceRoot) return false
+    return it.kind === 'folder' || !!it.path // a folder previews its tree, not a file
+  })
+
+  function reload(): void {
+    const it = item.value
+    if (!it || !canReload.value) return
+    // Re-reading replaces the buffer an edit session started from, so a draft must be
+    // resolved first — same discard confirm as close()/goBack().
+    if (dirty.value) {
+      confirmReq.value = {
+        titleKey: 'common.preview.discardTitle',
+        messageKey: 'common.preview.discardConfirm',
+        confirmKey: 'common.preview.discard',
+        danger: true,
+        run: () => {
+          cancelEdit()
+          doReload(it)
+        },
+      }
+      return
+    }
+    doReload(it)
+  }
+
+  // Per-kind reload paths. Each one keeps what's on screen until the new bytes land, so a
+  // reload of an unchanged file is a no-op to the eye.
+  function doReload(it: PreviewRef): void {
+    const root = it.workspaceRoot
+    if (!root) return
+    mediaError.value = false
+    // Folder: re-list the root plus every directory the user has open (dropping the
+    // children of collapsed dirs is free — they re-load on expand).
+    if (it.kind === 'folder') {
+      const dirs = ['', ...treeExpanded]
+      for (const k of Object.keys(treeChildren)) delete treeChildren[k]
+      for (const dir of dirs) void loadTreeDir(root, dir)
+      return
+    }
+    // Media never buffers through the UI — the element only re-requests the stream when
+    // its URL changes, so the reload counter rides along in the media:// query.
+    if (isMediaKind(it.kind)) {
+      mediaReloadKey.value += 1
+      return
+    }
+    // Binary bytes are cached per path — drop this entry or the read below re-serves
+    // exactly what's already on screen.
+    dataUrlCache.delete(cacheKey(it))
+    if (it.kind === 'image') {
+      void showImage(it, { keepView: true })
+      return
+    }
+    // Bumping the key re-creates the iframe, so an unchanged HTML page re-runs its scripts.
+    htmlReloadKey.value += 1
+    // An open editor is holding a draft of the OLD text (the discard confirm above proved
+    // it's unmodified): drop it and re-enter edit on the fresh content once it lands, or a
+    // later Save would write the stale buffer back over the file.
+    const wasEditing = editMode.value
+    cancelEdit()
+    void loadFromWorkspace(it).then(() => {
+      if (it.kind === 'markdown') void loadMdImages(true) // embedded images too
+      if (wasEditing && !editMode.value) startEdit() // loadFromWorkspace re-enters for 'text'
+    })
   }
   // ── markdown image resolution (workspace-relative → base64 data URL) ──────────
   // A markdown file's `![](…)` images use paths relative to the file on disk; v-html
@@ -622,7 +703,10 @@ export function usePreviewModal(
     })
   }
 
-  async function loadMdImages(): Promise<void> {
+  // `force` (a reload) re-reads images that are already resolved — the doc's text can be
+  // unchanged while an image it embeds was re-rendered on disk. It keeps the current data
+  // URL in place until the new bytes land, so a reload never blanks the pictures.
+  async function loadMdImages(force = false): Promise<void> {
     const it = item.value
     // A root is enough — `path` is optional (in-memory markdown resolves from the root).
     if (!it || it.kind !== 'markdown' || !it.workspaceRoot || !sc.available) return
@@ -631,13 +715,13 @@ export function usePreviewModal(
       if (seg.type !== 'html') continue
       for (const m of seg.html.matchAll(IMG_SRC_RE)) {
         const src = m[2]
-        if (src && isRelativeAsset(src) && !(src in mdImages)) srcs.add(src)
+        if (src && isRelativeAsset(src) && (force || !(src in mdImages))) srcs.add(src)
       }
     }
     for (const src of srcs) {
       const rel = resolveMdAsset(src)
       if (!rel) continue
-      mdImages[src] = '' // in-flight sentinel (dedupe concurrent loads)
+      if (!(src in mdImages)) mdImages[src] = '' // in-flight sentinel (dedupe concurrent loads)
       try {
         const res = await sc.request<FsFileBase64>('fs.readFileBase64', {
           workspaceRoot: it.workspaceRoot,
@@ -1110,6 +1194,12 @@ export function usePreviewModal(
   watch(
     item,
     (it, prev) => {
+      // New preview session (open / restore / close) → the read cache is stale by
+      // definition: re-read from disk. Runs before any load below fires.
+      if (openEpoch.value !== cachedEpoch) {
+        cachedEpoch = openEpoch.value
+        dataUrlCache.clear()
+      }
       // Tear down find highlights + bar BEFORE Vue re-renders `.mdbody` for the new
       // item, so no stale <mark> or highlight state carries over.
       find.closeFind()
@@ -1133,6 +1223,7 @@ export function usePreviewModal(
       loadedLang.value = undefined
       truncated.value = false
       mediaError.value = false
+      mediaReloadKey.value = 0
       office.reset()
       for (const k of Object.keys(mdImages)) delete mdImages[k]
       // In-memory markdown (a fullscreened chat reply) has no async file load, so the
@@ -1217,6 +1308,7 @@ export function usePreviewModal(
     showCode,
     htmlRender,
     htmlReloadKey,
+    canReload,
     reload,
     hasBar,
     view,

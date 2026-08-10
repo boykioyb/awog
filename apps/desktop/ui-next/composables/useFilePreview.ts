@@ -1,4 +1,13 @@
-import { inject, provide, toValue, type InjectionKey, type MaybeRefOrGetter } from 'vue'
+import {
+  inject,
+  provide,
+  ref,
+  toValue,
+  watch,
+  type InjectionKey,
+  type MaybeRefOrGetter,
+  type Ref,
+} from 'vue'
 import { usePreview, previewKindFromPath, type PreviewRef } from './usePreview'
 import { useWorkspaceData } from './useWorkspaceData'
 import { useFsApi } from './useFsApi'
@@ -35,6 +44,10 @@ type FilePreviewApi = {
   // PreviewModal — need it to anchor relative image refs at the same base the
   // transcript uses. null in browser-dev / a session with no project.
   root: () => Promise<string | null>
+  // Bumped every time the resolved-image cache is dropped, i.e. at the end of a turn.
+  // Renderers watch it to re-resolve the <img> nodes they already painted (see below —
+  // a file re-rendered on disk keeps its path, so nothing else would tell them).
+  imagesVersion: Readonly<Ref<number>>
 }
 const KEY: InjectionKey<FilePreviewApi> = Symbol('filePreview')
 
@@ -305,7 +318,24 @@ export function provideFilePreview(
   // data: URL. Cached per normalized path; '' negative-caches a miss so per-frame
   // re-renders don't re-read. Mirrors usePreviewModal's markdown image resolution,
   // but anchored at the workspace root (the session cwd), not a file's directory.
+  //
+  // The cache is dropped at every TURN BOUNDARY. A path is not a version: the model
+  // re-renders `…/thumb.png` in place (usually from a script it ran through Bash, so no
+  // Write/Edit step names the file) and the transcript would keep serving the bytes read
+  // the first time — for the whole life of the session. Turn end is the coarse but
+  // reliable "the workspace may have moved under us" signal; it costs one re-read per
+  // image actually on screen, and only when a turn finishes.
   const imageCache = new Map<string, string>()
+  const imagesVersion = ref(0)
+  const isRunning = (s: Session['status']): boolean => s === 'streaming' || s === 'awaiting'
+  watch(
+    () => toValue(session).status,
+    (now, before) => {
+      if (!isRunning(before) || isRunning(now)) return
+      imageCache.clear()
+      imagesVersion.value++
+    },
+  )
   // Absolute/remote schemes are already loadable — only local relative refs resolve.
   const ABSOLUTE_SCHEME = /^(?:https?:|data:|blob:|app:|file:)/i
   // Normalize a relative ref against the workspace root, collapsing '.'/'..'; a ref
@@ -339,20 +369,27 @@ export function provideFilePreview(
     if (!rel) return null
     const cached = imageCache.get(rel)
     if (cached !== undefined) return cached || null
+    // A read that spans a turn boundary carries pre-boundary bytes: keep the result for
+    // THIS caller but don't seed the freshly-cleared cache with it, or the refresh pass
+    // right behind us would be served exactly the bytes it means to replace.
+    const version = imagesVersion.value
+    const keep = (url: string): void => {
+      if (imagesVersion.value === version) imageCache.set(rel, url)
+    }
     try {
       const res = await fs.readFileBase64(r, rel)
       const url =
         res.base64 && !res.truncated && res.mimeType.startsWith('image/')
           ? `data:${res.mimeType};base64,${res.base64}`
           : ''
-      imageCache.set(rel, url)
+      keep(url)
       return url || null
     } catch {
-      imageCache.set(rel, '') // negative-cache a missing / out-of-root file
+      keep('') // negative-cache a missing / out-of-root file
       return null
     }
   }
-  provide(KEY, { open, shorten, resolve, imageSrc, root: ensureRoot })
+  provide(KEY, { open, shorten, resolve, imageSrc, root: ensureRoot, imagesVersion })
 }
 
 // No host (markdown rendered outside a session transcript) → links are inert.
@@ -362,6 +399,7 @@ const NOOP: FilePreviewApi = {
   resolve: () => Promise.resolve(null),
   imageSrc: () => Promise.resolve(null),
   root: () => Promise.resolve(null),
+  imagesVersion: ref(0), // never bumps — nothing to refresh without a host
 }
 
 // Leaf-side API, injected from the nearest provideFilePreview ancestor.

@@ -83,9 +83,13 @@ export const isOfficeKind = (kind: PreviewRef['kind']): boolean =>
 // process (apps/desktop/electron/src/media.ts) serves this scheme with HTTP Range
 // support so the file streams + seeks instead of being base64-inlined. Keep this
 // URL shape in sync with that handler.
-export function mediaFileUrl(workspaceRoot: string, path: string): string {
+//
+// `version` (a reload counter) rides along only to make the URL differ, so the media
+// element re-requests a file that was rewritten in place. The handler reads root+path
+// and ignores everything else.
+export function mediaFileUrl(workspaceRoot: string, path: string, version = 0): string {
   const qs = `root=${encodeURIComponent(workspaceRoot)}&path=${encodeURIComponent(path)}`
-  return `media://awog/?${qs}`
+  return `media://awog/?${qs}${version ? `&v=${version}` : ''}`
 }
 
 // Attachment variant: image/pdf are decided by the carried data (img flag / mime),
@@ -167,6 +171,12 @@ const pendingRestore = ref<PreviewRestore | null>(null)
 // falls back to listing the item's folder.
 const gallery = ref<PreviewRef[]>([])
 
+// Bumped on every preview-session boundary — a top-level open/restore and close, but NOT
+// push/replace/back (those stay inside one session). Consumers that hold a per-session read
+// cache (usePreviewModal's data-URL cache) key off this, so a file REGENERATED on disk between
+// two opens is read again instead of being served from a stale entry.
+const openEpoch = ref(0)
+
 export function usePreview() {
   // True while there's a frame to go back to (drives the header Back button).
   const canGoBack = computed(() => stack.value.length > 0)
@@ -176,6 +186,7 @@ export function usePreview() {
     current.value = item
     gallery.value = siblings ?? []
     pendingRestore.value = null
+    openEpoch.value++
   }
   // Re-open a previously minimized item, replaying its captured view + scroll. The
   // back history is transient (not parked with the dock snapshot) → restore lands at
@@ -185,6 +196,7 @@ export function usePreview() {
     current.value = item
     gallery.value = []
     pendingRestore.value = hint
+    openEpoch.value++
   }
   // Navigate INTO a new item, keeping the current one as history. A different file is a
   // different context, so the sibling set does NOT carry over.
@@ -217,6 +229,7 @@ export function usePreview() {
     stack.value = []
     current.value = null
     gallery.value = []
+    openEpoch.value++
   }
   // Consume the pending hint (one-shot; clears itself).
   function takeRestore(): PreviewRestore | null {
@@ -224,5 +237,17 @@ export function usePreview() {
     pendingRestore.value = null
     return r
   }
-  return { current, gallery, canGoBack, open, restore, push, replace, back, close, takeRestore }
+  return {
+    current,
+    gallery,
+    canGoBack,
+    openEpoch,
+    open,
+    restore,
+    push,
+    replace,
+    back,
+    close,
+    takeRestore,
+  }
 }

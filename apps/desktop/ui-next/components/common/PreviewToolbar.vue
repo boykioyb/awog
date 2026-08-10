@@ -162,7 +162,7 @@
       </template>
     </template>
 
-    <!-- html: render/raw toggle + reload (render) + copy -->
+    <!-- html: render/raw toggle + copy (reload is shared, below) -->
     <template v-else-if="item?.kind === 'html'">
       <button
         class="pvtb"
@@ -181,9 +181,6 @@
         <Icon name="commands" style="width: 14px; height: 14px" />
       </button>
       <span class="pvsep" />
-      <button v-if="view === 'render'" class="pvtb" :title="t('common.reload')" @click="reload()">
-        <Icon name="refresh" style="width: 13px; height: 13px" />
-      </button>
       <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
         <Icon name="copy" style="width: 13px; height: 13px" />
       </button>
@@ -234,6 +231,21 @@
           </template>
         </div>
       </div>
+    </template>
+
+    <!-- reload — every workspace preview: the file (or the folder's tree) can be rewritten
+         on disk under the same path, and nothing else would make the modal look again. An
+         in-memory attachment has no file to re-read, so canReload hides it there. -->
+    <template v-if="canReload">
+      <span class="pvsep" />
+      <button
+        class="pvtb"
+        :title="t('common.reload')"
+        :aria-label="t('common.reload')"
+        @click="reload()"
+      >
+        <Icon name="refresh" style="width: 13px; height: 13px" />
+      </button>
     </template>
 
     <!-- edit / save -->
@@ -369,6 +381,7 @@ const {
   galleryLabel,
   stepImage,
   copyContent,
+  canReload,
   reload,
   startEdit,
   save,

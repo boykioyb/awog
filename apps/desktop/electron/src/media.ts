@@ -15,6 +15,8 @@ import { resolveInsideWorkspace } from './workspace-scope'
 //
 // URL shape (MUST match mediaFileUrl() in ui-next composables/usePreview.ts):
 //   media://awog/?root=<enc workspaceRoot>&path=<enc workspace-relative path>
+// A preview reload appends a `&v=<n>` cache-buster so the element re-requests a file
+// rewritten in place; only root+path are read here, any other param is ignored.
 // The path is validated inside the workspace via resolveInsideWorkspace before a
 // single byte is read (security invariant #2) — a request that escapes the root
 // (traversal / symlink) is rejected with 403 and never served.

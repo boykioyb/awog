@@ -245,6 +245,9 @@ function resolveImages(el: HTMLElement) {
     // while the real bytes are read from the workspace.
     img.removeAttribute('src')
     img.classList.add('imgloading')
+    // Keep the written ref on the node: the resolved src is a data: URL, so it's the only
+    // way a later refresh (refreshImages) knows which workspace file this <img> came from.
+    img.dataset.mdsrc = raw
     void filePreview.imageSrc(raw).then((url) => {
       // Only the render token may gate the write. It already proves the node belongs to
       // the CURRENT subtree; an extra `img.isConnected` check would additionally require
@@ -270,6 +273,25 @@ function resolveImages(el: HTMLElement) {
         ph.textContent = img.getAttribute('alt') || raw.split('/').pop() || raw
         img.replaceWith(ph)
       }
+    })
+  }
+}
+
+// Re-read the workspace images this subtree already painted, without rebuilding it. The
+// model re-renders a file in place (same path, new bytes) and the markdown never changes,
+// so nothing else would ever refresh the picture. Unlike resolveImages this does NOT blank
+// the node first: the current image stays up until the new bytes are decoded, and the src is
+// only written when it actually differs, so a refresh can't flash or reflow the transcript.
+function refreshImages() {
+  const el = root.value
+  if (!el) return
+  const token = renderToken
+  for (const img of Array.from(el.querySelectorAll<HTMLImageElement>('img[data-mdsrc]'))) {
+    const raw = img.dataset.mdsrc ?? ''
+    if (!raw) continue
+    void filePreview.imageSrc(raw).then((url) => {
+      if (token !== renderToken) return // subtree replaced while reading
+      if (url && img.src !== url) img.src = url
     })
   }
 }
@@ -306,6 +328,8 @@ function rerender() {
 }
 onMounted(rerender)
 watch([() => props.html, () => props.highlights], rerender, { flush: 'post' })
+// Turn ended → the image cache was dropped; re-resolve what's on screen against disk.
+watch(() => filePreview.imagesVersion.value, refreshImages)
 </script>
 
 <style scoped>
