@@ -162,6 +162,12 @@ export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen
       if (draft.value.accountId) llmDefaults.accountId = draft.value.accountId
       if (draft.value.mcpServerIds !== undefined)
         llmDefaults.mcpServerIds = [...draft.value.mcpServerIds]
+      // Response style isn't part of this form — carry it forward, else saving the
+      // model defaults would silently clear a style the project already had.
+      const prev = p.llmDefaults
+      if (prev?.responseStyle !== undefined) llmDefaults.responseStyle = prev.responseStyle
+      if (prev?.responseStyleNoMarkdown !== undefined)
+        llmDefaults.responseStyleNoMarkdown = prev.responseStyleNoMarkdown
       return await store.updateProject({ ...p, llmDefaults })
     } finally {
       saving.value = false

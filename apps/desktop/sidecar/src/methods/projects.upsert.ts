@@ -23,7 +23,10 @@ const ProjectIdSchema = z
 const LlmDefaultsSchema = z.object({
   provider: z.enum(['anthropic', 'openai', 'google']),
   modelId: z.string().min(1).max(200),
-  level: z.enum(['low', 'medium', 'high', 'extra-high', 'max']),
+  // Optional: absent = the project follows the global thinking level. The UI only
+  // pins it when it differs from the app default, so requiring it here rejected
+  // every save where the two matched.
+  level: z.enum(['low', 'medium', 'high', 'extra-high', 'max']).optional(),
   accountId: z.string().max(200).optional(),
   // MCP server whitelist new sessions inherit. undefined = all enabled servers.
   mcpServerIds: z.array(z.string().max(200)).max(200).optional(),
@@ -127,7 +130,10 @@ register('projects.upsert', async (raw) => {
     project.llmDefaults = {
       provider: incoming.llmDefaults.provider,
       modelId: incoming.llmDefaults.modelId,
-      level: incoming.llmDefaults.level,
+    }
+    // Omitted → dropped (the project keeps following the global thinking level).
+    if (incoming.llmDefaults.level !== undefined) {
+      project.llmDefaults.level = incoming.llmDefaults.level
     }
     if (incoming.llmDefaults.accountId !== undefined) {
       project.llmDefaults.accountId = incoming.llmDefaults.accountId

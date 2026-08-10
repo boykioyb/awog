@@ -612,7 +612,9 @@ export interface SessionStep {
 export interface ProjectLlmDefaults {
   provider: ProviderName
   modelId: string
-  level: ThinkingLevel
+  // undefined = follow the global thinking level (the UI pins it only when the
+  // project intentionally overrides the app default).
+  level?: ThinkingLevel
   accountId?: string
   // MCP server whitelist new sessions inherit (mirror of Session.mcpServerIds).
   // undefined = all currently enabled servers.
