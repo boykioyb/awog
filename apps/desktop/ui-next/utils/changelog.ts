@@ -30,6 +30,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.28.1',
+    date: '2026-08-10',
+    highlight: {
+      en: 'Previews now show the file as it is on disk right now — a picture regenerated under the same name no longer keeps showing the old version.',
+      vi: 'Cửa sổ xem giờ hiện đúng nội dung file đang có trên đĩa — ảnh được tạo lại với cùng tên không còn hiện bản cũ nữa.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'A file rewritten under the same name — a re-rendered thumbnail, a regenerated report — kept showing the version read the first time you ever previewed it, for as long as the app stayed open. Reopening a preview now always reads the file again.',
+        vi: 'File bị ghi đè với cùng tên — ảnh thumbnail render lại, báo cáo tạo lại — vẫn hiện bản đọc được ở lần xem đầu tiên, kéo dài tới khi tắt app. Giờ mở lại cửa sổ xem là đọc lại file.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Images in the chat refresh at the end of each turn, so a picture the assistant just re-generated no longer stays the old one in messages already on screen.',
+        vi: 'Ảnh trong khung chat được làm mới ở cuối mỗi lượt, nên ảnh vừa được tạo lại không còn nằm nguyên bản cũ trong những tin nhắn đã hiển thị.',
+      },
+      {
+        kind: 'added',
+        en: 'A Reload button on every preview, not just web pages. Images reload without losing your zoom, folders re-list what changed, video and audio re-fetch, and a document also refreshes the images inside it.',
+        vi: 'Nút Tải lại có ở mọi cửa sổ xem, không riêng trang web. Ảnh tải lại mà vẫn giữ mức zoom, thư mục cập nhật lại danh sách, video và âm thanh nạp lại, tài liệu còn làm mới cả ảnh nằm bên trong.',
+      },
+      {
+        kind: 'fixed',
+        en: "Saving a project's model defaults no longer clears its response style, and saving works again when the project uses the same thinking level as the app default.",
+        vi: 'Lưu thiết lập model mặc định của dự án không còn xoá mất phong cách trả lời, và lưu được bình thường khi dự án dùng cùng mức suy luận với mặc định của app.',
+      },
+    ],
+  },
+  {
     version: '0.28.0',
     date: '2026-08-09',
     highlight: {
