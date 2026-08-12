@@ -34,6 +34,63 @@ export type AwogTrayCommand =
   | { kind: 'task'; id: string }
 export type AwogTrayModel = { macTitle: string; tooltip: string; unreadCount: number }
 
+// ── Desktop pet (docs/features/desktop-pet.md) ───────────────────────────────
+// Ambient status sprite in its own transparent always-on-top window. The MAIN
+// WINDOW computes the model (it owns the sessions/tasks stores) and pushes it; the
+// pet renderer only draws and sends commands back — never a second driver of the
+// engine event stream.
+export type AwogPetState = 'idle' | 'working' | 'awaiting' | 'done' | 'offline'
+// Which built-in spritesheet to draw (public/pet/<sprite>.png).
+export type AwogPetSprite = 'girl' | 'shiba' | 'bichon' | 'dino' | 'chicken' | 'miku'
+export type AwogPetItem = {
+  kind: 'session' | 'task'
+  // session → stable engine id; task → task id.
+  id: string
+  title: string
+  hint: 'awaiting' | 'running' | 'unread'
+  percent?: number
+  // One-line preview of what it is doing right now (last message / current step).
+  preview?: string
+}
+// Summary only — the pet floats above every app, so no tool input, ever.
+export type AwogPetPermission = { requestId: string; toolName: string; target: string }
+export type AwogPetModel = {
+  state: AwogPetState
+  counts: { running: number; attention: number; unread: number }
+  // At most 3, ordered attention → running → unread.
+  items: AwogPetItem[]
+  permission: AwogPetPermission | null
+  // Prefs the PET renders with. They ride the model rather than a channel of their
+  // own: the main window computes both from the same store, in the same tick.
+  autoPeek: boolean
+  sprite: AwogPetSprite
+  // The pet scales its own content in CSS. NOT webContents.setZoomFactor — Chromium
+  // zoom is per-ORIGIN, so that would scale every window of the app, not just this one.
+  scale: number
+  // Let the pet say something now and then (Settings → Pet).
+  quips: boolean
+  // Lines for the CURRENT state, already resolved by the main window (user edits ??
+  // localised defaults). The pet only picks one at random.
+  quipLines: string[]
+  reminders: string[]
+  // Milliseconds between periodic nudges; 0 = off.
+  reminderMs: number
+  // Which way the pet looks. Set by MAIN (only it knows where the window sits): a pet
+  // parked at the right edge faces INTO the screen.
+  facing: 'left' | 'right'
+}
+// What the main window pushes — everything but `facing`.
+export type AwogPetStatus = Omit<AwogPetModel, 'facing'>
+export type AwogPetCommand =
+  | { kind: 'open'; target: AwogTrayCommand }
+  | { kind: 'permission'; requestId: string; decision: 'allow' | 'deny' }
+  | { kind: 'toggle' }
+export type AwogPetPrefs = {
+  enabled: boolean
+  scale: number
+  pos: { x: number; y: number } | null
+}
+
 // ── Mobile Remote Control gateway (Electron main; Wave 2) ────────────────────
 // Device pairing + revoke for the Tailscale-bound HTTP gateway. The gateway
 // itself (binding, HTTP server, token store) lives entirely in the main process;
@@ -138,6 +195,18 @@ export interface AwogBridge {
   sendTrayUpdate(model: AwogTrayModel): void
   onTrayCommand(handler: (cmd: AwogTrayCommand) => void): () => void
   sendTrayCommand(cmd: AwogTrayCommand): void
+  // Desktop pet (desktop-pet). Main-window side: prefs + model out, commands and
+  // the post-drag position in. Pet side: model in, commands + hit-test + drag out.
+  // Optional so an older shell (packaged before the pet shipped) degrades to no pet
+  // instead of throwing — the composable guards on `sendPetPrefs`.
+  sendPetPrefs?(prefs: AwogPetPrefs): void
+  sendPetUpdate?(status: AwogPetStatus): void
+  onPetModel?(handler: (model: AwogPetModel) => void): () => void
+  sendPetCommand?(cmd: AwogPetCommand): void
+  onPetCommand?(handler: (cmd: AwogPetCommand) => void): () => void
+  onPetMoved?(handler: (pos: { x: number; y: number }) => void): () => void
+  setPetInteractive?(on: boolean): void
+  sendPetDrag?(phase: 'start' | 'end'): void
   // Mobile Remote Control gateway (Wave 2). Optional so an older shell without
   // the gateway degrades gracefully — the renderer guards on `window.awog?.gateway`.
   gateway?: AwogGatewayBridge

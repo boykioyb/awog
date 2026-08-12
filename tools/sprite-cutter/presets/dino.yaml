@@ -1,0 +1,101 @@
+# Dino sheet (assets/dino-sheet.png) — AI-generated, 1536×1024, 25 khối có caption.
+#
+# Khác tấm shiba ở chỗ quan trọng nhất: đây **không phải một cột hàng full-width** mà là
+# BỐN cột khối. Hai khối nằm cạnh nhau thì dùng chung dải Y, nên mọi bộ dò hàng đều đọc
+# chúng thành một hàng — chỉ có cách khai vùng mới tách được. Đó là `sections`.
+#
+# Toạ độ crop lấy từ `--debug` (overlay vẽ luôn khung section).
+
+fps: 12
+frames: 12
+padding: 3
+
+matte:
+  strategy: auto
+  threshold: 40
+
+sections:
+  # Cột trái, phần trên: 8 hàng dài, mỗi hàng 12 pose dính nhau (pitch ~64px).
+  - crop: [0, 0, 850, 730]
+    rows:
+      - { name: idle }
+      - { name: walk }
+      - { name: run }
+      - { name: sprint }
+      # Airborne thật: giữ cung nhảy thay vì ép chân về đất.
+      - { name: jump, lift_budget: 0.3 }
+      - { name: fall, align_y: row, lift_budget: 0.3 }
+      - { name: land }
+      - { name: turn }
+
+  # Cột trái, phần dưới. Ba khối này ngắn (4–6 pose) và là chuyển tiếp một chiều:
+  # đứng → ngồi, đứng → nằm. Loop thẳng thì giật, nên chạy ping-pong.
+  - crop: [0, 730, 545, 294]
+    rows:
+      - { name: sit, mode: pingpong }
+      - { name: lie_down, mode: pingpong }
+      - { name: sleep }
+
+  # Giữa dưới.
+  - crop: [545, 730, 440, 294]
+    rows:
+      - { name: climb, mode: pingpong }
+      - { name: slide }
+      - { name: shake }
+
+  # Cột phải: caption nằm ĐÈ lên frame đầu của chính nó, nên không thể cắt caption bằng
+  # gutter — phải nhận theo hình dạng (detector/rows.py).
+  # Mép trái 846 chứ không phải 850: chip SKILL (GROUND POUND) bắt đầu ở x=847, cắt ở 850
+  # là mất chip đó và cả khối rơi vào hàng DASH.
+  - crop: [846, 0, 690, 730]
+    rows:
+      - { name: attack }
+      - { name: attack_tail }
+      # Lửa dài dần sang phải: neo trọng tâm sẽ kéo con dino lùi trái mỗi frame.
+      - { name: fire_breath, align_x: bbox }
+      - { name: hurt }
+      - { name: die, mode: pingpong }
+      - { name: ground_pound }
+      - { name: dash }
+
+  # Góc phải dưới — bốn khối nhỏ, phải tách làm ba vùng vì chúng xen kẽ cả hai chiều:
+  # `pee` bắt đầu ở x=1237 (trái hơn cả `roar`), nên một đường cắt dọc là không đủ.
+  # Cắt ngang ở y=895 để chip PEE (x=1220, y=905) không lọt vào khối này — lọt thì nó
+  # hút mất cái thùng của EAT thành một hàng rác.
+  - crop: [995, 730, 275, 165]
+    rows:
+      - { name: eat }
+      - { name: happy }
+  - crop: [995, 890, 220, 134]
+    rows:
+      - { name: cry }
+  # `roar` là caption duy nhất không dò được (dính vào tia hiệu ứng của chính nó) → khối
+  # này không có chip, rơi về gom cụm theo Y, và vì chỉ có một hàng nên vẫn đúng.
+  - crop: [1270, 730, 266, 118]
+    rows:
+      - { name: roar }
+  - crop: [1270, 848, 266, 62]
+    rows:
+      - { name: sad }
+  - crop: [1210, 905, 326, 119]
+    rows:
+      - { name: pee }
+      - { name: poop }
+
+awog:
+  enabled: false # bật bằng --awog-sheet
+  cell: [132, 128]
+  gutter: 3
+  # Pet state → animation.
+  # `done` KHÔNG dùng `happy` dù khối đó có tim bay: generator vẽ ba pose của nó nhỏ dần
+  # (76px → 46px), mà cả sheet dùng chung một tỉ lệ nên con dino sẽ teo lại giữa chừng.
+  # `sit` 12 frame đều tăm tắp, đọc ra "xong việc, ngồi chờ" cũng đúng vai trò đó.
+  # `idle-alt` không dùng `shake` vì đám nước bắn làm khung phình gấp rưỡi → dino nhỏ đi.
+  map:
+    idle: idle
+    working: run
+    awaiting: jump
+    done: sit
+    offline: sleep
+    working-alt: walk
+    idle-alt: turn

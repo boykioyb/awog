@@ -27,6 +27,9 @@ type TrayDeps = {
   toggleBrowser: () => void
   // Toggle the styled popover at the clicked icon bounds.
   togglePopover: (bounds: Rectangle) => void
+  // Toggle the desktop pet (feature: desktop-pet) — the fallback way back when the
+  // pet was dragged somewhere unreachable or turned off and Settings feels far away.
+  togglePet: () => void
 }
 
 let tray: Tray | null = null
@@ -62,6 +65,7 @@ function buildMenu(): Menu {
   return Menu.buildFromTemplate([
     { label: 'Show AWOG', click: () => deps?.showWindow() },
     { label: 'Toggle browser window', click: () => deps?.toggleBrowser() },
+    { label: 'Toggle desktop pet', click: () => deps?.togglePet() },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ])

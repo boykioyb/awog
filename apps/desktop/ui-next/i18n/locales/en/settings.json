@@ -8,9 +8,7 @@
   "settings.nav.sessions": "Sessions",
   "settings.nav.keymap": "Keyboard",
   "settings.nav.about": "About",
-
   "settings.saved": "Settings saved",
-
   "settings.keymap.heading": "Keyboard shortcuts",
   "settings.keymap.sub": "Rebind the global shortcuts. Click Rebind, then press the new combo (Esc cancels). A binding needs a modifier (⌘/Ctrl, Alt or their combos).",
   "settings.keymap.rebind": "Rebind",
@@ -26,7 +24,6 @@
   "settings.keymap.act.openPrSummary": "Open PR summary",
   "settings.keymap.act.newSession": "New session",
   "settings.keymap.act.toggleFiles": "Toggle Files (in session)",
-
   "settings.appearance.heading": "Appearance",
   "settings.appearance.themeFamily.name": "Theme family",
   "settings.appearance.themeFamily.desc": "Base token set — AWOG or shadcn slate",
@@ -52,7 +49,6 @@
   "settings.appearance.font.desc": "Sans family",
   "settings.appearance.fontWeight.name": "Font weight",
   "settings.appearance.fontWeight.desc": "Body weight",
-
   "settings.defaults.heading": "Defaults for new sessions",
   "settings.defaults.model.name": "Model",
   "settings.defaults.model.desc": "Default model when creating a session",
@@ -72,7 +68,6 @@
   "settings.defaults.sendKey.desc": "Send-message key",
   "settings.defaults.autoTitle.name": "Auto-title",
   "settings.defaults.autoTitle.desc": "Auto-name the session after the first reply",
-
   "settings.models.accountsHeading": "LLM Accounts",
   "settings.models.connected": "connected",
   "settings.models.idle": "idle",
@@ -82,7 +77,6 @@
   "settings.models.openai": "OpenAI",
   "settings.models.google": "Google",
   "settings.models.note": "🔒 Keys are stored locally only (credentials.json chmod 600) and never leave the sidecar.",
-
   "settings.workspace.heading": "Workspace",
   "settings.workspace.path.name": "Workspace path",
   "settings.workspace.path.desc": "AWOG home (fixed; the sidecar always uses ~/.awog)",
@@ -91,7 +85,6 @@
   "settings.workspace.telemetry.desc": "Never sent externally except to the model API",
   "settings.workspace.templates.name": "Project templates",
   "settings.workspace.templates.desc": "Template directory",
-
   "settings.git.heading": "Git",
   "settings.git.autoFetch.name": "Auto-fetch",
   "settings.git.autoFetch.desc": "Fetch in the background periodically",
@@ -101,7 +94,6 @@
   "settings.git.autoCommit.desc": "Commit after each phase in Tasks",
   "settings.git.defaultBranch.name": "Default branch",
   "settings.git.defaultBranch.desc": "Default branch",
-
   "settings.sessions.heading": "Sessions",
   "settings.sessions.bubble.name": "Assistant bubble",
   "settings.sessions.bubble.desc": "Background bubble for replies",
@@ -113,13 +105,11 @@
   "settings.sessions.autoCompact.desc": "Auto-compact when context ≥ threshold",
   "settings.sessions.reducedMotion.name": "Reduced motion",
   "settings.sessions.reducedMotion.desc": "Reduce animation",
-
   "settings.about.heading": "About",
   "settings.about.appName": "AWOG",
   "settings.about.version": "v0.18.0 · Electron · Pi SDK runtime",
   "settings.about.checkUpdate": "Check for updates",
   "settings.about.tagline": "Artifact Workflow Orchestrate Guild — AI Team Operating System, local-first.",
-
   "settings.pricing.heading": "Model Pricing",
   "settings.pricing.intro": "Override per-model token prices used to compute cost on the Activity page. Edits apply only to this install.",
   "settings.pricing.loading": "Loading prices…",
@@ -137,5 +127,38 @@
   "settings.pricing.save": "Save prices",
   "settings.pricing.fetch": "Update from source",
   "settings.pricing.fetchedAt": "Updated {when}",
-  "settings.pricing.neverFetched": "Using bundled prices — fetch the latest from the source"
+  "settings.pricing.neverFetched": "Using bundled prices — fetch the latest from the source",
+  "settings.nav.pet": "Pet",
+  "settings.pet.heading": "Desktop pet",
+  "settings.pet.enabled.name": "Show pet",
+  "settings.pet.enabled.desc": "Floating status companion, always on top",
+  "settings.pet.gallery.heading": "Choose your pet",
+  "settings.pet.gallery.hint": "Drag the pet to move it · hover for details · click to keep them open",
+  "settings.pet.sprite.girl": "Girl",
+  "settings.pet.sprite.shiba": "Shiba",
+  "settings.pet.sprite.bichon": "Bichon",
+  "settings.pet.sprite.dino": "Dino",
+  "settings.pet.sprite.chicken": "Chicken",
+  "settings.pet.sprite.miku": "Miku",
+  "settings.pet.scale.name": "Size",
+  "settings.pet.scale.desc": "Pet + HUD scale",
+  "settings.pet.autoPeek.name": "Auto-peek",
+  "settings.pet.autoPeek.desc": "Open the HUD briefly when work needs you or finishes",
+  "settings.pet.quips.name": "Chatty",
+  "settings.pet.quips.desc": "Let the pet say something now and then",
+  "settings.pet.reset.name": "Position",
+  "settings.pet.reset.desc": "Reset puts the pet back in the screen corner",
+  "settings.pet.reset.action": "Reset",
+  "settings.pet.lines.heading": "What it says",
+  "settings.pet.lines.desc": "One line per quip. The pet picks at random from the selected group.",
+  "settings.pet.lines.reset": "Restore defaults",
+  "settings.pet.bucket.working": "Working",
+  "settings.pet.bucket.awaiting": "Needs you",
+  "settings.pet.bucket.done": "Done",
+  "settings.pet.bucket.idle": "Idle",
+  "settings.pet.bucket.offline": "Offline",
+  "settings.pet.bucket.reminder": "Reminders",
+  "settings.pet.reminder.name": "Periodic reminders",
+  "settings.pet.reminder.desc": "Nudges to drink water / stretch / rest your eyes",
+  "settings.pet.reminder.off": "Off"
 }

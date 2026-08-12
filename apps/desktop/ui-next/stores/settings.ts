@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import type { PetQuipBucket } from '~/utils/pet-quips'
 import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
 
 // Settings store (ui-next) — ports apps/desktop/ui/stores/settings.ts to the
@@ -165,6 +166,31 @@ export interface AppearanceExtras {
   composerSendKey: ComposerSendKey
 }
 
+// Desktop pet (docs/features/desktop-pet.md). Lives here because it is a pure UI
+// preference, but it is FUNCTIONAL in the main process (it creates/destroys a
+// window), so usePetStatus pushes it over IPC on every change.
+export interface PetSettings {
+  enabled: boolean
+  scale: PetScale
+  // Which built-in spritesheet (public/pet/<sprite>.png).
+  sprite: PetSprite
+  autoPeek: boolean
+  // Occasional speech bubbles.
+  quips: boolean
+  // User-edited lines per bucket (Settings → Pet). An empty/missing bucket falls back
+  // to the localised defaults — so an untouched install follows the app language, and
+  // an edited one is the user's own text.
+  quipLines: Partial<Record<PetQuipBucket, string[]>>
+  // Minutes between "drink water / stretch / rest your eyes" nudges. 0 = off.
+  reminderMinutes: number
+  // Last resting position in screen coordinates; null = default corner.
+  pos: { x: number; y: number } | null
+}
+export type PetScale = 1 | 1.25 | 1.5
+export const PET_SCALES: PetScale[] = [1, 1.25, 1.5]
+export type PetSprite = 'girl' | 'shiba' | 'bichon' | 'dino' | 'chicken' | 'miku'
+export const PET_SPRITES: PetSprite[] = ['girl', 'shiba', 'bichon', 'dino', 'chicken', 'miku']
+
 export const QUOTA_THRESHOLD_MIN = 50
 export const QUOTA_THRESHOLD_MAX = 99
 
@@ -258,6 +284,21 @@ const DEFAULT_APPEARANCE: AppearanceExtras = {
   composerSendKey: 'enter',
 }
 
+// Opt-in: a window floating above every other app is not something to turn on for
+// someone. Off until the user asks for it in Settings → Appearance.
+const DEFAULT_PET: PetSettings = {
+  enabled: false,
+  scale: 1,
+  sprite: 'girl',
+  autoPeek: true,
+  quips: true,
+  quipLines: {},
+  reminderMinutes: 30,
+  pos: null,
+}
+
+export const PET_REMINDER_CHOICES = [0, 15, 30, 60] as const
+
 // Workspace panel: per-view dock side. Default every view to the right column;
 // Terminal docks at the bottom (full-width under the chat) by default.
 const DEFAULT_WORKSPACE_PANEL: WorkspacePanelLayout = {
@@ -290,6 +331,7 @@ interface PersistShape {
   quota: QuotaWarningSettings
   autoUpdate: AutoUpdateSettings
   appearance: AppearanceExtras
+  pet: PetSettings
   workspacePanel: WorkspacePanelLayout
   githubAccount: string
   githubAutoFetchMs: number
@@ -360,6 +402,11 @@ export const useSettingsStore = defineStore('settings', () => {
     ...persisted.autoUpdate,
   })
   const appearance = reactive<AppearanceExtras>({ ...DEFAULT_APPEARANCE, ...persisted.appearance })
+  const pet = reactive<PetSettings>({ ...DEFAULT_PET, ...persisted.pet })
+  // A pack can be dropped between releases; a persisted name that no longer ships
+  // would render an empty sprite (the CSS class simply wouldn't exist). Clamp once,
+  // here, so every consumer — pet window and Settings gallery — agrees.
+  if (!PET_SPRITES.includes(pet.sprite)) pet.sprite = PET_SPRITES[0]!
   // Merge dock map field-by-field so a newly-added view inherits its default side
   // even when an older persisted blob only listed the original views.
   const workspacePanel = reactive<WorkspacePanelLayout>({
@@ -388,6 +435,7 @@ export const useSettingsStore = defineStore('settings', () => {
       quota,
       autoUpdate,
       appearance,
+      pet,
       workspacePanel,
       githubAccount,
       githubAutoFetchMs,
@@ -403,6 +451,7 @@ export const useSettingsStore = defineStore('settings', () => {
         quota,
         autoUpdate,
         appearance,
+        pet,
         workspacePanel,
         githubAccount: githubAccount.value,
         githubAutoFetchMs: githubAutoFetchMs.value,
@@ -609,6 +658,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const updateQuota = (patch: Partial<QuotaWarningSettings>) => Object.assign(quota, patch)
   const updateAutoUpdate = (patch: Partial<AutoUpdateSettings>) => Object.assign(autoUpdate, patch)
   const updateAppearance = (patch: Partial<AppearanceExtras>) => Object.assign(appearance, patch)
+  const updatePet = (patch: Partial<PetSettings>) => Object.assign(pet, patch)
   const updateTranslate = (patch: Partial<TranslateSettings>) => Object.assign(translate, patch)
   const setWorkspacePath = (path: string) => {
     workspacePath.value = path
@@ -644,6 +694,7 @@ export const useSettingsStore = defineStore('settings', () => {
     quota,
     autoUpdate,
     appearance,
+    pet,
     workspacePanel,
     githubAccount,
     githubAutoFetchMs,
@@ -675,6 +726,7 @@ export const useSettingsStore = defineStore('settings', () => {
     updateQuota,
     updateAutoUpdate,
     updateAppearance,
+    updatePet,
     updateTranslate,
     setWorkspacePath,
     setGithubAccount,

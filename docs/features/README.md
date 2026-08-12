@@ -31,6 +31,7 @@
 | 23 | [office-preview](./office-preview.md) | Implemented (ui-next) — xem `.docx`/`.xlsx` trong PreviewModal, parser tự viết |
 | 24 | [preview-popout-window](./preview-popout-window.md) | Implemented (ui-next + electron) — mở file ra cửa sổ OS riêng, nhiều cửa sổ cùng lúc |
 | 25 | [session-popout-window](./session-popout-window.md) | Implemented (ui-next + electron) — mở session ra cửa sổ OS riêng, hand-off quyền sở hữu |
+| 26 | [desktop-pet](./desktop-pet.md) | P1 implemented (ui-next + electron) — pet nổi trên mọi cửa sổ + mini-HUD, opt-in ở Settings → Appearance |
 
 ## Template
 

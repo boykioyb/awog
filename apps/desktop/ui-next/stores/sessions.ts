@@ -977,6 +977,18 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
+  // "Coming back to the window is reading the open session" needs a DWELL, not an
+  // instant clear: the click that raises the app is usually aimed at something ELSE
+  // (a tray/pet item, or a different session in the list). Clearing on the focus
+  // event itself marks the previously-open session read for a click the user never
+  // meant for it — two finished sessions, you open one, both lose their dot.
+  const READ_DWELL_MS = 500
+  let readDwellTimer: ReturnType<typeof setTimeout> | null = null
+  function cancelReadDwell(): void {
+    if (readDwellTimer) clearTimeout(readDwellTimer)
+    readDwellTimer = null
+  }
+
   // Open a session AND sync the project tab + per-tab memory to it. The single
   // internal entry point for every "open a session" path (setActive, create,
   // createForTask, fork, the remove fallback) — so selecting a session ANYWHERE
@@ -985,6 +997,10 @@ export const useSessionsStore = defineStore('sessions', () => {
   function activate(id: number) {
     const s = byId(id)
     if (!s) return
+    // Opening ANY session settles what that raising click was for — the pending
+    // "focus means I read the open one" clear is void. This is what makes the fix
+    // deterministic rather than a race against the dwell timer.
+    cancelReadDwell()
     activeId.value = id
     s.unread = false
     const proj = s.project
@@ -3575,10 +3591,24 @@ export const useSessionsStore = defineStore('sessions', () => {
     // but coming back to look at it IS reading it — the symmetric clear. Background
     // sessions keep their dot until opened. App-lifetime listener (store is a
     // singleton), so no teardown — matches subscribe()/hydrate() above.
+    //
+    // Deferred by READ_DWELL_MS and re-checked: the click that raised the app may be
+    // on its way to a DIFFERENT session (tray/pet item, another row in the list), and
+    // that must not clear the dot of whatever was open. activate() cancels the pending
+    // clear outright, so any real navigation wins regardless of how long it takes.
     if (typeof window !== 'undefined') {
       window.addEventListener('focus', () => {
         const s = active.value
-        if (s?.unread) s.unread = false
+        if (!s?.unread) return
+        const id = s.id
+        cancelReadDwell()
+        readDwellTimer = setTimeout(() => {
+          readDwellTimer = null
+          const still = byId(id)
+          if (!still?.unread || activeId.value !== id) return
+          if (document.hidden || !document.hasFocus()) return
+          still.unread = false
+        }, READ_DWELL_MS)
       })
     }
   } else {

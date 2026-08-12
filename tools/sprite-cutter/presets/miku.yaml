@@ -1,0 +1,118 @@
+# Miku sheet (assets/miku-sheet.png) — AI-generated, 1254×1254, 33 khối có caption.
+#
+# Tấm phức tạp nhất trong ba tấm: hai cột dài + ba DẢI khối nhỏ nằm cạnh nhau (mỗi dải
+# 3–4 khối) + một GRID biểu cảm 4×3 + hàng đạo cụ + hàng hiệu ứng.
+#
+# Bốn caption không dò được vì dính vào chính hiệu ứng của nó (SING, SPECIAL, ANGRY,
+# WAVE). Không sao: khối nào chỉ có một hàng thì cắt riêng một section, không có chip
+# thì rơi về gom cụm theo Y — vẫn ra đúng một hàng.
+#
+# Toạ độ crop lấy từ overlay `--debug`.
+
+fps: 12
+frames: 12
+padding: 3
+
+matte:
+  strategy: auto
+  threshold: 40
+
+sections:
+  # ── Cột trái: 11 hàng dài, caption xếp thẳng cột ở x=11 ──────────────────────
+  - crop: [0, 0, 752, 1000]
+    rows:
+      - { name: idle }
+      - { name: walk }
+      - { name: run }
+      # Bay lơ lửng: đây là hàng airborne THẬT, giữ nguyên độ cao thay vì ép xuống đất.
+      - { name: hover, align_y: row, lift_budget: 0.2 }
+      - { name: jump, lift_budget: 0.3 }
+      - { name: fall, align_y: row, lift_budget: 0.3 }
+      - { name: land }
+      - { name: turn }
+      - { name: sit, mode: pingpong }
+      - { name: lie_down, mode: pingpong }
+      - { name: sleep }
+
+  # ── Cột phải: mỗi khối một section vì chúng cao thấp khác nhau ───────────────
+  - crop: [752, 0, 502, 110]
+    rows: [attack_leek]
+  # Tia beam kéo dài sang phải: neo trọng tâm sẽ đẩy Miku lùi trái mỗi frame.
+  - crop: [752, 110, 502, 102]
+    rows:
+      - { name: attack_beam, align_x: bbox }
+  - crop: [752, 212, 502, 100]
+    rows: [sing]
+  - crop: [752, 312, 502, 110]
+    rows: [dance]
+  - crop: [752, 422, 502, 108]
+    rows: [spin]
+  - crop: [752, 530, 502, 100]
+    rows: [teleport]
+  - crop: [752, 630, 502, 98]
+    rows: [shield]
+  - crop: [752, 728, 502, 117]
+    rows: [special]
+
+  # ── Dải emote 1: bốn khối cạnh nhau, dùng chung dải Y ⇒ bốn section ──────────
+  - crop: [752, 846, 120, 107]
+    rows: [happy]
+  - crop: [872, 846, 120, 107]
+    rows: [sad]
+  - crop: [992, 845, 130, 108]
+    rows: [angry]
+  - crop: [1122, 846, 132, 107]
+    rows: [surprised]
+
+  # ── Dải emote 2 ─────────────────────────────────────────────────────────────
+  - crop: [752, 955, 190, 76]
+    rows: [eat]
+  - crop: [942, 955, 120, 76]
+    rows: [read]
+  - crop: [1062, 955, 192, 76]
+    rows: [play]
+
+  # ── Dải emote 3 ─────────────────────────────────────────────────────────────
+  - crop: [752, 1030, 178, 95]
+    rows: [wave]
+  - crop: [930, 1030, 150, 95]
+    rows: [cheer]
+  - crop: [1080, 1030, 174, 95]
+    rows: [cry]
+
+  # ── Grid biểu cảm 4×3 (chân dung, không phải animation) ──────────────────────
+  # Một section cho cả grid là sai: bộ tách frame sắp theo X nên ba dòng sẽ xen kẽ
+  # nhau. Mỗi dòng một section.
+  - crop: [0, 1026, 420, 62]
+    rows: [expressions_1]
+  - crop: [0, 1090, 420, 74]
+    rows: [expressions_2]
+  - crop: [0, 1155, 420, 75]
+    rows: [expressions_3]
+
+  # ── Tương tác + đạo cụ + hiệu ứng ────────────────────────────────────────────
+  - crop: [400, 1010, 360, 100]
+    rows: [interact]
+  - crop: [400, 1150, 440, 104]
+    rows: [item]
+  # Hiệu ứng nằm hai dòng so le. Ở section riêng, ngưỡng diện tích tính lại theo
+  # chính khối này nên các sprite nhỏ mới được coi là "pose" thay vì bị gộp làm bụi.
+  - crop: [752, 1140, 502, 60]
+    rows: [effects_1]
+  - crop: [752, 1188, 502, 66]
+    rows: [effects_2]
+
+awog:
+  enabled: false # bật bằng --awog-sheet
+  cell: [132, 128]
+  gutter: 3
+  map:
+    idle: idle
+    working: run
+    awaiting: jump
+    done: sit
+    offline: sleep
+    working-alt: walk
+    # Đổi cảnh lúc rảnh: Miku nhảy múa. `wave`/`cheer` hợp vai hơn nhưng mỗi khối chỉ
+    # có 1–2 pose, phóng lên 12 frame thì đứng hình.
+    idle-alt: dance

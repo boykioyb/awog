@@ -1,6 +1,7 @@
 <template>
   <div class="setpane">
     <SettingsAppearance v-if="active === 'appearance'" />
+    <SettingsPet v-else-if="active === 'pet'" />
     <SettingsDefaults v-else-if="active === 'defaults'" />
     <SettingsModels v-else-if="active === 'models'" />
     <SettingsPricing v-else-if="active === 'pricing'" />

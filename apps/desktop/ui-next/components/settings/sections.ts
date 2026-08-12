@@ -4,6 +4,7 @@
 
 export const SETTINGS_SECTIONS = [
   { id: 'appearance', labelKey: 'settings.nav.appearance', icon: 'settings' },
+  { id: 'pet', labelKey: 'settings.nav.pet', icon: 'smile' },
   { id: 'defaults', labelKey: 'settings.nav.defaults', icon: 'rules' },
   { id: 'models', labelKey: 'settings.nav.models', icon: 'agents' },
   { id: 'pricing', labelKey: 'settings.nav.pricing', icon: 'act' },

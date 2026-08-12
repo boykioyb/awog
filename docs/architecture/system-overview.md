@@ -47,6 +47,7 @@ AWOG là một **desktop application** đóng gói bằng Electron, với Nuxt 4
 - Tạo `BrowserWindow` load Nuxt SPA: dev `http://localhost:3031`; prod custom protocol `app://` phục vụ `apps/desktop/ui-next/.output/public`.
 - Quản lý cửa sổ chính (mở, đóng, minimize), single-instance.
 - System tray với menu: mở app, xem task đang chạy, quit.
+- Cửa sổ phụ cùng load SPA: tray popover (`/tray-popover`), preview/session popout, và **desktop pet** (`/pet` — transparent + always-on-top + click-through, [spec](../features/desktop-pet.md)). Tất cả dùng chung preload + `applyNavigationGuards`.
 - Native notification khi task hoàn tất hoặc cần approval.
 - Spawn và giám sát Node.js engine; relay JSON-RPC envelope renderer ⇄ engine.
 - Đóng cửa sổ **không** thoát ứng dụng — engine tiếp tục chạy ở tray.

@@ -71,6 +71,11 @@ useNativeNotify()
 // attention) + route tray menu clicks. No-op outside Electron.
 useTrayStatus()
 
+// Drive the desktop pet window (ambient status sprite + mini-HUD): push prefs +
+// status model, execute the commands it sends back. No-op when disabled/outside
+// Electron.
+usePetStatus()
+
 // App-lifetime global shortcuts: ⌘J terminal · ⌘G Git modal · ⌘T new session ·
 // ⌘H session Files view (self-registers its own window keydown listener).
 useGlobalShortcuts()

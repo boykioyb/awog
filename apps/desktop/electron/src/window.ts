@@ -140,6 +140,13 @@ export function createMainWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show())
 
+  // Chromium keeps zoom per ORIGIN, shared by every window on it — so a stray
+  // setZoomFactor anywhere (an earlier build of the pet window did exactly this)
+  // leaves the whole app scaled, and it survives a restart. AWOG never zooms
+  // deliberately, so pin the main window back to 1: a no-op normally, a repair for
+  // an install that already caught it.
+  win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(1))
+
   applyNavigationGuards(win)
 
   // DevTools toggle (F12 / Ctrl+Shift+I / Cmd+Opt+I) — works in the PACKAGED app

@@ -8,9 +8,7 @@
   "settings.nav.sessions": "Session",
   "settings.nav.keymap": "Bàn phím",
   "settings.nav.about": "Giới thiệu",
-
   "settings.saved": "Đã lưu cài đặt",
-
   "settings.keymap.heading": "Phím tắt",
   "settings.keymap.sub": "Chỉnh lại các phím tắt toàn cục. Bấm Đổi phím rồi nhấn tổ hợp mới (Esc để huỷ). Tổ hợp phải có phím bổ trợ (⌘/Ctrl, Alt hoặc kết hợp).",
   "settings.keymap.rebind": "Đổi phím",
@@ -26,7 +24,6 @@
   "settings.keymap.act.openPrSummary": "Mở PR summary",
   "settings.keymap.act.newSession": "Session mới",
   "settings.keymap.act.toggleFiles": "Bật/tắt Files (trong session)",
-
   "settings.appearance.heading": "Giao diện",
   "settings.appearance.themeFamily.name": "Bộ giao diện",
   "settings.appearance.themeFamily.desc": "Bộ token nền — AWOG hoặc shadcn slate",
@@ -52,7 +49,6 @@
   "settings.appearance.font.desc": "Họ phông sans",
   "settings.appearance.fontWeight.name": "Độ đậm chữ",
   "settings.appearance.fontWeight.desc": "Độ đậm nội dung",
-
   "settings.defaults.heading": "Mặc định cho session mới",
   "settings.defaults.model.name": "Model",
   "settings.defaults.model.desc": "Model mặc định khi tạo session",
@@ -72,7 +68,6 @@
   "settings.defaults.sendKey.desc": "Tổ hợp phím để gửi tin nhắn",
   "settings.defaults.autoTitle.name": "Tự đặt tên session",
   "settings.defaults.autoTitle.desc": "Sinh tên session sau reply đầu tiên",
-
   "settings.models.accountsHeading": "Tài khoản LLM",
   "settings.models.connected": "đã kết nối",
   "settings.models.idle": "nghỉ",
@@ -82,7 +77,6 @@
   "settings.models.openai": "OpenAI",
   "settings.models.google": "Google",
   "settings.models.note": "🔒 Key chỉ lưu local (credentials.json chmod 600), không rời sidecar.",
-
   "settings.workspace.heading": "Workspace",
   "settings.workspace.path.name": "Đường dẫn workspace",
   "settings.workspace.path.desc": "Thư mục gốc AWOG (cố định; sidecar luôn dùng ~/.awog)",
@@ -91,7 +85,6 @@
   "settings.workspace.telemetry.desc": "Không gửi ra ngoài trừ API của model",
   "settings.workspace.templates.name": "Mẫu dự án",
   "settings.workspace.templates.desc": "Thư mục chứa mẫu",
-
   "settings.git.heading": "Git",
   "settings.git.autoFetch.name": "Tự fetch",
   "settings.git.autoFetch.desc": "Tự fetch ngầm định kỳ",
@@ -101,7 +94,6 @@
   "settings.git.autoCommit.desc": "Commit sau mỗi phase trong Tasks",
   "settings.git.defaultBranch.name": "Nhánh mặc định",
   "settings.git.defaultBranch.desc": "Nhánh tạo khi init repo",
-
   "settings.sessions.heading": "Session",
   "settings.sessions.bubble.name": "Bong bóng assistant",
   "settings.sessions.bubble.desc": "Nền bong bóng cho reply",
@@ -113,13 +105,11 @@
   "settings.sessions.autoCompact.desc": "Tự nén khi ngữ cảnh ≥ ngưỡng",
   "settings.sessions.reducedMotion.name": "Giảm chuyển động",
   "settings.sessions.reducedMotion.desc": "Giảm hiệu ứng động",
-
   "settings.about.heading": "Giới thiệu",
   "settings.about.appName": "AWOG",
   "settings.about.version": "v0.18.0 · Electron · Pi SDK runtime",
   "settings.about.checkUpdate": "Kiểm tra cập nhật",
   "settings.about.tagline": "Artifact Workflow Orchestrate Guild — AI Team Operating System, local-first.",
-
   "settings.pricing.heading": "Giá model",
   "settings.pricing.intro": "Ghi đè giá token theo từng model để tính chi phí ở trang Hoạt động. Thay đổi chỉ áp dụng cho bản cài này.",
   "settings.pricing.loading": "Đang tải bảng giá…",
@@ -137,5 +127,38 @@
   "settings.pricing.save": "Lưu giá",
   "settings.pricing.fetch": "Cập nhật từ nguồn",
   "settings.pricing.fetchedAt": "Cập nhật {when}",
-  "settings.pricing.neverFetched": "Đang dùng giá đóng gói sẵn — fetch bản mới nhất từ nguồn"
+  "settings.pricing.neverFetched": "Đang dùng giá đóng gói sẵn — fetch bản mới nhất từ nguồn",
+  "settings.nav.pet": "Pet",
+  "settings.pet.heading": "Desktop pet",
+  "settings.pet.enabled.name": "Hiện pet",
+  "settings.pet.enabled.desc": "Pet trạng thái nổi trên mọi cửa sổ",
+  "settings.pet.gallery.heading": "Chọn pet",
+  "settings.pet.gallery.hint": "Kéo pet để đổi chỗ · rê chuột xem chi tiết · bấm để ghim",
+  "settings.pet.sprite.girl": "Cô gái",
+  "settings.pet.sprite.shiba": "Shiba",
+  "settings.pet.sprite.bichon": "Chó xù",
+  "settings.pet.sprite.dino": "Khủng long",
+  "settings.pet.sprite.chicken": "Gà mái",
+  "settings.pet.sprite.miku": "Miku",
+  "settings.pet.scale.name": "Kích thước",
+  "settings.pet.scale.desc": "Cỡ pet + HUD",
+  "settings.pet.autoPeek.name": "Tự hé HUD",
+  "settings.pet.autoPeek.desc": "Hé HUD vài giây khi có việc cần bạn hoặc vừa xong",
+  "settings.pet.quips.name": "Nói linh tinh",
+  "settings.pet.quips.desc": "Thỉnh thoảng cho pet lảm nhảm vài câu",
+  "settings.pet.reset.name": "Vị trí",
+  "settings.pet.reset.desc": "Đặt lại đưa pet về góc màn hình",
+  "settings.pet.reset.action": "Đặt lại",
+  "settings.pet.lines.heading": "Lời thoại",
+  "settings.pet.lines.desc": "Mỗi dòng một câu. Pet bốc ngẫu nhiên trong nhóm đang chọn.",
+  "settings.pet.lines.reset": "Khôi phục mặc định",
+  "settings.pet.bucket.working": "Đang chạy",
+  "settings.pet.bucket.awaiting": "Cần duyệt",
+  "settings.pet.bucket.done": "Đã xong",
+  "settings.pet.bucket.idle": "Rảnh",
+  "settings.pet.bucket.offline": "Ngoại tuyến",
+  "settings.pet.bucket.reminder": "Nhắc nhở",
+  "settings.pet.reminder.name": "Nhắc nhở định kỳ",
+  "settings.pet.reminder.desc": "Nhắc uống nước / duỗi lưng / nghỉ mắt sau mỗi khoảng thời gian",
+  "settings.pet.reminder.off": "Tắt"
 }

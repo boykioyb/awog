@@ -6,6 +6,7 @@ import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
 import { loadShellEnv } from './shell-env'
 import { registerMediaProtocol } from './media'
 import { startRemoteGateway, stopRemoteGateway } from './remote-gateway'
+import { petWindow, type PetCommand, type PetPrefs, type PetStatus } from './pet-window'
 import { trayPopover } from './popover'
 import { setupTray, updateTray, type TrayCommand, type TrayModel } from './tray'
 import { setupUpdater } from './updater'
@@ -33,6 +34,12 @@ function openMainWindow(): void {
     // A hard window close skips the renderer's onBeforeUnmount, so end any
     // active log-tail poll here rather than leaving watchFile running.
     stopLogTail()
+    // Nobody computes the pet model anymore. macOS keeps the app alive, so the pet
+    // stays up (greyed) and its click re-opens the window; elsewhere the app quits
+    // on last window, so the pet must go too — an open pet would keep
+    // `window-all-closed` from ever firing and the app would hang in the tray.
+    if (process.platform === 'darwin') petWindow.markOffline()
+    else petWindow.close()
   })
 }
 
@@ -55,12 +62,44 @@ function setupTrayBridge(): void {
     showWindow,
     toggleBrowser: () => (browser.isVisible() ? browser.hide() : browser.show()),
     togglePopover: (bounds) => trayPopover.toggle(bounds),
+    togglePet: () => {
+      // The pref lives in the renderer, so the tray asks it to flip rather than
+      // creating/destroying the window behind its back. With no main window there is
+      // nobody to ask — just bring the app back; the pet follows its saved pref.
+      if (!mainWindow) {
+        showWindow()
+        return
+      }
+      mainWindow.webContents.send('pet:command', { kind: 'toggle' } satisfies PetCommand)
+    },
   })
   ipcMain.on('tray:update', (_e, model: TrayModel) => updateTray(model))
   ipcMain.on('tray:navigate', (_e, cmd: TrayCommand) => {
     trayPopover.hide()
     showWindow()
     getWindow()?.webContents.send('tray:command', cmd)
+  })
+}
+
+// Desktop pet (feature: desktop-pet). The main window owns the state, so it pushes
+// prefs (create/resize/move) + the status model; the pet window sends back clicks,
+// its hit-test result, and drag phases. Only an `open` command raises the app — an
+// approval must resolve without yanking the user out of what they are doing.
+function setupPetBridge(): void {
+  ipcMain.on('pet:enabled', (_e, prefs: PetPrefs) => petWindow.apply(prefs))
+  ipcMain.on('pet:update', (_e, status: PetStatus) => petWindow.push(status))
+  ipcMain.on('pet:interactive', (_e, on: boolean) => petWindow.setInteractive(!!on))
+  ipcMain.on('pet:drag', (_e, phase: 'start' | 'end') => {
+    if (phase === 'start') {
+      petWindow.startDrag()
+      return
+    }
+    const pos = petWindow.endDrag()
+    if (pos) getWindow()?.webContents.send('pet:moved', pos)
+  })
+  ipcMain.on('pet:navigate', (_e, cmd: PetCommand) => {
+    if (cmd?.kind === 'open') showWindow()
+    getWindow()?.webContents.send('pet:command', cmd)
   })
 }
 
@@ -102,6 +141,7 @@ if (!gotLock) {
     registerLogTailIpc(getWindow)
     openMainWindow()
     setupTrayBridge()
+    setupPetBridge()
 
     app.on('activate', () => {
       // macOS: re-create the MAIN window when the dock icon is clicked and it's gone.
@@ -118,6 +158,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     browser.close()
+    petWindow.close()
     stopRemoteGateway()
     engine.stop()
   })

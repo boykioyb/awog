@@ -1,0 +1,67 @@
+# Shiba sheet (assets/shiba-sheet.png) — AI-generated, 1536×1024, 15 captioned rows.
+#
+# Row names are pinned here rather than guessed: the sheet's row 8 is PEE, while the
+# canonical order would have called it "attack". Captions are detected as *anchors*
+# (that is what separates the rows), never read as text.
+
+fps: 12
+
+# Every row is normalised to 12 frames. Two reasons, both AWOG-specific:
+#   • one column count = one set of CSS numbers for the whole pack (PetSprite.vue writes
+#     `steps(n)` and the keyframe end offset once);
+#   • an even count keeps a gait symmetric — 13 frames splits a two-beat walk cycle
+#     6.5/6.5 and the dog limps.
+# The source rows hold 13–19 poses, so this only ever drops frames, never invents them.
+frames: 12
+
+# Gutter around each cell; the fixed canvas is the AWOG cell, so padding stays small.
+padding: 3
+
+matte:
+  # The sheet already ships a clean alpha channel, so no flood-fill is needed. 40 keeps
+  # the antialiased rim and drops the soft brown haze the generator left behind.
+  strategy: auto
+  threshold: 40
+
+# `mode: pingpong` marks a row that is a one-way TRANSITION rather than a cycle — this
+# generator drew several rows as a turnaround (front view rotating to back view), and the
+# one captioned IDLE is one of them. Looping it snaps back to the front once per cycle;
+# playing it out and back reads as the dog turning round and turning back. Cannot be
+# auto-detected on this art (see processor/cycle.py) — check the GIF, then set the flag.
+rows:
+  - { name: idle, mode: pingpong }
+  - { name: walk }
+  - { name: run }
+  - { name: sprint }
+  # Airborne rows: keep the arc instead of nailing the feet to the ground (STEP 6).
+  # `jump` is detected as airborne on its own; `fall` is not — its source lift ends as
+  # high as it peaks, which is indistinguishable from the diagonal drift every other row
+  # has, so it is pinned here by hand.
+  - { name: jump, lift_budget: 0.3 }
+  - { name: fall, align_y: row, lift_budget: 0.3 }
+  - { name: land }
+  - { name: turn }
+  # The stream leaves the body far to one side; a centroid anchor would drag the dog
+  # sideways frame by frame, so this row is centred on its bounding box instead.
+  - { name: pee, align_x: bbox }
+  - { name: poop, align_x: bbox }
+  - { name: shake }
+  - { name: roll, lift_budget: 0.3 }
+  - { name: sit, mode: pingpong }
+  - { name: lie_down, mode: pingpong }
+  - { name: sleep }
+
+awog:
+  enabled: false # turned on by --awog-sheet
+  cell: [132, 128]
+  gutter: 3
+  # Pet state → animation. The states are fixed by PetSprite.vue; the mapping is the
+  # product decision (docs/features/desktop-pet.md § Trạng thái pet).
+  map:
+    idle: idle # breathing, standing
+    working: run # busy
+    awaiting: jump # has to catch the eye across the desktop
+    done: sit # calm, "finished and waiting"
+    offline: sleep # only frame 0 is ever shown (the row has no animation)
+    working-alt: walk # scene change during a long turn
+    idle-alt: roll # scene change while nothing is happening

@@ -39,3 +39,16 @@ Thumbs.db
 
 # Local work checklists (personal, not shared)
 tasks/
+
+# Desktop pet artwork that is licensed for USE but not for REDISTRIBUTION.
+# This repo is public, so the raw sheet must not be committed — it stays on the
+# machine that built it. See apps/desktop/ui-next/public/pet/CREDITS.md.
+# `shiba.png` and `dino.png` are NOT here: they are generated art we own, cut by
+# tools/sprite-cutter.
+apps/desktop/ui-next/public/pet/bichon.png
+
+# Sprite-cutter working output (frames, GIFs, contact sheets) — regenerate with the
+# command in tools/sprite-cutter/README.md.
+tools/sprite-cutter/out/
+__pycache__/
+*.pyc

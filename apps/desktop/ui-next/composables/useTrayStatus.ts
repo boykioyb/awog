@@ -9,6 +9,7 @@ import type { AwogTrayModel } from '~/types/awog-bridge'
 //   1. push the glanceable indicator (running count → macOS title, tooltip)
 //   2. route tray/popover item clicks (tray:command) into the main app
 // Call once globally (in the layout). No-op when the bridge is absent (browser dev).
+// The counting rule + the routing are shared with the desktop pet (useStatusSummary).
 
 export function useTrayStatus() {
   const bridge = typeof window !== 'undefined' ? window.awog : undefined
@@ -17,31 +18,27 @@ export function useTrayStatus() {
   const { t } = useI18n()
   const sessions = useSessionsStore()
   const tasks = useTasksStore()
-  const { openActivity } = useActivityModal()
+  const { running, attention, unread } = useStatusCounts()
+  const { openTarget } = useStatusRouting()
 
   // Ensure the stores have data even if the user never opened Sessions/Tasks.
   void sessions.hydrate?.()
   void tasks.loadTasks()
 
-  const model = computed<AwogTrayModel>(() => {
-    const running =
-      tasks.runningTasks.length + sessions.sessions.filter((s) => s.status === 'streaming').length
-    const attention =
-      tasks.awaitingTasks.length + sessions.sessions.filter((s) => s.status === 'awaiting').length
-    // Finished-but-unread sessions: surfaced so the tray flags "go read it" even
-    // after nothing is actively running (the gap the user hit — a done session
-    // left the menu bar blank). Drives a dot in the macOS title + the tooltip.
-    const unread = sessions.sessions.filter((s) => s.unread).length
-    return {
-      macTitle: running > 0 ? `${running}▶` : attention + unread > 0 ? '●' : '',
-      tooltip:
-        running || attention || unread
-          ? t('tray.tooltip.busy', { running, attention, unread })
-          : 'AWOG',
-      // Dock badge count (Telegram-style) — the finished-but-unread sessions.
-      unreadCount: unread,
-    }
-  })
+  const model = computed<AwogTrayModel>(() => ({
+    macTitle:
+      running.value > 0 ? `${running.value}▶` : attention.value + unread.value > 0 ? '●' : '',
+    tooltip:
+      running.value || attention.value || unread.value
+        ? t('tray.tooltip.busy', {
+            running: running.value,
+            attention: attention.value,
+            unread: unread.value,
+          })
+        : 'AWOG',
+    // Dock badge count (Telegram-style) — the finished-but-unread sessions.
+    unreadCount: unread.value,
+  }))
 
   let pushTimer: ReturnType<typeof setTimeout> | null = null
   const stopModel = watch(
@@ -54,20 +51,7 @@ export function useTrayStatus() {
   )
 
   // Route clicks coming from the tray menu / popover into the main app.
-  const offCommand = bridge.onTrayCommand?.((cmd) => {
-    if (cmd.kind === 'activity') {
-      openActivity()
-    } else if (cmd.kind === 'session') {
-      // Resolve by the stable engine id — the popover sent the sidecar id, not its
-      // own renderer's numeric client id (which never matches this store).
-      // openByEngineId hydrates first, so it works even before Sessions has loaded.
-      navigateTo('/sessions')
-      void sessions.openByEngineId(cmd.engineId)
-    } else if (cmd.kind === 'task') {
-      tasks.selectTask(cmd.id)
-      navigateTo('/tasks')
-    }
-  })
+  const offCommand = bridge.onTrayCommand?.((cmd) => openTarget(cmd))
 
   onScopeDispose(() => {
     if (pushTimer) clearTimeout(pushTimer)

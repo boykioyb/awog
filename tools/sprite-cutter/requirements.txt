@@ -1,0 +1,5 @@
+numpy>=1.24
+Pillow>=10
+scipy>=1.10
+opencv-python>=4.8   # only needed when the sheet has no alpha (flood-fill matte)
+PyYAML>=6            # only needed for YAML configs; JSON works without it

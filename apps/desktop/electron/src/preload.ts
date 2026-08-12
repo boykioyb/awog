@@ -32,6 +32,42 @@ type TrayCommand =
   | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
 type TrayModel = { macTitle: string; tooltip: string; unreadCount: number }
+// Desktop pet (docs/features/desktop-pet.md). Same shape as pet-window.ts — this
+// preload is sandboxed and cannot import main-process modules, so the types are
+// mirrored here (as the tray ones are).
+type PetState = 'idle' | 'working' | 'awaiting' | 'done' | 'offline'
+type PetSprite = 'girl' | 'shiba' | 'bichon' | 'dino' | 'chicken' | 'miku'
+type PetItem = {
+  kind: 'session' | 'task'
+  id: string
+  title: string
+  hint: 'awaiting' | 'running' | 'unread'
+  percent?: number
+  preview?: string
+}
+type PetPermission = { requestId: string; toolName: string; target: string }
+type PetModel = {
+  state: PetState
+  counts: { running: number; attention: number; unread: number }
+  items: PetItem[]
+  permission: PetPermission | null
+  autoPeek: boolean
+  sprite: PetSprite
+  scale: number
+  quips: boolean
+  quipLines: string[]
+  reminders: string[]
+  reminderMs: number
+  facing: 'left' | 'right'
+}
+// The main window pushes everything EXCEPT facing — only main knows where the
+// window sits (see pet-window.ts).
+type PetStatus = Omit<PetModel, 'facing'>
+type PetCommand =
+  | { kind: 'open'; target: TrayCommand }
+  | { kind: 'permission'; requestId: string; decision: 'allow' | 'deny' }
+  | { kind: 'toggle' }
+type PetPrefs = { enabled: boolean; scale: number; pos: { x: number; y: number } | null }
 // Mobile Remote Control (ADR 0067). Public device metadata only — no tokenHash.
 type RemoteDevice = {
   id: string
@@ -166,6 +202,41 @@ const awog = {
   // Popover window forwards a clicked item; main relays it to the main window.
   sendTrayCommand: (cmd: TrayCommand): void => {
     ipcRenderer.send('tray:navigate', cmd)
+  },
+
+  // Desktop pet (desktop-pet). MAIN WINDOW side: push the prefs main acts on
+  // (create/resize/move) + the status model, take back the pet's clicks and the
+  // resting position after a drag. PET side: receive the model, send commands,
+  // report the hit-test + drag phases.
+  sendPetPrefs: (prefs: PetPrefs): void => {
+    ipcRenderer.send('pet:enabled', prefs)
+  },
+  sendPetUpdate: (status: PetStatus): void => {
+    ipcRenderer.send('pet:update', status)
+  },
+  onPetModel(handler: (model: PetModel) => void): () => void {
+    const listener = (_e: unknown, model: PetModel): void => handler(model)
+    ipcRenderer.on('pet:model', listener)
+    return () => ipcRenderer.removeListener('pet:model', listener)
+  },
+  sendPetCommand: (cmd: PetCommand): void => {
+    ipcRenderer.send('pet:navigate', cmd)
+  },
+  onPetCommand(handler: (cmd: PetCommand) => void): () => void {
+    const listener = (_e: unknown, cmd: PetCommand): void => handler(cmd)
+    ipcRenderer.on('pet:command', listener)
+    return () => ipcRenderer.removeListener('pet:command', listener)
+  },
+  onPetMoved(handler: (pos: { x: number; y: number }) => void): () => void {
+    const listener = (_e: unknown, pos: { x: number; y: number }): void => handler(pos)
+    ipcRenderer.on('pet:moved', listener)
+    return () => ipcRenderer.removeListener('pet:moved', listener)
+  },
+  setPetInteractive: (on: boolean): void => {
+    ipcRenderer.send('pet:interactive', on)
+  },
+  sendPetDrag: (phase: 'start' | 'end'): void => {
+    ipcRenderer.send('pet:drag', phase)
   },
 
   // Mobile Remote Control (ADR 0067) — Settings → Devices talks to the WS gateway
