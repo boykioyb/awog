@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.29.0',
+    date: '2026-08-12',
+    highlight: {
+      en: 'A desktop pet that sits on top of your other windows and tells you at a glance whether AWOG is working, waiting for you, or finished — hover it to jump straight into a session or approve a request without opening the app.',
+      vi: 'Một con pet nhỏ nổi trên các cửa sổ khác, liếc mắt là biết AWOG đang chạy, đang chờ bạn, hay đã xong — trỏ chuột vào là mở ngay session hoặc duyệt yêu cầu mà không cần mở app.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Desktop pet: a small animated companion that floats above every window and changes how it behaves with your work — typing while things run, waving when something needs your approval, resting when all is quiet. It is off by default; turn it on in Settings → Pet.',
+        vi: 'Desktop pet: một người bạn nhỏ có hoạt ảnh, nổi trên mọi cửa sổ và đổi cách nó cư xử theo công việc của bạn — gõ phím khi đang chạy, vẫy tay khi có việc chờ duyệt, nghỉ ngơi khi mọi thứ đã yên. Mặc định tắt; bật ở Settings → Pet.',
+      },
+      {
+        kind: 'added',
+        en: 'Hover the pet for a mini panel listing up to three things that need you, each with a line of what is happening right now. Click one to open that session or task, or allow and deny a waiting tool request straight from the panel.',
+        vi: 'Trỏ chuột vào pet để mở bảng nhỏ liệt kê tối đa ba việc đang cần bạn, kèm một dòng cho biết đang diễn ra chuyện gì. Bấm vào một dòng để mở session hoặc task đó, hoặc duyệt/từ chối yêu cầu đang chờ ngay tại bảng.',
+      },
+      {
+        kind: 'added',
+        en: 'Choose your pet from a gallery of built-in characters, pick one of three sizes, and drag it anywhere on screen — it remembers the spot, turns to face the middle of the display, and comes back to your main screen if you unplug a monitor.',
+        vi: 'Chọn pet từ bộ nhân vật có sẵn, chọn một trong ba kích thước, và kéo nó tới bất kỳ chỗ nào trên màn hình — nó nhớ vị trí đó, tự quay mặt vào giữa màn hình, và trở về màn hình chính nếu bạn rút màn hình ngoài.',
+      },
+      {
+        kind: 'added',
+        en: 'The pet talks: short remarks while it works or waits, plus optional reminders to drink water and stretch. Every line is yours to rewrite in Settings → Pet, and the reminder interval can be changed or switched off.',
+        vi: 'Pet biết nói: những câu ngắn khi nó làm việc hoặc chờ đợi, kèm nhắc nhở uống nước và duỗi lưng (tùy chọn). Mọi lời thoại đều sửa được ở Settings → Pet, và chu kỳ nhắc có thể đổi hoặc tắt hẳn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Opening one session from the pet panel no longer wipes the unread mark on the session you already had open.',
+        vi: 'Mở một session từ bảng của pet không còn xoá dấu chưa đọc của session bạn đang mở dở.',
+      },
+    ],
+  },
+  {
     version: '0.28.1',
     date: '2026-08-10',
     highlight: {
