@@ -4,21 +4,26 @@
       :kind="kind"
       :items="gh.visibleItems.value"
       :loading="gh.loading.value"
+      :revalidating="gh.revalidating.value"
       :error-code="gh.errorCode.value"
       :state-filter="gh.stateFilter.value"
       :assignee="gh.assigneeFilter.value"
+      :reviewer="gh.reviewerFilter.value"
       :search="gh.searchQuery.value"
       :account="gh.account.value"
       :global-account="gh.globalAccount.value"
       :accounts="accountLogins"
       :known-assignees="gh.knownAssignees.value"
+      :known-reviewers="gh.knownReviewers.value"
       :repos="repos"
       :repo-path="selectedRepoPath"
       :can-load-more="gh.canLoadMore.value"
       @open="gh.open"
+      @prefetch="gh.prefetchThread"
       @refresh="() => gh.refresh({ force: true })"
       @set-state="gh.setStateFilter"
       @set-assignee="gh.setAssigneeFilter"
+      @set-reviewer="gh.setReviewerFilter"
       @set-account="gh.setAccount"
       @set-search="gh.setSearch"
       @set-repo="(v) => (selectedRepoPath = v)"
@@ -33,6 +38,7 @@
       :thread="gh.selected.value"
       :kind="kind"
       :loading="gh.detailLoading.value"
+      :reviews-loading="gh.reviewsLoading.value"
       :width="400"
       :view-lang="gh.viewLang.value"
       :segment="gh.segmentTranslation"
@@ -75,6 +81,7 @@ import ProjectGhDrawer from './ProjectGhDrawer.vue'
 import ProjectIssues from './ProjectIssues.vue'
 import type { ProjectRepo } from '~/composables/useProjectRepos'
 import {
+  prefetchGhList,
   useProjectGh,
   type GhAccount,
   type GhKind,
@@ -83,7 +90,17 @@ import {
 import { useSidecar } from '~/composables/useSidecar'
 import { useSessionsStore } from '~/stores/sessions'
 
-const props = defineProps<{ projectId: string; kind: GhKind; repos: ProjectRepo[] }>()
+const props = withDefaults(
+  defineProps<{
+    projectId: string
+    kind: GhKind
+    repos: ProjectRepo[]
+    // Deep link: open this issue/PR's drawer as soon as the tab is up (a GitHub
+    // notification toast). Null = no target.
+    openNumber?: number | null
+  }>(),
+  { openNumber: null },
+)
 
 const sc = useSidecar()
 const { t } = useI18n()
@@ -111,6 +128,32 @@ const gh = useProjectGh(
   () => props.projectId,
   () => props.kind,
   () => (selectedRepoPath.value === '.' ? undefined : selectedRepoPath.value),
+)
+
+// Warm the OTHER tab (Issues ↔ PR) for whichever repo is selected, so switching
+// tabs — or picking another repo and then switching — paints from cache. Skipped
+// when that list is already fresh (the prefetcher checks the same cache).
+watch(
+  () => selectedRepoPath.value,
+  (path) => {
+    void prefetchGhList({
+      projectId: props.projectId,
+      kind: props.kind === 'pr' ? 'issue' : 'pr',
+      ...(path === '.' ? {} : { repoPath: path }),
+    })
+  },
+  { immediate: true },
+)
+
+// Deep-link target (notification toast) → open its drawer. `immediate` covers the
+// tab being mounted BY the deep link; the watcher covers a second toast arriving
+// while the tab is already up.
+watch(
+  () => props.openNumber,
+  (n) => {
+    if (n != null) void gh.open(n)
+  },
+  { immediate: true },
 )
 
 // Drawer ref → focus the composer after a Reply prefills the draft.

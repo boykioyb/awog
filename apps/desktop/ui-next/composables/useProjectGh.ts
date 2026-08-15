@@ -6,7 +6,7 @@
 // Translation is per-segment: each translatable block (title / body / a comment
 // by index) keys its own cache entry so toggling never re-fetches; default view
 // is ALWAYS the original — nothing auto-translates on open.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
@@ -26,6 +26,17 @@ export interface GhThreadComment {
   body: string
   createdAt: string
 }
+// PR-only: one person on the review. 'PENDING' = requested but not submitted yet.
+export type GhReviewerState =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'CHANGES_REQUESTED'
+  | 'COMMENTED'
+  | 'DISMISSED'
+export interface GhThreadReviewer {
+  login: string
+  state: GhReviewerState
+}
 export interface GhThreadSummary {
   kind: GhKind
   number: number
@@ -39,6 +50,9 @@ export interface GhThreadSummary {
   isDraft?: boolean
   baseRefName?: string
   headRefName?: string
+  // PR-only: who is on the review — pending requests first, then submitted
+  // reviews (users only; team requests carry no login).
+  reviewers?: GhThreadReviewer[]
 }
 export interface GhThreadFile {
   path: string
@@ -163,6 +177,11 @@ const ghCodeOf = (err: unknown): string => {
 // manual Refresh forces a re-fetch; posting a comment / approving invalidates the
 // affected thread. Cleared on app reload (in-memory) — the "first time" each session.
 const GH_TTL_MS = 60 * 60 * 1000
+// Below this age a cached list is served as-is; above it the rows still paint
+// instantly but a silent re-fetch runs behind them (stale-while-revalidate).
+const GH_SWR_MS = 45 * 1000
+// Rows per page — module scope because the disk tier only seeds this exact size.
+const GH_PAGE = 50
 type GhCacheEntry = { data: unknown; at: number }
 const ghCache = new Map<string, GhCacheEntry>()
 function ghCacheRead<T>(key: string): T | null {
@@ -176,6 +195,191 @@ function ghCacheRead<T>(key: string): T | null {
 }
 function ghCacheWrite(key: string, data: unknown): void {
   ghCache.set(key, { data, at: Date.now() })
+}
+
+// ── List query → cache key → fetch ──────────────────────────────────────────
+// Everything that changes what gh returns. Shared by the controller and the
+// prefetcher so both address the SAME cache entry (a key drift here would mean
+// prefetching one thing and reading another).
+type GhListQuery = {
+  projectId: string
+  repoPath?: string
+  kind: GhKind
+  account: string
+  state: GhListState
+  assignee: string
+  reviewer: string
+  search: string
+  limit: number
+}
+const listKeyOf = (q: GhListQuery): string =>
+  `L|${q.projectId}|${q.repoPath ?? ''}|${q.kind}|${q.account}|${q.state}|${q.assignee}|${q.reviewer}|${q.search}|${q.limit}`
+
+type SidecarClient = ReturnType<typeof useSidecar>
+
+async function requestList(sc: SidecarClient, q: GhListQuery): Promise<GhThreadSummary[]> {
+  const params: {
+    projectId: string
+    kind: GhKind
+    state: GhListState
+    assignee?: string
+    reviewer?: string
+    account?: string
+    repoPath?: string
+    search?: string
+    limit?: number
+  } = { projectId: q.projectId, kind: q.kind, state: q.state, limit: q.limit }
+  if (q.assignee) params.assignee = q.assignee
+  // Reviewer is PR-only — the sidecar rejects it on kind=issue.
+  if (q.reviewer && q.kind === 'pr') params.reviewer = q.reviewer
+  if (q.account) params.account = q.account
+  if (q.repoPath) params.repoPath = q.repoPath
+  if (q.search) params.search = q.search
+  const res = await sc.request<{ items: GhThreadSummary[] }>('gh.list', params)
+  return res.items
+}
+
+// In-flight gh.list calls by key. A prefetch started at project-open and the tab
+// mounting a moment later join the SAME promise instead of spawning gh twice.
+const listInflight = new Map<string, Promise<GhThreadSummary[]>>()
+function fetchList(sc: SidecarClient, q: GhListQuery, key: string): Promise<GhThreadSummary[]> {
+  const running = listInflight.get(key)
+  if (running) return running
+  const p = requestList(sc, q)
+    .then((rows) => {
+      ghCacheWrite(key, rows)
+      writeDiskList(q, rows)
+      return rows
+    })
+    .finally(() => listInflight.delete(key))
+  listInflight.set(key, p)
+  return p
+}
+
+// ── Disk warm-start tier ────────────────────────────────────────────────────
+// The memory cache dies with the window, so the first visit after every app
+// start would hit a skeleton. Persist the DEFAULT view of each list (no text
+// search, first page) and paint from it on open, then always revalidate behind
+// it. Capped hard: head rows only, few entries, day-old max — this is a paint
+// seed, never a source of truth.
+const DISK_KEY = 'awog.gh.listCache'
+const DISK_MAX_ENTRIES = 8
+const DISK_MAX_ROWS = 30
+const DISK_MAX_AGE_MS = 24 * 60 * 60 * 1000
+type DiskListEntry = { at: number; items: GhThreadSummary[] }
+
+const readDiskAll = (): Record<string, DiskListEntry> => {
+  try {
+    const raw = localStorage.getItem(DISK_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, DiskListEntry>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeDiskList(q: GhListQuery, rows: GhThreadSummary[]): void {
+  // Only the default view is worth seeding — a search / deeper page is transient.
+  if (q.search || q.limit !== GH_PAGE) return
+  try {
+    const all = readDiskAll()
+    all[listKeyOf(q)] = { at: Date.now(), items: rows.slice(0, DISK_MAX_ROWS) }
+    // Evict oldest beyond the cap so this can't grow into a storage problem.
+    const kept = Object.entries(all)
+      .sort((a, b) => b[1].at - a[1].at)
+      .slice(0, DISK_MAX_ENTRIES)
+    localStorage.setItem(DISK_KEY, JSON.stringify(Object.fromEntries(kept)))
+  } catch {
+    // localStorage unavailable / full — the memory cache still does its job.
+  }
+}
+
+// Seed the memory cache from disk on first lookup of a key, stamped with its
+// on-disk age so the caller treats it as stale and revalidates.
+function readDiskList(key: string): GhCacheEntry | null {
+  const entry = readDiskAll()[key]
+  if (!entry || !Array.isArray(entry.items)) return null
+  if (Date.now() - entry.at > DISK_MAX_AGE_MS) return null
+  const hit: GhCacheEntry = { data: entry.items, at: entry.at }
+  ghCache.set(key, hit)
+  return hit
+}
+
+// One list entry, memory first then the disk seed. Returns the entry (not just
+// the rows) so the caller can decide fresh-enough vs revalidate-behind.
+function readListEntry(key: string): GhCacheEntry | null {
+  const mem = ghCache.get(key)
+  if (mem) {
+    if (Date.now() - mem.at <= GH_TTL_MS) return mem
+    ghCache.delete(key)
+  }
+  return readDiskList(key)
+}
+
+// ── Persisted filters (module scope: the prefetcher needs them too) ──────────
+// Per project+kind so they survive an app restart. localStorage holds a
+// `{ "<projectId>:<kind>": {...} }` map; search is intentionally NOT persisted
+// (transient text query). `account` '' means "follow gh's active account".
+const GH_FILTER_KEY = 'awog.gh.filters'
+// Per-tab account override sentinel: follow the project → app-level default.
+const INHERIT = '__inherit'
+type SavedGhFilter = {
+  state: GhListState
+  assignee: string
+  account: string
+  // Added later — absent in filters saved by older builds.
+  reviewer?: string
+}
+const filterKeyOf = (projectId: string, kind: GhKind): string => `${projectId}:${kind}`
+const readAllFilters = (): Record<string, SavedGhFilter> => {
+  try {
+    const raw = localStorage.getItem(GH_FILTER_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, SavedGhFilter>) : {}
+  } catch {
+    return {}
+  }
+}
+
+// The gh account a project's list resolves to: the tab's own override, else the
+// project's GitHub-account setting, else the app default. '' = gh active account.
+function resolveAccount(projectId: string, saved: SavedGhFilter | undefined): string {
+  const override = saved?.account ?? INHERIT
+  if (override !== INHERIT) return override
+  const proj = useProjectsStore().projectById(projectId)
+  return (proj?.githubAccount ?? useSettingsStore().githubAccount).trim()
+}
+
+// Warm one project's issue/PR list in the background, using its persisted filters
+// so the entry lands under the exact key the tab will read. Fire-and-forget: a
+// failure just leaves the tab to fetch (and surface the error) on open.
+export async function prefetchGhList(opts: {
+  projectId: string
+  kind: GhKind
+  repoPath?: string
+}): Promise<void> {
+  const sc = useSidecar()
+  if (!sc.available || !opts.projectId) return
+  const saved = readAllFilters()[filterKeyOf(opts.projectId, opts.kind)]
+  let state: GhListState = saved?.state ?? 'open'
+  if (opts.kind !== 'pr' && state === 'merged') state = 'open'
+  const q: GhListQuery = {
+    projectId: opts.projectId,
+    ...(opts.repoPath ? { repoPath: opts.repoPath } : {}),
+    kind: opts.kind,
+    account: resolveAccount(opts.projectId, saved),
+    state,
+    assignee: saved?.assignee ?? '',
+    reviewer: opts.kind === 'pr' ? (saved?.reviewer ?? '') : '',
+    search: '',
+    limit: GH_PAGE,
+  }
+  const key = listKeyOf(q)
+  const hit = readListEntry(key)
+  if (hit && Date.now() - hit.at <= GH_SWR_MS) return // already warm
+  try {
+    await fetchList(sc, q, key)
+  } catch {
+    // Best-effort warm-up — the on-demand fetch will surface any real error.
+  }
 }
 
 export function useProjectGh(
@@ -193,10 +397,14 @@ export function useProjectGh(
 
   const stateFilter = ref<GhListState>('open')
   const assigneeFilter = ref<string>('') // '' = anyone; '@me' or a login otherwise.
+  // PR-only requested-reviewer filter. '' = any reviewer; '@me' or a login otherwise.
+  const reviewerFilter = ref<string>('')
   const searchQuery = ref('')
   // How many rows to request — bumped by loadMore() for the plain (non-search) list.
-  const PAGE = 50
-  const pageLimit = ref(PAGE)
+  const pageLimit = ref(GH_PAGE)
+  // A background revalidation is running behind already-painted rows. Drives the
+  // refresh spinner ONLY — the list keeps its rows, unfaded (that's the point).
+  const revalidating = ref(false)
 
   const selected = ref<GhThread | null>(null)
   const drawerOpen = ref(false)
@@ -242,7 +450,6 @@ export function useProjectGh(
   //   ''          → explicitly "active gh account"
   //   '<login>'   → explicit account
   // The GH tab picker writes this; loadFilters seeds it (default = inherit).
-  const INHERIT = '__inherit'
   const account = ref<string>(INHERIT)
 
   // The account this project's GH ops resolve to when inheriting: the project's
@@ -261,21 +468,9 @@ export function useProjectGh(
   // What the picker's "inherit" row resolves to (project setting → app default).
   const globalAccount = computed<string>(() => inheritedAccount.value)
 
-  // Persisted filters (state / assignee / account) per project+kind so they
-  // survive an app restart. localStorage holds a `{ "<projectId>:<kind>": {...} }`
-  // map; search is intentionally NOT persisted (transient text query). `account`
-  // '' means "follow gh's active account".
-  const FILTER_KEY = 'awog.gh.filters'
-  type SavedFilter = { state: GhListState; assignee: string; account: string }
-  const filterKey = (): string => `${getProjectId()}:${getKind()}`
-  const readAllFilters = (): Record<string, SavedFilter> => {
-    try {
-      const raw = localStorage.getItem(FILTER_KEY)
-      return raw ? (JSON.parse(raw) as Record<string, SavedFilter>) : {}
-    } catch {
-      return {}
-    }
-  }
+  // Filters persist per project+kind (see the module-level helpers — the
+  // prefetcher reads the same store so it warms the view the user will see).
+  const filterKey = (): string => filterKeyOf(getProjectId(), getKind())
   const loadFilters = (): void => {
     const saved = readAllFilters()[filterKey()]
     let state: GhListState = saved?.state ?? 'open'
@@ -283,6 +478,8 @@ export function useProjectGh(
     if (getKind() !== 'pr' && state === 'merged') state = 'open'
     stateFilter.value = state
     assigneeFilter.value = saved?.assignee ?? ''
+    // Reviewer is PR-only — never restore it onto the Issues tab.
+    reviewerFilter.value = getKind() === 'pr' ? (saved?.reviewer ?? '') : ''
     account.value = saved?.account ?? INHERIT
     searchQuery.value = ''
   }
@@ -292,9 +489,10 @@ export function useProjectGh(
       all[filterKey()] = {
         state: stateFilter.value,
         assignee: assigneeFilter.value,
+        reviewer: reviewerFilter.value,
         account: account.value,
       }
-      localStorage.setItem(FILTER_KEY, JSON.stringify(all))
+      localStorage.setItem(GH_FILTER_KEY, JSON.stringify(all))
     } catch {
       // localStorage unavailable (private mode / quota) — filters won't persist.
     }
@@ -304,6 +502,17 @@ export function useProjectGh(
   const knownAssignees = computed<string[]>(() => {
     const set = new Set<string>()
     for (const it of items.value) for (const a of it.assignees) set.add(a.login)
+    return [...set].sort((a, b) => a.localeCompare(b))
+  })
+
+  // Reviewers the picker offers: only those with a PENDING request on a loaded row.
+  // The filter maps to `review-requested:` (pending only), so offering someone who
+  // has already submitted their review would just return an empty list.
+  const knownReviewers = computed<string[]>(() => {
+    const set = new Set<string>()
+    for (const it of items.value) {
+      for (const r of it.reviewers ?? []) if (r.state === 'PENDING') set.add(r.login)
+    }
     return [...set].sort((a, b) => a.localeCompare(b))
   })
 
@@ -321,13 +530,52 @@ export function useProjectGh(
   // Cache keys — scoped to project + child repo + account so they never collide.
   const ck = (): string =>
     `${getProjectId()}|${getRepoPath() ?? ''}|${getKind()}|${effectiveAccount.value}`
-  const listKey = (): string =>
-    `L|${ck()}|${stateFilter.value}|${assigneeFilter.value}|${searchQuery.value.trim()}|${pageLimit.value}`
   const threadKey = (n: number): string => `T|${ck()}|${n}`
   const diffKey = (n: number): string => `D|${ck()}|${n}`
   const commitsKey = (n: number): string => `C|${ck()}|${n}`
 
-  // The real gh.list round-trip. Cache-first unless `force` (the manual Refresh).
+  // Bumped by every visible fetch; a response whose token is no longer the latest
+  // is dropped (see refresh).
+  let listSeq = 0
+
+  // Everything the current view asks gh for — the single source for both the
+  // cache key and the request params.
+  const currentQuery = (): GhListQuery => {
+    const repoPath = getRepoPath()
+    return {
+      projectId: getProjectId(),
+      ...(repoPath ? { repoPath } : {}),
+      kind: getKind(),
+      account: effectiveAccount.value,
+      state: stateFilter.value,
+      assignee: assigneeFilter.value,
+      reviewer: reviewerFilter.value,
+      search: searchQuery.value.trim(),
+      limit: pageLimit.value,
+    }
+  }
+
+  // Re-fetch behind already-painted rows. Never touches `loading` (no skeleton, no
+  // dim) — only the refresh spinner shows it. A result whose key is no longer the
+  // current view is cached but NOT applied (the user moved on).
+  const revalidate = async (q: GhListQuery, key: string): Promise<void> => {
+    if (revalidating.value) return
+    revalidating.value = true
+    try {
+      const rows = await fetchList(sc, q, key)
+      if (listKeyOf(currentQuery()) !== key) return
+      items.value = rows
+      errorCode.value = null
+    } catch {
+      // Keep the cached rows — a background failure must not blank the list.
+    } finally {
+      revalidating.value = false
+    }
+  }
+
+  // The gh.list round-trip. Cache-first (memory → disk seed) unless `force` (the
+  // manual Refresh): a hit paints immediately, and if it's older than the SWR
+  // window a silent re-fetch runs behind it. Only a cold miss shows the skeleton.
   const refresh = async (opts: { force?: boolean } = {}): Promise<void> => {
     if (!sc.available) {
       errorCode.value = 'GH_NOT_FOUND'
@@ -336,48 +584,115 @@ export function useProjectGh(
     }
     const projectId = getProjectId()
     if (!projectId) return
+    const q = currentQuery()
+    const key = listKeyOf(q)
+    // Stale-response guard: a slower earlier fetch must not paint over (or blank)
+    // the view the user has since moved to — including one they got from cache.
+    const seq = ++listSeq
     if (!opts.force) {
-      const cached = ghCacheRead<GhThreadSummary[]>(listKey())
-      if (cached) {
-        items.value = cached
+      const hit = readListEntry(key)
+      if (hit) {
+        items.value = hit.data as GhThreadSummary[]
         errorCode.value = null
+        loading.value = false
+        if (Date.now() - hit.at > GH_SWR_MS) void revalidate(q, key)
         return
       }
     }
     loading.value = true
     try {
-      const params: {
-        projectId: string
-        kind: GhKind
-        state: GhListState
-        assignee?: string
-        account?: string
-        repoPath?: string
-        search?: string
-        limit?: number
-      } = { projectId, kind: getKind(), state: stateFilter.value, limit: pageLimit.value }
-      if (assigneeFilter.value) params.assignee = assigneeFilter.value
-      if (effectiveAccount.value) params.account = effectiveAccount.value
-      const repoPath = getRepoPath()
-      if (repoPath) params.repoPath = repoPath
-      const q = searchQuery.value.trim()
-      if (q) params.search = q
-      const res = await sc.request<{ items: GhThreadSummary[] }>('gh.list', params)
-      items.value = res.items
-      ghCacheWrite(listKey(), res.items)
+      const rows = await fetchList(sc, q, key)
+      if (seq !== listSeq) return
+      items.value = rows
       errorCode.value = null
     } catch (err) {
+      if (seq !== listSeq) return
       items.value = []
       errorCode.value = ghCodeOf(err)
     } finally {
-      loading.value = false
+      if (seq === listSeq) loading.value = false
+    }
+  }
+
+  // ── Thread detail (staged: seed → core → reviews) ───────────────────────────
+  // The list row we already have, shaped as a thread. Opening paints THIS first —
+  // title, state, author, labels, branches are all on screen before gh is even
+  // asked — so only the body/comments area waits on the round-trip.
+  const seedThread = (s: GhThreadSummary): GhThread => ({ ...s, body: '', url: '', comments: [] })
+
+  // One core gh.get per number, deduped: a hover prefetch and the click that
+  // follows it share the same request instead of spawning gh twice.
+  const threadInflight = new Map<number, Promise<GhThread>>()
+  const fetchThreadCore = (number: number): Promise<GhThread> => {
+    const key = threadKey(number)
+    const running = threadInflight.get(number)
+    if (running) return running
+    const params: {
+      projectId: string
+      kind: GhKind
+      number: number
+      account?: string
+      repoPath?: string
+    } = { projectId: getProjectId(), kind: getKind(), number }
+    if (effectiveAccount.value) params.account = effectiveAccount.value
+    const repoPath = getRepoPath()
+    if (repoPath) params.repoPath = repoPath
+    const p = sc
+      .request<GhThread>('gh.get', params)
+      .then((thread) => {
+        ghCacheWrite(key, thread)
+        return thread
+      })
+      .finally(() => threadInflight.delete(number))
+    threadInflight.set(number, p)
+    return p
+  }
+
+  // PR review timeline — two REST calls, so it loads BEHIND the painted thread
+  // (gh.reviews) instead of gating the drawer. Cached per PR; folded into the
+  // cached thread too, so re-opening shows it without a second pass.
+  const reviewsLoading = ref(false)
+  const reviewsKey = (n: number): string => `R|${ck()}|${n}`
+  // Attach reviews to the open thread (if it's still the one asked for) and to the
+  // cached copy, so a re-open is complete from cache.
+  const applyReviews = (number: number, reviews: GhReview[]): void => {
+    const cachedThread = ghCacheRead<GhThread>(threadKey(number))
+    if (cachedThread) ghCacheWrite(threadKey(number), { ...cachedThread, reviews })
+    const cur = selected.value
+    if (cur && cur.number === number) selected.value = { ...cur, reviews }
+  }
+  const loadReviews = async (number: number): Promise<void> => {
+    if (getKind() !== 'pr' || !sc.available) return
+    const cached = ghCacheRead<GhReview[]>(reviewsKey(number))
+    if (cached) {
+      applyReviews(number, cached)
+      return
+    }
+    reviewsLoading.value = true
+    try {
+      const params: { projectId: string; number: number; account?: string; repoPath?: string } = {
+        projectId: getProjectId(),
+        number,
+      }
+      if (effectiveAccount.value) params.account = effectiveAccount.value
+      const repoPath = getRepoPath()
+      if (repoPath) params.repoPath = repoPath
+      const res = await sc.request<{ reviews: GhReview[] }>('gh.reviews', params)
+      ghCacheWrite(reviewsKey(number), res.reviews)
+      applyReviews(number, res.reviews)
+    } catch {
+      // No timeline — the conversation still stands on its own.
+    } finally {
+      reviewsLoading.value = false
     }
   }
 
   const open = async (number: number, opts: { force?: boolean } = {}): Promise<void> => {
     drawerOpen.value = true
     detailLoading.value = true
-    selected.value = null
+    // Paint the row we already have while the detail is in flight.
+    const summary = items.value.find((i) => i.number === number)
+    selected.value = summary ? seedThread(summary) : null
     segments.value = {}
     viewLang.value = 'orig'
     commentDraft.value = ''
@@ -390,8 +705,7 @@ export function useProjectGh(
     commitsLoading.value = false
     reviewed.value = false
     reviewError.value = false
-    const projectId = getProjectId()
-    if (!sc.available || !projectId) {
+    if (!sc.available || !getProjectId()) {
       detailLoading.value = false
       return
     }
@@ -400,57 +714,43 @@ export function useProjectGh(
       if (cached) {
         selected.value = cached
         detailLoading.value = false
+        if (!cached.reviews) void loadReviews(number)
         return
       }
     }
     try {
-      const params: {
-        projectId: string
-        kind: GhKind
-        number: number
-        account?: string
-        repoPath?: string
-      } = {
-        projectId,
-        kind: getKind(),
-        number,
-      }
-      if (effectiveAccount.value) params.account = effectiveAccount.value
-      const repoPath = getRepoPath()
-      if (repoPath) params.repoPath = repoPath
-      const thread = await sc.request<GhThread>('gh.get', params)
+      const thread = await fetchThreadCore(number)
+      // A slower open must not paint over the thread the user has since opened.
+      if (selected.value?.number !== number) return
       selected.value = thread
-      ghCacheWrite(threadKey(number), thread)
     } catch (err) {
+      if (selected.value?.number !== number) return
       errorCode.value = ghCodeOf(err)
       drawerOpen.value = false
+      return
     } finally {
-      detailLoading.value = false
+      if (selected.value?.number === number) detailLoading.value = false
     }
+    void loadReviews(number)
+  }
+
+  // Warm a thread on hover so the click that follows opens from cache. Silent —
+  // failures are the click's problem, not the hover's.
+  const prefetchThread = (number: number): void => {
+    if (!sc.available || !getProjectId()) return
+    if (ghCacheRead<GhThread>(threadKey(number))) return
+    void fetchThreadCore(number).catch(() => {})
   }
 
   // Fetch a thread's full detail WITHOUT touching drawer state — used to capture an
   // issue/PR's body as context when spawning a session from it (so the model gets it
   // up front instead of re-fetching). Returns null on failure / browser-dev.
   const fetchThread = async (number: number): Promise<GhThread | null> => {
-    const projectId = getProjectId()
-    if (!sc.available || !projectId) return null
+    if (!sc.available || !getProjectId()) return null
     const cached = ghCacheRead<GhThread>(threadKey(number))
     if (cached) return cached
     try {
-      const params: {
-        projectId: string
-        kind: GhKind
-        number: number
-        account?: string
-        repoPath?: string
-      } = { projectId, kind: getKind(), number }
-      if (effectiveAccount.value) params.account = effectiveAccount.value
-      const repoPath = getRepoPath()
-      if (repoPath) params.repoPath = repoPath
-      const thread = await sc.request<GhThread>('gh.get', params)
-      ghCacheWrite(threadKey(number), thread)
-      return thread
+      return await fetchThreadCore(number)
     } catch {
       return null
     }
@@ -729,6 +1029,9 @@ export function useProjectGh(
       const rp = getRepoPath()
       if (rp) params.repoPath = rp
       await sc.request('gh.review', params)
+      // The new approval lives in the review timeline — drop its cache so the
+      // refetch below picks it up.
+      ghCache.delete(reviewsKey(number))
       await open(number, { force: true }) // refetch (resets reviewed) → then mark below
       reviewed.value = true
     } catch {
@@ -739,33 +1042,41 @@ export function useProjectGh(
   }
 
   // Manual refresh of the open thread (drawer header button) — drop its cached
-  // thread + diff + commits, then re-fetch fresh.
+  // diff + commits + review timeline, then re-fetch fresh.
   const refreshThread = async (): Promise<void> => {
     const n = selected.value?.number
     if (n == null) return
     ghCache.delete(diffKey(n))
     ghCache.delete(commitsKey(n))
+    ghCache.delete(reviewsKey(n))
     await open(n, { force: true })
   }
 
   const setStateFilter = (next: GhListState): void => {
     if (next === stateFilter.value) return
     stateFilter.value = next
-    pageLimit.value = PAGE
+    pageLimit.value = GH_PAGE
     saveFilters()
     void refresh()
   }
   const setAssigneeFilter = (next: string): void => {
     if (next === assigneeFilter.value) return
     assigneeFilter.value = next
-    pageLimit.value = PAGE
+    pageLimit.value = GH_PAGE
+    saveFilters()
+    void refresh()
+  }
+  const setReviewerFilter = (next: string): void => {
+    if (next === reviewerFilter.value) return
+    reviewerFilter.value = next
+    pageLimit.value = GH_PAGE
     saveFilters()
     void refresh()
   }
   const setAccount = (login: string): void => {
     if (login === account.value) return
     account.value = login
-    pageLimit.value = PAGE
+    pageLimit.value = GH_PAGE
     saveFilters()
     void refresh()
   }
@@ -775,7 +1086,7 @@ export function useProjectGh(
   let searchTimer: ReturnType<typeof setTimeout> | null = null
   const setSearch = (q: string): void => {
     searchQuery.value = q
-    pageLimit.value = PAGE
+    pageLimit.value = GH_PAGE
     if (searchTimer) clearTimeout(searchTimer)
     searchTimer = setTimeout(() => void refresh(), 350)
   }
@@ -783,7 +1094,7 @@ export function useProjectGh(
   // Load the next page of the plain list (bump the limit + refetch).
   const loadMore = (): void => {
     if (!canLoadMore.value) return
-    pageLimit.value += PAGE
+    pageLimit.value += GH_PAGE
     void refresh()
   }
 
@@ -795,7 +1106,7 @@ export function useProjectGh(
   watch([getProjectId, getRepoPath], () => {
     closeDrawer()
     loadFilters()
-    pageLimit.value = PAGE
+    pageLimit.value = GH_PAGE
     items.value = []
     void refresh()
   })
@@ -810,7 +1121,10 @@ export function useProjectGh(
     },
   )
 
-  onMounted(() => void refresh())
+  // Fired during setup, not onMounted: a cache hit assigns `items` synchronously,
+  // so the tab's FIRST render already has rows — no empty-state frame before the
+  // warm cache lands.
+  void refresh()
   onBeforeUnmount(() => closeDrawer())
 
   return {
@@ -819,16 +1133,20 @@ export function useProjectGh(
     visibleItems,
     canLoadMore,
     knownAssignees,
+    knownReviewers,
     loading,
+    revalidating,
     errorCode,
     stateFilter,
     assigneeFilter,
+    reviewerFilter,
     searchQuery,
     account,
     globalAccount,
     selected,
     drawerOpen,
     detailLoading,
+    reviewsLoading,
     viewLang,
     commentDraft,
     translatingDraft,
@@ -843,12 +1161,14 @@ export function useProjectGh(
     // actions
     refresh,
     open,
+    prefetchThread,
     fetchThread,
     closeDrawer,
     segmentTranslation,
     setViewLang,
     setStateFilter,
     setAssigneeFilter,
+    setReviewerFilter,
     setAccount,
     setSearch,
     loadMore,

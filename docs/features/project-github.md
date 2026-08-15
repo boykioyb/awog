@@ -43,11 +43,33 @@ Issue và PR dùng **chung một bộ component + RPC**, phân biệt bằng `ki
 - **Filter assignee (cả hai tab)** qua `AppSelect`, server-side (`gh … --assignee`):
   - **Anyone** (mặc định, không lọc) / **Assigned to me** (`@me`) / từng assignee xuất hiện trong danh sách.
   - Option danh sách assignee dựng từ `assignees` của các dòng đã fetch (cộng "@me" luôn có sẵn); đổi assignee → **re-fetch** `gh.list`.
+- **Filter reviewer (CHỈ tab PR)** qua `AppSelect`, server-side:
+  - **Any reviewer** (mặc định, không lọc) / **@me** / từng requested reviewer xuất hiện trong danh sách.
+  - `gh pr list` KHÔNG có cờ `--reviewer` → sidecar dịch thành qualifier `--search "review-requested:<login>"` (ghép với text search khi user gõ cả hai).
+  - Option dựng từ `reviewRequests` của các dòng đã fetch (chỉ user; team request không có `login` nên bị bỏ). Giá trị đang chọn luôn nằm trong option list kể cả khi việc lọc làm nó biến mất khỏi danh sách.
+  - Filter được persist theo `<projectId>:<kind>` như state/assignee; không bao giờ khôi phục sang tab Issues.
 - **Search** theo title/number (lọc client trên danh sách đã fetch).
 - Mỗi dòng:
   - **Issue**: `#number`, title, state badge (Open/Closed), labels, author, thời điểm cập nhật.
-  - **PR**: `#number`, title, state badge (Open/Closed/**Merged**) + nhãn **Draft** nếu `isDraft`, `base ← head` branch, labels, author, thời điểm cập nhật.
+  - **PR**: `#number`, title, state badge (Open/Closed/**Merged**) + nhãn **Draft** nếu `isDraft`, `base ← head` branch, **chip reviewer**, labels, author, thời điểm cập nhật.
+- **Chip reviewer trên mỗi dòng PR** — ai đang ở trong vòng review, **pending trước** rồi tới người đã review:
+  - `PENDING` (icon `clock`, dim) = đã request nhưng chưa review · `APPROVED` (`check`, green) · `CHANGES_REQUESTED` (`x`, danger) · `COMMENTED` (`message`, dim) · `DISMISSED` (`minus`, dim).
+  - Nguồn: `reviewRequests` (pending) + `latestReviews` (review mới nhất mỗi người) — merge theo login, **pending thắng** khi một người vừa review vừa bị request review lại. Body của review bị bỏ ở sidecar (dòng list chỉ cần ai + verdict).
+  - `title` chip = "{login} · trạng thái" (i18n `projects.gh.reviewState.*`).
 - Empty/error state riêng (xem [Trạng thái lỗi](#trạng-thái-lỗi--empty)).
+- **Prefetch + cache (mục tiêu: mở tab KHÔNG thấy loading):**
+  - **Warm sớm:** mở detail của project GitHub → `prefetchGhList()` chạy nền (`requestIdleCallback`, fallback `setTimeout 250ms`) cho **cả Issues lẫn PR** của repo mặc định, trong lúc user còn đang đọc Overview. Trong tab GH, đổi repo → warm luôn tab còn lại. Prefetch đọc **đúng filter đã persist** nên entry rơi vào đúng key mà tab sẽ đọc.
+  - **Dedupe in-flight:** `gh.list` đang chạy được join theo key — prefetch + tab mở ngay sau đó dùng CHUNG 1 promise, không spawn gh 2 lần.
+  - **3 tầng cache:** memory (`ghCache`, TTL 1h) → **disk seed** (`localStorage awog.gh.listCache`: chỉ view mặc định — không search, page đầu — tối đa 30 dòng đầu × 8 entry × 24h) → gh. Disk tier tồn tại để lần mở đầu **sau khi khởi động app** cũng có sẵn dòng để vẽ; nó là seed để paint, KHÔNG phải nguồn sự thật (luôn revalidate đè lên). Chỉ chứa metadata đã hiển thị trên UI (title/login/branch) — không token, không path.
+  - **Stale-while-revalidate:** cache hit → vẽ ngay; nếu entry cũ hơn 45s thì chạy `gh.list` ngầm phía sau và swap khi có kết quả. Fetch ngầm KHÔNG bật `loading` (không skeleton, không làm mờ) — chỉ nút refresh xoay.
+  - **Stale-response guard:** mỗi lần fetch mang một token; response của filter cũ về muộn thì bị bỏ, không ghi đè view hiện tại.
+  - `refresh()` gọi ngay trong setup (không đợi `onMounted`) để cache hit gán `items` đồng bộ → khung hình ĐẦU TIÊN của tab đã có dòng.
+- **Trạng thái đang fetch:**
+  - Lần fetch đầu **và cache rỗng** (chưa có dòng nào) → **skeleton shimmer** `ProjectGhListSkeleton.vue` mô phỏng đúng layout dòng thật (số + title + state pill / branch + chip), thay cho dòng chữ "Loading…".
+  - Fetch lại khi ĐÃ có dòng (refresh / đổi filter / search / load more) → **giữ nguyên dòng cũ, làm mờ** (`opacity .5`, transition 140ms). KHÔNG `pointer-events:none` vì `.ghlist` chính là scroller (sẽ chặn cuộn).
+  - Nút refresh **xoay icon** trong lúc fetch + disabled.
+  - Dòng mới mount **fade + rise** (200ms), stagger 22ms theo index, cap ở dòng thứ 10 (để "Load more" không phải chờ ramp dài). Dòng còn sống qua re-fetch được Vue tái dùng DOM (key = `number`) nên không animate lại.
+  - Toàn bộ animation tắt dưới `prefers-reduced-motion: reduce`.
 
 ### Chi tiết (drawer resize được)
 
@@ -56,6 +78,12 @@ Issue và PR dùng **chung một bộ component + RPC**, phân biệt bằng `ki
   - **Header**: title + `#number` + state badge + author + labels + link "Open on GitHub" (mở `url` external). PR thêm `base ← head` + cờ Draft.
   - **Body** render markdown qua [MarkdownBodyView.vue](../../apps/desktop/ui/components/markdown/MarkdownBodyView.vue) (an toàn, không `v-html` thô).
   - **Danh sách comment**: mỗi comment = author + thời gian + body (markdown). Sort cũ → mới.
+- **Mở drawer theo 3 chặng (lazy) — không chờ trắng màn:**
+  1. **Seed từ dòng list (0 round-trip):** dữ liệu dòng đã có sẵn (title, `#number`, state, author, labels, `base ← head`) được shape thành `GhThread` và vẽ NGAY khi click. Chỉ vùng body/comment shimmer.
+  2. **Core `gh.get` (1 spawn gh, ~0.7s):** body + comments + files.
+  3. **Review timeline `gh.reviews` (2 REST call, ~0.9s):** stream vào SAU, không chặn bước 2. Trước đây `gh.get` gọi luôn 2 REST này ⇒ drawer chờ ~1.6s mới hiện gì; giờ chặng chặn chỉ còn ~0.7s và phần thấy đầu tiên là tức thì.
+- **Prefetch theo hover:** rê chuột lên một dòng ≥140ms → warm core detail của dòng đó (`prefetchThread`). Click sau đó mở từ cache. Có debounce theo hover-intent nên quét chuột qua list không bắn gh mỗi dòng; request được dedupe theo số hiệu (hover + click dùng chung 1 promise).
+- **Cache detail:** thread + review timeline + diff + commits cache riêng theo key (project|repo|kind|account|number), TTL 1h. Reviews được fold vào thread đã cache nên mở lại là đủ. Approve / refresh thread / post comment invalidate đúng phần liên quan.
 
 ### Dịch LLM theo từng thành phần
 
@@ -72,6 +100,7 @@ Issue và PR dùng **chung một bộ component + RPC**, phân biệt bằng `ki
 ProjectGhTab(kind) ──gh.list──▶ sidecar gh.list  ─▶ gh issue/pr list --json (cwd=project.path)
   ProjectGhList (full-width + filter)
   ProjectGhDrawer (resize) ─gh.get─▶ gh.get  ─▶ gh issue/pr view N --json (+comments)
+                           ─gh.reviews─▶ gh api pulls/N/reviews + /comments (lazy, PR)
     TranslatableMarkdown ×N ─gh.translate─▶ gh.translate ─▶ completePi() (Pi SDK)
 ```
 
@@ -80,12 +109,14 @@ ProjectGhTab(kind) ──gh.list──▶ sidecar gh.list  ─▶ gh issue/pr li
 | Method | Params | Trả về |
 |---|---|---|
 | `gh.accounts` | `{}` | `{ accounts: GhAccount[] }` (login + active; KHÔNG token) |
-| `gh.list` | `{ projectId, kind: 'issue'\|'pr', state, assignee?, account?, limit?<=200 }` | `{ items: GhThreadSummary[] }` |
-| `gh.get` | `{ projectId, kind, number, account? }` | `GhThread` (kèm `comments: GhThreadComment[]`) |
+| `gh.list` | `{ projectId, kind: 'issue'\|'pr', state, assignee?, reviewer?, account?, limit?<=200 }` | `{ items: GhThreadSummary[] }` |
+| `gh.get` | `{ projectId, kind, number, account?, withReviews?: boolean }` | `GhThread` (kèm `comments: GhThreadComment[]`) |
+| `gh.reviews` | `{ projectId, number, account?, repoPath? }` | `{ reviews: GhReview[] }` (PR-only, best-effort → `[]`) |
 | `gh.translate` | `{ text, targetLang?, provider, modelId, accountId? }` | `{ text }` |
 
 - `state` validate theo `kind`: issue ∈ {open,closed,all}; pr ∈ {open,closed,merged,all}.
 - `assignee` (tùy chọn): `@me` hoặc GitHub login (regex `^[A-Za-z\d](?:-?[A-Za-z\d]){0,38}$`); bỏ qua khi "Anyone". `assignees` có trong `--json` list để dựng dropdown + hiển thị dòng.
+- `reviewer` (tùy chọn, **chỉ `kind='pr'`**): `@me` hoặc GitHub login (cùng regex với `assignee`); sidecar reject khi `kind='issue'` hoặc login sai định dạng. Map sang `--search "review-requested:<login>"`; `reviewRequests` + `latestReviews` có trong `--json` list để dựng chip reviewer trên dòng (dropdown chỉ lấy login đang `PENDING` — vì filter khớp theo review-requested).
 - `account` (tùy chọn): GitHub login đã chọn ở app-level. Sidecar resolve: = active hoặc rỗng → gh active account; khác → inject `GH_TOKEN` từ `gh auth token --user <login>`. Validate login regex + phải thuộc `gh.accounts`. Token không bao giờ trả UI/log.
 - `runGh(args, cwd)` helper mới ở `sidecar/src/github/runner.ts` (xem [ADR 0049](../decisions/0049-github-issues-and-prs-via-gh-cli.md)).
 - `cwd` = `project.path` (sidecar tự nạp theo `projectId`; UI không truyền path).
@@ -97,6 +128,7 @@ ProjectGhTab(kind) ──gh.list──▶ sidecar gh.list  ─▶ gh issue/pr li
 interface GhAccount { login: string; active: boolean; scopes: string }
 type GhThreadKind = 'issue' | 'pr'
 type GhThreadState = 'OPEN' | 'CLOSED' | 'MERGED'
+type GhReviewerState = 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED'
 interface GhThreadLabel { name: string; color: string }
 interface GhThreadComment { author: { login: string }; body: string; createdAt: string }
 interface GhThreadSummary {
@@ -106,6 +138,8 @@ interface GhThreadSummary {
   createdAt: string; updatedAt: string
   // PR-only:
   isDraft?: boolean; baseRefName?: string; headRefName?: string
+  // pending request + review đã submit, merge theo login (user, bỏ team)
+  reviewers?: { login: string; state: GhReviewerState }[]
 }
 interface GhThread extends GhThreadSummary {
   body: string; url: string
@@ -119,6 +153,7 @@ interface GhThread extends GhThreadSummary {
 |---|---|
 | `components/project/ProjectGhTab.vue` | Container theo `kind`: account picker + list full-width + drawer; dùng `useProjectGh(projectId, kind)` |
 | `components/project/ProjectGhList.vue` | Danh sách + filter state (enum theo kind) + filter assignee + search |
+| `components/project/ProjectGhListSkeleton.vue` | Skeleton shimmer của danh sách cho lần fetch đầu (bản implement: list là `ProjectIssues.vue`, container là `ProjectGh.vue`) |
 | `components/project/ProjectGhAccountPicker.vue` | Dropdown chọn GitHub account (app-level), nạp từ `gh.accounts` |
 | `components/project/ProjectGhDrawer.vue` | Drawer resize được, chứa detail + comments (render khác biệt nhỏ cho PR) |
 | `components/project/TranslatableMarkdown.vue` | Khối markdown + nút Dịch/Xem gốc + cache + spinner (dùng cho title/body/comment) |
@@ -139,7 +174,7 @@ interface GhThread extends GhThreadSummary {
 ## Bảo mật (invariant)
 
 - **Token không rời sidecar**: chỉ trả JSON đã parse; stderr strip token trước khi lên UI. Token từ `gh auth token --user` chỉ vào `GH_TOKEN` của child process, **không log/không trả UI/không vào trace**. `gh.accounts` không bao giờ kèm token (không dùng `--show-token`).
-- **No command injection**: chỉ `projectId` (server-side load) + `number` (int) + enum (kind/state) + `assignee`/`account` (validate `@me`/login regex) vào args; gh chạy arg-array, no shell. **Không `gh auth switch`** (mutate global state).
+- **No command injection**: chỉ `projectId` (server-side load) + `number` (int) + enum (kind/state) + `assignee`/`reviewer`/`account` (validate `@me`/login regex — `reviewer` validate TRƯỚC khi ghép vào chuỗi `--search`) vào args; gh chạy arg-array, no shell. **Không `gh auth switch`** (mutate global state).
 - **Scope = workspace**: cwd = `project.path`, UI không truyền cwd.
 - **Validate biên**: gh JSON qua Zod; markdown render qua renderer AST, không inject HTML.
 
@@ -164,6 +199,7 @@ Thêm nhóm `project.github.*` ở `en.json` + `vi.json`: tab label (Issues/Pull
 - **AC1 — Hiện tab có điều kiện:** Project có remote GitHub → hiện cả tab "Issues" lẫn "Pull Requests". Project không phải GitHub → không có hai tab này.
 - **AC2 — Filter state (cả hai):** Mở mỗi tab → danh sách (mặc định Open). Issues filter Open/Closed/All; PR filter Open/Closed/Merged/All; đổi filter → list cập nhật. Rỗng → empty state đúng loại.
 - **AC2b — Filter assignee (cả hai):** Mỗi tab có dropdown assignee: Anyone (mặc định) / Assigned to me (`@me`) / từng assignee trong danh sách. Chọn một assignee → list chỉ còn mục được gán cho người đó (re-fetch qua `gh --assignee`). Chọn "@me" → chỉ mục gán cho user hiện tại. Giá trị assignee không hợp lệ bị reject ở sidecar.
+- **AC2c — Filter reviewer (chỉ PR):** Tab Pull Requests có thêm dropdown reviewer: Any reviewer (mặc định) / `@me` / từng requested reviewer trong danh sách. Chọn một reviewer → list chỉ còn PR đang chờ người đó review (re-fetch qua `--search "review-requested:<login>"`). Tab Issues KHÔNG hiển thị dropdown này; `reviewer` gửi kèm `kind='issue'` bị reject ở sidecar.
 - **AC3 — Phân biệt PR:** Dòng PR hiển thị state Merged (màu riêng), cờ Draft khi `isDraft`, và `base ← head` branch.
 - **AC4 — Chi tiết + comment:** Click 1 mục → drawer mở hiện body + toàn bộ comment (markdown). Drawer **kéo resize được** và đóng được. Giữ nguyên code block, link.
 - **AC5 — Mặc định bản gốc:** Khi mở chi tiết, mọi thành phần hiển thị bản gốc; không tự gọi LLM.
@@ -171,4 +207,4 @@ Thêm nhóm `project.github.*` ở `en.json` + `vi.json`: tab label (Issues/Pull
 - **AC7 — Dịch giữ định dạng:** Bản dịch giữ markdown, code fence, link, `@mention`, `#ref`, `\`identifier\`` — chỉ dịch prose.
 - **AC8 — gh chưa sẵn sàng:** Chưa cài/chưa login/không phải repo GitHub → empty state hướng dẫn đúng, không crash.
 - **AC9 — Đa account:** `gh` có ≥2 account → account picker liệt kê đủ, đánh dấu active, mặc định chọn active. Đổi account → list re-fetch theo account đó. Lựa chọn persist sau reload app (app-level). Account không có quyền repo → lỗi rõ ràng, không crash. Chạy gh như account đã chọn **không làm đổi active account** của `gh` ngoài AWOG.
-- **AC10 — Bảo mật:** Token GitHub (kể cả token lấy qua `gh auth token`) không xuất hiện trong payload IPC/UI/log/trace; không path/cwd nào từ UI đi vào lệnh gh; `account`/`assignee` không hợp lệ bị reject ở sidecar.
+- **AC10 — Bảo mật:** Token GitHub (kể cả token lấy qua `gh auth token`) không xuất hiện trong payload IPC/UI/log/trace; không path/cwd nào từ UI đi vào lệnh gh; `account`/`assignee`/`reviewer` không hợp lệ bị reject ở sidecar.

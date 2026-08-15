@@ -101,6 +101,7 @@
         :project-id="project.id"
         kind="issue"
         :repos="ghRepos"
+        :open-number="tab === 'issues' ? openNumber : null"
       />
       <ProjectGh
         v-if="visited.prs"
@@ -108,6 +109,7 @@
         :project-id="project.id"
         kind="pr"
         :repos="ghRepos"
+        :open-number="tab === 'prs' ? openNumber : null"
       />
     </template>
   </div>
@@ -125,14 +127,24 @@ import ProjectGh from './ProjectGh.vue'
 import ProjectOverview from './ProjectOverview.vue'
 import type { ProjectRepo, ProjectView } from './data'
 import { useProjectRepos } from '~/composables/useProjectRepos'
+import { prefetchGhList } from '~/composables/useProjectGh'
+import type { ProjectDeepLink } from '~/composables/useProjectModal'
 import type { Project } from '~/types'
 
 // `compact` (quick-view modal): hide management chrome (header actions + Overview's
 // destructive / config-import controls) so the panel is view-only.
 const props = withDefaults(
-  defineProps<{ project: Project; view: ProjectView; compact?: boolean }>(),
+  defineProps<{
+    project: Project
+    view: ProjectView
+    compact?: boolean
+    // Open straight on a GitHub tab / thread (a notification toast). Null = the
+    // normal Overview-first behaviour.
+    deepLink?: ProjectDeepLink | null
+  }>(),
   {
     compact: false,
+    deepLink: null,
   },
 )
 const emit = defineEmits<{
@@ -171,6 +183,26 @@ const overviewRepos = computed<ProjectRepo[]>(() => {
   })
 })
 
+// Warm both GH lists as soon as a GitHub project's detail opens, while the user
+// is still reading Overview — clicking Issues / Pull Requests then paints from
+// cache instead of a skeleton. Idle-scheduled so it never competes with the
+// detail's own render; the prefetcher skips lists that are already fresh, and
+// the tab joins an in-flight warm-up rather than spawning gh a second time.
+watch(
+  [() => props.project.id, () => ghRepos.value[0]?.relativePath],
+  ([projectId, relativePath]) => {
+    if (!projectId || !hasGh.value) return
+    const repoPath = relativePath && relativePath !== '.' ? relativePath : undefined
+    const warm = (): void => {
+      void prefetchGhList({ projectId, kind: 'issue', ...(repoPath ? { repoPath } : {}) })
+      void prefetchGhList({ projectId, kind: 'pr', ...(repoPath ? { repoPath } : {}) })
+    }
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(warm, { timeout: 1500 })
+    else setTimeout(warm, 250)
+  },
+  { immediate: true },
+)
+
 type Tab = 'overview' | 'issues' | 'prs'
 const tab = ref<Tab>('overview')
 
@@ -202,4 +234,24 @@ watch(
 watch(hasGh, (has) => {
   if (!has && tab.value !== 'overview') tab.value = 'overview'
 })
+
+// Deep link (GitHub notification toast): jump to its tab + hand the thread number
+// down. Keyed on `token`, not the value, so re-clicking the same notification
+// re-applies it. Declared LAST on purpose: switching project resets the tab to
+// Overview above, and this must win when both fire in the same tick.
+const openNumber = ref<number | null>(null)
+watch(
+  () => props.deepLink?.token ?? null,
+  () => {
+    const link = props.deepLink
+    if (!link) {
+      openNumber.value = null
+      return
+    }
+    tab.value = link.tab
+    visited.value[link.tab] = true
+    openNumber.value = link.ghNumber
+  },
+  { immediate: true, flush: 'post' },
+)
 </script>

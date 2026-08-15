@@ -53,6 +53,19 @@ export interface GhReview {
   threads: GhReviewThread[]
 }
 
+// PR-only: one person on the review of a PR. 'PENDING' = review requested but not
+// submitted yet; the rest mirror GitHub's review states.
+export type GhReviewerState =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'CHANGES_REQUESTED'
+  | 'COMMENTED'
+  | 'DISMISSED'
+export interface GhThreadReviewer {
+  login: string
+  state: GhReviewerState
+}
+
 export interface GhThreadSummary {
   kind: GhThreadKind
   number: number
@@ -67,6 +80,10 @@ export interface GhThreadSummary {
   isDraft?: boolean
   baseRefName?: string
   headRefName?: string
+  // PR-only: who is on the review — pending review requests first, then whoever
+  // already submitted one. Users only (team requests carry no login and are
+  // dropped, since the reviewer filter keys on a login).
+  reviewers?: GhThreadReviewer[]
 }
 
 export interface GhThread extends GhThreadSummary {
@@ -112,6 +129,14 @@ const SummaryJson = z
     isDraft: z.boolean().optional(),
     baseRefName: z.string().optional(),
     headRefName: z.string().optional(),
+    // gh `reviewRequests` mixes users ({ __typename: 'User', login }) and teams
+    // ({ __typename: 'Team', name, slug }) → login is optional here.
+    reviewRequests: z.array(z.object({ login: z.string().optional() }).passthrough()).optional(),
+    // gh `latestReviews` — the last submitted review per person. Carries a `body`
+    // we deliberately drop (the list row only shows who + verdict).
+    latestReviews: z
+      .array(z.object({ author: Actor.optional(), state: z.string().optional() }).passthrough())
+      .optional(),
   })
   .passthrough()
 
@@ -148,6 +173,29 @@ function toState(state: string | undefined): GhThreadState {
   return 'OPEN'
 }
 
+const REVIEW_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED'])
+
+// Merge a PR's pending review requests + already-submitted reviews into one
+// per-person list. Pending first (it's the actionable half) and pending WINS when
+// someone both reviewed and was asked to look again — GitHub reports that person
+// in both fields. Returns undefined when gh sent neither field (older builds /
+// issue rows) so the summary key stays absent instead of an empty array.
+function toReviewers(j: SummaryJsonT): GhThreadReviewer[] | undefined {
+  if (j.reviewRequests === undefined && j.latestReviews === undefined) return undefined
+  const byLogin = new Map<string, GhReviewerState>()
+  for (const r of j.reviewRequests ?? []) {
+    // Team requests carry no login — drop them (the filter keys on a login).
+    if (r.login) byLogin.set(r.login, 'PENDING')
+  }
+  for (const r of j.latestReviews ?? []) {
+    const l = r.author?.login
+    if (!l || byLogin.has(l)) continue
+    const state = (r.state ?? '').toUpperCase()
+    byLogin.set(l, REVIEW_STATES.has(state) ? (state as GhReviewerState) : 'COMMENTED')
+  }
+  return [...byLogin].map(([login, state]) => ({ login, state }))
+}
+
 function toSummary(kind: GhThreadKind, j: SummaryJsonT): GhThreadSummary {
   const out: GhThreadSummary = {
     kind,
@@ -164,6 +212,8 @@ function toSummary(kind: GhThreadKind, j: SummaryJsonT): GhThreadSummary {
     if (j.isDraft !== undefined) out.isDraft = j.isDraft
     if (j.baseRefName !== undefined) out.baseRefName = j.baseRefName
     if (j.headRefName !== undefined) out.headRefName = j.headRefName
+    const reviewers = toReviewers(j)
+    if (reviewers) out.reviewers = reviewers
   }
   return out
 }

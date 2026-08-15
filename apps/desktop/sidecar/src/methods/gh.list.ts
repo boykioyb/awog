@@ -17,6 +17,9 @@ const Params = z
     kind: z.enum(['issue', 'pr']),
     state: z.string().min(1),
     assignee: z.string().optional(),
+    // PR-only: requested reviewer (`@me` or a login) → a `review-requested:`
+    // search qualifier (gh pr list has no dedicated flag for it).
+    reviewer: z.string().optional(),
     account: z.string().optional(),
     // Child repo of a multi-repo workspace (relativePath from git.discoverRepos).
     repoPath: z.string().optional(),
@@ -41,12 +44,25 @@ const Params = z
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['assignee'], message: 'invalid assignee' })
       }
     }
+    // reviewer: same shape, PR-only (issues have no reviewers). Validated before it
+    // reaches the search query so nothing unvetted lands in a gh argument.
+    if (p.reviewer !== undefined && p.reviewer !== '') {
+      if (p.kind !== 'pr') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['reviewer'],
+          message: 'reviewer is only valid for kind=pr',
+        })
+      } else if (p.reviewer !== '@me' && !isValidGhLogin(p.reviewer)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reviewer'], message: 'invalid reviewer' })
+      }
+    }
   })
 
 // Field sets per kind. Issues have no isDraft/baseRefName/headRefName.
 const ISSUE_FIELDS = 'number,title,state,author,assignees,labels,createdAt,updatedAt'
 const PR_FIELDS =
-  'number,title,state,isDraft,author,assignees,labels,baseRefName,headRefName,createdAt,updatedAt'
+  'number,title,state,isDraft,author,assignees,reviewRequests,latestReviews,labels,baseRefName,headRefName,createdAt,updatedAt'
 
 interface Result {
   items: GhThreadSummary[]
@@ -75,11 +91,18 @@ register('gh.list', async (raw): Promise<Result> => {
   }
 
   const args = [kindArg, 'list', '--state', params.state, '--limit', String(limit), '--json', fields]
-  if (search) {
-    // GitHub text search across the whole repo (title/body), not just this page.
-    args.push('--search', search)
-  } else if (params.assignee !== undefined && params.assignee !== '') {
-    // Assignee filter only applies to the plain list (search carries its own scope).
+  // The reviewer filter has no gh flag → it rides the search query as a
+  // `review-requested:` qualifier, merged with the user's text search when both
+  // are set. `search` alone = GitHub text search across the whole repo (title/
+  // body), not just this page.
+  const reviewer = (params.reviewer ?? '').trim()
+  const query = [search, reviewer ? `review-requested:${reviewer}` : '']
+    .filter((part) => part !== '')
+    .join(' ')
+  if (query) args.push('--search', query)
+  if (!search && params.assignee !== undefined && params.assignee !== '') {
+    // Assignee filter only applies without a text search (which carries its own
+    // scope); it combines fine with a reviewer-only search query.
     args.push('--assignee', params.assignee)
   }
 

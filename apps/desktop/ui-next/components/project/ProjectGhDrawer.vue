@@ -105,7 +105,10 @@
         class="ghdwbody"
         :class="{ 'gh-files-full': isFull && activeTab === 'files' && !!thread }"
       >
-        <div v-if="loading" class="fd" style="padding: 24px; text-align: center">
+        <!-- Only a cold open (no list row to seed from) waits on a blank pane —
+             normally the header/title/labels are already painted and just the body
+             below shimmers. -->
+        <div v-if="loading && !thread" class="fd" style="padding: 24px; text-align: center">
           {{ t('projects.gh.loading') }}
         </div>
         <template v-else-if="thread">
@@ -137,7 +140,11 @@
             <div v-if="viewLang !== 'orig'" class="trbadge">
               {{ t('projects.drawer.translatedBadge') }}
             </div>
-            <div class="ghmd">
+            <!-- Body arrives with the core gh.get — shimmer in its place until then. -->
+            <div v-if="loading" class="ghsk-body">
+              <div v-for="w in BODY_SK" :key="w" class="ghskbar" :style="{ width: w }" />
+            </div>
+            <div v-else class="ghmd">
               <ProjectGhMarkdown :source="segText('body', thread.body)" />
             </div>
           </template>
@@ -216,9 +223,15 @@
               </div>
             </template>
 
+            <!-- Comments come with the core detail, the review timeline behind it
+                 (gh.reviews) — shimmer for whichever is still in flight. -->
+            <div v-if="loading || reviewsLoading" class="ghsk-body">
+              <div v-for="w in COMMENT_SK" :key="w" class="ghskbar" :style="{ width: w }" />
+            </div>
+
             <!-- Empty state when there's no discussion yet. -->
             <div
-              v-if="!thread.comments.length && !reviews.length"
+              v-else-if="!thread.comments.length && !reviews.length"
               class="fd"
               style="margin-bottom: 4px"
             >
@@ -380,7 +393,11 @@ const { isDark } = useTheme()
 const props = defineProps<{
   thread: GhThread | null
   kind: GhKind
+  // The core detail (body + comments) is in flight. The thread prop is already the
+  // list-row seed while this is true — header/title/labels paint, body shimmers.
   loading: boolean
+  // PR-only: the review timeline is still streaming in behind the thread.
+  reviewsLoading: boolean
   width: number
   viewLang: ViewLang
   segment: (id: GhSegmentId) => GhSegmentState | null
@@ -522,6 +539,11 @@ onBeforeUnmount(onUp)
 // ── Display helpers ───────────────────────────────────────────────────────────
 const files = computed(() => props.thread?.files ?? [])
 const reviews = computed(() => props.thread?.reviews ?? [])
+
+// Shimmer line widths for the body / discussion placeholders (static descriptors —
+// the bar itself is a CSS gradient sweep, see .ghskbar).
+const BODY_SK = ['92%', '78%', '85%', '46%'] as const
+const COMMENT_SK = ['64%', '88%', '52%'] as const
 // Changed files as a directory tree (GitHub-style), single-child chains compressed.
 const fileTree = computed(() => buildFileTree(files.value))
 
@@ -640,6 +662,36 @@ function relativeWhen(iso: string): string {
 </script>
 
 <style scoped>
+/* Placeholder for prose still in flight (body / discussion). Same shimmer as the
+   list skeleton: a soft band swept via background-position — paint only. */
+.ghsk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 12px;
+}
+.ghskbar {
+  height: 11px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--bgHover) 25%, var(--bgActive) 50%, var(--bgHover) 75%);
+  background-size: 200% 100%;
+  animation: ghdw-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes ghdw-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ghskbar {
+    animation: none;
+    background: var(--bgHover);
+  }
+}
+
 /* Files-changed two-pane (fullscreen only): turn the scrolling body into a
    non-scrolling flex row so the tree column + diff column each scroll on their own
    (GitHub-style). Higher specificity than the global .ghdwbody so it wins. */

@@ -24,6 +24,7 @@
             v-if="project && view"
             :project="project"
             :view="view"
+            :deep-link="deepLink"
             @edit="onEdit"
             @delete="onDelete"
             @open-llm="onOpenLlm"
@@ -110,7 +111,7 @@ import ProjectLlmDefaultsModal from '~/components/project/ProjectLlmDefaultsModa
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import SaveAsTemplateDialog from '~/components/templates/SaveAsTemplateDialog.vue'
 import InstallTemplateDialog from '~/components/templates/InstallTemplateDialog.vue'
-import { useProjectModal } from '~/composables/useProjectModal'
+import { useProjectModal, type ProjectDeepLink } from '~/composables/useProjectModal'
 import { useProjectView } from '~/composables/useProjectView'
 import { useProjectActions } from '~/composables/useProjectActions'
 import { useToasts } from '~/composables/useToasts'
@@ -118,8 +119,15 @@ import { useProjectsStore } from '~/stores/projects'
 import type { Project } from '~/types'
 
 const { t } = useI18n()
-const { isOpen, key, close } = useProjectModal()
+const { isOpen, key, tab, ghNumber, target, close } = useProjectModal()
 const store = useProjectsStore()
+
+// Deep-link the opener asked for (GitHub notification toast → this PR/issue).
+// `target` re-stamps on every open so clicking the same notification twice
+// re-applies it even when the detail is already showing that thread.
+const deepLink = computed<ProjectDeepLink | null>(() =>
+  tab.value ? { tab: tab.value, ghNumber: ghNumber.value, token: target.value } : null,
+)
 
 // The session's `project` value may be an id OR a display name — resolve either.
 const project = computed<Project | null>(() => {

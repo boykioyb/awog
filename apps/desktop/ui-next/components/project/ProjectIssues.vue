@@ -26,12 +26,21 @@
         width="150px"
         @update:model-value="onAssignee"
       />
+      <!-- Reviewer is PR-only (issues have no review requests). -->
+      <AppSelect
+        v-if="kind === 'pr'"
+        :model-value="reviewer || '__any'"
+        :options="reviewerOptions"
+        width="150px"
+        @update:model-value="onReviewer"
+      />
       <div class="srch" style="flex: 1; min-width: 120px; max-width: 220px">
         <Icon name="search" style="width: 13px; height: 13px" />
         <input :value="search" :placeholder="t('projects.gh.search')" @input="onSearch" />
       </div>
       <button
-        class="iconbtn"
+        class="iconbtn ghrefresh"
+        :class="{ busy: loading || revalidating }"
         :title="t('projects.gh.refresh')"
         style="width: 30px; height: 30px"
         :disabled="loading"
@@ -41,12 +50,20 @@
       </button>
     </div>
 
-    <div class="ghlist">
-      <div v-if="loading && !items.length" class="fd" style="padding: 28px; text-align: center">
-        {{ t('projects.gh.loading') }}
-      </div>
+    <!-- Re-fetch over an already-loaded list: dim the rows (the spinning button
+         carries the "working" signal) instead of swapping them for a skeleton. -->
+    <div class="ghlist" :class="{ refetching: loading && items.length > 0 }">
+      <ProjectGhListSkeleton v-if="loading && !items.length" />
       <template v-else>
-        <div v-for="it in items" :key="it.number" class="ghrow" @click="emit('open', it.number)">
+        <div
+          v-for="(it, i) in items"
+          :key="it.number"
+          class="ghrow ghrow-in"
+          :style="{ animationDelay: rowDelay(i) }"
+          @click="emit('open', it.number)"
+          @mouseenter="onRowHover(it.number)"
+          @mouseleave="cancelRowHover"
+        >
           <div class="ghr1">
             <Icon :name="kind === 'pr' ? 'fork' : 'alert'" style="width: 13px; height: 13px" />
             <span class="ghnum">#{{ it.number }}</span>
@@ -77,6 +94,20 @@
           <div class="ghr2">
             <span v-if="kind === 'pr' && it.baseRefName" class="mono">
               {{ it.baseRefName }} ← {{ it.headRefName }}
+            </span>
+            <!-- Who is on the review: pending requests first, then verdicts. -->
+            <span
+              v-for="r in it.reviewers"
+              :key="r.login"
+              class="ghrev"
+              :style="{
+                color: reviewerMeta(r.state).color,
+                borderColor: reviewerMeta(r.state).border,
+              }"
+              :title="t('projects.gh.reviewState.' + reviewerMeta(r.state).key, { login: r.login })"
+            >
+              <Icon :name="reviewerMeta(r.state).icon" style="width: 11px; height: 11px" />
+              {{ r.login }}
             </span>
             <span
               v-for="l in it.labels"
@@ -127,13 +158,16 @@
 <script setup lang="ts">
 // Issues / Pull Requests tab — presentational. Filter chips drive the parent's
 // useProjectGh controller via emits; rows bind the live gh.list summaries. The
-// account/state/assignee dropdowns are themed AppSelects (WKWebView-safe).
-import { computed, ref } from 'vue'
+// account/state/assignee/reviewer dropdowns are themed AppSelects (WKWebView-safe);
+// reviewer only renders for pull requests.
+import { computed, onBeforeUnmount, ref } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
+import ProjectGhListSkeleton from '~/components/project/ProjectGhListSkeleton.vue'
 import type { ProjectRepo } from '~/composables/useProjectRepos'
 import type {
   GhKind,
   GhListState,
+  GhReviewerState,
   GhThreadState,
   GhThreadSummary,
 } from '~/composables/useProjectGh'
@@ -145,9 +179,14 @@ const props = defineProps<{
   kind: GhKind
   items: GhThreadSummary[]
   loading: boolean
+  // A silent re-fetch behind already-painted rows — spins the refresh glyph only
+  // (no skeleton, no dim: the rows on screen stay readable).
+  revalidating: boolean
   errorCode: string | null
   stateFilter: GhListState
   assignee: string
+  // PR-only requested-reviewer filter ('' = any reviewer).
+  reviewer: string
   search: string
   account: string
   // App-level default account login ('' = active gh account) the per-project
@@ -155,6 +194,7 @@ const props = defineProps<{
   globalAccount: string
   accounts: string[]
   knownAssignees: string[]
+  knownReviewers: string[]
   // GitHub child repos of the project + the selected one (multi-repo workspace).
   repos: ProjectRepo[]
   repoPath: string
@@ -164,9 +204,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'open', n: number): void
+  (e: 'prefetch', n: number): void
   (e: 'refresh'): void
   (e: 'set-state', v: GhListState): void
   (e: 'set-assignee', v: string): void
+  (e: 'set-reviewer', v: string): void
   (e: 'set-account', v: string): void
   (e: 'set-search', v: string): void
   (e: 'set-repo', v: string): void
@@ -186,10 +228,26 @@ const stateOptions = computed<AppSelectOption[]>(() =>
   })),
 )
 
+// Known logins seen on the loaded rows + the active filter — which the narrowing
+// it caused may have removed from that list, so the trigger never renders blank.
+function loginOptions(known: string[], active: string): AppSelectOption[] {
+  const set = new Set(known)
+  if (active && active !== '@me') set.add(active)
+  return [...set].sort((a, b) => a.localeCompare(b)).map((l) => ({ value: l, label: l }))
+}
+
 const assigneeOptions = computed<AppSelectOption[]>(() => [
   { value: '__any', label: t('projects.gh.assigneeAnyone') },
   { value: '@me', label: t('projects.gh.assigneeMe') },
-  ...props.knownAssignees.map((a) => ({ value: a, label: a })),
+  ...loginOptions(props.knownAssignees, props.assignee),
+])
+
+// Requested-reviewer picker (PR-only) — mirrors the assignee one; "any reviewer"
+// labels the empty state so the two dropdowns stay distinguishable at a glance.
+const reviewerOptions = computed<AppSelectOption[]>(() => [
+  { value: '__any', label: t('projects.gh.reviewerAny') },
+  { value: '@me', label: t('projects.gh.assigneeMe') },
+  ...loginOptions(props.knownReviewers, props.reviewer),
 ])
 
 // First row inherits the app-level default (Settings → Git). Its label shows what
@@ -227,12 +285,38 @@ const emptyText = computed(() => {
   return t(key, { state: props.stateFilter })
 })
 
+// Per review-state chip look: icon + color + i18n key. Pending/commented/dismissed
+// stay quiet (dim text, neutral border) so approved / changes-requested — the two
+// states that need action — are the ones that read at a glance.
+const REVIEWER_META: Record<
+  GhReviewerState,
+  { icon: string; color: string; border: string; key: string }
+> = {
+  PENDING: { icon: 'clock', color: 'var(--textDim)', border: 'var(--border)', key: 'pending' },
+  APPROVED: { icon: 'check', color: 'var(--green)', border: 'var(--green)', key: 'approved' },
+  CHANGES_REQUESTED: {
+    icon: 'x',
+    color: 'var(--danger)',
+    border: 'var(--danger)',
+    key: 'changesRequested',
+  },
+  COMMENTED: {
+    icon: 'message',
+    color: 'var(--textDim)',
+    border: 'var(--border)',
+    key: 'commented',
+  },
+  DISMISSED: { icon: 'minus', color: 'var(--textDim)', border: 'var(--border)', key: 'dismissed' },
+}
+const reviewerMeta = (s: GhReviewerState) => REVIEWER_META[s]
+
 function stateColor(s: GhThreadState): string {
   return s === 'OPEN' ? 'var(--green)' : s === 'MERGED' ? 'var(--violet)' : 'var(--textDim)'
 }
 
 const onState = (v: string) => emit('set-state', v as GhListState)
 const onAssignee = (v: string) => emit('set-assignee', v === '__any' ? '' : v)
+const onReviewer = (v: string) => emit('set-reviewer', v === '__any' ? '' : v)
 // '__active' → '' (active gh account); '__inherit' passes through as the override.
 const onAccount = (v: string) => emit('set-account', v === '__active' ? '' : v)
 
@@ -257,6 +341,27 @@ const installHint = computed<string>(() => {
 })
 const onSearch = (e: Event) => emit('set-search', (e.target as HTMLInputElement).value)
 
+// Hover intent → warm the row's detail so the click after it opens from cache.
+// The delay keeps a cursor sweeping across the list from firing a gh call per row.
+const HOVER_INTENT_MS = 140
+let hoverTimer: ReturnType<typeof setTimeout> | null = null
+function cancelRowHover(): void {
+  if (hoverTimer) clearTimeout(hoverTimer)
+  hoverTimer = null
+}
+function onRowHover(n: number): void {
+  cancelRowHover()
+  hoverTimer = setTimeout(() => emit('prefetch', n), HOVER_INTENT_MS)
+}
+onBeforeUnmount(cancelRowHover)
+
+// Staggered reveal for freshly mounted rows. Vue reuses the DOM of rows that
+// survive a re-fetch (keyed by number), so only genuinely new rows animate. The
+// delay is capped so "Load more" (index 50+) doesn't wait out a long ramp.
+const STAGGER_MS = 22
+const STAGGER_MAX = 9
+const rowDelay = (i: number): string => `${Math.min(i, STAGGER_MAX) * STAGGER_MS}ms`
+
 // Short relative time for an ISO timestamp: <1h Nm, <24h Nh, <7d Nd, else date.
 function relativeWhen(iso: string): string {
   const ms = Date.parse(iso)
@@ -274,6 +379,63 @@ function relativeWhen(iso: string): string {
 </script>
 
 <style scoped>
+/* In-flight gh.list → spin the refresh glyph (transform only: GPU, no reflow). */
+.ghrefresh.busy > .icn {
+  animation: ghrefresh-spin 0.7s linear infinite;
+}
+.ghrefresh:disabled {
+  cursor: default;
+}
+@keyframes ghrefresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Re-fetch over existing rows: fade them back. Kept interactive on purpose —
+   pointer-events:none here would also kill scrolling (.ghlist IS the scroller). */
+.ghlist.refetching {
+  opacity: 0.5;
+}
+.ghlist {
+  transition: opacity 0.14s ease;
+}
+/* New rows fade + rise in, staggered by index (inline animation-delay). */
+.ghrow-in {
+  animation: ghrow-in 0.2s ease-out both;
+}
+@keyframes ghrow-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ghrefresh.busy > .icn,
+  .ghrow-in {
+    animation: none;
+  }
+  .ghlist {
+    transition: none;
+  }
+}
+
+/* Reviewer chip on a PR row — same pill vocabulary as .ghlabel (prototype.css),
+   plus the state icon. Color/border come from the state (inline :style). */
+.ghrev {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid;
+  border-radius: 99px;
+  font-family: var(--code);
+  font-size: 0.7692rem;
+  white-space: nowrap;
+}
 .ghmore {
   width: 100%;
   margin-top: 4px;
