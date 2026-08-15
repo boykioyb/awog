@@ -46,6 +46,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCommandPalette } from '~/composables/useCommandPalette'
+import { startGhNotifications } from '~/composables/useGhNotifications'
 import { useSettingsStore } from '~/stores/settings'
 
 // Shell layout: NavRail | (TopBar + page body). Ported from awog-prototype.html
@@ -66,6 +67,11 @@ watch(() => route.path, closeDrawers)
 // Watch the sessions store for turn-complete + new attention items → fire native
 // notifications when the window is unfocused (composable owns gating/permission).
 useNativeNotify()
+
+// Poll the GitHub notification inbox for the opted-in projects and toast what's
+// new (docs/features/github-notifications.md). Main window only — a popout must
+// not double-toast. No-op until the user picks projects in Settings → Git.
+startGhNotifications()
 
 // Drive the live system-tray status surface (rate limits / usage / running /
 // attention) + route tray menu clicks. No-op outside Electron.

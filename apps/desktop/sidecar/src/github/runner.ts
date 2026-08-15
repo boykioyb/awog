@@ -183,6 +183,20 @@ export async function resolveGhEnv(account?: string): Promise<NodeJS.ProcessEnv>
   return env
 }
 
+// Run an ACCOUNT-scoped gh command that isn't tied to a repo (e.g. the
+// notifications inbox). Same token handling as runGh; no cwd because no repo is
+// resolved — nothing path-like from params is involved at all.
+export async function runGhAccount(
+  args: readonly string[],
+  account?: string,
+): Promise<string> {
+  const env = await resolveGhEnv(account)
+  log.info('gh exec', { sub: args.slice(0, 2).join(' ') })
+  const outcome = await execOnce(args, { env })
+  if (outcome.ok) return outcome.stdout
+  throwForOutcome(outcome)
+}
+
 // Run a repo-scoped gh command. `cwd` = project.path (server-loaded). `account`
 // optionally selects a non-active gh account (token injected, never logged).
 export async function runGh(

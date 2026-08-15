@@ -1,15 +1,12 @@
 {
   "settingsSessions.autoApprove.name": "Tự duyệt bước đơn giản",
   "settingsSessions.autoApprove.desc": "Bỏ qua bước duyệt cho các phase rủi ro thấp",
-  "settingsSessions.notifications.name": "Thông báo",
-  "settingsSessions.notifications.desc": "Hiện thông báo hệ thống khi task cần được duyệt",
   "settingsSessions.autoContinueBg.name": "Tự tiếp tục sau tác vụ nền",
   "settingsSessions.autoContinueBg.desc": "Khi một lệnh nền (Bash run_in_background) chạy xong và session đang rảnh, tự động chạy tiếp lượt. Tắt = hiện nút “Tiếp tục” để bạn tự bấm.",
   "settingsSessions.pasteAsFile.name": "Dán thành file",
   "settingsSessions.pasteAsFile.desc": "Đoạn dán dài sẽ thành tệp đính kèm thay vì nội dung inline",
   "settingsSessions.pasteThreshold.name": "Ngưỡng dán (ký tự)",
   "settingsSessions.pasteThreshold.desc": "Đoạn dán dài hơn mức này sẽ thành file (200–100000)",
-
   "settingsSessions.quota.heading": "Hạn mức sử dụng (giới hạn 5 giờ)",
   "settingsSessions.quota.warning.name": "Cảnh báo hạn mức",
   "settingsSessions.quota.warning.desc": "Cảnh báo khi hạn mức 5 giờ của tài khoản chạm ngưỡng",

@@ -10,13 +10,6 @@
     </SettingsField>
 
     <SettingsField
-      :name="t('settingsSessions.notifications.name')"
-      :desc="t('settingsSessions.notifications.desc')"
-    >
-      <SettingsTog v-model="notificationsEnabled" />
-    </SettingsField>
-
-    <SettingsField
       :name="t('settingsSessions.autoContinueBg.name')"
       :desc="t('settingsSessions.autoContinueBg.desc')"
     >
@@ -140,7 +133,6 @@ const settings = useSettingsStore()
 const sessionToggle = (
   key:
     | 'autoApprove'
-    | 'notificationsEnabled'
     | 'autoCompact'
     | 'assistantBubble'
     | 'typewriter'
@@ -155,7 +147,6 @@ const sessionToggle = (
   })
 
 const autoApprove = sessionToggle('autoApprove')
-const notificationsEnabled = sessionToggle('notificationsEnabled')
 const autoCompact = sessionToggle('autoCompact')
 const assistantBubble = sessionToggle('assistantBubble')
 const typewriter = sessionToggle('typewriter')

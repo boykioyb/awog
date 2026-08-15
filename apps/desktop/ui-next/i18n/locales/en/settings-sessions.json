@@ -1,15 +1,12 @@
 {
   "settingsSessions.autoApprove.name": "Auto-approve trivial steps",
   "settingsSessions.autoApprove.desc": "Skip approval gates for low-risk phases",
-  "settingsSessions.notifications.name": "Notifications",
-  "settingsSessions.notifications.desc": "Show a system notification when a task needs approval",
   "settingsSessions.autoContinueBg.name": "Auto-continue after background task",
   "settingsSessions.autoContinueBg.desc": "When a background command (Bash run_in_background) finishes and the session is idle, continue the turn automatically. Off = show a “Continue” prompt instead.",
   "settingsSessions.pasteAsFile.name": "Paste as file",
   "settingsSessions.pasteAsFile.desc": "Long pasted text becomes an attachment instead of inline content",
   "settingsSessions.pasteThreshold.name": "Paste threshold (chars)",
   "settingsSessions.pasteThreshold.desc": "Paste longer than this becomes a file (200–100000)",
-
   "settingsSessions.quota.heading": "Usage quota (5-hour limit)",
   "settingsSessions.quota.warning.name": "Quota warning",
   "settingsSessions.quota.warning.desc": "Warn when the account's 5-hour usage limit reaches the threshold",

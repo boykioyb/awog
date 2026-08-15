@@ -71,6 +71,60 @@
       <SettingsSeg v-model="autoFetchIntervalMs" :options="fetchIntervalOptions" />
     </SettingsField>
 
+    <SettingsField :name="t('settings.git.ghNotify.name')" :desc="t('settings.git.ghNotify.desc')">
+      <SettingsTog v-model="ghNotifyEnabled" />
+    </SettingsField>
+
+    <SettingsField
+      v-if="ghNotifyEnabled"
+      :name="t('settings.git.ghNotifyInterval.name')"
+      :desc="t('settings.git.ghNotifyInterval.desc')"
+    >
+      <SettingsSeg v-model="ghNotifyIntervalMs" :options="notifyIntervalOptions" />
+    </SettingsField>
+
+    <!-- Per-project opt-in: the inbox spans every repo, so nothing is surfaced
+         until the user names the projects worth interrupting them for. -->
+    <SettingsField
+      v-if="ghNotifyEnabled"
+      block
+      :name="t('settings.git.ghNotifyProjects.name')"
+      :desc="t('settings.git.ghNotifyProjects.desc')"
+    >
+      <div v-if="!projectRows.length" class="fd">
+        {{ t('settings.git.ghNotifyProjects.none') }}
+      </div>
+      <div v-else class="ghnp">
+        <label v-for="p in projectRows" :key="p.id" class="ghnp-row">
+          <input
+            type="checkbox"
+            :checked="ghNotifyProjectIds.includes(p.id)"
+            @change="toggleNotifyProject(p.id)"
+          />
+          <span class="ghnp-name">{{ p.name }}</span>
+          <span v-if="p.slug" class="ghnp-slug mono">{{ p.slug }}</span>
+        </label>
+      </div>
+      <div v-if="ghNotifyEnabled && !ghNotifyProjectIds.length" class="fd" style="margin-top: 6px">
+        {{ t('settings.git.ghNotifyProjects.empty') }}
+      </div>
+
+      <!-- Diagnostic: polling fails silently by design, so this is the only way
+           to see gh auth / project-mapping problems. Channel + toast placement
+           live in Settings → Notifications. -->
+      <div class="ghnp-check">
+        <button class="btn sm" type="button" :disabled="checking" @click="onCheckNotifications">
+          <Icon name="scan" style="width: 13px; height: 13px" />
+          {{
+            checking
+              ? t('settings.git.ghNotifyCheck.running')
+              : t('settings.git.ghNotifyCheck.action')
+          }}
+        </button>
+        <span v-if="checkText" class="fd">{{ checkText }}</span>
+      </div>
+    </SettingsField>
+
     <SettingsField
       block
       :name="t('settings.git.commitRule.name')"
@@ -97,12 +151,16 @@
 // textarea controls write through `updateGit` / `resetGitCommitRule` via computed
 // get/set proxies, so store state is only ever mutated inside the store actions.
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import { githubSlugFromRemote } from '~/components/project/data'
+import { checkGhNotifications, type GhNotifyCheck } from '~/composables/useGhNotifications'
 import type { GhAccount } from '~/composables/useProjectGh'
+import { useProjectsStore } from '~/stores/projects'
 import type { AutoCommitScope, DirtyTaskPolicy } from '~/stores/settings'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
-const { git, githubAccount } = storeToRefs(settings)
+const { git, githubAccount, githubNotify } = storeToRefs(settings)
+const projectsStore = useProjectsStore()
 const sc = useSidecar()
 
 // App-level default GitHub (gh CLI) account. '__active' (empty stored value) =
@@ -182,4 +240,110 @@ const commitMessageRule = computed<string>({
   set: (commitMessageRule) => settings.updateGit({ commitMessageRule }),
 })
 const resetCommitRule = () => settings.resetGitCommitRule()
+
+// ── GitHub notifications (docs/features/github-notifications.md) ─────────────
+// 60s is GitHub's documented minimum poll interval for the notifications API —
+// the poller floors at it regardless of what is stored here.
+const notifyIntervalOptions = [
+  { label: '1', value: '60000' },
+  { label: '2', value: '120000' },
+  { label: '5', value: '300000' },
+  { label: '10', value: '600000' },
+] as const
+
+const ghNotifyEnabled = computed<boolean>({
+  get: () => githubNotify.value.enabled,
+  set: (enabled) => (githubNotify.value.enabled = enabled),
+})
+const ghNotifyIntervalMs = computed<string>({
+  get: () => String(githubNotify.value.intervalMs),
+  set: (value) => (githubNotify.value.intervalMs = Number(value)),
+})
+const ghNotifyProjectIds = computed<string[]>(() => githubNotify.value.projectIds)
+
+// Every project is listed (a multi-repo container has no remote of its own, yet
+// still holds GitHub repos); the slug is shown when it can be derived, as a hint
+// of what the row will actually watch.
+const projectRows = computed(() =>
+  [...projectsStore.projects]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => ({ id: p.id, name: p.name, slug: githubSlugFromRemote(p.gitRemote) })),
+)
+
+// Connection check — the poller swallows its errors on purpose (a toast every
+// minute for "gh not authed" would be worse than the missing feature), so this
+// is where those problems become visible. It fetches once and reports; it does
+// NOT toast (toast look/placement belongs to Appearance).
+const checking = ref(false)
+const checkResult = ref<GhNotifyCheck | null>(null)
+const checkText = computed<string>(() => {
+  const r = checkResult.value
+  if (!r) return ''
+  if (r.status === 'no-projects') return t('settings.git.ghNotifyCheck.noProjects')
+  if (r.status === 'offline') return t('settings.git.ghNotifyCheck.offline')
+  if (r.status === 'error') return t('settings.git.ghNotifyCheck.error', { message: r.message })
+  return t('settings.git.ghNotifyCheck.ok', { matched: r.matched, total: r.total })
+})
+async function onCheckNotifications(): Promise<void> {
+  if (checking.value) return
+  checking.value = true
+  try {
+    checkResult.value = await checkGhNotifications()
+  } finally {
+    checking.value = false
+  }
+}
+
+function toggleNotifyProject(id: string): void {
+  const current = githubNotify.value.projectIds
+  githubNotify.value.projectIds = current.includes(id)
+    ? current.filter((x) => x !== id)
+    : [...current, id]
+}
 </script>
+
+<style scoped>
+/* Connection check row under the project list. */
+.ghnp-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* Per-project opt-in list. Scrolls once it outgrows the field so the panel keeps
+   its rhythm with many projects. */
+.ghnp {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+}
+.ghnp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ghnp-row:hover {
+  background: var(--bgHover);
+}
+.ghnp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ghnp-slug {
+  color: var(--textDim);
+  font-size: 12px;
+}
+</style>

@@ -1,0 +1,13 @@
+{
+  "github.notify.more": "+{n} more GitHub notifications",
+  "github.notify.reason.review_requested": "review requested",
+  "github.notify.reason.mention": "mentioned you",
+  "github.notify.reason.assign": "assigned to you",
+  "github.notify.reason.comment": "new comment",
+  "github.notify.reason.author": "your thread",
+  "github.notify.reason.state_change": "state changed",
+  "github.notify.reason.subscribed": "update",
+  "github.notify.reason.team_mention": "team mentioned",
+  "github.notify.reason.ci_activity": "CI activity",
+  "github.notify.nativeSample": "This is what a GitHub notification looks like."
+}

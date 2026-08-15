@@ -8,19 +8,38 @@ import { ref } from 'vue'
 // -block issues you'd hit rendering inside a transformed ancestor (e.g. the composer).
 
 export type ActionToastKind = 'info' | 'success' | 'error'
-export type ActionToast = { id: string; text: string; kind: ActionToastKind }
+export type ActionToast = {
+  id: string
+  text: string
+  kind: ActionToastKind
+  // Optional click-through (e.g. a GitHub notification opening its PR). When set,
+  // clicking runs it AND dismisses; without it a click just dismisses.
+  action?: () => void
+  // Icon override — defaults to the kind's icon.
+  icon?: string
+}
 
 const TTL_MS = 3600
+// Actionable toasts stay longer: they're only useful if the user gets to click.
+const ACTION_TTL_MS = 8000
 
 // Module-level (singleton) queue shared across all callers + the host.
 const toasts = ref<ActionToast[]>([])
 
-export function pushActionToast(text: string, kind: ActionToastKind = 'info'): void {
+export function pushActionToast(
+  text: string,
+  kind: ActionToastKind = 'info',
+  opts: { action?: () => void; icon?: string; ttlMs?: number } = {},
+): void {
   const id = `at-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-  toasts.value = [...toasts.value, { id, text, kind }]
+  const toast: ActionToast = { id, text, kind }
+  if (opts.action) toast.action = opts.action
+  if (opts.icon) toast.icon = opts.icon
+  toasts.value = [...toasts.value, toast]
+  const ttl = opts.ttlMs ?? (opts.action ? ACTION_TTL_MS : TTL_MS)
   setTimeout(() => {
     toasts.value = toasts.value.filter((tt) => tt.id !== id)
-  }, TTL_MS)
+  }, ttl)
 }
 
 export function dismissActionToast(id: string): void {

@@ -1,0 +1,13 @@
+{
+  "github.notify.more": "+{n} thông báo GitHub khác",
+  "github.notify.reason.review_requested": "được yêu cầu review",
+  "github.notify.reason.mention": "nhắc tới bạn",
+  "github.notify.reason.assign": "giao cho bạn",
+  "github.notify.reason.comment": "bình luận mới",
+  "github.notify.reason.author": "thread của bạn",
+  "github.notify.reason.state_change": "đổi trạng thái",
+  "github.notify.reason.subscribed": "cập nhật",
+  "github.notify.reason.team_mention": "nhắc tới team",
+  "github.notify.reason.ci_activity": "hoạt động CI",
+  "github.notify.nativeSample": "Thông báo GitHub sẽ trông như thế này."
+}

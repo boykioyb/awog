@@ -27,10 +27,13 @@ export function useNativeNotify() {
   const { sessions } = storeToRefs(store)
   const { t } = useI18n()
 
-  // Master toggle (Settings → Sessions → notificationsEnabled). When off, suppress
-  // every native notification regardless of focus / permission. Read live so the
-  // toggle takes effect immediately without remounting the watcher.
-  const notificationsOn = (): boolean => settings.sessions.notificationsEnabled
+  // Master gate (Settings → Notifications). `sessionEvents` is the source toggle;
+  // `delivery === 'toast'` means the user asked for in-app only, so the OS is off
+  // limits for every source. Read live so a change takes effect immediately
+  // without remounting the watcher. Session events stay unfocused-only even in
+  // 'native' mode — an open session already shows them as they happen.
+  const notificationsOn = (): boolean =>
+    settings.notifications.sessionEvents && settings.notifications.delivery !== 'toast'
 
   // Last seen status per session id (numeric client id). Seeded on first run so
   // we never notify for the initial hydrate snapshot.

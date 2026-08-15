@@ -8,6 +8,7 @@
     <SettingsWorkspace v-else-if="active === 'workspace'" />
     <SettingsGit v-else-if="active === 'git'" />
     <SettingsDevices v-else-if="active === 'devices'" />
+    <SettingsNotifications v-else-if="active === 'notifications'" />
     <SettingsSessions v-else-if="active === 'sessions'" />
     <SettingsKeymap v-else-if="active === 'keymap'" />
     <SettingsAbout v-else />

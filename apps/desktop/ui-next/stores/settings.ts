@@ -98,7 +98,6 @@ export interface GitSettings {
 // functional engine prefs; the rest are renderer UX prefs (bubble/typewriter/…).
 export interface SessionSettings {
   autoApprove: boolean
-  notificationsEnabled: boolean
   autoCompact: boolean
   assistantBubble: boolean
   typewriter: boolean
@@ -122,6 +121,42 @@ export interface QuotaWarningSettings {
 export interface AutoUpdateSettings {
   enabled: boolean
   lastCheckedAt: string | null
+}
+
+// GitHub notification polling (docs/features/github-notifications.md). Opt-in PER
+// PROJECT: the inbox spans every repo the account can see, but only notifications
+// belonging to `projectIds` are surfaced — an empty list means nothing fires, even
+// with `enabled` on.
+export interface GithubNotifySettings {
+  enabled: boolean
+  intervalMs: number
+  projectIds: string[]
+}
+
+// ── Notifications (Settings → Notifications) ────────────────────────────────
+// HOW notifications reach the user, owned in one place; the feature panels only
+// own WHAT generates them (Git: poll GitHub; Sessions: turn settle / attention).
+//   'toast'  — in-app toast only; never touches the OS
+//   'native' — OS notification only, even with the app focused
+//   'both'   — toast always + OS notification when the window isn't focused
+export type NotifyDelivery = 'toast' | 'native' | 'both'
+
+// Screen corner (or edge centre) the app-lifetime toasts stack in.
+export type ToastPosition =
+  | 'top-left'
+  | 'top-center'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-center'
+  | 'bottom-right'
+
+export interface NotificationSettings {
+  delivery: NotifyDelivery
+  toastPosition: ToastPosition
+  // Session turn-settle / needs-attention notifications (was sessions.
+  // notificationsEnabled). Session events only ever fire on an unfocused window
+  // — the open session already shows them live.
+  sessionEvents: boolean
 }
 
 // LLM used by the selection-to-translate feature (docs/features/selection-translate.md).
@@ -240,7 +275,6 @@ const DEFAULT_GIT: GitSettings = {
 
 const DEFAULT_SESSIONS: SessionSettings = {
   autoApprove: false,
-  notificationsEnabled: true,
   autoCompact: true,
   assistantBubble: true,
   // Default OFF = craft-style streaming (full text, 300ms chunky re-parse + buffer gate,
@@ -267,6 +301,21 @@ const DEFAULT_AUTO_UPDATE: AutoUpdateSettings = {
 
 // Default to following the session default; when a user pins a custom model, seed
 // a cheap one (translation is short + high-volume).
+// 60s = GitHub's documented minimum poll interval for the notifications API.
+const DEFAULT_GITHUB_NOTIFY: GithubNotifySettings = {
+  enabled: true,
+  intervalMs: 60_000,
+  projectIds: [],
+}
+
+const DEFAULT_NOTIFICATIONS: NotificationSettings = {
+  delivery: 'both',
+  // Bottom-right: out of the way of the composer and the centre of the app, and
+  // where desktop notifications usually live.
+  toastPosition: 'bottom-right',
+  sessionEvents: true,
+}
+
 const DEFAULT_TRANSLATE: TranslateSettings = {
   followAppDefault: true,
   provider: 'anthropic',
@@ -335,6 +384,8 @@ interface PersistShape {
   workspacePanel: WorkspacePanelLayout
   githubAccount: string
   githubAutoFetchMs: number
+  githubNotify: GithubNotifySettings
+  notifications: NotificationSettings
   translate: TranslateSettings
 }
 
@@ -416,6 +467,27 @@ export const useSettingsStore = defineStore('settings', () => {
   })
   const githubAccount = ref(persisted.githubAccount ?? '')
   const githubAutoFetchMs = ref(persisted.githubAutoFetchMs ?? 1_800_000)
+  const githubNotify = reactive<GithubNotifySettings>({
+    ...DEFAULT_GITHUB_NOTIFY,
+    ...persisted.githubNotify,
+  })
+  // Delivery/position/session-events used to live in three different slices
+  // (githubNotify.delivery, appearance.toastPosition, sessions.notificationsEnabled).
+  // Seed from those once so an existing install keeps its choices.
+  const legacy = persisted as Partial<PersistShape> & {
+    githubNotify?: { delivery?: NotifyDelivery }
+    appearance?: { toastPosition?: ToastPosition }
+    sessions?: { notificationsEnabled?: boolean }
+  }
+  const notifications = reactive<NotificationSettings>({
+    ...DEFAULT_NOTIFICATIONS,
+    ...(legacy.githubNotify?.delivery ? { delivery: legacy.githubNotify.delivery } : {}),
+    ...(legacy.appearance?.toastPosition ? { toastPosition: legacy.appearance.toastPosition } : {}),
+    ...(legacy.sessions?.notificationsEnabled !== undefined
+      ? { sessionEvents: legacy.sessions.notificationsEnabled }
+      : {}),
+    ...persisted.notifications,
+  })
   const translate = reactive<TranslateSettings>({ ...DEFAULT_TRANSLATE, ...persisted.translate })
 
   // Bumped whenever a persisted slice is saved (see the watch below). Lets the
@@ -439,6 +511,8 @@ export const useSettingsStore = defineStore('settings', () => {
       workspacePanel,
       githubAccount,
       githubAutoFetchMs,
+      githubNotify,
+      notifications,
       translate,
     ],
     () => {
@@ -455,6 +529,8 @@ export const useSettingsStore = defineStore('settings', () => {
         workspacePanel,
         githubAccount: githubAccount.value,
         githubAutoFetchMs: githubAutoFetchMs.value,
+        githubNotify,
+        notifications,
         translate,
       }
       try {
@@ -698,6 +774,8 @@ export const useSettingsStore = defineStore('settings', () => {
     workspacePanel,
     githubAccount,
     githubAutoFetchMs,
+    githubNotify,
+    notifications,
     translate,
     savedTick,
     // getters
