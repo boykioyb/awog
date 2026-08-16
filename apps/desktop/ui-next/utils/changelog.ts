@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.29.1',
+    date: '2026-08-16',
+    highlight: {
+      en: 'Sessions on Claude models get their task checklist back, and work sent to the background — a helper agent or a long-running command — is now waited for and answered in the same reply instead of quietly disappearing.',
+      vi: 'Session chạy bằng model Claude đã có lại checklist công việc, và việc chạy nền — một agent phụ hoặc một lệnh dài — nay được chờ và trả lời ngay trong cùng lượt thay vì lặng lẽ biến mất.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'The task checklist was never filled in on sessions using Claude models — the agent simply never wrote one. It now keeps the list up to date as it works, the pinned banner and the Plan tab show it, and your own edits to it survive the next turn.',
+        vi: 'Checklist công việc chưa bao giờ được điền ở session dùng model Claude — agent đơn giản là không bao giờ ghi. Nay nó cập nhật danh sách trong lúc làm, banner ghim và tab Plan đều hiện, và những sửa đổi của bạn không bị ghi đè ở lượt sau.',
+      },
+      {
+        kind: 'fixed',
+        en: 'On Claude models, an agent that delegated to a helper agent or started a long command in the background would say it was waiting for the result and then stop — the result never arrived. The turn now stays open until that work finishes and the answer continues in the same reply.',
+        vi: 'Ở model Claude, agent giao việc cho agent phụ hoặc chạy một lệnh dài dưới nền sẽ nói là đang chờ kết quả rồi dừng — kết quả không bao giờ tới. Nay lượt chat được giữ mở tới khi việc đó xong và câu trả lời chạy tiếp trong cùng một lượt.',
+      },
+      {
+        kind: 'improved',
+        en: 'Background work is visible while it runs: a helper agent or background command shows as a live row in the transcript that updates until it completes, instead of vanishing behind a line that already looks finished.',
+        vi: 'Việc chạy nền hiện rõ trong lúc chạy: agent phụ hay lệnh nền hiện thành một dòng sống trong transcript, cập nhật cho tới khi xong, thay vì biến mất sau một dòng trông như đã hoàn tất.',
+      },
+      {
+        kind: 'added',
+        en: 'Support for the newest GPT-5.6 models (Sol, Terra, Luna) on a ChatGPT subscription connection. Previously they could not be selected at all because the engine did not know them.',
+        vi: 'Hỗ trợ các model GPT-5.6 mới nhất (Sol, Terra, Luna) cho kết nối gói ChatGPT. Trước đây không thể chọn được vì engine chưa biết tới chúng.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The model list you curate for a ChatGPT subscription connection now actually drives the session model picker, so what you pick in the editor is what you can choose in a chat.',
+        vi: 'Danh sách model bạn chọn cho kết nối gói ChatGPT nay thực sự quyết định danh sách trong session, nên chọn gì ở phần sửa kết nối thì trong chat chọn được đúng thứ đó.',
+      },
+      {
+        kind: 'fixed',
+        en: 'A leftover "Translate" button no longer floats over the next file you preview after selecting text in a document.',
+        vi: 'Nút "Dịch" còn sót lại không còn nổi đè lên file tiếp theo bạn xem trước, sau khi bạn bôi đen chữ trong một tài liệu.',
+      },
+    ],
+  },
+  {
     version: '0.29.0',
     date: '2026-08-12',
     highlight: {
