@@ -4,7 +4,13 @@
 // mapping are defined once.
 
 import { join } from 'node:path'
-import type { Options, EffortLevel, ThinkingConfig } from '@anthropic-ai/claude-agent-sdk'
+import type {
+  Options,
+  EffortLevel,
+  HookInput,
+  HookJSONOutput,
+  ThinkingConfig,
+} from '@anthropic-ai/claude-agent-sdk'
 import { RpcError } from '../../transport/rpc.js'
 import { awogHome } from '../../util/path.js'
 import { log } from '../../util/logger.js'
@@ -155,4 +161,62 @@ export function effortFromLevel(level: ThinkingLevel): EffortLevel {
 // collapses to the "Thinking…" placeholder. 'summarized' returns visible reasoning.
 export function thinkingFromLevel(level: ThinkingLevel): ThinkingConfig {
   return level === 'low' ? { type: 'disabled' } : { type: 'adaptive', display: 'summarized' }
+}
+
+// ── Background work ─────────────────────────────────────────────────────────
+//
+// The CLI keeps a turn alive for background subagents/shells and wakes the model
+// when one settles (`system/task_notification`) — but only while its stdin is
+// open. The SDK closes stdin at the FIRST `result` whenever the caller passed a
+// STRING prompt (sdk.mjs sets `isSingleUserTurn` from `typeof prompt === 'string'`),
+// which killed the CLI process mid-run and made the promised notification
+// impossible. The chat path therefore feeds a streaming prompt it holds open until
+// no background task is live (run-stream.ts); this prompt tells the model the
+// resulting contract.
+export const BACKGROUND_TURN_PROMPT = `<background-work>
+Background work is supported in this session and the turn stays open until it settles: subagents you spawn with \`Task\` (which run in the background by default) and commands you start with \`Bash(run_in_background: true)\` keep running, and you are woken with their result inside this same turn. Use that for genuinely parallel work. What does NOT survive is the END of the turn: never finish your reply expecting to be notified later — if a result matters, wait for it now and answer with it.
+</background-work>`
+
+// The TASK path (workflow nodes) has no such holding: it is a one-shot query whose
+// result ends the node, so a backgrounded subagent there would be killed with it.
+// Force the synchronous form on that path — applied to the tool INPUT via the
+// PreToolUse hook's `updatedInput`, so it holds regardless of what the model asked.
+export function forceForegroundSubagent(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+): void {
+  if (toolName === 'Task' && toolInput.run_in_background !== false) {
+    toolInput.run_in_background = false
+  }
+}
+
+// Task-path counterpart of BACKGROUND_TURN_PROMPT: explains the constraint the
+// hook above enforces, so the node doesn't end waiting to be notified.
+export const NO_BACKGROUND_PROMPT = `<background-work>
+This task node runs as a single one-shot: nothing survives its end, so background work is terminated and no completion notification can reach you. Subagents you spawn with \`Task\` are forced to run synchronously — their result comes back in the same tool call, so just use it. Do not run \`Bash\` with \`run_in_background: true\`, and never end your run waiting to be notified about anything.
+</background-work>`
+
+// Minimal PreToolUse hook for the UNATTENDED path (tasks): no permission gate to
+// run — it exists solely to apply forceForegroundSubagent to the tool input. The
+// chat path has its own hook (the 4-mode gate) and does not need this.
+export function makeForegroundOnlyHook(): (
+  input: HookInput,
+  toolUseID: string | undefined,
+  options: { signal: AbortSignal },
+) => Promise<HookJSONOutput> {
+  return async (input) => {
+    if (input.hook_event_name !== 'PreToolUse') return { continue: true }
+    const toolInput =
+      input.tool_input && typeof input.tool_input === 'object'
+        ? { ...(input.tool_input as Record<string, unknown>) }
+        : {}
+    forceForegroundSubagent(input.tool_name, toolInput)
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'allow',
+        updatedInput: toolInput,
+      },
+    }
+  }
 }

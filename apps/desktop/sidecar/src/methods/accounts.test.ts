@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { completeSimple } from '@earendil-works/pi-ai'
+import { completeSimple } from '@earendil-works/pi-ai/compat'
 import { register } from '../transport/rpc.js'
 import { ANTHROPIC_API_HEADERS, REQUIRED_HEADERS } from '../auth/anthropic-oauth.js'
 import { codexSubscriptionModelIds } from '../auth/openai-codex-oauth.js'

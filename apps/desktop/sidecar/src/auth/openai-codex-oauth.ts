@@ -13,14 +13,31 @@
 // AccountRecord.piOAuth — it carries provider extras (chatgpt_account_id, etc.)
 // pi needs. SECRET — never logged, never sent to the UI.
 
-import { getModels } from '@earendil-works/pi-ai'
-import {
-  getOAuthApiKey,
-  loginOpenAICodex,
-  type OAuthAuthInfo,
-  type OAuthCredentials,
-} from '@earendil-works/pi-ai/oauth'
+import { getModels } from '@earendil-works/pi-ai/compat'
+import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
+import type { Api, Model, OAuthAuth, OAuthCredential } from '@earendil-works/pi-ai'
+import type { OAuthAuthInfo } from '@earendil-works/pi-ai/oauth'
 import type { PiOAuthCredentials } from '../types/shared.js'
+
+// pi 0.84 replaced the free `loginOpenAICodex`/`getOAuthApiKey` helpers with a
+// per-provider `OAuthAuth` object (login/refresh/toAuth) reachable through the
+// provider factory. We use just that object — NOT pi's `Models` collection —
+// because AWOG owns credential storage (multi-account per provider, which pi's
+// one-credential-per-provider CredentialStore can't express).
+function codexOAuth(): OAuthAuth {
+  const oauth = openaiCodexProvider().auth.oauth
+  if (!oauth) throw new Error('pi openai-codex provider exposes no OAuth auth')
+  return oauth
+}
+
+// pi's login prompts for a method first; AWOG only ever runs the browser
+// (loopback) flow, so we answer that select with 'browser'. Value mirrors pi's
+// OPENAI_CODEX_BROWSER_LOGIN_METHOD (auth/oauth/openai-codex.ts).
+const BROWSER_LOGIN_METHOD = 'browser'
+
+// Refresh margin — treat a token expiring within this window as expired so a
+// long turn doesn't start with a credential that dies mid-request.
+const REFRESH_MARGIN_MS = 60_000
 
 // Pi provider id for the ChatGPT subscription path (verified via
 // getOAuthProvider/getModels — models live under api 'openai-codex-responses').
@@ -46,7 +63,8 @@ export function codexSubscriptionModelIds(ids: readonly string[]): string[] {
 // a curated list back to "all available". Best-effort: empty on catalog failure.
 export function availableCodexModelIds(): string[] {
   try {
-    return codexSubscriptionModelIds(getModels(OPENAI_CODEX_PROVIDER_ID).map((m) => m.id))
+    const models = getModels(OPENAI_CODEX_PROVIDER_ID) as readonly Model<Api>[]
+    return codexSubscriptionModelIds(models.map((m) => m.id))
   } catch {
     return []
   }
@@ -56,12 +74,12 @@ export function availableCodexModelIds(): string[] {
 // Record<string, unknown> as far as AWOG storage is concerned. The two aliases
 // are the same runtime shape; the cast at the boundary keeps the rest of the
 // sidecar on the AWOG-local type without importing pi types everywhere.
-function toStored(creds: OAuthCredentials): PiOAuthCredentials {
+function toStored(creds: OAuthCredential): PiOAuthCredentials {
   return creds as unknown as PiOAuthCredentials
 }
 
-function fromStored(creds: PiOAuthCredentials): OAuthCredentials {
-  return creds as unknown as OAuthCredentials
+function fromStored(creds: PiOAuthCredentials): OAuthCredential {
+  return creds as unknown as OAuthCredential
 }
 
 // Run the browser (loopback) login. `onAuth` fires once pi has built the
@@ -70,29 +88,38 @@ function fromStored(creds: PiOAuthCredentials): OAuthCredentials {
 // in their browser, after which pi's callback captures the redirect and this
 // resolves with the credential blob to persist. NEVER log the blob.
 //
-// pi's loginOpenAICodex takes no AbortSignal, so we adapt `signal` into the
-// `onManualCodeInput` lever: AWOG never shows a manual-paste box, so that promise
-// ONLY ever rejects — on abort — which makes pi cancel its wait and throw. The
-// `onPrompt` fallback is defensive (e.g. port 1455 busy so no redirect arrives);
-// AWOG has no paste UI, so it rejects rather than hang on a never-resolving read.
+// pi's login drives everything through one `prompt()` lever:
+//   - the `select` step picks the flow → we always answer 'browser',
+//   - the `manual_code` step races the callback server → AWOG has no paste UI,
+//     so it only ever REJECTS (on abort or when its own signal fires), which is
+//     what makes pi cancel its wait and throw. That is the cancel path.
 export async function loginCodex(
   onAuth: (info: OAuthAuthInfo) => void,
   signal: AbortSignal,
 ): Promise<PiOAuthCredentials> {
-  const creds = await loginOpenAICodex({
-    onAuth,
-    onManualCodeInput: () =>
-      new Promise<string>((_resolve, reject) => {
-        if (signal.aborted) {
-          reject(new Error('Login cancelled'))
-          return
-        }
-        signal.addEventListener('abort', () => reject(new Error('Login cancelled')), {
-          once: true,
+  const creds = await codexOAuth().login({
+    signal,
+    notify: (event) => {
+      // Only the authorize URL is surfaced (public, no secret). Device-code and
+      // progress events can't occur on the browser flow we select.
+      if (event.type === 'auth_url') {
+        onAuth({
+          url: event.url,
+          ...(event.instructions !== undefined ? { instructions: event.instructions } : {}),
         })
-      }),
-    onPrompt: () =>
-      Promise.reject(new Error('OpenAI sign-in did not complete in the browser')),
+      }
+    },
+    prompt: (prompt) => {
+      if (prompt.type === 'select') return Promise.resolve(BROWSER_LOGIN_METHOD)
+      // manual_code (or anything else): never answered — reject on abort, and on
+      // pi's own per-prompt signal when the callback server wins the race.
+      return new Promise<string>((_resolve, reject) => {
+        const cancel = (): void => reject(new Error('Login cancelled'))
+        if (signal.aborted) return cancel()
+        signal.addEventListener('abort', cancel, { once: true })
+        prompt.signal?.addEventListener('abort', cancel, { once: true })
+      })
+    },
   })
   return toStored(creds)
 }
@@ -101,12 +128,20 @@ export async function loginCodex(
 // Returns the apiKey to send to pi PLUS the (possibly updated) credentials the
 // caller must persist back to the account so the next request reuses the fresh
 // refresh token. null ⇒ no usable credential. Token + blob NEVER logged.
+//
+// pi 0.84 moved this behind `Models.getAuth()` (refresh under a store lock).
+// AWOG keeps its own storage, so we run the same two steps directly: refresh
+// when the token is at/near expiry, then derive the request auth via toAuth.
 export async function resolveCodexApiKey(
   creds: PiOAuthCredentials,
 ): Promise<{ apiKey: string; newCredentials: PiOAuthCredentials } | null> {
-  const result = await getOAuthApiKey(OPENAI_CODEX_PROVIDER_ID, {
-    [OPENAI_CODEX_PROVIDER_ID]: fromStored(creds),
-  })
-  if (!result) return null
-  return { apiKey: result.apiKey, newCredentials: toStored(result.newCredentials) }
+  const oauth = codexOAuth()
+  let credential = fromStored(creds)
+  if (!credential.refresh || !credential.access) return null
+  if (credential.expires <= Date.now() + REFRESH_MARGIN_MS) {
+    credential = await oauth.refresh(credential, AbortSignal.timeout(30_000))
+  }
+  const auth = await oauth.toAuth(credential)
+  if (!auth.apiKey) return null
+  return { apiKey: auth.apiKey, newCredentials: toStored(credential) }
 }

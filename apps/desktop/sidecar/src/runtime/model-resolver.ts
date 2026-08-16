@@ -12,7 +12,8 @@
 //     else openai-completions). These expose their own model ids that are NOT in
 //     Pi's catalog, so we cannot use getModel for them.
 
-import { getModel, type Api, type Model } from '@earendil-works/pi-ai'
+import { getModel } from '@earendil-works/pi-ai/compat'
+import type { Api, Model } from '@earendil-works/pi-ai'
 import { RpcError } from '../transport/rpc.js'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import {

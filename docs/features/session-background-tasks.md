@@ -12,6 +12,8 @@ Hai primitive:
 
 **Không** phải Task/Workflow (đã có RunWorkflow cho pipeline nhiều phase). Đây là "chạy 1 lệnh nền rồi tiếp tục **chính session này**".
 
+> Phần dưới mô tả thiết kế của runtime **Pi**. Nhánh Claude SDK có cơ chế khác — xem [mục cuối tài liệu](#nhánh-claude-sdk--background-trong-phạm-vi-turn-2026-08-15).
+
 ## IPC / contract
 
 ### Tool `Bash` (mở rộng)
@@ -122,3 +124,23 @@ Như Flow 1 nhưng bước 4→5 tự động: session idle + `autoContinueOnBac
 3. **TTL cleanup `<dir>`?** Đề xuất: xoá bg dir khi done + đã surface > 24h, hoặc khi session xoá.
 4. **Message wake hiển thị thế nào?** Card riêng vs message `origin:'system'` inline trong transcript — chốt ở P2/P3 khi làm UI.
 5. **Auto-continue có nên bật được per-session** (override toggle global) không? YAGNI cho v1 — chỉ global; mở lại nếu có nhu cầu.
+
+## Nhánh Claude SDK — background trong phạm vi turn (2026-08-15)
+
+Nhánh Anthropic ([ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)) không dùng bg-registry: Bash/Task là built-in của CLI. Trước bản này mọi việc nền ở đó **chết im lặng**, và vì tool `Task` của CLI **mặc định `run_in_background: true`** nên subagent mặc định rơi vào bẫy — transcript ghi nguyên văn *"The agent is running in the background and will notify me when it completes, so I'll wait for the result"* rồi turn kết thúc, không bao giờ có gì thêm.
+
+**Nguyên nhân gốc** nằm ở SDK, không phải CLI: `query()` đặt `isSingleUserTurn = typeof prompt === 'string'`, và với single-turn nó **đóng stdin ngay khi `result` đầu tiên về** (`sdk.mjs`: *"First result received for single-turn query, closing stdin"*) → process CLI bị hạ, subagent nền chết giữa chừng, `system/task_notification` không bao giờ được gửi. Đây là chỗ duy nhất `isSingleUserTurn` được đọc trong SDK.
+
+**Cách chữa** — [claude-sdk/run-stream.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/run-stream.ts):
+
+| Thành phần | Cách làm |
+|---|---|
+| Input stream | `openClaudePrompt()` luôn trả **async generator** (không bao giờ trả string): yield message của turn rồi `await` một promise. Stdin chỉ đóng khi AWOG gọi `close()` — quyền quyết định turn kết thúc lúc nào thuộc về AWOG |
+| Theo dõi việc nền | `system/background_tasks_changed` là tín hiệu **level** (thay nguyên set); `task_started`/`task_notification` là cặp bookend dự phòng. Set bắt đầu rỗng vì mỗi turn có process CLI riêng |
+| Điều kiện đóng | Nhận `result`: set rỗng → đóng ngay (đúng hành vi cũ); còn task sống → **park**, tiếp tục đọc stream, model được CLI đánh thức và phần trả lời tiếp theo chảy vào **cùng turn đó**. `session_state_changed: idle` (tín hiệu turn-over chính thức, phát sau khi held-back result flush) cũng đóng |
+| Van an toàn | Cap cứng 15 phút (hoặc `budget.maxWallclockMs`) để task treo không giữ session lock mãi; grace 45s khi task cuối settle mà CLI không đánh thức model (task ambient/`skip_transcript`, task fail); abort → đóng ngay; `finally` luôn đóng |
+| UI | Adapter map `task_started`/`task_progress`/`task_notification` → **một step upsert theo `task_id`** (`bgtask-<id>`), nên subagent nền hiện ra trong lúc chạy thay vì biến mất sau một dòng Task đã 'done' |
+
+**Giới hạn:** background sống trong phạm vi **một turn**, không sống qua turn như Pi (bg-registry ghi ra đĩa, restart-safe). Sidecar chết giữa chừng = mất việc nền. Muốn parity đầy đủ phải giữ process CLI ngoài vòng đời turn — việc lớn hơn nhiều, cần ADR riêng.
+
+**Tasks (workflow node) thì ngược lại:** node là one-shot, không có chỗ để park, nên [claude-sdk/invoke.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/invoke.ts) ép `Task` về đồng bộ qua `forceForegroundSubagent` + `makeForegroundOnlyHook` và nói rõ ràng buộc bằng `NO_BACKGROUND_PROMPT` ([shared.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/shared.ts)).

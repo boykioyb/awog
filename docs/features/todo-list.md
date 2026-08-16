@@ -21,6 +21,16 @@ Hiển thị **checklist công việc trực tiếp** của agent (tool `TodoWri
 
 Parse dùng chung qua [runtime/todos.ts](../../apps/desktop/sidecar/src/runtime/todos.ts) (`parseTodos` + `countDone`) — input là model response (L1) nên validate phòng thủ, không throw.
 
+### Nhánh Claude SDK (dual runtime, [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)) — bổ sung 2026-08-15
+
+Ở nhánh Anthropic, `TodoWrite` là **built-in của SDK** (AWOG không sở hữu implementation), nên 2 cơ chế trên không tự có. Trước bản vá này: quét 150 session anthropic ≥200KB kể từ 2026-07-20 cho **0** lần gọi `TodoWrite` — checklist tắt hoàn toàn trên nhánh SDK kể từ commit dual-runtime `b36a3d1` (02/07).
+
+| Cơ chế | Nhánh Pi | Nhánh Claude SDK |
+|---|---|---|
+| Nudge `TODO_USAGE_PROMPT` | system-prompt append (rebuild mỗi turn) | **turn prompt** ([claude-sdk/run-stream.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/run-stream.ts)) — SDK đóng băng preset append lúc tạo session và bỏ qua khi `resume`, giống lý do của response style + plan mode. Tasks ([claude-sdk/invoke.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/invoke.ts)) là one-shot nên vẫn append được |
+| `<session_checklist>` | system-prompt append | **turn prompt** — cùng lý do đóng băng. Block dựng ở send-message rồi truyền xuống runner qua field riêng `sessionChecklist` (không gộp vào `systemPromptAppend`) để mỗi runtime tự chọn cách giao |
+| Ghi `Session.todos` | `ToolFilter.todoSink` ở tool layer | hook `onTodos` của [claude-sdk/event-adapter.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/event-adapter.ts) — event `tool_use` là chỗ duy nhất AWOG nhìn thấy checklist. Chỉ ghi cho main agent (`parent_tool_use_id` null), khớp với việc subagent Pi không được cấp sink |
+
 ## Data shape
 
 `TodoItem = { content: string; status: 'pending' | 'in_progress' | 'completed' }` — khai ở [shared.ts](../../apps/desktop/sidecar/src/types/shared.ts) (sidecar) + mirror [ui/types/index.ts](../../apps/desktop/ui/types/index.ts). Gắn vào `SessionStep.todos` (khi `kind === 'note'`), `TraceNode.todos` (khi `type === 'todo'`), và **`Session.todos`** — checklist *hiện tại* của session, persist trong `SessionHeader` (line 1 của session JSONL). Step/trace là **log lịch sử**; `Session.todos` là **state hiện tại**.

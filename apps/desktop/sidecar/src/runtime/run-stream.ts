@@ -14,7 +14,11 @@ import {
   type AgentEvent,
   type AgentMessage,
 } from '@earendil-works/pi-agent-core'
-import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
+import type { Api, AssistantMessage, Message, Model, Models } from '@earendil-works/pi-ai'
+// pi 0.84: the agent loop no longer owns a default stream function — the caller
+// passes it. `streamSimple` (compat) is the same dispatcher the loop used
+// internally before, so behaviour is unchanged.
+import { completeSimple, streamSimple } from '@earendil-works/pi-ai/compat'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { confirmOverageOrStop } from './overage-guard.js'
@@ -200,6 +204,10 @@ export async function runStreamPi(
     // MCP catalog (ADR 0051): present only when the MCP toolset is in proxy mode.
     mcpCatalog,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
+    // Current checklist (ADR 0069) — rebuilt per turn by send-message. Pi rebuilds
+    // the whole system prompt every turn, so the append carries it fine here (the
+    // Claude SDK path has to put it on the turn prompt instead — see runner.ts).
+    args.sessionChecklist,
     inPlanMode ? PLAN_MODE_PROMPT : undefined,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
@@ -518,6 +526,7 @@ export async function runStreamPi(
       },
       emit,
       args.abortController?.signal,
+      streamSimple,
     )
   } catch (err) {
     throw mapErrorToRpc(err)
@@ -571,6 +580,23 @@ export async function runStreamPi(
   }
 }
 
+// pi 0.84 routes the summarization request through a `Models` collection so pi
+// can resolve auth itself. AWOG owns credentials (multi-account per provider —
+// a shape pi's one-credential-per-provider CredentialStore can't express), so we
+// hand generateSummary a minimal collection implementing the ONE method it calls
+// (`completeSimple`), delegating to the same dispatcher with our per-turn key +
+// the model's headers. Cast at the boundary: the rest of the Models surface is
+// never touched on this path.
+function summaryModels(apiKey: string, headers: Model<Api>['headers']): Models {
+  return {
+    completeSimple: (
+      model: Model<Api>,
+      context: Parameters<Models['completeSimple']>[1],
+      options: Parameters<Models['completeSimple']>[2],
+    ) => completeSimple(model, context, { ...options, apiKey, ...(headers ? { headers } : {}) }),
+  } as unknown as Models
+}
+
 // `/compact` (ADR 0047). Re-summarises the older transcript prefix (the JSONL is
 // the source of truth — ADR 0029) and returns a compaction checkpoint the caller
 // persists; the model context is cut in buildContext on subsequent turns. We
@@ -607,10 +633,9 @@ async function runCompact(
     const summaryMessages = historyToAgentMessages(cut.toSummarize)
     const res = await generateSummary(
       summaryMessages,
+      summaryModels(apiKey, model.headers),
       model,
       DEFAULT_COMPACTION_SETTINGS.reserveTokens,
-      apiKey,
-      model.headers,
       args.abortController?.signal,
     )
     if (!res.ok) {

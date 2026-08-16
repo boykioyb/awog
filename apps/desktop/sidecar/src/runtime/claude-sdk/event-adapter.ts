@@ -26,8 +26,9 @@ import {
   stepFromToolResult,
   stepFromToolUse,
 } from '../../sessions/step-mapper.js'
+import { parseTodos } from '../todos.js'
 import type { StreamCallbacks } from '../../sessions/runner.js'
-import type { SessionStep } from '../../types/shared.js'
+import type { SessionStep, TodoItem } from '../../types/shared.js'
 
 export interface ClaudeAccumulator {
   text: string
@@ -68,7 +69,19 @@ export interface ClaudeEventAdapter {
   result: () => ClaudeAccumulator
 }
 
-export function createClaudeEventAdapter(cb: StreamCallbacks): ClaudeEventAdapter {
+// Optional side-channels the runner owns. `onTodos` is the SDK-path twin of the
+// Pi tool layer's `todoSink`: TodoWrite is an SDK built-in here, so the tool_use
+// event is the ONLY place AWOG can see the model's checklist and persist it as
+// the session's authoritative list (ADR 0069). Kept as a callback rather than a
+// store import so the adapter stays a pure event translator.
+export interface ClaudeAdapterHooks {
+  onTodos?: (todos: TodoItem[]) => void
+}
+
+export function createClaudeEventAdapter(
+  cb: StreamCallbacks,
+  hooks: ClaudeAdapterHooks = {},
+): ClaudeEventAdapter {
   const acc: ClaudeAccumulator = {
     text: '',
     modelUsed: '',
@@ -105,9 +118,49 @@ export function createClaudeEventAdapter(cb: StreamCallbacks): ClaudeEventAdapte
     }
     if (block.name === 'TodoWrite') {
       cb.onStep(wp(stepFromTodos('todo-list', input.todos)))
+      // Persist as the session's current checklist. Only the MAIN agent's list is
+      // the session checklist — a subagent (parent_tool_use_id set) keeps its own
+      // scratch list, mirroring the Pi path where subagents get no sink.
+      if (!parentId) {
+        const items = parseTodos(input.todos)
+        if (items.length) hooks.onTodos?.(items)
+      }
       return
     }
     cb.onStep(wp(stepFromToolUse({ id: block.id, name: block.name, input })))
+  }
+
+  // Background task lifecycle → ONE upserted step per task, so a subagent the model
+  // left running in the background is visible while it works instead of vanishing
+  // behind an already-'done' Task row. Keyed by the CLI's task_id (stable across
+  // started → progress → notification). `skip_transcript` marks ambient/housekeeping
+  // tasks the CLI itself wants hidden.
+  const emitBackgroundTask = (m: {
+    subtype?: string
+    task_id?: string
+    description?: string
+    subagent_type?: string
+    summary?: string
+    status?: string
+    skip_transcript?: boolean
+  }): void => {
+    if (!cb.onStep || !m.task_id || m.skip_transcript) return
+    const kind = m.subtype
+    if (kind !== 'task_started' && kind !== 'task_progress' && kind !== 'task_notification') return
+    const label = m.subagent_type
+      ? `Background agent: ${m.subagent_type}`
+      : `Background task${m.description ? `: ${m.description}` : ''}`
+    const step: SessionStep = {
+      id: `bgtask-${m.task_id}`,
+      kind: 'tool',
+      tool: m.subagent_type ? 'task' : 'terminal',
+      label,
+      status:
+        kind !== 'task_notification' ? 'running' : m.status === 'completed' ? 'done' : 'error',
+    }
+    const text = m.summary ?? m.description
+    if (text) step.detail = { kind: 'text', content: text }
+    cb.onStep(step)
   }
 
   const emitToolResult = (block: ContentBlock, parentId: string | undefined): void => {
@@ -136,8 +189,18 @@ export function createClaudeEventAdapter(cb: StreamCallbacks): ClaudeEventAdapte
 
     switch (msg.type) {
       case 'system': {
-        const m = msg as { subtype?: string; model?: string }
+        const m = msg as {
+          subtype?: string
+          model?: string
+          task_id?: string
+          description?: string
+          subagent_type?: string
+          summary?: string
+          status?: string
+          skip_transcript?: boolean
+        }
         if (m.subtype === 'init' && typeof m.model === 'string') acc.modelUsed = m.model
+        else emitBackgroundTask(m)
         break
       }
       case 'stream_event': {

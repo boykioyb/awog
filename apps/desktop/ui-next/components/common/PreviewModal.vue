@@ -263,9 +263,11 @@
           </div>
         </div>
 
-        <!-- highlight prose in a rendered markdown preview → floating Translate button -->
+        <!-- highlight prose in a rendered markdown preview → floating Translate button.
+             Gated on the view that can actually produce a selection, so no state
+             left over from a previous item can surface it over an image/video. -->
         <button
-          v-if="pvSel"
+          v-if="pvSel && shownItem.kind === 'markdown' && view === 'render'"
           class="pvseltr"
           :style="{ left: `${pvSel.x}px`, top: `${pvSel.y}px` }"
           @mousedown.prevent
@@ -537,6 +539,16 @@ function onPvSelect(e: MouseEvent) {
 function onPvMouseDown(e: MouseEvent) {
   if (e.button === 0) pvSel.value = null
 }
+// The trigger is STATE, not a live read of the selection, and this modal is an
+// app-lifetime singleton — so a button left over from one item would float above
+// the next one (a stale "Translate" over a video was the symptom). Drop it whenever
+// the shown item changes and at every open/close boundary; the mousedown handler
+// only fires inside the markdown scroller, so it can't cover closing from the
+// header or stepping through a gallery.
+const { openEpoch } = usePreview()
+watch([shownItem, openEpoch], () => {
+  pvSel.value = null
+})
 function onPvTranslate() {
   const s = pvSel.value
   if (!s) return

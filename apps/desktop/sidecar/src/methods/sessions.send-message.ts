@@ -888,13 +888,14 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // <session_checklist> block so a user edit made in the UI reaches the model
   // instead of being overwritten by its next TodoWrite. Read from disk (not from
   // the client payload) so the persisted list stays the single source of truth.
+  // Passed to the runner as its OWN field, not folded into systemPromptAppend:
+  // the Claude SDK freezes the preset append at session creation, so there the
+  // block has to ride on the turn prompt to survive `resume` (see runner.ts).
   // Best-effort — no checklist, or an unreadable session, yields no block.
+  let sessionChecklist: string | undefined
   try {
     const withTodos = await loadSession(params.sessionId)
-    const checklist = buildSessionChecklistBlock(withTodos?.todos)
-    if (checklist) {
-      systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${checklist}` : checklist
-    }
+    sessionChecklist = buildSessionChecklistBlock(withTodos?.todos)
   } catch {
     /* best-effort: never block the turn on the checklist block */
   }
@@ -1240,6 +1241,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...(gateAcc.promptSourceIds.length ? { promptSourceIds: gateAcc.promptSourceIds } : {}),
         ...gateToolFilterFields(gateAcc),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
+        ...(sessionChecklist ? { sessionChecklist } : {}),
         // Bulk-load section sizes for the context-window breakdown (the runtime
         // folds these into contextChars; it can't re-derive them from the joined
         // systemPromptAppend string).

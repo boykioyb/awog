@@ -5,8 +5,13 @@ packages:
   - apps/desktop/remote-pwa
 
 allowBuilds:
+  '@google/genai': true
   '@parcel/watcher': true
-  esbuild: false
-  vue-demi: false
-  node-pty: true
+  cpu-features: true
   electron: true
+  esbuild: false
+  node-pty: true
+  protobufjs: true
+  ssh2: true
+  unrs-resolver: true
+  vue-demi: false

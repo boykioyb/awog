@@ -19,6 +19,8 @@
 
 import { runAgentLoop, type AgentEvent, type AgentTool } from '@earendil-works/pi-agent-core'
 import { Type, type Message } from '@earendil-works/pi-ai'
+// pi 0.84: runAgentLoop takes the stream function explicitly (see run-stream.ts).
+import { streamSimple } from '@earendil-works/pi-ai/compat'
 import { resolveCredential } from '../../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../../providers/openai/usage.js'
 import { confirmOverageOrStop } from '../overage-guard.js'
@@ -327,6 +329,7 @@ async function spawnSubagent(
     },
     sink.emit,
     signal,
+    streamSimple,
   )
 
   return sink.text()

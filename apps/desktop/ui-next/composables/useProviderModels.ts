@@ -45,6 +45,12 @@ const SEED: Record<ProviderName, ModelInfo[]> = {
   openai: [
     { id: 'gpt-5.5', name: 'GPT-5.5', source: 'pi' },
     { id: 'gpt-5.5-pro', name: 'GPT-5.5 Pro', source: 'pi' },
+    // GPT-5.6 tiers — also the newest ChatGPT-subscription (Codex) models, so
+    // they carry the display names a Codex connection's curated list renders.
+    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', source: 'pi' },
+    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', source: 'pi' },
+    { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', source: 'pi' },
+    { id: 'gpt-5.4', name: 'GPT-5.4', source: 'pi' },
     { id: 'gpt-5.4-mini', name: 'GPT-5.4 mini', source: 'pi' },
     { id: 'gpt-5.1', name: 'GPT-5.1', source: 'pi' },
     { id: 'o4-mini', name: 'o4-mini', source: 'pi' },

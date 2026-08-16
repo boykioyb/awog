@@ -168,6 +168,13 @@ export interface RunNonStreamArgs {
   // (Claude-Code-style bulk load) the project memory files / available agents /
   // available skills blocks built in sessions.send-message.
   systemPromptAppend?: string
+  // The session's current checklist as a <session_checklist> block (ADR 0069),
+  // rebuilt by send-message every turn. Kept OUT of systemPromptAppend because
+  // the two runtimes must deliver it differently: Pi rebuilds its system prompt
+  // per turn (append is fine), while the Claude SDK freezes the preset append at
+  // session creation and ignores it on `resume` — there it has to ride on the
+  // turn prompt, like the response style and the plan-mode directive.
+  sessionChecklist?: string
   // Char sizes + lists of the bulk-loaded context sections (memory files /
   // custom agents / skills) that send-message already folded into
   // systemPromptAppend. The runtime forwards these into contextChars so the UI

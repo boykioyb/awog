@@ -23,14 +23,19 @@ export type AccountOption = {
   providerDisplay: string
   // "label · Provider" — what the chips/lists render.
   display: string
-  // Engine modelIds the account exposes (when the sidecar reports them). Only
-  // honoured for CUSTOM endpoints — built-in providers share one per-provider
-  // catalog (see modelsForAccount), so an account's curated list no longer
-  // restricts the picker for anthropic/openai/google.
+  // Engine modelIds the account exposes (when the sidecar reports them). Honoured
+  // for CUSTOM endpoints + ChatGPT subscriptions — every other built-in account
+  // shares one per-provider catalog (see modelsForAccount), so its curated list
+  // no longer restricts the picker for anthropic/openai/google.
   modelIds?: string[]
   // Custom endpoint (has its own baseURL). Such an account exposes models the
   // provider catalog doesn't know, so its `modelIds` stay authoritative.
   custom?: boolean
+  // ChatGPT subscription (openai + OAuth = the Codex path). Its usable model set
+  // is subscription-gated, i.e. a subset of the pay-as-you-go openai catalog, so
+  // like a custom endpoint it keeps its own `modelIds` — that list is what the
+  // connection editor curates (Settings → Connections → Edit).
+  codex?: boolean
   // True when this is the active account of its provider bucket (sidecar
   // `activeAccountId`). Drives the default pick for a NEW session so it honours
   // the user's "Set active" choice instead of the first account in the bucket —
@@ -40,7 +45,13 @@ export type AccountOption = {
 
 // Sidecar accounts.list shapes (confirmed — apps/desktop/sidecar/src/methods/
 // accounts.list.ts). We only consume id/label/models per provider bucket.
-type AccountSafeDto = { id: string; label: string; models?: string[]; baseURL?: string }
+type AccountSafeDto = {
+  id: string
+  label: string
+  models?: string[]
+  baseURL?: string
+  authMode?: string
+}
 type AccountsListDto = {
   providers: Record<string, { accounts: AccountSafeDto[]; activeAccountId: string | null }>
 }
@@ -68,6 +79,7 @@ function flatten(dto: AccountsListDto): AccountOption[] {
       }
       if (a.models?.length) opt.modelIds = a.models
       if (a.baseURL) opt.custom = true
+      if (key === 'openai' && a.authMode === 'oauth') opt.codex = true
       if (a.id === bucket.activeAccountId) opt.isActive = true
       out.push(opt)
     }
@@ -125,11 +137,14 @@ export function useAccounts() {
     accounts.value.find((a) => a.display === display)
 
   // Models for an account. Models belong to the PROVIDER, not the account: every
-  // built-in account of a provider shares one per-provider catalog. Only a CUSTOM
-  // endpoint (its own baseURL) keeps its curated `modelIds`, since it exposes
-  // models the provider catalog doesn't know.
+  // built-in account of a provider shares one per-provider catalog. Two kinds keep
+  // their curated `modelIds` because the provider catalog can't represent them —
+  // a CUSTOM endpoint (its own baseURL, models the catalog doesn't know) and a
+  // ChatGPT subscription (a subscription-gated subset). Those two are exactly the
+  // kinds whose list the connection editor lets the user curate, so the picker and
+  // the editor stay in agreement.
   const modelsForAccount = (account: AccountOption | undefined): string[] => {
-    if (account?.custom && account.modelIds?.length) {
+    if ((account?.custom || account?.codex) && account.modelIds?.length) {
       return account.modelIds.map((id) => modelDisplayName(id))
     }
     return modelsForProvider(account?.provider ?? 'Anthropic')

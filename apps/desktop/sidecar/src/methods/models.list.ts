@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { getModels } from '@earendil-works/pi-ai'
+// Static catalog reads live in pi's `compat` entrypoint since 0.84 (the root
+// export now only ships the `Models` collection API, which AWOG doesn't use —
+// credentials stay AWOG-owned, see credentials/store.ts).
+import { getModels } from '@earendil-works/pi-ai/compat'
+import type { Api, Model } from '@earendil-works/pi-ai'
 import { register } from '../transport/rpc.js'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { ANTHROPIC_API_HEADERS, REQUIRED_HEADERS } from '../auth/anthropic-oauth.js'
@@ -52,7 +56,7 @@ const AWOG_EXTRAS: Record<BuiltInProvider, ModelInfo[]> = {
 
 function piModels(provider: BuiltInProvider): ModelInfo[] {
   try {
-    return getModels(provider).map((m) => ({
+    return (getModels(provider) as readonly Model<Api>[]).map((m) => ({
       id: m.id,
       name: m.name ?? m.id,
       contextWindow: m.contextWindow,

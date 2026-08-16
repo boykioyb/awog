@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
-import { getModels } from '@earendil-works/pi-ai'
+import { getModels } from '@earendil-works/pi-ai/compat'
+import type { Api, Model } from '@earendil-works/pi-ai'
 import { register, RpcError } from '../transport/rpc.js'
 import { emit } from '../transport/stdio.js'
 import { loginCodex } from '../auth/openai-codex-oauth.js'
@@ -36,7 +37,7 @@ function newAccountId(): string {
 // list just means the picker falls back to whatever it knows. Never throws.
 function codexModelIds(): string[] {
   try {
-    return getModels('openai-codex').map((m) => m.id)
+    return (getModels('openai-codex') as readonly Model<Api>[]).map((m) => m.id)
   } catch (err) {
     log.warn('list codex models failed', {
       err: err instanceof Error ? err.message : String(err),

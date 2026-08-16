@@ -85,6 +85,21 @@ Trong `pi-agent-core`, `agent-loop.js:188` resolve `const resolvedApiKey = (conf
   5. **OAuth delivery:** ĐÃ GIẢI — `apiKey`/`getApiKey` + auto-detect `sk-ant-oat`; giữ refresh-on-401 (forceRefresh khi 401).
   6. **ESM/bundling:** Pi ESM thuần JS 0 native → ship `sidecar/node_modules` (Pi) trong extraResources; bỏ Claude CLI binary. `tsconfig` `module:NodeNext` import Pi không lỗi CJS interop (verify C0).
 
+## Cập nhật 2026-08-15 — nâng pi 0.79.9 → 0.84.2
+
+Lý do: catalog `openai-codex` của 0.79.9 dừng ở `gpt-5.5`, nên model GPT-5.6 (Sol/Terra/Luna) của gói ChatGPT không resolve được ở runtime (`getModel('openai-codex', …)` throw). 0.84.2 có đủ 7 model codex.
+
+0.84 tái cấu trúc API (breaking). Cách AWOG hấp thụ, giữ nguyên nguyên tắc **credential thuộc về AWOG** (multi-account/provider — mô hình `CredentialStore` 1-credential/provider của pi không diễn tả được):
+
+| Thay đổi ở pi 0.84 | Cách xử lý ở AWOG |
+|---|---|
+| Root export bỏ `getModel`/`getModels`/`completeSimple`/`streamSimple` (chuyển sang collection `Models`) | Import từ `@earendil-works/pi-ai/compat` — cùng chữ ký, catalog tĩnh, không đụng `Models` |
+| `runAgentLoop(...)` thêm tham số thứ 6 `streamFn` | Truyền `streamSimple` (compat) — đúng dispatcher loop dùng nội bộ trước đây |
+| `/oauth` bỏ `loginOpenAICodex` + `getOAuthApiKey`, thay bằng object `OAuthAuth` (`login`/`refresh`/`toAuth`) lấy qua `openaiCodexProvider()` | [openai-codex-oauth.ts](../../apps/desktop/sidecar/src/auth/openai-codex-oauth.ts): login trả lời prompt `select` = `browser`, prompt `manual_code` chỉ dùng làm đòn bẩy huỷ; refresh khi `expires <= now + 60s` rồi `toAuth` → bearer. Header `chatgpt-account-id` pi tự trích từ JWT nên không cần plumb thêm |
+| `generateSummary` nhận `Models` (tự resolve auth) thay vì `apiKey`/`headers` | `/compact` truyền một `Models` tối giản chỉ hiện thực `completeSimple`, uỷ quyền về compat kèm key + headers của AWOG ([run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts)) |
+
+Union `AgentEvent` **không đổi** giữa 2 phiên bản (đã diff) → step/trace mapper giữ nguyên. Kèm theo: picker model của connection ChatGPT (Codex) nay đọc `account.models` như custom endpoint — trước đó chỉ custom endpoint được đọc, nên list curate trong "Sửa kết nối" không tới được chip session.
+
 ## Tham chiếu
 
 - [ADR 0026](./0026-per-agent-multi-provider-llm.md) — multi-provider (ADR này thay lựa chọn runtime của 0026 Phase C).

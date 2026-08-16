@@ -11,6 +11,8 @@
 
 import { runAgentLoop, type AgentEvent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
+// pi 0.84: runAgentLoop takes the stream function explicitly (see run-stream.ts).
+import { streamSimple } from '@earendil-works/pi-ai/compat'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
@@ -345,6 +347,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
       },
       emit,
       args.abortController?.signal,
+      streamSimple,
     )
   } catch (err) {
     throw mapErrorToRpc(err)

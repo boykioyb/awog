@@ -22,8 +22,10 @@ import {
   type Options,
   type HookInput,
   type HookJSONOutput,
+  type SDKMessage,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
+
 import { resolveCredential } from '../../credentials/credential-resolver.js'
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
@@ -33,10 +35,14 @@ import type {
   SessionAttachment,
   SessionCompaction,
   SessionMessage,
+  TodoItem,
 } from '../../types/shared.js'
 import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../permission.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
+import { TODO_USAGE_PROMPT } from '../prompts.js'
+import { isToolAllowed } from '../tools/index.js'
+import { updateSessionMetadata } from '../../sessions/store.js'
 import { createClaudeEventAdapter } from './event-adapter.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { buildSourceToolsSdkServer } from './source-sdk-server.js'
@@ -44,6 +50,7 @@ import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
 import { listHosts } from '../../ssh/store.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
+  BACKGROUND_TURN_PROMPT,
   buildSdkEnv,
   commitAttribution,
   effortFromLevel,
@@ -52,6 +59,18 @@ import {
   toSdkMcpServers,
   toSdkModel,
 } from './shared.js'
+
+// How long a turn may stay parked waiting for background work to settle before we
+// give up and end the session (the per-turn wallclock budget overrides it when the
+// caller set one). Generous: a background build or a deep subagent legitimately
+// runs for many minutes; the cap only exists so a wedged task can't hold the
+// session lock forever.
+const DEFAULT_BACKGROUND_WAIT_MS = 15 * 60_000
+
+// Grace window after the LAST background task settles: if the CLI doesn't wake the
+// model within it (ambient tasks are skipped, a failed one may produce no
+// continuation), end the turn rather than sit until the cap. Any message cancels it.
+const BACKGROUND_GRACE_MS = 45_000
 
 // Plan-mode nudge (mirrors the Pi path). The gate blocks all writes/exec in plan
 // mode, so tell the model to investigate read-only then present its plan via the
@@ -240,25 +259,50 @@ function toClaudeFileTextBlock(att: SessionAttachment): ClaudeTextBlock | null {
   }
 }
 
-// Build the SDK prompt: the plain string when nothing usable is attached, else a
-// one-shot streaming generator carrying text + file/document/image blocks. All ride
-// with the CURRENT turn; prior-turn attachments persist via the SDK's own resume
+// An input stream we hold open on purpose. `close()` lets the generator finish,
+// which is what makes the SDK close the CLI's stdin.
+interface OpenPrompt {
+  stream: AsyncIterable<SDKUserMessage>
+  close: () => void
+}
+
+// Build the SDK prompt as a STREAMING input that stays open after the first
+// `result`, carrying the turn text + any file/document/image blocks. Attachments
+// ride with the CURRENT turn; prior-turn ones persist via the SDK's own resume
 // store, so there's no re-feed to do here.
-function buildClaudePrompt(
+//
+// Why never the plain-string form: the SDK sets `isSingleUserTurn` from
+// `typeof prompt === 'string'` and, for a single-turn query, closes the CLI's
+// stdin the moment the FIRST `result` arrives (sdk.mjs: "First result received for
+// single-turn query, closing stdin"). That kills the CLI process — and with it any
+// background subagent/shell still running — before its completion notification can
+// be delivered. With a generator, stdin closes only when the generator finishes,
+// so the caller decides when the session may end (see the background bookkeeping
+// in runStreamClaude).
+function openClaudePrompt(
   text: string,
   attachments: SessionAttachment[] | undefined,
-): string | AsyncIterable<SDKUserMessage> {
+): OpenPrompt {
   const list = attachments ?? []
   const images = list.map(toClaudeImageBlock).filter((b): b is ClaudeImageBlock => b !== null)
   const docs = list.map(toClaudeDocBlock).filter((b): b is ClaudeDocBlock => b !== null)
   const files = list.map(toClaudeFileTextBlock).filter((b): b is ClaudeTextBlock => b !== null)
-  if (images.length === 0 && docs.length === 0 && files.length === 0) return text
-  const content: ClaudePromptBlock[] = []
-  if (text) content.push({ type: 'text', text })
-  content.push(...files, ...docs, ...images)
-  return (async function* (): AsyncGenerator<SDKUserMessage> {
+  let content: string | ClaudePromptBlock[] = text
+  if (images.length > 0 || docs.length > 0 || files.length > 0) {
+    const blocks: ClaudePromptBlock[] = []
+    if (text) blocks.push({ type: 'text', text })
+    blocks.push(...files, ...docs, ...images)
+    content = blocks
+  }
+  let release = (): void => {}
+  const closed = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const stream = (async function* (): AsyncGenerator<SDKUserMessage> {
     yield { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null }
+    await closed
   })()
+  return { stream, close: () => release() }
 }
 
 export async function runStreamClaude(
@@ -295,6 +339,12 @@ export async function runStreamClaude(
     (p): p is string => typeof p === 'string' && p.length > 0,
   )
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
+  // TodoWrite is an SDK built-in here (AWOG doesn't own the implementation, unlike
+  // the Pi path), so the same allow/deny filter decides whether nudging is honest.
+  const todoAllowed = isToolAllowed('TodoWrite', {
+    ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+    ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+  })
 
   // 4-mode permission gate (ADR 0058 P4): reuse the Pi-path makeBeforeToolCall +
   // per-turn budget, driven from the PreToolUse hook below. The gate parks on
@@ -343,6 +393,17 @@ export async function runStreamClaude(
   // message (params.text) is persisted to our transcript, so this SDK-only prompt
   // shaping never pollutes the visible session history.
   if (stylePrompt) promptText = `${stylePrompt}\n\n${promptText}`
+  // Checklist (ADR 0069) + the TodoWrite nudge ride on the turn prompt for the
+  // frozen-append reason above. Both MUST be re-sent every turn: the checklist
+  // changes whenever the model or the user edits it, and the nudge is what makes
+  // the model keep the list current at all (the preset alone doesn't — on this
+  // path TodoWrite was effectively never called before this).
+  if (args.sessionChecklist) promptText = `${args.sessionChecklist}\n\n${promptText}`
+  if (todoAllowed) promptText = `${TODO_USAGE_PROMPT}\n\n${promptText}`
+  // Background work IS supported here (we hold the CLI session open until it
+  // settles — see the bookkeeping below), but only within this turn. Say so, so
+  // the model neither avoids it nor assumes it survives past the turn.
+  promptText = `${BACKGROUND_TURN_PROMPT}\n\n${promptText}`
   // Plan-mode directive on the turn prompt for the same frozen-append reason: plan
   // can be toggled mid-session, so a system-prompt append would be ignored on
   // `resume`. Prepended last → sits at the front of the turn so the model reliably
@@ -352,7 +413,7 @@ export async function runStreamClaude(
   // Attachments (images / text files) need the streaming-input block form — the
   // string prompt can't carry them. Returns the plain string when nothing usable
   // is attached, so the common text-only turn is unchanged.
-  const prompt = buildClaudePrompt(promptText, args.pendingAttachments)
+  const prompt = openClaudePrompt(promptText, args.pendingAttachments)
 
   // External MCP servers of the user (SDK-native mechanism, not a custom tool) +
   // AWOG `api` sources as in-process SDK MCP servers (api-sdk-server.ts) + the
@@ -424,13 +485,145 @@ export async function runStreamClaude(
     historyTurns: args.history.length,
   })
 
-  const adapter = createClaudeEventAdapter(cb)
+  // Persist every main-agent TodoWrite as the session's current checklist — the
+  // SDK-path equivalent of the Pi tool layer's todoSink (ADR 0069). Without it the
+  // banner/Plan tab can only fall back to the transcript snapshot and a user edit
+  // has no authoritative list to write to.
+  const todoSessionId = args.sessionId
+  const adapter = createClaudeEventAdapter(cb, {
+    ...(todoSessionId
+      ? {
+          onTodos: (todos: TodoItem[]) => {
+            void updateSessionMetadata(todoSessionId, { todos })
+          },
+        }
+      : {}),
+  })
+  // ── Background work: keep the CLI session alive until it settles ────────────
+  //
+  // The CLI holds the turn open for background subagents/shells and wakes the
+  // model when one finishes (`system/task_notification`). That only works while
+  // its stdin is open, so we decide when to close: on the turn's `result` we let
+  // the session end ONLY when no background task is live; otherwise we keep
+  // consuming and the model's woken continuation streams into this same turn.
+  //
+  // `background_tasks_changed` is a LEVEL signal (replace the set wholesale); the
+  // task_started/task_notification bookends are the fallback for a CLI that
+  // doesn't emit the level. The set starts empty because this query owns a fresh
+  // CLI process.
+  // id → task_type. We only PARK the turn for work the user is actually waiting on
+  // (a subagent, a shell, a workflow). Ambient/housekeeping tasks the CLI runs on
+  // its own ('monitor', anything unknown) must never hold a turn open — that would
+  // add the wait to EVERY turn. Unknown types therefore degrade to the old
+  // behaviour (end the turn) rather than to a hang.
+  const liveBackground = new Map<string, string>()
+  const WAITABLE_TASK_TYPES = new Set(['subagent', 'shell', 'workflow', 'agent', 'bash'])
+  const waitingCount = (): number => {
+    let n = 0
+    for (const type of liveBackground.values()) if (WAITABLE_TASK_TYPES.has(type)) n += 1
+    return n
+  }
+  let closed = false
+  // Parked = the turn's result already arrived and we are only still here for
+  // background work.
+  let parked = false
+  let waitTimer: NodeJS.Timeout | undefined
+  let graceTimer: NodeJS.Timeout | undefined
+  const closeInput = (reason: string): void => {
+    if (closed) return
+    closed = true
+    if (waitTimer) clearTimeout(waitTimer)
+    if (graceTimer) clearTimeout(graceTimer)
+    log.info('claude-sdk closing input', { sessionId: args.sessionId, reason })
+    prompt.close()
+  }
+  // Hard cap so a wedged background task can't hold the turn (and the session
+  // lock) forever. Honours the per-turn wallclock budget when the caller set one.
+  const waitCapMs = args.budget?.maxWallclockMs ?? DEFAULT_BACKGROUND_WAIT_MS
+  const armWaitCap = (): void => {
+    if (waitTimer || closed) return
+    waitTimer = setTimeout(() => closeInput('background wait cap reached'), waitCapMs)
+  }
+  // Every parked task settled but the CLI didn't wake the model (it skips ambient
+  // tasks, and a failed task may produce no continuation). Give it a short grace
+  // window — any message cancels it — then end the turn instead of sitting until
+  // the cap.
+  const armGrace = (): void => {
+    if (graceTimer || closed || !parked || waitingCount() > 0) return
+    graceTimer = setTimeout(
+      () => closeInput('background settled, no continuation'),
+      BACKGROUND_GRACE_MS,
+    )
+  }
+  const onAbort = (): void => closeInput('aborted')
+  args.abortController?.signal.addEventListener('abort', onAbort, { once: true })
+
+  const trackBackground = (msg: SDKMessage): void => {
+    if (msg.type !== 'system') return
+    const m = msg as {
+      subtype?: string
+      tasks?: { task_id: string; task_type?: string }[]
+      task_id?: string
+      task_type?: string
+      subagent_type?: string
+      state?: string
+    }
+    switch (m.subtype) {
+      case 'background_tasks_changed':
+        liveBackground.clear()
+        for (const t of m.tasks ?? []) liveBackground.set(t.task_id, t.task_type ?? 'unknown')
+        break
+      case 'task_started':
+        // A Task-tool subagent may arrive without task_type; subagent_type says it.
+        if (m.task_id) {
+          liveBackground.set(m.task_id, m.task_type ?? (m.subagent_type ? 'subagent' : 'unknown'))
+        }
+        break
+      case 'task_notification':
+        if (m.task_id) liveBackground.delete(m.task_id)
+        break
+      case 'session_state_changed':
+        // Authoritative turn-over signal: fires once the held-back result has
+        // flushed AND the background loop has exited — nothing left to wait for.
+        if (m.state === 'idle') closeInput('session idle')
+        break
+      default:
+        break
+    }
+  }
+
   try {
-    for await (const msg of query({ prompt, options })) {
+    for await (const msg of query({ prompt: prompt.stream, options })) {
+      // Any message is activity: the CLI is alive and working, so a pending
+      // "settled but nothing followed" grace window no longer applies.
+      if (graceTimer) {
+        clearTimeout(graceTimer)
+        graceTimer = undefined
+      }
       adapter.handle(msg)
+      trackBackground(msg)
+      if (msg.type === 'result') {
+        const waiting = waitingCount()
+        if (waiting === 0) closeInput('turn complete')
+        else {
+          parked = true
+          log.info('claude-sdk turn parked on background work', {
+            sessionId: args.sessionId,
+            tasks: waiting,
+            capMs: waitCapMs,
+          })
+          armWaitCap()
+        }
+      }
+      armGrace()
     }
   } catch (err) {
     throw mapClaudeErrorToRpc(err)
+  } finally {
+    // Never leave the generator parked (it would keep the CLI process alive) or a
+    // timer pending, whichever way this turn ended.
+    closeInput('turn ended')
+    args.abortController?.signal.removeEventListener('abort', onAbort)
   }
 
   // A mid-stream abort surfaces as CANCELED so send-message routes it through the
@@ -464,10 +657,20 @@ export async function runStreamClaude(
   const customAgentsLen = items?.customAgentsChars ?? 0
   const skillsLen = items?.skillsChars ?? 0
   const systemPromptLen = (args.systemPrompt ?? '').length
-  const instructionsLen = Math.max(
-    0,
-    (append?.length ?? 0) - systemPromptLen - memoryFilesLen - customAgentsLen - skillsLen,
-  )
+  // Turn-prompt riders (style / plan / checklist / todo nudge) are instructions the
+  // model receives every turn even though they don't live in `append` on this path
+  // — count them here so the gauge doesn't under-report what we actually send.
+  const ridersLen =
+    (stylePrompt?.length ?? 0) +
+    (inPlanMode ? PLAN_MODE_PROMPT.length : 0) +
+    (args.sessionChecklist?.length ?? 0) +
+    (todoAllowed ? TODO_USAGE_PROMPT.length : 0) +
+    BACKGROUND_TURN_PROMPT.length
+  const instructionsLen =
+    Math.max(
+      0,
+      (append?.length ?? 0) - systemPromptLen - memoryFilesLen - customAgentsLen - skillsLen,
+    ) + ridersLen
   // Transcript the SDK context holds: kept turns from the compaction cut onward (or
   // the whole transcript when uncompacted) + the summary — measured TEXT-ONLY via
   // renderHistoryPrefix (exactly what we seed the SDK with). We must NOT

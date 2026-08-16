@@ -10,12 +10,8 @@
 //     so a no-tools completeSimple cannot reach parity. authorPi drives
 //     runAgentLoop (like runtime/invoke.ts) and forwards deltas + tool steps.
 
-import {
-  completeSimple,
-  streamSimple,
-  type AssistantMessage,
-  type Message,
-} from '@earendil-works/pi-ai'
+import { completeSimple, streamSimple } from '@earendil-works/pi-ai/compat'
+import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
 import { runAgentLoop, type AgentEvent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
@@ -289,6 +285,10 @@ export async function authorPi(args: AuthorArgs, cb: AuthorCallbacks): Promise<A
         toolExecution: 'sequential',
       },
       emit,
+      // No abort signal: author flows are unattended one-shots. pi 0.84 wants the
+      // stream function explicitly (see run-stream.ts).
+      undefined,
+      streamSimple,
     )
   } catch (err) {
     throw mapErr(err, 'authoring')

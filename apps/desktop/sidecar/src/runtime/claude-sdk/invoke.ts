@@ -13,13 +13,17 @@ import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../../sdk/invoke.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
+import { TODO_USAGE_PROMPT } from '../prompts.js'
+import { isToolAllowed } from '../tools/index.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
   commitAttribution,
   effortFromLevel,
+  makeForegroundOnlyHook,
   mapClaudeErrorToRpc,
+  NO_BACKGROUND_PROMPT,
   thinkingFromLevel,
   toSdkMcpServers,
   toSdkModel,
@@ -198,9 +202,24 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
   // + workspace rules onto the claude_code preset. No tool-discipline/verify nudge
   // — the SDK's first-party prompt handles that (ADR 0058).
   const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0], extractTurnPaths(args.prompt))
-  const appendParts = [args.systemPrompt, args.systemPromptAppend, rulesPrompt].filter(
-    (p): p is string => typeof p === 'string' && p.length > 0,
-  )
+  // TodoWrite nudge — same as the Pi task path (invoke.ts). The preset alone leaves
+  // the checklist unused, so a task node would show no progress list on this
+  // runtime. Safe in the append here (unlike the chat path): a task node is a fresh
+  // one-shot SDK session, never a `resume`, so nothing freezes stale.
+  const todoAllowed = isToolAllowed('TodoWrite', {
+    ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+    ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+  })
+  const appendParts = [
+    args.systemPrompt,
+    args.systemPromptAppend,
+    rulesPrompt,
+    todoAllowed ? TODO_USAGE_PROMPT : undefined,
+    // A task node is one query too: a backgrounded subagent dies with it and its
+    // notification never arrives (see shared.ts). The hook below forces the
+    // synchronous form; this explains the constraint.
+    NO_BACKGROUND_PROMPT,
+  ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
   // External MCP servers + AWOG `api` sources (in-process SDK MCP servers). Merged
   // into one map for options.mcpServers; source ids never collide with mcp ids.
@@ -225,9 +244,12 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     includePartialMessages: true,
     thinking: thinkingFromLevel(args.settings.level),
     effort: effortFromLevel(args.settings.level),
-    // Tasks run unattended (ADR 0024 D-7): always allow, no permission gate.
+    // Tasks run unattended (ADR 0024 D-7): always allow, no permission gate. The
+    // hook is input-rewrite only — it forces `Task` to its synchronous form so a
+    // subagent isn't killed when this one-shot query ends (shared.ts).
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
+    hooks: { PreToolUse: [{ hooks: [makeForegroundOnlyHook()] }] },
     // Honour the node agent's tool whitelist (Claude Code subagent `tools:` field).
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
     ...(args.disabledTools ? { disallowedTools: args.disabledTools } : {}),
