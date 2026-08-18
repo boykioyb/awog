@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.29.2',
+    date: '2026-08-18',
+    highlight: {
+      en: 'Fixes a bug on Claude models where the agent suddenly lost its tools mid-answer and blamed a "temporary system problem", and clears every piece of sample data out of the app — no more made-up agents, projects or placeholder diffs pretending to be yours.',
+      vi: 'Sửa lỗi ở model Claude khiến agent đột nhiên mất hết công cụ giữa chừng rồi đổ cho "hệ thống có vấn đề tạm thời", và dọn sạch mọi dữ liệu mẫu trong app — không còn agent, project hay diff bịa ra trông như của bạn.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'On Claude models, as soon as an agent sent work to the background every later action in that turn came back refused with "the user doesn’t want to take this action" — nobody had refused anything. Helper agents apologised for a "temporary system problem" instead of reporting what they found, and the main agent was left with nothing to work with. Tools now stay available for the whole turn.',
+        vi: 'Ở model Claude, ngay khi agent đẩy một việc xuống chạy nền thì mọi thao tác sau đó trong lượt đều bị từ chối với lý do "người dùng không muốn thực hiện" — trong khi chẳng ai từ chối gì cả. Agent phụ xin lỗi vì "hệ thống có vấn đề tạm thời" thay vì báo kết quả, còn agent chính thì không còn gì để làm việc. Nay công cụ vẫn dùng được suốt cả lượt.',
+      },
+      {
+        kind: 'changed',
+        en: 'Sample data is gone from the whole app. Fresh installs used to show a handful of invented agents, a project, an LLM account and demo file trees that looked real until you clicked them; an edit with no recorded content even showed a placeholder diff of code the agent never wrote. Every screen now shows what the engine actually reports, or an empty state that says so.',
+        vi: 'Dữ liệu mẫu đã bị gỡ khỏi toàn bộ app. Bản cài mới trước đây hiện vài agent, một project, một tài khoản LLM và cây file bịa ra, trông như thật cho tới lúc bấm vào; một bước sửa file không lưu nội dung thậm chí hiện diff giả của đoạn code agent chưa từng viết. Nay mọi màn hình chỉ hiện đúng thứ engine báo về, hoặc một trạng thái rỗng nói rõ là chưa có gì.',
+      },
+      {
+        kind: 'added',
+        en: 'Agents, Skills, Commands and Rules each get an Import button in their toolbar. One picker sweeps your home folder and every project for existing .claude / .agents config, groups what it finds by destination, and copies the items you tick into AWOG. Originals are left untouched and anything you already have is hidden.',
+        vi: 'Trang Agents, Skills, Commands và Rules đều có nút Import trên thanh công cụ. Một cửa sổ chọn quét cả thư mục home lẫn từng project để tìm config .claude / .agents có sẵn, nhóm theo nơi sẽ nhập vào, rồi copy những mục bạn tick vào AWOG. Bản gốc giữ nguyên, thứ bạn đã có thì không hiện lại.',
+      },
+      {
+        kind: 'improved',
+        en: 'Background work now reads as one row in the transcript instead of two, and opening it shows what the work is actually doing — a running log of a helper agent’s steps, or the live output of a background command as it is written.',
+        vi: 'Việc chạy nền nay gộp thành một dòng trong transcript thay vì hai, và bung ra là thấy nó đang thực sự làm gì — nhật ký các bước của agent phụ, hoặc output của lệnh nền đang chảy ra theo thời gian thực.',
+      },
+      {
+        kind: 'improved',
+        en: 'The background chips above the composer stop piling up: a finished task disappears once the agent has read its result, anything that failed stays put so you can go back to it, and two or more collapse into a single "2 running · 1 failed" chip you can expand.',
+        vi: 'Dãy chip việc nền phía trên ô soạn tin không còn chất đống: việc xong sẽ tự rút lui khi agent đã đọc kết quả, việc lỗi thì giữ lại để bạn quay lại xem, và từ hai cái trở lên sẽ gộp thành một chip "2 đang chạy · 1 lỗi" bấm vào để bung.',
+      },
+      {
+        kind: 'improved',
+        en: 'Expanding a file step now prints the full path above the diff or file content, so a long path is readable instead of being cut off in the step header.',
+        vi: 'Bung một bước thao tác file nay hiện đầy đủ đường dẫn phía trên diff hoặc nội dung file, nên đường dẫn dài đọc được thay vì bị cắt cụt ở dòng tiêu đề.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Settings → Workspace shows the config folder AWOG really uses on your machine, instead of a default path that only happened to be correct on some machines.',
+        vi: 'Settings → Workspace hiện đúng thư mục cấu hình mà AWOG thực sự dùng trên máy bạn, thay vì một đường dẫn mặc định chỉ tình cờ đúng trên vài máy.',
+      },
+      {
+        kind: 'improved',
+        en: 'Empty menus explain themselves: the account picker with no connection tells you to connect one in Settings, and buttons that generate content with AI say they need a running engine and a connected account rather than doing nothing.',
+        vi: 'Menu rỗng nay tự giải thích: trình chọn tài khoản khi chưa có kết nối sẽ bảo bạn vào Settings kết nối, còn các nút sinh nội dung bằng AI nói rõ là cần engine đang chạy và một tài khoản đã kết nối, thay vì bấm mà không có gì xảy ra.',
+      },
+    ],
+  },
+  {
     version: '0.29.1',
     date: '2026-08-16',
     highlight: {
