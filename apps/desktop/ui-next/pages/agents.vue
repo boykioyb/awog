@@ -9,8 +9,10 @@
       :group-label="groupLabel"
       :group-dot="groupDot"
       show-new
+      import-kind="agent"
       @new="openCreator()"
       @new-in-group="openCreator"
+      @imported="onImported"
     >
       <template #row="{ item: a }">
         <div class="lrow">
@@ -89,7 +91,7 @@
 
 <script setup lang="ts">
 // Agents library — live store + full CRUD + chat-driven creation. Replaces the
-// static mock from the prototype port. Shell from <LibraryView>; all state +
+// static seed from the prototype port. Shell from <LibraryView>; all state +
 // handlers live in useAgentsPage (page-controller), mirroring pages/skills.vue.
 import { computed, type CSSProperties } from 'vue'
 import AgentBodyEditModal from '~/components/agent/AgentBodyEditModal.vue'
@@ -138,6 +140,7 @@ const {
   cancelDelete,
   deleteDescription,
   confirmDelete,
+  onImported,
   toasts,
   toastColor,
 } = useAgentsPage()

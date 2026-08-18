@@ -58,8 +58,8 @@
 <script setup lang="ts">
 // LLM-driven hook CONFIG edit — one-shot `hooks.generate` with `currentHook`
 // (revise the existing draft). Apply emits the proposed config up to the editor,
-// which merges it into the editing draft (user still Saves). Offline fallback:
-// surfaces an error since there's nothing meaningful to mock-revise.
+// which merges it into the editing draft (user still Saves). With no engine /
+// account it surfaces an error — there is nothing to revise with.
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useSidecar } from '~/composables/useSidecar'

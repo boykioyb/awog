@@ -2,7 +2,7 @@
 // Single entry point the rest of ui-next uses to reach the sidecar
 // (request/onEvent/openExternal/revealPath/openPath/…). When running in the
 // browser dev server (no Electron shell) `available` is false and callers fall
-// back to mock data. Ported from apps/desktop/ui/composables/useSidecar.ts.
+// back to empty state. Ported from apps/desktop/ui/composables/useSidecar.ts.
 
 export class SidecarError extends Error {
   code: number
@@ -29,7 +29,14 @@ export type SidecarEventHandler = (event: SidecarEvent) => void
 export type UnlistenFn = () => void
 
 // Auto-update (ADR 0028).
-export type AppInfo = { version: string; isPackaged: boolean; canAutoInstall: boolean }
+export type AppInfo = {
+  version: string
+  isPackaged: boolean
+  canAutoInstall: boolean
+  // Absolute path of the sidecar's config root (os.homedir()/.awog). Mirrors the
+  // sidecar's own `awogHome()` so Settings → Workspace shows the real root.
+  awogHome: string
+}
 export type UpdateEvent =
   | { type: 'checking' }
   | { type: 'available'; version: string }
@@ -140,8 +147,8 @@ export function useSidecar() {
   }
 
   // Open a session in its own OS window (session popout). Main validates the engineId
-  // and focuses the window the session already has. No-op outside Electron so the
-  // browser-dev mock path just doesn't pop out.
+  // and focuses the window the session already has. No-op outside Electron — without
+  // a bridge nothing pops out.
   const openSessionWindow = async (engineId: string, title: string): Promise<void> => {
     if (!api?.openSessionWindow) return
     await api.openSessionWindow(engineId, title)

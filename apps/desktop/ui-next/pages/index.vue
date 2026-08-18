@@ -176,7 +176,7 @@
 // Home — bento dashboard wired to the live stores (Phase B–E). All chrome +
 // dynamic strings go through i18n (t); entity content comes from the sessions /
 // tasks / connections / agents / git stores via useHomeDashboard. Browser-dev
-// (no Electron bridge) renders the per-store mock seeds, so the bento never
+// (no Electron bridge) leaves every store empty, so the bento shows its empty
 // empties out during dev. navigateTo + useI18n are Nuxt auto-imports.
 import { computed } from 'vue'
 import { useHomeDashboard } from '~/composables/useHomeDashboard'
@@ -218,7 +218,7 @@ const hintStyle = {
 } as const
 
 // Attention queue is "ready" once both source stores have a first load. Sessions
-// seed synchronously (mock) / hydrate async (IPC); tasks gate on `loaded`.
+// hydrate async over IPC; tasks gate on `loaded`.
 const attentionReady = computed(() => tasks.loaded)
 
 const attentionIcon = (kind: 'reply' | 'permission' | 'approval'): string =>

@@ -289,7 +289,7 @@ const newTabMenu = computed<TerminalTabKind[] | undefined>(() => {
 
 onMounted(() => {
   // Populates ssh.hosts + subscribes to ssh:host-key-prompt app-wide (idempotent
-  // with the /ssh page's own load). No-op in browser-dev beyond seeding mocks.
+  // with the /ssh page's own load). No-op without the bridge.
   void ssh.loadAll()
 })
 

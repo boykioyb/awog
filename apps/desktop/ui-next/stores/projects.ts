@@ -7,9 +7,10 @@ import type { Project, ProjectLlmDefaults, ProjectsListResponse, ProviderName } 
 // Projects store (ui-next) — dual-path live. The project entity is the registered
 // local folder roster persisted by the sidecar (~/.awog/projects/<id>.json).
 // When the Electron bridge is available `hydrate()` loads the real list over IPC
-// and every action round-trips to the sidecar; browser-dev seeds INITIAL_PROJECTS
-// and mutates locally. Mirrors stores/skills.ts dual-path pattern (the reference
-// store), trimmed to the single global project namespace projects use.
+// and every action round-trips to the sidecar; without it the list stays EMPTY (no
+// seed data — an invented project reads as one the user linked). Mirrors
+// stores/skills.ts dual-path pattern (the reference store), trimmed to the single
+// global project namespace projects use.
 //
 // COMPAT: useProjects() (the Sessions/library config helper) + the git store both
 // read the projects.list contract — this store owns the Project entity but never
@@ -79,48 +80,11 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
-// Browser-dev seed so the page is browsable without an Electron shell. Mirrors
-// the old UI INITIAL_PROJECTS shape (apps/desktop/ui/utils/initial-data.ts).
-function mockProjects(): Project[] {
-  return [
-    {
-      id: 'awog',
-      name: 'awog',
-      path: '~/KyroTech/Projects/awog',
-      description: 'Artifact Workflow Orchestrate Guild — local-first AI Team OS.',
-      gitRemote: 'git@github.com:awog/awog.git',
-      gitBranch: 'main',
-      language: 'TypeScript',
-      createdAt: '2025-01-04T09:00:00.000Z',
-    },
-    {
-      id: 'vbsec',
-      name: 'vbsec',
-      path: '~/KyroTech/Projects/vbsec',
-      description: 'Vulnerability rule catalog for AWOG security audits.',
-      gitRemote: 'git@github.com:tanviet12/vbsec.git',
-      gitBranch: 'main',
-      language: 'Markdown',
-      createdAt: '2025-02-11T10:30:00.000Z',
-    },
-    {
-      id: 'spacelinks-web',
-      name: 'spacelinks-web',
-      path: '~/work/spacelinks-web',
-      description: 'Spacelinks marketing site + API.',
-      gitRemote: '',
-      gitBranch: 'main',
-      language: 'Vue',
-      createdAt: '2025-03-20T08:15:00.000Z',
-    },
-  ]
-}
-
 export const useProjectsStore = defineStore('projects', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const projects = ref<Project[]>(sc.available ? [] : mockProjects())
+  const projects = ref<Project[]>([])
   const loaded = ref(false)
 
   // Make a unique sidecar-safe id from a project name against the current roster.
@@ -138,7 +102,7 @@ export const useProjectsStore = defineStore('projects', () => {
 
   const projectById = (id: string): Project | undefined => projects.value.find((p) => p.id === id)
 
-  // Load the registered project roster. Browser-dev keeps the mock seed. After a
+  // Load the registered project roster. No bridge → stays empty. After a
   // successful live load we prime the shared useWorkspaceData cache so name→path
   // resolution stays in sync for git / sessions / workspace tabs.
   async function hydrate(): Promise<void> {

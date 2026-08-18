@@ -346,7 +346,7 @@
 // the optional workspace panel. Context bar math mirrors ctxHtml (~1287); the
 // usage + config popovers reuse the `.dproj` dropdown pattern (one menu open at a
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
-// useSessionsStore (remove/setProject/sendMessage) — visual rates are mock.
+// useSessionsStore (remove/setProject/sendMessage) — visual rates are presentational.
 import type {
   Session,
   SessionAttachment,
@@ -465,7 +465,7 @@ function selectProj(id: string) {
   menu.value = null
 }
 
-// Composer send → mock turn runner (store swaps in the real IPC runner later).
+// Composer send → the store's turn runner (IPC).
 // Pending attachments ride along, then clear (new array so the sent copy is safe).
 function onSend(text: string, command?: SlashCommandRef) {
   // Folder attachments ride into the user message (bubble) and, via the store, to

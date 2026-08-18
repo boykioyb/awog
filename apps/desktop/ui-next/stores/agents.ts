@@ -6,10 +6,10 @@ import type { ProviderName } from '~/stores/settings'
 // Agents store — dual-path live (AGENT.md 5-tier → 2-tier global/project, ADR
 // 0015/0035). When the Electron bridge is available `loadAgents()` scans the
 // global tier + every passed project tier over IPC, and an `agents.fs-changed`
-// subscription re-hydrates when files are touched outside the app; browser-dev
-// seeds a small mock. Mirrors stores/skills.ts (the reference library store):
-// inline slice types, readonly-state + named async actions, mock seed gated on
-// `!sc.available`.
+// subscription re-hydrates when files are touched outside the app; without the
+// bridge the list stays empty (no seed data). Mirrors stores/skills.ts (the
+// reference library store): inline slice types, readonly-state + named async
+// actions.
 //
 // COMPAT: the Home dashboard (composables/useHomeDashboard.ts) consumes the
 // `agents` list as a roster of { id, name, model, role } via the `roster`
@@ -68,47 +68,6 @@ export type AgentInput = Agent
 type AgentsListResponse = { agents: Agent[]; reports?: AgentScanReport[] }
 type AgentUpsertResponse = { agent: Agent }
 
-function mockAgents(): Agent[] {
-  return [
-    {
-      id: 'tech-lead',
-      source: 'global',
-      name: 'tech-lead',
-      description: 'Quyết định kiến trúc, viết ADR (Context/Decision/Consequences).',
-      provider: 'anthropic',
-      model: 'claude-opus-5',
-      role: 'TL',
-      systemPrompt:
-        'Bạn là Tech Lead của AWOG. Quyết định kiến trúc, viết ADR, thiết kế ranh giới module qua UI/sidecar/storage. Output là ADR/design note, KHÔNG phải code.',
-      tools: ['Read', 'Grep', 'Glob', 'Write', 'mcp__github'],
-    },
-    {
-      id: 'developer',
-      source: 'global',
-      name: 'developer',
-      description: 'Implement một dev task end-to-end theo coding-guide.',
-      provider: 'anthropic',
-      model: 'claude-opus-5',
-      role: 'DV',
-      systemPrompt:
-        'Bạn là Developer. Implement một task end-to-end theo coding-guide, chạy lint+typecheck trước khi báo xong.',
-      tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'],
-    },
-    {
-      id: 'infosec',
-      source: 'global',
-      name: 'infosec',
-      description: 'Audit theo 21-rule + 8 invariant AWOG. Read-only.',
-      provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      role: 'IS',
-      systemPrompt:
-        'Bạn là Infosec. Audit theo 21-rule + 8 invariant AWOG. Read-only; xuất finding report (severity / file:line / fix).',
-      tools: ['Read', 'Grep', 'Glob', 'Bash'],
-    },
-  ]
-}
-
 // Composite identity — an agent is keyed by (source, projectId, id) so a project
 // agent and a global agent can share an id without colliding.
 const matchKey = (a: Agent, b: { source: AgentSource; projectId?: string; id: string }): boolean =>
@@ -120,7 +79,7 @@ export const useAgentsStore = defineStore('agents', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const agents = ref<Agent[]>(sc.available ? [] : mockAgents())
+  const agents = ref<Agent[]>([])
   const scanReports = ref<AgentScanReport[]>([])
   const loaded = ref(false)
 
@@ -197,7 +156,7 @@ export const useAgentsStore = defineStore('agents', () => {
       return res.agent
     }
 
-    // Browser-dev mock path.
+    // No bridge: keep the change in memory only.
     if (slugChanged) {
       agents.value = agents.value.filter(
         (a) =>
@@ -247,7 +206,7 @@ export const useAgentsStore = defineStore('agents', () => {
 
   // One-shot LLM draft/revision from a natural-language prompt (agents.generate).
   // Returns a draft (no `source`/`projectId` — the caller preserves the tier).
-  // Throws on failure so the caller can fall back to a local mock.
+  // Throws on failure so the caller can surface the error.
   async function generateAgent(
     prompt: string,
     accountId: string,

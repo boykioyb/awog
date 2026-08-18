@@ -30,14 +30,14 @@
       </div>
     </div>
 
-    <!-- Unavailable / no-root → mock tree fallback (browser-dev) or message. -->
+    <!-- Not ready → say why. A session with no project has no root to walk, so the
+         tree stays empty: never stand in a sample tree, which would look like the
+         user's own files. -->
     <div v-if="!ready" class="wsfiles-fallback">
-      <div v-if="!available" class="empty" style="padding: 30px">
-        <div class="et">{{ t('sessions.workspace.unavailable') }}</div>
-      </div>
-      <!-- Engine present but no project bound → mock tree (keeps panel usable). -->
-      <div v-else-if="!root" class="ftree2">
-        <SessionFileTree :nodes="FTREE" />
+      <div class="empty" style="padding: 30px">
+        <div class="et">
+          {{ available ? t('sessions.workspace.noProject') : t('sessions.workspace.unavailable') }}
+        </div>
       </div>
     </div>
 
@@ -65,7 +65,7 @@
 // Files tab (§5/§10) — real lazy file tree via fs.listDir. Opening a file routes to
 // the shared PreviewModal (usePreview) — the SAME modal used for attachment preview,
 // so there's a single file-preview surface (the modal reads content via fs.readFile
-// when given workspaceRoot + path). Browser-dev (no engine) → static mock tree.
+// when given workspaceRoot + path). No engine / no project → an empty state, never a sample tree.
 import type { Session, TreeNode } from '~/composables/useSessionsData'
 import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
 import { useSidecar } from '~/composables/useSidecar'
@@ -79,7 +79,6 @@ import { pushActionToast } from '~/composables/useActionToasts'
 const props = defineProps<{ session: Session }>()
 
 const { t } = useI18n()
-const { FTREE } = useSessionsData()
 const sc = useSidecar()
 const preview = usePreview()
 const fs = useFsApi()
@@ -110,7 +109,7 @@ const treeLoading = ref(false)
 // Highlight the opened file in the tree (no inline viewer — preview is the modal).
 const selectedPath = ref<string | null>(null)
 
-// Convert loaded FsEntry[] for a dir into the mock TreeNode shape SessionFileTree
+// Convert loaded FsEntry[] for a dir into the TreeNode shape SessionFileTree
 // renders (dirs as { d }, files as { f }).
 function nodesFor(dir: string): TreeNode[] {
   const entries = childrenByPath[dir] ?? []

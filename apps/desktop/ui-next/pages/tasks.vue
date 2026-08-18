@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-// Tasks — live Task Execution Engine slice (ADR 0024). Replaces the static mock
+// Tasks — live Task Execution Engine slice (ADR 0024). Replaces the static seed
 // from the prototype port. Master-detail shell from <LibraryView>; all state +
 // IPC live in useTasksPage (page-controller). Rows show status + progress;
 // the detail renders the pipeline (phase cards with approve / rerun / discuss /

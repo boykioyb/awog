@@ -9,8 +9,10 @@
       :group-label="groupLabel"
       :group-dot="groupDot"
       show-new
+      import-kind="skill"
       @new="openCreator()"
       @new-in-group="openCreator"
+      @imported="onImported"
     >
       <template #row="{ item: s }">
         <div class="lrow">
@@ -86,7 +88,7 @@
 
 <script setup lang="ts">
 // Skills library — live store + full CRUD + chat-driven creation. Replaces the
-// static mock from the prototype port. Shell from <LibraryView>; all state +
+// static seed from the prototype port. Shell from <LibraryView>; all state +
 // handlers live in useSkillsPage (page-controller). This is the REFERENCE
 // vertical slice the sibling library features mirror.
 import { computed } from 'vue'
@@ -129,6 +131,7 @@ const {
   cancelDelete,
   deleteDescription,
   confirmDelete,
+  onImported,
   toasts,
   toastColor,
 } = useSkillsPage()

@@ -1,8 +1,7 @@
-// Git page — shared types, mock data, and pure helpers. Layout mirrors the
+// Git page — shared types + pure helpers (no data, no IPC). Layout mirrors the
 // production Git Manager (apps/desktop/ui): full-section sidebar + page header
 // (project/repo/branch picker + ops) + selection-driven main pane. Styling uses
-// ui-next prototype.css classes. All static mock; no IPC. Used by pages/git.vue
-// + components/git/*.
+// ui-next prototype.css classes. Used by pages/git.vue + components/git/*.
 
 export type DiffMode = 'unified' | 'split'
 export type CommitTab = 'commit' | 'changes' | 'tree'
@@ -111,25 +110,6 @@ export type SectionOpen = {
 // shared composable so git call sites keep importing it from here unchanged.
 export type { MenuItem } from '~/composables/useContextMenu'
 
-export const DEMO_DIFF: DiffLine[] = [
-  { t: '@', s: '@@ -210,4 +210,5 @@ const send = () => {' },
-  { t: ' ', n: 210, s: '  const text = draft.value.trim()' },
-  { t: ' ', n: 211, s: '  if (!text) return' },
-  { t: '-', n: 212, s: '  emit("send", text)' },
-  { t: '+', n: 212, s: '  const enhanced = await enhancePrompt(text)' },
-  { t: '+', n: 213, s: '  emit("send", enhanced)' },
-  { t: ' ', n: 214, s: '}' },
-]
-
-export const DEMO_DIFF2: DiffLine[] = [
-  { t: '@', s: '@@ -50,3 +50,4 @@ export class McpManager {' },
-  { t: ' ', n: 50, s: '  private pool = new Map()' },
-  { t: '-', n: 51, s: '  spawn(id) { return new Server(id) }' },
-  { t: '+', n: 51, s: '  acquire(sessionId, serverId) {' },
-  { t: '+', n: 52, s: '    return this.pool.get(key) ?? this.spawn(serverId)' },
-  { t: '+', n: 53, s: '  }' },
-]
-
 export type GitState = {
   // Project + repo context (header pickers).
   projects: ProjectInfo[]
@@ -172,7 +152,7 @@ export type GitState = {
 export function createGitState(): GitState {
   return {
     // Data fields start empty — the store fills them from the sidecar (git.* IPC).
-    // No mock seed: an unwired/offline state shows real empty/NO_REPO UI, never
+    // No seed data: an unwired/offline state shows real empty/NO_REPO UI, never
     // fabricated branches/commits/stashes.
     projects: [],
     currentProjectId: '',

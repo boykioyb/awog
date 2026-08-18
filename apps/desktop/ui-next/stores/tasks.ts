@@ -8,7 +8,7 @@ import type { TodoStatus } from '~/types'
 // (`sc.available`) `loadTasks()` pulls the real task list over IPC and a lazy
 // `task.*` event subscription keeps it fresh (status / phase / run transitions,
 // trace stream, per-run output + discussion). In browser-dev (no shell) it seeds
-// a small mock so the Home bento + Tasks page render without the sidecar.
+// nothing (no seed data) — the Home bento + Tasks page show their empty states.
 // Mirrors stores/sessions.ts + stores/git.ts dual-path pattern and
 // apps/desktop/ui/stores/tasks.ts (reference IPC logic). The full Tasks page
 // (pages/tasks.vue) AND the Home dashboard read this slice — the dashboard binds
@@ -276,284 +276,13 @@ function topoOrder(nodes: WorkflowNodeSlice[], edges: WorkflowEdgeSlice[]): stri
 
 const nowIso = (): string => new Date().toISOString()
 
-// Mock seed (browser-dev): one running task, one second running, one awaiting
-// approval, one done — so both the Tasks page (master-detail) and the Home bento
-// have data without the engine. Runs carry trace + output so the detail renders.
-function mockTasks(): Task[] {
-  return [
-    {
-      id: 'tsk-mock-1',
-      title: 'Lazy-load transcripts (ADR 0048)',
-      description: 'Stream session JSONL on open instead of eager full load.',
-      projectId: 'awog',
-      source: { type: 'manual' },
-      workflowId: 'wf-1',
-      status: 'running',
-      currentNodeId: 'n3',
-      waitingApproval: null,
-      createdAt: new Date(Date.now() - 4 * 60_000).toISOString(),
-      workflowSnapshot: {
-        id: 'wf-1',
-        name: 'tech-lead → developer → qa',
-        nodes: [
-          { id: 'n1', agentId: 'tech-lead', agentName: 'tech-lead', skillId: 'write-adr' },
-          { id: 'n2', agentId: 'tech-lead', agentName: 'tech-lead', skillId: 'write-adr' },
-          {
-            id: 'n3',
-            agentId: 'developer',
-            agentName: 'developer',
-            skillId: 'implement-feature',
-          },
-          {
-            id: 'n4',
-            agentId: 'developer',
-            agentName: 'developer',
-            skillId: 'implement-feature',
-          },
-          { id: 'n5', agentId: 'qa-tester', agentName: 'qa-tester', skillId: 'write-test-cases' },
-        ],
-        edges: [
-          { from: 'n1', to: 'n2' },
-          { from: 'n2', to: 'n3' },
-          { from: 'n3', to: 'n4' },
-          { from: 'n4', to: 'n5' },
-        ],
-      },
-      phases: {
-        n1: {
-          nodeId: 'n1',
-          status: 'completed',
-          skillName: 'write-adr',
-          runs: mockDoneRuns('38s'),
-        },
-        n2: {
-          nodeId: 'n2',
-          status: 'completed',
-          skillName: 'write-adr',
-          runs: mockDoneRuns('1m 04s'),
-        },
-        n3: {
-          nodeId: 'n3',
-          status: 'running',
-          skillName: 'implement-feature',
-          runs: mockRunningRuns(),
-        },
-        n4: { nodeId: 'n4', status: 'pending', skillName: 'implement-feature', runs: [] },
-        n5: { nodeId: 'n5', status: 'pending', skillName: 'write-test-cases', runs: [] },
-      },
-    },
-    {
-      id: 'tsk-mock-2',
-      title: 'Audit fs.* path sanitize',
-      description: 'Verify path traversal guards on every workspace I/O sink.',
-      projectId: 'awog',
-      source: { type: 'manual' },
-      workflowId: 'wf-2',
-      status: 'running',
-      currentNodeId: 'n1',
-      waitingApproval: null,
-      createdAt: new Date(Date.now() - 60_000).toISOString(),
-      workflowSnapshot: {
-        id: 'wf-2',
-        name: 'infosec',
-        nodes: [{ id: 'n1', agentId: 'infosec', agentName: 'infosec', skillId: 'security-audit' }],
-      },
-      phases: {
-        n1: {
-          nodeId: 'n1',
-          status: 'running',
-          skillName: 'security-audit',
-          runs: mockRunningRuns(),
-        },
-      },
-    },
-    {
-      id: 'tsk-mock-3',
-      title: 'Wire enhance-prompt method',
-      description: 'Add the sessions.enhancePrompt RPC + composer wiring.',
-      projectId: 'awog',
-      source: { type: 'github', repo: 'kyro/awog', issueNumber: 142, url: '' },
-      workflowId: 'wf-3',
-      status: 'waiting_approval',
-      currentNodeId: 'n2',
-      waitingApproval: 'n2',
-      createdAt: new Date(Date.now() - 9 * 60_000).toISOString(),
-      workflowSnapshot: {
-        id: 'wf-3',
-        name: 'developer',
-        nodes: [
-          {
-            id: 'n1',
-            agentId: 'developer',
-            agentName: 'developer',
-            skillId: 'implement-feature',
-          },
-          {
-            id: 'n2',
-            agentId: 'developer',
-            agentName: 'developer',
-            skillId: 'implement-feature',
-            approval: true,
-          },
-        ],
-        edges: [{ from: 'n1', to: 'n2' }],
-      },
-      phases: {
-        n1: {
-          nodeId: 'n1',
-          status: 'completed',
-          skillName: 'implement-feature',
-          runs: mockDoneRuns('22s'),
-        },
-        n2: {
-          nodeId: 'n2',
-          status: 'waiting_approval',
-          skillName: 'implement-feature',
-          runs: mockApprovalRuns(),
-        },
-      },
-    },
-    {
-      id: 'tsk-mock-4',
-      title: 'Redesign Git reference UI',
-      description: 'Sublime-Merge style sidebar + flat default surfaces.',
-      projectId: 'awog',
-      source: { type: 'manual' },
-      workflowId: 'wf-4',
-      status: 'completed',
-      currentNodeId: null,
-      waitingApproval: null,
-      createdAt: new Date(Date.now() - 40 * 60_000).toISOString(),
-      workflowSnapshot: {
-        id: 'wf-4',
-        name: 'tech-lead → developer → reviewer',
-        nodes: [
-          { id: 'n1', agentId: 'tech-lead', agentName: 'tech-lead', skillId: 'write-adr' },
-          {
-            id: 'n2',
-            agentId: 'developer',
-            agentName: 'developer',
-            skillId: 'implement-feature',
-          },
-          { id: 'n3', agentId: 'code-reviewer', agentName: 'code-reviewer', skillId: 'review-pr' },
-        ],
-        edges: [
-          { from: 'n1', to: 'n2' },
-          { from: 'n2', to: 'n3' },
-        ],
-      },
-      phases: {
-        n1: {
-          nodeId: 'n1',
-          status: 'completed',
-          skillName: 'write-adr',
-          runs: mockDoneRuns('40s'),
-        },
-        n2: {
-          nodeId: 'n2',
-          status: 'completed',
-          skillName: 'implement-feature',
-          runs: mockDoneRuns('6m'),
-        },
-        n3: { nodeId: 'n3', status: 'completed', skillName: 'review-pr', runs: mockDoneRuns('1m') },
-      },
-    },
-  ]
-}
-
-function mockDoneRuns(duration: string): TaskRun[] {
-  return [
-    {
-      version: 1,
-      status: 'completed',
-      output: '✓ Done. Committed and verified.',
-      trace: [
-        {
-          id: 'tr-1',
-          type: 'agent',
-          name: 'agent',
-          model: 'Opus 5',
-          duration,
-          children: [
-            { id: 'tr-1-1', type: 'tool', tool: 'Read', input: 'types/index.ts', duration: '0.4s' },
-            {
-              id: 'tr-1-2',
-              type: 'tool',
-              tool: 'Edit',
-              input: 'types/index.ts',
-              result: '+12 −0',
-              duration: '0.6s',
-            },
-          ],
-        },
-      ],
-      messages: [],
-      duration,
-      approvedBy: 'auto',
-    },
-  ]
-}
-
-function mockRunningRuns(): TaskRun[] {
-  return [
-    {
-      version: 1,
-      status: 'running',
-      output: '',
-      trace: [
-        {
-          id: 'tr-live',
-          type: 'agent',
-          name: 'agent',
-          model: 'Opus 5',
-          duration: null,
-          status: 'running',
-          children: [
-            {
-              id: 'tr-live-1',
-              type: 'tool',
-              tool: 'Grep',
-              input: '"path.join"',
-              result: '18 matches',
-              duration: '0.3s',
-            },
-          ],
-        },
-      ],
-      messages: [],
-      duration: null,
-    },
-  ]
-}
-
-function mockApprovalRuns(): TaskRun[] {
-  return [
-    {
-      version: 1,
-      status: 'waiting_approval',
-      output: '⏸ Waiting for approval: writeFile methods/sessions.enhance-prompt.ts',
-      trace: [
-        {
-          id: 'tr-appr',
-          type: 'agent',
-          name: 'developer',
-          model: 'Opus 5',
-          duration: '50s',
-        },
-      ],
-      messages: [],
-      duration: '50s',
-    },
-  ]
-}
-
 export const useTasksStore = defineStore('tasks', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const tasks = ref<Task[]>(sc.available ? [] : mockTasks())
+  const tasks = ref<Task[]>([])
   const loaded = ref(false)
-  const selectedTaskId = ref<string | null>(sc.available ? null : (mockTasks()[0]?.id ?? null))
+  const selectedTaskId = ref<string | null>(null)
 
   let unlisten: UnlistenFn | null = null
 
@@ -631,7 +360,7 @@ export const useTasksStore = defineStore('tasks', () => {
         routeEvent(evt.type, evt.payload)
       })
     } catch {
-      // Browser-dev: onEvent throws when the bridge is absent. Ignore (mock path).
+      // No bridge: onEvent throws. Ignore — there is nothing to subscribe to.
       unlisten = null
     }
   }
@@ -738,7 +467,7 @@ export const useTasksStore = defineStore('tasks', () => {
     if (run) run.messages.push(e.message)
   }
 
-  // ── Commands (optimistic + RPC; browser-dev keeps mock optimism) ─────────────
+  // ── Commands (optimistic + RPC) ──────────────────────────────────────────────
 
   // Fire-and-forget persistence/command helper. UI state stays optimistic — the
   // authoritative task.* events overwrite it as the engine runs.
@@ -823,7 +552,6 @@ export const useTasksStore = defineStore('tasks', () => {
     }
     task.waitingApproval = null
     push('tasks.approvePhase', { taskId, nodeId })
-    if (!available.value) simulateAdvance(taskId, nodeId)
   }
 
   function rerunPhase(taskId: string, nodeId: string, instruction = ''): void {
@@ -908,25 +636,6 @@ export const useTasksStore = defineStore('tasks', () => {
     tasks.value = tasks.value.filter((t) => t.id !== id)
     if (selectedTaskId.value === id) selectedTaskId.value = tasks.value[0]?.id ?? null
     push('tasks.delete', { id })
-  }
-
-  // ── Browser-dev simulation (no shell) ────────────────────────────────────────
-  // Activate the next pending phase so the mock pipeline animates after approve.
-  function simulateAdvance(taskId: string, nodeId: string): void {
-    const task = taskById(taskId)
-    if (!task) return
-    const order = phaseOrder(task)
-    const idx = order.indexOf(nodeId)
-    const nextNodeId = idx >= 0 && idx < order.length - 1 ? (order[idx + 1] ?? null) : null
-    task.status = nextNodeId ? 'running' : 'completed'
-    if (!nextNodeId) return
-    setTimeout(() => {
-      const nextPhase = taskById(taskId)?.phases[nextNodeId]
-      if (nextPhase && nextPhase.status === 'pending') {
-        nextPhase.status = 'running'
-        nextPhase.runs = mockRunningRuns()
-      }
-    }, 600)
   }
 
   return {

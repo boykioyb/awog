@@ -101,7 +101,7 @@
 
 <script setup lang="ts">
 // Workflows — live store + VueFlow DAG editor + chat-driven generation (ADR 0024).
-// Replaces the static mock from the prototype port. 3-pane layout: list sidebar
+// Ported from the prototype. 3-pane layout: list sidebar
 // (with agent palette) + VueFlow canvas + node inspector. All state + handlers
 // live in useWorkflowsPage (page-controller); this stays a thin template.
 import { computed } from 'vue'

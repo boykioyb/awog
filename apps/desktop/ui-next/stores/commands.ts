@@ -6,9 +6,9 @@ import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 // Markdown, ADR 0034/0035). When the Electron bridge is available `loadCommands()`
 // scans the user/global tier + every passed project tier over IPC, and a
 // `commands.fs-changed` subscription re-hydrates when files are touched outside
-// the app; browser-dev seeds a small mock. Mirrors stores/skills.ts (the
-// reference) dual-path pattern: inline slice types, readonly-state + named async
-// actions, mock seed gated on `!sc.available`.
+// the app; without the bridge the list stays empty (no seed data). Mirrors
+// stores/skills.ts (the reference) dual-path pattern: inline slice types,
+// readonly-state + named async actions.
 
 export type CommandSource = 'global' | 'project'
 
@@ -53,46 +53,6 @@ type CommandGenerateResponse = {
   command: { name: string; description: string; argumentHint?: string; body: string }
 }
 
-function mockCommands(): Command[] {
-  return [
-    {
-      id: 'compact',
-      name: 'compact',
-      description: 'Nén ngữ cảnh để tiết kiệm token',
-      body: 'Tóm tắt hội thoại, giữ 8 lượt gần nhất.',
-      enabled: true,
-      source: 'global',
-    },
-    {
-      id: 'review',
-      name: 'review',
-      description: 'Review diff hiện tại',
-      body: 'Review the current diff for correctness + cleanup. Focus: $ARGUMENTS',
-      argumentHint: '[focus]',
-      enabled: true,
-      source: 'global',
-    },
-    {
-      id: 'commit',
-      name: 'commit',
-      description: 'Tạo commit theo convention',
-      body: 'Create a well-structured git commit. Args: $ARGUMENTS',
-      argumentHint: '[message]',
-      enabled: true,
-      source: 'project',
-      projectId: 'awog',
-    },
-    {
-      id: 'security-review',
-      name: 'security-review',
-      description: 'Audit bảo mật branch',
-      body: 'Security review pending changes on branch.',
-      enabled: false,
-      source: 'global',
-    },
-  ]
-}
-
 // Composite identity — a command is keyed by (source, projectId, id) so a project
 // command and a global command can share an id without colliding.
 const matchKey = (
@@ -107,7 +67,7 @@ export const useCommandsStore = defineStore('commands', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const commands = ref<Command[]>(sc.available ? [] : mockCommands())
+  const commands = ref<Command[]>([])
   const scanReports = ref<CommandScanReport[]>([])
   const loaded = ref(false)
 
@@ -164,7 +124,7 @@ export const useCommandsStore = defineStore('commands', () => {
       return res.command
     }
 
-    // Browser-dev mock path.
+    // No bridge: keep the change in memory only.
     if (existing) Object.assign(existing, payload)
     else commands.value.push({ ...payload })
     return payload
@@ -245,7 +205,7 @@ export const useCommandsStore = defineStore('commands', () => {
   // One-shot LLM draft from a natural-language prompt (commands.generate). Returns
   // a content-only draft (no source/projectId — the editor picks the tier). When
   // `current` is passed the model REVISES that command. Throws on failure so the
-  // caller can fall back to a local mock.
+  // caller can surface the error.
   async function generateCommand(
     prompt: string,
     accountId: string,

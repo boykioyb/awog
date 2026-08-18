@@ -9,8 +9,10 @@
       :group-label="groupLabel"
       :group-dot="groupDot"
       show-new
+      import-kind="command"
       @new="openCreator()"
       @new-in-group="openCreator"
+      @imported="onImported"
     >
       <template #row="{ item: c }">
         <div class="lrow" :style="{ opacity: c.enabled ? 1 : 0.55 }">
@@ -96,7 +98,7 @@
 
 <script setup lang="ts">
 // Commands library — live store + full CRUD + AI-drafted creation. Replaces the
-// static mock from the prototype port. Shell from <LibraryView>; all state +
+// static seed from the prototype port. Shell from <LibraryView>; all state +
 // handlers live in useCommandsPage (page-controller), mirroring pages/skills.vue.
 import { computed } from 'vue'
 import CommandBodyEditModal from '~/components/command/CommandBodyEditModal.vue'
@@ -140,6 +142,7 @@ const {
   cancelDelete,
   deleteDescription,
   confirmDelete,
+  onImported,
   toasts,
   toastColor,
 } = useCommandsPage()

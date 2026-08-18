@@ -4,7 +4,7 @@
 // PATH. This composable is a thin reactive view over the projects store
 // (stores/projects.ts) — the single home for the Project entity — exposing the
 // stable `{ projects, projectName, projectPath }` shape its many consumers bind.
-// SoC: IPC only (via the store). Browser-dev falls back to the store's mock seed.
+// SoC: IPC only (via the store); the list is empty without the bridge.
 import { computed } from 'vue'
 import { useI18n } from './useI18n'
 import { useProjectsStore } from '~/stores/projects'
@@ -31,7 +31,7 @@ export function useProjects() {
   }
 
   // Resolve an engine projectId → absolute on-disk path, or null when unknown
-  // (browser-dev mock paths are tilde-prefixed but still returned). Used by the
+  // (a tilde-prefixed path is still returned as stored). Used by the
   // session context menu (copy path / open in Finder).
   const projectPath = (id: string): string | null => {
     if (!id) return null

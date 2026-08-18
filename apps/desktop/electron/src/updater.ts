@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { app, ipcMain, shell, type BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { log, revealLogs } from './logger'
@@ -33,11 +35,15 @@ export function setupUpdater(getWindow: () => BrowserWindow | null): void {
   }
 
   // App info is always available — the renderer needs the version + capability
-  // even in dev (to show "dev mode" and skip scheduling).
+  // even in dev (to show "dev mode" and skip scheduling). `awogHome` mirrors the
+  // sidecar's own root (sidecar util/path.ts `awogHome()` = os.homedir()/.awog) so
+  // Settings → Workspace can show the REAL root instead of a baked-in default that
+  // only happened to be right on the developer's machine.
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
     isPackaged: app.isPackaged,
     canAutoInstall,
+    awogHome: join(homedir(), '.awog'),
   }))
 
   // Opening the releases page is harmless in dev too (notify-only fallback).

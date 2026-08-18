@@ -5,12 +5,12 @@ import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 // Skills store — dual-path live (SKILL.md 5-tier, ADR 0013). When the Electron
 // bridge is available `loadSkills()` scans the user/global tier + every passed
 // project tier over IPC, and an `skills.fs-changed` subscription re-hydrates when
-// files are touched outside the app; browser-dev seeds a small mock. Mirrors
-// stores/agents.ts + stores/connections.ts dual-path pattern.
+// files are touched outside the app; without the bridge the list stays empty (no
+// seed data). Mirrors stores/agents.ts + stores/connections.ts dual-path pattern.
 //
 // This is the REFERENCE store the sibling library features (agents, commands,
 // rules, hooks, connections) mirror: inline slice types, readonly-state + named
-// async actions, mock seed gated on `!sc.available`.
+// async actions.
 
 export type SkillSource = 'global' | 'project'
 
@@ -43,47 +43,6 @@ export type SkillInput = Skill
 type SkillsListResponse = { skills: Skill[]; reports?: SkillScanReport[] }
 type SkillUpsertResponse = { skill: Skill }
 
-function mockSkills(): Skill[] {
-  return [
-    {
-      id: 'design-ui-ux',
-      source: 'project',
-      projectId: 'awog',
-      name: 'design-ui-ux',
-      description: 'UI/UX design intelligence cho AWOG',
-      body: '# Skill: Design UI/UX (AWOG desktop)\n\nDesign intelligence — chọn style/màu/typography, dựng component, tự review.\n\n## Khi nào dùng\nBắt buộc khi task chạm bố cục, quyết định thị giác, pattern tương tác, chất lượng UX.',
-    },
-    {
-      id: 'write-adr',
-      source: 'global',
-      name: 'write-adr',
-      description: 'Author an Architecture Decision Record',
-      body: '# write-adr\n\nAuthor an ADR with Context / Decision / Consequences.',
-    },
-    {
-      id: 'security-audit',
-      source: 'global',
-      name: 'security-audit',
-      description: '21-rule vulnerability catalog',
-      body: '# security-audit\n\nApply the 21-rule catalog + AWOG invariants. Output findings.',
-    },
-    {
-      id: 'implement-feature',
-      source: 'global',
-      name: 'implement-feature',
-      description: 'Implement một dev task end-to-end',
-      body: '# implement-feature\n\nRead spec/ADR → code theo coding-guide → lint + typecheck.',
-    },
-    {
-      id: 'review-pr',
-      source: 'global',
-      name: 'review-pr',
-      description: 'Code review trên diff/PR',
-      body: '# review-pr\n\nVerify architecture fit, AWOG invariants, security, perf.',
-    },
-  ]
-}
-
 // Composite identity — a skill is keyed by (source, projectId, id) so a project
 // skill and a global skill can share an id without colliding.
 const matchKey = (a: Skill, b: { source: SkillSource; projectId?: string; id: string }): boolean =>
@@ -95,7 +54,7 @@ export const useSkillsStore = defineStore('skills', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const skills = ref<Skill[]>(sc.available ? [] : mockSkills())
+  const skills = ref<Skill[]>([])
   const scanReports = ref<SkillScanReport[]>([])
   const loaded = ref(false)
 
@@ -158,7 +117,7 @@ export const useSkillsStore = defineStore('skills', () => {
       return res.skill
     }
 
-    // Browser-dev mock path.
+    // No bridge: keep the change in memory only.
     if (slugChanged) {
       skills.value = skills.value.filter(
         (s) =>
@@ -208,7 +167,7 @@ export const useSkillsStore = defineStore('skills', () => {
 
   // One-shot LLM draft from a natural-language prompt (skills.generate). Returns
   // a draft (no `source`/`projectId` — the editor picks the tier). Throws on
-  // failure so the caller can fall back to a local mock.
+  // failure so the caller can surface the error.
   async function generateSkill(
     prompt: string,
     accountId: string,

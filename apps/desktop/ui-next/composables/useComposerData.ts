@@ -4,7 +4,7 @@ import { useProjects } from '~/composables/useProjects'
 import type { FsEntry } from '~/composables/useFsApi'
 
 // Real data sources backing the composer's `/` (commands + skills) and `@`
-// (agents + files) autocomplete — replaces the old static mock. Each source is
+// (agents + files) autocomplete — replaces the old static seed. Each source is
 // fetched lazily on first use and cached at module scope (keyed by project /
 // workspace root) so re-opening the menu across composer remounts is free.
 //

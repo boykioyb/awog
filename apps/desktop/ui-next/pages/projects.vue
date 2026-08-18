@@ -99,7 +99,7 @@
 // LLM defaults + GitHub Issues/PR integration + Templates (save-as / install,
 // pre-targeted to the selected project) + in-app code workspace entry. Master-
 // detail layout; all state + handlers live in useProjectsPage (page-controller).
-// Replaces the static PDATA mock with the real projects store + gh.* RPC.
+// Replaces the static PDATA seed with the real projects store + gh.* RPC.
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import ProjectDetail from '~/components/project/ProjectDetail.vue'
 import ProjectEditor from '~/components/project/ProjectEditor.vue'

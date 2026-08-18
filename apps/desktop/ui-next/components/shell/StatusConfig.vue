@@ -34,6 +34,10 @@
         <span class="sb-cfg-lbl">{{ accountShort }}</span>
       </button>
       <div v-if="openChip === 'account'" class="smenu sb-menu" @click.stop>
+        <!-- Fresh install: an empty menu reads as broken, so name the missing step. -->
+        <span v-if="!accounts.length" class="mi sb-mi-empty">
+          {{ t('sessions.config.noAccountHint') }}
+        </span>
         <button v-for="a in accounts" :key="a.id" class="mi" @click="pickAccount(a)">
           <span class="sb-mi-name">{{ a.display }}</span>
           <Icon
@@ -231,6 +235,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   position: fixed;
   inset: 0;
   z-index: 94;
+}
+/* Non-interactive hint row (no account connected yet). */
+.sb-mi-empty {
+  color: var(--textDim);
+  cursor: default;
+  white-space: normal;
 }
 /* Style description card: absolute (like .sb-menu), opens UPWARD, sits to the LEFT of
    the 272px-wide style menu (272 + 8px gap) so it clears the window's right edge and

@@ -14,8 +14,8 @@ import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 // P0 is CRUD + credentials only: there is no live tunnel process yet, so the store
 // subscribes just to the one fs-changed channel (re-hydrate on out-of-band edits).
 // The persisted `status` is rendered as a small badge but there is no up/down
-// control (that is P1). Browser-dev (no Electron shell) seeds a small in-memory
-// mock so the card UI works offline.
+// control (that is P1). Without the Electron shell there is no data to load, so
+// the list stays empty (no seed data).
 
 export type VpnType = 'openvpn'
 export type VpnAuthMode = 'none' | 'user-pass'
@@ -156,7 +156,7 @@ export const useVpnStore = defineStore('vpn', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const profiles = ref<VpnProfile[]>(sc.available ? [] : mockProfiles())
+  const profiles = ref<VpnProfile[]>([])
   const loaded = ref(false)
 
   // Live runtime status keyed by profile id (seeded by vpn.status, kept current by
@@ -307,7 +307,7 @@ export const useVpnStore = defineStore('vpn', () => {
   // Bring a tunnel up. Parks on the OS admin prompt + readiness (seconds), so the
   // caller should show a busy affordance; the vpn:status-changed event flips the
   // card to 'connecting' immediately. Throws on prompt-cancel / auth-fail so the
-  // caller can surface it. Browser-dev just flips the mock status.
+  // caller can surface it. Without the bridge it only flips the in-memory status.
   async function up(id: string): Promise<void> {
     clearLog(id) // fresh attempt → drop the previous connection's log
     clearChallenge(id) // and any stale MFA prompt from a prior attempt
@@ -358,8 +358,8 @@ export const useVpnStore = defineStore('vpn', () => {
   }
 
   // --- credentials -----------------------------------------------------------
-  // Written to the OS keychain. Browser-dev has no keychain, so this is a no-op
-  // there (the mock UI can't store a real secret).
+  // Written to the OS keychain. Without the bridge there is no keychain, so this
+  // is a no-op (nowhere to store a real secret).
   async function setCredential(input: VpnCredentialInput): Promise<void> {
     if (!available.value) return
     await sc.request('vpn.setCredential', input)
@@ -437,40 +437,3 @@ export const useVpnStore = defineStore('vpn', () => {
     submitChallenge,
   }
 })
-
-// ── Browser-dev mocks ─────────────────────────────────────────────────────────
-function mockProfiles(): VpnProfile[] {
-  const now = new Date().toISOString()
-  return [
-    {
-      id: 'office-vpn',
-      name: 'Office VPN',
-      type: 'openvpn',
-      configPath: '~/vpn/office.ovpn',
-      authMode: 'user-pass',
-      hasUserPass: true,
-      hasKeyPassphrase: false,
-      keepalive: true,
-      autoDown: false,
-      folder: 'work',
-      tags: ['office'],
-      status: 'down',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'home-lab',
-      name: 'Home Lab',
-      type: 'openvpn',
-      configPath: '~/vpn/homelab.ovpn',
-      authMode: 'none',
-      hasUserPass: false,
-      hasKeyPassphrase: true,
-      keepalive: true,
-      autoDown: true,
-      status: 'up',
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
-}

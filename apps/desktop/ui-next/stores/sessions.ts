@@ -44,10 +44,11 @@ export type QuotaAction = { label: string; run: () => void }
 // Sessions store — dual-path. When the Electron bridge is available (`sc.available`)
 // every action drives the real sidecar over IPC and folds the engine's streaming
 // events (session.chunk / session.step / session.permission-request) into the
-// active session's transcript with a typewriter reveal. In browser-dev (no shell)
-// it keeps the original mock behaviour fully working with canned replies + local
-// state mutations. The public action/getter surface is identical on both paths so
-// Wave 2 UI components bind to one stable API. See tasks/session-screen-checklist.md
+// active session's transcript with a typewriter reveal. Without the shell there is
+// no runtime to talk to: the list stays EMPTY and a turn cannot be sent — no seed
+// transcript and no canned reply, both of which used to be indistinguishable from
+// a real model answer. The public action/getter surface is identical on both paths
+// so Wave 2 UI components bind to one stable API. See tasks/session-screen-checklist.md
 // §0/§10/§11 + apps/desktop/ui/stores/sessions.ts (reference IPC logic).
 
 // ── Engine event payload shapes (mirrors apps/desktop/ui/stores/sessions.ts) ──
@@ -133,8 +134,10 @@ export type BgShellState = {
   startedAt: string
   status: BgShellStatus
   exitCode: number | null
+  // The model already consumed this one's result — a successful chip retires.
+  read: boolean
 }
-// Event payloads for session.background-started / session.background-done.
+// Event payloads for session.background-started / -done / -read.
 type BackgroundStartedPayload = {
   sessionId: string
   shellId: string
@@ -148,7 +151,13 @@ type BackgroundDonePayload = {
   status: BgShellStatus
   exitCode: number | null
   outputTail: string
+  // Set by the sidecar: the model already has this result (the runtime handed it
+  // over in-band), and `wake: false` means that runtime also resumes the turn
+  // itself — this renderer must not fire a second continuation.
+  read?: boolean
+  wake?: boolean
 }
+type BackgroundReadPayload = { sessionId: string; shellId: string }
 type PermissionRequestPayload = {
   sessionId: string
   messageId: string
@@ -202,6 +211,11 @@ const isBgDonePayload = (raw: unknown): raw is BackgroundDonePayload => {
   return (
     typeof p.sessionId === 'string' && typeof p.shellId === 'string' && typeof p.status === 'string'
   )
+}
+const isBgReadPayload = (raw: unknown): raw is BackgroundReadPayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return typeof p.sessionId === 'string' && typeof p.shellId === 'string'
 }
 
 // Terminal "turn finished" event (sidecar emits it right before returning the
@@ -342,17 +356,23 @@ interface SendMessageResult {
   parts?: ({ kind: 'text'; text: string } | EngineStep)[]
 }
 
+// Shown in place of a reply when there is no Electron shell to run a turn. This
+// path is unreachable in the packaged app (the bridge is always present); it exists
+// so browsing the UI off-shell fails VISIBLY instead of printing something that
+// reads like a model answer.
+const ENGINE_UNAVAILABLE = 'Engine unavailable — open this session in the AWOG desktop app'
+
 export const useSessionsStore = defineStore('sessions', () => {
   const sc = useSidecar()
-  const { SESSIONS, modelsFor } = useSessionsData()
+  const { modelsFor } = useSessionsData()
   const { accounts, accountById, accountByDisplay, modelsForAccount } = useAccounts()
   const settingsStore = useSettingsStore()
   const projectsStore = useProjectsStore()
   const useIpc = sc.available
 
-  // In IPC mode start empty (hydrate from sidecar); in mock mode use the seed.
-  const sessions = ref<Session[]>(useIpc ? [] : SESSIONS)
-  const activeId = ref<number | null>(useIpc ? null : (sessions.value[0]?.id ?? null))
+  // Always starts empty — hydrate() fills it from the sidecar (IPC only).
+  const sessions = ref<Session[]>([])
+  const activeId = ref<number | null>(null)
   const active = computed<Session | null>(
     () => sessions.value.find((s) => s.id === activeId.value) ?? null,
   )
@@ -600,9 +620,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     const provider = providerDisplay(s.settings?.provider)
     return acct ? `${acct} · ${provider}` : `${provider}`
   }
+  // Fallback for a session whose settings never recorded a modelId: the user's own
+  // global default, not a hardcoded name — a fixed 'Opus 5' shows a model the user
+  // may have no account for, and the chip then sends an unusable modelId.
   function modelDisplay(modelId?: string): string {
-    if (!modelId) return 'Opus 5'
-    return modelDisplayName(modelId)
+    return modelDisplayName(modelId || settingsStore.defaults.modelId)
   }
   function modeDisplay(mode?: string): string {
     if (mode === 'plan') return 'Plan'
@@ -820,7 +842,12 @@ export const useSessionsStore = defineStore('sessions', () => {
       id: newClientId(),
       engineId: dto.id,
       title: dto.title || 'Untitled session',
-      project: dto.projectId ?? 'awog',
+      // No project → the Default tab (''). NEVER invent an id here: a placeholder
+      // ('awog') makes seedTabsFromSessions open a tab for a project that does not
+      // exist, which on a fresh install reads as a pre-linked project the user
+      // never chose. pushUpsert writes `projectId: null` for unassigned sessions,
+      // so this is the common case, not an edge one.
+      project: dto.projectId ?? '',
       model: modelDisplay(dto.settings?.modelId),
       account: accountDisplay(dto),
       // Persisted per-session config (sessions.upsert ↔ sessions.list round-trip).
@@ -872,6 +899,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       const res = await sc.request<{ sessions: SessionSummaryDto[] }>('sessions.list')
       const list = Array.isArray(res.sessions) ? res.sessions : []
       sessions.value = list.map(summaryToSession)
+      // accounts.list may still be in flight here, in which case summaryToSession
+      // could only render a provider label / raw id — fix those up now, and again
+      // via the `accounts` watch if the list lands after this point.
+      reconcileSessionAccounts()
       seedTabsFromSessions()
     } catch (err) {
       console.warn('[sessions] hydrate failed', err)
@@ -1158,7 +1189,7 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // Resolve the default account for a NEW session from Settings → Defaults: prefer
   // the configured provider's ACTIVE account (the one the user marked "Set active"),
-  // then any account on that provider, then any account at all (else the mock seed
+  // then any account on that provider, then any account at all (else nothing
   // off-shell). Preferring the active account matters because a custom endpoint that
   // speaks the Anthropic/OpenAI protocol lives in that provider's bucket and shares
   // its display provider — without the active check, the first such account (e.g. a
@@ -1197,9 +1228,11 @@ export const useSessionsStore = defineStore('sessions', () => {
       undefined
     const available = acct ? modelsForAccount(acct) : []
     // Default model id (e.g. 'claude-opus-4-8') → display name; use it only when the
-    // chosen account actually offers it, else the account's first model.
+    // chosen account actually offers it, else the account's first model. With no
+    // account at all (fresh install) keep the configured default rather than a
+    // hardcoded name — reconcileUnboundAccounts() re-resolves it once one connects.
     const wantModel = modelDisplayName(modelId)
-    const model = available.includes(wantModel) ? wantModel : (available[0] ?? 'Opus 5')
+    const model = available.includes(wantModel) ? wantModel : (available[0] ?? wantModel)
     return { acct, model, level, mcpServerIds }
   }
 
@@ -1209,6 +1242,39 @@ export const useSessionsStore = defineStore('sessions', () => {
     const { acct, model } = defaultsForNewSession()
     return { acct, model }
   }
+
+  // Re-resolve the account/model snapshot each session carries whenever the accounts
+  // list changes. Two cases this repairs, both visible as a wrong config chip:
+  //   1. The session was created or hydrated BEFORE accounts.list resolved — no
+  //      account to bind, so it kept the configured default model and either no
+  //      account display or the raw sidecar id.
+  //   2. The user just connected (or removed / renamed) an account — an already
+  //      open session would otherwise keep pointing at the old resolution until the
+  //      app was restarted, and its next turn would send that stale provider.
+  // Not persisted: the next turn's engineSettings carries the fixed values, and a
+  // fresh boot re-runs this the same way, so an upsert per session buys nothing.
+  function reconcileSessionAccounts(): void {
+    if (!useIpc || !accounts.value.length) return
+    for (const s of sessions.value) {
+      // Never repoint a session mid-turn — the running request already picked one.
+      if (s.status === 'streaming') continue
+      const bound = s.accountId ? accountById(s.accountId) : undefined
+      if (bound) {
+        // Known account — refresh only a stale display (raw id, or a renamed label).
+        if (s.account !== bound.display) s.account = bound.display
+        continue
+      }
+      // Unbound, or bound to an account that no longer exists → adopt the default
+      // for its project scope (project-pinned LLM defaults still win).
+      const { acct, model } = defaultsForNewSession(s.project)
+      if (!acct) continue
+      s.accountId = acct.id
+      s.account = acct.display
+      if (!modelsForAccount(acct).includes(s.model)) s.model = model
+    }
+  }
+
+  watch(accounts, reconcileSessionAccounts)
 
   // Create a new session. `projectId` assigns it to a project up front (the
   // per-group "+" passes the group's project); omitted (the global "+") leaves the
@@ -1295,7 +1361,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       model,
-      account: acct?.display ?? 'hoatq · Anthropic',
+      account: acct?.display ?? '',
       style: 'Default',
       status: 'idle',
       when: 'vừa xong',
@@ -1351,7 +1417,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       title,
       project: projectId,
       model,
-      account: acct?.display ?? 'hoatq · Anthropic',
+      account: acct?.display ?? '',
       style: 'Default',
       status: 'idle',
       when: 'vừa xong',
@@ -1387,7 +1453,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       title: title ?? '',
       project: projectId ?? '',
       model,
-      account: acct?.display ?? 'hoatq · Anthropic',
+      account: acct?.display ?? '',
       style: 'Default',
       status: 'idle',
       when: 'vừa xong',
@@ -1504,7 +1570,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   function setTodos(id: number, todos: Todo[]) {
     const s = byId(id)
     if (!s) return
-    // `status` is the source of truth; a legacy/mock Todo without one falls back to
+    // `status` is the source of truth; a legacy Todo without one falls back to
     // `done`, and `done` is re-derived from it so the two can never disagree.
     const normalised = todos.map((td) => {
       const status = td.status ?? (td.done ? 'completed' : 'pending')
@@ -1533,7 +1599,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
-  // Legacy display-string setter (mock callers). When a real account id is known
+  // Legacy display-string setter. When a real account id is known
   // it rides along; the model resets to that provider's first available model.
   function setAccount(id: number, account: string, accountId?: string) {
     const s = byId(id)
@@ -2220,6 +2286,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     )
   }
 
+  // Firing a wake puts the command's output INTO the turn prompt, so the model has
+  // read it just as surely as via BashOutput — retire the chips that go with it.
+  function markWakesRead(engineId: string, wakes: PendingWake[]): void {
+    const list = bgShells.value[engineId]
+    if (!list) return
+    for (const w of wakes) {
+      const sh = list.find((s) => s.shellId === w.shellId)
+      if (sh) sh.read = true
+    }
+  }
+
   // Fire the pending wakes for a session as one continuation turn — auto-continue
   // path. Only when the setting is on AND the session is idle (no live/queued turn);
   // otherwise leaves them pending for the card / a later flush on turn end.
@@ -2233,6 +2310,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const wakes = pendingWakes.value[engineId]
     if (!wakes || !wakes.length) return
     delete pendingWakes.value[engineId]
+    markWakesRead(engineId, wakes)
     autoWakeStarting.add(engineId)
     // Backstop clear: if the turn never starts (e.g. quota-blocked, so runEngineTurn
     // is never reached), the latch must still release. runEngineTurn clears it early
@@ -2246,6 +2324,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const wakes = pendingWakes.value[engineId]
     if (!s || !wakes || !wakes.length) return
     delete pendingWakes.value[engineId]
+    markWakesRead(engineId, wakes)
     void sendMessage(s.id, buildWakePrompt(wakes))
   }
 
@@ -2453,7 +2532,15 @@ export const useSessionsStore = defineStore('sessions', () => {
             startedAt: p.startedAt,
             status: 'running',
             exitCode: null,
+            read: false,
           })
+          return
+        }
+        if (evt.type === 'session.background-read') {
+          if (!isBgReadPayload(evt.payload)) return
+          const p = evt.payload
+          const sh = bgShellsFor(p.sessionId).find((s) => s.shellId === p.shellId)
+          if (sh) sh.read = true
           return
         }
         if (evt.type === 'session.background-done') {
@@ -2466,7 +2553,11 @@ export const useSessionsStore = defineStore('sessions', () => {
             startedAt: existing?.startedAt ?? '',
             status: p.status,
             exitCode: p.exitCode,
+            read: p.read === true,
           })
+          // A runtime that resumes its own turn (Claude SDK path) settles with
+          // wake:false — the chip updates, but nothing else here fires.
+          if (p.wake === false) return
           // Record a pending wake, then try to auto-continue (setting on + idle);
           // otherwise it lingers for the "Continue" card, and — if the session is
           // busy under auto-continue — flushes when the current turn finishes
@@ -2546,7 +2637,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         }
       })
     } catch {
-      // Browser-dev: onEvent throws when the bridge is absent. Ignore — mock path.
+      // No bridge: onEvent throws. Ignore — there is nothing to subscribe to.
       unlisten = null
     }
   }
@@ -2657,7 +2748,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   // Turn runner. Appends the user message + a placeholder assistant bubble, then
-  // either streams the real reply (IPC) or appends a canned reply (mock).
+  // streams the real reply over IPC, or reports the engine as unavailable.
   async function sendMessage(
     id: number,
     text: string,
@@ -2730,17 +2821,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     // draft) carry content — otherwise the sidecar rejects the empty payload.
     const modelText = composeQuotedText(quotes, trimmed)
 
+    // No bridge = no runtime. Surface that instead of inventing an answer.
     if (!useIpc) {
-      // Mock turn: canned reply.
-      const tNow = Date.now()
-      s.msgs.push({
-        role: 'assistant',
-        at: new Date(tNow).toISOString(),
-        startedAt: tNow,
-        completedAt: tNow,
-        blocks: [{ kind: 'text', text: '(mock reply — chưa nối turn runner thật qua IPC)' }],
-      })
-      s.status = 'done'
+      s.msgs.push({ role: 'system', text: ENGINE_UNAVAILABLE, at: 'vừa xong' })
+      s.status = 'error'
       return
     }
 
@@ -2963,11 +3047,14 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   // Build the engine SessionSettings from the ui-next display fields. The provider
-  // is read from the selected account when known (else the display tail); modelId
-  // reverse-maps the display name; accountId is the REAL sidecar id.
+  // is read from the selected account when known, else the display tail, else the
+  // user's configured default — never a hardcoded 'anthropic', which would send a
+  // session with no bound account to a provider the user may have no key for.
+  // modelId reverse-maps the display name; accountId is the REAL sidecar id.
   function engineSettings(s: Session): Record<string, unknown> {
     const opt = s.accountId ? accountById(s.accountId) : undefined
-    const provider = (opt?.provider ?? s.account.split(' · ')[1] ?? 'Anthropic').toLowerCase()
+    const fallbackProvider = PROVIDER_DISPLAY[settingsStore.defaults.provider] ?? 'Anthropic'
+    const provider = (opt?.provider ?? s.account.split(' · ')[1] ?? fallbackProvider).toLowerCase()
     const modelId = modelIdFromDisplay(s.model)
     const mode =
       s.mode === 'Plan'
@@ -3142,7 +3229,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   // Approve a proposed plan: flip the block to approved + (IPC) send a continuation
-  // turn so the model carries it out. Mock just flips the local status.
+  // turn so the model carries it out. Without the bridge it only flips the status.
   function approvePlan(id: number, msgIndex: number) {
     const s = byId(id)
     const msg = s?.msgs[msgIndex]
@@ -3244,12 +3331,9 @@ export const useSessionsStore = defineStore('sessions', () => {
   // ── Enhance prompt (one-shot) ────────────────────────────────────────────────
 
   async function enhancePrompt(text: string): Promise<string> {
-    if (!useIpc) {
-      // Mock: wrap the draft with crude project context (mirrors the demo file).
-      const s = active.value
-      const ctx = s?.project ? `Bối cảnh: ${s.project}\nYêu cầu: ` : ''
-      return `${ctx}${text}`
-    }
+    // Enhancement is a model call — without the bridge the draft is returned
+    // unchanged rather than string-wrapped and passed off as "enhanced".
+    if (!useIpc) return text
     const s = active.value
     const settings = s ? engineSettings(s) : { provider: 'anthropic', modelId: 'claude-opus-5' }
     const res = await sc.request<{ text: string }>('sessions.enhancePrompt', {
@@ -3392,12 +3476,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         }
         return
       }
-      s.msgs.push({
-        role: 'assistant',
-        at: 'vừa xong',
-        blocks: [{ kind: 'text', text: '(mock reply — chưa nối turn runner thật qua IPC)' }],
-      })
-      s.status = 'done'
+      s.msgs.push({ role: 'system', text: ENGINE_UNAVAILABLE, at: 'vừa xong' })
+      s.status = 'error'
     } finally {
       regenInFlight.delete(id)
     }
@@ -3411,13 +3491,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
     s.msgs = s.msgs.slice(0, index)
-    s.msgs.push({ role: 'system', text: 'Thử lại với model khác', at: 'vừa xong' })
-    s.msgs.push({
-      role: 'assistant',
-      at: 'vừa xong',
-      blocks: [{ kind: 'text', text: '(mock reply — model khác — chưa nối turn runner thật)' }],
-    })
-    s.status = 'done'
+    s.msgs.push({ role: 'system', text: ENGINE_UNAVAILABLE, at: 'vừa xong' })
+    s.status = 'error'
   }
 
   function rewind(id: number, index: number) {
@@ -3564,19 +3639,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (q) q.note = note
   }
 
-  // Accounts load async (after hydrate). Once they arrive, re-resolve the display
-  // for hydrated sessions whose accountId now maps to a real account (so the chip
-  // shows "label · Provider" instead of the raw id fallback).
-  if (useIpc) {
-    watch(accounts, (list) => {
-      if (!list.length) return
-      for (const s of sessions.value) {
-        if (!s.accountId) continue
-        const hit = accountById(s.accountId)
-        if (hit && s.account !== hit.display) s.account = hit.display
-      }
-    })
-  }
+  // (The accounts watch that re-resolves hydrated sessions lives next to
+  // reconcileSessionAccounts — it now covers unbound sessions too, not just a stale
+  // display for an already-bound accountId.)
 
   // App-lifetime init: subscribe to engine events + hydrate the list (IPC only).
   if (useIpc) {
@@ -3612,8 +3677,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       })
     }
   } else {
-    // Browser-dev: sessions are seeded synchronously from the mock; seed the tabs
-    // from them (hydrate, which normally does this, is IPC-only).
+    // No bridge: nothing to hydrate, so open just the Default tab.
     seedTabsFromSessions()
   }
 

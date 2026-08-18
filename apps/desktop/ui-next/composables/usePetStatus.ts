@@ -137,7 +137,7 @@ export function usePetStatus() {
     ): void => {
       for (const s of sessions.sessions) {
         if (out.length >= MAX_ITEMS) return
-        // No engineId = a mock/never-hydrated row; clicking it could not resolve.
+        // No engineId = a never-hydrated row; clicking it could not resolve.
         if (!s.engineId || !match(s)) continue
         out.push({
           kind: 'session',

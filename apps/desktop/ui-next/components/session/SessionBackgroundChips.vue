@@ -1,11 +1,28 @@
 <template>
-  <!-- Background shells (ADR 0066). Docked above the composer: one chip per
-       Bash(run_in_background) command in this session — running (with a stop
-       affordance) or finished (exit code). P1 surfaces state; the reactive wake
-       (auto-continue / "Continue" card) lands in P2. -->
-  <div v-if="shells.length" class="bgsh">
+  <!-- Background work (ADR 0066). Docked above the composer: one chip per task the
+       session runs in the background — a `Bash(run_in_background)` shell on the Pi
+       path, a CLI-backgrounded shell/subagent on the Claude SDK path. Both arrive
+       through the same registry, so the two runtimes look identical here.
+
+       Two rules keep the strip from silting up (it used to grow all session long):
+       a finished chip retires once the model has read its result, and anything
+       left over collapses behind one summary chip. -->
+  <div v-if="visible.length" class="bgsh">
+    <button
+      v-if="visible.length > 1"
+      type="button"
+      class="bgsh-chip bgsh-sum"
+      :class="[`is-${summaryKind}`, { open: expanded }]"
+      :title="expanded ? t('sessions.bg.summary.collapse') : t('sessions.bg.summary.expand')"
+      @click="expanded = !expanded"
+    >
+      <span v-if="runningCount" class="bgsh-dot" />
+      <Icon v-else :name="failedCount ? 'alert' : 'check'" style="width: 12px; height: 12px" />
+      <span>{{ summaryText }}</span>
+      <Icon name="chev" class="bgsh-chev" style="width: 12px; height: 12px" />
+    </button>
     <div
-      v-for="sh in shells"
+      v-for="sh in shown"
       :key="sh.shellId"
       class="bgsh-chip"
       :class="`is-${statusKind(sh)}`"
@@ -29,9 +46,9 @@
 </template>
 
 <script setup lang="ts">
-// Background-shell chips for the active session. Reads the store's live bg-shell
-// map (fed by session.background-* events) and hydrates it on open so a reload
-// recovers shells started before the listener attached.
+// Background chips for the active session. Reads the store's live map (fed by
+// session.background-* events) and hydrates it on open so a reload recovers work
+// started before the listener attached.
 import type { Session } from '~/composables/useSessionsData'
 import type { BgShellState } from '~/stores/sessions'
 
@@ -43,10 +60,35 @@ const shells = computed<BgShellState[]>(() =>
   props.session.engineId ? store.bgShellsFor(props.session.engineId) : [],
 )
 
-// Hydrate whenever the bound session changes (open / switch tab).
+// A finished command whose result the model has already consumed (BashOutput read,
+// wake prompt, or the runtime handing it over in-band) has nothing left to tell the
+// user — retire it. A FAILED one stays: that's the case worth going back to.
+const visible = computed(() => shells.value.filter((sh) => !(sh.read && statusKind(sh) === 'ok')))
+const runningCount = computed(() => visible.value.filter((sh) => sh.status === 'running').length)
+const failedCount = computed(() => visible.value.filter((sh) => statusKind(sh) === 'fail').length)
+
+const expanded = ref(false)
+// One chip is its own summary; from two up, collapse behind the summary row.
+const shown = computed(() => (visible.value.length > 1 && !expanded.value ? [] : visible.value))
+
+const summaryKind = computed<'running' | 'ok' | 'fail'>(() => {
+  if (runningCount.value) return 'running'
+  return failedCount.value ? 'fail' : 'ok'
+})
+const summaryText = computed(() => {
+  const parts: string[] = []
+  if (runningCount.value) parts.push(t('sessions.bg.summary.running', { n: runningCount.value }))
+  if (failedCount.value) parts.push(t('sessions.bg.summary.failed', { n: failedCount.value }))
+  const done = visible.value.length - runningCount.value - failedCount.value
+  if (done > 0) parts.push(t('sessions.bg.summary.done', { n: done }))
+  return parts.join(' · ')
+})
+
+// Collapse again when the strip switches session — expansion is a per-view choice.
 watch(
   () => props.session.engineId,
   (eid) => {
+    expanded.value = false
     if (eid) void store.loadBackgroundShells(eid)
   },
   { immediate: true },
@@ -103,6 +145,16 @@ function onStop(shellId: string): void {
 }
 .bgsh-chip.is-fail {
   border-color: color-mix(in srgb, var(--amber) 45%, var(--border));
+}
+.bgsh-sum {
+  font-weight: 600;
+}
+.bgsh-chev {
+  opacity: 0.55;
+  transition: transform 0.14s var(--ease, ease);
+}
+.bgsh-sum.open .bgsh-chev {
+  transform: rotate(180deg);
 }
 .bgsh-dot {
   width: 7px;

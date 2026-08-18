@@ -10,7 +10,7 @@ import type {
   RemoteInfo,
   Stash,
 } from '~/components/git/git-types'
-import { DEMO_DIFF, DEMO_DIFF2, createGitState } from '~/components/git/git-types'
+import { createGitState } from '~/components/git/git-types'
 import { useFsApi } from '~/composables/useFsApi'
 import { useGitApi } from '~/composables/useGitApi'
 import type {
@@ -195,10 +195,11 @@ export type DeleteBranchResult =
 
 // ─── Store ──────────────────────────────────────────────────────────────────
 // Dual-mode: in the Electron shell (`available`) every action hits the sidecar
-// over IPC and re-syncs the view state; in browser-dev (`!available`) it mutates
-// the mock seed locally so the prototype UX stays interactive. Mirrors the
-// production git store (apps/desktop/ui/stores/git/*) but emits the compact
-// git-types view shapes instead of the per-project entity shapes.
+// over IPC and re-syncs the view state; without it the state stays at its empty
+// baseline and mutating actions no-op — git can only run in the sidecar, so there
+// is nothing to simulate. Mirrors the production git store
+// (apps/desktop/ui/stores/git/*) but emits the compact git-types view shapes
+// instead of the per-project entity shapes.
 export const useGitStore = defineStore('git', () => {
   const seed = createGitState()
 
@@ -492,7 +493,7 @@ export const useGitStore = defineStore('git', () => {
   }
 
   const loadTags = async () => {
-    if (!available.value) return // mock keeps its seeded / derived tags
+    if (!available.value) return
     const root = workspaceRoot()
     if (!root) return
     try {
@@ -518,8 +519,8 @@ export const useGitStore = defineStore('git', () => {
       await loadTags()
       return
     }
-    // Mock mode: derive tags from the commit ref decorations (sidecar exposes
-    // tags as refs on the history; the prototype keeps a flat name list).
+    // No bridge: derive the tag names from whatever ref decorations the loaded
+    // history already carries (the sidecar exposes tags as refs on the history).
     const seen = new Set<string>()
     const names: string[] = []
     for (const c of commits.value) {
@@ -658,7 +659,7 @@ export const useGitStore = defineStore('git', () => {
   // ─── Init ─────────────────────────────────────────────────────────────────
 
   const init = async () => {
-    // Seed mock state so browser-dev + first paint show something immediately.
+    // Reset to the empty baseline so the first paint shows real empty states.
     const s = createGitState()
     projects.value = s.projects
     currentProjectId.value = s.currentProjectId
@@ -734,7 +735,7 @@ export const useGitStore = defineStore('git', () => {
 
   // ─── Staging (working tree) ─────────────────────────────────────────────────
 
-  const moveMock = (path: string, from: GitFile[], to: GitFile[]): void => {
+  const moveLocal = (path: string, from: GitFile[], to: GitFile[]): void => {
     const idx = from.findIndex((x) => x.f === path)
     const item = from[idx]
     if (item) {
@@ -745,7 +746,7 @@ export const useGitStore = defineStore('git', () => {
 
   const stageFile = async (path: string) => {
     if (!available.value) {
-      moveMock(path, unstaged.value, staged.value)
+      moveLocal(path, unstaged.value, staged.value)
       return
     }
     try {
@@ -758,7 +759,7 @@ export const useGitStore = defineStore('git', () => {
 
   const unstageFile = async (path: string) => {
     if (!available.value) {
-      moveMock(path, staged.value, unstaged.value)
+      moveLocal(path, staged.value, unstaged.value)
       return
     }
     try {
@@ -820,7 +821,7 @@ export const useGitStore = defineStore('git', () => {
   const stagePaths = async (paths: string[]) => {
     if (paths.length === 0) return
     if (!available.value) {
-      for (const p of paths) moveMock(p, unstaged.value, staged.value)
+      for (const p of paths) moveLocal(p, unstaged.value, staged.value)
       return
     }
     try {
@@ -834,7 +835,7 @@ export const useGitStore = defineStore('git', () => {
   const unstagePaths = async (paths: string[]) => {
     if (paths.length === 0) return
     if (!available.value) {
-      for (const p of paths) moveMock(p, staged.value, unstaged.value)
+      for (const p of paths) moveLocal(p, staged.value, unstaged.value)
       return
     }
     try {
@@ -867,25 +868,9 @@ export const useGitStore = defineStore('git', () => {
     // Block re-entry — the button is disabled while in flight, but Cmd+Enter on
     // the textarea can still fire a second commit before the first resolves.
     if (isCommitting.value) return
-    if (!available.value) {
-      const hash = `mock${Date.now().toString(16).slice(-7)}`
-      commits.value = [
-        {
-          h: hash.slice(0, 7),
-          sha: hash,
-          m: msg.split('\n')[0] ?? msg,
-          a: 'Local Developer',
-          email: 'dev@awog.local',
-          w: 'now',
-          files: staged.value.map((f) => ({ ...f })),
-        },
-        ...commits.value,
-      ]
-      staged.value = []
-      commitMessage.value = ''
-      ahead.value += 1
-      return
-    }
+    // Only the sidecar can run git; without it there is nothing to commit (and a
+    // synthesized commit row would claim work that never happened).
+    if (!available.value) return
     isCommitting.value = true
     try {
       await useGitApi().commit(workspaceRoot(), { message: msg })
@@ -1115,22 +1100,7 @@ export const useGitStore = defineStore('git', () => {
   // ─── Merge / rebase ─────────────────────────────────────────────────────────
 
   const merge = async (name: string) => {
-    if (!available.value) {
-      const hash = `mock${Date.now().toString(16).slice(-7)}`
-      commits.value = [
-        {
-          h: hash.slice(0, 7),
-          sha: hash,
-          merge: true,
-          m: `Merge branch '${name}' into ${branch.value}`,
-          a: 'Local Developer',
-          w: 'now',
-          files: [],
-        },
-        ...commits.value,
-      ]
-      return
-    }
+    if (!available.value) return
     try {
       await useGitApi().merge(workspaceRoot(), name)
       await loadAll()
@@ -1436,7 +1406,7 @@ export const useGitStore = defineStore('git', () => {
   // the caller must say which side it's showing — inferring from list membership
   // is ambiguous once a file is in both.
   const loadDiff = async (path: string, staged = false): Promise<DiffLine[]> => {
-    if (!available.value) return DEMO_DIFF
+    if (!available.value) return []
     const root = workspaceRoot()
     if (!root) return []
     try {
@@ -1477,15 +1447,7 @@ export const useGitStore = defineStore('git', () => {
   const loadCommitDiff = async (
     sha: string,
   ): Promise<{ files: GitFile[]; diffByPath: Record<string, DiffLine[]> }> => {
-    if (!available.value) {
-      const known = commits.value.find((c) => c.sha === sha || c.h === sha.slice(0, 7))
-      const files = known?.files ?? []
-      const diffByPath: Record<string, DiffLine[]> = {}
-      files.forEach((f, i) => {
-        diffByPath[f.f] = i % 2 === 0 ? DEMO_DIFF : DEMO_DIFF2
-      })
-      return { files, diffByPath }
-    }
+    if (!available.value) return { files: [], diffByPath: {} }
     const root = workspaceRoot()
     if (!root) return { files: [], diffByPath: {} }
     try {
@@ -1506,7 +1468,7 @@ export const useGitStore = defineStore('git', () => {
   // ─── Hunk staging ───────────────────────────────────────────────────────────
 
   const stageHunk = async (path: string, hunkIndex: number) => {
-    if (!available.value) return // mock can't stage a single hunk
+    if (!available.value) return
     const root = workspaceRoot()
     if (!root) return
     try {
@@ -1518,7 +1480,7 @@ export const useGitStore = defineStore('git', () => {
   }
 
   const unstageHunk = async (path: string, hunkIndex: number) => {
-    if (!available.value) return // mock can't unstage a single hunk
+    if (!available.value) return
     const root = workspaceRoot()
     if (!root) return
     try {
@@ -1594,7 +1556,7 @@ export const useGitStore = defineStore('git', () => {
     try {
       await useSidecar().openExternal(url)
     } catch (err) {
-      // In mock mode openExternal throws SidecarUnavailableError → swallow.
+      // Without a bridge openExternal throws SidecarUnavailableError → swallow.
       console.warn('[git] openPrFor failed', err)
     }
   }
@@ -1660,40 +1622,21 @@ export const useGitStore = defineStore('git', () => {
     base: string,
     opts: { rulePath?: string } = {},
   ): Promise<PrSummaryResult> => {
-    if (!available.value) {
-      // Browser-dev mock: a plausible summary so the modal is exercisable offline.
-      return {
-        title: `feat: merge ${head} into ${base}`,
-        description: [
-          '## Summary',
-          `Changes from \`${head}\` proposed for \`${base}\`.`,
-          '',
-          '## Changes',
-          '- (mock) sidecar unavailable — no diff analysed',
-          '',
-          '## Test plan',
-          '- [ ] Run the app and verify the branch behaves as expected',
-        ].join('\n'),
-        model: 'mock',
-        truncated: false,
-      }
-    }
+    // The summary is model-generated from a real diff — there is no honest stand-in,
+    // so without the sidecar this fails rather than inventing a description.
+    if (!available.value) throw new Error('Engine unavailable — cannot generate a PR summary')
     const titleRule = await resolvePrTitleRule(opts.rulePath)
     return useGitApi().generatePrSummary(workspaceRoot(), { head, base, titleRule })
   }
 
   // ─── Identity (user.name / user.email) ──────────────────────────────────────
   // Commit identity at the global (~/.gitconfig) and repo-local scopes. Read on
-  // demand by the Git Identity modal (not part of loadAll). Mock mode returns a
-  // seeded global identity and pretends saves succeed (no real git in browser-dev).
+  // demand by the Git Identity modal (not part of loadAll). Only the sidecar can
+  // read ~/.gitconfig, so without it there is no identity to report — a seeded
+  // name/email would show up in the modal as the user's configured author.
 
   const loadIdentity = async (): Promise<GitIdentity | null> => {
-    if (!available.value) {
-      return {
-        global: { name: 'Local Developer', email: 'dev@awog.local' },
-        local: { name: null, email: null },
-      }
-    }
+    if (!available.value) return null
     const root = workspaceRoot()
     if (!root) return null
     try {
@@ -1705,7 +1648,7 @@ export const useGitStore = defineStore('git', () => {
   }
 
   const saveIdentity = async (params: SetIdentityParams): Promise<boolean> => {
-    if (!available.value) return true // mock: pretend success
+    if (!available.value) return false
     const root = workspaceRoot()
     if (!root) return false
     try {

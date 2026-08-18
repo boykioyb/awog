@@ -14,8 +14,8 @@ import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 //
 // P1 is CRUD + import only: there is no live connection process, so the store
 // subscribes just to the two fs-changed channels (re-hydrate on out-of-band
-// edits). Browser-dev (no Electron shell) seeds a small in-memory mock so the
-// card UI works offline.
+// edits). Without the Electron shell there is no data to load, so the list stays
+// empty (no seed data).
 
 export type SshAuthMethod = 'password' | 'key' | 'agent'
 export type SshKeyType = 'ed25519' | 'rsa' | 'ecdsa' | 'other'
@@ -188,8 +188,8 @@ export const useSshStore = defineStore('ssh', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const hosts = ref<SshHost[]>(sc.available ? [] : mockHosts())
-  const identities = ref<SshIdentity[]>(sc.available ? [] : mockIdentities())
+  const hosts = ref<SshHost[]>([])
+  const identities = ref<SshIdentity[]>([])
   const loaded = ref(false)
 
   // --- live-connection runtime (P2) ------------------------------------------
@@ -369,7 +369,7 @@ export const useSshStore = defineStore('ssh', () => {
 
   // --- credentials (WRITE-ONLY) ----------------------------------------------
   // The secret is written to the OS keychain and never returned. Browser-dev has
-  // no keychain, so this is a no-op there (the mock UI can't store a real secret).
+  // no keychain, so this is a no-op there (nowhere to store a real secret).
   async function setCredential(input: SshCredentialInput): Promise<void> {
     if (!available.value) return
     await sc.request('ssh.setCredential', input)
@@ -394,33 +394,16 @@ export const useSshStore = defineStore('ssh', () => {
   // --- import from ~/.ssh/config ---------------------------------------------
   // Dry-run parse; returns the importable candidates without touching disk.
   async function importConfig(): Promise<SshConfigCandidate[]> {
-    if (!available.value) return mockCandidates()
+    if (!available.value) return []
     const res = await sc.request<{ candidates: SshConfigCandidate[] }>('ssh.importConfig')
     return Array.isArray(res.candidates) ? res.candidates : []
   }
 
   // Apply the chosen aliases, then re-hydrate so the new hosts appear.
   async function importConfigApply(aliases: string[]): Promise<SshImportResult> {
-    if (!available.value) {
-      const cands = mockCandidates().filter((c) => aliases.includes(c.alias))
-      const ids: string[] = []
-      for (const c of cands) {
-        const now = new Date().toISOString()
-        const id = uniqueId(c.alias, new Set(hosts.value.map((h) => h.id)))
-        applyHost({
-          id,
-          name: c.alias,
-          host: c.host,
-          port: c.port,
-          user: c.user || '',
-          authMethod: 'agent',
-          createdAt: now,
-          updatedAt: now,
-        })
-        ids.push(id)
-      }
-      return { imported: ids.length, skipped: aliases.length - ids.length, ids }
-    }
+    // Only the sidecar can read ~/.ssh/config, so without the bridge there is
+    // nothing to import.
+    if (!available.value) return { imported: 0, skipped: aliases.length, ids: [] }
     const res = await sc.request<SshImportResult>('ssh.importConfigApply', { aliases })
     await loadAll()
     return res
@@ -572,78 +555,3 @@ export const useSshStore = defineStore('ssh', () => {
     confirmHostKey,
   }
 })
-
-// ── Browser-dev mocks ─────────────────────────────────────────────────────────
-function mockHosts(): SshHost[] {
-  const now = new Date().toISOString()
-  return [
-    {
-      id: 'prod-web',
-      name: 'Prod Web',
-      host: '10.0.1.20',
-      port: 22,
-      user: 'deploy',
-      authMethod: 'key',
-      identityId: 'deploy-key',
-      folder: 'prod',
-      tags: ['web', 'prod'],
-      connectionStatus: 'connected',
-      lastConnectedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'staging-db',
-      name: 'Staging DB',
-      host: 'db.staging.example.com',
-      port: 2222,
-      user: 'admin',
-      authMethod: 'password',
-      folder: 'staging',
-      tags: ['db'],
-      connectionStatus: 'disconnected',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'bastion',
-      name: 'Bastion',
-      host: 'bastion.example.com',
-      port: 22,
-      user: 'jump',
-      authMethod: 'agent',
-      connectionStatus: 'unknown',
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
-}
-
-function mockIdentities(): SshIdentity[] {
-  const now = new Date().toISOString()
-  return [
-    {
-      id: 'deploy-key',
-      name: 'Deploy key',
-      keyType: 'ed25519',
-      keyPath: '~/.ssh/id_ed25519',
-      inlineStored: false,
-      hasPassphrase: true,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
-}
-
-function mockCandidates(): SshConfigCandidate[] {
-  return [
-    {
-      alias: 'github.com',
-      host: 'github.com',
-      port: 22,
-      user: 'git',
-      identityFile: '~/.ssh/id_ed25519',
-    },
-    { alias: 'home-server', host: '192.168.1.10', port: 22, user: 'kyro' },
-  ]
-}

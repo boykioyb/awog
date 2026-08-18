@@ -1,4 +1,11 @@
 <template>
+  <!-- Full path, above the code/diff. The step header can only ellipsise a long path
+       (losing the filename) and the EMBEDDED code view hides its own filename header,
+       so without this row the path is readable nowhere once it gets long. -->
+  <div v-if="pathText" class="stepio">
+    <div class="stepio-lbl">{{ t('sessions.step.path') }}</div>
+    <pre class="cvcode plain steppath">{{ pathText }}</pre>
+  </div>
   <!-- Real unified diff (Edit/MultiEdit) → parsed diff view. -->
   <SessionCodeView
     v-if="diffLines.length"
@@ -7,8 +14,8 @@
     :lines="diffLines"
     embedded
   />
-  <!-- File content (Read/Write) → code view (the fname header already names the
-       input path, so no separate Input section is needed here). -->
+  <!-- File content (Read/Write) → code view. Its own filename header is suppressed
+       when embedded; the Path row above is what names the file. -->
   <SessionCodeView v-else-if="codeText !== null" :fname="target" :code="codeText" embedded />
   <!-- Terminal output / plain text / list → Input + Output split. The header
        truncates the input (command / query / url); here it shows in full,
@@ -28,8 +35,9 @@
 <script setup lang="ts">
 // Renders a step's expandable detail (shared by top-level steps + subagent steps).
 // Uses the engine `detailKind` to pick the right view with the REAL content (so a
-// live Edit shows its actual diff, Read its file). Falls back to the mock DEMO_DIFF
-// only for seed/mock steps that carry no real detail.
+// live Edit shows its actual diff, Read its file). A step with no captured detail
+// renders NOTHING here — never a placeholder diff, which would read as content the
+// tool actually wrote.
 import type { DiffLine, StepDetailKind } from '~/composables/useSessionsData'
 
 const props = defineProps<{
@@ -38,10 +46,8 @@ const props = defineProps<{
   detail?: string
   detailKind?: StepDetailKind
 }>()
-const { DEMO_DIFF } = useSessionsData()
 const { t } = useI18n()
 
-const isEditish = (t: string): boolean => /edit|write|update|create|notebook/i.test(t)
 const isReadish = (t: string): boolean => /read/i.test(t)
 
 // Full input for the raw branch (terminal command, search pattern, fetched URL,
@@ -51,14 +57,19 @@ const inputText = computed<string>(() => props.target?.trim() ?? '')
 
 const diffLines = computed<DiffLine[]>(() => {
   if (props.detailKind === 'diff' && props.detail) return parseDiff(props.detail)
-  // Mock seed Edit/Write (no real detail) → keep the demo diff so the card isn't empty.
-  if (!props.detailKind && !props.detail && isEditish(props.tool)) return DEMO_DIFF
   return []
 })
 const codeText = computed<string | null>(() => {
   if (props.detailKind === 'file') return props.detail ?? ''
   if (!props.detailKind && isReadish(props.tool)) return props.detail || '// (empty)'
   return null
+})
+
+// The path row belongs to the diff / code branches only — the raw branch below
+// already prints the full target as its Input block.
+const pathText = computed<string>(() => {
+  if (diffLines.value.length === 0 && codeText.value === null) return ''
+  return inputText.value
 })
 
 // Minimal unified-diff parser → DiffLine[]. Tracks the new-side line number from
@@ -102,6 +113,11 @@ function parseDiff(src: string): DiffLine[] {
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--border);
+}
+/* A path has no spaces to wrap at, so break it anywhere rather than let it scroll
+   out of view — the point of this row is that the WHOLE path is visible. */
+.steppath {
+  word-break: break-all;
 }
 .stepio-lbl {
   font-size: 0.7692rem;

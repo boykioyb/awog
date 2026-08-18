@@ -243,7 +243,7 @@
 
 <script setup lang="ts">
 // Git Manager — the production Git Manager UI (ui-next prototype styling) wired to
-// the git store (sidecar IPC, with a browser-dev mock fallback). The store owns
+// the git store (sidecar IPC; empty state without the bridge). The store owns
 // all git DATA + actions; this component owns VIEW state (selection/collapse/etc.)
 // and the working-tree diff for the selected file.
 //

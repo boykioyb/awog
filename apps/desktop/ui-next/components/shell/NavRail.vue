@@ -77,14 +77,14 @@ type NavGroup = { title?: string; items: NavItem[] }
 const sessions = useSessionsStore()
 // Sessions needing the user's attention: unread, or paused on a gate (awaiting a
 // question / permission answer). Drives the live "wait" badge on the Sessions nav
-// item — replaces the old static mock. 0 → no badge.
+// item — replaces the old static seed. 0 → no badge.
 const sessionsAttention = computed(
   () => sessions.sessions.filter((s) => s.unread || s.status === 'awaiting').length,
 )
 
 // Grouping mirrors awog-prototype.html; `label`/`title` are i18n keys (resolved
 // via t()). The Sessions badge is live (sessionsAttention); Tasks has no live
-// store in ui-next yet, so it carries no (mock) badge.
+// store in ui-next yet, so it carries no badge.
 const groups = computed<NavGroup[]>(() => [
   { items: [{ to: '/', icon: 'home', label: 'nav.home' }] },
   {

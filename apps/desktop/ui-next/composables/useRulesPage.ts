@@ -1,4 +1,5 @@
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from '~/composables/useI18n'
 import { useProjects } from '~/composables/useProjects'
 import { useSidecar } from '~/composables/useSidecar'
 import { useToasts } from '~/composables/useToasts'
@@ -17,6 +18,7 @@ export function useRulesPage() {
   const sc = useSidecar()
   const { projects } = useProjects()
   const { toasts, pushToast, toastColor } = useToasts()
+  const { t } = useI18n()
 
   // Project list for the scope picker + tier hints (id/name).
   const projectList = computed(() => projects.value.map((p) => ({ id: p.id, name: p.name })))
@@ -69,6 +71,18 @@ export function useRulesPage() {
     // Silent on entry — the manual refresh button reports counts.
     void refresh({ silent: true })
   })
+
+  // --- config import (ADR 0035) --------------------------------------------
+  // The `.claude`/`.agents` picker copied items into `.awog` — re-scan so the
+  // freshly imported tiers show up, then report what landed.
+  const onImported = async (n: number): Promise<void> => {
+    if (!n) {
+      pushToast(t('library.import.none'), 'info')
+      return
+    }
+    await refresh({ silent: true })
+    pushToast(t('library.import.done', { n }), 'success')
+  }
 
   // --- create (chat-driven, one-shot rules.generate) -----------------------
   const creatorOpen = ref(false)
@@ -219,6 +233,8 @@ export function useRulesPage() {
     cancelDelete,
     deleteDescription,
     confirmDelete,
+    // config import
+    onImported,
     // toasts
     toasts,
     toastColor,

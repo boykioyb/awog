@@ -213,13 +213,6 @@ const TOOL_GROUPS: [string, string[]][] = [
 ]
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
 
-// Mock MCP list for browser-dev (no bridge). Real sources come from source.list.
-const MCP_FALLBACK: [string, string][] = [
-  ['github', 'connected'],
-  ['filesystem', 'connected'],
-  ['linear', 'needs_auth'],
-]
-
 const cfgTab = ref<'General' | 'Tools' | 'MCP'>('General')
 const toolQ = ref('')
 
@@ -247,9 +240,9 @@ const filteredGroups = computed<[string, string[]][]>(() => {
 // ── MCP (per-session whitelist) ────────────────────────────────────────────────
 type McpRow = { id: string; name: string; status: string }
 const mcpReal = ref<McpRow[]>([])
-const mcpServers = computed<McpRow[]>(() =>
-  sc.available ? mcpReal.value : MCP_FALLBACK.map(([name, status]) => ({ id: name, name, status })),
-)
+// Real sources only (source.list). With no bridge the list is empty — a stand-in
+// row would offer to whitelist a server that does not exist.
+const mcpServers = computed<McpRow[]>(() => mcpReal.value)
 // undefined session whitelist = "all enabled servers on" (legacy); otherwise the
 // explicit set. The dot/toggle reflect membership.
 const mcpOnSet = computed<Set<string>>(() => {

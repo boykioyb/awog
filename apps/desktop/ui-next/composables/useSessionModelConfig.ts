@@ -119,6 +119,12 @@ export function useSessionModelConfig(session: () => Session) {
     const opt = selectedAccountId.value ? accountById(selectedAccountId.value) : undefined
     if (opt?.label) return opt.label
     const disp = selectedAccountDisplay.value
+    // Nothing connected yet (fresh install): say so, rather than naming a provider
+    // the user has no account for.
+    if (!disp && !accounts.value.length) return t('sessions.config.noAccount')
+    // An accountId we cannot resolve means `disp` is a hydrate fallback carrying the
+    // raw sidecar id ("acc_… · Anthropic") — show the provider tail, never the id.
+    if (selectedAccountId.value) return providerOf(disp)
     const idx = disp.lastIndexOf(' · ')
     return (idx > 0 ? disp.slice(0, idx) : disp) || providerOf(disp)
   })

@@ -109,14 +109,10 @@ const onGenerate = async () => {
   isGenerating.value = true
   error.value = null
   try {
+    // No engine / no account: there is nothing to revise with, so report it
+    // instead of stamping a comment into the body and calling it a revision.
     if (!sc.available || !props.accountId) {
-      // Offline fallback: append a revision note so something visibly changes.
-      await new Promise<void>((r) => setTimeout(r, 350))
-      draft.value = {
-        name: props.rule.name,
-        description: props.rule.description,
-        body: `${props.rule.body}\n\n<!-- Edit requested: ${text} -->`,
-      }
+      error.value = t('common.aiUnavailable')
       return
     }
     const current = {

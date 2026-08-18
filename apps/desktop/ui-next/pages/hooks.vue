@@ -117,7 +117,7 @@
 <script setup lang="ts">
 // Hooks library — live store + full CRUD + chat-driven (one-shot) creation +
 // inline script editing + run-once smoke test + project-tier trust gate
-// (ADR 0032). Replaces the static mock from the prototype port. Shell from
+// (ADR 0032). Ported from the prototype. Shell from
 // <LibraryView>; all state + handlers live in useHooksPage (page-controller).
 // Mirrors the reference skills vertical slice.
 import { useTemplateRef } from 'vue'

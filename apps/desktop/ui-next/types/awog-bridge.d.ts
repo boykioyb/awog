@@ -8,7 +8,13 @@ export type AwogDialogOpts = { title?: string; defaultPath?: string }
 export type AwogSavePathOpts = AwogDialogOpts & { filters?: AwogFileFilter[] }
 
 // Auto-update (ADR 0028).
-export type AwogAppInfo = { version: string; isPackaged: boolean; canAutoInstall: boolean }
+export type AwogAppInfo = {
+  version: string
+  isPackaged: boolean
+  canAutoInstall: boolean
+  // Absolute path of the sidecar's config root (os.homedir()/.awog).
+  awogHome: string
+}
 export type AwogUpdateEvent =
   | { type: 'checking' }
   | { type: 'available'; version: string }

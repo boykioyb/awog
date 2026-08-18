@@ -26,6 +26,15 @@
           <Icon name="foldv" style="width: 13px; height: 13px" />
         </button>
         <button
+          v-if="importKind"
+          class="iconbtn"
+          :title="t('library.import.tooltip')"
+          style="width: 32px; height: 32px"
+          @click="importOpen = true"
+        >
+          <Icon name="download" style="width: 13px; height: 13px" />
+        </button>
+        <button
           v-if="showNew"
           class="iconbtn"
           :title="t('common.add')"
@@ -155,12 +164,22 @@
         <div class="et">{{ t('common.empty.choose') }}</div>
       </div>
     </div>
+
+    <!-- Config import (ADR 0035): pull this kind out of `.claude`/`.agents` into `.awog`. -->
+    <LibraryImportModal
+      v-if="importKind"
+      :open="importOpen"
+      :kind="importKind"
+      @close="importOpen = false"
+      @imported="onImported"
+    />
   </div>
 </template>
 
 <script setup lang="ts" generic="T">
 import { computed, ref, watch } from 'vue'
 import type { GroupWindow } from '~/composables/useLoadMore'
+import type { ConfigKind } from '~/stores/templates'
 
 // Shared master-detail shell — a searchable list (.list/.ltop/.lscroll/.libli)
 // beside a detail pane (.detail). Pages supply per-entity #row and #detail slots
@@ -190,12 +209,18 @@ const props = defineProps<{
   // when this key CHANGES, the list selects that item. Used to restore a minimized
   // Task PiP (LibraryView otherwise owns selection internally).
   selectKey?: string | null
+  // Config kind of the listed entity. When set, the toolbar gains an import
+  // button that copies this kind out of `.claude`/`.agents` into `.awog`
+  // (ADR 0035). Omit for lists that have no legacy source (Tasks, Connections…).
+  importKind?: ConfigKind
 }>()
 
 const emit = defineEmits<{
   (e: 'new'): void
   // Per-group add button (only rendered when grouped + showNew).
   (e: 'new-in-group', key: string): void
+  // Items were copied into `.awog` — the page re-hydrates its store.
+  (e: 'imported', n: number): void
 }>()
 
 const { t } = useI18n()
@@ -218,6 +243,16 @@ const collapsed = ref<Record<string, boolean>>({})
 const showFilters = ref(false)
 const groupFilter = ref<string>('all')
 const projMenu = ref(false)
+// Config-import picker (only mounted when `importKind` is set).
+const importOpen = ref(false)
+
+// Close on a finished import and let the page re-hydrate its store — the fs
+// watcher only re-scans tiers already present in the list, so new project-tier
+// items would otherwise stay invisible until a manual refresh.
+function onImported(n: number): void {
+  importOpen.value = false
+  emit('imported', n)
+}
 
 function toggleGroup(key: string): void {
   collapsed.value[key] = !collapsed.value[key]

@@ -7,8 +7,8 @@ import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 // each with an `enabled` toggle. When the Electron bridge is available
 // `loadRules()` scans the user/global tier + every passed project tier over IPC,
 // and a `rules.fs-changed` subscription re-hydrates when files are touched
-// outside the app; browser-dev seeds a small mock. Mirrors stores/skills.ts +
-// stores/agents.ts dual-path pattern.
+// outside the app; without the bridge the list stays empty (no seed data).
+// Mirrors stores/skills.ts + stores/agents.ts dual-path pattern.
 
 export type RuleSource = 'global' | 'project'
 
@@ -48,45 +48,6 @@ export type RuleDraft = { name: string; description: string; body: string }
 type RulesListResponse = { rules: Rule[]; reports?: RuleScanReport[] }
 type RuleGenerateResponse = { rule: RuleDraft }
 
-function mockRules(): Rule[] {
-  return [
-    {
-      id: 'principles',
-      source: 'project',
-      projectId: 'awog',
-      name: 'Principles',
-      description: 'KISS / YAGNI / DRY / SRP',
-      enabled: true,
-      body: '# Principles\n\nKhi xung đột: KISS + YAGNI thắng DRY (chấp nhận trùng tạm).',
-    },
-    {
-      id: 'typescript',
-      source: 'project',
-      projectId: 'awog',
-      name: 'TypeScript',
-      description: 'strict:true · cấm any',
-      enabled: true,
-      body: '# TypeScript\n\nstrict luôn bật. Cấm any → dùng unknown rồi narrow.',
-    },
-    {
-      id: 'security',
-      source: 'global',
-      name: 'Security',
-      description: '8 invariant AWOG',
-      enabled: true,
-      body: '# Security\n\nAPI key không rời sidecar; path sanitize; git scope = workspace.',
-    },
-    {
-      id: 'nuxt-vue',
-      source: 'global',
-      name: 'Nuxt / Vue',
-      description: 'Component / store / theme',
-      enabled: false,
-      body: '# Nuxt / Vue\n\n<script setup> luôn; defineProps type-only; theme qua useTheme().',
-    },
-  ]
-}
-
 // Composite identity — a rule is keyed by (source, projectId, id) so a project
 // rule and a global rule can share an id without colliding.
 const matchKey = (a: Rule, b: { source: RuleSource; projectId?: string; id: string }): boolean =>
@@ -98,7 +59,7 @@ export const useRulesStore = defineStore('rules', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const rules = ref<Rule[]>(sc.available ? [] : mockRules())
+  const rules = ref<Rule[]>([])
   const scanReports = ref<RuleScanReport[]>([])
   const loaded = ref(false)
 
@@ -166,7 +127,7 @@ export const useRulesStore = defineStore('rules', () => {
       return data
     }
 
-    // Browser-dev mock path.
+    // No bridge: keep the change in memory only.
     if (slugChanged) {
       rules.value = rules.value.filter(
         (r) =>

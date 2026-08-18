@@ -15,7 +15,7 @@ import { SidecarError, useSidecar, type UnlistenFn } from '~/composables/useSide
 // External consumers (useAgentsPage MCP picker + useProjectLlmDefaults whitelist)
 // bind `servers` (id/name/status) + `mcpServers` + `loadServers()`; those names
 // are kept as thin aliases over the source-centric internals so this rewire stays
-// scoped to the Connections surface. Browser-dev seeds a small mock.
+// scoped to the Connections surface. Without the bridge the list stays empty.
 
 export type SourceType = 'mcp' | 'api' | 'local'
 export type SourceTransport = 'http' | 'sse' | 'stdio'
@@ -270,287 +270,11 @@ export function deriveStatus(s: Source): SourceConnectionStatus {
   return s.isAuthenticated ? 'connected' : 'needs_auth'
 }
 
-function mockSources(): Source[] {
-  return [
-    {
-      id: 'github_00000000',
-      slug: 'github',
-      name: 'github',
-      provider: 'github',
-      description: 'GitHub MCP — repos, issues, PRs.',
-      type: 'mcp',
-      enabled: true,
-      timeoutMs: 30000,
-      trust: 'prompt',
-      connectionStatus: 'connected',
-      isAuthenticated: true,
-      mcp: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-github'],
-        env: { GITHUB_PERSONAL_ACCESS_TOKEN: 'secret:GITHUB_PERSONAL_ACCESS_TOKEN' },
-      },
-    },
-    {
-      id: 'linear_00000000',
-      slug: 'linear',
-      name: 'linear',
-      provider: 'linear',
-      description: 'Linear MCP over HTTP.',
-      type: 'mcp',
-      enabled: true,
-      timeoutMs: 30000,
-      trust: 'prompt',
-      connectionStatus: 'needs_auth',
-      isAuthenticated: false,
-      mcp: { transport: 'http', url: 'https://mcp.linear.app/sse', authType: 'oauth' },
-    },
-    {
-      id: 'notion_00000000',
-      slug: 'notion',
-      name: 'notion',
-      provider: 'notion',
-      description: 'Notion MCP over HTTP.',
-      type: 'mcp',
-      enabled: false,
-      timeoutMs: 30000,
-      trust: 'prompt',
-      connectionStatus: 'untested',
-      mcp: { transport: 'http', url: 'https://mcp.notion.com' },
-    },
-    {
-      id: 'exa_00000000',
-      slug: 'exa',
-      name: 'exa',
-      provider: 'exa',
-      description: 'Exa search REST API (x-api-key).',
-      type: 'api',
-      enabled: false,
-      timeoutMs: 30000,
-      trust: 'prompt',
-      connectionStatus: 'needs_auth',
-      isAuthenticated: false,
-      api: {
-        baseUrl: 'https://api.exa.ai/',
-        authType: 'header',
-        headerName: 'x-api-key',
-        testEndpoint: { method: 'POST', path: '/search', body: { query: 'test' } },
-      },
-    },
-  ]
-}
-
-// Browser-dev preset catalog (mirror of the sidecar preset-catalog.ts). Only used
-// when the engine is offline so the picker + editor-seeding flow can be exercised
-// without a sidecar. NEVER carries a real secret — env keys are empty strings.
-type PresetMockEntry = { meta: SourcePresetMeta; build: () => Source }
-
-function presetMockBase(meta: SourcePresetMeta, enabled: boolean): SourceBase {
-  const b: SourceBase = {
-    id: meta.id,
-    slug: meta.slug,
-    name: meta.name,
-    provider: meta.provider,
-    enabled,
-    timeoutMs: 30000,
-    trust: 'prompt',
-  }
-  if (meta.icon) b.icon = meta.icon
-  if (meta.tagline) b.tagline = meta.tagline
-  return b
-}
-
-const PRESET_MOCKS: PresetMockEntry[] = [
-  {
-    meta: {
-      id: 'linear',
-      slug: 'linear',
-      name: 'Linear',
-      provider: 'linear',
-      type: 'mcp',
-      tagline: 'Issue tracking, sprint planning, and project management',
-      icon: '📐',
-      setupHint: 'Connect with OAuth from the connection detail after saving.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[0]!.meta, false),
-      type: 'mcp',
-      mcp: { transport: 'http', url: 'https://mcp.linear.app', authType: 'oauth' },
-    }),
-  },
-  {
-    meta: {
-      id: 'github',
-      slug: 'github',
-      name: 'GitHub',
-      provider: 'github',
-      type: 'mcp',
-      tagline: 'Repositories, issues, pull requests, and code search',
-      icon: '🐙',
-      setupHint: 'Needs a Personal Access Token (bearer) — add an Authorization header on Verify.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[1]!.meta, false),
-      type: 'mcp',
-      mcp: { transport: 'http', url: 'https://api.githubcopilot.com/mcp/', authType: 'bearer' },
-    }),
-  },
-  {
-    meta: {
-      id: 'notion',
-      slug: 'notion',
-      name: 'Notion',
-      provider: 'notion',
-      type: 'mcp',
-      tagline: 'Docs, wikis, and databases',
-      icon: '📔',
-      setupHint: 'Connect with OAuth from the connection detail after saving.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[2]!.meta, false),
-      type: 'mcp',
-      mcp: { transport: 'http', url: 'https://mcp.notion.com', authType: 'oauth' },
-    }),
-  },
-  {
-    meta: {
-      id: 'slack',
-      slug: 'slack',
-      name: 'Slack',
-      provider: 'slack',
-      type: 'mcp',
-      tagline: 'Channels, messages, and files',
-      icon: '💬',
-      setupHint: 'Connect with OAuth from the connection detail after saving.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[3]!.meta, false),
-      type: 'mcp',
-      mcp: { transport: 'http', url: 'https://mcp.slack.com', authType: 'oauth' },
-    }),
-  },
-  {
-    meta: {
-      id: 'google',
-      slug: 'google',
-      name: 'Google Workspace',
-      provider: 'google',
-      type: 'api',
-      tagline: 'Gmail, Calendar, Drive, Docs, and Sheets',
-      icon: '✉️',
-      setupHint: 'Google APIs use OAuth with your own client credentials.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[4]!.meta, false),
-      type: 'api',
-      api: { baseUrl: 'https://www.googleapis.com/', authType: 'oauth' },
-    }),
-  },
-  {
-    meta: {
-      id: 'microsoft',
-      slug: 'microsoft',
-      name: 'Microsoft 365',
-      provider: 'microsoft',
-      type: 'api',
-      tagline: 'Outlook, Calendar, OneDrive, Teams, and SharePoint',
-      icon: '🪟',
-      setupHint: 'Microsoft Graph uses OAuth with your own app registration.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[5]!.meta, false),
-      type: 'api',
-      api: { baseUrl: 'https://graph.microsoft.com/v1.0/', authType: 'oauth' },
-    }),
-  },
-  {
-    meta: {
-      id: 'exa',
-      slug: 'exa',
-      name: 'Exa',
-      provider: 'exa',
-      type: 'api',
-      tagline: 'Neural web search',
-      icon: '🔍',
-      setupHint: 'Paste your Exa API key on Verify.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[6]!.meta, false),
-      type: 'api',
-      api: {
-        baseUrl: 'https://api.exa.ai/',
-        authType: 'header',
-        headerName: 'x-api-key',
-        testEndpoint: { method: 'POST', path: 'search', body: { query: 'test', numResults: 1 } },
-      },
-    }),
-  },
-  {
-    meta: {
-      id: 'brave',
-      slug: 'brave-search',
-      name: 'Brave Search',
-      provider: 'brave',
-      type: 'mcp',
-      tagline: 'Web and local search via the Brave Search API',
-      icon: '🦁',
-      setupHint: 'Set BRAVE_API_KEY in Env vars (stored in the OS keychain).',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[7]!.meta, false),
-      type: 'mcp',
-      mcp: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-brave-search'],
-        env: { BRAVE_API_KEY: '' },
-      },
-    }),
-  },
-  {
-    meta: {
-      id: 'memory',
-      slug: 'memory',
-      name: 'Memory',
-      provider: 'memory',
-      type: 'mcp',
-      tagline: 'Persistent knowledge-graph memory (no auth required)',
-      icon: '🧠',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[8]!.meta, true),
-      type: 'mcp',
-      mcp: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-memory'],
-      },
-    }),
-  },
-  {
-    meta: {
-      id: 'filesystem',
-      slug: 'filesystem',
-      name: 'Filesystem',
-      provider: 'filesystem',
-      type: 'local',
-      tagline: 'Read/write files inside a local folder you choose',
-      icon: '📁',
-      setupHint: 'Set the folder path to expose. File access is scoped to this folder.',
-    },
-    build: () => ({
-      ...presetMockBase(PRESET_MOCKS[9]!.meta, true),
-      type: 'local',
-      local: { path: '~' },
-    }),
-  },
-]
-
 export const useConnectionsStore = defineStore('connections', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const sources = ref<Source[]>(sc.available ? [] : mockSources())
+  const sources = ref<Source[]>([])
   const loaded = ref(false)
 
   let unlisten: UnlistenFn | null = null
@@ -562,11 +286,6 @@ export const useConnectionsStore = defineStore('connections', () => {
   // reactivity. Invalidated in applySource/deleteSource when a source changes.
   const iconResults = new Map<string, ResolvedSourceIcon>()
   const iconInflight = new Map<string, Promise<ResolvedSourceIcon>>()
-
-  // Browser-dev only: in-memory guide/permissions so the P5 edit flow round-trips
-  // offline (the sidecar owns the real persistence at ~/.awog/sources/<slug>/).
-  const mockGuides = new Map<string, string>()
-  const mockPerms = new Map<string, SourcePermissions>()
 
   function invalidateIcon(slug: string): void {
     iconResults.delete(slug)
@@ -643,10 +362,11 @@ export const useConnectionsStore = defineStore('connections', () => {
   // Preset catalog for the "add a source" picker (UI-parity area 3). `listPresets`
   // returns the display metadata; `discoverPreset` returns a ready-to-edit draft
   // for a chosen provider (correct block pre-filled) + its meta (for setupHint).
-  // No secret ever crosses the boundary — env keys are seeded empty. Browser-dev
-  // serves the mock catalog so the flow works offline.
+  // No secret ever crosses the boundary — env keys are seeded empty. The sidecar's
+  // preset-catalog.ts is the ONE catalog; without the bridge there is no list to
+  // offer rather than a stand-in copy that could drift from it.
   async function listPresets(): Promise<SourcePresetMeta[]> {
-    if (!available.value) return PRESET_MOCKS.map((e) => e.meta)
+    if (!available.value) return []
     const res = await sc.request<{ presets: SourcePresetMeta[] }>('source.listPresets')
     return Array.isArray(res.presets) ? res.presets : []
   }
@@ -654,10 +374,7 @@ export const useConnectionsStore = defineStore('connections', () => {
   async function discoverPreset(
     presetId: string,
   ): Promise<{ preset: Source; meta: SourcePresetMeta } | null> {
-    if (!available.value) {
-      const entry = PRESET_MOCKS.find((e) => e.meta.id === presetId)
-      return entry ? { preset: entry.build(), meta: entry.meta } : null
-    }
+    if (!available.value) return null
     return sc.request<{ preset: Source; meta: SourcePresetMeta }>('source.discoverPreset', {
       presetId,
     })
@@ -762,8 +479,8 @@ export const useConnectionsStore = defineStore('connections', () => {
   // Persist an `api` source's credential to the OS keychain (ADR 0060 P3). The
   // secret NEVER touches config.json and is NEVER echoed back — the RPC returns
   // only { ok }, so there is no way to read a stored credential; a re-save simply
-  // overwrites. Keyed by the source's STABLE id (not slug). Browser-dev flips the
-  // matching api mock to authenticated so the flow can be exercised offline.
+  // overwrites. Keyed by the source's STABLE id (not slug). Without the bridge it
+  // only flips the in-memory row to authenticated.
   async function setApiCredential(
     args: { sourceId: string } & ApiCredentialInput,
   ): Promise<{ ok: boolean }> {
@@ -827,9 +544,9 @@ export const useConnectionsStore = defineStore('connections', () => {
     slug: string,
     onLog?: (line: SourceLogLine) => void,
   ): Promise<SourceToolsResult> {
-    if (!available.value) {
-      return fetchToolsMock(slug, onLog)
-    }
+    // A tool list can only come from a real handshake with the server — a
+    // synthesized one would name tools the agent cannot actually call.
+    if (!available.value) return { tools: [], error: 'Engine unavailable' }
     let unlistenLog: UnlistenFn | null = null
     if (onLog) {
       try {
@@ -849,63 +566,9 @@ export const useConnectionsStore = defineStore('connections', () => {
     }
   }
 
-  // Browser-dev fallback: synthesize a short live log (small delays so the console
-  // animates) + a couple of tools, mirroring the sidecar shape.
-  async function fetchToolsMock(
-    slug: string,
-    onLog?: (line: SourceLogLine) => void,
-  ): Promise<SourceToolsResult> {
-    const target = sourceBySlug(slug)
-    const log: SourceLogLine[] = []
-    const step = async (line: SourceLogLine, delay = 220): Promise<void> => {
-      await new Promise((r) => setTimeout(r, delay))
-      log.push(line)
-      onLog?.(line)
-    }
-    if (target?.type === 'mcp') {
-      await step({ level: 'info', message: `Testing MCP connection — ${slug}` })
-      await step({ level: 'info', message: 'Handshake — initialize + tools/list' })
-      await step({ level: 'stderr', message: 'server: listening on stdio' })
-      await step({ level: 'info', message: 'Handshake complete — 2 tool(s), 0 resource(s)' })
-      return {
-        tools: [
-          {
-            name: `mcp__${target.id}__list_repos`,
-            description: 'List repositories.',
-            allowed: true,
-          },
-          {
-            name: `mcp__${target.id}__create_issue`,
-            description: 'Open an issue.',
-            allowed: false,
-          },
-        ],
-        log,
-      }
-    }
-    if (target?.type === 'api') {
-      await step({
-        level: 'info',
-        message: `API source — one flexible tool for ${target.api.baseUrl}`,
-      })
-      return {
-        tools: [
-          {
-            name: `mcp__${target.id}__api_${target.slug}`,
-            description: 'REST API tool.',
-            allowed: true,
-          },
-        ],
-        log,
-      }
-    }
-    await step({ level: 'info', message: 'Local source — exposes files, not callable tools.' })
-    return { tools: [], log }
-  }
-
   // Permissions section: the parsed permissions.json, or null when none exists.
   async function fetchPermissions(slug: string): Promise<SourcePermissions | null> {
-    if (!available.value) return mockPerms.get(slug) ?? null
+    if (!available.value) return null
     const res = await sc.request<{ permissions: SourcePermissions | null }>('source.permissions', {
       slug,
     })
@@ -914,31 +577,25 @@ export const useConnectionsStore = defineStore('connections', () => {
 
   // Documentation section: the raw guide.md markdown, or null when none exists.
   async function fetchGuide(slug: string): Promise<string | null> {
-    if (!available.value) return mockGuides.get(slug) ?? null
+    if (!available.value) return null
     const res = await sc.request<{ guide: string | null }>('source.guide', { slug })
     return res.guide
   }
 
   // Write guide.md (ADR 0060 P5 edit). Empty/whitespace content clears the file
   // (the sidecar deletes it). No secret crosses the boundary — guide is authored
-  // markdown. Browser-dev writes to the in-memory map so the flow round-trips.
+  // markdown. The sidecar owns persistence (~/.awog/sources/<slug>/), so without
+  // the bridge there is nowhere to write and this is a no-op.
   async function saveGuide(slug: string, content: string): Promise<void> {
-    if (!available.value) {
-      if (content.trim() === '') mockGuides.delete(slug)
-      else mockGuides.set(slug, content)
-      return
-    }
+    if (!available.value) return
     await sc.request('source.saveGuide', { slug, content })
   }
 
   // Write permissions.json (ADR 0060 P5 edit). The sidecar validates the shape and
   // throws a validation RpcError the caller surfaces inline. No secret — patterns
-  // are scoping rules. Browser-dev writes to the in-memory map.
+  // are scoping rules. No-op without the bridge (the sidecar owns persistence).
   async function savePermissions(slug: string, permissions: SourcePermissions): Promise<void> {
-    if (!available.value) {
-      mockPerms.set(slug, permissions)
-      return
-    }
+    if (!available.value) return
     await sc.request('source.savePermissions', { slug, permissions })
   }
 
@@ -1018,7 +675,7 @@ export const useConnectionsStore = defineStore('connections', () => {
         }
       })
     } catch {
-      // Browser-dev: bridge absent → ignore (mock path).
+      // No bridge: nothing to subscribe to → ignore.
       unlisten = null
     }
   }

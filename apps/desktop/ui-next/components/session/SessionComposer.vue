@@ -547,7 +547,7 @@ const MAX_INLINE = 6
 const visibleAtt = computed(() => props.attachments.slice(0, MAX_INLINE))
 const overflowCount = computed(() => Math.max(0, props.attachments.length - MAX_INLINE))
 
-// Composer modes + their icon (adds "Accept Edits" beyond the mock's three).
+// Composer modes + their icon (adds "Accept Edits" beyond the prototype's three).
 const MODES_UI = [
   { id: 'Ask', icon: 'sessions' },
   { id: 'Plan', icon: 'rules' },

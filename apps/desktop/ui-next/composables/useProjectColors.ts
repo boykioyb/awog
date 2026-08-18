@@ -1,6 +1,6 @@
 // Per-project accent color for the session-list group dot (.pdot). A user
 // preference set from the project group context menu, persisted per-machine in
-// localStorage keyed by engine projectId. Replaces the old hardcoded PCOL mock —
+// localStorage keyed by engine projectId. Replaces the old hardcoded PCOL seed —
 // every project now starts neutral and the user paints the ones they care about.
 // SoC: this is UI display only; the sidecar / Project entity is unaware of the
 // dot color. Theme tokens (var(--…)) are stored so the choice stays theme-safe.

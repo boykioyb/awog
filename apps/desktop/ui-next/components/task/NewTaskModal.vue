@@ -317,7 +317,7 @@ const buildPayload = (): CreateTaskInput => {
 // above, before the seed watch.
 
 // Map the chosen projectId → its absolute path. The path is the workspaceRoot
-// git.* RPCs take. Empty when the project carries no path (browser-dev mock).
+// git.* RPCs take. Empty when the project carries no path.
 const selectedProjectPath = computed(
   () => projects.value.find((p) => p.id === projectId.value)?.path ?? '',
 )

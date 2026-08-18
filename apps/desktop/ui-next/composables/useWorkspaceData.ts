@@ -79,7 +79,7 @@ export function useWorkspaceData(projectName: MaybeRefOrGetter<string | undefine
     root: computed(() => root.value),
     resolving: computed(() => resolving.value),
     // True only when the engine bridge is present AND a root resolved — gates
-    // the real-data tabs; mock/empty fallback otherwise.
+    // the real-data tabs; empty otherwise.
     ready: computed(() => sc.available && root.value != null),
     available: sc.available,
     resolve,

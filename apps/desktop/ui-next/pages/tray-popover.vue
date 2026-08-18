@@ -271,10 +271,10 @@ function go(cmd: AwogTrayCommand): void {
 }
 
 // Accounts load asynchronously (accounts.list round-trip). Until the real list
-// resolves, `accounts` falls back to mock ids the sidecar can't resolve, so the
-// first fetch on mount returns empty ("No provider limits to show"). Re-fetch
-// once the real account list arrives — this is the reactive trigger the main
-// window's home tile gets for free via its keyed v-for of <ActivityRateLimit>.
+// resolves it is EMPTY, so the first fetch on mount returns nothing ("No provider
+// limits to show"). Re-fetch once the real account list arrives — this is the
+// reactive trigger the main window's home tile gets for free via its keyed v-for
+// of <ActivityRateLimit>.
 watch(accounts, () => void fetchRateLimits())
 
 onMounted(() => {

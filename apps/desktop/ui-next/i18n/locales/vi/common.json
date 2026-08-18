@@ -47,7 +47,7 @@
   "common.preview.mediaError": "Không phát được media này trong ứng dụng — mở bằng ứng dụng ngoài.",
   "common.preview.monacoLoadFailed": "Không tải được trình soạn thảo mã.",
   "common.preview.folderEmpty": "Thư mục này trống",
-  "common.preview.mock": "Ảnh xem trước (mock — chưa có dữ liệu)",
+  "common.preview.imageUnavailable": "Không tải được dữ liệu ảnh",
   "common.preview.theme": "Theme editor",
   "common.preview.followApp": "Theo theme ứng dụng",
   "common.preview.group.app": "Tự động",
@@ -102,5 +102,6 @@
   "common.thinking.medium": "Vừa",
   "common.thinking.high": "Cao",
   "common.thinking.extra-high": "Rất cao",
-  "common.thinking.max": "Tối đa"
+  "common.thinking.max": "Tối đa",
+  "common.aiUnavailable": "Tính năng sinh bằng AI cần engine đang chạy và một account LLM đã kết nối."
 }

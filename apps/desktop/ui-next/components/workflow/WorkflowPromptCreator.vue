@@ -103,7 +103,7 @@
 // LibraryCreatorPanel drives). Mirrors the old UI WorkflowPromptCreator: scope
 // picker (chosen BEFORE generating so it scopes which agents the LLM may wire) +
 // prompt → draft preview → Create. On Create the draft is persisted at the chosen
-// tier. Falls back to a name/description-only mock draft when no account/sidecar.
+// tier. Surfaces an error when there is no engine / LLM account to generate with.
 import { computed, ref, watch } from 'vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import type { WorkflowAgent, WorkflowDraft, WorkflowSkill } from '~/composables/useWorkflowGen'
@@ -118,7 +118,7 @@ const props = withDefaults(
     skills: WorkflowSkill[]
     projects?: { id: string; name: string }[]
     defaultScope?: string
-    // Runs the generate (one-shot LLM or mock). Provided by the page-controller.
+    // Runs the one-shot LLM generate. Provided by the page-controller.
     generate: (
       prompt: string,
       scopedAgents: WorkflowAgent[],

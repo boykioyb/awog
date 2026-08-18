@@ -27,7 +27,7 @@
 // A task carries its origin in `source = { type:'session', sessionId }`; we filter
 // the live tasks store on the session's engineId, so status dots update over the
 // store's `task.*` event subscription. Click a row to open the task. An empty
-// session (or mock mode, where there's no engineId) shows the placeholder.
+// session (or one with no engineId) shows the placeholder.
 import { computed, onMounted } from 'vue'
 import Icon from '~/components/Icon.vue'
 import { useI18n } from '~/composables/useI18n'

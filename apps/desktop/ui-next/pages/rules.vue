@@ -9,8 +9,10 @@
       :group-label="groupLabel"
       :group-dot="groupDot"
       show-new
+      import-kind="rule"
       @new="openCreator()"
       @new-in-group="openCreator"
+      @imported="onImported"
     >
       <template #row="{ item: r }">
         <div class="lrow">
@@ -90,7 +92,7 @@
 
 <script setup lang="ts">
 // Rules library — live store + full CRUD + chat-driven creation + auto-inject
-// toggle (ADR 0033). Replaces the static mock from the prototype port. Shell from
+// toggle (ADR 0033). Ported from the prototype. Shell from
 // <LibraryView>; all state + handlers live in useRulesPage (page-controller).
 // Mirrors the reference pages/skills.vue, adapted for the Rules surface.
 import { computed } from 'vue'
@@ -132,6 +134,7 @@ const {
   cancelDelete,
   deleteDescription,
   confirmDelete,
+  onImported,
   toasts,
   toastColor,
 } = useRulesPage()

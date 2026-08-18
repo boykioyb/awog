@@ -82,7 +82,7 @@
 <script setup lang="ts">
 // Project Templates library — live store + full flow (list/detail + Install,
 // Save-as, Fetch-from-GitHub dialogs + delete confirm). Replaces the static
-// prototype mock. Master-detail shell from <LibraryView>; all state + handlers
+// prototype seed. Master-detail shell from <LibraryView>; all state + handlers
 // live in useTemplatesPage (page-controller). Mirrors the Skills reference slice
 // (ADR 0035/0036).
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'

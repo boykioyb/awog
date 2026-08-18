@@ -1,6 +1,6 @@
 # Feature: Config Import Assistant (`.claude`/`.agents` → `.awog`)
 
-**Trạng thái:** v1 implemented (2026-06-12) — contract: [ADR 0035](../decisions/0035-consolidate-config-tiers-to-awog.md)
+**Trạng thái:** v1 implemented (2026-06-12) · picker theo từng loại ở Library (2026-08-17) — contract: [ADR 0035](../decisions/0035-consolidate-config-tiers-to-awog.md)
 
 ## Overview
 
@@ -23,8 +23,9 @@ Sau khi gộp mọi config-entity về `.awog` ([ADR 0035](../decisions/0035-con
     | Hooks | `{p}/.claude/settings.json`, `settings.local.json` | `~/.claude/settings.json` |
     | Rules | `{p}/CLAUDE.md`, `{p}/.claude/rules/*.md` | `~/.claude/CLAUDE.md` |
     | Commands | `{p}/.claude/commands/**` | `~/.claude/commands/**` |
-- **Banner tự phát hiện:** trong Projects detail, khi project có item importable (chưa import) → banner "Phát hiện N config ở `.claude`/`.agents` — Import vào `.awog`?". Dismiss được; vẫn còn **nút Import thủ công** bấm lại bất cứ lúc nào (cả global lẫn project).
-- **Preview + chọn:** dialog liệt kê item theo loại (kind · id · nguồn), checkbox chọn từng cái / chọn tất cả; mặc định chọn item chưa trùng id.
+- **Banner tự phát hiện:** trong Projects detail, khi project có item importable (chưa import) → banner "Phát hiện N config ở `.claude`/`.agents` — Import vào `.awog`?". Import-all một chạm, không mở dialog.
+- **Nút Import trên trang từng loại:** toolbar của Agents / Skills / Commands / Rules có icon `download` mở picker. Picker **quét mọi scope một lượt** — global (`~/.claude`, `~/.agents`) + `.claude`/`.agents` của **từng project** — rồi lọc đúng loại của trang. Vì `migration.scan` scope-loại-trừ nên UI fan-out 1 call/scope song song; import gom lại theo scope (1 call `migration.import`/scope).
+- **Preview + chọn:** dialog nhóm theo tier đích (Global · `~/.awog` → từng project), mỗi dòng = tên · nguồn (`~/.claude/agents`, `.claude/skills`…) · id, checkbox từng cái + chọn/bỏ tất cả; mặc định chọn hết. Item đã có trong `.awog` **không hiện** (đã lọc `alreadyExists`).
 - **Import (`migration.import`):** **copy** (không move — [ADR 0035](../decisions/0035-consolidate-config-tiers-to-awog.md) D-5) item đã chọn vào `.awog` tier tương ứng (`global` hoặc `project`) qua `save*` của từng store. Trả report `{ imported[], skipped[] }`.
 - **Sau import:** UI re-hydrate list loại liên quan; banner ẩn khi không còn item importable.
 
@@ -47,9 +48,9 @@ Types ở [`shared.ts`](../../apps/desktop/sidecar/src/types/shared.ts) + [`type
 
 ## UI/UX Notes
 
-- **Banner:** trong [pages/projects/index.vue](../../apps/desktop/ui/pages/projects/index.vue) detail pane; dùng theme token; i18n en/vi.
-- **Import dialog:** master list theo kind, count chip `(N)` per kind, checkbox; nút "Import N item".
-- **Global import:** entry trong Settings → Workspace (hoặc nút trên trang mỗi loại) để quét `~/.claude`/`~/.agents`.
+- **Banner:** trong [ProjectOverview.vue](../../apps/desktop/ui-next/components/project/ProjectOverview.vue) (`useConfigImport`); dùng theme token; i18n en/vi.
+- **Import dialog:** [LibraryImportModal.vue](../../apps/desktop/ui-next/components/library/LibraryImportModal.vue) trên nền `LibraryEntityModal`; state/IPC ở [useLibraryImport.ts](../../apps/desktop/ui-next/composables/useLibraryImport.ts). Nút mở nằm trong toolbar của [LibraryView.vue](../../apps/desktop/ui-next/components/library/LibraryView.vue) — bật bằng prop `importKind`, trang nghe `@imported` để re-hydrate store (watcher `*.fs-changed` chỉ re-scan tier đã có trong list nên không đủ).
+- **Global import:** không có entry riêng ở Settings — picker của mỗi trang đã quét cả global lẫn mọi project trong một lượt.
 
 ## Dependencies
 

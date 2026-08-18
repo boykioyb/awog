@@ -7,7 +7,10 @@
         style="width: 13px; height: 13px"
       />
       <span class="tname">{{ block.tool }}</span>
-      <span class="starg">{{ block.target }}</span>
+      <span class="starg flex min-w-0" :title="block.target">
+        <span class="min-w-0 truncate">{{ shortTarget(block.target).dir }}</span>
+        <span class="shrink-0">{{ shortTarget(block.target).name }}</span>
+      </span>
       <SessionStepResult :text="isTodo ? todoCount : block.result" />
       <!-- Live per-tool elapsed (craft ActivityRow parity): surfaces only once a running
            tool has been going ≥2s, so fast reads/edits stay quiet. -->
@@ -49,7 +52,10 @@
             <div class="steph" @click="toggleSub(i)">
               <Icon :name="stepIcon(st.tool)" class="stepic" style="width: 13px; height: 13px" />
               <span class="tname">{{ st.tool }}</span>
-              <span class="starg">{{ st.target }}</span>
+              <span class="starg flex min-w-0" :title="st.target">
+                <span class="min-w-0 truncate">{{ shortTarget(st.target).dir }}</span>
+                <span class="shrink-0">{{ shortTarget(st.target).name }}</span>
+              </span>
               <SessionStepResult :text="st.result" />
               <button
                 v-if="fileTargetOf(st.tool, st.target)"
@@ -103,7 +109,7 @@
           {{ block.detail || t('sessions.step.skillRunning') }}
         </div>
 
-        <!-- diff / file / output — real detail (mock DEMO_DIFF fallback inside) -->
+        <!-- diff / file / output — real detail only; empty when none was captured -->
         <SessionStepBody
           v-else
           :tool="block.tool"
@@ -161,7 +167,7 @@ const showElapsed = computed(() => running.value && elapsedSec.value >= 2)
 // open the file it touched without expanding the step or leaving the transcript.
 const filePreview = useFilePreview()
 
-// File-operation tools whose `target` is the file they touched (matches both mock
+// File-operation tools whose `target` is the file they touched (matches both prototype
 // tool names and the engine's human labels: Read/Edit/Write/Update/Create/…).
 const FILE_TOOL = /read|edit|write|update|create|notebook/i
 
@@ -195,6 +201,22 @@ const todoCount = computed(() => {
   return `${td.filter((x) => x.done).length}/${td.length}`
 })
 const isSkill = computed(() => /skill/i.test(props.block.tool))
+
+// A long absolute path used to lose its TAIL to the header's ellipsis — the half that
+// says which file this step touched. Show the last two directories plus the filename
+// ("…/app/models/order.py"), rendered as [ellipsisable dirs][never-clipped filename];
+// the untouched full path stays on `title` and in the expanded body's Path row.
+const TARGET_DIRS_SHOWN = 2
+function shortTarget(target: string): { dir: string; name: string } {
+  const raw = target?.trim() ?? ''
+  if (!raw.includes('/')) return { dir: '', name: raw }
+  const segments = raw.split('/')
+  const name = segments.pop() ?? ''
+  const dirs = segments.filter((s) => s.length > 0)
+  const kept = dirs.slice(-TARGET_DIRS_SHOWN)
+  const prefix = kept.length < dirs.length ? '…/' : raw.startsWith('/') ? '/' : ''
+  return { dir: kept.length > 0 ? `${prefix}${kept.join('/')}/` : prefix, name }
+}
 
 // A subagent's (Task) final report = the text it returns to the main agent, carried
 // on the step's `detail` (the FULL report — step-mapper persists Task results up to
@@ -230,7 +252,7 @@ function openSummary(): void {
   })
 }
 
-// Per-tool glyph for the step header. Matches both canonical tool names (mock:
+// Per-tool glyph for the step header. Matches both canonical tool names (prototype:
 // Read/Edit/Bash/…) and the engine's human labels ("Run", "Search", "Update", …)
 // via keyword. Keeps a recognizable icon per step type instead of a bare row.
 function stepIcon(tool: string): string {

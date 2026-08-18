@@ -283,7 +283,7 @@ const tokLabel = computed(() => {
   return n > 999 ? (n / 1000).toFixed(0) + 'k' : String(n)
 })
 
-// Message actions (mock-backed via the sessions store). The transcript passes each
+// Message actions (via the sessions store). The transcript passes each
 // item its absolute index in the active session's message list (row.i) so buttons
 // act at the right point — avoids an O(msgs) indexOf per item that also depended on
 // the whole msgs array (re-running on every streaming delta).

@@ -7,7 +7,7 @@ import type { TodoStatus } from '~/types'
 // `Session.todos` is the CURRENT checklist and the single source of truth: the engine
 // writes it on every TodoWrite and the user writes it by ticking a row, so both edits
 // land in one place (see sidecar sessions/todo-context.ts). The transcript step is only
-// a fallback for a session with no persisted list yet (mock mode / a session last
+// a fallback for a session with no persisted list yet (a session last
 // written before the field shipped).
 //
 // The banner stays pinned for as long as a checklist exists — expanded while work is

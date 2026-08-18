@@ -248,7 +248,7 @@
             </div>
           </div>
 
-          <!-- image with no data (seed mock) or non-previewable file -->
+          <!-- image whose data could not be read, or a non-previewable file -->
           <div v-else class="pvempty">
             <Icon
               :name="shownItem.kind === 'image' ? 'clip' : 'rules'"
@@ -257,7 +257,9 @@
             <div class="pvename">{{ shownItem.name }}</div>
             <div class="pvehint">
               {{
-                shownItem.kind === 'image' ? t('common.preview.mock') : t('common.preview.empty')
+                shownItem.kind === 'image'
+                  ? t('common.preview.imageUnavailable')
+                  : t('common.preview.empty')
               }}
             </div>
           </div>

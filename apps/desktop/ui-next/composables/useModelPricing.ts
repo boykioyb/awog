@@ -3,7 +3,7 @@
 // model) and persists user overrides via `settings.set('modelPricing', map)`.
 // SoC: orchestrates IPC only; no fs/SDK. Compile-time decoupled from the sidecar:
 // when the bridge is absent (browser-dev) or the methods are not yet implemented
-// it falls back to a small mock catalog so the Settings section stays editable.
+// the table stays empty (invented rates would misprice every cost figure).
 import { computed, ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 
@@ -36,51 +36,6 @@ type PricingResponse = { models?: unknown; fetchedAt?: unknown }
 // activity.pricing.fetch result — same `models` shape + when/how-many it updated.
 type PricingFetchResponse = { models?: unknown; fetchedAt?: unknown; updated?: unknown }
 
-function mockPricing(): ModelPrice[] {
-  return [
-    {
-      model: 'claude-opus-5',
-      provider: 'Anthropic',
-      input: 5,
-      output: 25,
-      cacheRead: 0.5,
-      cacheWrite: 6.25,
-      isOverride: false,
-      source: 'default',
-    },
-    {
-      model: 'claude-sonnet-5',
-      provider: 'Anthropic',
-      input: 3,
-      output: 15,
-      cacheRead: 0.3,
-      cacheWrite: 3.75,
-      isOverride: false,
-      source: 'default',
-    },
-    {
-      model: 'gpt-5-codex',
-      provider: 'OpenAI',
-      input: 1.25,
-      output: 10,
-      cacheRead: 0.125,
-      cacheWrite: 0,
-      isOverride: false,
-      source: 'default',
-    },
-    {
-      model: 'gemini-2.5-pro',
-      provider: 'Google',
-      input: 1.25,
-      output: 10,
-      cacheRead: 0.31,
-      cacheWrite: 0,
-      isOverride: false,
-      source: 'default',
-    },
-  ]
-}
-
 function num(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0
 }
@@ -108,7 +63,7 @@ function normalizeModels(raw: unknown): ModelPrice[] {
 export function useModelPricing() {
   const sc = useSidecar()
 
-  const models = ref<ModelPrice[]>(sc.available ? [] : mockPricing())
+  const models = ref<ModelPrice[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
   // ISO time the remote price catalog was last fetched (null = never / bundled only).
@@ -137,11 +92,9 @@ export function useModelPricing() {
   }
 
   async function load(): Promise<void> {
-    if (!sc.available) {
-      models.value = mockPricing()
-      seedOverrides(models.value)
-      return
-    }
+    // The sidecar owns the pricing table (activity.pricing) — no stand-in catalog:
+    // invented per-token rates would silently misprice every cost figure.
+    if (!sc.available) return
     loading.value = true
     error.value = null
     try {
@@ -151,8 +104,6 @@ export function useModelPricing() {
       seedOverrides(models.value)
     } catch (err) {
       console.warn('[pricing] activity.pricing failed', err)
-      models.value = mockPricing()
-      seedOverrides(models.value)
       error.value = err instanceof Error ? err.message : 'Failed to load pricing'
     } finally {
       loading.value = false

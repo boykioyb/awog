@@ -125,7 +125,7 @@ function toRows(lines: DiffLine[]): DiffRow[] {
   }))
 }
 
-// Real per-commit data (IPC) wins; fall back to the mock commit.files.
+// Real per-commit data (IPC) wins; fall back to the loaded commit.files.
 const files = computed<GitFile[]>(() =>
   props.files && props.files.length ? props.files : props.commit.files,
 )

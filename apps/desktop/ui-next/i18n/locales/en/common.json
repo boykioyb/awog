@@ -47,7 +47,7 @@
   "common.preview.mediaError": "Can’t play this media in-app — open it externally.",
   "common.preview.monacoLoadFailed": "Couldn’t load the code editor.",
   "common.preview.folderEmpty": "This folder is empty",
-  "common.preview.mock": "Preview image (mock — no data)",
+  "common.preview.imageUnavailable": "Image data unavailable",
   "common.preview.theme": "Editor theme",
   "common.preview.followApp": "Follow app theme",
   "common.preview.group.app": "Automatic",
@@ -102,5 +102,6 @@
   "common.thinking.medium": "Medium",
   "common.thinking.high": "High",
   "common.thinking.extra-high": "Extra high",
-  "common.thinking.max": "Max"
+  "common.thinking.max": "Max",
+  "common.aiUnavailable": "AI generation needs a running engine and a connected LLM account."
 }

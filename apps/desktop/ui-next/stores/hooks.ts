@@ -6,8 +6,9 @@ import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 // Electron bridge is available `loadHooks()` scans the user/global tier + every
 // passed project tier over IPC; a `hooks.fs-changed` subscription re-hydrates
 // when files are touched outside the app, and a live `hook.run` event prepends a
-// run record to the matching hook's audit list. Browser-dev seeds a small mock.
-// Mirrors stores/skills.ts (the reference) + stores/rules.ts dual-path pattern.
+// run record to the matching hook's audit list. Without the bridge the list stays
+// empty (no seed data). Mirrors stores/skills.ts (the reference) + stores/rules.ts
+// dual-path pattern.
 //
 // Richer than skills: each hook has an `enabled` toggle, a run-once action, an
 // editable script file, a recentRuns audit, and a project-tier TRUST gate
@@ -92,106 +93,6 @@ export type HookConfig = {
 
 type HooksListResponse = { hooks: Hook[]; reports?: HookScanReport[] }
 
-// Seed for browser-dev (no bridge) — ported from the old UI INITIAL_HOOKS so the
-// page stays browsable offline.
-function mockHooks(): Hook[] {
-  return [
-    {
-      id: 'prettier-ts',
-      name: 'Prettier on TS files',
-      description: 'Format TS/Vue/JSON ngay sau khi agent ghi.',
-      event: 'artifact.after-write',
-      matcher: { path: '**/*.{ts,vue,json}' },
-      command: 'pnpm exec prettier --write {{event.payload.path}}',
-      cwd: '${workspace}',
-      timeoutMs: 10000,
-      runMode: 'background',
-      enabled: true,
-      source: 'global',
-      trusted: true,
-      recentRuns: [
-        { at: '2 phút trước', durationMs: 612, exitCode: 0 },
-        { at: '8 phút trước', durationMs: 540, exitCode: 0 },
-        { at: '15 phút trước', durationMs: 580, exitCode: 0 },
-      ],
-    },
-    {
-      id: 'block-gitignored',
-      name: 'Block write to .gitignored paths',
-      description: 'Ngăn agent ghi vào path nằm trong .gitignore (tránh leak secret).',
-      event: 'artifact.before-write',
-      matcher: {},
-      command: 'node ./.awog/hooks/check-gitignore.mjs',
-      cwd: '${workspace}',
-      timeoutMs: 5000,
-      runMode: 'blocking',
-      enabled: true,
-      source: 'global',
-      trusted: true,
-      recentRuns: [
-        { at: '1 giờ trước', durationMs: 88, exitCode: 0 },
-        {
-          at: '3 giờ trước',
-          durationMs: 92,
-          exitCode: 1,
-          stderr: 'Blocked: .env is in .gitignore',
-        },
-      ],
-    },
-    {
-      id: 'slack-notify',
-      name: 'Slack notification on completion',
-      description: 'Ping #team-eng khi task hoàn thành hoặc fail.',
-      event: 'task.after-complete',
-      matcher: {},
-      command:
-        'curl -X POST -H "Content-type: application/json" --data \'{"text":"Task {{event.taskId}} {{event.payload.status}}"}\' $SLACK_WEBHOOK',
-      cwd: '${workspace}',
-      timeoutMs: 15000,
-      runMode: 'background',
-      enabled: false,
-      source: 'global',
-      trusted: true,
-      env: { SLACK_WEBHOOK: '${secret:slack_webhook}' },
-      recentRuns: [],
-    },
-    {
-      id: 'auto-commit',
-      name: 'Auto-commit after approval',
-      description: 'Tạo commit Git sau khi phase được approve.',
-      event: 'phase.after-approve',
-      matcher: {},
-      command: 'git add -A && git commit -m "AWOG: phase {{event.phaseId}} approved" --allow-empty',
-      cwd: '${workspace}',
-      timeoutMs: 8000,
-      runMode: 'blocking',
-      enabled: true,
-      source: 'project',
-      projectId: 'awog',
-      trusted: false,
-      recentRuns: [
-        { at: '15 phút trước', durationMs: 1240, exitCode: 0 },
-        { at: '1 giờ trước', durationMs: 1180, exitCode: 0 },
-      ],
-    },
-    {
-      id: 'log-tool-calls',
-      name: 'Audit tool calls',
-      description: 'Ghi mọi tool call ra file audit để review sau.',
-      event: 'tool.after-call',
-      matcher: {},
-      command: 'node ./.awog/hooks/log-tool.mjs',
-      cwd: '${workspace}',
-      timeoutMs: 3000,
-      runMode: 'background',
-      enabled: false,
-      source: 'global',
-      trusted: true,
-      recentRuns: [],
-    },
-  ]
-}
-
 // Composite identity — a hook is keyed by (source, projectId, id) so a project
 // hook and a global hook (or imported CC hooks across projects) can share an id
 // without colliding.
@@ -204,7 +105,7 @@ export const useHooksStore = defineStore('hooks', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const hooks = ref<Hook[]>(sc.available ? [] : mockHooks())
+  const hooks = ref<Hook[]>([])
   const scanReports = ref<HookScanReport[]>([])
   const loaded = ref(false)
 

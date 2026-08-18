@@ -77,13 +77,7 @@ import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import { useSidecar } from '~/composables/useSidecar'
-import {
-  useHooksStore,
-  type Hook,
-  type HookConfig,
-  type HookEvent,
-  type HookRunMode,
-} from '~/stores/hooks'
+import { useHooksStore, type Hook, type HookConfig } from '~/stores/hooks'
 
 const props = withDefaults(
   defineProps<{
@@ -134,51 +128,22 @@ const resetDraft = () => {
   draft.value = null
 }
 
-// Offline heuristic — keeps the panel usable with no engine / account.
-const mockDraft = (text: string): HookConfig => {
-  const lower = text.toLowerCase()
-  let event: HookEvent = 'artifact.after-write'
-  if (/(approve|approval)/.test(lower)) event = 'phase.after-approve'
-  else if (/(complete|done|finish|notify|slack)/.test(lower)) event = 'task.after-complete'
-  else if (/(tool|mcp)/.test(lower)) event = 'tool.after-call'
-  const runMode: HookRunMode = /(block|prevent|reject|deny|validate|check)/.test(lower)
-    ? 'blocking'
-    : 'background'
-  const name =
-    text
-      .split(/\s+/)
-      .slice(0, 4)
-      .join(' ')
-      .replace(/[^\w\s-]/g, '')
-      .trim() || 'New hook'
-  return {
-    name,
-    description: text.slice(0, 140),
-    event,
-    matcher: {},
-    command: 'node ./.awog/hooks/run.mjs',
-    cwd: '${workspace}',
-    timeoutMs: runMode === 'blocking' ? 10000 : 30000,
-    runMode,
-  }
-}
-
 const onGenerate = async () => {
   const text = prompt.value.trim()
   if (!text || isGenerating.value) return
   isGenerating.value = true
   error.value = null
   try {
+    // A hook is executable config — never hand back a keyword-guessed draft as if
+    // the model wrote it.
     if (!sc.available || !props.accountId) {
-      await new Promise<void>((r) => setTimeout(r, 350))
-      draft.value = mockDraft(text)
+      error.value = t('common.aiUnavailable')
       return
     }
     draft.value = await store.generateHook(text, props.accountId)
   } catch (err) {
-    console.warn('[hooks] generate failed, using mock', err)
+    console.warn('[hooks] generate failed', err)
     error.value = err instanceof Error ? err.message : String(err)
-    draft.value = mockDraft(text)
   } finally {
     isGenerating.value = false
   }

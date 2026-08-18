@@ -122,7 +122,7 @@ type SidecarGitStatus = {
 const rawFiles = ref<SidecarGitFileStatus[]>([])
 const loading = ref(false)
 const noRepo = ref(false)
-// Real current branch + ahead count for the gitlink header (replaces mock meta).
+// Real current branch + ahead count for the gitlink header (replaces the old static meta).
 const branch = ref('')
 const ahead = ref(0)
 

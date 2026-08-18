@@ -4,14 +4,14 @@ import { useSidecar } from '~/composables/useSidecar'
 
 // Workflows store — dual-path live (2-tier DAG, ADR 0024). When the Electron
 // bridge is available `loadWorkflows()` scans the global tier (~/.awog/workflows)
-// + every passed project tier ({project}/.awog/workflows); browser-dev seeds a
-// small mock so the canvas is browsable. Canvas mutations are optimistic + a
+// + every passed project tier ({project}/.awog/workflows); without the bridge the
+// list stays empty (no seed data). Canvas mutations are optimistic + a
 // debounced `workflows.upsert` coalesces rapid drag/connect bursts (mirrors the
 // old UI stores/workflows.ts). Sidecar emits NO `workflows.fs-changed` event, so
 // there is no fs-watch subscription here (unlike skills/agents).
 //
 // Mirrors the reference library store (stores/skills.ts): inline slice types,
-// readonly-state + named async actions, mock seed gated on `!sc.available`.
+// readonly-state + named async actions.
 
 export type WorkflowSource = 'global' | 'project'
 
@@ -82,58 +82,11 @@ type GenerateResponse = { workflow: GeneratedWorkflow }
 // bursts. 500ms matches the sidecar fs-watcher debounce.
 const PERSIST_DEBOUNCE_MS = 500
 
-function mockWorkflows(): Workflow[] {
-  return [
-    {
-      id: 'wf-feature-pipeline',
-      name: 'Feature Pipeline',
-      description: 'Brief → ADR → implement → audit → verify',
-      source: 'global',
-      nodes: [
-        {
-          id: 'n1',
-          agentId: 'tech-lead',
-          agentSource: 'global',
-          skillId: 'write-adr',
-          x: 80,
-          y: 60,
-          outputs: ['adr.md'],
-          approval: true,
-        },
-        {
-          id: 'n2',
-          agentId: 'developer',
-          agentSource: 'global',
-          skillId: 'implement-feature',
-          x: 360,
-          y: 60,
-          outputs: ['source.diff'],
-          approval: false,
-        },
-        {
-          id: 'n3',
-          agentId: 'infosec',
-          agentSource: 'global',
-          skillId: 'security-audit',
-          x: 640,
-          y: 60,
-          outputs: ['findings.md'],
-          approval: false,
-        },
-      ],
-      edges: [
-        { from: 'n1', to: 'n2' },
-        { from: 'n2', to: 'n3' },
-      ],
-    },
-  ]
-}
-
 export const useWorkflowsStore = defineStore('workflows', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const workflows = ref<Workflow[]>(sc.available ? [] : mockWorkflows())
+  const workflows = ref<Workflow[]>([])
   const loaded = ref(false)
 
   // Per-workflow debounce timers for canvas persistence.
@@ -266,7 +219,7 @@ export const useWorkflowsStore = defineStore('workflows', () => {
   // caller supplies the scoped agents/skills the model may wire; node x/y layout
   // + agent source/projectId resolution happen on the caller side (composable
   // useWorkflowGen). Returns the raw generated DAG (agentId/skillId refs, no
-  // geometry) — throws on failure so the caller can fall back to a local mock.
+  // geometry) — throws on failure so the caller can surface the error.
   async function generateWorkflow(params: {
     prompt: string
     accountId: string

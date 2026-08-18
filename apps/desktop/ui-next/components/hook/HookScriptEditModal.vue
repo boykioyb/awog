@@ -54,8 +54,8 @@
 // LLM-driven hook SCRIPT edit — one-shot `hooks.generate-script` (writes/revises
 // the raw code of the file a hook runs, e.g. format-after-edit.sh). The proposed
 // content is previewed read-only in Monaco; Apply emits it up to the editor,
-// which feeds it into the inline (editable) Monaco viewer. Offline fallback:
-// appends a TODO note so something visibly changes.
+// which feeds it into the inline (editable) Monaco viewer. With no engine /
+// account it reports that instead of writing a placeholder into the script.
 import { ref, watch } from 'vue'
 import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
@@ -102,10 +102,9 @@ const onGenerate = async () => {
   isGenerating.value = true
   error.value = null
   try {
+    // Never write a placeholder into a script the hook engine will actually run.
     if (!sc.available || !props.accountId) {
-      await new Promise<void>((r) => setTimeout(r, 350))
-      const base = props.currentContent
-      content.value = `${base}${base ? '\n' : ''}# TODO (no LLM available): ${text}\n`
+      error.value = t('common.aiUnavailable')
       return
     }
     content.value = await store.generateHookScript(text, props.accountId, {

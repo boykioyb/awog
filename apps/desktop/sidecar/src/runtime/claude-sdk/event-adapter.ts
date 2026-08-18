@@ -67,6 +67,14 @@ function toInputRecord(input: unknown): Record<string, unknown> {
 export interface ClaudeEventAdapter {
   handle: (msg: SDKMessage) => void
   result: () => ClaudeAccumulator
+  // Push a fresh output tail into a running background task's row (run-stream owns
+  // the polling; the adapter owns how the row looks).
+  updateBackgroundOutput: (taskId: string, output: string) => void
+  // Tell the adapter this task is real BACKGROUND work (run-stream owns the CLI's
+  // level signal, the only place that distinction exists).
+  markBackgroundTask: (taskId: string) => void
+  // Close a row whose task was still running when the turn ended.
+  settleBackgroundRow: (taskId: string) => void
 }
 
 // Optional side-channels the runner owns. `onTodos` is the SDK-path twin of the
@@ -76,6 +84,63 @@ export interface ClaudeEventAdapter {
 // store import so the adapter stays a pure event translator.
 export interface ClaudeAdapterHooks {
   onTodos?: (todos: TodoItem[]) => void
+  // Tail of a finished background task's `output_file` (claude-sdk/task-output.ts).
+  // A side channel for the same reason as onTodos: reading a file is not the
+  // translator's job, but without it a finished background shell can only say
+  // "completed" while its actual output sits on disk.
+  readTaskOutput?: (file: string, taskId: string) => string | undefined
+}
+
+// Live view of one CLI background task, folded from its event stream.
+interface BgTaskView {
+  name?: string
+  subagentType?: string
+  // Progress descriptions in order ("Reading foo.ts"), newest last, tail-capped.
+  activity: string[]
+  lastToolName?: string
+  usage?: { total_tokens?: number; tool_uses?: number; duration_ms?: number }
+  // The tool_use that launched it — also this row's step id, so the task's own steps
+  // (they carry it as `parentId`) nest under the row instead of a separate one.
+  toolUseId?: string
+  // Tail of the task's output file WHILE it runs (run-stream polls it — the CLI
+  // sends no progress events for a shell), so a long `pytest` is watchable instead
+  // of a silent row. Replaced by the final read when the task settles.
+  liveOutput?: string
+  // Set once the notification arrived: later polls must not resurrect the row.
+  settled?: boolean
+}
+
+// How many progress lines a row keeps. Enough to see what a subagent has been
+// doing, bounded because every step is persisted to the session JSONL.
+const BG_ACTIVITY_LINES = 12
+
+function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k tokens` : `${n} tokens`
+}
+
+function formatDuration(ms: number): string {
+  const s = Math.round(ms / 1000)
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+// The expandable body of a background-task row: what it has been doing, how much
+// work that took, and — once finished — its summary and captured output.
+function bgTaskBody(
+  view: BgTaskView,
+  summary: string | undefined,
+  output: string | undefined,
+): string {
+  const blocks: string[] = []
+  if (view.activity.length > 0) blocks.push(view.activity.join('\n'))
+  const stats: string[] = []
+  if (view.lastToolName) stats.push(view.lastToolName)
+  if (view.usage?.tool_uses !== undefined) stats.push(`${view.usage.tool_uses} tool calls`)
+  if (view.usage?.duration_ms !== undefined) stats.push(formatDuration(view.usage.duration_ms))
+  if (view.usage?.total_tokens !== undefined) stats.push(formatTokens(view.usage.total_tokens))
+  if (stats.length > 0) blocks.push(stats.join(' · '))
+  if (summary) blocks.push(summary)
+  if (output) blocks.push(output.trimEnd())
+  return blocks.join('\n\n')
 }
 
 export function createClaudeEventAdapter(
@@ -98,6 +163,15 @@ export function createClaudeEventAdapter(
   // delta upserts the same 'thinking' step in place. Bumped per assistant turn
   // (message_start) so successive iterations keep distinct reasoning blocks.
   const thinkingBlocks = new Map<string, string>()
+  // task_id → everything known about its background-task row, accumulated across
+  // the started → progress → notification events (see emitBackgroundTask).
+  const bgTasks = new Map<string, BgTaskView>()
+  // Reverse index of the same relation, for the tool_result path.
+  const taskIdByToolUse = new Map<string, string>()
+  // Task ids the CLI reported as live BACKGROUND work (its `background_tasks_changed`
+  // level signal, forwarded by run-stream). The started/progress/notification events
+  // alone can't tell background from foreground.
+  const backgroundTaskIds = new Set<string>()
   let assistantSeq = 0
 
   const withParent =
@@ -130,37 +204,143 @@ export function createClaudeEventAdapter(
     cb.onStep(wp(stepFromToolUse({ id: block.id, name: block.name, input })))
   }
 
-  // Background task lifecycle → ONE upserted step per task, so a subagent the model
-  // left running in the background is visible while it works instead of vanishing
-  // behind an already-'done' Task row. Keyed by the CLI's task_id (stable across
-  // started → progress → notification). `skip_transcript` marks ambient/housekeeping
-  // tasks the CLI itself wants hidden.
+  // Background task lifecycle → ONE upserted step, so a task the model left running
+  // is visible while it works instead of vanishing behind an already-'done' row.
+  //
+  // The row is keyed by the LAUNCHING `tool_use_id` (not the task id) so it MERGES
+  // with the Task/Bash step that started it: the subagent's own tool calls arrive as
+  // separate steps carrying that same id as `parentId`, so merging is what puts the
+  // step list, the progress log and the result on ONE row. `skip_transcript` marks
+  // ambient/housekeeping tasks the CLI wants hidden.
   const emitBackgroundTask = (m: {
     subtype?: string
     task_id?: string
+    tool_use_id?: string
     description?: string
     subagent_type?: string
     summary?: string
     status?: string
+    output_file?: string
+    last_tool_name?: string
+    usage?: { total_tokens?: number; tool_uses?: number; duration_ms?: number }
     skip_transcript?: boolean
   }): void => {
     if (!cb.onStep || !m.task_id || m.skip_transcript) return
     const kind = m.subtype
     if (kind !== 'task_started' && kind !== 'task_progress' && kind !== 'task_notification') return
-    const label = m.subagent_type
-      ? `Background agent: ${m.subagent_type}`
-      : `Background task${m.description ? `: ${m.description}` : ''}`
-    const step: SessionStep = {
-      id: `bgtask-${m.task_id}`,
-      kind: 'tool',
-      tool: m.subagent_type ? 'task' : 'terminal',
-      label,
-      status:
-        kind !== 'task_notification' ? 'running' : m.status === 'completed' ? 'done' : 'error',
+    const view = bgTasks.get(m.task_id) ?? { activity: [] }
+    bgTasks.set(m.task_id, view)
+    if (m.tool_use_id) {
+      view.toolUseId = m.tool_use_id
+      taskIdByToolUse.set(m.tool_use_id, m.task_id)
     }
-    const text = m.summary ?? m.description
-    if (text) step.detail = { kind: 'text', content: text }
+    // Only task_started's description NAMES the task. On task_progress the same
+    // field is the live activity ("Reading foo.ts") — appended to the log below, not
+    // promoted to the label — and task_notification carries neither name nor type,
+    // so both are remembered here or the settling upsert would rename a named row
+    // back to a bare "Background task".
+    if (m.subagent_type) view.subagentType = m.subagent_type
+    if (kind === 'task_started' && m.description) view.name = m.description
+    if (kind === 'task_progress') {
+      if (m.description && m.description !== view.activity.at(-1)) {
+        view.activity.push(m.description)
+        // Keep the tail: the row is a live progress log, not an audit trail.
+        if (view.activity.length > BG_ACTIVITY_LINES) view.activity.shift()
+      }
+      if (m.last_tool_name) view.lastToolName = m.last_tool_name
+      if (m.usage) view.usage = m.usage
+    }
+    if (kind === 'task_notification' && m.usage) view.usage = m.usage
+
+    // The final read replaces whatever the poll last saw — same file, now complete.
+    const finished = kind === 'task_notification'
+    if (finished) {
+      view.settled = true
+      if (!view.subagentType && m.output_file) {
+        const finalOutput = hooks.readTaskOutput?.(m.output_file, m.task_id)
+        if (finalOutput !== undefined) view.liveOutput = finalOutput
+      }
+    }
+    emitBgStep(m.task_id, view, {
+      status: !finished ? 'running' : m.status === 'completed' ? 'done' : 'error',
+      ...(finished && m.summary ? { summary: m.summary } : {}),
+    })
+  }
+
+  // Upsert the row for one background task. A shell renders as a terminal block (its
+  // output is plain text); a subagent renders as text — its own tool calls stream in
+  // as nested steps under this same row, so the row itself carries the progress log
+  // and the result.
+  //
+  // "Background" is only claimed for a task the CLI reported through its level signal
+  // (markBackgroundTask): a FOREGROUND subagent emits the very same started/progress/
+  // notification events, and calling that one "background" would be a lie. The
+  // foreground row also ends up owned by the Task tool_result (it arrives after the
+  // notification and carries the real report), which is the behaviour it always had —
+  // it just gains a live progress log while it runs.
+  const emitBgStep = (
+    taskId: string,
+    view: BgTaskView,
+    opts: { status: 'running' | 'done' | 'error'; summary?: string },
+  ): void => {
+    if (!cb.onStep) return
+    const isBackground = backgroundTaskIds.has(taskId)
+    // The raw command beats the CLI's paraphrase for a shell row — the adapter
+    // already holds the launching tool's input.
+    const command =
+      view.toolUseId !== undefined
+        ? ((toolInputs.get(view.toolUseId)?.input.command as string | undefined) ?? view.name)
+        : view.name
+    const step: SessionStep = {
+      id: view.toolUseId ?? `bgtask-${taskId}`,
+      kind: 'tool',
+      tool: view.subagentType ? 'task' : 'terminal',
+      label: view.subagentType
+        ? `${isBackground ? 'Background agent' : 'Agent'}: ${view.subagentType}`
+        : 'Background task',
+      status: opts.status,
+    }
+    const target = view.subagentType ? view.name : command
+    if (target) step.target = target
+    const body = bgTaskBody(view, opts.summary, view.liveOutput)
+    if (body) {
+      step.detail = view.subagentType
+        ? { kind: 'text', content: body }
+        : { kind: 'terminal', command: command ?? 'background task', output: body }
+    }
     cb.onStep(step)
+  }
+
+  // run-stream saw this task in the CLI's background level signal. Re-renders the row
+  // when it already exists, so a row drawn from an earlier event drops the foreground
+  // wording as soon as we learn better.
+  const markBackgroundTask = (taskId: string): void => {
+    if (backgroundTaskIds.has(taskId)) return
+    backgroundTaskIds.add(taskId)
+    const view = bgTasks.get(taskId)
+    if (view && !view.settled) emitBgStep(taskId, view, { status: 'running' })
+  }
+
+  // The turn ended with this task still running (the CLI process dies with the turn,
+  // so it cannot finish). Without this the row would stay 'running' forever in the
+  // persisted transcript — a spinner on a conversation that is over.
+  const settleBackgroundRow = (taskId: string): void => {
+    const view = bgTasks.get(taskId)
+    if (!view || view.settled) return
+    view.settled = true
+    emitBgStep(taskId, view, {
+      status: 'error',
+      summary: 'The turn ended before this finished, so it was stopped.',
+    })
+  }
+
+  // Fresh output tail for a STILL-RUNNING background shell (run-stream's poll).
+  // Ignored once the task settled so a late poll can't reopen a finished row.
+  const updateBackgroundOutput = (taskId: string, output: string): void => {
+    const view = bgTasks.get(taskId)
+    if (!view || view.settled || view.liveOutput === output) return
+    view.liveOutput = output
+    emitBgStep(taskId, view, { status: 'running' })
   }
 
   const emitToolResult = (block: ContentBlock, parentId: string | undefined): void => {
@@ -169,6 +349,13 @@ export function createClaudeEventAdapter(
     // ExitPlanMode / TodoWrite already rendered their step on the tool_use; their
     // result is an internal ack — don't overwrite it with a generic tool row.
     if (meta.name === 'ExitPlanMode' || meta.name === 'TodoWrite') return
+    // A BACKGROUNDED tool returns immediately with a launch ack ("Command running in
+    // background with ID …", "Async agent launched successfully" — the CLI itself
+    // tells the model not to quote it). The background row owns this id and shows the
+    // real progress/output, so the ack must not overwrite it. A FOREGROUND subagent is
+    // untouched here: its result IS the report.
+    const bgTaskId = taskIdByToolUse.get(block.tool_use_id)
+    if (bgTaskId !== undefined && backgroundTaskIds.has(bgTaskId)) return
     cb.onStep(
       withParent(parentId)(
         stepFromToolResult({
@@ -197,6 +384,9 @@ export function createClaudeEventAdapter(
           subagent_type?: string
           summary?: string
           status?: string
+          output_file?: string
+          last_tool_name?: string
+          usage?: { total_tokens?: number; tool_uses?: number; duration_ms?: number }
           skip_transcript?: boolean
         }
         if (m.subtype === 'init' && typeof m.model === 'string') acc.modelUsed = m.model
@@ -307,5 +497,11 @@ export function createClaudeEventAdapter(
     }
   }
 
-  return { handle, result: () => acc }
+  return {
+    handle,
+    result: () => acc,
+    updateBackgroundOutput,
+    markBackgroundTask,
+    settleBackgroundRow,
+  }
 }

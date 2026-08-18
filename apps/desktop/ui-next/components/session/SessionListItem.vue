@@ -168,7 +168,7 @@ async function askRemove() {
 
 // LIVE relative-time label derived from the raw `updatedAt` + a shared ticking clock,
 // so an untouched row's "3m → 2h → 1d" advances on its own instead of freezing at its
-// hydrate-time value. Falls back to the snapshot `when` for mock sessions (no updatedAt).
+// hydrate-time value. Falls back to the snapshot `when` when no updatedAt is known.
 const now = useNow()
 const timeLabel = computed(() =>
   props.session.updatedAt ? relativeTime(props.session.updatedAt, now.value) : props.session.when,

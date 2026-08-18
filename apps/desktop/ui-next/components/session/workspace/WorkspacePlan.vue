@@ -29,7 +29,7 @@
 // both derived from the transcript (assistant `plan` blocks / the latest TodoWrite).
 // One tab answers "what is the plan" and "how far along are we" together, so the
 // answer survives scrolling and turn boundaries. Read-only view; approve/run is
-// handled inline in the transcript gate cards. No mock data.
+// handled inline in the transcript gate cards.
 import type { PlanBlock, Session } from '~/composables/useSessionsData'
 
 const props = defineProps<{ session: Session }>()
@@ -54,7 +54,7 @@ const plan = computed<PlanBlock | null>(() => {
 })
 
 // Render the model's own markdown when present (headers/lists/bold survive); fall
-// back to the flattened items as a bullet list (mock data / legacy steps). Mirrors
+// back to the flattened items as a bullet list (legacy steps). Mirrors
 // SessionGateCard so the chat card and this tab show the same document.
 const planMarkdown = computed<string>(() => {
   const p = plan.value

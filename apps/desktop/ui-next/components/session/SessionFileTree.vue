@@ -5,7 +5,7 @@
       class="frow file"
       :style="isSelected(path(n.f)) ? { background: 'var(--bgActive)' } : undefined"
       @click="onFile(path(n.f))"
-      @contextmenu.prevent="ctrl?.onContext?.($event, path(n.f), 'file')"
+      @contextmenu.prevent="ctrl.onContext?.($event, path(n.f), 'file')"
     >
       <span class="fst" :class="{ m: n.st === 'M', a: n.st === 'A' }">{{ n.st || '' }}</span>
       <Icon name="rules" style="width: 12px; height: 12px" />
@@ -15,7 +15,7 @@
       <div
         class="frow dir"
         @click="onDir(path(n.d))"
-        @contextmenu.prevent="ctrl?.onContext?.($event, path(n.d), 'dir')"
+        @contextmenu.prevent="ctrl.onContext?.($event, path(n.d), 'dir')"
       >
         <Icon name="chev" class="fchv" :class="{ col: !isOpen(path(n.d)) }" />
         <Icon name="folder" style="width: 12px; height: 12px" />
@@ -29,71 +29,47 @@
 </template>
 
 <script lang="ts">
-// Shared injection key + state shape, evaluated once at module load so the
-// recursive instances all reference the SAME symbol (bindings inside <script
-// setup> are per-instance and would mint a fresh symbol each time).
-import type { InjectionKey, Ref } from 'vue'
+// Controller contract, declared in a plain <script> block so the recursive
+// instances share one type import site.
+import type { Ref } from 'vue'
 import type { TreeDir, TreeNode } from '~/composables/useSessionsData'
 
-// External controller (real-data mode): the Files tab owns expand/select state +
-// lazy directory loading, and passes children for a dir via `childrenFor`. When a
-// `ctrl` prop is present every instance defers to it instead of the internal
-// provide/inject mock state. Keeps one recursive component for both paths (DRY).
+// The owner of the tree (Files tab / PreviewModal folder view) holds expand +
+// select state and lazily loads a directory's children. This component is purely
+// the recursive markup — it keeps no state of its own, so there is no second
+// "sample tree" mode that could render a folder the user does not have.
 export type FileTreeController = {
   isOpen: (path: string) => boolean
   toggle: (path: string) => void
   selectedPath: Ref<string | null>
   selectFile: (path: string) => void
-  // Lazy children for a directory path (already-loaded entries, mock shape).
+  // Lazy children for a directory path (already-loaded entries).
   childrenFor: (path: string) => TreeNode[]
-  // Right-click a row → open the shared file context menu (real-data mode only).
+  // Right-click a row → open the shared file context menu.
   onContext?: (e: MouseEvent, path: string, kind: 'file' | 'dir') => void
 }
 </script>
 
 <script setup lang="ts">
 // Recursive workspace file tree (treeHtml ~1395). Self-references via global
-// auto-import. Two modes:
-//  • mock (no `ctrl`): dirs expand/collapse via provide/inject shared state,
-//    clicking a file highlights it (original prototype behaviour).
-//  • real (with `ctrl`): defers expand/select/lazy-load to the Files tab's
-//    controller so a real fs tree drives the same markup.
-type TreeState = { expanded: Set<string>; selected: Ref<string | null> }
-const TREE_STATE = Symbol('sessionFileTreeState') as InjectionKey<TreeState>
-
+// auto-import; every instance defers expand/select/lazy-load to `ctrl`.
 const props = withDefaults(
-  defineProps<{ nodes: TreeNode[]; prefix?: string; ctrl?: FileTreeController }>(),
-  { prefix: '', ctrl: undefined },
-)
-
-// Root instance creates + provides shared mock state; nested instances inject it.
-// (Only used in mock mode — `ctrl` short-circuits all of this.)
-const state = inject(
-  TREE_STATE,
-  () => {
-    const created: TreeState = { expanded: reactive(new Set<string>()), selected: ref(null) }
-    provide(TREE_STATE, created)
-    return created
+  defineProps<{ nodes: TreeNode[]; prefix?: string; ctrl: FileTreeController }>(),
+  {
+    prefix: '',
   },
-  true,
 )
 
 const path = (name: string) => (props.prefix ? `${props.prefix}/${name}` : name)
 
-const isOpen = (p: string): boolean => (props.ctrl ? props.ctrl.isOpen(p) : !state.expanded.has(p)) // mock: default expanded
-const isSelected = (p: string): boolean =>
-  props.ctrl ? props.ctrl.selectedPath.value === p : state.selected.value === p
-
-const childrenOf = (n: TreeDir): TreeNode[] =>
-  props.ctrl ? props.ctrl.childrenFor(path(n.d)) : (n.ch ?? [])
+const isOpen = (p: string): boolean => props.ctrl.isOpen(p)
+const isSelected = (p: string): boolean => props.ctrl.selectedPath.value === p
+const childrenOf = (n: TreeDir): TreeNode[] => props.ctrl.childrenFor(path(n.d))
 
 function onDir(p: string): void {
-  if (props.ctrl) props.ctrl.toggle(p)
-  else if (state.expanded.has(p)) state.expanded.delete(p)
-  else state.expanded.add(p)
+  props.ctrl.toggle(p)
 }
 function onFile(p: string): void {
-  if (props.ctrl) props.ctrl.selectFile(p)
-  else state.selected.value = p
+  props.ctrl.selectFile(p)
 }
 </script>

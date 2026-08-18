@@ -70,7 +70,7 @@
 // so this drafts via generateCommand (mirroring SkillBodyEditModal) rather than
 // the streaming LibraryCreatorPanel. The user describes the command, the model
 // returns a draft, then they either save directly to the chosen scope or hand off
-// to the form editor ("edit details"). Offline / no-account → a local mock draft.
+// to the form editor ("edit details"). Offline / no-account → an explicit error.
 import { ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
@@ -136,16 +136,10 @@ const onGenerate = async () => {
   isGenerating.value = true
   error.value = null
   try {
+    // No engine / no account: say so rather than passing a locally-derived draft
+    // off as the model's output.
     if (!sc.available || !props.accountId) {
-      // Offline / no-account fallback: derive a usable draft locally.
-      await new Promise<void>((r) => setTimeout(r, 300))
-      const firstLine = text.split('\n')[0] ?? 'new-command'
-      draft.value = {
-        name: firstLine.slice(0, 60),
-        description: firstLine.slice(0, 140),
-        argumentHint: '',
-        body: text,
-      }
+      error.value = t('common.aiUnavailable')
       return
     }
     draft.value = await store.generateCommand(text, props.accountId)

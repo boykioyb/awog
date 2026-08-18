@@ -33,7 +33,7 @@ export type PreviewRef = {
     | 'sheet'
   // Object URL / data URL for images and PDFs (drag-dropped / inlined files).
   src?: string
-  // In-memory source for markdown / text (drag-dropped files, mock data).
+  // In-memory source for markdown / text (e.g. drag-dropped files).
   text?: string
   size?: number
   mime?: string

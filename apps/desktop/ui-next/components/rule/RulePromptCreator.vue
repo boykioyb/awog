@@ -131,11 +131,10 @@ const onGenerate = async () => {
   isGenerating.value = true
   error.value = null
   try {
+    // No engine / no account: say so. A locally-derived draft would be presented
+    // as the model's output, which it is not.
     if (!sc.available || !props.accountId) {
-      // Offline fallback: drop the prompt into the body so something appears.
-      await new Promise<void>((r) => setTimeout(r, 350))
-      const firstLine = text.split('\n')[0]?.slice(0, 60) || 'New rule'
-      draft.value = { name: firstLine, description: '', body: text }
+      error.value = t('common.aiUnavailable')
       return
     }
     draft.value = await store.generateRule(text, props.accountId)

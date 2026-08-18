@@ -57,31 +57,6 @@ type SkillsListResponse = {
   }[]
 }
 
-// Title from the first prompt line (Title Case, ≤ 6 words). KISS — no stop-word
-// list (the ui-next surface has none); the LLM path supplies a real name anyway.
-const titleize = (prompt: string): string => {
-  const words = (prompt.split('\n')[0] ?? '')
-    .replace(/[^a-z0-9\s]/gi, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 6)
-  return words.length
-    ? words.map((w) => w[0]!.toUpperCase() + w.slice(1)).join(' ')
-    : 'New Workflow'
-}
-
-const firstSentence = (prompt: string): string => {
-  const m = prompt.match(/^[^.!?\n]+[.!?]?/)
-  return m ? m[0].trim() : prompt.slice(0, 140)
-}
-
-const mockDraft = (prompt: string): WorkflowDraft => ({
-  name: titleize(prompt),
-  description: firstSentence(prompt),
-  nodes: [],
-  edges: [],
-})
-
 // Layered DAG layout: x by rank (longest path from a root), y by order within a
 // rank. Keeps generated graphs readable on the canvas.
 const layout = (
@@ -137,7 +112,7 @@ export function useWorkflowGen() {
   const skills = ref<WorkflowSkill[]>([])
 
   // Provider-agnostic creator account (mirrors Sessions' default resolution); null
-  // → generate() falls back to a local mock draft.
+  // → generate() throws (nothing can be generated without an account).
   const accountId = computed(() => settings.resolveCreatorAccount().accountId)
 
   // Load the agent + skill rosters for the palette / node picker, scoped to the
@@ -220,11 +195,12 @@ export function useWorkflowGen() {
     scopedSkills: WorkflowSkill[],
   ): Promise<WorkflowDraft> {
     const trimmed = prompt.trim()
-    if (!trimmed) return mockDraft('')
+    if (!trimmed) throw new Error('Describe the workflow first')
     const id = accountId.value
+    // Generating a DAG needs the model. An empty-node stand-in used to come back
+    // looking like a successful generation; the caller surfaces this error instead.
     if (!sc.available || !id) {
-      await new Promise<void>((r) => setTimeout(r, 250))
-      return mockDraft(trimmed)
+      throw new Error('Engine or LLM account unavailable — cannot generate a workflow')
     }
     try {
       const res = await store.generateWorkflow({
@@ -249,8 +225,8 @@ export function useWorkflowGen() {
         edges: res.edges,
       })
     } catch (err) {
-      console.warn('[workflows] LLM generate failed, falling back to mock', err)
-      return mockDraft(trimmed)
+      console.warn('[workflows] LLM generate failed', err)
+      throw err
     }
   }
 

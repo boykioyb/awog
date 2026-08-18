@@ -4,11 +4,11 @@ import { useSidecar } from '~/composables/useSidecar'
 
 // Project Templates store — dual-path live (ADR 0036). Bundles of project-tier
 // config (agents/skills/hooks/rules/commands — NO MCP) the user exports from a
-// project and installs into another. Wraps the `templates.*` RPC; browser-dev
-// degrades to an in-memory list so the /templates page stays browsable.
+// project and installs into another. Wraps the `templates.*` RPC; without the
+// bridge it degrades to an empty in-memory list (no seed data).
 //
 // Mirrors the ui-next reference store (stores/skills.ts): inline slice types,
-// readonly-state + named async actions, mock seed gated on `!sc.available`.
+// readonly-state + named async actions.
 
 // The 5 config-entity kinds a template can bundle (NO MCP, ADR 0036).
 export type ConfigKind = 'agent' | 'skill' | 'hook' | 'rule' | 'command'
@@ -65,45 +65,18 @@ type TemplateInstallResponse = { result: TemplateInstallResult }
 // features — we never import them).
 type EntityListItem = { id: string; source: 'global' | 'project'; projectId?: string }
 
-function mockTemplates(): ProjectTemplate[] {
-  return [
-    {
-      id: 'tpl-full-delivery',
-      name: 'Full Delivery Guild',
-      description: 'PO → BA → PM → TL → dev → QA → reviewer',
-      createdAt: new Date().toISOString(),
-      entities: [
-        { kind: 'agent', id: 'product-owner', file: 'agents/product-owner.md' },
-        { kind: 'agent', id: 'business-analyst', file: 'agents/business-analyst.md' },
-        { kind: 'agent', id: 'developer', file: 'agents/developer.md' },
-        { kind: 'skill', id: 'implement-feature', file: 'skills/implement-feature' },
-      ],
-    },
-    {
-      id: 'tpl-security-sweep',
-      name: 'Security Sweep',
-      description: 'infosec audit + code-reviewer red flags',
-      createdAt: new Date().toISOString(),
-      entities: [
-        { kind: 'agent', id: 'infosec', file: 'agents/infosec.md' },
-        { kind: 'skill', id: 'security-audit', file: 'skills/security-audit' },
-      ],
-    },
-  ]
-}
-
 export const useTemplatesStore = defineStore('templates', () => {
   const sc = useSidecar()
   const available = computed(() => sc.available)
 
-  const templates = ref<ProjectTemplate[]>(sc.available ? [] : mockTemplates())
+  const templates = ref<ProjectTemplate[]>([])
   const loaded = ref(false)
 
   const templateById = (id: string): ProjectTemplate | undefined =>
     templates.value.find((tpl) => tpl.id === id)
 
   // Pull the full template list from the sidecar. Sidecar offline → mark loaded,
-  // keep whatever is already in memory (mock seed).
+  // keep whatever is already in memory.
   async function loadTemplates(): Promise<void> {
     if (!available.value) {
       loaded.value = true

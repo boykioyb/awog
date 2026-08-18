@@ -4,8 +4,9 @@ import { useSidecar } from '~/composables/useSidecar'
 // Fetches the data the New Task modal needs — workflows, projects, enabled
 // connections (MCP servers) — directly over IPC. SoC: the Tasks feature does NOT
 // import the workflows/projects/connections Pinia stores (other agents own
-// those), so this composable reaches the sidecar itself with minimal slices and a
-// browser-dev mock fallback. One round-trip per modal open via `load()`.
+// those), so this composable reaches the sidecar itself with minimal slices.
+// Without the bridge every list stays empty. One round-trip per modal open via
+// `load()`.
 
 export type WorkflowOption = {
   id: string
@@ -46,51 +47,11 @@ type ProjectDto = { id: string; name: string; path: string }
 // Source list slice (ADR 0060 `source.list`) — only the fields the modal binds.
 type SourceDto = { id: string; name: string; enabled?: boolean }
 
-function mockWorkflows(): WorkflowOption[] {
-  return [
-    {
-      id: 'wf-dev',
-      name: 'developer',
-      description: 'Single developer node — implement + commit.',
-      source: 'global',
-      nodes: [
-        { id: 'n1', agentId: 'developer', agentName: 'developer', skillId: 'implement-feature' },
-      ],
-      edges: [],
-    },
-    {
-      id: 'wf-tl-dev-qa',
-      name: 'tech-lead → developer → qa',
-      description: 'Plan, implement, then verify.',
-      source: 'global',
-      nodes: [
-        { id: 'n1', agentId: 'tech-lead', agentName: 'tech-lead', skillId: 'write-adr' },
-        {
-          id: 'n2',
-          agentId: 'developer',
-          agentName: 'developer',
-          skillId: 'implement-feature',
-          approval: true,
-        },
-        { id: 'n3', agentId: 'qa-tester', agentName: 'qa-tester', skillId: 'write-test-cases' },
-      ],
-      edges: [
-        { from: 'n1', to: 'n2' },
-        { from: 'n2', to: 'n3' },
-      ],
-    },
-  ]
-}
-
-function mockProjects(): ProjectOption[] {
-  return [{ id: 'awog', name: 'awog', path: '/Users/dev/awog' }]
-}
-
 export function useNewTaskData() {
   const sc = useSidecar()
 
-  const workflows = ref<WorkflowOption[]>(sc.available ? [] : mockWorkflows())
-  const projects = ref<ProjectOption[]>(sc.available ? [] : mockProjects())
+  const workflows = ref<WorkflowOption[]>([])
+  const projects = ref<ProjectOption[]>([])
   const connections = ref<ConnectionOption[]>([])
   const loading = ref(false)
 

@@ -37,15 +37,6 @@ export type DashboardUsage = {
 
 const USAGE_REFRESH_MS = 45_000
 
-function mockUsage(): DashboardUsage {
-  return {
-    today: 2_400_000,
-    yesterday: 2_030_000,
-    buckets: [22, 38, 18, 46, 60, 34, 72, 88, 50, 64, 95, 40],
-    ratePerMin: 14_000,
-  }
-}
-
 export function useHomeDashboard() {
   const sc = useSidecar()
   const { t } = useI18n()
@@ -128,14 +119,12 @@ export function useHomeDashboard() {
   )
 
   // ── Usage metric (dashboard.usage) ──
-  const usage = ref<DashboardUsage>(sc.available ? emptyUsage() : mockUsage())
+  const usage = ref<DashboardUsage>(emptyUsage())
   let usageTimer: ReturnType<typeof setInterval> | null = null
 
   async function fetchUsage(): Promise<void> {
-    if (!sc.available) {
-      usage.value = mockUsage()
-      return
-    }
+    // Real counters only — a sample sparkline reads as the user's own usage.
+    if (!sc.available) return
     try {
       const res = await sc.request<DashboardUsage>('dashboard.usage')
       usage.value = {

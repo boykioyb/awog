@@ -48,6 +48,14 @@ import { buildApiSdkServers } from './api-sdk-server.js'
 import { buildSourceToolsSdkServer } from './source-sdk-server.js'
 import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
 import { listHosts } from '../../ssh/store.js'
+import {
+  registerExternalBackground,
+  settleExternalBackground,
+  settleAllExternalBackground,
+  setExternalKiller,
+  clearExternalKiller,
+} from '../../sessions/bg-registry.js'
+import { readTaskOutputTail } from './task-output.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   BACKGROUND_TURN_PROMPT,
@@ -71,6 +79,32 @@ const DEFAULT_BACKGROUND_WAIT_MS = 15 * 60_000
 // model within it (ambient tasks are skipped, a failed one may produce no
 // continuation), end the turn rather than sit until the cap. Any message cancels it.
 const BACKGROUND_GRACE_MS = 45_000
+
+// The CLI's task_type vocabulary, VERBATIM (`system/background_tasks_changed` +
+// `task_started`): `local_bash` = Bash(run_in_background), `local_agent` = a Task
+// subagent, `local_workflow` = a Workflow run. These are the three kinds the user
+// is actually waiting on, so they — and only they — park the turn.
+//
+// Getting a name wrong here is NOT cosmetic. With waitingCount() stuck at 0 we
+// close the CLI's stdin on `result` while background work is still live, and that
+// stdin is also the control stream carrying PreToolUse hook callbacks: every later
+// tool call of the turn comes back as `toolDenialKind: 'cancelled'` with the CLI's
+// canned "The user doesn't want to take this action right now…" text, so the
+// subagent reports a phantom "temporary system error" instead of its findings and
+// the woken main agent loses its tools too. Verified against CLI 2.1.218.
+const WAITABLE_TASK_TYPES = new Set(['local_bash', 'local_agent', 'local_workflow'])
+// Known types we deliberately don't wait for: ambient/housekeeping work the CLI
+// runs on its own, and work whose lifetime is not the turn's. Listed so an actually
+// unknown type stands out in the log instead of hiding in this crowd.
+const AMBIENT_TASK_TYPES = new Set([
+  'monitor_ws',
+  'monitor_mcp',
+  'mcp_task',
+  'dream',
+  'auto_mode_scan',
+  'remote_agent',
+  'in_process_teammate',
+])
 
 // Plan-mode nudge (mirrors the Pi path). The gate blocks all writes/exec in plan
 // mode, so tell the model to investigate read-only then present its plan via the
@@ -498,6 +532,9 @@ export async function runStreamClaude(
           },
         }
       : {}),
+    // Let a finished background shell show its captured output in the transcript
+    // instead of a bare "completed" (task-output.ts validates the path).
+    readTaskOutput: readTaskOutputTail,
   })
   // ── Background work: keep the CLI session alive until it settles ────────────
   //
@@ -512,16 +549,28 @@ export async function runStreamClaude(
   // doesn't emit the level. The set starts empty because this query owns a fresh
   // CLI process.
   // id → task_type. We only PARK the turn for work the user is actually waiting on
-  // (a subagent, a shell, a workflow). Ambient/housekeeping tasks the CLI runs on
-  // its own ('monitor', anything unknown) must never hold a turn open — that would
-  // add the wait to EVERY turn. Unknown types therefore degrade to the old
-  // behaviour (end the turn) rather than to a hang.
+  // (a background shell, a subagent, a workflow). Ambient/housekeeping tasks the CLI
+  // runs on its own (monitor/dream/scan) must never hold a turn open — that would
+  // add the wait to EVERY turn — and neither must work that outlives the turn by
+  // design (a remote agent, a teammate).
   const liveBackground = new Map<string, string>()
-  const WAITABLE_TASK_TYPES = new Set(['subagent', 'shell', 'workflow', 'agent', 'bash'])
   const waitingCount = (): number => {
     let n = 0
     for (const type of liveBackground.values()) if (WAITABLE_TASK_TYPES.has(type)) n += 1
     return n
+  }
+  // Unknown types are reported once per turn: they mean the CLI's task vocabulary
+  // moved and this list needs updating — a silent miss is expensive (see the
+  // WAITABLE_TASK_TYPES comment).
+  const unknownTypesSeen = new Set<string>()
+  const noteTaskType = (type: string): void => {
+    if (WAITABLE_TASK_TYPES.has(type) || AMBIENT_TASK_TYPES.has(type)) return
+    if (unknownTypesSeen.has(type)) return
+    unknownTypesSeen.add(type)
+    log.warn('claude-sdk: unknown background task_type — turn will NOT wait for it', {
+      sessionId: args.sessionId,
+      taskType: type,
+    })
   }
   let closed = false
   // Parked = the turn's result already arrived and we are only still here for
@@ -558,29 +607,75 @@ export async function runStreamClaude(
   const onAbort = (): void => closeInput('aborted')
   args.abortController?.signal.addEventListener('abort', onAbort, { once: true })
 
+  // Mirror the CLI's background work into AWOG's bg registry so the session shows
+  // the SAME chips as the Pi path (docs/features/session-background-tasks.md).
+  // Registration follows the LEVEL signal, not task_started: only a task the CLI
+  // itself calls background belongs on a chip — a foreground subagent is already
+  // in the transcript. Settling follows the notification edge (it carries status).
+  const mirrorSessionId = args.sessionId
   const trackBackground = (msg: SDKMessage): void => {
     if (msg.type !== 'system') return
     const m = msg as {
       subtype?: string
-      tasks?: { task_id: string; task_type?: string }[]
+      tasks?: { task_id: string; task_type?: string; description?: string }[]
       task_id?: string
+      tool_use_id?: string
       task_type?: string
       subagent_type?: string
+      description?: string
+      status?: string
+      summary?: string
       state?: string
     }
     switch (m.subtype) {
       case 'background_tasks_changed':
         liveBackground.clear()
-        for (const t of m.tasks ?? []) liveBackground.set(t.task_id, t.task_type ?? 'unknown')
-        break
-      case 'task_started':
-        // A Task-tool subagent may arrive without task_type; subagent_type says it.
-        if (m.task_id) {
-          liveBackground.set(m.task_id, m.task_type ?? (m.subagent_type ? 'subagent' : 'unknown'))
+        for (const t of m.tasks ?? []) {
+          const type = t.task_type ?? 'unknown'
+          liveBackground.set(t.task_id, type)
+          noteTaskType(type)
+          // This level signal is the ONLY place background and foreground work differ
+          // (a foreground subagent emits the same task_* bookends) — the adapter needs
+          // it to label the row honestly.
+          adapter.markBackgroundTask(t.task_id)
+          if (mirrorSessionId && WAITABLE_TASK_TYPES.has(type)) {
+            registerExternalBackground({
+              sessionId: mirrorSessionId,
+              shellId: t.task_id,
+              command: t.description || type,
+            })
+          }
         }
         break
+      case 'task_started': {
+        // A Task-tool subagent may arrive without task_type; subagent_type says it.
+        if (m.task_id) {
+          const type = m.task_type ?? (m.subagent_type ? 'local_agent' : 'unknown')
+          liveBackground.set(m.task_id, type)
+          noteTaskType(type)
+          // A shell has no progress events — remember which tool_use announced it so
+          // we can pick its output path out of the matching tool_result.
+          if (type === 'local_bash' && m.tool_use_id) {
+            shellTaskByToolUse.set(m.tool_use_id, m.task_id)
+          }
+        }
+        break
+      }
       case 'task_notification':
-        if (m.task_id) liveBackground.delete(m.task_id)
+        if (m.task_id) {
+          liveBackground.delete(m.task_id)
+          if (mirrorSessionId) {
+            // 'completed' | 'failed' | 'stopped' — map onto the shell vocabulary
+            // the chips already speak (exit 0 / exit 1 / interrupted).
+            settleExternalBackground({
+              sessionId: mirrorSessionId,
+              shellId: m.task_id,
+              status: m.status === 'stopped' ? 'exited-unknown' : 'exited',
+              exitCode: m.status === 'completed' ? 0 : m.status === 'failed' ? 1 : null,
+              ...(m.summary !== undefined ? { summary: m.summary } : {}),
+            })
+          }
+        }
         break
       case 'session_state_changed':
         // Authoritative turn-over signal: fires once the held-back result has
@@ -592,8 +687,92 @@ export async function runStreamClaude(
     }
   }
 
+  // ── Live output for a background SHELL ──────────────────────────────────────
+  //
+  // The CLI emits `task_progress` for a subagent but NOTHING for a shell, so a long
+  // `pytest` would sit in the transcript as a bare "running" row for minutes and only
+  // reveal its output once it exits. The output file is named in the backgrounded
+  // Bash tool_result ("Output is being written to: …"), so we poll its tail while the
+  // task is live and push it into that row. Cheap by construction: one stat+read per
+  // live shell every few seconds, and the adapter drops an unchanged tail instead of
+  // re-emitting the step.
+  const OUTPUT_POLL_MS = 5_000
+  // Stop polling a path that keeps failing to read (deleted file, rejected path)
+  // instead of warning about it forever.
+  const OUTPUT_POLL_MAX_MISSES = 3
+  const shellTaskByToolUse = new Map<string, string>()
+  const bgOutputFiles = new Map<string, { file: string; misses: number }>()
+  let outputPoll: NodeJS.Timeout | undefined
+  const stopOutputPoll = (): void => {
+    if (!outputPoll) return
+    clearInterval(outputPoll)
+    outputPoll = undefined
+  }
+  const startOutputPoll = (): void => {
+    if (outputPoll || closed) return
+    outputPoll = setInterval(() => {
+      // Input closed → the turn is wrapping up; the row settles from the
+      // notification (or the turn-end sweep), not from another poll.
+      if (closed) {
+        stopOutputPoll()
+        return
+      }
+      for (const [taskId, entry] of bgOutputFiles) {
+        if (!liveBackground.has(taskId)) {
+          bgOutputFiles.delete(taskId)
+          continue
+        }
+        const tail = readTaskOutputTail(entry.file, taskId)
+        if (tail === undefined) {
+          entry.misses += 1
+          if (entry.misses >= OUTPUT_POLL_MAX_MISSES) bgOutputFiles.delete(taskId)
+          continue
+        }
+        entry.misses = 0
+        adapter.updateBackgroundOutput(taskId, tail)
+      }
+      if (bgOutputFiles.size === 0) stopOutputPoll()
+    }, OUTPUT_POLL_MS)
+    // A poll must never be the reason this process stays alive.
+    outputPoll.unref()
+  }
+  // Learn a backgrounded shell's output path from the tool_result that announced it.
+  const trackShellOutputPath = (msg: SDKMessage): void => {
+    if (msg.type !== 'user' || shellTaskByToolUse.size === 0) return
+    const content = (msg as { message?: { content?: unknown } }).message?.content
+    if (!Array.isArray(content)) return
+    for (const raw of content) {
+      const block = raw as { type?: string; tool_use_id?: string; content?: unknown }
+      if (block.type !== 'tool_result' || typeof block.tool_use_id !== 'string') continue
+      const taskId = shellTaskByToolUse.get(block.tool_use_id)
+      if (!taskId) continue
+      shellTaskByToolUse.delete(block.tool_use_id)
+      const text =
+        typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? '')
+      const file = /(\/[^\s"']+\.output)/.exec(text)?.[1]
+      if (!file) continue
+      bgOutputFiles.set(taskId, { file, misses: 0 })
+      startOutputPoll()
+    }
+  }
+
+  const q = query({ prompt: prompt.stream, options })
+  // Stop affordance parity with the Pi path: a chip's stop button goes through
+  // sessions.backgroundKill → the registry → here, since only the CLI can stop
+  // a task it owns.
+  if (mirrorSessionId) {
+    setExternalKiller(mirrorSessionId, (taskId) => {
+      void q.stopTask(taskId).catch((err: unknown) => {
+        log.warn('claude-sdk stopTask failed', {
+          taskId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      })
+    })
+  }
+
   try {
-    for await (const msg of query({ prompt: prompt.stream, options })) {
+    for await (const msg of q) {
       // Any message is activity: the CLI is alive and working, so a pending
       // "settled but nothing followed" grace window no longer applies.
       if (graceTimer) {
@@ -602,6 +781,7 @@ export async function runStreamClaude(
       }
       adapter.handle(msg)
       trackBackground(msg)
+      trackShellOutputPath(msg)
       if (msg.type === 'result') {
         const waiting = waitingCount()
         if (waiting === 0) closeInput('turn complete')
@@ -623,7 +803,16 @@ export async function runStreamClaude(
     // Never leave the generator parked (it would keep the CLI process alive) or a
     // timer pending, whichever way this turn ended.
     closeInput('turn ended')
+    stopOutputPoll()
     args.abortController?.signal.removeEventListener('abort', onAbort)
+    // The CLI process dies with the turn, so any task still mirrored as running
+    // is gone with it — settle the chips (and their transcript rows) instead of
+    // wedging them on 'running'.
+    for (const taskId of liveBackground.keys()) adapter.settleBackgroundRow(taskId)
+    if (mirrorSessionId) {
+      clearExternalKiller(mirrorSessionId)
+      settleAllExternalBackground(mirrorSessionId)
+    }
   }
 
   // A mid-stream abort surfaces as CANCELED so send-message routes it through the

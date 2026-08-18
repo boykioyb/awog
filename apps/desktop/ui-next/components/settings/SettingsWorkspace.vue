@@ -32,7 +32,9 @@
       </span>
     </SettingsField>
 
-    <!-- TODO: config-import from .claude / .agents — needs an fs.scan flow (out of scope). -->
+    <!-- Config import from .claude / .agents lives on each library page's toolbar
+         (Agents / Skills / Commands / Rules) — one picker per kind, sweeping the
+         global tier and every project at once (ADR 0035). -->
 
     <SettingsField
       v-if="sidecar.available"
@@ -58,10 +60,9 @@
 //   - Workspace path: READ-ONLY. The sidecar always uses os.homedir()/.awog as
 //     its home root (see sidecar util/path.ts `awogHome()`); there is no safe
 //     runtime remap, so an editable field would only mislead. We surface the
-//     actual root the sidecar uses and offer copy instead. NOTE for follow-up:
-//     to display this with zero hardcoded default, the sidecar would need to
-//     expose awogHome over RPC (e.g. an `app.paths`/extended getAppInfo) — not
-//     done here to keep this change inside the UI domain.
+//     actual root and offer copy instead — resolved from the shell via
+//     `app:info` (settings.hydrateAppPaths), so it is right on every machine
+//     rather than a baked-in default.
 //   - Git versioning: informational read-only status (auto-commit is always on).
 //   - Diagnostics: toggles an inline log tail (SettingsLogTail) that streams the
 //     app log file into a terminal-style view (Electron only).
@@ -70,9 +71,10 @@ const { t } = useI18n()
 const settings = useSettingsStore()
 const sidecar = useSidecar()
 
-// The workspace root the sidecar actually uses. Read-only display; the store
-// value matches the sidecar's awogHome (~/.awog) and persists across reloads.
+// The workspace root the sidecar actually uses. Read-only display; the store value
+// is filled from the shell's app:info (= the sidecar's awogHome) on mount.
 const workspaceRoot = computed(() => settings.workspacePath)
+onMounted(() => void settings.hydrateAppPaths())
 
 const copied = ref(false)
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null

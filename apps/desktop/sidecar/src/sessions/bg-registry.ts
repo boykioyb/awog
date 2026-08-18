@@ -67,6 +67,10 @@ export interface BgShellState {
   startedAt: string
   status: BgShellStatus
   exitCode: number | null
+  // The model has consumed this shell's result (a `BashOutput` read, or the
+  // runtime delivered it in-band). The UI hides a finished, read, successful
+  // chip — a failed one stays visible.
+  read: boolean
 }
 
 // Live handle for a running (or just-finalized) shell, kept only in memory.
@@ -77,11 +81,19 @@ interface LiveShell {
   child?: ChildProcess | undefined
   poll?: ReturnType<typeof setInterval> | undefined
   settled: boolean
+  read: boolean
+  // Runtime-owned (Claude SDK path): AWOG mirrors a task the CLI runs inside its
+  // own process. No pid, no log file, no poll — kill routes back to the runtime.
+  external?: boolean
 }
 
 // sessionId → shellId → LiveShell. Exited shells stay here (for listBackground)
 // until the session is cleaned up or the process restarts.
 const registry = new Map<string, Map<string, LiveShell>>()
+
+// sessionId → "stop this task" callback, installed by a runtime that owns its own
+// background work (Claude SDK path). Lives only while that runtime's turn runs.
+const externalKillers = new Map<string, (shellId: string) => void>()
 
 // ─── Paths ────────────────────────────────────────────────────────────────
 
@@ -146,11 +158,13 @@ function readOutput(dir: string): string {
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 // Count RUNNING shells for a session (exited ones don't count against the cap).
+// External (runtime-owned) tasks are mirrored for display only — the cap governs
+// what THIS process spawns, so they don't count.
 export function countRunning(sessionId: string): number {
   const m = registry.get(sessionId)
   if (!m) return 0
   let n = 0
-  for (const s of m.values()) if (s.status === 'running') n += 1
+  for (const s of m.values()) if (s.status === 'running' && !s.external) n += 1
   return n
 }
 
@@ -211,7 +225,14 @@ export async function startBackground(input: {
   const meta: BgShellMeta = { shellId, command, pid: child.pid ?? -1, startedAt, sessionId }
   writeFileSync(metaPathFor(dir), JSON.stringify(meta, null, 2))
 
-  const state: LiveShell = { meta, status: 'running', exitCode: null, child, settled: false }
+  const state: LiveShell = {
+    meta,
+    status: 'running',
+    exitCode: null,
+    child,
+    settled: false,
+    read: false,
+  }
   let byId = registry.get(sessionId)
   if (!byId) {
     byId = new Map()
@@ -279,6 +300,9 @@ function finalize(state: LiveShell, forced?: BgShellStatus): void {
     status,
     exitCode,
     outputTail,
+    read: state.read,
+    // The renderer owns the wake on this path (it drives every session turn).
+    wake: true,
   })
   log.info('bg-registry: done', { shellId: state.meta.shellId, status, exitCode })
 }
@@ -312,7 +336,21 @@ export function readBackground(sessionId: string, shellId: string): BackgroundRe
     status = 'running'
     exitCode = null
   }
+  // Reading a FINISHED shell is what retires its chip: the model now has the
+  // result, so the UI can stop showing a successful one. A still-running read is
+  // just a progress poll — it retires nothing.
+  if (state && status !== 'running') markRead(state)
   return { shellId, status, exitCode, output: readOutput(dir) }
+}
+
+// Flag a shell as consumed by the model and tell the UI (idempotent).
+function markRead(state: LiveShell): void {
+  if (state.read) return
+  state.read = true
+  emit('session.background-read', {
+    sessionId: state.meta.sessionId,
+    shellId: state.meta.shellId,
+  })
 }
 
 // List a session's background shells (running + finalized) for the UI.
@@ -325,6 +363,7 @@ export function listBackground(sessionId: string): BgShellState[] {
     startedAt: s.meta.startedAt,
     status: s.status,
     exitCode: s.exitCode,
+    read: s.read,
   }))
 }
 
@@ -332,6 +371,14 @@ export function listBackground(sessionId: string): BgShellState[] {
 export function killBackground(sessionId: string, shellId: string): boolean {
   const state = registry.get(sessionId)?.get(shellId)
   if (!state) return false
+  // Runtime-owned task: we don't hold its pid — ask the runtime that does. It
+  // answers with its own settle (or the turn-end sweep does).
+  if (state.external) {
+    const kill = externalKillers.get(sessionId)
+    if (!kill) return false
+    if (state.status === 'running') kill(shellId)
+    return true
+  }
   if (state.status === 'running' && state.meta.pid > 0) {
     try {
       // Negative pid → kill the detached process group.
@@ -347,9 +394,106 @@ export function killBackground(sessionId: string, shellId: string): boolean {
   return true
 }
 
+// ─── External (runtime-owned) tasks ───────────────────────────────────────
+//
+// The Claude SDK path runs its background work INSIDE the CLI process (a shell it
+// backgrounds, a Task subagent) — AWOG owns neither the pid nor a log file, so
+// none of the machinery above applies. We still mirror those tasks here so the UI
+// reads ONE list and renders the SAME chips whichever runtime a session is on;
+// only the lifetime differs (they die with the CLI process at turn end).
+
+// Install/remove the "stop this task" hook for a session's current runtime turn.
+export function setExternalKiller(sessionId: string, kill: (shellId: string) => void): void {
+  externalKillers.set(sessionId, kill)
+}
+export function clearExternalKiller(sessionId: string): void {
+  externalKillers.delete(sessionId)
+}
+
+// Mirror a runtime-owned task as a running background entry. Ignored when the id
+// is already known (the level signal that feeds this can repeat, and a settled
+// task must never flip back to running).
+export function registerExternalBackground(input: {
+  sessionId: string
+  shellId: string
+  command: string
+}): void {
+  const { sessionId, shellId, command } = input
+  let byId = registry.get(sessionId)
+  if (!byId) {
+    byId = new Map()
+    registry.set(sessionId, byId)
+  }
+  if (byId.has(shellId)) return
+
+  const startedAt = new Date().toISOString()
+  byId.set(shellId, {
+    meta: { shellId, command, pid: -1, startedAt, sessionId },
+    status: 'running',
+    exitCode: null,
+    settled: false,
+    read: false,
+    external: true,
+  })
+  emit('session.background-started', { sessionId, shellId, command, startedAt })
+}
+
+// Settle a runtime-owned task. `read` is true because the runtime hands the result
+// to the model itself, and `wake` false because it also resumes the turn — the
+// renderer must not fire a second continuation.
+export function settleExternalBackground(input: {
+  sessionId: string
+  shellId: string
+  status: BgShellStatus
+  exitCode: number | null
+  summary?: string
+}): void {
+  const state = registry.get(input.sessionId)?.get(input.shellId)
+  if (!state || !state.external || state.settled) return
+  state.settled = true
+  state.status = input.status
+  state.exitCode = input.exitCode
+  state.read = true
+  emit('session.background-done', {
+    sessionId: input.sessionId,
+    shellId: input.shellId,
+    command: state.meta.command,
+    status: input.status,
+    exitCode: input.exitCode,
+    outputTail: input.summary ?? '',
+    read: true,
+    wake: false,
+  })
+  // Nothing can be read back from a finished external task (no log file), so a
+  // successful one has no reason to stay: drop it instead of growing the list by
+  // one entry per subagent for the whole session. A failed one stays listable —
+  // its chip does too.
+  if (input.status === 'exited' && input.exitCode === 0) {
+    registry.get(input.sessionId)?.delete(input.shellId)
+  }
+}
+
+// Settle every still-running external task of a session — the owning runtime turn
+// ended, so nothing of its can still be alive.
+export function settleAllExternalBackground(sessionId: string): void {
+  const m = registry.get(sessionId)
+  if (!m) return
+  for (const s of m.values()) {
+    if (s.external && !s.settled) {
+      settleExternalBackground({
+        sessionId,
+        shellId: s.meta.shellId,
+        status: 'exited-unknown',
+        exitCode: null,
+      })
+    }
+  }
+}
+
 // Remove a session's background shells + their on-disk dir. Called when a session
 // is deleted.
 export function cleanupSessionBackground(sessionId: string): void {
+  externalKillers.delete(sessionId)
   const m = registry.get(sessionId)
   if (m) {
     for (const s of m.values()) {
@@ -442,6 +586,10 @@ export function reloadBackgroundShells(): void {
         status,
         exitCode: hasExit ? readExitCode(dir) : null,
         settled: status !== 'running',
+        // The read flag is in-memory only. A shell that finished in a PREVIOUS
+        // process already had its chance to be read/woken there, so adopt it as
+        // read — otherwise every restart resurrects the chips of the last day.
+        read: status !== 'running',
       }
       let byId = registry.get(sessionId)
       if (!byId) {

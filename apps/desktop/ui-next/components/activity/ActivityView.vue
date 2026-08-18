@@ -301,7 +301,7 @@ const { closeActivity } = useActivityModal()
 
 // Click a session title → open it on the Sessions page and dismiss the Activity
 // modal. Only close on success (openSession returns false for a deleted session
-// or the browser-dev mock rows, which have no real engineId to resolve).
+// or a row with no real engineId to resolve).
 async function goToSession(engineId: string): Promise<void> {
   const ok = await openSession(engineId)
   if (ok) closeActivity()

@@ -11,7 +11,13 @@ type EngineEvent = { type: string; payload: unknown }
 type DialogOpts = { title?: string; defaultPath?: string }
 type FileFilter = { name: string; extensions: string[] }
 type SavePathOpts = DialogOpts & { filters?: FileFilter[] }
-type AppInfo = { version: string; isPackaged: boolean; canAutoInstall: boolean }
+type AppInfo = {
+  version: string
+  isPackaged: boolean
+  canAutoInstall: boolean
+  // Absolute path of the sidecar's config root (os.homedir()/.awog).
+  awogHome: string
+}
 type UpdateEvent =
   | { type: 'checking' }
   | { type: 'available'; version: string }

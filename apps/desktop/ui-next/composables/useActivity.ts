@@ -5,9 +5,10 @@
 // through useSidecar; no fs/SDK access. The Activity modal (ActivityView.vue)
 // stays a thin template binding this composable's refs.
 //
-// Compile-time decoupled from the sidecar: when the Electron bridge is absent
-// (browser-dev) or the `activity.summary` method is not yet implemented, it
-// falls back to a deterministic mock so the page renders without breaking.
+// Compile-time decoupled from the sidecar: when the Electron bridge is absent or
+// `activity.summary` fails, the summary stays EMPTY and the error surfaces. Usage
+// and cost figures are never synthesized — a sample number here reads as the
+// user's own spend.
 import { computed, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useAccounts } from '~/composables/useAccounts'
@@ -164,159 +165,6 @@ function emptySummary(range: ActivityRange): ActivitySummary {
   }
 }
 
-// Deterministic browser-dev seed so the page renders fully off-shell. The day
-// buckets follow a gentle wave; per-model/per-account splits are stable.
-function mockSummary(range: ActivityRange): ActivitySummary {
-  const dayCount = range === '1d' ? 1 : range === '7d' ? 7 : range === '30d' ? 30 : 30
-  const today = new Date()
-  const byDay: ActivityByDay[] = []
-  for (let i = dayCount - 1; i >= 0; i -= 1) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i)
-    const wave = 0.55 + 0.45 * Math.sin((i / Math.max(dayCount, 1)) * Math.PI * 2)
-    byDay.push({
-      date: d.toISOString().slice(0, 10),
-      totalTokens: Math.round(180_000 * wave),
-      costUsd: Number((2.4 * wave).toFixed(4)),
-    })
-  }
-  const totalTokens = byDay.reduce((s, d) => s + d.totalTokens, 0)
-  const costUsd = Number(byDay.reduce((s, d) => s + d.costUsd, 0).toFixed(4))
-  const turns = dayCount * 18
-  // Spread a mock session's totals over the last `days` buckets so the row
-  // drill-down renders off-shell too.
-  const mockDays = (tok: number, cost: number, t: number, days: number): ActivitySessionDay[] => {
-    const picked = byDay.slice(-Math.min(days, byDay.length))
-    const n = Math.max(picked.length, 1)
-    return picked.map((d) => ({
-      date: d.date,
-      totalTokens: Math.round(tok / n),
-      costUsd: Number((cost / n).toFixed(4)),
-      turns: Math.round(t / n),
-    }))
-  }
-  return {
-    range,
-    from: byDay[0]?.date ?? today.toISOString(),
-    to: byDay[byDay.length - 1]?.date ?? today.toISOString(),
-    totals: {
-      inputTokens: Math.round(totalTokens * 0.18),
-      outputTokens: Math.round(totalTokens * 0.12),
-      cacheReadTokens: Math.round(totalTokens * 0.62),
-      cacheWriteTokens: Math.round(totalTokens * 0.08),
-      totalTokens,
-      costUsd,
-      turns,
-    },
-    byModel: [
-      {
-        model: 'claude-opus-5',
-        provider: 'Anthropic',
-        inputTokens: Math.round(totalTokens * 0.1),
-        outputTokens: Math.round(totalTokens * 0.08),
-        cacheReadTokens: Math.round(totalTokens * 0.4),
-        cacheWriteTokens: Math.round(totalTokens * 0.05),
-        totalTokens: Math.round(totalTokens * 0.63),
-        costUsd: Number((costUsd * 0.7).toFixed(4)),
-        turns: Math.round(turns * 0.6),
-      },
-      {
-        model: 'gpt-5-codex',
-        provider: 'OpenAI',
-        inputTokens: Math.round(totalTokens * 0.08),
-        outputTokens: Math.round(totalTokens * 0.04),
-        cacheReadTokens: Math.round(totalTokens * 0.22),
-        cacheWriteTokens: Math.round(totalTokens * 0.03),
-        totalTokens: Math.round(totalTokens * 0.37),
-        costUsd: Number((costUsd * 0.3).toFixed(4)),
-        turns: Math.round(turns * 0.4),
-      },
-    ],
-    byAccount: [
-      {
-        accountId: 'mock-anthropic',
-        label: 'Personal',
-        provider: 'Anthropic',
-        totalTokens: Math.round(totalTokens * 0.63),
-        costUsd: Number((costUsd * 0.7).toFixed(4)),
-        turns: Math.round(turns * 0.6),
-      },
-      {
-        accountId: 'mock-openai',
-        label: 'Codex',
-        provider: 'OpenAI',
-        totalTokens: Math.round(totalTokens * 0.37),
-        costUsd: Number((costUsd * 0.3).toFixed(4)),
-        turns: Math.round(turns * 0.4),
-      },
-    ],
-    bySession: [
-      {
-        sessionId: 'mock-s1',
-        title: 'Refactor Activity page',
-        provider: 'Anthropic',
-        model: 'claude-opus-5',
-        inputTokens: Math.round(totalTokens * 0.06),
-        outputTokens: Math.round(totalTokens * 0.04),
-        cacheReadTokens: Math.round(totalTokens * 0.22),
-        cacheWriteTokens: Math.round(totalTokens * 0.03),
-        totalTokens: Math.round(totalTokens * 0.35),
-        costUsd: Number((costUsd * 0.38).toFixed(4)),
-        turns: Math.round(turns * 0.34),
-        lastAt: byDay[byDay.length - 1]?.date ?? today.toISOString(),
-        byDay: mockDays(
-          Math.round(totalTokens * 0.35),
-          costUsd * 0.38,
-          Math.round(turns * 0.34),
-          3,
-        ),
-      },
-      {
-        sessionId: 'mock-s2',
-        title: 'Debug session switch lag',
-        provider: 'Anthropic',
-        model: 'claude-opus-5',
-        inputTokens: Math.round(totalTokens * 0.04),
-        outputTokens: Math.round(totalTokens * 0.03),
-        cacheReadTokens: Math.round(totalTokens * 0.15),
-        cacheWriteTokens: Math.round(totalTokens * 0.02),
-        totalTokens: Math.round(totalTokens * 0.24),
-        costUsd: Number((costUsd * 0.26).toFixed(4)),
-        turns: Math.round(turns * 0.28),
-        lastAt: byDay[byDay.length - 2]?.date ?? today.toISOString(),
-        byDay: mockDays(
-          Math.round(totalTokens * 0.24),
-          costUsd * 0.26,
-          Math.round(turns * 0.28),
-          2,
-        ),
-      },
-      {
-        sessionId: 'mock-s3',
-        title: 'Draft release notes',
-        provider: 'OpenAI',
-        model: 'gpt-5-codex',
-        inputTokens: Math.round(totalTokens * 0.02),
-        outputTokens: Math.round(totalTokens * 0.01),
-        cacheReadTokens: Math.round(totalTokens * 0.05),
-        cacheWriteTokens: Math.round(totalTokens * 0.01),
-        totalTokens: Math.round(totalTokens * 0.09),
-        costUsd: Number((costUsd * 0.08).toFixed(4)),
-        turns: Math.round(turns * 0.12),
-        lastAt: byDay[0]?.date ?? today.toISOString(),
-        byDay: mockDays(
-          Math.round(totalTokens * 0.09),
-          costUsd * 0.08,
-          Math.round(turns * 0.12),
-          1,
-        ),
-      },
-    ],
-    byDay,
-    missingPrices: range === 'all' ? ['gpt-5-codex'] : [],
-  }
-}
-
 // Defensive: the sidecar response is L1 (untrusted) — coerce numeric fields and
 // arrays into the expected shape rather than trusting it blindly.
 function normalize(raw: unknown, range: ActivityRange): ActivitySummary {
@@ -439,7 +287,7 @@ export function useActivity() {
   const sessionSort = ref<SessionSort>('most')
   // Session ids whose per-day drill-down is open in the by-session table.
   const expandedSessions = ref(new Set<string>())
-  const summary = ref<ActivitySummary>(sc.available ? emptySummary(range.value) : mockSummary('7d'))
+  const summary = ref<ActivitySummary>(emptySummary(range.value))
   const loading = ref(false)
   // True only until the very first summary lands. The cards show "…" during this
   // one; after that a range/filter switch keeps the previous numbers visible while
@@ -483,7 +331,6 @@ export function useActivity() {
   // was in flight (fast range flipping) so late arrivals never clobber the view.
   async function fetchSummary(force = false): Promise<void> {
     if (!sc.available) {
-      summary.value = mockSummary(range.value)
       initialLoad.value = false
       return
     }
@@ -512,10 +359,10 @@ export function useActivity() {
       if (norm) summary.value = norm
     } catch (err) {
       if (!selectionCurrent()) return
-      // Method not yet implemented (parallel work) or a transient failure: keep
-      // the page usable with the mock seed rather than an empty/broken screen.
+      // Transient failure or an unimplemented method: show the empty summary plus
+      // the error, never invented totals.
       console.warn('[activity] activity.summary failed', err)
-      summary.value = mockSummary(r)
+      summary.value = emptySummary(r)
       error.value = err instanceof Error ? err.message : 'Failed to load activity'
     } finally {
       if (selectionCurrent()) {

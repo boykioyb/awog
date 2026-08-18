@@ -184,7 +184,7 @@
 // Gate / status cards (blockHtml ~1466): plan, question (single/multi/answered),
 // permission, steer note, error. Wired to the sessions store: each action drives
 // the real store (which in turn talks to the sidecar in IPC mode, or mutates the
-// mock session locally). The DISPLAY is derived from `props.block` — the store's
+// no-bridge session locally). The DISPLAY is derived from `props.block` — the store's
 // own reactive object — via computeds, so the card never holds shadow status that
 // can diverge from the store. Only the per-question in-progress selection
 // (`forms` + the active tab) stays local UI working-state until "Submit" commits it.
@@ -215,7 +215,7 @@ const planStatus = computed<'pending' | 'approved'>(() =>
   props.block.kind === 'plan' ? (props.block.status ?? 'pending') : 'pending',
 )
 // Render the model's own markdown when present (headers/lists/bold survive);
-// fall back to the flattened items as a bullet list (mock data / legacy steps).
+// fall back to the flattened items as a bullet list (legacy steps).
 const planMarkdown = computed<string>(() => {
   if (props.block.kind !== 'plan') return ''
   if (props.block.markdown) return props.block.markdown

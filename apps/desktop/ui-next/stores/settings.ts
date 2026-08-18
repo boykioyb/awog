@@ -365,7 +365,11 @@ const DEFAULT_WORKSPACE_PANEL: WorkspacePanelLayout = {
   bottomHeight: 260,
 }
 
-const DEFAULT_WORKSPACE_PATH = '/Users/kyro/.awog'
+// No baked-in default: the real root is os.homedir()/.awog, which only the shell
+// knows. `hydrateAppPaths()` fills it from app:info; until then it stays empty and
+// the (single, read-only) consumer shows a placeholder instead of another user's
+// home directory.
+const DEFAULT_WORKSPACE_PATH = ''
 
 // --- persistence (single key; providers excluded — sidecar is their truth) ---
 const STORAGE_KEY = 'awog-settings-v1'
@@ -739,6 +743,19 @@ export const useSettingsStore = defineStore('settings', () => {
   const setWorkspacePath = (path: string) => {
     workspacePath.value = path
   }
+  // Adopt the shell's real config root (app:info → os.homedir()/.awog). Always
+  // overwrites: the sidecar's root is authoritative, so a value persisted on
+  // another machine (or from an older build with a baked-in path) must not win.
+  const hydrateAppPaths = async (): Promise<void> => {
+    const sidecar = useSidecar()
+    if (!sidecar.available) return
+    try {
+      const info = await sidecar.getAppInfo()
+      if (info.awogHome) workspacePath.value = info.awogHome
+    } catch (err) {
+      console.warn('[settings] hydrateAppPaths failed', err)
+    }
+  }
   // App-level default GitHub (gh CLI) account login. '' = follow gh's active
   // account. Per-project pickers inherit this unless they set an override.
   const setGithubAccount = (login: string) => {
@@ -807,6 +824,7 @@ export const useSettingsStore = defineStore('settings', () => {
     updatePet,
     updateTranslate,
     setWorkspacePath,
+    hydrateAppPaths,
     setGithubAccount,
     setWorkspaceDock,
     setWorkspaceLeftWidth,
