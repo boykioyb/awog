@@ -43,7 +43,8 @@ import type {
 import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../permission.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
-import { TODO_USAGE_PROMPT } from '../prompts.js'
+import { EVIDENCE_PROMPT, TODO_USAGE_PROMPT, VERIFY_PROMPT } from '../prompts.js'
+import { buildCurrentStateBlock, collectWorkspaceSnapshot } from '../../context/environment.js'
 import { isToolAllowed } from '../tools/index.js'
 import { updateSessionMetadata } from '../../sessions/store.js'
 import { createClaudeEventAdapter } from './event-adapter.js'
@@ -378,9 +379,25 @@ export async function runStreamClaude(
   // so a frozen append would never reach the model when plan is enabled after the
   // first turn. Re-sending it per turn matches the Pi path (which rebuilds its
   // append every turn).
-  const appendParts = [args.systemPrompt, args.systemPromptAppend, rulesPrompt].filter(
-    (p): p is string => typeof p === 'string' && p.length > 0,
-  )
+  // Verification + evidence contracts (ADR 0071). These two are the half of the
+  // senior-engineer stack the claude_code preset does NOT supply: it already
+  // carries engineering procedure and an output contract (so ENGINEERING_PROMPT /
+  // COMMUNICATION_PROMPT would only duplicate and risk contradicting it), but it
+  // does not mandate citing `file:line` for claims about the codebase, and AWOG's
+  // anti-fabrication rule was absent from this path entirely.
+  //
+  // Unlike style/plan/checklist above, these are CONSTANT — they never change
+  // mid-session — so the SDK freezing the append at session creation is harmless
+  // here and they belong in the cached system prompt rather than on every turn.
+  // (Consequence: sessions created before ADR 0071 keep the old behaviour until
+  // the user starts a new one; a resume cannot pick up a changed append.)
+  const appendParts = [
+    args.systemPrompt,
+    args.systemPromptAppend,
+    rulesPrompt,
+    VERIFY_PROMPT,
+    EVIDENCE_PROMPT,
+  ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
   // TodoWrite is an SDK built-in here (AWOG doesn't own the implementation, unlike
   // the Pi path), so the same allow/deny filter decides whether nudging is honest.
@@ -435,6 +452,15 @@ export async function runStreamClaude(
   // style change — see the buildStylePrompt note above). Only the AWOG user
   // message (params.text) is persisted to our transcript, so this SDK-only prompt
   // shaping never pollutes the visible session history.
+  // Volatile orientation (ADR 0071): date + branch + dirty tree + recent commits,
+  // rebuilt every turn. The CLI preset injects its own environment block, but it
+  // does so when the session is CREATED — across a resumed session that snapshot
+  // goes stale exactly like the frozen append. Re-sending it per turn keeps the
+  // model's view of the tree current, and matches the Pi path. Prepended before
+  // the style/checklist/plan directives below so it ends up adjacent to the
+  // user's actual text. Best-effort: a non-repo yields the date alone.
+  const workspaceSnapshot = await collectWorkspaceSnapshot(args.cwd)
+  promptText = `${buildCurrentStateBlock(workspaceSnapshot)}\n\n${promptText}`
   if (stylePrompt) promptText = `${stylePrompt}\n\n${promptText}`
   // Checklist (ADR 0069) + the TodoWrite nudge ride on the turn prompt for the
   // frozen-append reason above. Both MUST be re-sent every turn: the checklist

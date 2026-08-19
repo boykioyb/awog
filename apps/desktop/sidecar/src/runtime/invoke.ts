@@ -26,7 +26,15 @@ import { buildContext } from './context-builder.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
-import { TODO_USAGE_PROMPT, TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from './prompts.js'
+import {
+  COMMUNICATION_PROMPT,
+  ENGINEERING_PROMPT,
+  EVIDENCE_PROMPT,
+  TODO_USAGE_PROMPT,
+  TOOL_DISCIPLINE_PROMPT,
+  VERIFY_PROMPT,
+} from './prompts.js'
+import { buildOneShotContextBlock } from '../context/environment.js'
 import { CO_AUTHOR_INSTRUCTION } from '../git/co-author.js'
 import { toReasoning } from './thinking.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
@@ -42,7 +50,10 @@ function mapErrorToRpc(err: unknown): RpcError {
   if (name === 'AbortError' || lower.includes('aborted') || lower.includes('cancelled')) {
     return new RpcError(-32023, 'CANCELED')
   }
-  if (lower.includes('unauthor') || lower.includes('401') || lower.includes('authentication')) {
+  // `401` must match as a WHOLE token — a bare substring test also fires on an
+  // unrelated 4010/1401 in a request id, byte count or exit line, mislabelling
+  // a random failure as an expired login.
+  if (lower.includes('unauthor') || /\b401\b/.test(lower) || lower.includes('authentication')) {
     return new RpcError(-32020, 'AUTH_EXPIRED: re-authenticate via Settings')
   }
   if (lower.includes('rate limit') || lower.includes('429')) {
@@ -278,9 +289,22 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   // Tell the node agent — in-band — about any attached MCP server that failed to
   // load, so it doesn't call its absent tools or fabricate their results.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
+  // Orientation (ADR 0071): OS / shell / cwd / repo + date / branch / dirty tree /
+  // recent commits. A task node is a single one-shot request with no cached prefix
+  // to protect, so both halves go in the system prompt together (the chat path has
+  // to split them — see context/environment.ts).
+  const contextBlock = await buildOneShotContextBlock(args.cwd)
   const appendParts = [
+    contextBlock,
     args.systemPromptAppend,
     rulesPrompt,
+    // Senior-engineer scaffolding (ADR 0071): investigate before changing, match
+    // the codebase, cite file:line, verify before reporting done. Under OAuth Pi
+    // prepends only the one-sentence identity, so a node agent gets no
+    // engineering discipline unless we supply it.
+    ENGINEERING_PROMPT,
+    EVIDENCE_PROMPT,
+    COMMUNICATION_PROMPT,
     // Act through tools, don't narrate (see prompts.ts). Tasks are tool-driven.
     TOOL_DISCIPLINE_PROMPT,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.

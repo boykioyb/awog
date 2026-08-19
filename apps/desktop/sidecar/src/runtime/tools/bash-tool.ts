@@ -66,11 +66,22 @@ export function createBashTool(
   return {
     name: 'Bash',
     label: 'Run',
-    description: bg
-      ? 'Run a shell command in the workspace directory and capture its output. ' +
-        'Pass run_in_background:true for long-running commands (builds, test runs, dev servers) ' +
-        'to run detached and continue without blocking; poll with BashOutput.'
-      : 'Run a shell command in the workspace directory and capture its output.',
+    description: [
+      'Run a shell command in the workspace directory and capture its output.',
+      '',
+      '- Each call is a FRESH shell rooted at the workspace directory. `cd`, exported variables, and activated environments do NOT carry over to the next call — chain what must share state into one command (`cd sub && pnpm test`) or use absolute paths.',
+      '- Returns stdout and stderr merged, plus the exit code when it is non-zero. A non-zero exit is information, not a crash: read it and react rather than retrying blind.',
+      `- Output over ${MAX_OUTPUT_BYTES} bytes is truncated. Pipe through \`head\`/\`tail\`/\`grep\` when you expect a lot of it.`,
+      `- Timeout defaults to ${DEFAULT_TIMEOUT_MS}ms, capped at ${MAX_TIMEOUT_MS}ms.`,
+      '- The shell is `sh` on POSIX (git-bash, else cmd.exe, on Windows) — not guaranteed to be bash, so avoid bashisms like `[[ … ]]` and arrays unless you invoke bash explicitly.',
+      '- Prefer the purpose-built tool wherever one exists: Read/Write/Edit for files, Grep for searching contents, Glob for finding files by name. They are faster and their output is structured. Use the shell for builds, tests, git, and package managers.',
+      '- Quote paths that may contain spaces.',
+      ...(bg
+        ? [
+            '- For work that runs longer than a couple of minutes (builds, full test suites, dev servers), pass `run_in_background: true`. It returns a `shellId` immediately, is exempt from the timeout, and does not block you. Poll it with BashOutput and read the real output before you report anything about how it went.',
+          ]
+        : []),
+    ].join('\n'),
     parameters: BashParams,
     async execute(_id, params, signal): Promise<AgentToolResult<BashDetails>> {
       // Background branch (ADR 0066): only in a chat session. Spawns detached and

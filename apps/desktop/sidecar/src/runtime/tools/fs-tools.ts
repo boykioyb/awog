@@ -85,8 +85,15 @@ export function createReadTool(cwd: string): AgentTool<typeof ReadParams> {
   return {
     name: 'Read',
     label: 'Read',
-    description:
-      'Read a file from the workspace. Returns the contents with line numbers (cat -n style).',
+    description: [
+      'Read a file from the workspace. Returns the contents with line numbers (`cat -n` format, 1-indexed) — cite those numbers as `path:line` when you reference what you read.',
+      '',
+      '- `file_path` must resolve inside the working directory; absolute or workspace-relative.',
+      '- Pass `offset`/`limit` to read just the region you need instead of pulling a whole large file into context.',
+      `- Content beyond ${READ_MAX_BYTES} bytes is cut with a \`…(truncated)\` marker; a binary file returns a placeholder, not its bytes.`,
+      '- Read a file BEFORE you Edit it. Edit matches on the exact current text, and editing from an assumed rather than an observed file is the most common cause of a failed edit.',
+      '- Do NOT re-read a file to check that a Write or Edit landed. A failed write returns an error, so a call that succeeded quietly did what it said.',
+    ].join('\n'),
     parameters: ReadParams,
     async execute(_id, params): Promise<TextResult> {
       const abs = assertInsideWorkspace(cwd, params.file_path)
@@ -114,7 +121,13 @@ export function createWriteTool(cwd: string): AgentTool<typeof WriteParams> {
   return {
     name: 'Write',
     label: 'Write',
-    description: 'Create or overwrite a file with the given content.',
+    description: [
+      'Create a file, or overwrite an existing one, with exactly the content given. Missing parent directories are created.',
+      '',
+      '- This replaces the ENTIRE file: anything not present in `content` is gone. To change part of a file use Edit, which cannot silently drop the rest.',
+      '- Read an existing file before overwriting it, so you are replacing content you have actually seen rather than content you assume is there.',
+      `- Refuses a path that is a directory, a path outside the working directory, and content over ${WRITE_MAX_BYTES} bytes.`,
+    ].join('\n'),
     parameters: WriteParams,
     async execute(_id, params): Promise<TextResult> {
       const abs = assertInsideWorkspace(cwd, params.file_path)
@@ -170,8 +183,14 @@ export function createEditTool(cwd: string): AgentTool<typeof EditParams> {
   return {
     name: 'Edit',
     label: 'Edit',
-    description:
-      'Replace an exact string in a file. old_string must match verbatim and (unless replace_all) be unique.',
+    description: [
+      'Replace an exact string in a file. This is the default way to change existing code.',
+      '',
+      '- `old_string` must match the file byte-for-byte, including indentation. Strip the line-number prefix that Read adds before matching.',
+      '- `old_string` must be unique in the file unless `replace_all` is true. Include enough surrounding lines to make it unique rather than reaching for `replace_all`.',
+      '- Read the file first. An `old_string` reconstructed from memory or expectation will fail to match.',
+      '- When you have several changes to the SAME file, use MultiEdit so they apply atomically instead of one failing halfway through.',
+    ].join('\n'),
     parameters: EditParams,
     async execute(_id, params): Promise<TextResult> {
       const abs = assertInsideWorkspace(cwd, params.file_path)
@@ -214,8 +233,13 @@ export function createMultiEditTool(cwd: string): AgentTool<typeof MultiEditPara
   return {
     name: 'MultiEdit',
     label: 'Edit (multi)',
-    description:
-      'Apply multiple exact-string replacements to a single file in one atomic call. Edits run in order; each old_string must match verbatim and (unless replace_all) be unique at the time it is applied.',
+    description: [
+      'Apply several exact-string replacements to ONE file atomically. Edits run in order, each against the result of the previous one.',
+      '',
+      '- All edits are applied in memory first: if any `old_string` fails to match, NOTHING is written. Either the whole set lands or the file is left untouched.',
+      '- Same matching rules as Edit — verbatim match, unique unless `replace_all` — and order matters: write each later edit against the text as the earlier ones leave it.',
+      '- Prefer this over a run of Edit calls on one file. It is a single round trip and it cannot leave the file half-changed.',
+    ].join('\n'),
     parameters: MultiEditParams,
     async execute(_id, params): Promise<TextResult> {
       if (params.edits.length === 0) throw new Error('edits is empty — nothing to do')
@@ -299,7 +323,15 @@ export function createGrepTool(cwd: string): AgentTool<typeof GrepParams> {
   return {
     name: 'Grep',
     label: 'Grep',
-    description: 'Search file contents for a regular expression (powered by git grep).',
+    description: [
+      'Search file CONTENTS for a regular expression (powered by `git grep`). Use this to find code by what it says; use Glob to find files by name.',
+      '',
+      '- The pattern is POSIX extended regex (ERE), NOT PCRE: `\\d`, `\\w`, lookahead and lookbehind are unsupported. Use `[0-9]`, `[A-Za-z_]` and character classes instead.',
+      '- Results come back as `path:line:text`. Binary files are skipped.',
+      `- Capped at ${GREP_MAX_LINES} lines / ${GREP_MAX_OUTPUT_CHARS} chars, with long lines clamped. Narrow the pattern or scope rather than fighting the cap.`,
+      '- Dependency and build output is excluded by default (node_modules, .git, dist, build, .next, .nuxt, .output, vendor, *.min.js, *.min.css, *.map). Passing `glob` REPLACES those excludes with your own pattern — that is how you deliberately search inside them.',
+      '- Scope with `path` (a subdirectory) and/or `glob` (e.g. `*.ts`). A scoped search is faster and its output is readable.',
+    ].join('\n'),
     parameters: GrepParams,
     async execute(_id, params): Promise<TextResult> {
       // Validate optional subdir scope (defence-in-depth; git also rejects ../).
@@ -350,7 +382,14 @@ export function createGlobTool(cwd: string): AgentTool<typeof GlobParams> {
   return {
     name: 'Glob',
     label: 'Glob',
-    description: 'Find files by glob pattern (powered by git ls-files).',
+    description: [
+      'Find files by name or path pattern (powered by `git ls-files`). Use this to locate files; use Grep to search inside them.',
+      '',
+      '- Requires a git repository. Outside one it reports "Glob unavailable" instead of walking the filesystem.',
+      '- Lists tracked AND untracked files but respects .gitignore, so ignored paths (node_modules, build output) never appear. That is expected — not a missing file.',
+      '- Patterns are git pathspec globs: `**/*.ts`, `src/**/*.test.ts`. Scope with `path` to search one subdirectory.',
+      `- Capped at ${GLOB_MAX_FILES} files; narrow the pattern if you reach it.`,
+    ].join('\n'),
     parameters: GlobParams,
     async execute(_id, params): Promise<TextResult> {
       if (params.path) assertInsideWorkspace(cwd, params.path)

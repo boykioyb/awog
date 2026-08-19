@@ -30,11 +30,19 @@ import type { TodoItem } from '../types/shared.js'
 import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
 import { buildContext, historyToAgentMessages } from './context-builder.js'
+import {
+  buildCurrentStateBlock,
+  buildEnvironmentBlock,
+  collectWorkspaceSnapshot,
+} from '../context/environment.js'
 import { computeCutPoint } from './compaction.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import {
   BACKGROUND_EXEC_PROMPT,
+  COMMUNICATION_PROMPT,
+  ENGINEERING_PROMPT,
+  EVIDENCE_PROMPT,
   fileRefPrompt,
   TODO_USAGE_PROMPT,
   TOOL_DISCIPLINE_PROMPT,
@@ -72,7 +80,10 @@ function mapErrorToRpc(err: unknown): RpcError {
   if (name === 'AbortError' || lower.includes('aborted') || lower.includes('cancelled')) {
     return new RpcError(-32023, 'CANCELED')
   }
-  if (lower.includes('unauthor') || lower.includes('401') || lower.includes('authentication')) {
+  // `401` must match as a WHOLE token — a bare substring test also fires on an
+  // unrelated 4010/1401 in a request id, byte count or exit line, mislabelling
+  // a random failure as an expired login.
+  if (lower.includes('unauthor') || /\b401\b/.test(lower) || lower.includes('authentication')) {
     return new RpcError(-32020, 'AUTH_EXPIRED: re-authenticate via Settings')
   }
   if (lower.includes('rate limit') || lower.includes('429')) {
@@ -172,6 +183,10 @@ export async function runStreamPi(
   // Workspace rules (ADR 0033): enabled global + session-project rules, appended
   // to (not replacing) the agent's own prompt.
   const rulesPrompt = await buildRulesPrompt(args.projectId, extractTurnPaths(args.pendingText))
+  // One git read per turn feeding BOTH orientation blocks (ADR 0071): the stable
+  // half goes in the system prompt, the volatile half on the turn prompt.
+  // Best-effort — a non-repo or a git failure yields undefined, never an error.
+  const workspaceSnapshot = await collectWorkspaceSnapshot(args.cwd)
   // Response style (ADR 0046, sessions only): user-picked tone/format directive,
   // appended after rules (rules outrank style semantically) and before VERIFY.
   const stylePrompt = buildStylePrompt(
@@ -181,9 +196,24 @@ export async function runStreamPi(
   // Tell the model — in-band — about any attached MCP server that failed to
   // load, so it doesn't call its absent tools or fabricate their results.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
+  // Orientation (ADR 0071): OS / shell / cwd / repo root. Leads the append so the
+  // model can interpret every path and shell instruction that follows it. Only
+  // the STABLE half goes here — the volatile git snapshot rides the turn prompt
+  // below, so this block stays byte-identical across a session and the provider's
+  // prompt cache keeps hitting.
+  const environmentBlock = buildEnvironmentBlock(args.cwd, workspaceSnapshot)
   const appendParts = [
+    environmentBlock,
     args.systemPromptAppend,
     rulesPrompt,
+    // Senior-engineer scaffolding (ADR 0071). Under OAuth, pi-ai prepends only the
+    // one-sentence Claude Code identity — no behavioural body — so unlike the
+    // claude_code preset path these have to come from us. Placed after the
+    // project's own instructions/rules (which outrank them) and before the
+    // response style, so a user-picked voice still lands last on tone.
+    ENGINEERING_PROMPT,
+    EVIDENCE_PROMPT,
+    COMMUNICATION_PROMPT,
     stylePrompt,
     // Act through tools, don't narrate (see prompts.ts). Off in plan mode —
     // PLAN_MODE_PROMPT governs that read-only path.
@@ -334,9 +364,17 @@ export async function runStreamPi(
     tools.push(...sshTools)
   }
 
+  // Volatile orientation (date + branch + dirty tree + recent commits) rides the
+  // TURN prompt, not the system prompt: it changes as the user works, and pi-ai
+  // marks the whole system prompt as ONE cache block, so putting it there would
+  // invalidate the session's entire cached prefix on nearly every turn. Only this
+  // turn carries it — history is replayed from JSONL (clean user text), so the
+  // block never accumulates across turns and never reaches the transcript.
+  const turnText = `${buildCurrentStateBlock(workspaceSnapshot)}\n\n${args.pendingText}`
+
   const { context, prompt } = buildContext(
     args.history,
-    args.pendingText,
+    turnText,
     args.systemPrompt,
     systemPromptAppend,
     tools,

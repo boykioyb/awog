@@ -36,6 +36,7 @@ import { listSkills } from '../skills/store.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { applyBearerScheme } from '../mcp/auth-headers.js'
 import { assertInsideWorkspace } from '../git/path-sanitize.js'
+import { loadMemoryFiles } from '../context/memory-files.js'
 import { SKIP_DIRS } from '../fs/skip-dirs.js'
 import { getEffectivePricing, cost as priceCost } from '../pricing/catalog.js'
 import { readFile as fsReadFile, readdir, stat } from 'node:fs/promises'
@@ -281,10 +282,6 @@ function toSessionAttachment(a: z.infer<typeof SessionAttachmentSchema>): Sessio
 //
 // Char counts are measured on the EXACT injected block text so the breakdown
 // matches what the model actually receives.
-const CONTEXT_FILE_NAMES = ['CLAUDE.md', 'AGENTS.md'] as const
-// Cap per memory file so a giant CLAUDE.md can't blow the prompt; the breakdown
-// reflects the truncated content actually injected.
-const MAX_MEMORY_FILE_CHARS = 64_000
 // Compact one-line description for the agent/skill catalogue (the model reads
 // name + intent, not the full body — it loads those on demand).
 function compactLine(name: string, description: string): string {
@@ -468,35 +465,24 @@ async function buildBulkLoad(
   }
   const blocks: string[] = []
 
-  // Memory files — read project-root CLAUDE.md / AGENTS.md (when a project is
-  // linked). Path is gated by assertInsideWorkspace (security invariant #2);
-  // missing files are skipped. No project → nothing to bulk-load here.
-  if (cwd) {
-    const fileBlocks: string[] = []
-    for (const name of CONTEXT_FILE_NAMES) {
-      let abs: string
-      try {
-        abs = assertInsideWorkspace(cwd, name)
-      } catch {
-        continue
-      }
-      let content: string
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        content = await fsReadFile(abs, 'utf8')
-      } catch {
-        continue // missing / unreadable → skip
-      }
-      const trimmed = content.slice(0, MAX_MEMORY_FILE_CHARS)
-      const fileBlock = `<file path="${name}">\n${trimmed}\n</file>`
-      fileBlocks.push(fileBlock)
-      result.memoryFilesList.push({ label: name, chars: fileBlock.length })
-    }
-    if (fileBlocks.length > 0) {
-      const block = `<project_context_files>\n${fileBlocks.join('\n')}\n</project_context_files>`
-      blocks.push(block)
-      result.memoryFilesChars = block.length
-    }
+  // Memory files (ADR 0071) — project-root CLAUDE.md / AGENTS.md plus the
+  // user-global ~/.claude/CLAUDE.md, each with its `@import` references expanded.
+  // The expansion is the point: this repo's own CLAUDE.md carries its rules by
+  // reference (`@.claude/rules/typescript.md`), and before ADR 0071 the model
+  // received those lines as literal path strings instead of the rules themselves.
+  // Path-gating (invariant #2) and best-effort skipping live in loadMemoryFiles;
+  // the global file applies even when no project is linked, so this is not
+  // gated on `cwd`.
+  const memoryFiles = await loadMemoryFiles(cwd)
+  if (memoryFiles.length > 0) {
+    const fileBlocks = memoryFiles.map(({ label, content }) => {
+      const fileBlock = `<file path="${label}">\n${content}\n</file>`
+      result.memoryFilesList.push({ label, chars: fileBlock.length })
+      return fileBlock
+    })
+    const block = `<project_context_files>\n${fileBlocks.join('\n')}\n</project_context_files>`
+    blocks.push(block)
+    result.memoryFilesChars = block.length
   }
 
   // Custom agents — name + compact description of the in-scope agents (Task

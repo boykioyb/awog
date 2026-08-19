@@ -16,7 +16,7 @@ import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../../sdk/invoke.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
-import { TODO_USAGE_PROMPT } from '../prompts.js'
+import { EVIDENCE_PROMPT, TODO_USAGE_PROMPT, VERIFY_PROMPT } from '../prompts.js'
 import { isToolAllowed } from '../tools/index.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { resolveClaudeBinary } from './binary.js'
@@ -208,8 +208,11 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
   )
 
   // Layer the node agent's AGENT.md + bulk context (already in systemPromptAppend)
-  // + workspace rules onto the claude_code preset. No tool-discipline/verify nudge
-  // — the SDK's first-party prompt handles that (ADR 0058).
+  // + workspace rules onto the claude_code preset. The preset supplies engineering
+  // procedure and tool discipline (ADR 0058), so those are not repeated here — but
+  // per ADR 0071 the verification and evidence contracts ARE appended: the preset
+  // does not require a `file:line` citation for claims about the codebase, and
+  // AWOG's explicit anti-fabrication rule was missing from this runtime entirely.
   const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0], extractTurnPaths(args.prompt))
   // TodoWrite nudge — same as the Pi task path (invoke.ts). The preset alone leaves
   // the checklist unused, so a task node would show no progress list on this
@@ -223,6 +226,11 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     args.systemPrompt,
     args.systemPromptAppend,
     rulesPrompt,
+    // Safe in the append on this path for the same reason as the TodoWrite nudge
+    // below: a task node is a fresh one-shot SDK session, never a `resume`, so
+    // nothing here can freeze stale.
+    VERIFY_PROMPT,
+    EVIDENCE_PROMPT,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
     // A task node is one query too: a backgrounded subagent dies with it and its
     // notification never arrives (see shared.ts). The hook below forces the

@@ -32,7 +32,13 @@ import { resolveModel } from '../model-resolver.js'
 import { buildContext } from '../context-builder.js'
 import { createRuntimeToolDefinitions } from './index.js'
 import { buildMcpUnavailableNote } from './mcp-tools.js'
-import { TOOL_DISCIPLINE_PROMPT, VERIFY_PROMPT } from '../prompts.js'
+import {
+  ENGINEERING_PROMPT,
+  EVIDENCE_PROMPT,
+  TOOL_DISCIPLINE_PROMPT,
+  VERIFY_PROMPT,
+} from '../prompts.js'
+import { buildOneShotContextBlock } from '../../context/environment.js'
 import { CO_AUTHOR_INSTRUCTION } from '../../git/co-author.js'
 import { toReasoning } from '../thinking.js'
 import type { BeforeToolCall } from '../permission.js'
@@ -274,9 +280,19 @@ async function spawnSubagent(
   // review/fetch can't silently fabricate when its server is unreachable. The MCP
   // catalog (ADR 0051) rides along when the inherited toolset is in proxy mode.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
+  // Orientation + engineering scaffolding (ADR 0071). A subagent starts with no
+  // conversation to infer context from, so being blind to the OS, the cwd and the
+  // state of the tree hurts it more than it hurts the parent. COMMUNICATION_PROMPT
+  // is deliberately omitted: its output contract targets the human reader, and a
+  // subagent's report is consumed by the parent model. EVIDENCE_PROMPT matters
+  // most here — the parent has to be able to trust and re-check what it gets back.
+  const subContextBlock = await buildOneShotContextBlock(deps.cwd)
   const subAppend =
     [
+      subContextBlock,
       agentCtx.systemPromptAppend,
+      ENGINEERING_PROMPT,
+      EVIDENCE_PROMPT,
       TOOL_DISCIPLINE_PROMPT,
       VERIFY_PROMPT,
       // Inherit the parent turn's co-author setting (Pi has no built-in attribution).
