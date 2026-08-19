@@ -32,6 +32,8 @@
 | 24 | [preview-popout-window](./preview-popout-window.md) | Implemented (ui-next + electron) — mở file ra cửa sổ OS riêng, nhiều cửa sổ cùng lúc |
 | 25 | [session-popout-window](./session-popout-window.md) | Implemented (ui-next + electron) — mở session ra cửa sổ OS riêng, hand-off quyền sở hữu |
 | 26 | [desktop-pet](./desktop-pet.md) | P1 implemented (ui-next + electron) — pet nổi trên mọi cửa sổ + mini-HUD, opt-in ở Settings → Appearance |
+| 27 | [wiki](./wiki.md) | v1 implemented ([ADR 0073](../decisions/0073-wiki-as-llm-context-source.md)) — trang wiki trong app: đọc/soạn/import `.md`, đồng thời là nguồn context cho LLM (tool `wiki_search`/`wiki_read` trên 2 runtime) |
+| 28 | [ai-memory](./ai-memory.md) | v1 implemented ([ADR 0073](../decisions/0073-wiki-as-llm-context-source.md) phần B) — fact dài hạn, agent ghi (opt-in, mặc định TẮT) + quản lý ở Settings → Bộ nhớ |
 
 ## Template
 
