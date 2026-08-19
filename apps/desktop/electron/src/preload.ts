@@ -167,6 +167,8 @@ const awog = {
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   pickFile: (opts?: SavePathOpts): Promise<string | null> =>
     ipcRenderer.invoke('dialog:pickFile', opts ?? {}),
+  pickFiles: (opts?: SavePathOpts): Promise<string[]> =>
+    ipcRenderer.invoke('dialog:pickFiles', opts ?? {}),
   savePath: (opts?: SavePathOpts): Promise<string | null> =>
     ipcRenderer.invoke('dialog:savePath', opts ?? {}),
 

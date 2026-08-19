@@ -28,6 +28,22 @@ export async function pickFile(opts: PickFileOptions = {}): Promise<string | nul
   return api.pickFile(opts)
 }
 
+// Native MULTI-folder picker (`window.awog.pickFolders`). Returns [] on cancel
+// and in a plain browser (dev).
+export async function pickFolders(opts: PickFolderOptions = {}): Promise<string[]> {
+  const api = typeof window !== 'undefined' ? window.awog : undefined
+  if (!api?.pickFolders) return []
+  return api.pickFolders(opts)
+}
+
+// Native MULTI-file picker (`window.awog.pickFiles`) — one dialog, many files.
+// Returns [] on cancel and in a plain browser (dev).
+export async function pickFiles(opts: PickFileOptions = {}): Promise<string[]> {
+  const api = typeof window !== 'undefined' ? window.awog : undefined
+  if (!api?.pickFiles) return []
+  return api.pickFiles(opts)
+}
+
 // Native save dialog (`window.awog.savePath`) — pick a destination path/name for
 // a file to be written. Returns null on cancel, or in a plain browser (dev).
 export async function saveFilePath(opts: PickFileOptions = {}): Promise<string | null> {

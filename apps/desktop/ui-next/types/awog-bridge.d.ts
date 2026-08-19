@@ -184,6 +184,8 @@ export interface AwogBridge {
   // the File has no real filesystem origin (e.g. synthetic/clipboard blob).
   getPathForFile(file: File): string
   pickFile(opts?: AwogSavePathOpts): Promise<string | null>
+  // Multi-select file picker (wiki Markdown import, ADR 0073). [] on cancel.
+  pickFiles(opts?: AwogSavePathOpts): Promise<string[]>
   savePath(opts?: AwogSavePathOpts): Promise<string | null>
   // Auto-update (ADR 0028).
   getAppInfo(): Promise<AwogAppInfo>

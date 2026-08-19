@@ -266,6 +266,23 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return result.filePaths[0]
   })
 
+  // Pick one OR MORE existing files (multi-select) — used to import Markdown into
+  // the wiki (ADR 0073). Returns [] on cancel. Separate from pickFile so the
+  // existing single-file callers keep their `string | null` contract.
+  ipcMain.handle('dialog:pickFiles', async (_e, opts: SavePathOpts = {}): Promise<string[]> => {
+    const win = getWindow()
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile', 'multiSelections', 'showHiddenFiles'],
+      ...(opts.title ? { title: opts.title } : {}),
+      ...(opts.defaultPath ? { defaultPath: opts.defaultPath } : {}),
+      ...(opts.filters ? { filters: opts.filters } : {}),
+    }
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options)
+    return result.canceled ? [] : result.filePaths
+  })
+
   // Pick a save location only — the engine writes the file (e.g. git format-patch
   // stays inside the workspace, invariant #3). Mirrors Tauri's plugin-dialog save.
   ipcMain.handle('dialog:savePath', async (_e, opts: SavePathOpts = {}): Promise<string | null> => {
