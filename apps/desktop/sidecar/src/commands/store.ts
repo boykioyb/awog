@@ -1,18 +1,18 @@
-// Slash command persistence. Single editable home `.awog`, two tiers (ADR 0035).
-// Each command is a Markdown file (YAML frontmatter + body) like Claude Code's
-// `.claude/commands/<name>.md`:
-//   global  → ~/.awog/commands/<id>.md           (editable)
-//   project → {project.path}/.awog/commands/<id>.md (editable)
+// Slash command persistence. Home is `.claude` — SHARED with the Claude Code CLI
+// — in two tiers (ADR 0070, superseding the `.awog` home of ADR 0035). Each
+// command is a Markdown file (YAML frontmatter + body) in Claude Code's own
+// `commands/<name>.md` layout:
+//   global  → ~/.claude/commands/<id>.md              (editable)
+//   project → {project.path}/.claude/commands/<id>.md (editable)
 //
 // Frontmatter keys: name, description, argument-hint, allowed-tools, model,
 // enabled. The body is the prompt template expanded on send. source/projectId
 // are location-derived (NOT written into the file). Subdirectory namespacing is
 // supported the Claude Code way: `frontend/component.md` → id `frontend:component`.
-// `.claude/commands` are an import source only (see migration/).
 
 import { mkdir, readdir, readFile, writeFile, chmod, rename, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { awogHome, sanitizeChild } from '../util/path.js'
+import { claudeHome, projectClaudeDir, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { RpcError } from '../transport/rpc.js'
 import { loadProject } from '../projects/store.js'
@@ -22,10 +22,10 @@ import type { Command, CommandScanReport, CommandSource } from '../types/shared.
 const COMMANDS_DIR_NAME = sanitizeChild('commands')
 
 function globalCommandsDir(): string {
-  return join(awogHome(), COMMANDS_DIR_NAME)
+  return join(claudeHome(), COMMANDS_DIR_NAME)
 }
 function projectCommandsDir(projectPath: string): string {
-  return join(projectPath, '.awog', COMMANDS_DIR_NAME)
+  return join(projectClaudeDir(projectPath), COMMANDS_DIR_NAME)
 }
 
 interface FsError extends Error {

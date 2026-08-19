@@ -1,15 +1,15 @@
 // Agent persistence. Each agent is a single `<id>.md` file with YAML
 // frontmatter + markdown body, format-compatible with Claude Code SDK
-// subagents. Single editable home `.awog`, two tiers (ADR 0035):
+// subagents. Home is `.claude` — SHARED with the Claude Code CLI — in two tiers
+// (ADR 0070, superseding the `.awog` home of ADR 0035):
 //
-//   global  → ~/.awog/agents/<id>.md            (applies everywhere)
-//   project → {project.path}/.awog/agents/<id>.md (that project only)
+//   global  → ~/.claude/agents/<id>.md              (applies everywhere)
+//   project → {project.path}/.claude/agents/<id>.md (that project only)
 //
 // systemPrompt = markdown body. Frontmatter required: name, description.
 // Frontmatter optional: model, role.
 // (`context` field from old Context Providers feature is silent-dropped on
 //  read and never written back — see ADR 0016.)
-// `.claude`/`.agents` agent dirs are import sources only (see migration/).
 
 import {
   mkdir,
@@ -22,17 +22,16 @@ import {
   stat,
 } from 'node:fs/promises'
 import { join } from 'node:path'
-import { awogHome, sanitizeChild } from '../util/path.js'
+import { claudeHome, projectClaudeDir, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { parseFrontmatter, serializeFrontmatter } from '../skills/frontmatter.js'
 import { loadProject } from '../projects/store.js'
 import type { Agent, AgentSource } from '../types/shared.js'
 
 const AGENTS_DIR_NAME = sanitizeChild('agents')
-const AWOG_DIR_NAME = sanitizeChild('.awog')
 
 function userAgentsDir(): string {
-  return join(awogHome(), AGENTS_DIR_NAME)
+  return join(claudeHome(), AGENTS_DIR_NAME)
 }
 
 async function resolveAgentsDir(
@@ -48,7 +47,7 @@ async function resolveAgentsDir(
   if (!project) {
     throw new Error(`Project not found: ${projectId}`)
   }
-  return join(project.path, AWOG_DIR_NAME, AGENTS_DIR_NAME)
+  return join(projectClaudeDir(project.path), AGENTS_DIR_NAME)
 }
 
 function agentFile(dir: string, id: string): string {
@@ -230,7 +229,7 @@ export async function listProjectAgents(
 ): Promise<{ agents: Agent[]; reports: AgentScanReport[] }> {
   const project = await loadProject(projectId)
   if (!project) return { agents: [], reports: [] }
-  const dir = join(project.path, AWOG_DIR_NAME, AGENTS_DIR_NAME)
+  const dir = join(projectClaudeDir(project.path), AGENTS_DIR_NAME)
   const agents = await listFromDir(dir, 'project', projectId)
   return { agents, reports: [{ dir, source: 'project', found: agents.length }] }
 }

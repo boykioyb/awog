@@ -3,7 +3,6 @@
 // credential/env, MCP conversion, model normalisation, effort mapping, and error
 // mapping are defined once.
 
-import { join } from 'node:path'
 import type {
   Options,
   EffortLevel,
@@ -12,7 +11,6 @@ import type {
   ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk'
 import { RpcError } from '../../transport/rpc.js'
-import { awogHome } from '../../util/path.js'
 import { log } from '../../util/logger.js'
 import type { Credential } from '../../credentials/credential-resolver.js'
 import type { McpServersConfig } from '../permission-types.js'
@@ -58,7 +56,6 @@ export function mapClaudeErrorToRpc(err: unknown): RpcError {
 // Build the SDK subprocess env carrying the Anthropic credential. We do NOT
 // mutate the sidecar's own process.env (that would race across concurrent
 // sessions on different accounts) — the token lives only in the child's env.
-// Also pins the SDK's session store to ~/.awog/claude-sdk (see below).
 export function buildSdkEnv(cred: Credential): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) {
@@ -67,11 +64,16 @@ export function buildSdkEnv(cred: Credential): Record<string, string> {
   delete env.CLAUDE_CODE_OAUTH_TOKEN
   delete env.ANTHROPIC_API_KEY
   delete env.ANTHROPIC_BASE_URL
-  // Keep the SDK's session store (transcripts + resume + compaction) INSIDE
-  // AWOG's own data dir instead of the default ~/.claude — so it doesn't
-  // intermix with the user's real Claude Code CLI sessions and stays within the
-  // local-first data layer. Sessions land under ~/.awog/claude-sdk/projects/.
-  env.CLAUDE_CONFIG_DIR = join(awogHome(), 'claude-sdk')
+  // CLAUDE_CONFIG_DIR is deliberately NOT overridden (ADR 0070). It used to
+  // point at ~/.awog/claude-sdk to keep the SDK's session store out of the
+  // user's real ~/.claude — but that dir holds no skills/, agents/ or
+  // commands/, so the SDK's built-in Skill tool resolved nothing while AWOG
+  // advertised a full catalogue. Sharing the Claude home fixes that and makes an
+  // edit in either tool live in the other; the cost is that AWOG's SDK-path
+  // transcripts land in ~/.claude/projects/ alongside CLI sessions.
+  // Inheriting the ambient value (if the user set one) keeps the subprocess and
+  // claudeHome() in agreement — see util/path.ts.
+  //
   // SDK 0.3.233 dropped TodoWrite/TodoRead from the DEFAULT tool surface on
   // opus 4.8 / sonnet 5 / fable 5 / mythos 5 and newer. AWOG's session checklist
   // (ADR 0069) is built on that built-in — Session.todos is persisted from the

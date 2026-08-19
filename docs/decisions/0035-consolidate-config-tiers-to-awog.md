@@ -4,6 +4,8 @@
 - **Ngày:** 2026-06-12
 - **Người quyết định:** Tech Lead (theo yêu cầu user)
 
+> **Cập nhật (2026-08-19):** D-1 và D-3 bị **[ADR 0070](./0070-share-claude-home-for-config.md) supersede một phần** cho 3 loại Claude Code có layout native: **agents, skills, commands** chuyển nhà về `.claude` dùng chung (`<claudeHome>/{kind}` + `{project}/.claude/{kind}`), `.claude` thôi làm nguồn import cho 3 loại đó. **Hooks và rules giữ nguyên `.awog`** như ADR này quy định. D-2 (`Source` union `'global' | 'project'`), D-6..D-10 **không đổi**. Nội dung dưới đây giữ nguyên cho lịch sử.
+
 ## Bối cảnh
 
 5 loại config-entity (agents, skills, hooks, rules, commands) hiện lưu trữ **không đồng nhất**:

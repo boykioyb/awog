@@ -1,21 +1,24 @@
-// Management of the Claude Agent SDK's own session store (ADR 0058). AWOG points
-// the SDK's CLAUDE_CONFIG_DIR at ~/.awog/claude-sdk (see run-stream.ts), so the
-// SDK writes each Anthropic session's transcript + resume state + compaction
-// under ~/.awog/claude-sdk/projects/<cwd-hash>/<sdkSessionId>.jsonl (plus a
-// <sdkSessionId>/ subagents dir). This is a SECOND store alongside AWOG's own
-// session JSONL (which stays the UI record); the two are kept in sync by the
-// session lifecycle: history-rewriting ops (truncate/edit/regenerate) drop the
+// Management of the Claude Agent SDK's own session store (ADR 0058). The SDK
+// writes each Anthropic session's transcript + resume state + compaction under
+// <claudeHome>/projects/<cwd-hash>/<sdkSessionId>.jsonl (plus a <sdkSessionId>/
+// subagents dir). Since ADR 0070 that home is the SHARED ~/.claude — AWOG no
+// longer overrides CLAUDE_CONFIG_DIR — so the paths below sit next to the user's
+// own CLI sessions. Everything here is keyed by an sdkSessionId AWOG itself
+// created and persisted, so a cleanup can only ever touch AWOG's own artifacts.
+// This is a SECOND store alongside AWOG's own session JSONL (which stays the UI
+// record); the two are kept in sync by the session
+// lifecycle: history-rewriting ops (truncate/edit/regenerate) drop the
 // sdkSessionId so the next turn seeds a fresh SDK session, and delete/truncate
 // remove the now-orphan SDK artifacts via removeSdkSession below.
 
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { awogHome } from '../../util/path.js'
+import { claudeHome } from '../../util/path.js'
 import { log } from '../../util/logger.js'
 
-// Root of AWOG's dedicated SDK config dir (= env.CLAUDE_CONFIG_DIR in run-stream).
+// Root of the SDK's config dir — the shared Claude home (ADR 0070).
 export function sdkStoreDir(): string {
-  return join(awogHome(), 'claude-sdk')
+  return claudeHome()
 }
 
 // Remove the SDK store artifacts for one sdkSessionId. The SDK groups sessions

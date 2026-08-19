@@ -33,9 +33,9 @@
   "skills.editor.alwaysAllow": "Always-allow tools",
   "skills.editor.requiredSources": "Required sources",
   "skills.editor.save": "Save",
-  "skills.editor.globalHint": "Saved to ~/.awog/skills/ — AWOG-native, available across all projects.",
-  "skills.editor.projectHint": "Saved to {path}/.awog/skills/{slug}/SKILL.md",
-  "skills.editor.projectHintNone": "Pick a project — file will be written to <project>/.awog/skills/{slug}/SKILL.md",
+  "skills.editor.globalHint": "Saved to ~/.claude/skills/ — shared with Claude Code, available across all projects.",
+  "skills.editor.projectHint": "Saved to {path}/.claude/skills/{slug}/SKILL.md",
+  "skills.editor.projectHintNone": "Pick a project — file will be written to <project>/.claude/skills/{slug}/SKILL.md",
 
   "skills.creator.title": "New skill",
   "skills.creator.subtitle": "· the model writes SKILL.md on disk",

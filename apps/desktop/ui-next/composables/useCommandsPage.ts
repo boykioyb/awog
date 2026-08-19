@@ -218,7 +218,7 @@ export function useCommandsPage() {
   const deleteDescription = computed(() => {
     const c = pendingDelete.value
     if (!c) return ''
-    const where = (c.source ?? 'global') === 'global' ? '~/.awog/commands/' : '.awog/commands/'
+    const where = (c.source ?? 'global') === 'global' ? '~/.claude/commands/' : '.claude/commands/'
     return `This will permanently delete the command "/${c.name}" from ${where}${c.id}.md.`
   })
   const confirmDelete = async () => {

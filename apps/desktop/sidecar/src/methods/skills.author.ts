@@ -16,7 +16,7 @@ import { loadProject } from '../projects/store.js'
 import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
-import { awogHome } from '../util/path.js'
+import { claudeHome, projectClaudeDir } from '../util/path.js'
 import { authorPi } from '../runtime/complete.js'
 
 const ModelSchema = z.enum(ANTHROPIC_MODELS)
@@ -33,8 +33,8 @@ const Params = z.object({
   userText: z.string().min(1).max(8_000),
   accountId: z.string().min(1).max(120).optional(),
   modelId: ModelSchema.optional(),
-  // Where to save: 'global' (→ ~/.awog/skills) or a registered projectId
-  // (→ {project}/.awog/skills). Chosen via the creator's "Save to" picker.
+  // Where to save: 'global' (→ ~/.claude/skills) or a registered projectId
+  // (→ {project}/.claude/skills). Chosen via the creator's "Save to" picker.
   scope: z.string().min(1).max(64).default('global'),
 })
 
@@ -95,11 +95,11 @@ Hard rules:
 // projectId so the UI surfaces a clear error instead of a silent global write.
 async function resolveTarget(scope: string): Promise<{ skillsDir: string; cwd: string }> {
   if (scope === 'global') {
-    return { skillsDir: join(awogHome(), 'skills'), cwd: awogHome() }
+    return { skillsDir: join(claudeHome(), 'skills'), cwd: claudeHome() }
   }
   const project = await loadProject(scope)
   if (!project) throw new Error(`Unknown project: ${scope}`)
-  return { skillsDir: join(project.path, '.awog', 'skills'), cwd: project.path }
+  return { skillsDir: join(projectClaudeDir(project.path), 'skills'), cwd: project.path }
 }
 
 register('skills.author', async (raw) => {

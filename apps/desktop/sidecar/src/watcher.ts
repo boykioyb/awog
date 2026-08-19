@@ -23,7 +23,7 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { emit } from './transport/stdio.js'
 import { log } from './util/logger.js'
-import { awogHome } from './util/path.js'
+import { awogHome, claudeHome, projectClaudeDir } from './util/path.js'
 import { listProjects } from './projects/store.js'
 
 const DEBOUNCE_MS = 500
@@ -79,14 +79,17 @@ interface DirSpec {
   dir: string
 }
 
+// agents/skills/commands live in the SHARED `.claude` home (ADR 0070) so an edit
+// made in the Claude Code CLI shows up in AWOG without an import; the rest are
+// AWOG-owned and stay under `.awog`.
 function userDirs(): DirSpec[] {
   return [
-    { kind: 'agents', dir: join(awogHome(), 'agents') },
-    { kind: 'skills', dir: join(awogHome(), 'skills') },
+    { kind: 'agents', dir: join(claudeHome(), 'agents') },
+    { kind: 'skills', dir: join(claudeHome(), 'skills') },
+    { kind: 'commands', dir: join(claudeHome(), 'commands') },
     { kind: 'sources', dir: join(awogHome(), 'sources') },
     { kind: 'hooks', dir: join(awogHome(), 'hooks') },
     { kind: 'rules', dir: join(awogHome(), 'rules') },
-    { kind: 'commands', dir: join(awogHome(), 'commands') },
     { kind: 'ssh-hosts', dir: join(awogHome(), 'ssh-hosts') },
     { kind: 'ssh-identities', dir: join(awogHome(), 'ssh-identities') },
     { kind: 'vpn-profiles', dir: join(awogHome(), 'vpn-profiles') },
@@ -95,11 +98,11 @@ function userDirs(): DirSpec[] {
 
 function projectDirs(projectPath: string): DirSpec[] {
   return [
-    { kind: 'agents', dir: join(projectPath, '.awog', 'agents') },
-    { kind: 'skills', dir: join(projectPath, '.awog', 'skills') },
+    { kind: 'agents', dir: join(projectClaudeDir(projectPath), 'agents') },
+    { kind: 'skills', dir: join(projectClaudeDir(projectPath), 'skills') },
+    { kind: 'commands', dir: join(projectClaudeDir(projectPath), 'commands') },
     { kind: 'hooks', dir: join(projectPath, '.awog', 'hooks') },
     { kind: 'rules', dir: join(projectPath, '.awog', 'rules') },
-    { kind: 'commands', dir: join(projectPath, '.awog', 'commands') },
   ]
 }
 
@@ -145,9 +148,8 @@ class AwogWatcher {
     if (!this.chokidar) return
     // chokidar happily watches dirs that don't exist yet (uses fs.watchFile
     // fallback), but skip ones we can short-circuit to keep the log clean.
-    // The user-tier dirs (~/.claude/agents etc.) often don't exist if the
-    // user only uses ~/.awog/ — we want to know if they appear later, so
-    // still register.
+    // A project may have no `.claude/skills` (or no `.awog/rules`) yet — we
+    // want to know if one appears later, so still register.
     try {
       const watcher = this.chokidar.watch(spec.dir, {
         ignoreInitial: true,
@@ -271,11 +273,14 @@ function relevantFile(kind: WatchKind, path: string): boolean {
 }
 
 function isProjectSubdir(dir: string): boolean {
-  // Project-tier dirs live under {project}/.awog. The matching user-tier dir
-  // (~/.awog direct children) is NOT a project.
+  // Project-tier dirs live under {project}/.awog (hooks, rules) or
+  // {project}/.claude (agents, skills, commands — ADR 0070). The matching
+  // user-tier dirs (direct children of ~/.awog or the Claude home) are NOT
+  // projects.
   const home = homedir()
   if (dir.startsWith(`${home}/.awog/`)) return false
-  return dir.includes('/.awog/')
+  if (dir.startsWith(`${claudeHome()}/`)) return false
+  return dir.includes('/.awog/') || dir.includes('/.claude/')
 }
 
 function pathRegistered(dir: string, projectPaths: Set<string>): boolean {

@@ -41,9 +41,9 @@
   "commands.editor.templateHint": "Use the literal token $ARGUMENTS (or $1…$9) where the user's arguments should be inserted.",
   "commands.editor.enabled": "Enabled",
   "commands.editor.save": "Save",
-  "commands.editor.globalHint": "Saved to ~/.awog/commands/ — AWOG-native, available across all projects.",
-  "commands.editor.projectHint": "Saved to {path}/.awog/commands/{slug}.md",
-  "commands.editor.projectHintNone": "Pick a project — file will be written to <project>/.awog/commands/{slug}.md",
+  "commands.editor.globalHint": "Saved to ~/.claude/commands/ — shared with Claude Code, available across all projects.",
+  "commands.editor.projectHint": "Saved to {path}/.claude/commands/{slug}.md",
+  "commands.editor.projectHintNone": "Pick a project — file will be written to <project>/.claude/commands/{slug}.md",
 
   "commands.creator.title": "New command",
   "commands.creator.hint": "Describe the command you want — e.g. \"Review the current diff for cleanup\" or \"Create a conventional commit from staged changes\". The model drafts a name + prompt template; pick a location and save.",

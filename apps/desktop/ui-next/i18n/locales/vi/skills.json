@@ -33,9 +33,9 @@
   "skills.editor.alwaysAllow": "Tool cho phép sẵn",
   "skills.editor.requiredSources": "Nguồn bắt buộc",
   "skills.editor.save": "Lưu",
-  "skills.editor.globalHint": "Lưu vào ~/.awog/skills/ — AWOG-native, dùng được cho mọi dự án.",
-  "skills.editor.projectHint": "Lưu vào {path}/.awog/skills/{slug}/SKILL.md",
-  "skills.editor.projectHintNone": "Chọn một dự án — tệp sẽ được ghi vào <project>/.awog/skills/{slug}/SKILL.md",
+  "skills.editor.globalHint": "Lưu vào ~/.claude/skills/ — dùng chung với Claude Code, áp dụng cho mọi dự án.",
+  "skills.editor.projectHint": "Lưu vào {path}/.claude/skills/{slug}/SKILL.md",
+  "skills.editor.projectHintNone": "Chọn một dự án — tệp sẽ được ghi vào <project>/.claude/skills/{slug}/SKILL.md",
 
   "skills.creator.title": "Skill mới",
   "skills.creator.subtitle": "· mô hình tự ghi SKILL.md ra đĩa",

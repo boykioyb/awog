@@ -1,6 +1,6 @@
 // Project Template persistence (ADR 0036). A template is a self-contained bundle
 // under ~/.awog/templates/<id>/ holding a manifest (template.json) + a copy of
-// each included config entity in its `.awog` on-disk layout:
+// each included config entity in its on-disk layout:
 //
 //   ~/.awog/templates/<id>/template.json
 //   ~/.awog/templates/<id>/agents/<id>.md        (or agents/<id>/AGENT.md)
@@ -9,14 +9,15 @@
 //   ~/.awog/templates/<id>/rules/<id>.md
 //   ~/.awog/templates/<id>/commands/<ns>/<id>.md
 //
-// create() copies entities OUT of `.awog`; install() copies them INTO a target
-// project's `.awog` tiers. Both are plain file copies (faithful — preserves
+// create() copies entities OUT of their home; install() copies them INTO the
+// target project's matching tier — `.claude` for agents/skills/commands, `.awog`
+// for hooks/rules (ADR 0070). Both are plain file copies (faithful — preserves
 // colocated siblings + exact format). Security (ADR 0036 D-7): imported hooks
 // land untrusted (no .trust.json), secret values are never copied.
 
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile, rename } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
-import { awogHome, sanitizeChild } from '../util/path.js'
+import { awogHome, claudeHome, projectClaudeDir, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { RpcError } from '../transport/rpc.js'
 import { loadProject } from '../projects/store.js'
@@ -72,14 +73,28 @@ export function isInside(child: string, root: string): boolean {
   return c === r || c.startsWith(r + sep)
 }
 
-// `.awog/<kind>s` dir for a scope (source of truth for create, target for install).
+// Which home a kind lives in. agents/skills/commands are SHARED with the Claude
+// Code CLI under `.claude`; hooks/rules stay AWOG-owned under `.awog` (ADR 0070).
+function isSharedKind(kind: ConfigKind): boolean {
+  return kind === 'agent' || kind === 'skill' || kind === 'command'
+}
+
+// The home root a kind's entities live under, for one scope.
+function kindHome(kind: ConfigKind, projectPath?: string): string {
+  if (projectPath) {
+    return isSharedKind(kind) ? projectClaudeDir(projectPath) : join(projectPath, '.awog')
+  }
+  return isSharedKind(kind) ? claudeHome() : awogHome()
+}
+
+// `<home>/<kind>s` dir for a scope (source of truth for create, target for install).
 async function awogKindDir(kind: ConfigKind, scope: Scope, projectId?: string): Promise<string> {
   const sub = `${kind}s`
-  if (scope === 'global') return join(awogHome(), sub)
+  if (scope === 'global') return join(kindHome(kind), sub)
   if (!projectId) throw new RpcError(-32602, `Project ${kind} requires a projectId`)
   const project = await loadProject(projectId)
   if (!project) throw new RpcError(-32602, `Project not found: ${projectId}`)
-  return join(project.path, '.awog', sub)
+  return join(kindHome(kind, project.path), sub)
 }
 
 // Slug → unique template id (append -2, -3… if the dir already exists).
@@ -246,16 +261,17 @@ export async function installTemplate(
   if (!project) throw new RpcError(-32602, `Project not found: ${targetProjectId}`)
 
   const bundleRoot = templateDir(templateId)
-  const awogRoot = join(project.path, '.awog')
   const installed: TemplateInstallResult['installed'] = []
   const skipped: TemplateInstallResult['skipped'] = []
   for (const ref of template.entities) {
     const src = join(bundleRoot, ref.file)
-    // Target mirrors the bundle layout under {project}/.awog/.
-    const dest = join(awogRoot, ref.file)
+    // Target mirrors the bundle layout under the kind's home in the project:
+    // {project}/.claude for agents/skills/commands, {project}/.awog for the rest.
+    const destRoot = kindHome(ref.kind, project.path)
+    const dest = join(destRoot, ref.file)
     // Defense in depth (invariant #2): a hand-edited/shared template.json must
-    // not point ref.file outside the bundle or the project's `.awog`.
-    if (!isInside(src, bundleRoot) || !isInside(dest, awogRoot)) {
+    // not point ref.file outside the bundle or that home.
+    if (!isInside(src, bundleRoot) || !isInside(dest, destRoot)) {
       skipped.push({ kind: ref.kind, id: ref.id, reason: 'unsafe path in manifest' })
       continue
     }

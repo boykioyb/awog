@@ -186,7 +186,7 @@ export function useAgentsPage() {
   const deleteDescription = computed(() => {
     const a = pendingDelete.value
     if (!a) return ''
-    const where = a.source === 'global' ? '~/.awog/agents/' : '.awog/agents/'
+    const where = a.source === 'global' ? '~/.claude/agents/' : '.claude/agents/'
     return `This will permanently delete the agent "${a.name}" from ${where}${a.id}.md. Sessions referencing it will fall back to their default system prompt.`
   })
   const confirmDelete = async () => {

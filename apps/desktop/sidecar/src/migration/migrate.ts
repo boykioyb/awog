@@ -1,7 +1,13 @@
 // Config Import Assistant (ADR 0035 / config-import-assistant). Scans legacy
-// `.claude`/`.agents` locations for config not yet in `.awog` and copies the
-// selected items into `.awog` (non-destructive — sources are left untouched).
-// This module is the single owner of legacy Claude Code / Craft layout knowledge.
+// locations for config not yet in an AWOG store and copies the selected items in
+// (non-destructive — sources are left untouched). This module is the single
+// owner of legacy Claude Code / Craft layout knowledge.
+//
+// Since ADR 0070 the `.claude` tree IS the store for agents/skills/commands, so
+// it is no longer an import source for those kinds — only Craft's `.agents` is.
+// `.claude` remains a source for the two kinds AWOG still owns itself:
+//   - rules  ← CLAUDE.md + .claude/rules/*.md
+//   - hooks  ← .claude/settings.json hooks array
 //
 // Security (ADR 0035 D-5/D-10):
 //   - copy, never move (sources preserved)
@@ -17,11 +23,11 @@ import { loadProject } from '../projects/store.js'
 import { parseFrontmatter } from '../skills/frontmatter.js'
 import { listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
-import { listCommands, saveCommand, walkMd } from '../commands/store.js'
+import { listCommands } from '../commands/store.js'
 import { listRules, saveRule } from '../rules/store.js'
 import { listHooks, saveHook } from '../hooks/store.js'
 import { parseClaudeHooks } from '../hooks/claude-import.js'
-import type { Command, ConfigKind, ImportCandidate, ImportResult, Rule } from '../types/shared.js'
+import type { ConfigKind, ImportCandidate, ImportResult, Rule } from '../types/shared.js'
 
 type Scope = 'global' | 'project'
 
@@ -46,9 +52,10 @@ interface ScanContext {
   scope: Scope
   projectId?: string
   projectPath?: string
-  // Legacy roots that hold agents/<id>, skills/<id> (Claude Code + Craft).
+  // Legacy roots that hold agents/<id>, skills/<id>. Craft's `.agents` only —
+  // `.claude` is the live store now (ADR 0070), scanning it would self-import.
   legacyRoots: { dir: string; label: string }[]
-  // The `.claude` root (commands/, rules/, settings.json live only here).
+  // The `.claude` root — still scanned for rules/ + settings.json hooks.
   claudeRoot: string
   // CLAUDE.md location for this scope.
   claudeMd: string
@@ -198,43 +205,6 @@ async function collectSkills(ctx: ScanContext): Promise<SourceItem[]> {
   return out
 }
 
-async function collectCommands(ctx: ScanContext): Promise<SourceItem[]> {
-  const dir = join(ctx.claudeRoot, 'commands')
-  const files = await walkMd(dir)
-  const out: SourceItem[] = []
-  for (const { id, file } of files) {
-    // eslint-disable-next-line no-await-in-loop
-    const raw = await readFile(file, 'utf8').catch(() => '')
-    if (!raw) continue
-    const { data, body } = parseFrontmatter(raw)
-    const name = str(data.name, id)
-    out.push({
-      kind: 'command',
-      id,
-      name,
-      fromLabel: '.claude/commands',
-      targetScope: ctx.scope,
-      ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
-      doImport: async () => {
-        const cmd: Command = {
-          id,
-          name,
-          description: str(data.description),
-          body: body.trim(),
-          ...(data['argument-hint'] ? { argumentHint: str(data['argument-hint']) } : {}),
-          ...(data['allowed-tools'] ? { allowedTools: str(data['allowed-tools']) } : {}),
-          ...(data.model ? { model: str(data.model) } : {}),
-          enabled: true,
-          source: ctx.scope,
-          ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
-        }
-        await saveCommand(cmd)
-      },
-    })
-  }
-  return out
-}
-
 async function collectRules(ctx: ScanContext): Promise<SourceItem[]> {
   const out: SourceItem[] = []
   const pushRule = (id: string, name: string, file: string, fromLabel: string): void => {
@@ -323,9 +293,9 @@ async function collectHooks(ctx: ScanContext): Promise<SourceItem[]> {
 // ─── Orchestration ───────────────────────────────────────────────────────────
 
 // Scope is exclusive: a projectId scans ONLY that project's legacy dirs; without
-// one we scan ONLY global (~/.claude, ~/.agents). Global config is imported from
-// its own entry (Settings → Workspace) so a project banner never surfaces
-// unrelated ~/.claude/.agents items.
+// one we scan ONLY global. Global config is imported from its own entry
+// (Settings → Workspace) so a project banner never surfaces unrelated global
+// items.
 async function buildContexts(projectId?: string): Promise<ScanContext[]> {
   if (projectId) {
     const project = await loadProject(projectId)
@@ -335,10 +305,7 @@ async function buildContexts(projectId?: string): Promise<ScanContext[]> {
         scope: 'project',
         projectId,
         projectPath: project.path,
-        legacyRoots: [
-          { dir: join(project.path, '.claude'), label: '.claude' },
-          { dir: join(project.path, '.agents'), label: '.agents' },
-        ],
+        legacyRoots: [{ dir: join(project.path, '.agents'), label: '.agents' }],
         claudeRoot: join(project.path, '.claude'),
         claudeMd: join(project.path, 'CLAUDE.md'),
       },
@@ -348,10 +315,7 @@ async function buildContexts(projectId?: string): Promise<ScanContext[]> {
   return [
     {
       scope: 'global',
-      legacyRoots: [
-        { dir: join(home, '.claude'), label: '.claude' },
-        { dir: join(home, '.agents'), label: '.agents' },
-      ],
+      legacyRoots: [{ dir: join(home, '.agents'), label: '.agents' }],
       claudeRoot: join(home, '.claude'),
       claudeMd: join(home, '.claude', 'CLAUDE.md'),
     },
@@ -363,10 +327,11 @@ async function collectSources(projectId?: string): Promise<SourceItem[]> {
   const all: SourceItem[] = []
   for (const ctx of contexts) {
     // eslint-disable-next-line no-await-in-loop
+    // No collectCommands: its only source was `.claude/commands`, which IS the
+    // command store since ADR 0070 — there is nothing left to import from.
     const perKind = await Promise.all([
       collectAgents(ctx),
       collectSkills(ctx),
-      collectCommands(ctx),
       collectRules(ctx),
       collectHooks(ctx),
     ])

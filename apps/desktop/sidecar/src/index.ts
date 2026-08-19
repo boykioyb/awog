@@ -259,6 +259,7 @@ import './methods/templates.install.js'
 import './methods/templates.delete.js'
 import { migrateMcpPlaintextSecrets } from './mcp/store.js'
 import { migrateMcpServersToSources } from './sources/migrate.js'
+import { migrateToClaudeHome } from './migration/claude-home.js'
 import { sessionManager } from './sessions/session-manager.js'
 import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
@@ -412,9 +413,18 @@ startStdioLoop(handleLine, () => gracefulShutdown(0))
 //      invariant 1), rewriting them to `secret:` refs.
 //   2. migrateMcpServersToSources — copy legacy mcp-servers/<id>.json into the new
 //      per-source folder layout ~/.awog/sources/<slug>/config.json (ADR 0060).
+//   3. migrateToClaudeHome — move skills/agents/commands out of ~/.awog (and each
+//      project's .awog) into the SHARED `.claude` home, plus the SDK transcripts
+//      out of ~/.awog/claude-sdk, then delete the emptied legacy dirs (ADR 0070).
+//      Independent of 1+2; kicked off here only so a fresh boot does the work
+//      up-front. It does NOT gate the RPC loop (that would risk the host's
+//      heartbeat timeout on a slow move) — instead skills/agents/commands.list
+//      await the SAME single-flight promise, so no list can observe a
+//      half-drained store.
 // Step 1 MUST finish first so the copied source configs inherit `secret:` refs and
 // never plaintext. Step 2 is copy+backup, never deletes the originals, never touches
-// the keychain, idempotent (done-flag). Both are idempotent — safe on every boot.
+// the keychain, idempotent (done-flag). Step 3 DOES delete, but only a legacy dir it
+// has fully drained. All three are idempotent — safe on every boot.
 // The `sources` store is now the single source of truth for the runtime — there is no
 // boot auto-start anymore (ADR 0060 D-3): a source's status is derived from its last
 // source.test/auth, and the runtime bridge connects lazily per session.
@@ -422,8 +432,9 @@ void (async () => {
   try {
     await migrateMcpPlaintextSecrets()
     await migrateMcpServersToSources()
+    await migrateToClaudeHome()
   } catch (err) {
-    log.warn('boot: mcp→sources migration failed', {
+    log.warn('boot: migration failed', {
       err: err instanceof Error ? err.message : String(err),
     })
   }

@@ -41,9 +41,9 @@
   "commands.editor.templateHint": "Dùng token nguyên văn $ARGUMENTS (hoặc $1…$9) ở nơi cần chèn tham số của người dùng.",
   "commands.editor.enabled": "Bật",
   "commands.editor.save": "Lưu",
-  "commands.editor.globalHint": "Lưu vào ~/.awog/commands/ — của riêng AWOG, dùng được trên mọi dự án.",
-  "commands.editor.projectHint": "Lưu vào {path}/.awog/commands/{slug}.md",
-  "commands.editor.projectHintNone": "Chọn dự án — file sẽ được ghi vào <project>/.awog/commands/{slug}.md",
+  "commands.editor.globalHint": "Lưu vào ~/.claude/commands/ — dùng chung với Claude Code, áp dụng cho mọi dự án.",
+  "commands.editor.projectHint": "Lưu vào {path}/.claude/commands/{slug}.md",
+  "commands.editor.projectHintNone": "Chọn dự án — file sẽ được ghi vào <project>/.claude/commands/{slug}.md",
 
   "commands.creator.title": "Command mới",
   "commands.creator.hint": "Mô tả command bạn muốn — vd. \"Review diff hiện tại để dọn dẹp\" hoặc \"Tạo commit theo convention từ thay đổi đã stage\". Model sẽ soạn tên + mẫu prompt; chọn vị trí rồi lưu.",

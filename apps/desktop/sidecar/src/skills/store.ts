@@ -1,27 +1,27 @@
 // Skill persistence. Each skill is a folder containing SKILL.md (YAML
-// frontmatter + markdown body). Single editable home `.awog`, two tiers
-// (ADR 0035):
+// frontmatter + markdown body). Home is `.claude` — SHARED with the Claude Code
+// CLI — in two tiers (ADR 0070, superseding the `.awog` home of ADR 0035):
 //
-//   global  → ~/.awog/skills/<id>/SKILL.md             (applies everywhere)
-//   project → {project.path}/.awog/skills/<id>/SKILL.md (that project only)
+//   global  → ~/.claude/skills/<id>/SKILL.md              (applies everywhere)
+//   project → {project.path}/.claude/skills/<id>/SKILL.md (that project only)
 //
-// Same on-disk shape as Claude Code SDK / craft-agents-oss, so a skill written
-// here is reusable outside AWOG and vice versa. `.claude`/`.agents` skill dirs
-// are import sources only (see migration/).
+// This is the same layout Claude Code itself reads, so a skill edited in either
+// tool is immediately live in the other — and the SDK runtime's built-in Skill
+// tool resolves exactly the skills AWOG advertises (previously it scanned an
+// isolated config dir that held no skills at all).
 
 import { mkdir, readdir, readFile, writeFile, rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { awogHome, sanitizeChild } from '../util/path.js'
+import { claudeHome, projectClaudeDir, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter.js'
 import { loadProject } from '../projects/store.js'
 import type { Skill, SkillSource } from '../types/shared.js'
 
 const SKILLS_DIR_NAME = sanitizeChild('skills')
-const AWOG_DIR_NAME = sanitizeChild('.awog')
 
 function userSkillsDir(): string {
-  return join(awogHome(), SKILLS_DIR_NAME)
+  return join(claudeHome(), SKILLS_DIR_NAME)
 }
 
 async function resolveSkillsDir(
@@ -37,7 +37,7 @@ async function resolveSkillsDir(
   if (!project) {
     throw new Error(`Project not found: ${projectId}`)
   }
-  return join(project.path, AWOG_DIR_NAME, SKILLS_DIR_NAME)
+  return join(projectClaudeDir(project.path), SKILLS_DIR_NAME)
 }
 
 function skillFolder(dir: string, id: string): string {
@@ -150,7 +150,7 @@ export async function listProjectSkills(
 ): Promise<{ skills: Skill[]; reports: ScanReport[] }> {
   const project = await loadProject(projectId)
   if (!project) return { skills: [], reports: [] }
-  const dir = join(project.path, AWOG_DIR_NAME, SKILLS_DIR_NAME)
+  const dir = join(projectClaudeDir(project.path), SKILLS_DIR_NAME)
   const skills = await listFromDir(dir, 'project', projectId)
   return { skills, reports: [{ dir, source: 'project', found: skills.length }] }
 }

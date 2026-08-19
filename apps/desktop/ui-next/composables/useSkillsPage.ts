@@ -175,7 +175,7 @@ export function useSkillsPage() {
   const deleteDescription = computed(() => {
     const s = pendingDelete.value
     if (!s) return ''
-    const where = s.source === 'global' ? '~/.awog/skills/' : '.awog/skills/'
+    const where = s.source === 'global' ? '~/.claude/skills/' : '.claude/skills/'
     return `This will permanently delete the skill "${s.name}" from ${where}${s.id}/. Agents using it will lose this skill.`
   })
   const confirmDelete = async () => {
