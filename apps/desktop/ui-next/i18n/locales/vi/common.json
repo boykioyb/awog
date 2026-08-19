@@ -103,5 +103,10 @@
   "common.thinking.high": "Cao",
   "common.thinking.extra-high": "Rất cao",
   "common.thinking.max": "Tối đa",
-  "common.aiUnavailable": "Tính năng sinh bằng AI cần engine đang chạy và một account LLM đã kết nối."
+  "common.aiUnavailable": "Tính năng sinh bằng AI cần engine đang chạy và một account LLM đã kết nối.",
+  "common.clear": "Xóa bộ lọc",
+  "common.create": "Tạo",
+  "common.loading": "Đang tải…",
+  "common.saving": "Đang lưu…",
+  "common.edit": "Sửa"
 }

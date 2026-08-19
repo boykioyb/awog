@@ -158,6 +158,11 @@
         <circle cx="12" cy="12" r="3" />
         <path d="M3 12h6M15 12h6" />
       </symbol>
+      <!-- book (lucide) — the Wiki nav entry (ADR 0073). -->
+      <symbol id="i-book" viewBox="0 0 24 24">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      </symbol>
       <symbol id="i-file" viewBox="0 0 24 24">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
       </symbol>

@@ -163,6 +163,22 @@ export interface NotificationSettings {
 // `followAppDefault` true → resolve like a session (project llmDefaults → app
 // defaults); false → use the pinned provider/account/model below. accountId
 // undefined = the provider's active account.
+// Wiki + AI-memory context switches (ADR 0073). Functional settings: they travel
+// with every turn as `contextConfig` (sessions.sendMessage), NOT localStorage-only
+// — a switch the engine never sees would be a lie in the UI.
+export interface ContextSettings {
+  // Inject the wiki table of contents into each turn.
+  wikiEnabled: boolean
+  // Character budget for that index; over it, the index degrades to space level.
+  wikiBudgetChars: number
+  // Inject the memory index into each turn.
+  memoryEnabled: boolean
+  // Let the agent WRITE memory itself (memory_remember / memory_forget). Default
+  // OFF: an agent silently accumulating facts about the user is opt-in.
+  memoryAutoWrite: boolean
+  memoryBudgetChars: number
+}
+
 export interface TranslateSettings {
   followAppDefault: boolean
   provider: ProviderName
@@ -316,6 +332,14 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   sessionEvents: true,
 }
 
+const DEFAULT_CONTEXT: ContextSettings = {
+  wikiEnabled: true,
+  wikiBudgetChars: 4000,
+  memoryEnabled: true,
+  memoryAutoWrite: false,
+  memoryBudgetChars: 4000,
+}
+
 const DEFAULT_TRANSLATE: TranslateSettings = {
   followAppDefault: true,
   provider: 'anthropic',
@@ -391,6 +415,7 @@ interface PersistShape {
   githubNotify: GithubNotifySettings
   notifications: NotificationSettings
   translate: TranslateSettings
+  context: ContextSettings
 }
 
 function loadPersisted(): Partial<PersistShape> {
@@ -493,6 +518,7 @@ export const useSettingsStore = defineStore('settings', () => {
     ...persisted.notifications,
   })
   const translate = reactive<TranslateSettings>({ ...DEFAULT_TRANSLATE, ...persisted.translate })
+  const context = reactive<ContextSettings>({ ...DEFAULT_CONTEXT, ...persisted.context })
 
   // Bumped whenever a persisted slice is saved (see the watch below). Lets the
   // Settings modal render a debounced "saved" toast without re-declaring the
@@ -518,6 +544,7 @@ export const useSettingsStore = defineStore('settings', () => {
       githubNotify,
       notifications,
       translate,
+      context,
     ],
     () => {
       if (typeof window === 'undefined') return
@@ -536,6 +563,7 @@ export const useSettingsStore = defineStore('settings', () => {
         githubNotify,
         notifications,
         translate,
+        context,
       }
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(blob))
@@ -740,6 +768,24 @@ export const useSettingsStore = defineStore('settings', () => {
   const updateAppearance = (patch: Partial<AppearanceExtras>) => Object.assign(appearance, patch)
   const updatePet = (patch: Partial<PetSettings>) => Object.assign(pet, patch)
   const updateTranslate = (patch: Partial<TranslateSettings>) => Object.assign(translate, patch)
+  const updateContext = (patch: Partial<ContextSettings>) => Object.assign(context, patch)
+
+  // The per-turn payload sessions.sendMessage carries (ADR 0073 D-12). Only the
+  // NON-default fields are included so the engine keeps its own defaults for
+  // anything this UI build does not know about.
+  const contextConfig = (): Record<string, boolean | number> => {
+    const out: Record<string, boolean | number> = {}
+    if (!context.wikiEnabled) out.wikiEnabled = false
+    if (context.wikiBudgetChars !== DEFAULT_CONTEXT.wikiBudgetChars) {
+      out.wikiBudgetChars = context.wikiBudgetChars
+    }
+    if (!context.memoryEnabled) out.memoryEnabled = false
+    if (context.memoryAutoWrite) out.memoryAutoWrite = true
+    if (context.memoryBudgetChars !== DEFAULT_CONTEXT.memoryBudgetChars) {
+      out.memoryBudgetChars = context.memoryBudgetChars
+    }
+    return out
+  }
   const setWorkspacePath = (path: string) => {
     workspacePath.value = path
   }
@@ -794,6 +840,7 @@ export const useSettingsStore = defineStore('settings', () => {
     githubNotify,
     notifications,
     translate,
+    context,
     savedTick,
     // getters
     activeAccount,
@@ -823,6 +870,8 @@ export const useSettingsStore = defineStore('settings', () => {
     updateAppearance,
     updatePet,
     updateTranslate,
+    updateContext,
+    contextConfig,
     setWorkspacePath,
     hydrateAppPaths,
     setGithubAccount,

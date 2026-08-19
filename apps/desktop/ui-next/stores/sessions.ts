@@ -2924,6 +2924,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const sessionPrefs = settingsStore.sessions
     const sysPrompt = defaults.systemPrompt.trim()
     const instructions = defaults.instructions.trim()
+    const ctxConfig = settingsStore.contextConfig()
 
     try {
       const result = await sc.request<SendMessageResult>('sessions.sendMessage', {
@@ -2955,6 +2956,11 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Attached folders → read-only <workspace_tree> context (multi-folder), does
         // NOT change the cwd.
         ...(contextFolders.length ? { contextFolders } : {}),
+        // Wiki + memory context switches (Settings → Context, ADR 0073). Sent as a
+        // per-turn payload because the sidecar treats settings.json as opaque
+        // (ADR 0045) — same path responseStyle/sshApprovalMode take. Omitted when
+        // everything is at its default so the payload stays minimal.
+        ...(Object.keys(ctxConfig).length ? { contextConfig: ctxConfig } : {}),
         // Session-scoped tool denylist + MCP whitelist (config popover).
         ...(s.disabledTools && s.disabledTools.length ? { disabledTools: s.disabledTools } : {}),
         ...(s.mcpServerIds !== undefined ? { mcpServerIds: s.mcpServerIds } : {}),

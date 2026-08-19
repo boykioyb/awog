@@ -109,6 +109,7 @@ const groups = computed<NavGroup[]>(() => [
       { to: '/skills', icon: 'skills', label: 'nav.skills' },
       { to: '/commands', icon: 'commands', label: 'nav.commands' },
       { to: '/rules', icon: 'rules', label: 'nav.rules' },
+      { to: '/wiki', icon: 'book', label: 'nav.wiki' },
       { to: '/templates', icon: 'templates', label: 'nav.templates' },
     ],
   },

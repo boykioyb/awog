@@ -103,5 +103,10 @@
   "common.thinking.high": "High",
   "common.thinking.extra-high": "Extra high",
   "common.thinking.max": "Max",
-  "common.aiUnavailable": "AI generation needs a running engine and a connected LLM account."
+  "common.aiUnavailable": "AI generation needs a running engine and a connected LLM account.",
+  "common.clear": "Clear",
+  "common.create": "Create",
+  "common.loading": "Loading…",
+  "common.saving": "Saving…",
+  "common.edit": "Edit"
 }

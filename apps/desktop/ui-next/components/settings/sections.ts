@@ -9,6 +9,8 @@ export const SETTINGS_SECTIONS = [
   { id: 'models', labelKey: 'settings.nav.models', icon: 'agents' },
   { id: 'pricing', labelKey: 'settings.nav.pricing', icon: 'act' },
   { id: 'workspace', labelKey: 'settings.nav.workspace', icon: 'folder' },
+  { id: 'wiki', labelKey: 'settings.nav.wiki', icon: 'book' },
+  { id: 'memory', labelKey: 'settings.nav.memory', icon: 'brain' },
   { id: 'git', labelKey: 'settings.nav.git', icon: 'git' },
   { id: 'devices', labelKey: 'settings.nav.devices', icon: 'smartphone' },
   { id: 'notifications', labelKey: 'settings.nav.notifications', icon: 'alert' },
