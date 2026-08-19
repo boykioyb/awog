@@ -15,14 +15,17 @@
 //   - The destination ALWAYS wins a name clash — it is the copy the Claude Code
 //     CLI has been reading and writing. The legacy entry is only deleted when it
 //     is byte-identical; when it differs it is parked under
-//     ~/.awog/migrated-conflicts/<kind>/<id> so no edit is ever destroyed.
+//     ~/.awog/migrated-conflicts/<kind>/<tier>/<id> so no edit is ever destroyed.
+//     <tier> is 'global' or the project folder's name: the SAME id routinely
+//     exists in several tiers (one standard skill set copied into every project),
+//     and a park path keyed by <kind>/<id> alone let only the first tier land.
 //   - IDEMPOTENT by construction: the source dirs are gone after a successful
 //     run, so later boots find nothing to do. No done-flag to get out of sync.
 //   - BEST-EFFORT: any failure is logged and skipped. A migration must never
 //     stop the sidecar from starting.
 
 import { readdir, readFile, rename, rm, mkdir, stat, cp } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { awogHome, claudeHome, projectClaudeDir } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { listProjects } from '../projects/store.js'
@@ -39,6 +42,8 @@ interface FsError extends Error {
 function errCode(err: unknown): string | undefined {
   return typeof err === 'object' && err !== null ? (err as FsError).code : undefined
 }
+
+const MAX_PARK_SLOTS = 99
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -59,6 +64,37 @@ async function movePath(from: string, to: string): Promise<void> {
     await cp(from, to, { recursive: true, force: true })
     await rm(from, { recursive: true, force: true })
   }
+}
+
+// Move `from` to `preferredTo`, or to the first free `preferredTo-N` if that name
+// is taken; returns where it landed.
+//
+// Why this is not a plain rename: rename() onto an existing NON-EMPTY directory
+// fails with ENOTEMPTY. That is precisely how the first cut of this migration
+// stranded every project-tier entry whose id had already been parked by the
+// global tier — the park slot was keyed by <kind>/<id>, so the second tier to
+// reach the same id could never land, its `.awog` dir stayed non-empty, and the
+// run retried and re-failed on every boot. Never merge into an occupied slot: a
+// parked copy can be the only surviving version of the user's edit.
+async function moveToFreeSlot(from: string, preferredTo: string): Promise<string> {
+  for (let n = 1; n <= MAX_PARK_SLOTS; n += 1) {
+    const to = n === 1 ? preferredTo : `${preferredTo}-${n}`
+    // eslint-disable-next-line no-await-in-loop
+    if (await pathExists(to)) continue
+    // eslint-disable-next-line no-await-in-loop
+    await movePath(from, to)
+    return to
+  }
+  throw new Error(`no free park slot for ${preferredTo}`)
+}
+
+// Readable, filesystem-safe label for the tier an entry came from, so a parked
+// copy is traceable to the project that owned it. Deliberately the folder name
+// rather than a hash of the path — the user has to find their file in here. Two
+// projects sharing a basename are separated by moveToFreeSlot's suffix instead.
+function tierLabel(projectPath: string): string {
+  const safe = basename(projectPath).replace(/[^A-Za-z0-9._-]/g, '-').replace(/^[.-]+/, '')
+  return safe.length > 0 ? safe : 'project'
 }
 
 // Byte-compare a file or a whole directory tree. Used to decide whether a legacy
@@ -100,6 +136,9 @@ async function migrateKindDir(
   legacyDir: string,
   sharedDir: string,
   kind: string,
+  // Which tier this dir belongs to ('global' or a project label). Only used to
+  // namespace the park slot — see moveToFreeSlot.
+  tier: string,
 ): Promise<KindResult | null> {
   let entries: string[]
   try {
@@ -129,16 +168,17 @@ async function migrateKindDir(
         result.dropped += 1
         continue
       }
-      const parkDir = join(awogHome(), 'migrated-conflicts', kind)
+      const parkDir = join(awogHome(), 'migrated-conflicts', kind, tier)
       // eslint-disable-next-line no-await-in-loop
       await mkdir(parkDir, { recursive: true, mode: 0o700 })
       // eslint-disable-next-line no-await-in-loop
-      await movePath(from, join(parkDir, name))
+      const parkedTo = await moveToFreeSlot(from, join(parkDir, name))
       result.parked += 1
       log.warn('claude-home migration: kept the .claude copy, parked the differing .awog one', {
         kind,
         id: name,
-        parkedTo: join(parkDir, name),
+        tier,
+        parkedTo,
       })
     } catch (err) {
       log.warn('claude-home migration: entry failed, left in place', {
@@ -241,7 +281,7 @@ async function run(): Promise<void> {
 
   for (const kind of SHARED_KINDS) {
     // eslint-disable-next-line no-await-in-loop
-    add(await migrateKindDir(join(awogHome(), kind), join(claudeHome(), kind), kind))
+    add(await migrateKindDir(join(awogHome(), kind), join(claudeHome(), kind), kind, 'global'))
   }
 
   // Project tiers. A project whose folder is gone is simply skipped — readdir
@@ -262,6 +302,7 @@ async function run(): Promise<void> {
           join(project.path, '.awog', kind),
           join(projectClaudeDir(project.path), kind),
           kind,
+          tierLabel(project.path),
         ),
       )
     }
