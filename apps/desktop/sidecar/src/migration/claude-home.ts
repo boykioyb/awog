@@ -34,6 +34,7 @@ import { listProjects } from '../projects/store.js'
 // a settings.json array upstream and rules have no Claude Code dir equivalent,
 // so neither has a shared home to move into.
 const SHARED_KINDS = ['skills', 'agents', 'commands'] as const
+type SharedKind = (typeof SHARED_KINDS)[number]
 
 interface FsError extends Error {
   code?: string
@@ -265,9 +266,38 @@ async function migrateSdkStore(): Promise<number> {
 // module — e.g. from a list method — does not itself kick off filesystem work.
 let inFlight: Promise<void> | null = null
 
+// Per-kind gates. skills/agents/commands.list must not serve a half-drained store
+// of THEIR kind — but they have no reason to wait on the other two kinds, nor on
+// the SDK transcript move, which is hundreds of unrelated directory renames. One
+// promise for the whole run made opening the Skills page during a first-run
+// migration block on all of it. Each gate resolves as soon as its own kind is
+// drained across every tier.
+const kindGates = new Map<SharedKind, { promise: Promise<void>; open: () => void }>()
+
+function kindGate(kind: SharedKind): { promise: Promise<void>; open: () => void } {
+  let g = kindGates.get(kind)
+  if (!g) {
+    let open!: () => void
+    const promise = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    g = { promise, open }
+    kindGates.set(kind, g)
+  }
+  return g
+}
+
 export function migrateToClaudeHome(): Promise<void> {
   if (!inFlight) inFlight = run()
   return inFlight
+}
+
+// What the list methods await: this kind is drained, nothing else is promised.
+// Starts the run if the boot kick has not already (a list can be served before
+// the boot sequence gets here).
+export function awaitKindMigration(kind: SharedKind): Promise<void> {
+  void migrateToClaudeHome()
+  return kindGate(kind).promise
 }
 
 async function run(): Promise<void> {
@@ -279,13 +309,9 @@ async function run(): Promise<void> {
     totals.parked += r.parked
   }
 
-  for (const kind of SHARED_KINDS) {
-    // eslint-disable-next-line no-await-in-loop
-    add(await migrateKindDir(join(awogHome(), kind), join(claudeHome(), kind), kind, 'global'))
-  }
-
-  // Project tiers. A project whose folder is gone is simply skipped — readdir
-  // fails and migrateKindDir returns null.
+  // Project tiers are read up front so the loop below can finish one KIND across
+  // every tier before opening that kind's gate. A project whose folder is gone is
+  // simply skipped — readdir fails and migrateKindDir returns null.
   let projects: { path: string }[] = []
   try {
     projects = await listProjects()
@@ -294,20 +320,34 @@ async function run(): Promise<void> {
       err: err instanceof Error ? err.message : String(err),
     })
   }
-  for (const project of projects) {
+
+  try {
     for (const kind of SHARED_KINDS) {
-      // eslint-disable-next-line no-await-in-loop
-      add(
-        await migrateKindDir(
-          join(project.path, '.awog', kind),
-          join(projectClaudeDir(project.path), kind),
-          kind,
-          tierLabel(project.path),
-        ),
-      )
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        add(await migrateKindDir(join(awogHome(), kind), join(claudeHome(), kind), kind, 'global'))
+        for (const project of projects) {
+          // eslint-disable-next-line no-await-in-loop
+          add(
+            await migrateKindDir(
+              join(project.path, '.awog', kind),
+              join(projectClaudeDir(project.path), kind),
+              kind,
+              tierLabel(project.path),
+            ),
+          )
+        }
+      } finally {
+        // Open on the way out even if this kind threw: a waiting list must never
+        // hang on a migration failure. Resolving twice is a no-op.
+        kindGate(kind).open()
+      }
     }
+  } finally {
+    for (const kind of SHARED_KINDS) kindGate(kind).open()
   }
 
+  // Deliberately AFTER every gate is open: no list waits on this.
   const sdkMoved = await migrateSdkStore()
 
   if (totals.moved || totals.dropped || totals.parked || sdkMoved) {

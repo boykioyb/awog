@@ -418,9 +418,10 @@ startStdioLoop(handleLine, () => gracefulShutdown(0))
 //      out of ~/.awog/claude-sdk, then delete the emptied legacy dirs (ADR 0070).
 //      Independent of 1+2; kicked off here only so a fresh boot does the work
 //      up-front. It does NOT gate the RPC loop (that would risk the host's
-//      heartbeat timeout on a slow move) — instead skills/agents/commands.list
-//      await the SAME single-flight promise, so no list can observe a
-//      half-drained store.
+//      heartbeat timeout on a slow move) — instead each of skills/agents/
+//      commands.list awaits ITS OWN kind's gate (awaitKindMigration), so a list
+//      never observes a half-drained store of its kind, and never waits on the
+//      other kinds or on the SDK transcript move.
 // Step 1 MUST finish first so the copied source configs inherit `secret:` refs and
 // never plaintext. Step 2 is copy+backup, never deletes the originals, never touches
 // the keychain, idempotent (done-flag). Step 3 DOES delete, but only a legacy dir it
