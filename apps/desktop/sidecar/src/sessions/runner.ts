@@ -7,6 +7,7 @@
 
 import type {
   ContextChars,
+  ContextConfig,
   ContextItemSize,
   SessionAttachment,
   SessionCompaction,
@@ -131,6 +132,9 @@ export interface RunNonStreamArgs {
   // Linked project id (when any). Scopes the Task tool's subagent menu to the
   // user tiers + this project's agent tiers (ADR 0030).
   projectId?: string
+  // Wiki / memory context switches from Settings (ADR 0073). Absent = defaults
+  // (wiki + memory injected, agent memory writes OFF).
+  contextConfig?: ContextConfig
   // Linked SSH host id (ADR 0064 P2). When set, the Pi runtime pushes the scoped
   // SSH tools (ssh_exec / ssh_read_file / ssh_list_dir / ssh_write_file) targeting
   // this host; the mutating ones are gated via settings.sshApprovalMode.
@@ -188,9 +192,14 @@ export interface RunNonStreamArgs {
     memoryFilesChars: number
     customAgentsChars: number
     skillsChars: number
+    // Wiki table of contents + memory index (ADR 0073).
+    wikiChars: number
+    memoryChars: number
     memoryFilesList: ContextItemSize[]
     customAgentsList: ContextItemSize[]
     skillsList: ContextItemSize[]
+    wikiList: ContextItemSize[]
+    memoryList: ContextItemSize[]
   }
   // Claude Code subagent `tools` field from the active agent. When set,
   // restricts the runtime toolset to this whitelist.

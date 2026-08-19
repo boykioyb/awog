@@ -33,6 +33,8 @@ import {
 } from '../sources/gate.js'
 import { loadAgent, listAgents } from '../agents/store.js'
 import { listSkills } from '../skills/store.js'
+import { buildWikiIndex } from '../wiki/inject.js'
+import { buildMemoryIndex } from '../memory/inject.js'
 import { expandSecrets } from '../mcp/secrets.js'
 import { applyBearerScheme } from '../mcp/auth-headers.js'
 import { assertInsideWorkspace } from '../git/path-sanitize.js'
@@ -48,6 +50,7 @@ import type {
 } from '../runtime/permission-types.js'
 import type {
   ApiSource,
+  ContextConfig,
   ContextItemSize,
   LocalSource,
   SessionAttachment,
@@ -147,6 +150,18 @@ const Params = z.object({
   // on-disk path and passes it as the runtime tools' fs root so Read/Bash/Edit
   // operate against the user's repo instead of process.cwd().
   projectId: z.string().optional(),
+  // Wiki / memory context switches from Settings (ADR 0073 D-12). Absent = the
+  // documented defaults (both injected, agent memory writes OFF), so an older UI
+  // build keeps behaving sanely.
+  contextConfig: z
+    .object({
+      wikiEnabled: z.boolean().optional(),
+      wikiBudgetChars: z.number().int().positive().max(40_000).optional(),
+      memoryEnabled: z.boolean().optional(),
+      memoryAutoWrite: z.boolean().optional(),
+      memoryBudgetChars: z.number().int().positive().max(40_000).optional(),
+    })
+    .optional(),
   // Working folder dragged into the session (absolute on-disk path). Takes
   // precedence over the project-derived path as the runtime tools' cwd: the user
   // explicitly chose this folder. Validated (absolute + existing directory) below;
@@ -446,22 +461,32 @@ interface BulkLoadResult {
   memoryFilesChars: number
   customAgentsChars: number
   skillsChars: number
+  wikiChars: number
+  memoryChars: number
   memoryFilesList: ContextItemSize[]
   customAgentsList: ContextItemSize[]
   skillsList: ContextItemSize[]
+  wikiList: ContextItemSize[]
+  memoryList: ContextItemSize[]
 }
 
 async function buildBulkLoad(
   projectId: string | undefined,
   cwd: string | undefined,
+  // Wiki / memory switches from Settings, travelling with the turn (ADR 0073 D-12).
+  contextConfig: ContextConfig | undefined,
 ): Promise<BulkLoadResult> {
   const result: BulkLoadResult = {
     memoryFilesChars: 0,
     customAgentsChars: 0,
     skillsChars: 0,
+    wikiChars: 0,
+    memoryChars: 0,
     memoryFilesList: [],
     customAgentsList: [],
     skillsList: [],
+    wikiList: [],
+    memoryList: [],
   }
   const blocks: string[] = []
 
@@ -523,6 +548,43 @@ async function buildBulkLoad(
     log.warn('failed to list skills for bulk load', {
       err: err instanceof Error ? err.message : String(err),
     })
+  }
+
+  // Wiki (ADR 0073) — a TABLE OF CONTENTS of the user's own documentation, never
+  // its content: page paths + one-line descriptions, so the model knows what
+  // exists and pulls the page it needs with `wiki_read`. Degrades to space level
+  // when the full index would exceed its budget (wiki/inject.ts), and says so.
+  if (contextConfig?.wikiEnabled !== false) {
+    try {
+      const wiki = await buildWikiIndex(projectId, contextConfig?.wikiBudgetChars)
+      if (wiki.block) {
+        blocks.push(wiki.block)
+        result.wikiChars = wiki.chars
+        result.wikiList = wiki.items
+      }
+    } catch (err) {
+      log.warn('failed to build wiki index for bulk load', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Memory (ADR 0073 part B) — durable facts, one line each. Unlike the wiki the
+  // line IS the fact, so the index alone is useful; `memory_read` only exists for
+  // the few facts that carry extra detail.
+  if (contextConfig?.memoryEnabled !== false) {
+    try {
+      const memory = await buildMemoryIndex(projectId, contextConfig?.memoryBudgetChars)
+      if (memory.block) {
+        blocks.push(memory.block)
+        result.memoryChars = memory.chars
+        result.memoryList = memory.items
+      }
+    } catch (err) {
+      log.warn('failed to build memory index for bulk load', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 
   if (blocks.length > 0) result.block = blocks.join('\n\n')
@@ -851,7 +913,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // skills). Folded into systemPromptAppend so the model sees the catalogue; the
   // per-section char sizes ride along to the runtime for the usage-panel
   // breakdown. Best-effort — buildBulkLoad never throws.
-  const bulkLoad = await buildBulkLoad(params.projectId, cwd)
+  const bulkLoad = await buildBulkLoad(params.projectId, cwd, params.contextConfig)
   if (bulkLoad.block) {
     systemPromptAppend = systemPromptAppend
       ? `${systemPromptAppend}\n\n${bulkLoad.block}`
@@ -1211,6 +1273,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(cwd ? { cwd } : {}),
         ...(params.projectId ? { projectId: params.projectId } : {}),
+        // Wiki / memory switches ride with the turn (ADR 0073 D-12): the runtime
+        // decides which tools to offer from them.
+        ...(params.contextConfig ? { contextConfig: params.contextConfig } : {}),
         // Linked SSH host (ADR 0064 P2): the Pi runtime pushes the scoped SSH tools
         // for this host. sshApprovalMode rides along in `settings`.
         ...(params.aboutSshHostId ? { aboutSshHostId: params.aboutSshHostId } : {}),
@@ -1235,9 +1300,13 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
           memoryFilesChars: bulkLoad.memoryFilesChars,
           customAgentsChars: bulkLoad.customAgentsChars,
           skillsChars: bulkLoad.skillsChars,
+          wikiChars: bulkLoad.wikiChars,
+          memoryChars: bulkLoad.memoryChars,
           memoryFilesList: bulkLoad.memoryFilesList,
           customAgentsList: bulkLoad.customAgentsList,
           skillsList: bulkLoad.skillsList,
+          wikiList: bulkLoad.wikiList,
+          memoryList: bulkLoad.memoryList,
         },
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
         // Compaction checkpoint: explicit payload (reference `ui`) or folded from the

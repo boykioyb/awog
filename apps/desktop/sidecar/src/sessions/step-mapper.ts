@@ -183,6 +183,25 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Enter plan'
     case MCP_DESCRIBE_TOOL:
       return 'MCP: describe'
+    // Wiki + memory (ADR 0073). Both name forms are listed because the Pi path uses
+    // the bare name while the Claude SDK bridges the SAME tool as
+    // `mcp__awogwiki__*` / `mcp__awogmemory__*` — without these the row would read
+    // "awogwiki: wiki_read" on one runtime and "Wiki read" on the other.
+    case 'wiki_search':
+    case 'mcp__awogwiki__wiki_search':
+      return 'Wiki search'
+    case 'wiki_read':
+    case 'mcp__awogwiki__wiki_read':
+      return 'Wiki read'
+    case 'memory_remember':
+    case 'mcp__awogmemory__memory_remember':
+      return 'Remember'
+    case 'memory_forget':
+    case 'mcp__awogmemory__memory_forget':
+      return 'Forget'
+    case 'memory_read':
+    case 'mcp__awogmemory__memory_read':
+      return 'Memory'
     default: {
       // MCP tool (direct mcp__<server>__<tool>, or an unwrapped proxy mcp_call)
       // → "server: tool" instead of the raw double-underscore name (ADR 0051).

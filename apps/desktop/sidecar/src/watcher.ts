@@ -14,6 +14,8 @@
 //   hooks.fs-changed      — hook config file added/removed/modified
 //   rules.fs-changed      — rule file added/removed/modified
 //   commands.fs-changed   — slash-command file added/removed/modified
+//   wiki.fs-changed       — wiki page added/removed/modified (ADR 0073)
+//   memory.fs-changed     — memory fact added/removed/modified (ADR 0073)
 //
 // Each event payload: { tier?: string, path?: string, type: 'add'|'change'|'unlink' }
 // UI subscribes once and re-hydrates the matching store on event arrival.
@@ -25,6 +27,12 @@ import { emit } from './transport/stdio.js'
 import { log } from './util/logger.js'
 import { awogHome, claudeHome, projectClaudeDir } from './util/path.js'
 import { listProjects } from './projects/store.js'
+// The wiki index is cached per turn (wiki/inject.ts). Unlike the flat config
+// kinds, a wiki is EXPECTED to change outside the app — the user edits a page in
+// their own editor, or a `git pull` brings new pages — so the watcher, not just
+// the mutating RPCs, has to drop that cache.
+import { invalidateWikiCache } from './wiki/inject.js'
+import { invalidateMemoryCache } from './memory/inject.js'
 
 const DEBOUNCE_MS = 500
 const RESCAN_PROJECTS_MS = 30_000 // re-check registered projects every 30s
@@ -36,6 +44,8 @@ type WatchKind =
   | 'hooks'
   | 'rules'
   | 'commands'
+  | 'wiki'
+  | 'memory'
   | 'ssh-hosts'
   | 'ssh-identities'
   | 'vpn-profiles'
@@ -77,6 +87,8 @@ async function getChokidar(): Promise<ChokidarModule | null> {
 interface DirSpec {
   kind: WatchKind
   dir: string
+  // chokidar traversal depth. Omitted = the flat-config default (3).
+  depth?: number
 }
 
 // agents/skills/commands live in the SHARED `.claude` home (ADR 0070) so an edit
@@ -90,6 +102,8 @@ function userDirs(): DirSpec[] {
     { kind: 'sources', dir: join(awogHome(), 'sources') },
     { kind: 'hooks', dir: join(awogHome(), 'hooks') },
     { kind: 'rules', dir: join(awogHome(), 'rules') },
+    { kind: 'wiki', dir: join(awogHome(), 'wiki'), depth: 6 },
+    { kind: 'memory', dir: join(awogHome(), 'memory') },
     { kind: 'ssh-hosts', dir: join(awogHome(), 'ssh-hosts') },
     { kind: 'ssh-identities', dir: join(awogHome(), 'ssh-identities') },
     { kind: 'vpn-profiles', dir: join(awogHome(), 'vpn-profiles') },
@@ -103,6 +117,8 @@ function projectDirs(projectPath: string): DirSpec[] {
     { kind: 'commands', dir: join(projectClaudeDir(projectPath), 'commands') },
     { kind: 'hooks', dir: join(projectPath, '.awog', 'hooks') },
     { kind: 'rules', dir: join(projectPath, '.awog', 'rules') },
+    { kind: 'wiki', dir: join(projectPath, '.awog', 'wiki'), depth: 6 },
+    { kind: 'memory', dir: join(projectPath, '.awog', 'memory') },
   ]
 }
 
@@ -153,7 +169,9 @@ class AwogWatcher {
     try {
       const watcher = this.chokidar.watch(spec.dir, {
         ignoreInitial: true,
-        depth: 3, // <id>/AGENT.md or <id>/SKILL.md or <id>.md
+        // Flat kinds: <id>/AGENT.md or <id>/SKILL.md or <id>.md. A wiki is a real
+        // tree, so it declares its own depth (ADR 0073 caps slugs at 5 levels).
+        depth: spec.depth ?? 3,
         awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
         followSymlinks: false,
       })
@@ -161,6 +179,8 @@ class AwogWatcher {
         // Filter: only fire for files we'd actually parse. Anything else
         // (.DS_Store, lock files, sibling images) is irrelevant.
         if (!relevantFile(spec.kind, path)) return
+        if (spec.kind === 'wiki') invalidateWikiCache()
+        if (spec.kind === 'memory') invalidateMemoryCache()
         this.scheduleEmit(spec.kind, { dir: spec.dir, path, type })
       }
       watcher.on('add', (p: string) => onChange(p, 'add'))
@@ -217,7 +237,9 @@ class AwogWatcher {
           e.spec.kind === 'skills' ||
           e.spec.kind === 'hooks' ||
           e.spec.kind === 'rules' ||
-          e.spec.kind === 'commands') &&
+          e.spec.kind === 'commands' ||
+          e.spec.kind === 'wiki' ||
+          e.spec.kind === 'memory') &&
         isProjectSubdir(e.spec.dir) &&
         !pathRegistered(e.spec.dir, currentPaths),
     )
@@ -265,6 +287,11 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   if (kind === 'rules') return lower.endsWith('.md')
   // commands: a slash-command Markdown file (atomic .md.tmp.<pid> filtered out).
   if (kind === 'commands') return lower.endsWith('.md')
+  // wiki: any page in the tree (nested, unlike the flat kinds above); atomic
+  // .md.tmp.<pid> writes are filtered by the suffix check.
+  if (kind === 'wiki') return lower.endsWith('.md')
+  // memory: one fact per .md file (atomic .md.tmp.<pid> writes filtered out).
+  if (kind === 'memory') return lower.endsWith('.md')
   // ssh/vpn: a config .json (atomic .json.tmp.<pid> filtered out).
   if (kind === 'ssh-hosts' || kind === 'ssh-identities' || kind === 'vpn-profiles') {
     return lower.endsWith('.json') && !lower.includes('.tmp.')

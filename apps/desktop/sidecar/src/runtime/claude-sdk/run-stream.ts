@@ -51,6 +51,10 @@ import { createClaudeEventAdapter } from './event-adapter.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { buildSourceToolsSdkServer } from './source-sdk-server.js'
 import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
+import { buildWikiToolsSdkServer } from './wiki-sdk-server.js'
+import { hasWikiContext } from '../../wiki/inject.js'
+import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
+import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
 import { listHosts } from '../../ssh/store.js'
 import {
   registerExternalBackground,
@@ -500,6 +504,15 @@ export async function runStreamClaude(
   )
   // SSH tools are offered whenever the user has an agent-enabled host (unified model).
   const sshHostsExist = (await listHosts()).some((h) => h.agentEnabled !== false)
+  // Wiki tools (ADR 0073 D-7): same handlers as the Pi path, bridged as an
+  // in-process SDK MCP server so a wiki lookup works identically on both runtimes.
+  const ctxCfg = args.contextConfig
+  const wikiAvailable = ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId))
+  // Memory tools (ADR 0073 D-11): writes are opt-in, read appears only when a fact
+  // has detail past its one-liner. Same gating as the Pi path.
+  const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
+  const memoryAutoWrite = ctxCfg?.memoryAutoWrite === true
+  const memoryBodies = memoryOn && (await hasMemoryBodies(args.projectId))
   const allServers = {
     ...(mcpServers ?? {}),
     ...apiServers,
@@ -509,6 +522,17 @@ export async function runStreamClaude(
     // configured (host is a per-call param; mirrors the Pi run-stream guard). Gated by
     // sshApprovalMode. The co-pilot dock adds ssh_terminal_run (watched shell).
     ...(sshHostsExist ? { awogssh: buildSshToolsSdkServer(args.sshTerminalConnId) } : {}),
+    // Wiki lookup → mcp__awogwiki__wiki_search / mcp__awogwiki__wiki_read.
+    ...(wikiAvailable ? { awogwiki: buildWikiToolsSdkServer(args.projectId) } : {}),
+    // Memory → mcp__awogmemory__memory_remember / _forget / _read.
+    ...(memoryAutoWrite || memoryBodies
+      ? {
+          awogmemory: buildMemoryToolsSdkServer(args.projectId, {
+            autoWrite: memoryAutoWrite,
+            hasBodies: memoryBodies,
+          }),
+        }
+      : {}),
   }
   const claudeBinary = resolveClaudeBinary()
 
@@ -880,6 +904,8 @@ export async function runStreamClaude(
   const memoryFilesLen = items?.memoryFilesChars ?? 0
   const customAgentsLen = items?.customAgentsChars ?? 0
   const skillsLen = items?.skillsChars ?? 0
+  const wikiLen = items?.wikiChars ?? 0
+  const memoryLen = items?.memoryChars ?? 0
   const systemPromptLen = (args.systemPrompt ?? '').length
   // Turn-prompt riders (style / plan / checklist / todo nudge) are instructions the
   // model receives every turn even though they don't live in `append` on this path
@@ -893,7 +919,13 @@ export async function runStreamClaude(
   const instructionsLen =
     Math.max(
       0,
-      (append?.length ?? 0) - systemPromptLen - memoryFilesLen - customAgentsLen - skillsLen,
+      (append?.length ?? 0) -
+        systemPromptLen -
+        memoryFilesLen -
+        customAgentsLen -
+        skillsLen -
+        wikiLen -
+        memoryLen,
     ) + ridersLen
   // Transcript the SDK context holds: kept turns from the compaction cut onward (or
   // the whole transcript when uncompacted) + the summary — measured TEXT-ONLY via
@@ -909,11 +941,15 @@ export async function runStreamClaude(
     instructions: instructionsLen,
     customAgents: customAgentsLen,
     skills: skillsLen,
+    wiki: wikiLen,
+    memory: memoryLen,
     memoryFiles: memoryFilesLen,
     history: historyLen,
     ...(items?.memoryFilesList.length ? { memoryFilesList: items.memoryFilesList } : {}),
     ...(items?.customAgentsList.length ? { customAgentsList: items.customAgentsList } : {}),
     ...(items?.skillsList.length ? { skillsList: items.skillsList } : {}),
+    ...(items?.wikiList.length ? { wikiList: items.wikiList } : {}),
+    ...(items?.memoryList.length ? { memoryList: items.memoryList } : {}),
   }
 
   return {

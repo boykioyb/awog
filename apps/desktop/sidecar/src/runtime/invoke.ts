@@ -38,6 +38,8 @@ import { buildOneShotContextBlock } from '../context/environment.js'
 import { CO_AUTHOR_INSTRUCTION } from '../git/co-author.js'
 import { toReasoning } from './thinking.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
+import { buildWikiIndex, hasWikiContext } from '../wiki/inject.js'
+import { buildMemoryIndex, hasMemoryBodies } from '../memory/inject.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../sdk/invoke.js'
 
 // Map a thrown error to RPC codes so the UI treats CANCELED / AUTH_EXPIRED /
@@ -222,6 +224,27 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
       // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
       ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),
       ...(args.sourceApiEndpoints ? { sourceApiEndpoints: args.sourceApiEndpoints } : {}),
+      // Wiki lookup (ADR 0073). Tasks get it too: a workflow node reasoning about
+      // architecture needs the same documentation a chat turn does. Like the rules
+      // prompt below, the task's project is projectIds[0].
+      ...((await hasWikiContext(args.projectIds?.[0]))
+        ? {
+            includeWikiTools: {
+              ...(args.projectIds?.[0] ? { projectId: args.projectIds[0] } : {}),
+            },
+          }
+        : {}),
+      // Read-only memory access for tasks: `autoWrite: false` is not a setting here,
+      // it is the contract (see memoryIndex above).
+      ...((await hasMemoryBodies(args.projectIds?.[0]))
+        ? {
+            includeMemoryTools: {
+              ...(args.projectIds?.[0] ? { projectId: args.projectIds[0] } : {}),
+              autoWrite: false,
+              hasBodies: true,
+            },
+          }
+        : {}),
     },
     args.abortController?.signal,
     // Tasks run unattended — no interactive AskUserQuestion handler.
@@ -286,6 +309,14 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
   // Workspace rules (ADR 0033): enabled global + task-project rules, appended to
   // (not replacing) the node agent's own prompt.
   const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0], extractTurnPaths(args.prompt))
+  // Wiki table of contents (ADR 0073): page paths + one-line descriptions, never
+  // page content — the node reads a page with wiki_read when it needs one.
+  const wikiIndex = (await buildWikiIndex(args.projectIds?.[0])).block
+  // Memory index (ADR 0073 part B). A task READS memory but never writes it: an
+  // unattended node accumulating facts about the user is precisely what the
+  // opt-in write switch exists to prevent, and there is no one watching to correct
+  // a bad one. memory_read is still offered when a fact has extra detail.
+  const memoryIndex = (await buildMemoryIndex(args.projectIds?.[0])).block
   // Tell the node agent — in-band — about any attached MCP server that failed to
   // load, so it doesn't call its absent tools or fabricate their results.
   const mcpUnavailable = buildMcpUnavailableNote(mcpFailures)
@@ -298,6 +329,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     contextBlock,
     args.systemPromptAppend,
     rulesPrompt,
+    wikiIndex,
+    memoryIndex,
     // Senior-engineer scaffolding (ADR 0071): investigate before changing, match
     // the codebase, cite file:line, verify before reporting done. Under OAuth Pi
     // prepends only the one-sentence identity, so a node agent gets no

@@ -210,6 +210,10 @@ export interface ContextChars {
   customAgents?: number
   // Bulk-loaded `<available_skills>` block (name + description per skill).
   skills?: number
+  // Bulk-loaded `<wiki_index>` block — the wiki table of contents (ADR 0073).
+  wiki?: number
+  // Bulk-loaded `<memory>` block — durable facts, one line each (ADR 0073).
+  memory?: number
   // Bulk-loaded `<project_context_files>` block (CLAUDE.md / AGENTS.md content).
   memoryFiles?: number
   // Replayed history (prior messages + the pending prompt, incl. tool I/O).
@@ -222,6 +226,8 @@ export interface ContextChars {
   memoryFilesList?: ContextItemSize[]
   customAgentsList?: ContextItemSize[]
   skillsList?: ContextItemSize[]
+  wikiList?: ContextItemSize[]
+  memoryList?: ContextItemSize[]
 }
 
 // User-attached file/image on a message. Images carry an inline `url` (a
@@ -1520,4 +1526,121 @@ export interface ActivityPricingFetch {
   updated: number
   // Effective catalog after merge (same shape/order as `activity.pricing`).
   models: ModelPrice[]
+}
+
+// ─── Wiki ──────────────────────────────────────────────────────────────────
+// In-app documentation, doubling as the LLM's context source (ADR 0073).
+// Two tiers, AWOG-owned (the Claude Code CLI has no `wiki` kind, so this does
+// NOT belong in the shared `.claude` home of ADR 0070):
+//
+//   global  → ~/.awog/wiki/<space>/**/*.md              (applies everywhere)
+//   project → {project.path}/.awog/wiki/<space>/**/*.md  (that project only)
+//
+// `path` is the slug: the root-relative path WITHOUT the `.md` extension, always
+// forward-slashed (`architecture/system-overview`). It is the id used by
+// `[[wikilinks]]`, by the `wiki_read` tool, and by the UI tree.
+
+export type WikiSource = 'global' | 'project'
+
+export interface WikiPage {
+  path: string
+  source: WikiSource
+  projectId?: string
+  // First segment of `path`, or '' for a page sitting at the wiki root.
+  space: string
+  title: string
+  description: string
+  tags: string[]
+  // False = hidden from the LLM (index + search). A private note stays readable
+  // in the app but never reaches a prompt.
+  context: boolean
+  bytes: number
+  updatedAt: number
+}
+
+export interface WikiSpace {
+  id: string
+  source: WikiSource
+  projectId?: string
+  title: string
+  description: string
+  pageCount: number
+}
+
+export interface WikiTree {
+  spaces: WikiSpace[]
+  pages: WikiPage[]
+  // One entry per scanned root so the UI can report where it looked (mirrors
+  // RuleScanReport) — a wiki that yields nothing is usually a missing dir.
+  reports: { dir: string; source: WikiSource; projectId?: string; found: number }[]
+}
+
+// A page plus its content. `raw` is the file verbatim (frontmatter included) for
+// the editor; `body` is the content below the frontmatter for the reader.
+export interface WikiPageContent {
+  page: WikiPage
+  raw: string
+  body: string
+  truncated: boolean
+}
+
+export interface WikiSearchHit {
+  path: string
+  source: WikiSource
+  projectId?: string
+  title: string
+  line: number
+  preview: string
+}
+
+// Result of `wiki.import` — per-file outcome so the UI can say "18/21 imported"
+// and name what it skipped instead of silently dropping files.
+export interface WikiImportReport {
+  imported: string[]
+  skipped: { name: string; reason: string }[]
+}
+
+// ─── AI memory ─────────────────────────────────────────────────────────────
+// Long-term facts the agent accumulates and the user curates (ADR 0073 part B).
+// One fact per file, two tiers under `.awog`:
+//
+//   global  → ~/.awog/memory/<slug>.md
+//   project → {project.path}/.awog/memory/<slug>.md
+//
+// `description` is the fact in ONE LINE and is what the prompt receives; `body` is
+// optional detail the model pulls with `memory_read`. There is no MEMORY.md index
+// on disk — the injected index is derived from these frontmatters (D-10).
+
+export type MemorySource = 'global' | 'project'
+export type MemoryType = 'user' | 'feedback' | 'project' | 'reference'
+
+export interface MemoryFact {
+  // Slug = filename without the extension.
+  id: string
+  source: MemorySource
+  projectId?: string
+  name: string
+  description: string
+  body: string
+  type: MemoryType
+  enabled: boolean
+  // mtime — drives "most recent first" inside a type group.
+  updatedAt: number
+}
+
+// Per-turn context switches the renderer owns (ADR 0073 D-12). Settings live in
+// the UI blob (ADR 0045: the sidecar treats settings.json as opaque), so the flags
+// travel WITH the turn — the same path `responseStyle` / `sshApprovalMode` take.
+// Every field is optional: an absent field means the documented default, so an
+// older UI build keeps working.
+export interface ContextConfig {
+  // Inject the wiki table of contents. Default true.
+  wikiEnabled?: boolean | undefined
+  wikiBudgetChars?: number | undefined
+  // Inject the memory index. Default true.
+  memoryEnabled?: boolean | undefined
+  // Let the agent WRITE memory (memory_remember / memory_forget). Default FALSE —
+  // a model that quietly accumulates claims about the user is opt-in only.
+  memoryAutoWrite?: boolean | undefined
+  memoryBudgetChars?: number | undefined
 }

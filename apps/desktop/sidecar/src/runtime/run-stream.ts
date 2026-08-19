@@ -58,6 +58,8 @@ import { makeBeforeToolCall, withTurnBudget } from './permission.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
+import { hasWikiContext } from '../wiki/inject.js'
+import { hasMemory, hasMemoryBodies } from '../memory/inject.js'
 import { buildStylePrompt } from '../style/styles.js'
 import { CO_AUTHOR_INSTRUCTION } from '../git/co-author.js'
 
@@ -124,6 +126,16 @@ export async function runStreamPi(
   const inPlanMode = args.settings.mode === 'plan'
   // Captured in a const so TS narrows it inside the todoSink closure below.
   const todoSessionId = args.sessionId
+  // Wiki (ADR 0073): offer wiki_search/wiki_read only when the wiki actually has a
+  // page the LLM may see AND Settings has not turned the wiki off. No wiki → no
+  // tool schema → no token cost.
+  const ctxCfg = args.contextConfig
+  const wikiAvailable = ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId))
+  // Memory (ADR 0073 part B): the WRITE tools are opt-in (Settings, default off);
+  // memory_read appears only when some fact carries detail past its one-liner.
+  const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
+  const memoryAutoWrite = ctxCfg?.memoryAutoWrite === true
+  const memoryBodies = memoryOn && (await hasMemoryBodies(args.projectId))
   const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
@@ -138,6 +150,21 @@ export async function runStreamPi(
       // Source setup tools (ADR 0060 P6): sessions only. Lets the model add/test/
       // authenticate Sources conversationally. Never wired into tasks (invoke.ts).
       includeSourceTools: true,
+      // Wiki lookup (ADR 0073) — the user's own docs, reachable on BOTH runtimes.
+      ...(wikiAvailable
+        ? { includeWikiTools: { ...(args.projectId ? { projectId: args.projectId } : {}) } }
+        : {}),
+      // Memory write/read tools (ADR 0073 D-11). Omitted entirely when the user has
+      // not opted into agent writes and no fact has extra detail to read.
+      ...(memoryAutoWrite || memoryBodies
+        ? {
+            includeMemoryTools: {
+              ...(args.projectId ? { projectId: args.projectId } : {}),
+              autoWrite: memoryAutoWrite,
+              hasBodies: memoryBodies,
+            },
+          }
+        : {}),
       // Per-source Explore scoping (ADR 0060 P4): restrict a source to its own
       // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
       ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),
@@ -411,13 +438,17 @@ export async function runStreamPi(
   const memoryFilesLen = items?.memoryFilesChars ?? 0
   const customAgentsLen = items?.customAgentsChars ?? 0
   const skillsLen = items?.skillsChars ?? 0
+  const wikiLen = items?.wikiChars ?? 0
+  const memoryLen = items?.memoryChars ?? 0
   const instructionsLen = Math.max(
     0,
     (context.systemPrompt ?? '').length -
       systemPromptLen -
       memoryFilesLen -
       customAgentsLen -
-      skillsLen,
+      skillsLen -
+      wikiLen -
+      memoryLen,
   )
   const contextChars = {
     systemPrompt: systemPromptLen,
@@ -426,11 +457,15 @@ export async function runStreamPi(
     mcpTools: mcpToolsArr.length > 0 ? JSON.stringify(mcpToolsArr).length : 0,
     customAgents: customAgentsLen,
     skills: skillsLen,
+    wiki: wikiLen,
+    memory: memoryLen,
     memoryFiles: memoryFilesLen,
     history: JSON.stringify(context.messages).length + JSON.stringify(prompt).length,
     ...(items?.memoryFilesList.length ? { memoryFilesList: items.memoryFilesList } : {}),
     ...(items?.customAgentsList.length ? { customAgentsList: items.customAgentsList } : {}),
     ...(items?.skillsList.length ? { skillsList: items.skillsList } : {}),
+    ...(items?.wikiList.length ? { wikiList: items.wikiList } : {}),
+    ...(items?.memoryList.length ? { memoryList: items.memoryList } : {}),
   }
 
   const reasoning = toReasoning(args.settings.level, model)

@@ -33,6 +33,8 @@ import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } fr
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createSourceTools } from './source-tools.js'
+import { createWikiTools } from './wiki-tools.js'
+import { createMemoryTools } from './memory-tools.js'
 import { createTodoWriteTool, createWebSearchTool } from './builtin-stubs.js'
 import type { TodoSink } from './builtin-stubs.js'
 import { createWebFetchTool } from './web-fetch-tool.js'
@@ -78,6 +80,18 @@ export interface ToolFilter {
   // run_in_background silently degrades to synchronous there. Not a filter per se,
   // but threaded here alongside the other per-turn tool-assembly options.
   backgroundExec?: { sessionId: string }
+  // Wiki tools (ADR 0073). Set ONLY when the wiki actually has a page the LLM may
+  // see, so a user who never made a wiki pays zero tokens for its tool schemas.
+  // `projectId` scopes the project-tier wiki for the turn.
+  includeWikiTools?: { projectId?: string | undefined }
+  // Memory tools (ADR 0073 D-11). `autoWrite` gates memory_remember/memory_forget
+  // (Settings opt-in, default off); `hasBodies` gates memory_read. Absent = no
+  // memory tools at all.
+  includeMemoryTools?: {
+    projectId?: string | undefined
+    autoWrite: boolean
+    hasBodies: boolean
+  }
   // Checklist persistence: when set, TodoWrite also writes its list to the session's
   // Session.todos, which is what lets the user edit the checklist and have the edit
   // survive the model's next TodoWrite (sessions/todo-context.ts). Set ONLY by the
@@ -178,6 +192,10 @@ export function createAwogToolDefinitions(
     ...(filter.includePlanTool ? [createExitPlanModeTool()] : []),
     // Source setup tools (ADR 0060 P6) — sessions only (includeSourceTools).
     ...(filter.includeSourceTools ? createSourceTools() : []),
+    // Wiki lookup (ADR 0073) — present only when the wiki has LLM-visible pages.
+    ...(filter.includeWikiTools ? createWikiTools(filter.includeWikiTools) : []),
+    // Memory (ADR 0073 part B) — write tools only when the user opted in.
+    ...(filter.includeMemoryTools ? createMemoryTools(filter.includeMemoryTools) : []),
   ] as AgentTool[]
 
   return applyFilter(all, filter)
