@@ -40,7 +40,10 @@ export function mapClaudeErrorToRpc(err: unknown): RpcError {
   if (name === 'AbortError' || lower.includes('aborted') || lower.includes('cancelled')) {
     return new RpcError(-32023, 'CANCELED')
   }
-  if (lower.includes('unauthor') || lower.includes('401') || lower.includes('authentication')) {
+  // `401` must match as a WHOLE token — a bare substring test also fires on an
+  // unrelated 4010/1401 in a request id, byte count or exit line, mislabelling
+  // a random failure as an expired login.
+  if (lower.includes('unauthor') || /\b401\b/.test(lower) || lower.includes('authentication')) {
     return new RpcError(-32020, 'AUTH_EXPIRED: re-authenticate via Settings')
   }
   if (lower.includes('rate limit') || lower.includes('429')) {
@@ -69,6 +72,12 @@ export function buildSdkEnv(cred: Credential): Record<string, string> {
   // intermix with the user's real Claude Code CLI sessions and stays within the
   // local-first data layer. Sessions land under ~/.awog/claude-sdk/projects/.
   env.CLAUDE_CONFIG_DIR = join(awogHome(), 'claude-sdk')
+  // SDK 0.3.233 dropped TodoWrite/TodoRead from the DEFAULT tool surface on
+  // opus 4.8 / sonnet 5 / fable 5 / mythos 5 and newer. AWOG's session checklist
+  // (ADR 0069) is built on that built-in — Session.todos is persisted from the
+  // adapter's TodoWrite hook — so opt back in explicitly. AWOG's own allow/deny
+  // filter (allowedTools / disallowedTools) still decides per agent.
+  env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1'
   if (cred.kind === 'oauth') {
     env.CLAUDE_CODE_OAUTH_TOKEN = cred.accessToken
   } else {

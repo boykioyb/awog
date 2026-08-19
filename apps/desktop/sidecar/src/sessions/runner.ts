@@ -21,6 +21,10 @@ import type {
   CompiledApiEndpoint,
   McpServersConfig,
 } from '../runtime/permission-types.js'
+import { RpcError } from '../transport/rpc.js'
+import { resolveAccount } from '../credentials/credential-resolver.js'
+import { forceRefresh } from '../credentials/token-manager.js'
+import { log } from '../util/logger.js'
 
 const PER_SESSION_LOCKS = new Map<string, Promise<unknown>>()
 
@@ -281,6 +285,74 @@ export interface RunStreamResult {
   sdkSessionId?: string
 }
 
+// RpcError code mapClaudeErrorToRpc / mapErrorToRpc assign to an auth failure.
+const AUTH_EXPIRED_CODE = -32020
+
+// Retry a turn ONCE against a force-refreshed token.
+//
+// Why this exists: the Claude SDK path hands the OAuth token to its subprocess
+// through the env (runtime/claude-sdk/shared.ts buildSdkEnv) and cannot swap it
+// afterwards, so a token the provider rejects kills the turn outright. The Pi
+// path needs none of this — its getApiKey closure re-resolves per request.
+// FROZEN_TOKEN_MIN_LIFETIME_MS already makes plain expiry unlikely; this covers
+// what a lifetime floor cannot: a token rejected for some other reason (rotated
+// elsewhere, clock skew, a stale process-cached token).
+//
+// The retry is gated on the turn still being SILENT. Every tool call emits its
+// step before it runs and every reply token emits a chunk, so "nothing emitted"
+// is a proof that no side effect and no visible output happened yet — a re-run
+// therefore cannot duplicate work or replay text. Once anything has reached the
+// UI we rethrow and let the user press Retry, which is the honest affordance.
+//
+// A failed first attempt may leave an orphan SDK session behind; it is never
+// referenced (sdkSessionId is persisted only on success) and the next
+// delete/truncate of this session sweeps the store anyway.
+async function runWithAuthRetry(
+  args: RunNonStreamArgs,
+  cb: StreamCallbacks,
+  run: (a: RunNonStreamArgs, c: StreamCallbacks) => Promise<RunStreamResult>,
+): Promise<RunStreamResult> {
+  let emitted = false
+  const watched: StreamCallbacks = {
+    onChunk: (delta) => {
+      emitted = true
+      cb.onChunk(delta)
+    },
+    ...(cb.onStep
+      ? {
+          onStep: (step: SessionStep) => {
+            emitted = true
+            cb.onStep?.(step)
+          },
+        }
+      : {}),
+  }
+
+  try {
+    return await run(args, watched)
+  } catch (err) {
+    if (emitted || !(err instanceof RpcError) || err.code !== AUTH_EXPIRED_CODE) throw err
+    try {
+      const account = await resolveAccount('anthropic', args.settings.accountId)
+      // An api-key account has no token to refresh — the key really is rejected.
+      if (account.authMode !== 'oauth') throw err
+      await forceRefresh('anthropic', account.id)
+    } catch (refreshErr) {
+      // The refresh token itself is dead: the original AUTH_EXPIRED is the
+      // truthful message, so surface that rather than the refresh failure.
+      log.warn('auth retry: forced token refresh failed', {
+        sessionId: args.sessionId,
+        err: refreshErr instanceof Error ? refreshErr.message : String(refreshErr),
+      })
+      throw err
+    }
+    log.info('auth retry: token refreshed, replaying silent turn', { sessionId: args.sessionId })
+    // Not wrapped in another try — exactly one retry.
+    return run(args, watched)
+  }
+}
+
+
 export async function runStream(
   args: RunNonStreamArgs,
   cb: StreamCallbacks,
@@ -303,7 +375,7 @@ export async function runStream(
   // only the one in use loads its deps. Serialised per session by withSessionLock.
   if (args.settings.provider === 'anthropic') {
     const { runStreamClaude } = await import('../runtime/claude-sdk/run-stream.js')
-    return withSessionLock(args.sessionId, () => runStreamClaude(args, cb))
+    return withSessionLock(args.sessionId, () => runWithAuthRetry(args, cb, runStreamClaude))
   }
   const { runStreamPi } = await import('../runtime/run-stream.js')
   return withSessionLock(args.sessionId, () => runStreamPi(args, cb))

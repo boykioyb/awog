@@ -8,7 +8,10 @@
 // the Pi invoke adapter uses).
 
 import { query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import { resolveCredential } from '../../credentials/credential-resolver.js'
+import {
+  FROZEN_TOKEN_MIN_LIFETIME_MS,
+  resolveCredential,
+} from '../../credentials/credential-resolver.js'
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../../sdk/invoke.js'
@@ -196,7 +199,13 @@ function createInvokeAdapter(cb: InvokeCallbacks): {
 }
 
 export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Promise<InvokeResult> {
-  const { account, cred } = await resolveCredential(args.settings.provider, args.settings.accountId)
+  // Demand real runway on the token: buildSdkEnv freezes it into the subprocess
+  // env for the whole turn, so a token that expires mid-turn is unrecoverable.
+  const { account, cred } = await resolveCredential(
+    args.settings.provider,
+    args.settings.accountId,
+    FROZEN_TOKEN_MIN_LIFETIME_MS,
+  )
 
   // Layer the node agent's AGENT.md + bulk context (already in systemPromptAppend)
   // + workspace rules onto the claude_code preset. No tool-discipline/verify nudge

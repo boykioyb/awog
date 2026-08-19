@@ -8,6 +8,8 @@ import {
 } from './store.js'
 import type { OAuthTokens, ProviderName } from '../types/shared.js'
 
+// Default floor: refresh when the token has under 5 minutes left. Enough for a
+// caller that can re-resolve per request (the Pi runtime's getApiKey closure).
 const REFRESH_BUFFER_MS = 5 * 60 * 1000
 
 const cache = new Map<string, OAuthTokens>()
@@ -17,8 +19,8 @@ function cacheKey(provider: ProviderName, accountId: string): string {
   return `${provider}:${accountId}`
 }
 
-function needsRefresh(tokens: OAuthTokens): boolean {
-  return tokens.expiresAt - Date.now() < REFRESH_BUFFER_MS
+function needsRefresh(tokens: OAuthTokens, minLifetimeMs: number): boolean {
+  return tokens.expiresAt - Date.now() < minLifetimeMs
 }
 
 async function persistTokens(
@@ -56,9 +58,15 @@ async function performRefresh(
   return next
 }
 
+// `minLifetimeMs` is how much life the CALLER needs the token to still have.
+// A caller that can re-resolve mid-flight is fine with the small default; one
+// that freezes the token for a whole turn (the Claude SDK path hands it to a
+// subprocess via env and cannot swap it afterwards) must ask for more, or a long
+// turn will die on a 401 it has no way to recover from.
 export async function ensureFreshAccessToken(
   provider: ProviderName,
   accountId: string,
+  minLifetimeMs: number = REFRESH_BUFFER_MS,
 ): Promise<OAuthTokens> {
   if (provider !== 'anthropic') {
     throw new Error(`Token refresh not supported for provider: ${provider}`)
@@ -74,7 +82,7 @@ export async function ensureFreshAccessToken(
     tokens = record.oauth
     cache.set(key, tokens)
   }
-  if (!needsRefresh(tokens)) return tokens
+  if (!needsRefresh(tokens, minLifetimeMs)) return tokens
 
   const pending = inflight.get(key)
   if (pending) return pending

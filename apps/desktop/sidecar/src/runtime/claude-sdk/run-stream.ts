@@ -26,7 +26,10 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 
-import { resolveCredential } from '../../credentials/credential-resolver.js'
+import {
+  FROZEN_TOKEN_MIN_LIFETIME_MS,
+  resolveCredential,
+} from '../../credentials/credential-resolver.js'
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../../sessions/runner.js'
@@ -343,7 +346,13 @@ export async function runStreamClaude(
   args: RunNonStreamArgs,
   cb: StreamCallbacks,
 ): Promise<RunStreamResult> {
-  const { account, cred } = await resolveCredential(args.settings.provider, args.settings.accountId)
+  // Demand real runway on the token: buildSdkEnv freezes it into the subprocess
+  // env for the whole turn, so a token that expires mid-turn is unrecoverable.
+  const { account, cred } = await resolveCredential(
+    args.settings.provider,
+    args.settings.accountId,
+    FROZEN_TOKEN_MIN_LIFETIME_MS,
+  )
 
   // systemPrompt: layer the agent's own prompt (AGENT.md) + bulk-loaded context
   // (memory/agents/skills, already folded into systemPromptAppend upstream) +

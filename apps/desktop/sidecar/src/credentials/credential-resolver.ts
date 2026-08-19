@@ -83,11 +83,24 @@ async function persistPiOAuth(
   }
 }
 
+// How much token life a caller that CANNOT re-resolve mid-turn must start with.
+// The Claude SDK path hands the token to a subprocess through its env once per
+// turn (runtime/claude-sdk/shared.ts buildSdkEnv) and has no way to swap it
+// afterwards, so a turn outliving the token gets a hard 401 with nothing to
+// retry. One hour comfortably covers the longest turn the SDK path allows
+// (background work caps at 15 minutes) while still refreshing only about once
+// per token lifetime. The Pi path does not need this — its getApiKey closure
+// re-resolves on every provider request (runtime/model-resolver.ts).
+export const FROZEN_TOKEN_MIN_LIFETIME_MS = 60 * 60 * 1000
+
 // Resolve account + its usable credential in one call. OAuth accounts refresh
 // their access token here; apikey accounts return the stored key (no refresh).
+// `minTokenLifetimeMs` lets a caller that freezes the token demand more runway
+// than the token-manager's default refresh buffer.
 export async function resolveCredential(
   provider: ProviderName,
   accountId: string | undefined,
+  minTokenLifetimeMs?: number,
 ): Promise<{ account: AccountRecord; cred: Credential }> {
   const account = await resolveAccount(provider, accountId)
   if (account.authMode === 'apikey') {
@@ -125,6 +138,6 @@ export async function resolveCredential(
   if (provider !== 'anthropic') {
     throw new RpcError(-32011, `${provider} accounts must connect with an API key`)
   }
-  const tokens = await ensureFreshAccessToken(provider, account.id)
+  const tokens = await ensureFreshAccessToken(provider, account.id, minTokenLifetimeMs)
   return { account, cred: { kind: 'oauth', accessToken: tokens.accessToken } }
 }
