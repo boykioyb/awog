@@ -30,6 +30,91 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.30.0',
+    date: '2026-08-20',
+    highlight: {
+      en: 'AWOG now has a place to keep what it knows: a Wiki inside the app that doubles as what your agents read, and a memory of facts that survives between sessions. Agents can maintain the wiki themselves once you allow it, each session can be scoped to just the parts of it that matter, and there is a new off-white “Cute” look if the dark command-center is not your taste.',
+      vi: 'AWOG đã có nơi để giữ những gì nó biết: một trang Wiki trong app đồng thời là tài liệu agent đọc, và một bộ nhớ các thông tin còn lại giữa các session. Agent có thể tự bảo trì wiki khi bạn cho phép, mỗi session có thể giới hạn ở đúng phần wiki cần dùng, và có thêm giao diện sáng “Cute” nếu bạn không thích tông command-center tối.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'A Wiki lives in the app now, and it is the same documentation your agents read. Import the markdown you already have or write pages in place; each turn the agent only receives the table of contents and opens the pages it actually needs, so a big wiki costs almost nothing per message. Pages you mark private stay out of the agent’s view entirely.',
+        vi: 'App đã có trang Wiki, và đó chính là tài liệu agent đọc. Nhập những file markdown bạn đang có hoặc viết trực tiếp trong app; mỗi lượt agent chỉ nhận mục lục rồi tự mở đúng trang nó cần, nên wiki lớn cũng gần như không tốn thêm gì mỗi tin nhắn. Trang bạn đánh dấu riêng tư thì agent không thấy.',
+      },
+      {
+        kind: 'added',
+        en: 'Agents remember things between sessions. A fact worth carrying forward — how you like work reported, a constraint on the project, a link you keep needing — is kept as its own note and offered back on later turns. Settings → Memory lists every fact so you can edit, switch off or delete any of them; letting an agent write its own is off until you turn it on.',
+        vi: 'Agent nhớ được thông tin giữa các session. Một điều đáng giữ lại — cách bạn muốn được báo cáo, một ràng buộc của dự án, một đường link hay phải dùng — được lưu thành ghi chú riêng và đưa lại ở những lượt sau. Settings → Bộ nhớ liệt kê mọi thông tin để bạn sửa, tắt hoặc xoá; việc để agent tự ghi thì mặc định tắt cho tới khi bạn bật.',
+      },
+      {
+        kind: 'added',
+        en: 'Agents can maintain the wiki, not just read it. Turn it on at Settings → Wiki and an agent can create, update and delete pages — every edit still asks you first (outside execute mode) and shows up in the transcript. Off by default: the global wiki has no version history, so this is yours to allow.',
+        vi: 'Agent có thể bảo trì wiki, không chỉ đọc. Bật ở Settings → Wiki là agent có thể tạo, sửa, xoá trang — mỗi lần sửa vẫn hỏi bạn trước (trừ chế độ execute) và hiện rõ trong transcript. Mặc định tắt: wiki toàn cục không có lịch sử phiên bản, nên đây là quyền bạn tự cấp.',
+      },
+      {
+        kind: 'added',
+        en: 'Each session can be pointed at just part of the wiki. Open the session’s settings → Wiki and tick the spaces it may use; everything follows that choice — what the agent is shown, what it can search, read, or edit, and what the composer suggests. Leave it alone and the whole wiki stays in scope.',
+        vi: 'Mỗi session có thể chỉ dùng một phần wiki. Mở cấu hình session → Wiki rồi tick những space được dùng; mọi thứ đi theo lựa chọn đó — thứ agent được thấy, được tìm, được đọc hay được sửa, và cả gợi ý trong hộp soạn tin. Không chỉnh gì thì cả wiki vẫn trong phạm vi.',
+      },
+      {
+        kind: 'added',
+        en: 'Typing @ in the composer now finds skills and wiki pages too, not only agents and files. Pick one and the agent is told plainly that you pointed it there on purpose — so it applies the skill, or opens the page, instead of answering around a token it does not recognise.',
+        vi: 'Gõ @ trong hộp soạn tin nay tìm được cả skill và trang wiki, không chỉ agent với file. Chọn một mục là agent được nói rõ rằng bạn cố ý chỉ vào đó — nên nó áp dụng skill hoặc mở trang, thay vì trả lời vòng quanh một chuỗi lạ.',
+      },
+      {
+        kind: 'added',
+        en: 'Copy MD: highlight part of an answer, or of a markdown file in the preview, and copy the original markdown behind it — headings, code fences, tables and formulas intact — instead of the flattened text the browser would hand over. ⌘C is unchanged and still copies plain text.',
+        vi: 'Copy MD: bôi đen một đoạn trong câu trả lời, hoặc trong file markdown ở cửa sổ xem trước, rồi copy được đúng markdown gốc — giữ nguyên heading, khối code, bảng và công thức — thay vì đoạn text đã bị làm phẳng mà browser đưa. ⌘C không đổi, vẫn copy text thường.',
+      },
+      {
+        kind: 'added',
+        en: 'A second look, “Cute”: off-white surfaces, mint accents, softer edges and a small mascot in a few quiet places. Settings → Appearance → Theme → Cute switches to it instantly, and back, with no reload. The default AWOG look is untouched.',
+        vi: 'Một giao diện thứ hai, “Cute”: nền trắng ngà, nhấn màu mint, bo mềm hơn và một mascot nhỏ ở vài chỗ. Settings → Appearance → Theme → Cute là đổi ngay, đổi lại cũng ngay, không cần tải lại. Giao diện AWOG mặc định giữ nguyên.',
+      },
+      {
+        kind: 'improved',
+        en: 'The wiki reads like real documentation: pages nest inside pages, breadcrumbs show where you are, the outline on the right jumps to any heading — including repeated ones, which used to always scroll to the first — and you can add a page directly inside another. Opening a page is also faster, because the editor only loads when you actually edit.',
+        vi: 'Wiki đọc như tài liệu thật: trang lồng trong trang, breadcrumb cho biết bạn đang ở đâu, mục lục bên phải nhảy tới đúng heading — kể cả heading trùng tên, trước đây luôn nhảy về cái đầu tiên — và bạn thêm được trang con ngay trong một trang. Mở trang cũng nhanh hơn vì editor chỉ nạp khi bạn thật sự sửa.',
+      },
+      {
+        kind: 'improved',
+        en: 'Session tabs say what they are doing. A tab whose session is running takes a wash of that project’s colour with a beam tracing its border; one that finished while you were looking elsewhere turns amber, so “there is an answer waiting” reads from across the strip instead of needing a hunt for a small badge.',
+        vi: 'Tab session nói rõ nó đang làm gì. Tab có session đang chạy được nhuộm màu của project kèm một vệt sáng chạy quanh viền; tab vừa xong lúc bạn đang xem chỗ khác thì chuyển hổ phách, nên “có câu trả lời đang chờ” thấy được từ xa chứ không phải đi tìm một badge nhỏ.',
+      },
+      {
+        kind: 'improved',
+        en: 'Skills, agents and commands now share one home with the Claude Code CLI. Anything you create or edit in either tool shows up in the other straight away, so there is nothing left to import and no second copy to keep in sync. Your existing AWOG copies are moved across on first launch.',
+        vi: 'Skill, agent và command nay dùng chung một nơi lưu với Claude Code CLI. Tạo hay sửa ở bên nào cũng hiện ngay bên kia, nên không còn gì phải import và không còn bản sao thứ hai phải đồng bộ. Bản bạn đang có trong AWOG được chuyển sang ở lần mở đầu tiên.',
+      },
+      {
+        kind: 'improved',
+        en: 'Agents got a much better brief on how to work — investigate before changing code, check a claim before making it, say what was actually done — and it now applies on every provider, not just Claude. Answers should lean less on guesswork and more on what the agent verified.',
+        vi: 'Agent được hướng dẫn làm việc tốt hơn nhiều — tìm hiểu trước khi sửa code, kiểm chứng trước khi khẳng định, nói đúng thứ đã thực sự làm — và điều này áp cho mọi provider chứ không riêng Claude. Câu trả lời sẽ ít phỏng đoán, dựa nhiều hơn vào thứ agent đã tự kiểm.',
+      },
+      {
+        kind: 'improved',
+        en: 'The terminal dock lines up with the session you are reading instead of stretching under the session list, and it now reserves exactly the space it occupies — the message box no longer ends up hidden behind it. Its header carries a small dot for whether a shell is connected.',
+        vi: 'Khung terminal nay thẳng với phần session bạn đang đọc thay vì kéo dài dưới danh sách session, và chừa đúng khoảng nó chiếm — hộp soạn tin không còn bị che sau nó. Thanh tiêu đề có thêm một điểm nhỏ báo shell đã kết nối chưa.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The context gauge told the truth again after a reload. The real token counts from each turn were not being kept, so reopening a session fell back to a rough estimate — which also decided when a conversation got compacted. Those numbers are now saved with the conversation.',
+        vi: 'Thanh context lại báo đúng sau khi tải lại. Số token thật của từng lượt trước đây không được lưu, nên mở lại session là rơi về con số ước lượng — mà chính con số đó quyết định khi nào hội thoại bị nén. Nay các số này được lưu cùng hội thoại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'On Claude models, a login that expired in the middle of an answer killed that message outright with nothing to recover. AWOG now refreshes and retries once, and refuses to start a turn on a token that is about to run out.',
+        vi: 'Ở model Claude, phiên đăng nhập hết hạn giữa lúc đang trả lời làm chết hẳn tin nhắn đó, không cứu được gì. Nay AWOG tự làm mới rồi thử lại một lần, và không bắt đầu lượt mới bằng một token sắp hết hạn.',
+      },
+      {
+        kind: 'changed',
+        en: 'Two buttons left the message box: “Run as task” and “Attach folder”. Asking in chat to run a workflow still works and covers the first; the folder button attached read-only context that the agent can simply be pointed at instead.',
+        vi: 'Hộp soạn tin bỏ hai nút: “Run as task” và “Attach folder”. Nhờ agent chạy workflow ngay trong chat vẫn được và thay cho nút thứ nhất; nút thư mục trước đây chỉ đính kèm context chỉ-đọc, thứ bạn có thể chỉ đường cho agent trực tiếp.',
+      },
+    ],
+  },
+  {
     version: '0.29.2',
     date: '2026-08-18',
     highlight: {
