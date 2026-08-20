@@ -8,8 +8,11 @@ one-shot đã có ([ADR 0049](../decisions/0049-github-issues-and-prs-via-gh-cli
 
 | Surface | Vùng bắt selection | Ghi chú |
 |---|---|---|
-| Session chat | Transcript ([SessionDetail.vue](../../apps/desktop/ui-next/components/session/SessionDetail.vue)) | Nút Translate đứng cạnh nút Quote trong action bar floating |
-| Preview modal | Markdown **render** (`.mdbody`) trong [PreviewModal.vue](../../apps/desktop/ui-next/components/common/PreviewModal.vue) | Chỉ vùng prose đã render |
+| Session chat | Transcript ([SessionDetail.vue](../../apps/desktop/ui-next/components/session/SessionDetail.vue)) | Nút Translate đứng cạnh Quote + Copy MD trong action bar floating |
+| Preview modal | Markdown **render** (`.mdbody`) trong [PreviewModal.vue](../../apps/desktop/ui-next/components/common/PreviewModal.vue) | Chỉ vùng prose đã render; cùng bar với Copy MD |
+
+Hành động **Copy MD** (copy raw markdown của đoạn bôi đen) dùng chung action bar này —
+xem [selection-copy-markdown.md](./selection-copy-markdown.md).
 
 **Ngoài phạm vi (MVP):** iframe HTML sandbox (opaque-origin — `getSelection()` của parent không
 bắt được) và Monaco (`text/code` — có selection model riêng). Có thể bổ sung sau qua selection
@@ -41,8 +44,8 @@ Singleton pattern (giống `usePreview` + `PreviewModal`):
   Export `TranslateLang` + `LANG_LABEL` (dùng chung với [useProjectGh.ts](../../apps/desktop/ui-next/composables/useProjectGh.ts)).
 - **`SelectionTranslatePopover.vue`** ([components/common/](../../apps/desktop/ui-next/components/common/SelectionTranslatePopover.vue))
   — render popover kết quả; mount **một lần** ở [layouts/default.vue](../../apps/desktop/ui-next/layouts/default.vue).
-- **Nút trigger** là markup host-local (Session gộp cạnh Quote; Preview là 1 nút riêng) — mỗi host
-  tự bắt selection rồi gọi `open(...)`.
+- **Nút trigger** là markup host-local (Session: cạnh Quote + Copy MD; Preview: bar `.pvselbar` gồm
+  Translate + Copy MD) — mỗi host tự bắt selection rồi gọi `open(...)`.
 
 ## Backend
 

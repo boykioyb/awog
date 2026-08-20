@@ -25,7 +25,18 @@
     </div>
 
     <div class="tsr-scroll">
-      <div v-if="!visible.length" class="tsr-empty">
+      <div v-if="isCute && !visible.length" class="cempty">
+        <AwogMascot :size="44" style="color: var(--accent)" />
+        <span class="cempty-t">{{ t('terminalSnippet.emptyTitle') }}</span>
+        <span class="cempty-b">{{ t('terminalSnippet.emptyBody') }}</span>
+        <div class="cempty-cta">
+          <button class="btn pri sm" @click="openNew">
+            <Icon name="plus" style="width: 13px; height: 13px" />
+            {{ t('terminalSnippet.new') }}
+          </button>
+        </div>
+      </div>
+      <div v-else-if="!visible.length" class="tsr-empty">
         <Icon name="commands" style="width: 22px; height: 22px; opacity: 0.5" />
         <span class="tsr-empty-t">{{ t('terminalSnippet.emptyTitle') }}</span>
         <span class="tsr-empty-b">{{ t('terminalSnippet.emptyBody') }}</span>
@@ -116,6 +127,7 @@ const emit = defineEmits<{ run: [command: string]; close: [] }>()
 const { t } = useI18n()
 const store = useTerminalSnippetsStore()
 const { confirm } = useConfirm()
+const { isCute } = useThemeFamily()
 
 // This project's snippets + the shared Global tier, project-first then by name.
 const visible = computed(() =>

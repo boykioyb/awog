@@ -49,5 +49,13 @@
   "wiki.toast.renamed": "Page renamed",
   "wiki.toast.renameFailed": "Couldn’t rename the page",
   "wiki.toast.pathCopied": "Path copied",
-  "wiki.toast.copyFailed": "Copy failed"
+  "wiki.toast.copyFailed": "Copy failed",
+  "wiki.tree.expand": "Expand",
+  "wiki.tree.collapse": "Collapse",
+  "wiki.tree.newChild": "New page inside",
+  "wiki.menu.newChild": "New page inside…",
+  "wiki.newChildPrompt.title": "New page inside “{parent}”",
+  "wiki.newChildPrompt.placeholder": "page name",
+  "wiki.toast.badName": "That name has no usable characters — try letters or digits.",
+  "wiki.page.htmlStripped": "This page contains {n} raw HTML tag(s), which are not rendered — the markdown renderer strips author HTML (it shares the XSS boundary with the chat transcript). Convert them to Markdown to see the content."
 }

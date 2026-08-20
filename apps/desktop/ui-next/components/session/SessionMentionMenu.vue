@@ -12,25 +12,21 @@
       @mousedown.prevent="emit('select', i)"
       @mouseenter="emit('hover', i)"
     >
-      <span class="sc" :style="m.kind === 'agent' ? { color: 'var(--violet)' } : undefined">@</span>
+      <span class="sc" :style="glyphStyle(m.kind)">@</span>
       <span class="sd mlabel">{{ m.label }}</span>
       <span v-if="m.hint" class="sd mhint">{{ m.hint }}</span>
-      <span class="sd mtag">
-        {{
-          m.kind === 'agent'
-            ? t('sessions.composer.mentionAgent')
-            : t('sessions.composer.mentionFile')
-        }}
-      </span>
+      <span class="sd mtag">{{ t(TAG_KEY[m.kind]) }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// `@`-mention dropdown (§2). Real sources: enabled session agents (agents.list)
-// + the workspace file index (fs.listFiles, .gitignore-aware). The composer owns
-// the textarea + arrow-key nav and passes `active` down; this renders + emits
-// select(index)/hover only. Insert token = `@<insert>` (agent handle / file path).
+// `@`-mention dropdown (§2). Real sources: enabled session agents (agents.list),
+// skills in both tiers (skills.list — ADR 0070), wiki pages in the session's scope
+// (wiki.tree, ADR 0073), and the workspace file index (fs.listFiles,
+// .gitignore-aware). The composer owns the textarea + arrow-key nav and passes
+// `active` down; this renders + emits select(index)/hover only. Insert token =
+// `@<insert>` (agent handle / `skill:<id>` / `wiki:<slug>` / file path).
 import type { MentionRow } from './session-composer-commands'
 
 defineProps<{ items: MentionRow[]; active: number }>()
@@ -39,6 +35,24 @@ const emit = defineEmits<{
   hover: [i: number]
 }>()
 const { t } = useI18n()
+
+// Kind → right-hand tag label + `@` glyph accent. A map (not a ternary chain) so
+// adding a mention kind is one line and the two stay in sync.
+const TAG_KEY: Record<MentionRow['kind'], string> = {
+  agent: 'sessions.composer.mentionAgent',
+  skill: 'sessions.composer.mentionSkill',
+  wiki: 'sessions.composer.mentionWiki',
+  file: 'sessions.composer.mentionFile',
+}
+const GLYPH_COLOR: Partial<Record<MentionRow['kind'], string>> = {
+  agent: 'var(--violet)',
+  skill: 'var(--blue)',
+  wiki: 'var(--accent)',
+}
+const glyphStyle = (kind: MentionRow['kind']) => {
+  const color = GLYPH_COLOR[kind]
+  return color ? { color } : undefined
+}
 </script>
 
 <style scoped>

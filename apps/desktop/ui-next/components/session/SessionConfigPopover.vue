@@ -10,6 +10,9 @@
       <span :class="{ on: cfgTab === 'MCP' }" @click="cfgTab = 'MCP'">
         {{ t('sessions.config.tab.mcp') }}
       </span>
+      <span :class="{ on: cfgTab === 'Wiki' }" @click="cfgTab = 'Wiki'">
+        {{ t('sessions.config.tab.wiki') }}
+      </span>
     </div>
 
     <div class="popbody">
@@ -118,7 +121,7 @@
       </template>
 
       <!-- MCP -->
-      <template v-else>
+      <template v-else-if="cfgTab === 'MCP'">
         <div class="pl" style="margin-bottom: 9px">{{ t('sessions.config.mcpHint') }}</div>
         <div v-if="!mcpServers.length" class="listempty">
           {{ t('sessions.config.noMcp') }}
@@ -138,6 +141,31 @@
           <span class="tog2" :class="{ off: !mcpOnSet.has(m.id) }" />
         </div>
       </template>
+
+      <!-- Wiki (ADR 0073) — which wiki spaces this session may use. Scoping applies
+           to the injected <wiki_index> AND to wiki_search/wiki_read, so a narrowed
+           session cannot read its way back out. -->
+      <template v-else>
+        <div class="pl" style="margin-bottom: 9px">{{ t('sessions.config.wikiHint') }}</div>
+        <div v-if="!wikiSpaces.length" class="listempty">
+          {{ t('sessions.config.noWiki') }}
+        </div>
+        <template v-else>
+          <div class="mcprow" @click="setWikiAll()">
+            <span class="mcpn">{{ t('sessions.config.wikiAll') }}</span>
+            <span class="mcpst">{{ t('sessions.config.wikiPages', { n: totalWikiPages }) }}</span>
+            <span class="tog2" :class="{ off: session.wikiSpaces !== undefined }" />
+          </div>
+          <div v-for="w in wikiSpaces" :key="w.key" class="mcprow" @click="toggleWikiSpace(w.id)">
+            <span class="mcpn">{{ w.title }}</span>
+            <span class="mcpst">
+              {{ t('sessions.config.wikiPages', { n: w.pageCount })
+              }}{{ w.source === 'project' ? ' · project' : '' }}
+            </span>
+            <span class="tog2" :class="{ off: !wikiOnSet.has(w.id) }" />
+          </div>
+        </template>
+      </template>
     </div>
   </div>
 </template>
@@ -145,6 +173,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
+import { useWikiStore } from '~/stores/wiki'
 
 // Session config — tabbed popover (General / Tools / MCP). General now keeps just
 // Account + Model (real data via useAccounts); style / thinking / no-markdown moved
@@ -155,6 +184,7 @@ const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
 const store = useSessionsStore()
 const sc = useSidecar()
+const wiki = useWikiStore()
 const { fmtUsd } = useSessionCost()
 
 // ── Budget (soft + hard caps) ────────────────────────────────────────────────
@@ -213,7 +243,7 @@ const TOOL_GROUPS: [string, string[]][] = [
 ]
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
 
-const cfgTab = ref<'General' | 'Tools' | 'MCP'>('General')
+const cfgTab = ref<'General' | 'Tools' | 'MCP' | 'Wiki'>('General')
 const toolQ = ref('')
 
 // ── Tools (denylist) ───────────────────────────────────────────────────────────
@@ -257,7 +287,52 @@ function toggleMcp(id: string) {
   store.setMcpServerIds(props.session.id, [...cur])
 }
 
+// ── Wiki scope (ADR 0073) ────────────────────────────────────────────────────
+// `session.wikiSpaces === undefined` means "whole wiki" (the default), the same
+// convention mcpServerIds uses. Deduped by space id: a space that exists in both
+// the global and the project tier is ONE row here, because the whitelist is by id.
+const wikiSpaces = computed(() => {
+  const seen = new Map<
+    string,
+    { key: string; id: string; title: string; source: string; pageCount: number }
+  >()
+  for (const sp of wiki.spaces) {
+    const cur = seen.get(sp.id)
+    if (cur) {
+      cur.pageCount += sp.pageCount
+      continue
+    }
+    seen.set(sp.id, {
+      key: sp.id,
+      id: sp.id,
+      title: sp.title || sp.id,
+      source: sp.source,
+      pageCount: sp.pageCount,
+    })
+  }
+  return [...seen.values()].sort((a, b) => a.title.localeCompare(b.title))
+})
+const totalWikiPages = computed(() => wikiSpaces.value.reduce((n, w) => n + w.pageCount, 0))
+const wikiOnSet = computed<Set<string>>(() => {
+  const ids = props.session.wikiSpaces
+  if (ids === undefined) return new Set(wikiSpaces.value.map((w) => w.id))
+  return new Set(ids)
+})
+function toggleWikiSpace(id: string) {
+  const cur = new Set(wikiOnSet.value)
+  if (cur.has(id)) cur.delete(id)
+  else cur.add(id)
+  // Everything selected → clear the whitelist instead of storing every id, so a
+  // space added later is automatically in scope.
+  const all = wikiSpaces.value.length > 0 && cur.size === wikiSpaces.value.length
+  store.setWikiSpaces(props.session.id, all ? undefined : [...cur])
+}
+function setWikiAll() {
+  store.setWikiSpaces(props.session.id, undefined)
+}
+
 onMounted(async () => {
+  if (!wiki.loaded) void wiki.loadTree()
   if (!sc.available) return
   try {
     const res = await sc.request<{

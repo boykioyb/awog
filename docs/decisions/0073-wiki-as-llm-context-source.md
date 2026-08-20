@@ -100,7 +100,7 @@ Lý do phải đi bằng tool chứ không bằng `Read`: trên nhánh Pi, `Read
 - **Inject full nội dung wiki, cho chọn `always` từng trang** — từ chối: người dùng sẽ bật `always` cho trang to rồi trách app đốt token; giữ một đường (mục lục + on-demand) là ít gây ngạc nhiên hơn.
 - **Trang wiki là con trỏ tới file trong repo** thay vì copy — hoãn: rẻ về đĩa và luôn tươi, nhưng thêm một chế độ và một đường đọc lúc chạy. Ghi vào Open Questions của [spec](../features/wiki.md).
 - **Sidecar tự đọc `settings.json`** để biết auto-write — từ chối: phá contract blob của [ADR 0045](./0045-settings-json-file-persistence.md); cờ đi theo turn như `responseStyle`/`sshApprovalMode`.
-- **Cho agent ghi wiki ngay v1** — hoãn sang P5 opt-in: hấp dẫn (agent đọc code → viết trang architecture) nhưng là write surface mới, và mục đích v1 là *người dùng import tài liệu của mình*.
+- **Cho agent ghi wiki ngay v1** — hoãn sang P5 opt-in, **đã làm sau đó**: `wiki_write`/`wiki_delete` chỉ tồn tại khi người dùng bật ở Settings, và mỗi lần gọi vẫn đi qua permission gate như `Write`. Lý do không dùng riêng một công tắc như memory: gate sẵn có cho ta plan-mode block + duyệt từng lần + "always allow" mà không phát minh cơ chế thứ hai.
 
 ## Hệ quả
 
@@ -112,7 +112,9 @@ Lý do phải đi bằng tool chứ không bằng `Read`: trên nhánh Pi, `Read
   - P2 nạp `<wiki_index>` + `ContextChars` (Sessions **và** Tasks) + tool `wiki_search`/`wiki_read` trên 2 runtime.
   - P3 memory: store + tool + section Settings + công tắc auto-write.
   - P4 infosec audit (D-8, D-9) — **chặn ship**.
-  - P5 (tuỳ) `@wiki:<slug>` trong composer; agent ghi wiki (opt-in); dùng lại `wiki_read` vá lỗ "skill body không load được dưới Pi".
+  - ~~P5 `@wiki:<slug>` trong composer~~ **đã làm** cùng scope wiki theo session (`Session.wikiSpaces`, thu hẹp cả index và tool) — xem [spec](../features/wiki.md).
+  - ~~P5 agent ghi wiki (opt-in)~~ **đã làm**: `wiki_write`/`wiki_delete` opt-in ở Settings, permission-gated như file write, tôn trọng scope session.
+  - P5 còn lại (tuỳ): dùng lại `wiki_read` vá lỗ "skill body không load được dưới Pi".
 
 ## Tham chiếu
 

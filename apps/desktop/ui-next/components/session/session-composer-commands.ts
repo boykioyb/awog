@@ -70,10 +70,16 @@ export type SlashItem = {
   builtinId?: string
 }
 
-// An `@` row — agent or workspace file. `insert` is the token placed after `@`.
+// An `@` row — agent, skill, wiki page or workspace file. `insert` is the token
+// placed after `@`.
 export type MentionRow = {
   key: string
-  kind: 'agent' | 'file'
+  // 'wiki' inserts `@wiki:<slug>` — a page reference the model resolves with the
+  // wiki_read tool, not a filesystem path (the wiki lives outside the workspace).
+  // 'skill' inserts `@skill:<id>` — prefixed for the same reason: a skill id and
+  // an agent handle share one namespace, so a bare `@code-reviewer` would be
+  // ambiguous when both exist.
+  kind: 'agent' | 'skill' | 'file' | 'wiki'
   insert: string
   label: string
   hint?: string

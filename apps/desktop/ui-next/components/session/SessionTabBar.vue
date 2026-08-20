@@ -7,10 +7,14 @@
         class="stab"
         :class="{
           on: tab.active,
+          running: tab.running,
+          'done-unread': tab.doneUnread,
           dragging: dragId === tab.id,
           'drop-before': dropIndex === i,
           'drop-after': dropIndex === tabs.length && i === tabs.length - 1,
         }"
+        :style="{ '--stab-color': tab.color }"
+        :title="tab.doneUnread && !tab.running ? t('sessions.tabs.doneUnread') : undefined"
         :data-tab-index="i"
         role="tab"
         :aria-selected="tab.active"
@@ -28,6 +32,10 @@
           :title="tab.running ? t('sessions.tabs.running') : undefined"
         />
         <span class="stab-nm">{{ tab.name }}</span>
+        <!-- Running: a beam that chases the tab's border. Its own element, not a
+             pseudo-element — ::before/::after on .stab are taken by the drag-reorder drop
+             indicators. Sits on top of the running background tint. -->
+        <span v-if="tab.running" class="stab-run" aria-hidden="true" />
         <span
           v-if="tab.unread"
           class="stab-unread"
@@ -680,27 +688,83 @@ async function pDeleteAll() {
   border-radius: 99px;
   flex: 0 0 auto;
 }
-/* A session in this project is actively streaming → a spinner arc rotates around
-   the dot in the PROJECT's own color (var(--stab-dot), set inline): an unmistakable
-   "work in progress" cue that keeps project identity. The old opacity-breathe +
-   expanding box-shadow ring read as subtle AND its ring was clipped by the strip's
-   overflow-x:auto — the arc sits inside the dot's footprint (inset -3px) so it's
-   never clipped. Only `transform` animates (GPU, no reflow). */
-.stab-dot.running::after {
+/* ── Tab status: running beam + state tints ──────────────────────────────────
+   Two live states, both expressed the way the rest of the app expresses state —
+   background + border — rather than an extra decorative rule:
+
+     running     → the tab's background takes a wash of the PROJECT's own colour and a
+                   beam chases its border. A project working in the background is then
+                   obvious from across the strip, and the colour says WHICH project.
+     done-unread → a static amber chip: a result landed while you were elsewhere. Amber
+                   is already this app's "needs your eyes" colour (the unread badge
+                   beside it, .bdg.wait, .acard.hot), so no sixth hue is introduced.
+
+   The beam is a conic gradient on a rotating child, with the middle masked out so only
+   a 2px ring paints. Rotation (a transform) drives it — NOT an animated custom
+   property — so it needs no @property registration and only the compositor works. */
+.stab-run {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  /* Knock out the centre: full box minus content-box leaves the padding ring. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.stab-run::after {
   content: '';
   position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1.5px solid transparent;
-  border-top-color: var(--stab-dot, var(--accent));
-  border-right-color: var(--stab-dot, var(--accent));
-  animation: stab-dot-spin 0.7s linear infinite;
+  left: 50%;
+  top: 50%;
+  width: 260%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 66%,
+    var(--stab-color, var(--accent)) 84%,
+    transparent 100%
+  );
+  animation: stab-run-spin 1.5s linear infinite;
 }
-@keyframes stab-dot-spin {
+@keyframes stab-run-spin {
   to {
-    transform: rotate(360deg);
+    rotate: 360deg;
   }
 }
+/* Running background wash, in the project's colour. Skipped on the ACTIVE tab, which
+   keeps its own accent fill — the beam alone carries "running" there. */
+.stab.running:not(.on) {
+  background: color-mix(in srgb, var(--stab-color, var(--accent)) 11%, transparent);
+  border-color: color-mix(in srgb, var(--stab-color, var(--accent)) 30%, transparent);
+}
+/* "A result is waiting" — whole-chip amber, so it reads without hunting for a badge.
+   Gated off the active tab: you are looking at it, so nothing there is unread. */
+.stab.done-unread:not(.on):not(.running) {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  border-color: color-mix(in srgb, var(--amber) 34%, transparent);
+}
+.stab.done-unread:not(.on):not(.running) .stab-nm {
+  color: var(--amber);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Keep a full ring so "running" is still stated, just without the chase. */
+  .stab-run::after {
+    animation: none;
+    background: var(--stab-color, var(--accent));
+    opacity: 0.55;
+  }
+}
+
 .stab-nm {
   white-space: nowrap;
   overflow: hidden;
@@ -918,13 +982,6 @@ async function pDeleteAll() {
   .stab-x,
   .ctxsw .swatch {
     transition: none;
-  }
-  /* No spin, but keep a STATIC full ring so a running project is still visible
-     (dropping the cue entirely would hide it for reduced-motion users). */
-  .stab-dot.running::after {
-    animation: none;
-    border-color: var(--stab-dot, var(--accent));
-    opacity: 0.6;
   }
 }
 </style>

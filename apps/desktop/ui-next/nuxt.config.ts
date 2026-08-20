@@ -43,6 +43,15 @@ export default defineNuxtConfig({
     '@fontsource-variable/geist-mono',
     '~/assets/css/prototype.css',
     '~/assets/css/app-shell.css',
+    // Rendered-markdown prose (`.mdbody`) — global so every surface that renders
+    // markdown gets the same typography instead of each component carrying its own
+    // scoped copy (ADR 0073).
+    '~/assets/css/markdown.css',
+    // The "Cute" theme family (Settings → Appearance → Theme). Every rule inside is
+    // scoped under `body[data-theme-family='cute']`, so it is inert unless the user
+    // opts in; loaded last so it wins over both the prototype design system and the
+    // app-shell overrides. See docs/features/theme-cute.md.
+    '~/assets/css/theme-cute.css',
     '@vue-flow/core/dist/style.css',
     '@vue-flow/core/dist/theme-default.css',
     '@vue-flow/controls/dist/style.css',

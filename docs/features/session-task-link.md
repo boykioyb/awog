@@ -20,9 +20,11 @@ Nối Session (chat) và Task (instance Workflow) theo 2 chiều, tận dụng h
 
 ## Entry point
 
-### A. Session → Task (UI: "Run as task")
+### A. Session → Task
 
-`SessionComposer` có nút "Run as task" → `SessionDetail` mở `NewTaskModal` dùng chung (`useNewTaskModal().openModal`) pre-fill project = session.project, title = session.title, `originSessionId = engineId`. Modal ẩn source picker (source = session). Tạo qua `tasks.create` → task hiện ở tab **Tasks** của session (`WorkspaceTasks`) + Tasks page (badge "Từ session").
+> **2026-08-19 — nút "Run as task" ở composer ĐÃ GỠ** theo yêu cầu người dùng (hàng nút composer quá đông). Hệ quả: chiều Session → Task **không còn entry point do người dùng bấm**; chỉ còn model tự gọi tool `RunWorkflow`. Toàn bộ phần dưới (modal, pre-fill, `originSessionId`, badge "Từ session", chiều ngược) vẫn nguyên vẹn — nếu cần trả lại thì chỗ hợp lý là menu `…` ở header session, không phải hàng nút composer.
+
+Trước đây `SessionComposer` có nút "Run as task" → `SessionDetail` mở `NewTaskModal` dùng chung (`useNewTaskModal().openModal`) pre-fill project = session.project, title = session.title, `originSessionId = engineId`. Modal ẩn source picker (source = session). Tạo qua `tasks.create` → task hiện ở tab **Tasks** của session (`WorkspaceTasks`) + Tasks page (badge "Từ session").
 
 ### B. Session → Task (model: tool `RunWorkflow`)
 
@@ -38,7 +40,7 @@ Out of scope v1 (YAGNI).
 
 ## Acceptance Criteria
 
-- **AC1 (A):** Given session S trong project P, When bấm "Run as task" → chọn workflow → tạo, Then task xuất hiện ở `WorkspaceTasks` của S với status live; mở Task detail thấy badge "Từ session"; click badge → quay lại S.
+- **AC1 (A):** ~~Given session S trong project P, When bấm "Run as task" → chọn workflow → tạo, Then~~ (nút đã gỡ 2026-08-19; AC này chỉ còn áp dụng khi model gọi `RunWorkflow`) task xuất hiện ở `WorkspaceTasks` của S với status live; mở Task detail thấy badge "Từ session"; click badge → quay lại S.
 - **AC2 (B):** Given session S mode=ask, When model gọi `RunWorkflow`, Then hiện permission prompt; Approve → task `queued` rồi chạy; Deny → tool trả lỗi mềm, turn tiếp tục. Mode=execute → chạy không hỏi. Mode=plan → tool không tồn tại.
 - **AC3 (C):** Given task T xong, When bấm "Discuss in session", Then session mới có banner "Đang bàn về task: <title>"; hỏi về kết quả → agent trả lời dựa `<linked_task>`; `TaskDetail` của T liệt kê session đó ở "Discussions".
 - **AC4 (điều hướng):** Banner session → click mở task; row task ở `WorkspaceTasks` → click mở task; "Discussions" → click mở session. Đều hoạt động kể cả khi điều hướng chéo trang (store tự hydrate).
@@ -48,7 +50,7 @@ Out of scope v1 (YAGNI).
 
 - Xóa task mà session `aboutTaskId` trỏ tới → banner hiển thị id (filter discussions rỗng), không crash; `<linked_task>` bỏ qua (loadTask null).
 - Xóa session mà task `source` trỏ tới → task giữ source; click badge → `openByEngineId` trả false (không điều hướng).
-- Session chưa có `engineId` (mock/browser-dev) → "Run as task" mở modal như tạo task thường (không stamp session); `WorkspaceTasks` rỗng.
+- Session chưa có `engineId` (mock/browser-dev) → tạo task không stamp session; `WorkspaceTasks` rỗng.
 - `RunWorkflow` khi session không có project → tool không được đăng ký (cần project để tạo task).
 - Task chưa có run nào → `<linked_task>` chỉ chèn title/status.
 - Workflow rỗng trong workspace → mô tả tool báo "không có workflow để chạy".

@@ -6,5 +6,8 @@
   "terminalGlobal.newShell": "New shell",
   "terminalGlobal.resize": "Drag to resize",
   "terminalGlobal.cwdHint": "Working directory: home (~)",
-  "terminalGlobal.unavailable": "Terminal unavailable — open AWOG in the desktop app"
+  "terminalGlobal.unavailable": "Terminal unavailable — open AWOG in the desktop app",
+  "terminalGlobal.status.live": "Terminal connected",
+  "terminalGlobal.status.idle": "Terminal idle",
+  "terminalGlobal.status.off": "Terminal unavailable"
 }

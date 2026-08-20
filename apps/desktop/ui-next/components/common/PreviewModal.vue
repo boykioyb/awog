@@ -265,19 +265,25 @@
           </div>
         </div>
 
-        <!-- highlight prose in a rendered markdown preview → floating Translate button.
-             Gated on the view that can actually produce a selection, so no state
-             left over from a previous item can surface it over an image/video. -->
-        <button
+        <!-- highlight prose in a rendered markdown preview → floating action bar
+             (Translate + Copy MD). Gated on the view that can actually produce a
+             selection, so no state left over from a previous item can surface it over
+             an image/video. -->
+        <div
           v-if="pvSel && shownItem.kind === 'markdown' && view === 'render'"
-          class="pvseltr"
+          class="pvselbar"
           :style="{ left: `${pvSel.x}px`, top: `${pvSel.y}px` }"
           @mousedown.prevent
-          @click="onPvTranslate"
         >
-          <Icon name="globe" style="width: 13px; height: 13px" />
-          {{ t('translate.action') }}
-        </button>
+          <button class="pvseltr" @click="onPvTranslate">
+            <Icon name="globe" style="width: 13px; height: 13px" />
+            {{ t('translate.action') }}
+          </button>
+          <button class="pvseltr" @click="onPvCopyMarkdown">
+            <Icon :name="pvMdCopied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+            {{ pvMdCopied ? t('common.copied') : t('common.copyMarkdown') }}
+          </button>
+        </div>
 
         <PreviewToolbar v-if="hasBar" :ctrl="ctrl" />
 
@@ -358,6 +364,7 @@ import { usePreviewModal } from '~/composables/usePreviewModal'
 import { useCodeCopy } from '~/composables/useCodeCopy'
 import { isInternalFileHref } from '~/utils/file-links'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
+import { rawMarkdownForSelection } from '~/utils/selection-markdown'
 import { loadMonaco } from '~/utils/monaco-loader'
 
 // Backward-compatible alias: callers (e.g. SessionDetail) import `PreviewItem`.
@@ -535,6 +542,7 @@ function resolvePvSelection(): { text: string; rect: DOMRect } | null {
 }
 function onPvSelect(e: MouseEvent) {
   if (e.button !== 0) return
+  pvMdCopied.value = false
   const r = resolvePvSelection()
   pvSel.value = r ? { text: r.text, x: r.rect.left + r.rect.width / 2, y: r.rect.top - 8 } : null
 }
@@ -550,6 +558,7 @@ function onPvMouseDown(e: MouseEvent) {
 const { openEpoch } = usePreview()
 watch([shownItem, openEpoch], () => {
   pvSel.value = null
+  pvMdCopied.value = false
 })
 function onPvTranslate() {
   const s = pvSel.value
@@ -561,6 +570,28 @@ function onPvTranslate() {
       : { left: s.x, top: s.y, bottom: s.y, width: 0 }
   translate.open(s.text, rect)
   pvSel.value = null
+}
+
+// Copy MD → the RAW markdown behind the highlighted prose (utils/selection-markdown maps
+// the rendered selection back onto the file's source text), so a copied excerpt keeps its
+// headings/fences/tables instead of arriving flattened. The bar stays up showing "Copied";
+// it clears on the next click/selection or when the shown item changes.
+const pvMdCopied = ref(false)
+let pvMdCopiedTimer: ReturnType<typeof setTimeout> | null = null
+async function onPvCopyMarkdown() {
+  const s = pvSel.value
+  if (!s) return
+  const md = rawMarkdownForSelection([effectiveText.value], s.text) ?? s.text
+  try {
+    await navigator.clipboard.writeText(md)
+  } catch {
+    return // clipboard denied — leave the bar up so the user can copy manually
+  }
+  pvMdCopied.value = true
+  if (pvMdCopiedTimer) clearTimeout(pvMdCopiedTimer)
+  pvMdCopiedTimer = setTimeout(() => {
+    pvMdCopied.value = false
+  }, 1400)
 }
 
 // Let the shared translation popover consume ESC first (it closes itself); only
@@ -726,13 +757,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   align-items: center;
   padding: 26px 22px 86px;
 }
-/* Floating Translate button next to a text selection in the rendered markdown
-   (anchored to viewport coords; sits above the preview card, under the shared
+/* Floating action bar (Translate + Copy MD) next to a text selection in the rendered
+   markdown (anchored to viewport coords; sits above the preview card, under the shared
    translation popover teleported to body). */
-.pvseltr {
+.pvselbar {
   position: fixed;
   z-index: 120;
   transform: translate(-50%, -100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pvseltr {
   display: inline-flex;
   align-items: center;
   gap: 5px;

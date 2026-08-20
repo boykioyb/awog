@@ -5,7 +5,7 @@
 | `girl.png`    | Cute Girl - Free Sprites          | pzUH                               | https://opengameart.org/content/cute-girl-free-sprites                                                                      | **CC0 1.0**                                                                                     |
 | `chicken.png` | Chicken action set (labelled)     | sinh bằng AI, do chủ repo đặt hàng | tấm gốc `14_23_39 12 thg 8, 2026.png` (một PNG 1536×1024)                                                                   | **Tự tạo** — không ràng buộc phát tán, nên đây là sheet duy nhất _commit được_ ngoài `girl.png` |
 | `shiba.png`   | Shiba 15-animation set (labelled) | sinh bằng AI, do chủ repo đặt hàng | [tools/sprite-cutter/assets/shiba-sheet.png](../../../../../tools/sprite-cutter/assets/shiba-sheet.png) (một PNG 1536×1024) | **Tự tạo** — commit được, tấm gốc cũng nằm trong repo nên dựng lại được bằng một lệnh           |
-| `dino.png`    | Dino 25-animation set (labelled)  | sinh bằng AI, do chủ repo đặt hàng | [tools/sprite-cutter/assets/dino-sheet.png](../../../../../tools/sprite-cutter/assets/dino-sheet.png) (một PNG 1536×1024)   | **Tự tạo** — thay hẳn pack sticker CraftPix cũ (pack đó cấm phát tán)                            |
+| `dino.png`    | Dino 25-animation set (labelled)  | sinh bằng AI, do chủ repo đặt hàng | [tools/sprite-cutter/assets/dino-sheet.png](../../../../../tools/sprite-cutter/assets/dino-sheet.png) (một PNG 1536×1024)   | **Tự tạo** — thay hẳn pack sticker CraftPix cũ (pack đó cấm phát tán)                           |
 | `miku.png`    | Miku 33-animation set (labelled)  | sinh bằng AI, do chủ repo đặt hàng | [tools/sprite-cutter/assets/miku-sheet.png](../../../../../tools/sprite-cutter/assets/miku-sheet.png) (một PNG 1254×1254)   | **Tự tạo** — pet duy nhất không phải con vật                                                    |
 
 Các pack cat/dog/robot/knight **đã gỡ theo yêu cầu**; pack dino sticker (CraftPix, kèm
@@ -43,13 +43,13 @@ cô gái 30, hiệp sĩ **2**) nên script không hardcode mà xử lý cả ba 
 
 ## Hai loại pack, hai adapter
 
-| Loại               | Ví dụ          | Layout nguồn                                                                                                                                                     |
-| ------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sequence**       | pzUH (girl)    | `Idle (1).png`, `Run (1).png`… mỗi frame một file, cùng canvas                                                                                                   |
+| Loại               | Ví dụ                      | Layout nguồn                                                                                                                                                     |
+| ------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sequence**       | pzUH (girl)                | `Idle (1).png`, `Run (1).png`… mỗi frame một file, cùng canvas                                                                                                   |
 | **Labelled sheet** | chicken, shiba, dino, miku | 1 PNG chia **khối có nhãn** (IDLE / CHẠY / NHẢY / NGỦ…), mỗi khối một hàng frame — nguồn tốt nhất cho chuyển động mượt                                           |
-| **Sticker sheet**  | (đã gỡ)        | 1 PNG **nền kem đặc**, ~50 pose rời rạc không thẳng hàng                                                                                                         |
-| **Layered kit**    | chibi          | một PSD, **không có frame chuyển động nào** — chỉ 1 tư thế đứng, nhưng có 11 layer biểu cảm. Đổi mặt theo state; chuyển động do CSS transform tạo (`.is-static`) |
-| **Grid**           | bichon         | một PNG, animation chạy **liên tục theo hàng**, hàng cuối mỗi animation lấp không đầy → phải cắt theo bảng occupancy chứ không giả định hàng đầy                 |
+| **Sticker sheet**  | (đã gỡ)                    | 1 PNG **nền kem đặc**, ~50 pose rời rạc không thẳng hàng                                                                                                         |
+| **Layered kit**    | chibi                      | một PSD, **không có frame chuyển động nào** — chỉ 1 tư thế đứng, nhưng có 11 layer biểu cảm. Đổi mặt theo state; chuyển động do CSS transform tạo (`.is-static`) |
+| **Grid**           | bichon                     | một PNG, animation chạy **liên tục theo hàng**, hàng cuối mỗi animation lấp không đầy → phải cắt theo bảng occupancy chứ không giả định hàng đầy                 |
 
 ### Labelled sheet — `shiba.png`, cắt bằng tools/sprite-cutter
 

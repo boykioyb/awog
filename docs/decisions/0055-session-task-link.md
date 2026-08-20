@@ -71,3 +71,14 @@ Khi `Session.aboutTaskId` set, `sessions.send-message` chèn block `<linked_task
 - [ADR 0024](0024-task-execution-engine-ipc-contract.md) — Task Execution Engine (cơ chế chạy DAG).
 - [ADR 0030](0030-subagent-task-tool.md) — subagent `Task` tool (khác `RunWorkflow`: delegate trong turn, không spawn task bền).
 - Spec: [docs/features/session-task-link.md](../features/session-task-link.md).
+
+## Amendment 2026-08-19 — gỡ nút "Run as task" khỏi composer
+
+Nút ở `SessionComposer` đã được gỡ theo yêu cầu người dùng (hàng nút composer quá đông:
+pin · run-as-task · enhance · attach · attach-folder · Send). Quyết định trong ADR này
+**không đổi** — data model (`TaskSource` biến thể `session`, `Session.aboutTaskId`), modal
+dùng chung, chiều Task → Session và tool `RunWorkflow` đều giữ nguyên. Chỉ mất đúng một
+affordance do người dùng bấm ở chiều Session → Task.
+
+Muốn trả lại thì đặt vào menu `…` ở header session (nơi các action ít dùng đã được gom),
+không phải hàng nút composer.

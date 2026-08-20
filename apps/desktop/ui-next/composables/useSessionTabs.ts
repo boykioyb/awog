@@ -15,6 +15,10 @@ export type SessionTab = {
   color: string
   unread: number // sessions needing attention (unread / awaiting) — drives the amber badge
   running: boolean // a session in this project is actively streaming — drives the live dot pulse
+  // A session here FINISHED while you were not looking. Distinct from `unread`, which also
+  // counts sessions parked on a gate: this is specifically "there is a result waiting", so
+  // the tab can say "done, go read it" rather than just "needs attention".
+  doneUnread: boolean
   active: boolean
   closable: boolean // the Default tab is not user-closable
 }
@@ -46,6 +50,17 @@ export function useSessionTabs() {
     return out
   })
 
+  // Projects with at least one session that finished unread — drives the tab's "a result
+  // is waiting" colour. Kept separate from `unread` so a tab parked on a question does not
+  // claim to be done.
+  const doneUnreadByProject = computed<Record<string, boolean>>(() => {
+    const out: Record<string, boolean> = {}
+    for (const s of store.sessions) {
+      if (s.unread && s.status === 'done') out[s.project] = true
+    }
+    return out
+  })
+
   const tabs = computed<SessionTab[]>(() =>
     store.openProjectTabs.map((id) => ({
       id,
@@ -53,6 +68,7 @@ export function useSessionTabs() {
       color: id === '' ? PROJECT_COLOR_DEFAULT : colorOf(id),
       unread: unreadByProject.value[id] ?? 0,
       running: runningByProject.value[id] ?? false,
+      doneUnread: doneUnreadByProject.value[id] ?? false,
       active: id === store.activeTab,
       closable: id !== '',
     })),

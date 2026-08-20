@@ -386,6 +386,10 @@ export interface Session {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Per-session wiki whitelist (ADR 0073). undefined = the whole wiki is in scope;
+  // an explicit array limits BOTH the injected <wiki_index> and what wiki_search /
+  // wiki_read can reach — a scope the tools ignored would be theatre.
+  wikiSpaces?: string[]
   // Files/notes re-fed into every turn as <pinned_context> (see PinnedContext).
   pinnedContext?: PinnedContext
   // Absolute path of a folder dragged into the session; becomes the runtime tools'
@@ -1546,6 +1550,10 @@ export interface WikiPage {
   path: string
   source: WikiSource
   projectId?: string
+  // True when `description` was DERIVED from the body (no frontmatter description).
+  // A derived description is a fallback for the LLM index, not authored subtitle
+  // text — the reader must not print it above a body that already says it.
+  descriptionDerived?: boolean
   // First segment of `path`, or '' for a page sitting at the wiki root.
   space: string
   title: string
@@ -1637,6 +1645,10 @@ export interface ContextConfig {
   // Inject the wiki table of contents. Default true.
   wikiEnabled?: boolean | undefined
   wikiBudgetChars?: number | undefined
+  // Let the agent CREATE/UPDATE/DELETE wiki pages (wiki_write / wiki_delete).
+  // Default FALSE — the wiki is curated content and the global tier has no version
+  // history, so editing it is opt-in. Each call is still permission-gated.
+  wikiAutoWrite?: boolean | undefined
   // Inject the memory index. Default true.
   memoryEnabled?: boolean | undefined
   // Let the agent WRITE memory (memory_remember / memory_forget). Default FALSE —

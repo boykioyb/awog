@@ -1,7 +1,11 @@
 <template>
   <div class="swelcome">
     <div class="swhero">
-      <div class="swicon"><Icon name="sessions" style="width: 24px; height: 24px" /></div>
+      <!-- Cute theme swaps the decorative icon tile for the mascot. Only the MASCOT is
+           a markup fork: the title/subtitle keep their own classes so the hero type
+           scale lives in one place, and theme-cute.css restyles them from there. -->
+      <AwogMascot v-if="isCute" :size="64" state="idle" bob style="color: var(--accent)" />
+      <div v-else class="swicon"><Icon name="sessions" style="width: 24px; height: 24px" /></div>
       <div class="swh">{{ t('sessions.welcome.title') }}</div>
       <div class="swsub">{{ t('sessions.welcome.subtitle') }}</div>
       <div class="swctx">
@@ -62,6 +66,7 @@
 const { t } = useI18n()
 const store = useSessionsStore()
 const { projectName } = useProjects()
+const { isCute } = useThemeFamily()
 
 const projectLabel = computed(() => projectName(store.active?.project ?? ''))
 const model = computed(() => store.active?.model ?? 'Opus 5')

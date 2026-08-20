@@ -12,6 +12,7 @@
   "common.retry": "Thử lại",
   "common.delete": "Xóa",
   "common.copy": "Sao chép",
+  "common.copyMarkdown": "Copy MD",
   "common.copied": "Đã sao chép",
   "common.time.justNow": "vừa xong",
   "common.time.minutesAgo": "{n} phút trước",

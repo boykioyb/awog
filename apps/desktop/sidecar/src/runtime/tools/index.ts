@@ -83,7 +83,12 @@ export interface ToolFilter {
   // Wiki tools (ADR 0073). Set ONLY when the wiki actually has a page the LLM may
   // see, so a user who never made a wiki pays zero tokens for its tool schemas.
   // `projectId` scopes the project-tier wiki for the turn.
-  includeWikiTools?: { projectId?: string | undefined }
+  includeWikiTools?: {
+    projectId?: string | undefined
+    spaces?: readonly string[] | undefined
+    // Agent may create/update/delete wiki pages (Settings → Wiki, default off).
+    canWrite?: boolean | undefined
+  }
   // Memory tools (ADR 0073 D-11). `autoWrite` gates memory_remember/memory_forget
   // (Settings opt-in, default off); `hasBodies` gates memory_read. Absent = no
   // memory tools at all.

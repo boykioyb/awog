@@ -80,9 +80,25 @@ function firstHeading(body: string): string {
   return m ? m[1].trim() : ''
 }
 
-// First line that reads like prose: not a heading, not a fence, not a list
-// marker, not an HTML comment. Used when frontmatter has no description — and
-// the description is what the LLM index shows, so a decent guess matters.
+// Strip inline markdown so a derived description reads as a sentence. It is shown
+// verbatim in two places that cannot render markup — the reader's subtitle and the
+// `<wiki_index>` line the model reads — so leaving `**bold**` and `[x](y)` in it
+// looks broken in the UI and wastes prompt characters.
+function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target, label) => label || target)
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(^|\s)[*_]([^*_]+)[*_]/g, '$1$2')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// First line that reads like prose: not a heading, not a fence, not a table row,
+// not an HTML comment. Used when frontmatter has no description — and the
+// description is what the LLM index shows, so a decent guess matters.
 function firstProseLine(body: string): string {
   let inFence = false
   for (const raw of body.split('\n')) {
@@ -93,7 +109,14 @@ function firstProseLine(body: string): string {
     }
     if (inFence || line === '') continue
     if (line.startsWith('#') || line.startsWith('<!--') || line.startsWith('|')) continue
-    const text = line.replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, '')
+    // A leading list marker, blockquote `>` or emphasis wrapper is formatting, not
+    // content — an imported doc very often opens with `> summary line`.
+    const text = stripInlineMarkdown(
+      line
+        .replace(/^>\s*/, '')
+        .replace(/^[-*+]\s+/, '')
+        .replace(/^\d+\.\s+/, ''),
+    )
     if (text === '') continue
     return text.length > DESCRIPTION_CAP ? `${text.slice(0, DESCRIPTION_CAP)}…` : text
   }
@@ -108,20 +131,31 @@ function spaceOf(slug: string): string {
 interface PageMeta {
   title: string
   description: string
+  // See WikiPage.descriptionDerived.
+  descriptionDerived: boolean
   tags: string[]
   context: boolean
 }
 
 function parsePageMeta(head: string, slug: string): PageMeta {
   const { data, body } = parseFrontmatter(head)
-  const title = asString(data.title) || firstHeading(body) || humanise(basename(slug))
-  const description = asString(data.description) || firstProseLine(body)
+  const title =
+    stripInlineMarkdown(asString(data.title)) ||
+    stripInlineMarkdown(firstHeading(body)) ||
+    humanise(basename(slug))
+  // Flatten a FRONTMATTER description too, not just a derived one: it is displayed
+  // verbatim in the reader subtitle and in the `<wiki_index>` line, and neither
+  // renders markup — an imported page whose description says `**summary**` would
+  // show the asterisks in the UI and waste them on the model.
+  const explicit = stripInlineMarkdown(asString(data.description))
+  const description = explicit || firstProseLine(body)
   return {
     title,
     description:
       description.length > DESCRIPTION_CAP
         ? `${description.slice(0, DESCRIPTION_CAP)}…`
         : description,
+    descriptionDerived: explicit === '' && description !== '',
     tags: asStringArray(data.tags),
     // Only an explicit `false` hides a page from the LLM.
     context: asString(data.context, 'true').toLowerCase() !== 'false',
@@ -203,25 +237,34 @@ async function scanRoot(
         continue
       }
 
-      // `<space>/_index.md` describes its space instead of being a page.
-      if (name === SPACE_INDEX_FILE && depth === 1) {
-        const meta = parsePageMeta(head, childRel)
-        spaceMeta.set(rel, { title: meta.title || humanise(rel), description: meta.description })
-        continue
+      // `_index.md` IS its folder's page (Notion shape: a parent is also readable),
+      // so its slug is the FOLDER path, not `<folder>/_index`. At depth 1 it doubles
+      // as the space's title/description. A folder page whose `<folder>.md` sibling
+      // already exists loses to that sibling — one slug, one file.
+      let slug = childRel.slice(0, -3)
+      if (name === SPACE_INDEX_FILE && rel !== '') {
+        const meta = parsePageMeta(head, rel)
+        if (depth === 1) {
+          spaceMeta.set(rel, { title: meta.title || humanise(rel), description: meta.description })
+        }
+        if (pages.some((p) => p.path === rel)) continue
+        slug = rel
       }
 
-      const slug = childRel.slice(0, -3)
       const meta = parsePageMeta(head, slug)
       const page: WikiPage = {
         path: slug,
         source,
-        space: spaceOf(slug),
+        // A top-level folder page (`<space>/_index.md` → slug `<space>`) belongs to
+        // the space it introduces; spaceOf() would say '' because there is no '/'.
+        space: slug.includes('/') ? spaceOf(slug) : slug === rel ? slug : spaceOf(slug),
         title: meta.title,
         description: meta.description,
         tags: meta.tags,
         context: meta.context,
         bytes: st.size,
         updatedAt: st.mtimeMs,
+        ...(meta.descriptionDerived ? { descriptionDerived: true } : {}),
       }
       if (projectId) page.projectId = projectId
       pages.push(page)
@@ -246,6 +289,18 @@ async function rootsFor(
     roots.push({ root: projectWikiRoot(project.path), source: 'project', projectId: id })
   }
   return roots
+}
+
+// Keep only the spaces in `spaces` (undefined/empty = keep everything). Applied to
+// a scanned tree so the session whitelist and the tools see the same wiki.
+export function filterWikiTree(tree: WikiTree, spaces: readonly string[] | undefined): WikiTree {
+  if (!spaces || spaces.length === 0) return tree
+  const allowed = new Set(spaces)
+  return {
+    ...tree,
+    spaces: tree.spaces.filter((s) => allowed.has(s.id)),
+    pages: tree.pages.filter((p) => allowed.has(p.space)),
+  }
 }
 
 export async function scanWiki(projectIds: readonly string[] = []): Promise<WikiTree> {
@@ -330,6 +385,7 @@ export async function readWikiPage(
     context: meta.context,
     bytes: st.size,
     updatedAt: st.mtimeMs,
+    ...(meta.descriptionDerived ? { descriptionDerived: true } : {}),
   }
   if (projectId) page.projectId = projectId
   return { page, raw: kept, body, truncated }

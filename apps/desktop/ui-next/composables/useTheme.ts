@@ -53,6 +53,18 @@ function applyAccent() {
   s.setProperty('--accentText', luminance > threshold ? '#0a0a0a' : '#ffffff')
   s.setProperty('--accentDim', `rgba(${r}, ${g}, ${b}, 0.14)`)
   s.setProperty('--accentBorder', `rgba(${r}, ${g}, ${b}, 0.42)`)
+  // --accentSoft (SOLID pastel fill for active rows/tabs) and --accentHover (filled
+  // CTA hover) are used by the Cute theme. Derived as live color-mix() strings so a
+  // custom accent keeps a matching pastel + hover shade instead of falling back to
+  // the theme's mint; the AWOG default look reads neither token, so pinning them here
+  // is inert there.
+  s.setProperty('--accentSoft', 'color-mix(in srgb, var(--accent) 11%, var(--bgPanel))')
+  s.setProperty(
+    '--accentHover',
+    isDark.value
+      ? 'color-mix(in srgb, var(--accent) 82%, white)'
+      : 'color-mix(in srgb, var(--accent) 88%, black)',
+  )
 }
 
 // Set the base font size (px) on <html>. All prototype font-sizes are rem, so

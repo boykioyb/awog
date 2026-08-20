@@ -98,6 +98,9 @@ export interface WikiSearchOptions {
   // True = only pages the LLM may see (`context: true`). The `wiki_search` tool
   // sets this; the UI search does not (the user searches their own notes too).
   contextOnly?: boolean | undefined
+  // Session whitelist (Session.wikiSpaces): drop hits outside these spaces so a
+  // scoped session cannot search its way out of its own scope.
+  spaces?: readonly string[] | undefined
 }
 
 export async function searchWiki(opts: WikiSearchOptions): Promise<WikiSearchHit[]> {
@@ -122,6 +125,7 @@ export async function searchWiki(opts: WikiSearchOptions): Promise<WikiSearchHit
       const page = byKey.get(`${entry.source}:${entry.projectId ?? ''}:${hit.slug}`)
       if (!page) continue // _index.md / a file the scan skipped
       if (opts.contextOnly === true && !page.context) continue
+      if (opts.spaces && opts.spaces.length > 0 && !opts.spaces.includes(page.space)) continue
       const out: WikiSearchHit = {
         path: page.path,
         source: page.source,

@@ -60,6 +60,7 @@
 </template>
 
 <script setup lang="ts">
+import { onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
 // Sessions page — project tab strip on top, then list + resize handle + detail,
 // all backed by the reactive `useSessionsStore`. The list operates on the active
 // tab's sessions (store.tabSessions); the empty-state "+" creates a session scoped
@@ -72,6 +73,25 @@ const {
   dragging: listDragging,
   onPointerDown: onListResize,
 } = useResizable(296, { min: 200, max: 520 })
+
+// Keep the app-wide terminal dock aligned with the DETAIL column: publish the list
+// width (+ the 6px resize handle) so the dock starts where the list ends instead of
+// spanning under it — the list itself keeps its FULL height (the dock floats over the
+// detail column only; see useDockMetrics). In compact mode the list is an off-canvas
+// drawer, so there is no rail to clear and the inset must be 0.
+//
+// This page is inside <NuxtPage keepalive>, so `onUnmounted` never fires on navigation —
+// the inset has to be dropped on `onDeactivated` and restored on `onActivated`, or every
+// other page would render the dock indented by a list it does not have.
+const RSZ_W = 6
+const { setInset, clearInset } = useDockMetrics()
+const { compact } = useResponsiveShell()
+const publishInset = () => setInset(compact.value ? 0 : listWidth.value + RSZ_W)
+watch([listWidth, compact], publishInset)
+onMounted(publishInset)
+onActivated(publishInset)
+onDeactivated(clearInset)
+onUnmounted(clearInset)
 </script>
 
 <style scoped>

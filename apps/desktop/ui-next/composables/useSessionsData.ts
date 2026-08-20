@@ -345,6 +345,9 @@ export type Session = {
   // Session-scoped MCP server whitelist → params.mcpServerIds. undefined = all
   // enabled (legacy); [] = none; [ids] = only those.
   mcpServerIds?: string[]
+  // Session-scoped wiki whitelist → params.wikiSpaces. undefined = whole wiki
+  // (ADR 0073); an array limits the injected index AND the wiki tools' reach.
+  wikiSpaces?: string[]
   // Files/notes pinned to this session, re-fed into every turn as <pinned_context>.
   pinnedContext?: PinnedContext
   // Absolute path of a folder dragged into the session. Becomes the runtime tools'

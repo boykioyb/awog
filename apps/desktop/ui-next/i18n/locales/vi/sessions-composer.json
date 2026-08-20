@@ -15,7 +15,7 @@
   "sessions.composer.slashCommands": "Lệnh",
   "sessions.composer.slashHint": "có sẵn · lệnh · skill",
   "sessions.composer.mentionTitle": "Nhắc đến",
-  "sessions.composer.mentionHint": "agent · file trong workspace",
+  "sessions.composer.mentionHint": "agent · skill · wiki · file",
   "sessions.composer.mentionFile": "file",
   "sessions.composer.mentionAgent": "agent",
   "sessions.composer.kind.builtin": "có sẵn",
@@ -127,5 +127,7 @@
   "sessions.pinned.clearRecent": "Xóa",
   "sessions.pinned.inUse": "Đang dùng — nạp lại mỗi turn",
   "sessions.pinned.titleCount": "Ngữ cảnh ghim ({n})",
-  "sessions.pinned.deleteRecent": "Xóa khỏi gần đây"
+  "sessions.pinned.deleteRecent": "Xóa khỏi gần đây",
+  "sessions.composer.mentionWiki": "wiki",
+  "sessions.composer.mentionSkill": "skill"
 }

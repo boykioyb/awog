@@ -26,7 +26,7 @@
   "settings.keymap.act.toggleFiles": "Bật/tắt Files (trong session)",
   "settings.appearance.heading": "Giao diện",
   "settings.appearance.themeFamily.name": "Bộ giao diện",
-  "settings.appearance.themeFamily.desc": "Bộ token nền — AWOG hoặc shadcn slate",
+  "settings.appearance.themeFamily.desc": "Giao diện nền — AWOG, hoặc Cute (trắng ngà + mint)",
   "settings.appearance.mode.name": "Chế độ",
   "settings.appearance.mode.desc": "Tối / sáng · đồng bộ ☾ trên thanh top",
   "settings.appearance.mode.dark": "Tối",
@@ -241,5 +241,7 @@
   "settings.memory.delete.body": "Agent sẽ không còn thấy “{name}”. Không thể hoàn tác.",
   "settings.memory.clear.title": "Xóa hết bộ nhớ?",
   "settings.memory.clear.body": "Xóa vĩnh viễn toàn bộ {n} fact đã lưu. Không thể hoàn tác.",
-  "settings.memory.clear.confirm": "Xóa hết"
+  "settings.memory.clear.confirm": "Xóa hết",
+  "settings.wiki.autoWrite.name": "Cho agent sửa wiki",
+  "settings.wiki.autoWrite.desc": "Mặc định TẮT. Khi bật, agent tạo/cập nhật/xoá được trang — mỗi lần sửa vẫn phải xin duyệt (trừ chế độ execute) và hiện trong transcript. Wiki global không có version history."
 }

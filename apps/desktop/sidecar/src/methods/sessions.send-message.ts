@@ -153,10 +153,14 @@ const Params = z.object({
   // Wiki / memory context switches from Settings (ADR 0073 D-12). Absent = the
   // documented defaults (both injected, agent memory writes OFF), so an older UI
   // build keeps behaving sanely.
+  // Per-session wiki whitelist (ADR 0073) — session state, not a global setting,
+  // so it rides beside mcpServerIds rather than inside contextConfig.
+  wikiSpaces: z.array(z.string().max(200)).max(200).optional(),
   contextConfig: z
     .object({
       wikiEnabled: z.boolean().optional(),
       wikiBudgetChars: z.number().int().positive().max(40_000).optional(),
+      wikiAutoWrite: z.boolean().optional(),
       memoryEnabled: z.boolean().optional(),
       memoryAutoWrite: z.boolean().optional(),
       memoryBudgetChars: z.number().int().positive().max(40_000).optional(),
@@ -475,6 +479,8 @@ async function buildBulkLoad(
   cwd: string | undefined,
   // Wiki / memory switches from Settings, travelling with the turn (ADR 0073 D-12).
   contextConfig: ContextConfig | undefined,
+  // Per-session wiki whitelist (Session.wikiSpaces). Undefined = whole wiki.
+  wikiSpaces: string[] | undefined,
 ): Promise<BulkLoadResult> {
   const result: BulkLoadResult = {
     memoryFilesChars: 0,
@@ -540,7 +546,15 @@ async function buildBulkLoad(
         result.skillsList.push({ label: s.name, chars: line.length })
         return line
       })
-      const block = `<available_skills>\n${lines.join('\n')}\n</available_skills>`
+      const block =
+        `<available_skills>\n${lines.join('\n')}\n` +
+        // The composer inserts `@skill:<id>` when the user picks a skill from the
+        // `@` menu. Without saying what the token means, the model sees an
+        // unexplained string and answers around it instead of applying the skill
+        // the user explicitly pointed at (same reasoning as `@wiki:` — see
+        // wiki/inject.ts FRAMING).
+        `When the user's message contains \`@skill:<id>\`, they are pointing you at that skill on purpose — follow it for this task.\n` +
+        `</available_skills>`
       blocks.push(block)
       result.skillsChars = block.length
     }
@@ -556,7 +570,7 @@ async function buildBulkLoad(
   // when the full index would exceed its budget (wiki/inject.ts), and says so.
   if (contextConfig?.wikiEnabled !== false) {
     try {
-      const wiki = await buildWikiIndex(projectId, contextConfig?.wikiBudgetChars)
+      const wiki = await buildWikiIndex(projectId, contextConfig?.wikiBudgetChars, wikiSpaces)
       if (wiki.block) {
         blocks.push(wiki.block)
         result.wikiChars = wiki.chars
@@ -913,7 +927,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // skills). Folded into systemPromptAppend so the model sees the catalogue; the
   // per-section char sizes ride along to the runtime for the usage-panel
   // breakdown. Best-effort — buildBulkLoad never throws.
-  const bulkLoad = await buildBulkLoad(params.projectId, cwd, params.contextConfig)
+  const bulkLoad = await buildBulkLoad(
+    params.projectId,
+    cwd,
+    params.contextConfig,
+    params.wikiSpaces,
+  )
   if (bulkLoad.block) {
     systemPromptAppend = systemPromptAppend
       ? `${systemPromptAppend}\n\n${bulkLoad.block}`
@@ -1276,6 +1295,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         // Wiki / memory switches ride with the turn (ADR 0073 D-12): the runtime
         // decides which tools to offer from them.
         ...(params.contextConfig ? { contextConfig: params.contextConfig } : {}),
+        ...(params.wikiSpaces ? { wikiSpaces: params.wikiSpaces } : {}),
         // Linked SSH host (ADR 0064 P2): the Pi runtime pushes the scoped SSH tools
         // for this host. sshApprovalMode rides along in `settings`.
         ...(params.aboutSshHostId ? { aboutSshHostId: params.aboutSshHostId } : {}),

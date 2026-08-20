@@ -18,6 +18,13 @@
     --shadow-md:0 2px 6px rgba(0,0,0,.3),0 10px 24px rgba(0,0,0,.36);
     --shadow-lg:0 8px 24px rgba(0,0,0,.4),0 24px 64px rgba(0,0,0,.5);
     --ease:cubic-bezier(.32,.72,0,1);
+    /* Shared SCALES (theme-agnostic — no existing rule reads them, so defining them
+       here changes nothing; they exist so the Cute theme and any future theme speak
+       one vocabulary instead of re-inventing radii/timings inline).
+       Radius: 5 steps, nothing else. Motion: hover fastest, panels slowest. */
+    --r-xs:6px; --r-sm:8px; --r-btn:10px; --r-card:14px; --r-panel:16px; --r-pill:999px;
+    --dur-fast:130ms; --dur:160ms; --dur-panel:190ms;
+    --shadow-glow:0 0 0 3px var(--accentDim);
     --accent:#10b981; --accentText:#021410; --accentDim:rgba(16,185,129,.14); --accentBorder:rgba(16,185,129,.42);
     --amber:#f59e0b; --amberDim:rgba(245,158,11,.12); --amberBorder:rgba(245,158,11,.4);
     --blue:#60a5fa; --violet:#a78bfa; --danger:#ef4444; --dangerDim:rgba(239,68,68,.1); --dangerBg:rgba(239,68,68,.14); --dangerBorder:rgba(239,68,68,.42); --green:#22c55e;

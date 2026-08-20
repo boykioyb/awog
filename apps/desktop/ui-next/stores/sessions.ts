@@ -13,7 +13,11 @@ import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
-import { contextLimitFor, contextTokensFromChars } from '~/utils/context-window'
+import {
+  contextLimitFor,
+  contextTokensFromChars,
+  estimateContextTokens,
+} from '~/utils/context-window'
 import { slugSessionId } from '~/utils/session-slug'
 import type {
   AssistantBlock,
@@ -261,6 +265,8 @@ type SessionSummaryDto = {
   settings?: EngineSessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
+  // Per-session wiki whitelist (ADR 0073). undefined = whole wiki in scope.
+  wikiSpaces?: string[]
   // Task this session discusses (ADR 0055) — mirrors sidecar SessionSummary.
   aboutTaskId?: string
   // SSH host this session works with (ADR 0064) — mirrors sidecar SessionSummary.
@@ -302,6 +308,18 @@ type EngineMessage = {
   // User attachments persisted on the turn (sidecar SessionMessage.attachments).
   // Restored on hydrate so a reload keeps the attachment chips + previews.
   attachments?: EngineAttachment[]
+  // Per-turn usage snapshot persisted on an agent message (sidecar
+  // SessionMessage.usage). Lifted onto Session.usage on hydrate — see
+  // usageFromMessages — so the context gauge and the auto-compact trigger both see
+  // the REAL breakdown after a reload instead of falling back to an estimate.
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+    costUsd?: number
+    contextChars?: ContextChars
+  }
 }
 type SessionGetDto = {
   id: string
@@ -446,10 +464,14 @@ export const useSessionsStore = defineStore('sessions', () => {
   // useSessionContextUsage: occupancy = the assembled prompt content the model sees
   // (the engine's per-segment breakdown, contextTokensFromChars) over the SELECTED
   // model's window — NOT the API usage total, which double-counts the cached prefix
-  // and adds output, inflating the gauge past 100%. 0 when no real turn has run yet
-  // (no breakdown / browser-dev). Shared by the auto-compact trigger + quota guard.
+  // and adds output, inflating the gauge past 100%. Shared by the auto-compact
+  // trigger + quota guard.
+  //
+  // No breakdown (browser-dev / a transcript persisted before per-turn `usage`) falls
+  // back to the SAME text-only estimate the panel shows, never to 0: reading 0% there
+  // is what left auto-compact blind on exactly the sessions whose gauge looked full.
   function usagePct(s: Session): number {
-    const used = contextTokensFromChars(s.usage?.contextChars)
+    const used = contextTokensFromChars(s.usage?.contextChars) || estimateContextTokens(s.msgs)
     if (!used) return 0
     const max = s.usage?.max ?? contextLimitFor(modelIdFromDisplay(s.model))
     if (!max) return 0
@@ -581,26 +603,54 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // Auto-compaction trigger (Settings → Sessions → autoCompact). The sidecar has no
   // server-side auto-compact loop — `/compact` is a client-driven RPC — so we drive
-  // it here: once a turn settles and the session crosses the auto-compact threshold,
-  // fire compactSession() (the real ADR 0047 RPC, same as the manual button). The
-  // sidecar persists a checkpoint and trims the model context on the NEXT turn; the
-  // transcript is left intact. Guarded so it never fires twice for one threshold
-  // crossing (a per-engineId latch reset when usage drops back below the band).
+  // it here: when the session is over the threshold, fire compactSession() (the real
+  // ADR 0047 RPC, same as the manual button). The sidecar persists a checkpoint and
+  // trims the model context on the NEXT turn; the transcript is left intact.
+  //
+  // Called on BOTH edges of a turn: awaited BEFORE a turn starts (so an over-budget
+  // session is cut before the request goes out, not after it already overflowed) and
+  // fire-and-forget after one settles (so the next send is usually already clear).
+  // Guarded so it never fires twice for one threshold crossing (a per-engineId latch
+  // reset when usage drops back below the band).
   const AUTO_COMPACT_PCT = 85
   const autoCompactedAt = new Map<string, boolean>()
-  function maybeAutoCompact(s: Session): void {
-    if (!useIpc || !s.engineId || !settingsStore.sessions.autoCompact) return
+  // In-flight /compact per engineId (set by compactSession). A turn must not overtake
+  // a compaction that is already running: `sessions.sendMessage` reads the checkpoint
+  // off the persisted session, so starting the turn first means it runs on the UNCUT
+  // context. The queue drain hits this exactly — it fires the moment a turn settles,
+  // right as the post-turn edge starts compacting.
+  const compactInFlight = new Map<string, Promise<'compacted' | 'nothing' | 'error'>>()
+  async function maybeAutoCompact(s: Session): Promise<void> {
+    if (!useIpc || !s.engineId) return
+    const inFlight = compactInFlight.get(s.engineId)
+    // Already being compacted (post-turn edge / the manual button) → let it land and
+    // take that cut; compacting twice back-to-back would only re-summarise.
+    if (inFlight) {
+      await inFlight
+      return
+    }
+    if (!settingsStore.sessions.autoCompact) return
+    const eid = s.engineId
     const pct = usagePct(s)
-    const latched = autoCompactedAt.get(s.engineId) ?? false
+    const latched = autoCompactedAt.get(eid) ?? false
     // Reset the latch once usage falls well below the band (a fresh compaction cut
     // frees space) so a later re-fill can auto-compact again.
     if (pct < AUTO_COMPACT_PCT - 15) {
-      if (latched) autoCompactedAt.set(s.engineId, false)
+      if (latched) autoCompactedAt.set(eid, false)
       return
     }
     if (pct < AUTO_COMPACT_PCT || latched) return
-    autoCompactedAt.set(s.engineId, true)
-    void compactSession(s.id)
+    // Latch up-front so the two edges can't fire the same crossing twice. It STAYS
+    // latched on 'compacted' (the cut happened) and on 'nothing' (already compacted to
+    // this point / a single turn too big to cut — retrying every send would just burn
+    // round-trips), but is RELEASED on 'error': a transient RPC failure must not
+    // disable auto-compact for the rest of the app's life, since usage never falls back
+    // below the re-arm band on its own and the latch would then be permanent.
+    autoCompactedAt.set(eid, true)
+    // undefined keepRecentTokens ⇒ the sidecar's own default (20k kept verbatim), not
+    // the manual button's "keep only the last turn".
+    const res = await compactSession(s.id, undefined)
+    if (res === 'error') autoCompactedAt.set(eid, false)
   }
 
   // ── Mappers: engine → ui-next shapes ────────────────────────────────────
@@ -874,6 +924,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.settings?.sshApprovalMode) session.sshApprovalMode = dto.settings.sshApprovalMode
     if (dto.disabledTools) session.disabledTools = [...dto.disabledTools]
     if (dto.mcpServerIds) session.mcpServerIds = [...dto.mcpServerIds]
+    if (dto.wikiSpaces) session.wikiSpaces = [...dto.wikiSpaces]
     if (dto.aboutTaskId) session.aboutTaskId = dto.aboutTaskId
     if (dto.aboutSshHostId) session.aboutSshHostId = dto.aboutSshHostId
     if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
@@ -956,6 +1007,14 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
         // Restore the checklist so reopening a session shows where work stopped.
         if (full.todos) target.todos = mapTodos(full.todos)
+        // Restore the context-window snapshot + cumulative cost from the transcript
+        // so the gauge shows the real occupancy right after a reload (and the
+        // auto-compact trigger, which reads `contextChars`, is not blind). A turn that
+        // already ran in THIS app run is fresher — never overwrite it.
+        if (!target.usage) {
+          const persistedUsage = usageFromMessages(full.messages)
+          if (persistedUsage) target.usage = persistedUsage
+        }
         // Re-read the summary fields too: after a session comes back from a popout
         // window (session-popout-window.md) this is the only refresh it gets, and the
         // title / last-updated may well have changed there.
@@ -1004,6 +1063,46 @@ export const useSessionsStore = defineStore('sessions', () => {
       return { role: 'system', text: m.text, at: m.at ?? '' }
     }
     return { role: 'assistant', at: m.at ?? '', eid: m.id, blocks: engineMessageToBlocks(m) }
+  }
+
+  // Restore Session.usage from the persisted transcript (sessions.get already ships
+  // each agent turn's `usage`). WITHOUT this a reloaded session had no breakdown, so
+  // the usage panel fell back to a client-side text estimate — which counts step
+  // `detail` (diff / file content / terminal output the model never receives) and
+  // read several times the real occupancy — while usagePct() saw 0% and auto-compact
+  // stayed blind on exactly those sessions.
+  //
+  // Tokens + breakdown come from the LAST turn that reported them (a per-turn
+  // snapshot of the window, not a sum); `contextChars` is tracked separately so a
+  // trailing turn that omitted it (compact-only run) doesn't erase the last known
+  // breakdown — same fallback mergeUsage applies. Cost IS cumulative (mirrors
+  // mergeUsage), so it sums across turns.
+  function usageFromMessages(messages: EngineMessage[]): SessionUsage | undefined {
+    let last: NonNullable<EngineMessage['usage']> | undefined
+    let cc: ContextChars | undefined
+    let cost = 0
+    for (const m of messages) {
+      const u = m.usage
+      if (!u) continue
+      last = u
+      if (u.contextChars) cc = u.contextChars
+      cost += u.costUsd ?? 0
+    }
+    if (!last) return undefined
+    const input = last.inputTokens ?? 0
+    const output = last.outputTokens ?? 0
+    const cacheRead = last.cacheReadTokens ?? 0
+    const cacheWrite = last.cacheWriteTokens ?? 0
+    const usage: SessionUsage = {
+      input,
+      output,
+      cacheRead,
+      cacheWrite,
+      total: input + output + cacheRead + cacheWrite,
+    }
+    if (cc) usage.contextChars = cc
+    if (cost > 0) usage.cost = cost
+    return usage
   }
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
@@ -1671,6 +1770,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (useIpc) pushUpsert(s, 'update-metadata')
   }
   // undefined = all enabled servers (legacy); [] = none; [ids] = only those.
+  // undefined clears the whitelist ("whole wiki"); an array scopes the session to
+  // those spaces — for the index AND for what wiki_search/wiki_read can reach.
+  function setWikiSpaces(id: number, spaces: string[] | undefined) {
+    const s = byId(id)
+    if (!s) return
+    if (spaces === undefined) delete s.wikiSpaces
+    else s.wikiSpaces = [...spaces]
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+
   function setMcpServerIds(id: number, ids: string[] | undefined) {
     const s = byId(id)
     if (!s) return
@@ -2828,6 +2937,14 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
 
+    // Auto-compaction, BEFORE the turn goes out (Settings → Sessions): a session
+    // already over the threshold gets its checkpoint now, so the sidecar cuts the
+    // context of THIS turn. The post-turn edge alone could only react to an overflow
+    // that had already happened. Awaited — compaction must land before sendMessage
+    // reads the checkpoint back from the persisted session. The prior turns are what
+    // gets summarised; this message is not persisted yet, so it is never cut away.
+    await maybeAutoCompact(s)
+
     await runEngineTurn(s, modelText, atts)
   }
 
@@ -2961,6 +3078,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         // (ADR 0045) — same path responseStyle/sshApprovalMode take. Omitted when
         // everything is at its default so the payload stays minimal.
         ...(Object.keys(ctxConfig).length ? { contextConfig: ctxConfig } : {}),
+        // Per-session wiki scope (config popover → Wiki tab). Omitted = whole wiki.
+        ...(s.wikiSpaces ? { wikiSpaces: s.wikiSpaces } : {}),
         // Session-scoped tool denylist + MCP whitelist (config popover).
         ...(s.disabledTools && s.disabledTools.length ? { disabledTools: s.disabledTools } : {}),
         ...(s.mcpServerIds !== undefined ? { mcpServerIds: s.mcpServerIds } : {}),
@@ -2999,8 +3118,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (!refused) {
         s.usage = mergeUsage(s.usage, result.usage, result.contextChars)
         // Auto-compaction (Settings → Sessions): client-driven /compact once this
-        // session's context-window usage crosses the threshold (ADR 0047 RPC).
-        maybeAutoCompact(s)
+        // session's context-window usage crosses the threshold (ADR 0047 RPC). Not
+        // awaited here — the turn is done; the pre-send edge is the one that gates.
+        void maybeAutoCompact(s)
       }
       // Reflect the actually-used model, but DON'T collapse a 1M variant: the
       // engine reports the API base id (`claude-opus-4-8`) for the AWOG-internal
@@ -3098,27 +3218,57 @@ export const useSessionsStore = defineStore('sessions', () => {
   // real RPC with the session's engine settings; the sidecar persists a
   // `session.compacted` checkpoint and trims model context on the NEXT turn (the
   // transcript is left intact). Returns false in browser-dev / on error / when
-  // there is nothing to compact. keepRecentTokens 0 = keep only the last turn.
-  async function compactSession(id: number): Promise<'compacted' | 'nothing' | 'error'> {
+  // there is nothing to compact.
+  //
+  // `keepRecentTokens` = the recent window kept verbatim. The MANUAL button (the
+  // default, 0) keeps only the last turn — the user pressed it to reclaim budget now,
+  // and it must work even on a short conversation. Auto-compaction passes `undefined`
+  // so the field is omitted and the sidecar applies Pi's DEFAULT_COMPACTION_SETTINGS
+  // (20k), which is what runner.ts documents: an automatic cut must not silently throw
+  // away every recent turn behind the user's back.
+  async function compactSession(
+    id: number,
+    keepRecentTokens: number | undefined = 0,
+  ): Promise<'compacted' | 'nothing' | 'error'> {
     const s = byId(id)
     if (!s || !useIpc || !s.engineId) return 'error'
-    const es = engineSettings(s)
-    const messageId = `compact-${Date.now().toString(36)}`
     // Guard against overlapping /compact calls (auto-compact + manual button) and
     // drive the composer's "compacting…" indicator + Send lock for the whole RPC.
     if (s.compacting) return 'nothing'
+    const eid = s.engineId
+    // Publish the run so a turn starting meanwhile awaits it (maybeAutoCompact) rather
+    // than sending on the still-uncut context.
+    const run = runCompactRpc(s, eid, keepRecentTokens)
+    compactInFlight.set(eid, run)
+    try {
+      return await run
+    } finally {
+      compactInFlight.delete(eid)
+    }
+  }
+
+  // The `sessions.compact` round-trip itself. Flips `compacting` synchronously — before
+  // its first await — so the composer's Send lock and the overlap guard above take
+  // effect the moment compactSession is called, not a microtask later.
+  async function runCompactRpc(
+    s: Session,
+    engineId: string,
+    keepRecentTokens: number | undefined,
+  ): Promise<'compacted' | 'nothing' | 'error'> {
     s.compacting = true
+    const es = engineSettings(s)
+    const messageId = `compact-${Date.now().toString(36)}`
     try {
       const res = await sc.request<{ ok?: boolean; reason?: string; historyChars?: number }>(
         'sessions.compact',
         {
-          sessionId: s.engineId,
+          sessionId: engineId,
           messageId,
           provider: es.provider,
           modelId: es.modelId,
           ...(es.accountId ? { accountId: es.accountId } : {}),
           ...(s.project ? { projectId: s.project } : {}),
-          keepRecentTokens: 0,
+          ...(keepRecentTokens !== undefined ? { keepRecentTokens } : {}),
         },
       )
       if (res?.ok === false) {
@@ -3764,6 +3914,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setSshTerminalConnId,
     setDisabledTools,
     setMcpServerIds,
+    setWikiSpaces,
     addPinnedFile,
     removePinnedFile,
     setPinnedNotes,

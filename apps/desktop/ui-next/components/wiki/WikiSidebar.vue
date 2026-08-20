@@ -44,44 +44,15 @@
         {{ t('wiki.tree.empty') }}
       </div>
 
-      <div
-        v-for="node in tree"
-        :key="node.space + node.source + (node.projectId ?? '')"
-        class="wsb-space"
-      >
-        <button class="wsb-spacerow" @click="emit('toggle-space', node)">
-          <Icon :name="collapsed(node) ? 'chev-right' : 'chev'" :size="12" />
-          <span class="wsb-spacename">
-            {{ node.space === '' ? t('wiki.tree.rootGroup') : node.title }}
-          </span>
-          <span v-if="node.source === 'project'" class="tag acc" style="padding: 1px 6px">
-            {{ t('wiki.tier.project') }}
-          </span>
-          <span class="wsb-count">{{ node.pages.length }}</span>
-        </button>
-
-        <template v-if="!collapsed(node)">
-          <button
-            v-for="page in node.pages"
-            :key="page.path + page.source + (page.projectId ?? '')"
-            class="wsb-page"
-            :class="{ on: pageKey(page) === selectedKey }"
-            :title="page.description || page.path"
-            @click="emit('open', page)"
-            @contextmenu.prevent="emit('context-page', $event, page)"
-          >
-            <Icon name="file" :size="12" />
-            <span class="wsb-pagetitle">{{ page.title }}</span>
-            <Icon
-              v-if="!page.context"
-              name="eye-off"
-              :size="12"
-              class="wsb-hidden"
-              :title="t('wiki.page.hiddenFromLlm')"
-            />
-          </button>
-        </template>
-      </div>
+      <WikiTreeNodes
+        :nodes="tree"
+        :selected-key="selectedKey"
+        :is-collapsed="isCollapsed"
+        @open="(p) => emit('open', p)"
+        @toggle="(n) => emit('toggle-space', n)"
+        @new-child="(n) => emit('new-child', n)"
+        @context-page="(e, p) => emit('context-page', e, p)"
+      />
     </div>
 
     <div
@@ -98,9 +69,9 @@
 // Wiki sidebar: search box, create/import actions, and the space → page tree.
 // Presentational only — every action is emitted up to the page controller
 // (useWikiManager), which owns the state (nuxt-vue rule: thin components).
+import WikiTreeNodes from '~/components/wiki/WikiTreeNodes.vue'
 import type { WikiTreeNode } from '~/composables/useWikiManager'
 import type { WikiPage } from '~/stores/wiki'
-import { wikiKey } from '~/stores/wiki'
 
 const props = defineProps<{
   tree: WikiTreeNode[]
@@ -116,6 +87,7 @@ const emit = defineEmits<{
   open: [page: WikiPage]
   'toggle-space': [node: WikiTreeNode]
   'context-page': [event: MouseEvent, page: WikiPage]
+  'new-child': [node: WikiTreeNode]
   'update:query': [value: string]
   search: []
   'clear-search': []
@@ -125,8 +97,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-const pageKey = (page: WikiPage): string => wikiKey(page)
 
 // Drag-to-resize, same idiom as GitSidebar: pointer capture on the handle, width
 // emitted up so the page owns (and persists) it.
@@ -152,7 +122,6 @@ function onPointerDown(ev: PointerEvent): void {
   handle.addEventListener('pointermove', move)
   handle.addEventListener('pointerup', up)
 }
-const collapsed = (node: WikiTreeNode): boolean => props.isCollapsed(node)
 // Rounded to the nearest 100 chars — the point is the order of magnitude the
 // index costs per turn, not an exact byte count.
 const chars = computed(() =>

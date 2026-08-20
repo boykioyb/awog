@@ -213,21 +213,32 @@ const cssVar = (name: string, fallback: string): string => {
 }
 
 // Terminal appearance (color preset + font). The 'system' preset (theme === null)
-// keeps the CSS-var-derived palette below — byte-identical to the pre-feature look.
+// keeps the CSS-var-derived palette below — byte-identical to the pre-feature look
+// on the default 'awog' theme family, since --termBg/--termText only exist under
+// the opt-in 'cute' family (theme-cute.css). Precedence: user preset > terminal
+// token > app token — a preset always wins; otherwise prefer the terminal-specific
+// var (dark, for readability — §11) and fall back to the app's own var when it's
+// undefined (getComputedStyle returns '' for an unset var, and cssVar()'s fallback
+// param covers that).
+const { family: themeFamily } = useThemeFamily()
 const appearance = useTerminalAppearanceStore()
 
 // Background for the pane BOX so its padding reads as INTERNAL terminal padding (the
 // dark bg fills under the padding, text inset from the edge) instead of a page-colour
-// gutter. Matches the xterm background: a preset's hex, else live `var(--bg)` (system).
-const paneBg = computed(() => appearance.theme?.background ?? 'var(--bg)')
+// gutter. Matches the xterm background: a preset's hex, else --termBg falling back to
+// --bg (system) — nested var() so the browser resolves the same precedence at paint
+// time without a JS re-read.
+const paneBg = computed(() => appearance.theme?.background ?? 'var(--termBg, var(--bg))')
 
 // The xterm theme to apply: a concrete preset when one is chosen, else the live
-// CSS-var theme (the exact object initPane used to build inline). System preset →
-// this returns the app-theme colors → no visible change.
+// CSS-var theme (the exact object initPane used to build inline). System preset on
+// the default theme → --termBg/--termText are unset → falls through to --bg/--text →
+// byte-identical to the pre-feature look. System preset under 'cute' → the terminal
+// stays dark even though the app chrome is light.
 const resolveTheme = (): ITheme =>
   appearance.theme ?? {
-    background: cssVar('--bg', '#0d0d0d'),
-    foreground: cssVar('--text', '#e5e5e5'),
+    background: cssVar('--termBg', cssVar('--bg', '#0d0d0d')),
+    foreground: cssVar('--termText', cssVar('--text', '#e5e5e5')),
     cursor: cssVar('--accent', '#3b82f6'),
     selectionBackground: cssVar('--accent', '#3b82f6'),
     selectionForeground: cssVar('--accentText', '#ffffff'),
@@ -919,19 +930,25 @@ defineExpose({ runText })
 // ── Wiring ────────────────────────────────────────────────────────────────────
 // Live-apply terminal appearance to every open pane. Fires only when the user
 // changes preset / size / font (the default 'system'/13/mono values are stable →
-// this stays dormant → no change by default). Font metrics change → refit.
-watch([() => appearance.theme, () => appearance.fontSize, () => appearance.fontFamily], () => {
-  const nextTheme = resolveTheme()
-  for (const pane of panes.values()) {
-    if (!pane.term) continue
-    pane.term.options.theme = nextTheme
-    pane.term.options.fontSize = appearance.fontSize
-    pane.term.options.fontFamily = appearance.fontFamily
-  }
-  nextTick(() => {
-    for (const pane of panes.values()) if (pane.term) syncSize(pane)
-  })
-})
+// this stays dormant → no change by default). Font metrics change → refit. Also
+// fires on a theme-family switch: Settings → Appearance → Theme to/from Cute
+// flips whether --termBg/--termText resolve, so the 'system' preset must re-read
+// resolveTheme() and repaint every already-open xterm instance live.
+watch(
+  [() => appearance.theme, () => appearance.fontSize, () => appearance.fontFamily, themeFamily],
+  () => {
+    const nextTheme = resolveTheme()
+    for (const pane of panes.values()) {
+      if (!pane.term) continue
+      pane.term.options.theme = nextTheme
+      pane.term.options.fontSize = appearance.fontSize
+      pane.term.options.fontFamily = appearance.fontFamily
+    }
+    nextTick(() => {
+      for (const pane of panes.values()) if (pane.term) syncSize(pane)
+    })
+  },
+)
 
 watch(
   () => props.visible,

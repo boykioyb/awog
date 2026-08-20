@@ -10,6 +10,13 @@
       <SettingsNumber v-model="wikiBudget" :min="500" :max="40000" :step="500" />
     </SettingsField>
 
+    <SettingsField
+      :name="t('settings.wiki.autoWrite.name')"
+      :desc="t('settings.wiki.autoWrite.desc')"
+    >
+      <SettingsTog v-model="wikiAutoWrite" />
+    </SettingsField>
+
     <SettingsField :name="t('settings.wiki.cost.name')" :desc="t('settings.wiki.cost.desc')">
       <span class="chip">
         {{ t('settings.wiki.cost.value', { pages: wiki.contextPageCount, chars: chars }) }}
@@ -47,6 +54,11 @@ const wikiEnabled = computed({
 const wikiBudget = computed({
   get: () => settings.context.wikiBudgetChars,
   set: (v: number) => settings.updateContext({ wikiBudgetChars: v }),
+})
+
+const wikiAutoWrite = computed({
+  get: () => settings.context.wikiAutoWrite,
+  set: (v: boolean) => settings.updateContext({ wikiAutoWrite: v }),
 })
 
 const chars = computed(() =>

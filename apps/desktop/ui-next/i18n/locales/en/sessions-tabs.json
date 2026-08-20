@@ -11,5 +11,6 @@
   "sessions.tabs.searchPlaceholder": "Search projects…",
   "sessions.tabs.noMatch": "No matching projects",
   "sessions.tabs.unread": "{n} needing attention",
-  "sessions.tabs.running": "Session running"
+  "sessions.tabs.running": "Session running",
+  "sessions.tabs.doneUnread": "Finished — unread"
 }

@@ -146,10 +146,8 @@
   "sessions.composer.modelTooltip": "Quick switch model",
   "sessions.composer.accountTooltip": "Quick switch LLM account",
   "sessions.composer.styleTooltip": "Response style",
-  "sessions.composer.enhance": "Enhance prompt (✨)",
+  "sessions.composer.enhance": "Enhance prompt",
   "sessions.composer.attach": "Attach file / image",
-  "sessions.composer.attachFolder": "Attach folder (context)",
-  "sessions.composer.runAsTask": "Run as task",
   "sessions.composer.dropHint": "Drop files here to attach",
   "sessions.composer.pasteTruncated": "Pasted text was large — attached as a file (truncated)",
   "sessions.composer.send": "Send",
@@ -349,5 +347,10 @@
   "sessions.bg.wake.title": "Background task finished",
   "sessions.bg.wake.titleN": "{n} background tasks finished",
   "sessions.bg.wake.continue": "Continue",
-  "sessions.bg.wake.dismiss": "Dismiss"
+  "sessions.bg.wake.dismiss": "Dismiss",
+  "sessions.config.tab.wiki": "Wiki",
+  "sessions.config.wikiHint": "Which wiki spaces this session may read. Narrowing also narrows wiki_search / wiki_read.",
+  "sessions.config.noWiki": "No wiki pages yet — import Markdown on the Wiki page.",
+  "sessions.config.wikiAll": "Whole wiki",
+  "sessions.config.wikiPages": "{n} pages"
 }

@@ -1,4 +1,4 @@
-import type { ContextChars } from '~/composables/useSessionsData'
+import type { ContextChars, SessionMessage } from '~/composables/useSessionsData'
 import { providerModelContextWindow } from '~/composables/useProviderModels'
 
 // Per-model context window (input tokens), ported from apps/desktop/ui. The
@@ -71,6 +71,22 @@ export function contextTokensFromChars(cc: ContextChars | undefined): number {
     tok(cc.memoryFiles) +
     tok(cc.history)
   )
+}
+
+// Rough occupancy estimate from the CLIENT-side transcript, for the cases with no
+// engine breakdown: browser-dev, and a transcript persisted before per-turn `usage`
+// shipped. TEXT-ONLY on purpose — the runtimes replay the reply/user text only (the
+// Claude path's renderHistoryPrefix, the Pi path's historyToAgentMessages), so a
+// step's `detail` (diff / file content / terminal output) is UI-only and must NEVER
+// be counted: doing so read a ~35k-token prompt as 222k. Same chars/4 heuristic as
+// the engine breakdown, so the two paths are comparable. Shared by the usage panel
+// and the auto-compact trigger — they must agree on what "% full" means.
+export function estimateContextTokens(msgs: SessionMessage[]): number {
+  const chars = msgs.reduce((acc, m) => {
+    if (m.role === 'user' || m.role === 'system') return acc + m.text.length
+    return acc + m.blocks.reduce((b, k) => b + (k.kind === 'text' ? k.text.length : 0), 0)
+  }, 0)
+  return Math.floor(chars / CTX_DIVISOR)
 }
 
 // Drop trailing zeros from a fixed-decimal string ("4.00" → "4", "720.10" → "720.1").

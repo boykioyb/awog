@@ -1,7 +1,12 @@
 import { computed } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
 import { modelIdFromDisplay } from '~/composables/useSessionsData'
-import { contextLimitFor, contextTokensFromChars, formatTokenCount } from '~/utils/context-window'
+import {
+  contextLimitFor,
+  contextTokensFromChars,
+  estimateContextTokens,
+  formatTokenCount,
+} from '~/utils/context-window'
 
 // Context-window usage math for a session — extracted from SessionDetail so the
 // global status bar (footer) can render the context chip + breakdown for the
@@ -45,26 +50,15 @@ export function useSessionContextUsage(session: () => Session) {
   const sessionCost = computed(() => session().usage?.cost)
   const model = computed(() => session().model)
 
-  // Real engine usage when present; falls back to a rough chars/3 estimate in
-  // browser-dev / before the first real turn finishes (no usage yet).
+  // Real engine usage when present; falls back to a rough estimate in browser-dev /
+  // for a transcript persisted before per-turn `usage` shipped (a session that HAS a
+  // persisted snapshot restores it on open — see the store's usageFromMessages).
   const usage = computed(() => session().usage)
-  const estTok = computed(() => {
-    const chars = session().msgs.reduce((a, m) => {
-      if (m.role === 'user' || m.role === 'system') return a + m.text.length
-      return (
-        a +
-        m.blocks.reduce(
-          (b, k) =>
-            b +
-            ('text' in k ? k.text.length : 0) +
-            ('detail' in k ? (k.detail || '').length : 0) +
-            60,
-          0,
-        )
-      )
-    }, 0)
-    return Math.floor(chars / 3)
-  })
+  // Fallback occupancy estimate, shared with the store's auto-compact trigger so both
+  // read the same number. TEXT-ONLY (see estimateContextTokens): the previous local
+  // version counted every step's `detail` at chars/3 + 60/block — tool output the
+  // model never receives — which read a ~35k-token prompt as 222k / 111% full.
+  const estTok = computed(() => estimateContextTokens(session().msgs))
   // Occupancy = the assembled prompt content the model sees (the breakdown sum),
   // NOT the API usage total. When the engine breakdown is present we sum it (so the
   // gauge and the per-category rows always agree); before the first real turn /

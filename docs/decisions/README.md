@@ -54,6 +54,7 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0067](./0067-mobile-remote-control-transport.md) | Transport điều khiển session từ điện thoại = Tailscale/WireGuard mesh + Remote Gateway | Proposed |
 | [0070](./0070-share-claude-home-for-config.md) | Dùng chung `.claude` làm nhà cho skills/agents/commands | Accepted |
 | [0071](./0071-senior-engineer-prompt-core.md) | Lõi prompt cấp senior: orientation, quy trình, dẫn chứng (2 runtime) | Accepted |
+| [0072](./0072-cute-theme-family.md) | Theme family thứ hai (`cute`): 1 stylesheet scoped theo `data-theme-family`, opt-in | Accepted |
 | [0073](./0073-wiki-as-llm-context-source.md) | Wiki nội bộ làm nguồn context cho LLM (+ bộ nhớ AI): store 2 tier ở `.awog`, inject mục lục + đọc theo yêu cầu qua tool | Proposed |
 
 > Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần. Các ADR 0041–0058 và 0063–0066 đã tồn tại trong thư mục nhưng bảng này chưa backfill (index đang lạc hậu); ADR kế tiếp sau 0059 dùng 0060. ADR 0062 **amend** ADR 0048 (thay `index.json` bằng header per-file + warm cache); ADR 0070 **supersede** phần nhà-lưu-trữ của ADR 0035 (skills/agents/commands chuyển sang `.claude` dùng chung); ADR kế tiếp sau 0073 dùng 0074.

@@ -36,6 +36,7 @@ type SessionMetadataPatch = Partial<
     | 'pendingAgentIds'
     | 'disabledTools'
     | 'mcpServerIds'
+    | 'wikiSpaces'
     | 'aboutTaskId'
     | 'aboutSshHostId'
     | 'aboutGhUrl'

@@ -146,10 +146,8 @@
   "sessions.composer.modelTooltip": "Đổi model nhanh",
   "sessions.composer.accountTooltip": "Đổi LLM account nhanh",
   "sessions.composer.styleTooltip": "Phong cách trả lời",
-  "sessions.composer.enhance": "Cải thiện prompt (✨)",
+  "sessions.composer.enhance": "Cải thiện prompt",
   "sessions.composer.attach": "Đính kèm file / ảnh",
-  "sessions.composer.attachFolder": "Đính kèm thư mục (context)",
-  "sessions.composer.runAsTask": "Chạy thành task",
   "sessions.composer.dropHint": "Thả file vào đây để đính kèm",
   "sessions.composer.pasteTruncated": "Văn bản dán quá lớn — đã đính kèm thành file (đã cắt bớt)",
   "sessions.composer.send": "Gửi",
@@ -349,5 +347,10 @@
   "sessions.bg.wake.title": "Tác vụ nền đã xong",
   "sessions.bg.wake.titleN": "{n} tác vụ nền đã xong",
   "sessions.bg.wake.continue": "Tiếp tục",
-  "sessions.bg.wake.dismiss": "Bỏ qua"
+  "sessions.bg.wake.dismiss": "Bỏ qua",
+  "sessions.config.tab.wiki": "Wiki",
+  "sessions.config.wikiHint": "Session này được đọc space wiki nào. Thu hẹp ở đây thì wiki_search / wiki_read cũng bị thu hẹp theo.",
+  "sessions.config.noWiki": "Chưa có trang wiki nào — nhập Markdown ở trang Wiki.",
+  "sessions.config.wikiAll": "Toàn bộ wiki",
+  "sessions.config.wikiPages": "{n} trang"
 }

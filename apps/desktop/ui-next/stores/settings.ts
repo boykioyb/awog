@@ -171,6 +171,10 @@ export interface ContextSettings {
   wikiEnabled: boolean
   // Character budget for that index; over it, the index degrades to space level.
   wikiBudgetChars: number
+  // Let the agent create/update/delete wiki pages. Default OFF: the wiki is
+  // curated content and the global tier has no version history. Each call is still
+  // approved through the normal permission gate.
+  wikiAutoWrite: boolean
   // Inject the memory index into each turn.
   memoryEnabled: boolean
   // Let the agent WRITE memory itself (memory_remember / memory_forget). Default
@@ -200,7 +204,9 @@ export interface WorkspacePanelLayout {
   bottomHeight: number
 }
 
-export type ThemeFamily = 'awog' | 'shadcn'
+// 'cute' = the mint/off-white "cute AI command center" theme
+// (assets/css/theme-cute.css). 'awog' stays the default look.
+export type ThemeFamily = 'awog' | 'shadcn' | 'cute'
 export type SurfaceDepth = 'flat' | 'standard' | 'deep'
 export type SansFamily = 'geist' | 'inter' | 'system'
 export type FontWeight = 300 | 400 | 500
@@ -335,6 +341,7 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
 const DEFAULT_CONTEXT: ContextSettings = {
   wikiEnabled: true,
   wikiBudgetChars: 4000,
+  wikiAutoWrite: false,
   memoryEnabled: true,
   memoryAutoWrite: false,
   memoryBudgetChars: 4000,
@@ -779,6 +786,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (context.wikiBudgetChars !== DEFAULT_CONTEXT.wikiBudgetChars) {
       out.wikiBudgetChars = context.wikiBudgetChars
     }
+    if (context.wikiAutoWrite) out.wikiAutoWrite = true
     if (!context.memoryEnabled) out.memoryEnabled = false
     if (context.memoryAutoWrite) out.memoryAutoWrite = true
     if (context.memoryBudgetChars !== DEFAULT_CONTEXT.memoryBudgetChars) {

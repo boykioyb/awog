@@ -1,7 +1,10 @@
 <template>
   <aside class="side" :class="{ collapsed: collapsed && !compact }" data-tour="nav-rail">
     <div class="brand">
-      <span class="logo"><Icon name="home" /></span>
+      <span class="logo">
+        <AwogMascot v-if="isCute" :size="16" />
+        <Icon v-else name="home" />
+      </span>
       <span class="nm">
         AWOG
         <span>{{ t('nav.brandSuffix') }}</span>
@@ -132,6 +135,7 @@ const { open: activityOpen, openActivity } = useActivityModal()
 const { isDark, toggleTheme } = useTheme()
 const { hasUnseen, openPanel } = useWhatsNew()
 const { compact } = useResponsiveShell()
+const { isCute } = useThemeFamily()
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 
 const COLLAPSE_KEY = 'awog-nav-collapsed'

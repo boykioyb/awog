@@ -1,0 +1,1256 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   AWOG "Cute" theme family — a clean · cute · premium desktop workspace.
+   Settings → Appearance → Theme → Cute. Default family stays `awog`.
+
+   EVERY rule in this file is scoped under `[data-theme-family='cute']`, the attribute
+   useAppearanceDom writes from `settings.appearance.themeFamily`. Nothing here can
+   reach the default look — switching the segment repaints the whole app with no
+   reload, and switching back restores it exactly. (The dark TOKEN blocks additionally
+   carry `body:not(.light)` so the two mode variants are mutually exclusive — see the
+   note on them; component rules stay mode-agnostic and read the tokens.)
+
+   Why one file can restyle 262 components: ui-next is built from a small set of
+   shared prototype classes (.ni .li .btn .iconbtn .chip .tag .tile .step .smenu …)
+   and every component takes its colors from `var(--token)`. Re-declare the tokens +
+   restyle those classes once and the whole product moves together. The scope also
+   buys the specificity to reach INTO component `scoped` styles: a scoped selector
+   compiles to `.x[data-v-hash]` (0,2,0) while `body[data-theme-family='cute'] .x` is
+   (0,2,1), so the theme wins without `!important` as long as it mirrors the same
+   class chain. That is why session tabs / list rows / composer / terminal need no
+   per-component fork.
+
+   Design direction — "a cute AI command center for developers":
+     · off-white base, pure-white surfaces, mint/teal brand, lavender secondary
+     · hairlines instead of hard borders, soft layered shadows, generous spacing
+     · ONE 5-step radius scale, ONE 3-step motion scale, pastel state colors
+     · 90% professional / 10% cute — the mascot appears in the logo, empty states
+       and a success flash, nowhere else
+   Calm is the top priority: ≤5 colors per viewport, no strong gradients, no heavy
+   glassmorphism, no animation longer than 200ms and never a bounce.
+
+   Sections: 1 tokens · 2 base · 3 chrome · 4 sidebar · 5 session tabs · 6 lists ·
+   7 headers · 8 controls · 9 cards · 10 overlays · 11 transcript · 12 markdown/code ·
+   13 composer · 14 terminal + snippets · 15 empty states · 16 state colors ·
+   17 motion · 18 responsive.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   1. TOKENS
+   The light palette is the design target; dark is the calm counterpart so the
+   theme is usable at night without falling back to the other family. Both share
+   the brand hue, the radius/motion scales (declared in prototype.css :root) and
+   the dark terminal/code tokens.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* — dark variant — charcoal ladder, cooled slightly so mint sits naturally on it.
+     `:not(.light)` is REQUIRED, not decoration: `body.light[data-theme-family='cute']`
+     below is (0,2,1) and the depth blocks after it are (0,2,1) too, so without this
+     guard a dark block that merely comes later in the file wins in LIGHT mode and
+     paints dark panels under dark text. Making the two variants mutually exclusive
+     means source order and partial token sets can never leak across modes. */
+body:not(.light)[data-theme-family='cute'] {
+  --bg: #191b1c;
+  --bgPanel: #1c1f20;
+  --bgEl: #252829;
+  --bgHover: #2b2f30;
+  --bgActive: #343839;
+  --bgRail: #151718;
+  --bgSubtle: #212425;
+  --bgInput: #232627;
+  --bgCanvas: #1d2021;
+  --border: rgba(255, 255, 255, 0.075);
+  --borderStrong: rgba(255, 255, 255, 0.14);
+  --text: #f2f5f5;
+  --textMuted: #a7adad;
+  --textDim: #8b9191;
+  --textFaint: #6f7575;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.26), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.3), 0 10px 26px rgba(0, 0, 0, 0.34);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 24px 64px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 0 3px rgba(45, 212, 191, 0.16);
+  /* Brand. --accentSoft is the SOLID pastel fill (active nav row / active tab);
+     --accentDim stays the translucent wash for tints over unknown surfaces. Both are
+     re-derived as live color-mix() by useTheme.applyAccent when the user picks a
+     custom accent, so this pair is only the default. */
+  --accent: #2dd4bf;
+  --accentText: #04211d;
+  --accentSoft: #1b3936;
+  --accentHover: #5ce0d0;
+  --accentDim: rgba(45, 212, 191, 0.14);
+  --accentBorder: rgba(45, 212, 191, 0.4);
+  --amber: #f5b544;
+  --amberDim: rgba(245, 181, 68, 0.13);
+  --amberBorder: rgba(245, 181, 68, 0.38);
+  --blue: #7aa7f7;
+  --violet: #a3b0f8;
+  --lavender: #a3b0f8;
+  --danger: #f47171;
+  --dangerDim: rgba(244, 113, 113, 0.1);
+  --dangerBg: rgba(244, 113, 113, 0.15);
+  --dangerBorder: rgba(244, 113, 113, 0.4);
+  --green: #4ade80;
+  --add: #86efac;
+  --addBg: rgba(74, 222, 128, 0.15);
+  --del: #fca5a5;
+  --delBg: rgba(244, 113, 113, 0.14);
+  --mod: #fbbf24;
+}
+
+/* — shared by BOTH mode variants — the terminal and code blocks stay DARK even when the
+     app chrome is light (§11 "giữ dark terminal", §9 "dùng dark code block"): developers
+     read them all day, and they should read as machine output against paper-white
+     surfaces. Dark charcoal, never pure black.
+
+     These MUST NOT sit in the dark-only block above: `:not(.light)` would strip them in
+     light mode, and then the terminal follows the page (light) while `--codeBg` resolves
+     to nothing at all, so every code block loses its background. That regression is why
+     they live here.
+
+     Defined ONLY in this family. WorkspaceTerminal reads them with a fallback to
+     --bg/--text, so the AWOG family keeps following its own theme. */
+body[data-theme-family='cute'] {
+  --termBg: #1e2325;
+  --termBgHead: #252b2d;
+  --termText: #e4ecea;
+  --termBorder: rgba(255, 255, 255, 0.08);
+  --codeBg: #24292e;
+}
+
+/* — light variant — THE design target (§14). Off-white base, pure-white surfaces,
+     barely-there mint-tinted hairlines; depth comes from the shadow ramp, and gray
+     survives only as hover/active tints (which also carry the mint cast, so the whole
+     app reads as one family instead of "office gray"). */
+body.light[data-theme-family='cute'] {
+  --bg: #fafcfc;
+  --bgPanel: #ffffff;
+  --bgEl: #ffffff;
+  --bgHover: #f1f6f6;
+  --bgActive: #e6efef;
+  --bgRail: #f7fafa;
+  --bgSubtle: #f6f9f9;
+  --bgInput: #ffffff;
+  --bgCanvas: #f3f7f7;
+  --border: #e6eeee;
+  --borderStrong: #d4e0e0;
+  --text: #1f2937;
+  --textMuted: #4b5563;
+  --textDim: #6b7280;
+  --textFaint: #9ca3af;
+  /* §17: very subtle. Tuned to stay visible on the near-white base — a .03 shadow
+     disappears there — while never reading as a 2015 SaaS dashboard. */
+  --shadow-sm: 0 1px 2px rgba(31, 41, 55, 0.04), 0 2px 8px rgba(31, 41, 55, 0.05);
+  --shadow-md: 0 2px 12px rgba(31, 41, 55, 0.07), 0 10px 26px rgba(31, 41, 55, 0.07);
+  --shadow-lg: 0 8px 28px rgba(31, 41, 55, 0.1), 0 24px 60px rgba(31, 41, 55, 0.12);
+  --shadow-glow: 0 0 0 3px rgba(20, 184, 166, 0.14);
+  --accent: #14b8a6;
+  --accentText: #ffffff;
+  --accentSoft: #e8faf7;
+  --accentHover: #0f9f91;
+  --accentDim: rgba(20, 184, 166, 0.1);
+  --accentBorder: rgba(20, 184, 166, 0.34);
+  --amber: #f59e0b;
+  --amberDim: rgba(245, 158, 11, 0.11);
+  --amberBorder: rgba(245, 158, 11, 0.34);
+  --blue: #5b8def;
+  --violet: #8b9cf6;
+  --lavender: #8b9cf6;
+  --danger: #ef4444;
+  --dangerDim: rgba(239, 68, 68, 0.08);
+  --dangerBg: rgba(239, 68, 68, 0.11);
+  --dangerBorder: rgba(239, 68, 68, 0.32);
+  --green: #22c55e;
+  --add: #16a34a;
+  --addBg: rgba(34, 197, 94, 0.12);
+  --del: #dc2626;
+  --delBg: rgba(220, 38, 38, 0.1);
+  --mod: #d97706;
+}
+
+/* — Appearance → Surface depth, per variant. app-shell.css declares these combos for
+     the AWOG family with a specificity this file must beat, hence the explicit
+     multi-part selectors. `standard` needs no block (it IS the palette above), and the
+     LIGHT depth blocks only need to declare what differs from the light base — the
+     dark blocks are `:not(.light)`-guarded so they cannot bleed in. */
+body:not(.light)[data-theme-family='cute'][data-surface='flat'] {
+  --bgPanel: #191b1c;
+  --bgEl: #1e2122;
+  --bgHover: #262a2b;
+  --bgActive: #2f3334;
+  --bgSubtle: #1c1f20;
+  --bgInput: #1e2122;
+  --bgCanvas: #171a1b;
+  --border: rgba(255, 255, 255, 0.055);
+  --borderStrong: rgba(255, 255, 255, 0.11);
+}
+body:not(.light)[data-theme-family='cute'][data-surface='deep'] {
+  --bgPanel: #161819;
+  --bgEl: #2b2f30;
+  --bgHover: #33383a;
+  --bgActive: #3c4143;
+  --bgSubtle: #212425;
+  --bgInput: #2b2f30;
+  --bgCanvas: #1c1f20;
+  --border: rgba(255, 255, 255, 0.1);
+  --borderStrong: rgba(255, 255, 255, 0.17);
+}
+body.light[data-theme-family='cute'][data-surface='flat'] {
+  --bgHover: #f3f8f8;
+  --bgActive: #eaf2f2;
+  --bgSubtle: #fafcfc;
+  --bgCanvas: #f5f9f9;
+  --border: #edf3f3;
+  --borderStrong: #dde8e8;
+}
+body.light[data-theme-family='cute'][data-surface='deep'] {
+  --bg: #f4f8f8;
+  --bgHover: #eaf2f2;
+  --bgActive: #dfebeb;
+  --bgCanvas: #eef4f4;
+  --border: #dfeaea;
+  --borderStrong: #cbdada;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2. BASE (§15 typography, a11y)
+   Font FAMILY is deliberately untouched: it is a user setting (Appearance → Font:
+   Geist / Inter / System) applied inline on <html>, and the system stack is also
+   what renders Vietnamese + Japanese + English correctly. The theme only adjusts
+   rhythm and weight.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] {
+  line-height: 1.55;
+  letter-spacing: 0.001em;
+}
+body[data-theme-family='cute'] :is(.mono, .tm, .mmeta, .bdg, .gbadge, .ghhash, .ghdate) {
+  font-variant-numeric: tabular-nums;
+}
+/* One focus ring for the whole theme — for buttons, links, rows, menu items. Kept
+   for keyboard navigation (a11y); it is never removed from those.
+   (No `border-radius` here on purpose: setting it would change a focused element's
+   actual shape, not just its ring.) */
+body[data-theme-family='cute'] :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* TEXT FIELDS opt out of the ring. A text field already announces focus a better way —
+   its own accent border + soft glow, or its wrapper's `:focus-within` (the composer,
+   the search boxes) — so the hard rectangle was a SECOND indicator drawn inside the
+   first, which reads as a rendering artifact rather than information. Focus is still
+   visible everywhere: the rule below lights the element's border for any field that
+   has one, and a border-less field (composer textarea, search input) is covered by its
+   wrapper's glow. */
+body[data-theme-family='cute'] :is(input, textarea, [contenteditable]):focus-visible,
+body[data-theme-family='cute'] :is(input, textarea, [contenteditable]):focus {
+  outline: none;
+}
+body[data-theme-family='cute'] :is(input, textarea):focus {
+  border-color: var(--accentBorder);
+}
+body[data-theme-family='cute'] ::selection {
+  background: var(--accentDim);
+}
+/* Scrollbars recede until you need them. */
+body[data-theme-family='cute'] ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  background-clip: padding-box;
+}
+body[data-theme-family='cute'] ::-webkit-scrollbar-thumb:hover {
+  background: var(--borderStrong);
+  background-clip: padding-box;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3. CHROME (§3)
+   "Không để UI có quá nhiều đường border cứng." The shell is a grid of panes and
+   every pane drew a full-strength hairline, which read as a wireframe. Halve their
+   weight — the tokens stay full strength for real component borders — so the layout
+   reads as soft columns of light.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute']
+  :is(
+    .side,
+    .list,
+    .gmid,
+    .gside,
+    .insp,
+    .wpanel,
+    .setnav,
+    .codetree,
+    .top,
+    .dh,
+    .ltop,
+    .ptabs,
+    .gbar,
+    .ghhead,
+    .wptabs,
+    .wptabs2,
+    .wphead,
+    .stabs,
+    .ctabs,
+    .poptabs
+  ) {
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+}
+/* Two-tone split: navigation chrome sits on the soft rail tint, content on white. */
+body[data-theme-family='cute'] .side {
+  background: var(--bgRail);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4. SIDEBAR (§4)
+   Rows 36px tall, radius 10, pastel-mint active state with the icon and label both
+   taking the accent. No dark fills, no borders on rows.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .side {
+  padding: 10px 9px;
+}
+body[data-theme-family='cute'] .navg {
+  font-size: 0.8462rem;
+  font-weight: 600;
+  color: var(--textFaint);
+  padding: 13px 10px 5px;
+}
+body[data-theme-family='cute'] .ni {
+  min-height: 36px;
+  padding: 7px 10px;
+  gap: 10px;
+  border-radius: var(--r-btn);
+  border: 1px solid transparent;
+  color: var(--textMuted);
+  font-weight: 500;
+}
+body[data-theme-family='cute'] .ni .icn {
+  width: 16px;
+  height: 16px;
+  color: var(--textDim);
+}
+body[data-theme-family='cute'] .ni:hover {
+  background: var(--bgHover);
+  color: var(--text);
+}
+body[data-theme-family='cute'] .ni:hover .icn {
+  color: var(--text);
+}
+/* Active: solid pastel pill + accent text/icon. box-shadow:none drops the
+   prototype's inset accent bar — the pill IS the indicator, and the bar read as a
+   second, competing marker. */
+body[data-theme-family='cute'] :is(.ni.on, .ni.on:hover) {
+  background: var(--accentSoft);
+  border-color: transparent;
+  color: var(--accent);
+  box-shadow: none;
+  font-weight: 600;
+}
+body[data-theme-family='cute'] .ni.on .icn {
+  color: var(--accent);
+}
+body[data-theme-family='cute'] .ni .bdg {
+  border-radius: var(--r-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--textDim);
+}
+/* Brand tile holds the mascot (NavRail swaps the glyph when this family is on). */
+body[data-theme-family='cute'] .logo {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-btn);
+  background: var(--accentSoft);
+  color: var(--accent);
+  border: 1px solid var(--accentBorder);
+}
+body[data-theme-family='cute'] .logo .icn {
+  stroke: var(--accent);
+}
+body[data-theme-family='cute'] .brand .nm {
+  letter-spacing: -0.015em;
+}
+
+/* Footer utility row: no border above it — the rail already reads as its own column,
+   and a hairline there was one more hard line in a theme that avoids them. */
+body[data-theme-family='cute'] .sfoot {
+  border-top: 0;
+  padding-top: 8px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5. SESSION TABS (§5)
+   The prototype's flat underlined tabs read as browser tabs. Here each tab is a
+   rounded card: white surface, hairline, pastel fill + soft lift when active, and
+   a close button that only appears on hover / when active.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .stabs {
+  min-height: 42px;
+  padding: 5px 8px 0;
+  gap: 5px;
+  background: var(--bgRail);
+}
+body[data-theme-family='cute'] .stab {
+  height: 30px;
+  align-self: center;
+  padding: 0 9px;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  background: var(--bgEl);
+  color: var(--textDim);
+}
+body[data-theme-family='cute'] .stab:hover:not(.on) {
+  background: var(--bgHover);
+  border-color: var(--borderStrong);
+  color: var(--text);
+}
+body[data-theme-family='cute'] .stab.on {
+  background: var(--accentSoft);
+  border-color: var(--accentBorder);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+body[data-theme-family='cute'] .stab.on .stab-nm {
+  color: var(--accent);
+}
+/* Close reveals on hover only (§5) — an always-visible × on every tab is noise. */
+body[data-theme-family='cute'] .stab .stab-x {
+  opacity: 0;
+  border-radius: var(--r-xs);
+}
+body[data-theme-family='cute'] :is(.stab:hover, .stab:focus-within) .stab-x {
+  opacity: 1;
+}
+body[data-theme-family='cute'] .stab-x:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+body[data-theme-family='cute'] .stab-btn {
+  border-radius: var(--r-btn);
+}
+body[data-theme-family='cute'] .stab-unread {
+  border-radius: var(--r-pill);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6. LISTS (§6)
+   A row must be scannable in one pass: title, meta line, pastel state chip. The
+   active row is a soft mint card with a left accent bar and a whisper of shadow —
+   present, not shouting.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .lscroll {
+  padding: 8px;
+}
+body[data-theme-family='cute'] :is(.li, .libli) {
+  padding: 9px 11px;
+  margin-bottom: 4px;
+  border-radius: var(--r-card);
+  border: 1px solid transparent;
+}
+body[data-theme-family='cute'] :is(.li:hover, .libli:hover) {
+  background: var(--bgHover);
+}
+body[data-theme-family='cute'] :is(.li.on, .libli.on) {
+  background: var(--accentSoft);
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    var(--shadow-sm);
+}
+body[data-theme-family='cute'] :is(.li .ttl, .libli .ttl) {
+  font-weight: 550;
+  line-height: 1.4;
+}
+body[data-theme-family='cute'] :is(.li.on .ttl, .libli.on .ttl) {
+  font-weight: 600;
+}
+body[data-theme-family='cute'] .li .sub {
+  margin-top: 5px;
+}
+/* Row hover actions (pin · delete). These reveal ON TOP of an already-tinted row and
+   over the timestamp, so "ghost pill" is the wrong call — transparent + a hairline is
+   invisible against --bgHover and against the active row's mint fill. They need to be
+   opaque chips that lift off the row: panel surface, hairline, soft shadow, and an icon
+   at --textMuted (not --textDim, which washes out at 12px on a tinted background).
+   Hover then commits to intent: accent for pin (a toggle), danger only for delete. */
+body[data-theme-family='cute'] :is(.liact .liactbtn, .liact .del, .li .del) {
+  width: 24px;
+  height: 24px;
+  background: var(--bgPanel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--textMuted);
+  box-shadow: var(--shadow-sm);
+}
+body[data-theme-family='cute'] .liact .liactbtn:hover {
+  background: var(--accentSoft);
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+body[data-theme-family='cute'] .liact .liactbtn.on {
+  color: var(--accent);
+}
+body[data-theme-family='cute'] :is(.liact .liactbtn.danger:hover, .liact .del:hover, .li .del:hover) {
+  background: color-mix(in srgb, var(--danger) 12%, var(--bgPanel));
+  border-color: color-mix(in srgb, var(--danger) 34%, transparent);
+  color: var(--danger);
+}
+/* The reveal is a state change, so it gets the standard row timing — and the icons
+   must never be the thing that shifts layout, hence the fixed box above. */
+body[data-theme-family='cute'] .liact {
+  gap: 4px;
+}
+/* Session status chip → pastel: tinted fill, same-hue text, hairline of the same
+   hue. The inline `badgeStyle` in SessionListItem binds the color trio, so only the
+   SHAPE is themed here (an inline style always wins on color, by design). */
+body[data-theme-family='cute'] .statusbadge {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  font-family: var(--sans);
+  font-weight: 600;
+}
+/* Git / library / settings rows share the radius scale + pastel active. */
+body[data-theme-family='cute']
+  :is(.gsi, .gfile, .setni, .ghrow, .gcommit, .gbfolder, .frow, .cfrow, .pi) {
+  border-radius: var(--r-btn);
+}
+body[data-theme-family='cute'] :is(.gsi.on, .setni.on) {
+  background: var(--accentSoft);
+  color: var(--accent);
+  font-weight: 600;
+}
+body[data-theme-family='cute'] .gfile.on {
+  background: var(--accentSoft);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7. HEADERS (§7)
+   The header answers "what am I looking at": a clear title, a quiet subtitle,
+   actions pushed right as rounded icon squares. Section labels are UI titles, so
+   they stay sentence-case sans (app-shell.css already de-uppercased them).
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .top {
+  height: 46px;
+  padding: 0 16px;
+}
+body[data-theme-family='cute'] .dh {
+  height: 54px;
+  padding: 0 18px;
+}
+body[data-theme-family='cute'] .dh .dt {
+  font-size: 1.2308rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+body[data-theme-family='cute'] .dh .dsub {
+  font-family: var(--sans);
+  color: var(--textDim);
+}
+body[data-theme-family='cute'] .ptitle {
+  font-size: 1.2308rem;
+  letter-spacing: -0.012em;
+}
+body[data-theme-family='cute'] .top .kbd {
+  border-radius: var(--r-btn);
+  background: var(--bgEl);
+}
+body[data-theme-family='cute'] .sech {
+  color: var(--textMuted);
+  margin: 22px 0 10px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   8. CONTROLS (§18 icons, §21 consistency)
+   Every button / chip / input / toggle in the app resolves to one of these. Radius
+   from the scale, hairline borders, hover = a tint (never a gray slab), and exactly
+   ONE filled style: the primary CTA.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute']
+  :is(.btn, .keyinp, .sel2, .csval, .qother, .srch, .toolsrch, .gsearch, .seg, .gtoggle) {
+  border-radius: var(--r-btn);
+}
+body[data-theme-family='cute'] .btn {
+  padding: 7px 12px;
+  font-weight: 550;
+}
+body[data-theme-family='cute'] .btn:hover {
+  background: var(--bgHover);
+  border-color: var(--border);
+  color: var(--text);
+}
+/* The one filled control. Lifts on hover, settles on press. */
+body[data-theme-family='cute'] .btn.pri {
+  background: var(--accent);
+  color: var(--accentText);
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+body[data-theme-family='cute'] .btn.pri:hover {
+  background: var(--accentHover);
+  color: var(--accentText);
+  border-color: transparent;
+  filter: none;
+  box-shadow: var(--shadow-md);
+}
+body[data-theme-family='cute'] .btn.pri:active {
+  box-shadow: none;
+}
+body[data-theme-family='cute'] .btn.pri:disabled {
+  box-shadow: none;
+}
+/* Destructive stays outlined until it is the committed action. */
+body[data-theme-family='cute'] .btn.gdanger {
+  border-radius: var(--r-btn);
+}
+body[data-theme-family='cute'] .iconbtn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-btn);
+  border-color: transparent;
+}
+body[data-theme-family='cute'] .iconbtn:hover {
+  background: var(--bgHover);
+  border-color: transparent;
+  color: var(--text);
+}
+body[data-theme-family='cute'] .iconbtn.on {
+  background: var(--accentSoft);
+  color: var(--accent);
+  border-color: transparent;
+}
+/* Chips + tags: outline pills, no gray fill. */
+body[data-theme-family='cute'] :is(.chip, .tag, .gchip, .ghrepo, .pagent) {
+  border-radius: var(--r-pill);
+  background: transparent;
+}
+body[data-theme-family='cute'] .chip {
+  padding: 3px 10px;
+}
+body[data-theme-family='cute'] .chipbtn:hover {
+  background: var(--accentSoft);
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+/* Inputs: white surface, hairline, soft accent glow on focus — same language as
+   the composer, so "where do I type" reads the same everywhere. */
+body[data-theme-family='cute'] :is(.keyinp, .qother, .renameinp, input.ttl):focus {
+  border-color: var(--accentBorder);
+  box-shadow: var(--shadow-glow);
+  outline: none;
+}
+body[data-theme-family='cute'] :is(.srch, .toolsrch, .gsearch, .csval):focus-within {
+  border-color: var(--accentBorder);
+  box-shadow: var(--shadow-glow);
+}
+/* Segmented control: transparent track, pastel active pill. */
+body[data-theme-family='cute'] .seg span {
+  border-radius: var(--r-sm);
+}
+body[data-theme-family='cute'] .seg span.on {
+  background: var(--accentSoft);
+  color: var(--accent);
+  font-weight: 600;
+}
+body[data-theme-family='cute'] .seg span.on:hover {
+  color: var(--accent);
+}
+/* Toggles: the knob is always light, so an OFF track needs a visible surface +
+   hairline instead of the near-invisible gray it had on white. */
+body[data-theme-family='cute'] :is(.tog, .tog2) {
+  background: var(--accent);
+  transition: background var(--dur) var(--ease);
+}
+body[data-theme-family='cute'] :is(.tog.off, .tog2.off) {
+  background: var(--bgActive);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+body[data-theme-family='cute'] :is(.tog, .tog2)::after {
+  background: var(--bgPanel);
+  box-shadow: var(--shadow-sm);
+}
+/* Checkbox-ish boxes (todo rows, multi-select) follow the radius scale. */
+body[data-theme-family='cute'] :is(.tdck, .qcbox, .lcbox) {
+  border-radius: var(--r-xs);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   9. CARDS + SURFACES (§16 radius, §17 shadow)
+   Ordinary blocks: hairline + radius 14 + NO shadow. Floating or clickable things
+   get the shadow ramp. Recessed transcript wells stay flat on the soft tint so they
+   read as inset, not as a second stack of floating cards.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute']
+  :is(.tile, .tcard, .pcard, .rowi, .pstat, .authcard, .acard, .node, .gitlink, .todop, .wnode) {
+  border-radius: var(--r-card);
+}
+body[data-theme-family='cute'] :is(.step, .stepc, .cluster, .fwcard, .gcard, .qchk, .qopt) {
+  border-radius: var(--r-sm);
+}
+body[data-theme-family='cute'] :is(.step, .stepc, .cluster, .gcard, .todop, .gitlink) {
+  background: var(--bgSubtle);
+  box-shadow: none;
+}
+body[data-theme-family='cute'] .qopt:hover {
+  border-color: var(--accentBorder);
+  background: var(--accentSoft);
+}
+/* Progress bars + rails: pill, soft track. */
+body[data-theme-family='cute'] :is(.bar, .ctxbar, .rlbar2, .slider, .sld) {
+  border-radius: var(--r-pill);
+  background: var(--bgActive);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   10. OVERLAYS (§19)
+   Menus / popovers / modals: bigger radius, the soft ramp, and a short fade with a
+   3px rise on open. The scrim is light so a modal does not slam the room dark.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] :is(.smenu, .pop, .stylemenu, .styinfocard, .toast) {
+  border-radius: var(--r-card);
+  border-color: var(--border);
+  box-shadow: var(--shadow-md);
+  animation: cute-pop var(--dur-panel) var(--ease);
+}
+body[data-theme-family='cute'] :is(.smenu .mi, .stylemenu .mi, .pi) {
+  border-radius: var(--r-sm);
+}
+body[data-theme-family='cute'] :is(.smenu .mi:hover, .pi:hover, .pi.on) {
+  background: var(--bgHover);
+}
+body[data-theme-family='cute'] :is(.setmodal, .pal, .codepanel) {
+  border-radius: var(--r-panel);
+  border-color: var(--border);
+  box-shadow: var(--shadow-lg);
+  animation: cute-pop var(--dur-panel) var(--ease);
+}
+body[data-theme-family='cute'] .ovl {
+  background: color-mix(in srgb, var(--text) 30%, transparent);
+  backdrop-filter: blur(2px);
+}
+@keyframes cute-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   11. TRANSCRIPT (§8)
+   The AI reply should read as a DOCUMENT CARD, not a chat bubble: white surface,
+   subtle hairline, radius 16, generous padding, 1.6 line-height. The prototype's
+   bubble had a 5px "tail" corner — dropped, because a tail says "chat message".
+   The user's own message keeps a bubble (it IS a message) but loses the hard tail.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .msgs {
+  padding: 22px 22px 8px;
+  gap: 18px;
+}
+body[data-theme-family='cute'] .abody.bubble {
+  border-radius: var(--r-panel);
+  border-bottom-left-radius: var(--r-panel);
+  padding: 18px 20px;
+  background: var(--bgEl);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+body[data-theme-family='cute'] .abody.bubble .mmetarow.footer {
+  margin: 10px -20px -18px;
+  padding: 9px 18px;
+  border-top: 1px solid var(--border);
+}
+/* The user's own message: an accent-tinted bubble. `--bgSubtle` is near-white on an
+   off-white page, so the bubble dissolved into the background and the turn lost its
+   "who said this" cue. Tinting with the BRAND rather than another grey also separates
+   it at a glance from the white assistant document card — one look tells you which
+   side of the conversation you are reading. */
+body[data-theme-family='cute'] .mu {
+  border-radius: var(--r-panel);
+  border-bottom-right-radius: var(--r-sm);
+  padding: 11px 15px;
+  background: var(--accentSoft);
+  border-color: var(--accentBorder);
+  color: var(--text);
+  box-shadow: none;
+}
+body[data-theme-family='cute'] :is(.blk.txt, .ma p, .mu) {
+  line-height: 1.65;
+}
+/* Steps stay one-line and closed by default (that convention is deliberate); only
+   their chrome softens. */
+body[data-theme-family='cute'] .steph .tname {
+  border-radius: var(--r-xs);
+  background: var(--accentSoft);
+  color: var(--accent);
+  font-weight: 600;
+}
+body[data-theme-family='cute'] .think {
+  border-left-color: var(--accentBorder);
+}
+/* Reference / quote block (§9) — a card with an accent rail and a quote glyph.
+   NOTE: no "Reference" text label. Every markdown blockquote everywhere would get
+   it, and a `> Note:` callout in a README is not a reference — the glyph carries
+   the meaning without mislabelling. */
+body[data-theme-family='cute'] .mdinline blockquote {
+  position: relative;
+  margin: 0 0 10px;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accentBorder);
+  border-radius: var(--r-sm);
+  background: var(--bgSubtle);
+  color: var(--textMuted);
+}
+body[data-theme-family='cute'] .mdinline blockquote::before {
+  content: '\201C';
+  position: absolute;
+  top: 2px;
+  right: 9px;
+  font-size: 1.9em;
+  line-height: 1;
+  color: var(--accentBorder);
+  pointer-events: none;
+}
+body[data-theme-family='cute'] .mdinline blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   12. MARKDOWN + CODE (§9)
+   Code blocks stay DARK in both variants: readability, plus they read as "machine
+   output" against the paper-white document card. Shiki paints its own dark
+   background inline (useMarkdown forces the github-dark theme for this family), so
+   these rules cover the chrome and the un-highlighted fallbacks — `!important` is
+   needed only where the base rule lives in a component `:deep()` selector of equal
+   specificity.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .codeblock {
+  border-radius: var(--r-card);
+  overflow: hidden;
+  background: var(--codeBg);
+  box-shadow: var(--shadow-sm);
+}
+body[data-theme-family='cute'] .codeblock pre {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 13px 14px !important;
+  background: var(--codeBg) !important;
+  /* Safety net for LIGHT mode: the block is dark but `--text` is dark too, so any code
+     that is NOT carrying Shiki's inline token colors — the first paint before the
+     highlighter finishes loading, or a language outside its allowlist — would render
+     dark-on-dark. Declared WITHOUT `!important` on purpose: Shiki's inline color must
+     still win once it arrives (inline beats a normal author declaration). */
+  color: var(--termText);
+  /* §9 "không chiếm quá nhiều chiều cao" — a long block scrolls in place. */
+  max-height: 420px;
+  overflow: auto;
+}
+body[data-theme-family='cute'] :is(pre.codeplain, .mmdstream, .codeblk) {
+  border-radius: var(--r-card);
+  background: var(--codeBg) !important;
+  border-color: var(--termBorder) !important;
+  color: var(--termText) !important;
+}
+/* Language chip + copy button live on a dark block now, so they need dark chrome
+   (their neutral base styles are in app-shell.css for the AWOG family). */
+body[data-theme-family='cute'] .codelang {
+  color: var(--termText);
+  background: color-mix(in srgb, var(--termText) 13%, transparent);
+  border-color: transparent;
+}
+body[data-theme-family='cute'] .codecopy {
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--termText) 13%, transparent);
+  border-color: transparent;
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .codecopy:hover {
+  background: color-mix(in srgb, var(--termText) 24%, transparent);
+  color: var(--termText);
+}
+/* Prose rhythm (§9): headings get air, bullets breathe, inline code is a soft chip. */
+body[data-theme-family='cute'] .mdinline :is(h1, h2, h3, h4, h5) {
+  font-weight: 600;
+  margin: 20px 0 9px;
+  letter-spacing: -0.008em;
+}
+body[data-theme-family='cute'] .mdinline :is(ul, ol) {
+  padding-left: 20px;
+}
+body[data-theme-family='cute'] .mdinline li {
+  margin: 5px 0;
+}
+/* Inline code = a RAISED chip, derived from the text color rather than a surface
+   token. `--bgSubtle` is DARKER than the card it sits on in the dark variant, so a
+   surface-token chip reads as a hole punched in the paragraph — long `code` spans
+   turn into black redaction bars. Mixing the TEXT color into the (transparent)
+   backdrop instead makes the chip a light tint on dark and a grey tint on light,
+   from ONE rule, and it lands correctly on any surface underneath (card, page,
+   recessed well).
+   `:not(.filelink)` is load-bearing: a resolved workspace path is an ACTIONABLE
+   accent chip (SessionMarkdownHtml), and this rule's specificity would otherwise
+   repaint it as ordinary code and kill the affordance. */
+body[data-theme-family='cute'] .mdinline :not(pre) > code:not(.filelink) {
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-color: color-mix(in srgb, var(--text) 13%, transparent);
+  color: var(--text);
+  padding: 1px 5px;
+}
+body[data-theme-family='cute'] .mdinline :is(th, td) {
+  padding: 7px 12px;
+}
+body[data-theme-family='cute'] .mdinline table {
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+body[data-theme-family='cute'] .mdinline img {
+  border-radius: var(--r-sm);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   13. COMPOSER (§10)
+   "Một trong những component đẹp nhất của app": a floating card over the
+   transcript — mint hairline, radius 16, soft shadow, cyan glow on focus. Exactly
+   one primary CTA (Send); everything else is a quiet icon button or a chip.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .composer {
+  border-top: 0;
+  padding: 6px 16px 14px;
+  background: transparent;
+}
+body[data-theme-family='cute'] .cbox {
+  border-radius: var(--r-panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: var(--bgEl);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-md);
+}
+body[data-theme-family='cute'] .cbox:focus-within {
+  border-color: var(--accentBorder);
+  box-shadow:
+    var(--shadow-md),
+    var(--shadow-glow);
+}
+body[data-theme-family='cute'] .cbar {
+  margin-top: 10px;
+  gap: 7px;
+}
+body[data-theme-family='cute'] :is(.att, .uatt .a1, .attmore) {
+  border-radius: var(--r-sm);
+  background: var(--bgSubtle);
+}
+body[data-theme-family='cute'] .composer.drag {
+  outline-color: var(--accent);
+  border-radius: var(--r-panel);
+}
+/* The composer floats, so the transcript needs no hard rule above it. */
+body[data-theme-family='cute'] .cresize::after {
+  background: var(--border);
+}
+body[data-theme-family='cute'] :is(.cresize:hover, .cresize.drag)::after {
+  background: var(--accent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   14. TERMINAL + SNIPPETS (§11, §12)
+   The dock becomes a rounded dark "tool panel" floating in the app's bottom
+   gutter, with its own header (icon · title · cwd · status dot · controls). The
+   xterm palette follows --termBg/--termText, so chrome and content match.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .gterm {
+  border-top: 0;
+  margin: 0 10px 10px;
+  border: 1px solid var(--termBorder);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  background: var(--termBg);
+  box-shadow: var(--shadow-md);
+}
+body[data-theme-family='cute'] .gterm-head {
+  height: 32px;
+  background: var(--termBgHead);
+  border-bottom: 1px solid var(--termBorder);
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .gterm-title {
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .gterm-cwd {
+  color: color-mix(in srgb, var(--termText) 60%, transparent);
+}
+body[data-theme-family='cute'] .gterm-btn {
+  color: color-mix(in srgb, var(--termText) 65%, transparent);
+  border-radius: var(--r-xs);
+}
+body[data-theme-family='cute'] .gterm-btn:hover {
+  color: var(--termText);
+  background: color-mix(in srgb, var(--termText) 12%, transparent);
+}
+body[data-theme-family='cute'] :is(.gterm-btn--on, .gterm-btn--on:hover) {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* The snippets rail rides inside the dark panel, so it inherits the dark chrome. */
+body[data-theme-family='cute'] .tsr {
+  background: var(--termBg);
+  border-left: 1px solid var(--termBorder);
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .tsr-head {
+  background: var(--termBgHead);
+  border-bottom: 1px solid var(--termBorder);
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .tsr-row {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--termBorder);
+  background: color-mix(in srgb, var(--termText) 5%, transparent);
+  margin-bottom: 6px;
+}
+body[data-theme-family='cute'] .tsr-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+body[data-theme-family='cute'] .tsr-name {
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .tsr-cmd {
+  color: color-mix(in srgb, var(--termText) 62%, transparent);
+}
+body[data-theme-family='cute'] :is(.tsr-tool, .tsr-act) {
+  border-radius: var(--r-xs);
+  color: color-mix(in srgb, var(--termText) 65%, transparent);
+}
+body[data-theme-family='cute'] :is(.tsr-tool, .tsr-act):hover {
+  color: var(--termText);
+  background: color-mix(in srgb, var(--termText) 12%, transparent);
+}
+/* Inside the dark rail the empty state must read on charcoal, not on white. */
+body[data-theme-family='cute'] .tsr .cempty-t {
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .tsr .cempty-b {
+  color: color-mix(in srgb, var(--termText) 62%, transparent);
+}
+/* The Workspace-panel terminal tab is the SAME xterm component, so its panes are
+   dark too (paneBg → --termBg). Its wrapper + tab strip must follow, otherwise the
+   dark panes sit in a light gutter with a light tab row on top. */
+body[data-theme-family='cute'] .wsterm {
+  background: var(--termBg);
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .wsterm-tabs {
+  background: var(--termBgHead);
+  border-bottom: 1px solid var(--termBorder);
+}
+body[data-theme-family='cute'] .wsterm-tab {
+  border-radius: var(--r-xs);
+  color: color-mix(in srgb, var(--termText) 62%, transparent);
+}
+body[data-theme-family='cute'] .wsterm-tab:hover {
+  background: color-mix(in srgb, var(--termText) 10%, transparent);
+  color: var(--termText);
+}
+body[data-theme-family='cute'] .wsterm-tab.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+body[data-theme-family='cute'] :is(.wsterm-tab-add, .wsterm-tab-close) {
+  border-radius: var(--r-xs);
+  color: color-mix(in srgb, var(--termText) 60%, transparent);
+}
+body[data-theme-family='cute'] :is(.wsterm-tab-add, .wsterm-tab-close):hover {
+  background: color-mix(in srgb, var(--termText) 12%, transparent);
+  color: var(--termText);
+}
+/* The `.term` pre in the Plan/Diff tabs is app-surface text, not a live terminal. */
+body[data-theme-family='cute'] .term {
+  color: var(--textMuted);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   15. EMPTY STATES (§12, §13)
+   Where the mascot is allowed: an empty list, an empty panel, the welcome screen,
+   a success flash. Small, centered, one short explanation, at most one CTA.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] .empty {
+  gap: 12px;
+  padding: 44px 32px;
+}
+body[data-theme-family='cute'] .empty .ei {
+  border-radius: var(--r-panel);
+  background: var(--accentSoft);
+  border-color: transparent;
+  color: var(--accent);
+}
+body[data-theme-family='cute'] .empty .et {
+  color: var(--textDim);
+  max-width: 34ch;
+}
+/* Shared cute empty state — mascot + title + body + optional CTA. */
+body[data-theme-family='cute'] .cempty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 34px 20px;
+  text-align: center;
+}
+body[data-theme-family='cute'] .cempty-t {
+  font-weight: 600;
+  color: var(--text);
+}
+body[data-theme-family='cute'] .cempty-b {
+  color: var(--textDim);
+  line-height: 1.6;
+  max-width: 30ch;
+}
+body[data-theme-family='cute'] .cempty-cta {
+  margin-top: 4px;
+}
+body[data-theme-family='cute'] .listempty {
+  color: var(--textDim);
+}
+/* Session welcome hero — the mascot replaces the icon tile (a markup fork in
+   SessionWelcome), so the type around it gets a little more air. The title keeps its
+   own `.swh` scale; only rhythm and tone move here. */
+body[data-theme-family='cute'] .swhero {
+  gap: 14px;
+}
+body[data-theme-family='cute'] .swh {
+  letter-spacing: -0.018em;
+}
+body[data-theme-family='cute'] .swsub {
+  color: var(--textDim);
+  max-width: 40ch;
+}
+body[data-theme-family='cute'] .swicon {
+  border-radius: var(--r-panel);
+  background: var(--accentSoft);
+  border-color: transparent;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   16. STATE COLORS (§14)
+   Pastel, low-saturation: tinted fill + same-hue text + same-hue hairline. Never a
+   saturated block of color — those are for the CTA only.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute'] :is(.bdg.run, .tag.acc, .nx.ok, .nx.run, .trbadge, .fwanchor) {
+  background: var(--accentSoft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+body[data-theme-family='cute'] :is(.bdg.wait, .tag.warn) {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 28%, transparent);
+}
+body[data-theme-family='cute'] .gcard.gate {
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  border-color: color-mix(in srgb, var(--amber) 26%, transparent);
+}
+body[data-theme-family='cute'] .gcard.err {
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 24%, transparent);
+}
+/* The status pulse + step spinner hardcoded an emerald ring; derive both from the
+   live accent so a custom accent stays coherent. */
+body[data-theme-family='cute'] :is(.pulse, .steph .spin) {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: cute-pulse 1.8s infinite;
+}
+@keyframes cute-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+/* Selection-quote wash used a hardcoded white alpha — invisible on an off-white base. */
+body[data-theme-family='cute'] .uq {
+  background: var(--bgSubtle);
+  border-radius: var(--r-xs);
+}
+/* Diff gutters keep their semantic colors, just softer. */
+body[data-theme-family='cute'] .dl.hunk {
+  background: var(--bgSubtle);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   17. MOTION (§19)
+   Short, eased, no bounce: hover 130ms, state 160ms, panels 190ms. Everything here
+   still obeys the reduced-motion kill-switch in app-shell.css
+   (`[data-reduced-motion='1']`), plus the OS query below.
+   ════════════════════════════════════════════════════════════════════════════ */
+body[data-theme-family='cute']
+  :is(
+    .ni,
+    .li,
+    .libli,
+    .gsi,
+    .gfile,
+    .setni,
+    .smenu .mi,
+    .seg span,
+    .btn,
+    .iconbtn,
+    .chip,
+    .ghrow,
+    .stab,
+    .tsr-row
+  ) {
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+body[data-theme-family='cute'] :is(.btn, .iconbtn, .qopt):active {
+  transform: scale(0.975);
+}
+body[data-theme-family='cute'] .tcard:hover {
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme-family='cute']
+    :is(.smenu, .pop, .stylemenu, .styinfocard, .toast, .pal, .setmodal, .codepanel) {
+    animation: none;
+  }
+  body[data-theme-family='cute'] :is(.btn, .iconbtn, .qopt):active,
+  body[data-theme-family='cute'] .tcard:hover {
+    transform: none;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   18. RESPONSIVE (§20)
+   Priority as width shrinks: the chat workspace is never squeezed first. The
+   snippet rail collapses, then the workspace panel (app-shell.css owns that at
+   1040px), then the list narrows. Below the phone-ish breakpoint the floor is
+   released so nothing overflows.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1180px) {
+  body[data-theme-family='cute'] .tsr {
+    display: none !important;
+  }
+}
+body[data-theme-family='cute'] .chat {
+  min-width: 380px;
+}
+@media (max-width: 760px) {
+  body[data-theme-family='cute'] .chat {
+    min-width: 0;
+  }
+  body[data-theme-family='cute'] .gterm {
+    margin: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+}

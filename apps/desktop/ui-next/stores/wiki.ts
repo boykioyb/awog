@@ -25,6 +25,10 @@ export type WikiPage = {
   space: string
   title: string
   description: string
+  // True when the sidecar DERIVED the description from the body (no frontmatter
+  // one). The reader hides it then: the body already contains that line, so
+  // printing it as a subtitle shows the same sentence twice.
+  descriptionDerived?: boolean
   tags: string[]
   // False = hidden from the LLM (index + search); still readable in the app.
   context: boolean

@@ -104,44 +104,91 @@
           </div>
         </div>
       </span>
-      <!-- Move this session to its own OS window (session-popout-window.md). Hidden
-           inside a popout — a window must not clone itself — and disabled mid-turn,
-           since a running turn streams into THIS renderer and can't be handed over. -->
-      <button
-        v-if="canOpenInWindow"
-        class="iconbtn"
-        :title="turnBusy ? t('sessions.window.busy') : t('sessions.window.open')"
-        style="width: 28px; height: 28px"
-        :disabled="turnBusy"
-        :style="turnBusy ? { opacity: 0.45, cursor: 'not-allowed' } : {}"
-        @click="openInWindow"
-      >
-        <Icon name="external" style="width: 14px; height: 14px" />
-      </button>
-      <button
-        class="iconbtn"
-        :title="t('minimize.session')"
-        style="width: 28px; height: 28px"
-        @click="minimizeSession"
-      >
-        <Icon name="minimize" style="width: 14px; height: 14px" />
-      </button>
-      <button
-        class="iconbtn"
-        :title="t('sessions.export.title')"
-        style="width: 28px; height: 28px"
-        @click="exportModal.open(session.id)"
-      >
-        <Icon name="save" style="width: 14px; height: 14px" />
-      </button>
-      <button
-        class="iconbtn"
-        :title="t('sessions.detail.delete')"
-        style="width: 28px; height: 28px"
-        @click="askRemove"
-      >
-        <Icon name="trash" style="width: 14px; height: 14px" />
-      </button>
+      <template v-if="!isCute">
+        <!-- Move this session to its own OS window (session-popout-window.md). Hidden
+             inside a popout — a window must not clone itself — and disabled mid-turn,
+             since a running turn streams into THIS renderer and can't be handed over. -->
+        <button
+          v-if="canOpenInWindow"
+          class="iconbtn"
+          :title="popoutTitle"
+          style="width: 28px; height: 28px"
+          :disabled="turnBusy"
+          :style="turnBusy ? { opacity: 0.45, cursor: 'not-allowed' } : {}"
+          @click="openInWindow"
+        >
+          <Icon name="external" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="iconbtn"
+          :title="t('minimize.session')"
+          style="width: 28px; height: 28px"
+          @click="minimizeSession"
+        >
+          <Icon name="minimize" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="iconbtn"
+          :title="t('sessions.export.title')"
+          style="width: 28px; height: 28px"
+          @click="exportModal.open(session.id)"
+        >
+          <Icon name="save" style="width: 14px; height: 14px" />
+        </button>
+        <button
+          class="iconbtn"
+          :title="t('sessions.detail.delete')"
+          style="width: 28px; height: 28px"
+          @click="askRemove"
+        >
+          <Icon name="trash" style="width: 14px; height: 14px" />
+        </button>
+      </template>
+
+      <!-- Cute family only (spec §7/§21): the four actions above collapse behind one
+           "…" overflow control so the header keeps just the three primary actions
+           inline. Reuses the header's single-menu state machine (`menu`/`openMenu`)
+           and the same `.smenu`/`.mi` pattern as the project switcher above; every
+           row calls the EXACT same handler as its awog-family iconbtn twin, with the
+           same disabled/busy condition and title text (now the row label). -->
+      <span v-else style="position: relative">
+        <button
+          class="iconbtn"
+          :title="t('sessions.detail.moreActions')"
+          style="width: 28px; height: 28px"
+          @click.stop="openMenu('more')"
+        >
+          <Icon name="dots" style="width: 14px; height: 14px" />
+        </button>
+        <div
+          v-if="menu === 'more'"
+          class="smenu"
+          style="position: absolute; top: 130%; right: 0; z-index: 50"
+          @click.stop
+        >
+          <div
+            v-if="canOpenInWindow"
+            class="mi"
+            :class="{ mdisabled: turnBusy }"
+            @click="runOverflow(openInWindow)"
+          >
+            <Icon name="external" style="width: 13px; height: 13px" />
+            {{ popoutTitle }}
+          </div>
+          <div class="mi" @click="runOverflow(minimizeSession)">
+            <Icon name="minimize" style="width: 13px; height: 13px" />
+            {{ t('minimize.session') }}
+          </div>
+          <div class="mi" @click="runOverflow(() => exportModal.open(session.id))">
+            <Icon name="save" style="width: 13px; height: 13px" />
+            {{ t('sessions.export.title') }}
+          </div>
+          <div class="mi dmi" @click="runOverflow(askRemove)">
+            <Icon name="trash" style="width: 13px; height: 13px" />
+            {{ t('sessions.detail.delete') }}
+          </div>
+        </div>
+      </span>
     </div>
 
     <!-- Discuss banner (ADR 0055): this session was opened to discuss a task. -->
@@ -206,6 +253,10 @@
           @mousedown="onChatMouseDown"
           @contextmenu="onQuoteContextMenu"
         >
+          <!-- Cute family only (spec §13): a brief "Done!" celebration when a turn
+               finishes. `.chat` is its positioned ancestor (below) so it floats over
+               the top of the conversation without shifting layout. -->
+          <SessionDoneFlash v-if="isCute" :status="session.status" />
           <SessionTodoPanel :session="session" />
           <SessionTranscript
             :messages="session.msgs"
@@ -218,12 +269,10 @@
             :attachments="pendingAtt"
             @send="onSend"
             @pick="openPicker"
-            @pick-folder="pickFolders"
             @remove-att="removeAtt"
             @add-att="onAddAtt"
             @preview="previewAtt"
             @open-more="moreOpen = true"
-            @run-as-task="onRunAsTask"
           />
         </div>
         <template v-if="wpOpen && rightTabs.length">
@@ -280,11 +329,11 @@
       </div>
     </div>
 
-    <!-- Select (highlight) text in a message → floating action bar (Quote + Translate) -->
+    <!-- Select (highlight) text in a message → floating action bar (Quote + Translate + Copy MD) -->
     <div
       v-if="quoteSel"
       class="selactions"
-      :style="{ left: `${quoteSel.x}px`, top: `${quoteSel.y}px` }"
+      :style="{ '--sel-x': `${quoteSel.x}px`, '--sel-y': `${quoteSel.y}px` }"
       @mousedown.prevent
     >
       <button class="selquote" @click="openNote">
@@ -294,6 +343,10 @@
       <button class="selquote" @click="onTranslate">
         <Icon name="globe" style="width: 13px; height: 13px" />
         {{ t('translate.action') }}
+      </button>
+      <button class="selquote" @click="onCopyMarkdown">
+        <Icon :name="mdCopied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+        {{ mdCopied ? t('common.copied') : t('common.copyMarkdown') }}
       </button>
     </div>
 
@@ -363,6 +416,7 @@ import {
 } from '~/composables/usePreview'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
+import { rawMarkdownForSelection } from '~/utils/selection-markdown'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
@@ -372,6 +426,7 @@ const store = useSessionsStore()
 const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
 const translate = useSelectionTranslate()
+const { isCute } = useThemeFamily()
 
 // Whether THIS instance is the one currently shown. Under <KeepAlive> (pages/sessions
 // caches recent detail instances so switching back is instant) inactive instances stay
@@ -433,12 +488,20 @@ function onSshApprovalMode(v: string) {
   store.setSshApprovalMode(props.session.id, v as SshApprovalMode)
 }
 
-// Single popover open at a time (project switcher · config · workspace). The shared
-// backdrop closes whichever is open.
-type Menu = 'proj' | 'config' | 'workspace'
+// Single popover open at a time (project switcher · config · workspace · cute-only
+// overflow). The shared backdrop closes whichever is open.
+type Menu = 'proj' | 'config' | 'workspace' | 'more'
 const menu = ref<Menu | null>(null)
 function openMenu(m: Menu) {
   menu.value = menu.value === m ? null : m
+}
+
+// Cute-only overflow menu (`menu === 'more'`): each row closes the menu then runs
+// the exact same handler its awog-family iconbtn twin calls (mirrors how
+// `selectProj`/`toggleView` already close their own dropdown on pick).
+function runOverflow(fn: () => void) {
+  menu.value = null
+  fn()
 }
 
 // Project switcher (the `.dproj` crumb): the crumb shows the resolved project NAME
@@ -473,18 +536,6 @@ function onSend(text: string, command?: SlashCommandRef) {
   // set the session cwd — the tools' working dir stays the project/home.
   store.sendMessage(props.session.id, text, pendingAtt.value, command)
   pendingAtt.value = []
-}
-
-// "Run as task" (ADR 0055) → open the shared New Task modal seeded with this
-// session as the task origin (project + title pre-filled; source = this session).
-const { openModal: openNewTaskModal } = useNewTaskModal()
-function onRunAsTask() {
-  const seed: { projectId?: string; title?: string; originSessionId?: string } = {
-    title: props.session.title,
-  }
-  if (props.session.project) seed.projectId = props.session.project
-  if (props.session.engineId) seed.originSessionId = props.session.engineId
-  openNewTaskModal(seed)
 }
 
 // Pending attachments for the next message. Drag-drop anywhere on the detail and
@@ -578,22 +629,6 @@ watch(
 function openPicker() {
   fileInput.value?.click()
 }
-// Attach one or more FOLDERS via the native directory picker (multi-select). Each
-// becomes a read-only <workspace_tree> context chip (does not change the cwd). No-op
-// outside the Electron shell (browser dev). Dedupe against already-attached folders.
-async function pickFolders() {
-  const paths =
-    (await window.awog?.pickFolders?.({ title: t('sessions.composer.attachFolder') })) ?? []
-  for (const path of paths) {
-    if (!path || pendingAtt.value.some((a) => a.folder && a.path === path)) continue
-    const name =
-      path
-        .replace(/[/\\]+$/, '')
-        .split(/[/\\]/)
-        .pop() || path
-    pendingAtt.value.push({ name, img: false, folder: true, path })
-  }
-}
 function onPick(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files?.length) addFiles(input.files)
@@ -679,6 +714,7 @@ function onSelectQuote(e: MouseEvent) {
     quoteSel.value = null
     return
   }
+  mdCopied.value = false
   quoteSel.value = {
     text: q.text,
     src: q.src,
@@ -695,6 +731,7 @@ function onQuoteContextMenu(e: MouseEvent) {
   const q = resolveSelectionQuote()
   if (!q) return
   e.preventDefault()
+  mdCopied.value = false
   quoteSel.value = { text: q.text, src: q.src, x: e.clientX, y: e.clientY }
 }
 
@@ -728,6 +765,42 @@ function onTranslate() {
       : { left: q.x, top: q.y, bottom: q.y, width: 0 }
   translate.open(q.text, rect, props.session.project)
   quoteSel.value = null
+}
+
+// Copy MD → the RAW markdown behind the highlighted text, not the flattened text the
+// browser would put on the clipboard (utils/selection-markdown maps the rendered
+// selection back onto this message's markdown source). The bar stays open showing
+// "Copied" so the feedback is where the user just clicked; it clears on the next
+// click/selection like the other two actions.
+const mdCopied = ref(false)
+let mdCopiedTimer: ReturnType<typeof setTimeout> | null = null
+
+// Markdown sources the selection could have come from, in match order. An assistant turn
+// keeps its text runs as separate blocks (intermediate commentary + the final response),
+// and only ONE of them contains the selection — rawMarkdownForSelection takes the first
+// that matches. A user/system message is a single raw string.
+function selectionSources(mi: number): string[] {
+  const m = props.session.msgs[mi]
+  if (!m) return []
+  return m.role === 'assistant'
+    ? m.blocks.flatMap((b) => (b.kind === 'text' ? [b.text] : []))
+    : [m.text]
+}
+
+async function onCopyMarkdown() {
+  const q = quoteSel.value
+  if (!q) return
+  const md = rawMarkdownForSelection(selectionSources(q.src), q.text) ?? q.text
+  try {
+    await navigator.clipboard.writeText(md)
+  } catch {
+    return // clipboard denied — leave the bar up so the user can copy manually
+  }
+  mdCopied.value = true
+  if (mdCopiedTimer) clearTimeout(mdCopiedTimer)
+  mdCopiedTimer = setTimeout(() => {
+    mdCopied.value = false
+  }, 1400)
 }
 
 // Drag the popover by its header. Native pointer + setPointerCapture (mirrors
@@ -874,6 +947,11 @@ const canOpenInWindow = computed(
 // session over mid-turn would strand it. Wait for the turn (or cancel it) first.
 const turnBusy = computed(
   () => props.session.status === 'streaming' || props.session.status === 'awaiting',
+)
+// Single source for the popout action's label: the inline iconbtn's `title` and the
+// cute overflow menu's row text must read identically.
+const popoutTitle = computed(() =>
+  turnBusy.value ? t('sessions.window.busy') : t('sessions.window.open'),
 )
 function openInWindow() {
   if (turnBusy.value) return
@@ -1168,6 +1246,11 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   min-height: 0;
   overflow: hidden;
 }
+/* Positioned ancestor for the cute-only SessionDoneFlash chip (`position: absolute`
+   inside it) — scoped, so it only affects `.chat` as rendered by this component. */
+.chat {
+  position: relative;
+}
 /* Resize handle docked at the bottom: a full-width row gripper (the prototype's
    .rszwp is a vertical col-resize bar for the right dock). The ::after divider
    runs horizontally instead of vertically. */
@@ -1217,19 +1300,38 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   border-radius: 10px;
 }
 /* Floating action bar next to a text selection (anchored to viewport coords). */
+/* Floating selection action bar. Laid out at the viewport origin and moved ENTIRELY by
+   `transform`, on purpose:
+   `position: fixed` + `left: x` makes the available width `viewport - x`, and this bar is
+   shrink-to-fit — so a selection near the right edge (every short, right-aligned USER
+   bubble) squeezed the row until each button collapsed to min-content and its label broke
+   mid-phrase ("Trích / dẫn"). Anchored at 0 the bar always measures against the full
+   viewport.
+   The percentages inside translate() resolve against the BAR's own box, so clamping
+   there also keeps it fully on screen without measuring anything in JS:
+     x → centred on the selection, but never closer than 8px to either edge
+     y → above the selection, but never above the viewport top. */
 .selactions {
   position: fixed;
+  left: 0;
+  top: 0;
   z-index: 80;
-  transform: translate(-50%, -100%);
+  transform: translate(
+    clamp(8px, calc(var(--sel-x, 0px) - 50%), calc(100vw - 100% - 8px)),
+    max(8px, calc(var(--sel-y, 0px) - 100%))
+  );
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: calc(100vw - 16px);
 }
 .selquote {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
+  /* A two-word label is one label — never break it across lines. */
+  white-space: nowrap;
   color: var(--text);
   background: var(--bgEl);
   border: 1px solid var(--border);

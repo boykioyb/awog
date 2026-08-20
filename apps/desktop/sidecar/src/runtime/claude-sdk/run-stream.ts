@@ -507,7 +507,9 @@ export async function runStreamClaude(
   // Wiki tools (ADR 0073 D-7): same handlers as the Pi path, bridged as an
   // in-process SDK MCP server so a wiki lookup works identically on both runtimes.
   const ctxCfg = args.contextConfig
-  const wikiAvailable = ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId))
+  const wikiScope = args.wikiSpaces
+  const wikiAvailable =
+    ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId, wikiScope))
   // Memory tools (ADR 0073 D-11): writes are opt-in, read appears only when a fact
   // has detail past its one-liner. Same gating as the Pi path.
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
@@ -523,7 +525,15 @@ export async function runStreamClaude(
     // sshApprovalMode. The co-pilot dock adds ssh_terminal_run (watched shell).
     ...(sshHostsExist ? { awogssh: buildSshToolsSdkServer(args.sshTerminalConnId) } : {}),
     // Wiki lookup → mcp__awogwiki__wiki_search / mcp__awogwiki__wiki_read.
-    ...(wikiAvailable ? { awogwiki: buildWikiToolsSdkServer(args.projectId) } : {}),
+    ...(wikiAvailable
+      ? {
+          awogwiki: buildWikiToolsSdkServer(
+            args.projectId,
+            wikiScope,
+            ctxCfg?.wikiAutoWrite === true,
+          ),
+        }
+      : {}),
     // Memory → mcp__awogmemory__memory_remember / _forget / _read.
     ...(memoryAutoWrite || memoryBodies
       ? {

@@ -7,9 +7,10 @@
        body is hidden but its PTYs live on — an in-place "roll-up" minimize). -->
   <section
     v-show="isOpen"
+    ref="rootEl"
     class="gterm"
     :class="{ 'gterm--collapsed': collapsed }"
-    :style="collapsed ? undefined : { height: `${height}px` }"
+    :style="dockStyle"
     :aria-hidden="!isOpen"
   >
     <!-- Top-edge resize handle: drag up to grow the dock. Hidden while collapsed
@@ -25,6 +26,7 @@
 
     <!-- Clicking a collapsed header bar rolls the dock back open. -->
     <header class="gterm-head" :class="{ 'gterm-head--clickable': collapsed }" @click="onHeadClick">
+      <span class="gterm-dot" :class="`gterm-dot--${dotState}`" :title="dotTitle" />
       <span class="gterm-title">
         <Icon name="commands" style="width: 13px; height: 13px" />
         {{ t('terminalGlobal.title') }}
@@ -116,6 +118,7 @@ import { useSshStore } from '~/stores/ssh'
 import type { TerminalTabKind, TerminalTransport } from '~/composables/useTerminalApi'
 
 const { t } = useI18n()
+
 const sc = useSidecar()
 const {
   isOpen,
@@ -130,6 +133,43 @@ const {
   setSnippetsOpen,
   setHeight,
 } = useGlobalTerminal()
+
+// Left inset published by the page that owns a leading rail (the Sessions list), so the
+// dock lines up with the DETAIL column instead of running under that rail. 0 on every
+// other page. Height only applies while expanded — collapsed the header IS the dock.
+const { inset, setDockHeight } = useDockMetrics()
+const rootEl = useTemplateRef<HTMLElement>('rootEl')
+const dockStyle = computed(() => ({
+  marginLeft: `${inset.value}px`,
+  ...(collapsed.value ? {} : { height: `${height.value}px` }),
+}))
+
+// Publish the dock's REAL height (measured, not derived from `height` — the header has
+// its own height when collapsed, and each theme pads it differently). The column beneath
+// reserves exactly this much, so the composer never hides behind the panel. Closed →
+// `v-show` sets display:none, offsetHeight is 0, which is precisely the value we want.
+// OUTER height: the space to reserve is the box PLUS its vertical margins, because a
+// theme may float the panel off the window edge (the Cute theme insets it by 10px). Using
+// offsetHeight alone left the composer clipped by exactly that margin. Closed → display
+// is none, offsetHeight is 0, and the margins must not be counted either.
+function measure(el: HTMLElement): number {
+  if (!el.offsetHeight) return 0
+  const cs = getComputedStyle(el)
+  return el.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0)
+}
+onMounted(() => {
+  const el = rootEl.value
+  if (!el) return
+  const ro = new ResizeObserver(() => setDockHeight(measure(el)))
+  ro.observe(el)
+  setDockHeight(measure(el))
+  onBeforeUnmount(() => ro.disconnect())
+})
+// `v-show` toggling display does not resize the element, so ResizeObserver stays silent on
+// open/close — mirror those transitions explicitly.
+watch([isOpen, collapsed], () => {
+  void nextTick(() => setDockHeight(rootEl.value ? measure(rootEl.value) : 0))
+})
 
 // Live backend id of the active tab's active pane (null → no shell to run into).
 const activeConnId = ref<string | null>(null)
@@ -156,6 +196,17 @@ function setTermRef(key: string, el: unknown): void {
 function onConn(key: string, id: string | null): void {
   if (key === projectKey.value) activeConnId.value = id
 }
+
+// Header status dot — read-only derivation from state this component already
+// tracks, no new IPC/store: 'off' when the engine bridge is absent (sc.available),
+// else 'live' when the visible project's active pane has reported a real backend
+// id via onConn (a spawned PTY), else 'idle' (dock open/mounted but nothing
+// connected yet, e.g. still spawning).
+const dotState = computed<'live' | 'idle' | 'off'>(() => {
+  if (!sc.available) return 'off'
+  return activeConnId.value ? 'live' : 'idle'
+})
+const dotTitle = computed(() => t(`terminalGlobal.status.${dotState.value}`))
 
 // Expand the roll-up when the collapsed header bar is clicked (buttons stop
 // propagation, so only the bar itself triggers this).
@@ -311,9 +362,22 @@ function onResize(ev: PointerEvent): void {
 </script>
 
 <style scoped>
+/* The dock FLOATS over the bottom of `.main` rather than sitting in its flex column.
+   In the column it took height from the whole page row, which shortened the Sessions
+   list and left a dead gap beneath it; floating means only the column it covers has to
+   reserve room (app-shell.css does that with `--awog-dock-h`, published from here).
+   `.main` is the containing block (app-shell.css gives it position:relative), and being
+   positioned also keeps `.gterm-rsz` anchored to this box as before.
+   This lives HERE, not in app-shell.css: a scoped selector compiles to
+   `.gterm[data-v-hash]` (0,2,0) and would outrank a bare `.gterm` rule in a global
+   stylesheet — the earlier attempt to set `position` from app-shell.css silently lost. */
 .gterm {
-  position: relative;
-  flex: 0 0 auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Page band (page ≤61 · detail 80/81 · drawer 90-92 · modal 100-300). */
+  z-index: 40;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -350,6 +414,39 @@ function onResize(ev: PointerEvent): void {
 }
 .gterm-head--clickable {
   cursor: pointer;
+}
+/* Status dot: live PTY (accent, breathing), mounted-but-idle (dim), sidecar
+   unavailable (danger). Read-only reflection of dotState — see script setup. */
+.gterm-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--textFaint);
+}
+.gterm-dot--live {
+  background: var(--accent);
+  animation: gterm-dot-breathe 1.6s ease-in-out infinite;
+}
+.gterm-dot--idle {
+  background: var(--textFaint);
+}
+.gterm-dot--off {
+  background: var(--danger);
+}
+@keyframes gterm-dot-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gterm-dot--live {
+    animation: none;
+  }
 }
 .gterm-title {
   display: inline-flex;

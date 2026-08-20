@@ -27,7 +27,7 @@
         <input
           :value="draft.description"
           class="we-input"
-          :placeholder="t('wiki.editor.descriptionHint')"
+          :placeholder="derivedDescription || t('wiki.editor.descriptionHint')"
           @input="update('description', ($event.target as HTMLInputElement).value)"
         />
       </label>
@@ -75,9 +75,14 @@
 // body is pushed IN on open/page-switch and pulled OUT via `change` — the parent
 // keeps owning the draft. The model key is prefixed so a wiki page and a
 // same-named workspace file never share an undo stack.
-import { onMounted, ref, watch } from 'vue'
-import MonacoEditor from '~/components/common/MonacoEditor.vue'
+import { defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import type { MonacoEditorHandle } from '~/components/editor/types'
+
+// Monaco is loaded only when the user actually edits. A static import would put the
+// editor AND its five `?worker` bundles into the /wiki page graph, so merely READING
+// a page — the page's main job — would pay for the editor. The imperative handle
+// still resolves through the template ref once the chunk lands.
+const MonacoEditor = defineAsyncComponent(() => import('~/components/common/MonacoEditor.vue'))
 
 export interface WikiDraft {
   title: string
@@ -87,12 +92,18 @@ export interface WikiDraft {
   body: string
 }
 
-const props = defineProps<{
-  path: string
-  draft: WikiDraft
-  dirty: boolean
-  saving: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    path: string
+    draft: WikiDraft
+    dirty: boolean
+    saving: boolean
+    // What the LLM index currently shows when the page has no authored description —
+    // displayed as the field's placeholder, never as a value.
+    derivedDescription?: string
+  }>(),
+  { derivedDescription: '' },
+)
 
 const emit = defineEmits<{
   save: []
@@ -104,8 +115,11 @@ const { t } = useI18n()
 
 const editorRef = useTemplateRef<MonacoEditorHandle>('editorRef')
 const ready = ref(false)
-// Monaco model key. `wiki:` namespaces it away from workspace file paths.
-const modelPath = computed(() => `wiki:${props.path}`)
+// Monaco model key. Namespaced away from workspace file paths so a wiki page and a
+// same-named repo file never share an undo stack. NO colon: MonacoEditor builds the
+// model URI as `Uri.parse('file:///' + path)`, and a colon inside a file-URI path is
+// exactly where drive-letter normalisation lives — `wiki/` sidesteps that entirely.
+const modelPath = computed(() => `__wiki__/${props.path}`)
 
 function update<K extends keyof WikiDraft>(key: K, value: WikiDraft[K]): void {
   emit('update:draft', { ...props.draft, [key]: value })

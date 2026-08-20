@@ -15,7 +15,7 @@ import {
   tool,
   type McpSdkServerConfigWithInstance,
 } from '@anthropic-ai/claude-agent-sdk'
-import { runWikiRead, runWikiSearch } from '../tools/wiki-tools.js'
+import { runWikiDelete, runWikiRead, runWikiSearch, runWikiWrite } from '../tools/wiki-tools.js'
 
 const textResult = (text: string): { content: { type: 'text'; text: string }[] } => ({
   content: [{ type: 'text', text }],
@@ -23,11 +23,50 @@ const textResult = (text: string): { content: { type: 'text'; text: string }[] }
 
 export function buildWikiToolsSdkServer(
   projectId: string | undefined,
+  // Session whitelist of wiki spaces (Session.wikiSpaces) — same gate as the Pi path.
+  spaces?: readonly string[] | undefined,
+  // Agent may create/update/delete pages (Settings → Wiki, default off). Each call
+  // still passes the permission gate, which matches the bridged names too.
+  canWrite = false,
 ): McpSdkServerConfigWithInstance {
+  const writeTools = canWrite
+    ? [
+        tool(
+          'wiki_write',
+          "Create or update a page in the user's wiki — for documenting something durably, not for " +
+            'chat answers. A write replaces the whole body, so read the page first when editing part ' +
+            'of it, and reuse an existing path to revise instead of adding a near-duplicate.',
+          {
+            path: z.string().describe('Wiki page path, e.g. "architecture/system-overview".'),
+            body: z.string().describe('The FULL Markdown body — a write replaces the whole page.'),
+            title: z.string().optional().describe('Kept as-is when omitted on an existing page.'),
+            description: z
+              .string()
+              .optional()
+              .describe('One line — what every future turn sees in <wiki_index>.'),
+            tags: z.array(z.string()).optional(),
+            scope: z
+              .string()
+              .optional()
+              .describe("'project' = the project's wiki; 'global' (default) = user-wide."),
+          },
+          async (args) => textResult((await runWikiWrite(args, projectId, spaces)).text),
+        ),
+        tool(
+          'wiki_delete',
+          'Delete a wiki page. Only when the user asks — it may be their only copy and the global ' +
+            'wiki has no version history.',
+          { path: z.string().describe('Wiki page path to delete.') },
+          async (args) => textResult((await runWikiDelete(args.path, projectId, spaces)).text),
+        ),
+      ]
+    : []
+
   return createSdkMcpServer({
     name: 'awogwiki',
     version: '1.0.0',
     tools: [
+      ...writeTools,
       tool(
         'wiki_search',
         "Search the user's internal wiki (their own architecture notes, patterns, conventions, " +
@@ -41,7 +80,8 @@ export function buildWikiToolsSdkServer(
             .optional()
             .describe('Optional: restrict to one space (first path segment, e.g. "architecture").'),
         },
-        async (args) => textResult((await runWikiSearch(args.query, args.space, projectId)).text),
+        async (args) =>
+          textResult((await runWikiSearch(args.query, args.space, projectId, spaces)).text),
       ),
       tool(
         'wiki_read',
@@ -53,7 +93,9 @@ export function buildWikiToolsSdkServer(
           limit: z.number().optional().describe('Optional number of lines to return.'),
         },
         async (args) =>
-          textResult((await runWikiRead(args.path, projectId, args.offset, args.limit)).text),
+          textResult(
+            (await runWikiRead(args.path, projectId, args.offset, args.limit, spaces)).text,
+          ),
       ),
     ],
   })

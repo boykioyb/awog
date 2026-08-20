@@ -11,5 +11,6 @@
   "sessions.tabs.searchPlaceholder": "Tìm dự án…",
   "sessions.tabs.noMatch": "Không có dự án khớp",
   "sessions.tabs.unread": "{n} cần chú ý",
-  "sessions.tabs.running": "Đang chạy phiên"
+  "sessions.tabs.running": "Đang chạy phiên",
+  "sessions.tabs.doneUnread": "Đã xong — chưa đọc"
 }

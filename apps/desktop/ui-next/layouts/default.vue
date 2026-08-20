@@ -13,17 +13,19 @@
         <div class="body">
           <slot />
         </div>
+
+        <!-- App-wide terminal dock. Mounted INSIDE .main (under the page body, above
+             the status bar) so it spans only the work area — never the NavRail. It
+             stops short of a page's leading rail via useDockInset (the Sessions list
+             publishes its width). Single mount: its PTYs persist across navigation and
+             across open/close (useGlobalTerminal). -->
+        <GlobalTerminalHost />
       </div>
 
       <!-- Compact-mode drawer backdrop: dim the main content and dismiss the open
            nav/list drawer on click. Only mounted while a drawer is open. -->
       <div v-if="compact && (navOpen || listOpen)" class="shell-scrim" @click="closeDrawers" />
     </div>
-
-    <!-- App-wide terminal dock — sits in the flex column between the page and the
-         status bar so opening it pushes content up on every page. Single mount;
-         its PTY persists across navigation + open/close (useGlobalTerminal). -->
-    <GlobalTerminalHost />
 
     <!-- Global status bar — single app-lifetime mount, shows on every page. -->
     <AppStatusBar />

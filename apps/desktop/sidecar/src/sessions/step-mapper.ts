@@ -193,6 +193,12 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
     case 'wiki_read':
     case 'mcp__awogwiki__wiki_read':
       return 'Wiki read'
+    case 'wiki_write':
+    case 'mcp__awogwiki__wiki_write':
+      return 'Wiki write'
+    case 'wiki_delete':
+    case 'mcp__awogwiki__wiki_delete':
+      return 'Wiki delete'
     case 'memory_remember':
     case 'mcp__awogmemory__memory_remember':
       return 'Remember'

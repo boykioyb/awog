@@ -12,6 +12,7 @@
   "common.retry": "Retry",
   "common.delete": "Delete",
   "common.copy": "Copy",
+  "common.copyMarkdown": "Copy MD",
   "common.copied": "Copied",
   "common.time.justNow": "just now",
   "common.time.minutesAgo": "{n}m ago",

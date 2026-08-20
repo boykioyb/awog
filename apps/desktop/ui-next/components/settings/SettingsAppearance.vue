@@ -6,7 +6,7 @@
       :name="t('settings.appearance.themeFamily.name')"
       :desc="t('settings.appearance.themeFamily.desc')"
     >
-      <SettingsSeg v-model="themeFamily" :options="['AWOG', 'shadcn']" />
+      <SettingsSeg v-model="themeFamily" :options="['AWOG', 'Cute', 'shadcn']" />
     </SettingsField>
 
     <SettingsField
@@ -143,13 +143,22 @@ const mode = computed<string>({
   },
 })
 
-// Theme family — label === value ('AWOG'/'shadcn' both render literally, but the
-// stored value is lowercase). Map both directions.
-const THEME_FAMILY_LABELS: Record<ThemeFamily, string> = { awog: 'AWOG', shadcn: 'shadcn' }
+// Theme family — labels render literally but the stored value is lowercase, so map
+// both directions. 'Cute' = the mint/off-white theme (assets/css/theme-cute.css).
+const THEME_FAMILY_LABELS: Record<ThemeFamily, string> = {
+  awog: 'AWOG',
+  cute: 'Cute',
+  shadcn: 'shadcn',
+}
+const THEME_FAMILY_VALUES: Record<string, ThemeFamily> = {
+  AWOG: 'awog',
+  Cute: 'cute',
+  shadcn: 'shadcn',
+}
 const themeFamily = computed<string>({
   get: () => THEME_FAMILY_LABELS[store.appearance.themeFamily],
   set: (label) => {
-    const value: ThemeFamily = label === 'shadcn' ? 'shadcn' : 'awog'
+    const value = THEME_FAMILY_VALUES[label] ?? 'awog'
     store.updateAppearance({ themeFamily: value })
     applyThemeFamily(value)
   },

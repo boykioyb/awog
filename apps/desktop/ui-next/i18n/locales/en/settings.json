@@ -26,7 +26,7 @@
   "settings.keymap.act.toggleFiles": "Toggle Files (in session)",
   "settings.appearance.heading": "Appearance",
   "settings.appearance.themeFamily.name": "Theme family",
-  "settings.appearance.themeFamily.desc": "Base token set — AWOG or shadcn slate",
+  "settings.appearance.themeFamily.desc": "Base look — AWOG, or Cute (off-white + mint)",
   "settings.appearance.mode.name": "Mode",
   "settings.appearance.mode.desc": "Dark / light · synced with ☾ topbar",
   "settings.appearance.mode.dark": "Dark",
@@ -241,5 +241,7 @@
   "settings.memory.delete.body": "Agents will stop seeing “{name}”. This cannot be undone.",
   "settings.memory.clear.title": "Forget everything?",
   "settings.memory.clear.body": "Permanently delete all {n} saved facts. This cannot be undone.",
-  "settings.memory.clear.confirm": "Forget all"
+  "settings.memory.clear.confirm": "Forget all",
+  "settings.wiki.autoWrite.name": "Let agents edit the wiki",
+  "settings.wiki.autoWrite.desc": "Off by default. When on, an agent can create, update and delete pages — each edit still asks for approval (except in execute mode) and shows in the transcript. The global wiki has no version history."
 }

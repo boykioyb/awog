@@ -10,7 +10,9 @@ const CHECK_SVG = '<svg class="icn"><use href="#i-check"></use></svg>'
 export type CodeCopyLabels = { copy: string; copied: string }
 
 // Wrap every `<pre><code>` under `el` in a `.codeblock` and pin a `.codecopy` button to its
-// top-right corner (styles are global — assets/css/app-shell.css).
+// top-right corner, plus a `.codelang` chip (when the block carries a `data-lang`, set by
+// useMarkdown's highlightCode — see composables/useMarkdown.ts) to its left (styles are
+// global — assets/css/app-shell.css).
 //
 // The wrapper exists because <pre> is the horizontal scroll container: an absolutely-
 // positioned child of it is placed against the FULL scrolled width, so on a wide block the
@@ -30,6 +32,16 @@ export function attachCodeCopyButtons(el: HTMLElement, labels: CodeCopyLabels): 
     wrap.className = 'codeblock'
     pre.replaceWith(wrap)
     wrap.appendChild(pre)
+    const lang = pre.getAttribute('data-lang')
+    if (lang) {
+      // `lang` comes off `data-lang`, which useMarkdown only ever sets from an allowlisted
+      // language id (see composables/useMarkdown.ts). textContent regardless — never
+      // innerHTML — so nothing can be injected even if that constraint ever loosened.
+      const chip = document.createElement('span')
+      chip.className = 'codelang'
+      chip.textContent = lang
+      wrap.appendChild(chip)
+    }
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'codecopy'

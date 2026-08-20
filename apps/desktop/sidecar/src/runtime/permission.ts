@@ -29,6 +29,7 @@ import type { AgentMode, SshApprovalMode } from '../types/shared.js'
 import { allowSessionTool, isSessionToolAllowed } from '../sessions/permissions.js'
 import { BROWSER_TOOL_NAME, isMutatingBrowserAction } from './tools/browser-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
+import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
 import { log } from '../util/logger.js'
 
 // Tools that mutate the workspace or execute code. Everything else is read-only
@@ -72,6 +73,15 @@ function isSourceMutatingTool(name: string): boolean {
   return SOURCE_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
 }
 
+// Wiki mutations (ADR 0073): the agent editing the user's own documentation. Gated
+// like a file write — it prompts in ask/accept-edits, is hard-blocked in plan mode,
+// and runs freely only in execute mode. Settings decides whether these tools exist
+// at all; this decides each call. Matched under BOTH namings (bare Pi name and the
+// SDK's `mcp__awogwiki__wiki_write`), or a bridged call would slip past UNGATED.
+function isWikiMutatingTool(name: string): boolean {
+  return WIKI_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
+}
+
 // browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
 // screenshot/extract are read-only (don't gate). Decided per-call from args.
 function isGatedTool(name: string, args: unknown): boolean {
@@ -81,7 +91,8 @@ function isGatedTool(name: string, args: unknown): boolean {
     EXEC_TOOLS.has(name) ||
     SPAWN_TOOLS.has(name) ||
     SSH_GATED_TOOLS.has(name) ||
-    isSourceMutatingTool(name)
+    isSourceMutatingTool(name) ||
+    isWikiMutatingTool(name)
   )
 }
 

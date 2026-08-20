@@ -19,14 +19,26 @@ import { pickFiles, pickFolders } from '~/composables/useFolderPicker'
 
 export type WikiViewMode = 'read' | 'edit'
 
+// One row of the wiki tree. A node is a page, a container, or BOTH — the store
+// allows `a/b.md` to coexist with `a/b/*.md`, which is exactly the Notion shape:
+// any page can have children. `page` is undefined for a pure container (a folder
+// with children but no page of its own — reachable on disk, not creatable in the UI).
 export interface WikiTreeNode {
-  // '' for the synthetic root group holding top-level pages.
-  space: string
+  // Stable identity across re-scans: tier + slug.
+  key: string
+  // Slug of this node ('architecture', 'architecture/adr/why-sidecar').
+  path: string
+  // Last path segment's display name.
   title: string
   description: string
   source: WikiSource
   projectId?: string
-  pages: WikiPage[]
+  // Depth from the tier root (0 = space / root-level page).
+  depth: number
+  page?: WikiPage
+  children: WikiTreeNode[]
+  // Pages at or below this node — what the row's count badge shows.
+  pageCount: number
 }
 
 const DRAFT_TEMPLATE = '# {title}\n\n'
@@ -39,7 +51,27 @@ export function useWikiManager() {
   const content = ref<WikiPageContent | null>(null)
   const loadingPage = ref(false)
   const mode = ref<WikiViewMode>('read')
-  const collapsedSpaces = ref<Record<string, boolean>>({})
+  // node key → explicitly expanded (true) / collapsed (false). Absent = the default
+  // for that depth (see isCollapsed).
+  const EXPANDED_KEY = 'awog.wiki.expanded'
+  const expanded = ref<Record<string, boolean>>({})
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(EXPANDED_KEY)
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null
+      if (parsed && typeof parsed === 'object') expanded.value = parsed as Record<string, boolean>
+    } catch {
+      // Corrupt entry → start from defaults rather than failing the page.
+    }
+  }
+  function persistExpanded(): void {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(EXPANDED_KEY, JSON.stringify(expanded.value))
+    } catch {
+      // Quota/availability errors are non-fatal — expansion stays in memory.
+    }
+  }
 
   // Sidebar width, persisted locally (a layout preference, not engine state — so
   // localStorage, not the settings blob).
@@ -69,6 +101,11 @@ export function useWikiManager() {
   // Editor draft — mirrors the open page until saved.
   const draft = ref({ title: '', description: '', tags: '', context: true, body: '' })
   const draftPath = ref('')
+  // Derived description of the open page, surfaced as the editor's placeholder so the
+  // user can see what the LLM index currently shows without it being a saved value.
+  const derivedDescription = computed(() =>
+    content.value?.page.descriptionDerived === true ? content.value.page.description : '',
+  )
   const saving = ref(false)
   const dirty = computed(() => {
     if (mode.value !== 'edit' || !content.value) return false
@@ -90,45 +127,100 @@ export function useWikiManager() {
   // Tree grouped by (source, projectId, space) so a global and a project wiki with
   // the same space name stay separate rows.
   const tree = computed<WikiTreeNode[]>(() => {
-    const groups = new Map<string, WikiTreeNode>()
-    for (const page of store.pages) {
-      const key = `${page.source}|${page.projectId ?? ''}|${page.space}`
-      let node = groups.get(key)
-      if (!node) {
-        const space = store.spaces.find(
-          (s) =>
-            s.id === page.space &&
-            s.source === page.source &&
-            (s.projectId ?? '') === (page.projectId ?? ''),
-        )
-        node = {
-          space: page.space,
-          title: space?.title || page.space,
-          description: space?.description ?? '',
-          source: page.source,
-          pages: [],
-          ...(page.projectId ? { projectId: page.projectId } : {}),
-        }
-        groups.set(key, node)
+    // Build from slugs: every ancestor segment becomes a node, so `a/b/c` creates
+    // `a` → `a/b` → `a/b/c` even when `a.md` / `a/b.md` do not exist. Keyed per tier
+    // so a global and a project wiki sharing a slug stay separate branches.
+    const roots: WikiTreeNode[] = []
+    const byKey = new Map<string, WikiTreeNode>()
+    const nodeKey = (page: Pick<WikiPage, 'source' | 'projectId'>, path: string): string =>
+      `${page.source}|${page.projectId ?? ''}|${path}`
+
+    const ensure = (page: WikiPage, path: string, depth: number): WikiTreeNode => {
+      const key = nodeKey(page, path)
+      const existing = byKey.get(key)
+      if (existing) return existing
+      // A top-level node's display name comes from the space's `_index.md` when it
+      // has one; deeper nodes fall back to their own segment.
+      const space =
+        depth === 0
+          ? store.spaces.find(
+              (sp) =>
+                sp.id === path &&
+                sp.source === page.source &&
+                (sp.projectId ?? '') === (page.projectId ?? ''),
+            )
+          : undefined
+      const segment = path.slice(path.lastIndexOf('/') + 1)
+      const node: WikiTreeNode = {
+        key,
+        path,
+        title: space?.title || segment,
+        description: space?.description ?? '',
+        source: page.source,
+        depth,
+        children: [],
+        pageCount: 0,
+        ...(page.projectId ? { projectId: page.projectId } : {}),
       }
-      node.pages.push(page)
+      byKey.set(key, node)
+      if (depth === 0) roots.push(node)
+      else {
+        const parentPath = path.slice(0, path.lastIndexOf('/'))
+        ensure(page, parentPath, depth - 1).children.push(node)
+      }
+      return node
     }
-    const nodes = [...groups.values()]
-    for (const node of nodes) node.pages.sort((a, b) => a.title.localeCompare(b.title))
-    // Root pages last: they are the exception, spaces are the structure.
-    return nodes.sort((a, b) => {
-      if (a.space === '') return 1
-      if (b.space === '') return -1
-      return a.space.localeCompare(b.space)
-    })
+
+    for (const page of store.pages) {
+      const segments = page.path.split('/')
+      const node = ensure(page, page.path, segments.length - 1)
+      node.page = page
+      // A real page overrides the placeholder title derived from its segment.
+      node.title = page.title || node.title
+      node.description = page.description || node.description
+      // Count this page against itself and every ancestor.
+      for (let i = segments.length; i > 0; i--) {
+        const ancestor = byKey.get(nodeKey(page, segments.slice(0, i).join('/')))
+        if (ancestor) ancestor.pageCount += 1
+      }
+    }
+
+    // Containers first, then pages — a folder-ish node reads as structure. Within a
+    // group, by title.
+    const sortRec = (nodes: WikiTreeNode[]): void => {
+      nodes.sort((a, b) => {
+        const ac = a.children.length > 0 ? 0 : 1
+        const bc = b.children.length > 0 ? 0 : 1
+        return ac - bc || a.title.localeCompare(b.title)
+      })
+      for (const n of nodes) sortRec(n.children)
+    }
+    sortRec(roots)
+    return roots
   })
 
-  const spaceKey = (node: WikiTreeNode): string =>
-    `${node.source}|${node.projectId ?? ''}|${node.space}`
-  const isCollapsed = (node: WikiTreeNode): boolean =>
-    collapsedSpaces.value[spaceKey(node)] === true
+  // Expansion is per node and remembered across restarts — a documentation tree the
+  // user re-expands every launch is a tree they stop using. Top level starts open,
+  // deeper levels closed (Notion's default reading), and opening a page always
+  // expands its ancestors so the selection is never hidden inside a closed branch.
+  const isCollapsed = (node: WikiTreeNode): boolean => {
+    const explicit = expanded.value[node.key]
+    if (explicit !== undefined) return !explicit
+    return node.depth > 0
+  }
   const toggleSpace = (node: WikiTreeNode): void => {
-    collapsedSpaces.value[spaceKey(node)] = !isCollapsed(node)
+    expanded.value = { ...expanded.value, [node.key]: isCollapsed(node) }
+    persistExpanded()
+  }
+  function expandAncestors(page: Pick<WikiPage, 'path' | 'source' | 'projectId'>): void {
+    const segments = page.path.split('/')
+    const patch: Record<string, boolean> = {}
+    for (let i = 1; i < segments.length; i++) {
+      patch[`${page.source}|${page.projectId ?? ''}|${segments.slice(0, i).join('/')}`] = true
+    }
+    if (Object.keys(patch).length === 0) return
+    expanded.value = { ...expanded.value, ...patch }
+    persistExpanded()
   }
 
   // Space ids available as import targets, for the current scope.
@@ -138,6 +230,7 @@ export function useWikiManager() {
 
   async function open(page: Pick<WikiPage, 'path' | 'source' | 'projectId'>): Promise<void> {
     selectedKey.value = wikiKey(page)
+    expandAncestors(page)
     mode.value = 'read'
     loadingPage.value = true
     try {
@@ -152,7 +245,10 @@ export function useWikiManager() {
     if (!c) return
     draft.value = {
       title: c.page.title,
-      description: c.page.description,
+      // A derived description starts EMPTY in the editor, with the derived text shown
+      // as the placeholder: otherwise any edit+save would quietly promote the body's
+      // first line into real frontmatter the user never wrote.
+      description: c.page.descriptionDerived === true ? '' : c.page.description,
       tags: c.page.tags.join(', '),
       context: c.page.context,
       body: c.body,
@@ -376,6 +472,7 @@ export function useWikiManager() {
     isCollapsed,
     toggleSpace,
     open,
+    expandAncestors,
     sidebarWidth,
     setSidebarWidth,
     // editing
@@ -386,6 +483,7 @@ export function useWikiManager() {
     saving,
     startEdit,
     cancelEdit,
+    derivedDescription,
     save,
     createPage,
     renamePage,

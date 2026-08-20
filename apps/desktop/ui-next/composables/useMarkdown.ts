@@ -212,15 +212,34 @@ function renderMathBlock(src: string): string {
   }
 }
 
+// A plain fence info string ('python', 'c++', 'shell-script', …). Used to gate `data-lang`
+// on the `.codeplain` fallback below — the fence info string is author-controlled markdown
+// (L1, untrusted) and must never reach the HTML unless it matches this shape.
+const PLAIN_LANG_TOKEN = /^[a-z0-9+#-]{1,20}$/
+
 function highlightCode(text: string, rawLang: string): string {
   // Bare fence → default to shell; otherwise resolve aliases ('' → plain).
   const lang = rawLang === '' ? 'bash' : (LANG_ALIAS[rawLang] ?? rawLang)
   if (lang && highlighter && highlighter.getLoadedLanguages().includes(lang)) {
     // Shiki escapes `text` and emits per-token inline colors; the block background +
     // chrome come from the surrounding .mdinline/.mdbody styles.
-    return highlighter.codeToHtml(text, { lang, theme: activeTheme })
+    const html = highlighter.codeToHtml(text, { lang, theme: activeTheme })
+    // `lang` is a member of SHIKI_LANGS (the fixed set we loaded the highlighter with) —
+    // getLoadedLanguages() can only ever return one of those, so it's a closed allowlist
+    // of plain identifiers (no quotes/angle-brackets) and safe to inline into the tag
+    // without further escaping. attachCodeCopyButtons (utils/code-copy.ts) reads this to
+    // label the block with its language.
+    //
+    // Only label a block whose fence ACTUALLY named a language: a bare ``` fence is
+    // highlighted as shell by the default above, and claiming "BASH" on every unlabeled
+    // block would be a wrong label on the majority of them.
+    return rawLang === '' ? html : html.replace(/^<pre/, `<pre data-lang="${lang}"`)
   }
-  return `<pre class="codeplain"><code>${escapeHtml(text)}</code></pre>`
+  // rawLang is the fence info string — author-controlled (L1, untrusted) — so only surface
+  // it as data-lang when it matches PLAIN_LANG_TOKEN; anything else (unmatched, or an
+  // unresolved lang that fell through to plain rendering) gets no attribute at all.
+  const langAttr = PLAIN_LANG_TOKEN.test(rawLang) ? ` data-lang="${rawLang}"` : ''
+  return `<pre class="codeplain"${langAttr}><code>${escapeHtml(text)}</code></pre>`
 }
 
 let configured = false
@@ -327,9 +346,12 @@ export function useMarkdown() {
     configure()
     ensureHighlighter()
     // Track reactive deps so consuming computeds re-render when the highlighter finishes
-    // loading (plain → highlighted) and when the app theme flips (dark/light → Shiki theme).
+    // loading (plain → highlighted) and when the app theme flips (dark/light → Shiki theme,
+    // or awog/cute → Shiki theme — the cute theme is a light app chrome with intentionally
+    // DARK code blocks, spec §9).
     void ready.value
-    activeTheme = useTheme().isDark.value ? 'github-dark' : 'github-light'
+    activeTheme =
+      useTheme().isDark.value || useThemeFamily().isCute.value ? 'github-dark' : 'github-light'
 
     const tokens = marked.lexer(stripFrontMatter(src))
 

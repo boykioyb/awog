@@ -95,10 +95,11 @@ Identity tuple: `(source, projectId, id)`. Cùng slug có thể tồn tại đ�
 | Trigger | Ý nghĩa |
 |---|---|
 | `@path/file.md` | Reference file workspace — **live**: fuzzy toàn cây file thật qua `fs.listFiles` (git ls-files + walk fallback), cache per `workspaceRoot`, top 50 + đếm khi còn nữa. Rỗng nếu session chưa gắn project / không có sidecar. |
-| `$agent-name` | Invoke agent → expand `agent.skillIds` auto-active |
+| `@agent-handle` | Trỏ model tới một agent trong scope (global `~/.claude/agents` + `{project}/.claude/agents`) — nguồn cho `Task` tool. (`agent.skillIds` đã bị gỡ, xem [Còn mở](#còn-mở).) |
+| `@skill:<id>` | Trỏ model tới một skill trong scope — menu `@` liệt kê **cả 2 tier** (`~/.claude/skills` + `{project}/.claude/skills`, [ADR 0070](../decisions/0070-share-claude-home-for-config.md)). Tiền tố `skill:` là bắt buộc: id skill và handle agent dùng chung một namespace nên `@code-reviewer` trơn sẽ nhập nhằng khi tồn tại cả hai. Block `<available_skills>` mỗi turn có một câu nói rõ token này nghĩa là "user chỉ đúng skill này" (cùng cách làm với `@wiki:<path>`, xem [wiki.md](wiki.md)). |
 | `/slug` | Explicit skill invocation (hợp nhất với COMMANDS list) |
 
-`@` lấy `workspaceRoot` từ `session.projectId`; index cache ở [composables/useWorkspaceFileIndex.ts](../../apps/desktop/ui/composables/useWorkspaceFileIndex.ts). Chi tiết: [sessions.md → Mention](sessions.md). State machine: [composables/useMentionAutocomplete.ts](../../apps/desktop/ui/composables/useMentionAutocomplete.ts).
+`@` lấy `workspaceRoot` từ `session.project`; catalog (agents/skills/commands) + file index nạp lười và cache ở [composables/useComposerData.ts](../../apps/desktop/ui-next/composables/useComposerData.ts). Trigger + thứ tự row ở [SessionComposer.vue](../../apps/desktop/ui-next/components/session/SessionComposer.vue) (`mentionMatches`), render row ở [SessionMentionMenu.vue](../../apps/desktop/ui-next/components/session/SessionMentionMenu.vue).
 
 ## LLM integration
 

@@ -130,7 +130,9 @@ export async function runStreamPi(
   // page the LLM may see AND Settings has not turned the wiki off. No wiki → no
   // tool schema → no token cost.
   const ctxCfg = args.contextConfig
-  const wikiAvailable = ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId))
+  const wikiScope = args.wikiSpaces
+  const wikiAvailable =
+    ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId, wikiScope))
   // Memory (ADR 0073 part B): the WRITE tools are opt-in (Settings, default off);
   // memory_read appears only when some fact carries detail past its one-liner.
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
@@ -152,7 +154,15 @@ export async function runStreamPi(
       includeSourceTools: true,
       // Wiki lookup (ADR 0073) — the user's own docs, reachable on BOTH runtimes.
       ...(wikiAvailable
-        ? { includeWikiTools: { ...(args.projectId ? { projectId: args.projectId } : {}) } }
+        ? {
+            includeWikiTools: {
+              ...(args.projectId ? { projectId: args.projectId } : {}),
+              ...(wikiScope ? { spaces: wikiScope } : {}),
+              // Agent wiki editing (Settings → Wiki, default off). Still gated per
+              // call by permission.ts.
+              canWrite: ctxCfg?.wikiAutoWrite === true,
+            },
+          }
         : {}),
       // Memory write/read tools (ADR 0073 D-11). Omitted entirely when the user has
       // not opted into agent writes and no fact has extra detail to read.

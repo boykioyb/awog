@@ -49,5 +49,13 @@
   "wiki.toast.renamed": "Đã đổi tên trang",
   "wiki.toast.renameFailed": "Không đổi được tên trang",
   "wiki.toast.pathCopied": "Đã sao chép đường dẫn",
-  "wiki.toast.copyFailed": "Sao chép thất bại"
+  "wiki.toast.copyFailed": "Sao chép thất bại",
+  "wiki.tree.expand": "Mở",
+  "wiki.tree.collapse": "Thu gọn",
+  "wiki.tree.newChild": "Thêm trang con",
+  "wiki.menu.newChild": "Thêm trang con…",
+  "wiki.newChildPrompt.title": "Trang con trong “{parent}”",
+  "wiki.newChildPrompt.placeholder": "tên trang",
+  "wiki.toast.badName": "Tên đó không có ký tự dùng được — thử chữ hoặc số.",
+  "wiki.page.htmlStripped": "Trang này có {n} thẻ HTML thô và chúng không được render — bộ render markdown loại bỏ HTML do tác giả viết (dùng chung biên XSS với transcript chat). Chuyển sang Markdown để nội dung hiện ra."
 }

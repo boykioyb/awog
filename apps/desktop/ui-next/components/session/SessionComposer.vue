@@ -78,7 +78,7 @@
         </span>
       </div>
 
-      <!-- slash `/` (commands + skills) + `@`-mention (agents + files) autocomplete -->
+      <!-- slash `/` (commands + skills) + `@`-mention (agents/skills/wiki/files) -->
       <SessionSlashMenu
         v-if="autocomplete === 'slash'"
         :items="slashMatches"
@@ -376,21 +376,17 @@
         </span>
         <button
           class="iconbtn"
-          :title="t('sessions.composer.runAsTask')"
-          style="width: 28px; height: 28px"
-          @click="emit('run-as-task')"
-        >
-          <Icon name="workflows" style="width: 14px; height: 14px" />
-        </button>
-        <button
-          class="iconbtn"
           :title="enhancing ? t('sessions.composer.enhancing') : t('sessions.composer.enhance')"
           :disabled="enhancing"
           style="width: 28px; height: 28px"
           @click="onEnhance"
         >
+          <!-- Sparkles is this app's glyph for every AI-generate action (connection
+               editor, library/workflow prompt creators, hook editor, PR summary — which
+               spins it while loading exactly like this). The old `skills` wand read as
+               "open the skills library" and was the odd one out. -->
           <Icon
-            name="skills"
+            name="sparkles"
             class="enhicon"
             :class="{ enhspin: enhancing }"
             style="width: 14px; height: 14px"
@@ -403,14 +399,6 @@
           @click="emit('pick')"
         >
           <Icon name="clip" style="width: 14px; height: 14px" />
-        </button>
-        <button
-          class="iconbtn"
-          :title="t('sessions.composer.attachFolder')"
-          style="width: 28px; height: 28px"
-          @click="emit('pick-folder')"
-        >
-          <Icon name="folder" style="width: 14px; height: 14px" />
         </button>
         <!-- Compacting → disabled processing button (Send locked until the RPC ends).
              Idle → Send. While a turn streams → Stop + a split steer/queue button
@@ -501,6 +489,7 @@ import type {
   SlashCommandRef,
 } from '~/composables/useSessionsData'
 import { useComposerData } from '~/composables/useComposerData'
+import { useWikiStore } from '~/stores/wiki'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import { pushActionToast } from '~/composables/useActionToasts'
 import {
@@ -526,16 +515,12 @@ const emit = defineEmits<{
   // slash invocation displayed compactly in the user bubble.
   send: [text: string, command?: SlashCommandRef]
   pick: []
-  // Attach one or more FOLDERS (read-only context) via the native directory picker.
-  'pick-folder': []
   'remove-att': [i: number]
   // A pasted clipboard image → a pending attachment for the parent to track
   // (mirrors the drag-drop / file-picker path). The parent owns `pendingAtt`.
   'add-att': [att: SessionAttachment]
   preview: [i: number]
   'open-more': []
-  // Open the New Task modal seeded with this session as the task origin (ADR 0055).
-  'run-as-task': []
 }>()
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -573,6 +558,7 @@ const draft = computed<string>({
 // commands (mode/compact/style) come from the static BUILTIN_COMMANDS catalog.
 const projectIdRef = computed(() => store.active?.project ?? null)
 const data = useComposerData(projectIdRef)
+const wiki = useWikiStore()
 const agentHandle = (name: string) => name.toLowerCase().replace(/\s+/g, '-')
 
 // Transient command feedback line (e.g. "/compact running…", "Mode → Plan") shown
@@ -821,6 +807,15 @@ function toggleNote(text: string) {
 function removePin(path: string) {
   if (store.activeId != null) store.removePinnedFile(store.activeId, path)
 }
+// Wiki pages the ACTIVE session may reference: LLM-visible pages, narrowed by the
+// session's wiki space whitelist (config popover → Wiki). Mirroring that scope here
+// matters — offering a page the session excluded would insert a reference the model
+// is not allowed to read.
+const wikiPagesInScope = computed(() => {
+  const scope = store.active?.wikiSpaces
+  return wiki.pages.filter((p) => p.context && (scope === undefined || scope.includes(p.space)))
+})
+
 // File picker for pinning: reuse the workspace file index (same source as @-mention).
 const pinQuery = ref('')
 const pinFileMatches = computed(() => {
@@ -1090,13 +1085,17 @@ async function onEnhance() {
   }
 }
 
-// ── Autocomplete: slash `/` (commands + skills) + `@`-mention (agents + files) ──
+// ── Autocomplete: slash `/` (commands + skills) + `@`-mention (agents + skills
+// + wiki pages + files) ──
 type Autocomplete = 'slash' | 'mention' | null
 const autocomplete = ref<Autocomplete>(null)
 const acIndex = ref(0)
 // The caret-anchored query token (the word the user is typing) for `@`-mentions.
 const mentionQuery = ref('')
-const RESULT_CAP = 50
+// Rows per menu. Sized so a bare `@` (no query) still reaches the file rows after
+// the entity rows above them — agents + skills alone are ~50 on a workspace that
+// uses both tiers, and a cap that stops inside them would hide files completely.
+const RESULT_CAP = 80
 
 function caretText(): string {
   const el = ta.value
@@ -1143,11 +1142,20 @@ const slashMatches = computed<SlashItem[]>(() => {
   return [...builtins, ...cmds, ...sk].slice(0, RESULT_CAP)
 })
 
-// `@` results: enabled agents (by handle) first, then workspace files (filename
-// matches ranked above path-only matches). Capped — the list scrolls + user narrows.
+// `@` results, in pick order: agents (by handle), skills (by id), wiki pages, then
+// workspace files (filename matches ranked above path-only matches). Entities come
+// first because they are a short, named set the user asked for by name; files are
+// the long tail. Capped — the list scrolls + user narrows.
 const mentionMatches = computed<MentionRow[]>(() => {
   if (autocomplete.value !== 'mention') return []
   const q = mentionQuery.value.toLowerCase()
+  // The trigger regex keeps `:` inside the token, so a user narrowing an already
+  // inserted `@skill:…` / `@wiki:…` types a query that still carries the prefix.
+  // Match the id / page path against the part AFTER it — otherwise re-typing over
+  // one of those tokens empties the menu.
+  const unprefixed = (prefix: string) => (q.startsWith(prefix) ? q.slice(prefix.length) : q)
+  const qSkill = unprefixed('skill:')
+  const qWiki = unprefixed('wiki:')
   const agents: MentionRow[] = data.agents.value
     .filter(
       (a) => q === '' || agentHandle(a.name).startsWith(q) || a.name.toLowerCase().includes(q),
@@ -1158,6 +1166,43 @@ const mentionMatches = computed<MentionRow[]>(() => {
       insert: agentHandle(a.name),
       label: a.name,
       hint: a.source === 'project' ? t('sessions.composer.kind.project') : undefined,
+    }))
+  // Skills, both tiers (~/.claude/skills + {project}/.claude/skills — ADR 0070).
+  // Same catalogue the `/` menu offers and the same one the turn advertises as
+  // <available_skills>; `@skill:<id>` points the model at one without expanding a
+  // whole command body into the draft. Tier filter mirrors slashMatches.
+  const skills: MentionRow[] = data.skills.value
+    .filter(
+      (s) =>
+        inScope(s.source, s.projectId) &&
+        (qSkill === '' ||
+          s.id.toLowerCase().startsWith(qSkill) ||
+          s.name.toLowerCase().includes(qSkill)),
+    )
+    .map((s) => ({
+      key: `s:${s.source}:${s.id}`,
+      kind: 'skill',
+      insert: `skill:${s.id}`,
+      label: s.id,
+      hint: s.source === 'project' ? t('sessions.composer.kind.project') : undefined,
+    }))
+  // Wiki pages in THIS session's scope (ADR 0073). Ranked above files: a wiki page
+  // is an explicit, small reference the model can act on with wiki_read, whereas a
+  // file match is often incidental. Pages hidden from agents (`context: false`) are
+  // excluded — offering one would insert a reference the model cannot resolve.
+  const wikiRows: MentionRow[] = wikiPagesInScope.value
+    .filter(
+      (w) =>
+        qWiki === '' ||
+        w.title.toLowerCase().includes(qWiki) ||
+        w.path.toLowerCase().includes(qWiki),
+    )
+    .map((w) => ({
+      key: `w:${w.source}:${w.path}`,
+      kind: 'wiki',
+      insert: `wiki:${w.path}`,
+      label: w.title,
+      hint: w.path,
     }))
   const matched = data.files.value.filter(
     (f) => q === '' || f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
@@ -1176,7 +1221,7 @@ const mentionMatches = computed<MentionRow[]>(() => {
     label: f.name,
     hint: f.path,
   }))
-  return [...agents, ...files].slice(0, RESULT_CAP)
+  return [...agents, ...skills, ...wikiRows, ...files].slice(0, RESULT_CAP)
 })
 
 function refreshAutocomplete() {
@@ -1190,10 +1235,13 @@ function refreshAutocomplete() {
     return
   }
   // Mention: the caret word starts with `@` (preceded by start-of-line or space).
-  const m = /(^|\s)@([\w./-]*)$/.exec(caretText())
+  // `:` is part of the token so `@wiki:architecture/…` keeps the menu open while the
+  // user narrows (ADR 0073).
+  const m = /(^|\s)@([\w./:-]*)$/.exec(caretText())
   if (m) {
-    data.ensureCatalogs() // agents
+    data.ensureCatalogs() // agents + skills
     data.ensureFiles() // workspace file index
+    if (!wiki.loaded) void wiki.loadTree() // wiki pages (ADR 0073)
     mentionQuery.value = m[2] ?? ''
     autocomplete.value = 'mention'
     if (acIndex.value >= mentionMatches.value.length) acIndex.value = 0
@@ -1251,7 +1299,9 @@ function applyMention(i: number) {
   if (!item) return
   // Replace the caret's `@query` word with the full `@insert` token + trailing space.
   draft.value = draft.value.replace(
-    /(^|\s)@([\w./-]*)$/,
+    // `:` is included so re-typing over a partial `@wiki:arch…` token replaces the
+    // whole thing instead of leaving `@wiki:` behind.
+    /(^|\s)@([\w./:-]*)$/,
     (_m, pre: string) => `${pre}@${item.insert} `,
   )
   closeAutocomplete()

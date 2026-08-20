@@ -15,7 +15,7 @@
   "sessions.composer.slashCommands": "Commands",
   "sessions.composer.slashHint": "built-in · commands · skills",
   "sessions.composer.mentionTitle": "Mention",
-  "sessions.composer.mentionHint": "agents · workspace files",
+  "sessions.composer.mentionHint": "agents · skills · wiki · files",
   "sessions.composer.mentionFile": "file",
   "sessions.composer.mentionAgent": "agent",
   "sessions.composer.kind.builtin": "built-in",
@@ -127,5 +127,7 @@
   "sessions.pinned.clearRecent": "Clear",
   "sessions.pinned.inUse": "In use — re-fed every turn",
   "sessions.pinned.titleCount": "Pinned context ({n})",
-  "sessions.pinned.deleteRecent": "Remove from recent"
+  "sessions.pinned.deleteRecent": "Remove from recent",
+  "sessions.composer.mentionWiki": "wiki",
+  "sessions.composer.mentionSkill": "skill"
 }

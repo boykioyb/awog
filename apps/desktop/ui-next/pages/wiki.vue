@@ -18,6 +18,7 @@
       @open="open"
       @toggle-space="toggleSpace"
       @context-page="onContextPage"
+      @new-child="onNewChild"
       @update:query="(v) => (query = v)"
       @search="runSearch"
       @clear-search="clearSearch"
@@ -35,7 +36,14 @@
         <div v-if="hits.length === 0" class="wk-empty" :style="{ color: 'var(--textFaint)' }">
           {{ t('wiki.search.none', { q: query }) }}
         </div>
-        <button v-for="hit in hits" :key="hit.path + hit.line" class="wk-hit" @click="openHit(hit)">
+        <!-- keyed with the tier: the global and a project wiki can hold the same slug,
+             and a hit on the same line of both would otherwise collide -->
+        <button
+          v-for="hit in hits"
+          :key="`${hit.source}|${hit.projectId ?? ''}|${hit.path}:${hit.line}`"
+          class="wk-hit"
+          @click="openHit(hit)"
+        >
           <span class="wk-hittitle">{{ hit.title }}</span>
           <span class="wk-hitpath" :style="{ color: 'var(--textFaint)' }">
             {{ hit.path }}:{{ hit.line }}
@@ -50,6 +58,7 @@
         :draft="draft"
         :dirty="dirty"
         :saving="saving"
+        :derived-description="derivedDescription"
         @update:draft="(d) => (draft = d)"
         @save="onSave"
         @cancel="cancelEdit"
@@ -133,7 +142,7 @@ import ContextMenu from '~/components/common/ContextMenu.vue'
 import WikiEditor from '~/components/wiki/WikiEditor.vue'
 import WikiReader from '~/components/wiki/WikiReader.vue'
 import WikiSidebar from '~/components/wiki/WikiSidebar.vue'
-import { useWikiManager } from '~/composables/useWikiManager'
+import { useWikiManager, type WikiTreeNode } from '~/composables/useWikiManager'
 import { useConfirm } from '~/composables/useConfirm'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useTextPrompt } from '~/composables/useTextPrompt'
@@ -163,6 +172,7 @@ const {
   saving,
   startEdit,
   cancelEdit,
+  derivedDescription,
   save,
   createPage,
   removePage,
@@ -201,6 +211,45 @@ async function onSave(): Promise<void> {
     ok ? t('wiki.toast.saved') : store.lastError || t('wiki.toast.saveFailed'),
     ok ? 'success' : 'error',
   )
+}
+
+// "+" on a tree row (or the context menu) — create a page nested under that node.
+// The parent decides the tier, so a child of a project page stays in the project
+// wiki. Notion-style: any page can have children, and a container node can gain one
+// even when it has no page of its own.
+// The typed name is a TITLE; the path segment is its slug. Typing "Data Flow" should
+// give the page that title and the file `data-flow.md`, not a slug with a capital and
+// a space in it.
+function slugifyName(name: string): string {
+  return name
+    .normalize('NFKD')
+    .replace(/[^\w\s.-]/g, '')
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+    .toLowerCase()
+}
+
+async function onNewChild(node: WikiTreeNode): Promise<void> {
+  const name = await prompt({
+    title: t('wiki.newChildPrompt.title', { parent: node.title }),
+    placeholder: t('wiki.newChildPrompt.placeholder'),
+    submitLabel: t('common.create'),
+  })
+  if (!name) return
+  const slug = slugifyName(name)
+  if (!slug) {
+    pushToast(t('wiki.toast.badName'), 'error')
+    return
+  }
+  const page = await createPage({
+    source: node.source,
+    ...(node.projectId ? { projectId: node.projectId } : {}),
+    path: `${node.path}/${slug}`,
+    title: name.trim(),
+  })
+  if (!page) pushToast(store.lastError || t('wiki.toast.createFailed'), 'error')
 }
 
 async function onNewPage(): Promise<void> {
@@ -324,6 +373,7 @@ const menuItems = computed<MenuItem[]>(() => {
   if (!page) return []
   return [
     { id: 'open', label: t('wiki.menu.open'), icon: 'file' },
+    { id: 'child', label: t('wiki.menu.newChild'), icon: 'plus' },
     { id: 'rename', label: t('wiki.menu.rename'), icon: 'edit' },
     {
       id: 'context',
@@ -348,6 +398,21 @@ async function onMenuSelect(id: string): Promise<void> {
   if (!page) return
   if (id === 'open') {
     await open(page)
+    return
+  }
+  if (id === 'child') {
+    // The clicked page becomes the parent: its slug is the child's prefix.
+    await onNewChild({
+      key: '',
+      path: page.path,
+      title: page.title,
+      description: page.description,
+      source: page.source,
+      ...(page.projectId ? { projectId: page.projectId } : {}),
+      depth: page.path.split('/').length - 1,
+      children: [],
+      pageCount: 0,
+    })
     return
   }
   if (id === 'rename') {

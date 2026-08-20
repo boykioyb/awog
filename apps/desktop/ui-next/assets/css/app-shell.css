@@ -1191,12 +1191,13 @@ textarea.gcpta {
   padding: 20px;
 }
 
-/* ── Markdown code-block copy button (utils/code-copy) ─────────────────────────
+/* ── Markdown code-block copy button + language chip (utils/code-copy) ─────────
    Every rendered-markdown surface (transcript, preview modal, library body, artifact
    editor, GitHub drawer) wraps each <pre> in `.codeblock` and pins a `.codecopy` button
-   to its top-right corner. Styled globally so the control is identical everywhere instead
-   of being re-declared per surface. The wrapper carries NO margin — the surface's own
-   <pre> margin still applies (the transcript, whose <pre> margin is zeroed, adds it back
+   to its top-right corner, plus a `.codelang` chip (when a language is known) just left
+   of it. Styled globally so the control is identical everywhere instead of being
+   re-declared per surface. The wrapper carries NO margin — the surface's own <pre>
+   margin still applies (the transcript, whose <pre> margin is zeroed, adds it back
    on `.codeblock` in its scoped styles). */
 .codeblock {
   position: relative;
@@ -1232,7 +1233,64 @@ textarea.gcpta {
   color: var(--add);
   opacity: 1;
 }
+.codelang {
+  position: absolute;
+  top: 6px;
+  right: 34px;
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--textFaint);
+  font-family: var(--code);
+  font-size: 12px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.codeblock:hover .codelang {
+  opacity: 1;
+}
 .codecopy .icn {
   width: 13px;
   height: 13px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Global terminal dock placement (shared by both theme families).
+
+   The dock is a single app-lifetime mount inside `.main` (so its PTYs survive
+   navigation), which means it is a sibling of the page body rather than a child of
+   the page's detail column. Laid out in `.main`'s flex column it took height from the
+   WHOLE page row: on the Sessions page that shortened the session list and left a dead
+   gap under it, because the dock only paints from its left inset rightwards.
+
+   Fix: float the dock over the bottom of `.main`, and let the column it covers reserve
+   the space instead of the row. Result matches a VSCode bottom panel — the leading rail
+   (session list) keeps its full height, the chat column above the panel shrinks.
+
+   `--awog-dock-h` is the dock's measured height, published by GlobalTerminalHost
+   (useDockMetrics); its left inset is applied inline from the same composable. The dock's
+   own `position: absolute` lives in that component's scoped style — a scoped `.gterm`
+   selector is (0,2,0) and would outrank a bare `.gterm` rule written here.
+   ════════════════════════════════════════════════════════════════════════ */
+.main {
+  position: relative;
+}
+/* Sessions: reserve room in the DETAIL column only, so the list stays full height. */
+[data-page='sessions'] .md > .detail {
+  padding-bottom: var(--awog-dock-h, 0px);
+}
+/* Every other page has no leading rail, so the dock spans the full work area and the
+   page itself reserves the room. */
+.body > .page:not([data-page='sessions']) {
+  padding-bottom: var(--awog-dock-h, 0px);
+}
+/* Compact shell: the list is an off-canvas drawer, so there is no rail to clear and the
+   detail column is the whole work area. */
+.app.compact [data-page='sessions'] .md > .detail {
+  padding-bottom: var(--awog-dock-h, 0px);
 }
