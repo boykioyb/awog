@@ -195,6 +195,7 @@ export function usePetStatus() {
         : null,
       autoPeek: settings.pet.autoPeek,
       quips: settings.pet.quips,
+      tricks: settings.pet.tricks,
       // Resolved HERE, not in the pet: the lines are settings data, and the pet is a
       // passive renderer that owns no store. Only the current state's bucket travels.
       quipLines: effectiveQuipLines(t, settings.pet.quipLines, bucketOfState(state)),
@@ -227,6 +228,7 @@ export function usePetStatus() {
           permission: m.permission ? { ...m.permission } : null,
           autoPeek: m.autoPeek,
           quips: m.quips,
+          tricks: m.tricks,
           quipLines: [...m.quipLines],
           reminders: [...m.reminders],
           reminderMs: m.reminderMs,

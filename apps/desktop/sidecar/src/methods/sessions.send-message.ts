@@ -153,9 +153,6 @@ const Params = z.object({
   // Wiki / memory context switches from Settings (ADR 0073 D-12). Absent = the
   // documented defaults (both injected, agent memory writes OFF), so an older UI
   // build keeps behaving sanely.
-  // Per-session wiki whitelist (ADR 0073) — session state, not a global setting,
-  // so it rides beside mcpServerIds rather than inside contextConfig.
-  wikiSpaces: z.array(z.string().max(200)).max(200).optional(),
   contextConfig: z
     .object({
       wikiEnabled: z.boolean().optional(),
@@ -479,8 +476,6 @@ async function buildBulkLoad(
   cwd: string | undefined,
   // Wiki / memory switches from Settings, travelling with the turn (ADR 0073 D-12).
   contextConfig: ContextConfig | undefined,
-  // Per-session wiki whitelist (Session.wikiSpaces). Undefined = whole wiki.
-  wikiSpaces: string[] | undefined,
 ): Promise<BulkLoadResult> {
   const result: BulkLoadResult = {
     memoryFilesChars: 0,
@@ -570,7 +565,7 @@ async function buildBulkLoad(
   // when the full index would exceed its budget (wiki/inject.ts), and says so.
   if (contextConfig?.wikiEnabled !== false) {
     try {
-      const wiki = await buildWikiIndex(projectId, contextConfig?.wikiBudgetChars, wikiSpaces)
+      const wiki = await buildWikiIndex(projectId, contextConfig?.wikiBudgetChars)
       if (wiki.block) {
         blocks.push(wiki.block)
         result.wikiChars = wiki.chars
@@ -927,12 +922,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // skills). Folded into systemPromptAppend so the model sees the catalogue; the
   // per-section char sizes ride along to the runtime for the usage-panel
   // breakdown. Best-effort — buildBulkLoad never throws.
-  const bulkLoad = await buildBulkLoad(
-    params.projectId,
-    cwd,
-    params.contextConfig,
-    params.wikiSpaces,
-  )
+  const bulkLoad = await buildBulkLoad(params.projectId, cwd, params.contextConfig)
   if (bulkLoad.block) {
     systemPromptAppend = systemPromptAppend
       ? `${systemPromptAppend}\n\n${bulkLoad.block}`
@@ -1295,7 +1285,6 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         // Wiki / memory switches ride with the turn (ADR 0073 D-12): the runtime
         // decides which tools to offer from them.
         ...(params.contextConfig ? { contextConfig: params.contextConfig } : {}),
-        ...(params.wikiSpaces ? { wikiSpaces: params.wikiSpaces } : {}),
         // Linked SSH host (ADR 0064 P2): the Pi runtime pushes the scoped SSH tools
         // for this host. sshApprovalMode rides along in `settings`.
         ...(params.aboutSshHostId ? { aboutSshHostId: params.aboutSshHostId } : {}),

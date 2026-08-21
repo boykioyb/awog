@@ -53,6 +53,8 @@ rows:
 
 awog:
   enabled: false # turned on by --awog-sheet
+  # Hàng 7 `special` = "skill" riêng của pet (xem docs/features/desktop-pet.md).
+  states: [idle, working, awaiting, done, offline, working-alt, idle-alt, special]
   cell: [132, 128]
   gutter: 3
   # Pet state → animation. The states are fixed by PetSprite.vue; the mapping is the
@@ -65,3 +67,5 @@ awog:
     offline: sleep # only frame 0 is ever shown (the row has no animation)
     working-alt: walk # scene change during a long turn
     idle-alt: roll # scene change while nothing is happening
+    # Skill: rũ mình rồi lộn một vòng — trò của con chó.
+    special: shake

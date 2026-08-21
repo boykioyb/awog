@@ -265,8 +265,6 @@ type SessionSummaryDto = {
   settings?: EngineSessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
-  // Per-session wiki whitelist (ADR 0073). undefined = whole wiki in scope.
-  wikiSpaces?: string[]
   // Task this session discusses (ADR 0055) — mirrors sidecar SessionSummary.
   aboutTaskId?: string
   // SSH host this session works with (ADR 0064) — mirrors sidecar SessionSummary.
@@ -924,7 +922,6 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.settings?.sshApprovalMode) session.sshApprovalMode = dto.settings.sshApprovalMode
     if (dto.disabledTools) session.disabledTools = [...dto.disabledTools]
     if (dto.mcpServerIds) session.mcpServerIds = [...dto.mcpServerIds]
-    if (dto.wikiSpaces) session.wikiSpaces = [...dto.wikiSpaces]
     if (dto.aboutTaskId) session.aboutTaskId = dto.aboutTaskId
     if (dto.aboutSshHostId) session.aboutSshHostId = dto.aboutSshHostId
     if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
@@ -1770,16 +1767,6 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (useIpc) pushUpsert(s, 'update-metadata')
   }
   // undefined = all enabled servers (legacy); [] = none; [ids] = only those.
-  // undefined clears the whitelist ("whole wiki"); an array scopes the session to
-  // those spaces — for the index AND for what wiki_search/wiki_read can reach.
-  function setWikiSpaces(id: number, spaces: string[] | undefined) {
-    const s = byId(id)
-    if (!s) return
-    if (spaces === undefined) delete s.wikiSpaces
-    else s.wikiSpaces = [...spaces]
-    if (useIpc) pushUpsert(s, 'update-metadata')
-  }
-
   function setMcpServerIds(id: number, ids: string[] | undefined) {
     const s = byId(id)
     if (!s) return
@@ -3078,8 +3065,6 @@ export const useSessionsStore = defineStore('sessions', () => {
         // (ADR 0045) — same path responseStyle/sshApprovalMode take. Omitted when
         // everything is at its default so the payload stays minimal.
         ...(Object.keys(ctxConfig).length ? { contextConfig: ctxConfig } : {}),
-        // Per-session wiki scope (config popover → Wiki tab). Omitted = whole wiki.
-        ...(s.wikiSpaces ? { wikiSpaces: s.wikiSpaces } : {}),
         // Session-scoped tool denylist + MCP whitelist (config popover).
         ...(s.disabledTools && s.disabledTools.length ? { disabledTools: s.disabledTools } : {}),
         ...(s.mcpServerIds !== undefined ? { mcpServerIds: s.mcpServerIds } : {}),
@@ -3914,7 +3899,6 @@ export const useSessionsStore = defineStore('sessions', () => {
     setSshTerminalConnId,
     setDisabledTools,
     setMcpServerIds,
-    setWikiSpaces,
     addPinnedFile,
     removePinnedFile,
     setPinnedNotes,

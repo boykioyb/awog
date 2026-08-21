@@ -104,6 +104,8 @@ sections:
 
 awog:
   enabled: false # bật bằng --awog-sheet
+  # Hàng 7 `special` = "skill" riêng của pet (xem docs/features/desktop-pet.md).
+  states: [idle, working, awaiting, done, offline, working-alt, idle-alt, special]
   cell: [132, 128]
   gutter: 3
   map:
@@ -116,3 +118,5 @@ awog:
     # Đổi cảnh lúc rảnh: Miku nhảy múa. `wave`/`cheer` hợp vai hơn nhưng mỗi khối chỉ
     # có 1–2 pose, phóng lên 12 frame thì đứng hình.
     idle-alt: dance
+    # Skill: xoay tròn với vòng năng lượng dưới chân.
+    special: spin

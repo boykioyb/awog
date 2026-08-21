@@ -23,8 +23,6 @@ const textResult = (text: string): { content: { type: 'text'; text: string }[] }
 
 export function buildWikiToolsSdkServer(
   projectId: string | undefined,
-  // Session whitelist of wiki spaces (Session.wikiSpaces) — same gate as the Pi path.
-  spaces?: readonly string[] | undefined,
   // Agent may create/update/delete pages (Settings → Wiki, default off). Each call
   // still passes the permission gate, which matches the bridged names too.
   canWrite = false,
@@ -50,14 +48,14 @@ export function buildWikiToolsSdkServer(
               .optional()
               .describe("'project' = the project's wiki; 'global' (default) = user-wide."),
           },
-          async (args) => textResult((await runWikiWrite(args, projectId, spaces)).text),
+          async (args) => textResult((await runWikiWrite(args, projectId)).text),
         ),
         tool(
           'wiki_delete',
           'Delete a wiki page. Only when the user asks — it may be their only copy and the global ' +
             'wiki has no version history.',
           { path: z.string().describe('Wiki page path to delete.') },
-          async (args) => textResult((await runWikiDelete(args.path, projectId, spaces)).text),
+          async (args) => textResult((await runWikiDelete(args.path, projectId)).text),
         ),
       ]
     : []
@@ -80,8 +78,7 @@ export function buildWikiToolsSdkServer(
             .optional()
             .describe('Optional: restrict to one space (first path segment, e.g. "architecture").'),
         },
-        async (args) =>
-          textResult((await runWikiSearch(args.query, args.space, projectId, spaces)).text),
+        async (args) => textResult((await runWikiSearch(args.query, args.space, projectId)).text),
       ),
       tool(
         'wiki_read',
@@ -93,9 +90,7 @@ export function buildWikiToolsSdkServer(
           limit: z.number().optional().describe('Optional number of lines to return.'),
         },
         async (args) =>
-          textResult(
-            (await runWikiRead(args.path, projectId, args.offset, args.limit, spaces)).text,
-          ),
+          textResult((await runWikiRead(args.path, projectId, args.offset, args.limit)).text),
       ),
     ],
   })

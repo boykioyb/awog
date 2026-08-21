@@ -1,7 +1,12 @@
 import katex, { type KatexOptions } from 'katex'
 import { marked, type Tokens, type TokensList } from 'marked'
 import markedKatex from 'marked-katex-extension'
-import { createHighlighter, createJavaScriptRegexEngine, type Highlighter } from 'shiki'
+import {
+  bundledThemes,
+  createHighlighter,
+  createJavaScriptRegexEngine,
+  type Highlighter,
+} from 'shiki'
 
 // Markdown rendering for the transcript + preview. Security (rules/security.md sink table:
 // "markdown từ user → renderer AST, không inject HTML"): raw HTML tokens are dropped and
@@ -120,14 +125,51 @@ let initStarted = false
 const ready = ref(false)
 let activeTheme: 'github-dark' | 'github-light' = 'github-dark'
 
+// Comments are NOT dimmed in this renderer: they get the same color as ordinary
+// code. Both GitHub themes paint them #6a737d, which is 3.2:1 on our code-block
+// background (--bgSubtle #242426; 3.1:1 on the cute family's #24292e) — under the
+// 4.5:1 text floor. An editor can afford that because a comment there is an aside
+// next to code; an LLM transcript regularly posts a block whose payload is ALL
+// comment (a `# …` diff dropped into a python fence), and dimming the entire block
+// just makes the message unreadable. Intermediate steps (#8b949e 5.0:1, #adb6c0
+// 7.6:1) still read as greyed-out, so the dim is dropped outright.
+//
+// In both themes #6a737d is used by comment scopes ONLY
+// (`["comment","punctuation.definition.comment","string.comment"]`), so replacing
+// the color is exactly a comment-color change and touches nothing else.
+const COMMENT_COLOR = {
+  'github-dark': { '#6a737d': '#e1e4e8' }, // = the theme's normal code fg, 12.2:1
+  'github-light': { '#6a737d': '#24292e' }, // = ditto for light, 13.1:1 on #f7f8fa
+} as const
+const THEME_NAMES = ['github-dark', 'github-light'] as const
+
+// The stock themes with that replacement folded in. Theme NAMES are preserved so
+// `activeTheme` and Shiki's emitted `class="shiki github-dark"` are unchanged.
+// Theme-level `colorReplacements` is the supported hook for this; the same option
+// passed per `codeToHtml` call is ignored.
+function loadThemes() {
+  return Promise.all(
+    THEME_NAMES.map(async (name) => {
+      const theme = (await bundledThemes[name]()).default
+      return {
+        ...theme,
+        colorReplacements: { ...theme.colorReplacements, ...COMMENT_COLOR[name] },
+      }
+    }),
+  )
+}
+
 function ensureHighlighter() {
   if (initStarted) return
   initStarted = true
-  createHighlighter({
-    themes: ['github-dark', 'github-light'],
-    langs: SHIKI_LANGS,
-    engine: createJavaScriptRegexEngine({ forgiving: true }),
-  })
+  loadThemes()
+    .then((themes) =>
+      createHighlighter({
+        themes,
+        langs: SHIKI_LANGS,
+        engine: createJavaScriptRegexEngine({ forgiving: true }),
+      }),
+    )
     .then((h) => {
       highlighter = h
       ready.value = true

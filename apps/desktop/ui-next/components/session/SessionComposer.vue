@@ -186,6 +186,8 @@
             </div>
           </div>
         </span>
+        <!-- Per-session MCP whitelist (moved off the config popover's MCP tab). -->
+        <SessionMcpChip :open="open === 'mcp'" @toggle="toggle('mcp')" />
         <span class="grow1" />
         <span style="position: relative">
           <button
@@ -712,8 +714,8 @@ function onNote(i: number, e: Event) {
 // model / account / effort / style moved to the status-bar chips (StatusConfig).
 const selectedMode = computed(() => store.active?.mode || 'Ask')
 
-// Composer popovers: the Mode chip + the pinned-context popover.
-type MenuKind = 'mode' | 'pin'
+// Composer popovers: the Mode chip, the MCP chip + the pinned-context popover.
+type MenuKind = 'mode' | 'mcp' | 'pin'
 const open = ref<MenuKind | null>(null)
 function toggle(kind: MenuKind) {
   open.value = open.value === kind ? null : kind
@@ -807,14 +809,9 @@ function toggleNote(text: string) {
 function removePin(path: string) {
   if (store.activeId != null) store.removePinnedFile(store.activeId, path)
 }
-// Wiki pages the ACTIVE session may reference: LLM-visible pages, narrowed by the
-// session's wiki space whitelist (config popover → Wiki). Mirroring that scope here
-// matters — offering a page the session excluded would insert a reference the model
-// is not allowed to read.
-const wikiPagesInScope = computed(() => {
-  const scope = store.active?.wikiSpaces
-  return wiki.pages.filter((p) => p.context && (scope === undefined || scope.includes(p.space)))
-})
+// Wiki pages the model may actually read. `context: false` pages are excluded:
+// offering one would insert a reference the agent is not allowed to resolve.
+const wikiPagesInScope = computed(() => wiki.pages.filter((p) => p.context))
 
 // File picker for pinning: reuse the workspace file index (same source as @-mention).
 const pinQuery = ref('')

@@ -85,7 +85,6 @@ export interface ToolFilter {
   // `projectId` scopes the project-tier wiki for the turn.
   includeWikiTools?: {
     projectId?: string | undefined
-    spaces?: readonly string[] | undefined
     // Agent may create/update/delete wiki pages (Settings → Wiki, default off).
     canWrite?: boolean | undefined
   }

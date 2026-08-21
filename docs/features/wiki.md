@@ -13,13 +13,15 @@
 | Import `.md` (dialog nhiều file / cả thư mục / kéo-thả), copy-in, báo cáo bỏ qua | ✅ |
 | Toggle `Cho agent đọc` từng trang (`context: false`) | ✅ |
 | Editor: **Monaco** (markdown) + ⌘S | ✅ |
-| **Scope theo session**: tab Wiki trong session config (giống tab MCP) — chọn space nào session này được đọc; thu hẹp cả `<wiki_index>` **và** `wiki_search`/`wiki_read` | ✅ |
-| **`@wiki:<slug>`** trong composer: menu `@` liệt kê trang wiki trong scope, chèn token để chỉ đúng trang cho model | ✅ |
+| **`@wiki:<slug>`** trong composer: menu `@` liệt kê trang wiki (LLM đọc được), chèn token để chỉ đúng trang cho model | ✅ |
 | Style prose markdown dùng chung (`assets/css/markdown.css`) — trước đó mỗi component tự giữ bản copy scoped nên surface mới render trần | ✅ |
 | Nút **copy trên từng code block** (tái dùng `useCodeCopy` + CSS `.codecopy` global) | ✅ |
 | **HTML thô không render** (renderer chung xoá HTML tác giả — biên XSS dùng chung với transcript). Trang có HTML sẽ **báo rõ số thẻ bị bỏ** thay vì mất im lặng | ⚠️ theo thiết kế |
 | **Agent sửa wiki**: `wiki_write` / `wiki_delete` (2 runtime), opt-in ở Settings → Wiki (mặc định TẮT), mỗi lần gọi vẫn qua permission gate | ✅ |
 | **Cây lồng nhau kiểu Notion**: mọi cấp expand/collapse (nhớ qua localStorage), trang cha vừa đọc được vừa chứa trang con, nút `+` tạo trang con, breadcrumb bấm được | ✅ |
+| Nút **`Space mới`**: tạo space cấp 1 kèm trang giới thiệu (`<space>/_index.md`) có title do người dùng đặt | ✅ |
+| **Hộp nhập hỏi đích** (tier global/project + space có sẵn / gốc / space mới) thay vì suy ngầm từ trang đang chọn | ✅ |
+| Đổi tên trang cha **mang theo cả cây con** (rename folder), không bỏ rơi con ở tên cũ | ✅ |
 | Settings → Wiki (công tắc nạp LLM + ngân sách ký tự, đi qua IPC theo từng turn) | ✅ |
 | Context menu chuột phải trên cây (mở / đổi tên / ẩn-hiện với agent / copy path / xoá) | ✅ |
 | Sidebar resize được (200–480px, nhớ trong localStorage) | ✅ |
@@ -51,31 +53,6 @@ Wiki khác [rules](./rules.md): rule là **chỉ thị luôn được inject**, 
 - **Liên kết wiki:** `[[slug]]` và `[[slug|nhãn]]`. Resolve trong space hiện tại trước, rồi toàn wiki cùng scope, rồi tier còn lại. Link chết render dashed + click để tạo trang. **Backlinks** derive bằng scan (không persist index).
 - **TOC** derive từ heading của trang.
 
-### Chỉ định wiki cho một session
-
-- **Tab Wiki** trong session config popover (cạnh General / Tools / MCP): danh sách space + toggle, mặc định `Toàn bộ wiki`. Lưu ở `Session.wikiSpaces` (persist trong `SessionHeader`, đi theo turn như `mcpServerIds`); `undefined` = toàn bộ, mảng = whitelist.
-- Thu hẹp scope áp **cả 3 chỗ**: mục lục inject, `wiki_search`, `wiki_read`. Một scope mà tool phớt lờ thì chỉ là trang trí — model sẽ đọc đúng những trang vừa bị loại.
-- Chọn hết space = xoá whitelist (`undefined`) thay vì lưu mọi id, để space thêm sau tự động vào scope.
-- **`@` trong composer**: gõ `@` → trang wiki (trong scope, `context: true`) hiện cùng agent và file, chèn token `@wiki:architecture/system-overview`. Prompt có một câu nói rõ token đó nghĩa là "đọc trang này bằng `wiki_read` trước khi trả lời".
-
-### Agent tạo / sửa / xoá trang
-
-Bật ở **Settings → Wiki → "Cho agent sửa wiki"** (mặc định **TẮT**). Khi bật, agent có thêm 2 tool:
-
-| Tool | Việc |
-|---|---|
-| `wiki_write({ path, body, title?, description?, tags?, scope? })` | Tạo trang mới hoặc **ghi đè toàn bộ body** trang cũ. `scope: 'project'` ghi vào wiki của project (commit theo repo); mặc định `global`. |
-| `wiki_delete({ path })` | Xoá 1 trang. Tự tìm tier đang giữ trang; không có thì báo rõ **không xoá gì** thay vì báo thành công. |
-
-Bốn rào chắn, đều đã test:
-
-1. **Permission gate như một file write** ([permission.ts](../../apps/desktop/sidecar/src/runtime/permission.ts)): `plan` chặn cứng, `ask`/`accept-edits` hỏi duyệt từng lần, `execute` chạy thẳng. Khớp **cả hai dạng tên** (`wiki_write` và `mcp__awogwiki__wiki_write`) — thiếu dạng bridged là lọt gate ở nhánh Claude SDK. Tên tool `WIKI_MUTATING_TOOL_NAMES` export từ chỗ định nghĩa tool để gate không trôi lệch khỏi tool.
-2. **Không blank metadata**: `wiki_write` bỏ `title`/`description` trên trang có sẵn ⇒ giữ nguyên giá trị cũ. Một lệnh "sửa một đoạn" không được xoá cái dòng mô tả mà mục lục LLM đang dựa vào.
-3. **Không tự bật lại visibility**: ghi vào trang đang `context: false` thì trang **vẫn ẩn**. Agent không tự cho mình quyền đọc trang bạn đã ẩn.
-4. **Tôn trọng scope session**: session bị thu hẹp vào space nào thì chỉ ghi/xoá trong đó; ngoài phạm vi → từ chối kèm lý do. Cộng thêm `normaliseSlug` chặn traversal và cap body 256KB.
-
-Ghi xong, watcher `wiki.fs-changed` làm cây + reader trong app tự refresh.
-
 ### Nạp cho LLM
 
 - Mỗi turn inject `<wiki_index>`: space (title + description + số trang) → trang (title + description một dòng). Trang có `context: false` **không** xuất hiện và **không** search được từ LLM.
@@ -95,7 +72,11 @@ Ghi xong, watcher `wiki.fs-changed` làm cây + reader trong app tự refresh.
   - Cap 1 MB/trang, 2.000 trang/wiki. Trùng tên → hỏi ghi đè / đổi tên. File sai đuôi → bỏ qua, báo trong toast kết quả (`đã nhập 18/21 file`).
   - Frontmatter thiếu `title` → suy từ heading `#` đầu tiên, không có thì lấy tên file.
 - **Soạn/sửa** trong `WikiEditor.vue`: các field frontmatter (title / description / tags / `Cho agent đọc`) + body Markdown trong [`MonacoEditor`](../../apps/desktop/ui-next/components/common/MonacoEditor.vue) full-pane, ⌘S lưu. Model key có tiền tố `wiki:` để một trang wiki và một file workspace trùng tên không dùng chung undo stack. Lưu atomic (tmp + rename + chmod 600) như các store khác.
-- **Tạo** trang: nút `Trang mới` (nhập đường dẫn), nút `+` trên hàng cây / menu chuột phải → **trang con** của node đó (tên gõ vào là *title*, path là slug hoá của nó: "Data Flow" → `data-flow.md`), hoặc click một `[[link]]` chết → hỏi tạo. **Xoá / đổi tên / ẩn-hiện với agent / copy path**: context menu chuột phải trên cây, hoặc header reader. Đổi tên **cảnh báo trước** số backlink sẽ chết (v1 không tự sửa `[[slug]]`).
+- **Tạo space:** nút `Space mới` → gõ tên → tạo `<space>/_index.md` với đúng title đó. Space **không** phải entity riêng (nó là folder cấp 1), nên trước đây chỉ sinh ra như hệ quả của việc tạo trang có `/` hoặc nhập một thư mục — và muốn đặt tên tử tế thì phải tự biết mẹo `_index`.
+- **Tạo** trang: nút `Trang mới` (nhập đường dẫn), nút `+` trên hàng cây / menu chuột phải → **trang con** của node đó (tên gõ vào là *title*, path là slug hoá của nó: "Data Flow" → `data-flow.md`), hoặc click một `[[link]]` chết → hỏi tạo.
+- **Nhập** luôn **hỏi đích trước** ([`WikiImportModal.vue`](../../apps/desktop/ui-next/components/wiki/WikiImportModal.vue)): tier (global / từng project) + space (gốc wiki / space có sẵn / `+ space mới…`), có dòng `Sẽ vào: <tier> / <space>` trước khi mở dialog OS. Trước đó đích được suy từ trang đang chọn, nên nhập khi chưa chọn gì thì file rơi vào gốc wiki mà không nói gì — trang ở gốc lại không thuộc space nào, nên cũng không chọn được trong scope của session.
+- **Một slug, hai layout file:** `<slug>.md` hoặc `<slug>/_index.md`. `resolvePageFile` là chỗ duy nhất biết điều đó, dùng cho read/save/delete/move — nếu thiếu, cây quảng cáo trang cha mà mở lên là lỗi *(đúng bug đã xảy ra)*. Sửa trang cha ghi lại vào `_index.md` chứ không sinh `<slug>.md` song song.
+- **Đổi tên trang cha mang theo cây con**: `moveWikiPage` rename cả folder, vì để nguyên thì con bị bỏ lại trong folder tên cũ và mọi `[[link]]` vào nhánh đó chết cùng lúc. **Xoá / đổi tên / ẩn-hiện với agent / copy path**: context menu chuột phải trên cây, hoặc header reader. Đổi tên **cảnh báo trước** số backlink sẽ chết (v1 không tự sửa `[[slug]]`).
 - **Live:** `wiki.fs-changed` → cây re-hydrate. Cache mục lục invalidate ở **cả** hai chỗ: mọi RPC mutation *và* watcher — một wiki bị sửa ngoài app (editor riêng, `git pull`) là chuyện bình thường, khác các kind config phẳng.
 
 ## Data Model
@@ -189,7 +170,6 @@ Trang riêng **`/wiki`** trong NavRail (nhóm Library, cạnh `rules`/`templates
 - **Đổi tên trang tự sửa `[[slug]]`** — `wiki.movePage` có sẵn nhưng UI v1 chưa gọi (P3, cùng context menu).
 - **Import PDF/docx/HTML** — chỉ Markdown/text.
 - **Đa người dùng / comment / review** — local-first, một người.
-- **`@wiki:<slug>` trong composer** để ghim trang vào turn — P5.
 - **Whitelist wiki theo agent** — nạp cho agent chính; `agent.skillIds` đã bị gỡ vì đúng hướng này.
 
 ## Giới hạn render đã biết
@@ -206,3 +186,11 @@ Trang riêng **`/wiki`** trong NavRail (nhóm Library, cạnh `rules`/`templates
 - Mục lục nên **luôn đầy đủ** (mọi trang) hay chỉ **space + trang cấp 1**, để trang sâu chỉ tìm thấy qua `wiki_search`?
 - Wiki tier project nên commit vào repo (chia sẻ cả team) hay `.gitignore` mặc định?
 - Có cần một trang chủ wiki (`index.md`) người dùng tự soạn làm cửa vào, hay cây là đủ?
+
+## Đã gỡ: scope wiki theo session
+
+Một lượt tôi thêm tab **Wiki** vào session config popover (chọn space nào session được đọc, thu hẹp cả mục lục và tool) rồi **gỡ hoàn toàn** theo yêu cầu: với `context: false` từng trang và công tắc global ở Settings → Wiki, tab đó không thêm quyền điều khiển nào mà chỉ thêm một khái niệm phải giữ trong đầu.
+
+Gỡ luôn cả plumbing — `Session.wikiSpaces`, param per-turn, `filterWikiTree`/`isWikiPageInScope`, tham số `spaces` của các tool: giữ UI mà bỏ đường dây thì thành code chết, giữ đường dây mà bỏ UI thì thành mã không ai gọi được.
+
+Cách giới hạn wiki hiện có: **per-page** `context: false` (ẩn khỏi mọi prompt), **tier project** (`{project}/.awog/wiki` chỉ vào session của project đó), và **công tắc + ngân sách** ở Settings → Wiki.

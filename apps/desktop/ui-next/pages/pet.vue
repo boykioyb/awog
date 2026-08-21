@@ -1,9 +1,10 @@
 <template>
   <div class="pet-root" @mousemove="onMouseMove" @mouseleave="onMouseLeave">
-    <!-- Content is laid out at DESIGN size and scaled here. Main resizes the window
-         by the same factor; the origin is the bottom-right corner both are anchored
-         to, so the two stay in register. -->
-    <div class="pet-scale" :style="{ transform: `scale(${model.scale})` }">
+    <!-- Design-size canvas: everything with TEXT in it (HUD, speech bubble, badge)
+         stays at this size whatever the pet size setting says — only the sprite
+         scales, below. Main still grows the window by the same factor, so the taller
+         sprite always has room; both anchor bottom-right, so they stay in register. -->
+    <div class="pet-canvas">
       <div v-if="hudOpen" ref="hudRef" class="pet-hudwrap">
         <PetHud
           :model="model"
@@ -21,18 +22,22 @@
       <div
         ref="petRef"
         class="pet-anchor"
+        :style="{ '--pet-scale': model.scale }"
         :title="tooltip"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
         @pointercancel="onPointerCancel"
       >
-        <PetSprite
-          :state="model.state"
-          :sprite="model.sprite"
-          :facing="model.facing"
-          :alt="altScene"
-        />
+        <div class="pet-sprite">
+          <PetSprite
+            :state="model.state"
+            :sprite="model.sprite"
+            :facing="model.facing"
+            :alt="altScene"
+            :special="special"
+          />
+        </div>
         <span v-if="badge" class="pet-badge" :class="`is-${model.state}`">{{ badge }}</span>
       </div>
     </div>
@@ -65,6 +70,7 @@ const IDLE_MODEL: AwogPetModel = {
   permission: null,
   autoPeek: true,
   quips: true,
+  tricks: true,
   quipLines: [],
   reminders: [],
   reminderMs: 0,
@@ -93,6 +99,13 @@ const WORK_SCENE_MS = 7000
 const IDLE_SCENE_MS = 16_000
 const IDLE_ALT_MS = 3500
 
+// Skill (the sheet's `special` row). MUST match the animation duration in
+// PetSprite.vue: the CSS plays it once, this is what puts the pet back on its state row.
+const SPECIAL_MS = 1000
+// How often the pet performs on its own while nothing is running. Rare on purpose — a
+// trick every few seconds is a distraction, and this thing floats over every window.
+const TRICK_IDLE_MS = 180_000
+
 const bridge = typeof window !== 'undefined' ? window.awog : undefined
 
 const model = ref<AwogPetModel>(IDLE_MODEL)
@@ -100,6 +113,7 @@ const pinned = ref(false)
 const hovering = ref(false)
 const peeking = ref(false)
 const dragging = ref(false)
+const special = ref(false)
 
 const petRef = useTemplateRef<HTMLElement>('petRef')
 const hudRef = useTemplateRef<HTMLElement>('hudRef')
@@ -227,9 +241,11 @@ function onPointerUp(e: PointerEvent): void {
     return
   }
   downAt = null
-  // A plain click pins/unpins the HUD.
+  // A plain click pins/unpins the HUD — and pokes the pet, which is the one trigger
+  // that is a direct answer to the user rather than to the work.
   pinned.value = !pinned.value
   if (pinned.value) peeking.value = false
+  trick()
 }
 
 function onPointerCancel(): void {
@@ -296,6 +312,46 @@ function scheduleReminders(): void {
   }, every)
 }
 
+// ── Skill: the pack's own one-shot animation ──
+let specialTimer: ReturnType<typeof setTimeout> | null = null
+let trickTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopTrick(): void {
+  if (specialTimer) clearTimeout(specialTimer)
+  if (trickTimer) clearTimeout(trickTimer)
+  specialTimer = null
+  trickTimer = null
+  special.value = false
+}
+
+// One-shot, and a call while it is already playing is DROPPED rather than queued: a CSS
+// animation cannot restart without dropping the class for a frame, and nobody asked for
+// a backlog of tricks. Packs with no `special` row ignore the flag (PetSprite.vue), so
+// this stays a pure "ask" — the sprite decides whether it can answer.
+function trick(): void {
+  if (!model.value.tricks || special.value) return
+  // Offline the pet is asleep: performing would claim the app is alive when it is not.
+  if (model.value.state === 'offline') return
+  special.value = true
+  if (specialTimer) clearTimeout(specialTimer)
+  specialTimer = setTimeout(() => {
+    special.value = false
+    specialTimer = null
+  }, SPECIAL_MS)
+}
+
+// Only while IDLE. During a turn the state rows are already moving and the HUD is what
+// the user is watching; a trick there would fight both.
+function scheduleTrick(): void {
+  if (trickTimer) clearTimeout(trickTimer)
+  trickTimer = null
+  if (!model.value.tricks || model.value.state !== 'idle') return
+  trickTimer = setTimeout(() => {
+    trick()
+    scheduleTrick()
+  }, TRICK_IDLE_MS)
+}
+
 // ── Scene changes within a state ──
 const altScene = ref(false)
 let sceneTimer: ReturnType<typeof setTimeout> | null = null
@@ -343,6 +399,12 @@ watch(
   { immediate: true },
 )
 
+// Turning the skill off in Settings must stop the idle timer, not just the next frame.
+watch(
+  () => model.value.tricks,
+  () => scheduleTrick(),
+)
+
 onMounted(() => {
   window.addEventListener('error', onUncaught)
   offModel = bridge?.onPetModel?.((next) => {
@@ -360,6 +422,10 @@ watch(
     say()
     altScene.value = false
     scheduleScene()
+    scheduleTrick()
+    // Work just landed — perform. This is the trigger that earns the row: `done` is the
+    // one state the user is glad to see, and it is otherwise the calmest animation.
+    if (next === 'done') trick()
     if (!model.value.autoPeek) return
     if (next === 'awaiting' || next === 'done') peek()
   },
@@ -371,6 +437,7 @@ onBeforeUnmount(() => {
   clearQuipTimers()
   stopReminders()
   stopScene()
+  stopTrick()
   offModel?.()
   if (closeTimer) clearTimeout(closeTimer)
   if (peekTimer) clearTimeout(peekTimer)
@@ -402,15 +469,16 @@ body,
 }
 
 /* Design-size canvas. 320x280 MUST match BASE_WIDTH/BASE_HEIGHT in
-   electron/src/pet-window.ts — main sizes the window, this scales the content, and
-   both anchor bottom-right so they stay in register at any scale. */
-.pet-scale {
+   electron/src/pet-window.ts — main sizes the window by `scale`, this canvas does
+   NOT, and both anchor bottom-right so they stay in register. The window is
+   therefore always at least as tall as the stack, which is what lets the sprite
+   grow (below) without pushing the HUD out of the frame. */
+.pet-canvas {
   position: absolute;
   right: 0;
   bottom: 0;
   width: 320px;
   height: 280px;
-  transform-origin: bottom right;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -439,9 +507,23 @@ body,
   min-width: 0;
 }
 
+/* THE ONLY THING THE SIZE SETTING SCALES. Text must not change size with it, so the
+   scale lives here instead of on the canvas — the HUD, the speech bubble and the count
+   badge all stay at design size. The box is sized to the scaled sprite (66x68 MUST
+   match .sprite-wrap in components/pet/PetSprite.vue) so the drag + click-through
+   hit-test rect keeps matching what is actually drawn. */
 .pet-anchor {
   position: relative;
+  width: calc(66px * var(--pet-scale, 1));
+  height: calc(68px * var(--pet-scale, 1));
   cursor: grab;
+}
+.pet-sprite {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  transform: scale(var(--pet-scale, 1));
+  transform-origin: bottom right;
 }
 .pet-anchor:active {
   cursor: grabbing;

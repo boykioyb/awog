@@ -11,7 +11,7 @@
 // about it, and a user who cannot tell the index was cut will blame the model.
 
 import { log } from '../util/logger.js'
-import { filterWikiTree, scanWiki } from './store.js'
+import { scanWiki } from './store.js'
 import type { ContextItemSize, WikiPage, WikiTree } from '../types/shared.js'
 
 // Default character budget for the whole block (~1k tokens). Overridable per turn
@@ -54,13 +54,9 @@ export function invalidateWikiCache(): void {
 
 // Pages the LLM may see. Also the gate for whether the wiki tools are offered at
 // all — no visible page means no tool, which means zero token cost (D-6).
-export async function listWikiContextPages(
-  projectId: string | undefined,
-  // Session whitelist (Session.wikiSpaces). undefined = the whole wiki.
-  spaces?: readonly string[] | undefined,
-): Promise<WikiPage[]> {
+export async function listWikiContextPages(projectId: string | undefined): Promise<WikiPage[]> {
   try {
-    const { pages } = filterWikiTree(await treeFor(projectId), spaces)
+    const { pages } = await treeFor(projectId)
     return pages.filter((p) => p.context)
   } catch (err) {
     log.warn('wiki: scan failed for context listing', {
@@ -70,11 +66,8 @@ export async function listWikiContextPages(
   }
 }
 
-export async function hasWikiContext(
-  projectId: string | undefined,
-  spaces?: readonly string[] | undefined,
-): Promise<boolean> {
-  return (await listWikiContextPages(projectId, spaces)).length > 0
+export async function hasWikiContext(projectId: string | undefined): Promise<boolean> {
+  return (await listWikiContextPages(projectId)).length > 0
 }
 
 export interface WikiIndexResult {
@@ -142,13 +135,11 @@ function wrap(lines: string[], note?: string): string {
 export async function buildWikiIndex(
   projectId: string | undefined,
   budget: number = DEFAULT_WIKI_INDEX_BUDGET,
-  // Session whitelist (Session.wikiSpaces). undefined = the whole wiki.
-  spaces?: readonly string[] | undefined,
 ): Promise<WikiIndexResult> {
   const empty: WikiIndexResult = { chars: 0, items: [], degraded: false }
   let tree: WikiTree
   try {
-    tree = filterWikiTree(await treeFor(projectId), spaces)
+    tree = await treeFor(projectId)
   } catch (err) {
     log.warn('wiki: index build failed', {
       err: err instanceof Error ? err.message : String(err),

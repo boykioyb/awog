@@ -57,7 +57,9 @@ interface ExecOpts {
 type ExecOutcome =
   | { ok: true; stdout: string }
   | { ok: false; kind: 'enoent' }
-  | { ok: false; kind: 'fail'; stderr: string; code: number; message: string }
+  // stdout is kept on failure too: `gh api graphql` exits non-zero for a PARTIAL
+  // success (data + errors), and runGhAccountAllowPartial salvages that body.
+  | { ok: false; kind: 'fail'; stdout: string; stderr: string; code: number; message: string }
 
 function execOnce(args: readonly string[], opts: ExecOpts): Promise<ExecOutcome> {
   return new Promise<ExecOutcome>((resolveOutcome) => {
@@ -85,7 +87,14 @@ function execOnce(args: readonly string[], opts: ExecOpts): Promise<ExecOutcome>
             return
           }
           const exitCode = typeof ex.code === 'number' ? ex.code : -1
-          resolveOutcome({ ok: false, kind: 'fail', stderr, code: exitCode, message: ex.message ?? '' })
+          resolveOutcome({
+            ok: false,
+            kind: 'fail',
+            stdout,
+            stderr,
+            code: exitCode,
+            message: ex.message ?? '',
+          })
           return
         }
         resolveOutcome({ ok: true, stdout })
@@ -194,6 +203,27 @@ export async function runGhAccount(
   log.info('gh exec', { sub: args.slice(0, 2).join(' ') })
   const outcome = await execOnce(args, { env })
   if (outcome.ok) return outcome.stdout
+  throwForOutcome(outcome)
+}
+
+// Like runGhAccount, but tolerates a non-zero exit WHEN gh still printed a body.
+// Exists for `gh api graphql`: GraphQL answers partial success as data + errors,
+// and gh exits 1 for it — so the strict runner would throw away perfectly good rows
+// because one aliased sub-query was denied. Only stdout is returned; stderr is
+// dropped rather than surfaced (it can echo the request, and a caller that wanted
+// the failure would use the strict runner).
+export async function runGhAccountAllowPartial(
+  args: readonly string[],
+  account?: string,
+): Promise<string> {
+  const env = await resolveGhEnv(account)
+  log.info('gh exec', { sub: args.slice(0, 2).join(' ') })
+  const outcome = await execOnce(args, { env })
+  if (outcome.ok) return outcome.stdout
+  // A body means gh reached GitHub and got an answer — hand it to the caller, whose
+  // schema decides whether it is usable. No body (or a spawn failure: gh missing)
+  // is a real error and takes the normal path.
+  if (outcome.kind === 'fail' && outcome.stdout.trim() !== '') return outcome.stdout
   throwForOutcome(outcome)
 }
 

@@ -57,5 +57,20 @@
   "wiki.newChildPrompt.title": "Trang con trong “{parent}”",
   "wiki.newChildPrompt.placeholder": "tên trang",
   "wiki.toast.badName": "Tên đó không có ký tự dùng được — thử chữ hoặc số.",
-  "wiki.page.htmlStripped": "Trang này có {n} thẻ HTML thô và chúng không được render — bộ render markdown loại bỏ HTML do tác giả viết (dùng chung biên XSS với transcript chat). Chuyển sang Markdown để nội dung hiện ra."
+  "wiki.page.htmlStripped": "Trang này có {n} thẻ HTML thô và chúng không được render — bộ render markdown loại bỏ HTML do tác giả viết (dùng chung biên XSS với transcript chat). Chuyển sang Markdown để nội dung hiện ra.",
+  "wiki.newSpace.action": "Space mới",
+  "wiki.newSpace.hint": "Tạo space cấp 1 (một folder kèm trang giới thiệu riêng)",
+  "wiki.newSpace.prompt": "Tên space mới",
+  "wiki.newSpace.placeholder": "Kiến trúc hệ thống",
+  "wiki.toast.spaceCreated": "Đã tạo space",
+  "wiki.toast.spaceFailed": "Không tạo được space",
+  "wiki.importModal.title": "Nhập vào wiki",
+  "wiki.importModal.hint": "Chọn nơi file sẽ vào. Trang nhập vào là bản copy, file gốc vẫn nằm nguyên chỗ cũ.",
+  "wiki.importModal.tier": "Wiki",
+  "wiki.importModal.tierGlobal": "Toàn cục",
+  "wiki.importModal.space": "Space",
+  "wiki.importModal.spaceRoot": "Gốc wiki",
+  "wiki.importModal.spaceNew": "+ Space mới…",
+  "wiki.importModal.newSpaceName": "Tên space mới",
+  "wiki.importModal.destination": "File sẽ vào:"
 }

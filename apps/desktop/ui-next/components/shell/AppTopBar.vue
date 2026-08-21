@@ -22,6 +22,9 @@
     </button>
     <span class="ptitle">{{ title }}</span>
     <span class="sp" />
+    <!-- GitHub notification inbox (bell + unread badge). Left of the search box so
+         the two live in the same "utilities" cluster before the primary action. -->
+    <TopBarNotifications />
     <button
       type="button"
       class="kbd"

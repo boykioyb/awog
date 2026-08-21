@@ -135,8 +135,6 @@ export interface RunNonStreamArgs {
   // Wiki / memory context switches from Settings (ADR 0073). Absent = defaults
   // (wiki + memory injected, agent memory writes OFF).
   contextConfig?: ContextConfig
-  // Per-session wiki whitelist (Session.wikiSpaces). Absent = whole wiki in scope.
-  wikiSpaces?: string[]
   // Linked SSH host id (ADR 0064 P2). When set, the Pi runtime pushes the scoped
   // SSH tools (ssh_exec / ssh_read_file / ssh_list_dir / ssh_write_file) targeting
   // this host; the mutating ones are gated via settings.sshApprovalMode.

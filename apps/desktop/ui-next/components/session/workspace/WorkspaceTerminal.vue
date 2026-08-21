@@ -230,19 +230,32 @@ const appearance = useTerminalAppearanceStore()
 // time without a JS re-read.
 const paneBg = computed(() => appearance.theme?.background ?? 'var(--termBg, var(--bg))')
 
+// Scrollbar slider colors. From xterm 6 the scrollbar is xterm's OWN DOM and takes
+// its color ONLY from these three theme tokens (::-webkit-scrollbar no longer applies).
+// xterm's own defaults are the foreground at 20/40/50% — too faint to spot, let alone
+// aim at. A neutral gray reads on both light and dark terminals; a preset that names
+// its own scrollbarSlider* still wins (it spreads after).
+const SLIDER_COLORS: ITheme = {
+  scrollbarSliderBackground: 'rgba(145, 145, 145, 0.4)',
+  scrollbarSliderHoverBackground: 'rgba(145, 145, 145, 0.62)',
+  scrollbarSliderActiveBackground: 'rgba(145, 145, 145, 0.8)',
+}
+
 // The xterm theme to apply: a concrete preset when one is chosen, else the live
 // CSS-var theme (the exact object initPane used to build inline). System preset on
 // the default theme → --termBg/--termText are unset → falls through to --bg/--text →
 // byte-identical to the pre-feature look. System preset under 'cute' → the terminal
 // stays dark even though the app chrome is light.
-const resolveTheme = (): ITheme =>
-  appearance.theme ?? {
+const resolveTheme = (): ITheme => ({
+  ...SLIDER_COLORS,
+  ...(appearance.theme ?? {
     background: cssVar('--termBg', cssVar('--bg', '#0d0d0d')),
     foreground: cssVar('--termText', cssVar('--text', '#e5e5e5')),
     cursor: cssVar('--accent', '#3b82f6'),
     selectionBackground: cssVar('--accent', '#3b82f6'),
     selectionForeground: cssVar('--accentText', '#ffffff'),
-  }
+  }),
+})
 
 // ── Per-pane state ────────────────────────────────────────────────────────────
 // A Pane encapsulates one xterm + FitAddon + PTY id + the early-output buffer.
@@ -1094,8 +1107,12 @@ onBeforeUnmount(() => {
   /* Breathing-room gutter for the terminal(s). Lives HERE, not on `.wsterm-box`,
      because FitAddon measures the box's padding-inclusive clientHeight and would
      consume box padding (→ extra clipped row). Panes isn't measured, so this is a
-     true gap. Painted with the terminal bg so it reads as internal padding. */
-  padding: 6px 10px 12px;
+     true gap. Painted with the terminal bg so it reads as internal padding.
+     RIGHT is deliberately thin (2px, not 10px): FitAddon already reserves 14px there
+     for xterm's scrollbar, so text keeps its gap either way — while every extra pixel
+     of padding pushed the scroll track away from the panel edge, where the mouse
+     lands when you throw it right. */
+  padding: 6px 2px 12px 10px;
   background: var(--wsterm-bg, var(--bg));
 }
 /* While a pane is being dragged or a splitter resized, suppress selection across the
@@ -1107,29 +1124,51 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
-/* Slim, subtle scrollbar for the xterm viewport. xterm renders its own DOM (not in
-   Vue's scoped tree), so this is a plain global block. A translucent neutral thumb
-   reads on both dark + light terminal themes — the app's global bar is colored with
-   app tokens (light-gray in light mode) which looks wrong on the terminal's own,
-   independently-themed background. */
+/* xterm's scrollbar — a plain global block: xterm builds its own DOM, outside Vue's
+   scoped tree.
+
+   xterm 6 no longer scrolls with `.xterm-viewport`'s NATIVE scrollbar: it wraps
+   `.xterm-screen` in `.xterm-scrollable-element` and draws its own slider (lifted from
+   VS Code), colored from the `scrollbarSlider*` theme tokens (see resolveTheme). But
+   xterm.css still leaves `.xterm-viewport` on `overflow-y: scroll`, so Chromium paints
+   a SECOND, native scrollbar in the same strip. Measured: that bar is 11px wide with a
+   scroll range of exactly 0 — dead chrome. Yet it is the one always on screen (the real
+   slider carries `.invisible .fade` until the pointer enters), so it is the one the eye
+   finds and the mouse grabs, and dragging it scrolls nothing. Kill the native bar; keep
+   the real slider. */
 .xterm-viewport {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(140, 140, 140, 0.35) transparent;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
 .xterm-viewport::-webkit-scrollbar {
-  width: 9px;
+  display: none;
 }
-.xterm-viewport::-webkit-scrollbar-track {
-  background: transparent;
-}
-.xterm-viewport::-webkit-scrollbar-thumb {
-  background: rgba(140, 140, 140, 0.32);
-  border-radius: 99px;
+/* The real slider: xterm injects its background from the theme, so only the SHAPE is
+   ours. Its box is 14px wide — set inline by xterm (`overviewRuler.width || 14`), and
+   exactly what FitAddon reserves on the right, so nothing here can cover a column of
+   text. Keep that 14px as the grab target and paint a thinner bar inside it: a
+   transparent 2px border + `background-clip: padding-box` leaves 10px of paint.
+
+   The border must run ALL ROUND, not just the sides. padding-box clipping shrinks each
+   corner radius by the border width PER AXIS, so with side-only borders the declared
+   6px became 4px horizontally but stayed 6px vertically — an elliptical cap, i.e. the
+   capsule we were trying to get rid of (measured: the paint took five rows to reach its
+   full 10px). A 2px border on every side leaves a symmetric 2px corner: one row of
+   rounding, flat ends. `border-radius: 0` here would be perfectly square.
+
+   The state selectors are NOT decoration. xterm injects three rules of its own —
+   `.slider`, `.slider:hover`, `.slider.active` — each re-declaring the `background`
+   SHORTHAND, which resets background-clip to border-box. Its style element is appended
+   to the DOM (later than ours), so on any tie it wins: with only the base selector here
+   the bar snapped from 10px back to the full 14px the moment the pointer touched it (and
+   again while dragging). Matching each state with one extra class puts us a step above
+   every one of them. */
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider,
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+  box-sizing: border-box;
   border: 2px solid transparent;
   background-clip: padding-box;
-}
-.xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: rgba(140, 140, 140, 0.55);
-  background-clip: padding-box;
+  border-radius: 4px;
 }
 </style>

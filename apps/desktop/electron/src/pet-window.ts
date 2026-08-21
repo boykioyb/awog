@@ -20,7 +20,7 @@ import { applyNavigationGuards, loadAppRoute } from './window'
 // validates them (a permission decision must still match its pending request).
 
 export type PetState = 'idle' | 'working' | 'awaiting' | 'done' | 'offline'
-export type PetSprite = 'girl' | 'shiba' | 'bichon' | 'dino' | 'chicken' | 'miku'
+export type PetSprite = 'girl' | 'shiba' | 'dino' | 'chicken' | 'miku'
 
 export type PetItem = {
   kind: 'session' | 'task'
@@ -52,12 +52,15 @@ export type PetModel = {
   // channel, since the main window computes both from the same place.
   autoPeek: boolean
   sprite: PetSprite
-  // The pet scales its own content in CSS. It must NOT be done with
-  // webContents.setZoomFactor: Chromium's zoom is per-ORIGIN, so zooming the pet
-  // zooms every window on the same origin — i.e. the whole app.
+  // Applies to the SPRITE only — the HUD, the speech bubble and the badge stay at
+  // design size, so text never changes size with it. The pet does it in CSS: it must
+  // NOT be done with webContents.setZoomFactor, whose zoom is per-ORIGIN, so zooming
+  // the pet would zoom every window on the same origin — i.e. the whole app.
   scale: number
   // Let the pet say something now and then (Settings → Pet).
   quips: boolean
+  // Let the pet perform its pack's skill (sheet row `special`) — see pet.vue.
+  tricks: boolean
   // Lines for the CURRENT state, already resolved (user edits ?? localised default) —
   // the pet only picks one at random, it never reads settings or i18n itself.
   quipLines: string[]
@@ -109,6 +112,7 @@ const OFFLINE_STATUS: PetStatus = {
   permission: null,
   autoPeek: true,
   quips: true,
+  tricks: true,
   quipLines: [],
   reminders: [],
   reminderMs: 0,
@@ -142,8 +146,9 @@ class PetWindow {
     this.scale = clampScale(prefs.scale)
     const win = this.ensure()
     // A non-resizable window pins its min/max size to the current one, so setSize is
-    // ignored — briefly allow resizing to apply the new scale. Scaling the CONTENT to
-    // match is the renderer's job (PetModel.scale) — see the note on that field.
+    // ignored — briefly allow resizing to apply the new scale. The frame grows by the
+    // full factor while the renderer only scales the SPRITE inside it (PetModel.scale):
+    // that headroom is what keeps the taller pet from pushing the HUD out of frame.
     win.setResizable(true)
     win.setSize(Math.round(BASE_WIDTH * this.scale), Math.round(BASE_HEIGHT * this.scale))
     win.setResizable(false)
@@ -170,6 +175,7 @@ class PetWindow {
       ...OFFLINE_STATUS,
       autoPeek: this.lastStatus.autoPeek,
       quips: this.lastStatus.quips,
+      tricks: this.lastStatus.tricks,
       quipLines: this.lastStatus.quipLines,
       reminders: this.lastStatus.reminders,
       reminderMs: this.lastStatus.reminderMs,

@@ -32,6 +32,10 @@
           <Icon name="plus" :size="13" />
           {{ t('wiki.newPage') }}
         </button>
+        <button class="btn sm" :title="t('wiki.newSpace.hint')" @click="emit('new-space')">
+          <Icon name="folder" :size="13" />
+          {{ t('wiki.newSpace.action') }}
+        </button>
         <button class="btn sm" :title="t('wiki.import.files')" @click="emit('import-files')">
           <Icon name="download" :size="13" />
           {{ t('wiki.import.short') }}
@@ -92,6 +96,7 @@ const emit = defineEmits<{
   search: []
   'clear-search': []
   'new-page': []
+  'new-space': []
   'import-files': []
   resize: [width: number]
 }>()

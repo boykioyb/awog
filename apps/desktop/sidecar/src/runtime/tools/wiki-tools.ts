@@ -42,8 +42,6 @@ export async function runWikiSearch(
   query: string,
   space: string | undefined,
   projectId: string | undefined,
-  // Session whitelist (Session.wikiSpaces) — undefined = the whole wiki.
-  scope?: readonly string[] | undefined,
 ): Promise<{ text: string; hits: number }> {
   const hits = await searchWiki({
     query,
@@ -51,7 +49,6 @@ export async function runWikiSearch(
     space,
     max: SEARCH_MAX_HITS,
     contextOnly: true,
-    ...(scope && scope.length > 0 ? { spaces: scope } : {}),
   })
   if (hits.length === 0) {
     return { text: `No wiki page matches "${query}".`, hits: 0 }
@@ -72,9 +69,8 @@ export async function runWikiSearch(
 async function resolvePage(
   path: string,
   projectId: string | undefined,
-  scope: readonly string[] | undefined,
 ): Promise<{ page: WikiPage; pages: WikiPage[] } | null> {
-  const pages = await listWikiContextPages(projectId, scope)
+  const pages = await listWikiContextPages(projectId)
   if (pages.length === 0) return null
   const slugs = pages.map((p) => p.path)
   const resolved = resolveWikiLink(path, '', slugs)
@@ -88,9 +84,8 @@ export async function runWikiRead(
   projectId: string | undefined,
   offset?: number,
   limit?: number,
-  scope?: readonly string[] | undefined,
 ): Promise<{ text: string; found: boolean }> {
-  const match = await resolvePage(path, projectId, scope)
+  const match = await resolvePage(path, projectId)
   if (!match) {
     return {
       text: `No wiki page "${path}". Use wiki_search to find one, or check the paths listed in <wiki_index>.`,
@@ -136,12 +131,6 @@ export async function runWikiRead(
   return { text: `${header}\n\n${clamped.text}${footer}`, found: true }
 }
 
-// Space of a slug — the unit the session whitelist is expressed in.
-function spaceOf(slug: string): string {
-  const idx = slug.indexOf('/')
-  return idx === -1 ? '' : slug.slice(0, idx)
-}
-
 export async function runWikiWrite(
   args: {
     path: string
@@ -152,7 +141,6 @@ export async function runWikiWrite(
     scope?: string | undefined
   },
   projectId: string | undefined,
-  sessionScope: readonly string[] | undefined,
 ): Promise<{ text: string; path: string }> {
   let slug: string
   try {
@@ -161,14 +149,6 @@ export async function runWikiWrite(
     return {
       text: `Rejected: ${err instanceof Error ? err.message : 'invalid wiki path'}. Use a relative path like "architecture/system-overview".`,
       path: args.path,
-    }
-  }
-  // A session narrowed to some spaces must not write OUTSIDE them: the user scoped
-  // what this session may touch, and a write is the higher-consequence direction.
-  if (sessionScope && sessionScope.length > 0 && !sessionScope.includes(spaceOf(slug))) {
-    return {
-      text: `Rejected: this session is scoped to the wiki space(s) ${sessionScope.join(', ')}, so it cannot write to "${slug}".`,
-      path: slug,
     }
   }
   if (args.body.length > MAX_WRITE_BODY_CHARS) {
@@ -210,7 +190,6 @@ export async function runWikiWrite(
 export async function runWikiDelete(
   path: string,
   projectId: string | undefined,
-  sessionScope: readonly string[] | undefined,
 ): Promise<{ text: string; deleted: boolean }> {
   let slug: string
   try {
@@ -218,12 +197,6 @@ export async function runWikiDelete(
   } catch (err) {
     return {
       text: `Rejected: ${err instanceof Error ? err.message : 'invalid wiki path'}.`,
-      deleted: false,
-    }
-  }
-  if (sessionScope && sessionScope.length > 0 && !sessionScope.includes(spaceOf(slug))) {
-    return {
-      text: `Rejected: this session is scoped to ${sessionScope.join(', ')} and cannot delete "${slug}".`,
       deleted: false,
     }
   }
@@ -315,10 +288,6 @@ interface WikiReadDetails {
 export interface CreateWikiToolsOptions {
   // Project of the turn — decides whether the project-tier wiki is in scope.
   projectId?: string | undefined
-  // Session whitelist of wiki spaces (Session.wikiSpaces). Undefined/empty = whole
-  // wiki. Applied to search AND read: a scope the tools ignored would let the model
-  // read exactly the pages the user just excluded.
-  spaces?: readonly string[] | undefined
   // Whether the agent may CREATE/UPDATE/DELETE pages (Settings → Wiki, default off).
   // Even when true, each call still routes through the permission gate like any
   // other mutation (runtime/permission.ts).
@@ -326,7 +295,7 @@ export interface CreateWikiToolsOptions {
 }
 
 export function createWikiTools(opts: CreateWikiToolsOptions): AgentTool[] {
-  const { projectId, spaces } = opts
+  const { projectId } = opts
 
   const searchTool: AgentTool<typeof SearchParams, WikiSearchDetails> = {
     name: 'wiki_search',
@@ -338,7 +307,7 @@ export function createWikiTools(opts: CreateWikiToolsOptions): AgentTool[] {
       'source for those, and it is not in the repo. Returns paths to read with wiki_read.',
     parameters: SearchParams,
     async execute(_id, params): Promise<AgentToolResult<WikiSearchDetails>> {
-      const { text, hits } = await runWikiSearch(params.query, params.space, projectId, spaces)
+      const { text, hits } = await runWikiSearch(params.query, params.space, projectId)
       return { content: [{ type: 'text', text }], details: { query: params.query, hits } }
     },
   }
@@ -352,13 +321,7 @@ export function createWikiTools(opts: CreateWikiToolsOptions): AgentTool[] {
       'support an offset/limit line window.',
     parameters: ReadParams,
     async execute(_id, params): Promise<AgentToolResult<WikiReadDetails>> {
-      const { text, found } = await runWikiRead(
-        params.path,
-        projectId,
-        params.offset,
-        params.limit,
-        spaces,
-      )
+      const { text, found } = await runWikiRead(params.path, projectId, params.offset, params.limit)
       return { content: [{ type: 'text', text }], details: { path: params.path, found } }
     },
   }
@@ -375,7 +338,7 @@ export function createWikiTools(opts: CreateWikiToolsOptions): AgentTool[] {
       'reuse an existing path to revise rather than adding a near-duplicate page.',
     parameters: WriteParams,
     async execute(_id, params): Promise<AgentToolResult<WikiWriteDetails>> {
-      const { text, path } = await runWikiWrite(params, projectId, spaces)
+      const { text, path } = await runWikiWrite(params, projectId)
       return { content: [{ type: 'text', text }], details: { path } }
     },
   }
@@ -388,7 +351,7 @@ export function createWikiTools(opts: CreateWikiToolsOptions): AgentTool[] {
       'and the global wiki has no version history.',
     parameters: DeleteParams,
     async execute(_id, params): Promise<AgentToolResult<WikiDeleteDetails>> {
-      const { text, deleted } = await runWikiDelete(params.path, projectId, spaces)
+      const { text, deleted } = await runWikiDelete(params.path, projectId)
       return { content: [{ type: 'text', text }], details: { deleted } }
     },
   }

@@ -7,17 +7,11 @@
       <span :class="{ on: cfgTab === 'Tools' }" @click="cfgTab = 'Tools'">
         {{ t('sessions.config.tab.tools') }}
       </span>
-      <span :class="{ on: cfgTab === 'MCP' }" @click="cfgTab = 'MCP'">
-        {{ t('sessions.config.tab.mcp') }}
-      </span>
-      <span :class="{ on: cfgTab === 'Wiki' }" @click="cfgTab = 'Wiki'">
-        {{ t('sessions.config.tab.wiki') }}
-      </span>
     </div>
 
     <div class="popbody">
       <!-- General — Budget caps. Account / Model / Reasoning effort / Style now live
-           on the status-bar chips (StatusConfig); Tools + MCP on their own tabs. -->
+           on the status-bar chips (StatusConfig); Tools on its own tab. -->
       <template v-if="cfgTab === 'General'">
         <!-- Budget: soft warning + hard cap (USD). Soft only warns; hard refuses a
              turn / stops tool calls sidecar-side. Empty = no cap. -->
@@ -85,7 +79,7 @@
       </template>
 
       <!-- Tools -->
-      <template v-else-if="cfgTab === 'Tools'">
+      <template v-else>
         <div class="toolsrch">
           <Icon name="search" style="width: 13px; height: 13px" />
           <input v-model="toolQ" :placeholder="t('sessions.config.toolSearch')" />
@@ -119,72 +113,21 @@
           {{ t('sessions.config.noToolMatch') }}
         </div>
       </template>
-
-      <!-- MCP -->
-      <template v-else-if="cfgTab === 'MCP'">
-        <div class="pl" style="margin-bottom: 9px">{{ t('sessions.config.mcpHint') }}</div>
-        <div v-if="!mcpServers.length" class="listempty">
-          {{ t('sessions.config.noMcp') }}
-        </div>
-        <div v-for="m in mcpServers" :key="m.id" class="mcprow" @click="toggleMcp(m.id)">
-          <span
-            class="cdot"
-            :style="{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              background: m.status === 'connected' ? 'var(--green)' : 'var(--textFaint)',
-            }"
-          />
-          <span class="mcpn">{{ m.name }}</span>
-          <span class="mcpst">{{ m.status }}</span>
-          <span class="tog2" :class="{ off: !mcpOnSet.has(m.id) }" />
-        </div>
-      </template>
-
-      <!-- Wiki (ADR 0073) — which wiki spaces this session may use. Scoping applies
-           to the injected <wiki_index> AND to wiki_search/wiki_read, so a narrowed
-           session cannot read its way back out. -->
-      <template v-else>
-        <div class="pl" style="margin-bottom: 9px">{{ t('sessions.config.wikiHint') }}</div>
-        <div v-if="!wikiSpaces.length" class="listempty">
-          {{ t('sessions.config.noWiki') }}
-        </div>
-        <template v-else>
-          <div class="mcprow" @click="setWikiAll()">
-            <span class="mcpn">{{ t('sessions.config.wikiAll') }}</span>
-            <span class="mcpst">{{ t('sessions.config.wikiPages', { n: totalWikiPages }) }}</span>
-            <span class="tog2" :class="{ off: session.wikiSpaces !== undefined }" />
-          </div>
-          <div v-for="w in wikiSpaces" :key="w.key" class="mcprow" @click="toggleWikiSpace(w.id)">
-            <span class="mcpn">{{ w.title }}</span>
-            <span class="mcpst">
-              {{ t('sessions.config.wikiPages', { n: w.pageCount })
-              }}{{ w.source === 'project' ? ' · project' : '' }}
-            </span>
-            <span class="tog2" :class="{ off: !wikiOnSet.has(w.id) }" />
-          </div>
-        </template>
-      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
-import { useWikiStore } from '~/stores/wiki'
 
-// Session config — tabbed popover (General / Tools / MCP). General now keeps just
-// Account + Model (real data via useAccounts); style / thinking / no-markdown moved
-// to the composer chips. The Tools tab maps to the session tool DENYLIST
-// (params.disabledTools); the MCP tab loads real servers (mcp.list) and maintains
-// the session MCP whitelist (params.mcpServerIds).
+// Session config — tabbed popover (General / Tools). General keeps the budget caps
+// (account / model / thinking / style live on the status-bar chips); the Tools tab
+// maps to the session tool DENYLIST (params.disabledTools). The per-session MCP
+// whitelist moved to the composer's MCP chip (SessionMcpChip).
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
 const store = useSessionsStore()
-const sc = useSidecar()
-const wiki = useWikiStore()
 const { fmtUsd } = useSessionCost()
 
 // ── Budget (soft + hard caps) ────────────────────────────────────────────────
@@ -233,8 +176,8 @@ function commitMaxMinutes() {
   store.setBudget(props.session.id, { maxWallclockMs: mins != null ? mins * 60000 : undefined })
 }
 
-// Built-in Claude Code tools (the toggleable runtime toolset). MCP tools live in
-// their own tab — the denylist here is built-ins only.
+// Built-in Claude Code tools (the toggleable runtime toolset). MCP servers are
+// whitelisted from the composer chip — the denylist here is built-ins only.
 const TOOL_GROUPS: [string, string[]][] = [
   ['File', ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit']],
   ['Exec', ['Bash', 'BashOutput', 'KillShell']],
@@ -243,7 +186,7 @@ const TOOL_GROUPS: [string, string[]][] = [
 ]
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
 
-const cfgTab = ref<'General' | 'Tools' | 'MCP' | 'Wiki'>('General')
+const cfgTab = ref<'General' | 'Tools'>('General')
 const toolQ = ref('')
 
 // ── Tools (denylist) ───────────────────────────────────────────────────────────
@@ -265,85 +208,6 @@ const filteredGroups = computed<[string, string[]][]>(() => {
   return TOOL_GROUPS.map(
     ([g, tools]) => [g, tools.filter((tl) => tl.toLowerCase().includes(q))] as [string, string[]],
   ).filter(([, tools]) => tools.length)
-})
-
-// ── MCP (per-session whitelist) ────────────────────────────────────────────────
-type McpRow = { id: string; name: string; status: string }
-const mcpReal = ref<McpRow[]>([])
-// Real sources only (source.list). With no bridge the list is empty — a stand-in
-// row would offer to whitelist a server that does not exist.
-const mcpServers = computed<McpRow[]>(() => mcpReal.value)
-// undefined session whitelist = "all enabled servers on" (legacy); otherwise the
-// explicit set. The dot/toggle reflect membership.
-const mcpOnSet = computed<Set<string>>(() => {
-  const ids = props.session.mcpServerIds
-  if (ids === undefined) return new Set(mcpServers.value.map((m) => m.id))
-  return new Set(ids)
-})
-function toggleMcp(id: string) {
-  const cur = new Set(mcpOnSet.value)
-  if (cur.has(id)) cur.delete(id)
-  else cur.add(id)
-  store.setMcpServerIds(props.session.id, [...cur])
-}
-
-// ── Wiki scope (ADR 0073) ────────────────────────────────────────────────────
-// `session.wikiSpaces === undefined` means "whole wiki" (the default), the same
-// convention mcpServerIds uses. Deduped by space id: a space that exists in both
-// the global and the project tier is ONE row here, because the whitelist is by id.
-const wikiSpaces = computed(() => {
-  const seen = new Map<
-    string,
-    { key: string; id: string; title: string; source: string; pageCount: number }
-  >()
-  for (const sp of wiki.spaces) {
-    const cur = seen.get(sp.id)
-    if (cur) {
-      cur.pageCount += sp.pageCount
-      continue
-    }
-    seen.set(sp.id, {
-      key: sp.id,
-      id: sp.id,
-      title: sp.title || sp.id,
-      source: sp.source,
-      pageCount: sp.pageCount,
-    })
-  }
-  return [...seen.values()].sort((a, b) => a.title.localeCompare(b.title))
-})
-const totalWikiPages = computed(() => wikiSpaces.value.reduce((n, w) => n + w.pageCount, 0))
-const wikiOnSet = computed<Set<string>>(() => {
-  const ids = props.session.wikiSpaces
-  if (ids === undefined) return new Set(wikiSpaces.value.map((w) => w.id))
-  return new Set(ids)
-})
-function toggleWikiSpace(id: string) {
-  const cur = new Set(wikiOnSet.value)
-  if (cur.has(id)) cur.delete(id)
-  else cur.add(id)
-  // Everything selected → clear the whitelist instead of storing every id, so a
-  // space added later is automatically in scope.
-  const all = wikiSpaces.value.length > 0 && cur.size === wikiSpaces.value.length
-  store.setWikiSpaces(props.session.id, all ? undefined : [...cur])
-}
-function setWikiAll() {
-  store.setWikiSpaces(props.session.id, undefined)
-}
-
-onMounted(async () => {
-  if (!wiki.loaded) void wiki.loadTree()
-  if (!sc.available) return
-  try {
-    const res = await sc.request<{
-      sources: { id: string; name: string; enabled: boolean; connectionStatus?: string }[]
-    }>('source.list')
-    mcpReal.value = (res.sources ?? [])
-      .filter((s) => s.enabled)
-      .map((s) => ({ id: s.id, name: s.name, status: s.connectionStatus ?? 'untested' }))
-  } catch {
-    // Leave empty — the MCP tab shows its empty state.
-  }
 })
 </script>
 

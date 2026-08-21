@@ -42,7 +42,7 @@ type TrayModel = { macTitle: string; tooltip: string; unreadCount: number }
 // preload is sandboxed and cannot import main-process modules, so the types are
 // mirrored here (as the tray ones are).
 type PetState = 'idle' | 'working' | 'awaiting' | 'done' | 'offline'
-type PetSprite = 'girl' | 'shiba' | 'bichon' | 'dino' | 'chicken' | 'miku'
+type PetSprite = 'girl' | 'shiba' | 'dino' | 'chicken' | 'miku'
 type PetItem = {
   kind: 'session' | 'task'
   id: string
@@ -61,6 +61,7 @@ type PetModel = {
   sprite: PetSprite
   scale: number
   quips: boolean
+  tricks: boolean
   quipLines: string[]
   reminders: string[]
   reminderMs: number

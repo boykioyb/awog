@@ -57,5 +57,20 @@
   "wiki.newChildPrompt.title": "New page inside “{parent}”",
   "wiki.newChildPrompt.placeholder": "page name",
   "wiki.toast.badName": "That name has no usable characters — try letters or digits.",
-  "wiki.page.htmlStripped": "This page contains {n} raw HTML tag(s), which are not rendered — the markdown renderer strips author HTML (it shares the XSS boundary with the chat transcript). Convert them to Markdown to see the content."
+  "wiki.page.htmlStripped": "This page contains {n} raw HTML tag(s), which are not rendered — the markdown renderer strips author HTML (it shares the XSS boundary with the chat transcript). Convert them to Markdown to see the content.",
+  "wiki.newSpace.action": "New space",
+  "wiki.newSpace.hint": "Create a top-level space (a folder with its own intro page)",
+  "wiki.newSpace.prompt": "New space name",
+  "wiki.newSpace.placeholder": "Architecture",
+  "wiki.toast.spaceCreated": "Space created",
+  "wiki.toast.spaceFailed": "Couldn’t create the space",
+  "wiki.importModal.title": "Import into the wiki",
+  "wiki.importModal.hint": "Pick where the files land. Imported pages are copied in, so the originals stay where they are.",
+  "wiki.importModal.tier": "Wiki",
+  "wiki.importModal.tierGlobal": "Global",
+  "wiki.importModal.space": "Space",
+  "wiki.importModal.spaceRoot": "Wiki root",
+  "wiki.importModal.spaceNew": "+ New space…",
+  "wiki.importModal.newSpaceName": "New space name",
+  "wiki.importModal.destination": "Files land in:"
 }

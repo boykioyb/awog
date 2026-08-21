@@ -43,6 +43,20 @@ export interface WikiTreeNode {
 
 const DRAFT_TEMPLATE = '# {title}\n\n'
 
+// A typed name is a TITLE; the path segment is its slug ("Kiến trúc hệ thống" →
+// `kien-truc-he-thong`). Shared by the new-space and new-child flows.
+export function slugifySegment(name: string): string {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s.-]/g, '')
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+    .toLowerCase()
+}
+
 export function useWikiManager() {
   const store = useWikiStore()
   const projects = useProjectsStore()
@@ -227,6 +241,8 @@ export function useWikiManager() {
   const spaceOptions = computed(() =>
     [...new Set(store.spaces.map((s) => s.id))].sort((a, b) => a.localeCompare(b)),
   )
+  // Projects offered as an import tier / new-space tier.
+  const projectOptions = computed(() => projects.projects.map((p) => ({ id: p.id, name: p.name })))
 
   async function open(page: Pick<WikiPage, 'path' | 'source' | 'projectId'>): Promise<void> {
     selectedKey.value = wikiKey(page)
@@ -328,6 +344,41 @@ export function useWikiManager() {
     return content?.backlinks.length ?? 0
   }
 
+  // A space is a top-level folder, so "create a space" means creating its intro page
+  // at `<space>/_index.md` — that gives the space a real title/description instead of
+  // one humanised from the folder name, and leaves something to open when the user
+  // clicks the top node. Returns the space id.
+  async function createSpace(input: {
+    name: string
+    source: WikiSource
+    projectId?: string
+  }): Promise<string | null> {
+    const id = slugifySegment(input.name)
+    if (!id) return null
+    const title = input.name.trim()
+    const page = await store.savePage({
+      source: input.source,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      path: `${id}/_index`,
+      title,
+      description: '',
+      context: true,
+      body: `# ${title}\n\n`,
+      mode: 'create',
+    })
+    if (!page) return null
+    await store.loadTree()
+    // Open by the slug the SCAN reports for a folder-index page (`<space>`), not the
+    // `<space>/_index` path we wrote — the tree keys on the former.
+    await open({
+      source: input.source,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      path: id,
+    })
+    startEdit()
+    return id
+  }
+
   async function removePage(page: WikiPage): Promise<void> {
     const ok = await store.deletePage(page)
     if (ok && wikiKey(page) === selectedKey.value) {
@@ -401,7 +452,15 @@ export function useWikiManager() {
     }
   }
 
-  async function importFilesViaDialog(): Promise<void> {
+  // The destination is now CHOSEN (WikiImportModal), not inferred from whatever page
+  // happened to be selected — inference is what silently dropped an imported file at
+  // the wiki root.
+  async function importFilesViaDialog(target?: {
+    source: WikiSource
+    projectId?: string
+    space: string
+  }): Promise<void> {
+    if (target) importTarget.value = { ...target }
     const paths = await pickFiles({
       title: 'Import Markdown into the wiki',
       filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdx', 'txt'] }],
@@ -409,7 +468,12 @@ export function useWikiManager() {
     await importPaths(paths)
   }
 
-  async function importFolderViaDialog(): Promise<void> {
+  async function importFolderViaDialog(target?: {
+    source: WikiSource
+    projectId?: string
+    space: string
+  }): Promise<void> {
+    if (target) importTarget.value = { ...target }
     const paths = await pickFolders({ title: 'Import a folder of Markdown into the wiki' })
     await importPaths(paths)
   }
@@ -486,6 +550,7 @@ export function useWikiManager() {
     derivedDescription,
     save,
     createPage,
+    createSpace,
     renamePage,
     backlinkCount,
     removePage,
@@ -502,6 +567,7 @@ export function useWikiManager() {
     lastImport,
     importFilesViaDialog,
     importFolderViaDialog,
+    projectOptions,
     importDrop,
   }
 }

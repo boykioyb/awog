@@ -21,9 +21,11 @@ import type { AwogPetModel, AwogPetSprite, AwogPetState } from '~/types/awog-bri
 //
 // Sheet geometry — one ROW per state, frames left to right:
 //   cell 132x128 → rendered at half size, cell 66x64
-//   two column counts: legacy packs 10/8 (1320x896), sprite-cutter packs 12 (1584x896)
+//   legacy packs 10/8 columns × 7 rows (1320x896)
+//   sprite-cutter packs 12 columns × 8 rows (1584x1024)
 //   row 0 idle · 1 working · 2 awaiting · 3 done · 4 offline
 //   row 5 working-alt · 6 idle-alt — the "scene changes" (see `alt`)
+//   row 7 special — the pack's own skill, one-shot (see `special`)
 // `done` owns a row: packs that have something celebratory (a wink, an "OK!" sign) get
 // to use it, and packs that don't just repeat a calm frame there.
 //
@@ -41,6 +43,10 @@ const props = defineProps<{
   // breathing idle). The page swaps this on a timer so a long turn is not one loop
   // forever. States with no alternative just ignore it.
   alt?: boolean
+  // Play the pack's SKILL once, over whatever the state row was showing (dino breathes
+  // fire, miku spins, shiba shakes itself off). The page decides when — see pet.vue.
+  // Packs without the row ignore it rather than showing a transparent cell.
+  special?: boolean
 }>()
 
 const ALT_ROW: Partial<Record<AwogPetState, string>> = {
@@ -48,14 +54,17 @@ const ALT_ROW: Partial<Record<AwogPetState, string>> = {
   idle: 'is-idle-alt',
 }
 
-// Packs cut by tools/sprite-cutter: 12 frames per row instead of the legacy 10/8, so they
-// need their own sheet width and row timings. One class rather than per-pack rules —
-// nothing about the timings is pack-specific, only the column count is.
+// Packs cut by tools/sprite-cutter. TWO things follow from that origin, which is why it
+// is one list and not two: 12 frames per row instead of the legacy 10/8, and an 8th row
+// (`special`). girl + chicken stay 7 rows — their source artwork is not in the repo, so
+// they cannot be re-cut, and a `special` class on them would point past the sheet.
 const SHEET_12: AwogPetSprite[] = ['shiba', 'dino', 'miku']
 
-const rowClass = computed(() =>
-  props.alt ? (ALT_ROW[props.state] ?? `is-${props.state}`) : `is-${props.state}`,
-)
+const hasSpecial = computed(() => SHEET_12.includes(props.sprite))
+const rowClass = computed(() => {
+  if (props.special && hasSpecial.value) return 'is-special'
+  return props.alt ? (ALT_ROW[props.state] ?? `is-${props.state}`) : `is-${props.state}`
+})
 const sheetClass = computed(() => (SHEET_12.includes(props.sprite) ? 'sheet12' : ''))
 </script>
 
@@ -107,15 +116,6 @@ const sheetClass = computed(() => (SHEET_12.includes(props.sprite) ? 'sheet12' :
 .pet-chicken {
   background-image: url('/pet/chicken.png');
 }
-/* PIXEL ART: the sheet is 1:1 with no resampling, so the browser must not smooth it
-   on the way down to the display size — nearest-neighbour keeps the pixel grid.
-   Local-only (gitignored): the pack allows USE but not redistribution, and this repo
-   is public — see public/pet/CREDITS.md. */
-.pet-bichon {
-  background-image: url('/pet/bichon.png');
-  image-rendering: pixelated;
-}
-
 .pet-shiba {
   background-image: url('/pet/shiba.png');
 }
@@ -176,8 +176,8 @@ const sheetClass = computed(() => (SHEET_12.includes(props.sprite) ? 'sheet12' :
    classes beat the one-class rules above, so these win without !important, and
    `background-position-y` still comes from them. */
 .sheet12 {
-  /* Half of the 1584×896 source. */
-  background-size: 792px 448px;
+  /* Half of the 1584×1024 source (8 rows — the 8th is `special`). */
+  background-size: 792px 512px;
 }
 .sheet12.is-idle {
   /* These idle rows are a slow turn-round-and-back, so they want a long cycle — played
@@ -208,6 +208,15 @@ const sheetClass = computed(() => (SHEET_12.includes(props.sprite) ? 'sheet12' :
 }
 .sheet12.is-idle-alt {
   animation: play12 1.6s steps(12) infinite;
+}
+/* The pack's skill. The ONLY row that does not loop: it plays once and the page clears
+   the flag (pet.vue). `both` holds the last frame so there is no flash back to frame 0
+   in the gap before that happens. 12 frames at the sheet's 12fps → 1s, which is also the
+   page's SPECIAL_MS — the two must stay in step. Only 8-row packs ever get this class,
+   so the offset is safe to write unconditionally. */
+.is-special {
+  background-position-y: -448px;
+  animation: play12 1s steps(12) 1 both;
 }
 
 @keyframes pet-breathe {

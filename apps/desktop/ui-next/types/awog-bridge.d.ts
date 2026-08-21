@@ -47,7 +47,7 @@ export type AwogTrayModel = { macTitle: string; tooltip: string; unreadCount: nu
 // engine event stream.
 export type AwogPetState = 'idle' | 'working' | 'awaiting' | 'done' | 'offline'
 // Which built-in spritesheet to draw (public/pet/<sprite>.png).
-export type AwogPetSprite = 'girl' | 'shiba' | 'bichon' | 'dino' | 'chicken' | 'miku'
+export type AwogPetSprite = 'girl' | 'shiba' | 'dino' | 'chicken' | 'miku'
 export type AwogPetItem = {
   kind: 'session' | 'task'
   // session → stable engine id; task → task id.
@@ -70,11 +70,15 @@ export type AwogPetModel = {
   // own: the main window computes both from the same store, in the same tick.
   autoPeek: boolean
   sprite: AwogPetSprite
-  // The pet scales its own content in CSS. NOT webContents.setZoomFactor — Chromium
-  // zoom is per-ORIGIN, so that would scale every window of the app, not just this one.
+  // Cỡ SPRITE (text does not scale with it). CSS transform, NOT
+  // webContents.setZoomFactor — Chromium zoom is per-ORIGIN, so that would scale every
+  // window of the app, not just this one.
   scale: number
   // Let the pet say something now and then (Settings → Pet).
   quips: boolean
+  // Let the pet perform its pack's own skill — the sheet's `special` row. Packs cut
+  // before that row existed (girl, chicken) have nothing to play and stay still.
+  tricks: boolean
   // Lines for the CURRENT state, already resolved by the main window (user edits ??
   // localised defaults). The pet only picks one at random.
   quipLines: string[]

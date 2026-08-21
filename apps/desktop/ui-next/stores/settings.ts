@@ -234,6 +234,10 @@ export interface PetSettings {
   autoPeek: boolean
   // Occasional speech bubbles.
   quips: boolean
+  // Let the pet perform its pack's own skill (row `special` of the sheet): dino
+  // breathes fire, miku spins, shiba shakes itself off. Packs without that row
+  // (girl, chicken) simply never perform.
+  tricks: boolean
   // User-edited lines per bucket (Settings → Pet). An empty/missing bucket falls back
   // to the localised defaults — so an untouched install follows the app language, and
   // an edited one is the user's own text.
@@ -245,8 +249,8 @@ export interface PetSettings {
 }
 export type PetScale = 1 | 1.25 | 1.5
 export const PET_SCALES: PetScale[] = [1, 1.25, 1.5]
-export type PetSprite = 'girl' | 'shiba' | 'bichon' | 'dino' | 'chicken' | 'miku'
-export const PET_SPRITES: PetSprite[] = ['girl', 'shiba', 'bichon', 'dino', 'chicken', 'miku']
+export type PetSprite = 'girl' | 'shiba' | 'dino' | 'chicken' | 'miku'
+export const PET_SPRITES: PetSprite[] = ['girl', 'shiba', 'dino', 'chicken', 'miku']
 
 export const QUOTA_THRESHOLD_MIN = 50
 export const QUOTA_THRESHOLD_MAX = 99
@@ -372,6 +376,7 @@ const DEFAULT_PET: PetSettings = {
   sprite: 'girl',
   autoPeek: true,
   quips: true,
+  tricks: true,
   quipLines: {},
   reminderMinutes: 30,
   pos: null,

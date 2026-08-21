@@ -12,23 +12,21 @@ Các pack cat/dog/robot/knight **đã gỡ theo yêu cầu**; pack dino sticker 
 lớp lửa) thay bằng sheet AI ở bảng trên.
 Pack **shiba emote (itch)** và **shibasticker** cũng đã gỡ: `shiba.png` bây giờ là sheet
 AI ở trên, và hai pet shiba song song trong gallery là trùng lặp.
+Pack **bichon** (`bichon.png`, pixel art) **gỡ ở bản này**: license cho phép _dùng_ nhưng
+cấm phát tán lại file art, repo lại public ⇒ sheet không commit được, nên máy khác clone
+repo là thấy một ô pet trống. Muốn có lại con chó xù thì sinh art mới rồi cắt bằng
+[tools/sprite-cutter](../../../../../tools/sprite-cutter/README.md) như shiba/dino/miku —
+art tự tạo thì commit được.
 
-> 🚫 **`bichon.png` nằm trong `.gitignore` — cố ý.** License của pack:
-> _"can be edited and used in commercial or non-commercial projects, but cannot be resold
-> or **distributed to others**"_. Tức là **dùng thì hoàn toàn hợp lệ**, chỉ không được
-> phát tán lại file art. Repo này public ⇒ commit PNG lên = phát tán. Nên sheet nằm
-> lại trên máy build, không vào git.
->
-> Hệ quả cần biết: máy khác clone repo sẽ **không có** pet đó (chọn nó ở Settings
-> thì store tự clamp về pet đầu tiên — không vỡ UI). Muốn ship kèm bản release thì
-> phải xin phép tác giả trước.
+`shiba.png` + `dino.png` + `miku.png` có **8 hàng** (`1584×1024`), không phải 7 như hai
+sheet còn lại: hàng thứ 8 là **`special`** — skill riêng của pack (dino phun lửa, miku xoay
+tròn, shiba rũ mình), phát một lần khi vừa xong việc / lúc bấm vào pet / thỉnh thoảng lúc
+rảnh. `girl.png` + `chicken.png` **không có** hàng này vì tấm gốc của chúng không nằm trong
+repo nên không cắt lại được — renderer phớt lờ cờ skill cho hai pack đó
+([spec](../../../../../docs/features/desktop-pet.md#skill-riêng-của-mỗi-pet)).
 
-`bichon.png` là **pixel art**: sheet dựng **1:1, không resample** (mọi phép scale không
-nguyên đều làm nát lưới pixel) và renderer đặt `image-rendering: pixelated` cho riêng
-class đó. Tư thế idle 87×84 vốn đã lọt ô 132×128 nên chỉ cần crop, không cần phóng.
-
-`shiba.png` + `dino.png` + `miku.png` là ba sheet **không cùng số cột** với phần còn lại
-(12 frame/hàng thay vì 10/8) và là ba sheet được cắt bằng **công cụ có trong repo** —
+Ba sheet đó cũng **không cùng số cột** với phần còn lại (12 frame/hàng thay vì 10/8) và là
+ba sheet được cắt bằng **công cụ có trong repo** —
 [tools/sprite-cutter](../../../../../tools/sprite-cutter/README.md). Renderer nhận chúng
 qua class `sheet12` trong [PetSprite.vue](../../components/pet/PetSprite.vue), không phải
 qua rule riêng từng pack.
@@ -49,7 +47,6 @@ cô gái 30, hiệp sĩ **2**) nên script không hardcode mà xử lý cả ba 
 | **Labelled sheet** | chicken, shiba, dino, miku | 1 PNG chia **khối có nhãn** (IDLE / CHẠY / NHẢY / NGỦ…), mỗi khối một hàng frame — nguồn tốt nhất cho chuyển động mượt                                           |
 | **Sticker sheet**  | (đã gỡ)                    | 1 PNG **nền kem đặc**, ~50 pose rời rạc không thẳng hàng                                                                                                         |
 | **Layered kit**    | chibi                      | một PSD, **không có frame chuyển động nào** — chỉ 1 tư thế đứng, nhưng có 11 layer biểu cảm. Đổi mặt theo state; chuyển động do CSS transform tạo (`.is-static`) |
-| **Grid**           | bichon                     | một PNG, animation chạy **liên tục theo hàng**, hàng cuối mỗi animation lấp không đầy → phải cắt theo bảng occupancy chứ không giả định hàng đầy                 |
 
 ### Labelled sheet — `shiba.png`, cắt bằng tools/sprite-cutter
 
@@ -72,6 +69,7 @@ cd tools/sprite-cutter && python3 -m sprite_cutter assets/shiba-sheet.png \
 | 4    | `offline`     | `SLEEP`    | CSS không animate hàng này → chỉ hiện cột 0 |
 | 5    | `working-alt` | `WALK`     | cảnh phụ của chạy                           |
 | 6    | `idle-alt`    | `ROLL`     | cảnh phụ lúc rảnh                           |
+| 7    | `special`     | `SHAKE`    | skill: rũ mình rồi lộn một vòng             |
 
 Bốn thứ tấm này dạy ra, đều nằm trong tool nên sheet sau không phải học lại:
 
@@ -110,6 +108,7 @@ cd tools/sprite-cutter && python3 -m sprite_cutter assets/miku-sheet.png \
 | 4    | `offline`     | `SLEEP`    | CSS không animate hàng này → chỉ hiện cột 0 |
 | 5    | `working-alt` | `WALK`     | cảnh phụ của chạy                           |
 | 6    | `idle-alt`    | `DANCE`    | rảnh thì nhảy — có tim bay                  |
+| 7    | `special`     | `SPIN`     | skill: xoay tròn, vòng năng lượng dưới chân |
 
 Ba thứ tấm này dạy thêm:
 
@@ -188,15 +187,16 @@ cd tools/sprite-cutter && python3 -m sprite_cutter assets/dino-sheet.png \
   --awog-sheet ../../apps/desktop/ui-next/public/pet/dino.png
 ```
 
-| Hàng | State         | Khối nguồn | Vì sao                                      |
-| ---- | ------------- | ---------- | ------------------------------------------- |
-| 0    | `idle`        | `IDLE`     | đứng thở                                    |
-| 1    | `working`     | `RUN`      | đang bận                                    |
-| 2    | `awaiting`    | `JUMP`     | nhảy = đập vào mắt từ xa                    |
-| 3    | `done`        | `SIT`      | ngồi xuống, xong việc                       |
-| 4    | `offline`     | `SLEEP`    | CSS không animate hàng này → chỉ hiện cột 0 |
-| 5    | `working-alt` | `WALK`     | cảnh phụ của chạy                           |
-| 6    | `idle-alt`    | `TURN`     | ngó quanh                                   |
+| Hàng | State         | Khối nguồn    | Vì sao                                                   |
+| ---- | ------------- | ------------- | -------------------------------------------------------- |
+| 0    | `idle`        | `IDLE`        | đứng thở                                                 |
+| 1    | `working`     | `RUN`         | đang bận                                                 |
+| 2    | `awaiting`    | `JUMP`        | nhảy = đập vào mắt từ xa                                 |
+| 3    | `done`        | `SIT`         | ngồi xuống, xong việc                                    |
+| 4    | `offline`     | `SLEEP`       | CSS không animate hàng này → chỉ hiện cột 0              |
+| 5    | `working-alt` | `WALK`        | cảnh phụ của chạy                                        |
+| 6    | `idle-alt`    | `TURN`        | ngó quanh                                                |
+| 7    | `special`     | `FIRE BREATH` | skill: phun lửa — hàng DUY NHẤT khai frame tay, xem dưới |
 
 Ba thứ tấm này dạy thêm:
 
@@ -212,6 +212,16 @@ Ba thứ tấm này dạy thêm:
    là tín hiệu tuần hoàn, độ trễ khớp nhất chính là pitch. Rồi thử số phần lân cận và
    chọn cái có **nhát cắt tệ nhất là nông nhất** — cắt sai thì kiểu gì cũng phải xuyên qua
    một con vật.
+
+**Hàng `FIRE BREATH` phải khai `frame_regions` tay.** Tấm gốc vẽ hàng này như cuộn phim
+của _viên đạn_: "dino + lửa" là **một** component 142px, rồi ba quả cầu lửa + khói là các
+pose **không có con dino**. Thả cho bộ tách frame tự chạy thì nó chặt đôi đúng cái component
+đó (dino rời khỏi tia lửa của chính nó) và pet **biến mất 6/12 frame**; gộp cả 142px vào một
+ô thì `plan_layout` hạ tỉ lệ **cả sheet** 22% ⇒ dino teo ở **mọi** state vì một hàng. Cách
+chạy được: 3 pose lấy đà, rồi **cắt ngắn chính tia lửa ngay trong ô** (56→96px, đều ≤ 111px
+= ngân sách rộng ở tỉ lệ 1.135), tia phun ra rồi rút lại, cuối là pose thu người. `cut_frame`
+crop **theo box** rồi mới mask theo component, nên cắt ngang một component là hợp lệ — đó là
+thứ làm mẹo này chạy được mà không cần sửa code tool.
 
 **Không dùng `HAPPY` cho `done`** dù khối đó có tim bay: generator vẽ ba pose nhỏ dần
 (76px → 46px), mà cả sheet dùng chung một tỉ lệ nên con dino teo lại giữa animation.
@@ -236,7 +246,10 @@ chọn tỉ lệ**, chứ không xoá sau — xoá sau là cắt mất mực.
 
 ## Cách sinh lại các sheet
 
-Sheet trong thư mục này **không** phải file gốc — chúng được ghép lại:
+Sheet trong thư mục này **không** phải file gốc — chúng được ghép lại. Phần dưới là công
+thức của **script cũ dùng một lần** (thời pack girl/knight, 6 hàng) — giữ lại vì nó ghi
+đúng các bài học về căn khung và chọn frame; sheet bây giờ đi qua
+[tools/sprite-cutter](../../../../../tools/sprite-cutter/README.md) và có 7–8 hàng:
 
 - **Layout**: 1 hàng = 1 animation, frame trái → phải. Sheet `1320×768`, cell
   `132×128`, 10 cột × **6 hàng**.
@@ -279,6 +292,7 @@ repo — công thức ở trên đủ để dựng lại. **Sheet mới thì dù
 [tools/sprite-cutter](../../../../../tools/sprite-cutter/README.md)**: nó có trong repo,
 có test, và tự in ra các số CSS cần dán vào `PetSprite.vue`.
 
-Đổi asset khác chỉ cần giữ đúng ô `132×128` và thứ tự hàng; số cột thì được phép khác
+Đổi asset khác chỉ cần giữ đúng ô `132×128` và thứ tự hàng (7 hàng, hoặc 8 nếu pack có
+hàng `special`); số cột thì được phép khác
 (`shiba.png` dùng 12, các sheet còn lại 10/8) — đổi lại là pack đó phải khai riêng một
 khối timing trong `PetSprite.vue`. Không file nào ngoài `PetSprite.vue` biết về hình.

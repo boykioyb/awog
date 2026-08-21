@@ -386,10 +386,6 @@ export interface Session {
   settings: SessionSettings
   disabledTools?: string[]
   mcpServerIds?: string[]
-  // Per-session wiki whitelist (ADR 0073). undefined = the whole wiki is in scope;
-  // an explicit array limits BOTH the injected <wiki_index> and what wiki_search /
-  // wiki_read can reach — a scope the tools ignored would be theatre.
-  wikiSpaces?: string[]
   // Files/notes re-fed into every turn as <pinned_context> (see PinnedContext).
   pinnedContext?: PinnedContext
   // Absolute path of a folder dragged into the session; becomes the runtime tools'

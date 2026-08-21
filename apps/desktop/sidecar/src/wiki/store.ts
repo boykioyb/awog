@@ -291,18 +291,6 @@ async function rootsFor(
   return roots
 }
 
-// Keep only the spaces in `spaces` (undefined/empty = keep everything). Applied to
-// a scanned tree so the session whitelist and the tools see the same wiki.
-export function filterWikiTree(tree: WikiTree, spaces: readonly string[] | undefined): WikiTree {
-  if (!spaces || spaces.length === 0) return tree
-  const allowed = new Set(spaces)
-  return {
-    ...tree,
-    spaces: tree.spaces.filter((s) => allowed.has(s.id)),
-    pages: tree.pages.filter((p) => allowed.has(p.space)),
-  }
-}
-
 export async function scanWiki(projectIds: readonly string[] = []): Promise<WikiTree> {
   const roots = await rootsFor(projectIds)
   const scans = await Promise.all(
@@ -352,22 +340,38 @@ export async function scanWiki(projectIds: readonly string[] = []): Promise<Wiki
 // Read one page. `raw` is the file verbatim (what the editor saves back); `body`
 // is the content below the frontmatter (what the reader renders and what the
 // `wiki_read` tool hands the model).
+interface ResolvedPageFile {
+  file: string
+  // True when the page lives in `<slug>/_index.md` rather than `<slug>.md`.
+  isFolderIndex: boolean
+}
+
+async function resolvePageFile(root: string, slug: string): Promise<ResolvedPageFile | null> {
+  const direct = pageFile(root, slug)
+  const exists = await stat(direct).then(
+    () => true,
+    () => false,
+  )
+  if (exists) return { file: direct, isFolderIndex: false }
+  const folderIndex = join(root, normaliseSlug(slug), SPACE_INDEX_FILE)
+  const indexExists = await stat(folderIndex).then(
+    () => true,
+    () => false,
+  )
+  return indexExists ? { file: folderIndex, isFolderIndex: true } : null
+}
+
 export async function readWikiPage(
   source: WikiSource,
   projectId: string | undefined,
   slug: string,
 ): Promise<WikiPageContent> {
   const root = await resolveWikiRoot(source, projectId)
-  const file = pageFile(root, slug)
+  const resolved = await resolvePageFile(root, slug)
+  if (!resolved) throw new RpcError(-32602, `Wiki page not found: ${slug}`)
+  const { file } = resolved
   await assertInsideWiki(root, file, true)
-
-  let st
-  try {
-    st = await stat(file)
-  } catch (err) {
-    if (isMissing(err)) throw new RpcError(-32602, `Wiki page not found: ${slug}`)
-    throw err
-  }
+  const st = await stat(file)
 
   const raw = await readFile(file, 'utf8')
   const truncated = raw.length > MAX_PAGE_BYTES
@@ -417,14 +421,13 @@ async function writeAtomic(file: string, content: string): Promise<void> {
 export async function saveWikiPage(input: SaveWikiPageInput): Promise<WikiPage> {
   const slug = normaliseSlug(input.path)
   const root = await resolveWikiRoot(input.source, input.projectId)
-  const file = pageFile(root, slug)
+  // Write back to whichever file already holds this slug: editing a space's intro
+  // page must update `<space>/_index.md`, not create a rival `<space>.md`.
+  const resolved = await resolvePageFile(root, slug)
+  const file = resolved?.file ?? pageFile(root, slug)
   await assertInsideWiki(root, file, false)
 
-  const exists = await stat(file).then(
-    () => true,
-    () => false,
-  )
-  if (input.mode === 'create' && exists) {
+  if (input.mode === 'create' && resolved) {
     throw new RpcError(-32602, `Wiki page already exists: ${slug}`)
   }
 
@@ -463,10 +466,11 @@ export async function deleteWikiPage(
   slug: string,
 ): Promise<void> {
   const root = await resolveWikiRoot(source, projectId)
-  const file = pageFile(root, slug)
-  await assertInsideWiki(root, file, true)
+  const resolved = await resolvePageFile(root, slug)
+  if (!resolved) return // already gone
+  await assertInsideWiki(root, resolved.file, true)
   try {
-    await rm(file)
+    await rm(resolved.file)
   } catch (err) {
     if (!isMissing(err)) throw err
   }
@@ -479,8 +483,14 @@ export async function moveWikiPage(
   to: string,
 ): Promise<WikiPage> {
   const root = await resolveWikiRoot(source, projectId)
-  const fromFile = pageFile(root, from)
-  const toFile = pageFile(root, to)
+  const resolvedFrom = await resolvePageFile(root, from)
+  if (!resolvedFrom) throw new RpcError(-32602, `Wiki page not found: ${normaliseSlug(from)}`)
+  const fromFile = resolvedFrom.file
+  // Renaming a folder-index page keeps it an index of the DESTINATION folder, so the
+  // moved page stays the parent it was instead of becoming a stray sibling.
+  const toFile = resolvedFrom.isFolderIndex
+    ? join(root, normaliseSlug(to), SPACE_INDEX_FILE)
+    : pageFile(root, to)
   await assertInsideWiki(root, fromFile, true)
   await assertInsideWiki(root, toFile, false)
 
@@ -490,8 +500,36 @@ export async function moveWikiPage(
   )
   if (clash) throw new RpcError(-32602, `Wiki page already exists: ${normaliseSlug(to)}`)
 
-  await mkdir(dirname(toFile), { recursive: true, mode: 0o700 })
-  await rename(fromFile, toFile)
+  // A page can have children (`adr.md` + `adr/`, or a folder index + its folder).
+  // Renaming the page has to carry the SUBTREE, or the children silently detach into
+  // a folder named after the old title — the parent disappears from above them and
+  // every `[[link]]` into the branch breaks at once.
+  const fromDir = join(root, normaliseSlug(from))
+  const toDir = join(root, normaliseSlug(to))
+  const hasChildren = await stat(fromDir).then(
+    (st) => st.isDirectory(),
+    () => false,
+  )
+  if (hasChildren) {
+    const dirClash = await stat(toDir).then(
+      () => true,
+      () => false,
+    )
+    if (dirClash) {
+      throw new RpcError(-32602, `A wiki folder already exists at ${normaliseSlug(to)}`)
+    }
+    await assertInsideWiki(root, toDir, false)
+    await mkdir(dirname(toDir), { recursive: true, mode: 0o700 })
+    await rename(fromDir, toDir)
+    // The folder move already carried a folder-index page with it.
+    if (!resolvedFrom.isFolderIndex) {
+      await mkdir(dirname(toFile), { recursive: true, mode: 0o700 })
+      await rename(fromFile, toFile)
+    }
+  } else {
+    await mkdir(dirname(toFile), { recursive: true, mode: 0o700 })
+    await rename(fromFile, toFile)
+  }
   const { page } = await readWikiPage(source, projectId, to)
   return page
 }

@@ -22,7 +22,7 @@
         @mousedown.stop
         @pointerdown.stop="ctx.onGripDown(tabId, leaf!.paneId, $event)"
       >
-        <Icon name="move" style="width: 12px; height: 12px" />
+        <Icon name="move" style="width: 13px; height: 13px" />
       </button>
       <button
         class="wsterm-pane-close"
@@ -31,7 +31,7 @@
         @mousedown.stop
         @click="ctx.closePane(tabId, leaf!.paneId)"
       >
-        <Icon name="x" style="width: 11px; height: 11px" />
+        <Icon name="x" style="width: 13px; height: 13px" />
       </button>
     </div>
 
@@ -305,31 +305,48 @@ const nodeKey = (node: LayoutNode): string =>
 }
 
 /* Per-pane controls (drag handle + close) — hover-revealed, never over the terminal
-   body so xterm keeps its own mouse. */
+   body so xterm keeps its own mouse. Rendered as one floating chip: over live output
+   two naked 18px squares were hard to read AND hard to hit. */
 .wsterm-pane-tools {
   position: absolute;
   top: 4px;
-  right: 4px;
-  z-index: 6;
+  /* Clear of xterm's scrollbar gutter (14px — exactly what FitAddon reserves on the
+     right, `overviewRuler.width || 14`). Sitting ON that gutter, the chip covered the
+     top of the scroll track, so the thumb could not be grabbed where it rests when
+     the buffer is scrolled to the bottom. */
+  right: 18px;
+  /* Above xterm's own scrollbar (z-index 11 inside `.xterm`, which is not a stacking
+     context — at 6 the slider painted straight over these buttons). */
+  z-index: 12;
   display: flex;
-  gap: 3px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bgPanel);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 28%);
   opacity: 0;
+  /* Hidden ≠ inert: at opacity 0 the buttons still hit-tested, swallowing clicks and
+     text selection in the pane's top-right corner. */
+  pointer-events: none;
   transition: opacity 0.12s;
 }
 .wsterm-box:hover .wsterm-pane-tools,
 .wsterm-pane-tools:focus-within {
   opacity: 1;
+  pointer-events: auto;
 }
 .wsterm-pane-grip,
 .wsterm-pane-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  /* 22px = the dock header's button size (.gterm-btn) — same house target. */
+  width: 22px;
+  height: 22px;
   border: none;
-  border-radius: 4px;
-  background: var(--bgActive);
+  border-radius: 5px;
+  background: transparent;
   color: var(--textDim);
   cursor: pointer;
   transition:
@@ -353,7 +370,7 @@ const nodeKey = (node: LayoutNode): string =>
 .wsterm-pane-grip:focus-visible,
 .wsterm-pane-close:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
 
 /* Drop-zone overlay — purely visual (pointer-events off so hit-testing sees the box

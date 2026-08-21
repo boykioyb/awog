@@ -1,10 +1,15 @@
 // GitHub notification poller (docs/features/github-notifications.md).
 //
-// One `gh.notifications` call per tick pulls the account's whole unread inbox;
-// this module keeps only the notifications belonging to the projects the user
-// opted in to (Settings → Git), toasts what's new, and routes a click to that
-// project's Issues/PR drawer. App-lifetime singleton: `startGhNotifications()` is
-// called once from the main window's layout — a popout must not double-toast.
+// One `gh.notifications` call per tick pulls the account's whole unread inbox. The
+// FULL list goes to useGhInbox (what the top-bar bell shows); only notifications
+// belonging to the projects the user opted in to (Settings → Git) are ALERTED —
+// toast + OS notification — with a click routing to that project's Issues/PR
+// drawer. App-lifetime singleton: `startGhNotifications()` is called once from the
+// main window's layout — a popout must not double-toast.
+//
+// The split matters: alerting is interruption (opt-in, per project), the inbox is
+// reference (everything, so a bell that shows nothing means the inbox IS empty —
+// not that a project checkbox is unticked somewhere).
 //
 // Everything below the state block is module scope (not closed over by start())
 // so the Settings "preview" button can reuse the exact same toast + routing path
@@ -13,26 +18,19 @@
 //
 // SoC: no fs / no gh here; the sidecar owns the CLI. This orchestrates timing,
 // dedupe and presentation only.
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { githubSlugFromRemote } from '~/components/project/data'
 import { useSidecar } from '~/composables/useSidecar'
 import { pushActionToast } from '~/composables/useActionToasts'
+import {
+  fetchGhInbox,
+  setGhInbox,
+  setGhInboxError,
+  type GhNotification,
+} from '~/composables/useGhInbox'
 import { useProjectModal } from '~/composables/useProjectModal'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
-
-export type GhNotificationType = 'PullRequest' | 'Issue' | 'Other'
-
-export interface GhNotification {
-  id: string
-  reason: string
-  updatedAt: string
-  title: string
-  type: GhNotificationType
-  repo: string
-  number: number | null
-  url: string
-}
 
 type GitRepoEntryDto = { relativePath: string; remote?: string }
 
@@ -63,9 +61,14 @@ const lastError = ref<string | null>(null)
 const repoToProject = new Map<string, string>()
 
 let seenCache: Map<string, string> | null = null
-// Whether this run has established a baseline. The first poll after app start
-// records what's already in the inbox WITHOUT toasting it — otherwise opening the
-// app would fire a wall of toasts for notifications already read on GitHub.
+// Whether a baseline has EVER been established on this machine. The very first
+// poll records what's already in the inbox WITHOUT toasting it — otherwise a fresh
+// install would fire a wall of toasts for notifications already read on GitHub.
+//
+// Keyed on the persisted poll stamp, not on `seen` being non-empty: `seen` stays
+// empty as long as nothing matched an opted-in project, and keying on it made EVERY
+// app start re-seed — silently swallowing the first batch of real notifications
+// after each launch (the "toasts never fire" bug).
 let seeded = false
 let timer: ReturnType<typeof setInterval> | null = null
 let polling = false
@@ -84,7 +87,7 @@ function readSeen(): Map<string, string> {
 function seen(): Map<string, string> {
   if (!seenCache) {
     seenCache = readSeen()
-    seeded = seenCache.size > 0
+    seeded = localStorage.getItem(POLLED_KEY) !== null || seenCache.size > 0
   }
   return seenCache
 }
@@ -100,22 +103,21 @@ function writeSeen(): void {
 
 const optedIn = (): string[] => useSettingsStore().githubNotify.projectIds
 
-// Rebuild owner/repo → project. Seeded synchronously from each project's own
-// remote, then widened by repo discovery (a project can be a container holding
-// several repos, in which case its own root has no remote).
+// Rebuild owner/repo → project. Seeded synchronously from EVERY project's own
+// remote (cheap, and the bell must be able to route a click for a repo the user
+// never opted in to), then widened by repo discovery — but only for the opted-in
+// projects, since that costs one sidecar call each. A project can be a container
+// holding several repos, in which case its own root has no remote.
 async function buildRepoMap(): Promise<void> {
   const sc = useSidecar()
   const projects = useProjectsStore()
   repoToProject.clear()
-  const ids = optedIn()
-  for (const id of ids) {
-    const p = projects.projectById(id)
-    if (!p) continue
+  for (const p of projects.projects) {
     const slug = githubSlugFromRemote(p.gitRemote)
-    if (slug) repoToProject.set(slug.toLowerCase(), id)
+    if (slug) repoToProject.set(slug.toLowerCase(), p.id)
   }
   if (!sc.available) return
-  for (const id of ids) {
+  for (const id of optedIn()) {
     const p = projects.projectById(id)
     if (!p?.path) continue
     try {
@@ -133,20 +135,40 @@ async function buildRepoMap(): Promise<void> {
   }
 }
 
-// Toast text: "owner/repo #12 · why · title". GitHub keeps adding reasons, so an
-// unknown one degrades to its own prettified name rather than a missing key.
-function toastText(n: GhNotification): string {
+// GitHub `reason` → label. GitHub keeps adding reasons, so an unknown one degrades
+// to its own prettified name rather than a missing i18n key. Shared with the bell
+// rows so the toast and the inbox never word the same event differently.
+export function reasonLabel(reason: string): string {
   const { t } = useI18n()
-  const reason = TRANSLATED_REASONS.has(n.reason)
-    ? t(`github.notify.reason.${n.reason}`)
-    : n.reason.replace(/_/g, ' ')
+  return TRANSLATED_REASONS.has(reason)
+    ? t(`github.notify.reason.${reason}`)
+    : reason.replace(/_/g, ' ')
+}
+
+// Toast text: "owner/repo #12 · why · title".
+function toastText(n: GhNotification): string {
   const ref = n.number != null ? `#${n.number}` : ''
-  return `${n.repo} ${ref} · ${reason} · ${n.title}`.replace(/\s+/g, ' ').trim()
+  return `${n.repo} ${ref} · ${reasonLabel(n.reason)} · ${n.title}`.replace(/\s+/g, ' ').trim()
+}
+
+// The project a notification's repo belongs to, or null when no project tracks it.
+// Exported so the bell can label a row and route its click through the same map the
+// poller uses.
+export function projectForRepo(repo: string): string | null {
+  return repoToProject.get(repo.toLowerCase()) ?? null
+}
+
+// Whether a notification would ALERT (toast / OS notification): its repo maps to a
+// project AND that project is opted in (Settings → Git). The inbox shows everything;
+// only this subset is allowed to interrupt.
+export function isAlerting(n: GhNotification): boolean {
+  const id = projectForRepo(n.repo)
+  return id !== null && optedIn().includes(id)
 }
 
 // Click-through: the project's own Issues/PR drawer when we know which project
 // and which thread; github.com otherwise (releases, discussions, …).
-function openNotification(n: GhNotification): void {
+export function openNotification(n: GhNotification): void {
   const projectId = repoToProject.get(n.repo.toLowerCase())
   if (projectId && n.number != null && n.type !== 'Other') {
     useProjectModal().open(projectId, {
@@ -173,6 +195,11 @@ export async function ensureNotificationPermission(): Promise<NotificationPermis
   }
 }
 
+// Can the OS path actually deliver right now? Split out because `present()` needs
+// the answer to decide whether suppressing the toast would leave NOTHING visible.
+const osDeliverable = (): boolean =>
+  notificationsSupported() && Notification.permission === 'granted'
+
 // OS notification. `delivery` decides WHEN: 'native' fires always (the toast is
 // suppressed, so something must show even with the app in front); 'both' keeps
 // the original rule — only when the window isn't in front, where the toast alone
@@ -182,8 +209,7 @@ function nativeNotify(n: GhNotification): void {
   const delivery = settings.notifications.delivery
   if (delivery === 'toast') return
   if (delivery === 'both' && !document.hidden && document.hasFocus()) return
-  if (!notificationsSupported()) return
-  if (Notification.permission !== 'granted') return
+  if (!osDeliverable()) return
   try {
     const note = new Notification(n.repo, { body: toastText(n), tag: `gh-${n.id}` })
     note.onclick = () => {
@@ -200,9 +226,13 @@ function nativeNotify(n: GhNotification): void {
 }
 
 // The one presentation path. `delivery === 'native'` means the user asked for OS
-// notifications INSTEAD of in-app ones, so the toast is skipped entirely.
+// notifications INSTEAD of in-app ones — but only when the OS can actually deliver:
+// if permission was never granted (or the webview has no Notification API), keeping
+// the toast suppressed would drop the notification entirely, which is exactly how
+// this feature looked broken.
 function present(n: GhNotification): void {
-  if (useSettingsStore().notifications.delivery !== 'native') {
+  const nativeOnly = useSettingsStore().notifications.delivery === 'native' && osDeliverable()
+  if (!nativeOnly) {
     pushActionToast(toastText(n), 'info', {
       icon: n.type === 'PullRequest' ? 'fork' : 'alert',
       action: () => openNotification(n),
@@ -211,48 +241,39 @@ function present(n: GhNotification): void {
   nativeNotify(n)
 }
 
-// Fetch the inbox. `since` keeps the payload small on the polling path; the
-// preview omits it so it can find something to show even on a quiet day.
-async function fetchInbox(opts: { since?: string; limit: number }): Promise<GhNotification[]> {
-  const settings = useSettingsStore()
-  const params: { account?: string; since?: string; limit: number } = { limit: opts.limit }
-  if (settings.githubAccount) params.account = settings.githubAccount
-  if (opts.since) params.since = opts.since
-  const res = await useSidecar().request<{ notifications: GhNotification[] }>(
-    'gh.notifications',
-    params,
-  )
-  return res.notifications
-}
-
-const forOptedInProjects = (list: GhNotification[]): GhNotification[] =>
-  list.filter((n) => repoToProject.has(n.repo.toLowerCase()))
-
 async function poll(): Promise<void> {
   if (polling) return
   const settings = useSettingsStore()
   const { t } = useI18n()
-  if (!settings.githubNotify.enabled || optedIn().length === 0) return
+  // The inbox is fetched whenever the feature is on — with or without project
+  // opt-ins, which only gate the ALERT below. A bell that stays empty because a
+  // checkbox is unticked is indistinguishable from a broken poller.
+  if (!settings.githubNotify.enabled) return
   if (!useSidecar().available) return
   polling = true
   try {
-    const since = localStorage.getItem(POLLED_KEY) ?? undefined
-    const list = await fetchInbox({ limit: 50, ...(since ? { since } : {}) })
+    const list = await fetchGhInbox()
     lastError.value = null
-    // Stamp the poll BEFORE presenting: a toast that throws must not make the
-    // next tick re-deliver the same window of notifications.
+    setGhInbox(list)
+    // Stamp the poll BEFORE presenting: a toast that throws must not make the next
+    // tick treat this run as the (silent) baseline again.
     try {
       localStorage.setItem(POLLED_KEY, new Date().toISOString().replace(/\.\d+Z$/, 'Z'))
     } catch {
-      // Without the stamp we just re-scan a wider window; `seen` still dedupes.
+      // Without the stamp we re-seed once on the next launch; `seen` still dedupes.
     }
 
     const store = seen()
-    const fresh = forOptedInProjects(list).filter((n) => store.get(n.id) !== n.updatedAt)
+    // `n.unread` matters now that the fetch includes read threads: something the
+    // user already handled on github.com must never come back as a toast.
+    const fresh = list
+      .filter((n) => n.unread)
+      .filter(isAlerting)
+      .filter((n) => store.get(n.id) !== n.updatedAt)
     for (const n of fresh) store.set(n.id, n.updatedAt)
     writeSeen()
 
-    // First run establishes the baseline silently.
+    // Very first poll on this machine establishes the baseline silently.
     if (!seeded) {
       seeded = true
       return
@@ -263,8 +284,11 @@ async function poll(): Promise<void> {
     if (overflow > 0) pushActionToast(t('github.notify.more', { n: overflow }), 'info')
   } catch (err) {
     // Poll failures are silent by design (gh not installed / not authed / rate
-    // limited): a toast every minute would be worse than the missing feature.
-    lastError.value = err instanceof Error ? err.message : 'gh.notifications failed'
+    // limited): a toast every minute would be worse than the missing feature. The
+    // bell panel + Settings → Git surface the last one instead.
+    const message = err instanceof Error ? err.message : 'gh.notifications failed'
+    lastError.value = message
+    setGhInboxError(message)
   } finally {
     polling = false
   }
@@ -274,7 +298,7 @@ function schedule(): void {
   if (timer) clearInterval(timer)
   timer = null
   const settings = useSettingsStore()
-  if (!settings.githubNotify.enabled || optedIn().length === 0) return
+  if (!settings.githubNotify.enabled) return
   // Floor at 60s — GitHub's documented minimum poll interval for this API.
   const ms = Math.max(60_000, settings.githubNotify.intervalMs)
   timer = setInterval(() => void poll(), ms)
@@ -342,9 +366,12 @@ export async function checkGhNotifications(): Promise<GhNotifyCheck> {
   if (!useSidecar().available) return { status: 'offline' }
   try {
     await buildRepoMap()
-    const list = await fetchInbox({ limit: 50 })
+    const list = await fetchGhInbox()
     lastError.value = null
-    return { status: 'ok', matched: forOptedInProjects(list).length, total: list.length }
+    // Counts the UNREAD subset: the question this diagnostic answers is "would a
+    // notification reach me", and read threads never would.
+    const unread = list.filter((n) => n.unread)
+    return { status: 'ok', matched: unread.filter(isAlerting).length, total: unread.length }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'gh.notifications failed'
     lastError.value = message
@@ -352,8 +379,12 @@ export async function checkGhNotifications(): Promise<GhNotifyCheck> {
   }
 }
 
-// Read-only view for the Settings panel (surface the last failure without
-// toasting it on every tick).
+// Read-only view for the Settings panel + the bell panel (surface the last failure
+// and how many projects are opted in, without toasting either on every tick).
 export function useGhNotificationsStatus() {
-  return { started, lastError }
+  return {
+    started,
+    lastError,
+    watchedProjectCount: computed(() => optedIn().length),
+  }
 }

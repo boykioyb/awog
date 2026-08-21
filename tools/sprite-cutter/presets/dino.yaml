@@ -51,8 +51,30 @@ sections:
     rows:
       - { name: attack }
       - { name: attack_tail }
-      # Lửa dài dần sang phải: neo trọng tâm sẽ kéo con dino lùi trái mỗi frame.
-      - { name: fire_breath, align_x: bbox }
+      # Hàng duy nhất phải khai frame TAY. Tấm gốc vẽ hàng này như một cuộn phim của
+      # viên đạn: "dino + lửa" là MỘT component 142px, rồi ba quả cầu lửa + khói là các
+      # pose KHÔNG có con dino. Để bộ tách frame tự chạy thì nó chặt đôi chính cái
+      # component đó (con dino rời khỏi tia lửa của nó) và pet biến mất 6/12 frame; còn
+      # gộp cả 142px vào một ô thì `plan_layout` phải hạ tỉ lệ cả sheet 22% (một tỉ lệ
+      # cho mọi hàng) ⇒ con dino teo lại ở MỌI state chỉ vì một hàng.
+      # Nên: 3 pose lấy đà, rồi CẮT NGẮN tia lửa ngay trong ô (56→96px, tất cả ≤ 111px =
+      # ngân sách chiều rộng ở tỉ lệ hiện tại) cho tia phun ra rồi rút lại, cuối là pose
+      # thu người. Không đặt `align_x: bbox`: neo mặc định (centroid, nặng về khối thân
+      # dino) giữ con dino đứng yên trong lúc tia dài ra.
+      - name: fire_breath
+        frame_regions:
+          - [857, 246, 59, 67] # đứng (y ≥ 246 để chừa chip caption FIRE BREATH)
+          - [916, 246, 56, 67] # hít vào
+          - [972, 232, 52, 81] # mở miệng (x ≥ 972 để không liếm pose bên cạnh)
+          - [1024, 232, 56, 74] # lửa vừa ra
+          - [1024, 232, 68, 74]
+          - [1024, 232, 80, 74]
+          - [1024, 232, 92, 74]
+          - [1024, 232, 96, 74] # tia dài nhất
+          - [1024, 232, 92, 74]
+          - [1024, 232, 80, 74]
+          - [1024, 232, 64, 74]
+          - [1459, 232, 61, 81] # thu người
       - { name: hurt }
       - { name: die, mode: pingpong }
       - { name: ground_pound }
@@ -84,6 +106,8 @@ sections:
 
 awog:
   enabled: false # bật bằng --awog-sheet
+  # Hàng 7 `special` = "skill" riêng của pet (xem docs/features/desktop-pet.md).
+  states: [idle, working, awaiting, done, offline, working-alt, idle-alt, special]
   cell: [132, 128]
   gutter: 3
   # Pet state → animation.
@@ -99,3 +123,5 @@ awog:
     offline: sleep
     working-alt: walk
     idle-alt: turn
+    # Skill: phun lửa — cả lý do khai frame tay ở trên.
+    special: fire_breath

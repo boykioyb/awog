@@ -23,6 +23,7 @@
       @search="runSearch"
       @clear-search="clearSearch"
       @new-page="onNewPage"
+      @new-space="onNewSpace"
       @import-files="onImportFiles"
     />
 
@@ -114,6 +115,15 @@
       {{ t('wiki.import.dropHint') }}
     </div>
 
+    <WikiImportModal
+      :open="importOpen"
+      :spaces="spaceOptions"
+      :projects="projectOptions"
+      @close="importOpen = false"
+      @pick-files="onPickFiles"
+      @pick-folder="onPickFolder"
+    />
+
     <ContextMenu
       :open="menu.pos.value !== null"
       :position="menu.pos.value ?? { x: 0, y: 0 }"
@@ -140,6 +150,7 @@
 // import/create/delete confirmations.
 import ContextMenu from '~/components/common/ContextMenu.vue'
 import WikiEditor from '~/components/wiki/WikiEditor.vue'
+import WikiImportModal, { type WikiImportTarget } from '~/components/wiki/WikiImportModal.vue'
 import WikiReader from '~/components/wiki/WikiReader.vue'
 import WikiSidebar from '~/components/wiki/WikiSidebar.vue'
 import { useWikiManager, type WikiTreeNode } from '~/composables/useWikiManager'
@@ -175,6 +186,7 @@ const {
   derivedDescription,
   save,
   createPage,
+  createSpace,
   removePage,
   toggleContext,
   resolveLink,
@@ -187,6 +199,8 @@ const {
   importFilesViaDialog,
   importFolderViaDialog,
   importDrop,
+  spaceOptions,
+  projectOptions,
   renamePage,
   backlinkCount,
   sidebarWidth,
@@ -270,21 +284,48 @@ async function onNewPage(): Promise<void> {
   if (!page) pushToast(store.lastError || t('wiki.toast.createFailed'), 'error')
 }
 
-async function onImportFiles(): Promise<void> {
-  const current = selectedPage.value
-  importTarget.value = {
-    source: current?.source ?? 'global',
-    ...(current?.projectId ? { projectId: current.projectId } : {}),
-    space: current?.space ?? '',
-  }
-  await importFilesViaDialog()
+// "Nhập" now opens the target picker; the OS dialog comes after the destination is
+// known. Guessing the destination from the current selection is what silently dropped
+// an imported file at the wiki root.
+const importOpen = ref(false)
+function onImportFiles(): void {
+  importOpen.value = true
+}
+function onImportFolder(): void {
+  importOpen.value = true
+}
+
+async function onPickFiles(target: WikiImportTarget): Promise<void> {
+  importOpen.value = false
+  await importFilesViaDialog(target)
   reportImport()
 }
 
-async function onImportFolder(): Promise<void> {
-  importTarget.value = { source: 'global', space: '' }
-  await importFolderViaDialog()
+async function onPickFolder(target: WikiImportTarget): Promise<void> {
+  importOpen.value = false
+  await importFolderViaDialog(target)
   reportImport()
+}
+
+async function onNewSpace(): Promise<void> {
+  const name = await prompt({
+    title: t('wiki.newSpace.prompt'),
+    placeholder: t('wiki.newSpace.placeholder'),
+    submitLabel: t('common.create'),
+  })
+  if (!name) return
+  // A new space follows the tier of the current selection, so creating one from
+  // inside a project wiki stays in that project.
+  const current = selectedPage.value
+  const id = await createSpace({
+    name,
+    source: current?.source ?? 'global',
+    ...(current?.projectId ? { projectId: current.projectId } : {}),
+  })
+  pushToast(
+    id ? t('wiki.toast.spaceCreated') : store.lastError || t('wiki.toast.spaceFailed'),
+    id ? 'success' : 'error',
+  )
 }
 
 async function onDrop(event: DragEvent): Promise<void> {

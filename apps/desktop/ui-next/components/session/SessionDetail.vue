@@ -49,8 +49,8 @@
         <Icon name="code" style="width: 14px; height: 14px" />
       </button>
 
-      <!-- Config gear → Budget / Tools / MCP (Model · Account · Effort · Style moved
-           to the status-bar chips). -->
+      <!-- Config gear → Budget / Tools (Model · Account · Effort · Style live on the
+           status-bar chips; the per-session MCP whitelist on the composer chip). -->
       <span style="position: relative">
         <button
           class="iconbtn"

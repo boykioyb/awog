@@ -38,6 +38,10 @@
       <SettingsTog v-model="quips" />
     </SettingsField>
 
+    <SettingsField :name="t('settings.pet.tricks.name')" :desc="t('settings.pet.tricks.desc')">
+      <SettingsTog v-model="tricks" />
+    </SettingsField>
+
     <SettingsField :name="t('settings.pet.reminder.name')" :desc="t('settings.pet.reminder.desc')">
       <SettingsSeg v-model="reminder" :options="reminderOptions" />
     </SettingsField>
@@ -95,6 +99,12 @@ const autoPeek = computed<boolean>({
 const quips = computed<boolean>({
   get: () => store.pet.quips,
   set: (value) => store.updatePet({ quips: value }),
+})
+// Only the 8-row packs (shiba/dino/miku) have a skill to perform; girl + chicken ignore
+// it. The toggle stays visible either way — hiding it per sprite would read as a bug.
+const tricks = computed<boolean>({
+  get: () => store.pet.tricks,
+  set: (value) => store.updatePet({ tricks: value }),
 })
 const scaleOptions = PET_SCALES.map((s) => ({ label: `${Math.round(s * 100)}%`, value: String(s) }))
 

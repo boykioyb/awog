@@ -84,6 +84,10 @@ Hệ quả thiết kế:
 | `done` | `unread > 0` | Pet ngồi cạnh dấu ✓, có dot đỏ |
 | `idle` | còn lại | Pet thở, 1 frame / 2s |
 
+**`special` (skill) KHÔNG phải một state** — nó là hàng thứ 8 của sheet, phát **một
+lần** đè lên hàng state đang chạy rồi trả về ngay, nên nó không cạnh tranh với bảng ưu
+tiên trên. Xem [§ Skill riêng của mỗi pet](#skill-riêng-của-mỗi-pet).
+
 Nguồn đếm **giống hệt** `useTrayStatus` ([useTrayStatus.ts:26-44](../../apps/desktop/ui-next/composables/useTrayStatus.ts#L26-L44))
 — tách chung một composable `usePetStatus` dùng lại phép đếm đó, không copy logic.
 
@@ -182,9 +186,11 @@ export type PetModel = {
   // Pref mà PET cần để render. Đi kèm model thay vì mở kênh riêng — cùng một nơi
   // (cửa sổ chính) tính cả hai.
   autoPeek: boolean
+  // Cho pet diễn skill của pack (hàng `special`) — xem § Skill riêng của mỗi pet.
+  tricks: boolean
   sprite: 'girl'
-  // Pet tự scale bằng CSS transform — KHÔNG dùng setZoomFactor (zoom Chromium là
-  // per-origin → phóng to cả app). Xem mục "Cửa sổ Electron".
+  // Cỡ SPRITE (chữ không scale theo). Pet tự scale bằng CSS transform — KHÔNG dùng
+  // setZoomFactor (zoom Chromium là per-origin → phóng to cả app). Xem "Cửa sổ Electron".
   scale: number
   // Hướng nhìn. Do MAIN quyết vì chỉ nó biết cửa sổ đang ở đâu (xem "Hướng mặt").
   facing: 'left' | 'right'
@@ -213,8 +219,9 @@ Slice `pet` trong [stores/settings.ts](../../apps/desktop/ui-next/stores/setting
 | Field | Default | Ghi chú |
 |---|---|---|
 | `enabled` | `false` | **Opt-in** — thứ nổi trên mọi cửa sổ không được tự bật |
-| `sprite` | `'girl'` | Pet built-in trong `PET_SPRITES` (`girl`, `shiba`, `bichon`, `dino`, `chicken`, `miku`); đi xuống pet trong `PetModel`. Tên lạ (pack bị gỡ giữa các bản — `shibasticker` gỡ ở bản này vì trùng với `shiba`) được **clamp về pet đầu tiên** lúc load store. Sheet của `shiba` + `dino` + `miku` cắt bằng [tools/sprite-cutter](../../tools/sprite-cutter/README.md): 12 frame/hàng thay vì 10/8, renderer nhận qua class `sheet12` |
-| `scale` | `1` | `1 \| 1.25 \| 1.5` (`PET_SCALES`) |
+| `sprite` | `'girl'` | Pet built-in trong `PET_SPRITES` (`girl`, `shiba`, `dino`, `chicken`, `miku`); đi xuống pet trong `PetModel`. Tên lạ (pack bị gỡ giữa các bản — `shibasticker` gỡ vì trùng với `shiba`, `bichon` gỡ vì license cấm phát tán file art nên sheet không commit được) được **clamp về pet đầu tiên** lúc load store. Sheet của `shiba` + `dino` + `miku` cắt bằng [tools/sprite-cutter](../../tools/sprite-cutter/README.md): 12 frame/hàng thay vì 10/8, renderer nhận qua class `sheet12` |
+| `scale` | `1` | `1 \| 1.25 \| 1.5` (`PET_SCALES`) — **chỉ cỡ sprite**, chữ trong HUD/quip/badge giữ nguyên |
+| `tricks` | `true` | Cho pet diễn skill của pack (hàng `special`) — xem [§ Skill](#skill-riêng-của-mỗi-pet) |
 | `autoPeek` | `true` | Auto-peek 6s; đi xuống pet **trong `PetModel`**, không phải `PetPrefs` |
 | `quips` | `true` | Bong bóng thoại tếu; cũng đi trong `PetModel` |
 | `quipLines` | `{}` | Lời thoại người dùng sửa, theo nhóm. Rỗng = dùng default i18n |
@@ -270,14 +277,20 @@ kéo — nên pet lật mặt ngay khi bạn kéo nó qua giữa màn hình. Ren
 `transform: scaleX(-1)` khi `facing === 'left'`. Gallery trong Settings **không** lật:
 ở đó nó là ảnh chân dung, không phải trạng thái.
 
-**Kích thước theo `scale`** — main đổi **kích thước cửa sổ**, renderer đổi **kích thước
-nội dung**, hai bên cùng neo góc dưới-phải nên khớp nhau ở mọi scale:
+**Kích thước theo `scale`** — `scale` chỉ phóng **con pet**, **không** phóng chữ: HUD,
+bong bóng thoại và badge đếm luôn ở cỡ design, nên đổi cỡ pet không làm chữ to/nhỏ theo.
 
-- Main: cửa sổ `resizable: false` ghim min/max size vào kích thước hiện tại nên
-  `setSize` bị bỏ qua — phải `setResizable(true)` → `setSize` → `setResizable(false)`.
-- Renderer: `.pet-scale` (khung design cố định `320×200`, **phải khớp**
-  `BASE_WIDTH`/`BASE_HEIGHT`) mang `transform: scale(model.scale)` +
-  `transform-origin: bottom right`.
+- Main: đổi **kích thước cửa sổ** theo đúng `scale`. Cửa sổ `resizable: false` ghim
+  min/max size vào kích thước hiện tại nên `setSize` bị bỏ qua — phải
+  `setResizable(true)` → `setSize` → `setResizable(false)`. Cửa sổ to hơn phần nội dung
+  cần là **cố ý**: đó là khoảng chừa (trong suốt, click-through) để con pet cao thêm
+  không đẩy HUD ra ngoài khung.
+- Renderer: `.pet-canvas` (khung design cố định `320×280`, **phải khớp**
+  `BASE_WIDTH`/`BASE_HEIGHT`) **không** transform; chỉ `.pet-sprite` mang
+  `transform: scale(var(--pet-scale))` + `transform-origin: bottom right`. `.pet-anchor`
+  bọc ngoài lấy đúng cỡ đã scale (`calc(66px * var(--pet-scale))`, phải khớp
+  `.sprite-wrap` trong `PetSprite.vue`) để rect **kéo thả + hit-test click-through**
+  vẫn trùng với thứ đang vẽ.
 
 > **⚠ KHÔNG dùng `webContents.setZoomFactor`.** Zoom của Chromium là **per-ORIGIN**,
 > không per-window: pet và cửa sổ chính cùng origin (`app://bundle` hoặc dev URL) nên
@@ -304,11 +317,12 @@ trong `workArea` để không nằm dưới taskbar/Dock.
   animation, không canvas, **không dependency mới**. Artwork: pzUH "Cat & Dog Free
   Sprites" — **CC0**, chi tiết + công thức ghép sheet ở
   [public/pet/CREDITS.md](../../apps/desktop/ui-next/public/pet/CREDITS.md).
-  Sheet `1320×896`, cell `132×128` (2× cỡ hiển thị ~64px cho retina), **7 hàng**:
-  idle / working / awaiting / **done** / offline + **2 hàng cảnh phụ** (working-alt,
-  idle-alt). `done` có hàng riêng — pack nào có tư thế ăn mừng (nháy mắt, giơ biển
-  "OK!") thì dùng, pack không có thì lặp lại một frame bình thường. Mọi sheet **cùng geometry** nên
-  chung một bộ số CSS.
+  Cell `132×128` (2× cỡ hiển thị ~64px cho retina). Hàng: idle / working / awaiting /
+  **done** / offline + **2 hàng cảnh phụ** (working-alt, idle-alt) + **hàng `special`**
+  (skill, chỉ pack cắt bằng sprite-cutter mới có). Hai layout: pack cũ `1320×896`
+  (10 cột × 7 hàng), pack sprite-cutter `1584×1024` (12 cột × **8 hàng**) — renderer nhận
+  layout thứ hai qua class `sheet12`. `done` có hàng riêng — pack nào có tư thế ăn mừng
+  (nháy mắt, giơ biển "OK!") thì dùng, pack không có thì lặp lại một frame bình thường.
 - **`chicken.png`** là sheet duy nhất **mọi hàng đều là animation thật** (artwork đặt
   riêng, 9 khối chu kỳ có nhãn): chạy khi `working`, nhảy khi `awaiting`, **đẻ trứng khi
   `done`**, mổ đất ở cảnh phụ `idle`. Nó cũng là sheet duy nhất ngoài `girl.png`
@@ -375,13 +389,57 @@ không đọc i18n.
 - `pet:update` debounce 300ms ở cửa sổ chính (giống `sendTrayUpdate`).
 - `powerMonitor` `suspend` → `win.hide()`, `resume` → `show()`.
 
+## Skill riêng của mỗi pet
+
+Mỗi tấm art gốc có **nhiều hơn 7 animation rất nhiều** (dino 28, miku 36, shiba 15) —
+`tools/sprite-cutter` cắt hết, nhưng sheet chỉ mang được số hàng renderer biết. Hàng thứ
+8 `special` là chỗ cho **một** animation "đặc sản" của pack:
+
+| Pack | Skill | Khối nguồn |
+|---|---|---|
+| `dino` | phun lửa | `FIRE BREATH` (khai frame tay — xem dưới) |
+| `miku` | xoay tròn, vòng năng lượng dưới chân | `SPIN` |
+| `shiba` | rũ mình rồi lộn một vòng | `SHAKE` |
+| `girl`, `chicken` | **không có** | tấm gốc không nằm trong repo ⇒ không cắt lại được |
+
+**Ba trigger** (đều trong [pet.vue](../../apps/desktop/ui-next/pages/pet.vue), pet tự
+quyết — không có IPC nào cho việc này):
+
+1. **Vừa xong việc** — state đổi sang `done`. Đây là trigger đáng giá nhất: `done` là
+   state người dùng vui khi thấy, và vốn là hàng ít chuyển động nhất.
+2. **Bấm vào pet** — cùng cú click pin/unpin HUD.
+3. **Thỉnh thoảng lúc rảnh** — `TRICK_IDLE_MS` = 3 phút, **chỉ khi `idle`**. Lúc đang
+   chạy thì hàng state đã động sẵn và người dùng đang nhìn HUD, diễn thêm là tranh chỗ.
+
+Công tắc: **Settings → Pet → "Khoe skill"** (`settings.pet.tricks`, mặc định BẬT) →
+`PetModel.tricks`. Tắt là dừng cả timer, không chỉ frame kế tiếp.
+
+Cơ chế: hàng `special` là hàng **duy nhất không loop** —
+`animation: play12 1s steps(12) 1 both`. Page bật cờ `special`, hết `SPECIAL_MS` (1s,
+**phải khớp** duration trong CSS) thì tắt để pet về hàng state. Gọi lại lúc đang diễn thì
+**bỏ qua**, không xếp hàng: CSS animation không restart được nếu không nhả class một
+frame, và không ai cần một hàng đợi trò. Pack không có hàng đó thì `PetSprite` **phớt lờ**
+cờ này (danh sách `SHEET_12`) chứ không vẽ ô trong suốt.
+
+> **Vì sao hàng lửa của dino phải khai frame tay.** Tấm gốc vẽ hàng `FIRE BREATH` như một
+> cuộn phim của *viên đạn*: "dino + lửa" là **một** component 142px, rồi ba quả cầu lửa và
+> khói là các pose **không có con dino**. Để bộ tách frame tự chạy thì (a) nó chặt đôi
+> chính component đó — con dino rời khỏi tia lửa của nó, và (b) pet **biến mất 6/12 frame**.
+> Còn gộp cả 142px vào một ô thì `plan_layout` phải hạ tỉ lệ **cả sheet** 22% (một tỉ lệ
+> cho mọi hàng) ⇒ dino teo lại ở **mọi** state chỉ vì một hàng. Nên preset khai
+> `frame_regions` tay: 3 pose lấy đà, rồi **cắt ngắn chính tia lửa ngay trong ô**
+> (56→96px, đều ≤ 111px = ngân sách rộng ở tỉ lệ hiện tại) cho tia phun ra rồi rút lại,
+> cuối là pose thu người. Chi tiết + toạ độ:
+> [presets/dino.yaml](../../tools/sprite-cutter/presets/dino.yaml).
+
 ## Settings UI
 
 **Mục riêng "Pet"** trong nav Settings ([SettingsPet.vue](../../apps/desktop/ui-next/components/settings/SettingsPet.vue)),
 không nhét vào Appearance: pet là một **surface riêng** (cửa sổ trên desktop) và phần
 chọn sprite cần chỗ để lớn thành gallery thật.
 
-- Toggle bật/tắt · **gallery chọn pet** · segmented kích thước · toggle auto-peek · nút "Đặt lại vị trí".
+- Toggle bật/tắt · **gallery chọn pet** · segmented kích thước · toggle auto-peek ·
+  toggle "Nói linh tinh" · toggle **"Khoe skill"** · nhắc nhở định kỳ · nút "Đặt lại vị trí".
 - Gallery render **chính `PetSprite`** đang chạy vòng idle — cái bạn chọn đúng là cái
   sẽ hiện trên desktop, và không có bản preview thứ hai để lệch với thật.
 - Chuỗi: `settings.pet.*` trong `settings.json`; chuỗi trong cửa sổ pet ở `pet.json`.

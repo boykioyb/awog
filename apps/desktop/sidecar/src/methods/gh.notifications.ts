@@ -2,20 +2,25 @@
 // (docs/features/github-notifications.md). Account-scoped, NOT repo-scoped: the
 // inbox spans every repo, so there is no cwd and nothing path-like in the args.
 //
-// One `gh api notifications` call per poll. `since` (the renderer's last poll
-// stamp) keeps the payload small; the renderer does the dedupe + per-project
-// filtering, since only it knows which projects the user opted in to.
+// One `gh api notifications` call per poll returns the whole UNREAD inbox (no
+// `since` window): the renderer renders it as a list (the bell inbox), so it needs
+// the current state — a delta would leave threads read on github.com sitting in the
+// panel forever.
+//
+// Unread-only is deliberate. GitHub's `all=true` would also return read threads, but
+// the endpoint caps a page at 50 rows either way — measured on a live inbox: 50
+// unread with `all=false` vs 39 unread + 11 read with `all=true`, i.e. 11 real unread
+// notifications silently pushed off the page and out of the badge count. The renderer
+// keeps its own read rows instead (useGhInbox).
+//
+// Dedupe + per-project filtering stay in the renderer, which is the only side that
+// knows which projects the user opted in to.
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { runGhAccount } from '../github/runner.js'
 
-// ISO-8601 UTC, the shape GitHub's `since` expects. Validated (not just typed) —
-// it is the one caller-supplied value that reaches the request path.
-const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
-
 const Params = z.object({
   account: z.string().optional(),
-  since: z.string().regex(ISO_UTC_RE).optional(),
   limit: z.number().int().min(1).max(100).optional(),
 })
 
@@ -23,6 +28,7 @@ const Params = z.object({
 const NotificationJson = z
   .object({
     id: z.string(),
+    unread: z.boolean().optional(),
     reason: z.string().optional(),
     updated_at: z.string().optional(),
     subject: z
@@ -45,6 +51,8 @@ export type GhNotificationType = 'PullRequest' | 'Issue' | 'Other'
 
 export interface GhNotification {
   id: string
+  // false once the thread is read (here or on github.com).
+  unread: boolean
   // GitHub's reason (review_requested / mention / assign / comment / …).
   reason: string
   updatedAt: string
@@ -92,11 +100,7 @@ register('gh.notifications', async (raw): Promise<Result> => {
   const limit = params.limit ?? 50
   // Unread only (`all=false` is gh's default) across every repo the account can
   // see; the renderer filters down to the opted-in projects.
-  const query = [`per_page=${limit}`, params.since ? `since=${params.since}` : '']
-    .filter((p) => p !== '')
-    .join('&')
-
-  const stdout = await runGhAccount(['api', `notifications?${query}`], params.account)
+  const stdout = await runGhAccount(['api', `notifications?per_page=${limit}`], params.account)
   const rows = NotificationsJson.parse(JSON.parse(stdout))
 
   const notifications: GhNotification[] = rows.map((r) => {
@@ -104,6 +108,9 @@ register('gh.notifications', async (raw): Promise<Result> => {
     const target = subjectTarget(repo, r.subject?.url, r.subject?.type)
     return {
       id: r.id,
+      // Absent field ⇒ treat as unread: an inbox that hides something is worse
+      // than one that shows it as needing attention.
+      unread: r.unread ?? true,
       reason: r.reason ?? '',
       updatedAt: r.updated_at ?? '',
       title: r.subject?.title ?? '',
