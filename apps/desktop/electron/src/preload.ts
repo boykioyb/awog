@@ -65,6 +65,7 @@ type PetModel = {
   quipLines: string[]
   reminders: string[]
   reminderMs: number
+  dismissed: boolean
   facing: 'left' | 'right'
 }
 // The main window pushes everything EXCEPT facing — only main knows where the
@@ -74,6 +75,7 @@ type PetCommand =
   | { kind: 'open'; target: TrayCommand }
   | { kind: 'permission'; requestId: string; decision: 'allow' | 'deny' }
   | { kind: 'toggle' }
+  | { kind: 'dismiss' }
 type PetPrefs = { enabled: boolean; scale: number; pos: { x: number; y: number } | null }
 // Mobile Remote Control (ADR 0067). Public device metadata only — no tokenHash.
 type RemoteDevice = {

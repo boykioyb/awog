@@ -104,6 +104,10 @@ export function usePetStatus() {
   const settings = useSettingsStore()
   const { running, attention, unread } = useStatusCounts()
   const { openTarget } = useStatusRouting()
+  // Temporary dismiss (its own composable to avoid a cycle with the store). Grab the
+  // handle once — `dismissed` is a shared module ref, so reading it inside `model`
+  // makes the pet-hide state a reactive input like everything else.
+  const petDismiss = usePetDismiss()
 
   // Prefs → main. The store stays the single source of truth: main only ever
   // reacts (create / resize / move / destroy), never flips the pref itself.
@@ -203,6 +207,9 @@ export function usePetStatus() {
       reminderMs: Math.max(0, settings.pet.reminderMinutes) * 60_000,
       sprite: settings.pet.sprite,
       scale: settings.pet.scale,
+      // Reading the shared ref here means stopModel's [model, enabled] watch fires the
+      // push on its own when dismiss/reset flips — no extra watch on the source needed.
+      dismissed: petDismiss.dismissed.value,
     }
   })
 
@@ -234,11 +241,21 @@ export function usePetStatus() {
           reminderMs: m.reminderMs,
           sprite: m.sprite,
           scale: m.scale,
+          dismissed: m.dismissed,
         }
         traceSend('sendPetUpdate', payload, () => bridge.sendPetUpdate?.(payload))
       }, 300)
     },
     { immediate: true },
+  )
+
+  // Re-enabling the pet from Settings clears a stale dismiss: a user who turned it off
+  // then on again expects to see it, not a window that stays hidden from an old X.
+  const stopEnabledReset = watch(
+    () => settings.pet.enabled,
+    (on) => {
+      if (on) petDismiss.resetDismiss()
+    },
   )
 
   // Resolve a permission the user approved from the pet. The pet only carries the
@@ -261,6 +278,10 @@ export function usePetStatus() {
   }
 
   const offCommand = bridge.onPetCommand?.((cmd: AwogPetCommand) => {
+    if (cmd.kind === 'dismiss') {
+      petDismiss.dismiss()
+      return
+    }
     if (cmd.kind === 'toggle') {
       settings.updatePet({ enabled: !settings.pet.enabled })
       return
@@ -293,6 +314,7 @@ export function usePetStatus() {
     if (pushTimer) clearTimeout(pushTimer)
     stopPrefs()
     stopModel()
+    stopEnabledReset()
     offCommand?.()
     offMoved?.()
   })

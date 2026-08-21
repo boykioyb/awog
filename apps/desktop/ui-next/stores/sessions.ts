@@ -2885,6 +2885,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // marked it) — otherwise the tab / NavRail / list badges linger on the session the
     // user is actively chatting in. Covers both the immediate send and the re-queue path.
     s.unread = false
+    // A new prompt (in ANY session — every turn-start path lands here) un-dismisses
+    // the desktop pet: the user asked for work, so bring the ambient sprite back.
+    usePetDismiss().resetDismiss()
     // Stamp last-activity so the list "Updated" sort + live time label track chatting
     // (the sidecar re-stamps on persist; this keeps the client order fresh until reload).
     // The list label is derived reactively from `updatedAt`, so we must NOT freeze a
