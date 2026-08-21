@@ -30,6 +30,76 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.31.0',
+    date: '2026-08-21',
+    highlight: {
+      en: 'GitHub notifications now have a real home: a bell in the top bar that lists every unread thread on your account, not just the ones allowed to interrupt you. The wiki learns where things belong — spaces you create on purpose, and an import that asks where the files should land instead of guessing. And your desktop pet picked up a trick.',
+      vi: 'Thông báo GitHub đã có chỗ ở thật sự: một chiếc chuông trên thanh trên cùng, liệt kê mọi thread chưa đọc của tài khoản chứ không chỉ những thread được phép nhắc bạn. Wiki thì biết chỗ để đồ hơn — space do bạn chủ động tạo, và lệnh nhập file hỏi bạn muốn để vào đâu thay vì tự đoán. Còn pet trên màn hình thì học được một chiêu.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'A notification bell in the top bar. It lists every unread GitHub thread on your account with who opened it, badges the unread count, and lets you mark one thread — or the whole inbox — as read. “Watched” narrows it to the projects you picked; “All” is everything.',
+        vi: 'Chuông thông báo trên thanh trên cùng. Nó liệt kê mọi thread GitHub chưa đọc của tài khoản kèm người mở, hiện số chưa đọc, và cho bạn đánh dấu đã đọc từng thread — hoặc cả hộp thư. Tab “Đang theo dõi” chỉ lọc các project bạn đã chọn; tab “Tất cả” là toàn bộ.',
+      },
+      {
+        kind: 'changed',
+        en: 'Picking projects in Settings → Git now only decides what is allowed to interrupt you. The bell always shows the whole inbox, so an empty bell means your GitHub inbox really is clear — it no longer means “nothing was being watched”.',
+        vi: 'Việc chọn project ở Settings → Git giờ chỉ quyết định thứ nào được phép nhắc bạn. Chuông luôn hiện cả hộp thư, nên chuông rỗng nghĩa là hộp thư GitHub thật sự sạch — không còn nghĩa là “chưa theo dõi project nào”.',
+      },
+      {
+        kind: 'added',
+        en: 'Create a wiki space on purpose. “New space” makes a top-level section with its own intro page, so it carries the title you typed instead of one guessed from a folder name.',
+        vi: 'Tạo space wiki một cách chủ động. Nút “Space mới” tạo một mục cấp 1 kèm trang giới thiệu riêng, nên nó mang đúng cái tên bạn gõ chứ không phải tên suy ra từ folder.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Importing markdown asks where it should go. You pick the wiki and the space (or make a new one) and see the destination before the file picker opens — previously an import with nothing selected quietly landed at the wiki root, where it belonged to no space at all.',
+        vi: 'Nhập file markdown giờ hỏi bạn muốn để vào đâu. Bạn chọn wiki và space (hoặc tạo space mới) rồi thấy rõ đích đến trước khi hộp chọn file mở ra — trước đây nhập lúc chưa chọn gì thì file lặng lẽ rơi vào gốc wiki, không thuộc space nào.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Editing a space’s intro page saves back to that page. Renaming or deleting one works the same way, instead of leaving the original behind and creating a near-duplicate beside it.',
+        vi: 'Sửa trang giới thiệu của một space giờ lưu lại đúng trang đó. Đổi tên hay xoá cũng vậy, không còn để lại bản gốc và tạo thêm một trang gần-trùng bên cạnh.',
+      },
+      {
+        kind: 'changed',
+        en: 'Per-session wiki scope is gone. Marking a page private is the one place that decides what an agent may see, so there is no second list to keep in sync — sessions read whichever pages you left visible.',
+        vi: 'Bỏ phần giới hạn wiki theo từng session. Việc đánh dấu một trang là riêng tư giờ là nơi duy nhất quyết định agent được thấy gì, nên không còn danh sách thứ hai phải giữ đồng bộ — session đọc đúng những trang bạn để ở chế độ hiện.',
+      },
+      {
+        kind: 'changed',
+        en: 'The MCP connections a session may use moved out of the settings gear and into a chip beside the composer, next to Mode — it is a decision you make while typing, not a setting you go looking for.',
+        vi: 'Danh sách MCP mà một session được dùng đã rời khỏi bánh xe cấu hình, chuyển thành một chip ngay cạnh hộp soạn tin, bên cạnh Mode — đây là thứ bạn quyết khi đang gõ, không phải cái setting phải đi tìm.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The terminal scrollbar works again. The bar you could see was dead chrome left over by the terminal library, drawn on top of the real one; now there is a single slider you can actually grab, and the pane buttons no longer sit on top of it.',
+        vi: 'Thanh cuộn của terminal đã dùng được lại. Thanh mà bạn thấy vốn là phần dư của thư viện terminal, vẽ đè lên thanh thật; giờ chỉ còn một thanh duy nhất và kéo được, còn hai nút của pane không ngồi lên nó nữa.',
+      },
+      {
+        kind: 'improved',
+        en: 'Comments in code blocks are no longer greyed out. Their contrast sat below the readable floor, which made a block that is all comments — a diff or a snippet of notes — hard to read at all.',
+        vi: 'Comment trong khối code không còn bị làm mờ. Độ tương phản của nó nằm dưới ngưỡng đọc được, khiến những khối toàn comment — một đoạn diff hay một mẩu ghi chú — gần như không đọc nổi.',
+      },
+      {
+        kind: 'added',
+        en: 'Your desktop pet has a trick: the dino breathes fire, Miku spins, the shiba shakes itself off. It plays when work lands, when you poke the pet, and now and then while it is idle. Turn it off at Settings → Pet.',
+        vi: 'Pet trên màn hình có chiêu riêng: dino phun lửa, Miku xoay tròn, shiba rũ mình. Nó diễn khi vừa xong việc, khi bạn bấm vào pet, và thỉnh thoảng lúc rảnh. Tắt được ở Settings → Pet.',
+      },
+      {
+        kind: 'improved',
+        en: 'The pet size setting now scales only the pet. Its status text and speech bubble keep their size, so a bigger pet no longer means oversized text floating over your screen.',
+        vi: 'Thiết lập cỡ pet giờ chỉ phóng to con pet. Phần chữ trạng thái và bong bóng thoại giữ nguyên cỡ, nên pet to hơn không còn kéo theo cả đống chữ quá khổ nổi trên màn hình.',
+      },
+      {
+        kind: 'changed',
+        en: 'The bichon pet was removed. Its artwork cannot be shipped with the app, so the slot was empty on every machine but the one that built it.',
+        vi: 'Đã gỡ pet bichon. Phần art của nó không được phép đóng gói kèm app, nên ô chọn đó vốn trống trên mọi máy trừ máy dựng bản build.',
+      },
+    ],
+  },
+  {
     version: '0.30.0',
     date: '2026-08-20',
     highlight: {
