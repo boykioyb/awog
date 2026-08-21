@@ -2073,12 +2073,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     )
     const runs = (parts ?? []).filter((p): p is { kind: 'text'; text: string } => p.kind === 'text')
     if (runs.length) {
-      // Reconcile the matching prefix; never clobber across run boundaries. Extra
-      // live blocks keep their streamed text, extra runs are ignored (rare drift).
-      textBlocks.forEach((b, i) => {
-        const run = runs[i]
-        if (run) b.text = run.text
-      })
+      // Positional run→block reconcile is only valid when the live text blocks and the
+      // authoritative `parts` runs are 1:1. They are NOT when a subagent (Task tool) ran:
+      // a subagent-child step arrives with `parentId` and `upsertStep` attaches it to the
+      // parent's `sub.steps` and returns WITHOUT closing the open text run — so runs
+      // separated only by subagent children merge into one live block, while `parts`
+      // keeps every run split. Matching by index then overwrites a merged block with a
+      // short early run and drops the trailing runs — including the final answer. When
+      // the counts disagree, the live per-run deltas (snapped by flushText just before
+      // this call) already hold the complete, correctly-ordered text — leave them alone.
+      if (textBlocks.length === runs.length) {
+        textBlocks.forEach((b, i) => {
+          const run = runs[i]
+          if (run) b.text = run.text
+        })
+      }
       return
     }
     if (!fullText) return
