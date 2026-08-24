@@ -67,6 +67,9 @@ export type PetModel = {
   // Time-based nudges + how often, 0 = off. Independent of state.
   reminders: string[]
   reminderMs: number
+  // Temporary dismiss — the pet hides its draw region while true. Main-driven like
+  // the rest of this group; this side only forwards the value it was pushed.
+  dismissed: boolean
   // Which way the pet looks. Owned by MAIN because only it knows where the window
   // sits: a pet parked at the right edge should face INTO the screen, not off it.
   facing: 'left' | 'right'
@@ -76,6 +79,9 @@ export type PetCommand =
   | { kind: 'open'; target: TrayCommand }
   | { kind: 'permission'; requestId: string; decision: 'allow' | 'deny' }
   | { kind: 'toggle' }
+  // Pet's X — hide until the main window resets it. Forwarded generically by
+  // pet:navigate (only `open` shows the main window), so no handling here.
+  | { kind: 'dismiss' }
 
 // Prefs the MAIN process acts on: whether the window exists at all, how big it is,
 // and where it sits. The renderer's settings store stays the single source of truth.
@@ -118,6 +124,7 @@ const OFFLINE_STATUS: PetStatus = {
   reminderMs: 0,
   sprite: 'girl',
   scale: SCALE_MIN,
+  dismissed: false,
 }
 
 const clampScale = (n: number): number =>

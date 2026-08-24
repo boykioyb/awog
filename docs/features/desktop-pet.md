@@ -192,6 +192,9 @@ export type PetModel = {
   // Cỡ SPRITE (chữ không scale theo). Pet tự scale bằng CSS transform — KHÔNG dùng
   // setZoomFactor (zoom Chromium là per-origin → phóng to cả app). Xem "Cửa sổ Electron".
   scale: number
+  // Ẩn tạm khi hover (xem § Ẩn tạm khi hover). Do MAIN đẩy như phần còn lại của nhóm:
+  // pet ẩn toàn bộ vùng vẽ khi true; prompt mới ở bất kỳ session lật lại false.
+  dismissed: boolean
   // Hướng nhìn. Do MAIN quyết vì chỉ nó biết cửa sổ đang ở đâu (xem "Hướng mặt").
   facing: 'left' | 'right'
 }
@@ -205,6 +208,8 @@ export type PetCommand =
   // Tray menu "Toggle desktop pet" → cửa sổ chính lật pref (pref là nguồn sự thật,
   // main không tự bật/tắt sau lưng nó).
   | { kind: 'toggle' }
+  // Nút X của pet — ẩn tạm tới lần reset kế (KHÔNG đụng pref `enabled`).
+  | { kind: 'dismiss' }
 
 // Prefs main hành động lên: cửa sổ có tồn tại không, to bao nhiêu, nằm đâu.
 export type PetPrefs = { enabled: boolean; scale: number; pos: { x: number; y: number } | null }
@@ -502,6 +507,44 @@ liệu. Nếu sau này pet đọc/ghi trực tiếp qua sidecar → lúc đó m�
 | Kéo pet → "An object could not be cloned" | **Đã fix** — `pos` từ `pet:moved` đi qua contextBridge nên **không** phải plain object; dựng lại field-by-field ngay tại handler trước khi cất vào store, và pick primitive khi gửi `pet:enabled`. Quy tắc chung: **giá trị nhận từ IPC không được cất rồi gửi ngược lại nguyên trạng** |
 | Pet có nổi trên app fullscreen không | Chưa xác nhận trên máy thật sau khi bỏ transform — nếu không, dùng `type: 'panel'` |
 | Linux không hỗ trợ `forward: true` | Không bật click-through — cửa sổ interactive suốt (`SUPPORTS_CLICK_THROUGH` trong pet-window.ts) |
+| Bấm X (ẩn tạm) rồi gửi prompt ở **session khác** | Pet hiện lại — `dismissed` là ref global, `sendMessage` ở bất kỳ session nào cũng reset |
+| Bấm X rồi tắt/bật lại toggle pet ở Settings | Bật lại `enabled` auto-reset `dismissed=false` → pet hiện ngay (không bị kẹt ẩn từ lần X trước) |
+| Bấm X rồi restart app | Pet hiện lại — `dismissed` là runtime ref, không persist |
+| Bấm X khi `enabled=false` | Không xảy ra — cửa sổ pet đã bị hủy, không có sprite để hover/X |
+
+## Ẩn tạm khi hover (dismiss)
+
+Pet luôn hiện gây phiền khi không chạy việc. Giải pháp: một nút **X** (góc trên-trái
+sprite, đối diện count badge) chỉ lộ **khi hover**, cho phép **ẩn tạm** pet mà **KHÔNG**
+đụng tới pref `settings.pet.enabled`.
+
+- **State**: `dismissed` là một `ref` **module-scope singleton** trong
+  `composables/usePetDismiss.ts` (KHÔNG nằm trong `usePetStatus` để cắt phụ thuộc vòng
+  `usePetStatus ↔ sessions`). Runtime-only, **không persist** → restart là hiện lại.
+- **Ẩn (approach a — trong renderer)**: `dismissed` được fold vào `PetModel` và đẩy sang
+  pet qua `pet:update` như mọi field khác. `pages/pet.vue` bọc toàn bộ vùng vẽ trong
+  `v-if="!model.dismissed"` → DOM rỗng → hit-test không thấy gì → cửa sổ click-through
+  hoàn toàn, không quip/trick/animation chạy. **KHÔNG** `hide()`/`close()` ở main → cửa sổ
+  vẫn sống và tiếp tục nhận model push.
+- **Command**: nút X gửi `PetCommand { kind: 'dismiss' }` → `pet:navigate` (forward
+  generic, `main.ts` không cần sửa vì chỉ `open` mới `showWindow()`) → `pet:command` →
+  `usePetStatus.onPetCommand` gọi `petDismiss.dismiss()`.
+- **Reset trigger**: một prompt mới trong **bất kỳ** session — `stores/sessions.ts`
+  `sendMessage` gọi `usePetDismiss().resetDismiss()` (sau quota gate). Push model kế tiếp
+  mang `dismissed:false` → pet hiện lại tự động (guard `enabled` vẫn phải true).
+- **Auto-reset khi bật lại toggle**: `usePetStatus` watch `settings.pet.enabled`, khi bật
+  lên thì `resetDismiss()` — tránh kẹt ẩn từ lần X trước.
+
+Máy trạng thái:
+
+```mermaid
+stateDiagram-v2
+  [*] --> Visible: enabled = true
+  Visible --> Dismissed: bấm X (dismiss)
+  Dismissed --> Visible: prompt mới (mọi session) / bật lại toggle
+  Visible --> [*]: enabled = false (hủy cửa sổ)
+  Dismissed --> [*]: enabled = false (hủy cửa sổ)
+```
 
 ## Out of scope (P2+)
 

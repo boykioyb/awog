@@ -4,7 +4,11 @@
          stays at this size whatever the pet size setting says — only the sprite
          scales, below. Main still grows the window by the same factor, so the taller
          sprite always has room; both anchor bottom-right, so they stay in register. -->
-    <div class="pet-canvas">
+    <!-- Whole draw region gone while dismissed: an empty canvas means the hit-test
+         finds nothing, so the window falls back to fully click-through and no
+         quip/trick/animation runs (the DOM isn't mounted). A new prompt in any session
+         flips `dismissed` back off (usePetDismiss). -->
+    <div v-if="!model.dismissed" class="pet-canvas">
       <div v-if="hudOpen" ref="hudRef" class="pet-hudwrap">
         <PetHud
           :model="model"
@@ -29,6 +33,22 @@
         @pointerup="onPointerUp"
         @pointercancel="onPointerCancel"
       >
+        <!-- Temporary-dismiss X. Sits INSIDE the anchor rect so the existing hit-test
+             already covers it. Stops its own pointer/click so it never triggers the
+             anchor's pin/drag; sends `dismiss` (does NOT touch the enabled pref). -->
+        <button
+          v-if="hovering"
+          type="button"
+          class="pet-dismiss"
+          :title="t('pet.dismiss')"
+          @pointerdown.stop
+          @pointerup.stop
+          @click.stop="send({ kind: 'dismiss' })"
+        >
+          <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
         <div class="pet-sprite">
           <PetSprite
             :state="model.state"
@@ -76,6 +96,7 @@ const IDLE_MODEL: AwogPetModel = {
   reminderMs: 0,
   sprite: 'girl',
   scale: 1,
+  dismissed: false,
   facing: 'left',
 }
 
@@ -105,6 +126,8 @@ const SPECIAL_MS = 1000
 // How often the pet performs on its own while nothing is running. Rare on purpose — a
 // trick every few seconds is a distraction, and this thing floats over every window.
 const TRICK_IDLE_MS = 180_000
+
+const { t } = useI18n()
 
 const bridge = typeof window !== 'undefined' ? window.awog : undefined
 
@@ -527,6 +550,37 @@ body,
 }
 .pet-anchor:active {
   cursor: grabbing;
+}
+
+/* Temporary-dismiss X — top-left corner, opposite the count badge (top-right). Only
+   shown on hover (v-if), so it never covers the idle sprite. */
+.pet-dismiss {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--textMuted);
+  background: var(--bgEl);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.pet-dismiss:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.pet-dismiss svg {
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  fill: none;
 }
 
 .pet-badge {

@@ -166,14 +166,14 @@ describe('parseUnifiedDiff', () => {
 
   it('keeps a plain path containing spaces intact', () => {
     const stdout = [
-      'diff --git a/docs/Panwall DX/README.md b/docs/Panwall DX/README.md',
+      'diff --git a/docs/My Docs/README.md b/docs/My Docs/README.md',
       '@@ -1 +1,2 @@',
       ' a',
       '+b',
     ].join('\n')
     const out = parseUnifiedDiff(stdout)
     expect(out).toHaveLength(1)
-    expect(out[0]!.path).toBe('docs/Panwall DX/README.md')
+    expect(out[0]!.path).toBe('docs/My Docs/README.md')
   })
 })
 

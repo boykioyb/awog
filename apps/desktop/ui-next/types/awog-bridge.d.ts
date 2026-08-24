@@ -85,6 +85,10 @@ export type AwogPetModel = {
   reminders: string[]
   // Milliseconds between periodic nudges; 0 = off.
   reminderMs: number
+  // Temporary dismiss (Desktop pet). Main-driven like the rest of this group: the
+  // pet hides its whole draw region while true, and a new prompt (any session) flips
+  // it back. NOT `facing` — it is state the main window resolves, not window geometry.
+  dismissed: boolean
   // Which way the pet looks. Set by MAIN (only it knows where the window sits): a pet
   // parked at the right edge faces INTO the screen.
   facing: 'left' | 'right'
@@ -95,6 +99,9 @@ export type AwogPetCommand =
   | { kind: 'open'; target: AwogTrayCommand }
   | { kind: 'permission'; requestId: string; decision: 'allow' | 'deny' }
   | { kind: 'toggle' }
+  // Pet's X button — hide until the next reset trigger. Does NOT touch the enabled
+  // pref, so main keeps the window alive and the model keeps flowing.
+  | { kind: 'dismiss' }
 export type AwogPetPrefs = {
   enabled: boolean
   scale: number

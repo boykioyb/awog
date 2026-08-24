@@ -39,7 +39,7 @@
         :title="t('sessions.bg.stop')"
         @click="onStop(sh.shellId)"
       >
-        <Icon name="stop" style="width: 11px; height: 11px" />
+        <Icon name="x" style="width: 11px; height: 11px" />
       </button>
     </div>
   </div>
