@@ -258,6 +258,10 @@
                the top of the conversation without shifting layout. -->
           <SessionDoneFlash v-if="isCute" :status="session.status" />
           <SessionTodoPanel :session="session" />
+          <!-- Reading anchors for this session (spec §6.1). Mounted HERE, not inside
+               SessionTranscript, so the SSH co-pilot's transcript does not grow a bar
+               of its own; absent from the DOM entirely when there are no bookmarks. -->
+          <SessionBookmarkBar :session="session" />
           <!-- Find-in-session (⌘/Ctrl+F): floats over the top-right of the chat column,
                left of the transcript's fold-all button, so nothing shifts when it opens. -->
           <div v-if="findOpen" class="findwrap">

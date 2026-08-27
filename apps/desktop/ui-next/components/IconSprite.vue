@@ -242,6 +242,11 @@
       <symbol id="i-pin" viewBox="0 0 24 24">
         <path d="M12 17v5M8 3h8l-1.2 7.2 2.7 2.8H6.5l2.7-2.8z" />
       </symbol>
+      <!-- Reading anchor on a transcript message (ADR 0074). Deliberately NOT the pin
+           glyph above: pinning feeds the model, bookmarking does not. -->
+      <symbol id="i-bookmark" viewBox="0 0 24 24">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+      </symbol>
       <symbol id="i-foldv" viewBox="0 0 24 24">
         <path d="M8 4l4 4 4-4M8 20l4-4 4 4M4 12h16" />
       </symbol>
