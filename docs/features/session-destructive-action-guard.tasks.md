@@ -19,7 +19,7 @@
 
 | Lát | Nội dung | Phụ thuộc | AC |
 |---|---|---|---|
-| **B1** | Gate confirm **4 hành động** + danger hover **5 hành động / 6 điểm bấm** + 12 khoá i18n × 2 ngôn ngữ + §4.6 so lại + toast + Boy Scout | **KHÔNG** — độc lập hoàn toàn, ship ngay, chạy **song song** T0a/T0b/T0c của feature anh em | AC-G1…AC-G36 |
+| **B1** | Gate confirm **4 hành động** + danger hover **5 hành động / 6 điểm bấm** + 12 khoá i18n × 2 ngôn ngữ + §4.6 so lại + toast + Boy Scout | **KHÔNG** — độc lập hoàn toàn, ship ngay, chạy **song song** T0a/T0b/T0c của feature anh em | AC-G1…AC-G35 (**AC-G36 superseded**) |
 | **B2** | §4.8 vá persist `rewind` ("neo vào `eid` gần nhất phía trước") + thêm câu "Không thể hoàn tác" vào hộp thoại `rewind` | **DEPENDENCY CỨNG → T0c** | AC-R1…AC-R9 |
 
 ### ⚠ DEPENDENCY CỨNG chéo feature: `B2 → T0c`
@@ -29,7 +29,7 @@
 - `T0c` = task của [session-transcript-navigation.tasks.md](./session-transcript-navigation.tasks.md) (`T0c.1` → `T0c.2` → `T0c.4 infosec` → **`T0c.3`**): gắn `eid` cho **user/system message** + **mint `userMessageId` lúc gửi**.
 - Lý do: quy tắc §4.8 neo vào *"message có `eid` gần nhất phía trước"*. Trước T0c, `rewind` trên turn assistant có `prev` là **user** — mà user **chưa có `eid`** (`sessions.ts:1050-1063`) ⇒ ca **phổ biến nhất** rơi vào nhánh không neo được.
 - **Mốc mở khoá chính xác:** `T0c.3` (store gắn `eid` + mint `userMessageId`) đã merge. Chỉ `T0c.1/T0c.2` (sidecar) là **chưa đủ** — message user gửi **trong phiên hiện tại** vẫn thiếu `eid` cho tới lần reload (spec §12.2, lối thứ ba #3 đã loại).
-- **Hệ quả bắt buộc trong cửa sổ B1 → B2:** hộp thoại `rewind` **KHÔNG được** chứa câu "Không thể hoàn tác" (**AC-G36**). Câu đó chỉ thêm ở B2 (**AC-R9**), bằng **một dòng diff** nhờ khoá riêng `sessions.guard.irreversible`.
+- ~~**Hệ quả bắt buộc trong cửa sổ B1 → B2:** hộp thoại `rewind` **KHÔNG được** chứa câu "Không thể hoàn tác" (**AC-G36**).~~ **Không áp dụng (2026-08-27):** B1 + B2 merge cùng một nhánh ⇒ cửa sổ đó không tồn tại; câu này có mặt ngay từ commit đầu và **đúng sự thật**. Điều kiện còn hiệu lực: **AC-R9**; **AC-G36 superseded** ([spec §8.8](./session-destructive-action-guard.md)). Khoá riêng `sessions.guard.irreversible` vẫn giữ.
 - **Lát B1 hoàn toàn không phụ thuộc T0c.**
 
 ---
@@ -71,7 +71,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **File chạm:** `apps/desktop/ui-next/components/session/SessionMessageItem.vue`
   - **Depends on:** B1.3
   - **Owner:** developer
-  - **Acceptance:** **AC-G1** (cả 4 mở hộp thoại trước khi message biến mất) · **AC-G2** (7 điểm bấm / 6 hành động còn lại **không** hỏi — gồm `retryModel`) · **AC-G3** (assistant đúng **2** điểm gate, user bubble đúng **3**) · **AC-G4** (grep `useConfirm` trong `components/session/` ⇒ **không** file modal mới) · **AC-G5…AC-G9** (`lostCount === 0` ⇒ không hỏi; **không bao giờ** render "0 tin nhắn") · **AC-G10…AC-G12** (huỷ ⇒ không mất gì, không RPC, không prune bookmark; Esc/scrim = huỷ; huỷ ở edit&resend ⇒ giữ **nội dung cũ**) · **AC-G13…AC-G18** (con số đúng: 12 / 17 / 8 / 2; divider tính 1; turn 5 block tính 1) · **AC-G22/AC-G25/AC-G26** · **AC-G32/AC-G33** (dòng chi phí: có ở 3 hành động chạy lại, **không** ở `rewind`) · **AC-G36** (**B1: hộp thoại `rewind` KHÔNG chứa "Không thể hoàn tác"**, trong khi 3 cái kia CÓ).
+  - **Acceptance:** **AC-G1** (cả 4 mở hộp thoại trước khi message biến mất) · **AC-G2** (7 điểm bấm / 6 hành động còn lại **không** hỏi — gồm `retryModel`) · **AC-G3** (assistant đúng **2** điểm gate, user bubble đúng **3**) · **AC-G4** (grep `useConfirm` trong `components/session/` ⇒ **không** file modal mới) · **AC-G5…AC-G9** (`lostCount === 0` ⇒ không hỏi; **không bao giờ** render "0 tin nhắn") · **AC-G10…AC-G12** (huỷ ⇒ không mất gì, không RPC, không prune bookmark; Esc/scrim = huỷ; huỷ ở edit&resend ⇒ giữ **nội dung cũ**) · **AC-G13…AC-G18** (con số đúng: 12 / 17 / 8 / 2; divider tính 1; turn 5 block tính 1) · **AC-G22/AC-G25/AC-G26** · **AC-G32/AC-G33** (dòng chi phí: có ở 3 hành động chạy lại, **không** ở `rewind`) · ~~**AC-G36**~~ (**superseded** — xem ghi chú đầu file; thay bằng **AC-R9** ở QA-R).
   - **Risk:** công thức `regenerate` **không** được rút gọn thành `msgs.length - i - 1` (sẽ giấu message giữa `ui` và `i` — AC-G16 bắt đúng chỗ này). **`SessionGateCard.vue` KHÔNG được sửa** — quy tắc `lostCount === 0` tự phủ `onRetry` (§4.4). **Rủi ro cùng-file** với A1.4/T0a.3 của feature anh em.
 
 - [ ] **B1.2. Tô `danger` khi hover cho 5 hành động destructive (6 điểm bấm)** — **S**
@@ -120,7 +120,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **File chạm:** `apps/desktop/ui-next/components/session/SessionMessageItem.vue`
   - **Depends on:** B2.1
   - **Owner:** developer
-  - **Acceptance:** **AC-R9** (hộp thoại `rewind` **CÓ** câu "Không thể hoàn tác", và AC-R1…AC-R3 đồng thời pass ⇒ câu đó **đúng sự thật**) — đảo của **AC-G36**. Không khoá i18n nào bị sửa lần thứ hai.
+  - **Acceptance:** **AC-R9** (hộp thoại `rewind` **CÓ** câu "Không thể hoàn tác", và AC-R1…AC-R3 đồng thời pass ⇒ câu đó **đúng sự thật**) — thay cho **AC-G36** đã superseded. Không khoá i18n nào bị sửa lần thứ hai.
   - **Risk:** merge B2.2 mà B2.1 chưa pass QA-R = hộp thoại nói dối ⇒ **không được tách PR riêng cho B2.2**, phải đi cùng B2.1.
 
 ---
@@ -157,7 +157,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Owner:** qa-tester
   - **Acceptance:** **AC-G19 … AC-G26** PASS + E1…E4, E9…E13 đúng hành vi bảng §9.
 
-- [ ] **QA-G3. Verify tín hiệu thị giác + i18n (gồm AC-G36 của cửa sổ B1→B2)** — **S**
+- [ ] **QA-G3. Verify tín hiệu thị giác + i18n** — **S** *(bỏ AC-G36: superseded)*
   - **Mô tả:** Chạy AC-G27…AC-G36.
     1. Hover **6 điểm bấm** destructive ⇒ `--dangerBg` + `--danger`; hover 6 nút an toàn ⇒ trung tính.
     2. **Hover riêng `settings` / "Thử model khác"** ⇒ ra danger **dù nó không mở hộp thoại** (AC-G28 — verify tách bạch, đây là điểm dễ sót nhất).

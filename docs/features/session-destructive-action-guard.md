@@ -63,7 +63,7 @@ Mọi khẳng định dưới đây đọc trực tiếp từ code, không suy �
 - Comment tại `AppGlobalHosts.vue:28-38` nói rõ mục đích: *"a confirm(), a toast, a preview … must work identically in both windows"*.
 
 ⇒ Rủi ro "popout không có host ⇒ `confirm()` treo vĩnh viễn ⇒ hành động im lặng không chạy" **không tồn tại**.
-Vẫn giữ **AC-G15** như một **test hồi quy** để lần refactor sau không lỡ tay gỡ host ra khỏi popout.
+Vẫn giữ **AC-G19** như một **test hồi quy** để lần refactor sau không lỡ tay gỡ host ra khỏi popout.
 
 Lưu ý phụ (đúng, không ảnh hưởng): mỗi renderer có **một singleton `useConfirm()` riêng** (module-level
 trong từng cửa sổ). Cửa sổ chính và popout không chia sẻ state dialog — đúng mô hình hand-off của
@@ -504,7 +504,11 @@ hay không*.
 > "Không thể hoàn tác" — vì lúc đó §4.8 chưa merge và ca phổ biến nhất chỉ cắt trong bộ nhớ (message
 > quay lại sau khi khởi động lại app). Một hộp thoại an toàn nói sai **một lần** là mất uy tín ở **mọi**
 > hộp thoại còn lại, kể cả 3 cái đang nói đúng. Câu này được thêm vào ở **B2**, khi nó trở thành đúng
-> vô điều kiện (AC-R1…AC-R3). Kiểm chứng: **AC-G36** (B1) và **AC-R9** (B2).
+> vô điều kiện (AC-R1…AC-R3). Kiểm chứng: ~~**AC-G36** (B1)~~ và **AC-R9** (B2).
+>
+> **Cập nhật 2026-08-27:** ràng buộc "ở lát B1 không được chứa câu đó" **không còn áp dụng** — B1 và B2
+> merge cùng một đợt nên cửa sổ B1→B2 không tồn tại. Câu "Không thể hoàn tác" **có** trong hộp thoại
+> `rewind` ngay từ commit đầu và **đúng sự thật**. Chỉ **AC-R9** còn hiệu lực; **AC-G36 superseded** (§8.8).
 
 ### 7.2. `resend` / `edit & resend`
 
@@ -650,10 +654,15 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (persist trên đĩa, lá
   nội dung, nhãn hai nút đều là tiếng Anh — **không** còn chuỗi hardcode tiếng Việt.
 - **AC-G35.** *Given* nút xác nhận, *when* đọc nhãn, *then* là **"Cắt về đây"** hoặc **"Chạy lại"** —
   **không bao giờ** là "Xoá" / "Delete".
-- **AC-G36.** *(chỉ lát B1)* *Given* **B1 đã ship nhưng B2 chưa**, *when* mở hộp thoại `rewind`, *then* nội
-  dung **KHÔNG** chứa câu "Không thể hoàn tác" / "This cannot be undone" — trong khi 3 hộp thoại `resend` /
-  `edit & resend` / `regenerate` **CÓ** chứa câu đó. *(Hộp thoại an toàn không được hứa điều chưa làm được —
-  §7.1.)*
+- **AC-G36.** ~~*(chỉ lát B1)* *Given* **B1 đã ship nhưng B2 chưa**, *when* mở hộp thoại `rewind`, *then* nội
+  dung **KHÔNG** chứa câu "Không thể hoàn tác" / "This cannot be undone".~~
+  > **SUPERSEDED 2026-08-27 bởi AC-R9 — KHÔNG chạy AC này, và không tái sử dụng số AC-G36.**
+  > Tiền đề "B1 đã ship nhưng B2 chưa" **chưa bao giờ tồn tại**: B1 và B2 cùng nằm một nhánh và merge cùng
+  > đợt, nên "cửa sổ B1→B2" mà AC này canh không có trên bất kỳ commit nào. Code hiện tại **cố ý** đưa câu
+  > đó vào hộp thoại `rewind` (`SessionMessageItem.vue:507`) và điều đó **đúng**, vì §4.8 đã merge cùng lúc
+  > (AC-R1…AC-R3). Chạy AC-G36 nguyên văn giờ sẽ **fail trên code đúng**. Điều kiện còn hiệu lực là **AC-R9**.
+  > *(Lập luận gốc — hộp thoại an toàn không được hứa điều chưa làm được, §7.1 — vẫn đúng; nó chỉ không còn
+  > ràng buộc nào để canh.)*
 
 ### 8.9. Persist trên đĩa của `rewind` / `regenerate` / `resend` (§4.8) — điều kiện merge của lát **B2**
 
@@ -766,7 +775,7 @@ rewind trên turn assistant ⇒ `prev` là user ⇒ user chưa có `eid`). Khôn
 
 | Lát | Nội dung | Phụ thuộc | Ghi chú |
 |---|---|---|---|
-| **B1** | Gate 4 hành động + danger hover 6 điểm bấm + i18n + §4.6 + toast | **Không** — độc lập, ship ngay | AC-G1…AC-G36 |
+| **B1** | Gate 4 hành động + danger hover 6 điểm bấm + i18n + §4.6 + toast | **Không** — độc lập, ship ngay | AC-G1…AC-G35 (**AC-G36 superseded**, §8.8) |
 | **B2** | §4.8 helper neo persist dùng chung → áp cho `rewind`, `regenerate`, `resend` + thêm câu "Không thể hoàn tác" vào hộp thoại `rewind` | **T0c** (Brief A) | AC-R1…AC-R11 |
 
 > **Cập nhật 2026-08-27 (phạm vi B2):** `rewind` đã ship trước trong B2. Phần `regenerate`/`resend`
@@ -785,6 +794,10 @@ id đã nằm sẵn trên đĩa cho cả 3 role (`sidecar/src/types/shared.ts:26
 **không được** chứa câu "Không thể hoàn tác" (§7.1, AC-G36). Đây là lý do câu đó được tách thành khoá
 i18n riêng `sessions.guard.irreversible` (§7, §13): B2 thêm nó bằng **một dòng diff**, không khoá nào
 bị sửa hai lần.
+
+> **Kết cục thực tế (2026-08-27):** cửa sổ B1→B2 **không xảy ra** — cả hai lát merge cùng một nhánh, nên
+> câu đó có mặt ngay từ commit đầu và đúng sự thật. Việc tách khoá i18n riêng vẫn đáng: nó là thứ cho phép
+> hai lát *có thể* tách ra mà không phải sửa khoá hai lần. **AC-G36 superseded bởi AC-R9** (§8.8).
 
 **Ba lối thứ ba đã cân nhắc và LOẠI** (ghi lại để không ai đề xuất lại):
 
