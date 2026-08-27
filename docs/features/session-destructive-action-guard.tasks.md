@@ -5,6 +5,14 @@
 > Vai trò tạo: Project Manager. Tài liệu **chỉ chia task + dependency + ước lượng + owner + acceptance**, KHÔNG chứa code.
 > **Spec đã chốt hoàn toàn — 0 open question** (Q1/Q2/Q3 + TL-1 chốt ở §12). **Không cần ADR mới. Không cần infosec** (§11).
 
+> **Đóng plan 2026-08-27.** Toàn bộ checkbox đã tick. Nguồn verify: **static + grep + lint/typecheck 0 error**
+> (assistant chạy lại ở bước Z2 — 8/8 điều kiện pass, gồm: không file modal mới, `SessionGateCard.vue` +
+> `useConfirm`/`ConfirmDialogHost`/`LibraryConfirmDelete` **không bị sửa**, commit B1/B2 **không chạm**
+> `sidecar/**` hay `electron/**`, `types/index.ts` không đổi, thay đổi logic store **đúng** phần `lastPersistedEid`,
+> `keepThroughId` viết bằng vòng lùi chứ không bằng `role`); **các ca cần bấm tay + restart app** (QA-G1…G3, QA-R) —
+> **user tự verify 2026-08-27**. **AC-G36 không chạy** (superseded bởi AC-R9).
+> **Còn mở:** **TL-2** ([spec §12.3](./session-destructive-action-guard.md)) — chờ tech-lead chốt, không chặn.
+
 ## Cách đọc plan
 
 - **Effort:** S (< 0.5d) · M (0.5–2d) · L (2–5d). Không task nào XL.
@@ -59,14 +67,14 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
 
 ## Lát B1 — Gate + danger hover + i18n (độc lập, ship ngay)
 
-- [ ] **B1.3. Thêm 12 khoá i18n `sessions.guard.*` (en + vi)** — **S**
+- [x] **B1.3. Thêm 12 khoá i18n `sessions.guard.*` (en + vi)** — **S**
   - **Mô tả:** Thêm **12 key × 2 ngôn ngữ = 24 dòng**, key **phẳng** đúng convention file hiện có (`sessions.delete.*` ở dòng 105-108): `rewind.title/body/confirm`, `resend.title`, `editResend.title`, `resend.body`, `regen.title`, `regen.body`, **`irreversible`**, `rerun.confirm`, `costNote`, `stale` (bảng đầy đủ ở [spec §13](./session-destructive-action-guard.md)). **Không** thêm key cho nút huỷ (dùng `common.cancel`), **không** có biến thể "0 message". `irreversible` là **khoá riêng có chủ đích** để B2 thêm cho `rewind` bằng một dòng diff.
   - **File chạm:** `apps/desktop/ui-next/i18n/locales/vi/sessions.json` · `apps/desktop/ui-next/i18n/locales/en/sessions.json`
   - **Depends on:** none
   - **Owner:** developer
   - **Acceptance:** đủ 12 key ở **cả hai** file, nội dung khớp bảng §13 từng chữ; **AC-G34** (chạy app ở `en` ⇒ không còn chuỗi hardcode tiếng Việt) · **AC-G35** (nhãn xác nhận là "Cắt về đây" / "Chạy lại", **không bao giờ** "Xoá"/"Delete").
 
-- [ ] **B1.1. Gate `await confirm()` cho 4 hành động + `lostCount` + kiểm tra lại sau confirm** — **M**
+- [x] **B1.1. Gate `await confirm()` cho 4 hành động + `lostCount` + kiểm tra lại sau confirm** — **M**
   - **Mô tả:** Trong `SessionMessageItem.vue`: `const { confirm } = useConfirm()`; hàm tính **`lostCount`** theo §4.1 (`rewind` = `msgs.length - i`; `resend`/`edit & resend` = `msgs.length - i - 1`; `regenerate` = `msgs.length - ui - 2`, với `ui` = index user turn gần nhất **trước** `i`, lùi từ `i - 1`). Bọc `rewind` / `resend` / `editMsg` / `regen` bằng `await confirm(...)` **chỉ khi `lostCount ≥ 1`**; `lostCount === 0` ⇒ chạy thẳng. `edit & resend`: confirm đặt **SAU** overlay sửa nội dung (huỷ overlay ⇒ thoát im lặng, **không** hiện confirm). Nhãn: `confirmLabel` = "Cắt về đây" (rewind) / "Chạy lại" (3 hành động chạy lại); `cancelLabel` để trống; `kind` **không truyền** (mặc định `'danger'`). `description` ghép **3 mảnh** theo §7 (`body` + `' ' + irreversible` + `'\n' + costNote`) — **`rewind` ở lát B1 KHÔNG có mảnh `irreversible`**. §4.6: chụp `lenAtOpen` + `sessionId` + `index` **trước** `confirm()`; sau khi `true` thì so lại `msgs.length === lenAtOpen` **và** session active vẫn là session đó; lệch ⇒ **không thực thi gì** + `pushActionToast(t('sessions.guard.stale'), 'error')`. Guard phòng thủ E9: `store.active == null` / `i < 0` / `i >= msgs.length` ⇒ không mở hộp thoại. E6: `regenerate` không có `ui` ⇒ **không hỏi, không gọi store**. **Đặt comment chéo** giữa chỗ tìm `ui` ở UI và chỗ tìm `ui` ở store (§4.1, chống drift).
   - **File chạm:** `apps/desktop/ui-next/components/session/SessionMessageItem.vue`
   - **Depends on:** B1.3
@@ -74,7 +82,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Acceptance:** **AC-G1** (cả 4 mở hộp thoại trước khi message biến mất) · **AC-G2** (7 điểm bấm / 6 hành động còn lại **không** hỏi — gồm `retryModel`) · **AC-G3** (assistant đúng **2** điểm gate, user bubble đúng **3**) · **AC-G4** (grep `useConfirm` trong `components/session/` ⇒ **không** file modal mới) · **AC-G5…AC-G9** (`lostCount === 0` ⇒ không hỏi; **không bao giờ** render "0 tin nhắn") · **AC-G10…AC-G12** (huỷ ⇒ không mất gì, không RPC, không prune bookmark; Esc/scrim = huỷ; huỷ ở edit&resend ⇒ giữ **nội dung cũ**) · **AC-G13…AC-G18** (con số đúng: 12 / 17 / 8 / 2; divider tính 1; turn 5 block tính 1) · **AC-G22/AC-G25/AC-G26** · **AC-G32/AC-G33** (dòng chi phí: có ở 3 hành động chạy lại, **không** ở `rewind`) · ~~**AC-G36**~~ (**superseded** — xem ghi chú đầu file; thay bằng **AC-R9** ở QA-R).
   - **Risk:** công thức `regenerate` **không** được rút gọn thành `msgs.length - i - 1` (sẽ giấu message giữa `ui` và `i` — AC-G16 bắt đúng chỗ này). **`SessionGateCard.vue` KHÔNG được sửa** — quy tắc `lostCount === 0` tự phủ `onRetry` (§4.4). **Rủi ro cùng-file** với A1.4/T0a.3 của feature anh em.
 
-- [ ] **B1.2. Tô `danger` khi hover cho 5 hành động destructive (6 điểm bấm)** — **S**
+- [x] **B1.2. Tô `danger` khi hover cho 5 hành động destructive (6 điểm bấm)** — **S**
   - **Mô tả:** 6 điểm bấm: user `edit` / `send` / `rewind`, assistant `refresh` / **`settings` (retryModel)** / `rewind`. Hover ⇒ nền `var(--dangerBg)` + màu `var(--danger)`. Gợi ý implement (không bắt buộc, §10): thêm cờ `danger?: boolean` cho item trong mảng `msgActions` (`SessionMessageItem.vue:503-518`) rồi bind style hover; footer user bubble là template cứng ⇒ đánh dấu trực tiếp 3 span tương ứng. Rule hover mới đặt trong `<style scoped>` của cùng file. **Không hardcode hex**, không token mới. **Không đổi `title`** của bất kỳ nút nào.
   - **File chạm:** `apps/desktop/ui-next/components/session/SessionMessageItem.vue` (`msgActions` 503-518; footer user bubble 46-63; `<style scoped>` ~617-620)
   - **Depends on:** none (song song B1.1, nhưng **cùng file** ⇒ nên cùng dev, commit sau B1.1)
@@ -82,7 +90,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Acceptance:** **AC-G27** (6 điểm bấm ra `--dangerBg` + `--danger`) · **AC-G28** (**`settings` / "Thử model khác" ra màu danger y như `refresh` và `rewind` — dù nó KHÔNG mở hộp thoại**; đây là điểm dễ bỏ sót nhất của Q1, phải verify riêng) · **AC-G29** (6 nút an toàn giữ hover trung tính `--bgHover` + `--text`) · **AC-G30** (theme family **Cute** vẫn ra danger, không token mới) · **AC-G31** (`title` không đổi).
   - **Risk:** quên bật cờ cho `settings`/retryModel — đây là lý do AC-G28 tồn tại như một AC độc lập.
 
-- [ ] **B1.4. Boy Scout: sửa comment sai ở `stores/sessions.ts:3598-3599`** — **S**
+- [x] **B1.4. Boy Scout: sửa comment sai ở `stores/sessions.ts:3598-3599`** — **S**
   - **Mô tả:** Comment hiện viết *"same guard `resend` uses"* khi nói về `regenInFlight` — **sai**. `regenInFlight` chỉ xuất hiện ở 3593 / 3600 / 3602 / 3635, **toàn bộ nằm trong `regenerate`**; `resend` **chỉ** có guard streaming (3673). Sửa comment cho đúng sự thật. **KHÔNG** thêm `regenInFlight` vào `resend` (ngoài phạm vi — §4.6 đã chặn ca re-entry thực tế, và spec §15 liệt kê rõ là out of scope).
   - **File chạm:** `apps/desktop/ui-next/stores/sessions.ts` (3598-3599)
   - **Depends on:** none
@@ -94,7 +102,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
 
 ## Lát B2 — Vá persist `rewind` (§4.8) — CHỜ `T0c` MERGE
 
-- [ ] **B2.0. Verify điều kiện tiên quyết AC-R7 trước khi viết một dòng code** — **S**
+- [x] **B2.0. Verify điều kiện tiên quyết AC-R7 trước khi viết một dòng code** — **S**
   - **Mô tả:** Sau khi `T0c.3` merge: mở một session dài qua `ensureLoaded`, duyệt toàn bộ `s.msgs` và xác nhận **mọi** message đều có `eid`, **trừ** message hệ thống cục bộ `ENGINE_UNAVAILABLE` (store tự chèn ở `sessions.ts:2934`, `3632`, `3647` — **không bao giờ** ra sidecar ⇒ **không bao giờ** có `eid`, kể cả sau T0c). Nếu tìm thấy **bất kỳ** message **persist** nào thiếu `eid` ⇒ **DỪNG, báo tech-lead**; **không** tự ý mở rộng vòng lùi (neo sẽ nhảy qua một message có thật trên đĩa và cắt **nhiều hơn** ý định).
   - **File chạm:** không sửa file — chỉ verify (`apps/desktop/ui-next/stores/sessions.ts`, `composables/useSessionsData.ts`).
   - **Depends on:** **`T0c` (T0c.3) của [session-transcript-navigation.tasks.md](./session-transcript-navigation.tasks.md) — DEPENDENCY CỨNG**
@@ -102,7 +110,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Acceptance:** **AC-R7** PASS, có ghi lại danh sách nguồn message không có `eid` (kỳ vọng: **đúng 3 chỗ chèn `ENGINE_UNAVAILABLE`**, không có chỗ nào khác). FAIL ⇒ **B2.1 không được bắt đầu**.
   - **Risk:** đây là **cổng an toàn** của cả lát B2 — bỏ qua nó là chấp nhận rủi ro cắt sai/mất dữ liệu.
 
-- [ ] **B2.1. Vá persist `rewind` — "neo vào `eid` gần nhất phía trước"** — **M**
+- [x] **B2.1. Vá persist `rewind` — "neo vào `eid` gần nhất phía trước"** — **M**
   - **Mô tả:** `stores/sessions.ts:3651-3661`. **Một** quy tắc duy nhất: lùi dần từ `index - 1` tìm `anchorId` = `eid` của message **có `eid`** gần nhất trong `msgs[0 .. index-1]`; **có** ⇒ `sessions.rewind({ sessionId, messageId: anchorId })`; **không** ⇒ `sessions.truncate({ sessionId, keepThroughId: null })`. **Giữ `rewind` là hàm ĐỒNG BỘ** — `pushRequest` fire-and-forget như hiện tại, **không** thêm `async`/`await` (không sinh cửa sổ đua mới). Vòng lùi là O(k) in-memory, không I/O.
   - **Ràng buộc an toàn (ranh giới giữa đúng và thảm hoạ):**
     - **`keepThroughId: null` CHỈ hợp lệ khi vòng lùi không tìm được `eid` nào trong toàn bộ tiền tố.** Tuyệt đối **không** dùng `null` làm fallback cho "message ngay trước không phải assistant" — đó chính là bẫy wipe sạch transcript (`sidecar/src/sessions/store.ts:70-71`). Điều kiện `null` phải viết bằng **kết quả vòng lùi**, không bằng `role`.
@@ -115,7 +123,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Acceptance:** **AC-R4** (`keepThroughId: null` **chỉ** xuất hiện khi không tìm được `eid` nào trong `msgs[0..index-1]`, không ca nào khác — verify bằng đọc payload RPC) · **AC-R6** (chữ ký vẫn **đồng bộ**) · **AC-G24** (thay đổi logic **duy nhất** ở store là phần này; `regenInFlight`, guard streaming, thứ tự `await sessions.truncate` → `sendMessage` giữ **nguyên xi**; **không** có `useConfirm`/DOM nào lọt vào store).
   - **Risk:** **cao nhất trong cả 2 spec** — sai một nhánh ⇒ wipe sạch transcript trên đĩa. QA-R phải verify bằng **restart app**, không tin state trong bộ nhớ.
 
-- [ ] **B2.2. Thêm câu "Không thể hoàn tác" vào hộp thoại `rewind`** — **S**
+- [x] **B2.2. Thêm câu "Không thể hoàn tác" vào hộp thoại `rewind`** — **S**
   - **Mô tả:** Thêm mảnh `' ' + t('sessions.guard.irreversible')` vào `description` của **nhánh `rewind`** (§7.1). **Đúng một dòng diff**, **không** thêm khoá i18n nào (khoá đã có từ B1.3). Ba hộp thoại còn lại **không đổi**.
   - **File chạm:** `apps/desktop/ui-next/components/session/SessionMessageItem.vue`
   - **Depends on:** B2.1
@@ -127,7 +135,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
 
 ## QA
 
-- [ ] **QA-G1. Verify phạm vi gate + con số (đếm được)** — **M**
+- [x] **QA-G1. Verify phạm vi gate + con số (đếm được)** — **M**
   - **Mô tả:** Chạy AC-G1…AC-G18. Ca bắt buộc:
     1. Session 30 message, thao tác ở **giữa**: bấm lần lượt `rewind` (user bubble), `send`, `edit`, `refresh` ⇒ **cả 4** mở hộp thoại.
     2. **Đếm bằng mắt** 7 điểm bấm không hỏi: `copy`, `quote`, `maximize`, `layers`, `fork`, `branch`, **`settings` (retryModel)**.
@@ -141,7 +149,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Owner:** qa-tester
   - **Acceptance:** **AC-G1 … AC-G18** PASS, ghi kết quả từng AC (đặc biệt 4 con số của AC-G13…AC-G16).
 
-- [ ] **QA-G2. Verify popout + race/re-entry** — **M**
+- [x] **QA-G2. Verify popout + race/re-entry** — **M**
   - **Mô tả:** Chạy AC-G19…AC-G26 + edge case E1…E4, E9…E13. **Ca bắt buộc — confirm trong CỬA SỔ POPOUT:**
     1. Pop out session ra cửa sổ riêng (`/session?id=…`) → bấm `rewind` trong cửa sổ đó ⇒ hộp thoại **hiện trong chính popout**, "Cắt về đây" cắt đúng transcript — **không treo, không im lặng** (hồi quy cho `AppGlobalHosts.vue:11` + `pages/session.vue:7`).
     2. Hộp thoại đang mở trong popout ⇒ **cửa sổ chính không hiện hộp thoại nào** và vẫn ở trạng thái hand-off.
@@ -157,7 +165,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Owner:** qa-tester
   - **Acceptance:** **AC-G19 … AC-G26** PASS + E1…E4, E9…E13 đúng hành vi bảng §9.
 
-- [ ] **QA-G3. Verify tín hiệu thị giác + i18n** — **S** *(bỏ AC-G36: superseded)*
+- [x] **QA-G3. Verify tín hiệu thị giác + i18n** — **S** *(bỏ AC-G36: superseded)*
   - **Mô tả:** Chạy AC-G27…AC-G36.
     1. Hover **6 điểm bấm** destructive ⇒ `--dangerBg` + `--danger`; hover 6 nút an toàn ⇒ trung tính.
     2. **Hover riêng `settings` / "Thử model khác"** ⇒ ra danger **dù nó không mở hộp thoại** (AC-G28 — verify tách bạch, đây là điểm dễ sót nhất).
@@ -169,7 +177,7 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
   - **Owner:** qa-tester
   - **Acceptance:** **AC-G27 … AC-G36** PASS. AC-G36 phải được chạy **trước khi B2 merge** (sau B2 thì AC-R9 thay thế).
 
-- [ ] **QA-R. Verify persist `rewind` — 4 ca, verify bằng RESTART APP** — **M**
+- [x] **QA-R. Verify persist `rewind` — 4 ca, verify bằng RESTART APP** — **M**
   - **Mô tả:** Chạy AC-R1…AC-R9. **Mọi ca đều phải kiểm chứng bằng KHỞI ĐỘNG LẠI APP** — không tin state trong bộ nhớ, vì đúng bug này là "bộ nhớ thì cắt, đĩa thì không".
     1. **Ca 1 (AC-R1):** transcript 30 message, `msgs[17]` là **assistant có `eid`** → `rewind@18` → xác nhận → **restart app** ⇒ còn **đúng 18 message**.
     2. **Ca 2 (AC-R2 — phổ biến nhất):** `msgs[17]` là **user** (rewind trên turn assistant) → `rewind@18` → xác nhận → **restart app** ⇒ còn **đúng 18 message** — **không** 30 (bug cũ) và **không** 0 (bẫy `keepThroughId: null`).
@@ -189,14 +197,14 @@ Cạnh chéo feature khác cần tôn trọng: **thứ tự cắt** phải khớ
 
 ## Đóng gói
 
-- [ ] **Z1. Cập nhật tài liệu** — **S**
+- [x] **Z1. Cập nhật tài liệu** — **S**
   - **Mô tả:** Đánh dấu spec `Status: Draft → Implemented` (ghi rõ lát B1 / B2 và ngày ship từng lát). Nếu [sessions.md](./sessions.md) có câu mô tả `rewind` như "chỉ cắt trong phiên" thì sửa cho đúng sau B2. **Không** tạo ADR (spec §12.2 đã chốt: không cần).
   - **File chạm:** `docs/features/session-destructive-action-guard.md` (dòng Status) · `docs/features/sessions.md` (nếu có câu sai)
   - **Depends on:** QA-R
   - **Owner:** developer
   - **Acceptance:** trạng thái spec đúng; không tài liệu nào còn mô tả `rewind` theo hành vi cũ.
 
-- [ ] **Z2. Code review tổng (2 lát)** — **S**
+- [x] **Z2. Code review tổng (2 lát)** — **S**
   - **Mô tả:** Review theo ràng buộc "KHÔNG chạm" của [spec §14](./session-destructive-action-guard.md).
   - **Depends on:** Z1
   - **Owner:** code-reviewer

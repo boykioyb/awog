@@ -248,7 +248,7 @@ Mỗi refresh response trả `refresh_token` mới → overwrite cả token + re
 - Steps **không** persist JSONL — reload session mất step history (chỉ có message text).
 - Chưa surface `thinking` blocks (Claude extended thinking, xACBudgetTokens) ra UI — SDK accumulate nhưng UI không hiển thị chi tiết.
 - Multi-provider chưa có — chỉ Anthropic OAuth. OpenAI / Google / custom provider thuộc roadmap (xem [models-and-accounts.md](./models-and-accounts.md#todo-post-m7)).
-- Chưa search trong nội dung message (chỉ filter trên title).
+- Search nội dung message: **có trong phiên đang mở** (`⌘F` / `Ctrl+F`, [session-transcript-navigation.md](./session-transcript-navigation.md)); **chưa có cross-session** — danh sách session vẫn chỉ filter trên title.
 - Chưa promote-session-to-task / fork / branch.
 - Subagent drawer hiện chỉ cho Tool steps (có input/output). Plan/thinking steps không có drawer.
 

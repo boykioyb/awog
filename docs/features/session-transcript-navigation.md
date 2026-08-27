@@ -2,7 +2,7 @@
 
 > **Brief:** [session-transcript-navigation.brief.md](./session-transcript-navigation.brief.md) (PO, 2026-08-26)
 > **ADR ràng buộc:** [ADR 0074 — Neo tin nhắn bền + hợp đồng điều hướng transcript](../decisions/0074-session-message-anchor-and-transcript-navigation.md) — **Accepted**, kèm [ADR 0075 — Phạm vi transcript theo surface](../decisions/0075-transcript-surface-scoping.md) (**amend phần T0a/§Q2 của 0074**). Mọi hợp đồng kỹ thuật trong spec này **suy ra từ 0074 + 0075**; spec không mở lại bất kỳ quyết định nào ở đó.
-> **Status:** Draft (chờ PM decompose → dev)
+> **Status:** **Implemented** 2026-08-27 — nhánh `feature/session-navigation-and-guard` (T0a/T0b/T0c + A1 + A2). Cầu nối A1.5 loại có chủ đích (§16). Ràng buộc `/compact` **không** prune bookmark: [ADR 0076](../decisions/0076-compact-is-not-a-bookmark-prune-path.md), **AC-P10**.
 > **Last updated:** 2026-08-27
 > **Kế thừa AC:** [preview-modal-find.md](./preview-modal-find.md) (14 AC hành vi tìm kiếm — xem bảng ánh xạ §9)
 > **Sửa đổi 2026-08-27 (BA, phản hồi từ dev khi implement A1):** (1) **`/compact` bị gỡ khỏi danh sách đường cắt** — nó không cắt transcript, prune ở đó sẽ xoá bookmark còn sống (§5.4, AC-P1, **AC-P10** mới); (2) bổ sung khoá `sessions.bookmark.saveFailed` vào §11.2; (3) chốt số `N` **chỉ hiện một lần** ở chip đếm, `barTitle` bỏ tham số `{n}` (§6.1, §11.2).

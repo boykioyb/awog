@@ -1,7 +1,7 @@
 # Feature Spec: Chặn thao tác phá huỷ transcript trong Sessions
 
 > **Brief:** [session-destructive-action-guard.brief.md](./session-destructive-action-guard.brief.md)
-> **Status:** Draft — Q1/Q2/Q3 **và TL-1** đã chốt (§12). **TL-2 mở ngày 2026-08-27** (§12.3) — nhỏ, **không chặn** B1/B2.
+> **Status:** **Implemented** 2026-08-27 — **B1** (gate + danger hover + i18n) và **B2** (§4.8 helper neo persist) ship **cùng một nhánh** `feature/session-navigation-and-guard`, nên cửa sổ B1→B2 không tồn tại (**AC-G36 superseded bởi AC-R9**, §8.8). Q1/Q2/Q3 + TL-1 đã chốt (§12). **TL-2 (§12.3) vẫn MỞ** — chờ tech-lead chốt, **không chặn** B1/B2 vì thiệt hại giới hạn ở một thông báo lỗi cục bộ trong session vừa fork chưa reload.
 > **Last updated:** 2026-08-27
 > **Layer:** UI + **một** thay đổi logic ở `stores/sessions.ts` (helper neo persist dùng chung cho `rewind` / `regenerate` / `resend`, §4.8). Không sidecar mới, không RPC mới, không storage, **không ADR**, không infosec.
 > **Ship làm 2 lát (TL-1):** **B1** = gate + danger hover + i18n (**độc lập, ship ngay**) · **B2** = §4.8 helper neo persist (**sau T0c** của Brief A) — `rewind` đã ship trước, `regenerate` + `resend` đi **cùng đợt B2**, không tách ticket (§2.6). Xem §12.2 + §16.
