@@ -76,7 +76,13 @@ const now = useNow()
 
 const { rows, count, latest, expanded, jump, remove } = useSessionBookmarks(() => props.session)
 
-const onJump = (row: BookmarkRow) => void jump(row)
+// Chọn một mục cũng thu thanh lại (AC-B6): sau khi đã nhảy tới đích thì danh
+// sách mở rộng chỉ còn che transcript. Thu NGAY, không chờ `jump` — nó await
+// reveal + nextTick, để tới đó mới thu thì thanh giật một nhịp sau cú click.
+const onJump = (row: BookmarkRow) => {
+  expanded.value = false
+  void jump(row)
+}
 </script>
 
 <style scoped>
