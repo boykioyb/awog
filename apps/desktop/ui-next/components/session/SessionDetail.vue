@@ -442,6 +442,11 @@ provideFilePreview(
   () => props.session,
 )
 
+// This detail is a transcript "surface": jump callers underneath it (follow-up
+// anchors, the composer's quote cards) resolve to the SessionTranscript rendered
+// here, not to a same-session copy docked in a hidden SSH tab (ADR 0075).
+provideTranscriptSurface()
+
 // Header trash → confirm before dropping the session (destructive, no undo).
 async function askRemove() {
   const ok = await confirm({

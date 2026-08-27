@@ -93,6 +93,10 @@ const props = defineProps<{
   // True while the session's transcript is being fetched → show the skeleton
   // instead of the empty welcome (only matters when there are no messages yet).
   loading?: boolean
+  // Hold the reader's position while a new turn arrives instead of snapping to the
+  // bottom. Set while the find bar is open (searching mid-run must not yank the
+  // viewport away from the match the user is looking at).
+  suppressAutoScroll?: boolean
 }>()
 const { t } = useI18n()
 
@@ -186,6 +190,32 @@ function updateEdges() {
   atBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
 }
 
+// Start of the turn containing `i` = the largest user-message index ≤ i (0 when the
+// message sits before the first user turn).
+function turnStartFor(i: number): number {
+  const idx = userTurnIndices(i + 1)
+  return idx[idx.length - 1] ?? 0
+}
+
+// Grow the window until message `i` is mounted, for a deliberate jump (bookmark,
+// find, follow-up anchor) — see useSessionScroll / ADR 0074 §Q2. Opens exactly to
+// the turn boundary containing the target, never the whole history like jumpTop.
+async function revealMessage(i: number): Promise<void> {
+  if (!Number.isInteger(i) || i < 0 || i >= props.messages.length) return
+  const target = turnStartFor(i)
+  // The window only ever GROWS: shrinking it would unmount what the reader is on.
+  if (target >= windowStart.value) return
+  // Same viewport anchoring as loadOlder: prepended turns push the content down, so
+  // add the height delta back before anyone scrolls on purpose (no double jump).
+  const el = msgsEl.value
+  const prevH = el?.scrollHeight ?? 0
+  const prevTop = el?.scrollTop ?? 0
+  windowStart.value = target
+  await nextTick()
+  if (el) el.scrollTop = prevTop + (el.scrollHeight - prevH)
+  updateEdges()
+}
+
 function scrollToBottom() {
   const el = msgsEl.value
   if (el) el.scrollTop = el.scrollHeight
@@ -230,8 +260,11 @@ const scrollSig = computed(() => {
 
 watch(scrollSig, () => {
   // A brand-new message (length grew) snaps to the bottom even if the user had
-  // scrolled up — they just sent / received a turn boundary.
-  if (props.messages.length > prevLen) stick.value = true
+  // scrolled up — they just sent / received a turn boundary. Unless the surface asked
+  // us not to (find bar open).
+  if (props.messages.length > prevLen) {
+    if (!props.suppressAutoScroll) stick.value = true
+  }
   // Transcript SHRANK in place (fork / regenerate truncation) → re-window to the
   // latest turns so `windowStart` can't dangle past the new end.
   else if (props.messages.length < prevLen) windowStart.value = startForLastTurns(INITIAL_TURNS)
@@ -267,6 +300,23 @@ onMounted(windowAndScrollToBottom)
 // its old scroll position. Re-window to the latest turns + jump to the bottom on every
 // re-activation so opening a session always lands at the newest message.
 onActivated(windowAndScrollToBottom)
+
+// Publish this transcript to its surface (SessionDetail / SshSessionPanel) so jump
+// callers below that surface reach THIS instance and query inside THIS root — never
+// a same-session copy living in a hidden SSH tab (ADR 0075). Scope is structural, so
+// mount/unmount is enough: no onActivated/onDeactivated pair.
+const { registerTranscriptRevealer } = useSessionScroll()
+let unregisterRevealer: (() => void) | null = null
+onMounted(() => {
+  unregisterRevealer = registerTranscriptRevealer({
+    root: () => msgsEl.value,
+    reveal: revealMessage,
+  })
+})
+onUnmounted(() => {
+  unregisterRevealer?.()
+  unregisterRevealer = null
+})
 </script>
 
 <style scoped>

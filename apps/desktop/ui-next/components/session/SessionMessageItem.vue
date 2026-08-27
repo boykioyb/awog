@@ -77,7 +77,7 @@
         role="button"
         :title="t('sessions.transcript.anchor.tooltip')"
         style="cursor: pointer"
-        @click="scrollToMessage(msgIndex)"
+        @click="void scrollToMessage(msgIndex)"
       >
         {{ a.label }}
       </span>

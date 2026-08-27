@@ -15,7 +15,7 @@
             <span
               class="fwq fwlink"
               :title="t('sessions.message.quote')"
-              @click="scrollToMessage(q.src)"
+              @click="void scrollToMessage(q.src)"
             >
               {{ q.excerpt }}
             </span>
