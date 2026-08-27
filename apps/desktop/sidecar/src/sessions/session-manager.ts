@@ -26,6 +26,7 @@ import {
   sessionFilePath,
   sessionsDir,
 } from './jsonl.js'
+import { MAX_BOOKMARKS, MAX_BOOKMARK_AT_LEN, MESSAGE_ID_RE } from './ids.js'
 import { sessionPersistenceQueue } from './persistence-queue.js'
 import { migrateLegacySessions } from './migrate-legacy.js'
 
@@ -122,25 +123,28 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   return summary
 }
 
-// Bookmark ids accepted from disk. Same charset/length as the sessions.updateBookmarks
-// RPC boundary — every message id AWOG mints (msg_u_<hex>, m-<b36>-<b36>, fm-<i>-<seq>,
-// compact-<b36>) fits, so anything outside it can never resolve to a message anyway.
-const BOOKMARK_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
-const BOOKMARK_AT_MAX = 40
-
 // Re-validate a header's `bookmarks` after reading it off disk (L2: the file is
-// hand-editable). A malformed ENTRY is skipped, never thrown on — a typo in one
-// bookmark must not cost the user the whole session. `undefined` when the header has
-// no bookmarks or none survived, so the field stays absent (exactOptionalPropertyTypes).
+// hand-editable) against the SAME charset/length/count the sessions.updateBookmarks RPC
+// enforces (sessions/ids.ts). A malformed ENTRY is skipped, never thrown on — a typo in
+// one bookmark must not cost the user the whole session.
+//
+// The list is also truncated to MAX_BOOKMARKS: capping only at the RPC leaves this path
+// unbounded, so a hand-written header full of well-formed entries would hydrate in full
+// and then be re-serialized on every persist. Truncation is SILENT for the same reason a
+// bad entry is skipped — this path must never throw.
+//
+// `undefined` when the header has no bookmarks or none survived, so the field stays
+// absent (exactOptionalPropertyTypes).
 function sanitizeBookmarks(value: unknown): SessionBookmark[] | undefined {
   if (!Array.isArray(value)) return undefined
   const clean: SessionBookmark[] = []
   for (const raw of value) {
     if (typeof raw !== 'object' || raw === null) continue
     const { id, at } = raw as { id?: unknown; at?: unknown }
-    if (typeof id !== 'string' || !BOOKMARK_ID_RE.test(id)) continue
-    if (typeof at !== 'string' || at.length > BOOKMARK_AT_MAX) continue
+    if (typeof id !== 'string' || !MESSAGE_ID_RE.test(id)) continue
+    if (typeof at !== 'string' || at.length > MAX_BOOKMARK_AT_LEN) continue
     clean.push({ id, at })
+    if (clean.length === MAX_BOOKMARKS) break
   }
   return clean.length ? clean : undefined
 }

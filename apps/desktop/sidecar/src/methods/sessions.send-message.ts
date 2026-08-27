@@ -13,6 +13,7 @@ import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { buildLinkedSshHostBlock } from '../sessions/linked-ssh-host.js'
 import { buildSessionChecklistBlock } from '../sessions/todo-context.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
+import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import { loadProject } from '../projects/store.js'
 import {
   parkPermissionRequest,
@@ -128,12 +129,10 @@ const Params = z.object({
   // SECURITY (merge condition, ADR 0074 Q1): this is L1 input and the persisted
   // message.id flows into a PATH sink — sessions/jsonl.ts externalizes attachments to
   // sanitizeChild(`${message.id}-${att.id}`). sanitizeChild only rejects '/', '\' and
-  // '..', so it must not be the only defence: the charset+length regex below is
-  // the real boundary and rejects traversal, separators, whitespace and overlong ids.
-  userMessageId: z
-    .string()
-    .regex(/^[A-Za-z0-9_-]{1,64}$/)
-    .optional(),
+  // '..', so it must not be the only defence: MESSAGE_ID_RE (shared with the bookmark
+  // RPC and the bookmark load path — see sessions/ids.ts) is the real boundary and
+  // rejects traversal, separators, whitespace and overlong ids.
+  userMessageId: z.string().regex(MESSAGE_ID_RE).optional(),
   // May be empty when the turn carries only image attachments — the
   // text-or-attachments invariant is enforced by the object-level .refine below.
   text: z.string(),
