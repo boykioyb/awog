@@ -121,6 +121,19 @@ const MAX_ATTACHMENTS = 20
 const Params = z.object({
   sessionId: z.string().min(1),
   messageId: z.string().min(1),
+  // Id to persist THIS turn's user message under, minted by the UI so the message it
+  // just rendered already carries a durable anchor (ADR 0074) instead of only getting
+  // one on the next reload. Omitted → the sidecar mints `msg_u_<hex>` exactly as before.
+  //
+  // SECURITY (merge condition, ADR 0074 Q1): this is L1 input and the persisted
+  // message.id flows into a PATH sink — sessions/jsonl.ts externalizes attachments to
+  // sanitizeChild(`${message.id}-${att.id}`). sanitizeChild only rejects '/', '\' and
+  // '..', so it must not be the only defence: the charset+length regex below is
+  // the real boundary and rejects traversal, separators, whitespace and overlong ids.
+  userMessageId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/)
+    .optional(),
   // May be empty when the turn carries only image attachments — the
   // text-or-attachments invariant is enforced by the object-level .refine below.
   text: z.string(),
@@ -1146,7 +1159,8 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // created yet (new-session race — the UI's create RPC has landed by send time).
   try {
     await appendMessage(params.sessionId, {
-      id: `msg_u_${randomBytes(8).toString('hex')}`,
+      // Validated at the boundary (Params.userMessageId) — see the security note there.
+      id: params.userMessageId ?? `msg_u_${randomBytes(8).toString('hex')}`,
       role: 'user',
       text: params.text,
       at: new Date().toISOString(),
