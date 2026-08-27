@@ -364,6 +364,21 @@ body.light[data-surface='deep'] {
   vertical-align: super;
 }
 
+/* Find-in-page hits (utils/find-in-dom): the preview modal's find bar and the
+   session transcript's both wrap <mark.findmatch> imperatively, so — like .qmark —
+   these rules can't be scoped. The current hit inverts to the accent so it reads
+   apart from its neighbours. */
+.findmatch {
+  background: color-mix(in srgb, var(--amber) 28%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.findmatch--current {
+  background: var(--accent);
+  color: var(--bg);
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    Git Manager layout (ui-next) — production arrangement, prototype styling.
    .gcols [ full-section GitSidebar | .gmain( GitPageHeader + .gbody ) ].

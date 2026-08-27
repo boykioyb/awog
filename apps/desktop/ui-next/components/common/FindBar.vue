@@ -10,8 +10,8 @@
       :placeholder="placeholder"
       @keydown.enter.prevent="onEnter"
     />
-    <span v-if="query.trim()" class="pvfcount" :class="{ noresult }">
-      {{ noresult ? t('common.find.noResults') : `${current}/${total}` }}
+    <span v-if="status || query.trim()" class="pvfcount" :class="{ noresult }">
+      {{ status || (noresult ? t('common.find.noResults') : `${current}/${total}`) }}
     </span>
     <button
       class="pvfbtn"
@@ -62,6 +62,10 @@ const props = defineProps<{
   current: number
   focusTick: number
   placeholder: string
+  // Overrides the counter while the surface can't answer yet (session-find shows
+  // "Loading transcript…" until the lazy transcript arrives — reporting 0/0 there
+  // would claim the text isn't in the session). Empty/absent = normal counter.
+  status?: string
 }>()
 const emit = defineEmits<{ next: []; prev: []; close: [] }>()
 const query = defineModel<string>('query', { required: true })
@@ -70,7 +74,7 @@ const matchCase = defineModel<boolean>('matchCase', { required: true })
 const { t } = useI18n()
 
 // No match found for a non-empty query → danger state on input + counter.
-const noresult = computed(() => !!query.value.trim() && props.total === 0)
+const noresult = computed(() => !props.status && !!query.value.trim() && props.total === 0)
 
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef')
 function focusInput() {

@@ -258,10 +258,27 @@
                the top of the conversation without shifting layout. -->
           <SessionDoneFlash v-if="isCute" :status="session.status" />
           <SessionTodoPanel :session="session" />
+          <!-- Find-in-session (⌘/Ctrl+F): floats over the top-right of the chat column,
+               left of the transcript's fold-all button, so nothing shifts when it opens. -->
+          <div v-if="findOpen" class="findwrap">
+            <FindBar
+              v-model:query="findQuery"
+              v-model:match-case="findMatchCase"
+              :total="findTotal"
+              :current="findCurrent"
+              :status="findStatus"
+              :focus-tick="findFocusTick"
+              :placeholder="t('sessions.find.placeholder')"
+              @next="findNext"
+              @prev="findPrev"
+              @close="closeFind"
+            />
+          </div>
           <SessionTranscript
             :messages="session.msgs"
             :fallback-when="session.when"
             :loading="!!session.loading"
+            :suppress-auto-scroll="findOpen"
           />
           <SessionBackgroundWakeCard :session="session" />
           <SessionBackgroundChips :session="session" />
@@ -445,7 +462,10 @@ provideFilePreview(
 // This detail is a transcript "surface": jump callers underneath it (follow-up
 // anchors, the composer's quote cards) resolve to the SessionTranscript rendered
 // here, not to a same-session copy docked in a hidden SSH tab (ADR 0075).
-provideTranscriptSurface()
+// The returned ref is kept because the find bar lives in THIS component: `inject`
+// resolves from the PARENT's provides, so a provider can never inject its own entry —
+// it hands the ref to useSessionFind instead.
+const transcriptSurface = provideTranscriptSurface()
 
 // Header trash → confirm before dropping the session (destructive, no undo).
 async function askRemove() {
@@ -904,6 +924,26 @@ useEscToClose(
     notePop.value = null
   },
 )
+// Find in session (docs/features/session-transcript-navigation.md §A2). Declared AFTER
+// the note popover's useEscToClose so its Esc listener registers later and yields to the
+// popover; ⌘/Ctrl+F, the highlight and the loading state all live in the composable.
+const {
+  findOpen,
+  query: findQuery,
+  matchCase: findMatchCase,
+  total: findTotal,
+  current: findCurrent,
+  status: findStatus,
+  focusTick: findFocusTick,
+  closeFind,
+  nextMatch: findNext,
+  prevMatch: findPrev,
+} = useSessionFind({
+  session: () => props.session,
+  surface: transcriptSurface,
+  isActive: () => isActive.value,
+})
+
 // Save → add the follow-up (with note). The in-place highlight is painted reactively by
 // SessionTextBlock via the CSS Custom Highlight API once the follow-up lands in state, so
 // there's no DOM mutation here (which would otherwise strip the rendered markdown).
@@ -1255,6 +1295,14 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
    inside it) — scoped, so it only affects `.chat` as rendered by this component. */
 .chat {
   position: relative;
+}
+/* Containing block for the find bar (absolute inside it): offsets it clear of the
+   transcript's fold-all button at the same corner, without touching FindBar itself. */
+.findwrap {
+  position: absolute;
+  top: 0;
+  right: 38px;
+  z-index: 6;
 }
 /* Resize handle docked at the bottom: a full-width row gripper (the prototype's
    .rszwp is a vertical col-resize bar for the right dock). The ::after divider
