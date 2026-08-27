@@ -48,18 +48,6 @@
           <span class="bmb-ex">{{ row.excerpt }}</span>
           <span class="bmb-when">{{ formatRelativeAgo(row.at, t, now) }}</span>
         </button>
-        <!-- The ONE bridge into the prompt, and it is explicit (spec §5.2): `pin` here
-             means "feed this to the model every turn", which is why it is a separate
-             button with its own icon and a toast that names the cost. -->
-        <button
-          v-if="!row.dangling"
-          type="button"
-          class="bmb-act"
-          :title="t('sessions.bookmark.toPinned')"
-          @click="toPinned(row)"
-        >
-          <Icon name="pin" style="width: 13px; height: 13px" />
-        </button>
         <button
           type="button"
           class="bmb-act dgr"
@@ -77,8 +65,7 @@
 
 <script setup lang="ts">
 // Bookmark bar for the active session. All state (resolve map, sorting, excerpts,
-// dangling, the pinned-context bridge) lives in useSessionBookmarks; this file is the
-// markup for it.
+// dangling) lives in useSessionBookmarks; this file is the markup for it.
 import type { Session } from '~/composables/useSessionsData'
 import type { BookmarkRow } from '~/composables/useSessionBookmarks'
 import { formatRelativeAgo } from '~/utils/relative-time'
@@ -87,9 +74,7 @@ const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
 const now = useNow()
 
-const { rows, count, latest, expanded, jump, remove, toPinned } = useSessionBookmarks(
-  () => props.session,
-)
+const { rows, count, latest, expanded, jump, remove } = useSessionBookmarks(() => props.session)
 
 const onJump = (row: BookmarkRow) => void jump(row)
 </script>
@@ -225,10 +210,6 @@ const onJump = (row: BookmarkRow) => void jump(row)
   transition:
     color 0.12s var(--ease, ease),
     background 0.12s var(--ease, ease);
-}
-.bmb-act:hover {
-  background: var(--bgHover);
-  color: var(--text);
 }
 .bmb-act.dgr:hover {
   background: var(--dangerBg, var(--bgHover));

@@ -5,7 +5,7 @@ import { pushActionToast } from '~/composables/useActionToasts'
 
 // State behind the "Bookmarked (N)" bar (docs/features/session-transcript-navigation.md
 // §A1). Bookmarks are READING anchors: they never enter the prompt and never leave
-// ~/.awog. The one bridge to the prompt is deliberate and explicit — `toPinned` below.
+// ~/.awog.
 //
 // INVARIANT (ADR 0074 §Q1): a bookmark resolves through `map.get(b.id)` and nothing
 // else. `undefined` ⇒ the row is dangling and does nothing when clicked. There is no
@@ -15,13 +15,8 @@ import { pushActionToast } from '~/composables/useActionToasts'
 // Excerpts are DERIVED here, never persisted: the session header is read with an 8KB
 // probe, and 30 stored excerpts would eat it on their own (spec §7.1).
 
-// One line in the bar: ≤100 chars. The pinned-context bridge cuts at 500 because that
-// text is re-fed into EVERY turn — a real bill, hence the tighter budget.
+// One line in the bar: ≤100 chars.
 const EXCERPT_CHARS = 100
-const PINNED_EXCERPT_CHARS = 500
-// Ceiling for pinnedContext.notes after appending (spec §7.5). Over it we refuse and
-// say so, rather than silently growing a per-turn cost the user never agreed to.
-const PINNED_NOTES_MAX = 8000
 
 export type BookmarkRow = {
   // The bookmarked message's persisted engine id (SessionMessage.eid).
@@ -64,14 +59,14 @@ export function useSessionBookmarks(session: () => Session) {
     return map
   })
 
-  // First non-empty prose segment of the turn, cut to `max`. Same surface find uses, so
-  // what the bar shows is what a reader recognises as "what was said" — tool steps,
+  // First non-empty prose segment of the turn, cut to one line. Same surface find uses,
+  // so what the bar shows is what a reader recognises as "what was said" — tool steps,
   // thinking and diffs are not prose and stay out.
-  function excerptOf(msgIndex: number, max: number): string {
+  function excerptOf(msgIndex: number): string {
     const m = session().msgs[msgIndex]
     const seg = m ? searchableSegments(m)[0] : undefined
     if (!seg) return ''
-    return seg.text.length > max ? `${seg.text.slice(0, max)}…` : seg.text
+    return seg.text.length > EXCERPT_CHARS ? `${seg.text.slice(0, EXCERPT_CHARS)}…` : seg.text
   }
 
   function atMs(at: string): number {
@@ -92,7 +87,7 @@ export function useSessionBookmarks(session: () => Session) {
         dangling,
         excerpt: dangling
           ? t('sessions.bookmark.dangling')
-          : excerptOf(msgIndex, EXCERPT_CHARS) || t('sessions.bookmark.noText'),
+          : excerptOf(msgIndex) || t('sessions.bookmark.noText'),
       }
     })
     // MESSAGE time ascending — the reading order — not the order the user clicked
@@ -129,24 +124,5 @@ export function useSessionBookmarks(session: () => Session) {
     store.removeBookmark(session().id, row.id)
   }
 
-  // The deliberate bridge from "I want to re-read this" to "the model should keep
-  // seeing this" (spec §5.2). Two separate things on purpose: the bookmark stays, and
-  // the user is told this text now costs tokens on every turn.
-  function toPinned(row: BookmarkRow): void {
-    if (row.dangling) return
-    const text = excerptOf(row.msgIndex, PINNED_EXCERPT_CHARS)
-    if (!text) return
-    const s = session()
-    const current = s.pinnedContext?.notes ?? ''
-    const block = `> ${text}`
-    const next = current.trim() ? `${current.trimEnd()}\n\n${block}` : block
-    if (next.length > PINNED_NOTES_MAX) {
-      pushActionToast(t('sessions.bookmark.toPinnedFull'), 'error')
-      return
-    }
-    store.setPinnedNotes(s.id, next)
-    pushActionToast(t('sessions.bookmark.toPinnedDone'), 'success')
-  }
-
-  return { rows, count, latest, expanded, jump, remove, toPinned }
+  return { rows, count, latest, expanded, jump, remove }
 }
