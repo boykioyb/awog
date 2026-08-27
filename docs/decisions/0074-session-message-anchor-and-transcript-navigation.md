@@ -1,6 +1,6 @@
 # 0074 — Neo tin nhắn bền + hợp đồng điều hướng transcript (bookmark & find-in-session)
 
-- **Trạng thái:** Accepted (T0a amended by [0075](0075-transcript-surface-scoping.md))
+- **Trạng thái:** Accepted (T0a amended by [0075](0075-transcript-surface-scoping.md); danh sách đường cắt của §Q1 amended by [0076](0076-compact-is-not-a-bookmark-prune-path.md) — `/compact` **không** phải đường cắt)
 - **Ngày:** 2026-08-26
 - **Người quyết định:** Tech Lead (AWOG)
 - **Chặn:** [session-transcript-navigation.brief.md](../features/session-transcript-navigation.brief.md) (Brief A) — BA không viết spec được cho tới khi 3 câu này chốt.
