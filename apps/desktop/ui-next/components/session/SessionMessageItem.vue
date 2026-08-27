@@ -486,14 +486,14 @@ function lostCountOf(kind: GuardKind, msgs: SessionMessage[], i: number): number
 
 // §7 — dialog copy, assembled from up to three pieces (`description` renders pre-wrap,
 // so '\n' starts the cost line).
-// ⚠ `rewind` deliberately omits "cannot be undone" (§7.1, AC-G36): its on-disk truncation
-// is still partial today (§4.8), so claiming it would make the dialog lie. The sentence is
-// its own i18n key precisely so slice B2 can add it in one line, the day the patch lands.
+// `rewind` now DOES claim "cannot be undone" (§7.1, AC-R9): slice B2 made its on-disk
+// truncation unconditional (§4.8), so the sentence is finally true. It stays out of the
+// cost line though — a rewind re-runs nothing, so it costs no model call.
 function guardDialog(kind: GuardKind, n: number): ConfirmOptions {
   if (kind === 'rewind') {
     return {
       title: t('sessions.guard.rewind.title'),
-      description: t('sessions.guard.rewind.body', { n }),
+      description: `${t('sessions.guard.rewind.body', { n })} ${t('sessions.guard.irreversible')}`,
       confirmLabel: t('sessions.guard.rewind.confirm'),
     }
   }

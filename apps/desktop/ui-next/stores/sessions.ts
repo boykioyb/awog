@@ -3714,15 +3714,47 @@ export const useSessionsStore = defineStore('sessions', () => {
     s.status = 'error'
   }
 
+  // Rewind: drop msgs[index..end] from the transcript, in memory AND on disk.
+  //
+  // The disk cut anchors on the nearest PERSISTED message among the ones being kept:
+  // walk back over the kept prefix (the array is already sliced down to it) until a
+  // message carrying `eid` turns up — §4.8 of
+  // docs/features/session-destructive-action-guard.md. Every message read back from
+  // JSONL carries an `eid` (ADR 0074), so the walk normally stops on its first step; it
+  // only keeps going over the locally pushed ENGINE_UNAVAILABLE notice, which has no
+  // `eid` precisely because it never reaches the transcript file.
+  //
+  // ⚠ The anchor is picked by `eid`, NEVER by `role`. A `prev.role === 'assistant' ?
+  // prev.eid : null` shape reads as equivalent but takes the null branch on the MOST
+  // COMMON rewind (an assistant turn, whose preceding message is the user bubble) — and
+  // `keepThroughId: null` empties the whole file (sidecar/src/sessions/store.ts:70-71),
+  // turning "did not persist" into "wiped everything". Reaching `null` here means the
+  // walk found nothing at all, i.e. nothing in the kept prefix was ever persisted
+  // (rewind at index 0), so an empty transcript is exactly what matches memory.
+  //
+  // Stays SYNCHRONOUS on purpose: nothing re-runs after a rewind, so the RPC is
+  // fire-and-forget and no new race window opens. The walk is O(k) over an in-memory
+  // array — no I/O.
   function rewind(id: number, index: number) {
     const s = byId(id)
     if (!s) return
     s.msgs = s.msgs.slice(0, index)
-    if (useIpc && s.engineId) {
-      const target = s.msgs[index - 1]
-      if (target && target.role === 'assistant' && target.eid) {
-        pushRequest('sessions.rewind', { sessionId: s.engineId, messageId: target.eid })
+    if (!useIpc || !s.engineId) return
+    let anchorId: string | undefined
+    for (let i = s.msgs.length - 1; i >= 0; i -= 1) {
+      const eid = s.msgs[i]?.eid
+      if (eid) {
+        anchorId = eid
+        break
       }
+    }
+    if (anchorId) {
+      // NOT sessions.truncate: sessions.rewind does more — it also drops the orphaned
+      // SDK transcript (ADR 0058) and restores the workspace snapshot (ADR 0038).
+      pushRequest('sessions.rewind', { sessionId: s.engineId, messageId: anchorId })
+    } else {
+      // `sessions.rewind` cannot express "keep nothing" (messageId: z.string().min(1)).
+      pushRequest('sessions.truncate', { sessionId: s.engineId, keepThroughId: null })
     }
   }
 
