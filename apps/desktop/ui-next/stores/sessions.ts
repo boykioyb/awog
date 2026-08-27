@@ -3648,6 +3648,32 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // ── Existing local actions (preserved 1:1) ──────────────────────────────────
 
+  // The one data-safety rule behind every disk-side truncation (§4.8 of
+  // docs/features/session-destructive-action-guard.md): the cut anchors on the nearest
+  // PERSISTED message among the ones being KEPT. Walk the kept prefix backwards until a
+  // message carrying `eid` turns up; `null` means nothing in that prefix ever reached the
+  // transcript file, so an empty transcript is exactly what matches memory.
+  //
+  // ⚠ The anchor is picked by `eid`, NEVER by `role`. A `prev.role === 'assistant' ?
+  // prev.eid : null` shape reads as equivalent but takes the null branch whenever the last
+  // kept message is a user or system turn — and `null` empties the WHOLE file
+  // (`truncateSession` assigns `messages = []`, sidecar/src/sessions/store.ts:70-71),
+  // turning "did not persist" into "wiped everything". Both null branches are reachable in
+  // practice: rewinding onto a user bubble, and resending the first user turn of a forked
+  // session (system messages persist — sessions.upsert accepts role 'system').
+  //
+  // Every message read back from JSONL carries an `eid` (ADR 0074), so the walk normally
+  // stops on its first step; it only keeps going over locally pushed notices such as
+  // ENGINE_UNAVAILABLE, which have no `eid` precisely because they never reach the file.
+  // O(k) over an in-memory array — no I/O.
+  function lastPersistedEid(kept: Session['msgs']): string | null {
+    for (let i = kept.length - 1; i >= 0; i -= 1) {
+      const eid = kept[i]?.eid
+      if (eid) return eid
+    }
+    return null
+  }
+
   // Sessions with a regenerate/retry in flight. `regenerate` runs an async
   // truncate→re-run with an IPC round-trip in the middle; the message hover-action
   // buttons that call it carry no per-button disabled state, so a second click
@@ -3679,12 +3705,13 @@ export const useSessionsStore = defineStore('sessions', () => {
           // The sidecar resumes from the JSONL transcript (sendMessage sends no
           // history), so slicing the in-memory copy is not enough — persist the
           // truncation first, else the regenerated turn would replay the very reply
-          // it replaces. Keep through the assistant turn before the re-run user
-          // message (null = drop all). AWAIT so loadSession on the next turn reads
-          // the already-truncated file (avoids a read-before-write race).
+          // it replaces. Keep through the last persisted message of the kept prefix —
+          // `s.msgs` is already sliced down to it (see `lastPersistedEid`; a role-based
+          // condition here would wipe the file instead of keeping the prefix). AWAIT so
+          // loadSession on the next turn reads the already-truncated file (avoids a
+          // read-before-write race).
           if (s.engineId) {
-            const prev = ui > 0 ? s.msgs[ui - 1] : undefined
-            const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
+            const keepThroughId = lastPersistedEid(s.msgs)
             try {
               await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
             } catch (err) {
@@ -3716,38 +3743,18 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // Rewind: drop msgs[index..end] from the transcript, in memory AND on disk.
   //
-  // The disk cut anchors on the nearest PERSISTED message among the ones being kept:
-  // walk back over the kept prefix (the array is already sliced down to it) until a
-  // message carrying `eid` turns up — §4.8 of
-  // docs/features/session-destructive-action-guard.md. Every message read back from
-  // JSONL carries an `eid` (ADR 0074), so the walk normally stops on its first step; it
-  // only keeps going over the locally pushed ENGINE_UNAVAILABLE notice, which has no
-  // `eid` precisely because it never reaches the transcript file.
-  //
-  // ⚠ The anchor is picked by `eid`, NEVER by `role`. A `prev.role === 'assistant' ?
-  // prev.eid : null` shape reads as equivalent but takes the null branch on the MOST
-  // COMMON rewind (an assistant turn, whose preceding message is the user bubble) — and
-  // `keepThroughId: null` empties the whole file (sidecar/src/sessions/store.ts:70-71),
-  // turning "did not persist" into "wiped everything". Reaching `null` here means the
-  // walk found nothing at all, i.e. nothing in the kept prefix was ever persisted
-  // (rewind at index 0), so an empty transcript is exactly what matches memory.
+  // The disk cut anchors on the nearest persisted message of the kept prefix (`s.msgs` is
+  // already sliced down to it) — see `lastPersistedEid` for why that walk, and not a
+  // role check, is what keeps the file safe.
   //
   // Stays SYNCHRONOUS on purpose: nothing re-runs after a rewind, so the RPC is
-  // fire-and-forget and no new race window opens. The walk is O(k) over an in-memory
-  // array — no I/O.
+  // fire-and-forget and no new race window opens.
   function rewind(id: number, index: number) {
     const s = byId(id)
     if (!s) return
     s.msgs = s.msgs.slice(0, index)
     if (!useIpc || !s.engineId) return
-    let anchorId: string | undefined
-    for (let i = s.msgs.length - 1; i >= 0; i -= 1) {
-      const eid = s.msgs[i]?.eid
-      if (eid) {
-        anchorId = eid
-        break
-      }
-    }
+    const anchorId = lastPersistedEid(s.msgs)
     if (anchorId) {
       // NOT sessions.truncate: sessions.rewind does more — it also drops the orphaned
       // SDK transcript (ADR 0058) and restores the workspace snapshot (ADR 0038).
@@ -3775,12 +3782,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     // user bubble and runs the turn.
     s.msgs = s.msgs.slice(0, index)
     // Persist the truncation BEFORE re-running (the sidecar resumes from JSONL, so
-    // slicing in-memory alone would replay the dropped reply). Keep through the
-    // assistant turn before this one (null = drop all). AWAIT to avoid a
-    // read-before-write race on the next turn's loadSession.
+    // slicing in-memory alone would replay the dropped reply). Keep through the last
+    // persisted message of the kept prefix (see `lastPersistedEid`; a role-based
+    // condition here wipes the file when the preceding turn is a user or system
+    // message). AWAIT to avoid a read-before-write race on the next turn's loadSession.
     if (useIpc && s.engineId) {
-      const prev = index > 0 ? s.msgs[index - 1] : undefined
-      const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
+      const keepThroughId = lastPersistedEid(s.msgs)
       try {
         await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
       } catch (err) {
