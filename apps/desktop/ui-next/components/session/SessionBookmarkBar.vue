@@ -17,7 +17,7 @@
       >
         <Icon name="chev" class="bmb-chev" :class="{ open: expanded }" />
         <Icon name="bookmark" class="bmb-ic" />
-        <span class="bmb-title">{{ t('sessions.bookmark.barTitle', { n: count }) }}</span>
+        <span class="bmb-title">{{ t('sessions.bookmark.barTitle') }}</span>
       </button>
       <!-- Collapsed: the newest bookmark rides in the same row, so the bar costs ONE
            line until the user asks for the list. -->

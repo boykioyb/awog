@@ -5,7 +5,7 @@
   "sessions.transcript.fold.collapse": "Collapse all steps",
   "sessions.bookmark.add": "Bookmark",
   "sessions.bookmark.remove": "Remove bookmark",
-  "sessions.bookmark.barTitle": "Bookmarked ({n})",
+  "sessions.bookmark.barTitle": "Bookmarked",
   "sessions.bookmark.expand": "Show all bookmarks",
   "sessions.bookmark.collapse": "Collapse",
   "sessions.bookmark.jump": "Jump to message",
