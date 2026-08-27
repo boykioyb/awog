@@ -11,7 +11,13 @@
 import { readdir, rm } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { log } from '../util/logger.js'
-import type { Session, SessionMessage, SessionSummary, SessionHeader } from '../types/shared.js'
+import type {
+  Session,
+  SessionBookmark,
+  SessionMessage,
+  SessionSummary,
+  SessionHeader,
+} from '../types/shared.js'
 import {
   createSessionHeader,
   readSessionHeader,
@@ -47,6 +53,7 @@ type SessionMetadataPatch = Partial<
     | 'sdkSessionId'
     | 'compaction'
     | 'todos'
+    | 'bookmarks'
   >
 >
 
@@ -115,6 +122,39 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   return summary
 }
 
+// Bookmark ids accepted from disk. Same charset/length as the sessions.updateBookmarks
+// RPC boundary — every message id AWOG mints (msg_u_<hex>, m-<b36>-<b36>, fm-<i>-<seq>,
+// compact-<b36>) fits, so anything outside it can never resolve to a message anyway.
+const BOOKMARK_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+const BOOKMARK_AT_MAX = 40
+
+// Re-validate a header's `bookmarks` after reading it off disk (L2: the file is
+// hand-editable). A malformed ENTRY is skipped, never thrown on — a typo in one
+// bookmark must not cost the user the whole session. `undefined` when the header has
+// no bookmarks or none survived, so the field stays absent (exactOptionalPropertyTypes).
+function sanitizeBookmarks(value: unknown): SessionBookmark[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const clean: SessionBookmark[] = []
+  for (const raw of value) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const { id, at } = raw as { id?: unknown; at?: unknown }
+    if (typeof id !== 'string' || !BOOKMARK_ID_RE.test(id)) continue
+    if (typeof at !== 'string' || at.length > BOOKMARK_AT_MAX) continue
+    clean.push({ id, at })
+  }
+  return clean.length ? clean : undefined
+}
+
+// Drop a header's bookmarks field entirely when nothing survived re-validation, so a
+// hand-corrupted list neither reaches the UI nor gets written back on the next persist.
+function withSanitizedBookmarks(header: SessionHeader): SessionHeader {
+  if (header.bookmarks === undefined) return header
+  const bookmarks = sanitizeBookmarks(header.bookmarks)
+  if (bookmarks) return { ...header, bookmarks }
+  const { bookmarks: _dropped, ...rest } = header
+  return rest
+}
+
 class SessionManager {
   private sessions = new Map<string, ManagedSession>()
   // Deduplicate concurrent lazy loads of the same session's messages.
@@ -170,7 +210,11 @@ class SessionManager {
       // or carries a corrupt/old-format header → skip it.
       const header = readSessionHeader(sessionFilePath(entry.name))
       if (!header) continue
-      this.sessions.set(header.id, { header, messages: [], messagesLoaded: false })
+      this.sessions.set(header.id, {
+        header: withSanitizedBookmarks(header),
+        messages: [],
+        messagesLoaded: false,
+      })
       loaded += 1
     }
     log.info('session-manager: loaded sessions from disk (metadata only)', { count: loaded })
