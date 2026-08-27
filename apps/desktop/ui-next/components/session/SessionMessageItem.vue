@@ -49,13 +49,15 @@
         <span class="ha" :title="t('sessions.message.fullscreen')" @click="openFullscreen">
           <Icon name="maximize" style="width: 13px; height: 13px" />
         </span>
-        <span class="ha" :title="t('sessions.message.edit')" @click="editMsg">
+        <!-- `danger`: cuts the transcript (see .ha.danger below). Same three actions the
+             confirm guard gates — the colour is the warning that arrives before the click. -->
+        <span class="ha danger" :title="t('sessions.message.edit')" @click="editMsg">
           <Icon name="edit" style="width: 13px; height: 13px" />
         </span>
-        <span class="ha" :title="t('sessions.message.resend')" @click="resend">
+        <span class="ha danger" :title="t('sessions.message.resend')" @click="resend">
           <Icon name="send" style="width: 13px; height: 13px" />
         </span>
-        <span class="ha" :title="t('sessions.message.rewind')" @click="rewind">
+        <span class="ha danger" :title="t('sessions.message.rewind')" @click="rewind">
           <Icon name="rewind" style="width: 13px; height: 13px" />
         </span>
         <span class="ha" :title="t('sessions.message.fork')" @click="fork">
@@ -135,7 +137,14 @@
           </template>
         </span>
         <div v-if="showBottomActions" class="hoveract bottom">
-          <span v-for="a in msgActions" :key="a.icon" class="ha" :title="a.title" @click="a.run">
+          <span
+            v-for="a in msgActions"
+            :key="a.icon"
+            class="ha"
+            :class="{ danger: a.danger }"
+            :title="a.title"
+            @click="a.run"
+          >
             <Icon :name="a.icon" style="width: 13px; height: 13px" />
           </span>
         </div>
@@ -165,6 +174,7 @@ import type {
 import type { BlockHighlight } from './SessionTextBlock.vue'
 import type { ActivityEntry } from './SessionTurnActivities.vue'
 import type { PreviewRef } from '~/composables/usePreview'
+import type { ConfirmOptions } from '~/composables/useConfirm'
 import {
   finalResponseIndex,
   responseIndex,
@@ -313,6 +323,35 @@ const parkedOnGate = computed(() => {
 })
 const streamingActive = computed(() => streaming.value && !parkedOnGate.value)
 
+// ── Streaming-render diagnostics (utils/stream-diag) ─────────────────────────────
+// Snapshot the in-memory `message.blocks` the moment the turn finalizes: how many text
+// runs the STORE actually holds + their lengths, plus how `grouped` bucketed them.
+// Cross-referenced with the on-disk JSONL `fullText`, this decides store-layer loss
+// (blocks short) vs render-layer stall (blocks complete but a SessionTextBlock STALLs —
+// see its own diag rows). One record per turn → negligible cost.
+watch(streaming, (on, was) => {
+  if (!was || on) return
+  const m = asAssistant.value
+  if (!m) return
+  const texts = m.blocks.filter((b) => b.kind === 'text').map((b) => b.text.length)
+  const total = texts.reduce((a, n) => a + n, 0)
+  const gtext = grouped.value.flatMap((g) => (g.type === 'text' ? [g.text.length] : []))
+  const actsRuns = grouped.value.reduce(
+    (n, g) => n + (g.type === 'activities' ? g.entries.filter((e) => e.kind === 'text').length : 0),
+    0,
+  )
+  streamDiag({
+    src: 'msg',
+    key: `msg#${props.msgIndex}`,
+    ev: 'finalize',
+    textLen: total,
+    renderLen: 0,
+    streaming: false,
+    connected: true,
+    note: `blocks text[${texts.length}]=${texts.join(',')}; grouped text[${gtext.length}]=${gtext.join(',')} actsTextRuns=${actsRuns}`,
+  })
+})
+
 // ── Action-footer visibility ─────────────────────────────────────────────────
 // Actions (copy/quote/fork/regen…) are shown only once the turn is done: they aren't
 // valid mid-stream, and the footer would collide with the working indicator. When
@@ -410,22 +449,118 @@ function act(fn: (id: number, i: number) => void) {
 }
 const copyText = () => void navigator.clipboard.writeText(plainText.value)
 const quote = () => act(store.addQuote)
+
+// ── Destructive-action guard (docs/features/session-destructive-action-guard.md) ──
+// Four footer actions cut the transcript for good; they sit one icon away from copy /
+// quote / fullscreen. Gate them behind the shared confirm dialog — but only when the
+// cut actually costs messages, so the dialog keeps its meaning (§4.4). The gate lives
+// HERE, not in the store: useConfirm() is UI (§4.7), and keeping it out of the store is
+// why `retryModel` (which reaches `regenerate` directly) stays ungated by design (§4.3).
+const { confirm } = useConfirm()
+
+type GuardKind = 'rewind' | 'resend' | 'editResend' | 'regen'
+
+// Index of the nearest USER turn strictly BEFORE `i` — the message `regenerate` re-sends.
+// ⚠ RULE DUPLICATED ON PURPOSE: `stores/sessions.ts` → `regenerate()` walks back the exact
+// same way ("Re-run the nearest preceding user turn"). That copy RUNS the action, this one
+// only COUNTS what it will destroy. If one changes, change the other (spec §4.1).
+function nearestUserIndex(msgs: SessionMessage[], i: number): number {
+  let ui = i - 1
+  while (ui >= 0 && msgs[ui]?.role !== 'user') ui -= 1
+  return ui
+}
+
+// Messages that leave the transcript and DON'T come back (§4.1). The user message being
+// resent and the reply being deliberately replaced are not losses, so they're subtracted.
+// Returns -1 when the action must not run at all (regenerate with no user turn before it,
+// E6) — the store would otherwise slice the transcript and then re-run nothing.
+function lostCountOf(kind: GuardKind, msgs: SessionMessage[], i: number): number {
+  if (kind === 'rewind') return msgs.length - i
+  if (kind !== 'regen') return msgs.length - i - 1
+  const ui = nearestUserIndex(msgs, i)
+  // NOT `msgs.length - i - 1`: messages sitting BETWEEN the user turn and this reply
+  // (a system divider, an assistant turn left over from a rewind) are cut too and must
+  // be counted, not hidden.
+  return ui < 0 ? -1 : msgs.length - ui - 2
+}
+
+// §7 — dialog copy, assembled from up to three pieces (`description` renders pre-wrap,
+// so '\n' starts the cost line).
+// ⚠ `rewind` deliberately omits "cannot be undone" (§7.1, AC-G36): its on-disk truncation
+// is still partial today (§4.8), so claiming it would make the dialog lie. The sentence is
+// its own i18n key precisely so slice B2 can add it in one line, the day the patch lands.
+function guardDialog(kind: GuardKind, n: number): ConfirmOptions {
+  if (kind === 'rewind') {
+    return {
+      title: t('sessions.guard.rewind.title'),
+      description: t('sessions.guard.rewind.body', { n }),
+      confirmLabel: t('sessions.guard.rewind.confirm'),
+    }
+  }
+  const tail = ` ${t('sessions.guard.irreversible')}\n${t('sessions.guard.costNote')}`
+  const confirmLabel = t('sessions.guard.rerun.confirm')
+  if (kind === 'regen') {
+    return {
+      title: t('sessions.guard.regen.title'),
+      description: t('sessions.guard.regen.body', { n }) + tail,
+      confirmLabel,
+    }
+  }
+  const title =
+    kind === 'editResend' ? t('sessions.guard.editResend.title') : t('sessions.guard.resend.title')
+  return { title, description: t('sessions.guard.resend.body', { n }) + tail, confirmLabel }
+}
+
+// Run a destructive action behind the guard. `lostCount === 0` ⇒ straight through, no
+// friction (§4.4) — that one rule covers "retry the last failed turn", "regenerate the
+// last reply" and "resend the last bubble" without any per-button exception.
+// After the await we re-check the transcript (§4.6): the number the user agreed to was
+// computed against a specific session and length, so if either moved (a new message
+// arrived, a turn started streaming, they switched session, they double-clicked) we do
+// nothing and say so — silently skipping would be worse than the original problem.
+async function guarded(kind: GuardKind, run: (id: number, i: number) => void) {
+  const id = store.activeId
+  const s = store.active
+  const i = msgIndex.value
+  // E9 — no active session / index out of range: no dialog, no action.
+  if (id == null || !s || i < 0 || i >= s.msgs.length) return
+  const lost = lostCountOf(kind, s.msgs, i)
+  if (lost < 0) return
+  if (lost === 0) {
+    run(id, i)
+    return
+  }
+  const lenAtOpen = s.msgs.length
+  if (!(await confirm(guardDialog(kind, lost)))) return
+  const now = store.active
+  if (store.activeId !== id || !now || now.msgs.length !== lenAtOpen) {
+    pushActionToast(t('sessions.guard.stale'), 'error')
+    return
+  }
+  run(id, i)
+}
+
 // Edit → open the focused prompt-edit overlay (§9); on confirm, edit & resend this
 // user turn (truncate it + everything after, re-run with the new text). Cancel
 // (null) leaves the turn untouched.
+// The guard sits AFTER the overlay (§4.5): the overlay is where the user drafts, the
+// dialog is where they commit — and the message count is only meaningful right before
+// the cut. Cancelling the overlay still exits silently, no dialog.
 const { openPromptEdit } = useCommandPalette()
 const editMsg = async () => {
   const next = await openPromptEdit(plainText.value)
   if (next == null) return
-  if (store.activeId != null && msgIndex.value >= 0) {
-    void store.resend(store.activeId, msgIndex.value, next)
-  }
+  await guarded('editResend', (id, i) => void store.resend(id, i, next))
 }
 // Resend → re-run this user turn unchanged (one click, no overlay).
-const resend = () => act(store.resend)
-const regen = () => act(store.regenerate)
+const resend = () => void guarded('resend', store.resend)
+const regen = () => void guarded('regen', store.regenerate)
+// NOT gated (§4.3): "try another model" is a highly deliberate click, and gating every
+// destructive button breeds confirm-fatigue. It DOES truncate + spend a model call
+// though (store.retryModel → regenerate), so it pays for the exemption with the danger
+// hover colour below — the user sees the risk before clicking (AC-G28).
 const retry = () => act(store.retryModel)
-const rewind = () => act(store.rewind)
+const rewind = () => void guarded('rewind', store.rewind)
 const fork = () => act((id, i) => store.fork(id, i, 'fork'))
 const branch = () => act((id, i) => store.fork(id, i, 'branch'))
 
@@ -471,7 +606,10 @@ watch(
 
 // One action set, rendered twice (floating pill at the top + inline on the meta
 // row at the bottom) so the actions are reachable without scrolling a long reply.
-const msgActions = computed(() => [
+// `danger` = this action cuts the transcript → red on hover (§3.2). It is NOT the same
+// set as "opens a confirm dialog": `settings`/retryModel is danger but ungated (AC-G28).
+type MsgAction = { icon: string; title: string; run: () => void; danger?: boolean }
+const msgActions = computed<MsgAction[]>(() => [
   { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
   // Response-only fullscreen (PreviewModal) — only earns a slot when there's prose to read.
   ...(plainText.value.trim()
@@ -481,9 +619,9 @@ const msgActions = computed(() => [
   // turn, incl. tool-only turns that have no final response (AC3.9).
   { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
   { icon: 'quote', title: t('sessions.message.quote'), run: quote },
-  { icon: 'refresh', title: t('sessions.message.regen'), run: regen },
-  { icon: 'settings', title: t('sessions.message.retryModel'), run: retry },
-  { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind },
+  { icon: 'refresh', title: t('sessions.message.regen'), run: regen, danger: true },
+  { icon: 'settings', title: t('sessions.message.retryModel'), run: retry, danger: true },
+  { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
   { icon: 'branch', title: t('sessions.message.branch'), run: branch },
   { icon: 'fork', title: t('sessions.message.forkShort'), run: fork },
 ])
@@ -588,6 +726,15 @@ const msgActions = computed(() => [
 .hoveract .ha:hover {
   background: var(--bgHover);
   color: var(--text);
+}
+/* Destructive actions (rewind / resend / edit & resend / regenerate / retry another
+   model) read RED on hover, so the risk is visible BEFORE the click rather than only in
+   the dialog after it. Six click points in total — the four gated actions plus
+   `settings`/retryModel, which truncates + spends a model call without asking (§4.3).
+   Theme tokens only: both theme families ship --dangerBg/--danger. */
+.hoveract .ha.danger:hover {
+  background: var(--dangerBg);
+  color: var(--danger);
 }
 /* Assistant reply body. Always a flex column (keeps the per-block gap); the
    `bubble` variant (Settings → Sessions · Assistant bubble) wraps it in an
