@@ -6,6 +6,7 @@
 > **Last updated:** 2026-08-27
 > **Kế thừa AC:** [preview-modal-find.md](./preview-modal-find.md) (14 AC hành vi tìm kiếm — xem bảng ánh xạ §9)
 > **Sửa đổi 2026-08-27 (BA, phản hồi từ dev khi implement A1):** (1) **`/compact` bị gỡ khỏi danh sách đường cắt** — nó không cắt transcript, prune ở đó sẽ xoá bookmark còn sống (§5.4, AC-P1, **AC-P10** mới); (2) bổ sung khoá `sessions.bookmark.saveFailed` vào §11.2; (3) chốt số `N` **chỉ hiện một lần** ở chip đếm, `barTitle` bỏ tham số `{n}` (§6.1, §11.2).
+> **Sửa đổi 2026-08-27 (BA, quyết định sản phẩm — gỡ A1.5):** cầu nối **"Đưa vào ngữ cảnh ghim"** trong thanh bookmark **đã bị loại có chủ đích** và **code đã gỡ xong** (commit `79e00e5`). Kéo theo: §5.2 gỡ; **AC-B15 + AC-B16 bỏ, hai số này KHÔNG tái sử dụng**; 3 khoá i18n `sessions.bookmark.toPinned*` gỡ khỏi cả 2 locale; các cap chỉ phục vụ cầu nối (excerpt 500 ký tự, trần 8000 ký tự cho `pinnedContext.notes`) gỡ — excerpt **100 ký tự** của thanh giữ nguyên. Lý do + ranh giới chống scope-creep: **§16**. **Lập luận đặt tên ở §3 giữ nguyên và giờ càng quan trọng hơn** — không còn cầu nối nào để người dùng tự học ra khác biệt giữa "Đánh dấu" và "Ngữ cảnh ghim".
 
 ---
 
@@ -13,7 +14,7 @@
 
 Feature cho phép người dùng **quay lại một tin nhắn quan trọng** và **tìm chữ trong phiên đang mở** của một session dài hàng trăm turn, thay vì chỉ có cuộn tay:
 
-- **A1 — Đánh dấu (Bookmark):** đánh dấu một tin nhắn bất kỳ; thanh **"Đã đánh dấu (N)"** ở đầu transcript liệt kê chúng theo **thời gian tạo tin nhắn tăng dần**; click → nhảy tới đúng tin nhắn đó (kể cả khi nó chưa được mount); bỏ đánh dấu được; kèm hành động phụ **"Đưa vào ngữ cảnh ghim"**.
+- **A1 — Đánh dấu (Bookmark):** đánh dấu một tin nhắn bất kỳ; thanh **"Đã đánh dấu (N)"** ở đầu transcript liệt kê chúng theo **thời gian tạo tin nhắn tăng dần**; click → nhảy tới đúng tin nhắn đó (kể cả khi nó chưa được mount); bỏ đánh dấu được. **Hết — bookmark làm đúng một việc: điều hướng transcript** (§16).
 - **A2 — Tìm trong phiên:** `⌘/Ctrl+F` mở thanh tìm kiếm; tìm **literal substring** trên **toàn bộ** tin nhắn của session (không chỉ phần đang render); counter `n/N`, next/prev, wrap-around, match-case.
 
 Cả hai kết thúc ở **một hành động chung**: *"nhảy tới tin nhắn thứ i"* — hành động này hiện **thất bại im lặng** khi tin nhắn nằm ngoài render-window. Nền tảng chung (§4) sửa đúng chỗ đó và là điều kiện tiên quyết cho cả A1 lẫn A2.
@@ -28,7 +29,7 @@ Cả hai kết thúc ở **một hành động chung**: *"nhảy tới tin nhắ
 |---|---|
 | **Dev / tech-lead chạy session dài nhiều giờ** (persona chính của Brief) | Có 2 phương tiện điều hướng mới; giữ được session dài thay vì mở session mới để né cuộn. |
 | **Người hỏi nhanh 3 câu rồi đóng** | **Vô hình.** Không có bookmark ⇒ thanh không tồn tại (0px). Thanh find chỉ hiện khi chủ động bấm `⌘F`. |
-| **Người dùng đang phân vân "ghim" nghĩa là gì** | Được dẫn đường: tên "Đánh dấu" + icon `bookmark` khác hẳn "Ngữ cảnh ghim" ở composer, và có cầu nối tường minh **"Đưa vào ngữ cảnh ghim"** khi họ thật sự muốn nạp nội dung vào prompt. |
+| **Người dùng đang phân vân "ghim" nghĩa là gì** | Được dẫn đường **chỉ bằng tên + icon**: "Đánh dấu" / `bookmark` ở đầu transcript khác hẳn "Ngữ cảnh ghim" / `pin` ở composer. Sau khi cầu nối "Đưa vào ngữ cảnh ghim" bị gỡ (§16), **không còn** chỗ nào trong UI dạy họ sự khác biệt ⇒ ranh giới từ vựng §3 là phương tiện dẫn đường **duy nhất** và phải giữ tuyệt đối. |
 | **QA** | Thêm 2 bề mặt cần hồi quy: auto-scroll khi gửi tin, và tương tác `<mark>` find ↔ `<mark>` quote-highlight. |
 
 ---
@@ -42,6 +43,8 @@ Cả hai kết thúc ở **một hành động chung**: *"nhảy tới tin nhắ
 | Ghim file/ghi chú vào ngữ cảnh LLM (đã có) | Ngữ cảnh ghim | Pinned context | `sessions.pinned.*`, `Session.pinnedContext` | **Nạp vào prompt mỗi turn ⇒ tốn token thật** ([spec](./session-pinned-context.md)). |
 
 **Cấm** dùng chữ `pin*` / icon `pin` cho A1 ở bất kỳ đâu (khoá i18n, tên field, tên component, tooltip). Icon bắt buộc: `bookmark`.
+
+> **Vì sao ranh giới này còn hiệu lực — và càng quan trọng hơn sau 2026-08-27:** chữ **"ghim"** mang **hai** nghĩa trong đúng một màn hình Session — ghim session lên đầu sidebar (miễn phí, chỉ là sắp xếp) và **ngữ cảnh ghim** (**nạp vào prompt mỗi turn ⇒ tốn tiền thật**). Bản đầu của spec còn có cầu nối "Đưa vào ngữ cảnh ghim" ngay trong thanh bookmark, tức người dùng có một chỗ để *tự học* ra rằng hai thứ này khác nhau. Cầu nối đó **đã bị gỡ** (§16) ⇒ **tên + icon giờ là phương tiện dẫn đường duy nhất**. Dùng lẫn `pin` cho A1 sẽ đẩy người dùng tới một trong hai kết luận sai, cả hai đều tốn kém: (a) tưởng đánh dấu cũng ngốn token nên không dám dùng; (b) tệ hơn — tưởng "ngữ cảnh ghim" cũng chỉ là cái đánh dấu vô hại rồi nhồi nội dung vào đó.
 
 ---
 
@@ -113,12 +116,10 @@ Dùng chung cho A1 (click bookmark), A2 (next/prev), và anchor follow-up sẵn 
 6. Click một mục → chạy **flow 5.0** → transcript mở rộng window nếu cần rồi cuộn tới tin nhắn, flash nền accent.
 7. Muốn bỏ: click icon `bookmark` (đang bật) trên chính tin nhắn đó, **hoặc** nút `×` trên hàng bookmark trong thanh.
 
-### 5.2. A1 — Hành động phụ "Đưa vào ngữ cảnh ghim"
+### 5.2. *(đã gỡ — flow "Đưa vào ngữ cảnh ghim")*
 
-1. Trong thanh bookmark, mỗi hàng có nút phụ (icon `pin`, tooltip **"Đưa vào ngữ cảnh ghim"**).
-2. Click → nội dung văn bản của tin nhắn (trích ≤ 500 ký tự, xem §7.4) được **nối thêm** vào `Session.pinnedContext.notes` qua đường sẵn có `setPinnedNotes` → `pushUpsert(update-metadata)`.
-3. Toast xác nhận: "Đã thêm vào ngữ cảnh ghim" — **kèm câu nhắc chi phí**: "sẽ được nạp vào mỗi lượt".
-4. Bookmark **vẫn còn** (hai thứ độc lập; đây là cầu nối, không phải chuyển đổi).
+> Cầu nối bookmark → ngữ cảnh ghim **đã bị loại có chủ đích** (2026-08-27; code gỡ ở commit `79e00e5`). Lý do + ranh giới chống scope-creep: **§16**.
+> Số mục **5.2 để trống, không tái sử dụng** — mọi tham chiếu §5.3 / §5.4 / §5.7 sẵn có (kể cả trong plan, commit message và spec anh em) vì thế vẫn trỏ đúng chỗ. Cùng cách repo xử lý số ADR đã dùng ([docs/decisions/README.md](../decisions/README.md)).
 
 ### 5.3. A1 — Bookmark dangling (không resolve được id)
 
@@ -193,9 +194,9 @@ Cộng thêm **`fork`** — không cắt gì của session gốc, nhưng bản c
 - **Rút gọn (mặc định):** một hàng — icon `bookmark` + tiêu đề `Đã đánh dấu` + excerpt của **mục cuối theo `at`** + **chip đếm `N`** + nút mở rộng (`chev`).
 - **Số `N` xuất hiện ĐÚNG MỘT LẦN, ở chip đếm.** Tiêu đề là chữ thuần — `sessions.bookmark.barTitle` **không** còn tham số `{n}` (§11.2), component **không** truyền `{ n: count }`. Lý do chọn chip thay vì để `N` trong tiêu đề: chip là badge số ⇒ theo UI pattern `.claude/rules/nuxt-vue.md` nó phải là `text-[12px]` fixed + `font-mono`, còn tiêu đề là text đọc được ⇒ `text-[1em]` scale theo Appearance. Nhét `N` vào tiêu đề sẽ khiến con số scale theo font-size setting và lệch khỏi mọi count chip khác trong app.
   > Ở các mục khác của spec, cách viết thanh **"Đã đánh dấu (N)"** là **cách gọi tắt** cho cặp *tiêu đề + chip*, không phải yêu cầu render đúng chuỗi đó.
-- **Mở rộng:** danh sách dọc, sort `at` ASC; mỗi hàng: excerpt 1 dòng (≤100 ký tự, ellipsis) + thời gian tương đối + nút phụ `pin` ("Đưa vào ngữ cảnh ghim") + nút `×` ("Bỏ đánh dấu"). Chip `N` vẫn ở hàng đầu (đếm tổng, không đổi theo trạng thái mở/thu).
+- **Mở rộng:** danh sách dọc, sort `at` ASC; mỗi hàng: excerpt 1 dòng (≤100 ký tự, ellipsis) + thời gian tương đối + nút `×` ("Bỏ đánh dấu"). **Không có nút phụ nào khác** — mỗi hàng chỉ làm 2 việc: nhảy tới, hoặc gỡ (§16). Chip `N` vẫn ở hàng đầu (đếm tổng, không đổi theo trạng thái mở/thu).
 - **Trạng thái mở/thu là ephemeral** — không persist (KISS, Brief đã chốt); reset khi đổi session.
-- **Phân biệt thị giác với chip "Ngữ cảnh ghim":** thanh bookmark dùng nền `--bgEl` + viền `--border` + icon/accent màu `--accent`; chip pinned-context ở composer giữ nguyên. Hai thứ ở hai vị trí khác nhau (đầu transcript vs composer) và khác icon (`bookmark` vs `pin`).
+- **Phân biệt thị giác với chip "Ngữ cảnh ghim":** thanh bookmark dùng nền `--bgEl` + viền `--border` + icon/accent màu `--accent`; chip pinned-context ở composer giữ nguyên. Hai thứ ở hai vị trí khác nhau (đầu transcript vs composer) và khác icon (`bookmark` vs `pin`). Vì **không còn cầu nối** giữa chúng (§16), khác biệt vị trí + icon + tên phải tự nói lên tất cả — xem lập luận ở §3.
 - **Màu:** bắt buộc qua token theme (`--bgEl`, `--border`, `--text`, `--textDim`, `--accent`, `--accentBorder`, `--bgHover`, `--danger`). Không hardcode hex.
 - **Font-size:** excerpt/tiêu đề `text-[1em]`; chip đếm `N` là badge → `text-[12px]` fixed + `font-mono leading-none`.
 
@@ -292,7 +293,7 @@ Params = {
 - Nguồn: `searchableSegments(m)` (§7.6) → đoạn text non-empty **đầu tiên**.
 - Chuẩn hoá: `\s+ → ' '`, trim, cắt **100 ký tự** + `…`.
 - Turn không có text (chỉ tool) → nhãn `sessions.bookmark.noText` = "(lượt không có phản hồi văn bản)".
-- Excerpt cho **"Đưa vào ngữ cảnh ghim"** dùng cùng nguồn nhưng cắt **500 ký tự** (nội dung này đi vào prompt mỗi turn ⇒ cắt chặt là chống cháy tiền). Nối vào `notes` dạng block trích dẫn; nếu `notes` sau khi nối vượt **8000 ký tự** → **chặn** + toast `sessions.bookmark.toPinnedFull`, không ghi.
+- **100 ký tự là độ dài duy nhất của feature.** Bản đầu còn một excerpt 500 ký tự phục vụ cầu nối "Đưa vào ngữ cảnh ghim"; cầu nối đó đã bị gỡ (§16) nên hằng số đó — cùng trần 8000 ký tự cho `pinnedContext.notes` — **không còn tồn tại** trong spec lẫn code.
 
 ### 7.6. `utils/transcript-text.ts` (mới) — bề mặt tìm kiếm
 
@@ -378,8 +379,10 @@ Ký hiệu nhóm: **N** = nền tảng (T0), **F** = find (A2), **B** = bookmark
 - **AC-B12.** *Given* đã đánh dấu 3 tin nhắn có nội dung dài, *when* mở file `~/.awog/sessions/{id}/session.jsonl` dòng header, *then* mảng `bookmarks` chỉ chứa **`{ id, at }`** cho mỗi mục — **không có excerpt / preview / text** nào; tổng kích thước phần `bookmarks` ≤ ~1.8KB ở mức 30 mục.
 - **AC-B13.** *Given* một bookmark có `id` **không** resolve được trong `s.msgs` hiện tại, *when* thanh render, *then* hàng đó hiển thị **mờ, không bấm được**, có nhãn "Tin nhắn không còn tồn tại" + nút "Gỡ đánh dấu"; **app không crash**, console không có exception.
 - **AC-B14.** *Given* một bookmark dangling, *when* người dùng thử click vào hàng (hoặc nhấn Enter khi focus vào nó), *then* **không có** thao tác cuộn nào xảy ra và **tuyệt đối không** cuộn tới một tin nhắn khác. *(ràng buộc không thương lượng của PO)*
-- **AC-B15.** *Given* một bookmark hợp lệ, *when* click nút phụ "Đưa vào ngữ cảnh ghim", *then* nội dung tin nhắn (trích ≤500 ký tự) được **nối thêm** vào `pinnedContext.notes`, chip "Notes" ở composer cập nhật, toast xác nhận có nhắc "sẽ được nạp vào mỗi lượt". Bookmark **vẫn còn**.
-- **AC-B16.** *Given* `pinnedContext.notes` sau khi nối sẽ vượt 8000 ký tự, *when* click "Đưa vào ngữ cảnh ghim", *then* thao tác **bị chặn** + toast cảnh báo; `notes` không đổi.
+
+> **AC-B15 và AC-B16 đã bỏ** (2026-08-27) cùng với hành động phụ "Đưa vào ngữ cảnh ghim" — code đã gỡ ở commit `79e00e5`, lý do ở **§16**.
+> **Hai số này KHÔNG tái sử dụng.** Chúng đã được trích dẫn trong commit message và trong plan ([session-transcript-navigation.tasks.md](./session-transcript-navigation.tasks.md)); gán lại cho AC khác sẽ làm mọi tham chiếu sẵn có trỏ sai. Cùng cách repo xử lý số ADR đã dùng ([docs/decisions/README.md](../decisions/README.md)). AC kế tiếp trong nhóm B là **AC-B17**, và **QA không chạy** hai số đã bỏ.
+
 - **AC-B17.** *Given* session có 5 bookmark, *when* gửi một lượt mới và kiểm tra prompt gửi đi (`sessions.sendMessage` payload + system prompt), *then* **không có** dữ liệu bookmark nào xuất hiện — bookmark **không vào prompt**.
 - **AC-B18.** *Given* bookmark được lưu, *when* kiểm tra `SessionSummary` trả về từ `sessions.list`, *then* **không có** trường `bookmarks` (danh sách session không cần biết).
 - **AC-B19.** *Given* RPC `sessions.updateBookmarks` lỗi (sidecar chết / reject), *when* người dùng vừa bấm "Đánh dấu", *then* toast hiện nội dung của khoá **`sessions.bookmark.saveFailed`** ("Không lưu được đánh dấu"), `console.warn` có log, và **state UI không rollback** — lần thao tác kế tiếp gửi lại toàn bộ mảng nên tự chữa.
@@ -470,6 +473,7 @@ Ký hiệu nhóm: **N** = nền tảng (T0), **F** = find (A2), **B** = bookmark
 | **Multi-window** | ⚠️ Popout + cửa sổ chính cùng ghi header session → last-write-wins ở mức field (§10.3). Rủi ro chấp nhận, đã ghi ở ADR 0074. |
 | **Multi-surface (cùng renderer)** | ✔ `SessionDetail` + N `SshSessionPanel` cùng mount `SessionTranscript` → phân giải bằng provide/inject theo surface ([ADR 0075](../decisions/0075-transcript-surface-scoping.md), §10.1, AC-N9). |
 | **Ngân sách header 8KB** | ⚠️ `todos` (ADR 0069) đã có thể vượt probe từ trước; bookmark thêm ≤1.8KB. Field thứ ba muốn vào header **phải đo lại tổng**. |
+| **Chi phí token** | ✔ **Không có đường nào từ A1/A2 chảy vào prompt.** Cầu nối "Đưa vào ngữ cảnh ghim" — điểm duy nhất từng làm được việc đó — **đã bị gỡ** (§16). Muốn nạp nội dung vào prompt: dùng trực tiếp Ngữ cảnh ghim ở composer, nơi đã có đồng hồ chi phí. |
 | **Security** | Chỉ **một** điểm mở bề mặt: `userMessageId` (L1 → path sink). Đã có AC-P5/P6 + infosec review bắt buộc. Không network, không exec, không path từ UI, không `v-html` mới (wrap bằng DOM Range như đã ship ở preview). |
 
 ---
@@ -503,9 +507,6 @@ Ký hiệu nhóm: **N** = nền tảng (T0), **F** = find (A2), **B** = bookmark
 | `sessions.bookmark.notFound` | Couldn't open that message | Không mở được tin nhắn đó |
 | `sessions.bookmark.noText` | (turn has no text response) | (lượt không có phản hồi văn bản) |
 | `sessions.bookmark.saveFailed` | Couldn't save bookmarks | Không lưu được đánh dấu |
-| `sessions.bookmark.toPinned` | Add to pinned context | Đưa vào ngữ cảnh ghim |
-| `sessions.bookmark.toPinnedDone` | Added to pinned context — it will be fed into every turn | Đã thêm vào ngữ cảnh ghim — sẽ được nạp vào mỗi lượt |
-| `sessions.bookmark.toPinnedFull` | Pinned notes are full — trim them first | Ghi chú ghim đã đầy — hãy rút gọn trước |
 | `sessions.find.placeholder` | Find in session… | Tìm trong phiên… |
 | `sessions.find.open` | Find in session | Tìm trong phiên |
 | `sessions.find.loading` | Loading transcript… | Đang nạp transcript… |
@@ -513,6 +514,7 @@ Ký hiệu nhóm: **N** = nền tảng (T0), **F** = find (A2), **B** = bookmark
 
 > **Đổi so với bản 2026-08-26 (dev cần sửa 2 file locale + 1 call site):** `sessions.bookmark.barTitle` **bỏ tham số `{n}`** — `Bookmarked ({n})` → **`Bookmarked`**, `Đã đánh dấu ({n})` → **`Đã đánh dấu`**; `SessionBookmarkBar.vue` bỏ luôn `{ n: count }` khi gọi `t()`. Số `N` chỉ còn ở chip đếm (§6.1).
 > **Bổ sung:** `sessions.bookmark.saveFailed` — toast khi `sessions.updateBookmarks` lỗi (§6.5, AC-B19). Khoá này thiếu ở bản đầu dù §6.5 đã yêu cầu toast.
+> **Gỡ 2026-08-27:** ba khoá `sessions.bookmark.toPinned`, `sessions.bookmark.toPinnedDone`, `sessions.bookmark.toPinnedFull` **đã xoá khỏi cả 2 locale** cùng với hành động phụ "Đưa vào ngữ cảnh ghim" (§16). **Không thêm lại.**
 
 > Không được dùng literal string trong component — mọi nhãn đi qua `t()`.
 
@@ -558,8 +560,9 @@ Ký hiệu nhóm: **N** = nền tảng (T0), **F** = find (A2), **B** = bookmark
   - `rewind` / `resend` (gồm cả "edit & resend" — cùng hàm, có `overrideText`) / `regenerate` (+ `retryModel` ở nhánh browser-dev): gọi prune **trước** khi cắt;
   - **`compactSession` / `runCompactRpc`: KHÔNG gọi prune, KHÔNG đụng `bookmarks`** — `/compact` không cắt transcript (§5.4, AC-P10);
   - `fork` (~dòng 3695): **lọc `bookmarks` tường minh** theo `msgs.slice(0, index + 1)`.
-- **`apps/desktop/ui-next/composables/useSessionBookmarks.ts` (mới)** — `Map<eid, index>`, rows đã sort + excerpt, trạng thái dangling, expand/collapse.
-- **`apps/desktop/ui-next/components/session/SessionBookmarkBar.vue` (mới)** — thanh "Đã đánh dấu" (tiêu đề không kèm số + chip đếm `N`, §6.1).
+  - **KHÔNG chạm `pinnedContext`** — sau khi gỡ cầu nối (§16), A1 không có đường nào ghi vào `setPinnedNotes`.
+- **`apps/desktop/ui-next/composables/useSessionBookmarks.ts` (mới)** — `Map<eid, index>`, rows đã sort + excerpt (**một** hằng số 100 ký tự), trạng thái dangling, expand/collapse.
+- **`apps/desktop/ui-next/components/session/SessionBookmarkBar.vue` (mới)** — thanh "Đã đánh dấu" (tiêu đề không kèm số + chip đếm `N`, §6.1). Mỗi hàng chỉ có **nhảy tới** + nút `×`; **không** nút `pin`, **không** icon `pin` ở bất kỳ đâu trong file.
 - [`apps/desktop/ui-next/components/session/SessionDetail.vue`](../../apps/desktop/ui-next/components/session/SessionDetail.vue) — mount `SessionBookmarkBar` ngay trên `SessionTranscript` (cạnh `SessionTodoPanel`).
 - `SessionMessageItem.vue` — nút "Đánh dấu" trong `msgActions` (assistant) + hàng action của user bubble.
 
@@ -586,8 +589,8 @@ Ký hiệu nhóm: **N** = nền tảng (T0), **F** = find (A2), **B** = bookmark
 | Loại | Chi tiết |
 |---|---|
 | **Entity hiện có** | `Session` (thêm `bookmarks`), `SessionMessage` (đọc `id` đã có). **Không** chạm Task / Project / Workflow / Agent / Skill / Artifact. |
-| **Feature phụ thuộc vào** | [preview-modal-find](./preview-modal-find.md) (util `find-in-dom`, component `FindBar`), [session-popout-window](./session-popout-window.md) (đường reclaim + re-read), [session-pinned-context](./session-pinned-context.md) (đích của "Đưa vào ngữ cảnh ghim"), [workspace-panel](./workspace-panel.md) (Monaco/terminal nhường `⌘F`), [ADR 0064](../decisions/0064-session-ssh-link.md) (SSH co-pilot — surface thứ hai mount `SessionTranscript`). |
-| **Feature liên quan nhưng KHÔNG chạm** | `/compact` ([ADR 0047](../decisions/0047-auto-compact-context.md) — chỉ cắt ngữ cảnh model, transcript nguyên vẹn) ⇒ bookmark **không** prune ở đó (§5.4, AC-P10). |
+| **Feature phụ thuộc vào** | [preview-modal-find](./preview-modal-find.md) (util `find-in-dom`, component `FindBar`), [session-popout-window](./session-popout-window.md) (đường reclaim + re-read), [workspace-panel](./workspace-panel.md) (Monaco/terminal nhường `⌘F`), [ADR 0064](../decisions/0064-session-ssh-link.md) (SSH co-pilot — surface thứ hai mount `SessionTranscript`). |
+| **Feature liên quan nhưng KHÔNG chạm** | `/compact` ([ADR 0047](../decisions/0047-auto-compact-context.md) — chỉ cắt ngữ cảnh model, transcript nguyên vẹn) ⇒ bookmark **không** prune ở đó (§5.4, AC-P10). **[session-pinned-context](./session-pinned-context.md)** — sau khi gỡ cầu nối (§16), feature này **không đọc, không ghi** `pinnedContext`; quan hệ còn lại **chỉ là ranh giới đặt tên** (§3). |
 | **Feature bị ảnh hưởng** | [session-destructive-action-guard.brief.md](./session-destructive-action-guard.brief.md) (Brief B) — thứ tự: `confirm()` → prune bookmark → cắt. Hai spec **phải** khớp ở điểm này. |
 | **ADR** | [0074](../decisions/0074-session-message-anchor-and-transcript-navigation.md) (ràng buộc chính) + **[0075](../decisions/0075-transcript-surface-scoping.md)** (amend T0a: surface scoping), [0048](../decisions/0048-session-index-lazy-load.md) + [0062](../decisions/0062-adopt-craft-session-storage-model.md) (lazy-load / header), [0069](../decisions/0069-editable-session-checklist.md) (tiền lệ RPC hẹp), [0067](../decisions/0067-mobile-remote-control-transport.md) (allowlist remote), [0032](../decisions/0032-session-message-parts-model.md) (parts). |
 | **External** | Không có. Không API model, không Git CLI, không OS notification. |
@@ -607,8 +610,8 @@ T0c (eid + userMessageId + updateBookmarks)            ─┘        ↑        
 | **T0b** | Rename `PreviewFindBar` → `common/FindBar` + i18n | — | **Commit riêng**, 0 logic (AC-N8). Chạy song song T0a. |
 | **T0c** | `eid` cho user/system + `userMessageId` + `sessions.updateBookmarks` | — | Sidecar + store. **infosec review bắt buộc** cho regex (AC-P5). |
 | **A2** | `transcript-text.ts` + `useSessionFind` + wiring `⌘F`/`Esc` + mount `FindBar` | T0a, T0b | A2 trước vì ít câu hỏi mở hơn và tự nó giải phần lớn nỗi đau. |
-| **A1** | `useSessionBookmarks` + `SessionBookmarkBar` + nút trên message + prune **3 đường cắt** + fork filter | T0a, T0c | |
-| **QA** | AC-N*, AC-F*, AC-B*, AC-P* + hồi quy "gửi tin → tự cuộn xuống đáy" + ca `<mark>` chồng `<mark>` + **ca "/compact không dọn bookmark" (AC-P10)** | tất cả | |
+| **A1** | `useSessionBookmarks` + `SessionBookmarkBar` + nút trên message + prune **3 đường cắt** + fork filter. **Không** có hành động phụ nào (§16). | T0a, T0c | |
+| **QA** | AC-N*, AC-F*, AC-B* (trừ AC-B15/AC-B16 đã bỏ), AC-P* + hồi quy "gửi tin → tự cuộn xuống đáy" + ca `<mark>` chồng `<mark>` + **ca "/compact không dọn bookmark" (AC-P10)** | tất cả | |
 
 **Hồi quy bắt buộc (không được bỏ):**
 1. Gửi tin nhắn mới khi thanh find **đóng** → transcript vẫn tự cuộn xuống đáy (`suppressAutoScroll` không rò rỉ).
@@ -628,13 +631,13 @@ Các *Câu hỏi phụ* mà Brief giao lại cho BA — chốt tại đây, khô
 | Thanh rỗng chiếm chỗ? | **0px, không render trong DOM** | Success criteria của PO |
 | Persist trạng thái mở/thu của thanh? | **Không** | Brief đã chốt (KISS, ephemeral UI state) |
 | Sort tie-break khi `at` trùng nhau | Theo **index đã resolve** ASC; bookmark dangling xếp **sau** | Deterministic, không phụ thuộc thứ tự bấm |
-| Excerpt dài bao nhiêu | **100 ký tự** ở thanh; **500 ký tự** khi đưa vào ngữ cảnh ghim | Thanh là 1 dòng; nội dung vào prompt phải cắt chặt (tiền thật) |
-| Cap cho `pinnedContext.notes` sau khi nối | **8000 ký tự**, vượt thì **chặn + toast** | `notes` nạp vào prompt **mỗi turn**; im lặng nối dài là đường cháy tiền |
+| Excerpt dài bao nhiêu | **100 ký tự** — một dòng ở thanh, và là **độ dài duy nhất** của feature | Thanh là 1 dòng. Sau khi gỡ cầu nối "Đưa vào ngữ cảnh ghim" (§16), không còn nội dung nào của bookmark chảy vào prompt ⇒ không cần hằng số thứ hai |
 | Kế thừa AC-14 (prefill selection)? | **Không** ở v1 | Selection trong transcript đã mang nghĩa "Quote & follow up"; hai hành vi tranh nhau trên cùng cử chỉ |
 | `⌘F` nhường ai | Nhường **Monaco** + **xterm** + **PreviewModal đang mở**; **không** nhường composer textarea | Chỗ nào đã có find native thì nhường; chỗ nào browser-find vô dụng thì AWOG thắng |
 | Ghi bookmark: optimistic hay chờ RPC? | **Optimistic** + `pushRequest` (như `setTodos`), lỗi thì log + toast `sessions.bookmark.saveFailed`, **không rollback** | Payload là **toàn bộ mảng** nên thao tác kế tiếp tự chữa; UI phản hồi tức thì |
 | **`/compact` có prune bookmark không?** *(sửa 2026-08-27)* | **KHÔNG.** Chỉ `rewind` / `resend` (gồm edit & resend) / `regenerate` prune; `fork` lọc tường minh | `/compact` **không cắt transcript** — sidecar ghi checkpoint và cắt ở `buildContext` cho lượt sau, `session.messages` không đổi. Prune ở đó = **xoá bookmark còn sống**, đúng ngược mục tiêu (§5.4, AC-P10) |
 | **Số `N` hiện ở đâu?** *(sửa 2026-08-27)* | **Chỉ ở chip đếm.** `barTitle` bỏ tham số `{n}` | Badge số phải `text-[12px]` fixed + mono (`.claude/rules/nuxt-vue.md`), tiêu đề phải `text-[1em]`; để `N` ở cả hai chỗ là hiển thị trùng và làm con số scale theo Appearance |
+| **Giữ cầu nối bookmark → ngữ cảnh ghim?** *(chốt 2026-08-27, code đã gỡ)* | **KHÔNG.** Gỡ hoàn toàn: nút, hàm, 2 hằng số (500 / 8000), 3 khoá i18n | Bookmark giữ đúng **một** việc — điều hướng transcript (SRP). Ngữ cảnh ghim ở composer đã là chỗ đầy đủ cho việc "cho AI nhớ", có UI và đồng hồ chi phí riêng. Chi tiết + ranh giới chống scope-creep: **§16** |
 
 ---
 
@@ -649,6 +652,7 @@ Các *Câu hỏi phụ* mà Brief giao lại cho BA — chốt tại đây, khô
 | Restart-safe | **Có** — bookmark trong header, ghi atomic |
 | Storage | ≤ **1.8KB** / session ở mức 30 bookmark; **không** vượt ngân sách probe 8KB một mình |
 | Bề mặt IPC mới | 1 RPC (`sessions.updateBookmarks`) + 1 param (`userMessageId`) + 1 field header (`bookmarks`) |
+| Chi phí token phát sinh | **0** — không có đường nào từ A1/A2 vào prompt (§10.5) |
 | Số dependency mới | **0** |
 
 ---
@@ -668,6 +672,9 @@ Giữ nguyên mục *Out of scope* của Brief, nhắc lại để chống scope
 - Prefill selection vào ô tìm kiếm (§14).
 - **Dọn bookmark theo `/compact`** — không phải "chưa làm" mà là **sai về bản chất**: `/compact` không cắt transcript (§5.4). Muốn đổi ⇒ phải đổi [ADR 0047](../decisions/0047-auto-compact-context.md) trước.
 - **Đổi `SshWorkspace` sang `v-if` cho terminal tab** — cố ý dùng `v-show` để không disconnect shell; feature này thích ứng bằng surface scoping chứ không sửa `SshWorkspace` ([ADR 0075](../decisions/0075-transcript-surface-scoping.md)).
+- **Cầu nối "Đưa vào ngữ cảnh ghim" từ thanh bookmark** — **đã LOẠI CÓ CHỦ ĐÍCH 2026-08-27**, không phải "chưa làm". Code đã gỡ ở commit `79e00e5` (nút, hàm `toPinned()`, excerpt 500 ký tự, trần 8000 ký tự cho `pinnedContext.notes`, 3 khoá i18n `sessions.bookmark.toPinned*`); tài liệu gỡ theo: §5.2, **AC-B15 + AC-B16** (số **không tái sử dụng**), task **A1.5**.
+  **Lý do:** bookmark giữ đúng **một** việc — **điều hướng transcript** (SRP: một hàng bookmark = một lý do tồn tại). Ai muốn AI ghi nhớ một đoạn thì dùng **trực tiếp Ngữ cảnh ghim ở composer** ([spec](./session-pinned-context.md)), nơi đã có UI riêng, chip đếm và ngữ cảnh chi phí rõ ràng. Nhét thêm một nút "tiện tay" vào hàng bookmark biến một thao tác *đọc* (miễn phí) thành một thao tác *bơm token vào mọi lượt sau đó* — đúng loại nhầm lẫn mà ranh giới đặt tên ở §3 tồn tại để ngăn.
+  **⇒ Đừng "bổ sung lại cho đủ".** Muốn mở lại phải đi qua Brief mới của PO, không phải một PR "hoàn thiện A1".
 
 ---
 
@@ -687,6 +694,9 @@ Ba câu hỏi kiến trúc của Brief **đã chốt** ở ADR 0074 và **không
 - **✅ Q2 (BA) — CHỐT 2026-08-27: `/compact` có phải đường cắt không?**
   **Không.** Bản 2026-08-26 liệt kê nhầm (§5.4 "5 đường" + AC-P1). Dev phát hiện khi implement A1; BA verify lại tại nguồn: [`sessions.compact.ts`](../../apps/desktop/sidecar/src/methods/sessions.compact.ts) (*"The full transcript is left intact… only the model context is cut, in buildContext"*), `compactSession()` lưu `{ ...rest, compaction }` không đụng `messages`, và `runCompactRpc` phía UI không `slice` `s.msgs`. Danh sách đường cắt còn **3** + lọc tường minh khi `fork`; thêm **AC-P10** làm hồi quy.
 
+- **✅ Q3 (PO/BA) — CHỐT 2026-08-27: bookmark có cần cầu nối sang ngữ cảnh ghim?**
+  **Không — gỡ hoàn toàn.** Quyết định sản phẩm của người dùng; code đã gỡ ở commit `79e00e5`. Bookmark = điều hướng transcript, hết. Lý do + ranh giới chống "bổ sung lại cho đủ": **§16**; hàng quyết định tương ứng ở **§14**.
+
 **Không còn open question nào chặn việc triển khai.**
 
 ---
@@ -697,7 +707,7 @@ Ba câu hỏi kiến trúc của Brief **đã chốt** ở ADR 0074 và **không
 - **ADR chính:** [0074 — Neo tin nhắn bền + hợp đồng điều hướng transcript](../decisions/0074-session-message-anchor-and-transcript-navigation.md)
 - **ADR amend T0a:** [0075 — Phạm vi transcript theo surface](../decisions/0075-transcript-surface-scoping.md)
 - **Kế thừa AC:** [preview-modal-find.md](./preview-modal-find.md)
-- **Ranh giới đặt tên:** [session-pinned-context.md](./session-pinned-context.md)
+- **Ranh giới đặt tên (không còn phụ thuộc chức năng — §16):** [session-pinned-context.md](./session-pinned-context.md)
 - **Bối cảnh:** [sessions.md](./sessions.md), [workspace-panel.md](./workspace-panel.md), [session-popout-window.md](./session-popout-window.md), [todo-list.md](./todo-list.md)
 - **Spec anh em (phải khớp thứ tự prune):** [session-destructive-action-guard.brief.md](./session-destructive-action-guard.brief.md)
 - **ADR nền:** [0047](../decisions/0047-auto-compact-context.md) (`/compact` — không cắt transcript), [0048](../decisions/0048-session-index-lazy-load.md), [0062](../decisions/0062-adopt-craft-session-storage-model.md), [0069](../decisions/0069-editable-session-checklist.md), [0067](../decisions/0067-mobile-remote-control-transport.md), [0064](../decisions/0064-session-ssh-link.md)

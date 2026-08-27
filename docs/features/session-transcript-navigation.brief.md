@@ -75,6 +75,8 @@ Nghĩa thứ ba sẽ khiến người dùng **hợp lý mà hiểu nhầm** rằ
 3. Thanh đầu transcript đặt tên **"Đã đánh dấu (N)"**, phải phân biệt thị giác rõ với chip "Ngữ cảnh ghim" ở composer.
 4. **Cầu nối có chủ đích:** trong menu của một bookmark có thêm hành động thứ hai — **"Đưa vào ngữ cảnh ghim"** → ghi nội dung message sang `pinnedContext.notes`. Biến hiểu nhầm thành đường dẫn học được, đồng thời **tái dùng feature sẵn có thay vì làm mới**.
 
+> **Superseded 2026-08-27 — điểm 4 đã bị loại.** Cầu nối "Đưa vào ngữ cảnh ghim" **không** được triển khai (quyết định của user, code gỡ ở `79e00e5`). Bookmark giữ đúng một việc: điều hướng transcript. Ba điểm 1–3 **vẫn còn hiệu lực** — và điểm 1–2 nay càng quan trọng hơn, vì không còn cầu nối nào để người dùng tự học ra khác biệt giữa "đánh dấu" và "ghim ngữ cảnh": tên + icon là phương tiện dẫn đường duy nhất. Xem [spec §16](./session-transcript-navigation.md).
+
 ### Vì sao không thay được bằng feature sẵn có
 
 Follow-up quote **gần như** đủ (có anchor badge + scroll + đánh số) — nhưng `followups` bị **xoá sạch mỗi lần gửi tin** (bản chất ephemeral, phục vụ composer). Bookmark cần **bền qua turn và qua restart**. Kết luận: không thay thế được, feature mới hợp lệ; nhưng **cơ chế UI thì tái dùng nguyên**.

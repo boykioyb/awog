@@ -5,6 +5,7 @@
 > **Spec anh em:** [session-destructive-action-guard.md](./session-destructive-action-guard.md) — plan tại [session-destructive-action-guard.tasks.md](./session-destructive-action-guard.tasks.md)
 > Vai trò tạo: Project Manager. Tài liệu **chỉ chia task + dependency + ước lượng + owner + acceptance**, KHÔNG chứa code.
 > **Spec + ADR đã chốt hoàn toàn — 0 open question.** Task nào phát sinh câu hỏi mới ⇒ dừng, quay lại BA/TL, không tự quyết.
+> **Sửa đổi 2026-08-27:** (1) **task A1.5 "Đưa vào ngữ cảnh ghim" đã bị gỡ** khỏi plan — cầu nối bookmark → ngữ cảnh ghim bị loại có chủ đích (code gỡ ở commit `79e00e5`, lý do ở [spec §16](./session-transcript-navigation.md)); ID `A1.5` **không tái sử dụng**, các task còn lại **không đánh số lại**. (2) Sửa danh sách đường cắt trong A1.1 / QA-B / QA-P từ "5 đường" về **đúng 3** — `/compact` **không** cắt transcript nên **không** prune bookmark ([spec §5.4](./session-transcript-navigation.md), **AC-P10**).
 
 ## Cách đọc plan
 
@@ -41,7 +42,7 @@ T0b (rename FindBar — COMMIT RIÊNG, 0 logic)  ──────────�
 T0a.1 → T0a.2 → T0a.3 ──────────────┬──────────────────────┼→ A2.1 → A2.2 → A2.3 → QA-F
    (surface + scroll async)         │                      │
                                     │                      │
-T0c.1 → T0c.2 → T0c.4 (infosec) ────┼→ T0c.3 ──────────────┴→ A1.1 → A1.2 → A1.3 ─┬→ A1.5 → QA-B → QA-P
+T0c.1 → T0c.2 → T0c.4 (infosec) ────┼→ T0c.3 ──────────────┴→ A1.1 → A1.2 → A1.3 ─┬→ QA-B → QA-P
    (sidecar: types/RPC/param)       │      (store: eid + mint)          → A1.4 ────┘
                                     │
                                     └→ QA-N (nền tảng, sau T0a.3)
@@ -187,25 +188,25 @@ B1 (feature guard) — ĐỘC LẬP HOÀN TOÀN, chạy song song T0a/T0b/T0c
 
 ## A1 — Đánh dấu (Bookmark)
 
-> **Từ vựng bắt buộc:** tên UI "Đánh dấu", icon `bookmark`, tiền tố `sessions.bookmark.*`. **CẤM** chữ `pin*` / icon `pin` cho A1 ở mọi nơi (trừ đúng nút phụ "Đưa vào ngữ cảnh ghim"). Bookmark **không vào prompt**, **không rời `.awog`**, **không tới remote gateway**.
+> **Từ vựng bắt buộc:** tên UI "Đánh dấu", icon `bookmark`, tiền tố `sessions.bookmark.*`. **CẤM** chữ `pin*` / icon `pin` cho A1 ở **mọi** nơi — không có ngoại lệ nào (cầu nối "Đưa vào ngữ cảnh ghim" đã bị loại, [spec §16](./session-transcript-navigation.md)). Bookmark **không vào prompt**, **không rời `.awog`**, **không tới remote gateway**.
 
-- [ ] **A1.1. Store: actions bookmark + prune 5 đường cắt + fork filter tường minh** — **M**
-  - **Mô tả:** Actions mới `toggleBookmark(id, msgIndex)` / `removeBookmark(id, bookmarkId)` / **`pruneBookmarksTo(s, survivingIds)`** (một hàm duy nhất, dùng lại ở **cả 5 đường**: `rewind`, `resend`, `regenerate`, edit & resend, `compactSession`). Ghi **optimistic** + `pushRequest` (như `setTodos`), lỗi ⇒ log `console.warn` + toast, **không rollback** (payload là toàn bộ mảng nên thao tác kế tiếp tự chữa). Thứ tự cắt bắt buộc: tính `survivingIds = new Set(idsOf(msgs.slice(0, index)))` **TRƯỚC** khi cắt → prune → `sessions.updateBookmarks` → **rồi mới** `msgs.slice(...)` + cắt trên đĩa. `fork` (~3695): **lọc `bookmarks` tường minh** theo `msgs.slice(0, index + 1)` — **không dựa vào `...s` spread**.
-  - **File chạm:** `apps/desktop/ui-next/stores/sessions.ts` (~3651 `rewind`, ~3667 `resend`, ~3595 `regenerate`, `compactSession`, ~3695 `fork`) · `apps/desktop/ui-next/composables/useSessionsData.ts`
+- [ ] **A1.1. Store: actions bookmark + prune 3 đường cắt + fork filter tường minh** — **M**
+  - **Mô tả:** Actions mới `toggleBookmark(id, msgIndex)` / `removeBookmark(id, bookmarkId)` / **`pruneBookmarksTo(s, survivingIds)`** (một hàm duy nhất, dùng lại ở **đúng 3 đường**: `rewind`, `resend` — gồm cả "edit & resend" vì đó chính là `resend` có `overrideText` — và `regenerate`). **`/compact` KHÔNG prune, KHÔNG đụng `bookmarks`** — nó chỉ cắt ngữ cảnh gửi model, transcript còn nguyên (spec §5.4, **AC-P10**). Ghi **optimistic** + `pushRequest` (như `setTodos`), lỗi ⇒ log `console.warn` + toast, **không rollback** (payload là toàn bộ mảng nên thao tác kế tiếp tự chữa). Thứ tự cắt bắt buộc: tính `survivingIds = new Set(idsOf(msgs.slice(0, index)))` **TRƯỚC** khi cắt → prune → `sessions.updateBookmarks` → **rồi mới** `msgs.slice(...)` + cắt trên đĩa. `fork` (~3695): **lọc `bookmarks` tường minh** theo `msgs.slice(0, index + 1)` — **không dựa vào `...s` spread**.
+  - **File chạm:** `apps/desktop/ui-next/stores/sessions.ts` (~3651 `rewind`, ~3667 `resend`, ~3595 `regenerate` + `retryModel` ở nhánh browser-dev, ~3695 `fork`) · `apps/desktop/ui-next/composables/useSessionsData.ts`
   - **Depends on:** T0c.3
   - **Owner:** developer
-  - **Acceptance:** **AC-P1** (bookmark #5 còn, #40 bị dọn, `sessions.updateBookmarks` gọi **trước** khi cắt đĩa; sau reload đúng 1 bookmark) · **AC-P2** (fork tại 20 ⇒ bản fork chỉ mang #5; **session gốc giữ nguyên cả hai**) · **AC-B17** (bookmark **không** xuất hiện trong payload `sendMessage` hay system prompt).
+  - **Acceptance:** **AC-P1** (bookmark #5 còn, #40 bị dọn, `sessions.updateBookmarks` gọi **trước** khi cắt đĩa; sau reload đúng 1 bookmark) · **AC-P2** (fork tại 20 ⇒ bản fork chỉ mang #5; **session gốc giữ nguyên cả hai**) · **AC-P10** (`/compact` ⇒ `s.msgs` không đổi, `sessions.updateBookmarks` **KHÔNG** được gọi, thanh giữ đủ số bookmark) · **AC-B17** (bookmark **không** xuất hiện trong payload `sendMessage` hay system prompt).
   - **Risk:** **Rủi ro cùng-file với B1/B2** (`stores/sessions.ts`) — xem §"Rủi ro cùng-file". Thứ tự với feature guard: `confirm()` chạy **trước** cả bước tính `survivingIds` ([spec B §6](./session-destructive-action-guard.md)) — huỷ hộp thoại ⇒ **bookmark KHÔNG bị prune**.
 
 - [ ] **A1.2. `useSessionBookmarks` — resolve `O(1)` + rows sort + excerpt + dangling** — **M**
-  - **Mô tả:** Một `computed` dựng `Map<eid, index>` từ `s.msgs`; mọi bookmark tra map — **không** `findIndex` trong `v-for`. **Bất biến tuyệt đối:** đường resolve là `map.get(b.id)`; `undefined` ⇒ **return sớm**, không fallback index cũ, không "gần đúng". Rows sort theo `at` **ASC** (tie-break: index đã resolve ASC; dangling xếp **sau**). Excerpt derive lúc render từ `searchableSegments(m)` — đoạn text non-empty đầu tiên, `\s+ → ' '`, trim, cắt **100 ký tự** + `…`; turn không có text ⇒ `sessions.bookmark.noText`. State expand/collapse **ephemeral, không persist**, reset khi đổi session.
+  - **Mô tả:** Một `computed` dựng `Map<eid, index>` từ `s.msgs`; mọi bookmark tra map — **không** `findIndex` trong `v-for`. **Bất biến tuyệt đối:** đường resolve là `map.get(b.id)`; `undefined` ⇒ **return sớm**, không fallback index cũ, không "gần đúng". Rows sort theo `at` **ASC** (tie-break: index đã resolve ASC; dangling xếp **sau**). Excerpt derive lúc render từ `searchableSegments(m)` — đoạn text non-empty đầu tiên, `\s+ → ' '`, trim, cắt **100 ký tự** + `…` (đây là **độ dài duy nhất** của feature); turn không có text ⇒ `sessions.bookmark.noText`. State expand/collapse **ephemeral, không persist**, reset khi đổi session.
   - **File chạm:** `apps/desktop/ui-next/composables/useSessionBookmarks.ts` (**mới**)
   - **Depends on:** A1.1, A2.1 (dùng lại `searchableSegments`)
   - **Owner:** developer
   - **Acceptance:** **AC-B4** (đánh dấu #80 trước, #12 sau ⇒ hiển thị **#12 rồi #80**, sort theo thời gian tạo tin nhắn, **không** theo lúc bấm) · **AC-B13** (id không resolve ⇒ hàng dangling, **app không crash**, console không exception) · §14 spec: tie-break `at` trùng.
 
 - [ ] **A1.3. `SessionBookmarkBar.vue` + mount trong `SessionDetail`** — **M**
-  - **Mô tả:** Thanh "Đã đánh dấu (N)" đặt **ngay trên** `<SessionTranscript>` trong `SessionDetail`, cạnh `SessionTodoPanel`. **KHÔNG** đặt bên trong `SessionTranscript` (để `SshSessionPanel` không kéo theo). **Rỗng ⇒ không render** (`v-if`, 0px). Chỉ hiện khi `session.loaded`. Rút gọn = 1 hàng (mục có `at` lớn nhất) + chip đếm `N` + nút mở rộng; mở rộng = danh sách sort ASC, mỗi hàng có excerpt + thời gian tương đối + nút phụ `pin` + nút `×`. Click hàng ⇒ `await scrollToMessage(i)`; `'not-found'` ⇒ toast `sessions.bookmark.notFound` + hàng chuyển hiển thị dangling **trong phiên hiện tại** (không ghi đĩa). Màu qua token (`--bgEl`, `--border`, `--text`, `--textDim`, `--accent`, `--accentBorder`, `--bgHover`, `--danger`); excerpt/tiêu đề `text-[1em]`, chip `N` = `text-[12px]` fixed + `font-mono leading-none`. Thêm khoá i18n `sessions.bookmark.*` (§11.2) en + vi.
+  - **Mô tả:** Thanh "Đã đánh dấu (N)" đặt **ngay trên** `<SessionTranscript>` trong `SessionDetail`, cạnh `SessionTodoPanel`. **KHÔNG** đặt bên trong `SessionTranscript` (để `SshSessionPanel` không kéo theo). **Rỗng ⇒ không render** (`v-if`, 0px). Chỉ hiện khi `session.loaded`. Rút gọn = 1 hàng (mục có `at` lớn nhất) + chip đếm `N` + nút mở rộng; mở rộng = danh sách sort ASC, mỗi hàng có excerpt + thời gian tương đối + nút `×`. Click hàng ⇒ `await scrollToMessage(i)`; `'not-found'` ⇒ toast `sessions.bookmark.notFound` + hàng chuyển hiển thị dangling **trong phiên hiện tại** (không ghi đĩa). Màu qua token (`--bgEl`, `--border`, `--text`, `--textDim`, `--accent`, `--accentBorder`, `--bgHover`, `--danger`); excerpt/tiêu đề `text-[1em]`, chip `N` = `text-[12px]` fixed + `font-mono leading-none`. Thêm khoá i18n `sessions.bookmark.*` (§11.2) en + vi.
   - **File chạm:** `apps/desktop/ui-next/components/session/SessionBookmarkBar.vue` (**mới**) · `apps/desktop/ui-next/components/session/SessionDetail.vue` · `apps/desktop/ui-next/i18n/locales/en/sessions-transcript.json` · `apps/desktop/ui-next/i18n/locales/vi/sessions-transcript.json`
   - **Depends on:** A1.2, T0a.3
   - **Owner:** developer
@@ -220,13 +221,7 @@ B1 (feature guard) — ĐỘC LẬP HOÀN TOÀN, chạy song song T0a/T0b/T0c
   - **Acceptance:** **AC-B1** · **AC-B2** (streaming hoặc không `eid` ⇒ nút **không hiện**) · **AC-B3** (click ⇒ thanh cập nhật trong **cùng một frame**, optimistic; click lần nữa gỡ) · **AC-B10** (đủ 30 ⇒ disabled, click **không gửi RPC**).
   - **Risk:** **Rủi ro cùng-file với B1** (`SessionMessageItem.vue`) — serialize, xem §"Rủi ro cùng-file".
 
-- [ ] **A1.5. Hành động phụ "Đưa vào ngữ cảnh ghim"** — **S**
-  - **Mô tả:** Nút phụ (icon `pin`, tooltip "Đưa vào ngữ cảnh ghim") trên mỗi hàng bookmark. Trích **≤ 500 ký tự** (cùng nguồn `searchableSegments`), **nối thêm** vào `Session.pinnedContext.notes` qua đường sẵn có `setPinnedNotes` → `pushUpsert(update-metadata)`. Toast xác nhận **kèm câu nhắc chi phí** "sẽ được nạp vào mỗi lượt". Bookmark **vẫn còn** (cầu nối, không phải chuyển đổi). `notes` sau khi nối vượt **8000 ký tự** ⇒ **chặn** + toast `sessions.bookmark.toPinnedFull`, **không ghi**.
-  - **File chạm:** `apps/desktop/ui-next/components/session/SessionBookmarkBar.vue` · `apps/desktop/ui-next/composables/useSessionBookmarks.ts`
-  - **Depends on:** A1.3
-  - **Owner:** developer
-  - **Acceptance:** **AC-B15** (nối vào `notes`, chip "Notes" ở composer cập nhật, toast có nhắc chi phí, bookmark còn) · **AC-B16** (vượt 8000 ⇒ **chặn** + toast, `notes` không đổi).
-  - **Risk:** đây là đường **cháy tiền** duy nhất của A1 (`notes` nạp vào prompt **mỗi turn**) ⇒ cap 500/8000 là bắt buộc, không "nới cho tiện".
+> **A1.5 (cũ) — "Đưa vào ngữ cảnh ghim": ĐÃ GỠ 2026-08-27.** Cầu nối bookmark → ngữ cảnh ghim bị loại **có chủ đích** (code gỡ ở commit `79e00e5`); ID `A1.5` **không tái sử dụng**. Lý do + ranh giới: [spec §16](./session-transcript-navigation.md). Ai muốn AI ghi nhớ nội dung thì dùng trực tiếp ngữ cảnh ghim ở composer — **không** mở lại task này để "cho đủ".
 
 ---
 
@@ -264,28 +259,28 @@ B1 (feature guard) — ĐỘC LẬP HOÀN TOÀN, chạy song song T0a/T0b/T0c
   - **Acceptance:** **AC-F1 … AC-F22** PASS + hồi quy "gửi tin ⇒ tự cuộn đáy" (`suppressAutoScroll` không rò rỉ).
 
 - [ ] **QA-B. Verify nhóm B — Đánh dấu (gồm ca dangling)** — **M**
-  - **Mô tả:** Chạy AC-B1…AC-B18. **Ca bắt buộc nhấn — bookmark DANGLING sau khi transcript bị cắt:**
+  - **Mô tả:** Chạy AC-B1…AC-B19 — **trừ AC-B15 / AC-B16 đã bỏ cùng A1.5, không chạy, không tái sử dụng số**. **Ca bắt buộc nhấn — bookmark DANGLING sau khi transcript bị cắt:**
     1. Bookmark **dangling sau `rewind`** — kiểm tra bookmark thuộc phần bị cắt **được tự dọn** (không sinh hàng dangling), bookmark còn sống vẫn nguyên.
     2. Bookmark **sau `fork`** — bản fork chỉ mang bookmark trong `msgs.slice(0, index + 1)`; **session gốc giữ nguyên cả hai**.
-    3. Bookmark **sau `/compact`** — cùng quy tắc prune.
+    3. Bookmark **KHÔNG bị dọn sau `/compact`** (**AC-P10**) — chạy `/compact` thành công (đồng hồ ngữ cảnh tụt), rồi verify: `s.msgs` không đổi, `sessions.updateBookmarks` **không** được gọi (spy/log RPC), thanh giữ **đủ** số bookmark, **cả bookmark nằm trước `firstKeptMessageId` vẫn nhảy đúng**; sau reload app header vẫn đủ. `/compact` chỉ tóm tắt ngữ cảnh model trong `buildContext` — transcript trên đĩa nguyên vẹn (spec §5.4).
     4. Dangling **thật** (id không resolve được, ví dụ transcript đang reload / session vừa cắt ở cửa sổ khác): hàng mờ, **không bấm được**, click/Enter **tuyệt đối không** cuộn tới tin nhắn khác, có nút "Gỡ đánh dấu", **không tự xoá**.
     5. Đếm 30 bookmark ⇒ nút disabled; payload 31 phần tử ⇒ RPC reject.
     6. Thanh rỗng ⇒ đo `clientHeight` của `.msgs` trước/sau khi thêm rồi gỡ hết bookmark ⇒ **không lệch một pixel**.
-  - **Depends on:** A1.5
+  - **Depends on:** A1.4
   - **Owner:** qa-tester
-  - **Acceptance:** **AC-B1 … AC-B18** PASS, kèm số đo `clientHeight` cho AC-B7.
+  - **Acceptance:** **AC-B1 … AC-B14**, **AC-B17 … AC-B19**, **AC-P10** PASS, kèm số đo `clientHeight` cho AC-B7.
 
 - [ ] **QA-P. Verify nhóm P — persistence, popout round-trip, offline** — **M**
   - **Mô tả:** Chạy AC-P1…AC-P9. **Ca bắt buộc:**
-    1. Prune bookmark ở **cả 5 đường** cắt (`rewind`, `resend`, `regenerate`, edit & resend, `/compact`) — verify `sessions.updateBookmarks` gọi **trước** khi cắt đĩa, và sau **reload app** số bookmark đúng.
+    1. Prune bookmark ở **đúng 3 đường** cắt (`rewind`, `resend` — gồm "edit & resend" — `regenerate`) — verify `sessions.updateBookmarks` gọi **trước** khi cắt đĩa, và sau **reload app** số bookmark đúng. *(`/compact` **không** phải đường cắt; ca AC-P10 nằm ở QA-B ca 3.)*
     2. **Round-trip popout 2 chiều:** tạo bookmark trong popout → "Đưa về đây" → cửa sổ chính hiển thị **đúng** số bookmark, **không mất, không nhân đôi**; và chiều ngược lại.
     3. Nút "Đánh dấu" dùng được **ngay** trên tin nhắn user vừa gửi (chưa reload app).
     4. Đọc thẳng `~/.awog/sessions/{id}/session.jsonl` dòng header: `bookmarks` chỉ có `{ id, at }`.
     5. **Offline** (ngắt mạng): A1 + A2 hoạt động đầy đủ, **0 request mạng**.
     6. Kill app ngay sau khi bấm "Đánh dấu" ⇒ mở lại: header parse được, transcript mở bình thường.
-  - **Depends on:** A1.5, T0c.4
+  - **Depends on:** A1.4, T0c.4
   - **Owner:** qa-tester
-  - **Acceptance:** **AC-P1 … AC-P9** PASS (AC-P5/P6 đối chiếu kết quả của T0c.4).
+  - **Acceptance:** **AC-P1 … AC-P9** PASS (AC-P5/P6 đối chiếu kết quả của T0c.4; **AC-P10** thuộc QA-B ca 3).
 
 ---
 
@@ -302,7 +297,7 @@ B1 (feature guard) — ĐỘC LẬP HOÀN TOÀN, chạy song song T0a/T0b/T0c
   - **Mô tả:** Review theo checklist PR của T0a + ranh giới DATA/DOM của A2 + bất biến resolve của A1.
   - **Depends on:** Z1
   - **Owner:** code-reviewer
-  - **Acceptance:** xác nhận (a) `useSessionScroll.ts` sạch `document.querySelector`; (b) `n/N` **không** đếm DOM; (c) đường resolve bookmark là `map.get(b.id)`, `undefined` ⇒ return sớm — **không** fallback index; (d) `fork` lọc `bookmarks` **tường minh**; (e) không dependency mới; (f) `usePreviewFind.ts` + `find-in-dom.ts` **không bị sửa một dòng**.
+  - **Acceptance:** xác nhận (a) `useSessionScroll.ts` sạch `document.querySelector`; (b) `n/N` **không** đếm DOM; (c) đường resolve bookmark là `map.get(b.id)`, `undefined` ⇒ return sớm — **không** fallback index; (d) `fork` lọc `bookmarks` **tường minh**; (e) không dependency mới; (f) `usePreviewFind.ts` + `find-in-dom.ts` **không bị sửa một dòng**; (g) **không** còn dấu vết cầu nối bookmark → ngữ cảnh ghim (không `toPinned`, không icon `pin` trong `SessionBookmarkBar.vue`, không khoá `sessions.bookmark.toPinned*`).
 
 ---
 
@@ -314,7 +309,7 @@ B1 (feature guard) — ĐỘC LẬP HOÀN TOÀN, chạy song song T0a/T0b/T0c
 | **PR-1** | T0a.1 → T0a.2 → T0a.3 + QA-N | — | Ship độc lập được; đã tự nó sửa 2 bug sẵn có (AC-N6, AC-N9). Chạy song song PR-0 và PR-2. |
 | **PR-2** | T0c.1 → T0c.2 → **T0c.4 (infosec, chặn merge)** → T0c.3 | — | Chạm sidecar. **Không merge khi infosec chưa PASS.** Merge PR này **mở khoá lát B2** của feature guard. |
 | **PR-3** | A2.1 → A2.2 → A2.3 + QA-F | PR-0, PR-1 | Find-in-session. |
-| **PR-4** | A1.1 → A1.2 → A1.3 → A1.4 → A1.5 + QA-B + QA-P | PR-1, PR-2 | Bookmark. Đụng `SessionMessageItem.vue` + `stores/sessions.ts` ⇒ **serialize với PR của B1**. |
+| **PR-4** | A1.1 → A1.2 → A1.3 → A1.4 + QA-B + QA-P | PR-1, PR-2 | Bookmark. Đụng `SessionMessageItem.vue` + `stores/sessions.ts` ⇒ **serialize với PR của B1**. |
 | **PR-5** | Z1 + Z2 | PR-3, PR-4 | Docs + review đóng. |
 
 **Feature guard (plan riêng):** **B1** chạy **song song** PR-0/PR-1/PR-2 (độc lập hoàn toàn). **B2** chỉ bắt đầu **sau khi PR-2 (T0c.3) merge** — **DEPENDENCY CỨNG `B2 → T0c`**.
@@ -331,7 +326,7 @@ B1 (feature guard) — ĐỘC LẬP HOÀN TOÀN, chạy song song T0a/T0b/T0c
 
 ## Ngoài phạm vi (không tạo task)
 
-Giữ nguyên [spec §16](./session-transcript-navigation.md): search liên session + palette `⌘K`; tìm trong tool call/diff/terminal/thinking; regex / whole-word / tìm-không-dấu; virtual scroll thật; bookmark có ghi chú/nhãn/nhóm/kéo-thả; **đồng bộ bookmark ra mobile remote** (mở allowlist ⇒ **infosec re-audit bắt buộc**); xuất bookmark ra artifact/Wiki; persist trạng thái mở/thu của thanh; prefill selection vào ô tìm; đổi `SshWorkspace` sang `v-if`.
+Giữ nguyên [spec §16](./session-transcript-navigation.md): search liên session + palette `⌘K`; tìm trong tool call/diff/terminal/thinking; regex / whole-word / tìm-không-dấu; virtual scroll thật; bookmark có ghi chú/nhãn/nhóm/kéo-thả; **đồng bộ bookmark ra mobile remote** (mở allowlist ⇒ **infosec re-audit bắt buộc**); xuất bookmark ra artifact/Wiki; persist trạng thái mở/thu của thanh; prefill selection vào ô tìm; đổi `SshWorkspace` sang `v-if`; **cầu nối bookmark → ngữ cảnh ghim** (đã **loại có chủ đích**, không phải "chưa làm" — spec §16).
 
 ## Missing from spec
 
