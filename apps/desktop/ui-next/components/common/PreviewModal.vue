@@ -68,13 +68,14 @@
           </button>
         </div>
 
-        <PreviewFindBar
+        <FindBar
           v-if="findOpen && shownItem.kind === 'markdown' && view === 'render'"
           v-model:query="findQuery"
           v-model:match-case="findMatchCase"
           :total="findMatches.length"
           :current="findMatches.length ? findCurrentIndex + 1 : 0"
           :focus-tick="findFocusTick"
+          :placeholder="t('common.preview.find.placeholder')"
           @next="nextMatch"
           @prev="prevMatch"
           @close="closeFind"
@@ -358,7 +359,7 @@ import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import OfficeDocView from '~/components/common/OfficeDocView.vue'
 import OfficeSheetView from '~/components/common/OfficeSheetView.vue'
 import PreviewToolbar from '~/components/common/PreviewToolbar.vue'
-import PreviewFindBar from '~/components/common/PreviewFindBar.vue'
+import FindBar from '~/components/common/FindBar.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreviewModal } from '~/composables/usePreviewModal'
 import { useCodeCopy } from '~/composables/useCodeCopy'

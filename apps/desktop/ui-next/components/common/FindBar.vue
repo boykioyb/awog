@@ -7,17 +7,17 @@
       class="pvfinput"
       :class="{ noresult }"
       spellcheck="false"
-      :placeholder="t('common.preview.find.placeholder')"
+      :placeholder="placeholder"
       @keydown.enter.prevent="onEnter"
     />
     <span v-if="query.trim()" class="pvfcount" :class="{ noresult }">
-      {{ noresult ? t('common.preview.find.noResults') : `${current}/${total}` }}
+      {{ noresult ? t('common.find.noResults') : `${current}/${total}` }}
     </span>
     <button
       class="pvfbtn"
       :class="{ on: matchCase }"
-      :title="t('common.preview.find.matchCase')"
-      :aria-label="t('common.preview.find.matchCase')"
+      :title="t('common.find.matchCase')"
+      :aria-label="t('common.find.matchCase')"
       :aria-pressed="matchCase"
       @click="matchCase = !matchCase"
     >
@@ -26,8 +26,8 @@
     <button
       class="pvfbtn"
       :disabled="!total"
-      :title="t('common.preview.find.prev')"
-      :aria-label="t('common.preview.find.prev')"
+      :title="t('common.find.prev')"
+      :aria-label="t('common.find.prev')"
       @click="emit('prev')"
     >
       <Icon name="chev-left" style="width: 15px; height: 15px" />
@@ -35,16 +35,16 @@
     <button
       class="pvfbtn"
       :disabled="!total"
-      :title="t('common.preview.find.next')"
-      :aria-label="t('common.preview.find.next')"
+      :title="t('common.find.next')"
+      :aria-label="t('common.find.next')"
       @click="emit('next')"
     >
       <Icon name="chev-right" style="width: 15px; height: 15px" />
     </button>
     <button
       class="pvfbtn"
-      :title="t('common.preview.find.close')"
-      :aria-label="t('common.preview.find.close')"
+      :title="t('common.find.close')"
+      :aria-label="t('common.find.close')"
       @click="emit('close')"
     >
       <Icon name="x" style="width: 14px; height: 14px" />
@@ -57,7 +57,12 @@
 // usePreviewFind (owned by usePreviewModal); this component binds query + match-case
 // and emits next/prev/close. Keyboard: Enter = next, Shift+Enter = prev; Esc and a
 // repeat ⌘/Ctrl+F are handled by the modal's window key handler.
-const props = defineProps<{ total: number; current: number; focusTick: number }>()
+const props = defineProps<{
+  total: number
+  current: number
+  focusTick: number
+  placeholder: string
+}>()
 const emit = defineEmits<{ next: []; prev: []; close: [] }>()
 const query = defineModel<string>('query', { required: true })
 const matchCase = defineModel<boolean>('matchCase', { required: true })
