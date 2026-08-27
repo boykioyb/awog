@@ -39,7 +39,7 @@ Dựng hình `[… user@18, assistant@19, system@20, assistant@21]` (tổng 22):
 ### G-FORK-SYS — session vừa fork có **system message đã persist** (bắt buộc cho AC-R10/AC-R11)
 1. Mở session có system message trong tiền tố (ví dụ có `/compact` divider), **ngay sau** system message đó là một lượt **user**.
 2. Bấm **fork** ở một message phía sau system message đó.
-3. Mở session fork → **khởi động lại app** (để mọi message mang `eid` đọc từ đĩa; `fork` chưa reload có ngoại lệ TL-2).
+3. Mở session fork → **khởi động lại app** (để mọi message mang `eid` đọc từ đĩa; ngoại lệ TL-2 đã đóng bằng phương án (c) — `fork` không còn persist thông báo `ENGINE_UNAVAILABLE`).
 4. Kiểm tra hình dạng: `head -1` + đọc JSONL để chắc `[…, system, user, assistant, …]`.
 
 ### G-ENGINE-OFF — có message `ENGINE_UNAVAILABLE` cục bộ (bắt buộc cho AC-R8)
@@ -206,7 +206,7 @@ Kill sidecar (hoặc rút quyền chạy engine) → gửi 1 lượt → store c
   **Expected:** vẫn **đồng bộ** (`function rewind(id, index)`), dùng `pushRequest` fire-and-forget.
 - **TC-R10 (AC-R7 — cổng tiên quyết) — A.** Mở một session **dài** qua `ensureLoaded` → console: đếm message thiếu `eid`.
   **Expected:** **mọi** message có `eid`, **trừ** system message cục bộ `ENGINE_UNAVAILABLE`. Nếu tìm thấy message **persist** nào thiếu `eid` ⇒ **DỪNG, báo tech-lead** (đừng tự mở rộng vòng lùi).
-  **Ngoại lệ đã biết (TL-2, không chặn):** session **vừa fork chưa reload** — dòng `ENGINE_UNAVAILABLE` đã nằm trên đĩa dưới id `fm-<i>-<seq>` nhưng bộ nhớ không có `eid` ⇒ đĩa bị cắt nhiều hơn bộ nhớ **đúng một** dòng thông báo lỗi. Ghi nhận, không rollback.
+  **~~Ngoại lệ đã biết (TL-2, không chặn)~~ — ĐÃ SỬA 2026-08-27 (TL-2 chốt (c)):** `fork` **không còn** persist dòng `ENGINE_UNAVAILABLE`, nên ca "đĩa bị cắt nhiều hơn bộ nhớ một dòng" **không còn tồn tại**. **Ca verify thay thế (cần bấm tay):** tạo lượt lỗi engine để có dòng thông báo → **fork** ngay (chưa reload) → `rewind` trong bản fork → **khởi động lại app** ⇒ transcript khớp đúng phần đáng lẽ còn lại, và dòng thông báo **không** xuất hiện lại (nó chưa từng xuống đĩa).
 - **TC-R11 (AC-R9) — A + R.** Mở hộp thoại `rewind` (TC-G21) **và** chạy TC-R1…TC-R3 trong cùng một đợt.
   **Expected:** hộp thoại **CÓ** câu "Không thể hoàn tác" **và** R1…R3 pass ⇒ câu đó **đúng sự thật**.
 - **TC-R12 (hồi quy B2.1) — R.** `resend` / `edit & resend` / `regenerate` ở các hình dạng **thường** (prev là assistant có `eid`).

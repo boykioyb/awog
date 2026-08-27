@@ -2902,19 +2902,38 @@ export const useSessionsStore = defineStore('sessions', () => {
   // WITH prior turns (a fork) must carry them on disk or the model would see an
   // empty context. Reuses each turn's `eid` (all three roles — ADR 0074) as the engine
   // message id so the forked transcript's ids match the ones on display, which is what
-  // lets a bookmark carried into the fork still resolve. `fm-<i>-<seq>` stays the
-  // fallback for a message minted before ids were surfaced (e.g. the local
-  // ENGINE_UNAVAILABLE notice). Attachments are not replicated (best-effort: the
-  // conversational text is what drives forked context).
+  // lets a bookmark carried into the fork still resolve. Attachments are not replicated
+  // (best-effort: the conversational text is what drives forked context).
+  //
+  // The local ENGINE_UNAVAILABLE banner is DROPPED, not persisted (TL-2 (c), §12.3 of
+  // docs/features/session-destructive-action-guard.md). It is a runtime error notice
+  // about a turn that never happened, not transcript content, and §2.3 already treats
+  // it as never-persisted. Minting `fm-<i>-<seq>` for it here put it on disk while the
+  // in-memory copy kept no `eid` — breaking the "on disk ⇔ has `eid` in memory"
+  // invariant of AC-R7, which then made §4.8's anchor walk skip it and cut the file one
+  // message deeper than memory. Accepted trade-off: a just-forked session still shows
+  // the banner until the next reload, after which it is gone for good.
+  //
+  // `fm-<i>-<seq>` stays as the fallback for any OTHER message without an `eid`. AC-R7
+  // says none exists; if one ever does, persisting it under a minted id keeps the
+  // conversation intact (the old TL-2 wart) instead of silently dropping content.
+  //
+  // The filter matches on role + text, so a banner that DID reach disk before this fix
+  // (and therefore comes back carrying an `eid`) is dropped from a new fork too. That is
+  // intended — it self-heals the legacy rows. Nothing conversational can match: the text
+  // is a UI-only constant, and no bookmark can anchor here (system messages have no
+  // footer, so no bookmark button).
   function msgsToEngineMessages(msgs: Session['msgs']): Record<string, unknown>[] {
     const now = new Date().toISOString()
-    return msgs.map((m, i) => {
-      const at = m.at || now
-      const id = m.eid ?? `fm-${i}-${seq++}`
-      if (m.role === 'user') return { id, role: 'user', text: m.text, at }
-      if (m.role === 'system') return { id, role: 'system', text: m.text, at }
-      return { id, role: 'agent', text: assistantText(m.blocks), at }
-    })
+    return msgs
+      .filter((m) => !(m.role === 'system' && m.text === ENGINE_UNAVAILABLE))
+      .map((m, i) => {
+        const at = m.at || now
+        const id = m.eid ?? `fm-${i}-${seq++}`
+        if (m.role === 'user') return { id, role: 'user', text: m.text, at }
+        if (m.role === 'system') return { id, role: 'system', text: m.text, at }
+        return { id, role: 'agent', text: assistantText(m.blocks), at }
+      })
   }
   // Build the minimal sidecar session payload from the ui-next display fields. The
   // engine owns the canonical settings; we only forward what we can derive.

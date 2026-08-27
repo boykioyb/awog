@@ -1,7 +1,7 @@
 # Feature Spec: Chặn thao tác phá huỷ transcript trong Sessions
 
 > **Brief:** [session-destructive-action-guard.brief.md](./session-destructive-action-guard.brief.md)
-> **Status:** **Implemented** 2026-08-27 — **B1** (gate + danger hover + i18n) và **B2** (§4.8 helper neo persist) ship **cùng một nhánh** `feature/session-navigation-and-guard`, nên cửa sổ B1→B2 không tồn tại (**AC-G36 superseded bởi AC-R9**, §8.8). Q1/Q2/Q3 + TL-1 đã chốt (§12). **TL-2 (§12.3) vẫn MỞ** — chờ tech-lead chốt, **không chặn** B1/B2 vì thiệt hại giới hạn ở một thông báo lỗi cục bộ trong session vừa fork chưa reload.
+> **Status:** **Implemented** 2026-08-27 — **B1** (gate + danger hover + i18n) và **B2** (§4.8 helper neo persist) ship **cùng một nhánh** `feature/session-navigation-and-guard`, nên cửa sổ B1→B2 không tồn tại (**AC-G36 superseded bởi AC-R9**, §8.8). Q1/Q2/Q3 + TL-1 đã chốt (§12). **TL-2 (§12.3) đã CHỐT 2026-08-27: phương án (c)** — `fork` không persist thông báo `ENGINE_UNAVAILABLE`; đã implement, bất biến AC-R7 khép kín.
 > **Last updated:** 2026-08-27
 > **Layer:** UI + **một** thay đổi logic ở `stores/sessions.ts` (helper neo persist dùng chung cho `rewind` / `regenerate` / `resend`, §4.8). Không sidecar mới, không RPC mới, không storage, **không ADR**, không infosec.
 > **Ship làm 2 lát (TL-1):** **B1** = gate + danger hover + i18n (**độc lập, ship ngay**) · **B2** = §4.8 helper neo persist (**sau T0c** của Brief A) — `rewind` đã ship trước, `regenerate` + `resend` đi **cùng đợt B2**, không tách ticket (§2.6). Xem §12.2 + §16.
@@ -93,7 +93,9 @@ tuyệt đối sau khi B2 merge):
 `{ role: 'system', text: ENGINE_UNAVAILABLE }` ở **3 chỗ** — `sessions.ts:2934` (không có bridge),
 `3632` (regenerate thất bại), `3647` (retryModel thất bại). Những message này **không bao giờ** đi ra
 sidecar ⇒ **không có `id` trên đĩa** ⇒ **không bao giờ có `eid`**, kể cả sau T0c. §4.8 phải chịu được chúng.
-(Ngoại lệ duy nhất: `fork` **mint id thay** cho chúng khi upsert — xem TL-2, §12.3.)
+(Trước 2026-08-27 có một ngoại lệ: `fork` **mint id thay** cho chúng khi upsert ⇒ đĩa có message mà bộ nhớ không thấy.
+**TL-2 chốt (c)** đã đóng lỗ đó: `msgsToEngineMessages` **lọc bỏ** thông báo này khỏi payload upsert, nên nó
+**không bao giờ** xuống đĩa ở bất kỳ đường nào — xem §12.3.)
 
 ### 2.4. UI — footer message
 
@@ -154,10 +156,13 @@ chính là bẫy mà §4.8 đã đóng cho `rewind`, chỉ khác chỗ nó nằm
 ⇒ **Kết luận:** cả ba hành động phải dùng **chung một** quy tắc neo. T0c.3 đã gán `eid` cho system
 message load từ đĩa (`sessions.ts:1072-1074`), nên quy tắc §4.8 áp được cho cả ba **ngay bây giờ**.
 
-> **Ghi chú kèm (đẻ ra TL-2, §12.3):** `msgsToEngineMessages` mint id thay (`fm-<i>-<seq>`,
-> `sessions.ts:2827`) cho message **không** có `eid`. Nghĩa là trong một session **vừa fork và chưa
-> reload**, một thông báo cục bộ `ENGINE_UNAVAILABLE` **đã nằm trên đĩa** nhưng **không** mang `eid`
-> trong bộ nhớ — một ngoại lệ hẹp của điều kiện tiên quyết AC-R7.
+> **Ghi chú kèm (đẻ ra TL-2, §12.3) — ĐÃ ĐÓNG 2026-08-27:** `msgsToEngineMessages` mint id thay
+> (`fm-<i>-<seq>`) cho message **không** có `eid`, nên trong một session **vừa fork và chưa reload**, một
+> thông báo cục bộ `ENGINE_UNAVAILABLE` **đã nằm trên đĩa** nhưng **không** mang `eid` trong bộ nhớ — ngoại
+> lệ hẹp của AC-R7. **TL-2 chốt (c):** hàm này giờ **lọc bỏ** thông báo đó khỏi payload upsert, nên bất biến
+> "trên đĩa ⇔ có `eid` trong bộ nhớ" **khép kín** và §4.8 không còn ngoại lệ nào. Fallback `fm-<i>-<seq>`
+> giữ lại cho message **khác** thiếu `eid` (AC-R7 nói không có) — persist dưới id mint vẫn hơn là **âm thầm
+> mất nội dung hội thoại**.
 
 ## 3. Bảng phân loại — mọi hành động trong footer
 
@@ -404,8 +409,8 @@ nguồn).
   `s.msgs` phải có `eid` **trừ** message hệ thống cục bộ ở §2.3. Nếu dev phát hiện một nguồn nào khác
   persist message mà **không** mang `eid` ra tới UI ⇒ **dừng, báo tech-lead** — đừng tự ý mở rộng vòng
   lùi, vì khi đó neo sẽ nhảy qua một message có thật trên đĩa và cắt **nhiều hơn** ý định. Kiểm chứng
-  bằng **AC-R7**. *(Một ngoại lệ hẹp đã tìm thấy và đang chờ tech-lead: session **vừa fork chưa reload**
-  — TL-2, §12.3.)*
+  bằng **AC-R7**. *(Ngoại lệ hẹp duy nhất từng tìm thấy — session **vừa fork chưa reload** — đã **đóng**
+  bằng TL-2 (c), §12.3. Nếu xuất hiện ngoại lệ mới thì quy tắc "dừng, báo tech-lead" vẫn nguyên hiệu lực.)*
 
 ## 5. User flow
 
@@ -683,7 +688,9 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (persist trên đĩa, lá
 - **AC-R7.** *(điều kiện tiên quyết)* *Given* một session dài mở qua `ensureLoaded`, *when* duyệt `s.msgs`,
   *then* **mọi** message đều có `eid`, **trừ** message hệ thống cục bộ `ENGINE_UNAVAILABLE` (§2.3). Nếu tìm
   thấy bất kỳ message **persist** nào thiếu `eid` ⇒ **dừng, báo tech-lead** trước khi ship B2 (§4.8).
-  *(Ngoại lệ đã biết, đang chờ chốt: session **vừa fork chưa reload** — TL-2, §12.3. Không chặn B2.)*
+  *(Ngoại lệ từng biết — session **vừa fork chưa reload** — đã **đóng** bằng TL-2 (c): `fork` không còn
+  persist thông báo `ENGINE_UNAVAILABLE`, §12.3. AC này giờ đọc theo nghĩa **tuyệt đối**: message thiếu
+  `eid` chỉ có thể là thông báo cục bộ **chưa từng** xuống đĩa.)*
 - **AC-R8.** *Given* transcript có một message `ENGINE_UNAVAILABLE` cục bộ ngay trước điểm rewind, *when*
   `rewind` và xác nhận, *then* neo lùi tới message **có `eid`** gần nhất phía trước; khởi động lại app,
   transcript khớp đúng phần đáng lẽ còn lại — **không** wipe, **không** giữ nguyên 30.
@@ -826,7 +833,7 @@ nó dùng đúng hai method sẵn có theo đúng ngữ nghĩa đã tài liệu 
 mọi role) đã được [ADR 0074 §Q1](../decisions/0074-session-message-anchor-and-transcript-navigation.md)
 quyết. Đây là **thứ tự ship + tái dùng một task đã duyệt**, ghi trong spec là đủ.
 
-### 12.3. TL-2 — **MỞ 2026-08-27 (cho tech-lead): `fork` mint id cho message cục bộ ⇒ đĩa có message mà bộ nhớ không thấy**
+### 12.3. TL-2 — **CHỐT 2026-08-27: phương án (c)** — `fork` không persist thông báo cục bộ
 
 **Không chặn B1/B2.** Ghi ra vì nó là **đúng cái điều kiện AC-R7 yêu cầu "dừng, báo tech-lead"**, và vì
 để im thì lần sau sẽ có người "phát hiện lại" nó.
@@ -854,8 +861,28 @@ fork (sau reload nó có `eid`, quy tắc chạy đúng). So với bug §2.6 (wi
 | **(c)** | `fork` **loại hẳn** thông báo cục bộ khỏi payload upsert (không persist `ENGINE_UNAVAILABLE`). | Đúng ngữ nghĩa nhất — thông báo lỗi runtime **không thuộc** transcript, và §2.3 đã coi nó là "không persist". Nhưng transcript fork sẽ khác bản hiển thị đúng một dòng, cần xác nhận đó là điều mong muốn. |
 
 **BA nghiêng về (c)**, nhưng đây là quyết định về **hợp đồng dữ liệu của `fork`** nên thuộc tech-lead.
-Việc thực thi (dù chọn gì) **nằm ngoài spec này** — `fork` không phải hành động destructive và không
-nằm trong 4 hành động bị gate (§3.3).
+
+> **CHỐT 2026-08-27 — (c).** `msgsToEngineMessages` lọc bỏ `{ role: 'system', text: ENGINE_UNAVAILABLE }`
+> khỏi payload `sessions.upsert`. Đã implement (một `.filter()` trước `.map()`).
+>
+> **Vì sao (c) chứ không (b):** (b) khôi phục bất biến bằng cách **ghi ngược** id đã mint vào clone, tức
+> biến một hàm map thuần thành hàm có side effect (hoặc phải tách thêm một bước) — trả giá kiến trúc để
+> giữ trên đĩa một thứ **không thuộc** transcript. (c) sửa **nguyên nhân**: thông báo lỗi runtime nói về
+> một lượt **chưa từng xảy ra**, và §2.3 vốn đã coi nó là "không persist" — (c) chỉ làm code khớp lại với
+> điều tài liệu vẫn luôn nói.
+>
+> **Phạm vi thực tế:** `msgsToEngineMessages` chỉ chạy ở `mode === 'create'`, và session mới thì không có
+> message ⇒ đường duy nhất bị ảnh hưởng là **`fork`**.
+>
+> **Trade-off đã chấp nhận (đúng cái §12.3 cảnh báo):** session **vừa fork** vẫn **hiển thị** dòng thông
+> báo cho tới lần reload kế tiếp, sau đó nó mất hẳn. Chấp nhận được vì dòng đó nói về lượt lỗi của session
+> **nguồn**, không phải của bản fork — đọc nó trong fork vốn đã là gây nhầm.
+>
+> **Không** giữ lại ngoại lệ nào cho AC-R7. Fallback `fm-<i>-<seq>` **vẫn còn** nhưng chỉ dành cho message
+> khác thiếu `eid` mà AC-R7 nói là không tồn tại: nếu ngày nào đó có, persist dưới id mint (wart cũ) vẫn
+> hơn là âm thầm **mất nội dung hội thoại**.
+
+Việc thực thi trước đây được ghi là **nằm ngoài spec này**; nay đã làm cùng đợt đóng plan (§14 cập nhật theo).
 
 ## 13. i18n keys cần thêm
 
@@ -898,7 +925,9 @@ gọi `t('sessions.guard.irreversible')` vào nhánh `rewind` (§7.1). Không c�
 - `components/session/SessionGateCard.vue` — quy tắc `lostCount === 0` (§4.4) tự phủ `onRetry` (312-315), không cần sửa.
 - `composables/useConfirm.ts`, `components/common/ConfirmDialogHost.vue`, `components/library/LibraryConfirmDelete.vue` — dùng lại nguyên trạng.
 - `apps/desktop/sidecar/**`, `apps/desktop/electron/**` — **không** RPC mới, không đổi schema; §4.8 chỉ dùng lại `sessions.rewind` / `sessions.truncate` đã có. (Phần sidecar của T0c thuộc **Brief A**, không thuộc PR này.)
-- `stores/sessions.ts` → hàm `fork` / `msgsToEngineMessages` — TL-2 (§12.3) **chưa chốt**, và dù chốt thế nào thì việc sửa cũng **không** thuộc spec này.
+- `stores/sessions.ts` → hàm `fork` — **không** bị sửa. `msgsToEngineMessages` **đã sửa** (2026-08-27, sau khi
+  TL-2 chốt (c)): thêm một `.filter()` loại thông báo `ENGINE_UNAVAILABLE` khỏi payload upsert. Đây là thay
+  đổi logic **thứ hai** ở store trong phạm vi spec này, bên cạnh `lastPersistedEid` (AC-G24) — ghi rõ ở §12.3.
 - `types/index.ts` — không có entity mới.
 - `docs/features/session-transcript-navigation.md` và mọi ADR — do tech-lead / Brief A sở hữu.
 

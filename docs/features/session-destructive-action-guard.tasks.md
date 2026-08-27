@@ -11,7 +11,8 @@
 > `sidecar/**` hay `electron/**`, `types/index.ts` không đổi, thay đổi logic store **đúng** phần `lastPersistedEid`,
 > `keepThroughId` viết bằng vòng lùi chứ không bằng `role`); **các ca cần bấm tay + restart app** (QA-G1…G3, QA-R) —
 > **user tự verify 2026-08-27**. **AC-G36 không chạy** (superseded bởi AC-R9).
-> **Còn mở:** **TL-2** ([spec §12.3](./session-destructive-action-guard.md)) — chờ tech-lead chốt, không chặn.
+> **TL-2 đã chốt 2026-08-27 — phương án (c)** ([spec §12.3](./session-destructive-action-guard.md)): `fork` không persist
+> thông báo `ENGINE_UNAVAILABLE` ⇒ bất biến AC-R7 khép kín. Đã implement + tài liệu cập nhật. **0 open question.**
 
 ## Cách đọc plan
 
