@@ -1,10 +1,10 @@
 # Feature Spec: Chặn thao tác phá huỷ transcript trong Sessions
 
 > **Brief:** [session-destructive-action-guard.brief.md](./session-destructive-action-guard.brief.md)
-> **Status:** Draft — Q1/Q2/Q3 **và TL-1** đã chốt (§12). Không còn open question.
-> **Last updated:** 2026-08-26
-> **Layer:** UI + **một** thay đổi có chủ đích ở `stores/sessions.ts` (vá bug persist của `rewind`, §4.8). Không sidecar mới, không RPC mới, không storage, **không ADR**, không infosec.
-> **Ship làm 2 lát (TL-1):** **B1** = gate + danger hover + i18n (**độc lập, ship ngay**) · **B2** = §4.8 vá persist `rewind` (**sau T0c** của Brief A). Xem §12.2 + §16.
+> **Status:** Draft — Q1/Q2/Q3 **và TL-1** đã chốt (§12). **TL-2 mở ngày 2026-08-27** (§12.3) — nhỏ, **không chặn** B1/B2.
+> **Last updated:** 2026-08-27
+> **Layer:** UI + **một** thay đổi logic ở `stores/sessions.ts` (helper neo persist dùng chung cho `rewind` / `regenerate` / `resend`, §4.8). Không sidecar mới, không RPC mới, không storage, **không ADR**, không infosec.
+> **Ship làm 2 lát (TL-1):** **B1** = gate + danger hover + i18n (**độc lập, ship ngay**) · **B2** = §4.8 helper neo persist (**sau T0c** của Brief A) — `rewind` đã ship trước, `regenerate` + `resend` đi **cùng đợt B2**, không tách ticket (§2.6). Xem §12.2 + §16.
 > **Spec anh em:** [session-transcript-navigation.md](./session-transcript-navigation.md) (Brief A) — **phải khớp thứ tự cắt** (§6) **và** là **dependency** của B2 (T0c: `eid` cho user/system).
 
 ## 1. Tóm tắt
@@ -22,8 +22,10 @@ Feature này **không thêm nút nào, không dựng modal nào**. Nó làm bố
    nhắc **tốn thêm một lượt gọi model**.
 3. Tô `danger` khi hover cho **5 hành động** destructive — 4 hành động trên **+ `retryModel`**
    (nó cũng cắt transcript, chỉ là không bị gate — §4.3).
-4. **Vá bug persist của `rewind`** (§4.8): hôm nay `rewind` chỉ cắt trên đĩa ở một phần các ca, khiến
-   câu "Không thể hoàn tác" trong hộp thoại không đúng sự thật.
+4. **Vá bug persist của cả ba đường cắt trên đĩa** (§4.8): `rewind` hôm nay chỉ cắt trên đĩa ở một
+   phần các ca — khiến câu "Không thể hoàn tác" trong hộp thoại không đúng sự thật — còn
+   `regenerate`/`resend` mang một nhánh **xoá sạch transcript trên đĩa** (§2.6). Cả ba dùng chung
+   **một** quy tắc neo.
 
 **6 hành động còn lại** (`copy`, `quote`, `fullscreen` ×2, `fork`, `branch`, `retryModel`) **không**
 bị hỏi — ràng buộc cứng chống confirm-fatigue, xem §4.3.
@@ -31,6 +33,8 @@ bị hỏi — ràng buộc cứng chống confirm-fatigue, xem §4.3.
 > **Việc (4) tách sang lát B2** vì nó phụ thuộc `eid` cho user/system (Brief A **T0c**) — xem TL-1 (§12.2).
 > Hệ quả bắt buộc: trong lát **B1**, hộp thoại `rewind` **không được** chứa câu "Không thể hoàn tác"
 > (§7.1) — một hộp thoại an toàn không được nói điều mình chưa làm được.
+> Trong **B2**, `rewind` ship trước; `regenerate`/`resend` **phải** đi cùng đợt vì cùng công thức
+> role-based cũ, và ở hai hành động đó nhánh sai **xoá sạch đĩa** chứ không chỉ "không cắt" (§2.6).
 
 ## 2. Hiện trạng đã verify (bằng chứng file:line)
 
@@ -67,15 +71,17 @@ trong từng cửa sổ). Cửa sổ chính và popout không chia sẻ state di
 
 ### 2.3. Store — hành vi thật của 6 action
 
-Tất cả ở [`stores/sessions.ts`](../../apps/desktop/ui-next/stores/sessions.ts):
+Tất cả ở [`stores/sessions.ts`](../../apps/desktop/ui-next/stores/sessions.ts). Số dòng dưới đây là
+**ảnh chụp trước khi B2 chạm vào file** (B2 làm dịch dòng — dùng tên hàm để tra, đừng tin số dòng
+tuyệt đối sau khi B2 merge):
 
 | Action | Dòng | Sự thật đã verify |
 |---|---|---|
-| `regenerate(id, index)` | 3595-3637 | `async`. Guard **kép**: `if (regenInFlight.has(id)) return` (3600) + `if (s.msgs.some(m => m.role==='assistant' && m.streaming)) return` (3601). Cắt `msgs.slice(0, index)` (3604) → lùi tìm user turn gần nhất `ui` (3607-3608) → cắt tiếp `slice(0, ui)` (3611) → **`await sc.request('sessions.truncate')`** (3623) → `void sendMessage(...)` (3628). `finally` xoá `regenInFlight` (3635). |
-| `resend(id, index, overrideText?)` | 3667-3693 | `async`. Chặn khi có turn đang streaming (3673) — **không** có `regenInFlight`. Cắt `slice(0, index)` (3678) → `await sessions.truncate` (3687) → `void sendMessage` (3692). `overrideText` chính là đường "edit & resend". |
+| `regenerate(id, index)` | 3595-3637 | `async`. Guard **kép**: `if (regenInFlight.has(id)) return` (3600) + `if (s.msgs.some(m => m.role==='assistant' && m.streaming)) return` (3601). Cắt `msgs.slice(0, index)` (3604) → lùi tìm user turn gần nhất `ui` (3607-3608) → cắt tiếp `slice(0, ui)` (3611) → **`await sc.request('sessions.truncate')`** (3623) → `void sendMessage(...)` (3628). `finally` xoá `regenInFlight` (3635). **`keepThroughId` tính bằng công thức role-based ⇒ có nhánh wipe, xem §2.6.** |
+| `resend(id, index, overrideText?)` | 3667-3693 | `async`. Chặn khi có turn đang streaming (3673) — **không** có `regenInFlight`. Cắt `slice(0, index)` (3678) → `await sessions.truncate` (3687) → `void sendMessage` (3692). `overrideText` chính là đường "edit & resend". **Cùng công thức role-based ⇒ cùng nhánh wipe (§2.6).** |
 | `rewind(id, index)` | 3651-3661 | **Đồng bộ**, **không** có guard streaming. Cắt `slice(0, index)` (3654). Chỉ gửi RPC `sessions.rewind` khi `msgs[index-1]` là **assistant có `eid`** (3656-3659) ⇒ **bug persist**, xem §4.8. |
 | `retryModel(id, index)` | 3639-3649 | Dưới IPC (chế độ chạy thật) nó **gọi thẳng `regenerate(id, index)`** (3642-3644) ⇒ **cắt transcript + tốn 1 lượt model**, y hệt `regenerate`. Không gate (§4.3) nhưng **có** tô danger. |
-| `fork(id, index, suffix)` | 3695-3747 | Clone `msgs.slice(0, index + 1)` sang **session mới**; session gốc **không đổi**. An toàn thật. `branch` = cùng hàm, `suffix='branch'` (`SessionMessageItem.vue:459`). |
+| `fork(id, index, suffix)` | 3695-3747 | Clone `msgs.slice(0, index + 1)` sang **session mới**; session gốc **không đổi**. An toàn thật cho session gốc — nhưng chính nó dựng nên hình dạng transcript làm lộ bug §2.6. `branch` = cùng hàm, `suffix='branch'` (`SessionMessageItem.vue:459`). |
 | `addQuote` / `removeQuote` | 3759-3789 | Chỉ đụng `s.followups`, không đụng `msgs`. |
 
 > **Boy Scout (bắt buộc sửa trong PR này):** comment ở `sessions.ts:3598-3599` viết *"same guard `resend` uses"*
@@ -87,6 +93,7 @@ Tất cả ở [`stores/sessions.ts`](../../apps/desktop/ui-next/stores/sessions
 `{ role: 'system', text: ENGINE_UNAVAILABLE }` ở **3 chỗ** — `sessions.ts:2934` (không có bridge),
 `3632` (regenerate thất bại), `3647` (retryModel thất bại). Những message này **không bao giờ** đi ra
 sidecar ⇒ **không có `id` trên đĩa** ⇒ **không bao giờ có `eid`**, kể cả sau T0c. §4.8 phải chịu được chúng.
+(Ngoại lệ duy nhất: `fork` **mint id thay** cho chúng khi upsert — xem TL-2, §12.3.)
 
 ### 2.4. UI — footer message
 
@@ -99,7 +106,7 @@ Tất cả ở [`components/session/SessionMessageItem.vue`](../../apps/desktop/
 - Có **một call site thứ hai** của `regenerate` ngay trong file: nút "Thử lại" trong khối lỗi (`@click="regen"`, dòng 114) — xem §4.4.
 - Style hover hiện tại **giống nhau cho cả 9 nút**: `.hoveract .ha:hover { background: var(--bgHover); color: var(--text) }` (617-620) ⇒ đúng như brief nói, không phân biệt an toàn/nguy hiểm.
 - Token màu có sẵn: `--danger`, `--dangerBg`, `--dangerDim`, `--dangerBorder` (khai ở [`assets/css/prototype.css:30`](../../apps/desktop/ui-next/assets/css/prototype.css) và [`assets/css/theme-cute.css:87-90, 157-160`](../../apps/desktop/ui-next/assets/css/theme-cute.css)) ⇒ theme "Cute" cũng có, không cần token mới.
-- **User/system message KHÔNG có `eid`**: `engineMessageToSessionMessage` (`sessions.ts:1050-1063`) chỉ gán `eid: m.id` cho **assistant**. Đây là ràng buộc quyết định của §4.8 — và là thứ Brief A **T0c** gỡ bỏ.
+- **User/system message KHÔNG có `eid`** *(hiện trạng trước T0c)*: `engineMessageToSessionMessage` chỉ gán `eid: m.id` cho **assistant**. Đây là ràng buộc quyết định của §4.8 — và là thứ Brief A **T0c.3** đã gỡ bỏ (nay cả 3 role đều mang `eid`, `sessions.ts:1058-1076`).
 - Call site khác của `regenerate` ngoài file này: [`SessionGateCard.vue:312-315`](../../apps/desktop/ui-next/components/session/SessionGateCard.vue) (`onRetry` của khối lỗi trong gate card).
 - Call site khác của `fork`: [`SessionList.vue:594`](../../apps/desktop/ui-next/components/session/SessionList.vue) (`'copy'` — nhân bản session, không đụng session gốc).
 
@@ -110,10 +117,47 @@ Quan trọng cho §4.8, đọc từ sidecar:
 | Sự thật | Bằng chứng |
 |---|---|
 | `truncateSession(sessionId, keepThroughId)`: giữ **đến hết** `keepThroughId`; **`null` ⇒ xoá sạch transcript**; **id lạ ⇒ NO-OP** (không bao giờ wipe vì id rác) | [`sidecar/src/sessions/store.ts:55-80`](../../apps/desktop/sidecar/src/sessions/store.ts) (`null` → `messages = []` ở 70-71; `idx < 0` → `return` ở 73-75) |
+| `truncateSession` **tự** drop `sdkSessionId` (ADR 0058) ⇒ `sessions.truncate` đã đủ cho `regenerate`/`resend`, không cần đổi sang `sessions.rewind` | `sidecar/src/sessions/store.ts:57-58, 78` |
 | `sessions.rewind` làm **nhiều hơn** truncate: `removeSdkSession` dọn transcript SDK mồ côi (ADR 0058) **+ restore file workspace từ snapshot** (ADR 0038) khi có `projectId` | [`sidecar/src/methods/sessions.rewind.ts:20-61`](../../apps/desktop/sidecar/src/methods/sessions.rewind.ts) |
 | `sessions.rewind` bắt buộc `messageId: z.string().min(1)` ⇒ **không diễn đạt được** ca "cắt sạch" | `sessions.rewind.ts:14-18` |
-| Call site UI hiện **không truyền `projectId`** ⇒ nhánh restore file chưa từng chạy từ nút rewind | `stores/sessions.ts:3658` |
+| Call site UI hiện **không truyền `projectId`** ⇒ nhánh restore file chưa từng chạy từ nút rewind | `stores/sessions.ts` (`rewind`, nhánh `pushRequest('sessions.rewind', …)`) |
 | **Snapshot keyed theo assistant message id, chụp ở CUỐI turn** ⇒ `restoreSnapshot(sessionId, messageId)` trong `sessions.rewind` khôi phục file về trạng thái **sau lượt được giữ lại**. Đảo ngữ nghĩa `messageId` sẽ khôi phục nhầm sang lượt **bị bỏ** — xem §12.2 (lối thứ ba bị loại) | `sessions.send-message.ts:1454-1458`, `sessions/snapshots.ts:193-196` |
+
+### 2.6. System message **CÓ** persist ⇒ nhánh `null` của `resend`/`regenerate` chạm tới được (phát hiện 2026-08-27)
+
+Bản spec trước đánh giá rằng công thức role-based ở `resend`/`regenerate` *"gần như không chạm tới"*
+nhánh `null` vì `index` luôn trỏ vào một message **user** nên `prev` gần như luôn là assistant.
+**Đánh giá đó chưa đủ chặt** — có một đường đi verify được dẫn thẳng vào nhánh `null`:
+
+| Mắt xích | Bằng chứng |
+|---|---|
+| `sessions.upsert` **chấp nhận** `role: 'system'` (`z.enum(['user','agent','system'])`) ⇒ system message **ghi được xuống JSONL** | [`sidecar/src/methods/sessions.upsert.ts:23-30`](../../apps/desktop/sidecar/src/methods/sessions.upsert.ts) |
+| `sessions.send-message` dùng **cùng** schema, cùng enum | [`sidecar/src/methods/sessions.send-message.ts:64-71`](../../apps/desktop/sidecar/src/methods/sessions.send-message.ts) |
+| `fork` clone nguyên tiền tố (kể cả system message) rồi upsert qua `msgsToEngineMessages`, map `{ id, role: 'system', text, at }` | [`stores/sessions.ts:2823-2832`](../../apps/desktop/ui-next/stores/sessions.ts) (map) + `fork` → `pushUpsert(branch, 'create')` |
+| Message đọc lại từ đĩa mang `eid` cho **cả 3 role** (T0c.3 đã merge) | `stores/sessions.ts:1058-1076` |
+
+**Đường đi thật, đầy đủ:**
+
+1. Người dùng bấm **fork** ở một session có system message trong tiền tố ⇒ session mới có system
+   message **trên đĩa**.
+2. Ngay sau system message đó là một lượt **user**.
+3. Bấm **`resend`** trên lượt user đó ⇒ `prev = msgs[index-1]` là **system** ⇒
+   `prev.role === 'assistant' ? … : null` rơi vào **`null`** ⇒
+   `truncateSession(sessionId, null)` gán `messages = []` (`store.ts:70-71`) ⇒
+   **xoá sạch transcript trên đĩa**, trong khi bộ nhớ vẫn giữ nguyên tiền tố.
+4. **`regenerate`** cùng hình dạng: neo ở `ui` (user turn gần nhất phía trước), `prev = msgs[ui-1]` —
+   nếu đó là system message đã persist thì cũng rơi vào `null`.
+
+Biểu hiện: **UI trông vẫn đúng cho tới khi khởi động lại app**, sau đó transcript trống trơn. Đây
+chính là bẫy mà §4.8 đã đóng cho `rewind`, chỉ khác chỗ nó nằm ở hai hành động còn lại.
+
+⇒ **Kết luận:** cả ba hành động phải dùng **chung một** quy tắc neo. T0c.3 đã gán `eid` cho system
+message load từ đĩa (`sessions.ts:1072-1074`), nên quy tắc §4.8 áp được cho cả ba **ngay bây giờ**.
+
+> **Ghi chú kèm (đẻ ra TL-2, §12.3):** `msgsToEngineMessages` mint id thay (`fm-<i>-<seq>`,
+> `sessions.ts:2827`) cho message **không** có `eid`. Nghĩa là trong một session **vừa fork và chưa
+> reload**, một thông báo cục bộ `ENGINE_UNAVAILABLE` **đã nằm trên đĩa** nhưng **không** mang `eid`
+> trong bộ nhớ — một ngoại lệ hẹp của điều kiện tiên quyết AC-R7.
 
 ## 3. Bảng phân loại — mọi hành động trong footer
 
@@ -146,7 +190,7 @@ model không. "Danger?" = có tô đỏ khi hover không.
 | 9 | Fork | `fork` | `fork` (458) | Không | Không | Không | Không |
 
 > **Ghi chú bắt buộc về `retryModel` (hàng #6)** — lý do miễn confirm **không phải** "nó vô hại".
-> Giả định đó **sai**: `stores/sessions.ts:3639-3648` cho thấy dưới IPC nó gọi thẳng `regenerate(id, index)`,
+> Giả định đó **sai**: `stores/sessions.ts` cho thấy dưới IPC nó gọi thẳng `regenerate(id, index)`,
 > tức **có truncate transcript** và **có tốn 1 lượt gọi model**, y hệt nút `refresh`.
 > Lý do thật sự miễn confirm: **"Thử model khác" là thao tác rất chủ đích** — người dùng phải cố ý muốn
 > đổi model mới bấm nó, xác suất bấm nhầm thấp hơn hẳn các nút còn lại; thêm ma sát ở đây chỉ nuôi
@@ -277,64 +321,91 @@ hiện trạng. Không dựng UI mới — dùng host toast sẵn có.
 - Gate nằm ở `SessionMessageItem.vue` ⇒ `retryModel` (đi thẳng vào `store.regenerate`) **không** bị
   gate lây — đúng phạm vi đã chốt (§4.3).
 - Đường **mobile remote** (`sessions.*` qua gateway, [ADR 0067](../decisions/0067-mobile-remote-control-transport.md)) không đi qua component ⇒ không bị ảnh hưởng, đúng mục *Out of scope* của brief.
-- `stores/sessions.ts` **chỉ** đổi đúng một chỗ, và không phải vì gate — mà vì §4.8.
+- `stores/sessions.ts` chỉ có **một** thay đổi logic, và không phải vì gate — mà vì §4.8 (helper neo
+  persist dùng chung cho 3 hành động).
 
-### 4.8. Vá bug persist của `rewind` (Q2 — **lát B2**, sau T0c)
+### 4.8. Quy tắc neo persist dùng chung cho `rewind` / `regenerate` / `resend` (Q2 — **lát B2**, sau T0c)
 
-**Bug.** `sessions.ts:3651-3661` cắt `msgs` trong bộ nhớ **luôn**, nhưng chỉ gửi RPC khi
-`msgs[index-1]` là **assistant có `eid`**. Vì `rewind` trên một **turn assistant** có message trước
-thường là **user**, và user message **không có `eid`** (`sessions.ts:1050-1063`), nên ca phổ biến nhất
-**không persist**: reload app là message quay về, và lượt sau vẫn resume từ JSONL đầy đủ. Câu
-"Không thể hoàn tác" trong hộp thoại vì thế **không đúng sự thật**.
+**Bug — hai mặt của cùng một công thức.** Cả ba đường cắt trên đĩa đều chọn điểm neo bằng biểu thức
+role-based `prev && prev.role === 'assistant' ? (prev.eid ?? null) : null`:
+
+1. **`rewind` — không persist.** Nó cắt `msgs` trong bộ nhớ **luôn**, nhưng chỉ gửi RPC khi
+   `msgs[index-1]` là **assistant có `eid`**. Vì `rewind` trên một **turn assistant** có message trước
+   thường là **user** (trước T0c chưa có `eid`), ca phổ biến nhất **không persist**: reload app là
+   message quay về, và lượt sau vẫn resume từ JSONL đầy đủ ⇒ câu "Không thể hoàn tác" trong hộp thoại
+   **không đúng sự thật**.
+2. **`regenerate` / `resend` — xoá sạch đĩa.** Cùng biểu thức, nhưng nhánh `null` ở đây đi thẳng vào
+   `truncateSession(sessionId, null)` ⇒ `messages = []` ⇒ **wipe toàn bộ transcript trên đĩa** trong
+   khi bộ nhớ vẫn giữ tiền tố. Đường đi verify được: **fork ⇒ system message persist ⇒ `resend` trên
+   lượt user ngay sau nó** (§2.6). Tệ hơn (1) nhiều lần vì nó **mất dữ liệu thật**, và im lặng cho tới
+   lần khởi động lại app.
 
 **Hướng mirror `resend` do PO đề xuất — SAI ở hai chi tiết. Không được implement như vậy:**
 
-1. **Sai chí mạng (mất dữ liệu).** `keepThroughId = prev.role === 'assistant' ? (prev.eid ?? null) : null`:
-   với `rewind` trên turn assistant, `prev` là **user** ⇒ rơi vào nhánh `null` ⇒
-   `truncateSession(sessionId, null)` ⇒ **`messages = []`** (`sidecar/src/sessions/store.ts:70-71`) ⇒
-   **xoá sạch transcript trên đĩa** trong khi bộ nhớ chỉ cắt tới `index`. Bug "không persist" biến thành
-   bug "wipe toàn bộ" — tệ hơn nhiều lần. (Trong `resend`/`regenerate` nhánh này gần như không chạm tới
-   vì `index` luôn là user message nên `prev` gần như luôn là assistant; ở `rewind` thì **ngược lại**.)
+1. **Sai chí mạng (mất dữ liệu).** Đúng cái biểu thức role-based ở trên. Nó không chỉ hỏng ở `rewind`:
+   §2.6 chứng minh chính `resend`/`regenerate` — nguồn được đem ra "mirror" — cũng có nhánh wipe.
+   Mirror một công thức sai chỉ nhân bản lỗi.
 2. **Thu hẹp hợp đồng.** `sessions.rewind` **không** tương đương `sessions.truncate`: nó còn
    `removeSdkSession` (dọn transcript SDK mồ côi, ADR 0058) **và** restore file workspace từ snapshot
    (ADR 0038) khi có `projectId` — `sidecar/src/methods/sessions.rewind.ts:20-61`. Đổi hết sang
    `truncate` là âm thầm bỏ hai hành vi đó.
 
-**Hướng sửa đúng — MỘT quy tắc duy nhất (chốt TL-1, §12.2):**
+**Hướng sửa đúng — MỘT quy tắc duy nhất, MỘT helper dùng chung (chốt TL-1 §12.2, mở rộng 2026-08-27):**
 
-Sau khi Brief A **T0c** merge, mọi message đến từ đĩa đều mang `eid`. Khi đó R-a/R-b/R-c gộp lại thành
-**một** quy tắc, diễn đạt bằng *"neo vào message được persist gần nhất phía trước"*:
+Sau khi Brief A **T0c** merge, mọi message đến từ đĩa đều mang `eid` cho **cả 3 role**. Khi đó R-a/R-b/R-c
+gộp lại thành **một** quy tắc, diễn đạt bằng *"neo vào message được persist gần nhất trong tiền tố sẽ
+được giữ lại"* — và quy tắc đó **giống hệt nhau ở cả ba hành động**:
 
 ```
-anchorId = eid của message CÓ eid gần nhất trong msgs[0 .. index-1]   (lùi dần từ index-1)
+lastPersistedEid(kept) = eid của message CÓ eid gần nhất trong `kept` (lùi dần từ cuối)
+                       = null nếu không có message nào trong `kept` mang eid
 
-anchorId có   → sessions.rewind({ sessionId, messageId: anchorId })
-anchorId không → sessions.truncate({ sessionId, keepThroughId: null })
+rewind      : kept = msgs[0 .. index-1]   → có neo: sessions.rewind({ messageId: neo })
+                                          → null   : sessions.truncate({ keepThroughId: null })
+resend      : kept = msgs[0 .. index-1]   → sessions.truncate({ keepThroughId: neo ?? null })
+regenerate  : kept = msgs[0 .. ui-1]      → sessions.truncate({ keepThroughId: neo ?? null })
+              (ui = user turn gần nhất trước `index`)
 ```
+
+Trong code cả ba đều gọi helper **sau** khi đã `s.msgs = s.msgs.slice(0, …)`, nên tham số truyền vào
+đúng bằng `s.msgs` và helper chỉ việc duyệt ngược từ cuối mảng. Đây là **một hàm thuần, một chỗ khai
+báo** — không copy 3 bản (đây chính là loại tri thức mà DRY áp dụng: một quy tắc an toàn dữ liệu, một
+nguồn).
 
 | Ca | Rơi vào nhánh nào | Vì sao đúng |
 |---|---|---|
-| `index === 0` (cũ: **R-a**) | `null` | Không có message nào phía trước ⇒ cắt sạch **đúng ý định**. (`sessions.rewind` không dùng được: `messageId` bắt buộc `min(1)`, `sessions.rewind.ts:14-18`.) |
-| `msgs[index-1]` có `eid`, **bất kể role** (cũ: **R-b**) | `sessions.rewind` | Sau T0c đây là **đa số tuyệt đối**. Giữ RPC này để không mất `removeSdkSession` + đường file-restore. |
-| `msgs[index-1]` là message hệ thống cục bộ **không persist** (`ENGINE_UNAVAILABLE`, §2.3) | lùi tiếp tới `eid` gần nhất | Message đó **không nằm trên đĩa**, nên "giữ đến hết message persist trước nó" chính là trạng thái đĩa đúng. |
-| Toàn bộ `msgs[0..index-1]` đều không có `eid` | `null` | Cả tiền tố **không** nằm trên đĩa ⇒ đĩa vốn đã rỗng ở đoạn đó ⇒ `null` khớp bộ nhớ, **không** mất gì. |
+| `rewind` tại `index === 0` (cũ: **R-a**) | `null` | Không có message nào phía trước ⇒ cắt sạch **đúng ý định**. (`sessions.rewind` không dùng được: `messageId` bắt buộc `min(1)`, `sessions.rewind.ts:14-18`.) |
+| Message cuối của `kept` có `eid`, **bất kể role** (cũ: **R-b**) | neo = chính nó | Sau T0c đây là **đa số tuyệt đối** — gồm cả ca `prev` là **user** (rewind) và `prev` là **system** đã persist (resend/regenerate, §2.6). |
+| Message cuối của `kept` là thông báo hệ thống cục bộ **không persist** (`ENGINE_UNAVAILABLE`, §2.3) | lùi tiếp tới `eid` gần nhất | Message đó **không nằm trên đĩa**, nên "giữ đến hết message persist trước nó" chính là trạng thái đĩa đúng. |
+| Toàn bộ `kept` đều không có `eid` | `null` | Cả tiền tố **không** nằm trên đĩa ⇒ đĩa vốn đã rỗng ở đoạn đó ⇒ `null` khớp bộ nhớ, **không** mất gì. |
 
 **Ràng buộc an toàn — đọc kỹ, đây là ranh giới giữa đúng và thảm hoạ:**
 
-- **`keepThroughId: null` chỉ hợp lệ khi KHÔNG tìm được `eid` nào trong toàn bộ tiền tố `msgs[0..index-1]`.**
-  Tuyệt đối **không** dùng `null` làm fallback cho "message ngay trước không phải assistant" hay
-  "không tiện tìm id" — đó chính là cái bẫy wipe ở mục 1 phía trên. Điều kiện `null` phải được viết
-  bằng kết quả của vòng lùi, không bằng `role`.
-- **Giữ `rewind` là hàm đồng bộ.** Nó không chạy lại lượt nào sau đó nên **không cần** `await` — dùng
-  `pushRequest` (fire-and-forget, như hiện tại). Không đổi chữ ký ⇒ không sinh cửa sổ đua mới.
-  Vòng lùi tìm `eid` là O(k) trên mảng có sẵn trong bộ nhớ, không I/O.
+- **`keepThroughId: null` (và nhánh `sessions.truncate` của `rewind`) chỉ hợp lệ khi KHÔNG tìm được
+  `eid` nào trong toàn bộ tiền tố `kept`.** Tuyệt đối **không** dùng `null` làm fallback cho "message
+  ngay trước không phải assistant" hay "không tiện tìm id" — đó chính là cái bẫy wipe ở mục 1 phía
+  trên. **Điều kiện `null` phải được viết bằng kết quả của vòng lùi, không bằng `role`.** Lý do phải
+  nói thành ràng buộc chứ không phải khuyến nghị: biểu thức role-based **đọc như tương đương** trong
+  ca thường gặp, nên nó sống sót qua review — nhưng ở `rewind` nó rơi `null` ngay ca phổ biến nhất
+  (`prev` là user), còn ở `resend`/`regenerate` nó rơi `null` mỗi khi tiền tố kết thúc bằng một
+  **system message đã persist** (§2.6). Cả hai đều là mất dữ liệu im lặng.
+- **Helper chỉ chia sẻ CÁCH CHỌN NEO, không chia sẻ RPC.** `rewind` giữ `sessions.rewind` (cần
+  `removeSdkSession` + đường restore snapshot); `regenerate`/`resend` giữ `sessions.truncate` —
+  `truncateSession` đã tự drop `sdkSessionId` (`store.ts:57-58, 78`) nên chúng **không** thiếu gì, và
+  đổi chúng sang `sessions.rewind` sẽ kéo theo restore file workspace **ngay trước một lượt chạy mới**
+  — hành vi mới, ngoài phạm vi (§15).
+- **Không đổi chữ ký, không đổi thứ tự await.** `rewind` **giữ đồng bộ** (không chạy lại lượt nào sau
+  đó ⇒ `pushRequest` fire-and-forget, không sinh cửa sổ đua mới). `regenerate`/`resend` **giữ nguyên**
+  `await sessions.truncate` → `void sendMessage(...)` (sidecar resume từ JSONL nên phải cắt xong mới
+  chạy). Vòng lùi tìm `eid` là O(k) trên mảng có sẵn trong bộ nhớ, không I/O.
 - **An toàn sẵn có:** id lạ ⇒ `truncateSession` **no-op** (`store.ts:73-75`), không wipe. Đây là lưới
   an toàn, **không** phải lý do để gửi id bừa.
 - **Điều kiện tiên quyết phải verify trước khi ship B2:** sau `ensureLoaded`, **mọi** message trong
   `s.msgs` phải có `eid` **trừ** message hệ thống cục bộ ở §2.3. Nếu dev phát hiện một nguồn nào khác
   persist message mà **không** mang `eid` ra tới UI ⇒ **dừng, báo tech-lead** — đừng tự ý mở rộng vòng
   lùi, vì khi đó neo sẽ nhảy qua một message có thật trên đĩa và cắt **nhiều hơn** ý định. Kiểm chứng
-  bằng **AC-R7**.
+  bằng **AC-R7**. *(Một ngoại lệ hẹp đã tìm thấy và đang chờ tech-lead: session **vừa fork chưa reload**
+  — TL-2, §12.3.)*
 
 ## 5. User flow
 
@@ -350,7 +421,7 @@ anchorId không → sessions.truncate({ sessionId, keepThroughId: null })
 
 1. Click icon `send` ở bong bóng user #12 trong transcript 30 message ⇒ `lostCount = 30 - 12 - 1 = 17`.
 2. Hộp thoại: **"Gửi lại tin nhắn này?"** / **"Sẽ xoá 17 tin nhắn sau tin nhắn này. Không thể hoàn tác.\nLượt chạy lại sẽ tốn thêm một lần gọi model."** / nút **"Chạy lại"**.
-3. Xác nhận → cắt + `sessions.truncate` + gửi lại nội dung cũ → một lượt mới chạy.
+3. Xác nhận → cắt + `sessions.truncate` (neo theo §4.8 từ B2) + gửi lại nội dung cũ → một lượt mới chạy.
 4. Nếu bong bóng user đó là message **cuối** (`lostCount = 0`) ⇒ **không hỏi**, gửi lại ngay.
 
 ### 5.3. `edit & resend`
@@ -409,7 +480,10 @@ description = t(body, { n })
 Tách câu **"Không thể hoàn tác."** thành khoá riêng (`sessions.guard.irreversible`) thay vì nhúng vào
 từng `body` là **có chủ đích**: nó cho phép `rewind` **không** khẳng định điều đó ở lát B1 (khi §4.8
 chưa merge) rồi thêm vào ở B2 — **một dòng diff, không khoá nào bị sửa hai lần**. Ba hành động chạy lại
-dùng nó **ngay từ B1** vì đường persist của chúng (`sessions.truncate`) đã đúng sẵn (§2.3).
+dùng nó **ngay từ B1** vì chúng **thật sự cắt trên đĩa** ở mọi ca ngay từ hiện trạng (§2.3) — kể cả
+nhánh sai của §4.8 cũng cắt, có điều nó cắt **quá tay** (§2.6). Nói cách khác: ở ba hành động đó câu
+"Không thể hoàn tác" **chưa bao giờ nói dối**; thứ B2 sửa là *cắt đúng bao nhiêu*, không phải *có cắt
+hay không*.
 
 **Không có biến thể "0 message"** — `lostCount === 0` thì hộp thoại không hiện (§4.4), nên chuỗi
 "0 tin nhắn" không bao giờ được render.
@@ -464,7 +538,7 @@ tính (thuộc [session-cost-budget.md](./session-cost-budget.md)).
 
 ## 8. Acceptance criteria
 
-Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (rewind persist, lát **B2**). QA tham chiếu bằng ID.
+Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (persist trên đĩa, lát **B2**). QA tham chiếu bằng ID.
 
 ### 8.1. Phạm vi gate — đếm được
 
@@ -533,15 +607,18 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (rewind persist, lát **B
 
 - **AC-G22.** *Given* một turn đang **streaming**, *when* người dùng bấm `refresh`/`send`/`rewind` ở một
   bong bóng user cũ (footer user bubble không bị ẩn khi streaming) và xác nhận, *then* **không message nào
-  bị cắt** — chặn bởi §4.6 (số message đã đổi) và/hoặc guard streaming của store (`sessions.ts:3601, 3673`);
+  bị cắt** — chặn bởi §4.6 (số message đã đổi) và/hoặc guard streaming của store (`regenerate`, `resend`);
   người dùng thấy toast giải thích.
 - **AC-G23.** *Given* đã xác nhận một `regenerate` và nó đang trong cửa sổ `await sessions.truncate`,
   *when* bấm `refresh` lần nữa và xác nhận, *then* **không** có lượt model thứ hai được sinh ra —
-  `regenInFlight` (`sessions.ts:3593, 3600, 3635`) vẫn chặn đúng.
+  `regenInFlight` vẫn chặn đúng.
 - **AC-G24.** *Given* code sau khi sửa, *when* đọc `stores/sessions.ts`, *then* thay đổi **duy nhất** về
-  logic là phần vá persist của `rewind` (§4.8, lát B2) — `regenInFlight`, guard streaming, thứ tự
-  `await sessions.truncate` → `sendMessage` của `regenerate`/`resend` giữ **nguyên xi**; **không** có lời
-  gọi `useConfirm`/DOM nào lọt vào store.
+  logic là **helper neo persist dùng chung** (§4.8, lát B2) cùng ba call site dùng nó
+  (`rewind`, `regenerate`, `resend`); *and* `regenInFlight`, guard streaming, thứ tự
+  `await sessions.truncate` → `sendMessage` của `regenerate`/`resend`, và **chữ ký cả ba hàm**
+  (`rewind` vẫn **đồng bộ**) giữ **nguyên xi**; *and* **không** có lời gọi `useConfirm`/DOM nào lọt vào
+  store; *and* grep công thức role-based `role === 'assistant' ? … : null` trong file cho **0 kết quả**
+  (không còn bản sao nào của quy tắc cũ).
 - **AC-G25.** *Given* người dùng double-click **cùng một** nút destructive, *when* quan sát, *then* chỉ có
   **một** hộp thoại trên màn hình (cái đầu tự resolve `false` theo `useConfirm.ts:40-43`) và tối đa **một**
   hành động được thực thi.
@@ -578,7 +655,7 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (rewind persist, lát **B
   `edit & resend` / `regenerate` **CÓ** chứa câu đó. *(Hộp thoại an toàn không được hứa điều chưa làm được —
   §7.1.)*
 
-### 8.9. Persist của `rewind` (§4.8) — điều kiện merge của lát **B2**
+### 8.9. Persist trên đĩa của `rewind` / `regenerate` / `resend` (§4.8) — điều kiện merge của lát **B2**
 
 - **AC-R1.** *Given* transcript 30 message và `msgs[17]` là **assistant có `eid`**, *when* `rewind` tại
   index **18** và xác nhận, *then* **khởi động lại app**, transcript mở ra còn **đúng 18 message**.
@@ -587,8 +664,9 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (rewind persist, lát **B
   còn **đúng 18 message** — **không** 30 (bug cũ) và **không** 0 (bẫy `keepThroughId: null`).
 - **AC-R3.** *Given* transcript bất kỳ, *when* `rewind` tại index **0** và xác nhận, *then* khởi động lại
   app, transcript **rỗng** — cắt sạch đúng ý định.
-- **AC-R4.** *Given* mọi ca AC-R1…AC-R3, *when* kiểm tra payload RPC, *then* `keepThroughId: null` **chỉ**
-  xuất hiện khi **không** tìm được `eid` nào trong `msgs[0..index-1]` — không ca nào khác.
+- **AC-R4.** *Given* mọi ca AC-R1…AC-R3 **và** AC-R10…AC-R11, *when* kiểm tra payload RPC, *then*
+  `keepThroughId: null` **chỉ** xuất hiện khi **không** tìm được `eid` nào trong toàn bộ tiền tố được giữ
+  lại — không ca nào khác.
 - **AC-R5.** *Given* payload rewind mang một `messageId` mà engine không biết, *when* RPC chạy, *then*
   transcript trên đĩa **không đổi** (no-op, `sidecar/src/sessions/store.ts:73-75`) — không wipe.
 - **AC-R6.** *Given* `rewind` sau khi vá, *when* đọc chữ ký hàm, *then* nó vẫn **đồng bộ** (không thêm
@@ -596,11 +674,23 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (rewind persist, lát **B
 - **AC-R7.** *(điều kiện tiên quyết)* *Given* một session dài mở qua `ensureLoaded`, *when* duyệt `s.msgs`,
   *then* **mọi** message đều có `eid`, **trừ** message hệ thống cục bộ `ENGINE_UNAVAILABLE` (§2.3). Nếu tìm
   thấy bất kỳ message **persist** nào thiếu `eid` ⇒ **dừng, báo tech-lead** trước khi ship B2 (§4.8).
+  *(Ngoại lệ đã biết, đang chờ chốt: session **vừa fork chưa reload** — TL-2, §12.3. Không chặn B2.)*
 - **AC-R8.** *Given* transcript có một message `ENGINE_UNAVAILABLE` cục bộ ngay trước điểm rewind, *when*
   `rewind` và xác nhận, *then* neo lùi tới message **có `eid`** gần nhất phía trước; khởi động lại app,
   transcript khớp đúng phần đáng lẽ còn lại — **không** wipe, **không** giữ nguyên 30.
 - **AC-R9.** *(chỉ lát B2)* *Given* B2 đã merge, *when* mở hộp thoại `rewind`, *then* nội dung **CÓ** câu
   "Không thể hoàn tác" — và AC-R1…AC-R3 đồng thời pass, tức câu đó **đúng sự thật** (đảo của AC-G36).
+- **AC-R10.** *(ca mới, §2.6)* *Given* một session **vừa fork** mà transcript có dạng
+  `[… , system (đã persist), user, assistant, …]` — dựng bằng: mở session có system message trong tiền tố
+  → bấm **fork** → mở session fork → **khởi động lại app** để mọi message mang `eid` từ đĩa —, *when* bấm
+  **`send` (resend)** trên bong bóng **user đứng ngay sau system message** đó và xác nhận, *then* **khởi
+  động lại app**: transcript trên đĩa giữ **đúng tiền tố tới hết system message** rồi tiếp bằng lượt vừa
+  chạy lại — **KHÔNG rỗng**. *(Trước khi vá, ca này cho transcript trống trơn sau restart — `prev.role ===
+  'system'` ⇒ `keepThroughId = null` ⇒ `messages = []`.)*
+- **AC-R11.** *(ca mới, §2.6)* *Given* **cùng hình dạng transcript** như AC-R10, *when* bấm **`refresh`
+  (regenerate)** trên turn assistant mà user turn gần nhất phía trước là bong bóng user đứng ngay sau
+  system message đó, và xác nhận, *then* **khởi động lại app**: transcript giữ **đúng tiền tố tới hết
+  system message** — **KHÔNG rỗng**, và **không** mất thêm message nào phía trước điểm neo.
 
 ## 9. Edge case
 
@@ -609,23 +699,24 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (rewind persist, lát **B
 | **E1** | **Double-click** nút destructive | Hộp thứ hai làm hộp thứ nhất resolve `false` (`useConfirm.ts:40-43`) ⇒ tối đa 1 hộp, tối đa 1 hành động. Nếu click thứ hai xảy ra **sau** khi hành động thứ nhất đã cắt, §4.6 bắt được lệch `msgs.length` ⇒ huỷ + toast. Việc này **vá luôn** lỗ re-entry sẵn có của `resend` (store chỉ có guard streaming, không có `regenInFlight` — §2.3). |
 | **E2** | **Người dùng gửi tin mới trong lúc modal đang mở** | `msgs.length` tăng ⇒ §4.6 huỷ thao tác + toast `sessions.guard.stale`. Con số đã hiện trên hộp thoại **không bao giờ** được dùng để cắt một transcript khác với lúc nó được tính. |
 | **E3** | Hộp thoại mở, người dùng **đi sang session khác** rồi mới xác nhận | Chốt `sessionId` + `index` tại lúc mở hộp thoại; nếu `store.activeId` đã khác ⇒ **huỷ + toast**. Không được cắt nhầm session. |
-| **E4** | Bấm hành động trên message **đang streaming** | Footer assistant đã bị ẩn khi streaming (`SessionMessageItem.vue:126, 349`) ⇒ không bấm được. Footer **user bubble không bị ẩn** ⇒ vẫn bấm được: hộp thoại hiện, nhưng khi xác nhận thì §4.6 và/hoặc guard store (`3601`, `3673`) chặn ⇒ **không cắt gì** + toast. `rewind` **không có** guard streaming ở store ⇒ §4.6 là lớp bảo vệ **duy nhất**, bắt buộc phải có. |
+| **E4** | Bấm hành động trên message **đang streaming** | Footer assistant đã bị ẩn khi streaming (`SessionMessageItem.vue:126, 349`) ⇒ không bấm được. Footer **user bubble không bị ẩn** ⇒ vẫn bấm được: hộp thoại hiện, nhưng khi xác nhận thì §4.6 và/hoặc guard store chặn ⇒ **không cắt gì** + toast. `rewind` **không có** guard streaming ở store ⇒ §4.6 là lớp bảo vệ **duy nhất**, bắt buộc phải có. |
 | **E5** | **`lostCount === 0`** — "Thử lại" lượt lỗi cuối, `regenerate` câu trả lời cuối, `resend` bong bóng user cuối | **Không hỏi, chạy thẳng** (§4.4). Không có biến thể text "0 tin nhắn" nào tồn tại. Quy tắc theo **điều kiện**, không theo vị trí nút ⇒ tự đúng cho cả `SessionGateCard.vue:312-315` mà không phải sửa file đó. |
-| **E6** | **`regenerate` không tìm thấy user turn phía trước** (message đầu tiên là assistant/system) | **Không mở hộp thoại, không gọi store.** Đây còn là cải thiện thật: `store.regenerate` hiện `slice(0, index)` **trước** khi biết có `ui` hay không (`sessions.ts:3604` trước `3607-3608`) ⇒ nếu không có `ui` thì transcript bị cắt trong bộ nhớ mà **không** chạy lại và **không** cắt trên đĩa. Gate ở component làm nhánh đó **không thể chạm tới từ footer**. |
+| **E6** | **`regenerate` không tìm thấy user turn phía trước** (message đầu tiên là assistant/system) | **Không mở hộp thoại, không gọi store.** Đây còn là cải thiện thật: `store.regenerate` hiện `slice(0, index)` **trước** khi biết có `ui` hay không ⇒ nếu không có `ui` thì transcript bị cắt trong bộ nhớ mà **không** chạy lại và **không** cắt trên đĩa. Gate ở component làm nhánh đó **không thể chạm tới từ footer**. |
 | **E7** | **`rewind` tại index 0** (message đầu tiên) | `lostCount = msgs.length` (toàn bộ) ⇒ **luôn hỏi**. Xác nhận ⇒ vòng lùi của §4.8 không tìm được `eid` nào ⇒ `sessions.truncate` với `keepThroughId: null` ⇒ cắt sạch **cả trên đĩa** (AC-R3). |
-| **E8** | **`rewind` mà `msgs[index-1]` không có `eid`** | Sau **T0c**, chỉ còn đúng một nguồn: message hệ thống cục bộ `ENGINE_UNAVAILABLE` (§2.3) — vốn **không nằm trên đĩa**. Xử lý: **lùi tiếp** tới `eid` gần nhất phía trước (§4.8, AC-R8). **Không** được rơi về `keepThroughId: null` chỉ vì message ngay trước thiếu id. Trước T0c thì ca này là đa số ⇒ đó là lý do B2 xếp sau T0c (TL-1). |
+| **E8** | **Tiền tố được giữ kết thúc bằng một message KHÔNG có `eid`** (áp cho **cả ba** hành động) | Sau **T0c**, chỉ còn đúng một nguồn: message hệ thống cục bộ `ENGINE_UNAVAILABLE` (§2.3) — vốn **không nằm trên đĩa**. Xử lý: **lùi tiếp** tới `eid` gần nhất phía trước (§4.8, AC-R8). **Không** được rơi về `keepThroughId: null` chỉ vì message cuối tiền tố thiếu id hoặc "sai role". Trước T0c thì ca này là đa số ở `rewind` ⇒ đó là lý do B2 xếp sau T0c (TL-1). |
 | **E9** | **Session chưa `loaded`** / đang `loading` / là placeholder hand-off (đã pop out) | Footer không render vì không có message ⇒ không có đường bấm. Vẫn bắt buộc guard phòng thủ: `store.active == null` hoặc `i < 0` hoặc `i >= msgs.length` ⇒ **không mở hộp thoại, không làm gì**. |
-| **E10** | **Offline / sidecar chết** | Hộp thoại là 100% client-side ⇒ vẫn hiện, vẫn huỷ được. Nếu người dùng xác nhận, phần cắt trên đĩa thất bại thì rơi về hành vi hiện có của store (`console.warn` tại `3625`/`3689`) — feature này **không** đổi xử lý lỗi đó. |
+| **E10** | **Offline / sidecar chết** | Hộp thoại là 100% client-side ⇒ vẫn hiện, vẫn huỷ được. Nếu người dùng xác nhận, phần cắt trên đĩa thất bại thì rơi về hành vi hiện có của store (`console.warn` ở nhánh `catch` của `truncate`) — feature này **không** đổi xử lý lỗi đó. |
 | **E11** | **App crash / restart giữa chừng** | Hộp thoại không persist — mở lại app thì không còn dialog nào, và vì bước 5 (cắt) chưa chạy nên **transcript nguyên vẹn**. Restart-safe theo nghĩa "fail về phía không mất dữ liệu". |
 | **E12** | **Transcript rất dài** (5.000 message) | `lostCount` là phép trừ số nguyên, **không** duyệt mảng. Riêng `regenerate` phải lùi tìm `ui`, và §4.8 phải lùi tìm `eid` — cả hai bị chặn bởi khoảng cách tới phần tử hợp lệ gần nhất, thực tế < 20 bước, thuần in-memory. |
 | **E13** | **Message bị xoá/đổi từ cửa sổ khác** (popout đang sở hữu session) | Cửa sổ chính hiển thị placeholder hand-off, không render footer ⇒ không có đường bấm. Bảo vệ bởi `ownsSession` gate ([session-popout-window.md](./session-popout-window.md)). |
+| **E14** | **`resend` / `regenerate` ngay sau một system message ĐÃ PERSIST** (session vừa fork, §2.6) | Neo lùi dừng **ngay tại** system message đó (nó **có** `eid` sau khi đọc lại từ đĩa) ⇒ `sessions.truncate` giữ đúng tiền tố. **Cấm** nhánh `null`: đây chính là ca làm wipe sạch đĩa trước khi vá. Kiểm chứng: **AC-R10**, **AC-R11**. |
 
 ## 10. UI behavior
 
 - **Component chạm:** [`components/session/SessionMessageItem.vue`](../../apps/desktop/ui-next/components/session/SessionMessageItem.vue) — nơi duy nhất phải sửa logic UI.
 - **Component dùng lại (không sửa):** `ConfirmDialogHost.vue`, `LibraryConfirmDelete.vue`, `AppGlobalHosts.vue`, `ActionToastHost`, `SessionGateCard.vue`.
 - **Route mới:** không.
-- **State mới ở store:** **không**. Không thêm field vào `Session`/`SessionMessage`, không thêm ref nào. Store chỉ đổi phần persist của `rewind` (§4.8, lát B2).
+- **State mới ở store:** **không**. Không thêm field vào `Session`/`SessionMessage`, không thêm ref nào. Store chỉ đổi cách chọn điểm neo khi cắt trên đĩa của `rewind`/`regenerate`/`resend` (§4.8, lát B2) — thêm **một hàm thuần**, không thêm state.
 - **Theme token mới:** **không** — `--danger`, `--dangerBg` đã có ở cả hai theme family.
 - **Trạng thái hiển thị:**
   - *Empty:* session chưa có message ⇒ không có footer ⇒ không áp dụng.
@@ -639,15 +730,17 @@ Tiền tố **AC-G** (guard, lát **B1**) và **AC-R** (rewind persist, lát **B
 ## 11. Data shape / Non-functional
 
 **Data shape:** không có entity mới, không đổi entity cũ, không thêm event log, không đổi **định dạng**
-file trên đĩa. Thay đổi duy nhất chạm đĩa: `rewind` giờ **thực sự** cắt JSONL ở mọi ca (§4.8) — dùng
-RPC đã có (`sessions.rewind` / `sessions.truncate`), **không thêm method, không đổi schema**.
-`types/index.ts` không đổi. (Trường `eid` cho user/system message thuộc **Brief A T0c**, không phải spec này.)
+file trên đĩa. Thay đổi duy nhất chạm đĩa là **điểm neo** của ba lời gọi sẵn có: `rewind` giờ **thực sự**
+cắt JSONL ở mọi ca, còn `regenerate`/`resend` **thôi xoá sạch** transcript ở ca §2.6 (chúng vẫn cắt như
+trước ở mọi ca khác). Dùng đúng RPC đã có (`sessions.rewind` / `sessions.truncate`), **không thêm method,
+không đổi schema**. `types/index.ts` không đổi. (Trường `eid` cho user/system message thuộc **Brief A T0c**,
+không phải spec này.)
 
 | Tiêu chí | Mục tiêu |
 |---|---|
 | Latency UI | Hộp thoại hiện < 1 frame sau click (state đồng bộ, không I/O). Tính `lostCount` = O(1) trừ nhánh tìm `ui` (E12). |
 | Offline | **Có** — hộp thoại hoàn toàn client-side. Phần cắt đĩa là IPC nội bộ, không network. |
-| Restart-safe | **Có** — huỷ giữa chừng ⇒ transcript nguyên vẹn (E11); xác nhận ⇒ trạng thái đã cắt **sống sót qua restart** (AC-R1…R3, từ lát B2). |
+| Restart-safe | **Có** — huỷ giữa chừng ⇒ transcript nguyên vẹn (E11); xác nhận ⇒ trạng thái đã cắt **sống sót qua restart** và **đúng** (AC-R1…R3, AC-R10…R11, từ lát B2). |
 | Storage | Không tăng. `rewind` đúng ra còn **giảm** dung lượng JSONL vì giờ mới thực sự cắt. |
 | i18n | en + vi đầy đủ (AC-G34). |
 | A11y | Kế thừa `role="dialog"` + `aria-modal="true"` (`LibraryConfirmDelete.vue:4`) + Esc để huỷ. |
@@ -660,7 +753,7 @@ RPC đã có (`sessions.rewind` / `sessions.truncate`), **không thêm method, k
 | Q | Chốt | Đã phản ánh ở |
 |---|---|---|
 | **Q1** — `retryModel` | **KHÔNG gate**, nhưng **CÓ** tô `danger` hover. Lý do miễn confirm được ghi lại cho đúng: **thao tác rất chủ đích, ít bấm nhầm** — **không phải** "vô hại" (nó thật sự truncate + tốn 1 lượt model). | §3.2 (ghi chú), §3.3 (4 gate / 5 danger), §4.3, AC-G2, **AC-G28** |
-| **Q2** — bug persist `rewind` | **Sửa cùng PR này**, nhưng **tách lát B2** (TL-1). Hướng mirror `resend` bị **bác bỏ ở 2 chi tiết** (wipe sạch khi `prev` là user; `sessions.rewind` ≠ `sessions.truncate`). Hướng đúng: **một** quy tắc "neo vào `eid` gần nhất phía trước". | §2.5, **§4.8**, E7, E8, **AC-R1…AC-R9**, AC-G24 |
+| **Q2** — bug persist khi cắt trên đĩa | **Sửa cùng PR này**, **tách lát B2** (TL-1), và **áp cho cả ba** hành động (`rewind` + `regenerate` + `resend`) bằng **một helper neo dùng chung** — không tách ticket. Hướng mirror `resend` bị **bác bỏ ở 2 chi tiết** (công thức role-based có nhánh wipe — chính `resend` cũng dính, §2.6; `sessions.rewind` ≠ `sessions.truncate`). Hướng đúng: **một** quy tắc "neo vào `eid` gần nhất trong tiền tố được giữ". | §2.5, **§2.6**, **§4.8**, E7, E8, **E14**, **AC-R1…AC-R11**, AC-G24 |
 | **Q3** — "Thử lại" lượt lỗi | **Miễn confirm khi `lostCount === 0`** — diễn đạt theo điều kiện, không theo vị trí nút. Kéo theo: `regenerate` câu trả lời cuối và `resend` bong bóng user cuối cũng không hỏi. | §4.4, §5.5, E5, **AC-G5…AC-G9** |
 
 ### 12.2. TL-1 — **ĐÃ CHỐT 2026-08-26 (tech-lead): phương án (i)**
@@ -674,7 +767,12 @@ rewind trên turn assistant ⇒ `prev` là user ⇒ user chưa có `eid`). Khôn
 | Lát | Nội dung | Phụ thuộc | Ghi chú |
 |---|---|---|---|
 | **B1** | Gate 4 hành động + danger hover 6 điểm bấm + i18n + §4.6 + toast | **Không** — độc lập, ship ngay | AC-G1…AC-G36 |
-| **B2** | §4.8 vá persist `rewind` + thêm câu "Không thể hoàn tác" vào hộp thoại `rewind` | **T0c** (Brief A) | AC-R1…AC-R9 |
+| **B2** | §4.8 helper neo persist dùng chung → áp cho `rewind`, `regenerate`, `resend` + thêm câu "Không thể hoàn tác" vào hộp thoại `rewind` | **T0c** (Brief A) | AC-R1…AC-R11 |
+
+> **Cập nhật 2026-08-27 (phạm vi B2):** `rewind` đã ship trước trong B2. Phần `regenerate`/`resend`
+> **đi cùng đợt B2, không tách ticket** — chúng mang **đúng** công thức role-based cũ và §2.6 chứng
+> minh nhánh sai của chúng **xoá sạch transcript trên đĩa**, nên để lại là để một bug mất dữ liệu nằm
+> trong nhánh `main`. Thứ tự ship trong lát không đổi (vẫn sau T0c), phụ thuộc không đổi.
 
 **Lý do chọn (i), không chọn (ii):** phương án (ii) ship một **hộp thoại an toàn nói sai** ở đúng ca
 phổ biến nhất. Cái giá không phải là "một dòng chữ hơi lệch" — mà là **niềm tin vào mọi hộp thoại còn
@@ -715,7 +813,36 @@ nó dùng đúng hai method sẵn có theo đúng ngữ nghĩa đã tài liệu 
 mọi role) đã được [ADR 0074 §Q1](../decisions/0074-session-message-anchor-and-transcript-navigation.md)
 quyết. Đây là **thứ tự ship + tái dùng một task đã duyệt**, ghi trong spec là đủ.
 
-**Không còn open question nào.**
+### 12.3. TL-2 — **MỞ 2026-08-27 (cho tech-lead): `fork` mint id cho message cục bộ ⇒ đĩa có message mà bộ nhớ không thấy**
+
+**Không chặn B1/B2.** Ghi ra vì nó là **đúng cái điều kiện AC-R7 yêu cầu "dừng, báo tech-lead"**, và vì
+để im thì lần sau sẽ có người "phát hiện lại" nó.
+
+**Sự thật.** `msgsToEngineMessages` (`stores/sessions.ts:2823-2832`) mint id thay
+(`fm-<i>-<seq>`, dòng 2827) cho message **không** có `eid`. Nguồn duy nhất của loại message đó là thông
+báo cục bộ `ENGINE_UNAVAILABLE` (§2.3). Khi `fork` upsert bản clone, thông báo ấy **được ghi xuống đĩa**
+dưới id vừa mint — nhưng bản trong bộ nhớ của session fork **vẫn không có `eid`** (fork không ghi ngược
+id đã mint vào clone).
+
+**Hệ quả với §4.8.** Trong một session **vừa fork và chưa reload**, vòng lùi **không thấy** message đó
+⇒ neo nhảy qua nó ⇒ đĩa bị cắt **nhiều hơn bộ nhớ đúng một message thông báo lỗi cục bộ**. Sau khi
+khởi động lại app, thông báo đó biến mất khỏi transcript.
+
+**Vì sao vẫn không chặn:** thiệt hại bị chặn cứng ở **một** message, và message đó là thông báo lỗi
+runtime chứ không phải nội dung hội thoại; ca chỉ tồn tại **trước lần reload đầu tiên** của session
+fork (sau reload nó có `eid`, quy tắc chạy đúng). So với bug §2.6 (wipe toàn bộ) thì đây là hạng khác hẳn.
+
+**Ba phương án, mời tech-lead chốt:**
+
+| # | Phương án | Trade-off |
+|---|---|---|
+| **(a)** | **Chấp nhận**, ghi vào ngoại lệ của AC-R7 (hiện trạng spec này). | Rẻ nhất, 0 dòng code. Đổi lại: bất biến "message trên đĩa ⇔ có `eid` trong bộ nhớ" có một lỗ nhỏ, người đọc §4.8 sau này phải nhớ. |
+| **(b)** | `fork` **ghi ngược** id vừa mint vào `eid` của bản clone. | ~1-2 dòng, khôi phục bất biến. Nhưng làm `msgsToEngineMessages` (đang là hàm map thuần) có side effect, hoặc phải tách thành bước riêng. |
+| **(c)** | `fork` **loại hẳn** thông báo cục bộ khỏi payload upsert (không persist `ENGINE_UNAVAILABLE`). | Đúng ngữ nghĩa nhất — thông báo lỗi runtime **không thuộc** transcript, và §2.3 đã coi nó là "không persist". Nhưng transcript fork sẽ khác bản hiển thị đúng một dòng, cần xác nhận đó là điều mong muốn. |
+
+**BA nghiêng về (c)**, nhưng đây là quyết định về **hợp đồng dữ liệu của `fork`** nên thuộc tech-lead.
+Việc thực thi (dù chọn gì) **nằm ngoài spec này** — `fork` không phải hành động destructive và không
+nằm trong 4 hành động bị gate (§3.3).
 
 ## 13. i18n keys cần thêm
 
@@ -748,8 +875,8 @@ gọi `t('sessions.guard.irreversible')` vào nhánh `rewind` (§7.1). Không c�
 |---|---|---|
 | [`apps/desktop/ui-next/components/session/SessionMessageItem.vue`](../../apps/desktop/ui-next/components/session/SessionMessageItem.vue) | `const { confirm } = useConfirm()`; hàm tính `lostCount` + `ui` (§4.1); bọc `rewind`/`resend`/`editMsg`/`regen` bằng `await confirm(...)` **chỉ khi `lostCount ≥ 1`** + so lại `msgs.length`/session (§4.6); đánh dấu `danger` cho **6 điểm bấm** (gồm `settings`/retryModel) + rule hover mới trong `<style scoped>`. | **B1** |
 | ⤷ cùng file | Thêm `t('sessions.guard.irreversible')` vào `description` của nhánh `rewind` (§7.1) | **B2** |
-| [`apps/desktop/ui-next/stores/sessions.ts`](../../apps/desktop/ui-next/stores/sessions.ts) | **Boy Scout**: sửa comment sai ở 3598-3599 (*"same guard `resend` uses"* — `resend` không có `regenInFlight`). | **B1** |
-| ⤷ cùng file | Vá persist của `rewind` theo quy tắc "neo vào `eid` gần nhất phía trước" (§4.8, dòng 3651-3661) — giữ hàm **đồng bộ**. **Không** thêm gì khác. | **B2** |
+| [`apps/desktop/ui-next/stores/sessions.ts`](../../apps/desktop/ui-next/stores/sessions.ts) | **Boy Scout**: sửa comment sai ở `regenerate` (*"same guard `resend` uses"* — `resend` không có `regenInFlight`). | **B1** |
+| ⤷ cùng file | Tách quy tắc neo thành **một helper thuần dùng chung** (§4.8) rồi áp cho **cả ba** call site: `rewind` (giữ **đồng bộ**, RPC `sessions.rewind`), `regenerate` và `resend` (giữ `await sessions.truncate` → `sendMessage`). Xoá sạch công thức role-based cũ ở cả ba chỗ. **Không** thêm gì khác, **không** đổi chữ ký hàm nào. | **B2** |
 | [`apps/desktop/ui-next/i18n/locales/vi/sessions.json`](../../apps/desktop/ui-next/i18n/locales/vi/sessions.json) | +12 key (§13). | **B1** |
 | [`apps/desktop/ui-next/i18n/locales/en/sessions.json`](../../apps/desktop/ui-next/i18n/locales/en/sessions.json) | +12 key (§13). | **B1** |
 
@@ -758,6 +885,7 @@ gọi `t('sessions.guard.irreversible')` vào nhánh `rewind` (§7.1). Không c�
 - `components/session/SessionGateCard.vue` — quy tắc `lostCount === 0` (§4.4) tự phủ `onRetry` (312-315), không cần sửa.
 - `composables/useConfirm.ts`, `components/common/ConfirmDialogHost.vue`, `components/library/LibraryConfirmDelete.vue` — dùng lại nguyên trạng.
 - `apps/desktop/sidecar/**`, `apps/desktop/electron/**` — **không** RPC mới, không đổi schema; §4.8 chỉ dùng lại `sessions.rewind` / `sessions.truncate` đã có. (Phần sidecar của T0c thuộc **Brief A**, không thuộc PR này.)
+- `stores/sessions.ts` → hàm `fork` / `msgsToEngineMessages` — TL-2 (§12.3) **chưa chốt**, và dù chốt thế nào thì việc sửa cũng **không** thuộc spec này.
 - `types/index.ts` — không có entity mới.
 - `docs/features/session-transcript-navigation.md` và mọi ADR — do tech-lead / Brief A sở hữu.
 
@@ -770,8 +898,10 @@ gọi `t('sessions.guard.irreversible')` vào nhánh `rewind` (§7.1). Không c�
 - **Sắp lại bố cục / gom 9 nút vào menu `…`** — việc của refactor UI.
 - **Confirm cho bề mặt khác** (xoá session/tab/project) — đã có confirm riêng.
 - **Cảnh báo ngân sách chi tiết** (số tiền, token ước tính) — thuộc [session-cost-budget.md](./session-cost-budget.md); ở đây đúng **một dòng** định tính.
-- **Đường mobile remote** — `sessions.*` mutating đi qua gateway theo policy riêng ([ADR 0067](../decisions/0067-mobile-remote-control-transport.md)). Gate nằm ở component nên không ảnh hưởng đường đó (§4.7). **Lưu ý:** phần vá §4.8 nằm trong store nên **có** cải thiện đường nào gọi `store.rewind`, nhưng không mở/đổi allowlist gateway.
+- **Đường mobile remote** — `sessions.*` mutating đi qua gateway theo policy riêng ([ADR 0067](../decisions/0067-mobile-remote-control-transport.md)). Gate nằm ở component nên không ảnh hưởng đường đó (§4.7). **Lưu ý:** phần vá §4.8 nằm trong store nên **có** cải thiện mọi đường gọi `store.rewind` / `store.regenerate` / `store.resend`, nhưng không mở/đổi allowlist gateway.
+- **Hợp nhất RPC của 3 hành động** — helper §4.8 chỉ chia sẻ **cách chọn neo**. `regenerate`/`resend` **giữ** `sessions.truncate`; đổi chúng sang `sessions.rewind` sẽ kéo theo restore file workspace ngay trước một lượt chạy mới — hành vi mới, cần brief riêng.
 - **Thêm `regenInFlight` cho `resend`** — §4.6 đã chặn ca thực tế; chỉ sửa comment sai (§2.3).
+- **Sửa hợp đồng persist của `fork`** (TL-2, §12.3) — dù tech-lead chốt (a)/(b)/(c), việc thực thi không thuộc spec này.
 - **Lưu nháp nội dung `edit & resend` khi huỷ hộp thoại** (AC-G12) — hành vi hiện tại giữ nguyên.
 - **Bật `projectId` cho `sessions.rewind` để restore file** — hành vi lớn hơn hẳn, cần brief riêng.
 - **Đổi ngữ nghĩa `messageId` của `sessions.rewind` / mở rộng schema `sessions.truncate`** — đã cân nhắc và **loại** ở §12.2 (lối thứ ba #1): đắt hơn T0c và làm hỏng `restoreSnapshot`.
@@ -780,15 +910,15 @@ gọi `t('sessions.guard.irreversible')` vào nhánh `rewind` (§7.1). Không c�
 
 | Loại | Chi tiết |
 |---|---|
-| **Entity hiện có** | `Session.msgs` (`SessionMessage`) — đọc để đếm; `SessionMessage.eid` — đọc để chọn nhánh persist (§4.8). Không chạm Task / Project / Workflow / Agent / Skill / Artifact. |
+| **Entity hiện có** | `Session.msgs` (`SessionMessage`) — đọc để đếm; `SessionMessage.eid` — đọc để chọn điểm neo persist cho **cả ba** hành động (§4.8). Không chạm Task / Project / Workflow / Agent / Skill / Artifact. |
 | **Phụ thuộc vào (UI)** | `useConfirm()` + `ConfirmDialogHost` + `LibraryConfirmDelete`; `pushActionToast` (`useActionToasts.ts:29`); `AppGlobalHosts` (host có ở cả 2 cửa sổ). |
 | **Phụ thuộc vào (sidecar, đã có)** | `sessions.rewind` (`methods/sessions.rewind.ts`), `sessions.truncate` → `truncateSession` (`sessions/store.ts:55-80`). **Không đổi cả hai.** |
-| **DEPENDENCY CỨNG — `B2 → T0c`** | [session-transcript-navigation.md](./session-transcript-navigation.md) **T0c** (`eid` cho user/system + mint `userMessageId` lúc gửi). **Lát B2 không được bắt đầu trước khi T0c merge** — chốt TL-1 (§12.2). **Lát B1 hoàn toàn không phụ thuộc T0c.** |
+| **DEPENDENCY CỨNG — `B2 → T0c`** | [session-transcript-navigation.md](./session-transcript-navigation.md) **T0c** (`eid` cho user/system + mint `userMessageId` lúc gửi). **Lát B2 không được bắt đầu trước khi T0c merge** — chốt TL-1 (§12.2). **T0c.3 (đọc `eid` cho cả 3 role, `sessions.ts:1058-1076`) đã merge** ⇒ quy tắc §4.8 áp được cho cả `rewind`, `regenerate`, `resend`. **Lát B1 hoàn toàn không phụ thuộc T0c.** |
 | **Feature phải khớp** | Brief A §5.4 — **thứ tự** `lostCount` → `confirm()` → so lại → `survivingIds` → prune bookmark → cắt (§6). |
 | **Feature liên quan (không chặn)** | [session-popout-window.md](./session-popout-window.md), [session-cost-budget.md](./session-cost-budget.md), [human-approval.md](./human-approval.md) (cùng triết lý approval checkpoint, cấp vi mô), [sessions.md](./sessions.md). |
 | **ADR** | **Không cần ADR mới** (lý do: §12.2). Chỉ để đọc: [0074](../decisions/0074-session-message-anchor-and-transcript-navigation.md) (`eid` là neo persistence — nền của T0c), [0038](../decisions/) (snapshot/rewind file restore), [0058](../decisions/) (drop `sdkSessionId` khi truncate), [0067](../decisions/0067-mobile-remote-control-transport.md), [0072](../decisions/0072-cute-theme-family.md). |
 | **External** | Không. Không API model, không Git CLI, không OS notification. |
-| **Thứ tự ship (chốt)** | **B1** (gate + danger hover + i18n, ship ngay, độc lập) → *chờ T0c merge* → **B2** (§4.8 + câu "Không thể hoàn tác" cho `rewind`). |
+| **Thứ tự ship (chốt)** | **B1** (gate + danger hover + i18n, ship ngay, độc lập) → *chờ T0c merge* → **B2** (§4.8 helper neo cho `rewind` → rồi `regenerate` + `resend` **cùng đợt** → câu "Không thể hoàn tác" cho `rewind`). |
 
 ## 17. Liên kết
 
