@@ -30,6 +30,7 @@ import type {
   QueuedMessage,
   Session,
   SessionAttachment,
+  SessionBookmark,
   SessionStatus,
   SessionUsage,
   SlashCommandRef,
@@ -338,6 +339,9 @@ type SessionGetDto = {
   }
   parentSessionId?: string
   forkFromMessageId?: string
+  // Reading anchors persisted in the session header (ADR 0074). The sidecar already
+  // drops wrong-shaped entries when it parses the header, so this hydrates as-is.
+  bookmarks?: SessionBookmark[]
   // The session's current checklist (sidecar Session.todos) — the authoritative
   // list the banner + Plan tab render, restored on open so progress survives a
   // reload. Absent for a session that never had one.
@@ -1002,6 +1006,10 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (full.budget) target.budget = full.budget
         if (full.parentSessionId) target.parentSessionId = full.parentSessionId
         if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
+        // Reading anchors (ADR 0074) live in the header, so they only come back on the
+        // full read — including after a popout hands the session back (reclaimSession
+        // clears `loaded` to force exactly this re-read).
+        if (full.bookmarks) target.bookmarks = full.bookmarks
         // Restore the checklist so reopening a session shows where work stopped.
         if (full.todos) target.todos = mapTodos(full.todos)
         // Restore the context-window snapshot + cumulative cost from the transcript
@@ -1047,17 +1055,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     return att
   }
 
+  // `eid` is carried for ALL three roles (ADR 0074): the persisted message id is the
+  // durable anchor a bookmark points at, while the array index is only a runtime
+  // address. Every message on disk has an id, so this is a pure read-back — no
+  // migration, no JSONL change.
   function engineMessageToSessionMessage(m: EngineMessage): Session['msgs'][number] {
     if (m.role === 'user') {
       return {
         role: 'user',
         text: m.text,
         at: m.at ?? '',
+        eid: m.id,
         ...(m.attachments?.length ? { att: m.attachments.map(engineAttToSession) } : {}),
       }
     }
     if (m.role === 'system') {
-      return { role: 'system', text: m.text, at: m.at ?? '' }
+      return { role: 'system', text: m.text, at: m.at ?? '', eid: m.id }
     }
     return { role: 'assistant', at: m.at ?? '', eid: m.id, blocks: engineMessageToBlocks(m) }
   }
@@ -2801,16 +2814,20 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Map ui-next display messages → engine SessionMessage shape (id/role/text/at).
   // The sidecar resumes a session from its JSONL transcript, so a session created
   // WITH prior turns (a fork) must carry them on disk or the model would see an
-  // empty context. Reuses an assistant turn's `eid` as the engine message id so the
-  // forked transcript's ids match what hydrate later assigns. Attachments are not
-  // replicated (best-effort: the conversational text is what drives forked context).
+  // empty context. Reuses each turn's `eid` (all three roles — ADR 0074) as the engine
+  // message id so the forked transcript's ids match the ones on display, which is what
+  // lets a bookmark carried into the fork still resolve. `fm-<i>-<seq>` stays the
+  // fallback for a message minted before ids were surfaced (e.g. the local
+  // ENGINE_UNAVAILABLE notice). Attachments are not replicated (best-effort: the
+  // conversational text is what drives forked context).
   function msgsToEngineMessages(msgs: Session['msgs']): Record<string, unknown>[] {
     const now = new Date().toISOString()
     return msgs.map((m, i) => {
       const at = m.at || now
-      if (m.role === 'user') return { id: `fm-${i}-${seq++}`, role: 'user', text: m.text, at }
-      if (m.role === 'system') return { id: `fm-${i}-${seq++}`, role: 'system', text: m.text, at }
-      return { id: m.eid ?? `fm-${i}-${seq++}`, role: 'agent', text: assistantText(m.blocks), at }
+      const id = m.eid ?? `fm-${i}-${seq++}`
+      if (m.role === 'user') return { id, role: 'user', text: m.text, at }
+      if (m.role === 'system') return { id, role: 'system', text: m.text, at }
+      return { id, role: 'agent', text: assistantText(m.blocks), at }
     })
   }
   // Build the minimal sidecar session payload from the ui-next display fields. The
@@ -2850,6 +2867,39 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.parentSessionId) session.parentSessionId = s.parentSessionId
     if (s.forkFromMessageId) session.forkFromMessageId = s.forkFromMessageId
     pushRequest('sessions.upsert', { session, mode })
+  }
+
+  // Mirrors the sidecar boundary schema for `sessions.sendMessage.userMessageId`
+  // (z.string().regex(...)). Kept here so a bad mint degrades locally instead of
+  // reaching an RPC that would reject the whole turn.
+  const USER_MESSAGE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+  // Mint the persisted id of the user turn we are about to send (ADR 0074), so the
+  // message can be bookmarked in THIS session run instead of only after a reload.
+  //
+  // Uniqueness is a hard requirement, not a nicety: the sidecar's appendMessage is an
+  // upsert BY ID, so a repeated id would overwrite the earlier message (and the
+  // attachment files named `${messageId}-${att.id}`), and bookmarks assume one message
+  // per id. Three independent parts guarantee it: the ms clock separates app runs, the
+  // monotonic `seq` separates mints inside one run, and the random tail separates two
+  // renderers of the same app run (a popped-out session window has its own `seq`).
+  // Every send path (compose, queue drain, resend, regenerate, wake) calls this fresh —
+  // an id is NEVER reused for a retry, because the retried turn is a new message.
+  function mintUserMessageId(): string {
+    const rand = Math.floor(Math.random() * 36 ** 4)
+      .toString(36)
+      .padStart(4, '0')
+    return `mu-${Date.now().toString(36)}-${(seq++).toString(36)}${rand}`
+  }
+
+  // Fail-fast at our own edge: anything that does not match the sidecar's regex is
+  // dropped entirely (both the local `eid` and the RPC param) rather than sent. The
+  // turn then behaves exactly as before this feature — the sidecar mints its own id —
+  // instead of failing validation or anchoring the UI on an id nothing persisted.
+  function validUserMessageId(candidate: string): string | undefined {
+    if (USER_MESSAGE_ID_RE.test(candidate)) return candidate
+    console.warn('[sessions] discarding malformed userMessageId')
+    return undefined
   }
 
   // Turn runner. Appends the user message + a placeholder assistant bubble, then
@@ -2912,10 +2962,14 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
 
+    // One id for both the bubble and the RPC: the sidecar persists the user turn under
+    // exactly this id, so the "bookmark" action on the bubble works immediately.
+    const userMessageId = validUserMessageId(mintUserMessageId())
     s.msgs.push({
       role: 'user',
       text: trimmed,
       at: new Date().toISOString(),
+      ...(userMessageId ? { eid: userMessageId } : {}),
       att: atts.length ? atts : null,
       quotes: quotes.length ? quotes : null,
       command: command ?? null,
@@ -2944,12 +2998,19 @@ export const useSessionsStore = defineStore('sessions', () => {
     // gets summarised; this message is not persisted yet, so it is never cut away.
     await maybeAutoCompact(s)
 
-    await runEngineTurn(s, modelText, atts)
+    await runEngineTurn(s, modelText, atts, userMessageId)
   }
 
   // Drive one real turn over IPC: placeholder bubble + stream subscription folds
   // events into it; finalize / cancel / error stamps the bubble.
-  async function runEngineTurn(s: Session, text: string, atts: SessionAttachment[]) {
+  async function runEngineTurn(
+    s: Session,
+    text: string,
+    atts: SessionAttachment[],
+    // Id the caller already stamped on the pushed user bubble; omitted when the mint
+    // failed validation, in which case the sidecar falls back to its own `msg_u_<hex>`.
+    userMessageId?: string,
+  ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
     // wake paths already consumed it before calling here; a manual send means the
@@ -3046,6 +3107,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       const result = await sc.request<SendMessageResult>('sessions.sendMessage', {
         sessionId: s.engineId,
         messageId,
+        ...(userMessageId ? { userMessageId } : {}),
         text,
         ...(engineAtts.length ? { attachments: engineAtts } : {}),
         history: [],
