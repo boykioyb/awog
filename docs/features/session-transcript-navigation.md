@@ -508,13 +508,13 @@ Ký hiệu nhóm: **N** = nền tảng (T0), **F** = find (A2), **B** = bookmark
 | `sessions.bookmark.noText` | (turn has no text response) | (lượt không có phản hồi văn bản) |
 | `sessions.bookmark.saveFailed` | Couldn't save bookmarks | Không lưu được đánh dấu |
 | `sessions.find.placeholder` | Find in session… | Tìm trong phiên… |
-| `sessions.find.open` | Find in session | Tìm trong phiên |
 | `sessions.find.loading` | Loading transcript… | Đang nạp transcript… |
 | `sessions.find.notFoundJump` | Couldn't open that result | Không mở được kết quả đó |
 
 > **Đổi so với bản 2026-08-26 (dev cần sửa 2 file locale + 1 call site):** `sessions.bookmark.barTitle` **bỏ tham số `{n}`** — `Bookmarked ({n})` → **`Bookmarked`**, `Đã đánh dấu ({n})` → **`Đã đánh dấu`**; `SessionBookmarkBar.vue` bỏ luôn `{ n: count }` khi gọi `t()`. Số `N` chỉ còn ở chip đếm (§6.1).
 > **Bổ sung:** `sessions.bookmark.saveFailed` — toast khi `sessions.updateBookmarks` lỗi (§6.5, AC-B19). Khoá này thiếu ở bản đầu dù §6.5 đã yêu cầu toast.
 > **Gỡ 2026-08-27:** ba khoá `sessions.bookmark.toPinned`, `sessions.bookmark.toPinnedDone`, `sessions.bookmark.toPinnedFull` **đã xoá khỏi cả 2 locale** cùng với hành động phụ "Đưa vào ngữ cảnh ghim" (§16). **Không thêm lại.**
+> **Gỡ 2026-08-27 (QA nit #5):** khoá `sessions.find.open` ("Find in session" / "Tìm trong phiên") **đã xoá khỏi cả 2 locale** — nó là **khoá chết**: thanh tìm chỉ mở bằng `⌘F` / `Ctrl+F`, **không** có nút nào để gắn nhãn (§6.2). Bảng này còn **15** khoá. Nếu sau này thêm nút mở thanh tìm thì thêm lại khoá cùng lúc với nút.
 
 > Không được dùng literal string trong component — mọi nhãn đi qua `t()`.
 

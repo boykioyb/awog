@@ -16,7 +16,6 @@
   "sessions.bookmark.noText": "(turn has no text response)",
   "sessions.bookmark.saveFailed": "Couldn't save bookmarks",
   "sessions.find.placeholder": "Find in session…",
-  "sessions.find.open": "Find in session",
   "sessions.find.loading": "Loading transcript…",
   "sessions.find.notFoundJump": "Couldn't open that result"
 }

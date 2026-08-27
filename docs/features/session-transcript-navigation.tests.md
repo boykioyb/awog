@@ -80,7 +80,7 @@ Mở SSH workspace → mở **co-pilot (dock `session`) ở tab 1** → mở **t
 | **AC-P8** | Header ghi atomic: `writeFileSync(tmp)` → `atomicReplaceSync` (`sessions/jsonl.ts`), mode `0o600`. |
 | **AC-P9** | `sessions.updateBookmarks` **không** có trong `electron/src/remote-gateway-policy.ts` (allowlist exact-match, default-deny). |
 | **AC-P10** (phần static) | `runCompactRpc` (`stores/sessions.ts`) chỉ set `s.usage.contextChars.history`; **không** `s.msgs`, **không** `pruneBookmarksTo`. 4 call site `pruneBookmarksTo` = `regenerate` (×2), `retryModel` (nhánh browser), `rewind`, `resend` — **không có** compact. |
-| **i18n (§11.2)** | 16 khoá `sessions.bookmark.*` + `sessions.find.*` có đủ ở **en + vi**, `barTitle` **không** còn `{n}`, **không** còn khoá `toPinned*`. |
+| **i18n (§11.2)** | **15** khoá `sessions.bookmark.*` + `sessions.find.*` có đủ ở **en + vi**, `barTitle` **không** còn `{n}`, **không** còn khoá `toPinned*` **và không còn `sessions.find.open`** (khoá chết — thanh tìm chỉ mở bằng `⌘F`, đã gỡ 2026-08-27). |
 | **A1.5 tombstone** | `grep -rn "toPinned" apps/desktop/ui-next` ⇒ **rỗng**. `SessionBookmarkBar.vue` không dùng icon `pin`, mỗi hàng chỉ có 2 hành động (nhảy / gỡ). |
 
 ---

@@ -16,7 +16,6 @@
   "sessions.bookmark.noText": "(lượt không có phản hồi văn bản)",
   "sessions.bookmark.saveFailed": "Không lưu được đánh dấu",
   "sessions.find.placeholder": "Tìm trong phiên…",
-  "sessions.find.open": "Tìm trong phiên",
   "sessions.find.loading": "Đang nạp transcript…",
   "sessions.find.notFoundJump": "Không mở được kết quả đó"
 }
