@@ -9,9 +9,11 @@
 //             flush / KeepAlive (de)activate / unmount. Answers: "did a mounted block
 //             stall its render below the settled text?"
 //
-// Only DISCRETE lifecycle events are recorded (never per-delta), so the cost is a
-// handful of entries per turn — safe to leave on. When the bug reproduces, WITHOUT
-// restarting the app open the DevTools console and run:
+// DEV-ONLY. `DIAG_ON` is `import.meta.dev`, a build-time constant, so every call site
+// guards on it and a production bundle drops the buffer, the window global and the
+// payload work entirely. Only DISCRETE lifecycle events are recorded (never per-delta),
+// so even in dev the cost is a handful of entries per turn. When the bug reproduces,
+// WITHOUT restarting the app open the DevTools console and run:
 //
 //     __awogStreamDiag.dump()      // prints + returns the table; copy it back to me
 //     __awogStreamDiag.clear()     // reset before a fresh repro
@@ -34,6 +36,11 @@ export type StreamDiagRecord = {
   note?: string // freeform (role, before/after lengths, per-block breakdown)
 }
 
+// Single gate for the whole instrumentation. Exported so call sites can skip building
+// their payload (and registering diag-only lifecycle hooks) instead of relying on this
+// module to swallow the call.
+export const DIAG_ON = import.meta.dev
+
 const CAP = 2000
 const buf: StreamDiagRecord[] = []
 let t0 = 0
@@ -43,6 +50,7 @@ let seq = 0
 // Stable per-instance id for a diag source (e.g. one SessionTextBlock). Module-scoped
 // so it survives across setups; `<script setup>` top-level state would be per-instance.
 export function nextDiagId(prefix = 'b'): string {
+  if (!DIAG_ON) return ''
   return `${prefix}${++seq}`
 }
 
@@ -72,6 +80,7 @@ function install(): void {
 }
 
 export function streamDiag(rec: Omit<StreamDiagRecord, 't'>): void {
+  if (!DIAG_ON) return
   install()
   const now = typeof performance !== 'undefined' ? performance.now() : 0
   if (!t0) t0 = now

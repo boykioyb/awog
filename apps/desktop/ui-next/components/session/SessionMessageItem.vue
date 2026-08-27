@@ -338,9 +338,10 @@ const streamingActive = computed(() => streaming.value && !parkedOnGate.value)
 // runs the STORE actually holds + their lengths, plus how `grouped` bucketed them.
 // Cross-referenced with the on-disk JSONL `fullText`, this decides store-layer loss
 // (blocks short) vs render-layer stall (blocks complete but a SessionTextBlock STALLs —
-// see its own diag rows). One record per turn → negligible cost.
+// see its own diag rows). One record per turn, and gated on `DIAG_ON`
+// (= `import.meta.dev`) so it compiles out of a production build.
 watch(streaming, (on, was) => {
-  if (!was || on) return
+  if (!DIAG_ON || !was || on) return
   const m = asAssistant.value
   if (!m) return
   const texts = m.blocks.filter((b) => b.kind === 'text').map((b) => b.text.length)

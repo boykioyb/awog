@@ -60,6 +60,35 @@ const craftStream = computed(() => !!props.streaming && !settings.sessions.typew
 // craft's 300ms cadence otherwise.
 const throttleMs = () => (craftStream.value ? 300 : 33)
 const renderSrc = ref(props.text)
+const rootEl = useTemplateRef<HTMLElement>('rootEl')
+
+// ── Streaming-render diagnostics (utils/stream-diag) ─────────────────────────────
+// Records renderSrc-vs-props.text at each lifecycle transition so an intermittent
+// "reply truncated until restart" can be traced from `__awogStreamDiag.dump()` in the
+// DevTools console — no live debugger needed. A STALL row = this block rendered fewer
+// chars than the SETTLED text at a point where it should already be complete (the loss
+// signature). Discrete events only (never per-delta), and the whole tap is gated on
+// `DIAG_ON` (= `import.meta.dev`) so it compiles out of a production build.
+const diagKey = nextDiagId()
+const diagRole = () => `role=${props.bubble ? 'resp' : props.caret ? 'tail' : 'inter'}`
+function diag(ev: string, note?: string) {
+  if (!DIAG_ON) return
+  streamDiag({
+    src: 'block',
+    key: diagKey,
+    ev,
+    textLen: props.text.length,
+    renderLen: renderSrc.value.length,
+    streaming: !!props.streaming,
+    connected: !!rootEl.value?.isConnected,
+    note: note ?? diagRole(),
+  })
+}
+function checkStall(where: string) {
+  if (!DIAG_ON) return
+  if (!props.streaming && renderSrc.value.length < props.text.length)
+    diag('STALL', `at=${where} ${diagRole()}`)
+}
 let lastRender = 0
 let trailing: ReturnType<typeof setTimeout> | null = null
 watch(
@@ -96,11 +125,13 @@ watch(
   () => props.streaming,
   (on, was) => {
     if (!was || on) return
+    const before = renderSrc.value.length
     if (trailing) {
       clearTimeout(trailing)
       trailing = null
     }
     renderSrc.value = props.text
+    diag('stream-end', `${diagRole()} before=${before}`)
   },
 )
 // Sanitized markdown segments (html runs + mermaid code), in document order. While
@@ -111,7 +142,6 @@ const segments = computed(() => renderMarkdown(renderSrc.value, props.streaming)
 // Keep a capped, streaming response pinned to the bottom as it grows (the inner
 // equivalent of the transcript's stick-to-bottom) — UNLESS the user has scrolled up
 // within the bubble to read, so we never yank them back.
-const rootEl = useTemplateRef<HTMLElement>('rootEl')
 watch(renderSrc, () => {
   const el = rootEl.value
   if (!el || !props.bubble || !props.streaming) return
@@ -163,7 +193,23 @@ const buffering = computed(() => {
   return !(words >= BUF_MIN_WORDS || structural)
 })
 
+// Diag lifecycle taps: mount seeds the baseline; (de)activate captures the <KeepAlive>
+// park/restore window (the prime suspect — a block parked mid-stream stayed truncated);
+// unmount flags a block that dies while still behind the settled text.
+if (DIAG_ON) {
+  onMounted(() => diag('mount'))
+  onActivated(() => {
+    diag('activated')
+    checkStall('activated')
+  })
+  onDeactivated(() => {
+    diag('deactivated')
+    checkStall('deactivated')
+  })
+}
 onBeforeUnmount(() => {
+  checkStall('unmount')
+  diag('unmount')
   if (trailing) clearTimeout(trailing)
   stopBufTimer()
 })
