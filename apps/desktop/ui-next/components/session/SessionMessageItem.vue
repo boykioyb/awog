@@ -49,6 +49,15 @@
         <span class="ha" :title="t('sessions.message.fullscreen')" @click="openFullscreen">
           <Icon name="maximize" style="width: 13px; height: 13px" />
         </span>
+        <span
+          v-if="canBookmark"
+          class="ha"
+          :class="{ on: isBookmarked, off: bookmarkFull }"
+          :title="bookmarkTitle"
+          @click="toggleBookmark"
+        >
+          <Icon name="bookmark" style="width: 13px; height: 13px" />
+        </span>
         <!-- `danger`: cuts the transcript (see .ha.danger below). Same three actions the
              confirm guard gates — the colour is the warning that arrives before the click. -->
         <span class="ha danger" :title="t('sessions.message.edit')" @click="editMsg">
@@ -141,7 +150,7 @@
             v-for="a in msgActions"
             :key="a.icon"
             class="ha"
-            :class="{ danger: a.danger }"
+            :class="{ danger: a.danger, on: a.active, off: a.disabled }"
             :title="a.title"
             @click="a.run"
           >
@@ -171,6 +180,7 @@ import type {
   TextBlock,
   Followup,
 } from '~/composables/useSessionsData'
+import { MAX_BOOKMARKS } from '~/composables/useSessionsData'
 import type { BlockHighlight } from './SessionTextBlock.vue'
 import type { ActivityEntry } from './SessionTurnActivities.vue'
 import type { PreviewRef } from '~/composables/usePreview'
@@ -604,11 +614,46 @@ watch(
   },
 )
 
+// ── Bookmark (ADR 0074) ─────────────────────────────────────────────────────────
+// A READING anchor on this message. It never enters the prompt — that is what the
+// pinned context is for — so this button is cheap and needs no confirmation.
+//
+// Anchored on `eid`, the persisted message id. Without one there is nothing durable to
+// point at (the locally pushed ENGINE_UNAVAILABLE notice never reaches the transcript
+// file), and while the turn streams the id is not final yet: in both cases the button
+// is simply ABSENT rather than present-and-broken (AC-B2).
+const bookmarks = computed(() => store.active?.bookmarks ?? [])
+const isBookmarked = computed(
+  () => !!props.message.eid && bookmarks.value.some((b) => b.id === props.message.eid),
+)
+const canBookmark = computed(() => !!props.message.eid && !streaming.value)
+// At the cap an unbookmarked message shows a DISABLED button with the reason, instead
+// of a live button whose click would be swallowed by the store (and rejected by the RPC).
+const bookmarkFull = computed(() => !isBookmarked.value && bookmarks.value.length >= MAX_BOOKMARKS)
+const bookmarkTitle = computed(() => {
+  if (bookmarkFull.value) return t('sessions.bookmark.limit')
+  return isBookmarked.value ? t('sessions.bookmark.remove') : t('sessions.bookmark.add')
+})
+function toggleBookmark(): void {
+  if (bookmarkFull.value) return
+  const id = store.activeId
+  if (id == null) return
+  store.toggleBookmark(id, msgIndex.value)
+}
+
 // One action set, rendered twice (floating pill at the top + inline on the meta
 // row at the bottom) so the actions are reachable without scrolling a long reply.
 // `danger` = this action cuts the transcript → red on hover (§3.2). It is NOT the same
 // set as "opens a confirm dialog": `settings`/retryModel is danger but ungated (AC-G28).
-type MsgAction = { icon: string; title: string; run: () => void; danger?: boolean }
+type MsgAction = {
+  icon: string
+  title: string
+  run: () => void
+  danger?: boolean
+  // Bookmark only: on = anchored (accent), off = at the cap (dimmed, inert).
+  active?: boolean
+  disabled?: boolean
+}
 const msgActions = computed<MsgAction[]>(() => [
   { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
   // Response-only fullscreen (PreviewModal) — only earns a slot when there's prose to read.
@@ -619,6 +664,17 @@ const msgActions = computed<MsgAction[]>(() => [
   // turn, incl. tool-only turns that have no final response (AC3.9).
   { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
   { icon: 'quote', title: t('sessions.message.quote'), run: quote },
+  ...(canBookmark.value
+    ? [
+        {
+          icon: 'bookmark',
+          title: bookmarkTitle.value,
+          run: toggleBookmark,
+          active: isBookmarked.value,
+          disabled: bookmarkFull.value,
+        },
+      ]
+    : []),
   { icon: 'refresh', title: t('sessions.message.regen'), run: regen, danger: true },
   { icon: 'settings', title: t('sessions.message.retryModel'), run: retry, danger: true },
   { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
@@ -726,6 +782,19 @@ const msgActions = computed<MsgAction[]>(() => [
 .hoveract .ha:hover {
   background: var(--bgHover);
   color: var(--text);
+}
+/* Bookmarked: the anchor is ON, so the icon carries the accent instead of the muted
+   default. At the cap the button stays visible but inert — the tooltip says why. */
+.hoveract .ha.on {
+  color: var(--accent);
+}
+.hoveract .ha.off {
+  opacity: 0.4;
+  cursor: default;
+}
+.hoveract .ha.off:hover {
+  background: transparent;
+  color: var(--textDim);
 }
 /* Destructive actions (rewind / resend / edit & resend / regenerate / retry another
    model) read RED on hover, so the risk is visible BEFORE the click rather than only in
