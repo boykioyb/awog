@@ -2,12 +2,15 @@ import { defineStore } from 'pinia'
 import { computed, markRaw, ref, watch } from 'vue'
 import { SidecarError, SidecarUnavailableError } from '~/composables/useSidecar'
 import {
+  MAX_BOOKMARKS,
   modelDisplayName,
   modelIdFromDisplay,
   PROVIDER_DISPLAY,
   questionAnswered,
 } from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
+import { useI18n } from '~/composables/useI18n'
+import { pushActionToast } from '~/composables/useActionToasts'
 import type { AccountOption } from '~/composables/useAccounts'
 import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
@@ -1690,6 +1693,89 @@ export const useSessionsStore = defineStore('sessions', () => {
       sessionId: s.engineId,
       todos: normalised.map((td) => ({ content: td.t, status: td.status })),
     })
+  }
+
+  // ── Bookmarks (ADR 0074) ───────────────────────────────────────────────────
+  //
+  // A bookmark is a READING anchor the human drops on a message: it lives in the session
+  // header, never enters the prompt and never leaves ~/.awog. It is stored as a
+  // SESSION-LEVEL array on purpose — `ensureLoaded` markRaw()s every message but the
+  // last, so a flag hung off a message would simply never be reactive.
+  //
+  // The cap itself lives next to the SessionBookmark type (useSessionsData) so the bar
+  // and the message button read the same number this action enforces.
+
+  // Persist the WHOLE list (mirrors setTodos): the payload is the complete array, which
+  // is why a failed write needs no rollback — the next click rewrites it correctly. The
+  // user still gets told, because a silent console warning about lost bookmarks is the
+  // kind of quiet data loss this feature exists to avoid.
+  function persistBookmarks(s: Session): void {
+    if (!useIpc || !s.engineId) return
+    sc.request('sessions.updateBookmarks', {
+      sessionId: s.engineId,
+      bookmarks: (s.bookmarks ?? []).map((b) => ({ id: b.id, at: b.at })),
+    }).catch((err) => {
+      console.warn('[sessions] sessions.updateBookmarks failed', err)
+      pushActionToast(useI18n().t('sessions.bookmark.saveFailed'), 'error')
+    })
+  }
+
+  // Toggle the bookmark on the message at `msgIndex`. Anchored on `eid` (the persisted
+  // message id), never on the index: the index is a runtime address that any truncation
+  // shifts. No `eid` (a locally pushed ENGINE_UNAVAILABLE notice) ⇒ nothing to anchor on.
+  function toggleBookmark(id: number, msgIndex: number): void {
+    const s = byId(id)
+    const m = s?.msgs[msgIndex]
+    if (!s || !m?.eid) return
+    const eid = m.eid
+    const list = s.bookmarks ?? []
+    const at = list.findIndex((b) => b.id === eid)
+    if (at >= 0) {
+      s.bookmarks = list.filter((_, i) => i !== at)
+    } else {
+      // Cap here too, so a UI that forgot to disable its button cannot push a payload
+      // the RPC would reject wholesale (which would drop the legal bookmarks with it).
+      if (list.length >= MAX_BOOKMARKS) return
+      s.bookmarks = [...list, { id: eid, at: m.at || new Date().toISOString() }]
+    }
+    persistBookmarks(s)
+  }
+
+  function removeBookmark(id: number, bookmarkId: string): void {
+    const s = byId(id)
+    if (!s?.bookmarks?.length) return
+    const kept = s.bookmarks.filter((b) => b.id !== bookmarkId)
+    if (kept.length === s.bookmarks.length) return
+    s.bookmarks = kept
+    persistBookmarks(s)
+  }
+
+  // The set of message ids that survive a truncation — computed from the KEPT PREFIX
+  // before anything is cut, which is the only moment both halves are still known.
+  function survivingEids(kept: Session['msgs']): Set<string> {
+    const ids = new Set<string>()
+    for (const m of kept) if (m.eid) ids.add(m.eid)
+    return ids
+  }
+
+  // Drop every bookmark whose message is about to be destroyed on disk. ONE function for
+  // all three truncating actions (rewind / resend / regenerate — "edit & resend" is
+  // resend with an override), so the rule cannot drift between them.
+  //
+  // This is the DELIBERATE-CUT half of the dangling contract: the message is gone for
+  // good, so the anchor is pure garbage and is removed. The other half — an id that
+  // merely fails to resolve right now (transcript reloading, session cut in another
+  // window) — is NEVER auto-removed; it renders as a dangling row the user can dismiss.
+  // `/compact` is NOT on this list: it summarises the model context and leaves the whole
+  // transcript on disk (sidecar methods/sessions.compact.ts), so every anchor still
+  // resolves and pruning there would delete live bookmarks.
+  function pruneBookmarksTo(s: Session, survivingIds: Set<string>): void {
+    const before = s.bookmarks
+    if (!before?.length) return
+    const kept = before.filter((b) => survivingIds.has(b.id))
+    if (kept.length === before.length) return
+    s.bookmarks = kept
+    persistBookmarks(s)
   }
 
   function setMode(id: number, mode: string) {
@@ -3690,6 +3776,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) return
     regenInFlight.add(id)
     try {
+      // Anchors in the part about to disappear are garbage from here on (§5.4). The
+      // second, deeper cut below prunes again against its own kept prefix.
+      pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
       s.msgs = s.msgs.slice(0, index)
       if (useIpc) {
         // Re-run the nearest preceding user turn.
@@ -3700,6 +3789,10 @@ export const useSessionsStore = defineStore('sessions', () => {
         while (ui >= 0 && s.msgs[ui]?.role !== 'user') ui -= 1
         const userMsg = ui >= 0 ? s.msgs[ui] : undefined
         if (userMsg && userMsg.role === 'user') {
+          // Prune BEFORE the cut, and against the FINAL kept prefix (`ui`, not `index`):
+          // regenerate walks back past the assistant turn to re-run the user turn, so the
+          // survivors are the messages before `ui`.
+          pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, ui)))
           s.msgs = s.msgs.slice(0, ui)
           const atts = userMsg.att ?? undefined
           // The sidecar resumes from the JSONL transcript (sendMessage sends no
@@ -3736,6 +3829,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       regenerate(id, index)
       return
     }
+    pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
     s.msgs = s.msgs.slice(0, index)
     s.msgs.push({ role: 'system', text: ENGINE_UNAVAILABLE, at: 'vừa xong' })
     s.status = 'error'
@@ -3752,6 +3846,11 @@ export const useSessionsStore = defineStore('sessions', () => {
   function rewind(id: number, index: number) {
     const s = byId(id)
     if (!s) return
+    // Bookmarks first: the surviving id set can only be computed while both halves of
+    // the transcript are still in hand, and sessions.updateBookmarks must reach the
+    // sidecar BEFORE the cut (§5.4) so a crash in between never leaves the header
+    // pointing at messages the file no longer has.
+    pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
     s.msgs = s.msgs.slice(0, index)
     if (!useIpc || !s.engineId) return
     const anchorId = lastPersistedEid(s.msgs)
@@ -3779,7 +3878,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     const text = overrideText ?? userMsg.text
     const atts = userMsg.att ?? undefined
     // Drop this user message + everything after; sendMessage re-appends a fresh
-    // user bubble and runs the turn.
+    // user bubble and runs the turn. Bookmarks in the dropped tail are pruned first
+    // (§5.4) — the resent turn gets a brand-new id, so the old anchor cannot survive.
+    pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
     s.msgs = s.msgs.slice(0, index)
     // Persist the truncation BEFORE re-running (the sidecar resumes from JSONL, so
     // slicing in-memory alone would replay the dropped reply). Keep through the last
@@ -3843,11 +3944,25 @@ export const useSessionsStore = defineStore('sessions', () => {
     else delete branch.parentSessionId
     if (forkPoint?.role === 'assistant' && forkPoint.eid) branch.forkFromMessageId = forkPoint.eid
     else delete branch.forkFromMessageId
+    // Bookmarks are filtered EXPLICITLY against the cloned prefix. `...s` above copies
+    // every field of the source, so without this the branch would inherit anchors
+    // pointing past its own fork point — the blind-inheritance trap every new Session
+    // field falls into.
+    const clonedIds = survivingEids(msgs)
+    const carried = (s.bookmarks ?? []).filter((b) => clonedIds.has(b.id))
+    if (carried.length) branch.bookmarks = carried
+    else delete branch.bookmarks
     sessions.value.unshift(branch)
     activate(nid)
     if (useIpc) {
       branch.engineId = engineIdFor(nid)
       pushUpsert(branch, 'create')
+      // sessions.upsert rebuilds the session field by field and has no `bookmarks` in
+      // its schema (same as `todos`), so the create above would silently drop them.
+      // Write them with the narrow RPC the field actually has — after the create, whose
+      // handler registers the session before this one looks it up (requests keep their
+      // order on the single stdio channel).
+      if (carried.length) persistBookmarks(branch)
     }
   }
 
@@ -4013,6 +4128,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     setSshApprovalMode,
     setAboutSshHost,
     setTodos,
+    toggleBookmark,
+    removeBookmark,
     setSshTerminalConnId,
     setDisabledTools,
     setMcpServerIds,

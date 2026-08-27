@@ -321,6 +321,12 @@ export type SshApprovalMode = 'prompt' | 'session' | 'auto'
 // the sidecar SessionBookmark; deliberately no excerpt (derived at render time).
 export type SessionBookmark = { id: string; at: string }
 
+// Hard cap on bookmarks per session. Mirrors MAX_BOOKMARKS in
+// apps/desktop/sidecar/src/sessions/ids.ts, which enforces the same number at the RPC
+// boundary AND on the load path. The two packages share no module, so the constant is
+// duplicated on purpose: raising it here alone would only make the write bounce back.
+export const MAX_BOOKMARKS = 30
+
 export type Session = {
   id: number
   title: string
