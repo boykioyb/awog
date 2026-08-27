@@ -1,6 +1,21 @@
 # Feature: Sessions
 
-**Trạng thái:** Wired (M7+) — đã nối với Node.js sidecar `@anthropic-ai/claude-agent-sdk` + Anthropic Pro/Max OAuth. Tool-use + permission prompts fully integrated.
+**Trạng thái:** Wired (M7+) — đã nối với Node.js sidecar + Anthropic Pro/Max OAuth. Tool-use + permission prompts fully integrated.
+
+> **Runtime (rà lại 2026-08-27):** chọn **theo provider**, không phải một runtime duy nhất —
+> `sessions/runner.ts:381-390`: `settings.provider === 'anthropic'` ⇒ `runStreamClaude`
+> (`@anthropic-ai/claude-agent-sdk`), mọi provider khác ⇒ `runStreamPi` (Pi SDK); riêng `/compact`
+> **luôn** đi qua Pi ([ADR 0047](../decisions/0047-auto-compact-context.md)). Vì vậy mọi câu nhắc
+> `@anthropic-ai/claude-agent-sdk` trong tài liệu này (sơ đồ §Flow, bảng *Tools support*) mô tả
+> **nhánh Anthropic**, không phải toàn bộ. Xem [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md)
+> (migrate sang Pi) và [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)
+> (dual-runtime, revisit phần single-runtime của 0029).
+>
+> ⚠ **Drift chưa dọn (thuộc tech-lead, không thuộc tài liệu này):** ADR 0058 và
+> [dual-sdk-runtime.md](./dual-sdk-runtime.md) đều còn ghi *"implement phân kỳ, chưa bắt đầu"*,
+> nhưng nhánh SDK **đã có trong code** (`runtime/claude-sdk/run-stream.ts`, và `runtime/invoke.ts:392`
+> cho Tasks). Cần tech-lead xác định P0–P5 đã ship tới đâu rồi cập nhật trạng thái + đoạn
+> "LLM runtime" trong [CLAUDE.md](../../CLAUDE.md).
 
 ## Mục đích
 
@@ -242,19 +257,25 @@ Sidecar `token-manager` pre-refresh 5 phút trước expiry. Khi `/v1/messages` 
 
 Mỗi refresh response trả `refresh_token` mới → overwrite cả token + refresh trong file + memory. Xem [ADR 0011](../decisions/0011-anthropic-subscription-oauth.md).
 
-## Limitations (M7+)
+## Limitations (rà lại 2026-08-27)
 
-- Attachment (ảnh/file) đính kèm ở composer có **preview** (ảnh inline qua data URL) nhưng **chưa forward content xuống model** — multimodal turn (gửi ảnh cho Claude) thuộc roadmap.
-- Steps **không** persist JSONL — reload session mất step history (chỉ có message text).
-- Chưa surface `thinking` blocks (Claude extended thinking, xACBudgetTokens) ra UI — SDK accumulate nhưng UI không hiển thị chi tiết.
-- Multi-provider chưa có — chỉ Anthropic OAuth. OpenAI / Google / custom provider thuộc roadmap (xem [models-and-accounts.md](./models-and-accounts.md#todo-post-m7)).
 - Search nội dung message: **có trong phiên đang mở** (`⌘F` / `Ctrl+F`, [session-transcript-navigation.md](./session-transcript-navigation.md)); **chưa có cross-session** — danh sách session vẫn chỉ filter trên title.
-- Chưa promote-session-to-task / fork / branch.
 - Subagent drawer hiện chỉ cho Tool steps (có input/output). Plan/thinking steps không có drawer.
+
+> **Năm dòng dưới đây đã HẾT hiệu lực và được gỡ khỏi danh sách ngày 2026-08-27** — chúng viết ở mốc M7+ và
+> nay đều đã ship. Giữ lại nguyên nhân + nơi verify để không ai "phát hiện lại" chúng như limitation:
+>
+> | Limitation cũ | Thực tế hiện tại |
+> |---|---|
+> | *"Attachment chưa forward content xuống model"* | `sessions.sendMessage` nhận `attachments` và runtime dựng lại image part; có cả cờ `refeedImages` cho ảnh của lượt trước (`sidecar/src/methods/sessions.send-message.ts:95, 139, 152`). |
+> | *"Steps không persist JSONL — reload mất step history"* | `SessionMessage.steps` + `SessionMessage.parts` persist, comment tại nguồn nói rõ: *"Persisted so a re-hydrate from JSONL restores the plan card"* (`sidecar/src/types/shared.ts:325-335`). |
+> | *"Chưa surface `thinking` blocks ra UI"* | `SessionTurnActivities.vue:14-24` render extended-thinking dạng collapsible, mỗi block một trạng thái mở riêng. |
+> | *"Multi-provider chưa có — chỉ Anthropic OAuth"* | `ProviderName = 'anthropic' \| 'openai' \| 'google'` + custom base URL / wire protocol (`sidecar/src/types/shared.ts:3-9`). Runtime chọn **theo provider** — xem ghi chú "Runtime" ở đầu tài liệu. |
+> | *"Chưa promote-session-to-task / fork / branch"* | `store.fork` với 3 suffix `copy` / `fork` / `branch` + cây fork (`useSessionForkTree`, `SessionForkNode.vue`); Session ↔ Task link 2 chiều qua `Session.aboutTaskId` ([ADR 0055](../decisions/0055-session-task-link.md)). |
 
 ## Tools support
 
-Runner backend `@anthropic-ai/claude-agent-sdk` default tool preset:
+Runner backend `@anthropic-ai/claude-agent-sdk` default tool preset (**nhánh Anthropic** — xem ghi chú Runtime ở đầu tài liệu):
 
 | Tool | Mapping tới SessionStep | Ghi chú |
 |---|---|---|
