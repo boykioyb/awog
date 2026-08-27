@@ -3596,7 +3596,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (!s) return
     // Block re-entry (same-tick double-click in the truncate window) and never
-    // regenerate over a live streaming turn — same guard `resend` uses.
+    // regenerate over a live streaming turn. NOTE: `regenInFlight` is regenerate-only —
+    // `resend` carries the streaming guard alone, not this one.
     if (regenInFlight.has(id)) return
     if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) return
     regenInFlight.add(id)
@@ -3604,6 +3605,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       s.msgs = s.msgs.slice(0, index)
       if (useIpc) {
         // Re-run the nearest preceding user turn.
+        // ⚠ RULE DUPLICATED ON PURPOSE: `components/session/SessionMessageItem.vue` →
+        // `nearestUserIndex()` walks back the same way to COUNT the messages the confirm
+        // dialog promises to destroy. This copy RUNS it. Change one, change the other.
         let ui = index - 1
         while (ui >= 0 && s.msgs[ui]?.role !== 'user') ui -= 1
         const userMsg = ui >= 0 ? s.msgs[ui] : undefined
