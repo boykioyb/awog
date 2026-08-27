@@ -1,5 +1,9 @@
 import { nextTick } from 'vue'
-import { useTranscriptSurface, type TranscriptEntry } from './useTranscriptSurface'
+import {
+  useTranscriptSurface,
+  type TranscriptEntry,
+  type TranscriptSurface,
+} from './useTranscriptSurface'
 
 // Scroll to + briefly flash a transcript message by its `data-mi` index (§8).
 // Shared by follow-up anchors (on a source message), follow-up cards (on the
@@ -11,8 +15,12 @@ import { useTranscriptSurface, type TranscriptEntry } from './useTranscriptSurfa
 // that owns THIS surface to grow its render window (`reveal`), then query the row
 // inside that transcript's own root (ADR 0075 — never `document`, which would pick
 // the first copy in document order, possibly one hidden behind `v-show`).
-export function useSessionScroll() {
-  const surface = useTranscriptSurface()
+// `surfaceOverride` is for the component that DECLARES the surface: `inject` resolves
+// from the parent's provides, so a provider can never inject its own entry. SessionDetail
+// keeps the ref `provideTranscriptSurface()` returned and hands it in; everyone below it
+// (message rows, composer, find bar under those) just injects.
+export function useSessionScroll(surfaceOverride?: TranscriptSurface) {
+  const surface = surfaceOverride ?? useTranscriptSurface()
 
   // Called by SessionTranscript on mount. Returns an unregister function that only
   // clears the pointer when it still refers to this very entry.

@@ -2,5 +2,9 @@
   "sessions.transcript.anchor.tooltip": "Nhảy tới tin nhắn được trích",
   "sessions.transcript.mark.tooltip": "Đã trích làm follow-up {n}",
   "sessions.transcript.fold.expand": "Mở tất cả bước",
-  "sessions.transcript.fold.collapse": "Gập tất cả bước"
+  "sessions.transcript.fold.collapse": "Gập tất cả bước",
+  "sessions.find.placeholder": "Tìm trong phiên…",
+  "sessions.find.open": "Tìm trong phiên",
+  "sessions.find.loading": "Đang nạp transcript…",
+  "sessions.find.notFoundJump": "Không mở được kết quả đó"
 }

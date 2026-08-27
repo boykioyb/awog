@@ -2,5 +2,9 @@
   "sessions.transcript.anchor.tooltip": "Jump to quoted message",
   "sessions.transcript.mark.tooltip": "Quoted as follow-up {n}",
   "sessions.transcript.fold.expand": "Expand all steps",
-  "sessions.transcript.fold.collapse": "Collapse all steps"
+  "sessions.transcript.fold.collapse": "Collapse all steps",
+  "sessions.find.placeholder": "Find in session…",
+  "sessions.find.open": "Find in session",
+  "sessions.find.loading": "Loading transcript…",
+  "sessions.find.notFoundJump": "Couldn't open that result"
 }
