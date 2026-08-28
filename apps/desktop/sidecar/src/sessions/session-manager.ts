@@ -11,7 +11,13 @@
 import { readdir, rm } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { log } from '../util/logger.js'
-import type { Session, SessionMessage, SessionSummary, SessionHeader } from '../types/shared.js'
+import type {
+  Session,
+  SessionBookmark,
+  SessionMessage,
+  SessionSummary,
+  SessionHeader,
+} from '../types/shared.js'
 import {
   createSessionHeader,
   readSessionHeader,
@@ -20,6 +26,7 @@ import {
   sessionFilePath,
   sessionsDir,
 } from './jsonl.js'
+import { MAX_BOOKMARKS, MAX_BOOKMARK_AT_LEN, MESSAGE_ID_RE } from './ids.js'
 import { sessionPersistenceQueue } from './persistence-queue.js'
 import { migrateLegacySessions } from './migrate-legacy.js'
 
@@ -47,6 +54,7 @@ type SessionMetadataPatch = Partial<
     | 'sdkSessionId'
     | 'compaction'
     | 'todos'
+    | 'bookmarks'
   >
 >
 
@@ -115,6 +123,42 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   return summary
 }
 
+// Re-validate a header's `bookmarks` after reading it off disk (L2: the file is
+// hand-editable) against the SAME charset/length/count the sessions.updateBookmarks RPC
+// enforces (sessions/ids.ts). A malformed ENTRY is skipped, never thrown on — a typo in
+// one bookmark must not cost the user the whole session.
+//
+// The list is also truncated to MAX_BOOKMARKS: capping only at the RPC leaves this path
+// unbounded, so a hand-written header full of well-formed entries would hydrate in full
+// and then be re-serialized on every persist. Truncation is SILENT for the same reason a
+// bad entry is skipped — this path must never throw.
+//
+// `undefined` when the header has no bookmarks or none survived, so the field stays
+// absent (exactOptionalPropertyTypes).
+function sanitizeBookmarks(value: unknown): SessionBookmark[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const clean: SessionBookmark[] = []
+  for (const raw of value) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const { id, at } = raw as { id?: unknown; at?: unknown }
+    if (typeof id !== 'string' || !MESSAGE_ID_RE.test(id)) continue
+    if (typeof at !== 'string' || at.length > MAX_BOOKMARK_AT_LEN) continue
+    clean.push({ id, at })
+    if (clean.length === MAX_BOOKMARKS) break
+  }
+  return clean.length ? clean : undefined
+}
+
+// Drop a header's bookmarks field entirely when nothing survived re-validation, so a
+// hand-corrupted list neither reaches the UI nor gets written back on the next persist.
+function withSanitizedBookmarks(header: SessionHeader): SessionHeader {
+  if (header.bookmarks === undefined) return header
+  const bookmarks = sanitizeBookmarks(header.bookmarks)
+  if (bookmarks) return { ...header, bookmarks }
+  const { bookmarks: _dropped, ...rest } = header
+  return rest
+}
+
 class SessionManager {
   private sessions = new Map<string, ManagedSession>()
   // Deduplicate concurrent lazy loads of the same session's messages.
@@ -170,7 +214,11 @@ class SessionManager {
       // or carries a corrupt/old-format header → skip it.
       const header = readSessionHeader(sessionFilePath(entry.name))
       if (!header) continue
-      this.sessions.set(header.id, { header, messages: [], messagesLoaded: false })
+      this.sessions.set(header.id, {
+        header: withSanitizedBookmarks(header),
+        messages: [],
+        messagesLoaded: false,
+      })
       loaded += 1
     }
     log.info('session-manager: loaded sessions from disk (metadata only)', { count: loaded })

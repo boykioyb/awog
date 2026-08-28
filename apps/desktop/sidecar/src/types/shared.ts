@@ -373,6 +373,21 @@ export interface PinnedContext {
   notePresets?: string[]
 }
 
+// A reading anchor the USER placed on one message of a session (ADR 0074). `id` is
+// the persisted SessionMessage.id (the durable anchor — index is only a runtime
+// address); `at` is the MESSAGE's timestamp, so the bookmark bar can sort by when
+// the message was written rather than when the user clicked.
+//
+// Deliberately just those two fields: NO excerpt. The session header is read with an
+// 8KB probe (sessions/jsonl.ts HEADER_PROBE_BYTES); 30 bookmarks x ~60 bytes stays
+// well inside that budget, while a persisted 200-char excerpt would eat the probe on
+// its own and force a second read on every session list. The UI derives the excerpt
+// from the loaded messages at render time.
+export interface SessionBookmark {
+  id: string
+  at: string
+}
+
 export interface Session {
   id: string
   title: string
@@ -424,6 +439,12 @@ export interface Session {
   // still records each TodoWrite step as history; this is only the current state.
   // Absent for a session that never had a checklist.
   todos?: TodoItem[]
+  // Reading anchors the user placed on messages of this session (ADR 0074). Header
+  // metadata only: written through the narrow sessions.updateBookmarks RPC, capped at
+  // MAX_BOOKMARKS (30) at that boundary, and NEVER injected into the prompt — this is
+  // a human's navigation aid, not agent memory. Deliberately absent from
+  // SessionSummary (the session list has no use for it).
+  bookmarks?: SessionBookmark[]
   // Claude Agent SDK session id (ADR 0058, Anthropic path only). Set once the
   // first SDK turn runs and updated whenever the SDK rotates it; the next turn
   // passes it as `resume` so the SDK restores conversation history + compaction

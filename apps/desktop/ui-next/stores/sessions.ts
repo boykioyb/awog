@@ -2,12 +2,15 @@ import { defineStore } from 'pinia'
 import { computed, markRaw, ref, watch } from 'vue'
 import { SidecarError, SidecarUnavailableError } from '~/composables/useSidecar'
 import {
+  MAX_BOOKMARKS,
   modelDisplayName,
   modelIdFromDisplay,
   PROVIDER_DISPLAY,
   questionAnswered,
 } from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
+import { useI18n } from '~/composables/useI18n'
+import { pushActionToast } from '~/composables/useActionToasts'
 import type { AccountOption } from '~/composables/useAccounts'
 import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
@@ -30,6 +33,7 @@ import type {
   QueuedMessage,
   Session,
   SessionAttachment,
+  SessionBookmark,
   SessionStatus,
   SessionUsage,
   SlashCommandRef,
@@ -338,6 +342,9 @@ type SessionGetDto = {
   }
   parentSessionId?: string
   forkFromMessageId?: string
+  // Reading anchors persisted in the session header (ADR 0074). The sidecar already
+  // drops wrong-shaped entries when it parses the header, so this hydrates as-is.
+  bookmarks?: SessionBookmark[]
   // The session's current checklist (sidecar Session.todos) — the authoritative
   // list the banner + Plan tab render, restored on open so progress survives a
   // reload. Absent for a session that never had one.
@@ -1002,6 +1009,10 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (full.budget) target.budget = full.budget
         if (full.parentSessionId) target.parentSessionId = full.parentSessionId
         if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
+        // Reading anchors (ADR 0074) live in the header, so they only come back on the
+        // full read — including after a popout hands the session back (reclaimSession
+        // clears `loaded` to force exactly this re-read).
+        if (full.bookmarks) target.bookmarks = full.bookmarks
         // Restore the checklist so reopening a session shows where work stopped.
         if (full.todos) target.todos = mapTodos(full.todos)
         // Restore the context-window snapshot + cumulative cost from the transcript
@@ -1047,17 +1058,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     return att
   }
 
+  // `eid` is carried for ALL three roles (ADR 0074): the persisted message id is the
+  // durable anchor a bookmark points at, while the array index is only a runtime
+  // address. Every message on disk has an id, so this is a pure read-back — no
+  // migration, no JSONL change.
   function engineMessageToSessionMessage(m: EngineMessage): Session['msgs'][number] {
     if (m.role === 'user') {
       return {
         role: 'user',
         text: m.text,
         at: m.at ?? '',
+        eid: m.id,
         ...(m.attachments?.length ? { att: m.attachments.map(engineAttToSession) } : {}),
       }
     }
     if (m.role === 'system') {
-      return { role: 'system', text: m.text, at: m.at ?? '' }
+      return { role: 'system', text: m.text, at: m.at ?? '', eid: m.id }
     }
     return { role: 'assistant', at: m.at ?? '', eid: m.id, blocks: engineMessageToBlocks(m) }
   }
@@ -1677,6 +1693,89 @@ export const useSessionsStore = defineStore('sessions', () => {
       sessionId: s.engineId,
       todos: normalised.map((td) => ({ content: td.t, status: td.status })),
     })
+  }
+
+  // ── Bookmarks (ADR 0074) ───────────────────────────────────────────────────
+  //
+  // A bookmark is a READING anchor the human drops on a message: it lives in the session
+  // header, never enters the prompt and never leaves ~/.awog. It is stored as a
+  // SESSION-LEVEL array on purpose — `ensureLoaded` markRaw()s every message but the
+  // last, so a flag hung off a message would simply never be reactive.
+  //
+  // The cap itself lives next to the SessionBookmark type (useSessionsData) so the bar
+  // and the message button read the same number this action enforces.
+
+  // Persist the WHOLE list (mirrors setTodos): the payload is the complete array, which
+  // is why a failed write needs no rollback — the next click rewrites it correctly. The
+  // user still gets told, because a silent console warning about lost bookmarks is the
+  // kind of quiet data loss this feature exists to avoid.
+  function persistBookmarks(s: Session): void {
+    if (!useIpc || !s.engineId) return
+    sc.request('sessions.updateBookmarks', {
+      sessionId: s.engineId,
+      bookmarks: (s.bookmarks ?? []).map((b) => ({ id: b.id, at: b.at })),
+    }).catch((err) => {
+      console.warn('[sessions] sessions.updateBookmarks failed', err)
+      pushActionToast(useI18n().t('sessions.bookmark.saveFailed'), 'error')
+    })
+  }
+
+  // Toggle the bookmark on the message at `msgIndex`. Anchored on `eid` (the persisted
+  // message id), never on the index: the index is a runtime address that any truncation
+  // shifts. No `eid` (a locally pushed ENGINE_UNAVAILABLE notice) ⇒ nothing to anchor on.
+  function toggleBookmark(id: number, msgIndex: number): void {
+    const s = byId(id)
+    const m = s?.msgs[msgIndex]
+    if (!s || !m?.eid) return
+    const eid = m.eid
+    const list = s.bookmarks ?? []
+    const at = list.findIndex((b) => b.id === eid)
+    if (at >= 0) {
+      s.bookmarks = list.filter((_, i) => i !== at)
+    } else {
+      // Cap here too, so a UI that forgot to disable its button cannot push a payload
+      // the RPC would reject wholesale (which would drop the legal bookmarks with it).
+      if (list.length >= MAX_BOOKMARKS) return
+      s.bookmarks = [...list, { id: eid, at: m.at || new Date().toISOString() }]
+    }
+    persistBookmarks(s)
+  }
+
+  function removeBookmark(id: number, bookmarkId: string): void {
+    const s = byId(id)
+    if (!s?.bookmarks?.length) return
+    const kept = s.bookmarks.filter((b) => b.id !== bookmarkId)
+    if (kept.length === s.bookmarks.length) return
+    s.bookmarks = kept
+    persistBookmarks(s)
+  }
+
+  // The set of message ids that survive a truncation — computed from the KEPT PREFIX
+  // before anything is cut, which is the only moment both halves are still known.
+  function survivingEids(kept: Session['msgs']): Set<string> {
+    const ids = new Set<string>()
+    for (const m of kept) if (m.eid) ids.add(m.eid)
+    return ids
+  }
+
+  // Drop every bookmark whose message is about to be destroyed on disk. ONE function for
+  // all three truncating actions (rewind / resend / regenerate — "edit & resend" is
+  // resend with an override), so the rule cannot drift between them.
+  //
+  // This is the DELIBERATE-CUT half of the dangling contract: the message is gone for
+  // good, so the anchor is pure garbage and is removed. The other half — an id that
+  // merely fails to resolve right now (transcript reloading, session cut in another
+  // window) — is NEVER auto-removed; it renders as a dangling row the user can dismiss.
+  // `/compact` is NOT on this list: it summarises the model context and leaves the whole
+  // transcript on disk (sidecar methods/sessions.compact.ts), so every anchor still
+  // resolves and pruning there would delete live bookmarks.
+  function pruneBookmarksTo(s: Session, survivingIds: Set<string>): void {
+    const before = s.bookmarks
+    if (!before?.length) return
+    const kept = before.filter((b) => survivingIds.has(b.id))
+    if (kept.length === before.length) return
+    s.bookmarks = kept
+    persistBookmarks(s)
   }
 
   function setMode(id: number, mode: string) {
@@ -2801,17 +2900,40 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Map ui-next display messages → engine SessionMessage shape (id/role/text/at).
   // The sidecar resumes a session from its JSONL transcript, so a session created
   // WITH prior turns (a fork) must carry them on disk or the model would see an
-  // empty context. Reuses an assistant turn's `eid` as the engine message id so the
-  // forked transcript's ids match what hydrate later assigns. Attachments are not
-  // replicated (best-effort: the conversational text is what drives forked context).
+  // empty context. Reuses each turn's `eid` (all three roles — ADR 0074) as the engine
+  // message id so the forked transcript's ids match the ones on display, which is what
+  // lets a bookmark carried into the fork still resolve. Attachments are not replicated
+  // (best-effort: the conversational text is what drives forked context).
+  //
+  // The local ENGINE_UNAVAILABLE banner is DROPPED, not persisted (TL-2 (c), §12.3 of
+  // docs/features/session-destructive-action-guard.md). It is a runtime error notice
+  // about a turn that never happened, not transcript content, and §2.3 already treats
+  // it as never-persisted. Minting `fm-<i>-<seq>` for it here put it on disk while the
+  // in-memory copy kept no `eid` — breaking the "on disk ⇔ has `eid` in memory"
+  // invariant of AC-R7, which then made §4.8's anchor walk skip it and cut the file one
+  // message deeper than memory. Accepted trade-off: a just-forked session still shows
+  // the banner until the next reload, after which it is gone for good.
+  //
+  // `fm-<i>-<seq>` stays as the fallback for any OTHER message without an `eid`. AC-R7
+  // says none exists; if one ever does, persisting it under a minted id keeps the
+  // conversation intact (the old TL-2 wart) instead of silently dropping content.
+  //
+  // The filter matches on role + text, so a banner that DID reach disk before this fix
+  // (and therefore comes back carrying an `eid`) is dropped from a new fork too. That is
+  // intended — it self-heals the legacy rows. Nothing conversational can match: the text
+  // is a UI-only constant, and no bookmark can anchor here (system messages have no
+  // footer, so no bookmark button).
   function msgsToEngineMessages(msgs: Session['msgs']): Record<string, unknown>[] {
     const now = new Date().toISOString()
-    return msgs.map((m, i) => {
-      const at = m.at || now
-      if (m.role === 'user') return { id: `fm-${i}-${seq++}`, role: 'user', text: m.text, at }
-      if (m.role === 'system') return { id: `fm-${i}-${seq++}`, role: 'system', text: m.text, at }
-      return { id: m.eid ?? `fm-${i}-${seq++}`, role: 'agent', text: assistantText(m.blocks), at }
-    })
+    return msgs
+      .filter((m) => !(m.role === 'system' && m.text === ENGINE_UNAVAILABLE))
+      .map((m, i) => {
+        const at = m.at || now
+        const id = m.eid ?? `fm-${i}-${seq++}`
+        if (m.role === 'user') return { id, role: 'user', text: m.text, at }
+        if (m.role === 'system') return { id, role: 'system', text: m.text, at }
+        return { id, role: 'agent', text: assistantText(m.blocks), at }
+      })
   }
   // Build the minimal sidecar session payload from the ui-next display fields. The
   // engine owns the canonical settings; we only forward what we can derive.
@@ -2850,6 +2972,39 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.parentSessionId) session.parentSessionId = s.parentSessionId
     if (s.forkFromMessageId) session.forkFromMessageId = s.forkFromMessageId
     pushRequest('sessions.upsert', { session, mode })
+  }
+
+  // Mirrors the sidecar boundary schema for `sessions.sendMessage.userMessageId`
+  // (z.string().regex(...)). Kept here so a bad mint degrades locally instead of
+  // reaching an RPC that would reject the whole turn.
+  const USER_MESSAGE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+  // Mint the persisted id of the user turn we are about to send (ADR 0074), so the
+  // message can be bookmarked in THIS session run instead of only after a reload.
+  //
+  // Uniqueness is a hard requirement, not a nicety: the sidecar's appendMessage is an
+  // upsert BY ID, so a repeated id would overwrite the earlier message (and the
+  // attachment files named `${messageId}-${att.id}`), and bookmarks assume one message
+  // per id. Three independent parts guarantee it: the ms clock separates app runs, the
+  // monotonic `seq` separates mints inside one run, and the random tail separates two
+  // renderers of the same app run (a popped-out session window has its own `seq`).
+  // Every send path (compose, queue drain, resend, regenerate, wake) calls this fresh —
+  // an id is NEVER reused for a retry, because the retried turn is a new message.
+  function mintUserMessageId(): string {
+    const rand = Math.floor(Math.random() * 36 ** 4)
+      .toString(36)
+      .padStart(4, '0')
+    return `mu-${Date.now().toString(36)}-${(seq++).toString(36)}${rand}`
+  }
+
+  // Fail-fast at our own edge: anything that does not match the sidecar's regex is
+  // dropped entirely (both the local `eid` and the RPC param) rather than sent. The
+  // turn then behaves exactly as before this feature — the sidecar mints its own id —
+  // instead of failing validation or anchoring the UI on an id nothing persisted.
+  function validUserMessageId(candidate: string): string | undefined {
+    if (USER_MESSAGE_ID_RE.test(candidate)) return candidate
+    console.warn('[sessions] discarding malformed userMessageId')
+    return undefined
   }
 
   // Turn runner. Appends the user message + a placeholder assistant bubble, then
@@ -2912,10 +3067,14 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
 
+    // One id for both the bubble and the RPC: the sidecar persists the user turn under
+    // exactly this id, so the "bookmark" action on the bubble works immediately.
+    const userMessageId = validUserMessageId(mintUserMessageId())
     s.msgs.push({
       role: 'user',
       text: trimmed,
       at: new Date().toISOString(),
+      ...(userMessageId ? { eid: userMessageId } : {}),
       att: atts.length ? atts : null,
       quotes: quotes.length ? quotes : null,
       command: command ?? null,
@@ -2944,12 +3103,19 @@ export const useSessionsStore = defineStore('sessions', () => {
     // gets summarised; this message is not persisted yet, so it is never cut away.
     await maybeAutoCompact(s)
 
-    await runEngineTurn(s, modelText, atts)
+    await runEngineTurn(s, modelText, atts, userMessageId)
   }
 
   // Drive one real turn over IPC: placeholder bubble + stream subscription folds
   // events into it; finalize / cancel / error stamps the bubble.
-  async function runEngineTurn(s: Session, text: string, atts: SessionAttachment[]) {
+  async function runEngineTurn(
+    s: Session,
+    text: string,
+    atts: SessionAttachment[],
+    // Id the caller already stamped on the pushed user bubble; omitted when the mint
+    // failed validation, in which case the sidecar falls back to its own `msg_u_<hex>`.
+    userMessageId?: string,
+  ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
     // wake paths already consumed it before calling here; a manual send means the
@@ -3046,6 +3212,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       const result = await sc.request<SendMessageResult>('sessions.sendMessage', {
         sessionId: s.engineId,
         messageId,
+        ...(userMessageId ? { userMessageId } : {}),
         text,
         ...(engineAtts.length ? { attachments: engineAtts } : {}),
         history: [],
@@ -3586,6 +3753,32 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // ── Existing local actions (preserved 1:1) ──────────────────────────────────
 
+  // The one data-safety rule behind every disk-side truncation (§4.8 of
+  // docs/features/session-destructive-action-guard.md): the cut anchors on the nearest
+  // PERSISTED message among the ones being KEPT. Walk the kept prefix backwards until a
+  // message carrying `eid` turns up; `null` means nothing in that prefix ever reached the
+  // transcript file, so an empty transcript is exactly what matches memory.
+  //
+  // ⚠ The anchor is picked by `eid`, NEVER by `role`. A `prev.role === 'assistant' ?
+  // prev.eid : null` shape reads as equivalent but takes the null branch whenever the last
+  // kept message is a user or system turn — and `null` empties the WHOLE file
+  // (`truncateSession` assigns `messages = []`, sidecar/src/sessions/store.ts:70-71),
+  // turning "did not persist" into "wiped everything". Both null branches are reachable in
+  // practice: rewinding onto a user bubble, and resending the first user turn of a forked
+  // session (system messages persist — sessions.upsert accepts role 'system').
+  //
+  // Every message read back from JSONL carries an `eid` (ADR 0074), so the walk normally
+  // stops on its first step; it only keeps going over locally pushed notices such as
+  // ENGINE_UNAVAILABLE, which have no `eid` precisely because they never reach the file.
+  // O(k) over an in-memory array — no I/O.
+  function lastPersistedEid(kept: Session['msgs']): string | null {
+    for (let i = kept.length - 1; i >= 0; i -= 1) {
+      const eid = kept[i]?.eid
+      if (eid) return eid
+    }
+    return null
+  }
+
   // Sessions with a regenerate/retry in flight. `regenerate` runs an async
   // truncate→re-run with an IPC round-trip in the middle; the message hover-action
   // buttons that call it carry no per-button disabled state, so a second click
@@ -3596,29 +3789,41 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (!s) return
     // Block re-entry (same-tick double-click in the truncate window) and never
-    // regenerate over a live streaming turn — same guard `resend` uses.
+    // regenerate over a live streaming turn. NOTE: `regenInFlight` is regenerate-only —
+    // `resend` carries the streaming guard alone, not this one.
     if (regenInFlight.has(id)) return
     if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) return
     regenInFlight.add(id)
     try {
+      // Anchors in the part about to disappear are garbage from here on (§5.4). The
+      // second, deeper cut below prunes again against its own kept prefix.
+      pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
       s.msgs = s.msgs.slice(0, index)
       if (useIpc) {
         // Re-run the nearest preceding user turn.
+        // ⚠ RULE DUPLICATED ON PURPOSE: `components/session/SessionMessageItem.vue` →
+        // `nearestUserIndex()` walks back the same way to COUNT the messages the confirm
+        // dialog promises to destroy. This copy RUNS it. Change one, change the other.
         let ui = index - 1
         while (ui >= 0 && s.msgs[ui]?.role !== 'user') ui -= 1
         const userMsg = ui >= 0 ? s.msgs[ui] : undefined
         if (userMsg && userMsg.role === 'user') {
+          // Prune BEFORE the cut, and against the FINAL kept prefix (`ui`, not `index`):
+          // regenerate walks back past the assistant turn to re-run the user turn, so the
+          // survivors are the messages before `ui`.
+          pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, ui)))
           s.msgs = s.msgs.slice(0, ui)
           const atts = userMsg.att ?? undefined
           // The sidecar resumes from the JSONL transcript (sendMessage sends no
           // history), so slicing the in-memory copy is not enough — persist the
           // truncation first, else the regenerated turn would replay the very reply
-          // it replaces. Keep through the assistant turn before the re-run user
-          // message (null = drop all). AWAIT so loadSession on the next turn reads
-          // the already-truncated file (avoids a read-before-write race).
+          // it replaces. Keep through the last persisted message of the kept prefix —
+          // `s.msgs` is already sliced down to it (see `lastPersistedEid`; a role-based
+          // condition here would wipe the file instead of keeping the prefix). AWAIT so
+          // loadSession on the next turn reads the already-truncated file (avoids a
+          // read-before-write race).
           if (s.engineId) {
-            const prev = ui > 0 ? s.msgs[ui - 1] : undefined
-            const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
+            const keepThroughId = lastPersistedEid(s.msgs)
             try {
               await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
             } catch (err) {
@@ -3643,20 +3848,38 @@ export const useSessionsStore = defineStore('sessions', () => {
       regenerate(id, index)
       return
     }
+    pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
     s.msgs = s.msgs.slice(0, index)
     s.msgs.push({ role: 'system', text: ENGINE_UNAVAILABLE, at: 'vừa xong' })
     s.status = 'error'
   }
 
+  // Rewind: drop msgs[index..end] from the transcript, in memory AND on disk.
+  //
+  // The disk cut anchors on the nearest persisted message of the kept prefix (`s.msgs` is
+  // already sliced down to it) — see `lastPersistedEid` for why that walk, and not a
+  // role check, is what keeps the file safe.
+  //
+  // Stays SYNCHRONOUS on purpose: nothing re-runs after a rewind, so the RPC is
+  // fire-and-forget and no new race window opens.
   function rewind(id: number, index: number) {
     const s = byId(id)
     if (!s) return
+    // Bookmarks first: the surviving id set can only be computed while both halves of
+    // the transcript are still in hand, and sessions.updateBookmarks must reach the
+    // sidecar BEFORE the cut (§5.4) so a crash in between never leaves the header
+    // pointing at messages the file no longer has.
+    pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
     s.msgs = s.msgs.slice(0, index)
-    if (useIpc && s.engineId) {
-      const target = s.msgs[index - 1]
-      if (target && target.role === 'assistant' && target.eid) {
-        pushRequest('sessions.rewind', { sessionId: s.engineId, messageId: target.eid })
-      }
+    if (!useIpc || !s.engineId) return
+    const anchorId = lastPersistedEid(s.msgs)
+    if (anchorId) {
+      // NOT sessions.truncate: sessions.rewind does more — it also drops the orphaned
+      // SDK transcript (ADR 0058) and restores the workspace snapshot (ADR 0038).
+      pushRequest('sessions.rewind', { sessionId: s.engineId, messageId: anchorId })
+    } else {
+      // `sessions.rewind` cannot express "keep nothing" (messageId: z.string().min(1)).
+      pushRequest('sessions.truncate', { sessionId: s.engineId, keepThroughId: null })
     }
   }
 
@@ -3674,15 +3897,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     const text = overrideText ?? userMsg.text
     const atts = userMsg.att ?? undefined
     // Drop this user message + everything after; sendMessage re-appends a fresh
-    // user bubble and runs the turn.
+    // user bubble and runs the turn. Bookmarks in the dropped tail are pruned first
+    // (§5.4) — the resent turn gets a brand-new id, so the old anchor cannot survive.
+    pruneBookmarksTo(s, survivingEids(s.msgs.slice(0, index)))
     s.msgs = s.msgs.slice(0, index)
     // Persist the truncation BEFORE re-running (the sidecar resumes from JSONL, so
-    // slicing in-memory alone would replay the dropped reply). Keep through the
-    // assistant turn before this one (null = drop all). AWAIT to avoid a
-    // read-before-write race on the next turn's loadSession.
+    // slicing in-memory alone would replay the dropped reply). Keep through the last
+    // persisted message of the kept prefix (see `lastPersistedEid`; a role-based
+    // condition here wipes the file when the preceding turn is a user or system
+    // message). AWAIT to avoid a read-before-write race on the next turn's loadSession.
     if (useIpc && s.engineId) {
-      const prev = index > 0 ? s.msgs[index - 1] : undefined
-      const keepThroughId = prev && prev.role === 'assistant' ? (prev.eid ?? null) : null
+      const keepThroughId = lastPersistedEid(s.msgs)
       try {
         await sc.request('sessions.truncate', { sessionId: s.engineId, keepThroughId })
       } catch (err) {
@@ -3738,11 +3963,25 @@ export const useSessionsStore = defineStore('sessions', () => {
     else delete branch.parentSessionId
     if (forkPoint?.role === 'assistant' && forkPoint.eid) branch.forkFromMessageId = forkPoint.eid
     else delete branch.forkFromMessageId
+    // Bookmarks are filtered EXPLICITLY against the cloned prefix. `...s` above copies
+    // every field of the source, so without this the branch would inherit anchors
+    // pointing past its own fork point — the blind-inheritance trap every new Session
+    // field falls into.
+    const clonedIds = survivingEids(msgs)
+    const carried = (s.bookmarks ?? []).filter((b) => clonedIds.has(b.id))
+    if (carried.length) branch.bookmarks = carried
+    else delete branch.bookmarks
     sessions.value.unshift(branch)
     activate(nid)
     if (useIpc) {
       branch.engineId = engineIdFor(nid)
       pushUpsert(branch, 'create')
+      // sessions.upsert rebuilds the session field by field and has no `bookmarks` in
+      // its schema (same as `todos`), so the create above would silently drop them.
+      // Write them with the narrow RPC the field actually has — after the create, whose
+      // handler registers the session before this one looks it up (requests keep their
+      // order on the single stdio channel).
+      if (carried.length) persistBookmarks(branch)
     }
   }
 
@@ -3908,6 +4147,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     setSshApprovalMode,
     setAboutSshHost,
     setTodos,
+    toggleBookmark,
+    removeBookmark,
     setSshTerminalConnId,
     setDisabledTools,
     setMcpServerIds,

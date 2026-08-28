@@ -165,6 +165,10 @@ export type UserMessage = {
   role: 'user'
   text: string
   at?: string
+  // Persisted engine message id (ADR 0074). Hydrated from JSONL on load and minted
+  // client-side when the turn is sent, so a message can be anchored by id — the
+  // durable address — while the array index stays the runtime address only.
+  eid?: string
   att?: SessionAttachment[] | null
   quotes?: Followup[] | null
   command?: SlashCommandRef | null
@@ -183,7 +187,9 @@ export type AssistantMessage = {
   startedAt?: number
   completedAt?: number
 }
-export type SystemMessage = { role: 'system'; text: string; at?: string }
+// `eid`: same durable anchor as on the other two roles. Absent on the locally
+// pushed "engine unavailable" notice — that one never reaches the transcript file.
+export type SystemMessage = { role: 'system'; text: string; at?: string; eid?: string }
 export type SessionMessage = UserMessage | AssistantMessage | SystemMessage
 
 export type GitMeta = {
@@ -310,6 +316,17 @@ export const THINKING_LEVELS: readonly ThinkingLevel[] = [
 //   auto    — run without prompting (explicit opt-in; the UI warns)
 export type SshApprovalMode = 'prompt' | 'session' | 'auto'
 
+// A reading anchor the user placed on one message (ADR 0074). `id` is the message's
+// persisted engine id (`SessionMessage.eid`), `at` the MESSAGE's timestamp. Mirrors
+// the sidecar SessionBookmark; deliberately no excerpt (derived at render time).
+export type SessionBookmark = { id: string; at: string }
+
+// Hard cap on bookmarks per session. Mirrors MAX_BOOKMARKS in
+// apps/desktop/sidecar/src/sessions/ids.ts, which enforces the same number at the RPC
+// boundary AND on the load path. The two packages share no module, so the constant is
+// duplicated on purpose: raising it here alone would only make the write bounce back.
+export const MAX_BOOKMARKS = 30
+
 export type Session = {
   id: number
   title: string
@@ -333,6 +350,11 @@ export type Session = {
   mode?: string
   git?: GitMeta
   todos?: Todo[]
+  // Reading anchors on this session's messages (ADR 0074). Session-level array on
+  // purpose: ensureLoaded markRaw()s every message but the last, so a flag stored on
+  // a message would not be reactive. Persisted in the JSONL header via
+  // sessions.updateBookmarks; hydrated by ensureLoaded.
+  bookmarks?: SessionBookmark[]
   followups?: Followup[]
   msgs: SessionMessage[]
   // ── Per-session model config (config popover → engine settings) ──────────

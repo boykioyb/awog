@@ -124,6 +124,11 @@ const { confirm } = useConfirm()
 const sessions = useSessionsStore()
 const ssh = useSshStore()
 
+// The docked co-pilot is the second transcript surface: without this, every jump
+// from inside this panel (follow-up anchor, quote card) would resolve to no
+// transcript at all and return 'not-found' (ADR 0075).
+provideTranscriptSurface()
+
 const menu = ref<'session' | 'term' | null>(null)
 const toggleMenu = (m: 'session' | 'term') => (menu.value = menu.value === m ? null : m)
 
