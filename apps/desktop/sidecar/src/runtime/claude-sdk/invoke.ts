@@ -16,7 +16,12 @@ import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../../sdk/invoke.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
-import { EVIDENCE_PROMPT, TODO_USAGE_PROMPT, VERIFY_PROMPT } from '../prompts.js'
+import {
+  EVIDENCE_PROMPT,
+  OUTPUT_SURFACE_PROMPT,
+  TODO_USAGE_PROMPT,
+  VERIFY_PROMPT,
+} from '../prompts.js'
 import { isToolAllowed } from '../tools/index.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { resolveClaudeBinary } from './binary.js'
@@ -213,6 +218,10 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
   // per ADR 0071 the verification and evidence contracts ARE appended: the preset
   // does not require a `file:line` citation for claims about the codebase, and
   // AWOG's explicit anti-fabrication rule was missing from this runtime entirely.
+  // OUTPUT_SURFACE_PROMPT (ADR 0077) is appended for a different reason: it does
+  // not duplicate the preset, it corrects it — the preset is a CLI prompt and
+  // assumes output is printed to a terminal, while a node's answer is rendered as
+  // markdown in the GUI and its paste-ready blocks get copied out verbatim.
   const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0], extractTurnPaths(args.prompt))
   // TodoWrite nudge — same as the Pi task path (invoke.ts). The preset alone leaves
   // the checklist unused, so a task node would show no progress list on this
@@ -231,6 +240,7 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     // nothing here can freeze stale.
     VERIFY_PROMPT,
     EVIDENCE_PROMPT,
+    OUTPUT_SURFACE_PROMPT,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,
     // A task node is one query too: a backgrounded subagent dies with it and its
     // notification never arrives (see shared.ts). The hook below forces the

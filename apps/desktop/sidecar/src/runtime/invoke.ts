@@ -30,6 +30,7 @@ import {
   COMMUNICATION_PROMPT,
   ENGINEERING_PROMPT,
   EVIDENCE_PROMPT,
+  OUTPUT_SURFACE_PROMPT,
   TODO_USAGE_PROMPT,
   TOOL_DISCIPLINE_PROMPT,
   VERIFY_PROMPT,
@@ -338,6 +339,10 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     ENGINEERING_PROMPT,
     EVIDENCE_PROMPT,
     COMMUNICATION_PROMPT,
+    // Display surface (ADR 0077): a node's output is read as markdown in the GUI
+    // and its paste-ready blocks (PR body, release note) get copied out verbatim,
+    // so paragraphs must stay on one line.
+    OUTPUT_SURFACE_PROMPT,
     // Act through tools, don't narrate (see prompts.ts). Tasks are tool-driven.
     TOOL_DISCIPLINE_PROMPT,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
