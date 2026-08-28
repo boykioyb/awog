@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.32.0',
+    date: '2026-08-28',
+    highlight: {
+      en: 'Sessions pick up three tools for long conversations: bookmark a message and jump back to it, search the whole session with ⌘F, and a confirmation before anything that would throw part of the transcript away. Replies also stop arriving pre-wrapped, so a PR description copied out of one finally pastes clean.',
+      vi: 'Sessions có thêm ba công cụ cho hội thoại dài: đánh dấu một tin nhắn để quay lại, tìm trong cả phiên bằng ⌘F, và một bước xác nhận trước bất cứ thao tác nào làm mất một phần transcript. Câu trả lời cũng thôi bị ngắt dòng sẵn, nên đoạn mô tả PR copy ra dán vào đâu cũng gọn.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Bookmark a message. Pin any message in a session and it appears in a strip at the top of the transcript — click to jump straight back to it. Bookmarks stay with the session across restarts.',
+        vi: 'Đánh dấu tin nhắn. Ghim bất kỳ tin nhắn nào trong phiên, nó hiện ở thanh rút gọn đầu transcript — bấm là nhảy thẳng về đó. Đánh dấu được giữ lại sau khi khởi động lại app.',
+      },
+      {
+        kind: 'added',
+        en: 'Find in session with ⌘F (Ctrl+F on Windows and Linux). It searches every message in the open session, so the match count covers the whole conversation rather than only the part currently on screen.',
+        vi: 'Tìm trong phiên bằng ⌘F (Ctrl+F trên Windows và Linux). Nó tìm trên mọi tin nhắn của phiên đang mở, nên số kết quả tính cả hội thoại chứ không riêng phần đang hiển thị.',
+      },
+      {
+        kind: 'added',
+        en: 'A confirmation before anything that throws transcript away. Rewind, resend, edit and resend, and regenerate now ask first and name exactly how many messages you are about to lose. Those actions also turn red on hover, so they are harder to hit by accident.',
+        vi: 'Xác nhận trước mọi thao tác làm mất transcript. Quay lui, gửi lại, sửa & gửi lại, tạo lại — giờ đều hỏi trước và nói rõ bạn sắp mất bao nhiêu tin nhắn. Các nút này cũng chuyển đỏ khi rê chuột nên khó bấm nhầm hơn.',
+      },
+      {
+        kind: 'added',
+        en: 'Hide the desktop pet for a moment. Hover it and click the X in the corner — it disappears without touching your setting, and comes back on your next prompt.',
+        vi: 'Ẩn tạm pet trên màn hình. Rê chuột vào rồi bấm dấu X ở góc — pet biến mất mà không đụng gì tới thiết lập, và tự hiện lại ở lần gửi prompt kế tiếp.',
+      },
+      {
+        kind: 'improved',
+        en: 'Replies no longer arrive pre-wrapped. Each paragraph comes as one continuous line and lets your window decide where it breaks, so a PR description, issue body, or commit message copied out of a reply pastes into GitHub without ragged half-lines to tidy up by hand.',
+        vi: 'Câu trả lời không còn bị ngắt dòng sẵn. Mỗi đoạn văn về liền một dòng và để cửa sổ tự quyết định chỗ xuống dòng, nên phần mô tả PR, nội dung issue hay commit message copy từ câu trả lời dán vào GitHub là gọn, không còn những nửa dòng răng cưa phải sửa tay.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The end of an answer no longer vanishes on turns that used a subagent. The full reply was always saved to disk; it was the on-screen copy that got cut short once the turn finished.',
+        vi: 'Phần cuối câu trả lời không còn biến mất ở những lượt có dùng subagent. Bản đầy đủ vẫn luôn được lưu xuống đĩa; chỉ bản hiển thị trên màn hình bị cắt bớt khi lượt chạy kết thúc.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The stop button on a background shell chip read as an empty checkbox at small size. It is an X now.',
+        vi: 'Nút dừng trên chip background shell trông như ô checkbox rỗng ở cỡ nhỏ. Giờ nó là dấu X.',
+      },
+    ],
+  },
+  {
     version: '0.31.0',
     date: '2026-08-21',
     highlight: {
