@@ -35,6 +35,7 @@ import { buildMcpUnavailableNote } from './mcp-tools.js'
 import {
   ENGINEERING_PROMPT,
   EVIDENCE_PROMPT,
+  OUTPUT_SURFACE_PROMPT,
   TOOL_DISCIPLINE_PROMPT,
   VERIFY_PROMPT,
 } from '../prompts.js'
@@ -286,6 +287,11 @@ async function spawnSubagent(
   // is deliberately omitted: its output contract targets the human reader, and a
   // subagent's report is consumed by the parent model. EVIDENCE_PROMPT matters
   // most here — the parent has to be able to trust and re-check what it gets back.
+  // OUTPUT_SURFACE_PROMPT IS included even though COMMUNICATION_PROMPT is not
+  // (ADR 0077 §5): it is not a rule about tone or audience but about whether the
+  // text survives being reused. A subagent asked for a PR body or a release note
+  // gets quoted verbatim by the parent, so hard-wrapped prose lands straight in the
+  // final message — and nested subagent steps render in the transcript anyway.
   const subContextBlock = await buildOneShotContextBlock(deps.cwd)
   const subAppend =
     [
@@ -293,6 +299,7 @@ async function spawnSubagent(
       agentCtx.systemPromptAppend,
       ENGINEERING_PROMPT,
       EVIDENCE_PROMPT,
+      OUTPUT_SURFACE_PROMPT,
       TOOL_DISCIPLINE_PROMPT,
       VERIFY_PROMPT,
       // Inherit the parent turn's co-author setting (Pi has no built-in attribution).

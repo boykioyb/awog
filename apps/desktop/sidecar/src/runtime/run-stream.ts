@@ -44,6 +44,7 @@ import {
   ENGINEERING_PROMPT,
   EVIDENCE_PROMPT,
   fileRefPrompt,
+  OUTPUT_SURFACE_PROMPT,
   TODO_USAGE_PROMPT,
   TOOL_DISCIPLINE_PROMPT,
   VERIFY_PROMPT,
@@ -248,6 +249,10 @@ export async function runStreamPi(
     ENGINEERING_PROMPT,
     EVIDENCE_PROMPT,
     COMMUNICATION_PROMPT,
+    // Display surface (ADR 0077): the transcript is markdown in a resizable GUI
+    // panel, so paragraphs must stay on one line. Before stylePrompt on purpose —
+    // style still lands last on voice.
+    OUTPUT_SURFACE_PROMPT,
     stylePrompt,
     // Act through tools, don't narrate (see prompts.ts). Off in plan mode —
     // PLAN_MODE_PROMPT governs that read-only path.

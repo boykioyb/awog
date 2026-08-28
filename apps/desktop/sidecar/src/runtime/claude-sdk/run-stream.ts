@@ -43,7 +43,12 @@ import type {
 import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../permission.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
-import { EVIDENCE_PROMPT, TODO_USAGE_PROMPT, VERIFY_PROMPT } from '../prompts.js'
+import {
+  EVIDENCE_PROMPT,
+  OUTPUT_SURFACE_PROMPT,
+  TODO_USAGE_PROMPT,
+  VERIFY_PROMPT,
+} from '../prompts.js'
 import { buildCurrentStateBlock, collectWorkspaceSnapshot } from '../../context/environment.js'
 import { isToolAllowed } from '../tools/index.js'
 import { updateSessionMetadata } from '../../sessions/store.js'
@@ -390,17 +395,26 @@ export async function runStreamClaude(
   // does not mandate citing `file:line` for claims about the codebase, and AWOG's
   // anti-fabrication rule was absent from this path entirely.
   //
-  // Unlike style/plan/checklist above, these are CONSTANT — they never change
+  // The third block, OUTPUT_SURFACE_PROMPT (ADR 0077), is a different category:
+  // it does NOT duplicate the preset, it CORRECTS it. The preset is a CLI's system
+  // prompt and tells the model its output goes to a command line; on AWOG the
+  // transcript is markdown rendered in a resizable GUI panel, and the preset says
+  // nothing about hard-wrapping. Correcting a preset assumption that is true for
+  // Claude Code but false for AWOG is allowed here; restating what the preset
+  // already says is not.
+  //
+  // Unlike style/plan/checklist above, all three are CONSTANT — they never change
   // mid-session — so the SDK freezing the append at session creation is harmless
   // here and they belong in the cached system prompt rather than on every turn.
-  // (Consequence: sessions created before ADR 0071 keep the old behaviour until
-  // the user starts a new one; a resume cannot pick up a changed append.)
+  // (Consequence: sessions created before ADR 0071 / 0077 keep the old behaviour
+  // until the user starts a new one; a resume cannot pick up a changed append.)
   const appendParts = [
     args.systemPrompt,
     args.systemPromptAppend,
     rulesPrompt,
     VERIFY_PROMPT,
     EVIDENCE_PROMPT,
+    OUTPUT_SURFACE_PROMPT,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
   // TodoWrite is an SDK built-in here (AWOG doesn't own the implementation, unlike
