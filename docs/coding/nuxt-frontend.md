@@ -116,9 +116,28 @@ Hai nguồn style đan xen:
 
 Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compile-time. **Không hardcode hex trong class.**
 
-- **Không tạo CSS class custom** trừ khi Tailwind/inline không xử lý được (animation phức tạp, scrollbar).
-- **`assets/css/main.css`** chỉ chứa reset, scrollbar, base — không component style.
+- **Thực tế ở `ui-next`: phần lớn style nằm trong `<style scoped>` của component**, không phải utility Tailwind. Tailwind lo layout/spacing; typography + màu + bo góc đi qua design token (dưới đây). Trong 298 file `.vue` hiện có **0** usage `text-xs`/`text-sm`/`rounded-*` — đừng giới thiệu lại chúng.
+- **`assets/css/main.css`** chỉ chứa 3 directive Tailwind. Design system thật nằm ở `assets/css/prototype.css` (token + class dùng chung), `app-shell.css` (override toàn cửa sổ, load sau nên thắng), `theme-cute.css` (theme family thứ 2, mọi rule scoped `body[data-theme-family='cute']`).
 - **Responsive:** dùng prefix Tailwind (`md:`, `lg:`). Hiện UI tối ưu cho desktop ≥ 1280.
+
+### Design token — bắt buộc, có guard
+
+`pnpm lint` chạy `scripts/check-design-tokens.mjs` và **fail** nếu hardcode. Chi tiết: [ADR 0079](../decisions/0079-native-macos-shell-and-design-tokens.md), [native-macos-polish.md](../features/native-macos-polish.md).
+
+| Nhóm | Token | Cấm |
+|---|---|---|
+| Type scale | `--fs-xs` 11 · `--fs-sm` 12 · `--fs-md` 13 · `--fs-lg` 15 · `--fs-xl` 17 · `--fs-2xl` 22 (@base 13) | `font-size: <n>rem` |
+| Radius | `--r-xs` 6 · `--r-sm` 8 · `--r-btn` 10 · `--r-card` 14 · `--r-panel` 16 · `--r-pill` | `border-radius: <n>px` |
+| Màu | `useTheme()` / CSS var | hex trong class hoặc `<style>` |
+| Motion | `--dur-fast` `--dur` `--dur-panel` + `--ease` | duration/easing hardcode |
+| Elevation | `--shadow-sm/md/lg` | `box-shadow` hardcode |
+
+Type scale khai bằng `calc(var(--font-size-base) ± Npx)` — Appearance cho kéo base 12→18, nên `rem` sẽ cho ra nửa pixel (`0.8846rem` = 11.5px) và macOS render nhoè. `em` vẫn hợp lệ (tương đối với cha); `px` cố định hợp lệ cho badge không muốn scale.
+
+**Hai marker opt-out**, ghi ngay trên dòng cần miễn:
+
+- `/* design-token-ok: <lý do> */` — khi con số px **chính là hình dạng** (caret, swatch 9px, góc gần vuông làm đuôi bong bóng chat).
+- `/* mono-ok: <lý do> */` — khi `var(--code)` là đúng. Tiêu chí: *người dùng có copy-paste nội dung này vào terminal/editor không?* Có → mono. Không → font hệ thống; cần căn số thẳng cột thì `font-variant-numeric: tabular-nums` (class `.tnum`), **không** dùng mono.
 
 ## UI patterns
 

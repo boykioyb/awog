@@ -57,11 +57,15 @@
 
 - **Detail header buttons:** mọi action button trong `*Detail.vue` header row (Edit/Delete/Duplicate/Test/Restart…) dùng cùng icon-only style. Class `p-1.5 rounded transition`, icon size `13`, color mặc định `t.textDim`, hover bgHover+text (hoặc dangerBg+danger cho destructive). `title` attribute bắt buộc thay text label. **Không** mix text+border (`px-3 py-1.5`) với icon-only trong cùng row.
 - **Editor textareas:** `<textarea>` trong `*Editor.vue` cho content dài (description, body, systemPrompt, command, args) dùng `resize-y min-h-[<rem>]` — không `resize-none`. Chat composer / single-purpose modal input giữ `resize-none` (ghi comment lý do).
-- **Font-size:**
-  - **Body text dùng `text-[1em]`** (scale theo `--font-size-base` từ Appearance setting; default 12px, range `FONT_SIZE_MIN`=12 → `FONT_SIZE_MAX`=18 ở [composables/useAppearanceDom.ts](../../apps/desktop/ui-next/composables/useAppearanceDom.ts)). Không `text-xs`/`text-sm`/`text-[<1em]` cho text đọc được — để người dùng tự chỉnh cỡ qua setting thay vì hardcode nhỏ.
-  - **Badge/hint/count chip = `text-[12px]` fixed** (không em, không scale). Áp dụng cho: numeric badge (dirty count, ahead/behind), section count `(N)`, status hint inline (`current`, `↑2`, `↓33`). Kèm `font-mono leading-none` + `minWidth: 18px` khi là pill số để box vuông cân.
-  - **Section/group label** (uppercase header trong sidebar/section): giữ `text-[1em]` — là header, không phải badge.
-  - Pixel-fixed lớn (`text-[80px]`, hero, empty state) OK — intentional.
+- **Font-size + radius: dùng CSS token, KHÔNG hardcode** ([ADR 0079](../../docs/decisions/0079-native-macos-shell-and-design-tokens.md)). `pnpm lint` chạy `scripts/check-design-tokens.mjs` và **fail** nếu vi phạm.
+  - **Type scale — 6 bậc:** `var(--fs-xs)` 11 · `var(--fs-sm)` 12 · `var(--fs-md)` 13 (body) · `var(--fs-lg)` 15 · `var(--fs-xl)` 17 · `var(--fs-2xl)` 22 (@base 13). Khai bằng `calc(var(--font-size-base) ± Npx)` nên ra **px nguyên ở mọi base** 12→18 (Appearance). **Cấm `font-size: <n>rem`** — rem lẻ rơi vào nửa pixel và macOS render nhoè.
+  - **Radius — 6 bậc:** `var(--r-xs)` 6 · `var(--r-sm)` 8 · `var(--r-btn)` 10 · `var(--r-card)` 14 · `var(--r-panel)` 16 · `var(--r-pill)`. **Cấm `border-radius: <n>px`**. `50%` và `0` vẫn hợp lệ.
+  - **`em` vẫn dùng được** cho cỡ chữ tương đối với cha (icon inline, superscript) — khác ngữ nghĩa token, guard không bắt. **`px` cố định** hợp lệ cho badge/hint không muốn scale theo Appearance.
+  - **Ngoại lệ:** khi con số px CHÍNH LÀ hình dạng (caret, swatch nhỏ, góc gần vuông làm đuôi bong bóng chat), giữ px và ghi `/* design-token-ok: <lý do> */` ngay trên dòng đó.
+- **Monospace chỉ cho code** ([ADR 0079](../../docs/decisions/0079-native-macos-shell-and-design-tokens.md) D3). Tiêu chí: *nội dung này người dùng có copy-paste vào terminal/editor không?* Có (code, diff, path, SHA, lệnh shell, env var) → `var(--code)` + ghi `/* mono-ok: <lý do> */`. Không (timestamp, count, badge, chip, nhãn, initials) → font hệ thống. Cần **căn số thẳng cột** thì dùng `font-variant-numeric: tabular-nums` (hoặc class `.tnum`), KHÔNG dùng mono.
+- **Section/group label** viết sentence-case, **không `text-transform: uppercase`**, không `letter-spacing` rộng. All-caps chỉ giữ cho nhãn kỹ thuật ngắn (tag ngôn ngữ code, badge trạng thái).
+- **Selection state** (`.ni.on` / `.li.on` / row đang chọn) = **accent-tint** `--accentDim` + `--accentBorder` + thanh accent 2px. **Không** dùng nền xám `--bgActive` — đã thử và bị bác.
+- Pixel-fixed lớn (hero, empty state) OK — intentional.
 
 Chi tiết + bảng `rows → min-h`: [docs/coding/nuxt-frontend.md#ui-patterns](../../docs/coding/nuxt-frontend.md#ui-patterns).
 

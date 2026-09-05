@@ -12,7 +12,7 @@
     "katex:inline": "node scripts/inline-katex-fonts.mjs",
     "postinstall": "nuxt prepare && node scripts/inline-katex-fonts.mjs",
     "typecheck": "nuxt typecheck",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-design-tokens.mjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,vue,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,vue,js,json,md}\""
