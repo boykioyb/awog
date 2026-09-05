@@ -119,7 +119,12 @@ export function traceFromToolResult(rawUse: InvokeToolUse, result: InvokeToolRes
   // Same proxy unwrap as traceFromToolUse (ADR 0051).
   const { name, input } = unwrapMcpToolCall(rawUse.name, rawUse.input)
   const use: InvokeToolUse = { ...rawUse, name, input }
-  if (use.name === 'TodoWrite') return traceFromTodos(use.id, use.input, formatDuration(elapsedMs))
+  // A SUCCESSFUL TodoWrite is just the checklist; a FAILED one must not render as
+  // one (same fix as the chat adapters — a failed tool that looks healthy is how a
+  // broken tool goes unnoticed). Fall through to the generic node, which marks it.
+  if (use.name === 'TodoWrite' && !result.isError) {
+    return traceFromTodos(use.id, use.input, formatDuration(elapsedMs))
+  }
   const node: TraceNode = {
     id: use.id,
     type: use.name === 'Task' ? 'subagent' : 'tool',
@@ -136,7 +141,10 @@ export function traceFromToolResult(rawUse: InvokeToolUse, result: InvokeToolRes
     if (target !== undefined) node.input = target
   }
   const preview = previewResult(result.content)
+  // An error must be labelled even when it carried no readable content — otherwise
+  // an empty-bodied failure is indistinguishable from a quiet success.
   if (preview.length > 0) node.result = result.isError ? `[error] ${preview}` : preview
+  else if (result.isError) node.result = '[error]'
   return node
 }
 

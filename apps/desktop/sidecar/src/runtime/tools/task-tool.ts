@@ -427,10 +427,12 @@ export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams,
         const who = agent ? agent.name : 'general-purpose'
         log.warn('subagent run failed', { subagent: who, err: message })
         // Surface as a non-fatal tool error so the parent can recover (re-plan
-        // or do the work itself) rather than aborting the whole turn.
+        // or do the work itself) rather than aborting the whole turn. Flagged per
+        // tool-error.ts so it still RENDERS as an error: a dead subagent must not
+        // look like a completed delegation.
         return {
           content: [{ type: 'text', text: `Subagent "${who}" failed: ${message}` }],
-          details,
+          details: { ...details, isError: true },
         }
       }
     },

@@ -45,6 +45,9 @@ interface BashDetails {
   command: string
   exitCode: number | null
   shellId?: string
+  // tool-error.ts: this result reports a failure (the model still reads the text
+  // and recovers; the step renders as an error instead of a green launch ack).
+  isError?: boolean
 }
 
 // Background exec context (ADR 0066). Set ONLY by the chat runtime (sessions) —
@@ -113,7 +116,7 @@ export function createBashTool(
               : `Failed to start background command: ${err instanceof Error ? err.message : String(err)}`
           return {
             content: [{ type: 'text', text }],
-            details: { command: params.command, exitCode: null },
+            details: { command: params.command, exitCode: null, isError: true },
           }
         }
       }

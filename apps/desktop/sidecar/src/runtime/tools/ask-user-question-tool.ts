@@ -53,6 +53,9 @@ const AskUserQuestionParams = Type.Object({
 interface AskUserQuestionDetails {
   questions: SessionQuestion[]
   answers: SessionQuestionAnswer[]
+  // tool-error.ts: a malformed call is a failed call — it must render as an
+  // error step, not as an answered question.
+  isError?: boolean
 }
 
 type RawParams = {
@@ -117,11 +120,13 @@ export function createAskUserQuestionTool(
       const questions = (params as RawParams).questions
       const error = validate(questions)
       if (error) {
-        // AgentToolResult has no isError flag — the descriptive content text is
-        // how the model learns to correct the call and retry.
+        // AgentToolResult has no isError flag of its own, so the failure rides in
+        // `details` (tool-error.ts) — the descriptive text is how the model learns
+        // to correct the call, the flag is how the step renders as an error rather
+        // than as an answered question.
         return {
           content: [{ type: 'text', text: `AskUserQuestion error: ${error}` }],
-          details: { questions: [], answers: [] },
+          details: { questions: [], answers: [], isError: true },
         }
       }
 

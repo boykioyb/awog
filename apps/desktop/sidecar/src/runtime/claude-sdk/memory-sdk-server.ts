@@ -12,8 +12,15 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import { runForget, runMemoryRead, runRemember } from '../tools/memory-tools.js'
 
-const textResult = (text: string): { content: { type: 'text'; text: string }[] } => ({
+// `isError` carries a helper's failure across the bridge — runForget reports "no
+// match" in a return field rather than by throwing (tools/tool-error.ts), and
+// without this it would render as a completed forget.
+const textResult = (
+  text: string,
+  isError = false,
+): { content: { type: 'text'; text: string }[]; isError?: boolean } => ({
   content: [{ type: 'text', text }],
+  ...(isError ? { isError: true } : {}),
 })
 
 export function buildMemoryToolsSdkServer(
@@ -51,7 +58,10 @@ export function buildMemoryToolsSdkServer(
           'memory_forget',
           'Delete a saved memory by name — when the user says something you remembered is wrong.',
           { name: z.string().describe('Name of the saved memory to delete.') },
-          async (args) => textResult((await runForget(args.name, projectId)).text),
+          async (args) => {
+            const r = await runForget(args.name, projectId)
+            return textResult(r.text, !r.found)
+          },
         ),
       ]
     : []

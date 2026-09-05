@@ -346,16 +346,22 @@ export function createClaudeEventAdapter(
   const emitToolResult = (block: ContentBlock, parentId: string | undefined): void => {
     if (!cb.onStep || typeof block.tool_use_id !== 'string') return
     const meta = toolInputs.get(block.tool_use_id) ?? { name: 'tool', input: {} }
-    // ExitPlanMode / TodoWrite already rendered their step on the tool_use; their
-    // result is an internal ack — don't overwrite it with a generic tool row.
-    if (meta.name === 'ExitPlanMode' || meta.name === 'TodoWrite') return
+    // Every skip below applies to a SUCCESSFUL result only. An error must always
+    // reach the transcript: silently dropping it renders a failed call as a healthy
+    // step, which is exactly how a rejected TodoWrite looked like a working
+    // checklist for a month of sessions.
+    const failed = block.is_error === true
+    // ExitPlanMode / TodoWrite already rendered their step on the tool_use; a
+    // successful result is an internal ack — don't overwrite it with a generic row.
+    if ((meta.name === 'ExitPlanMode' || meta.name === 'TodoWrite') && !failed) return
     // A BACKGROUNDED tool returns immediately with a launch ack ("Command running in
     // background with ID …", "Async agent launched successfully" — the CLI itself
     // tells the model not to quote it). The background row owns this id and shows the
     // real progress/output, so the ack must not overwrite it. A FOREGROUND subagent is
-    // untouched here: its result IS the report.
+    // untouched here: its result IS the report. A failed launch is not an ack and
+    // owns nothing, so it falls through.
     const bgTaskId = taskIdByToolUse.get(block.tool_use_id)
-    if (bgTaskId !== undefined && backgroundTaskIds.has(bgTaskId)) return
+    if (bgTaskId !== undefined && backgroundTaskIds.has(bgTaskId) && !failed) return
     cb.onStep(
       withParent(parentId)(
         stepFromToolResult({
@@ -363,7 +369,7 @@ export function createClaudeEventAdapter(
           toolName: meta.name,
           toolInput: meta.input,
           content: block.content,
-          isError: block.is_error === true,
+          isError: failed,
         }),
       ),
     )

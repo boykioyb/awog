@@ -24,6 +24,7 @@ import { listAgents } from '../agents/store.js'
 import { resolveModel } from './model-resolver.js'
 import { buildContext } from './context-builder.js'
 import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
+import { detailsSignalError } from './tools/tool-error.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
 import {
@@ -147,16 +148,21 @@ function createInvokeAdapter(
         const meta = toolInputs.get(event.toolCallId) ?? { name: event.toolName, input: {} }
         // event.result is the AgentToolResult { content, details, terminate };
         // surface the content array (node-runner's trace-mapper understands it).
-        const content =
+        const asResult =
           event.result && typeof event.result === 'object'
-            ? (event.result as { content?: unknown }).content
-            : event.result
+            ? (event.result as { content?: unknown; details?: unknown })
+            : undefined
+        const content = asResult ? asResult.content : event.result
         cb.onToolResult?.({
           id: event.toolCallId,
           name: meta.name,
           input: meta.input,
           content,
-          isError: event.isError === true,
+          // Same two failure modes as the chat adapter (event-adapter.ts): the tool
+          // threw, or it returned a failure flagged in `details` (tool-error.ts).
+          // Tasks were only ever checking the first, so a dead subagent or a
+          // rejected MCP call rendered as a healthy trace node.
+          isError: event.isError === true || detailsSignalError(asResult?.details),
           parentId,
         })
         break

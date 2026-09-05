@@ -169,16 +169,21 @@ export function createMemoryTools(opts: CreateMemoryToolsOptions): AgentTool[] {
         return { content: [{ type: 'text', text }], details: { id } }
       },
     }
-    const forgetTool: AgentTool<typeof ForgetParams, { found: boolean }> = {
+    const forgetTool: AgentTool<typeof ForgetParams, { found: boolean; isError?: boolean }> = {
       name: 'memory_forget',
       label: 'Forget',
       description:
         'Delete a saved memory by name — use it when the user says something you remembered is wrong ' +
         'or no longer true.',
       parameters: ForgetParams,
-      async execute(_id, params): Promise<AgentToolResult<{ found: boolean }>> {
+      async execute(_id, params): Promise<AgentToolResult<{ found: boolean; isError?: boolean }>> {
         const { text, found } = await runForget(params.name, projectId)
-        return { content: [{ type: 'text', text }], details: { found } }
+        // Nothing matched = the requested deletion did not happen. Flagged per
+        // tool-error.ts so it renders as an error rather than a completed forget.
+        return {
+          content: [{ type: 'text', text }],
+          details: { found, ...(found ? {} : { isError: true }) },
+        }
       },
     }
     tools.push(rememberTool as AgentTool, forgetTool as AgentTool)

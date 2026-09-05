@@ -148,7 +148,8 @@ export function createRunWorkflowTool(
         log.warn('RunWorkflow: failed to start task', { workflowId: workflow.id, err: message })
         return {
           content: [{ type: 'text', text: `Failed to start the workflow: ${message}` }],
-          details,
+          // tool-error.ts: no task was created — the step must not read as spawned.
+          details: { ...details, isError: true },
         }
       }
 

@@ -17,8 +17,15 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import { runWikiDelete, runWikiRead, runWikiSearch, runWikiWrite } from '../tools/wiki-tools.js'
 
-const textResult = (text: string): { content: { type: 'text'; text: string }[] } => ({
+// `isError` is what makes a rejected write render as a failed step instead of a
+// saved page — the helpers below report failure in a return field, not by throwing
+// (tools/tool-error.ts), so it has to be carried across the bridge explicitly.
+const textResult = (
+  text: string,
+  isError = false,
+): { content: { type: 'text'; text: string }[]; isError?: boolean } => ({
   content: [{ type: 'text', text }],
+  ...(isError ? { isError: true } : {}),
 })
 
 export function buildWikiToolsSdkServer(
@@ -48,14 +55,21 @@ export function buildWikiToolsSdkServer(
               .optional()
               .describe("'project' = the project's wiki; 'global' (default) = user-wide."),
           },
-          async (args) => textResult((await runWikiWrite(args, projectId)).text),
+          async (args) => {
+            const r = await runWikiWrite(args, projectId)
+            return textResult(r.text, r.rejected === true)
+          },
         ),
         tool(
           'wiki_delete',
           'Delete a wiki page. Only when the user asks — it may be their only copy and the global ' +
             'wiki has no version history.',
           { path: z.string().describe('Wiki page path to delete.') },
-          async (args) => textResult((await runWikiDelete(args.path, projectId)).text),
+          async (args) => {
+            // Nothing deleted = the requested action did not happen.
+            const r = await runWikiDelete(args.path, projectId)
+            return textResult(r.text, !r.deleted)
+          },
         ),
       ]
     : []

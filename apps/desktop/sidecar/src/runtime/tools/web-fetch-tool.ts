@@ -30,6 +30,8 @@ const WebFetchParams = Type.Object(
 interface WebFetchDetails {
   url: string
   status?: number
+  // tool-error.ts: this result reports a failure and must render as an error step.
+  isError?: boolean
 }
 
 function textResult(text: string, details: WebFetchDetails): AgentToolResult<WebFetchDetails> {
@@ -151,7 +153,9 @@ export function createWebFetchTool(): AgentTool<typeof WebFetchParams, WebFetchD
               : err.message
             : String(err)
         log.warn('WebFetch failed', { url: params.url, err: msg })
-        return textResult(`Could not fetch ${params.url}: ${msg}`, { url: params.url })
+        // Returned (not thrown) so the model can try another URL; flagged per
+        // tool-error.ts so the step is an error, not a successful fetch.
+        return textResult(`Could not fetch ${params.url}: ${msg}`, { url: params.url, isError: true })
       } finally {
         clearTimeout(timer)
       }

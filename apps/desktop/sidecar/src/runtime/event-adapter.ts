@@ -23,6 +23,7 @@ import {
 } from '../sessions/step-mapper.js'
 import type { StreamCallbacks } from '../sessions/runner.js'
 import type { SessionQuestionAnswer, SessionStep } from '../types/shared.js'
+import { detailsSignalError } from './tools/tool-error.js'
 
 interface Accumulator {
   text: string
@@ -178,15 +179,26 @@ export function createEventAdapter(
       }
       case 'tool_execution_end': {
         if (!cb.onStep) break
+        // event.result is the AgentToolResult { content, details, terminate }.
+        // `details` is the side channel where Edit/MultiEdit stash their diff + new
+        // file content for the step detail, and where a tool flags a failure.
+        const result =
+          event.result && typeof event.result === 'object'
+            ? (event.result as { content?: unknown; details?: unknown })
+            : undefined
+        // A tool FAILS in one of two ways: it threw (Pi sets event.isError), or it
+        // returned a failure as a normal result and flagged it in `details`
+        // (tool-error.ts — the only way to fail without aborting the turn, since
+        // AgentToolResult has no isError field). Both must render as an error step:
+        // a failed tool that looks successful is how a broken tool goes unnoticed.
+        const failed = event.isError === true || detailsSignalError(result?.details)
         // AskUserQuestion → update the 'question' step (emitted on start) with the
         // chosen answers from the tool result `details`, flipping it to 'done' so
         // the card renders the read-only record. Done before the generic path so
-        // it isn't overwritten by a plain tool row.
-        if (event.toolName === 'AskUserQuestion') {
-          const details =
-            event.result && typeof event.result === 'object'
-              ? (event.result as { details?: unknown }).details
-              : undefined
+        // it isn't overwritten by a plain tool row. A FAILED call falls through to
+        // the generic path instead, which is what renders the error.
+        if (event.toolName === 'AskUserQuestion' && !failed) {
+          const details = result?.details
           const rec = (typeof details === 'object' && details !== null ? details : {}) as {
             questions?: unknown
             answers?: SessionQuestionAnswer[]
@@ -203,18 +215,13 @@ export function createEventAdapter(
           )
           break
         }
-        // ExitPlanMode / TodoWrite already emitted their step on start; the
+        // ExitPlanMode / TodoWrite already emitted their step on start; a SUCCESSFUL
         // result is an internal ack — don't overwrite it with a generic tool row.
-        if (event.toolName === 'ExitPlanMode' || event.toolName === 'TodoWrite') break
+        // A FAILED one must still surface: skipping it unconditionally is what let
+        // a rejected TodoWrite render as a healthy checklist for a month.
+        if ((event.toolName === 'ExitPlanMode' || event.toolName === 'TodoWrite') && !failed) break
         const meta = toolInputs.get(event.toolCallId) ?? { name: event.toolName, input: {} }
-        // event.result is the AgentToolResult { content, details, terminate }.
-        // step-mapper's previewToolResult understands the content array shape;
-        // `details` is the side channel where Edit/MultiEdit stash their diff +
-        // new file content for the step detail's git-style view.
-        const result =
-          event.result && typeof event.result === 'object'
-            ? (event.result as { content?: unknown; details?: unknown })
-            : undefined
+        // step-mapper's previewToolResult understands the content array shape.
         cb.onStep(
           withParent(
             stepFromToolResult({
@@ -223,7 +230,7 @@ export function createEventAdapter(
               toolInput: meta.input,
               content: result ? result.content : event.result,
               details: result ? result.details : undefined,
-              isError: event.isError === true,
+              isError: failed,
             }),
           ),
         )

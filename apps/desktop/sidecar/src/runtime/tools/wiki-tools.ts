@@ -141,7 +141,7 @@ export async function runWikiWrite(
     scope?: string | undefined
   },
   projectId: string | undefined,
-): Promise<{ text: string; path: string }> {
+): Promise<{ text: string; path: string; rejected?: boolean }> {
   let slug: string
   try {
     slug = normaliseSlug(args.path)
@@ -149,10 +149,15 @@ export async function runWikiWrite(
     return {
       text: `Rejected: ${err instanceof Error ? err.message : 'invalid wiki path'}. Use a relative path like "architecture/system-overview".`,
       path: args.path,
+      rejected: true,
     }
   }
   if (args.body.length > MAX_WRITE_BODY_CHARS) {
-    return { text: `Rejected: page body exceeds ${MAX_WRITE_BODY_CHARS} characters.`, path: slug }
+    return {
+      text: `Rejected: page body exceeds ${MAX_WRITE_BODY_CHARS} characters.`,
+      path: slug,
+      rejected: true,
+    }
   }
 
   const wantsProject = args.scope === 'project'
@@ -269,10 +274,14 @@ const DeleteParams = Type.Object({
 
 interface WikiWriteDetails {
   path: string
+  // tool-error.ts: a rejected write must render as an error, not a saved page.
+  isError?: boolean
 }
 
 interface WikiDeleteDetails {
   deleted: boolean
+  // tool-error.ts: nothing deleted = the requested action did not happen.
+  isError?: boolean
 }
 
 interface WikiSearchDetails {
@@ -338,8 +347,11 @@ export function createWikiTools(opts: CreateWikiToolsOptions): AgentTool[] {
       'reuse an existing path to revise rather than adding a near-duplicate page.',
     parameters: WriteParams,
     async execute(_id, params): Promise<AgentToolResult<WikiWriteDetails>> {
-      const { text, path } = await runWikiWrite(params, projectId)
-      return { content: [{ type: 'text', text }], details: { path } }
+      const { text, path, rejected } = await runWikiWrite(params, projectId)
+      return {
+        content: [{ type: 'text', text }],
+        details: { path, ...(rejected ? { isError: true } : {}) },
+      }
     },
   }
 
@@ -352,7 +364,11 @@ export function createWikiTools(opts: CreateWikiToolsOptions): AgentTool[] {
     parameters: DeleteParams,
     async execute(_id, params): Promise<AgentToolResult<WikiDeleteDetails>> {
       const { text, deleted } = await runWikiDelete(params.path, projectId)
-      return { content: [{ type: 'text', text }], details: { deleted } }
+      // A delete that removed nothing did not do what was asked — surface it.
+      return {
+        content: [{ type: 'text', text }],
+        details: { deleted, ...(deleted ? {} : { isError: true }) },
+      }
     },
   }
 

@@ -20,6 +20,7 @@
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { countDone, parseTodos } from '../todos.js'
+import { log } from '../../util/logger.js'
 import type { TodoItem } from '../../types/shared.js'
 
 // TodoWrite: accept the Claude Code todo shape permissively (content + status,
@@ -62,8 +63,14 @@ export function createTodoWriteTool(
       if (sink) {
         try {
           await sink(items)
-        } catch {
-          /* ignore: persistence is an enhancement, not a precondition */
+        } catch (err) {
+          // The tool itself still succeeded (the model's list is intact and the
+          // transcript step renders it), so this is NOT a tool error — but it must
+          // not vanish either: the user's editable checklist silently failed to
+          // persist, and only a log makes that diagnosable.
+          log.warn('TodoWrite: failed to persist session checklist', {
+            err: err instanceof Error ? err.message : String(err),
+          })
         }
       }
       return {
@@ -81,14 +88,21 @@ const WebSearchParams = Type.Object(
   { additionalProperties: true },
 )
 
-export function createWebSearchTool(): AgentTool<typeof WebSearchParams, Record<string, never>> {
+interface WebSearchDetails {
+  // tool-error.ts: the stub never returns results, so every call is a failure to
+  // perform the requested search. Rendering it as a successful step told the user
+  // the search ran when nothing did.
+  isError: true
+}
+
+export function createWebSearchTool(): AgentTool<typeof WebSearchParams, WebSearchDetails> {
   return {
     name: 'WebSearch',
     label: 'Web search',
     description:
       'Search the web. NOTE: web access is not available in this environment — calling this returns an unavailability notice, not results.',
     parameters: WebSearchParams,
-    async execute(): Promise<AgentToolResult<Record<string, never>>> {
+    async execute(): Promise<AgentToolResult<WebSearchDetails>> {
       return {
         content: [
           {
@@ -96,7 +110,7 @@ export function createWebSearchTool(): AgentTool<typeof WebSearchParams, Record<
             text: 'Web search is not available in this environment. Proceed using the workspace files and your knowledge, or ask the user to provide the information.',
           },
         ],
-        details: {},
+        details: { isError: true },
       }
     },
   }
