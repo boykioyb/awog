@@ -98,17 +98,17 @@ watch(
   min-width: 0;
   background: var(--bgInput);
   border: 1px solid var(--accentBorder);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   padding: 2px 7px;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   outline: none;
 }
 .wfli-del {
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 0;
   background: transparent;
   color: var(--textDim);

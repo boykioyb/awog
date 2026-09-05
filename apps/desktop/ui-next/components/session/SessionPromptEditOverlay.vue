@@ -100,7 +100,7 @@ watch(
   flex-direction: column;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
@@ -126,7 +126,7 @@ watch(
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
   background: transparent;
@@ -142,7 +142,7 @@ watch(
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
   font-size: 1em;
@@ -160,7 +160,7 @@ watch(
 }
 .pe-btn {
   padding: 6px 13px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   font-size: 1em;
   font-weight: 500;
   cursor: pointer;

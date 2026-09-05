@@ -121,7 +121,7 @@
             <div class="usage">
               <span class="u1">
                 {{ formatTokens(usage.today) }}
-                <span style="font-size: 0.8462rem; color: var(--textDim); font-weight: 500">
+                <span style="font-size: var(--fs-xs); color: var(--textDim); font-weight: 500">
                   {{ t('home.activity.today') }}
                 </span>
               </span>

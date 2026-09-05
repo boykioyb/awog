@@ -448,18 +448,18 @@ const onDirtyContinue = (suppress: boolean) => {
   gap: 6px;
 }
 .nt-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
 .nt-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -475,7 +475,7 @@ const onDirtyContinue = (suppress: boolean) => {
   line-height: 1.5;
 }
 .nt-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .nt-wflist {
@@ -490,7 +490,7 @@ const onDirtyContinue = (suppress: boolean) => {
   width: 100%;
   text-align: left;
   padding: 10px 12px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   cursor: pointer;
@@ -526,12 +526,12 @@ const onDirtyContinue = (suppress: boolean) => {
   min-width: 0;
 }
 .nt-wf-name {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
 .nt-wf-desc {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 </style>

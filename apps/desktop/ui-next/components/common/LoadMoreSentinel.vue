@@ -63,7 +63,7 @@ onBeforeUnmount(() => {
   margin: 1px 0 5px 10px;
   padding: 2px 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textFaint);
   font-size: 12px;

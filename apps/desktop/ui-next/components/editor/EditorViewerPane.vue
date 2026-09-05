@@ -181,12 +181,12 @@ const diffLines = computed<DiffLine[]>(() => {
   font-size: 0.9em;
   background: var(--bgActive);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 .mdbody :deep(pre) {
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 12px 14px;
   overflow-x: auto;
   line-height: 1.6;
@@ -194,7 +194,7 @@ const diffLines = computed<DiffLine[]>(() => {
 .mdbody :deep(pre code) {
   background: none;
   padding: 0;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
 }
 .mdbody :deep(blockquote) {
   border-left: 3px solid var(--border);

@@ -106,13 +106,13 @@ const dismissLabel = computed(() =>
 .upd-track {
   margin-top: 4px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   overflow: hidden;
   background: var(--border);
 }
 .upd-bar {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--accent);
   transition: width 0.2s;
 }

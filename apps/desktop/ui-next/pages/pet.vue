@@ -516,7 +516,8 @@ body,
   align-self: flex-end;
   max-width: 100%;
   padding: 7px 10px;
-  border-radius: 12px 12px 3px 12px;
+  /* design-token-ok: near-square corner = the speech-bubble tail (see LibraryCreatorPanel). */
+  border-radius: var(--r-btn) var(--r-btn) 3px var(--r-btn);
   background: var(--bgEl);
   border: 1px solid var(--border);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
@@ -590,7 +591,7 @@ body,
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;

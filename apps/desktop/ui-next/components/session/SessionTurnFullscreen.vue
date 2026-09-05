@@ -169,7 +169,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -199,7 +199,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 9px;
   margin: 4px 0;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--dangerDim, rgba(239, 68, 68, 0.12));
   border: 1px solid var(--dangerBorder, rgba(239, 68, 68, 0.35));
 }

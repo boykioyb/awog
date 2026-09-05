@@ -697,7 +697,7 @@ function toggleFoldAll() {
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   color: var(--textDim);
 }
@@ -763,7 +763,7 @@ function toggleFoldAll() {
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

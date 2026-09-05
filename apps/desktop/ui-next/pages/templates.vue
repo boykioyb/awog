@@ -141,7 +141,7 @@ const {
   flex: 0 0 auto;
 }
 .tpl-bar-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }

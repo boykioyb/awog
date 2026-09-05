@@ -86,11 +86,11 @@ const runClass = (run: DocxRun) => ({
   font-size: 0.9em;
   background: var(--bgSubtle);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 10px 12px;
 }
 .odp.caption {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
 }
 /* List rows: marker in its own column so wrapped text aligns under the text. */

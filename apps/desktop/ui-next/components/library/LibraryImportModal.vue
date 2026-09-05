@@ -129,12 +129,12 @@ const confirm = async (): Promise<void> => {
   gap: 12px;
 }
 .lim-sub {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.5;
 }
 .lim-state {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   text-align: center;
   padding: 18px 0;
@@ -144,7 +144,7 @@ const confirm = async (): Promise<void> => {
   background: transparent;
   border: 0;
   color: var(--accent);
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
   padding: 2px 0;
 }
@@ -155,7 +155,7 @@ const confirm = async (): Promise<void> => {
   max-height: 48vh;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
 }
 .lim-grp {
   display: flex;
@@ -164,7 +164,7 @@ const confirm = async (): Promise<void> => {
   padding: 8px 12px;
   background: var(--bgHover);
   color: var(--textDim);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
 }
 .lim-grp:not(:first-child) {
   border-top: 1px solid var(--border);
@@ -204,18 +204,18 @@ const confirm = async (): Promise<void> => {
   min-width: 0;
 }
 .lim-item-nm {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   word-break: break-all;
 }
 .lim-item-sub {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   word-break: break-all;
 }
 .lim-count {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 </style>

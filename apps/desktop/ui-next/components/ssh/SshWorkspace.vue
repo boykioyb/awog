@@ -353,10 +353,10 @@ watch(
   max-width: 220px;
   padding: 6px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -380,7 +380,7 @@ watch(
 .sshx-tab-dot {
   width: 9px;
   height: 9px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   flex: 0 0 auto;
 }
 .sshx-tab-x {
@@ -389,7 +389,7 @@ watch(
   justify-content: center;
   width: 17px;
   height: 17px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }
@@ -405,7 +405,7 @@ watch(
   height: 28px;
   flex: 0 0 auto;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -427,7 +427,7 @@ watch(
   height: 28px;
   flex: 0 0 auto;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -497,17 +497,17 @@ watch(
 .sshx-tbar-dot {
   width: 9px;
   height: 9px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   flex: 0 0 auto;
 }
 .sshx-tbar-name {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
   flex: 0 0 auto;
 }
 .sshx-tbar-sub {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   min-width: 0;
   overflow: hidden;
@@ -529,10 +529,10 @@ watch(
   height: 26px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
   transition:
@@ -594,7 +594,7 @@ watch(
 .sshx-tsftp-note {
   padding: 24px 12px;
   text-align: center;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 </style>

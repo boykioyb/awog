@@ -385,9 +385,9 @@ onMounted(() => {
   pointer-events: none;
   background: var(--accentDim);
   border: 2px dashed var(--accent);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--accent);
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 .ssh-sf-head {
@@ -396,7 +396,7 @@ onMounted(() => {
   gap: 7px;
   flex: 0 0 auto;
   padding: 6px 10px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -416,7 +416,7 @@ onMounted(() => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -432,7 +432,7 @@ onMounted(() => {
 }
 .ssh-sf-empty {
   padding: 12px 14px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .ssh-sf-path {
@@ -449,7 +449,7 @@ onMounted(() => {
   flex: 1;
   min-width: 0;
   flex-wrap: wrap;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   cursor: text;
 }
 .ssh-sf-pathedit {
@@ -458,7 +458,7 @@ onMounted(() => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -474,11 +474,11 @@ onMounted(() => {
   min-width: 0;
   margin: 4px 8px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--accent);
   background: var(--bgInput);
   color: var(--text);
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   outline: none;
 }
 .ssh-sf-crumb {
@@ -487,7 +487,7 @@ onMounted(() => {
   color: var(--accent);
   cursor: pointer;
   padding: 1px 3px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   font-family: var(--code);
 }
 .ssh-sf-crumb:disabled {
@@ -511,7 +511,7 @@ onMounted(() => {
   background: var(--accentDim);
 }
 .ssh-sf-bulk-n {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--accent);
 }
@@ -525,10 +525,10 @@ onMounted(() => {
   height: 24px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: var(--bgEl);
   color: var(--text);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 .ssh-sf-bulk-btn:hover {
@@ -592,7 +592,7 @@ button.ssh-sf-hc:hover {
   background: transparent;
   color: var(--text);
   text-align: left;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   cursor: default;
 }
 .ssh-sf-row + .ssh-sf-row {
@@ -651,7 +651,7 @@ button.ssh-sf-hc:hover {
 }
 .ssh-sf-err {
   padding: 12px 14px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   word-break: break-word;
 }

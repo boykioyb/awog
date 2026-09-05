@@ -324,7 +324,7 @@ function formatResetsIn(ms: number | undefined): string {
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--accentDim);
   color: var(--accent);
   flex: 0 0 auto;
@@ -405,14 +405,14 @@ function formatResetsIn(ms: number | undefined): string {
 .rl-bar {
   flex: 1 1 auto;
   height: 5px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: var(--bgInput);
   overflow: hidden;
 }
 .rl-bar i {
   display: block;
   height: 100%;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   transition: width 0.2s;
 }
 .rl-pct {
@@ -435,7 +435,7 @@ function formatResetsIn(ms: number | undefined): string {
   width: 100%;
   text-align: left;
   padding: 7px 10px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
@@ -488,7 +488,7 @@ function formatResetsIn(ms: number | undefined): string {
   gap: 7px;
   width: 100%;
   padding: 8px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--accentBorder);
   background: var(--accentDim);
   color: var(--accent);

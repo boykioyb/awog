@@ -84,7 +84,7 @@ function setSegHtml(el: unknown, html: string): void {
   font-family: var(--code);
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   padding: 0 4px;
   font-size: 0.92em;
   overflow-wrap: anywhere;
@@ -94,7 +94,7 @@ function setSegHtml(el: unknown, html: string): void {
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow-x: auto;
   line-height: 1.5;
 }

@@ -176,7 +176,7 @@ const colWidth = (index: number) => sheet.value?.colWidths[index] ?? SHEET_DEFAU
 .osmorebtn {
   padding: 6px 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -205,7 +205,7 @@ const colWidth = (index: number) => sheet.value?.colWidths[index] ?? SHEET_DEFAU
   max-width: 220px;
   padding: 5px 12px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--textDim);
   cursor: pointer;
   white-space: nowrap;

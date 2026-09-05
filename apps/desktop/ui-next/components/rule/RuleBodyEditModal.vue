@@ -144,14 +144,14 @@ const onApply = () => {
   gap: 14px;
 }
 .rbe-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.55;
 }
 .rbe-promptbox {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 11px;
 }
 .rbe-ta {
@@ -162,16 +162,16 @@ const onApply = () => {
   resize: vertical;
   min-height: 4rem;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   font-family: var(--sans);
 }
 .rbe-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
 }
 .rbe-preview {
@@ -186,12 +186,12 @@ const onApply = () => {
   flex-wrap: wrap;
 }
 .rbe-pname {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
 .rbe-pdesc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
 }
 .spin {

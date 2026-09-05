@@ -657,7 +657,7 @@ async function pDeleteAll() {
 .stab-x:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
 }
 /* The lifted tab during a drag-reorder: dimmed so the insertion indicator reads. */
 .stab.dragging {
@@ -671,7 +671,7 @@ async function pDeleteAll() {
   top: 4px;
   bottom: 4px;
   width: 2px;
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   background: var(--accent);
   z-index: 1;
 }
@@ -685,7 +685,7 @@ async function pDeleteAll() {
   position: relative;
   width: 8px;
   height: 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   flex: 0 0 auto;
 }
 /* ── Tab status: running beam + state tints ──────────────────────────────────
@@ -782,7 +782,7 @@ async function pDeleteAll() {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   font-family: var(--code);
   font-size: 12px;
   line-height: 1;
@@ -800,7 +800,7 @@ async function pDeleteAll() {
   border: 0;
   background: transparent;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--textFaint);
   opacity: 0;
   transition: opacity 0.12s;
@@ -822,7 +822,7 @@ async function pDeleteAll() {
   align-self: center;
   height: 28px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   background: transparent;
   cursor: pointer;
@@ -923,7 +923,7 @@ async function pDeleteAll() {
   place-items: center;
   width: 17px;
   height: 17px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   color: var(--textDim);
   box-shadow: 0 0 0 1px var(--border);

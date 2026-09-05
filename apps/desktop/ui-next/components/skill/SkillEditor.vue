@@ -329,18 +329,18 @@ const onSave = () => {
   gap: 6px;
 }
 .ske-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
 .ske-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -356,7 +356,7 @@ const onSave = () => {
   line-height: 1.55;
 }
 .ske-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .ske-tiers {

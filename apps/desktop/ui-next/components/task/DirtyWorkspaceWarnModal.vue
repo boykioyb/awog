@@ -71,7 +71,7 @@ const bodyText = computed(() =>
   gap: 14px;
 }
 .dwm-body {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.6;
 }
@@ -79,7 +79,7 @@ const bodyText = computed(() =>
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   cursor: pointer;
 }

@@ -125,7 +125,7 @@ onBeforeUnmount(() => {
   padding: 16px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 .gpm-title {
@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
   padding: 9px 11px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
 }
 .gae-prompt {
   flex: none;
@@ -179,14 +179,14 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   white-space: nowrap;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .gae-copy {
   flex: none;
   display: inline-flex;
   align-items: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -201,9 +201,9 @@ onBeforeUnmount(() => {
   padding: 9px 11px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--textDim);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;

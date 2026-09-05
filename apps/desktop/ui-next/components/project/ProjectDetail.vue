@@ -6,7 +6,7 @@
         style="
           width: 26px;
           height: 26px;
-          border-radius: 7px;
+          border-radius: var(--r-xs);
           background: var(--accentDim);
           color: var(--accent);
           margin-right: 8px;

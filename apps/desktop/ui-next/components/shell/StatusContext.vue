@@ -224,6 +224,8 @@ function onCompact() {
 .catsq {
   width: 9px;
   height: 9px;
+  /* design-token-ok: a 9px square legend swatch — the --r-xs token (6px) clamps to
+     4.5px on it and turns the square into a dot. */
   border-radius: 2px;
   flex: 0 0 auto;
 }
@@ -332,7 +334,7 @@ function onCompact() {
   width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--text);
   font-size: 12px;

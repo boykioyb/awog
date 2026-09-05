@@ -73,7 +73,7 @@ const glyphStyle = (kind: MentionRow['kind']) => {
   align-items: center;
   justify-content: space-between;
   padding: 6px 11px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   background: var(--bgEl);
   border-bottom: 1px solid var(--border);

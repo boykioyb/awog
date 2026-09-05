@@ -200,16 +200,16 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   gap: 9px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   padding: 10px 12px;
 }
 .wfn-badge {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   font-weight: 600;
   background: var(--accentDim);
@@ -220,7 +220,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   min-width: 0;
 }
 .wfi-agent-name {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
   overflow: hidden;
@@ -228,12 +228,12 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   white-space: nowrap;
 }
 .wfi-agent-id {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   margin-top: 2px;
 }
 .wfi-skill-desc {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   margin-top: 6px;
   line-height: 1.5;
@@ -253,9 +253,9 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   min-width: 0;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 6px 9px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   outline: none;
 }
@@ -280,7 +280,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   background: transparent;
   border: 0;
   color: var(--textDim);
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
   padding: 4px 2px;
 }
@@ -292,7 +292,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .wfi-chk input {
@@ -306,7 +306,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   margin-top: 8px;
 }
 .wfi-gate-lbl {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--textDim);
   margin-bottom: 4px;
@@ -318,7 +318,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   margin-top: 10px;
 }
 .wfi-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   margin-top: 5px;
   margin-left: 22px;
@@ -332,6 +332,6 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   color: var(--textDim);
   text-align: center;
   padding: 40px 12px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
 }
 </style>

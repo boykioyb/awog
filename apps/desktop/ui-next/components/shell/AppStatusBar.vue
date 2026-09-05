@@ -171,7 +171,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   height: 20px;
   padding: 0 7px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   font-size: 12px;
@@ -201,7 +201,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   min-width: 16px;
   height: 14px;
   padding: 0 4px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: var(--accentDim);
   color: var(--accent);
   font-family: var(--code);

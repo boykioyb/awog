@@ -263,7 +263,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   height: 26px;
   padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -276,7 +276,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   color: var(--text);
 }
 .sshsess-title {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
   overflow: hidden;
@@ -309,7 +309,7 @@ function onSend(text: string, command?: SlashCommandRef) {
 .sshsess-row {
   display: flex;
   align-items: center;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
 }
 .sshsess-row:hover {
   background: var(--bgHover);
@@ -360,7 +360,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   height: 30px;
   margin-right: 4px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textFaint);
   cursor: pointer;
@@ -397,7 +397,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   height: 24px;
   padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textFaint);
   font-size: 12px;
@@ -447,7 +447,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   height: 24px;
   flex: 0 0 auto;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -482,7 +482,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   height: 24px;
   padding: 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   font-size: 12px;

@@ -137,7 +137,7 @@ const toggleSecret = async (i: number) => {
 
 <style scoped>
 .lkv-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--textDim);
   margin-bottom: 8px;
@@ -154,12 +154,12 @@ const toggleSecret = async (i: number) => {
 }
 .lkv-input {
   padding: 6px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
   font-family: var(--code);
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   outline: none;
 }
 .lkv-input:focus {
@@ -190,7 +190,7 @@ const toggleSecret = async (i: number) => {
   cursor: not-allowed;
 }
 .lkv-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   padding-top: 2px;
 }

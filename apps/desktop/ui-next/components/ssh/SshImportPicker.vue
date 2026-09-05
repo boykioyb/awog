@@ -110,12 +110,12 @@ const confirm = () => {
   gap: 12px;
 }
 .ssp-sub {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.5;
 }
 .ssp-state {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   text-align: center;
   padding: 18px 0;
@@ -125,7 +125,7 @@ const confirm = () => {
   background: transparent;
   border: 0;
   color: var(--accent);
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
   padding: 2px 0;
 }
@@ -137,7 +137,7 @@ const confirm = () => {
   max-height: 48vh;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
 }
 .ssp-item {
   display: flex;
@@ -165,18 +165,18 @@ const confirm = () => {
   min-width: 0;
 }
 .ssp-item-nm {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   word-break: break-all;
 }
 .ssp-item-sub {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   word-break: break-all;
 }
 .ssp-count {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 </style>

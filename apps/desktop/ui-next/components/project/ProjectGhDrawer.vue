@@ -672,7 +672,7 @@ function relativeWhen(iso: string): string {
 }
 .ghskbar {
   height: 11px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: linear-gradient(90deg, var(--bgHover) 25%, var(--bgActive) 50%, var(--bgHover) 75%);
   background-size: 200% 100%;
   animation: ghdw-shimmer 1.5s ease-in-out infinite;
@@ -724,7 +724,7 @@ function relativeWhen(iso: string): string {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--bgPanel);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textMuted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -782,7 +782,7 @@ function relativeWhen(iso: string): string {
   font-family: var(--code);
   line-height: 1;
   padding: 2px 7px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: var(--bgActive);
   color: var(--textDim);
   min-width: 18px;
@@ -798,11 +798,11 @@ function relativeWhen(iso: string): string {
   gap: 4px;
   padding: 2px 7px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   transition:
     color 0.12s ease,
     background 0.12s ease,
@@ -825,7 +825,7 @@ function relativeWhen(iso: string): string {
 /* A review timeline entry — its header + body + nested threads grouped in a card. */
 .ghreview {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   padding: 10px 12px;
   margin: 10px 0;
 }
@@ -851,7 +851,7 @@ function relativeWhen(iso: string): string {
 .ghrt-hunk {
   margin-bottom: 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .ghrt-reply {
@@ -873,7 +873,7 @@ function relativeWhen(iso: string): string {
   gap: 6px;
   padding: 6px 12px;
   border: 1px solid var(--green);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--green);
   font-size: 1em;

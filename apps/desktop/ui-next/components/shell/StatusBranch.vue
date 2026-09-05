@@ -124,7 +124,7 @@ function openGit() {
 }
 .sb-menu-hint {
   padding: 6px 10px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
 }
 .sb-menu-sep {

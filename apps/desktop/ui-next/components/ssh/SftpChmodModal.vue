@@ -104,7 +104,7 @@ const subtitle = computed(() =>
   padding: 18px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: var(--shadow-lg);
 }
 .sfmod-head {
@@ -118,12 +118,12 @@ const subtitle = computed(() =>
   color: var(--accent);
 }
 .sfmod-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
 .sfmod-sub {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   word-break: break-all;
 }
@@ -132,7 +132,7 @@ const subtitle = computed(() =>
   width: 100%;
 }
 .sfmod-grid th {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--textDim);
   padding: 4px;
@@ -144,7 +144,7 @@ const subtitle = computed(() =>
 }
 .sfmod-rowlabel {
   text-align: left !important;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .sfmod-grid input {
@@ -157,13 +157,13 @@ const subtitle = computed(() =>
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .sfmod-octal-in {
   width: 70px;
   padding: 5px 8px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: var(--bgInput);
   color: var(--text);

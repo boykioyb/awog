@@ -54,7 +54,7 @@
       :name="t('settings.about.lastChecked.name')"
       :desc="t('settings.about.lastChecked.desc')"
     >
-      <span style="color: var(--textDim); font-size: 0.8846rem">{{ lastCheckedLabel }}</span>
+      <span style="color: var(--textDim); font-size: var(--fs-sm)">{{ lastCheckedLabel }}</span>
     </SettingsField>
 
     <!-- Live status line (reflects the shared update store). -->

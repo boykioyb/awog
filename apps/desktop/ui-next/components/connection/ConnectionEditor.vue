@@ -1140,7 +1140,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   align-items: flex-start;
   gap: 9px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--accentDim);
   border: 1px solid var(--accent);
   color: var(--text);
@@ -1149,7 +1149,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 .cne-setup-t {
@@ -1171,18 +1171,18 @@ function namesToEntries(names: string[]): KvEntry[] {
   gap: 6px;
 }
 .cne-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
 .cne-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -1202,7 +1202,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   line-height: 1.55;
 }
 .cne-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .cne-toggle {
@@ -1210,11 +1210,11 @@ function namesToEntries(names: string[]): KvEntry[] {
   align-items: center;
   gap: 9px;
   padding: 9px 11px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--textMuted);
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
 .cne-toggle.on {
@@ -1228,7 +1228,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   border-top: 1px solid var(--border);
 }
 .cne-verify-sum {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
 }
 .cne-verify-sum.ok {
@@ -1241,14 +1241,14 @@ function namesToEntries(names: string[]): KvEntry[] {
   margin-top: -6px;
 }
 .cne-err {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--danger);
 }
 .cne-pre {
   font-family: var(--code);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--textDim);
@@ -1257,7 +1257,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   white-space: pre-wrap;
 }
 .cne-preview > summary {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   cursor: pointer;
   user-select: none;

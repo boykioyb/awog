@@ -246,6 +246,7 @@ onBeforeUnmount(() => {
   width: 0.5em;
   height: 1.1em;
   margin-left: 2px;
+  /* design-token-ok: streaming caret — same reason as .cursor in prototype.css. */
   border-radius: 2px;
   background: var(--accent);
   vertical-align: -0.2em;
@@ -278,7 +279,7 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow-x: auto;
   font-family: var(--code);
   font-size: 0.92em;

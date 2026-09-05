@@ -154,9 +154,9 @@ const onSubmit = () => {
 .cpfsel {
   border: 1px solid var(--border);
   background: var(--bgInput);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 7px 10px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   outline: none;
   font-family: var(--sans);

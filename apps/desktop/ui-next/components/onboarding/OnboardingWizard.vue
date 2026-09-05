@@ -123,7 +123,7 @@ const goTo = (i: number) => {
   max-height: 88vh;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
@@ -150,7 +150,7 @@ const goTo = (i: number) => {
   width: 26px;
   height: 26px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   color: var(--textDim);

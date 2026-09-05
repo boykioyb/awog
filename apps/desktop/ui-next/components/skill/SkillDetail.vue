@@ -103,12 +103,12 @@ const hasMetaChips = computed(
 .skd-icn {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   flex: 0 0 auto;
 }
 .skd-act {
@@ -120,7 +120,7 @@ const hasMetaChips = computed(
   border-color: var(--danger);
 }
 .skd-desc {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.6;
   margin: 0;

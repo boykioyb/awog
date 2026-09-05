@@ -240,7 +240,7 @@ watch(
 }
 .aederror {
   margin-top: 8px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
   font-size: 1em;
   background: var(--dangerDim);

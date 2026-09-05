@@ -309,7 +309,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex-direction: column;
   background: var(--bg);
   border: 1px solid var(--borderStrong);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   overflow: hidden;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
@@ -331,7 +331,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: var(--textDim);
   cursor: pointer;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   display: inline-flex;
 }
 .expmodal-x:hover {
@@ -356,7 +356,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
   gap: 5px;
   padding: 5px 11px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);
@@ -388,7 +388,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);

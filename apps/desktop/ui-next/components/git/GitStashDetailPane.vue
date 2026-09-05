@@ -11,7 +11,7 @@
       </div>
       <div class="gcard">
         <div style="white-space: pre-wrap; color: var(--text)">{{ stash.m }}</div>
-        <div style="margin-top: 8px; color: var(--textFaint); font-size: 0.8462rem">
+        <div style="margin-top: 8px; color: var(--textFaint); font-size: var(--fs-xs)">
           {{ stash.w }}
         </div>
         <div class="gdpactions">

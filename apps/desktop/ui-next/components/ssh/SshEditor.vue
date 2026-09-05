@@ -448,18 +448,18 @@ function parseTags(text: string): string[] {
   gap: 6px;
 }
 .sse-label {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text);
 }
 .sse-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -503,7 +503,7 @@ function parseTags(text: string): string[] {
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -518,7 +518,7 @@ function parseTags(text: string): string[] {
   color: var(--text);
 }
 .sse-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 /* Toggle row (reuses the global .tog2 switch) — a clickable label + switch. */
@@ -539,7 +539,7 @@ function parseTags(text: string): string[] {
   flex-direction: column;
   gap: 8px;
   padding: 12px 13px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
 }
@@ -549,7 +549,7 @@ function parseTags(text: string): string[] {
   gap: 7px;
 }
 .sse-secret-title {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }

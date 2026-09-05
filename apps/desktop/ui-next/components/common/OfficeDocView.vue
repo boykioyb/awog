@@ -51,7 +51,7 @@ const { t } = useI18n()
   max-width: 100%;
   height: auto;
   margin: 0.9em 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
 }
 /* Wide tables scroll inside their own box instead of stretching the column. */
 .odtwrap {
@@ -80,7 +80,7 @@ const { t } = useI18n()
   margin: 1.4em 0 0;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--amber);
   background: var(--bgSubtle);
 }

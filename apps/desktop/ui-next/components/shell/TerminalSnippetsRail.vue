@@ -214,7 +214,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   line-height: 1;
   min-width: 18px;
   padding: 2px 6px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   text-align: center;
   color: var(--textDim);
   background: var(--bgHover);
@@ -232,7 +232,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -276,7 +276,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   gap: 6px;
   padding: 8px 9px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgEl);
 }
 .tsr-row + .tsr-row {
@@ -302,7 +302,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   font-size: 12px;
   line-height: 1;
   padding: 2px 6px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   border: 1px solid var(--border);
   font-weight: 500;
@@ -326,7 +326,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

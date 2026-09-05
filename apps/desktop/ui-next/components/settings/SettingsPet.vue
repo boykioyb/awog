@@ -168,7 +168,7 @@ const scale = computed<string>({
   margin-top: 8px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   color: var(--text);
   font: inherit;
@@ -201,7 +201,7 @@ const scale = computed<string>({
   width: 96px;
   padding: 12px 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
   color: var(--textDim);
   font: inherit;

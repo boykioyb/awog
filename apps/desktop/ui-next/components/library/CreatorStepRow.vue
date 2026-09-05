@@ -71,7 +71,7 @@ const verifyTitle = computed(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
 }
@@ -79,11 +79,11 @@ const verifyTitle = computed(() => {
   display: flex;
   gap: 9px;
   padding: 9px 11px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--textMuted);
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
 }
 .lcp-verify.ok {
   border-color: var(--accentBorder);
@@ -116,7 +116,7 @@ const verifyTitle = computed(() => {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--code);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .spin {

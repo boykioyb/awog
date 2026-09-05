@@ -200,7 +200,7 @@ onBeforeUnmount(unbindListeners)
 }
 .tour-spot {
   position: fixed;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   border: 2px solid var(--accent);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
   pointer-events: none;
@@ -220,7 +220,7 @@ onBeforeUnmount(unbindListeners)
   max-width: min(340px, calc(100vw - 24px));
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 14px 15px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
   z-index: 251;
@@ -268,7 +268,7 @@ onBeforeUnmount(unbindListeners)
 }
 .tbtn {
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   padding: 5px 11px;
   font-size: 1em;
   font-weight: 500;

@@ -243,7 +243,7 @@ const onDrop = (e: DragEvent) => {
 .wfempty .ei {
   width: 48px;
   height: 48px;
-  border-radius: 13px;
+  border-radius: var(--r-card);
   background: var(--bgEl);
   border: 1px solid var(--border);
   display: grid;
@@ -251,7 +251,7 @@ const onDrop = (e: DragEvent) => {
   color: var(--textDim);
 }
 .wfempty .et {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   color: var(--textMuted);
 }
 .btn.pri.sm:disabled {
@@ -268,7 +268,7 @@ const onDrop = (e: DragEvent) => {
   font-family: var(--sans);
 }
 .wfcanvas .vue-flow__handle {
-  border-radius: 9999px;
+  border-radius: var(--r-pill);
   width: 9px;
   height: 9px;
   background: var(--borderStrong);
@@ -276,7 +276,7 @@ const onDrop = (e: DragEvent) => {
 }
 .wfcanvas .vue-flow__controls {
   box-shadow: none;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .wfcanvas .vue-flow__controls button {
@@ -292,7 +292,7 @@ const onDrop = (e: DragEvent) => {
   fill: currentColor;
 }
 .wfcanvas .vue-flow__minimap {
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow: hidden;
   background: var(--bgPanel);
 }

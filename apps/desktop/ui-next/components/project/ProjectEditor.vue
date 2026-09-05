@@ -379,18 +379,18 @@ const onSubmit = () => {
   gap: 6px;
 }
 .pe-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
 .pe-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -409,7 +409,7 @@ const onSubmit = () => {
   line-height: 1.55;
 }
 .pe-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .pe-labelrow {
@@ -421,7 +421,7 @@ const onSubmit = () => {
 .pe-detecting {
   margin-left: 8px;
   font-weight: 400;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .pe-genbtn {
@@ -429,11 +429,11 @@ const onSubmit = () => {
   align-items: center;
   gap: 5px;
   padding: 3px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   border: 1px solid var(--border);
   color: var(--textDim);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
   transition:
     color 0.12s ease,
@@ -462,7 +462,7 @@ const onSubmit = () => {
 }
 .pe-srcbtn {
   text-align: left;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -480,21 +480,21 @@ const onSubmit = () => {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
   margin-bottom: 3px;
 }
 .pe-srchint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .pe-status {
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   padding: 10px 12px;
   background: var(--bgSubtle);
   border: 1px solid var(--border);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
 }
 .pe-status.err {

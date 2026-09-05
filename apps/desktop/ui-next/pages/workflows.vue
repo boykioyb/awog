@@ -181,7 +181,7 @@ const canvasScopeLabel = computed(() => {
   flex: 0 0 auto;
 }
 .wflist-title {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
 }
@@ -198,7 +198,7 @@ const canvasScopeLabel = computed(() => {
 }
 .wflist-empty {
   padding: 16px 9px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
   text-align: center;
 }

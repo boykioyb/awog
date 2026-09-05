@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
   position: relative;
   margin: 0 0 14px;
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   overflow: hidden;
   height: 340px;
   background: var(--bg);
@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   color: var(--textDim);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   transition:
     background 0.12s,
@@ -226,7 +226,7 @@ onBeforeUnmount(() => {
   bottom: 12px;
   padding: 5px 12px;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: 12px;
   font-weight: 650;
   color: var(--accentText);

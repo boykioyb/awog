@@ -101,7 +101,7 @@ const badgeStyle = computed(() =>
   font-size: 12px;
   line-height: 1;
   padding: 3px 7px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
 }
 .wsplan-section {
   display: flex;

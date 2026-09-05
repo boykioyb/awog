@@ -112,7 +112,7 @@ function useSuggestion(prompt: string) {
   place-items: center;
   width: 54px;
   height: 54px;
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   color: var(--accent);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
@@ -138,7 +138,7 @@ function useSuggestion(prompt: string) {
   align-items: center;
   gap: 5px;
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: 12px;
   color: var(--textDim);
   background: var(--bgSubtle);
@@ -158,7 +158,7 @@ function useSuggestion(prompt: string) {
   gap: 11px;
   padding: 13px 14px;
   text-align: left;
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   border: 1px solid var(--border);
   background: var(--bgEl);
   cursor: pointer;
@@ -180,7 +180,7 @@ function useSuggestion(prompt: string) {
   flex: 0 0 auto;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--accent);
   background: var(--accentDim);
 }
@@ -217,7 +217,7 @@ function useSuggestion(prompt: string) {
   font-size: 11px;
   line-height: 1;
   padding: 3px 6px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   background: var(--bgSubtle);
   border: 1px solid var(--border);

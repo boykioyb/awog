@@ -626,7 +626,7 @@ watch(
   padding: 15px 16px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
 }
 .cnd-hero-main {
   flex: 1;
@@ -636,13 +636,13 @@ watch(
   gap: 6px;
 }
 .cnd-hero-name {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
   word-break: break-word;
 }
 .cnd-hero-tagline {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.5;
 }
@@ -703,7 +703,7 @@ watch(
   text-transform: capitalize;
 }
 .cnd-lead {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.6;
   margin: 0 0 14px;
@@ -713,7 +713,7 @@ watch(
    card language (shadcn-style neutral). */
 .cnd-card {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   overflow: hidden;
 }
@@ -726,7 +726,7 @@ watch(
   align-items: center;
   gap: 7px;
   padding: 10px 14px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
@@ -750,12 +750,12 @@ watch(
   min-width: 0;
 }
 .cnd-row-label {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
 }
 .cnd-row-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   line-height: 1.4;
 }
@@ -771,7 +771,7 @@ watch(
   display: flex;
   gap: 14px;
   padding: 10px 14px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .cnd-kv-row + .cnd-kv-row {
   border-top: 1px solid var(--border);
@@ -797,7 +797,7 @@ watch(
   align-items: center;
   gap: 4px;
   padding: 1px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--accentBorder);
   color: var(--accent);
   font-family: var(--code);
@@ -808,7 +808,7 @@ watch(
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--dangerDim);
   border-top: 1px solid var(--dangerBorder);
@@ -818,11 +818,11 @@ watch(
   gap: 9px;
   margin-top: 14px;
   padding: 11px 13px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--textMuted);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .cnd-banner.ok {
   border-color: var(--accentBorder);
@@ -873,10 +873,10 @@ watch(
 }
 .cnd-pre {
   font-family: var(--code);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   margin-top: 8px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgPanel);
   color: var(--textDim);
   max-height: 8rem;
@@ -910,9 +910,9 @@ watch(
   border: 0;
   background: transparent;
   color: var(--textDim);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
 }
 .cnd-log-toggle:hover {
   color: var(--text);
@@ -929,7 +929,7 @@ watch(
   align-items: flex-start;
   gap: 9px;
   padding: 9px 11px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgEl);
   border: 1px solid var(--border);
   color: var(--textDim);
@@ -947,12 +947,12 @@ watch(
   gap: 7px;
 }
 .cnd-tool-name {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text);
 }
 .cnd-tool-desc {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   margin-top: 2px;
 }
@@ -977,15 +977,15 @@ watch(
   gap: 5px;
 }
 .cnd-perm-label {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   font-family: var(--code);
 }
 .cnd-perm-item {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   word-break: break-all;
@@ -1016,7 +1016,7 @@ watch(
   gap: 6px;
 }
 .cnd-edit-label {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   font-family: var(--code);
 }
@@ -1026,11 +1026,11 @@ watch(
   resize: vertical;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 9px 11px;
   color: var(--text);
   font-family: var(--code);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   outline: none;
 }
@@ -1041,7 +1041,7 @@ watch(
   border-color: var(--accentBorder);
 }
 .cnd-edit-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
   line-height: 1.5;
 }

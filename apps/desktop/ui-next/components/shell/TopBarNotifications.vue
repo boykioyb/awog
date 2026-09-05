@@ -301,7 +301,7 @@ function openOnGithub(): void {
   display: grid;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -329,7 +329,7 @@ function openOnGithub(): void {
   min-width: 15px;
   height: 15px;
   padding: 0 3px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--bg);
   font-family: var(--code);
@@ -352,7 +352,7 @@ function openOnGithub(): void {
   flex-direction: column;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
@@ -380,7 +380,7 @@ function openOnGithub(): void {
   flex: 0 0 auto;
   padding: 4px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -415,7 +415,7 @@ function openOnGithub(): void {
   gap: 5px;
   padding: 3px 9px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -478,7 +478,7 @@ function openOnGithub(): void {
 .ntf-grp-head:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
 }
 .ntf-grp-chev {
   flex: 0 0 auto;
@@ -520,7 +520,7 @@ function openOnGithub(): void {
   flex: 0 0 auto;
   padding: 1px 6px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   font-size: 12px;
   line-height: 1.35;

@@ -74,7 +74,7 @@ const metaText = computed(() => {
 <style scoped>
 .tli-count {
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }

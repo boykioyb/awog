@@ -5,7 +5,7 @@
   </div>
   <template v-else>
     <div class="dh">
-      <span class="dt mono" style="font-size: 0.9231rem">
+      <span class="dt mono" style="font-size: var(--fs-sm)">
         <span class="dtname" :title="file ?? ''">{{ baseName }}</span>
       </span>
       <span v-if="additions > 0" class="chip" style="color: var(--add)">+{{ additions }}</span>
@@ -204,6 +204,6 @@ const splitRight = computed<DiffRow[]>(() => {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 </style>

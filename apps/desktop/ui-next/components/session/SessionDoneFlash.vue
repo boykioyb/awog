@@ -63,7 +63,7 @@ onBeforeUnmount(clearTimer)
   background: var(--accentSoft, var(--accentDim));
   color: var(--accent);
   border: 1px solid var(--accentBorder);
-  border-radius: var(--r-pill, 999px);
+  border-radius: var(--r-pill);
   box-shadow: var(--shadow-sm);
   font-weight: 600;
   pointer-events: none;

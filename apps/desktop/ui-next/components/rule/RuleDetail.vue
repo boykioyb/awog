@@ -101,7 +101,7 @@ const hasGlobs = computed(() => (props.rule.globs?.length ?? 0) > 0)
 .rld-icn {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   background: var(--bgInput);
@@ -126,7 +126,7 @@ const hasGlobs = computed(() => (props.rule.globs?.length ?? 0) > 0)
   margin: 0;
 }
 .rld-desc {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.6;
   margin: 0;
@@ -139,7 +139,7 @@ const hasGlobs = computed(() => (props.rule.globs?.length ?? 0) > 0)
   margin-top: 14px;
 }
 .rld-globlabel {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 </style>

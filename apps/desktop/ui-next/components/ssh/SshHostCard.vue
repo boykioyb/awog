@@ -100,7 +100,7 @@ const avatarStyle = computed(() => {
 .ssh-av {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -111,7 +111,7 @@ const avatarStyle = computed(() => {
 .ssh-name {
   flex: 1;
   min-width: 0;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
@@ -136,7 +136,7 @@ const avatarStyle = computed(() => {
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   opacity: 0;
   transition: opacity 0.12s;
 }
@@ -160,7 +160,7 @@ const avatarStyle = computed(() => {
   flex-wrap: wrap;
 }
 .ssh-endpoint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;

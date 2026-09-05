@@ -168,14 +168,14 @@ const onEditDetails = () => {
   gap: 14px;
 }
 .cpc-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.55;
 }
 .cpc-promptbox {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 11px;
 }
 .cpc-ta {
@@ -186,16 +186,16 @@ const onEditDetails = () => {
   resize: vertical;
   min-height: 4rem;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   font-family: var(--sans);
 }
 .cpc-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
 }
 .cpc-preview {
@@ -210,12 +210,12 @@ const onEditDetails = () => {
   flex-wrap: wrap;
 }
 .cpc-pname {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text);
 }
 .cpc-pdesc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
 }
 .spin {

@@ -2,7 +2,7 @@
   <div class="cres">
     <!-- Toolbar: filename + progress chip + take-all + Mark resolved -->
     <div class="dh">
-      <span class="dt mono" style="font-size: 0.9231rem">
+      <span class="dt mono" style="font-size: var(--fs-sm)">
         <span class="dtname" :title="path">{{ baseName }}</span>
       </span>
       <span v-if="mode === 'text'" class="chip cchip">
@@ -168,7 +168,7 @@ const baseName = computed(() => baseNameOf(props.path))
   gap: 10px;
   padding: 8px 12px;
   margin-bottom: 12px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--danger);
   background: var(--dangerBg, var(--bgSubtle));
   border: 1px solid var(--danger);
@@ -179,7 +179,7 @@ const baseName = computed(() => baseNameOf(props.path))
 .cfb {
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
 }
 .cfbmsg {
   color: var(--textDim);

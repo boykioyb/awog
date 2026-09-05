@@ -221,7 +221,7 @@ const onCancel = () => {
   color: var(--textDim);
   line-height: 1.5;
   padding: 9px 11px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
 }
@@ -241,7 +241,7 @@ const onCancel = () => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 650;
   flex: 0 0 auto;
   background: var(--bgInput);
@@ -273,7 +273,7 @@ const onCancel = () => {
   font-family: var(--code);
 }
 .oaerror {
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
   font-size: 1em;
   background: var(--dangerDim);

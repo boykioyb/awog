@@ -170,7 +170,7 @@
       <Icon name="alert" />
       {{ t('sessions.gate.error') }}
     </div>
-    <div style="font-size: 1rem; line-height: 1.5">{{ block.text }}</div>
+    <div style="font-size: var(--fs-md); line-height: 1.5">{{ block.text }}</div>
     <div class="cact">
       <button class="btn pri sm" @click="onRetry">
         <Icon name="refresh" />
@@ -347,11 +347,11 @@ const onRetry = (): void => {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 500;
   padding: 6px 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

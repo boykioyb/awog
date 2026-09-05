@@ -100,7 +100,7 @@ function onRowClick(node: WikiTreeNode): void {
   align-items: center;
   gap: 4px;
   padding: 4px 6px;
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   cursor: pointer;
   font-size: 1em;

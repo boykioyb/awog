@@ -103,7 +103,7 @@ watch(() => [props.source.slug, props.source.icon], loadIcon)
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgActive);
   color: var(--textMuted);
   border: 1px solid var(--border);
@@ -114,7 +114,7 @@ watch(() => [props.source.slug, props.source.icon], loadIcon)
 .savatar--sm {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
 }
 .savatar--md {
   width: 34px;
@@ -123,7 +123,7 @@ watch(() => [props.source.slug, props.source.icon], loadIcon)
 .savatar--lg {
   width: 46px;
   height: 46px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
 }
 .savatar-emoji {
   line-height: 1;

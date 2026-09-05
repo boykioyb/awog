@@ -169,14 +169,14 @@ const onSave = () => {
   gap: 14px;
 }
 .rpc-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.55;
 }
 .rpc-promptbox {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 11px;
 }
 .rpc-ta {
@@ -187,16 +187,16 @@ const onSave = () => {
   resize: vertical;
   min-height: 4rem;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   font-family: var(--sans);
 }
 .rpc-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
 }
 .rpc-preview {
@@ -211,12 +211,12 @@ const onSave = () => {
   flex-wrap: wrap;
 }
 .rpc-pname {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
 .rpc-pdesc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
 }
 .spin {

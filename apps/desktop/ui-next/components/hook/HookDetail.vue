@@ -164,7 +164,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 .hkd-icn {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   background: var(--bgInput);
@@ -190,7 +190,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   gap: 4px;
 }
 .hkd-desc {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.6;
   margin: 0;
@@ -201,7 +201,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   gap: 11px;
   margin-top: 16px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--amberDim);
   border: 1px solid var(--amberBorder);
 }
@@ -217,12 +217,12 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   min-width: 0;
 }
 .hkd-trust-ttl {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--amber);
 }
 .hkd-trust-desc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.55;
 }
@@ -241,17 +241,17 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
 }
 .hkd-ctl-label {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--textDim);
 }
 .hkd-ctl-val {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .hkd-tog.locked {
@@ -259,7 +259,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   cursor: not-allowed;
 }
 .hkd-faint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
 }
 .hkd-kvs {
@@ -275,17 +275,17 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   align-items: center;
   gap: 10px;
   padding: 7px 11px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
 }
 .hkd-kv-key {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   flex: 0 0 auto;
 }
 .hkd-kv-val {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   word-break: break-all;
 }
@@ -304,7 +304,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   align-items: center;
   gap: 11px;
   padding: 7px 11px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   flex-wrap: wrap;
@@ -316,25 +316,25 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   flex: 0 0 auto;
 }
 .hkd-run-code {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   min-width: 56px;
 }
 .hkd-run-dur {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   min-width: 70px;
 }
 .hkd-run-err {
   flex: 1;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .hkd-run-at {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .spin {

@@ -87,7 +87,7 @@ const { t } = useI18n()
   border-bottom: 1px solid var(--border);
 }
 .sshx-kc-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -95,7 +95,7 @@ const { t } = useI18n()
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -118,7 +118,7 @@ const { t } = useI18n()
   gap: 12px;
   padding: 12px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .sshx-kc-row + .sshx-kc-row {
@@ -129,7 +129,7 @@ const { t } = useI18n()
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   color: var(--accent);
   background: var(--accentDim);
   flex: 0 0 auto;
@@ -142,7 +142,7 @@ const { t } = useI18n()
   gap: 5px;
 }
 .sshx-kc-name {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
 }
@@ -158,7 +158,7 @@ const { t } = useI18n()
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -174,7 +174,7 @@ const { t } = useI18n()
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accentDim);
 }
@@ -184,7 +184,7 @@ const { t } = useI18n()
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

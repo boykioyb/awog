@@ -30,19 +30,19 @@ defineProps<{ icon: string; title: string; body: string }>()
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   color: var(--textDim);
   background: var(--bgHover);
   border: 1px solid var(--border);
 }
 .ssh-es-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
 .ssh-es-body {
   max-width: 320px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.5;
 }

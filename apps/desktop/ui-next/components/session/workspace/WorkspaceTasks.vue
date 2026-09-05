@@ -93,7 +93,7 @@ const entries = computed<Entry[]>(() => {
   gap: 9px;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgSubtle);
   cursor: pointer;
   text-align: left;

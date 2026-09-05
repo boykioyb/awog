@@ -76,14 +76,14 @@ function openPreview() {
 .thumb {
   width: 15px;
   height: 15px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   flex: 0 0 auto;
   background: linear-gradient(135deg, var(--blue), var(--violet));
 }
 .a1thumb {
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   object-fit: cover;
   flex: 0 0 auto;
 }

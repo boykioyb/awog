@@ -234,18 +234,18 @@ const onSave = () => {
   gap: 6px;
 }
 .ssi-label {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text);
 }
 .ssi-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -276,7 +276,7 @@ const onSave = () => {
   align-self: flex-start;
 }
 .ssi-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 /* Secret callout — subtle accent-tinted card (mirrors SshDetail's .ssh-err idiom):
@@ -286,7 +286,7 @@ const onSave = () => {
   flex-direction: column;
   gap: 8px;
   padding: 12px 13px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
 }
@@ -296,7 +296,7 @@ const onSave = () => {
   gap: 7px;
 }
 .ssi-secret-title {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }

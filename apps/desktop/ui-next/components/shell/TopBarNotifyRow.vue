@@ -98,7 +98,7 @@ const hoverText = computed(() => {
   column-gap: 6px;
   align-items: start;
   padding: 7px 6px 7px 4px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 /* Rows are multi-line now, so they need a seam to read as separate items. With the
@@ -232,7 +232,7 @@ const hoverText = computed(() => {
   gap: 4px;
   padding: 2px 8px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

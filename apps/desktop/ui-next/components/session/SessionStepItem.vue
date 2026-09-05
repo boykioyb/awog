@@ -104,7 +104,7 @@
         <!-- skill -->
         <div
           v-else-if="isSkill"
-          style="font-size: 0.9231rem; color: var(--textMuted); line-height: 1.6"
+          style="font-size: var(--fs-sm); color: var(--textMuted); line-height: 1.6"
         >
           {{ block.detail || t('sessions.step.skillRunning') }}
         </div>
@@ -329,7 +329,7 @@ const toggleSub = (i: number) => {
   display: inline-flex;
   align-items: center;
   padding: 2px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--textFaint);
   transition:
     background 0.12s ease,
@@ -362,7 +362,7 @@ const toggleSub = (i: number) => {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 /* "View full summary" button — trails the accent header row, opens the report in
    the shared PreviewModal. Reuses .stepview chrome; pushed to the far right. */
@@ -373,7 +373,7 @@ const toggleSub = (i: number) => {
 .submore {
   align-self: flex-start;
   padding: 1px 0;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--accent);
   transition: opacity 0.12s ease;
 }

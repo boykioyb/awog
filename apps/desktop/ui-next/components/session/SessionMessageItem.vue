@@ -693,7 +693,7 @@ const msgActions = computed<MsgAction[]>(() => [
   gap: 6px;
   max-width: 100%;
   padding: 3px 9px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
   color: var(--accent);
@@ -777,7 +777,7 @@ const msgActions = computed<MsgAction[]>(() => [
   height: 20px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
 }
 .hoveract .ha:hover {
@@ -819,8 +819,8 @@ const msgActions = computed<MsgAction[]>(() => [
 .abody.bubble {
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  border-bottom-left-radius: 5px;
+  border-radius: var(--r-panel);
+  border-bottom-left-radius: var(--r-xs);
   padding: 11px 14px;
   /* Clip the full-bleed footer bar to the card's rounded corners. */
   overflow: hidden;
@@ -844,7 +844,7 @@ const msgActions = computed<MsgAction[]>(() => [
   gap: 9px;
   margin: 4px 0;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--dangerDim, rgba(239, 68, 68, 0.12));
   border: 1px solid var(--dangerBorder, rgba(239, 68, 68, 0.35));
 }
@@ -872,12 +872,12 @@ const msgActions = computed<MsgAction[]>(() => [
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   border: 1px solid var(--dangerBorder, var(--border));
   color: var(--danger);
   cursor: pointer;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .merr-retry:hover {
   background: var(--dangerDim, var(--bgHover));

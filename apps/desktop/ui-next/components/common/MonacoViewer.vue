@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
 .mvretry {
   padding: 5px 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--text);
   cursor: pointer;

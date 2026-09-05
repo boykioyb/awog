@@ -71,7 +71,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex-direction: column;
   background: var(--bg);
   border: 1px solid var(--borderStrong);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   overflow: hidden;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
@@ -93,7 +93,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: var(--textDim);
   cursor: pointer;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   display: inline-flex;
 }
 .forkmodal-x:hover {
@@ -117,7 +117,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .forkempty .ei {
   width: 48px;
   height: 48px;
-  border-radius: 13px;
+  border-radius: var(--r-card);
   background: var(--bgEl);
   border: 1px solid var(--border);
   display: grid;

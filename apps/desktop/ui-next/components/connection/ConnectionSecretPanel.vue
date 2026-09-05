@@ -94,7 +94,7 @@ const onSave = () => {
   gap: 9px;
   margin: 0 16px 12px;
   padding: 12px 13px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--accentBorder);
 }
@@ -104,12 +104,12 @@ const onSave = () => {
   gap: 7px;
 }
 .csp-title {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 .csp-sub {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   line-height: 1.5;
 }
@@ -124,18 +124,18 @@ const onSave = () => {
   gap: 4px;
 }
 .csp-label {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--textMuted);
 }
 .csp-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   outline: none;
 }
 .csp-input:focus {

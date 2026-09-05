@@ -61,7 +61,7 @@ function runAction(tt: QuotaToast) {
   flex: 0 0 auto;
   padding: 3px 10px;
   border: 1px solid var(--accent);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--accentDim);
   color: var(--accent);
   font-size: 12px;

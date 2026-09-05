@@ -92,7 +92,7 @@
         <button class="btn sm" :disabled="busy" @click="emit('pull')">
           <span v-if="syncOp?.op === 'pull'" class="gspin-ring" />
           {{ syncOp?.op === 'pull' ? syncLabel : t('git.ops.pullWord') }}
-          <span v-if="!syncOp && behind" class="mono" style="font-size: 0.8462rem">
+          <span v-if="!syncOp && behind" class="mono" style="font-size: var(--fs-xs)">
             ↓{{ behind }}
           </span>
         </button>
@@ -109,7 +109,7 @@
         <button class="btn pri sm" :disabled="busy" @click="emit('push')">
           <span v-if="syncOp?.op === 'push'" class="gspin-ring" />
           {{ syncOp?.op === 'push' ? syncLabel : t('git.ops.pushWord') }}
-          <span v-if="!syncOp && ahead" class="mono" style="font-size: 0.8462rem">
+          <span v-if="!syncOp && ahead" class="mono" style="font-size: var(--fs-xs)">
             ↑{{ ahead }}
           </span>
         </button>
@@ -184,7 +184,7 @@
               class="mono"
               style="
                 display: block;
-                font-size: 0.8462rem;
+                font-size: var(--fs-xs);
                 color: var(--textDim);
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -398,7 +398,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .gbar .btn,
 .gbar .chip {
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
 }
 .gbar .btn.sm {
   padding: 0 11px;
@@ -432,7 +432,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   height: 28px;
   margin-left: -1px;
   border: 1px solid var(--border);
-  border-radius: 0 7px 7px 0;
+  border-radius: 0 var(--r-xs) var(--r-xs) 0;
   background: transparent;
   color: var(--danger);
   cursor: pointer;

@@ -164,7 +164,7 @@ const chars = computed(() =>
   gap: 6px;
   padding: 4px 6px;
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   color: var(--textDim);
 }
@@ -214,7 +214,7 @@ const chars = computed(() =>
   padding: 4px 6px;
   background: transparent;
   border: 0;
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   cursor: pointer;
   text-align: left;

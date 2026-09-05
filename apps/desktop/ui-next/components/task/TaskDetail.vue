@@ -275,7 +275,7 @@ const formattedTime = computed(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   margin-bottom: 12px;
 }
@@ -292,7 +292,7 @@ const formattedTime = computed(() => {
   color: var(--textFaint);
 }
 .td-desc {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.6;
   margin-bottom: 6px;
@@ -307,7 +307,7 @@ const formattedTime = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   margin-bottom: 2px;
 }
@@ -317,7 +317,7 @@ const formattedTime = computed(() => {
   gap: 8px;
   padding: 7px 9px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgSubtle);
   cursor: pointer;
   text-align: left;

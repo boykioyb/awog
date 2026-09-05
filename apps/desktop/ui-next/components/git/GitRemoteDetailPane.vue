@@ -197,7 +197,7 @@ watch(
 .gdp-edit {
   flex: none;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   transition: background 0.12s;
 }
@@ -217,7 +217,7 @@ watch(
   padding: 7px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
   font-size: 1em;

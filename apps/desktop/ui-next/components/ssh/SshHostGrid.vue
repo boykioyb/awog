@@ -212,7 +212,7 @@ const connectFirst = () => {
   height: 24px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--textDim);
   font-size: 12px;
@@ -288,7 +288,7 @@ const connectFirst = () => {
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
   text-align: left;
   cursor: pointer;
@@ -309,10 +309,10 @@ const connectFirst = () => {
 .sshx-card-mono {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   display: grid;
   place-items: center;
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-family: var(--code);
   font-weight: 650;
   flex: 0 0 auto;
@@ -325,7 +325,7 @@ const connectFirst = () => {
   gap: 3px;
 }
 .sshx-card-name {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
@@ -333,7 +333,7 @@ const connectFirst = () => {
   text-overflow: ellipsis;
 }
 .sshx-card-sub {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;
@@ -348,7 +348,7 @@ const connectFirst = () => {
 .sshx-card-tag {
   padding: 1px 7px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: 12px;
   color: var(--textDim);
   white-space: nowrap;
@@ -358,7 +358,7 @@ const connectFirst = () => {
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   opacity: 0;
   flex: 0 0 auto;

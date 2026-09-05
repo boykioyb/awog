@@ -90,7 +90,7 @@ const viewOptions = [
   align-items: center;
   gap: 5px;
   padding: 5px 9px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--textDim);
   background: transparent;
   cursor: pointer;

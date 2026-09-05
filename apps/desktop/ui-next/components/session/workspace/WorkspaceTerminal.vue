@@ -1033,7 +1033,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   padding: 5px 8px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   font-size: 1em;
@@ -1062,7 +1062,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 16px;
   height: 16px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
 }
 .wsterm-tab-close:hover {
@@ -1081,7 +1081,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   color: var(--textDim);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   transition:
     background 0.12s,
@@ -1169,6 +1169,6 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 </style>

@@ -54,10 +54,10 @@ const items: { key: SshSection; icon: string; label: string }[] = [
   width: 100%;
   padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   text-align: left;
   cursor: pointer;

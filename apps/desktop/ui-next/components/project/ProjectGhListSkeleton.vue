@@ -52,7 +52,7 @@ const ROWS: GhSkRow[] = [
 /* Shimmer: a soft band swept via background-position (paint-only — no reflow). */
 .ghskbar {
   height: 11px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: linear-gradient(90deg, var(--bgHover) 25%, var(--bgActive) 50%, var(--bgHover) 75%);
   background-size: 200% 100%;
   animation: ghsk-shimmer 1.5s ease-in-out infinite;
@@ -61,12 +61,12 @@ const ROWS: GhSkRow[] = [
 .ghskpill {
   width: 52px;
   height: 15px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   margin-left: auto;
 }
 .ghskchip {
   height: 14px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
 }
 @keyframes ghsk-shimmer {
   0% {

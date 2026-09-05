@@ -365,7 +365,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   font-family: var(--code);
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   padding: 0 4px;
   font-size: 0.92em;
   /* Long unbreakable tokens (file paths, URLs) must wrap inside the bubble instead
@@ -411,7 +411,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow-x: auto;
   line-height: 1.5;
 }
@@ -514,7 +514,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 .mdinline :deep(img) {
   max-width: 100%;
   height: auto;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
 }
 /* Resolved image → click opens the full-window PreviewModal. zoom-in cursor + an accent
@@ -548,7 +548,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   gap: 6px;
   padding: 3px 10px;
   border: 1px dashed var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   font-family: var(--code);
   font-size: 0.92em;

@@ -68,7 +68,7 @@ function onDismiss(): void {
   gap: 10px;
   margin: 6px 12px 0;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--text);
@@ -99,7 +99,7 @@ function onDismiss(): void {
   gap: 5px;
   flex: none;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   font-size: 12px;
   font-weight: 600;
   color: #fff;
@@ -115,7 +115,7 @@ function onDismiss(): void {
   justify-content: center;
   flex: none;
   padding: 3px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--text);
   opacity: 0.5;
   transition: opacity 0.12s var(--ease, ease);

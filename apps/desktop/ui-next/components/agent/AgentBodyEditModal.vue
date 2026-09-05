@@ -177,14 +177,14 @@ const onApply = () => {
   gap: 14px;
 }
 .abe-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.55;
 }
 .abe-promptbox {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 11px;
 }
 .abe-ta {
@@ -195,16 +195,16 @@ const onApply = () => {
   resize: vertical;
   min-height: 4rem;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   font-family: var(--sans);
 }
 .abe-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
 }
 .abe-preview {
@@ -219,12 +219,12 @@ const onApply = () => {
   flex-wrap: wrap;
 }
 .abe-pname {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text);
 }
 .abe-pdesc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
 }
 .spin {

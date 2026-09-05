@@ -152,7 +152,7 @@ watch(
   gap: 9px;
   width: 100%;
   padding: 8px 8px 8px 11px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
   border: 1px solid var(--border);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -232,7 +232,7 @@ watch(
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
 }
 .mdx:hover {

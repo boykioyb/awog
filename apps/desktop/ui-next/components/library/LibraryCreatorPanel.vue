@@ -251,7 +251,7 @@ onBeforeUnmount(() => creator.teardown())
   max-height: 680px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -266,12 +266,12 @@ onBeforeUnmount(() => creator.teardown())
   flex: 0 0 auto;
 }
 .lcp-title {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
 .lcp-sub {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .lcp-x {
@@ -288,7 +288,7 @@ onBeforeUnmount(() => creator.teardown())
   gap: 12px;
 }
 .lcp-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.6;
 }
@@ -296,14 +296,16 @@ onBeforeUnmount(() => creator.teardown())
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.6;
 }
 .lcp-msg.user .lcp-text {
   align-self: flex-end;
   background: var(--accentDim);
   color: var(--text);
-  border-radius: 12px 12px 2px 12px;
+  /* design-token-ok: the near-square bottom-right corner IS the speech-bubble tail;
+     rounding it to a token erases the tail. */
+  border-radius: var(--r-btn) var(--r-btn) 2px var(--r-btn);
   padding: 8px 12px;
   max-width: 85%;
 }
@@ -333,11 +335,11 @@ onBeforeUnmount(() => creator.teardown())
   animation: lcp-blink 1s step-end infinite;
 }
 .lcp-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
 }
 .lcp-foot {
@@ -347,7 +349,7 @@ onBeforeUnmount(() => creator.teardown())
 .lcp-box {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   padding: 11px;
   display: flex;
   flex-direction: column;
@@ -363,7 +365,7 @@ onBeforeUnmount(() => creator.teardown())
   outline: none;
   resize: none;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   font-family: var(--sans);
 }
@@ -373,7 +375,7 @@ onBeforeUnmount(() => creator.teardown())
   justify-content: space-between;
 }
 .lcp-foothint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 .lcp-send {

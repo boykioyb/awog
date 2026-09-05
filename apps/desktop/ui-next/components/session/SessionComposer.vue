@@ -1439,7 +1439,7 @@ function onPaste(e: ClipboardEvent) {
   background: var(--bgActive);
   border: 1px solid var(--border);
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1;
   opacity: 0;
   transform: scale(0.85);
@@ -1553,18 +1553,18 @@ textarea.ci {
 .cmdnotice {
   margin: 0 2px 6px;
   padding: 5px 10px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: var(--bgActive);
   border: 1px solid var(--border);
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 /* Composer attachment thumbnail (image chips) — matches SessionAttachmentChip's
    inline gradient swatch from the prototype. */
 .thumb {
   width: 15px;
   height: 15px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   flex: 0 0 auto;
   background: linear-gradient(135deg, var(--blue), var(--violet));
 }
@@ -1572,7 +1572,7 @@ textarea.ci {
 .attthumb {
   width: 18px;
   height: 18px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   object-fit: cover;
   flex: 0 0 auto;
 }
@@ -1744,7 +1744,7 @@ textarea.ci {
   gap: 6px;
   margin: 4px 2px 0;
   padding: 5px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   font-size: 12px;
   color: var(--danger);
   background: var(--dangerBg);
@@ -1780,7 +1780,7 @@ textarea.ci {
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: var(--bgActive);
   color: var(--text);
 }
@@ -1806,7 +1806,7 @@ textarea.ci {
   width: 100%;
   background: var(--bgInput, var(--bgActive));
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   padding: 6px 8px;
   color: var(--text);
   font-size: 12px;
@@ -1828,7 +1828,7 @@ textarea.ci {
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   color: var(--text);
 }
@@ -1861,7 +1861,7 @@ textarea.ci {
   min-width: 0;
   background: var(--bgInput, var(--bgActive));
   border: 1px solid var(--accentBorder, var(--border));
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   padding: 5px 8px;
   color: var(--text);
   font-size: 12px;
@@ -1874,7 +1874,7 @@ textarea.ci {
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);
@@ -1889,7 +1889,7 @@ textarea.ci {
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -1933,7 +1933,7 @@ textarea.ci {
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   color: var(--text);
 }

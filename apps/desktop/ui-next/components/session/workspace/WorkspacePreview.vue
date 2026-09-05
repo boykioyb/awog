@@ -214,12 +214,12 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   flex: 0 0 auto;
   max-width: 160px;
   padding: 4px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   border: 1px solid transparent;
   color: var(--textDim);
   font-family: var(--code);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -257,7 +257,7 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   flex: 0 0 auto;
   display: inline-flex;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   border: none;
   color: var(--textDim);
@@ -291,12 +291,12 @@ watch([root, selectedPath], () => void load(), { immediate: true })
    .empty supplies the gap above it). */
 .wsprev-extbtn {
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   border: 1px solid var(--accent);
   color: var(--accent);
   cursor: pointer;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 .wsprev-extbtn:hover {

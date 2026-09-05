@@ -66,7 +66,7 @@ const rows = computed<DiffRow[]>(() => {
 .ghdiff {
   background: var(--bgInput);
   font-family: var(--code);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   line-height: 1.55;
 }
 .ghdiff-empty {
@@ -87,7 +87,7 @@ const rows = computed<DiffRow[]>(() => {
   text-align: right;
   color: var(--textFaint);
   user-select: none;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   line-height: 1.55;
   white-space: nowrap;
 }

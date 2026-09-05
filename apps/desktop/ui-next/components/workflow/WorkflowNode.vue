@@ -74,7 +74,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   width: 168px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   padding: 10px 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   position: relative;
@@ -94,10 +94,10 @@ const onDelete = () => props.data.onDelete?.(props.id)
 .wfn-badge {
   width: 18px;
   height: 18px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   font-weight: 600;
   background: var(--accentDim);
@@ -105,7 +105,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   flex: 0 0 auto;
 }
 .wfn-name {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -113,7 +113,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   white-space: nowrap;
 }
 .wfn-skill {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
   margin-top: 5px;
@@ -136,7 +136,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   gap: 5px;
   min-width: 0;
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .wfn-out-t {
@@ -162,7 +162,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   right: 6px;
   width: 20px;
   height: 20px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--borderStrong);
   background: var(--bgEl);
   color: var(--textMuted);

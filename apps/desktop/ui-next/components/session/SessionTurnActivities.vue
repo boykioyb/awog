@@ -92,7 +92,7 @@ function toggleThink(key: string) {
   align-items: center;
   gap: 8px;
   padding: 3px 6px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   color: var(--textDim);
   transition: background 0.12s ease;
@@ -117,7 +117,7 @@ function toggleThink(key: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   font-size: 12px;
   font-family: var(--font-mono, ui-monospace, monospace);

@@ -26,14 +26,14 @@ withDefaults(
   margin: 0 0 10px;
 }
 .setpanet {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
   line-height: 1.3;
 }
 .setpanesub {
   margin-top: 4px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.55;
 }

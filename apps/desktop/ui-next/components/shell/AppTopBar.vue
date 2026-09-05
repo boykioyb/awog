@@ -99,7 +99,7 @@ function onNew() {
   height: 28px;
   flex: 0 0 auto;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   color: var(--textDim);

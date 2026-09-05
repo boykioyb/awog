@@ -255,7 +255,7 @@ const onBackdrop = () => {
   max-height: 86vh;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -270,12 +270,12 @@ const onBackdrop = () => {
   flex: 0 0 auto;
 }
 .wfpc-title {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
 .wfpc-sub {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .wfpc-x {
@@ -295,13 +295,13 @@ const onBackdrop = () => {
   width: 100%;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 11px;
   outline: none;
   resize: vertical;
   min-height: 7rem;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   font-family: var(--sans);
 }
@@ -309,17 +309,17 @@ const onBackdrop = () => {
   border-color: var(--borderStrong);
 }
 .wfpc-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
 }
 .wfpc-draft {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 12px;
 }
 .wfpc-draft-hd {
@@ -329,12 +329,12 @@ const onBackdrop = () => {
   margin-bottom: 5px;
 }
 .wfpc-draft-name {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 .wfpc-draft-desc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.5;
 }
@@ -350,12 +350,12 @@ const onBackdrop = () => {
   gap: 6px;
 }
 .wfpc-group-name {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 .wfpc-group-role {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 .wfpc-group-steps {
@@ -369,17 +369,17 @@ const onBackdrop = () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .wfpc-step-n {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 .wfpc-step-skill {
   color: var(--textDim);
 }
 .wfpc-draft-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
   margin-top: 9px;
 }
@@ -392,7 +392,7 @@ const onBackdrop = () => {
   gap: 8px;
 }
 .wfpc-foothint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 .btn.pri.sm:disabled,

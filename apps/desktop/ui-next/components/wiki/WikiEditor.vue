@@ -201,7 +201,7 @@ function onKeydown(event: KeyboardEvent): void {
 .we-input {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   color: var(--text);
   padding: 4px 6px;
   font-size: 1em;
@@ -224,7 +224,7 @@ function onKeydown(event: KeyboardEvent): void {
   min-height: 0;
   margin: 0 10px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 </style>

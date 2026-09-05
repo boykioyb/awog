@@ -195,7 +195,7 @@ const onEditDetails = () => {
   gap: 14px;
 }
 .hpc-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.55;
 }
@@ -207,7 +207,7 @@ const onEditDetails = () => {
 .hpc-promptbox {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 11px;
 }
 .hpc-ta {
@@ -218,16 +218,16 @@ const onEditDetails = () => {
   resize: vertical;
   min-height: 4rem;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   font-family: var(--sans);
 }
 .hpc-err {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 11px;
 }
 .hpc-preview {
@@ -236,7 +236,7 @@ const onEditDetails = () => {
   gap: 8px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 12px;
 }
 .hpc-prow {
@@ -246,12 +246,12 @@ const onEditDetails = () => {
   flex-wrap: wrap;
 }
 .hpc-pname {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   font-weight: 550;
 }
 .hpc-pdesc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.55;
 }
@@ -261,7 +261,7 @@ const onEditDetails = () => {
   word-break: break-word;
 }
 .hpc-matcher {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .spin {

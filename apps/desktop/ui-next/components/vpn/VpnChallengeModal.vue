@@ -95,12 +95,12 @@ watch(
 }
 .vch-sub {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textDim);
 }
 .vch-prompt {
   margin: 0;
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
 }
@@ -108,12 +108,12 @@ watch(
   width: 100%;
   margin-top: 2px;
   padding: 9px 12px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
   font-family: var(--code);
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   letter-spacing: 0.14em;
   outline: none;
 }

@@ -68,7 +68,7 @@ useEscToClose(
   max-height: 86vh;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -83,7 +83,7 @@ useEscToClose(
   flex: 0 0 auto;
 }
 .lem-title {
-  font-size: 1.1154rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }

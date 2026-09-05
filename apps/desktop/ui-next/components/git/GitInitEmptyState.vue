@@ -116,7 +116,7 @@ async function onInit() {
   padding: 24px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-card);
 }
 .ginit-icon {
   align-self: center;
@@ -125,7 +125,7 @@ async function onInit() {
   justify-content: center;
   width: 52px;
   height: 52px;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: var(--bgInput);
   border: 1px solid var(--border);
   margin-bottom: 2px;
@@ -155,7 +155,7 @@ async function onInit() {
   padding: 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
 }
 .ginit-sec-head {
   display: flex;
@@ -190,7 +190,7 @@ async function onInit() {
   padding: 8px 11px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
   font-size: 1em;

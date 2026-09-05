@@ -183,7 +183,7 @@ const dayTitle = (d: CostDay): string =>
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -196,7 +196,7 @@ const dayTitle = (d: CostDay): string =>
   font-weight: 500;
   padding: 3px 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -224,7 +224,7 @@ const dayTitle = (d: CostDay): string =>
   width: 26px;
   height: 26px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -256,7 +256,7 @@ const dayTitle = (d: CostDay): string =>
   min-width: 0;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   padding: 3px 6px;
   color: var(--text);
   font-family: var(--code);
@@ -330,14 +330,14 @@ const dayTitle = (d: CostDay): string =>
   flex: 1;
   min-width: 0;
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   background: var(--bgActive);
   overflow: hidden;
 }
 .wscost-daybar > i {
   display: block;
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   background: var(--accent);
 }
 .wscost-daycost {
@@ -352,7 +352,7 @@ const dayTitle = (d: CostDay): string =>
   margin-top: 10px;
   padding: 4px 12px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -366,7 +366,7 @@ const dayTitle = (d: CostDay): string =>
   align-items: center;
   gap: 6px;
   padding: 7px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   font-size: 12px;
   color: var(--amber);
   background: color-mix(in srgb, var(--amber) 12%, transparent);

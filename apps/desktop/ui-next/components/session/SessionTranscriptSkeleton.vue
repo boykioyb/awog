@@ -49,7 +49,7 @@ const ROWS: SkRow[] = [
    reflow). bgHover base + bgActive band gives a gentle sweep in dark and light. */
 .skbar {
   height: 11px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: linear-gradient(90deg, var(--bgHover) 25%, var(--bgActive) 50%, var(--bgHover) 75%);
   background-size: 200% 100%;
   animation: sk-shimmer 1.5s ease-in-out infinite;
@@ -58,8 +58,8 @@ const ROWS: SkRow[] = [
    real user bubble (.mu), so it clearly reads as an outgoing message. */
 .skmsg.u .skbar {
   height: 40px;
-  border-radius: 16px;
-  border-bottom-right-radius: 5px;
+  border-radius: var(--r-panel);
+  border-bottom-right-radius: var(--r-xs);
 }
 @keyframes sk-shimmer {
   0% {

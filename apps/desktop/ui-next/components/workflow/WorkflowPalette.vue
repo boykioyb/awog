@@ -63,7 +63,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
 }
 .wfpal-hd {
   padding: 9px 11px;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
@@ -81,7 +81,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   align-items: center;
   gap: 8px;
   padding: 7px 9px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgEl);
   cursor: grab;
@@ -95,10 +95,10 @@ const onDragStart = (e: DragEvent, agentId: string) => {
 .wfpal-badge {
   width: 20px;
   height: 20px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   font-weight: 600;
   background: var(--accentDim);
@@ -108,7 +108,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
 .wfpal-name {
   flex: 1;
   min-width: 0;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
@@ -117,7 +117,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
 }
 .wfpal-empty {
   padding: 14px 9px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
   text-align: center;
 }

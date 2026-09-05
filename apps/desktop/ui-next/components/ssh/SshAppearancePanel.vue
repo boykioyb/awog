@@ -141,7 +141,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   border-bottom: 1px solid var(--border);
 }
 .tap-title {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -152,7 +152,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -178,7 +178,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 8px;
 }
 .tap-label {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 550;
   color: var(--textDim);
 }
@@ -193,7 +193,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 10px;
   padding: 6px 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -223,12 +223,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   height: 32px;
   padding: 3px 5px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   overflow: hidden;
 }
 .tap-swatch-txt {
   font-family: var(--code);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   line-height: 1;
 }
 .tap-swatch-dots {
@@ -238,11 +238,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .tap-swatch-dots i {
   width: 5px;
   height: 5px;
+  /* design-token-ok: 5px swatch dot — a token radius clamps and changes its shape. */
   border-radius: 1px;
 }
 .tap-preset-name {
   flex: 1 1 auto;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 .tap-check {
@@ -257,7 +258,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 2px;
   align-self: flex-start;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   padding: 2px;
 }
@@ -268,7 +269,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 28px;
   height: 26px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--text);
   cursor: pointer;
@@ -286,7 +287,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .tap-step-val {
   min-width: 30px;
   text-align: center;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 </style>

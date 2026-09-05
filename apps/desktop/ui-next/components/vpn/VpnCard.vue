@@ -151,7 +151,7 @@ const avatarStyle = computed(() => {
   gap: 12px;
   padding: 12px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .vpn-card + .vpn-card {
@@ -162,7 +162,7 @@ const avatarStyle = computed(() => {
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   flex: 0 0 auto;
 }
 .vpn-main {
@@ -180,7 +180,7 @@ const avatarStyle = computed(() => {
 }
 .vpn-name {
   min-width: 0;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
@@ -218,7 +218,7 @@ const avatarStyle = computed(() => {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -230,7 +230,7 @@ const avatarStyle = computed(() => {
   font-weight: 500;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accentDim);
 }
@@ -242,7 +242,7 @@ const avatarStyle = computed(() => {
 .vpn-tag {
   padding: 1px 7px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: 12px;
   color: var(--textDim);
   white-space: nowrap;
@@ -253,7 +253,7 @@ const avatarStyle = computed(() => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

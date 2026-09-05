@@ -126,7 +126,7 @@ function patchFor(path: string): string {
   cursor: pointer;
   text-align: left;
   font-size: 1em;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
 }
 .ghtrow:hover {
   background: var(--bgHover);
@@ -166,7 +166,7 @@ function patchFor(path: string): string {
 .ghtdiff {
   margin: 2px 0 6px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .ghtdiff-loading {

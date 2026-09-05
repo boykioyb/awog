@@ -175,7 +175,7 @@
             v-for="d in TIERS"
             :key="d"
             class="chip"
-            style="padding: 2px 8px; font-size: 0.8462rem"
+            style="padding: 2px 8px; font-size: var(--fs-xs)"
           >
             {{ d }}/
           </span>
@@ -359,8 +359,8 @@ async function onGhAccount(v: string) {
   gap: 8px;
   margin-top: 8px;
   padding: 8px 11px;
-  border-radius: 9px;
-  font-size: 0.9231rem;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
   color: var(--amber);
   background: var(--amberDim);
   border: 1px solid var(--amberBorder);

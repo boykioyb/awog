@@ -408,7 +408,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   padding: 16px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 .prm-head {
@@ -432,7 +432,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -453,7 +453,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   align-items: center;
   gap: 5px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
@@ -474,7 +474,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--dangerBg);
   border: 1px solid var(--dangerBorder);
   color: var(--danger);
@@ -522,7 +522,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);
@@ -538,7 +538,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   padding: 9px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
   font-size: 1em;
@@ -555,7 +555,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   font-size: 1em;
   font-weight: 500;
   padding: 3px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid transparent;
   background: transparent;
   color: var(--textDim);
@@ -579,7 +579,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid transparent;
   background: transparent;
   color: var(--textDim);
@@ -600,7 +600,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
   font-family: var(--code);
@@ -617,7 +617,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   font-size: 1em;
   line-height: 1.6;
 }

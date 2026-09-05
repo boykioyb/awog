@@ -274,7 +274,7 @@ onMounted(() => {
   padding: 5px;
   border: 0;
   background: transparent;
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -290,7 +290,7 @@ onMounted(() => {
   margin-top: 12px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   display: flex;
   flex-direction: column;
   gap: 8px;

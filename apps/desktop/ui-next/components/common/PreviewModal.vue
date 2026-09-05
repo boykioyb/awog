@@ -664,7 +664,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   color: var(--amber);
   background: var(--bgActive);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   padding: 3px 7px;
   white-space: nowrap;
   flex: 0 0 auto;
@@ -673,7 +673,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -731,9 +731,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .mdoitem {
   display: block;
   padding: 5px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1.35;
   cursor: pointer;
   white-space: nowrap;
@@ -777,7 +777,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   color: var(--text);
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   cursor: pointer;
 }
@@ -919,7 +919,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   padding: 18px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
 }
 .pvdlgt {
@@ -932,12 +932,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .pvdlgerr {
   color: var(--danger);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .pvinput {
   width: 100%;
   padding: 9px 11px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
@@ -955,7 +955,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvbtn {
   font-weight: 500;
   padding: 7px 14px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   color: var(--textDim);
   background: transparent;
@@ -1031,12 +1031,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   font-size: 0.9em;
   background: var(--bgActive);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 .mdbody :deep(pre) {
   background: var(--bgSubtle);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 12px 14px;
   overflow-x: auto;
   line-height: 1.6;
@@ -1044,7 +1044,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .mdbody :deep(pre code) {
   background: none;
   padding: 0;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
 }
 .mdbody :deep(blockquote) {
   border-left: 3px solid var(--border);

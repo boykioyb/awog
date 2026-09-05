@@ -321,7 +321,7 @@ function toggleNotifyProject(id: string): void {
   max-height: 220px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 6px;
 }
 .ghnp-row {
@@ -329,7 +329,7 @@ function toggleNotifyProject(id: string): void {
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: pointer;
 }
 .ghnp-row:hover {

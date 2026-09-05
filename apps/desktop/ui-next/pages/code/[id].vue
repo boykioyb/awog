@@ -256,7 +256,7 @@ onMounted(() => {
   display: grid;
   place-items: center;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   color: var(--textFaint);
   background: transparent;
   cursor: pointer;
@@ -326,7 +326,7 @@ onMounted(() => {
 }
 .codetoast {
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgEl);
   color: var(--text);

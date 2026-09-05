@@ -36,7 +36,7 @@ const points = computed(() => [
 .obw-hero {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   display: grid;
   place-items: center;
   background: var(--accentDim);

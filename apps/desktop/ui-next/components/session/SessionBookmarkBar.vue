@@ -90,7 +90,7 @@ const onJump = (row: BookmarkRow) => {
   flex: 0 0 auto;
   margin: 10px 14px 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .bmb-head {
@@ -144,7 +144,7 @@ const onJump = (row: BookmarkRow) => {
   flex: 0 0 auto;
   min-width: 18px;
   padding: 2px 5px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   background: var(--accentDim, var(--bgHover));
   color: var(--accent);
   font-family: var(--code, monospace);
@@ -162,7 +162,7 @@ const onJump = (row: BookmarkRow) => {
   align-items: center;
   gap: 4px;
   padding: 1px 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   min-width: 0;
 }
 .bmb-row:hover {
@@ -211,7 +211,7 @@ const onJump = (row: BookmarkRow) => {
   justify-content: center;
   flex: 0 0 auto;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   transition:
     color 0.12s var(--ease, ease),

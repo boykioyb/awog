@@ -169,7 +169,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   gap: 7px;
   flex: 0 0 auto;
   padding: 6px 10px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -180,7 +180,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   font-size: 12px;
   line-height: 1;
   padding: 2px 7px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -196,7 +196,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -209,7 +209,7 @@ async function del(snippet: SshSnippet): Promise<void> {
 .ssh-sn-note {
   flex: 0 0 auto;
   padding: 8px 12px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -228,12 +228,12 @@ async function del(snippet: SshSnippet): Promise<void> {
   color: var(--textDim);
 }
 .ssh-sn-empty-t {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
 }
 .ssh-sn-empty-b {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .ssh-sn-list {
   padding: 8px;
@@ -244,7 +244,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   gap: 8px;
   padding: 9px 10px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgEl);
 }
 .ssh-sn-row + .ssh-sn-row {
@@ -259,7 +259,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   cursor: pointer;
 }
 .ssh-sn-name {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -282,7 +282,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

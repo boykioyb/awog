@@ -51,7 +51,7 @@ watch(
   flex-direction: column;
   gap: 2px;
   padding: 9px 11px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgPanel);
   border: 1px solid var(--border);
   overflow-y: auto;
@@ -59,7 +59,7 @@ watch(
 .ctl-line {
   display: flex;
   gap: 8px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   line-height: 1.5;
   word-break: break-word;
 }

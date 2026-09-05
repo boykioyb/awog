@@ -107,7 +107,7 @@ function onEnter(e: KeyboardEvent) {
   padding: 5px 6px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 .pvfico {
@@ -121,7 +121,7 @@ function onEnter(e: KeyboardEvent) {
   width: 190px;
   padding: 4px 6px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: var(--bgInput);
   color: var(--text);
   outline: none;
@@ -148,7 +148,7 @@ function onEnter(e: KeyboardEvent) {
   min-width: 26px;
   height: 26px;
   padding: 0 5px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
   font-family: var(--code);

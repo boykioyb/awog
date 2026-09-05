@@ -171,9 +171,9 @@ onBeforeUnmount(() => {
   width: 100%;
   border: 1px solid var(--border);
   background: var(--bgInput);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 7px 10px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   cursor: pointer;
   font-family: var(--sans);
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   padding: 4px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
 }
@@ -235,9 +235,9 @@ onBeforeUnmount(() => {
   width: 100%;
   border: 0;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   padding: 6px 9px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   cursor: pointer;
   text-align: left;

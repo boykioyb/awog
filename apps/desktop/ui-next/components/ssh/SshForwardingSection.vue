@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 .sshx-fw-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -291,7 +291,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -329,11 +329,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex: 1 1 90px;
   padding: 0 9px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   outline: none;
 }
 .sshx-fw-input:focus {
@@ -381,7 +381,7 @@ onBeforeUnmount(() => {
   gap: 10px;
   padding: 11px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .sshx-fw-row + .sshx-fw-row {
@@ -393,7 +393,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
   flex: 0 0 auto;
@@ -401,12 +401,12 @@ onBeforeUnmount(() => {
 .sshx-fw-body {
   flex: 1;
   min-width: 0;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   word-break: break-all;
 }
 .sshx-fw-host {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   white-space: nowrap;
   flex: 0 0 auto;
@@ -420,7 +420,7 @@ onBeforeUnmount(() => {
   line-height: 1;
   padding: 3px 8px;
   border: 1px solid currentColor;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: transparent;
   flex: 0 0 auto;
 }
@@ -437,7 +437,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

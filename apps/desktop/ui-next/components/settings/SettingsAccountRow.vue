@@ -176,7 +176,7 @@ const formatTestResult = (result: AccountTestResult): string => {
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
 }
@@ -228,7 +228,7 @@ const formatTestResult = (result: AccountTestResult): string => {
   border-radius: 50%;
 }
 .acrsub {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   margin-top: 2px;
   white-space: nowrap;
@@ -241,7 +241,7 @@ const formatTestResult = (result: AccountTestResult): string => {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);
@@ -290,12 +290,12 @@ const formatTestResult = (result: AccountTestResult): string => {
   padding-left: 27px;
 }
 .acrmodel {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
 }
 .acrtest {
   margin-left: 27px;
   padding: 5px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   font-size: 1em;
   background: var(--bgEl);
   border: 1px solid var(--border);

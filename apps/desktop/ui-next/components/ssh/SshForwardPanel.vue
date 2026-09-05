@@ -202,7 +202,7 @@ onBeforeUnmount(() => {
    are styled locally rather than inherited. */
 .ssh-fp-surface {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   overflow: hidden;
 }
 .ssh-fp-head {
@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 7px;
   padding: 9px 12px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -233,7 +233,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
 }
 .ssh-fp-empty {
   padding: 12px 14px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .ssh-fp-list {
@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
   flex: 0 0 auto;
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
 .ssh-fp-body {
   flex: 1;
   min-width: 0;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   word-break: break-all;
 }
@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
   line-height: 1;
   padding: 3px 8px;
   border: 1px solid currentColor;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: transparent;
   flex: 0 0 auto;
 }
@@ -311,7 +311,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -347,11 +347,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex: 1 1 90px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .ssh-fp-input:focus-visible {
   outline: 2px solid var(--accent);

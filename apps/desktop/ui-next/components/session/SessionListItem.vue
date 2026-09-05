@@ -276,7 +276,7 @@ input.ttl {
   background: var(--bgInput);
   color: var(--text);
   border: 1px solid var(--accentBorder);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   padding: 2px 7px;
   outline: none;
   font: inherit;
@@ -322,7 +322,7 @@ input.ttl {
   flex: 0 0 auto;
   padding: 2px 7px;
   border: 1px solid;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   font-family: var(--code);
   font-size: 12px;
   line-height: 1;
@@ -377,7 +377,7 @@ input.ttl {
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   color: var(--textDim);
   background: var(--bgActive);

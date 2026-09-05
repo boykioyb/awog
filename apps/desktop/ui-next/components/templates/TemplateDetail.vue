@@ -90,7 +90,7 @@ const groups = computed<Group[]>(() => {
 .tdt-icn {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   background: var(--accentDim);
@@ -102,19 +102,19 @@ const groups = computed<Group[]>(() => {
   border-color: var(--danger);
 }
 .tdt-desc {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.6;
   margin: 0 0 18px;
 }
 .tdt-section-hd {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--textDim);
   margin-bottom: 12px;
 }
 .tdt-empty {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .tdt-group {
@@ -127,7 +127,7 @@ const groups = computed<Group[]>(() => {
   margin-bottom: 8px;
 }
 .tdt-group-name {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }

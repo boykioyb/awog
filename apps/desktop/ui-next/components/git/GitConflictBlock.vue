@@ -80,7 +80,7 @@ const theirsRows = computed(() => toRows(props.theirs, 'theirs'))
 <style scoped>
 .cblock {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   margin-bottom: 12px;
   overflow: hidden;
 }
@@ -102,7 +102,7 @@ const theirsRows = computed(() => toRows(props.theirs, 'theirs'))
 }
 .cbtake {
   padding: 2px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);

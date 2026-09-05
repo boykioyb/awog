@@ -145,7 +145,7 @@ watch(
   padding: 18px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: var(--shadow-lg);
 }
 .sfpp-head {
@@ -159,7 +159,7 @@ watch(
   color: var(--accent);
 }
 .sfpp-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -168,7 +168,7 @@ watch(
   align-items: center;
   gap: 3px;
   flex-wrap: wrap;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
 }
 .sfpp-crumb {
   border: none;
@@ -176,7 +176,7 @@ watch(
   color: var(--accent);
   cursor: pointer;
   padding: 1px 3px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   font-family: var(--code);
 }
 .sfpp-crumb:disabled {
@@ -193,7 +193,7 @@ watch(
   height: 240px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
 }
 .sfpp-row {
@@ -206,7 +206,7 @@ watch(
   background: transparent;
   color: var(--text);
   text-align: left;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
 .sfpp-row + .sfpp-row {
@@ -224,17 +224,17 @@ watch(
 }
 .sfpp-empty {
   padding: 12px 14px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .sfpp-err {
   padding: 12px 14px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--danger);
   word-break: break-word;
 }
 .sfpp-dest {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   word-break: break-all;
 }

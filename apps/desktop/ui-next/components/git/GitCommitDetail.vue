@@ -10,7 +10,7 @@
       FILE TREE
     </span>
     <span style="flex: 1" />
-    <span class="mono" style="color: var(--accent); font-size: 0.8462rem">{{ commit.h }}</span>
+    <span class="mono" style="color: var(--accent); font-size: var(--fs-xs)">{{ commit.h }}</span>
   </div>
 
   <div v-if="tab === 'commit'" class="cdbody">
@@ -181,7 +181,7 @@ const dir = (f: string) => shortPath(f)[0]
 }
 .cddiffempty {
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   padding: 8px 4px;
 }
 </style>

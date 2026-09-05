@@ -248,7 +248,7 @@ const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value]
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   flex: 0 0 auto;
   opacity: 0;
   transition: opacity 0.12s;
@@ -267,14 +267,14 @@ const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value]
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: var(--accentDim);
   color: var(--accent);
 }
 .ssh-src-ic.lg {
   width: 44px;
   height: 44px;
-  border-radius: 11px;
+  border-radius: var(--r-btn);
 }
 .ssh-src-detail {
   padding: 24px;
@@ -289,12 +289,12 @@ const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value]
   gap: 14px;
 }
 .ssh-src-title {
-  font-size: 1.15rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
 .ssh-src-desc {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   margin-top: 2px;
 }

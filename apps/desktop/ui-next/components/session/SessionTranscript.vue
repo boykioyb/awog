@@ -337,7 +337,7 @@ onUnmounted(() => {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgEl);
   border: 1px solid var(--border);
   color: var(--textDim);

@@ -243,7 +243,7 @@ defineExpose({ focus })
 .ghcomposer {
   margin-top: 14px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   padding: 9px;
 }
@@ -257,7 +257,7 @@ defineExpose({ focus })
 .ghcseg {
   font-size: 1em;
   padding: 3px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid transparent;
   background: transparent;
   color: var(--textDim);
@@ -283,7 +283,7 @@ defineExpose({ focus })
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid transparent;
   background: transparent;
   color: var(--textDim);
@@ -325,7 +325,7 @@ defineExpose({ focus })
   font-size: 12px;
   font-family: var(--code);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);

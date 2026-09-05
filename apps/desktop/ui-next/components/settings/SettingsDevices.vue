@@ -197,7 +197,7 @@ function platformLabel(platform: string): string {
   font-size: 12px;
   line-height: 1;
   padding: 5px 10px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   border: 1px solid transparent;
   font-weight: 550;
 }
@@ -217,7 +217,7 @@ function platformLabel(platform: string): string {
   align-items: flex-start;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   border: 1px solid var(--amberBorder);
   background: var(--amberDim);
   margin-bottom: 14px;
@@ -236,26 +236,26 @@ function platformLabel(platform: string): string {
   color: var(--textFaint);
 }
 .dev-banner-title {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
 .dev-banner-hint {
   margin-top: 3px;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.5;
 }
 .dev-guide {
   margin-bottom: 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgSubtle);
   padding: 10px 14px;
 }
 .dev-guide-sum {
   cursor: pointer;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -267,7 +267,7 @@ function platformLabel(platform: string): string {
   gap: 7px;
 }
 .dev-guide-steps li {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.5;
 }
@@ -277,7 +277,7 @@ function platformLabel(platform: string): string {
   padding: 0;
   color: var(--accent);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: var(--fs-md);
   text-decoration: underline;
 }
 .dev-guide-tip {
@@ -292,7 +292,7 @@ function platformLabel(platform: string): string {
   align-items: center;
   gap: 8px;
   padding: 36px 20px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   border: 1px dashed var(--border);
   text-align: center;
 }
@@ -301,12 +301,12 @@ function platformLabel(platform: string): string {
   margin-bottom: 4px;
 }
 .dev-empty-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
 }
 .dev-empty-body {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.5;
   max-width: 320px;
@@ -325,7 +325,7 @@ function platformLabel(platform: string): string {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   border: 1px solid var(--border);
   background: var(--bgSubtle);
 }
@@ -334,7 +334,7 @@ function platformLabel(platform: string): string {
   min-width: 0;
 }
 .dev-row-label {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -349,7 +349,7 @@ function platformLabel(platform: string): string {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   color: var(--textDim);
 }

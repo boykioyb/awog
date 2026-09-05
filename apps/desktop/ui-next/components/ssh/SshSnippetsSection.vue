@@ -195,7 +195,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   border-bottom: 1px solid var(--border);
 }
 .sshx-sn-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -203,7 +203,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -219,13 +219,13 @@ async function del(snippet: SshSnippet): Promise<void> {
   border-bottom: 1px solid var(--border);
 }
 .sshx-sn-runon {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--textDim);
   flex: 0 0 auto;
 }
 .sshx-sn-notarget {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .sshx-sn-scroll {
@@ -244,7 +244,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   gap: 12px;
   padding: 12px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .sshx-sn-row + .sshx-sn-row {
@@ -255,7 +255,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   color: var(--accent);
   background: var(--accentDim);
   flex: 0 0 auto;
@@ -268,7 +268,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   gap: 5px;
 }
 .sshx-sn-name {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
 }
@@ -285,7 +285,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

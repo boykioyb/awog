@@ -195,15 +195,15 @@ function onFetch(): void {
 .sprhint {
   padding: 16px;
   color: var(--textFaint);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .sprtable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
 }
 .sprtable th {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
   font-weight: 500;
@@ -233,9 +233,9 @@ function onFetch(): void {
   width: 92px;
   border: 1px solid var(--border);
   background: var(--bgInput);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   padding: 5px 8px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   outline: none;
   text-align: right;
@@ -249,7 +249,7 @@ function onFetch(): void {
   width: 28px;
   height: 28px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -268,7 +268,7 @@ function onFetch(): void {
   gap: 10px;
 }
 .pcarderror {
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 6px 10px;
   font-size: 1em;
   background: var(--dangerDim);

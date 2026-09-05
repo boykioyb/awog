@@ -156,7 +156,7 @@ watch(
 .wim {
   width: 420px;
   max-width: 92vw;
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -191,7 +191,7 @@ watch(
 .wim-input {
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   color: var(--text);
   padding: 5px 7px;
   font-size: 1em;

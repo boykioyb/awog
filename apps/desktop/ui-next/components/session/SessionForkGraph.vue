@@ -101,7 +101,7 @@ function onNodeClick(e: NodeMouseEvent) {
 }
 .forkcanvas .vue-flow__controls {
   box-shadow: none;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .forkcanvas .vue-flow__controls button {

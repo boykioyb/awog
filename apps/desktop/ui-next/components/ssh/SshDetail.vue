@@ -279,10 +279,10 @@ const forwardLabel = (fwd: PortForward): string => {
 .ssh-mono {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   display: grid;
   place-items: center;
-  font-size: 1.15rem;
+  font-size: var(--fs-lg);
   font-family: var(--code);
   font-weight: 650;
   flex: 0 0 auto;
@@ -295,13 +295,13 @@ const forwardLabel = (fwd: PortForward): string => {
   gap: 4px;
 }
 .ssh-hero-name {
-  font-size: 1.15rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
   word-break: break-word;
 }
 .ssh-hero-endpoint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   word-break: break-all;
 }
@@ -321,7 +321,7 @@ const forwardLabel = (fwd: PortForward): string => {
   line-height: 1;
   padding: 3px 8px;
   border: 1px solid;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: transparent;
 }
 .ssh-pill-dot {
@@ -336,7 +336,7 @@ const forwardLabel = (fwd: PortForward): string => {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -368,10 +368,10 @@ const forwardLabel = (fwd: PortForward): string => {
   padding: 0 13px;
   margin-right: 4px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--accent);
   color: var(--accentText, #fff);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   cursor: pointer;
   transition:
@@ -396,7 +396,7 @@ const forwardLabel = (fwd: PortForward): string => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -435,7 +435,7 @@ const forwardLabel = (fwd: PortForward): string => {
   padding: 16px 18px;
 }
 .ssh-sec-h {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--textDim);
   margin: 0 0 6px;
@@ -451,7 +451,7 @@ const forwardLabel = (fwd: PortForward): string => {
   display: flex;
   gap: 16px;
   padding: 8px 0;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .ssh-kv-row + .ssh-kv-row {
   border-top: 1px solid var(--border);
@@ -478,7 +478,7 @@ const forwardLabel = (fwd: PortForward): string => {
   gap: 4px;
   padding: 2px 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -496,8 +496,8 @@ const forwardLabel = (fwd: PortForward): string => {
   gap: 8px;
   padding: 10px 12px;
   margin-bottom: 22px;
-  border-radius: 10px;
-  font-size: 0.8846rem;
+  border-radius: var(--r-btn);
+  font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--dangerDim);
   border: 1px solid var(--dangerBorder);
@@ -506,7 +506,7 @@ const forwardLabel = (fwd: PortForward): string => {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   overflow: hidden;
 }
 .ssh-fwd {
@@ -519,7 +519,7 @@ const forwardLabel = (fwd: PortForward): string => {
   border-top: 1px solid var(--border);
 }
 .ssh-fwd-body {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   word-break: break-all;
 }
@@ -539,7 +539,7 @@ const forwardLabel = (fwd: PortForward): string => {
   flex-direction: column;
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   overflow: hidden;
 }
 .ssh-surface-grow {
@@ -553,7 +553,7 @@ const forwardLabel = (fwd: PortForward): string => {
   padding: 9px 12px;
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
 }
 .ssh-surface-sub {
   flex: 1;
@@ -569,7 +569,7 @@ const forwardLabel = (fwd: PortForward): string => {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

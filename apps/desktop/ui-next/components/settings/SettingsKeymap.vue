@@ -142,12 +142,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
   min-width: 42px;
   height: 26px;
   padding: 0 9px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: var(--bgEl);
   color: var(--text);
   font-family: var(--code);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   line-height: 1;
 }
 .km-cap.on {
@@ -167,7 +167,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
 }
 .km-err {
   color: var(--danger);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   text-align: right;
   max-width: 320px;
 }

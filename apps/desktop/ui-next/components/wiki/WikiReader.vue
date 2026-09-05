@@ -325,7 +325,7 @@ async function onCopyPath(): Promise<void> {
   padding: 6px;
   border: 0;
   background: transparent;
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   cursor: pointer;
   transition: background var(--dur) var(--ease);
@@ -393,7 +393,7 @@ async function onCopyPath(): Promise<void> {
   color: var(--textDim);
   cursor: pointer;
   padding: 3px 4px;
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   font-size: 1em;
   overflow: hidden;
   text-overflow: ellipsis;

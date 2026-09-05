@@ -107,7 +107,7 @@ const kindStyle = (kind: ChangeKind) => ({
   margin-top: 1px;
   padding: 1px 7px;
   border: 1px solid;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: 12px;
   line-height: 1.5;
   white-space: nowrap;

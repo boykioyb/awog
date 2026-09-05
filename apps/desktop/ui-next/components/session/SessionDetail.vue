@@ -1225,7 +1225,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   margin: 0 14px 8px;
   padding: 7px 11px;
   border: 1px solid var(--accentBorder);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--text);
   cursor: pointer;
@@ -1343,7 +1343,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   pointer-events: none;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
   border: 2px dashed var(--accent);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
 }
 .dropzone-inner {
   display: flex;
@@ -1354,7 +1354,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   color: var(--accent);
   background: var(--bgEl);
   border: 1px solid var(--accentBorder);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
 }
 /* Floating action bar next to a text selection (anchored to viewport coords). */
 /* Floating selection action bar. Laid out at the viewport origin and moved ENTIRELY by
@@ -1392,7 +1392,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   color: var(--text);
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   cursor: pointer;
 }
@@ -1417,7 +1417,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   padding: 10px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 /* Once dragged/resized, anchor by explicit top-left (drop the selection transform). */
@@ -1432,7 +1432,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   align-items: flex-start;
   gap: 6px;
   color: var(--accent);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   cursor: grab;
   touch-action: none;
 }
@@ -1454,7 +1454,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   width: 100%;
   padding: 6px 9px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: var(--bgInput);
   color: var(--text);
   outline: none;
@@ -1479,7 +1479,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 }
 .npbtn {
   padding: 4px 12px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   color: var(--textDim);
 }

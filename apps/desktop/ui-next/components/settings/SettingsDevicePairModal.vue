@@ -124,7 +124,7 @@ onBeforeUnmount(stopTicker)
   margin: 0;
   text-align: center;
   color: var(--textMuted);
-  font-size: 1rem;
+  font-size: var(--fs-md);
   line-height: 1.5;
 }
 .pair-qr {
@@ -133,7 +133,7 @@ onBeforeUnmount(stopTicker)
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   overflow: hidden;
   border: 1px solid var(--border);
   background: var(--bgSubtle);
@@ -149,7 +149,7 @@ onBeforeUnmount(stopTicker)
   align-items: center;
   gap: 8px;
   color: var(--textDim);
-  font-size: 1rem;
+  font-size: var(--fs-md);
 }
 .pair-countdown {
   font-family: var(--code);
@@ -174,12 +174,12 @@ onBeforeUnmount(stopTicker)
 }
 .pair-code {
   font-family: var(--code);
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   letter-spacing: 0.12em;
   color: var(--text);
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 4px 10px;
 }
 </style>

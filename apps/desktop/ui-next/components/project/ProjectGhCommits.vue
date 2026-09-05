@@ -61,7 +61,7 @@ function relativeWhen(iso: string): string {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .ghcommit-row {
@@ -77,7 +77,7 @@ function relativeWhen(iso: string): string {
 .ghcommit-sha {
   flex: 0 0 auto;
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--accent);
 }
 .ghcommit-msg {
@@ -91,7 +91,7 @@ function relativeWhen(iso: string): string {
 }
 .ghcommit-meta {
   flex: 0 0 auto;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 </style>

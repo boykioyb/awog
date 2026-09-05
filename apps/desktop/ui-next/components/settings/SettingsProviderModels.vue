@@ -167,7 +167,7 @@ const onReset = () => reset(provider.value)
   align-items: center;
   gap: 10px;
   padding: 7px 4px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 .smcatrow:hover {

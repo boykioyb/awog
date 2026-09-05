@@ -127,7 +127,7 @@ useEscToClose(
   max-height: 44vh;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
@@ -154,7 +154,7 @@ useEscToClose(
   font-size: 12px;
   font-family: var(--code, ui-monospace, monospace);
   line-height: 1.4;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);
@@ -178,7 +178,7 @@ useEscToClose(
   align-items: center;
   justify-content: center;
   padding: 3px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
   transition:
@@ -241,13 +241,13 @@ useEscToClose(
   font-size: 0.92em;
   background: var(--bgHover);
   padding: 1px 4px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 .sttmd :deep(pre) {
   margin: 0 0 8px;
   padding: 8px 10px;
   background: var(--bgHover);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   overflow-x: auto;
 }
 .sttmd :deep(pre code) {
@@ -262,7 +262,7 @@ useEscToClose(
   margin: 0;
   padding: 8px 10px;
   background: var(--bgHover);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   overflow-x: auto;
   font-family: var(--code, ui-monospace, monospace);
   font-size: 0.92em;
@@ -302,7 +302,7 @@ useEscToClose(
   gap: 5px;
   padding: 4px 9px;
   font-size: 1em;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);

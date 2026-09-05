@@ -51,7 +51,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -71,12 +71,12 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   padding: 6px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   box-shadow: var(--shadow-lg);
 }
 .sfcol-head {
   padding: 4px 8px 6px;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--textDim);
 }
@@ -85,8 +85,8 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   align-items: center;
   gap: 9px;
   padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 0.9231rem;
+  border-radius: var(--r-xs);
+  font-size: var(--fs-sm);
   color: var(--text);
   cursor: pointer;
 }

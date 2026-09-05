@@ -319,7 +319,7 @@ body[data-theme-family='cute'] .side {
   padding: 10px 9px;
 }
 body[data-theme-family='cute'] .navg {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--textFaint);
   padding: 13px 10px 5px;
@@ -548,7 +548,7 @@ body[data-theme-family='cute'] .dh {
   padding: 0 18px;
 }
 body[data-theme-family='cute'] .dh .dt {
-  font-size: 1.2308rem;
+  font-size: var(--fs-xl);
   font-weight: 650;
   letter-spacing: -0.012em;
 }
@@ -557,7 +557,7 @@ body[data-theme-family='cute'] .dh .dsub {
   color: var(--textDim);
 }
 body[data-theme-family='cute'] .ptitle {
-  font-size: 1.2308rem;
+  font-size: var(--fs-xl);
   letter-spacing: -0.012em;
 }
 body[data-theme-family='cute'] .top .kbd {

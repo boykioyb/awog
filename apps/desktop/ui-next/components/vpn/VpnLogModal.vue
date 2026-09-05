@@ -88,14 +88,14 @@ watch(
 .vlog-body {
   height: 52vh;
   overflow-y: auto;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   border: 1px solid var(--border);
   background: var(--bg);
   padding: 12px 14px;
 }
 .vlog-empty {
   color: var(--textDim);
-  font-size: 1rem;
+  font-size: var(--fs-md);
   padding: 6px 2px;
 }
 .vlog-pre {

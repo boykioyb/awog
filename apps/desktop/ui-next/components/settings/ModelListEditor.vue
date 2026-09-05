@@ -99,7 +99,7 @@ const add = (id: string) => {
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);

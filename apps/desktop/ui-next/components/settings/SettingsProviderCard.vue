@@ -232,7 +232,7 @@ const onEditSaved = (account: ProviderAccount) => {
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .pcardtop {
@@ -243,7 +243,7 @@ const onEditSaved = (account: ProviderAccount) => {
 .pcardtop .rx {
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   display: grid;
   place-items: center;
   background: var(--bgActive);
@@ -255,11 +255,11 @@ const onEditSaved = (account: ProviderAccount) => {
   min-width: 0;
 }
 .pcardinfo .rt {
-  font-size: 1.0385rem;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 .pcardinfo .rd {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   margin-top: 2px;
 }
@@ -294,7 +294,7 @@ const onEditSaved = (account: ProviderAccount) => {
   border-style: dashed;
 }
 .pcarderror {
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 6px 10px;
   font-size: 1em;
   background: var(--dangerDim);

@@ -183,7 +183,7 @@ const onReset = async () => {
   gap: 16px;
 }
 .pll-note {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   line-height: 1.5;
 }
@@ -193,7 +193,7 @@ const onReset = async () => {
   gap: 7px;
 }
 .pll-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -222,17 +222,17 @@ const onReset = async () => {
   gap: 8px;
 }
 .pll-mcpreset {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--accent);
   cursor: pointer;
 }
 .pll-mcphint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .pll-mcplist {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0 10px;
   max-height: 196px;
   overflow-y: auto;

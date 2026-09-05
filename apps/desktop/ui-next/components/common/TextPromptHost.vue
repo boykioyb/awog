@@ -78,7 +78,7 @@ watch(
   padding: 16px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 .tph-title {
@@ -91,7 +91,7 @@ watch(
   padding: 9px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
   font-size: 1em;

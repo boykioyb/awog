@@ -127,7 +127,7 @@ const sourcePath = computed(() => {
 .cmd-icn {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   background: var(--bgInput);
@@ -149,14 +149,14 @@ const sourcePath = computed(() => {
   border-color: var(--danger);
 }
 .cmd-desc {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.6;
   margin: 0;
 }
 .cmd-invoke {
   margin-top: 10px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .cmd-arg {
@@ -175,7 +175,7 @@ const sourcePath = computed(() => {
   gap: 8px;
 }
 .cmd-toggle-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--textDim);
 }

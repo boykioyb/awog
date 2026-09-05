@@ -141,7 +141,7 @@ const todoColor = (status: TodoStatus): string => {
   align-items: center;
   gap: 8px;
   padding: 3px 7px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   min-width: 0;
 }
 .ttn-row.toggle {
@@ -165,14 +165,14 @@ const todoColor = (status: TodoStatus): string => {
   transform: rotate(0deg);
 }
 .ttn-kind {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-weight: 650;
   flex: 0 0 auto;
 }
 .ttn-name {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text);
   flex: 0 0 auto;
@@ -185,19 +185,19 @@ const todoColor = (status: TodoStatus): string => {
   flex: 0 0 auto;
 }
 .ttn-dim {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ttn-tool {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   flex: 0 0 auto;
 }
 .ttn-input {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -205,7 +205,7 @@ const todoColor = (status: TodoStatus): string => {
   min-width: 0;
 }
 .ttn-think {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-style: italic;
   color: var(--textMuted);
   overflow: hidden;
@@ -215,7 +215,7 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-dur {
   margin-left: auto;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }
@@ -227,12 +227,12 @@ const todoColor = (status: TodoStatus): string => {
   padding: 2px 0;
 }
 .ttn-purpose {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   padding: 2px 0;
 }
 .ttn-detail-body {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   white-space: pre-wrap;
   word-break: break-word;
   padding: 2px 0;
@@ -245,7 +245,7 @@ const todoColor = (status: TodoStatus): string => {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .ttn-todo-mark {
   font-family: var(--code);

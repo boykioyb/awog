@@ -33,14 +33,14 @@ const { t } = useI18n()
   flex: 0 0 auto;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .scg-msg {
   flex: 1;
   min-width: 0;
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .scg-x {
   width: 24px;
@@ -48,7 +48,7 @@ const { t } = useI18n()
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

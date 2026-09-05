@@ -6,7 +6,7 @@
       <div class="gl1">
         <Icon name="branch" />
         <span class="brn">{{ branch || '—' }}</span>
-        <span style="font-family: var(--code); font-size: 0.8462rem; color: var(--textDim)">
+        <span style="font-family: var(--code); font-size: var(--fs-xs); color: var(--textDim)">
           {{ t('sessions.workspace.changed', { ahead, changed: changedCount }) }}
         </span>
         <span style="margin-left: auto; display: inline-flex; gap: 2px">
@@ -258,7 +258,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   font-family: var(--code);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .wsdiff-files .frow.file {
   width: 100%;

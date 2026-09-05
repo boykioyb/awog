@@ -244,7 +244,7 @@ watch(
   padding: 18px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 .gid-head {
@@ -269,7 +269,7 @@ watch(
 .gid-x {
   flex: none;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   transition: background 0.12s;
 }
@@ -287,7 +287,7 @@ watch(
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--textDim);
@@ -335,7 +335,7 @@ watch(
   padding: 8px 11px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
   font-size: 1em;

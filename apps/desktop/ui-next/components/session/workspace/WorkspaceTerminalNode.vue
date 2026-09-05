@@ -322,7 +322,7 @@ const nodeKey = (node: LayoutNode): string =>
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: var(--bgPanel);
   box-shadow: 0 2px 8px rgb(0 0 0 / 28%);
   opacity: 0;
@@ -345,7 +345,7 @@ const nodeKey = (node: LayoutNode): string =>
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -383,7 +383,7 @@ const nodeKey = (node: LayoutNode): string =>
 }
 .wsterm-drop-band {
   position: absolute;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   border: 1px solid var(--accent);
 }

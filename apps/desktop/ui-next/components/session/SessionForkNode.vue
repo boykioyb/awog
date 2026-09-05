@@ -27,7 +27,7 @@ const { t } = useI18n()
 .fnode {
   width: 188px;
   padding: 9px 11px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
   border: 1px solid var(--border);
   cursor: pointer;

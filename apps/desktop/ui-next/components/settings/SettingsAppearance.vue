@@ -253,7 +253,7 @@ onMounted(() => {
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
 }
 .apv-h {
@@ -267,7 +267,7 @@ onMounted(() => {
 .apv-card {
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgCanvas);
   color: var(--text);
 }

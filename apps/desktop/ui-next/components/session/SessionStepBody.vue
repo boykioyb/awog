@@ -120,7 +120,7 @@ function parseDiff(src: string): DiffLine[] {
   word-break: break-all;
 }
 .stepio-lbl {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-weight: 650;
   color: var(--textDim);
 }

@@ -78,7 +78,7 @@ async function copy(): Promise<void> {
 <style scoped>
 .acc {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgSubtle);
   padding: 12px 14px;
   margin-bottom: 14px;
@@ -93,7 +93,7 @@ async function copy(): Promise<void> {
   min-width: 0;
 }
 .acc-title {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -107,11 +107,11 @@ async function copy(): Promise<void> {
   display: block;
   margin-top: 10px;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);
   font-family: var(--code);
-  font-size: 1rem;
+  font-size: var(--fs-md);
   color: var(--text);
   overflow-x: auto;
   white-space: nowrap;
@@ -126,7 +126,7 @@ async function copy(): Promise<void> {
 .acc-qr img {
   width: 200px;
   height: 200px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   border: 1px solid var(--border);
   display: block;
 }

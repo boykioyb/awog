@@ -245,7 +245,7 @@ onMounted(() => {
   border-bottom: 1px solid var(--border);
 }
 .vpnx-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -253,7 +253,7 @@ onMounted(() => {
   font-size: 12px;
   line-height: 1;
   padding: 3px 8px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
 }

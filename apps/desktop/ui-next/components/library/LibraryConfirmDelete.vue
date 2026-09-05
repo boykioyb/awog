@@ -85,7 +85,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   padding: 18px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 .lcd-head {
@@ -99,12 +99,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex: 0 0 auto;
 }
 .lcd-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
 .lcd-body {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.6;
   white-space: pre-wrap;

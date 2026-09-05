@@ -47,12 +47,12 @@ const { t } = useI18n()
   margin-left: auto;
   flex: 0 0 auto;
   padding: 1px 8px;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--accent);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   transition:
     background 0.12s,

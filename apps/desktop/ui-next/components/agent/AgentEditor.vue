@@ -447,7 +447,7 @@ const onSave = () => {
   gap: 6px;
 }
 .age-label {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
   display: flex;
@@ -455,7 +455,7 @@ const onSave = () => {
   gap: 8px;
 }
 .age-count {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--textDim);
   font-family: var(--code);
@@ -463,11 +463,11 @@ const onSave = () => {
 .age-input {
   width: 100%;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -483,7 +483,7 @@ const onSave = () => {
   line-height: 1.55;
 }
 .age-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   line-height: 1.5;
 }
@@ -527,7 +527,7 @@ const onSave = () => {
   gap: 2px;
   background: var(--bgInput);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   padding: 6px;
 }
 .age-mcprow {
@@ -535,7 +535,7 @@ const onSave = () => {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   cursor: pointer;
 }
 .age-mcprow.on {
@@ -545,12 +545,12 @@ const onSave = () => {
   accent-color: var(--accent);
 }
 .age-mcpname {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text);
 }
 .age-mcpempty {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
   text-align: center;
   padding: 12px 0;

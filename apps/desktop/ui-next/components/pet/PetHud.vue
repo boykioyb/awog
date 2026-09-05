@@ -87,7 +87,7 @@ function metaOf(item: AwogPetItem): string {
   flex-direction: column;
   gap: 2px;
   padding: 6px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
   border: 1px solid var(--border);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
@@ -101,7 +101,7 @@ function metaOf(item: AwogPetItem): string {
   width: 100%;
   padding: 5px 7px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -220,7 +220,7 @@ function metaOf(item: AwogPetItem): string {
 }
 .btn {
   padding: 4px 12px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);

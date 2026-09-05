@@ -85,7 +85,7 @@
           <input v-model="toolQ" :placeholder="t('sessions.config.toolSearch')" />
           <span
             class="tc"
-            style="font-family: var(--code); font-size: 0.7692rem; color: var(--textFaint)"
+            style="font-family: var(--code); font-size: var(--fs-xs); color: var(--textFaint)"
           >
             {{ onCount }}/{{ total }}
           </span>
@@ -239,7 +239,7 @@ const filteredGroups = computed<[string, string[]][]>(() => {
   width: 100%;
   background: var(--bgInput, var(--bgActive));
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   padding: 5px 8px;
   color: var(--text);
   font-variant-numeric: tabular-nums;

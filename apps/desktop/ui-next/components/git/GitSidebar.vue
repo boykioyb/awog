@@ -560,7 +560,7 @@ function onPointerDown(ev: PointerEvent) {
 .gbpinhd {
   padding: 6px 8px 2px 22px;
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 
@@ -571,7 +571,7 @@ function onPointerDown(ev: PointerEvent) {
   align-items: center;
   flex: 0 0 auto;
   padding: 2px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
   opacity: 0;

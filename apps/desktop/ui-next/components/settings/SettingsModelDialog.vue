@@ -61,7 +61,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   max-height: 84vh;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -77,7 +77,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .smdtitle {
   flex: 1;
-  font-size: 1.1538rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -85,7 +85,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
   background: transparent;

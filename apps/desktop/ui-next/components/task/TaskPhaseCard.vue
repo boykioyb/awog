@@ -265,7 +265,7 @@ const confirmRerun = () => {
 <style scoped>
 .tpc {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgEl);
   overflow: hidden;
 }
@@ -291,7 +291,7 @@ const confirmRerun = () => {
   background: var(--bgHover);
 }
 .tpc-idx {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
   flex: 0 0 auto;
   min-width: 16px;
@@ -299,7 +299,7 @@ const confirmRerun = () => {
 .tpc-box {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -341,7 +341,7 @@ const confirmRerun = () => {
   min-width: 0;
 }
 .tpc-agent {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 550;
   color: var(--text);
   overflow: hidden;
@@ -349,7 +349,7 @@ const confirmRerun = () => {
   white-space: nowrap;
 }
 .tpc-skill {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -391,7 +391,7 @@ const confirmRerun = () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }
@@ -401,7 +401,7 @@ const confirmRerun = () => {
   animation: tpc-pulse 1.4s ease-in-out infinite;
 }
 .tpc-dur {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }
@@ -428,7 +428,7 @@ const confirmRerun = () => {
   background: var(--bgSubtle);
 }
 .tpc-history-label {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .tpc-runchip {
@@ -461,7 +461,7 @@ const confirmRerun = () => {
   border-bottom: 1.5px solid transparent;
   margin-bottom: -1px;
   color: var(--textDim);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
 }
@@ -482,7 +482,7 @@ const confirmRerun = () => {
   font-family: var(--code);
 }
 .tpc-empty {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   padding: 8px 0;
 }
@@ -498,11 +498,11 @@ const confirmRerun = () => {
   gap: 3px;
 }
 .tpc-msg-role {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .tpc-msg-text {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
@@ -520,9 +520,9 @@ const confirmRerun = () => {
   border: 1px solid var(--border);
   background: var(--bgInput);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 7px 10px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -535,7 +535,7 @@ const confirmRerun = () => {
   gap: 10px;
 }
 .tpc-rerun-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.55;
 }
@@ -544,9 +544,9 @@ const confirmRerun = () => {
   border: 1px solid var(--border);
   background: var(--bgInput);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 10px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
   resize: vertical;
   min-height: 4rem;

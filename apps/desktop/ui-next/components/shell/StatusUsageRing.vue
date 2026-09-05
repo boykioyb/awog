@@ -116,7 +116,7 @@ function onFocus() {
   align-items: center;
   gap: 5px;
   padding: 0 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   cursor: default;
 }
 .donut-wrap:hover {
@@ -157,14 +157,14 @@ function onFocus() {
   padding: 11px 12px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
 }
 .donut-wrap:hover .donut-pop {
   display: flex;
 }
 .donut-pop-hd {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -172,7 +172,7 @@ function onFocus() {
   text-overflow: ellipsis;
 }
 .donut-pop-hint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
 }
 .donut-row {
@@ -182,7 +182,7 @@ function onFocus() {
 }
 .donut-rlbl {
   flex: 0 0 84px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   white-space: nowrap;
   overflow: hidden;
@@ -191,14 +191,14 @@ function onFocus() {
 .donut-rbar {
   flex: 1 1 auto;
   height: 5px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: var(--bgInput);
   overflow: hidden;
 }
 .donut-rbar i {
   display: block;
   height: 100%;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
 }
 .donut-rpct {
   flex: 0 0 30px;

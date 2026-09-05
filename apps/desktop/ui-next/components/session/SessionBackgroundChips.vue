@@ -133,7 +133,7 @@ function onStop(shellId: string): void {
   gap: 6px;
   max-width: 320px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   font-size: 12px;
@@ -184,7 +184,7 @@ function onStop(shellId: string): void {
   align-items: center;
   justify-content: center;
   padding: 1px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   color: var(--text);
   opacity: 0.55;
   transition: opacity 0.12s var(--ease, ease);

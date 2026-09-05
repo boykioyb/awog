@@ -566,7 +566,7 @@ async function onRename(page: WikiPage): Promise<void> {
   text-align: left;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   padding: 8px 10px;
   margin-bottom: 6px;
   cursor: pointer;
@@ -598,7 +598,7 @@ async function onRename(page: WikiPage): Promise<void> {
   position: absolute;
   inset: 8px;
   border: 2px dashed var(--accent);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -108,7 +108,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   padding: 18px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: var(--shadow-lg);
 }
 .skh-head {
@@ -122,12 +122,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex: 0 0 auto;
 }
 .skh-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
 .skh-body {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   line-height: 1.6;
 }
@@ -138,7 +138,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   overflow: hidden;
 }
@@ -146,7 +146,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   gap: 12px;
   padding: 9px 12px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .skh-row + .skh-row {
   border-top: 1px solid var(--border);
@@ -170,7 +170,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   cursor: pointer;
 }

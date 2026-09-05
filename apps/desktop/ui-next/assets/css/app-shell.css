@@ -354,7 +354,7 @@ body.light[data-surface='deep'] {
    imperatively (document.createElement), so they carry no scoped-style attribute. */
 .qmark {
   background: var(--accentDim, rgba(16, 185, 129, 0.18));
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   padding: 0 1px;
 }
 .qnum {
@@ -372,7 +372,7 @@ body.light[data-surface='deep'] {
 .findmatch {
   background: color-mix(in srgb, var(--amber) 28%, transparent);
   color: inherit;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   padding: 0 1px;
 }
 .findmatch--current {
@@ -410,7 +410,7 @@ body.light[data-surface='deep'] {
   gap: 8px;
   flex: 0 0 auto;
   padding: 8px 14px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--amber);
   background: var(--amberDim);
   border-bottom: 1px solid var(--amberBorder);
@@ -427,7 +427,7 @@ body.light[data-surface='deep'] {
   border-bottom: 1px solid var(--border);
 }
 .gsidetitle {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textFaint);
 }
@@ -437,7 +437,7 @@ body.light[data-surface='deep'] {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -457,7 +457,7 @@ body.light[data-surface='deep'] {
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -485,7 +485,7 @@ body.light[data-surface='deep'] {
   background: transparent;
   outline: none;
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-family: var(--sans);
 }
 .gsearch input::placeholder,
@@ -502,10 +502,10 @@ body.light[data-surface='deep'] {
 .gbadge {
   flex: 0 0 auto;
   padding: 2px 6px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   border: 1px solid transparent;
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   line-height: 1;
 }
@@ -514,7 +514,7 @@ body.light[data-surface='deep'] {
 .gsec.gseccol {
   gap: 6px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
 }
 .gsec.gseccol:hover {
   color: var(--textMuted);
@@ -532,12 +532,12 @@ body.light[data-surface='deep'] {
 .gsecct {
   flex: 0 0 auto;
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 .gsecempty {
   padding: 6px 10px 6px 28px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   font-style: italic;
   color: var(--textDim);
 }
@@ -585,7 +585,7 @@ body.light[data-surface='deep'] {
   margin-bottom: 14px;
 }
 .gdpt {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
 }
@@ -598,7 +598,7 @@ body.light[data-surface='deep'] {
 
 /* ──── Local Changes: WORKING TREE header + sections + commit panel ──── */
 .gchtitle {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
 }
@@ -608,7 +608,7 @@ body.light[data-surface='deep'] {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -621,7 +621,7 @@ body.light[data-surface='deep'] {
   flex: 0 0 auto;
   margin-left: 4px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   overflow: hidden;
 }
 .gsegbtn {
@@ -690,12 +690,12 @@ body.light[data-surface='deep'] {
   gap: 4px;
   flex: 0 0 auto;
   padding: 3px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--textDim);
   font-family: var(--sans);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 .gsecbtn:hover:not(:disabled) {
@@ -731,7 +731,7 @@ body.light[data-surface='deep'] {
 .gsecempty {
   padding: 3px 12px 9px 28px;
   color: var(--textFaint);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
 }
 .gzonediv {
   height: 1px;
@@ -749,14 +749,14 @@ body.light[data-surface='deep'] {
   transform: rotate(-90deg);
 }
 .gstatlbl {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
   font-weight: 600;
 }
 .gstatct {
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 .gstatact {
@@ -765,7 +765,7 @@ body.light[data-surface='deep'] {
   place-items: center;
   width: 20px;
   height: 20px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -789,7 +789,7 @@ body.light[data-surface='deep'] {
   padding: 8px 14px;
 }
 .gcplbl {
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
 }
@@ -798,11 +798,11 @@ body.light[data-surface='deep'] {
   align-items: center;
   gap: 5px;
   padding: 3px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--accent);
   background: transparent;
   color: var(--accent);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 .gcpgen:disabled {
@@ -813,7 +813,7 @@ body.light[data-surface='deep'] {
 }
 .gcpcount {
   font-family: var(--code);
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 .gcpbody {
@@ -821,7 +821,7 @@ body.light[data-surface='deep'] {
 }
 textarea.gcpta {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgInput);
   padding: 8px 10px;
   min-height: 72px;
@@ -843,7 +843,7 @@ textarea.gcpta {
 /* Tree dir rows in the changes list — clickable + collapse chevron + ellipsis. */
 .gtdir {
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
 }
 .gtdir:hover {
   background: var(--bgHover);
@@ -893,7 +893,7 @@ textarea.gcpta {
 .smenu .mi .mhint {
   margin-left: auto;
   font-family: var(--code);
-  font-size: 0.7692rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 
@@ -960,7 +960,7 @@ textarea.gcpta {
 [data-page='projects'] .ghrow {
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   padding: 11px 13px;
 }
 [data-page='projects'] .ghrow:hover {
@@ -1121,11 +1121,11 @@ textarea.gcpta {
 .tile,
 .tcard,
 .pcard {
-  border-radius: 14px;
+  border-radius: var(--r-card);
 }
 .rowi,
 .pstat {
-  border-radius: 13px;
+  border-radius: var(--r-card);
 }
 
 /* The one clearly-clickable card (templates / project grid) gets a smooth hover
@@ -1162,7 +1162,7 @@ textarea.gcpta {
 }
 .pal,
 .codepanel {
-  border-radius: 16px;
+  border-radius: var(--r-panel);
 }
 .wnode {
   box-shadow: var(--shadow-sm);
@@ -1224,7 +1224,7 @@ textarea.gcpta {
   align-items: center;
   justify-content: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--textDim);

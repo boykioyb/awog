@@ -101,6 +101,24 @@ const RE_CODE_VAR = /var\(\s*--code\s*\)/
 const pickToken = (scale, px) => scale.find((s) => px <= s.maxPx) ?? scale[scale.length - 1]
 
 /** Mask `/* … *\/` comments with spaces so line numbers stay intact. */
+// A declaration opts out of tokenisation with a `design-token-ok: <reason>` marker on
+// its own line, or in the comment block sitting directly above it. Used where the raw
+// px IS the geometry — a text caret, a 9px legend square, the near-square corner that
+// forms a speech-bubble tail — and a token radius would change the shape.
+const OPT_OUT = 'design-token-ok'
+
+function isOptedOut(rawLines, maskedLines, index) {
+  if (rawLines[index]?.includes(OPT_OUT)) return true
+  // Walk up through the comment block above: masking blanks a comment-only line, so
+  // any line with code on it (or a blank separator) ends the block.
+  for (let i = index - 1; i >= 0; i--) {
+    if (maskedLines[i].trim() !== '') return false
+    if (rawLines[i].includes(OPT_OUT)) return true
+    if (rawLines[i].trim() === '') return false
+  }
+  return false
+}
+
 const maskBlockComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
 
 function* walk(dir) {
@@ -163,10 +181,14 @@ for (const dir of SCAN_DIRS) {
     const relPath = relative(ROOT, file).split(sep).join('/')
     if (SKIP_FILES.has(relPath)) continue
 
-    const lines = maskBlockComments(readFileSync(file, 'utf8')).split('\n')
+    const src = readFileSync(file, 'utf8')
+    const rawLines = src.split('\n')
+    const lines = maskBlockComments(src).split('\n')
     const codeSurface = isCodeSurface(relPath)
 
     lines.forEach((line, i) => {
+      // Hand-synced with scripts/lib/css-sites.mjs — see the note there.
+      if (isOptedOut(rawLines, lines, i)) return
       const at = { file: relPath, line: i + 1 }
 
       for (const [, prop, value] of line.matchAll(RE_RADIUS)) {

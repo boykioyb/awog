@@ -112,7 +112,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
   align-items: center;
   gap: 11px;
   padding: 12px 13px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
   text-align: left;
@@ -131,7 +131,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--bgActive);
   color: var(--textMuted);
   border: 1px solid var(--border);
@@ -146,17 +146,17 @@ function pseudoSource(p: SourcePresetMeta): Source {
   min-width: 0;
 }
 .cap-opt-t {
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 .cap-opt-s {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   line-height: 1.4;
 }
 .cap-seplbl {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--textDim);
   padding-top: 2px;
@@ -173,7 +173,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
   align-items: flex-start;
   gap: 11px;
   padding: 11px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
   text-align: left;
@@ -196,7 +196,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -206,12 +206,12 @@ function pseudoSource(p: SourcePresetMeta): Source {
   text-transform: uppercase;
 }
 .cap-card-tl {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   line-height: 1.4;
 }
 .cap-empty {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   text-align: center;
   padding: 12px 0;

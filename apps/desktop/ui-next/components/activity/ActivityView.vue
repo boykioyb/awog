@@ -389,7 +389,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   flex: 0 0 auto;
 }
 .acthdt {
-  font-size: 1.231rem;
+  font-size: var(--fs-xl);
   font-weight: 600;
 }
 .acthdr {
@@ -405,11 +405,11 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   gap: 8px;
   margin: 10px 0;
   padding: 8px 12px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--amberDim);
   border: 1px solid var(--amberBorder);
   color: var(--amber);
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
 }
 
 .actcards {
@@ -422,18 +422,18 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   gap: 4px;
 }
 .actclbl {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
 }
 .actcbig {
-  font-size: 1.85rem;
+  font-size: var(--fs-2xl);
   font-weight: 600;
   line-height: 1.15;
   margin-top: 4px;
 }
 .actcsub {
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   margin-top: 4px;
 }
@@ -458,7 +458,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   width: 100%;
   background: var(--accent);
   opacity: 0.42;
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
   min-height: 3px;
   transition: opacity 0.12s;
 }
@@ -469,7 +469,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .actaxis {
   display: flex;
   justify-content: space-between;
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textFaint);
 }
@@ -481,7 +481,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .acthint {
   padding: 18px 15px;
   color: var(--textFaint);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 .actwarn {
   display: flex;
@@ -489,20 +489,20 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   gap: 8px;
   margin-bottom: 8px;
   padding: 7px 11px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--amberDim);
   border: 1px solid var(--amberBorder);
   color: var(--amber);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
 }
 
 .acttable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9615rem;
+  font-size: var(--fs-sm);
 }
 .acttable th {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   font-family: var(--code);
   color: var(--textDim);
   font-weight: 500;
@@ -582,7 +582,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   height: 18px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textFaint);
   cursor: pointer;
@@ -629,14 +629,14 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   flex: 1 1 auto;
   min-width: 40px;
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: var(--bgActive);
   overflow: hidden;
 }
 .actdaybar > i {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: var(--accent);
 }
 .actdaymeta {

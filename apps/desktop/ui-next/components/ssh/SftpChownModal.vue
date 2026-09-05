@@ -106,7 +106,7 @@ const subtitle = computed(() =>
   padding: 18px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   box-shadow: var(--shadow-lg);
 }
 .sfmod-head {
@@ -120,12 +120,12 @@ const subtitle = computed(() =>
   color: var(--accent);
 }
 .sfmod-title {
-  font-size: 1.0769rem;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text);
 }
 .sfmod-sub {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
   word-break: break-all;
 }
@@ -133,16 +133,16 @@ const subtitle = computed(() =>
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 0.8846rem;
+  font-size: var(--fs-sm);
   color: var(--textDim);
 }
 .sfmod-in {
   padding: 7px 9px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);
   color: var(--text);
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   outline: none;
 }
 .sfmod-in:focus {
@@ -152,7 +152,7 @@ const subtitle = computed(() =>
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
   cursor: pointer;
 }
@@ -161,7 +161,7 @@ const subtitle = computed(() =>
   cursor: pointer;
 }
 .sfmod-hint {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
   line-height: 1.5;
 }

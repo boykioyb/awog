@@ -79,7 +79,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   max-height: 80vh;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
@@ -98,7 +98,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
 }
@@ -120,7 +120,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 9px;
   padding: 7px 9px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--bgActive);
   cursor: pointer;
   min-width: 0;
@@ -134,7 +134,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 30px;
   height: 30px;
   flex: 0 0 auto;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   overflow: hidden;
   color: var(--textDim);
 }
@@ -146,7 +146,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .thumb {
   width: 20px;
   height: 20px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: linear-gradient(135deg, var(--blue), var(--violet));
 }
 .aminfo {
@@ -171,7 +171,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   flex: 0 0 auto;
   color: var(--textDim);
   cursor: pointer;

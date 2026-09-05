@@ -100,7 +100,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   padding: 15px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 13px;
+  border-radius: var(--r-card);
 }
 .arlhd {
   display: flex;
@@ -118,7 +118,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   width: 26px;
   height: 26px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -140,7 +140,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   }
 }
 .arlhint {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textFaint);
 }
 .arlhint.err {
@@ -163,27 +163,27 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   gap: 8px;
 }
 .arllbl {
-  font-size: 0.9231rem;
+  font-size: var(--fs-sm);
   color: var(--textMuted);
 }
 .arlpct {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textDim);
 }
 .arlbar {
   height: 6px;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: var(--bgInput);
   overflow: hidden;
 }
 .arlbar i {
   display: block;
   height: 100%;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   transition: width 0.2s;
 }
 .arlreset {
-  font-size: 0.8462rem;
+  font-size: var(--fs-xs);
   color: var(--textFaint);
 }
 

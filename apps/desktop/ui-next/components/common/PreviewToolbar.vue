@@ -573,7 +573,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   padding: 7px 10px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   user-select: none;
 }
@@ -619,7 +619,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   min-width: 28px;
   height: 28px;
   padding: 0 7px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--textDim);
   cursor: pointer;
   font-size: 1em;
@@ -668,7 +668,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   padding: 5px;
   background: var(--bgEl);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
 }
 .pvmenu.up {
@@ -689,7 +689,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   gap: 8px;
   width: 100%;
   padding: 6px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   color: var(--text);
   cursor: pointer;
   white-space: nowrap;
@@ -732,7 +732,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   transform: translateX(-50%);
   white-space: nowrap;
   padding: 5px 11px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   font-size: 12px;
   font-family: var(--code);
   background: var(--bgActive);

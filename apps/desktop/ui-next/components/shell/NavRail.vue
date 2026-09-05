@@ -157,7 +157,7 @@ function toggleCollapsed() {
   width: 26px;
   height: 26px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   color: var(--textDim);
