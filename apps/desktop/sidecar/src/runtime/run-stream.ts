@@ -147,6 +147,10 @@ export async function runStreamPi(
     {
       ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
       ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+      // Read-before-write registry keyed by session (read-registry.ts): a file
+      // Read in turn 1 stays writable in turn 5, even though the toolset itself
+      // is rebuilt every turn.
+      ...(args.sessionId ? { readRegistryKey: `session:${args.sessionId}` } : {}),
       // Plan mode: expose ExitPlanMode so the model can present a plan for
       // approval (permission.ts still blocks all writes/exec meanwhile).
       ...(inPlanMode ? { includePlanTool: true } : {}),

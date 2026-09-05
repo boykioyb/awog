@@ -36,12 +36,20 @@ import { createSourceTools } from './source-tools.js'
 import { createWikiTools } from './wiki-tools.js'
 import { createMemoryTools } from './memory-tools.js'
 import { createTodoWriteTool, createWebSearchTool } from './builtin-stubs.js'
+import { getReadRegistry } from './read-registry.js'
 import type { TodoSink } from './builtin-stubs.js'
 import { createWebFetchTool } from './web-fetch-tool.js'
 import { createBrowserTool } from './browser-tool.js'
 import { wrapToolsWithHooks, type HookToolContext } from '../../hooks/tool-anchor.js'
 
 export interface ToolFilter {
+  // Conversation key for the read-before-write registry (read-registry.ts).
+  // Write/Edit refuse to touch an existing file the model has not Read, and the
+  // toolset is rebuilt every turn — so the registry has to outlive the toolset or
+  // the model would have to re-Read on every single turn. Chat sets this to the
+  // session id; tasks to the task id. Absent (one-shot completions) = a fresh
+  // per-construction registry, which is stricter, never looser.
+  readRegistryKey?: string
   // Agent `tools` whitelist (Claude Code subagent field). When set + non-empty,
   // only tools whose name is in this list survive. Undefined/empty = no filter.
   allowedTools?: string[]
@@ -166,11 +174,14 @@ export function createAwogToolDefinitions(
   // The full built-in set. `as AgentTool[]` widens the per-tool parameter
   // generics to the AgentTool default (TSchema) for a homogeneous array — Pi's
   // runtime validates each tool against its own schema regardless.
+  // One registry per conversation, shared by Read (which records) and
+  // Write/Edit/MultiEdit (which gate on it).
+  const reads = getReadRegistry(filter.readRegistryKey)
   const all: AgentTool[] = [
-    createReadTool(cwd),
-    createWriteTool(cwd),
-    createEditTool(cwd),
-    createMultiEditTool(cwd),
+    createReadTool(cwd, reads),
+    createWriteTool(cwd, reads),
+    createEditTool(cwd, reads),
+    createMultiEditTool(cwd, reads),
     createBashTool(cwd, filter.backgroundExec),
     // BashOutput: poll a background shell (ADR 0066). Sessions only (paired with
     // Bash's run_in_background), and only when backgroundExec is set.
