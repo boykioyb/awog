@@ -91,7 +91,7 @@
              informative text. The header carries it once and sticks while its rows
              scroll; a group whose project isn't watched reads dimmer (it never
              would have interrupted you). -->
-        <div v-for="g in groups" :key="g.repo" class="ntf-grp" :class="{ dim: !g.watched }">
+        <div v-for="g in groups" :key="g.repo" class="ntf-grp">
           <!-- The whole header is the collapse toggle (bigger target than a lone
                chevron). A collapsed group keeps its unread dot + count visible, so
                folding a noisy repo away never hides that it has something new. -->
@@ -256,10 +256,10 @@ function onOpen(n: GhNotification): void {
   openNotification(n)
 }
 
-// The row's ↗ leaves for github.com; the row body opens the in-app drawer. Both
-// keep the panel closed afterwards — the user has moved on either way.
+// The row's ↗ hands the thread to the browser and LEAVES THE PANEL OPEN: the app
+// itself doesn't change, and closing it forced a re-open for every next row. Only the
+// in-app open (onOpen) closes, because it navigates the UI behind the panel.
 function onExternal(n: GhNotification): void {
-  close()
   if (n.url) void useSidecar().openExternal(n.url)
 }
 
@@ -283,7 +283,6 @@ function goSettings(): void {
 }
 
 function openOnGithub(): void {
-  close()
   void useSidecar().openExternal('https://github.com/notifications')
 }
 </script>
@@ -432,7 +431,7 @@ function openOnGithub(): void {
 .ntf-tab-n {
   font-size: 12px;
   line-height: 1;
-  color: var(--textFaint);
+  color: var(--textDim);
 }
 .ntf-tab.on .ntf-tab-n {
   color: var(--accent);
@@ -450,9 +449,10 @@ function openOnGithub(): void {
 .ntf-grp + .ntf-grp {
   margin-top: 2px;
 }
-.ntf-grp.dim {
-  opacity: 0.68;
-}
+/* No opacity dim on a non-watched group: with no project opted in EVERY group is
+   "not watched", so the dim landed on the whole list and just made text hard to
+   read. The `không theo dõi` chip states it in words instead — an opacity value is
+   not something the user can decode anyway. */
 .ntf-grp-head {
   position: sticky;
   top: 0;
@@ -484,7 +484,7 @@ function openOnGithub(): void {
   flex: 0 0 auto;
   width: 12px;
   height: 12px;
-  color: var(--textFaint);
+  color: var(--textDim);
   transition: transform 0.14s ease;
 }
 .ntf-grp-chev.open {
@@ -511,7 +511,7 @@ function openOnGithub(): void {
 .ntf-grp-owner {
   flex: 0 1 auto;
   min-width: 0;
-  color: var(--textFaint);
+  color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -521,27 +521,18 @@ function openOnGithub(): void {
   padding: 1px 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  color: var(--textFaint);
+  color: var(--textDim);
   font-size: 12px;
   line-height: 1.35;
 }
 .ntf-grp-n {
   flex: 0 0 auto;
-  /* auto-margin only when no dot precedes it (the dot already pushed the pair
-     right); harmless otherwise since a second auto margin just splits the gap. */
+  /* Pushes itself right when nothing precedes it; when the unread dot is there the
+     dot takes the auto margin instead, so the pair stays glued together. */
   margin-left: auto;
-  color: var(--textFaint);
+  color: var(--textDim);
 }
-.ntf-grp-dot + .ntf-grp-tag {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--textFaint);
-  font-size: 12px;
-  line-height: 1.35;
-}
-.ntf-grp-n {
+.ntf-grp-dot + .ntf-grp-n {
   margin-left: 0;
 }
 .ntf-note {
@@ -558,7 +549,7 @@ function openOnGithub(): void {
   gap: 8px;
   padding: 8px 11px;
   border-top: 1px solid var(--border);
-  color: var(--textFaint);
+  color: var(--textDim);
   font-size: 12px;
 }
 .ntf-foot-when {

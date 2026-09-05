@@ -139,7 +139,7 @@ const hoverText = computed(() => {
   width: 13px;
   height: 13px;
   margin-top: 2px;
-  color: var(--textFaint);
+  color: var(--textDim);
 }
 .ntf-row-ic.act {
   color: var(--accent);
@@ -170,12 +170,16 @@ const hoverText = computed(() => {
   -webkit-line-clamp: 3;
   overflow: hidden;
   color: var(--text);
+  /* Unread is the default state here (most rows), so weight is what separates a
+     row that still wants something from one already handled. */
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 /* Read rows stay in the list (that IS the read/unread distinction) but stop
    competing for attention. */
 .ntf-row.read .ntf-row-title {
   color: var(--textDim);
+  font-weight: 400;
 }
 .ntf-row-meta {
   display: flex;
@@ -186,7 +190,9 @@ const hoverText = computed(() => {
   margin-top: 2px;
   overflow: hidden;
   font-size: 12px;
-  color: var(--textFaint);
+  /* NOT --textFaint: at 12px on the light theme's white that lands around 3.4:1,
+     which is what read as "washed out" for the number/author/timestamp. */
+  color: var(--textDim);
 }
 .ntf-row-num {
   flex: 0 0 auto;
