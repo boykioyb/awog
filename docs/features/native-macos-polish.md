@@ -1,6 +1,7 @@
 # Feature — Native macOS polish (ui-next)
 
-> Trạng thái: **Plan** (chưa code). Scan thực hiện 2026-09-06 trên `main` @ v0.33.0.
+> Trạng thái: **P0–P4 đã land** (2026-09-06, branch `feature/native-macos-polish`). P5 (vibrancy) chưa bắt đầu — cần ADR riêng.
+> Scan gốc thực hiện 2026-09-06 trên `main` @ v0.33.0.
 > Mục tiêu: bỏ cảm giác "web page nhét trong cửa sổ" của app desktop, không đổi kiến trúc, không thêm dependency.
 
 ## 1. Vấn đề
@@ -150,14 +151,14 @@ Ngoại lệ **không đụng**: xterm tự vẽ scrollbar DOM riêng ([Workspac
 
 ## 5. Thứ tự thi công
 
-| Phase | Workstream | Ước lượng | File đụng | Ăn thua |
+| Phase | Workstream | Trạng thái | File đụng | Commit |
 |---|---|---|---|---|
-| **P0** | W1 + W2 | ~½ ngày | ~8 | **Cao nhất** — đổi cảm giác nhiều nhất, ít file nhất |
-| **P1** | W6 + W7 | ~½ ngày | ~6 CSS + rà 127 selector | Cao |
-| **P2** | W3 + W4 (codemod) | ~1–1.5 ngày | ~220 (cơ học) | Trung bình–cao, diff to nhưng review được |
-| **P3** | W5 (mono triage) | ~1 ngày | ~114 | Trung bình, cần mắt người |
-| **P4** | W8 (guard + docs + ADR) | ~½ ngày | ~5 | Chống tái phát |
-| **P5** *(tuỳ chọn, ADR riêng)* | Vibrancy / translucency | ~1–2 ngày | toàn bộ thang màu | Cao nhưng rủi ro cao |
+| **P0** | W1 + W2 | ✅ | 10 | `32b7e3f` |
+| **P1** | W6 + W7 | ✅ — W7(a) huỷ, xem §4 | 31 | `516576f` |
+| **P2** | W3 + W4 (codemod) | ✅ | 225 | `b6f2de2` |
+| **P3** | W5 (mono triage) | ✅ — 85 giữ / 167 đổi | 113 | `a8a04c0` |
+| **P4** | W8 (guard + docs + ADR) | ✅ — guard nối vào `pnpm lint` | 7 | `a49a68f` + `b323405` |
+| **P5** *(chưa làm, cần ADR riêng)* | Vibrancy / translucency | ⬜ | toàn bộ thang màu | — |
 
 Mỗi phase = 1 commit riêng theo [.claude/rules/git-commit.md](../../.claude/rules/git-commit.md). P2 tách 2 commit (radius / type).
 
@@ -200,3 +201,19 @@ Codemod không bắt được lỗi thị giác. Duyệt tối thiểu: NavRail,
 | `backgroundColor` không biết theme lúc tạo window | `show:false` + `ready-to-show`; persist theme nếu vẫn nháy |
 | Type scale làm layout chật/rộng bất ngờ (14px → 15px) | Diff theo phase, duyệt §7 |
 | Bỏ mono làm bảng số mất căn | `tabular-nums` bù lại; kiểm ở Cost tab, Git stats, usage ring |
+
+## 10. Còn lại sau P0–P4
+
+**Chưa verify bằng mắt** (không agent nào chạy được app) — xem §7:
+- `trafficLightPosition {x:14,y:15}` với `.top` 52px, và `padding-left: 82px` ở compact mode — số suy ra, chưa đo pixel.
+- Windows/Linux `env(titlebar-area-width)` chưa test trên máy thật.
+- Căn cột số sau khi bỏ mono: Cost tab, Activity, usage ring, Git sidebar (`↑2 / ↓33`).
+- Va chạm radius lồng nhau ở 9 file từng có 12px ngoài + 10px trong.
+- Wiki + Settings→Bộ nhớ: lần đầu render bo góc sau khi sửa bug `var(--r)`.
+
+**Việc nhỏ tách riêng:**
+- Đổi tên `.ssh-mono` / `.sshx-card-mono` → `-monogram` (mono ở đây là *monogram*, không phải monospace).
+- Gỡ 2 override `font-family: var(--sans)` giờ đã thừa trong `theme-cute.css`.
+- `check-design-tokens.mjs` giữ bản sao riêng của `SCAN_DIRS`/`SKIP_FILES`/`maskBlockComments` thay vì import `scripts/lib/css-sites.mjs` — cố ý để script tự chứa, nhưng phải sync tay.
+- 3 chỗ selection lệch chuẩn để lại: `.sshsess-row.on` (chỉ đổi màu chữ), `.ostab.on` + `.ntf-tab.on` (2 tín hiệu accent, không fill).
+- `[role='tab']` chưa nằm trong họ press-state của P0 nên session tab không có phản hồi khi bấm.
