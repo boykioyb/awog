@@ -355,8 +355,6 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
   align-items: center;
   gap: 6px;
   color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   font-size: 12px;
   margin-bottom: 6px;
 }

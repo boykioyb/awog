@@ -135,9 +135,11 @@ Ngoại lệ **không đụng**: xterm tự vẽ scrollbar DOM riêng ([Workspac
 
 ### W7 — Selection & label idiom
 
-- `.ni.on` ([prototype.css:81](../../apps/desktop/ui-next/assets/css/prototype.css)) hiện chồng **4 tín hiệu** cùng lúc: `background: accentDim` + `border-color: accentBorder` + `box-shadow: inset 2px 0 0 accent` + đổi màu chữ. macOS dùng **một**. Chốt giữ: nền `--bgActive` + thanh accent inset; bỏ border + accentDim.
-- Rà 127 selector `.on` để áp cùng quy ước (`.gsi.on`, `.codetab.on`, `.li.on`…).
+- **HUỶ (2026-09-06).** Bản plan đầu chốt đổi `.ni.on` / `.li.on` / `.libli.on` sang nền `--bgActive` + thanh accent inset. **Sai** — đúng thay đổi đó đã từng thực hiện và **user đã bác**: "gray/quê, selection phải CÓ MÀU, không phải xám". Selection state của sidebar/list **giữ nguyên accent-tint** (`--accentDim` + `--accentBorder` + thanh accent 2px). Không đụng tới.
+- Phần còn giá trị của W7(a): rà 129 rule block `.on` để **phát hiện** chỗ lệch chuẩn, chứ không đồng loạt chuyển sang xám. Ghi nhận từ lần rà: `.sshsess-row.on` đánh dấu selection **chỉ bằng màu chữ**, yếu hơn mọi list khác; `.ostab.on` và `.ntf-tab.on` mang 2 tín hiệu accent (border + text) mà không có fill. Ba chỗ này để lại, xử lý khi user than phiền.
+- Ghi chú đếm: grep thô ra ~150 hit vì dính `onSelect` / `onDidChangeContent` / `git.stash.onBranch`; số rule block CSS thật là **129**.
 - Bỏ `text-transform: uppercase` + `letter-spacing: .06–.08em` ở label sidebar/section (33 file, 59 site) — idiom Material, không phải macOS. Giữ uppercase ở nơi thật sự là nhãn kỹ thuật (badge trạng thái).
+- **Cảnh báo đếm sai (đã gặp):** 16/59 site đó **đã** bị vô hiệu từ trước bởi một override trong `app-shell.css` (commit `8e3292c`) — sửa mỗi rule gốc là no-op trên màn hình. Đồng thời `prototype.css:823` cộng lại `letter-spacing:.06em` **sau** override đó. Muốn thấy thay đổi thật thì phải gỡ cả ba tầng.
 
 ### W8 — Guard & tài liệu
 

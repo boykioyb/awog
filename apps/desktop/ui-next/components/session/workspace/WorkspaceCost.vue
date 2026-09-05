@@ -269,8 +269,6 @@ const dayTitle = (d: CostDay): string =>
 }
 .wscost-lbl {
   color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   font-size: 12px;
 }
 .wscost-big {
@@ -310,8 +308,6 @@ const dayTitle = (d: CostDay): string =>
 /* Per-day breakdown. */
 .wscost-dayh {
   color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   font-size: 12px;
   margin-bottom: 4px;
 }

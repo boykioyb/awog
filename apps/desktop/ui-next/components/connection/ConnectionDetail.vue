@@ -728,8 +728,6 @@ watch(
   padding: 10px 14px;
   font-size: 0.8462rem;
   font-family: var(--code);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -981,8 +979,6 @@ watch(
 .cnd-perm-label {
   font-size: 0.8462rem;
   color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   font-family: var(--code);
 }
 .cnd-perm-item {
@@ -1022,8 +1018,6 @@ watch(
 .cnd-edit-label {
   font-size: 0.8462rem;
   color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   font-family: var(--code);
 }
 .cnd-edit-ta {

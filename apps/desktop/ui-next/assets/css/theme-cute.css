@@ -252,8 +252,19 @@ body[data-theme-family='cute'] :is(input, textarea):focus {
 body[data-theme-family='cute'] ::selection {
   background: var(--accentDim);
 }
-/* Scrollbars recede until you need them. */
+/* Scrollbars recede until you need them — one step softer than the base theme at every
+   stage. Mirrors the overlay behaviour of prototype.css (thumb invisible at rest, fades
+   in while the scrolling element is hovered); these selectors carry an attribute, so
+   they outrank the base rules and have to restate the whole ramp or Cute would be the
+   only family with a permanently visible bar. */
+body[data-theme-family='cute'] *:hover {
+  scrollbar-color: var(--border) transparent;
+}
 body[data-theme-family='cute'] ::-webkit-scrollbar-thumb {
+  background: transparent;
+  background-clip: padding-box;
+}
+body[data-theme-family='cute'] *:hover::-webkit-scrollbar-thumb {
   background: var(--border);
   background-clip: padding-box;
 }

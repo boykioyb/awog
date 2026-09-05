@@ -65,8 +65,6 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   padding: 9px 11px;
   font-size: 0.7692rem;
   font-family: var(--code);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;

@@ -53,8 +53,6 @@ const { t } = useI18n()
 .edalist-head {
   padding: 9px 12px;
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;

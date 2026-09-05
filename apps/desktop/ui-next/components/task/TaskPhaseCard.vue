@@ -429,8 +429,6 @@ const confirmRerun = () => {
 }
 .tpc-history-label {
   font-size: 0.7692rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--textDim);
 }
 .tpc-runchip {
@@ -501,8 +499,6 @@ const confirmRerun = () => {
 }
 .tpc-msg-role {
   font-size: 0.7692rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--textDim);
 }
 .tpc-msg-text {

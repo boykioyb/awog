@@ -223,8 +223,6 @@ const chars = computed(() =>
 .wsb-spacerow {
   color: var(--text);
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 .wsb-spacerow:hover,
 .wsb-page:hover {

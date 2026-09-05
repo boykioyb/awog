@@ -205,8 +205,6 @@ function onFetch(): void {
 .sprtable th {
   font-size: 0.8462rem;
   font-family: var(--code);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--textDim);
   font-weight: 500;
   padding: 9px 12px;

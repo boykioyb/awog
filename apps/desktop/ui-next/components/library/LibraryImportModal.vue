@@ -165,8 +165,6 @@ const confirm = async (): Promise<void> => {
   background: var(--bgHover);
   color: var(--textDim);
   font-size: 0.8462rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .lim-grp:not(:first-child) {
   border-top: 1px solid var(--border);

@@ -120,8 +120,6 @@ function openGit() {
   padding: 4px 10px 6px;
   font-size: 12px;
   font-family: var(--code);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--textFaint);
 }
 .sb-menu-hint {

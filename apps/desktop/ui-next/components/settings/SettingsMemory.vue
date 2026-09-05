@@ -245,8 +245,6 @@ onMounted(() => {
 }
 .memgrouphead {
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin: 8px 0 4px;
 }
 .memrow {

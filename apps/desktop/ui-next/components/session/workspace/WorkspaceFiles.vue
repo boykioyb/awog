@@ -272,8 +272,6 @@ onMounted(() => {
   white-space: nowrap;
   font-size: 12px;
   color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .wsfiles-tb-actions {
   display: flex;

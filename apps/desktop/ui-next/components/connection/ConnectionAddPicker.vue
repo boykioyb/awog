@@ -158,8 +158,6 @@ function pseudoSource(p: SourcePresetMeta): Source {
 .cap-seplbl {
   font-size: 0.8462rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--textDim);
   padding-top: 2px;
   border-top: 1px solid var(--border);

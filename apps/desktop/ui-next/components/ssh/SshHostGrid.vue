@@ -197,8 +197,6 @@ const connectFirst = () => {
 }
 .sshx-newhost {
   flex: 0 0 auto;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 /* Tag filter bar */
 .sshx-tagbar {
@@ -265,8 +263,6 @@ const connectFirst = () => {
   color: var(--textDim);
   font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 .sshx-grouphdr-name {
   font-weight: 500;

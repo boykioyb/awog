@@ -140,8 +140,6 @@ const hasGlobs = computed(() => (props.rule.globs?.length ?? 0) > 0)
 }
 .rld-globlabel {
   font-size: 0.8462rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--textDim);
 }
 </style>

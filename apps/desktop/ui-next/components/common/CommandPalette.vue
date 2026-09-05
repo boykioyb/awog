@@ -298,8 +298,6 @@ watch(activeIndex, (i) => {
   padding: 8px 10px 4px;
   font-family: var(--code);
   font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--textFaint);
 }
 .cmdk-row {

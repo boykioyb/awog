@@ -424,8 +424,6 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .actclbl {
   font-size: 0.8462rem;
   font-family: var(--code);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   color: var(--textDim);
 }
 .actcbig {
@@ -506,8 +504,6 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .acttable th {
   font-size: 0.8462rem;
   font-family: var(--code);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--textDim);
   font-weight: 500;
   padding: 10px 14px;

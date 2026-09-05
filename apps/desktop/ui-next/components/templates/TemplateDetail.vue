@@ -110,8 +110,6 @@ const groups = computed<Group[]>(() => {
 .tdt-section-hd {
   font-size: 0.8462rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--textDim);
   margin-bottom: 12px;
 }

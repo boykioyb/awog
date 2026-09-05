@@ -330,10 +330,11 @@ body.light[data-surface='deep'] {
    the prototype's `.list{flex:0 0 auto}` and the ≤720px `width:192px !important`
    media rule at every breakpoint, and updates live with the drag-resize). */
 
-/* Workspace tab strip — thin horizontal scrollbar. The global bar is 10px tall
-   with a 3px-transparent-border thumb (fine for tall panels, far too chunky for
+/* Workspace tab strip — thin horizontal scrollbar. The global bar is 8px tall
+   with a 2px-transparent-border thumb (fine for tall panels, still chunky for
    this ~36px row). Shrink the track to 5px and the thumb border to 1px so the
-   thumb stays visible in the thinner track. */
+   thumb stays visible in the thinner track. Auto-hide comes from the global
+   rules — only the geometry is overridden here. */
 .wptabs2::-webkit-scrollbar {
   height: 5px;
 }
@@ -428,8 +429,6 @@ body.light[data-surface='deep'] {
 .gsidetitle {
   font-size: 0.7692rem;
   font-family: var(--code);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--textFaint);
 }
 .gsidecol {
@@ -601,8 +600,6 @@ body.light[data-surface='deep'] {
 .gchtitle {
   font-size: 0.7692rem;
   font-family: var(--code);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--textDim);
 }
 .gchbtn {
@@ -754,8 +751,6 @@ body.light[data-surface='deep'] {
 .gstatlbl {
   font-size: 0.8462rem;
   font-family: var(--code);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--textDim);
   font-weight: 600;
 }
@@ -796,8 +791,6 @@ body.light[data-surface='deep'] {
 .gcplbl {
   font-size: 0.7692rem;
   font-family: var(--code);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--textDim);
 }
 .gcpgen {
@@ -1024,11 +1017,10 @@ textarea.gcpta {
    /badges. An explicit weight also keeps headers above body even when the user
    raises the base body weight in Appearance.
 
-   Casing: the prototype also FORCED these to uppercase with wide tracking — a
-   web/marketing "eyebrow" look. Native macOS section headers (Finder/System
-   Settings sidebars) are sentence-case semibold. Strings are authored normally
-   (e.g. "Library") and only CSS uppercased them, so `text-transform:none` renders
-   them as authored — reading as a UI title, not a machine string. */
+   Casing: the uppercase + wide tracking these headers used to carry (a web/marketing
+   "eyebrow" look) was undone HERE first, and has since been removed at the source
+   rules themselves — see docs/features/native-macos-polish.md §4 W7. Nothing to
+   override any more, so this block is down to family + weight. */
 .navg,
 .sech,
 .gsec,
@@ -1046,8 +1038,6 @@ textarea.gcpta {
 .gchtitle {
   font-family: var(--sans);
   font-weight: 600;
-  text-transform: none;
-  letter-spacing: normal;
 }
 
 /* Issue/PR rows: the "new session" action reveals on row hover (and keyboard

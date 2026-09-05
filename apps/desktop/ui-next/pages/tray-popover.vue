@@ -362,8 +362,6 @@ function formatResetsIn(ms: number | undefined): string {
 .tp-sech {
   font-size: 11px;
   font-family: var(--code);
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--textFaint);
 }
 .tp-empty {

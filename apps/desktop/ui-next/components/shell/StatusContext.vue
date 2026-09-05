@@ -217,8 +217,6 @@ function onCompact() {
 .cathead {
   font-size: 12px;
   color: var(--textFaint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   border-bottom: 1px solid var(--border);
   padding-bottom: 5px;
   margin-bottom: 2px;
@@ -273,8 +271,6 @@ function onCompact() {
   cursor: pointer;
   color: var(--textFaint);
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .ctxsechead:hover {
   color: var(--text);

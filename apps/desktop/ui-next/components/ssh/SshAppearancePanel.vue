@@ -180,8 +180,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .tap-label {
   font-size: 0.8462rem;
   font-weight: 550;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--textDim);
 }
 .tap-presets {

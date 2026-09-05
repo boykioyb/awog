@@ -1911,14 +1911,10 @@ textarea.ci {
   font-size: 12px;
   font-weight: 600;
   color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 .pinreuse-clear {
   margin-left: auto;
   font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
   cursor: pointer;
   color: var(--textDim);
 }
