@@ -8,6 +8,7 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "check:tokens": "node scripts/check-design-tokens.mjs",
     "katex:inline": "node scripts/inline-katex-fonts.mjs",
     "postinstall": "nuxt prepare && node scripts/inline-katex-fonts.mjs",
     "typecheck": "nuxt typecheck",

@@ -1,8 +1,14 @@
 # 0041 — Design system in-house kiểu shadcn trên nền `useTheme` tokens
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Superseded by 0079
 - **Ngày:** 2026-06-16
 - **Người quyết định:** tech-lead (user chốt hướng)
+
+> **Cảnh báo (2026-09-06) — ADR này mô tả code KHÔNG còn tồn tại.**
+> Mọi đường dẫn dưới đây trỏ vào `apps/desktop/ui/`, thư mục đã **bị xoá** trong lần rebuild UI sang [`apps/desktop/ui-next/`](../../apps/desktop/ui-next/). Lớp primitive (`AppButton`, `AppCard`, `components/ui/`) **không được port sang** — `ui-next/components/ui/` hiện không tồn tại và toàn repo có **0 usage** `AppButton`. Đó là lý do `ui-next` hiện có **752** `<button>` viết tay, mỗi chỗ tự đặt padding / radius / hover.
+> Hướng đi đã được [ADR 0044](./0044-adopt-shadcn-vue-real.md) đổi ngay trong cùng tháng (in-house → shadcn-vue thật) và ADR 0044 cũng mô tả cùng thư mục đã xoá đó, nên **cả hai đều không phản ánh code hiện tại**; `reka-ui` / `cva` / `clsx` vẫn nằm trong `package.json` của `ui-next` nhưng **không file nào import**.
+> Quyết định hiện hành cho lớp UI dùng chung: [ADR 0079 — Vỏ cửa sổ native + thang design token](./0079-native-macos-shell-and-design-tokens.md) và plan [native-macos-polish.md](../features/native-macos-polish.md). ADR 0079 đi đường **token + guard script** thay vì đường primitive component; nếu muốn dựng lại lớp primitive thì cần một ADR mới, không dùng lại ADR này.
+> Giữ file làm lịch sử — không sửa nội dung bên dưới.
 
 ## Bối cảnh
 

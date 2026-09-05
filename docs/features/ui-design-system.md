@@ -1,5 +1,15 @@
 # Feature — UI Design System (primitive layer kiểu shadcn)
 
+> ## ⚠️ TÀI LIỆU CHẾT — mô tả code đã bị xoá (đánh dấu 2026-09-06)
+>
+> Catalog dưới đây mô tả `apps/desktop/ui/components/ui/AppButton.vue` và các primitive cùng thư mục. **Thư mục `apps/desktop/ui/` không còn tồn tại** — UI đã được rebuild sang [`apps/desktop/ui-next/`](../../apps/desktop/ui-next/) và lớp primitive **không được port sang**: `ui-next/components/ui/` không tồn tại, toàn repo **0 usage** `AppButton`, và `ui-next` hiện có **752** `<button>` viết tay.
+>
+> **Đừng dùng tài liệu này để tra cứu API.** Không có prop `variant` / `size` nào như bảng dưới đây trong code hiện tại.
+>
+> Nguồn hiện hành: [native-macos-polish.md](./native-macos-polish.md) (plan) + [ADR 0079](../decisions/0079-native-macos-shell-and-design-tokens.md) (quyết định) — đi đường **design token + guard script** thay vì lớp primitive component. ADR gốc của tài liệu này ([0041](../decisions/0041-in-house-design-system-shadcn-style.md)) đã `Superseded by 0079`; [ADR 0044](../decisions/0044-adopt-shadcn-vue-real.md) mô tả cùng thư mục đã xoá.
+>
+> Giữ file làm **lịch sử** (ghi lại tại sao lớp primitive từng được chọn và nó trông ra sao), không xoá.
+
 > Quyết định gốc: [ADR 0041](../decisions/0041-in-house-design-system-shadcn-style.md). Tài liệu này là **catalog primitive + migration plan** sống cùng code.
 
 ## Mục tiêu
