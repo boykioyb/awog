@@ -164,7 +164,7 @@ Nhánh: `claude/sdk-version-app-effort-qg99pq`. Mỗi phase một commit riêng 
 - [x] `pnpm --filter @awog/sidecar typecheck` — exit 0. **`zod/v3` không thành vấn đề**: `require.resolve('zod/v3')` ra `node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/index.cjs`, `zod` giữ nguyên 3.25.76
 - [x] `pnpm --filter @awog/sidecar build` + verify binary — xem bảng size dưới
 - [ ] Smoke dev: session Anthropic (stream + tool-call + resume + abort) và 1 task node — **CHƯA CHẠY**
-- [ ] Commit: `chore(sidecar): bump claude-agent-sdk to 0.3.260`
+- [x] Commit `cab8fb3` — `chore(sidecar): bump claude-agent-sdk 0.3.235 -> 0.3.260`
 
 **Kết quả packaging đo thật (darwin-arm64):** dự đoán ở §A-3 rằng dung lượng có thể phình là **sai hướng** — binary nhỏ đi.
 
@@ -183,7 +183,7 @@ Nhánh: `claude/sdk-version-app-effort-qg99pq`. Mỗi phase một commit riêng 
 - [x] Viết [ADR 0078](../decisions/0078-reasoning-effort-parity.md); ghi amend vào **dòng Trạng thái** của ADR 0029 (không sửa body item 6 — ADR Accepted là bất biến); thêm dòng 0078 + sửa ghi chú số kế tiếp trong [docs/decisions/README.md](../decisions/README.md)
 - [x] [CLAUDE.md](../../CLAUDE.md): **không cần sửa** — đã grep, không có câu nào mô tả mapping thinking. [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md) dòng 78 chỉ mô tả nhánh Anthropic ⇒ vẫn đúng
 - [x] `pnpm --filter @awog/sidecar typecheck` — exit 0
-- [ ] Commit: `fix(runtime): align Pi reasoning effort with the Claude Code scale`
+- [x] Commit `4742909` — `fix(runtime): align Pi reasoning effort with the Claude Code scale`
 
 ### P2 — `systemPrompt.snapshot` ✅ (nhánh chat; nhánh task cố ý KHÔNG làm)
 - [x] Thêm `snapshot: true` ở [claude-sdk/run-stream.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/run-stream.ts) (nhánh chat)
@@ -191,7 +191,7 @@ Nhánh: `claude/sdk-version-app-effort-qg99pq`. Mỗi phase một commit riêng 
 - [x] Dynamic section của preset (**working directory, auto-memory, git status**) bị đóng băng theo — vô hại ở nhánh chat vì `<current_state>` với git snapshot tươi đã được prepend **mỗi turn** ([run-stream.ts:481](../../apps/desktop/sidecar/src/runtime/claude-sdk/run-stream.ts)), mới hơn và có thẩm quyền hơn bản ghi
 - [x] **KHÔNG áp cho [claude-sdk/invoke.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/invoke.ts) (task)** — trái với dự kiến ban đầu của plan. Task node **không** có `<current_state>` trên prompt, nên dynamic section của preset là nguồn định vị git/cwd duy nhất của nó; đóng băng = đổi state sống lấy cache. Xem "còn nợ" dưới
 - [ ] QA riêng: đo prompt-cache hit trước/sau trên một session dài, và verify resume qua một lần nâng app (case mà `snapshot` sinh ra để chữa)
-- [ ] Commit: `perf(claude-sdk): record the system prompt once per conversation`
+- [x] Commit `227cfdb` — `perf(claude-sdk): record the system prompt once per conversation`
 
 **Còn nợ — quyết định cho nhánh task.** Ẩn số: CLI render dynamic section **mỗi request** hay **mỗi lần launch**? `.d.ts` không nói rõ. Nếu mỗi request thì trong một node chạy dài, mỗi lần model sửa file là `git status` đổi ⇒ vỡ prefix cache + vứt reasoning ở **mọi** request sau đó — lúc đó `snapshot: true` cho task là món hời lớn, và cách làm đúng là kèm prepend `<current_state>` vào prompt của node để bù định vị. Nếu mỗi launch thì task one-shot chẳng được gì. **Cần đo trước khi làm**, không đoán.
 
@@ -246,7 +246,7 @@ Không có test tự động cho lớp runtime ⇒ QA thủ công, chạy **sau 
 1. ~~**Chốt phương án B-3**~~ — ✅ **đã chốt A** (2026-09-05), xem [ADR 0078](../decisions/0078-reasoning-effort-parity.md).
 2. ~~**P2 `snapshot: true`**~~ — ✅ **tự tan**: đó đã là hiện trạng, không phải cái giá mới (xem P2). Câu hỏi CÒN LẠI, hẹp hơn: có bật `snapshot` cho **nhánh task** không — cần đo xem CLI render dynamic section mỗi request hay mỗi launch.
 3. Có cắt release `0.33.0` ngay sau P1, hay gom thêm P2/P3 rồi mới cắt?
-4. Ngoài phạm vi plan này: `pi-ai` đang `^0.84.2`, latest `0.85.0` — có muốn mở task riêng đánh giá không?
+4. ~~**Bump `pi-ai`**~~ — ✅ **đã làm** ở [Track C](#8-track-c--nâng-pi-runtime-0842--0851) (lên `^0.85.1`, không phải 0.85.0).
 
 ---
 
