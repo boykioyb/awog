@@ -23,6 +23,10 @@ const { initLocale } = useI18n()
 const settings = useSettingsStore()
 const { applyAll, applyReducedMotion } = useAppearanceDom()
 const { maybeStart } = useOnboarding()
+// Native window chrome: publish platform + fullscreen onto <body> for app-shell.css.
+// Runs in setup (not onMounted) so the traffic-light inset is in place before the
+// shell's first paint — applying it later shifts the NavRail one frame in.
+useWindowChrome()
 onMounted(() => {
   init()
   initLocale()

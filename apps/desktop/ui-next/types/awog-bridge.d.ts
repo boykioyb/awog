@@ -154,6 +154,12 @@ export interface AwogBridge {
   request(method: string, params?: unknown): Promise<unknown>
   // Subscribe to engine events; returns an unsubscribe function.
   onEvent(handler: (event: AwogEngineEvent) => void): () => void
+  // Host platform ('darwin' | 'win32' | 'linux' | …). Optional so a shell packaged
+  // before native-macos-polish degrades to the plain, un-inset chrome.
+  platform?: string
+  // Fullscreen state of the window hosting this renderer (macOS hides the traffic
+  // lights there, so the shell drops their inset). Returns an unsubscribe function.
+  onFullscreen?(handler: (fullscreen: boolean) => void): () => void
   openExternal(url: string): Promise<void>
   revealPath(root: string, path: string): Promise<void>
   // Reveal a source's folder (~/.awog/sources/<slug>) in the OS file manager.

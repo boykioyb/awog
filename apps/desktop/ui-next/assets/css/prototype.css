@@ -9,6 +9,9 @@
   :root{
     --bg:#1c1c1e; --bgPanel:#1e1e20; --bgEl:#29292b; --bgHover:#2e2e30; --bgActive:#38383b;
     --bgRail:#161618; --bgSubtle:#242426; --bgInput:#262628; --bgCanvas:#202022;
+    /* Pressed state for controls with no fill of their own — one step past --bgHover,
+       so a click reads as a real dip instead of the hover tint holding still. */
+    --bgPress:#3f3f43;
     --border:rgba(255,255,255,.09); --borderStrong:rgba(255,255,255,.15); --borderFocus:var(--accentBorder);
     --text:#f5f5f7; --textMuted:#a1a1a6; --textDim:#86868b; --textFaint:#6e6e73;
     /* Elevation ramp — soft, layered, theme-aware (light overrides in body.light).
@@ -38,7 +41,7 @@
        is barely-off-white; sidebars/cards are PURE white; depth comes entirely from
        the shadow ramp + hairlines. Gray survives only as hover/active tints. */
     --bg:#fafbfc; --bgPanel:#ffffff; --bgEl:#ffffff; --bgHover:#f0f1f4; --bgActive:#e6e8ec;
-    --bgRail:#f7f8fa; --bgSubtle:#f7f8fa; --bgInput:#ffffff; --bgCanvas:#f3f4f6;
+    --bgRail:#f7f8fa; --bgSubtle:#f7f8fa; --bgInput:#ffffff; --bgCanvas:#f3f4f6; --bgPress:#d9dbe1;
     --border:rgba(0,0,0,.08); --borderStrong:rgba(0,0,0,.14);
     --text:#1d1d1f; --textMuted:#4b4b50; --textDim:#6e6e73; --textFaint:#8e8e93;
     /* Soft gray shadows — this is where the bright OrbStack-style depth reads.

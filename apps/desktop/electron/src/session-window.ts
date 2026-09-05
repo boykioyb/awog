@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { log } from './logger'
 import { preloadPath } from './paths'
-import { applyNavigationGuards, loadAppRoute } from './window'
+import { applyNavigationGuards, loadAppRoute, WINDOW_BACKGROUND } from './window'
 
 // Session popout windows — "open this session in its own OS window"
 // (docs/features/session-popout-window.md). Mirrors preview-window.ts: each popout is a
@@ -91,8 +91,13 @@ export function openSessionWindow(params: SessionWindowParams): void {
     minWidth: 520,
     minHeight: 420,
     // Shown immediately as a native frame with the session title, so the window exists
-    // while the SPA boots; the page then owns the title (useHead).
+    // while the SPA boots; the page then owns the title (useHead). The frame stays
+    // NATIVE on purpose (docs/features/native-macos-polish.md §4 W1): a popout is a
+    // document window, and macOS document windows keep a real title bar. Only the
+    // paint-before-first-frame background is borrowed from the main window, so the
+    // popout no longer flashes white while the SPA boots.
     title: params.title || engineId,
+    backgroundColor: WINDOW_BACKGROUND,
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,

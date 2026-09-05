@@ -54,6 +54,8 @@ body:not(.light)[data-theme-family='cute'] {
   --bgEl: #252829;
   --bgHover: #2b2f30;
   --bgActive: #343839;
+  /* Pressed state (native-macos-polish §4 W2) — mint-cast, one step past hover. */
+  --bgPress: #3d4243;
   --bgRail: #151718;
   --bgSubtle: #212425;
   --bgInput: #232627;
@@ -126,6 +128,7 @@ body.light[data-theme-family='cute'] {
   --bgEl: #ffffff;
   --bgHover: #f1f6f6;
   --bgActive: #e6efef;
+  --bgPress: #d9e6e6;
   --bgRail: #f7fafa;
   --bgSubtle: #f6f9f9;
   --bgInput: #ffffff;

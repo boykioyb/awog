@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, net, protocol, shell } from 'electron'
+import type { BrowserWindowConstructorOptions } from 'electron'
 import { log } from './logger'
 import { MEDIA_SCHEME } from './media'
 import { DEV_URL, preloadPath, uiDir } from './paths'
@@ -122,6 +123,50 @@ export function loadAppRoute(win: BrowserWindow, route: string): void {
   })
 }
 
+// ── Native window chrome (docs/features/native-macos-polish.md §4 W1) ──────────
+//
+// The renderer paints its own top bar, so the OS title bar is hidden and that top
+// bar doubles as the drag region (`-webkit-app-region` in app-shell.css).
+//   - macOS: `hiddenInset` keeps the traffic lights; they are nudged to sit centred
+//     in the 52px top bar. The renderer insets the shell to clear them, and drops
+//     that inset in fullscreen (where the lights are gone) — hence WINDOW_FULLSCREEN.
+//   - Windows/Linux: `hidden` + a themed overlay, so the minimise/maximise/close
+//     glyphs are drawn in app colours instead of a bright system strip.
+//
+// WINDOW_BACKGROUND is painted by the window itself before the renderer's first
+// frame, which removes the white flash on load. It matches `--bg` of the DARK theme;
+// the real theme lives in the renderer's localStorage, so a light-theme user still
+// gets one dark frame (mitigated by `show:false` + `ready-to-show`).
+export const WINDOW_BACKGROUND = '#1c1c1e'
+const TITLEBAR_SYMBOL_COLOR = '#f5f5f7'
+// Height of the app's own top bar on Windows/Linux (`.top` in app-shell.css). macOS
+// grows it to 52px, but the overlay only exists on the other two platforms.
+const TITLEBAR_OVERLAY_HEIGHT = 44
+const TRAFFIC_LIGHT_POSITION = { x: 14, y: 15 } as const
+
+// Channel carrying the main window's fullscreen state to its renderer (boolean).
+// Mirrored as a literal in preload.ts, which is sandboxed and cannot import this.
+const WINDOW_FULLSCREEN = 'window:fullscreen'
+
+function windowChromeOptions(): BrowserWindowConstructorOptions {
+  if (process.platform === 'darwin') {
+    return {
+      backgroundColor: WINDOW_BACKGROUND,
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { ...TRAFFIC_LIGHT_POSITION },
+    }
+  }
+  return {
+    backgroundColor: WINDOW_BACKGROUND,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: WINDOW_BACKGROUND,
+      symbolColor: TITLEBAR_SYMBOL_COLOR,
+      height: TITLEBAR_OVERLAY_HEIGHT,
+    },
+  }
+}
+
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -130,6 +175,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 600,
     title: 'AWOG',
     show: false,
+    ...windowChromeOptions(),
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,
@@ -139,6 +185,16 @@ export function createMainWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+
+  // Fullscreen hides the macOS traffic lights, so the shell must drop the inset it
+  // keeps for them. Push the state on every change, and again after each load — a
+  // reload rebuilds the renderer's <body> attributes from scratch.
+  const sendFullscreen = (on: boolean): void => {
+    if (!win.isDestroyed()) win.webContents.send(WINDOW_FULLSCREEN, on)
+  }
+  win.on('enter-full-screen', () => sendFullscreen(true))
+  win.on('leave-full-screen', () => sendFullscreen(false))
+  win.webContents.on('did-finish-load', () => sendFullscreen(win.isFullScreen()))
 
   // Chromium keeps zoom per ORIGIN, shared by every window on it — so a stray
   // setZoomFactor anywhere (an earlier build of the pet window did exactly this)

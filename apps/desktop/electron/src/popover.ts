@@ -32,8 +32,17 @@ class TrayPopover {
       skipTaskbar: true,
       alwaysOnTop: true,
       // Opaque, themed by the page itself — robust vs. a transparent window
-      // (rounded corners need transparency, which flickers across platforms).
+      // (rounded corners need transparency, which flickers across platforms). Kept
+      // as the cross-platform fallback under the macOS vibrancy below.
       backgroundColor: '#1a1a1a',
+      // macOS only: give the popover the same material a real menu-bar popover uses,
+      // and keep it "active" so it does not desaturate when the app loses focus
+      // (docs/features/native-macos-polish.md §4 W1). Vibrancy only shows through
+      // where the page is translucent, so this is a no-op until the surfaces opt in
+      // (that retune is the separate phase — see D4 in the same doc).
+      ...(process.platform === 'darwin'
+        ? { vibrancy: 'popover' as const, visualEffectState: 'active' as const }
+        : {}),
       webPreferences: {
         preload: preloadPath(),
         contextIsolation: true,

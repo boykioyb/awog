@@ -113,6 +113,21 @@ const awog = {
     return () => ipcRenderer.removeListener('engine:event', listener)
   },
 
+  // Host platform (`process.platform`, polyfilled in the sandboxed preload). The
+  // renderer only uses it to set `body[data-platform]`, which drives the native
+  // window-chrome insets in app-shell.css (native-macos-polish §4 W1).
+  platform: process.platform,
+  // Fullscreen state of the window hosting this renderer. macOS hides the traffic
+  // lights in fullscreen, so the shell drops the strip it reserves for them.
+  // Returns an unsubscribe function, like onEvent.
+  onFullscreen(handler: (fullscreen: boolean) => void): () => void {
+    const listener = (_e: unknown, fullscreen: boolean): void => handler(fullscreen)
+    // Channel literal mirrors WINDOW_FULLSCREEN in main's window.ts — this preload
+    // is sandboxed, so it can't import main-process modules.
+    ipcRenderer.on('window:fullscreen', listener)
+    return () => ipcRenderer.removeListener('window:fullscreen', listener)
+  },
+
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   revealPath: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:revealPath', { root, path }),

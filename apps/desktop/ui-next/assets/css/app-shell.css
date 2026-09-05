@@ -1336,3 +1336,167 @@ body[data-code-wrap='on'] .codewrap {
 .app.compact [data-page='sessions'] .md > .detail {
   padding-bottom: var(--awog-dock-h, 0px);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Native window chrome (docs/features/native-macos-polish.md §4 W1)
+
+   The OS title bar is hidden (electron/src/window.ts), so the app's own top bar IS
+   the title bar: it has to be draggable, and every interactive child has to opt back
+   out — a control that sits inside a drag region swallows its own clicks.
+
+   `body[data-platform]` / `body[data-fullscreen]` are published by useWindowChrome
+   (app.vue, once). In a plain browser (dev) the platform is `browser`, so none of
+   the macOS/Windows branches below apply and the shell renders exactly as before.
+   ════════════════════════════════════════════════════════════════════════ */
+.top {
+  -webkit-app-region: drag;
+}
+/* Opt every interactive descendant back out. Written broadly on purpose: a button
+   added to the top bar later must not silently become undraggable dead weight.
+   `.ntf` covers the notification bell AND its popover panel, which is a child of
+   `.top` and would otherwise be one big drag handle. */
+.top button,
+.top a,
+.top input,
+.top select,
+.top textarea,
+.top label,
+.top [role='button'],
+.top .btn,
+.top .iconbtn,
+.top .kbd,
+.top .shelltgl,
+.top .ntf {
+  -webkit-app-region: no-drag;
+}
+
+/* macOS: grow the top bar to a real toolbar height, and keep a clear strip for the
+   traffic lights. Which element takes that strip depends on the shell mode. */
+body[data-platform='darwin'] .top {
+  height: 52px;
+}
+/* Normal shell — the rail is the left column, so the lights land on IT. 12px is the
+   prototype's own top padding; +28px clears the lights. */
+body[data-platform='darwin']:not([data-fullscreen]) .side {
+  padding-top: 40px;
+}
+/* Compact shell (≤1100px) — the rail is an off-canvas drawer parked off-screen, so
+   with it closed nothing sits under the lights except the top bar. Move the inset
+   there: 18px is the prototype's own left padding, +64px clears the three lights. */
+body[data-platform='darwin']:not([data-fullscreen]) .app.compact .side {
+  padding-top: 12px;
+}
+body[data-platform='darwin']:not([data-fullscreen]) .app.compact .top {
+  padding-left: 82px;
+}
+/* …and while that drawer IS out it slides back under the lights, so it takes the
+   inset again for as long as it is visible. */
+body[data-platform='darwin']:not([data-fullscreen]) .app.compact.nav-open .side {
+  padding-top: 40px;
+}
+/* Fullscreen needs no branch: macOS removes the traffic lights there, and every rule
+   above is gated on :not([data-fullscreen]) — the inset collapses on its own. */
+
+/* Windows/Linux: `titleBarOverlay` draws the minimise/maximise/close glyphs over the
+   top-right of the page. Reserve exactly the width Chromium reports for them so the
+   primary "New" button never ends up underneath. The env() fallback (100vw → the
+   prototype's plain 18px) keeps the bar correct if the overlay is unavailable. */
+body[data-platform='win32'] .top,
+body[data-platform='linux'] .top {
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw) + 18px);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Interaction states (docs/features/native-macos-polish.md §4 W2)
+
+   The shell had 366 `:hover` rules against 26 `:active` ones, so most controls lit
+   up under the cursor and then did nothing under the finger — that is the whole
+   "clicks don't land" feeling. One global block gives every interactive family the
+   same fast colour transition, a real pressed state and a focus ring.
+
+   Specificity is deliberate:
+   - transition + focus ring use `:where()` (specificity 0) so they are a pure
+     FALLBACK — the 47 places that declare their own focus-visible, and every
+     component that tunes its own transition, still win.
+   - `:active` uses `:is()` so it can beat the matching `:hover` rule (which is
+     usually (0,2,0)); otherwise hover would keep painting over the press.
+   ════════════════════════════════════════════════════════════════════════ */
+:where(
+  button,
+  [role='button'],
+  .btn,
+  .iconbtn,
+  .ni,
+  .li,
+  .gsi,
+  .chip,
+  .chipbtn,
+  .act,
+  .cact,
+  .codetab,
+  .shelltgl
+) {
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+/* Pressed: controls with no fill of their own dip to the neutral press tint.
+   `.pri` is excluded — a filled button keeps its accent and darkens instead. */
+:is(
+  button,
+  [role='button'],
+  .btn,
+  .iconbtn,
+  .ni,
+  .li,
+  .gsi,
+  .chip,
+  .chipbtn,
+  .act,
+  .cact,
+  .codetab,
+  .shelltgl
+):not(.pri):active:not(:disabled) {
+  background-color: var(--bgPress);
+}
+.btn.pri:active:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+/* Keyboard focus fallback — a soft accent halo for the controls that never declared
+   one. Zero specificity, so anything with its own ring keeps it. */
+:where(
+  button,
+  [role='button'],
+  .btn,
+  .iconbtn,
+  .ni,
+  .li,
+  .gsi,
+  .chip,
+  .chipbtn,
+  .act,
+  .cact,
+  .codetab,
+  .shelltgl
+):focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow);
+}
+
+/* OS-level reduce-motion. Mirrors the in-app kill-switch above so the two behave
+   identically; the scattered per-component blocks only covered a handful of places.
+   Durations only — `transform` is load-bearing layout here (drawer slide, VueFlow
+   pan/zoom, xterm), so it is never forced to `none`. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
