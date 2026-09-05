@@ -93,6 +93,7 @@ const { t } = useI18n()
   min-width: 0;
 }
 .edalist-name {
+  /* mono-ok: artifact file name */
   font-family: var(--code);
   white-space: nowrap;
   overflow: hidden;

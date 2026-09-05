@@ -72,7 +72,7 @@ const verifyTitle = computed(() => {
   align-items: center;
   gap: 6px;
   font-size: var(--fs-xs);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   color: var(--textDim);
 }
 .lcp-verify {
@@ -115,6 +115,7 @@ const verifyTitle = computed(() => {
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  /* mono-ok: verification command output */
   font-family: var(--code);
   font-size: var(--fs-xs);
   color: var(--textDim);

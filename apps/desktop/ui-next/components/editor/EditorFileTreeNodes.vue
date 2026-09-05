@@ -94,6 +94,7 @@ function onClick(node: WorkspaceTreeNode): void {
   flex-shrink: 0;
 }
 .edtn-name {
+  /* mono-ok: file tree node name */
   font-family: var(--code);
   white-space: nowrap;
   overflow: hidden;

@@ -155,7 +155,7 @@ const baseName = computed(() => baseNameOf(props.path))
 }
 .cchip {
   font-size: 12px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   color: var(--textDim);
 }
 .cscroll {

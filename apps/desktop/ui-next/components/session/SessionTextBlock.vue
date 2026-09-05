@@ -281,6 +281,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   overflow-x: auto;
+  /* mono-ok: raw mermaid source while the fence is still streaming */
   font-family: var(--code);
   font-size: 0.92em;
   line-height: 1.5;

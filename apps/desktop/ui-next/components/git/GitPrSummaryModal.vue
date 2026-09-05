@@ -449,6 +449,8 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   flex-wrap: wrap;
 }
 .prm-branch {
+  /* mono-ok: git branch name */
+  font-family: var(--code);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -457,7 +459,6 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
-  font-family: var(--code);
   font-size: 12px;
 }
 .prm-into {
@@ -603,6 +604,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   border-radius: var(--r-sm);
   outline: none;
   color: var(--text);
+  /* mono-ok: PR body — markdown with fenced code, written to a fixed column */
   font-family: var(--code);
   font-size: 1em;
   line-height: 1.55;

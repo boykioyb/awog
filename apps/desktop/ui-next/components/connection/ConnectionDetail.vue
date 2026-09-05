@@ -727,7 +727,6 @@ watch(
   gap: 7px;
   padding: 10px 14px;
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -800,7 +799,6 @@ watch(
   border-radius: var(--r-pill);
   border: 1px solid var(--accentBorder);
   color: var(--accent);
-  font-family: var(--code);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -872,6 +870,7 @@ watch(
   color: var(--danger);
 }
 .cnd-pre {
+  /* mono-ok: JSON / env block */
   font-family: var(--code);
   font-size: var(--fs-xs);
   margin-top: 8px;
@@ -979,7 +978,6 @@ watch(
 .cnd-perm-label {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  font-family: var(--code);
 }
 .cnd-perm-item {
   font-size: var(--fs-sm);
@@ -1018,7 +1016,6 @@ watch(
 .cnd-edit-label {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  font-family: var(--code);
 }
 .cnd-edit-ta {
   width: 100%;
@@ -1029,6 +1026,7 @@ watch(
   border-radius: var(--r-sm);
   padding: 9px 11px;
   color: var(--text);
+  /* mono-ok: JSON config editor */
   font-family: var(--code);
   font-size: var(--fs-sm);
   line-height: 1.55;

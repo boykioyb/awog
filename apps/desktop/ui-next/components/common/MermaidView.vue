@@ -549,7 +549,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   border-radius: var(--r-xs);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textFaint);
   cursor: pointer;
@@ -618,6 +618,7 @@ onBeforeUnmount(() => {
   border-radius: var(--r-sm);
   background: var(--bg);
   color: var(--textDim);
+  /* mono-ok: mermaid source */
   font-family: var(--code);
   font-size: var(--fs-xs);
   white-space: pre-wrap;

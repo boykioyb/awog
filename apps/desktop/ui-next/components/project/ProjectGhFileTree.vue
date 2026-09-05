@@ -160,7 +160,7 @@ function patchFor(path: string): string {
   flex: 0 0 auto;
   display: flex;
   gap: 7px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
 .ghtdiff {

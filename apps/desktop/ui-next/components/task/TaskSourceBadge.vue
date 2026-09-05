@@ -78,7 +78,4 @@ const open = (url: string): void => {
   height: 12px;
   flex: 0 0 auto;
 }
-.mono {
-  font-family: var(--code);
-}
 </style>

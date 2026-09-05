@@ -99,6 +99,7 @@
   font-style: italic;
 }
 .mdbody code {
+  /* mono-ok: inline code + code fence in the markdown render */
   font-family: var(--code);
   font-size: 0.9em;
   background: var(--bgActive);

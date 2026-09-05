@@ -636,6 +636,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   color: var(--text);
 }
 .pvname {
+  /* mono-ok: file path being previewed */
   font-family: var(--code);
   font-weight: 600;
   white-space: nowrap;
@@ -653,7 +654,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   flex: 0 0 auto;
 }
 .pvmeta {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textFaint);
   flex: 0 0 auto;
@@ -723,7 +724,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   background: var(--bgSubtle);
 }
 .mdolabel {
-  font-family: var(--code);
   font-size: 12px;
   color: var(--textFaint);
   padding: 0 8px 8px;
@@ -881,6 +881,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   color: var(--textDim);
 }
 .pvename {
+  /* mono-ok: file name */
   font-family: var(--code);
   color: var(--text);
 }
@@ -941,6 +942,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
+  /* mono-ok: rename input — a file name */
   font-family: var(--code);
   outline: none;
 }
@@ -1027,6 +1029,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   text-decoration: underline;
 }
 .mdbody :deep(code) {
+  /* mono-ok: inline code in the markdown render */
   font-family: var(--code);
   font-size: 0.9em;
   background: var(--bgActive);

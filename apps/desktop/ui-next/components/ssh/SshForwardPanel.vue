@@ -290,7 +290,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   padding: 3px 8px;
   border: 1px solid currentColor;

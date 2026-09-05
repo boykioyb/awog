@@ -67,7 +67,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--textFaint);
   font-size: 12px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   cursor: pointer;
   transition:

@@ -117,12 +117,12 @@ const viewOptions = [
   flex-shrink: 0;
 }
 .edtitle {
-  font-family: var(--code);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
 }
 .edsub {
+  /* mono-ok: subtitle carries the project path in pages/code/[id].vue */
   font-family: var(--code);
   font-size: 12px;
   color: var(--textFaint);
@@ -136,7 +136,7 @@ const viewOptions = [
   align-items: center;
   gap: 8px;
   margin-left: 6px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
 .eddiff-files {

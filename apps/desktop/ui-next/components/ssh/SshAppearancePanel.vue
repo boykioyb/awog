@@ -51,7 +51,7 @@
           >
             <Icon name="minus" style="width: 14px; height: 14px" />
           </button>
-          <span class="tap-step-val mono">{{ store.fontSize }}</span>
+          <span class="tap-step-val tnum">{{ store.fontSize }}</span>
           <button
             class="tap-step"
             type="button"
@@ -227,6 +227,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   overflow: hidden;
 }
 .tap-swatch-txt {
+  /* mono-ok: terminal preview swatch — shows real terminal text */
   font-family: var(--code);
   font-size: var(--fs-xs);
   line-height: 1;

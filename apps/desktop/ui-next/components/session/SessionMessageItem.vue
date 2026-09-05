@@ -688,6 +688,8 @@ const msgActions = computed<MsgAction[]>(() => [
 /* Slash-command invocation chip in the user bubble — compact `/name args` pill in
    place of the expanded body (which is still sent to the model). */
 .ucmd {
+  /* mono-ok: slash command — a literal string the user types */
+  font-family: var(--code);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -697,7 +699,6 @@ const msgActions = computed<MsgAction[]>(() => [
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
   color: var(--accent);
-  font-family: var(--code);
   vertical-align: middle;
 }
 .ucmd-name {

@@ -76,6 +76,7 @@ function relativeWhen(iso: string): string {
 }
 .ghcommit-sha {
   flex: 0 0 auto;
+  /* mono-ok: commit SHA */
   font-family: var(--code);
   font-size: var(--fs-xs);
   color: var(--accent);

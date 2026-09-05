@@ -395,6 +395,7 @@ const onSubmit = () => {
   outline: none;
 }
 .pe-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — project path */
   font-family: var(--code);
 }
 .pe-input:focus {

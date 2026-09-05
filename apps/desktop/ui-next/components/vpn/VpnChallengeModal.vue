@@ -112,6 +112,7 @@ watch(
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
+  /* mono-ok: one-time challenge code — fixed advance keeps the digits apart */
   font-family: var(--code);
   font-size: var(--fs-lg);
   letter-spacing: 0.14em;

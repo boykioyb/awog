@@ -146,7 +146,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
   border: 1px solid var(--border);
   background: var(--bgEl);
   color: var(--text);
-  font-family: var(--code);
   font-size: var(--fs-sm);
   line-height: 1;
 }

@@ -345,6 +345,7 @@ const onSave = () => {
   outline: none;
 }
 .ske-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — allowed-tools / path */
   font-family: var(--code);
 }
 .ske-input:focus {

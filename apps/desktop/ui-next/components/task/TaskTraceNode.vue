@@ -25,7 +25,7 @@
       <span v-else-if="item.type === 'thinking' && detailText" class="ttn-think">
         {{ detailText }}
       </span>
-      <span class="ttn-dur mono">
+      <span class="ttn-dur tnum">
         <span v-if="isRunning" class="ttn-live">{{ t('tasks.trace.running') }}</span>
         <template v-else>{{ item.duration }}</template>
       </span>
@@ -248,7 +248,10 @@ const todoColor = (status: TodoStatus): string => {
   font-size: var(--fs-sm);
 }
 .ttn-todo-mark {
-  font-family: var(--code);
+  /* The three marks (○ ▸ ✓) have different advances in the system font;
+     a fixed box keeps the text column from jittering between rows. */
+  width: 1em;
+  text-align: center;
   flex: 0 0 auto;
 }
 .ttn-todo-text {

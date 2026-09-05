@@ -212,6 +212,7 @@ const onEdit = (e: MouseEvent) => {
   text-decoration: underline;
 }
 .mdbody :deep(code) {
+  /* mono-ok: inline code in the markdown render */
   font-family: var(--code);
   font-size: 0.9em;
   background: var(--bgActive);

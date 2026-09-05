@@ -204,7 +204,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   border-radius: var(--r-pill);
   background: var(--accentDim);
   color: var(--accent);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   font-weight: 700;
   display: inline-flex;

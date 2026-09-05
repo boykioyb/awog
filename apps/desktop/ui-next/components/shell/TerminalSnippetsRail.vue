@@ -218,7 +218,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   text-align: center;
   color: var(--textDim);
   background: var(--bgHover);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
 }
 .tsr-tools {
   display: flex;

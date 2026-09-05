@@ -296,7 +296,6 @@ watch(activeIndex, (i) => {
 }
 .cmdk-group {
   padding: 8px 10px 4px;
-  font-family: var(--code);
   font-size: 12px;
   color: var(--textFaint);
 }
@@ -339,7 +338,6 @@ watch(activeIndex, (i) => {
   flex-shrink: 0;
   font-size: 12px;
   color: var(--textFaint);
-  font-family: var(--code);
 }
 .cmdk-foot {
   display: flex;
@@ -349,7 +347,6 @@ watch(activeIndex, (i) => {
   flex-shrink: 0;
   font-size: 12px;
   color: var(--textFaint);
-  font-family: var(--code);
 }
 
 .cmdk-enter-active,

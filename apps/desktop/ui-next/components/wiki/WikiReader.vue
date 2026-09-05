@@ -298,7 +298,6 @@ async function onCopyPath(): Promise<void> {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--code);
   font-size: 12px;
 }
 .wr-sep {

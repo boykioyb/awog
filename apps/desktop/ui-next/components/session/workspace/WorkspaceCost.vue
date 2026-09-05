@@ -71,7 +71,7 @@
         </div>
         <div class="wscost-metarow">
           <span class="wscost-metak">{{ t('sessions.workspace.cost.lifetime') }}</span>
-          <span class="wscost-metav mono">{{ fmtUsd(lifetime.costUsd) }}</span>
+          <span class="wscost-metav tnum">{{ fmtUsd(lifetime.costUsd) }}</span>
         </div>
       </div>
 
@@ -87,11 +87,11 @@
           }}
         </p>
         <div v-for="d in daysDesc" :key="d.date" class="wscost-dayrow" :title="dayTitle(d)">
-          <span class="wscost-daydate mono">{{ d.date }}</span>
+          <span class="wscost-daydate tnum">{{ d.date }}</span>
           <span class="wscost-daybar">
             <i :style="{ width: `${barPct(d.costUsd)}%` }" />
           </span>
-          <span class="wscost-daycost mono">{{ fmtUsd(d.costUsd) }}</span>
+          <span class="wscost-daycost tnum">{{ fmtUsd(d.costUsd) }}</span>
         </div>
       </div>
 
@@ -259,7 +259,8 @@ const dayTitle = (d: CostDay): string =>
   border-radius: var(--r-xs);
   padding: 3px 6px;
   color: var(--text);
-  font-family: var(--code);
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
 }
 /* Headline cost. */
 .wscost-head {

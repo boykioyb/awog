@@ -82,6 +82,7 @@ const runClass = (run: DocxRun) => ({
   color: var(--textMuted);
 }
 .odp.code {
+  /* mono-ok: code paragraph in a .docx render */
   font-family: var(--code);
   font-size: 0.9em;
   background: var(--bgSubtle);
@@ -127,6 +128,7 @@ const runClass = (run: DocxRun) => ({
   text-decoration: underline line-through;
 }
 .odrun.mono {
+  /* mono-ok: monospace run carried over from the .docx */
   font-family: var(--code);
   font-size: 0.9em;
 }

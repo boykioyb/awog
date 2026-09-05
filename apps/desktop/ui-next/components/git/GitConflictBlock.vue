@@ -97,7 +97,7 @@ const theirsRows = computed(() => toRows(props.theirs, 'theirs'))
 }
 .cbtitle {
   font-size: 12px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   color: var(--textDim);
 }
 .cbtake {
@@ -138,7 +138,6 @@ const theirsRows = computed(() => toRows(props.theirs, 'theirs'))
 .cbpanehd {
   padding: 4px 10px;
   font-size: 12px;
-  font-family: var(--code);
   color: var(--textDim);
   background: var(--bgSubtle);
   border-bottom: 1px solid var(--border);

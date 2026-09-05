@@ -464,6 +464,7 @@ const onDirtyContinue = (suppress: boolean) => {
   outline: none;
 }
 .nt-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — path / branch */
   font-family: var(--code);
 }
 .nt-input:focus {

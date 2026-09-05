@@ -80,7 +80,7 @@ const kindStyle = (kind: ChangeKind) => ({
   color: var(--text);
 }
 .wn-date {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textDim);
 }

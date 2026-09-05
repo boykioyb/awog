@@ -48,7 +48,6 @@ const { t } = useI18n()
   flex: 0 0 auto;
   padding: 1px 8px;
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--accent);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);

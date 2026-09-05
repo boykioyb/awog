@@ -1,7 +1,7 @@
 <template>
   <div class="tpc" :class="{ active: isActive }">
     <button class="tpc-head" :class="{ click: isInteractive }" @click="onToggle">
-      <span class="tpc-idx mono">{{ String(index).padStart(2, '0') }}</span>
+      <span class="tpc-idx tnum">{{ String(index).padStart(2, '0') }}</span>
       <span class="tpc-box" :class="boxClass">
         <Icon :name="statusIcon" class="tpc-boxi" :class="{ spin: phase.status === 'running' }" />
       </span>
@@ -9,7 +9,7 @@
         <div class="tpc-agent">{{ agentName }}</div>
         <div class="tpc-skill mono">{{ phase.skillName }}</div>
       </div>
-      <span v-if="phase.runs.length > 1 && latestRun" class="chip mono tpc-ver">
+      <span v-if="phase.runs.length > 1 && latestRun" class="chip tnum tpc-ver">
         {{ t('tasks.phase.version', { v: latestRun.version, n: phase.runs.length }) }}
       </span>
       <span
@@ -19,7 +19,7 @@
       >
         {{ latestVerdict === 'pass' ? t('tasks.phase.verdictPass') : t('tasks.phase.verdictFail') }}
       </span>
-      <span v-if="gate && failCount > 0" class="chip mono tpc-loop">
+      <span v-if="gate && failCount > 0" class="chip tnum tpc-loop">
         {{ t('tasks.phase.loop', { n: failCount, max: gate.maxIterations }) }}
       </span>
       <span v-if="phase.status === 'waiting_approval'" class="tag warn tpc-flag">
@@ -29,7 +29,7 @@
         <Icon name="act" class="tpc-livei" />
         {{ t('tasks.phase.live') }}
       </span>
-      <span v-else-if="currentRun?.duration" class="tpc-dur mono">{{ currentRun.duration }}</span>
+      <span v-else-if="currentRun?.duration" class="tpc-dur tnum">{{ currentRun.duration }}</span>
       <Icon v-if="isInteractive" name="chev" class="tpc-chv" :class="{ open: expanded }" />
     </button>
 
@@ -40,7 +40,7 @@
         <button
           v-for="r in phase.runs"
           :key="r.version"
-          class="chip mono tpc-runchip"
+          class="chip tnum tpc-runchip"
           :class="{ on: shownVersion === r.version, dead: r.status === 'superseded' }"
           :title="r.triggeredBy === 'auto-loop' ? t('tasks.phase.autoLoopRun') : undefined"
           @click.stop="selectedVersion = r.version"
@@ -62,7 +62,7 @@
           @click.stop="activeTab = tab.id"
         >
           {{ tab.label }}
-          <span v-if="tab.badge != null" class="chip mono tpc-tabbadge">{{ tab.badge }}</span>
+          <span v-if="tab.badge != null" class="chip tnum tpc-tabbadge">{{ tab.badge }}</span>
         </button>
         <span class="tpc-tabsp" />
         <button
@@ -479,6 +479,7 @@ const confirmRerun = () => {
   padding: 13px;
 }
 .tpc-trace {
+  /* mono-ok: phase trace output */
   font-family: var(--code);
 }
 .tpc-empty {

@@ -133,7 +133,7 @@ function onEnter(e: KeyboardEvent) {
   border-color: var(--danger);
 }
 .pvfcount {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textDim);
   white-space: nowrap;
@@ -151,7 +151,6 @@ function onEnter(e: KeyboardEvent) {
   border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
-  font-family: var(--code);
 }
 .pvfbtn:hover:not(:disabled) {
   background: var(--bgHover);

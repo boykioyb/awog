@@ -158,6 +158,7 @@ const toggleSecret = async (i: number) => {
   background: var(--bgInput);
   border: 1px solid var(--border);
   color: var(--text);
+  /* mono-ok: frontmatter key/value — identifiers */
   font-family: var(--code);
   font-size: var(--fs-sm);
   outline: none;

@@ -186,7 +186,6 @@ onMounted(() => {
   gap: 16px;
   padding: 4px 14px;
   flex-shrink: 0;
-  font-family: var(--code);
   font-size: 12px;
   color: var(--textDim);
   background: var(--bgPanel);

@@ -83,10 +83,7 @@
         <div class="toolsrch">
           <Icon name="search" style="width: 13px; height: 13px" />
           <input v-model="toolQ" :placeholder="t('sessions.config.toolSearch')" />
-          <span
-            class="tc"
-            style="font-family: var(--code); font-size: var(--fs-xs); color: var(--textFaint)"
-          >
+          <span class="tc tnum" style="font-size: var(--fs-xs); color: var(--textFaint)">
             {{ onCount }}/{{ total }}
           </span>
         </div>

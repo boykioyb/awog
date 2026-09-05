@@ -14,7 +14,7 @@
             {{ statusLabel }}
           </span>
           <span class="ssh-chip">{{ authMethodLabel }}</span>
-          <span v-if="folder" class="ssh-chip ssh-chip-folder">
+          <span v-if="folder" class="ssh-chip">
             <Icon name="folder" style="width: 11px; height: 11px" />
             {{ folder }}
           </span>
@@ -283,7 +283,6 @@ const forwardLabel = (fwd: PortForward): string => {
   display: grid;
   place-items: center;
   font-size: var(--fs-lg);
-  font-family: var(--code);
   font-weight: 650;
   flex: 0 0 auto;
 }
@@ -317,7 +316,6 @@ const forwardLabel = (fwd: PortForward): string => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  font-family: var(--code);
   line-height: 1;
   padding: 3px 8px;
   border: 1px solid;
@@ -339,9 +337,6 @@ const forwardLabel = (fwd: PortForward): string => {
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
-}
-.ssh-chip-folder {
-  font-family: var(--code);
 }
 .ssh-chip-accent {
   color: var(--accent);

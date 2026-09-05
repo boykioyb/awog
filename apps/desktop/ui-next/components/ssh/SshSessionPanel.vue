@@ -34,7 +34,7 @@
               />
               <span v-else class="sshsess-row-ckspace" />
               <span class="sshsess-row-title">{{ s.title || t('ssh.session.untitled') }}</span>
-              <span class="sshsess-row-when mono">{{ s.when }}</span>
+              <span class="sshsess-row-when tnum">{{ s.when }}</span>
             </button>
             <button
               class="sshsess-del"

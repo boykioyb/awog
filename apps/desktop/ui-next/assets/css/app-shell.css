@@ -359,7 +359,7 @@ body.light[data-surface='deep'] {
 }
 .qnum {
   margin-left: 1px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 0.7em;
   color: var(--accent);
   vertical-align: super;
@@ -428,7 +428,6 @@ body.light[data-surface='deep'] {
 }
 .gsidetitle {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textFaint);
 }
 .gsidecol {
@@ -504,7 +503,7 @@ body.light[data-surface='deep'] {
   padding: 2px 6px;
   border-radius: var(--r-pill);
   border: 1px solid transparent;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   font-weight: 700;
   line-height: 1;
@@ -531,7 +530,7 @@ body.light[data-surface='deep'] {
 }
 .gsecct {
   flex: 0 0 auto;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   color: var(--textFaint);
 }
@@ -599,7 +598,6 @@ body.light[data-surface='deep'] {
 /* ──── Local Changes: WORKING TREE header + sections + commit panel ──── */
 .gchtitle {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
 }
 .gchbtn {
@@ -750,12 +748,11 @@ body.light[data-surface='deep'] {
 }
 .gstatlbl {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
   font-weight: 600;
 }
 .gstatct {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   color: var(--textFaint);
 }
@@ -790,7 +787,6 @@ body.light[data-surface='deep'] {
 }
 .gcplbl {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
 }
 .gcpgen {
@@ -812,7 +808,7 @@ body.light[data-surface='deep'] {
   opacity: 0.6;
 }
 .gcpcount {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   color: var(--textFaint);
 }
@@ -827,6 +823,7 @@ textarea.gcpta {
   min-height: 72px;
   max-height: 180px;
   resize: vertical;
+  /* mono-ok: commit message body — the 50/72 column convention needs a fixed advance */
   font-family: var(--code);
 }
 .gcpfoot {
@@ -892,7 +889,7 @@ textarea.gcpta {
 }
 .smenu .mi .mhint {
   margin-left: auto;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   color: var(--textFaint);
 }
@@ -1257,7 +1254,6 @@ textarea.gcpta {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--textFaint);
-  font-family: var(--code);
   font-size: 12px;
   line-height: 1.4;
   text-transform: uppercase;

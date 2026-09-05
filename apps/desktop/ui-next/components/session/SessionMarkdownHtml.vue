@@ -362,6 +362,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   font-style: italic;
 }
 .mdinline :deep(code) {
+  /* mono-ok: inline code in the markdown render */
   font-family: var(--code);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -550,7 +551,6 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   border: 1px dashed var(--border);
   border-radius: var(--r-xs);
   color: var(--textDim);
-  font-family: var(--code);
   font-size: 0.92em;
 }
 </style>

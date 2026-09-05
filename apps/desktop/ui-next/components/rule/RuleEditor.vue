@@ -314,6 +314,7 @@ const onSave = () => {
   outline: none;
 }
 .rle-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — glob / path */
   font-family: var(--code);
 }
 .rle-input:focus {

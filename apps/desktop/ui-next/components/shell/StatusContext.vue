@@ -177,6 +177,7 @@ function onCompact() {
 
 /* ── Context-window breakdown table (Claude-Code /context style) ───────────── */
 .ctxmodel {
+  /* mono-ok: model id, e.g. claude-sonnet-4-5 */
   font-family: var(--code);
   font-size: 12px;
   color: var(--textDim);
@@ -243,7 +244,7 @@ function onCompact() {
 .catnum,
 .catpct {
   flex: 0 0 auto;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textDim);
   text-align: right;
@@ -285,7 +286,7 @@ function onCompact() {
 }
 .ctxcount {
   margin-left: auto;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 1;
   color: var(--textDim);
@@ -309,13 +310,14 @@ function onCompact() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* mono-ok: path of an injected context file */
   font-family: var(--code);
   font-size: 12px;
   color: var(--textDim);
 }
 .ctxinum {
   flex: 0 0 auto;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textFaint);
   text-align: right;

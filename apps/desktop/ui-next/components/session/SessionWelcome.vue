@@ -213,7 +213,6 @@ function useSuggestion(prompt: string) {
   gap: 6px;
 }
 .swhint kbd {
-  font-family: var(--code);
   font-size: 11px;
   line-height: 1;
   padding: 3px 6px;

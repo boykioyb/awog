@@ -100,6 +100,7 @@ const onSave = () => {
   outline: none;
 }
 .sne-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — shell snippet */
   font-family: var(--code);
 }
 .sne-input:focus {

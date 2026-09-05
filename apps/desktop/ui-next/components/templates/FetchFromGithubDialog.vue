@@ -114,6 +114,7 @@ const onFetch = async () => {
   outline: none;
 }
 .tpd-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — repo slug / path */
   font-family: var(--code);
 }
 .tpd-input:focus {

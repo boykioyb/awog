@@ -323,7 +323,6 @@ input.ttl {
   padding: 2px 7px;
   border: 1px solid;
   border-radius: var(--r-xs);
-  font-family: var(--code);
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
@@ -339,7 +338,6 @@ input.ttl {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-family: var(--code);
   font-size: 12px;
   line-height: 1;
   color: var(--textFaint);

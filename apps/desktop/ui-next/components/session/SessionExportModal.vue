@@ -427,6 +427,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-weight: 600;
 }
 .expsaved-path {
+  /* mono-ok: path the export was written to */
   font-family: var(--code);
   font-size: 12px;
   line-height: 1.5;
@@ -449,6 +450,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* mono-ok: preview of the exported markdown */
   font-family: var(--code);
   font-size: 12px;
   line-height: 1.55;
@@ -466,6 +468,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: none;
   outline: none;
   background: transparent;
+  /* mono-ok: exported prompt text */
   font-family: var(--code);
   font-size: 12px;
   line-height: 1.55;

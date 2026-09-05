@@ -580,10 +580,12 @@ async function onRename(page: WikiPage): Promise<void> {
   font-size: 1em;
 }
 .wk-hitpath {
+  /* mono-ok: search hit — page path */
   font-family: var(--code);
   font-size: 12px;
 }
 .wk-hitprev {
+  /* mono-ok: search hit — matching source line */
   font-family: var(--code);
   font-size: 12px;
   overflow: hidden;

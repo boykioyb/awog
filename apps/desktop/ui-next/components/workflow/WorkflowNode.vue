@@ -98,7 +98,6 @@ const onDelete = () => props.data.onDelete?.(props.id)
   display: grid;
   place-items: center;
   font-size: var(--fs-xs);
-  font-family: var(--code);
   font-weight: 600;
   background: var(--accentDim);
   color: var(--accent);
@@ -114,7 +113,6 @@ const onDelete = () => props.data.onDelete?.(props.id)
 }
 .wfn-skill {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
   margin-top: 5px;
   overflow: hidden;
@@ -135,6 +133,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   align-items: center;
   gap: 5px;
   min-width: 0;
+  /* mono-ok: output artifact file name */
   font-family: var(--code);
   font-size: var(--fs-xs);
   color: var(--textDim);

@@ -108,7 +108,6 @@ function tagStyle(kind: SlashItem['kind']) {
 /* Kind tag (col 3): right-aligned pill, text + faint tint from --tagc (set inline). */
 .sitag {
   justify-self: end;
-  font-family: var(--code);
   font-size: 12px;
   line-height: 1;
   text-transform: uppercase;

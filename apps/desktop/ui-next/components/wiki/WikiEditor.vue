@@ -172,6 +172,7 @@ function onKeydown(event: KeyboardEvent): void {
 .we-path {
   flex: 1;
   min-width: 0;
+  /* mono-ok: wiki page path */
   font-family: var(--code);
   font-size: 12px;
   overflow: hidden;

@@ -637,7 +637,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   color: var(--bg);
 }
 .pvz {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textFaint);
   min-width: 40px;
@@ -678,7 +678,6 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   right: 0;
 }
 .pvmhd {
-  font-family: var(--code);
   font-size: 12px;
   color: var(--textFaint);
   padding: 6px 8px 3px;
@@ -734,7 +733,6 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   padding: 5px 11px;
   border-radius: var(--r-sm);
   font-size: 12px;
-  font-family: var(--code);
   background: var(--bgActive);
   color: var(--text);
   border: 1px solid var(--border);

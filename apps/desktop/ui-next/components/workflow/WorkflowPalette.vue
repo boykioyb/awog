@@ -64,7 +64,6 @@ const onDragStart = (e: DragEvent, agentId: string) => {
 .wfpal-hd {
   padding: 9px 11px;
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
@@ -99,7 +98,6 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   display: grid;
   place-items: center;
   font-size: var(--fs-xs);
-  font-family: var(--code);
   font-weight: 600;
   background: var(--accentDim);
   color: var(--accent);

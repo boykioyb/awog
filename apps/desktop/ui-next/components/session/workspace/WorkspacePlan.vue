@@ -97,7 +97,6 @@ const badgeStyle = computed(() =>
   color: var(--text);
 }
 .wsplan-badge {
-  font-family: var(--code);
   font-size: 12px;
   line-height: 1;
   padding: 3px 7px;
@@ -115,7 +114,7 @@ const badgeStyle = computed(() =>
 }
 .wsplan-count {
   margin-left: auto;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 1;
   color: var(--textDim);

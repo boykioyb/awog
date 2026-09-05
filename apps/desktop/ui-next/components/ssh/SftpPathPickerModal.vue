@@ -177,6 +177,7 @@ watch(
   cursor: pointer;
   padding: 1px 3px;
   border-radius: var(--r-xs);
+  /* mono-ok: remote path segment */
   font-family: var(--code);
 }
 .sfpp-crumb:disabled {

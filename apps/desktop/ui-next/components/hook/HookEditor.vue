@@ -551,6 +551,7 @@ defineExpose({
   outline: none;
 }
 .hke-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — matcher / command */
   font-family: var(--code);
 }
 .hke-input:focus {

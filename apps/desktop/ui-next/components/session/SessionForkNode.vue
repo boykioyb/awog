@@ -61,6 +61,5 @@ const { t } = useI18n()
 .fnode-cur {
   margin-left: auto;
   color: var(--accent);
-  font-family: var(--code);
 }
 </style>

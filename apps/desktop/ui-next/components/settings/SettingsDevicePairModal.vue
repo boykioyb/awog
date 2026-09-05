@@ -152,7 +152,7 @@ onBeforeUnmount(stopTicker)
   font-size: var(--fs-md);
 }
 .pair-countdown {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textDim);
 }
@@ -173,6 +173,7 @@ onBeforeUnmount(stopTicker)
   font-size: 12px;
 }
 .pair-code {
+  /* mono-ok: pairing code — typed character by character on the phone */
   font-family: var(--code);
   font-size: var(--fs-lg);
   letter-spacing: 0.12em;

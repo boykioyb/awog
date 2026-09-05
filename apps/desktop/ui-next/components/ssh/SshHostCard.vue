@@ -104,7 +104,6 @@ const avatarStyle = computed(() => {
   display: grid;
   place-items: center;
   font-size: 12px;
-  font-family: var(--code);
   font-weight: 600;
   flex: 0 0 auto;
 }

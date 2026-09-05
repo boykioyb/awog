@@ -245,7 +245,7 @@ const chars = computed(() =>
   white-space: nowrap;
 }
 .wsb-count {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 1;
   min-width: 18px;

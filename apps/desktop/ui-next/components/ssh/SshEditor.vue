@@ -464,6 +464,7 @@ function parseTags(text: string): string[] {
   outline: none;
 }
 .sse-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — host / command / key path */
   font-family: var(--code);
 }
 .sse-input:focus {

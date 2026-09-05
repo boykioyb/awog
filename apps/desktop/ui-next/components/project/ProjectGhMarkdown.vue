@@ -81,6 +81,7 @@ function setSegHtml(el: unknown, html: string): void {
   font-style: italic;
 }
 .ghmdbody :deep(code) {
+  /* mono-ok: inline code in the markdown render */
   font-family: var(--code);
   background: var(--bgInput);
   border: 1px solid var(--border);

@@ -69,7 +69,6 @@ const ensureDark = (dark: boolean) => {
 }
 .obap-label {
   font-size: 12px;
-  font-family: var(--code);
   color: var(--textFaint);
 }
 </style>

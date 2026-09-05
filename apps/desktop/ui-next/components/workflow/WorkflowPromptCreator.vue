@@ -44,7 +44,7 @@
                 </div>
                 <div class="wfpc-group-steps">
                   <div v-for="s in grp.steps" :key="s.id" class="wfpc-step">
-                    <span class="wfpc-step-n mono">{{ s.num }}</span>
+                    <span class="wfpc-step-n tnum">{{ s.num }}</span>
                     <span class="wfpc-step-skill">
                       {{ s.skillId || t('workflow.node.noSkill') }}
                     </span>

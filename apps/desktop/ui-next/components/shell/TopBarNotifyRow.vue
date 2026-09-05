@@ -11,7 +11,7 @@
       <button class="ntf-row-main" type="button" :title="hoverText" @click="emit('open', item)">
         <span class="ntf-row-title">{{ item.title }}</span>
         <span class="ntf-row-meta">
-          <span v-if="item.number != null" class="ntf-row-num mono">#{{ item.number }}</span>
+          <span v-if="item.number != null" class="ntf-row-num tnum">#{{ item.number }}</span>
           <!-- Who opened it. Sits BEFORE the reason so it is never the first thing
                truncated — "whose PR is this" is the question the row gets asked. -->
           <span

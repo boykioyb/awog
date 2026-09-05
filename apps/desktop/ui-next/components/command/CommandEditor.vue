@@ -338,6 +338,7 @@ const onSave = () => {
   outline: none;
 }
 .cme-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — command body */
   font-family: var(--code);
 }
 .cme-input:focus {

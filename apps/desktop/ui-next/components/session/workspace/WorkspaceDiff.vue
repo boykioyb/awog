@@ -6,7 +6,7 @@
       <div class="gl1">
         <Icon name="branch" />
         <span class="brn">{{ branch || '—' }}</span>
-        <span style="font-family: var(--code); font-size: var(--fs-xs); color: var(--textDim)">
+        <span class="tnum" style="font-size: var(--fs-xs); color: var(--textDim)">
           {{ t('sessions.workspace.changed', { ahead, changed: changedCount }) }}
         </span>
         <span style="margin-left: auto; display: inline-flex; gap: 2px">
@@ -257,6 +257,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* mono-ok: file paths of the changed files */
   font-family: var(--code);
   font-size: var(--fs-sm);
 }
@@ -269,7 +270,7 @@ onBeforeUnmount(() => {
 }
 .wsdiff-counts {
   margin-left: auto;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   display: inline-flex;
   gap: 6px;

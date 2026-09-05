@@ -22,8 +22,8 @@
               <span class="rl-bar">
                 <i :style="{ width: row.pct + '%', background: row.color }" />
               </span>
-              <span class="rl-pct mono" :style="{ color: row.color }">{{ row.pct }}%</span>
-              <span class="rl-reset mono">{{ row.reset }}</span>
+              <span class="rl-pct tnum" :style="{ color: row.color }">{{ row.pct }}%</span>
+              <span class="rl-reset tnum">{{ row.reset }}</span>
             </div>
           </div>
         </div>
@@ -38,7 +38,7 @@
         <button v-for="r in running" :key="r.key" class="tp-row" @click="go(r.cmd)">
           <span class="tp-dot pulse" :style="{ background: r.color }" />
           <span class="tp-rtitle">{{ r.title }}</span>
-          <span class="tp-rmeta mono">{{ r.meta }}</span>
+          <span class="tp-rmeta tnum">{{ r.meta }}</span>
         </button>
       </section>
 
@@ -63,7 +63,7 @@
         >
           <span class="tp-dot" :style="{ background: s.color }" />
           <span class="tp-rtitle">{{ s.title }}</span>
-          <span class="tp-rmeta mono">{{ s.when }}</span>
+          <span class="tp-rmeta tnum">{{ s.when }}</span>
         </button>
         <div v-if="!recent.length" class="tp-empty">{{ t('tray.empty.recent') }}</div>
       </section>
@@ -343,7 +343,7 @@ function formatResetsIn(ms: number | undefined): string {
 .tp-sub {
   font-size: 12px;
   color: var(--textDim);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
 }
 .tp-scroll {
   flex: 1 1 auto;
@@ -361,7 +361,6 @@ function formatResetsIn(ms: number | undefined): string {
 }
 .tp-sech {
   font-size: 11px;
-  font-family: var(--code);
   color: var(--textFaint);
 }
 .tp-empty {

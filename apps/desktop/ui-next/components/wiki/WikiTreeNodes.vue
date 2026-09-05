@@ -143,7 +143,7 @@ function onRowClick(node: WikiTreeNode): void {
   color: var(--textFaint);
 }
 .wtn-count {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 1;
   min-width: 18px;

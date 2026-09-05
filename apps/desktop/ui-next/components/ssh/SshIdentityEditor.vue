@@ -250,6 +250,7 @@ const onSave = () => {
   outline: none;
 }
 .ssi-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — key path / passphrase */
   font-family: var(--code);
 }
 .ssi-path-row {

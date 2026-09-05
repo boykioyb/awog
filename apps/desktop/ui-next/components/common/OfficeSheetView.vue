@@ -126,7 +126,6 @@ const colWidth = (index: number) => sheet.value?.colWidths[index] ?? SHEET_DEFAU
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   color: var(--textFaint);
-  font-family: var(--code);
   font-size: 12px;
   font-weight: 500;
 }
@@ -144,7 +143,7 @@ const colWidth = (index: number) => sheet.value?.colWidths[index] ?? SHEET_DEFAU
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   color: var(--textFaint);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   font-weight: 500;
   text-align: right;

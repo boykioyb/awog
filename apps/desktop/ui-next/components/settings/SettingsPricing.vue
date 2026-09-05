@@ -204,7 +204,6 @@ function onFetch(): void {
 }
 .sprtable th {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
   font-weight: 500;
   padding: 9px 12px;

@@ -218,7 +218,6 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   background: transparent;
   border: 1px solid transparent;
   color: var(--textDim);
-  font-family: var(--code);
   font-size: var(--fs-xs);
   font-weight: 500;
   white-space: nowrap;

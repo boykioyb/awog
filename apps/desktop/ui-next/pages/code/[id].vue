@@ -245,6 +245,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .codetab-name {
+  /* mono-ok: open file name on the tab */
   font-family: var(--code);
 }
 .codetab-dirty {
@@ -298,7 +299,6 @@ onMounted(() => {
   gap: 16px;
   padding: 4px 14px;
   flex-shrink: 0;
-  font-family: var(--code);
   font-size: 12px;
   color: var(--textDim);
   background: var(--bgPanel);

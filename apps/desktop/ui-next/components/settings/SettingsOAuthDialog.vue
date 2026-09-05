@@ -270,6 +270,7 @@ const onCancel = () => {
 .oacode {
   width: 100%;
   resize: none;
+  /* mono-ok: OAuth code the user pastes back */
   font-family: var(--code);
 }
 .oaerror {

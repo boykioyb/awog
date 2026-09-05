@@ -213,7 +213,6 @@ watch(
   line-height: 1.25;
 }
 .mdtitle {
-  font-family: var(--code);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;

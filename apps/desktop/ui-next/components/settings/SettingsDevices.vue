@@ -208,6 +208,7 @@ function platformLabel(platform: string): string {
   flex: 0 0 auto;
 }
 .dev-host {
+  /* mono-ok: tailnet hostname */
   font-family: var(--code);
   font-size: 12px;
   color: var(--textDim);

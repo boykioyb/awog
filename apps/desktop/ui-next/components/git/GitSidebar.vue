@@ -559,7 +559,6 @@ function onPointerDown(ev: PointerEvent) {
    section-header idiom (mono, uppercase, faint) but indented as a child. */
 .gbpinhd {
   padding: 6px 8px 2px 22px;
-  font-family: var(--code);
   font-size: var(--fs-xs);
   color: var(--textFaint);
 }

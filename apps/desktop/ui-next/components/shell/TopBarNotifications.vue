@@ -69,7 +69,7 @@
           @click="filter = tab"
         >
           {{ t(`github.inbox.tab.${tab}`) }}
-          <span class="ntf-tab-n mono">
+          <span class="ntf-tab-n tnum">
             {{ tab === 'all' ? items.length : watchedItems.length }}
           </span>
         </button>
@@ -103,13 +103,13 @@
             @click="toggleGroup(g.repo)"
           >
             <Icon name="chev-right" class="ntf-grp-chev" :class="{ open: !isCollapsed(g.repo) }" />
-            <span class="ntf-grp-name mono" :title="g.repo">{{ g.name }}</span>
+            <span class="ntf-grp-name" :title="g.repo">{{ g.name }}</span>
             <span v-if="g.owner" class="ntf-grp-owner">{{ g.owner }}</span>
             <!-- Names the reason this group is dimmed, instead of leaving the user to
                  infer it from an opacity value. -->
             <span v-if="!g.watched" class="ntf-grp-tag">{{ t('github.inbox.notWatched') }}</span>
             <span v-if="g.unread" class="ntf-grp-dot" />
-            <span class="ntf-grp-n mono">{{ g.items.length }}</span>
+            <span class="ntf-grp-n tnum">{{ g.items.length }}</span>
           </button>
           <template v-if="!isCollapsed(g.repo)">
             <TopBarNotifyRow
@@ -332,7 +332,7 @@ function openOnGithub(): void {
   border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--bg);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 15px;
   text-align: center;

@@ -100,7 +100,6 @@ const glyphStyle = (kind: MentionRow['kind']) => {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--textFaint);
-  font-family: var(--code);
   font-size: 12px;
 }
 .mtag {

@@ -71,7 +71,7 @@
         </div>
         <div class="hkd-ctl">
           <span class="hkd-ctl-label">{{ t('hooks.detail.timeout') }}</span>
-          <span class="hkd-ctl-val mono">{{ hook.timeoutMs }}ms</span>
+          <span class="hkd-ctl-val tnum">{{ hook.timeoutMs }}ms</span>
         </div>
       </div>
 

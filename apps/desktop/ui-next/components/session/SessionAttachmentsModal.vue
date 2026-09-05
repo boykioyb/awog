@@ -156,6 +156,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex: 1;
 }
 .amname {
+  /* mono-ok: attachment file name */
   font-family: var(--code);
   color: var(--text);
   white-space: nowrap;
@@ -163,7 +164,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   text-overflow: ellipsis;
 }
 .ammeta {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textFaint);
 }

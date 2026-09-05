@@ -272,7 +272,7 @@ const connectFirst = () => {
 }
 .sshx-grouphdr-count {
   font-size: 12px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   color: var(--textFaint);
   font-weight: 400;
 }
@@ -313,7 +313,6 @@ const connectFirst = () => {
   display: grid;
   place-items: center;
   font-size: var(--fs-lg);
-  font-family: var(--code);
   font-weight: 650;
   flex: 0 0 auto;
 }

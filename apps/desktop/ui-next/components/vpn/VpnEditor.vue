@@ -430,6 +430,7 @@ function parseTags(text: string): string[] {
   outline: none;
 }
 .vpe-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — .ovpn path / host */
   font-family: var(--code);
 }
 .vpe-input:focus {

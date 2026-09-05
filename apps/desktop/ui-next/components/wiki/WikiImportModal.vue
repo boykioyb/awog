@@ -205,6 +205,7 @@ watch(
   font-size: 12px;
 }
 .wim-dest code {
+  /* mono-ok: destination path */
   font-family: var(--code);
 }
 .wim-actions {

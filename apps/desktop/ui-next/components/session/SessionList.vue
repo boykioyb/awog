@@ -797,7 +797,7 @@ function toggleFoldAll() {
 }
 .pglbl {
   font-size: 12px;
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--textDim);
   min-width: 68px;

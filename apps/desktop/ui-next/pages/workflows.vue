@@ -182,7 +182,6 @@ const canvasScopeLabel = computed(() => {
 }
 .wflist-title {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
 }
 .wflist-scope {

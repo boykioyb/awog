@@ -46,7 +46,7 @@
     <div class="actcards">
       <div class="tile actcard">
         <div class="actclbl">{{ t('activity.cards.totalTokens') }}</div>
-        <div class="actcbig mono">{{ initialLoad ? '…' : formatTokens(totals.totalTokens) }}</div>
+        <div class="actcbig tnum">{{ initialLoad ? '…' : formatTokens(totals.totalTokens) }}</div>
         <div class="actcsub">
           {{
             t('activity.cards.tokenBreak', {
@@ -58,7 +58,7 @@
       </div>
       <div class="tile actcard">
         <div class="actclbl">{{ t('activity.cards.totalCost') }}</div>
-        <div class="actcbig mono" style="color: var(--accent)">
+        <div class="actcbig tnum" style="color: var(--accent)">
           {{ initialLoad ? '…' : formatCost(totals.costUsd) }}
         </div>
         <div class="actcsub">
@@ -72,7 +72,7 @@
       </div>
       <div class="tile actcard">
         <div class="actclbl">{{ t('activity.cards.turns') }}</div>
-        <div class="actcbig mono">{{ initialLoad ? '…' : formatTokens(totals.turns) }}</div>
+        <div class="actcbig tnum">{{ initialLoad ? '…' : formatTokens(totals.turns) }}</div>
         <div class="actcsub">{{ t('activity.cards.turnsSub') }}</div>
       </div>
     </div>
@@ -137,14 +137,14 @@
                 </span>
               </div>
             </td>
-            <td class="tr mono">{{ formatTokens(m.inputTokens) }}</td>
-            <td class="tr mono">{{ formatTokens(m.outputTokens) }}</td>
-            <td class="tr mono">
+            <td class="tr tnum">{{ formatTokens(m.inputTokens) }}</td>
+            <td class="tr tnum">{{ formatTokens(m.outputTokens) }}</td>
+            <td class="tr tnum">
               {{ formatTokens(m.cacheReadTokens + m.cacheWriteTokens) }}
             </td>
-            <td class="tr mono">{{ formatTokens(m.totalTokens) }}</td>
-            <td class="tr mono">{{ formatTokens(m.turns) }}</td>
-            <td class="tr mono" style="color: var(--accent)">{{ formatCost(m.costUsd) }}</td>
+            <td class="tr tnum">{{ formatTokens(m.totalTokens) }}</td>
+            <td class="tr tnum">{{ formatTokens(m.turns) }}</td>
+            <td class="tr tnum" style="color: var(--accent)">{{ formatCost(m.costUsd) }}</td>
           </tr>
         </tbody>
       </table>
@@ -170,9 +170,9 @@
             <td class="tl">
               <span class="tag">{{ a.provider }}</span>
             </td>
-            <td class="tr mono">{{ formatTokens(a.totalTokens) }}</td>
-            <td class="tr mono">{{ formatTokens(a.turns) }}</td>
-            <td class="tr mono" style="color: var(--accent)">{{ formatCost(a.costUsd) }}</td>
+            <td class="tr tnum">{{ formatTokens(a.totalTokens) }}</td>
+            <td class="tr tnum">{{ formatTokens(a.turns) }}</td>
+            <td class="tr tnum" style="color: var(--accent)">{{ formatCost(a.costUsd) }}</td>
           </tr>
         </tbody>
       </table>
@@ -238,9 +238,9 @@
                   <span v-if="s.provider" class="tag">{{ s.provider }}</span>
                 </div>
               </td>
-              <td class="tr mono">{{ formatTokens(s.totalTokens) }}</td>
-              <td class="tr mono">{{ formatTokens(s.turns) }}</td>
-              <td class="tr mono" style="color: var(--accent)">{{ formatCost(s.costUsd) }}</td>
+              <td class="tr tnum">{{ formatTokens(s.totalTokens) }}</td>
+              <td class="tr tnum">{{ formatTokens(s.turns) }}</td>
+              <td class="tr tnum" style="color: var(--accent)">{{ formatCost(s.costUsd) }}</td>
             </tr>
             <!-- Drill-down: this session's spend split by day, newest first. Same
                  pricing + filters as the row above, so the days sum to it. -->
@@ -248,11 +248,11 @@
               <td colspan="5">
                 <div class="actdays">
                   <div v-for="d in sessionDays(s)" :key="d.date" class="actday">
-                    <span class="actdaydate mono">{{ d.date }}</span>
+                    <span class="actdaydate tnum">{{ d.date }}</span>
                     <span class="actdaybar">
                       <i :style="{ width: `${dayPct(s, d.costUsd)}%` }" />
                     </span>
-                    <span class="actdaymeta mono">
+                    <span class="actdaymeta tnum">
                       {{
                         t('activity.bySession.days.meta', {
                           tokens: formatTokens(d.totalTokens),
@@ -260,7 +260,7 @@
                         })
                       }}
                     </span>
-                    <span class="actdaycost mono">{{ formatCost(d.costUsd) }}</span>
+                    <span class="actdaycost tnum">{{ formatCost(d.costUsd) }}</span>
                   </div>
                 </div>
               </td>
@@ -423,7 +423,6 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 }
 .actclbl {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
 }
 .actcbig {
@@ -470,7 +469,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   display: flex;
   justify-content: space-between;
   font-size: var(--fs-xs);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   color: var(--textFaint);
 }
 
@@ -503,7 +502,6 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 }
 .acttable th {
   font-size: var(--fs-xs);
-  font-family: var(--code);
   color: var(--textDim);
   font-weight: 500;
   padding: 10px 14px;

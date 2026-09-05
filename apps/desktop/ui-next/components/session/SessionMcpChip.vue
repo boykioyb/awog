@@ -95,7 +95,6 @@ watch(
 /* Fixed-size count badge (not em-scaled) — same rule as the other count chips. */
 .mcpc {
   font-size: 12px;
-  font-family: var(--code);
   line-height: 1;
   color: var(--textFaint);
 }

@@ -110,6 +110,7 @@ async function copy(): Promise<void> {
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);
+  /* mono-ok: pairing URL */
   font-family: var(--code);
   font-size: var(--fs-md);
   color: var(--text);

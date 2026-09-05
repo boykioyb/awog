@@ -210,7 +210,6 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   display: grid;
   place-items: center;
   font-size: var(--fs-xs);
-  font-family: var(--code);
   font-weight: 600;
   background: var(--accentDim);
   color: var(--accent);

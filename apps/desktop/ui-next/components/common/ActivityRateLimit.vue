@@ -24,7 +24,7 @@
         <div v-for="row in rows" :key="row.type" class="arlrow">
           <div class="arlmeta">
             <span class="arllbl">{{ row.label }}</span>
-            <span class="arlpct mono">{{ row.pct }}%</span>
+            <span class="arlpct tnum">{{ row.pct }}%</span>
           </div>
           <div class="arlbar">
             <i :style="{ width: row.pct + '%', background: row.color }" />

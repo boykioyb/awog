@@ -458,7 +458,7 @@ const onSave = () => {
   font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--textDim);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
 }
 .age-input {
   width: 100%;
@@ -472,6 +472,7 @@ const onSave = () => {
   outline: none;
 }
 .age-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — tool names / model ids */
   font-family: var(--code);
 }
 .age-input:focus {

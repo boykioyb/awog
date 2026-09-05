@@ -1790,6 +1790,7 @@ textarea.ci {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* mono-ok: pinned file path */
   font-family: var(--code);
   font-size: 12px;
 }
@@ -1847,6 +1848,7 @@ textarea.ci {
   white-space: nowrap;
   font-size: 12px;
   color: var(--textDim);
+  /* mono-ok: pinned file path */
   font-family: var(--code);
 }
 /* Reusable-notes section (save as preset + presets/recent lists). */

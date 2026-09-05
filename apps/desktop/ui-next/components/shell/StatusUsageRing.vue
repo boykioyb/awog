@@ -11,7 +11,7 @@
         transform="rotate(-90 18 18)"
       />
     </svg>
-    <span class="donut-pct mono" :style="{ color: ringColor }">{{ ringPct }}%</span>
+    <span class="donut-pct tnum" :style="{ color: ringColor }">{{ ringPct }}%</span>
 
     <!-- Hover tooltip: account label + every reported limit row -->
     <div class="donut-pop">
@@ -23,8 +23,8 @@
       <div v-for="r in rows" :key="r.type" class="donut-row">
         <span class="donut-rlbl">{{ r.label }}</span>
         <span class="donut-rbar"><i :style="{ width: `${r.pct}%`, background: r.color }" /></span>
-        <span class="donut-rpct mono" :style="{ color: r.color }">{{ r.pct }}%</span>
-        <span class="donut-rreset mono">{{ r.reset }}</span>
+        <span class="donut-rpct tnum" :style="{ color: r.color }">{{ r.pct }}%</span>
+        <span class="donut-rreset tnum">{{ r.reset }}</span>
       </div>
     </div>
   </div>

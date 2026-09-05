@@ -117,7 +117,7 @@
             >
               {{ l.name }}
             </span>
-            <span style="margin-left: auto; font-family: var(--code)">
+            <span class="tnum" style="margin-left: auto">
               {{ it.author.login }} · {{ relativeWhen(it.createdAt) }}
             </span>
           </div>
@@ -432,7 +432,6 @@ function relativeWhen(iso: string): string {
   padding: 1px 7px;
   border: 1px solid;
   border-radius: var(--r-pill);
-  font-family: var(--code);
   font-size: var(--fs-xs);
   white-space: nowrap;
 }

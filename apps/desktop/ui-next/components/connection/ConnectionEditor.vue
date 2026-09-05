@@ -1187,6 +1187,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   outline: none;
 }
 .cne-input.mono {
+  /* mono-ok: the `.mono` opt-in variant — command / args / env */
   font-family: var(--code);
 }
 .cne-input:focus {
@@ -1245,6 +1246,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   color: var(--danger);
 }
 .cne-pre {
+  /* mono-ok: JSON preview */
   font-family: var(--code);
   font-size: var(--fs-xs);
   padding: 8px 10px;

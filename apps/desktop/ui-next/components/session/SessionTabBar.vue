@@ -783,7 +783,7 @@ async function pDeleteAll() {
   height: 16px;
   padding: 0 4px;
   border-radius: var(--r-xs);
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 1;
   font-variant-numeric: tabular-nums;

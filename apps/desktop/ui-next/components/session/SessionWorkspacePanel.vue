@@ -359,7 +359,7 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
   margin-bottom: 6px;
 }
 .infoctx-n {
-  font-family: var(--code);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--textFaint);
 }

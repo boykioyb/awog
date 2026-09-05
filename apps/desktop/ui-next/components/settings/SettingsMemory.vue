@@ -312,7 +312,6 @@ onMounted(() => {
   gap: 6px;
 }
 .membody {
-  font-family: var(--code);
   line-height: 1.5;
 }
 </style>

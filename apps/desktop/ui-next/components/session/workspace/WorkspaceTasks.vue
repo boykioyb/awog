@@ -118,7 +118,6 @@ const entries = computed<Entry[]>(() => {
   white-space: nowrap;
 }
 .wstasks-target {
-  font-family: var(--code);
   font-size: 12px;
   color: var(--textDim);
   overflow: hidden;

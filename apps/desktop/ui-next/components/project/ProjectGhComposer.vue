@@ -323,7 +323,6 @@ defineExpose({ focus })
 }
 .ghclang {
   font-size: 12px;
-  font-family: var(--code);
   padding: 2px 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
