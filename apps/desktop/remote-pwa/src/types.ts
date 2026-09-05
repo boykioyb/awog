@@ -102,6 +102,13 @@ export interface EngineMessage {
   error?: { message: string }
 }
 
+// Agent mode for a turn — the same four values as the desktop (ui-next
+// stores/settings.ts `AgentMode`). `accept-edits` auto-allows file writes and
+// `execute` skips the permission gate entirely, so both run tools WITHOUT asking
+// the phone; the gateway forwards whichever is chosen (remote-gateway-policy.ts
+// REMOTE_ALLOWED_MODES).
+export type AgentMode = 'ask' | 'plan' | 'accept-edits' | 'execute'
+
 export interface SessionSettings {
   provider: string
   modelId: string
@@ -193,7 +200,7 @@ export interface SessionConfig {
   accountId: string
   modelId: string
   level: string
-  mode: 'ask' | 'plan'
+  mode: AgentMode
   responseStyle: string
   responseStyleNoMarkdown: boolean
 }

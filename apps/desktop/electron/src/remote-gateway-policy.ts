@@ -7,7 +7,9 @@
 //        agent, so `sessions.sendMessage` params are the real RCE surface. We drop
 //        every dangerous field (workspacePath/systemPrompt/history/…), force
 //        autoApprove=false, and PIN provider/model/account/project from the
-//        session's own persisted settings — never from the phone.
+//        session's own persisted settings — never from the phone. The agent MODE
+//        is the one setting a phone does choose freely (all four desktop modes) —
+//        see REMOTE_ALLOWED_MODES for what `execute` costs.
 //   F3 — git.* is "read-only" but takes a `workspaceRoot`; unrestricted that reads
 //        ANY repo on disk. We force workspaceRoot = a known project's path.
 //   F2 — event egress allowlist (which engine events may reach a phone at all).
@@ -111,15 +113,23 @@ export function eventSessionId(payload: unknown): string | null {
 // block continuing any session that already spent more — hijacking the user's own
 // budget config. Leave `budget` unset → the turn uses the session's own budget.
 
-// Modes a REMOTE turn may run in. `execute`/`accept-edits` are gate-OFF modes: the
-// runtime skips the permission park entirely under them (permission.ts execute
-// short-circuit sits BEFORE the autoApprove check), so a phone selecting `execute`
-// would re-open ungated Bash/Write RCE despite our forced autoApprove:false
-// (infosec F-1 blocker). We clamp any non-safe mode — from the phone OR the
-// session's own persisted setting — down to `ask`, so the gate is ALWAYS on for a
-// remote turn. Plan-approve from a phone therefore keeps the gate: the agent
-// proceeds and each tool parks for the phone to approve via permission cards.
-const REMOTE_SAFE_MODES = new Set(['ask', 'plan'])
+// Modes a REMOTE turn may run in — all four the desktop offers.
+//
+// ⚠ This is a DELIBERATE relaxation of the original F-1 clamp (which allowed only
+// `ask`/`plan`), made on 2026-08-30 at the user's explicit direction: the phone was
+// missing `execute`, and mode parity with the desktop was chosen over the clamp.
+// Know what it costs. `execute` skips the permission park entirely (sidecar
+// runtime/permission.ts: `if (mode === 'execute') return undefined`, BEFORE the
+// autoApprove check), so a remote `execute` turn runs Bash/Write with no approval
+// card — full RCE reachable over the tailnet, and forcing `autoApprove:false` below
+// does NOT hold it back. `accept-edits` is narrower: Write/Edit auto-allow, Bash
+// still parks. `ask`/`plan` keep every mutating tool gated as before.
+//
+// The remaining defences are unchanged: tailnet-only bind + fail-closed, opt-in
+// toggle (default OFF), device pairing, the method allowlist, per-method param-pick,
+// and gateway rate limits (F8). Mode is now the user's choice, so the PWA labels
+// the ungated modes as such (remote-pwa/src/catalog.ts AGENT_MODES).
+const REMOTE_ALLOWED_MODES = new Set(['ask', 'plan', 'accept-edits', 'execute'])
 
 // Strip fields a phone must not supply on attachments — notably `path` (a desktop
 // filesystem path the phone has no business referencing). Bound the count too.
@@ -317,9 +327,11 @@ async function resolveChoice(
   return out
 }
 
+// An unrecognized mode string still falls back to the gated default — the relaxation
+// widens the allowed SET, it does not make the field free-form.
 function clampMode(raw: unknown, fallback: string): string {
   const mode = typeof raw === 'string' ? raw : fallback
-  return REMOTE_SAFE_MODES.has(mode) ? mode : 'ask'
+  return REMOTE_ALLOWED_MODES.has(mode) ? mode : 'ask'
 }
 
 function toEngineSettings(s: ResolvedSettings, mode: string): SessionSettingsLike {
@@ -469,10 +481,11 @@ export async function sanitizeRemoteParams(
       if (!session) throw new RemoteRejected('session not found')
       const s = session.settings
       const phoneSettings = p.settings && typeof p.settings === 'object' ? asObject(p.settings) : {}
-      // F-1: clamp to a gated mode. A phone-supplied (or session-persisted)
-      // execute/accept-edits mode is downgraded to `ask` so the gate stays on.
+      // Mode: the phone's choice wins over the session's persisted one, validated
+      // against REMOTE_ALLOWED_MODES (all four desktop modes — see the note there on
+      // why `execute` is no longer clamped away). Unknown string ⇒ gated `ask`.
       const requestedMode = typeof phoneSettings.mode === 'string' ? phoneSettings.mode : s.mode
-      const mode = REMOTE_SAFE_MODES.has(requestedMode) ? requestedMode : 'ask'
+      const mode = REMOTE_ALLOWED_MODES.has(requestedMode) ? requestedMode : 'ask'
       const requestedLevel = optString(phoneSettings.level, 32)
       const level = requestedLevel && LEVELS.has(requestedLevel) ? requestedLevel : s.level
       const attachments = sanitizeAttachments(p.attachments)
@@ -495,7 +508,9 @@ export async function sanitizeRemoteParams(
             ? { responseStyleNoMarkdown: s.responseStyleNoMarkdown }
             : {}),
         },
-        autoApprove: false, // F1: a phone can NEVER disable the permission gate
+        // F1: a phone can never flip the autoApprove flag itself. Note this no longer
+        // guarantees a gated turn — `execute` bypasses the gate upstream of this flag.
+        autoApprove: false,
         ...(session.projectId ? { projectId: session.projectId } : {}),
         // Explicitly dropped (never forwarded): workspacePath, contextFolders,
         // systemPrompt, instructions, disabledTools, mcpServerIds, budget (F8 is

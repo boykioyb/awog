@@ -291,8 +291,17 @@ Viết theo **Given / When / Then**. ID để PM/QA tham chiếu.
   forward, then gateway **param-pick** (chỉ field cho phép, default-deny field lạ), **ép
   `autoApprove=false`**, **loại bỏ** `workspacePath`/`contextFolders`/`systemPrompt`/
   `instructions`/`history`, **pin** `accountId`/`provider`/`modelId` theo session server-side,
-  và cwd chỉ đặt qua `projectId` (resolve server-side). Phone **không thể** tắt permission
-  gate hay đặt cwd tùy ý.
+  và cwd chỉ đặt qua `projectId` (resolve server-side). Phone **không thể** tự đặt cờ
+  `autoApprove` hay cwd tùy ý.
+  > **Sửa 2026-08-30 (user chốt):** vế "phone không thể tắt permission gate" **KHÔNG còn
+  > đúng**. Phone chọn được **cả 4 mode** như desktop, kể cả `execute` — mode này skip
+  > permission park ở runtime, tức **có** tắt gate. Xem AC-SEC-6b.
+- **AC-SEC-6b (mode parity — thay clamp F-1, 2026-08-30).** Given phone chọn mode ở composer
+  hoặc session config, when gửi turn, then gateway forward đúng mode đó nếu nó thuộc
+  `REMOTE_ALLOWED_MODES` = `ask`/`plan`/`accept-edits`/`execute`; chuỗi lạ ⇒ fallback `ask`.
+  Given mode là `accept-edits` hoặc `execute`, then PWA **phải** hiện cảnh báo tại chỗ chọn
+  (chip composer đổi màu warn/danger + hint trong sheet + hint dưới ô Mode ở config) vì tool
+  sẽ chạy **không xin duyệt**.
 - **AC-SEC-7 (F2 — High).** Given gateway stream event xuống phone, then chỉ forward
   **type trong allowlist** (`session.chunk/step/message.done/permission-request`, `task.*`
   tối thiểu) **và** chỉ event của session/task device **đang subscribe**; **chặn cứng**
@@ -340,9 +349,18 @@ phải gap kiến trúc. **F1–F5 phải vào code P1**; F6–F8 fix-trước-r
 > unit test khoá allowlist (cần test-runner — chưa có vitest ở apps/desktop), IPv6 tailnet,
 > schema-validate store khi load. Re-audit hẹp lại F-1 path nên chạy lại sau khi test thật.
 
+> **Nới F-1 theo quyết định user (2026-08-30):** clamp `ask`/`plan` **đã gỡ** —
+> `REMOTE_ALLOWED_MODES` giờ gồm đủ 4 mode desktop. Lý do: phone thiếu `execute` so với
+> desktop, user chốt ưu tiên parity hơn clamp. **Hệ quả cần ghi rõ:** một turn remote ở mode
+> `execute` chạy Bash/Write **không có approval card** → RCE qua tailnet; `autoApprove:false`
+> vẫn ép nhưng **không** chặn được vì `execute` short-circuit nằm trước cờ đó
+> (`sidecar/src/runtime/permission.ts`). Phòng thủ còn lại: bind tailnet-only + fail-closed,
+> toggle opt-in mặc định TẮT, pairing thiết bị, allowlist method, param-pick, rate limit (F8),
+> cộng cảnh báo UI ở PWA (AC-SEC-6b). **infosec re-audit BẮT BUỘC trước release kế tiếp.**
+
 | ID | Sev | Vấn đề | Fix bắt buộc | AC |
 |---|---|---|---|---|
-| **F1** | ⛔ Critical | Param của `sessions.sendMessage` (`autoApprove`/`workspacePath`/`systemPrompt`/`accountId`/`history`) cho remote **lái agent → RCE + đọc/ghi file toàn máy + tự tắt gate**. Allowlist tên method KHÔNG đủ. | Param-pick per-method (default-deny field lạ); ép `autoApprove=false`; cấm `workspacePath`/`contextFolders`/`systemPrompt`/`instructions`/`history`; pin account/model server-side; cwd chỉ qua `projectId`. | AC-SEC-6 |
+| **F1** | ⛔ Critical | Param của `sessions.sendMessage` (`autoApprove`/`workspacePath`/`systemPrompt`/`accountId`/`history`) cho remote **lái agent → RCE + đọc/ghi file toàn máy + tự tắt gate**. Allowlist tên method KHÔNG đủ. | Param-pick per-method (default-deny field lạ); ép `autoApprove=false`; cấm `workspacePath`/`contextFolders`/`systemPrompt`/`instructions`/`history`; pin account/model server-side; cwd chỉ qua `projectId`. ⚠ Phần "clamp mode về `ask`/`plan`" **đã gỡ 2026-08-30** theo quyết định user — xem AC-SEC-6b. | AC-SEC-6, AC-SEC-6b |
 | **F2** | 🔴 High | `engine.onEvent` forward **global** → rò `auth.oauth-url` (state/PKCE), `terminal.data`, `ssh:data`, `vpn:*`, event **session khác** xuống phone. | Event egress allowlist theo **type** + lọc theo **subscription** của device; chặn cứng oauth/terminal/ssh/vpn + session không subscribe. | AC-SEC-7 |
 | **F3** | 🔴 High | `git.status/diff/log` nhận `workspaceRoot` L1 tùy ý → đọc **mọi repo** trên đĩa từ 4G ("read-only" ≠ "scoped"). | Ràng `workspaceRoot` vào tập project đã biết (`projects.list` server-side); reject path lạ. | AC-SEC-8 |
 | **F4** | 🔴 High | Tên method ADR dùng **gạch nối** nhưng registry là **camelCase** (`sendMessage`…); prefix/denylist sẽ fail-open (`sessions.upsert/delete/compact/rewind`). | Allowlist exact-match/default-deny; validate vs registry lúc boot (fail-fast); unit test khóa list; revoke **force-close WS**. | AC-SEC-9, AC-SEC-5 |
@@ -557,13 +575,13 @@ tasks.list  tasks.get  tasks.approvePhase  tasks.rerunPhase  tasks.discuss  task
 git.status  git.diff  git.log
 account.usage  dashboard.usage  ping
 ```
-P1 **bật handler UI** cho: `sendMessage`, `permission`, `answerQuestion`, `list/get/search/costBreakdown`, `git.*`. Còn lại nằm trong allowlist nhưng UI để P2 (steer/cancel/tasks). **Approve-plan (Q5):** KHÔNG method riêng — reuse `sessions.sendMessage` với continuation text + `settings.mode='execute'` (giống desktop `stores/sessions.ts approvePlan`).
+P1 **bật handler UI** cho: `sendMessage`, `permission`, `answerQuestion`, `list/get/search/costBreakdown`, `git.*`. Còn lại nằm trong allowlist nhưng UI để P2 (steer/cancel/tasks). **Approve-plan (Q5):** KHÔNG method riêng — reuse `sessions.sendMessage` với continuation text + `settings.mode='execute'` (giống desktop `stores/sessions.ts approvePlan`). Đây là override **một lượt**: mode của session không đổi.
 
 ### Param-pick per-method (F1 — default-deny field lạ)
 
 | Method | Field cho phép từ phone | Ép / bỏ (server-side) |
 |---|---|---|
-| `sessions.sendMessage` | `sessionId`, `messageId`, `text`, `attachments` (đã strip `path`), `settings.mode` (chỉ `ask`/`plan`), `settings.level` | **ép `autoApprove:false`**; **clamp mode** về `ask`/`plan` — `execute`/`accept-edits` bị hạ cấp `ask` (F-1: các mode này TẮT gate ở runtime → phone không được chọn); **pin** `settings.provider/modelId/accountId` + `projectId` từ `sessions.get`; **DROP** `workspacePath`, `contextFolders`, `systemPrompt`, `instructions`, `history`, `disabledTools`, `mcpServerIds`, `attachments.path`, `budget` (F8 = rate-limit ở gateway, **KHÔNG** ép dollar-cap session) |
+| `sessions.sendMessage` | `sessionId`, `messageId`, `text`, `attachments` (đã strip `path`), `settings.mode` (đủ 4 mode desktop), `settings.level` | **ép `autoApprove:false`**; **validate mode** theo `REMOTE_ALLOWED_MODES` = `ask`/`plan`/`accept-edits`/`execute`, chuỗi lạ ⇒ `ask` (⚠ 2026-08-30 gỡ clamp: `execute` TẮT gate ở runtime, user chấp nhận — AC-SEC-6b); **pin** `settings.provider/modelId/accountId` + `projectId` từ `sessions.get`; **DROP** `workspacePath`, `contextFolders`, `systemPrompt`, `instructions`, `history`, `disabledTools`, `mcpServerIds`, `attachments.path`, `budget` (F8 = rate-limit ở gateway, **KHÔNG** ép dollar-cap session) |
 | `sessions.permission` | `requestId`, `decision` | **DROP `updatedInput` + `alwaysAllow`** (F7 — remote không rewrite arg / không always-allow) |
 | `sessions.answerQuestion` | `requestId`, `answers` | — (sidecar zod re-validate) |
 | `git.status/diff/log` | mọi field TRỪ `workspaceRoot` | **`workspaceRoot` ép = project.path** map từ `projectId` (client gửi) qua `projects.list` (F3); reject nếu không khớp |
@@ -621,7 +639,7 @@ reachable (không tính budget).
 |---|---|---|
 | `sessions.steer` | `sessionId`, `messageId`, `text` (≤100KB) | cap độ dài; tính vào budget *sends* |
 | `sessions.updateTodos` | `sessionId`, `todos` | shape/cap do zod sidecar (200 × 2000 ký tự) |
-| `sessions.upsert` | `mode`, `sessionId?`, `title?`, `projectId?`, `settings.{provider,accountId,modelId,level,mode,responseStyle,responseStyleNoMarkdown}` | **gateway TỰ dựng `Session`** — phone không gửi object session. `projectId` phải khớp `projects.list`; field bỏ trống ⇒ **kế thừa** desktop defaults + `project.llmDefaults`; `accountId` **phải tồn tại trong `accounts.list` của provider đã chọn** (`null` = bỏ ghim), đổi provider ⇒ **xoá `accountId`**; `level` phải ∈ enum; `responseStyle` charset `[A-Za-z0-9-]{1,64}` (slug lạ → sidecar degrade "no style"); mode clamp `ask`/`plan`; `messages: []`. **Không thể** đặt `workspaceFolder`, `budget`, `pinnedContext`, `disabledTools`, `mcpServerIds`, fork lineage |
+| `sessions.upsert` | `mode`, `sessionId?`, `title?`, `projectId?`, `settings.{provider,accountId,modelId,level,mode,responseStyle,responseStyleNoMarkdown}` | **gateway TỰ dựng `Session`** — phone không gửi object session. `projectId` phải khớp `projects.list`; field bỏ trống ⇒ **kế thừa** desktop defaults + `project.llmDefaults`; `accountId` **phải tồn tại trong `accounts.list` của provider đã chọn** (`null` = bỏ ghim), đổi provider ⇒ **xoá `accountId`**; `level` phải ∈ enum; `responseStyle` charset `[A-Za-z0-9-]{1,64}` (slug lạ → sidecar degrade "no style"); `settings.mode` validate theo `REMOTE_ALLOWED_MODES` (đủ 4 mode, lạ ⇒ `ask`); `messages: []`. **Không thể** đặt `workspaceFolder`, `budget`, `pinnedContext`, `disabledTools`, `mcpServerIds`, fork lineage |
 | `sessions.delete` | `id` | chỉ `id` |
 | `sessions.generateTitle` | `sessionId`, `userText?` (≤4000) | **pin** `provider`/`modelId`/`accountId` từ session server-side |
 
@@ -645,7 +663,7 @@ text ≤100KB) và *writes* (`upsert`/`delete`/`updateTodos`/`generateTitle`, 30
   ở 160 dòng và **ghi rõ còn bao nhiêu dòng**.
 - **Checklist ghim (ADR 0069):** banner `done/total`, chạm một dòng để xoay trạng thái →
   `sessions.updateTodos` (shared state, không bị model ghi đè).
-- **Composer:** chip mode **Ask/Plan**, đính kèm **ảnh** (chụp hoặc chọn — downscale 1280px/JPEG
+- **Composer:** chip mode mở sheet chọn **Ask / Plan / Accept Edits / Execute** (2 mode sau tô warn/danger vì chạy tool không xin duyệt — AC-SEC-6b), đính kèm **ảnh** (chụp hoặc chọn — downscale 1280px/JPEG
   0.8 trước khi gửi vì frame WS cap 1MB) và tệp văn bản (`preview`), textarea tự giãn.
 - **Session config đầy đủ như desktop** (`SessionConfigFields.vue` dùng chung cho New session +
   sheet của session): **provider · account · model · thinking level · mode · response style ·

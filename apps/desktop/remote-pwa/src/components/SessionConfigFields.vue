@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  AGENT_MODES,
   RESPONSE_STYLES,
   catalogError,
+  isUngatedMode,
   THINKING_LABELS,
   THINKING_LEVELS,
   accountsFor,
@@ -10,7 +12,7 @@ import {
   modelsForAccount,
   providers,
 } from '../catalog'
-import type { SessionConfig } from '../types'
+import type { AgentMode, SessionConfig } from '../types'
 
 // The desktop's session config (provider · account · model · effort · mode ·
 // response style) as one form, shared by "New session" and the session sheet.
@@ -28,6 +30,11 @@ const accounts = computed(() => accountsFor(props.modelValue.provider))
 const models = computed(() =>
   modelsForAccount(props.modelValue.provider, props.modelValue.accountId),
 )
+const modeHint = computed(() => AGENT_MODES.find((m) => m.id === props.modelValue.mode)?.hint ?? '')
+// `accept-edits`/`execute` run tools without asking — the phone is unattended by
+// definition, so the choice gets a standing warning rather than a silent option.
+const modeUngated = computed(() => isUngatedMode(props.modelValue.mode))
+
 const defaultAccountLabel = computed(() => {
   const active = activeAccountFor(props.modelValue.provider)
   const label = accounts.value.find((a) => a.id === active)?.label
@@ -73,12 +80,15 @@ function target(e: Event): string {
     </label>
     <label class="field grow">
       <span>Mode</span>
-      <select :value="modelValue.mode" @change="patch({ mode: target($event) as 'ask' | 'plan' })">
-        <option value="ask">Ask</option>
-        <option value="plan">Plan</option>
+      <select :value="modelValue.mode" @change="patch({ mode: target($event) as AgentMode })">
+        <option v-for="m in AGENT_MODES" :key="m.id" :value="m.id">{{ m.label }}</option>
       </select>
     </label>
   </div>
+
+  <p class="mode-hint" :class="{ warn: modeUngated }">
+    <template v-if="modeUngated">⚠ </template>{{ modeHint }}
+  </p>
 
   <label v-if="modelValue.provider" class="field">
     <span>Account</span>
@@ -135,6 +145,14 @@ function target(e: Event): string {
 </template>
 
 <style scoped>
+.mode-hint {
+  margin: -8px 0 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mode-hint.warn {
+  color: var(--warn);
+}
 .stale {
   margin: 0 0 14px;
   padding: 9px 11px;

@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { gateway } from './gateway'
-import type { RemoteAccount, RemoteBootstrap, RemoteModel, RemoteProject } from './types'
+import type { AgentMode, RemoteAccount, RemoteBootstrap, RemoteModel, RemoteProject } from './types'
 
 // Desktop catalog the phone needs to label rows and offer "New session": the
 // project list, the model catalog per usable provider, and the desktop's own
@@ -65,6 +65,45 @@ export async function loadCatalog(force = false): Promise<void> {
 }
 
 // ─── Session config vocabularies ────────────────────────────────────────────
+
+// Agent modes, in the desktop's own order (ui-next SettingsDefaults.vue). `ungated`
+// marks the modes where the permission gate does NOT stop every mutating tool:
+// `accept-edits` auto-allows Write/Edit (Bash still parks) and `execute` skips the
+// gate outright (sidecar runtime/permission.ts). The phone can pick either, so the
+// UI has to SAY so — a mode tap is the only thing standing between a remote agent
+// and an unattended `rm -rf`.
+export const AGENT_MODES: { id: AgentMode; label: string; hint: string; ungated: boolean }[] = [
+  { id: 'ask', label: 'Ask', hint: 'Mọi tool ghi/chạy đều xin duyệt', ungated: false },
+  { id: 'plan', label: 'Plan', hint: 'Chỉ đọc — lập kế hoạch, không ghi', ungated: false },
+  {
+    id: 'accept-edits',
+    label: 'Accept Edits',
+    hint: 'Tự ghi file, Bash vẫn xin duyệt',
+    ungated: true,
+  },
+  {
+    id: 'execute',
+    label: 'Execute',
+    hint: 'KHÔNG xin duyệt — Bash/Write chạy thẳng',
+    ungated: true,
+  },
+]
+
+const DEFAULT_MODE: AgentMode = 'ask'
+
+// Narrow an engine-supplied mode string. An unknown value falls back to the gated
+// default rather than being trusted through to the composer chip.
+export function toAgentMode(raw: unknown): AgentMode {
+  return AGENT_MODES.some((m) => m.id === raw) ? (raw as AgentMode) : DEFAULT_MODE
+}
+
+export function modeLabel(id: string): string {
+  return AGENT_MODES.find((m) => m.id === id)?.label ?? id
+}
+
+export function isUngatedMode(id: string): boolean {
+  return AGENT_MODES.find((m) => m.id === id)?.ungated ?? false
+}
 
 // Thinking levels — mirrors ThinkingLevel in ui-next/types/index.ts (the sidecar
 // zod schema is the enforcing copy).

@@ -17,8 +17,7 @@ import CostPanel from '../components/CostPanel.vue'
 import TodoBanner from '../components/TodoBanner.vue'
 import BackgroundChips from '../components/BackgroundChips.vue'
 import SessionMenuSheet from '../components/SessionMenuSheet.vue'
-import type { ComposerMode } from '../store'
-import type { SessionAttachment } from '../types'
+import type { AgentMode, SessionAttachment } from '../types'
 
 type Tab = 'chat' | 'diff' | 'cost'
 const tab = ref<Tab>('chat')
@@ -56,7 +55,7 @@ const configChips = computed<string[]>(() => {
 })
 const scroller = ref<HTMLElement | null>(null)
 
-function setMode(mode: ComposerMode): void {
+function setMode(mode: AgentMode): void {
   if (cur.value) cur.value.mode = mode
 }
 

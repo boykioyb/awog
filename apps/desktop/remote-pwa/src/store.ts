@@ -1,9 +1,10 @@
 import { computed, ref, watch } from 'vue'
 import { gateway } from './gateway'
-import { loadCatalog } from './catalog'
+import { loadCatalog, toAgentMode } from './catalog'
 import { buzz, notify, setBadge } from './notify'
 import { errMsg, randomId } from './util'
 import type {
+  AgentMode,
   BackgroundDonePayload,
   BackgroundStartedPayload,
   EngineMessage,
@@ -49,7 +50,6 @@ export interface BackgroundShell {
   exitCode?: number | null
 }
 
-export type ComposerMode = 'ask' | 'plan'
 
 export interface CurrentSession {
   id: string
@@ -64,9 +64,10 @@ export interface CurrentSession {
   todos: TodoItem[]
   background: BackgroundShell[]
   settings: SessionSettings | null
-  // Mode for the NEXT turn. Remote turns are clamped to ask/plan at the gateway
-  // (execute would disable the permission gate), so those are the only choices.
-  mode: ComposerMode
+  // Mode for the NEXT turn — all four desktop modes, including the ungated
+  // `accept-edits`/`execute` (see catalog.ts AGENT_MODES). The gateway forwards
+  // the choice as-is; only `autoApprove` stays pinned off.
+  mode: AgentMode
   // messageId of the in-flight assistant turn — the steer/cancel target.
   streamingId: string | null
   // Messages typed while a turn we can't steer is running (we reconnected
@@ -262,7 +263,7 @@ export async function refetchCurrent(): Promise<void> {
     cur.messages = session.messages.map(engineMessageToUi)
     cur.todos = session.todos ?? []
     cur.settings = session.settings ?? null
-    cur.mode = session.settings?.mode === 'plan' ? 'plan' : 'ask'
+    cur.mode = toAgentMode(session.settings?.mode)
     cur.error = null
     cur.loading = false
     // A full refetch is the source of truth: any gate resolved elsewhere is gone.
@@ -294,7 +295,7 @@ function pushAgent(cur: CurrentSession, messageId: string): UiMessage {
 
 async function runTurn(
   text: string,
-  opts: { mode?: 'ask' | 'plan' | 'execute'; attachments?: SessionAttachment[] } = {},
+  opts: { mode?: AgentMode; attachments?: SessionAttachment[] } = {},
 ): Promise<void> {
   const cur = current.value
   if (!cur) return
@@ -448,7 +449,7 @@ export async function cycleTodo(index: number): Promise<void> {
 export async function createSession(input: NewSessionInput): Promise<void> {
   try {
     // `mode` at the top level is the upsert mode (create/update-metadata); the
-    // session's ask/plan mode travels inside `settings` — don't collapse the two.
+    // session's AGENT mode travels inside `settings` — don't collapse the two.
     const { session } = await gateway.request<{ session: FullSession }>('sessions.upsert', {
       mode: 'create',
       ...(input.title ? { title: input.title } : {}),
@@ -489,10 +490,10 @@ export async function updateSessionConfig(config: SessionConfig): Promise<void> 
       sessionId: cur.id,
       settings: settingsPayload(config, true),
     })
-    // Read the applied settings back: the gateway may have clamped the mode or
-    // dropped an account that doesn't belong to the chosen provider.
+    // Read the applied settings back: the gateway may have dropped an account
+    // that doesn't belong to the chosen provider.
     cur.settings = session.settings ?? cur.settings
-    cur.mode = session.settings?.mode === 'plan' ? 'plan' : 'ask'
+    cur.mode = toAgentMode(session.settings?.mode)
   } catch (e) {
     showToast(errMsg(e))
   }
@@ -540,8 +541,9 @@ export function resolvePermission(decision: 'allow' | 'deny'): void {
 }
 
 // Approve a plan: reuse sessions.sendMessage with a continuation prompt + execute
-// mode (mirrors desktop stores/sessions.ts approvePlan). The gateway clamps the
-// mode back to `ask`, so each tool still parks for approval on the phone.
+// mode (mirrors desktop stores/sessions.ts approvePlan). This is a ONE-TURN
+// override — `cur.mode` is untouched, so the session goes back to its own mode on
+// the next message.
 export function approvePlan(step: SessionStep): void {
   step.planStatus = 'approved'
   void runTurn('The plan is approved. Proceed to implement it now, following the plan.', {

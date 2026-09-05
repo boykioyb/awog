@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { MAX_ATTACHMENT_BYTES, toAttachment } from '../attachments'
+import { AGENT_MODES } from '../catalog'
 import { showToast } from '../store'
 import { errMsg } from '../util'
-import type { ComposerMode } from '../store'
-import type { SessionAttachment } from '../types'
+import AppSheet from './AppSheet.vue'
+import type { AgentMode, SessionAttachment } from '../types'
 
 const props = defineProps<{
   // A turn is in flight: the primary action becomes "steer into the running turn"
   // and a stop button appears (the desktop's send/steer split).
   streaming: boolean
-  mode: ComposerMode
+  mode: AgentMode
   disabled?: boolean
 }>()
 
@@ -18,7 +19,7 @@ const emit = defineEmits<{
   (e: 'send', text: string, attachments: SessionAttachment[]): void
   (e: 'steer', text: string): void
   (e: 'stop'): void
-  (e: 'update:mode', mode: ComposerMode): void
+  (e: 'update:mode', mode: AgentMode): void
 }>()
 
 const MAX_ATTACHMENTS = 4
@@ -31,6 +32,7 @@ const payloadBytes = (a: SessionAttachment): number =>
 const text = ref('')
 const attachments = ref<SessionAttachment[]>([])
 const busy = ref(false)
+const modeOpen = ref(false)
 const box = ref<HTMLTextAreaElement | null>(null)
 const filePicker = ref<HTMLInputElement | null>(null)
 const cameraPicker = ref<HTMLInputElement | null>(null)
@@ -94,8 +96,14 @@ function remove(id: string): void {
   attachments.value = attachments.value.filter((a) => a.id !== id)
 }
 
-function toggleMode(): void {
-  emit('update:mode', props.mode === 'plan' ? 'ask' : 'plan')
+// Four modes don't fit a toggle, and cycling through them would put `execute`
+// (gate off) one stray tap away — so the chip opens a picker that spells out what
+// each mode lets the agent do unattended.
+const modeRow = computed(() => AGENT_MODES.find((m) => m.id === props.mode))
+
+function pickMode(mode: AgentMode): void {
+  modeOpen.value = false
+  emit('update:mode', mode)
 }
 </script>
 
@@ -112,11 +120,11 @@ function toggleMode(): void {
     <div class="bar">
       <button
         class="chip"
-        :class="{ on: mode === 'plan' }"
-        :title="mode === 'plan' ? 'Chế độ Plan' : 'Chế độ Ask'"
-        @click="toggleMode"
+        :class="[mode, { ungated: modeRow?.ungated }]"
+        :title="modeRow?.hint"
+        @click="modeOpen = true"
       >
-        {{ mode === 'plan' ? 'Plan' : 'Ask' }}
+        {{ modeRow?.label ?? mode }}
       </button>
       <span v-if="streaming" class="hint muted">Gửi = chen vào lượt đang chạy</span>
     </div>
@@ -168,6 +176,22 @@ function toggleMode(): void {
       @change="pick"
     />
     <input ref="cameraPicker" type="file" accept="image/*" capture="environment" hidden @change="pick" />
+
+    <AppSheet :open="modeOpen" title="Chế độ" @close="modeOpen = false">
+      <button
+        v-for="m in AGENT_MODES"
+        :key="m.id"
+        class="mode-row"
+        :class="{ sel: m.id === mode }"
+        @click="pickMode(m.id)"
+      >
+        <span class="mode-name" :class="{ ungated: m.ungated }">
+          {{ m.label }}<template v-if="m.ungated"> ⚠</template>
+        </span>
+        <span class="mode-hint">{{ m.hint }}</span>
+        <span v-if="m.id === mode" class="mode-tick">✓</span>
+      </button>
+    </AppSheet>
   </div>
 </template>
 
@@ -244,10 +268,57 @@ function toggleMode(): void {
   font-size: 12px;
   font-weight: 600;
 }
-.chip.on {
+.chip.plan {
   color: var(--accent);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* accept-edits/execute run tools with no approval prompt — the chip has to read
+   as a live warning, not a neutral state. */
+.chip.ungated {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+.chip.execute {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.mode-row {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 34px 11px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.mode-row.sel {
+  border-color: var(--accent);
+}
+.mode-name {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+.mode-name.ungated {
+  color: var(--warn);
+}
+.mode-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mode-tick {
+  position: absolute;
+  top: 11px;
+  right: 12px;
+  color: var(--accent);
 }
 .hint {
   font-size: 12px;
