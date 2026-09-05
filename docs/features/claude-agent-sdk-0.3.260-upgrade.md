@@ -64,7 +64,7 @@ PR bump (P0) chỉ đổi version + lockfile, **0 thay đổi hành vi**. Các t
 | # | Tính năng SDK mới | Giá trị cho AWOG | Ưu tiên |
 |---|---|---|---|
 | 1 | **`systemPrompt.snapshot?: boolean`** — ghi system prompt 1 lần cho cả hội thoại, tái dùng nguyên văn ở mọi request + `resume` | **Cao nhất.** AWOG truyền `{ preset: 'claude_code', append }` ở [run-stream.ts:558](../../apps/desktop/sidecar/src/runtime/claude-sdk/run-stream.ts) và [invoke.ts:266](../../apps/desktop/sidecar/src/runtime/claude-sdk/invoke.ts). Có `append` ⇒ SDK **mặc định TẮT** ghi snapshot ⇒ mỗi lần đổi `append` (hoặc nâng CLI) là vỡ prompt-cache prefix **và vứt reasoning đã có của extended thinking**. Đúng chỗ đau của [ADR 0071](../decisions/0071-senior-engineer-prompt-core.md) | **P1** |
-| 2 | **`McpSdkServerConfig.timeout`** — timeout per-server cho MCP **in-process** (`type: 'sdk'`) | Mới thật: 0.3.235 chỉ có `timeout` cho MCP **external** (AWOG đã dùng). AWOG chạy 5 in-process server (`awog`, `awogssh`, `awogwiki`, `awogmemory`, api sources) hiện **không có** timeout riêng — một handler treo là treo cả turn | **P2** |
+| 2 | **`McpSdkServerConfig.timeout`** — timeout per-server cho MCP **in-process** (`type: 'sdk'`) | API mới thật, nhưng **tiền đề của mục này sai** (đã kiểm 2026-09-05): không handler nào trong 5 server treo được. `ssh` đã có `EXEC_TIMEOUT_MS` ở [ssh/manager.ts](../../apps/desktop/sidecar/src/ssh/manager.ts) (60s, trả `exitCode -1`); `api`/`source` nhận abort signal của turn + `timeoutMs` cấu hình per-source; `wiki`/`memory` là fs cục bộ. Thêm nữa sẽ là **đồng hồ thứ hai** chồng lên guard đã có, và vì nó là wall-clock cứng không nới theo progress notification nên chỉ có thể **cắt ngắn** thứ đang chạy đúng | **Không làm** |
 | 3 | Usage `thinkingTokens?` + `costBasis?: 'list'\|'managed'\|'unknown'` | Bổ sung cho [event-adapter.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/event-adapter.ts) đang gom `cacheReadTokens`… — hiển thị token thinking tách bạch | **P2** |
 | 4 | `user_message_uuid` + `user_message_uuids[]` trên assistant/partial/result | Bind stream trả lời về đúng lần send; hữu ích cho popout window + remote PWA khi nhiều send dồn thành một turn | **P3** |
 | 5 | `queued_turn_count?` trên result | Biết còn bao nhiêu send đang xếp hàng → UI composer | **P3** |
@@ -194,9 +194,17 @@ Nhánh: `claude/sdk-version-app-effort-qg99pq`. Mỗi phase một commit riêng 
 
 **Còn nợ — quyết định cho nhánh task.** Ẩn số: CLI render dynamic section **mỗi request** hay **mỗi lần launch**? `.d.ts` không nói rõ. Nếu mỗi request thì trong một node chạy dài, mỗi lần model sửa file là `git status` đổi ⇒ vỡ prefix cache + vứt reasoning ở **mọi** request sau đó — lúc đó `snapshot: true` cho task là món hời lớn, và cách làm đúng là kèm prepend `<current_state>` vào prompt của node để bù định vị. Nếu mỗi launch thì task one-shot chẳng được gì. **Cần đo trước khi làm**, không đoán.
 
-### P3 — timeout cho MCP in-process (tuỳ chọn)
-- [ ] Thêm `timeout` vào 5 in-process SDK MCP server; chọn giá trị mặc định thống nhất với timeout của MCP external
-- [ ] Commit: `feat(claude-sdk): per-server timeout for in-process MCP servers`
+### P3 — timeout cho MCP in-process — ❌ BỎ
+
+Không làm, và không phải vì hoãn: **tiền đề sai**. Plan viết 5 in-process server "hiện không có timeout riêng — một handler treo là treo cả turn". Kiểm lại thì không cái nào treo được:
+
+| Server | Guard đã có |
+|---|---|
+| `awogssh` | `EXEC_TIMEOUT_MS` ở [ssh/manager.ts](../../apps/desktop/sidecar/src/ssh/manager.ts) — 60s, `finish(-1)`, trả về phần output đã bắt được |
+| api / source | Abort signal của turn ([api-sdk-server.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/api-sdk-server.ts)) + `timeoutMs` cấu hình per-source (mặc định 30s) |
+| `awogwiki`, `awogmemory` | Đọc/ghi fs cục bộ, thang mili-giây |
+
+Thêm `timeout` cấp SDK vào đây chỉ tạo đồng hồ thứ hai chồng lên guard đã có, ở đúng những chỗ không cần. Và vì nó là **wall-clock cứng, progress notification không nới**, tác dụng thực tế duy nhất là cắt ngắn thứ đang chạy hợp lệ. Nếu sau này gỡ `EXEC_TIMEOUT_MS` khỏi tầng ssh thì mở lại mục này.
 
 ### P4 — release (chỉ khi user muốn cắt bản)
 - [ ] Bump `0.32.0` → `0.33.0` ở **4 nơi**: root, `ui-next`, `sidecar`, `electron` package.json
