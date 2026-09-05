@@ -184,11 +184,15 @@ Nhánh: `claude/sdk-version-app-effort-qg99pq`. Mỗi phase một commit riêng 
 - [x] `pnpm --filter @awog/sidecar typecheck` — exit 0
 - [ ] Commit: `fix(runtime): align Pi reasoning effort with the Claude Code scale`
 
-### P2 — `systemPrompt.snapshot` (PR riêng, phụ thuộc P0)
-- [ ] Thêm `snapshot: true` vào cả hai chỗ dựng `systemPrompt` (`run-stream.ts`, `invoke.ts`). Chú ý `exactOptionalPropertyTypes: true` — dùng đúng idiom spread có điều kiện đang có trong file, không gán `undefined`
-- [ ] Đọc kỹ hệ quả: prompt đã ghi **không đổi** cho tới lúc compact hoặc session mới ⇒ sửa `append` (AGENT.md, context block) **không** áp ngay cho session đang chạy. Cần quyết định có chấp nhận không, và có phải ghi chú vào [ADR 0071](../decisions/0071-senior-engineer-prompt-core.md) không
-- [ ] QA riêng: đo prompt-cache hit trước/sau trên một session dài
+### P2 — `systemPrompt.snapshot` ✅ (nhánh chat; nhánh task cố ý KHÔNG làm)
+- [x] Thêm `snapshot: true` ở [claude-sdk/run-stream.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/run-stream.ts) (nhánh chat)
+- [x] **Câu hỏi mở #2 tự tan khi đọc code.** Lo ngại "sửa `append` không áp ngay cho session đang chạy" **đã là hiện trạng** chứ không phải cái giá mới: SDK vốn đóng băng `append` ở `resume`, và code đã thiết kế quanh đúng ràng buộc đó — style / plan mode / checklist / rules **đều đã rời khỏi append** để ride trên turn prompt; phần còn lại trong `appendParts` là hằng số per-session (khối comment trên `appendParts` nói thẳng điều này). Không cần sửa [ADR 0071](../decisions/0071-senior-engineer-prompt-core.md)
+- [x] Dynamic section của preset (**working directory, auto-memory, git status**) bị đóng băng theo — vô hại ở nhánh chat vì `<current_state>` với git snapshot tươi đã được prepend **mỗi turn** ([run-stream.ts:481](../../apps/desktop/sidecar/src/runtime/claude-sdk/run-stream.ts)), mới hơn và có thẩm quyền hơn bản ghi
+- [x] **KHÔNG áp cho [claude-sdk/invoke.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/invoke.ts) (task)** — trái với dự kiến ban đầu của plan. Task node **không** có `<current_state>` trên prompt, nên dynamic section của preset là nguồn định vị git/cwd duy nhất của nó; đóng băng = đổi state sống lấy cache. Xem "còn nợ" dưới
+- [ ] QA riêng: đo prompt-cache hit trước/sau trên một session dài, và verify resume qua một lần nâng app (case mà `snapshot` sinh ra để chữa)
 - [ ] Commit: `perf(claude-sdk): record the system prompt once per conversation`
+
+**Còn nợ — quyết định cho nhánh task.** Ẩn số: CLI render dynamic section **mỗi request** hay **mỗi lần launch**? `.d.ts` không nói rõ. Nếu mỗi request thì trong một node chạy dài, mỗi lần model sửa file là `git status` đổi ⇒ vỡ prefix cache + vứt reasoning ở **mọi** request sau đó — lúc đó `snapshot: true` cho task là món hời lớn, và cách làm đúng là kèm prepend `<current_state>` vào prompt của node để bù định vị. Nếu mỗi launch thì task one-shot chẳng được gì. **Cần đo trước khi làm**, không đoán.
 
 ### P3 — timeout cho MCP in-process (tuỳ chọn)
 - [ ] Thêm `timeout` vào 5 in-process SDK MCP server; chọn giá trị mặc định thống nhất với timeout của MCP external
@@ -231,6 +235,6 @@ Không có test tự động cho lớp runtime ⇒ QA thủ công, chạy **sau 
 ## 7. Câu hỏi mở
 
 1. ~~**Chốt phương án B-3**~~ — ✅ **đã chốt A** (2026-09-05), xem [ADR 0078](../decisions/0078-reasoning-effort-parity.md).
-2. **P2 `snapshot: true`:** chấp nhận việc đổi `append` không áp ngay cho session đang chạy chứ? Đây là đánh đổi thật giữa prompt-cache/reasoning và tính "sửa AGENT.md là thấy ngay".
+2. ~~**P2 `snapshot: true`**~~ — ✅ **tự tan**: đó đã là hiện trạng, không phải cái giá mới (xem P2). Câu hỏi CÒN LẠI, hẹp hơn: có bật `snapshot` cho **nhánh task** không — cần đo xem CLI render dynamic section mỗi request hay mỗi launch.
 3. Có cắt release `0.33.0` ngay sau P1, hay gom thêm P2/P3 rồi mới cắt?
 4. Ngoài phạm vi plan này: `pi-ai` đang `^0.84.2`, latest `0.85.0` — có muốn mở task riêng đánh giá không?

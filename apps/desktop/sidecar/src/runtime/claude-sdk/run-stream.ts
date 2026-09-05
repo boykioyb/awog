@@ -555,7 +555,36 @@ export async function runStreamClaude(
   const claudeBinary = resolveClaudeBinary()
 
   const options: Options = {
-    systemPrompt: { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) },
+    // `snapshot: true` (SDK 0.3.260+): record this conversation's system prompt once
+    // and reuse it verbatim on every later request and `resume`, instead of rendering
+    // it fresh each time. Passing an `append` turns recording OFF by default, so this
+    // has to be explicit.
+    //
+    // It costs this path nothing. The append built above is already CONSTANT per
+    // session and already frozen on `resume` (see the appendParts block comment);
+    // everything that can change mid-session — style, plan mode, checklist, rules —
+    // rides the turn prompt instead. And the preset's own dynamic sections (working
+    // directory, auto-memory, git status) going stale is covered: `<current_state>` is
+    // prepended to EVERY turn below with a fresh git snapshot, which is both newer and
+    // more authoritative than the recorded copy.
+    //
+    // What it buys is the case the default cannot cover: the CLI changing UNDER a live
+    // session — exactly what an app upgrade that bumps claude-agent-sdk does. Today
+    // that re-renders the preset, invalidating the prompt-cache prefix and, with
+    // extended thinking, discarding the reasoning accumulated so far.
+    //
+    // Deliberately NOT set on the task path (invoke.ts): a task node has no
+    // `<current_state>` on its prompt, so the preset's dynamic sections are its only
+    // git/cwd orientation and freezing them would trade live state for cache stability.
+    //
+    // Server-side recording is still rolling out; where it is not enabled for the
+    // account (and on Bedrock/Vertex/Foundry) the flag is accepted and inert.
+    systemPrompt: {
+      type: 'preset',
+      preset: 'claude_code',
+      snapshot: true,
+      ...(append ? { append } : {}),
+    },
     // Honor the Git `commitCoAuthor` setting via the SDK flag-settings layer
     // (highest priority). The claude_code preset otherwise adds Claude's own
     // attribution regardless (see commitAttribution): on → AWOG trailer, off → hidden.
