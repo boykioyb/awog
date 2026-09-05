@@ -1,4 +1,6 @@
-# Migration Pi SDK 0.79.x → 0.80.x (deferred)
+# Migration Pi SDK 0.79.x → 0.80.x (hồ sơ lịch sử — ĐÃ XONG)
+
+> **⚠ Tài liệu này đã lạc hậu, giữ lại làm hồ sơ.** Nó viết khi repo còn ở `^0.79.9` và mô tả 0.80 như task hoãn. Thực tế 0.80 đã làm từ lâu; repo đi tiếp qua 0.84.2 rồi lên **`^0.85.1`** (2026-09-05, xem [Track C của plan 0.3.260](./claude-agent-sdk-0.3.260-upgrade.md)). Phần còn giá trị của tài liệu này là **phương pháp**, không phải con số: bump Pi thì trial-upgrade + `tsc --noEmit` trước, đọc diff bề mặt type, rồi mới quyết định là *bump* hay *migration*. Mục "Lưu ý môi trường" ở cuối vẫn đúng.
 
 Task **hoãn** (deferred): nâng `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core` từ **0.79.9** lên **0.80.x** (latest 0.80.2 tại 2026-06-30). Liên quan [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md) (Pi là runtime LLM duy nhất).
 

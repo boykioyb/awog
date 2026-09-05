@@ -1,7 +1,8 @@
 # Plan: nâng Claude Agent SDK `0.3.235 → 0.3.260` + đồng bộ reasoning effort hai runtime
 
 > **Trạng thái:** P0 + P1 đang implement trên nhánh `claude/sdk-version-app-effort-qg99pq`. Khảo sát 2026-09-05.
-> **Đã chốt:** câu hỏi B-3 → **phương án A** (user, 2026-09-05) — xem [ADR 0078](../decisions/0078-reasoning-effort-parity.md). P2/P3/P4 chưa làm.
+> **Đã chốt:** câu hỏi B-3 → **phương án A** (user, 2026-09-05) — xem [ADR 0078](../decisions/0078-reasoning-effort-parity.md).
+> **Phạm vi đã mở rộng:** thêm **[Track C](#8-track-c--nâng-pi-runtime-0842--0851)** (nâng Pi runtime, user yêu cầu 2026-09-05). P2 đã làm cho nhánh chat, P3 bỏ, P4 chờ QA.
 > **Liên quan:** [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md) (runtime chọn theo provider), [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md) item 6 (mapping thinking → Pi), [ADR 0071](../decisions/0071-senior-engineer-prompt-core.md) (system prompt append), [dual-sdk-runtime.md](./dual-sdk-runtime.md).
 
 Hai việc độc lập nhưng gộp chung một plan vì cùng chạm lớp runtime, cùng cần **một** vòng QA parity 2 runtime, và cùng ra một release:
@@ -246,3 +247,54 @@ Không có test tự động cho lớp runtime ⇒ QA thủ công, chạy **sau 
 2. ~~**P2 `snapshot: true`**~~ — ✅ **tự tan**: đó đã là hiện trạng, không phải cái giá mới (xem P2). Câu hỏi CÒN LẠI, hẹp hơn: có bật `snapshot` cho **nhánh task** không — cần đo xem CLI render dynamic section mỗi request hay mỗi launch.
 3. Có cắt release `0.33.0` ngay sau P1, hay gom thêm P2/P3 rồi mới cắt?
 4. Ngoài phạm vi plan này: `pi-ai` đang `^0.84.2`, latest `0.85.0` — có muốn mở task riêng đánh giá không?
+
+---
+
+## 8. Track C — nâng Pi runtime 0.84.2 → 0.85.1
+
+Ngoài phạm vi plan gốc (câu hỏi mở #4), user yêu cầu làm luôn 2026-09-05. `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core` `^0.84.2` → **`^0.85.1`** (không phải 0.85.0 như §7 ghi).
+
+### C-1. Là bump, không phải migration
+
+Trial upgrade + `tsc --noEmit`: **1 lỗi / 1 file**, so với 6 lỗi / 6 file của 0.79→0.80 ([hồ sơ](./pi-sdk-0.80-migration.md)). `runAgentLoop` / `runAgentLoopContinue` **giữ nguyên chữ ký** kể cả tham số `signal`, `beforeToolCall` giống từng dòng, `AgentEvent` / `Usage` / `StopReason` byte-identical.
+
+**Điểm vỡ duy nhất — `generateSummary` (`/compact`).** Bỏ `signal` ở vị trí 5, thêm `context: Context` bắt buộc ở cuối (Context kiểu Go từ package mới `@earendil-works/chord`); mọi optional phía trước thành positional bắt buộc. Cancellation giờ đi *trong* context: `withAbortSignal(signal, BACKGROUND_CONTEXT)`. **Bẫy:** vị trí 5 từ `signal` thành `customInstructions` — giữ nguyên thứ tự cũ là truyền nhầm loại. Đã sửa, mỗi `undefined` một dòng kèm tên tham số để lần sau đổi chữ ký là thấy diff.
+
+### C-2. Ba thay đổi hành vi IM LẶNG (typecheck không bắt)
+
+`compat.supportsMidConvoEffort` là cờ **hoàn toàn mới** ở 0.85.1 (0.84.2: 0 hit). Trúng đúng **2 model**: `claude-opus-5` (**default của AWOG**) và `claude-fable-5-1`.
+
+| | Vấn đề | Trạng thái |
+|---|---|---|
+| **C-2a** | **`-1m` nhiều khả năng 400.** `getBetaFeatures()` mới coi header `anthropic-beta` do caller cấp là danh sách **loại trừ** và return sớm, bỏ mọi beta nó tự thêm. AWOG đè đúng header đó cho `claude-opus-5-1m` / `claude-opus-4-8-1m` ([model-resolver.ts](../../apps/desktop/sidecar/src/runtime/model-resolver.ts)) ⇒ mất `mid-conversation-output-config-2026-07-01` + `thinking-binding-controls-2026-08-01`, trong khi `buildParams` **vẫn** phát `output_config` + `thinking.block_binding` + message `role:"system"` vì model có cờ | ✅ **Đã sửa** — union thay vì đè, keyed đúng cờ `supportsMidConvoEffort`. Pi không có field `betas` công khai nên header vẫn là kênh duy nhất |
+| **C-2b** | **`/compact` mất khả năng tắt thinking.** 0.84.2: `claude-opus-5` không có key `off` ⇒ guard `off !== null` đúng ⇒ `thinking: { type: "disabled" }`. 0.85.1: catalog thêm `off: null` **và** code thêm nhánh cưỡng chế đặt **trước** `else if (model.reasoning)`, không đọc `thinkingEnabled` ⇒ adaptive thinking + effort mặc định **`"high"`** | ✅ **Giảm nhẹ** — `compactThinkingLevel()` xin nấc `low` khi model khai `off: null`. Không khôi phục được "off" (model thật sự không còn cung cấp) |
+| **C-2c** | ~17 RPC one-shot đi `runtime/complete.ts` (`completeSimple` không truyền `reasoning`) dính **cùng** cơ chế C-2b: generate-title, PR-summary, enhance-prompt… đốt thinking token khi model là opus-5 | ❌ **CHƯA sửa** — cần quyết định: xin nấc thấp giống `/compact`, hay ghim model rẻ cho nhóm helper này |
+
+Hai mục **không** phải rủi ro sau khi đọc kỹ: `output_config` top-level hardcode `"high"` (`:849`) nhưng effort thật đi trên message `role:"system"` chèn cuối (`activeEffort = options?.effort ?? "high"`) — **đúng thiết kế** `mid-conversation-output-config`, message sau đè trước, nên picker effort của [ADR 0078](../decisions/0078-reasoning-effort-parity.md) vẫn đúng (**nên bắt 1 payload thật xác nhận**). Và server-side fallback bật cho `claude-fable-5` (`allowedFallbackModels`) — Anthropic có thể trả lời bằng Opus 4.8/5; Pi ghi `output.model` model thật + tính lại giá, AWOG đã ghi nhận qua `event-adapter.ts` nên không sai số liệu.
+
+### C-3. Packaging — esbuild 11MB lọt vào installer
+
+`@earendil-works/chord` khai `dependencies: { esbuild: "0.28.1" }` ⇒ kéo 26 gói `@esbuild/<platform>` vào bundle ship đi, và làm **sai** comment *"pure JS, 0 native deps"* trong [build.mjs](../../apps/desktop/sidecar/scripts/build.mjs). Thêm một executable lồng chưa ký cho notarization macOS.
+
+✅ **Đã sửa:** `pruneBundle()` gỡ `esbuild` + `@esbuild`. An toàn vì pi-agent-core chỉ import root + `/context` của chord, file duy nhất chạm esbuild là `chord/dist/node/bundle.js` sau subpath `/node`. **Verify bằng cách chạy thật**: gỡ hẳn 2 thư mục rồi nạp `pi-agent-core`, `pi-ai`, `runtime/run-stream.js`, `runtime/model-resolver.js` và cả `lib/src/index.js` từ bundle — tất cả OK.
+
+### C-4. Đi ké ngoài ý muốn
+
+`pnpm install` lần này kéo **`@anthropic-ai/sdk` 0.91.1 → 0.123.0**. Không phải Pi — nó là transitive/peer của `claude-agent-sdk`, và nó **chữa** đúng peer warning mà Track A để lại (`unmet peer @anthropic-ai/sdk>=0.93.0: found 0.91.1`). Giữ, nhưng ghi ra đây vì nó nhảy 32 minor của một dep nằm dưới runtime Anthropic và **không** thuộc phạm vi yêu cầu.
+
+### C-5. Supply chain
+
+`@earendil-works/chord` **không phải squat**: cùng maintainer (`mitsuhiko`, `badlogic`, `rwachtler`), cùng repo `github.com/earendil-works/pi`, MIT, version lockstep với pi-ai/pi-telemetry. Grep `dist`: 0 hit `fetch`/`http`/`WebSocket`/`eval`/`child_process` trong closure AWOG import tới. `pnpm audit --prod`: **0 advisory** đi qua chord; advisory dính earendil duy nhất là `pi-ai > @google/genai > protobufjs`, mà `@google/genai` đã có từ 0.84.2 ⇒ **không do bump sinh ra**. Invariant no-telemetry không bị vi phạm — `@opentelemetry/api` thực ra biến mất khỏi cây.
+
+### C-6. Không đổi (đã kiểm, nói để khỏi kiểm lại)
+
+Tên các nấc thinking y hệt; `clampThinkingLevel` + `getSupportedThinkingLevels` byte-identical; **không model nào đang tồn tại đổi giá trị `toReasoning()` hiệu dụng** ở 4 provider AWOG dùng (Gemini 3.x vẫn không khai `xhigh`/`max` ⇒ vẫn clamp `high`, đúng như [ADR 0078](../decisions/0078-reasoning-effort-parity.md) mô tả); OAuth Anthropic nguyên vẹn (prepend *"You are Claude Code…"*, `sk-ant-oat`, `cache_control` — `dist/oauth.js` + `dist/compat.js` md5 khớp).
+
+**Bonus, có sẵn không do bump:** `useProviderModels.ts` liệt kê `gemini-2.0-flash` nhưng id này không có trong catalog Pi ở **cả hai** bản ⇒ chọn nó sẽ ném `unknown google model`. Lỗi cũ, đáng mở task riêng.
+
+### C-7. Còn nợ
+
+- [ ] **C-2c** — quyết định cho ~17 one-shot helper
+- [ ] Bắt 1 payload thật xác nhận C-2b/C-2c và effort picker (mid-convo `role:"system"`) hoạt động đúng
+- [ ] **Test `claude-opus-5-1m` dưới OAuth** — C-2a mới chỉ sửa theo lý thuyết, chưa chạy thật
+- [ ] Đo lại size installer sau khi prune esbuild trên win/linux (mới đo darwin-arm64: `dist` 343M)
