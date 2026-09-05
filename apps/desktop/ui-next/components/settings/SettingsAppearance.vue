@@ -58,6 +58,13 @@
     </SettingsField>
 
     <SettingsField
+      :name="t('settings.appearance.codeWrap.name')"
+      :desc="t('settings.appearance.codeWrap.desc')"
+    >
+      <SettingsTog v-model="codeWrap" />
+    </SettingsField>
+
+    <SettingsField
       :name="t('settings.appearance.fontSize.name')"
       :desc="t('settings.appearance.fontSize.desc')"
     >
@@ -125,8 +132,14 @@ const accents = ['#10b981', '#60a5fa', '#a78bfa', '#f59e0b', '#f43f5e', '#22d3ee
 const FONT_SIZES = [12, 13, 14, 15, 16, 18]
 
 // DOM appliers (shared with app.vue boot paint) — sans/weight/surface/family/glass.
-const { applySansFamily, applyFontWeight, applySurfaceDepth, applyThemeFamily, applyGlass } =
-  useAppearanceDom()
+const {
+  applySansFamily,
+  applyFontWeight,
+  applySurfaceDepth,
+  applyThemeFamily,
+  applyGlass,
+  applyCodeWrap,
+} = useAppearanceDom()
 
 // Mode seg: visible label === stored value (Dark/Light); flip the theme when the
 // chosen label differs from the current one.
@@ -186,6 +199,16 @@ const liquidGlass = computed<boolean>({
   },
 })
 
+// Soft-wrap in rendered-markdown code blocks. Mirrored by the wrap button on every code
+// block (utils/code-block-controls) — same preference, two entry points.
+const codeWrap = computed<boolean>({
+  get: () => store.appearance.codeWrap,
+  set: (value) => {
+    store.updateAppearance({ codeWrap: value })
+    applyCodeWrap(value)
+  },
+})
+
 const sansOptions = [
   { label: 'Geist', value: 'geist' },
   { label: 'Inter', value: 'inter' },
@@ -214,6 +237,7 @@ onMounted(() => {
   applyThemeFamily(store.appearance.themeFamily)
   applySurfaceDepth(store.appearance.surfaceDepth)
   applyGlass(store.appearance.liquidGlass)
+  applyCodeWrap(store.appearance.codeWrap)
   applySansFamily(store.appearance.sansFamily)
   applyFontWeight(store.appearance.fontWeight)
 })

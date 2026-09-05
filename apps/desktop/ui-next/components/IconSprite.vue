@@ -159,6 +159,13 @@
         <rect x="9" y="9" width="11" height="11" rx="2" />
         <path d="M5 15V5a2 2 0 0 1 2-2h10" />
       </symbol>
+      <!-- wrap-text (lucide) — the per-code-block soft-wrap toggle (utils/code-block-controls). -->
+      <symbol id="i-wrap" viewBox="0 0 24 24">
+        <path d="M3 6h18" />
+        <path d="M3 12h15a3 3 0 1 1 0 6h-4" />
+        <path d="m16 16-2 2 2 2" />
+        <path d="M3 18h7" />
+      </symbol>
       <symbol id="i-commit" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="3" />
         <path d="M3 12h6M15 12h6" />

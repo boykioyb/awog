@@ -16,6 +16,7 @@ import type {
 // - surface depth→ `body[data-surface]` (app-shell layer-token overrides)
 // - theme family → `body[data-theme-family]`
 // - liquid glass → `body.glass`
+// - code wrap    → `body[data-code-wrap]` (app-shell `.codeblock pre` soft-wrap)
 //
 // `applyReducedMotion` lives here too but is NOT part of AppearanceExtras: it
 // reads settings.sessions.reducedMotion (a separate store slice). It toggles
@@ -39,6 +40,11 @@ export function useAppearanceDom() {
     document.body.dataset.themeFamily = value
   }
   const applyGlass = (value: boolean) => document.body.classList.toggle('glass', value)
+  // Soft-wrap in rendered-markdown code blocks. An attribute (not a class) so the CSS reads
+  // as a stated preference, and so a future third mode has somewhere to go.
+  const applyCodeWrap = (value: boolean) => {
+    document.body.dataset.codeWrap = value ? 'on' : 'off'
+  }
   const applyReducedMotion = (value: boolean) => {
     if (value) document.documentElement.dataset.reducedMotion = '1'
     else delete document.documentElement.dataset.reducedMotion
@@ -50,6 +56,7 @@ export function useAppearanceDom() {
     applySurfaceDepth(a.surfaceDepth)
     applyThemeFamily(a.themeFamily)
     applyGlass(a.liquidGlass)
+    applyCodeWrap(a.codeWrap)
   }
 
   return {
@@ -58,6 +65,7 @@ export function useAppearanceDom() {
     applySurfaceDepth,
     applyThemeFamily,
     applyGlass,
+    applyCodeWrap,
     applyReducedMotion,
     applyAll,
   }

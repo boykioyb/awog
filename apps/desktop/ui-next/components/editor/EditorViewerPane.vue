@@ -28,7 +28,7 @@
 //   'preview' → markdown rendered via useMarkdown (raw HTML stripped) + live
 //               mermaid diagrams, styled like the shared PreviewModal prose.
 import MermaidView from '~/components/common/MermaidView.vue'
-import { useCodeCopy } from '~/composables/useCodeCopy'
+import { useCodeBlockControls } from '~/composables/useCodeBlockControls'
 import { useMarkdown } from '~/composables/useMarkdown'
 import type { MdSegment } from '~/composables/useMarkdown'
 import { useMdFileLink } from '~/composables/useMdFileLink'
@@ -55,7 +55,7 @@ const segments = computed<MdSegment[]>(() =>
 
 // Per-code-block copy button, same control as the transcript / preview modal.
 const mdBody = useTemplateRef<HTMLElement>('mdBody')
-useCodeCopy(mdBody, () => segments.value)
+useCodeBlockControls(mdBody, () => segments.value)
 
 type DiffLine = { text: string; kind: 'add' | 'del' | 'hunk' | 'meta' | 'ctx' }
 

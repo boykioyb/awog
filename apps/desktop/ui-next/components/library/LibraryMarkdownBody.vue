@@ -59,7 +59,7 @@
 // live), styled in prototype CSS.
 import { computed, ref } from 'vue'
 import MermaidView from '~/components/common/MermaidView.vue'
-import { useCodeCopy } from '~/composables/useCodeCopy'
+import { useCodeBlockControls } from '~/composables/useCodeBlockControls'
 import { useMarkdown } from '~/composables/useMarkdown'
 import { useMdFileLink } from '~/composables/useMdFileLink'
 
@@ -95,7 +95,7 @@ const segments = computed(() => renderMarkdown(props.content ?? ''))
 
 // Per-code-block copy button (the header's Copy button copies the WHOLE body).
 const mdBody = useTemplateRef<HTMLElement>('mdBody')
-useCodeCopy(mdBody, () => segments.value)
+useCodeBlockControls(mdBody, () => segments.value)
 
 const onCopy = async () => {
   try {

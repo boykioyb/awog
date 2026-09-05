@@ -221,6 +221,11 @@ export interface AppearanceExtras {
   surfaceDepth: SurfaceDepth
   liquidGlass: boolean
   composerSendKey: ComposerSendKey
+  // Soft-wrap long lines inside rendered-markdown code blocks instead of scrolling them
+  // horizontally. Global (not per block) — it is a reading preference, and the transcript
+  // rebuilds its code-block subtrees on every streaming frame. Toggled from any block's
+  // wrap button as well as from Settings → Appearance.
+  codeWrap: boolean
 }
 
 // Desktop pet (docs/features/desktop-pet.md). Lives here because it is a pure UI
@@ -366,6 +371,9 @@ const DEFAULT_APPEARANCE: AppearanceExtras = {
   surfaceDepth: 'standard',
   liquidGlass: false,
   composerSendKey: 'enter',
+  // Off by default: `pre` semantics (a line is a line) is what most code expects; wrapping
+  // is opt-in for the sessions where reading a long JSON line beats keeping its shape.
+  codeWrap: false,
 }
 
 // Opt-in: a window floating above every other app is not something to turn on for

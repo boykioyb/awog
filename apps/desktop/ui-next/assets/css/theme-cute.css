@@ -851,20 +851,20 @@ body[data-theme-family='cute'] :is(pre.codeplain, .mmdstream, .codeblk) {
   border-color: var(--termBorder) !important;
   color: var(--termText) !important;
 }
-/* Language chip + copy button live on a dark block now, so they need dark chrome
+/* Language chip + wrap/copy buttons live on a dark block now, so they need dark chrome
    (their neutral base styles are in app-shell.css for the AWOG family). */
 body[data-theme-family='cute'] .codelang {
   color: var(--termText);
   background: color-mix(in srgb, var(--termText) 13%, transparent);
   border-color: transparent;
 }
-body[data-theme-family='cute'] .codecopy {
+body[data-theme-family='cute'] :is(.codecopy, .codewrap) {
   border-radius: var(--r-xs);
   background: color-mix(in srgb, var(--termText) 13%, transparent);
   border-color: transparent;
   color: var(--termText);
 }
-body[data-theme-family='cute'] .codecopy:hover {
+body[data-theme-family='cute'] :is(.codecopy, .codewrap):hover {
   background: color-mix(in srgb, var(--termText) 24%, transparent);
   color: var(--termText);
 }

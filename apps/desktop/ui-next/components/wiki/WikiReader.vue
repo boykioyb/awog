@@ -121,7 +121,7 @@
 // clickable spans before render, so a click is resolved against the loaded tree
 // instead of hitting the SPA router (a dead route would 404 the whole page).
 import MermaidView from '~/components/common/MermaidView.vue'
-import { useCodeCopy } from '~/composables/useCodeCopy'
+import { useCodeBlockControls } from '~/composables/useCodeBlockControls'
 import { useMarkdown } from '~/composables/useMarkdown'
 import type { WikiPage } from '~/stores/wiki'
 
@@ -180,9 +180,9 @@ const linkedBody = computed(() =>
 const segments = computed(() => renderMarkdown(linkedBody.value))
 
 // Per-code-block copy button + language chip. The buttons are injected into the
-// v-html output from outside (utils/code-copy), so this must re-run whenever the
+// v-html output from outside (utils/code-block-controls), so this must re-run whenever the
 // rendered segments change — the composable watches them.
-useCodeCopy(bodyRef, () => segments.value)
+useCodeBlockControls(bodyRef, () => segments.value)
 
 // Raw HTML is removed by the shared markdown renderer — it feeds `v-html`, and the
 // same pipeline renders untrusted model output in the transcript, so author HTML is

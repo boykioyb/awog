@@ -21,7 +21,7 @@
 // live diagrams instead of the plain code card they fell back to before.
 import { useMarkdown } from '~/composables/useMarkdown'
 import { useMdFileLink } from '~/composables/useMdFileLink'
-import { attachCodeCopyButtons } from '~/utils/code-copy'
+import { useCodeBlockAttacher } from '~/composables/useCodeBlockControls'
 
 const props = withDefaults(
   defineProps<{
@@ -33,8 +33,8 @@ const props = withDefaults(
   { workspaceRoot: null },
 )
 
-const { t } = useI18n()
 const { renderMarkdown } = useMarkdown()
+const attachCodeBlockControls = useCodeBlockAttacher()
 // A repo-relative path in an issue/PR body (`docs/x.md`) must not navigate the SPA;
 // GitHub URLs are external and keep their default (open-in-browser) behaviour.
 const { onMdLinkClick } = useMdFileLink(() => props.workspaceRoot)
@@ -50,8 +50,8 @@ function setSegHtml(el: unknown, html: string): void {
   if (!node || written.get(node) === html) return
   written.set(node, html)
   node.innerHTML = html
-  // Re-attach the per-code-block copy button: innerHTML just dropped the previous ones.
-  attachCodeCopyButtons(node, { copy: t('common.copy'), copied: t('common.copied') })
+  // Re-attach the per-code-block controls: innerHTML just dropped the previous ones.
+  attachCodeBlockControls(node)
 }
 </script>
 

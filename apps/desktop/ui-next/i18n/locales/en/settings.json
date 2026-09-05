@@ -43,6 +43,8 @@
   "settings.appearance.surfaceDepth.deep": "Deep",
   "settings.appearance.glass.name": "Liquid glass",
   "settings.appearance.glass.desc": "Backdrop blur for overlay/panel",
+  "settings.appearance.codeWrap.name": "Wrap code blocks",
+  "settings.appearance.codeWrap.desc": "Fold long lines instead of scrolling sideways — also toggleable on each code block",
   "settings.appearance.fontSize.name": "Font size",
   "settings.appearance.fontSize.desc": "Body text size",
   "settings.appearance.font.name": "Font",

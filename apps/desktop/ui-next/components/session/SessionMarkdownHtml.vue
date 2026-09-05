@@ -19,7 +19,7 @@
 // boundary as v-html). Highlights not found in this run are simply skipped by locateMarks.
 import type { BlockHighlight } from './SessionTextBlock.vue'
 import { locateMarks, type QuoteMark } from '~/utils/quote-highlight'
-import { attachCodeCopyButtons } from '~/utils/code-copy'
+import { useCodeBlockAttacher } from '~/composables/useCodeBlockControls'
 import { isInternalFileHref } from '~/utils/file-links'
 
 const props = defineProps<{ html: string; highlights?: BlockHighlight[] }>()
@@ -75,12 +75,11 @@ function applyMarks(el: HTMLElement) {
   }
 }
 
-// Copy button per code block — shared with every other markdown surface (utils/code-copy).
-// Applied AFTER applyMarks so the button's (text-empty) node can't interfere with quote
-// matching. The subtree is rebuilt each rerender, so stale buttons + their reset timers are
-// detached and GC'd.
-const addCopyButtons = (el: HTMLElement) =>
-  attachCodeCopyButtons(el, { copy: t('common.copy'), copied: t('common.copied') })
+// Language chip + wrap toggle + copy button per code block — shared with every other
+// markdown surface (utils/code-block-controls). Applied AFTER applyMarks so the controls'
+// (text-empty) nodes can't interfere with quote matching. The subtree is rebuilt each
+// rerender, so stale controls + their reset timers are detached and GC'd.
+const addCodeBlockControls = useCodeBlockAttacher()
 
 // Turn inline-code file references (e.g. `docs/x.md`, `tasks/#21/plan.md`) and
 // relative-path links into clickable chips that open the shared PreviewModal —
@@ -322,7 +321,7 @@ function rerender() {
   renderToken++
   el.innerHTML = props.html
   applyMarks(el)
-  addCopyButtons(el)
+  addCodeBlockControls(el)
   linkifyFilePaths(el)
   resolveImages(el)
 }
@@ -393,10 +392,10 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   border-color: var(--accent);
   outline: none;
 }
-/* Non-scrolling wrapper around a code block's <pre> (added by addCopyButtons). The copy
-   button anchors to THIS (a sibling of <pre>), so it stays pinned to the visible
+/* Non-scrolling wrapper around a code block's <pre> (added by addCodeBlockControls). The
+   controls row anchors to THIS (a sibling of <pre>), so it stays pinned to the visible
    top-right corner when a wide block scrolls horizontally, instead of drifting with the
-   scrolled content — see app-shell.css for the shared button styling. Here the wrapper also
+   scrolled content — see app-shell.css for the shared styling. Here the wrapper also
    owns the block's bottom margin, since `:deep(pre)` below zeroes it. */
 .mdinline :deep(.codeblock) {
   margin: 0 0 10px;

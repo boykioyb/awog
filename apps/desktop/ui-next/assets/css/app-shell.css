@@ -1206,21 +1206,30 @@ textarea.gcpta {
   padding: 20px;
 }
 
-/* ── Markdown code-block copy button + language chip (utils/code-copy) ─────────
-   Every rendered-markdown surface (transcript, preview modal, library body, artifact
-   editor, GitHub drawer) wraps each <pre> in `.codeblock` and pins a `.codecopy` button
-   to its top-right corner, plus a `.codelang` chip (when a language is known) just left
-   of it. Styled globally so the control is identical everywhere instead of being
-   re-declared per surface. The wrapper carries NO margin — the surface's own <pre>
-   margin still applies (the transcript, whose <pre> margin is zeroed, adds it back
-   on `.codeblock` in its scoped styles). */
+/* ── Markdown code-block controls (utils/code-block-controls) ─────────────────
+   Every rendered-markdown surface (transcript, preview modal, library body, wiki reader,
+   artifact editor, GitHub drawer) wraps each <pre> in `.codeblock` and pins a `.codetools`
+   row to its top-right corner: the `.codelang` chip (when a language is known), the
+   `.codewrap` soft-wrap toggle and the `.codecopy` button. Styled globally so the controls
+   are identical everywhere instead of being re-declared per surface. The wrapper carries NO
+   margin — the surface's own <pre> margin still applies (the transcript, whose <pre> margin
+   is zeroed, adds it back on `.codeblock` in its scoped styles). */
 .codeblock {
   position: relative;
 }
-.codecopy {
+/* One flex row, so adding a control never means re-deriving `right:` offsets. It sits on
+   the non-scrolling wrapper, not inside <pre>, so it stays in the visible corner while a
+   wide block scrolls. */
+.codetools {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.codecopy,
+.codewrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1234,13 +1243,17 @@ textarea.gcpta {
   transition:
     opacity 0.12s ease,
     color 0.12s ease,
-    background 0.12s ease;
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 .codeblock:hover .codecopy,
-.codecopy:focus-visible {
+.codeblock:hover .codewrap,
+.codecopy:focus-visible,
+.codewrap:focus-visible {
   opacity: 1;
 }
-.codecopy:hover {
+.codecopy:hover,
+.codewrap:hover {
   color: var(--text);
   background: var(--bgHover);
 }
@@ -1249,9 +1262,6 @@ textarea.gcpta {
   opacity: 1;
 }
 .codelang {
-  position: absolute;
-  top: 6px;
-  right: 34px;
   padding: 2px 6px;
   border-radius: var(--r-xs);
   background: var(--bg);
@@ -1269,9 +1279,26 @@ textarea.gcpta {
 .codeblock:hover .codelang {
   opacity: 1;
 }
-.codecopy .icn {
+.codecopy .icn,
+.codewrap .icn {
   width: 13px;
   height: 13px;
+}
+
+/* Soft-wrap preference (settings appearance.codeWrap, applied by useAppearanceDom). Long
+   lines fold inside the block instead of forcing a horizontal scroll; `anywhere` is what
+   makes it work on the real offenders — a one-line JSON log or a minified URL has no space
+   to break at. Inherited by the Shiki token spans, so `pre` alone is enough. */
+body[data-code-wrap='on'] .codeblock pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The toggle stays lit while wrapping is on: the preference is app-wide, so its state has
+   to be readable without hovering every block. */
+body[data-code-wrap='on'] .codewrap {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accentBorder);
 }
 
 /* ════════════════════════════════════════════════════════════════════════

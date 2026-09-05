@@ -269,7 +269,7 @@ function highlightCode(text: string, rawLang: string): string {
     // `lang` is a member of SHIKI_LANGS (the fixed set we loaded the highlighter with) —
     // getLoadedLanguages() can only ever return one of those, so it's a closed allowlist
     // of plain identifiers (no quotes/angle-brackets) and safe to inline into the tag
-    // without further escaping. attachCodeCopyButtons (utils/code-copy.ts) reads this to
+    // without further escaping. attachCodeBlockControls (utils/code-block-controls.ts) reads this to
     // label the block with its language.
     //
     // Only label a block whose fence ACTUALLY named a language: a bare ``` fence is

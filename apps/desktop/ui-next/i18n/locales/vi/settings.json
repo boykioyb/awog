@@ -43,6 +43,8 @@
   "settings.appearance.surfaceDepth.deep": "Sâu",
   "settings.appearance.glass.name": "Hiệu ứng kính",
   "settings.appearance.glass.desc": "Làm mờ nền cho overlay/panel",
+  "settings.appearance.codeWrap.name": "Xuống dòng trong khối code",
+  "settings.appearance.codeWrap.desc": "Câu dài tự ngắt thay vì phải cuộn ngang — bật/tắt nhanh ngay trên mỗi khối code",
   "settings.appearance.fontSize.name": "Cỡ chữ",
   "settings.appearance.fontSize.desc": "Cỡ chữ nội dung",
   "settings.appearance.font.name": "Phông chữ",

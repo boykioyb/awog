@@ -362,7 +362,7 @@ import PreviewToolbar from '~/components/common/PreviewToolbar.vue'
 import FindBar from '~/components/common/FindBar.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import { usePreviewModal } from '~/composables/usePreviewModal'
-import { useCodeCopy } from '~/composables/useCodeCopy'
+import { useCodeBlockControls } from '~/composables/useCodeBlockControls'
 import { isInternalFileHref } from '~/utils/file-links'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 import { rawMarkdownForSelection } from '~/utils/selection-markdown'
@@ -501,9 +501,9 @@ function onMdClick(e: MouseEvent) {
 
 // Copy button on every code block of the rendered markdown — same control the transcript
 // shows. v-html owns those nodes, so the buttons are (re)attached whenever the segments
-// change (utils/code-copy is idempotent).
+// change (utils/code-block-controls is idempotent).
 const mdBody = useTemplateRef<HTMLElement>('mdBody')
-useCodeCopy(mdBody, () => segments.value)
+useCodeBlockControls(mdBody, () => segments.value)
 
 // Focus the rename/move input when its dialog opens.
 const renameInput = useTemplateRef<HTMLInputElement>('renameInput')
