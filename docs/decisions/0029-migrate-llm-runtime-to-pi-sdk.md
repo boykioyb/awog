@@ -1,6 +1,6 @@
 # 0029 — Migrate LLM runtime sang Pi SDK (single runtime, multi-provider)
 
-- **Trạng thái:** Accepted — Phase C hoàn tất (C0–C4 implement xong 2026-06-05)
+- **Trạng thái:** Accepted — Phase C hoàn tất (C0–C4 implement xong 2026-06-05); bảng mapping thinking của **item 6** amended by [0078](./0078-reasoning-effort-parity.md) (mapping 1:1 toàn thang, không còn dịch xuống một nấc — phần degrade của item 6 giữ nguyên)
 - **Ngày:** 2026-06-05
 - **Người quyết định:** Tech Lead + user (chốt hướng X — migrate toàn bộ sang Pi, 2026-06-05)
 - **Liên quan:** [0026](./0026-per-agent-multi-provider-llm.md) (multi-provider — ADR này **thay** lựa chọn runtime của 0026), [0023](./0023-sdk-session-resume-and-compact.md) (resume — **amend**), [0014](./0014-mcp-servers-stdio-runtime.md) (MCP Q4 — **amend**), [0018](./0018-mcp-secret-keychain.md) (secret keychain), [0008](./0008-stdio-ipc-for-sidecar.md) (stdio IPC)

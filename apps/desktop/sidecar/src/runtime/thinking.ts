@@ -1,12 +1,23 @@
-// Map AWOG ThinkingLevel → Pi `SimpleStreamOptions.reasoning` (ADR 0029 item 6).
+// Map AWOG ThinkingLevel → Pi `SimpleStreamOptions.reasoning` (ADR 0078, which
+// amends the mapping recorded in ADR 0029 item 6).
 //
-// AWOG levels (Claude Code effort picker) → Pi reasoning levels:
-//   low        → undefined  (no extended thinking — matches sdk branch where
-//                            'low' = budget 0 = thinking off)
-//   medium     → 'low'
-//   high       → 'medium'
-//   extra-high → 'high'
-//   max        → 'xhigh'
+// AWOG's picker IS the Claude Code effort picker, and Pi's reasoning scale
+// (off | minimal | low | medium | high | xhigh | max) carries the very same
+// names, so the mapping is 1:1 — nothing is shifted:
+//   low        → 'low'
+//   medium     → 'medium'
+//   high       → 'high'
+//   extra-high → 'xhigh'
+//   max        → 'max'
+//
+// Pi's 'minimal' stays unused: AWOG's picker has no level below 'low'.
+//
+// ACCEPTED DIVERGENCE at 'low': on the Claude SDK path (Anthropic provider)
+// `thinkingFromLevel` in claude-sdk/shared.ts still returns `{ type: 'disabled' }`,
+// so "Low" means extended thinking OFF on Anthropic while it means
+// `reasoning: 'low'` here. Deliberate, see ADR 0078 — Anthropic gets its depth
+// hint from `effort: 'low'` either way, and matching the Claude Code scale on
+// every other provider was judged more valuable than mirroring that one switch.
 //
 // Degrade rules (provider-agnostic — Pi maps reasoning per provider, so this
 // works for Anthropic, OpenAI o-series + gpt-5, and Google Gemini alike):
@@ -14,7 +25,10 @@
 //     gemini-2.0-flash, every custom endpoint).
 //   - the requested Pi level not in getSupportedThinkingLevels(model) → clamp
 //     down to the model's nearest supported level via clampThinkingLevel; if
-//     that clamps to 'off' (or 'minimal' below our floor) → undefined.
+//     that clamps to 'off' (or 'minimal' below our floor) → undefined. Models
+//     that never declare 'xhigh'/'max' (e.g. Gemini) therefore land on 'high'
+//     for both 'extra-high' and 'max' — the model's own ceiling, not a mapping
+//     bug.
 
 import {
   clampThinkingLevel,
@@ -27,20 +41,19 @@ import type { ThinkingLevel as AwogThinkingLevel } from '../types/shared.js'
 
 type PiReasoning = NonNullable<SimpleStreamOptions['reasoning']>
 
-// AWOG level → desired Pi reasoning level. 'low' maps to undefined (off) and is
-// handled before this map is consulted.
-const LEVEL_MAP: Record<Exclude<AwogThinkingLevel, 'low'>, PiReasoning> = {
-  medium: 'low',
-  high: 'medium',
-  'extra-high': 'high',
-  max: 'xhigh',
+// AWOG level → desired Pi reasoning level (1:1 with the Claude Code picker).
+const LEVEL_MAP: Record<AwogThinkingLevel, PiReasoning> = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  'extra-high': 'xhigh',
+  max: 'max',
 }
 
 export function toReasoning(
   level: AwogThinkingLevel,
   model: Model<Api>,
 ): PiReasoning | undefined {
-  if (level === 'low') return undefined
   if (!model.reasoning) return undefined
 
   const desired = LEVEL_MAP[level]

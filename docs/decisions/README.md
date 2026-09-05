@@ -34,7 +34,7 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0026](./0026-per-agent-multi-provider-llm.md) | Per-agent multi-provider LLM | Accepted (Phase C còn lại) |
 | [0027](./0027-tauri-vs-electron-revisit.md) | Tauri vs Electron revisit | Accepted — Option B (Electron) |
 | [0028](./0028-auto-update.md) | Auto-update | Accepted — Option A (electron-updater) |
-| [0029](./0029-migrate-llm-runtime-to-pi-sdk.md) | Migrate LLM runtime sang Pi SDK | Accepted (C2 amended by 0059) |
+| [0029](./0029-migrate-llm-runtime-to-pi-sdk.md) | Migrate LLM runtime sang Pi SDK | Accepted (C2 amended by 0059, item 6 mapping by 0078) |
 | [0030](./0030-subagent-task-tool.md) | Subagent `Task` tool | Accepted |
 | [0031](./0031-rtk-token-proxy.md) | Bundle RTK (Rust Token Killer) làm bộ nén output cho Bash tool | Reverted (2026-06-15) |
 | [0032](./0032-hook-execution-engine-ipc-contract.md) | Hook Execution Engine + IPC contract | Accepted |
@@ -60,8 +60,9 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0075](./0075-transcript-surface-scoping.md) | Phạm vi transcript theo "surface": `scrollToMessage` query trong root + provide/inject — amend T0a của 0074 | Accepted |
 | [0076](./0076-compact-is-not-a-bookmark-prune-path.md) | `/compact` không phải đường cắt: bookmark không bị prune ở đó — amend danh sách đường cắt của §Q1 trong 0074 | Accepted |
 | [0077](./0077-output-surface-no-hard-wrap.md) | Bề mặt hiển thị là markdown trong GUI, không phải terminal: cấm hard-wrap đoạn văn xuôi (block dùng chung cả 2 runtime) — amend 0071 | Accepted |
+| [0078](./0078-reasoning-effort-parity.md) | Reasoning effort 1:1 với picker Claude Code trên nhánh Pi (hết dịch xuống một nấc) — amend bảng mapping của item 6 trong 0029 | Accepted |
 
-> Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần. Các ADR 0041–0058 và 0063–0066 đã tồn tại trong thư mục nhưng bảng này chưa backfill (index đang lạc hậu); ADR kế tiếp sau 0059 dùng 0060. ADR 0062 **amend** ADR 0048 (thay `index.json` bằng header per-file + warm cache); ADR 0070 **supersede** phần nhà-lưu-trữ của ADR 0035 (skills/agents/commands chuyển sang `.claude` dùng chung); ADR 0075 **amend** phần T0a/§Q2 của ADR 0074 (query `[data-mi]` trong root của transcript + provide/inject theo surface, thay singleton cấp module); ADR 0076 **amend** danh sách "đường cắt" trong §Q1 của ADR 0074 (`/compact` không cắt transcript ⇒ không prune bookmark; quyết định neo bằng `eid` giữ nguyên); ADR 0077 **amend** ADR 0071 (thêm loại block "đính chính bề mặt" được phép đắp lên preset `claude_code`, và bỏ câu *"Keep all of it legible in a terminal."* trong `COMMUNICATION_PROMPT`); ADR kế tiếp sau 0077 dùng 0078.
+> Lưu ý: số `0032` bị trùng (hai quyết định độc lập landed cùng đợt). Số mới không tái sử dụng — ADR kế tiếp dùng số tăng dần. Các ADR 0041–0058 và 0063–0066 đã tồn tại trong thư mục nhưng bảng này chưa backfill (index đang lạc hậu); ADR kế tiếp sau 0059 dùng 0060. ADR 0062 **amend** ADR 0048 (thay `index.json` bằng header per-file + warm cache); ADR 0070 **supersede** phần nhà-lưu-trữ của ADR 0035 (skills/agents/commands chuyển sang `.claude` dùng chung); ADR 0075 **amend** phần T0a/§Q2 của ADR 0074 (query `[data-mi]` trong root của transcript + provide/inject theo surface, thay singleton cấp module); ADR 0076 **amend** danh sách "đường cắt" trong §Q1 của ADR 0074 (`/compact` không cắt transcript ⇒ không prune bookmark; quyết định neo bằng `eid` giữ nguyên); ADR 0077 **amend** ADR 0071 (thêm loại block "đính chính bề mặt" được phép đắp lên preset `claude_code`, và bỏ câu *"Keep all of it legible in a terminal."* trong `COMMUNICATION_PROMPT`); ADR 0078 **amend** bảng mapping thinking của item 6 trong ADR 0029 (nhánh Pi chuyển sang 1:1 toàn thang với picker Claude Code; phần degrade theo `model.reasoning` giữ nguyên); ADR kế tiếp sau 0078 dùng 0079.
 
 ## Template
 

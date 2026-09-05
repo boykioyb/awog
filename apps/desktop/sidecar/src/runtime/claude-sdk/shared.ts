@@ -138,10 +138,11 @@ export function toSdkModel(modelId: string): string {
   return modelId.replace(/-1m$/, '')
 }
 
-// AWOG ThinkingLevel → SDK effort. AWOG's picker IS the Claude Code effort picker
-// (see thinking.ts), so on the SDK path (native Claude Code) we map DIRECTLY —
-// `extra-high` is the SDK's `xhigh`. (The Pi path shifts levels down because Pi's
-// reasoning scale differs; that translation is Pi-specific and not applied here.)
+// AWOG ThinkingLevel → SDK effort. AWOG's picker IS the Claude Code effort picker,
+// so on the SDK path (native Claude Code) we map DIRECTLY — `extra-high` is the
+// SDK's `xhigh`. The Pi path now maps 1:1 as well (thinking.ts, ADR 0078): both
+// scales carry the same five names, so a given level asks for the same effort on
+// either runtime.
 export function effortFromLevel(level: ThinkingLevel): EffortLevel {
   switch (level) {
     case 'low':
@@ -161,9 +162,11 @@ export function effortFromLevel(level: ThinkingLevel): EffortLevel {
 
 // AWOG ThinkingLevel → SDK extended-thinking config. `effort` alone guides depth
 // but does NOT emit thinking blocks; `thinking` must be enabled for the model to
-// produce (and stream) reasoning as thinking content. Mirrors the Pi mapping
-// where 'low' = thinking off; every higher level uses ADAPTIVE thinking (Claude
-// decides when/how much, guided by effort — Opus 4.6+/Sonnet 4.6+/Fable 5).
+// produce (and stream) reasoning as thinking content. 'low' = thinking off is the
+// one ACCEPTED DIVERGENCE from the Pi path, which sends `reasoning: 'low'` there
+// (ADR 0078); effort still carries the depth hint at that level. Every higher
+// level uses ADAPTIVE thinking (Claude decides when/how much, guided by effort —
+// Opus 4.6+/Sonnet 4.6+/Fable 5).
 //
 // `display: 'summarized'` is REQUIRED for the reasoning text to reach the UI. On
 // the subscription (OAuth) path the SDK otherwise defaults to redacted thinking:

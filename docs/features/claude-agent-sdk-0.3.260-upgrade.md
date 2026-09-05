@@ -1,6 +1,7 @@
 # Plan: nâng Claude Agent SDK `0.3.235 → 0.3.260` + đồng bộ reasoning effort hai runtime
 
-> **Trạng thái:** Proposed — chưa code. Khảo sát ngày 2026-09-05.
+> **Trạng thái:** P0 + P1 đang implement trên nhánh `claude/sdk-version-app-effort-qg99pq`. Khảo sát 2026-09-05.
+> **Đã chốt:** câu hỏi B-3 → **phương án A** (user, 2026-09-05) — xem [ADR 0078](../decisions/0078-reasoning-effort-parity.md). P2/P3/P4 chưa làm.
 > **Liên quan:** [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md) (runtime chọn theo provider), [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md) item 6 (mapping thinking → Pi), [ADR 0071](../decisions/0071-senior-engineer-prompt-core.md) (system prompt append), [dual-sdk-runtime.md](./dual-sdk-runtime.md).
 
 Hai việc độc lập nhưng gộp chung một plan vì cùng chạm lớp runtime, cùng cần **một** vòng QA parity 2 runtime, và cùng ra một release:
@@ -110,16 +111,16 @@ off | minimal | low | medium | high | xhigh | max      (pi-ai dist/types.d.ts)
 3. **Cùng một nhãn, hai hành vi khác nhau tuỳ provider.** Đổi account Anthropic → OpenAI mà giữ nguyên "High": effort thực tụt `high` → `medium`, im lặng, không có gì trên UI báo.
 4. **Lệch ngay bên trong một session Anthropic.** Subagent `Task` ([ADR 0030](../decisions/0030-subagent-task-tool.md)) honor provider/model của chính AGENT.md, nên một session Anthropic delegate sang agent ghim OpenAI/Google sẽ chạy nhánh Pi với mapping lệch — cùng một session, hai thang effort khác nhau. (`/compact` **không** dính: `runCompact` gọi `generateSummary` không truyền `reasoning`.)
 
-### B-3. Quyết định cần chốt (❗ block Track B)
+### B-3. Quyết định — ĐÃ CHỐT: phương án A
 
 Sửa nấc `low` thế nào:
 
 | | Mapping | Được | Mất |
 |---|---|---|---|
-| **A** | `low→low`, `medium→medium`, `high→high`, `extra-high→xhigh`, `max→max` | Bám Claude Code tuyệt đối | Nhánh Pi có thinking ở Low, nhánh Anthropic thì không (`thinkingFromLevel` trả `{type:'disabled'}`) ⇒ **đẻ ra lệch mới** |
-| **B ✅ đề xuất** | `low→off`, `medium→medium`, `high→high`, `extra-high→xhigh`, `max→max` | Sửa đúng 4 nấc đang lệch; giữ hợp đồng "Low = tắt thinking" đang dùng chung cả hai runtime | "Low" của AWOG vẫn không hoàn toàn giống "Low" của Claude Code — nhưng đó là lựa chọn **đã có chủ đích** của AWOG, giữ nguyên |
+| **A ✅ CHỌN** | `low→low`, `medium→medium`, `high→high`, `extra-high→xhigh`, `max→max` | Bám Claude Code tuyệt đối | Nhánh Pi có thinking ở Low, nhánh Anthropic thì không (`thinkingFromLevel` trả `{type:'disabled'}`) ⇒ **đẻ ra lệch mới** |
+| **B** (đề xuất ban đầu, bị loại) | `low→off`, `medium→medium`, `high→high`, `extra-high→xhigh`, `max→max` | Sửa đúng 4 nấc đang lệch; giữ hợp đồng "Low = tắt thinking" đang dùng chung cả hai runtime | "Low" của AWOG vẫn không hoàn toàn giống "Low" của Claude Code — nhưng đó là lựa chọn **đã có chủ đích** của AWOG, giữ nguyên |
 
-Chọn **B**. Nấc `minimal` của Pi tiếp tục không dùng ở cả hai phương án.
+**User chốt A** (2026-09-05), ưu tiên bám picker Claude Code tuyệt đối; chấp nhận điểm lệch mới ở nấc `low` (Anthropic tắt thinking, Pi bật) và ghi lại nó như **known divergence** trong [ADR 0078 §2](../decisions/0078-reasoning-effort-parity.md). Nấc `minimal` của Pi tiếp tục không dùng ở cả hai phương án.
 
 ### B-4. Điểm sửa
 
@@ -127,12 +128,15 @@ Một map duy nhất, ba call-site tự hưởng:
 
 ```ts
 // apps/desktop/sidecar/src/runtime/thinking.ts
-const LEVEL_MAP: Record<Exclude<AwogThinkingLevel, 'low'>, PiReasoning> = {
-  medium: 'medium',   // was 'low'
-  high: 'high',       // was 'medium'
+const LEVEL_MAP: Record<AwogThinkingLevel, PiReasoning> = {
+  low: 'low',            // was: ca đặc biệt trả undefined trước khi tra map
+  medium: 'medium',      // was 'low'
+  high: 'high',          // was 'medium'
   'extra-high': 'xhigh', // was 'high'
-  max: 'max',         // was 'xhigh'
+  max: 'max',            // was 'xhigh'
 }
+
+// và gỡ early-return `if (level === 'low') return undefined` trong toReasoning()
 ```
 
 - Call-site (không cần sửa): [runtime/run-stream.ts:483](../../apps/desktop/sidecar/src/runtime/run-stream.ts) (chat Pi), [runtime/invoke.ts:363](../../apps/desktop/sidecar/src/runtime/invoke.ts) (task node + one-shot method của provider ngoài Anthropic), [runtime/tools/task-tool.ts:321](../../apps/desktop/sidecar/src/runtime/tools/task-tool.ts) (subagent).
@@ -154,18 +158,30 @@ Cùng một lựa chọn cũ, từ bản này trở đi model **nghĩ sâu hơn 
 Nhánh: `claude/sdk-version-app-effort-qg99pq`. Mỗi phase một commit riêng theo [.claude/rules/git-commit.md](../../.claude/rules/git-commit.md) (không trộn deps với feature).
 
 ### P0 — bump SDK, 0 thay đổi hành vi
-- [ ] `sidecar/package.json`: `0.3.235` → `0.3.260`
-- [ ] `pnpm install` → commit `pnpm-lock.yaml`
-- [ ] `pnpm --filter @awog/sidecar typecheck` xanh
-- [ ] `pnpm --filter @awog/sidecar build` + verify binary trong `dist/node_modules/@anthropic-ai/…`, ghi lại size `dist/`
-- [ ] Smoke dev: session Anthropic (stream + tool-call + resume + abort) và 1 task node
+- [x] `sidecar/package.json`: `0.3.235` → `0.3.260` (giữ pin chính xác)
+- [x] `pnpm install` → `pnpm-lock.yaml` đổi **đúng cụm SDK** (specifier + entry + 8 optional dep per-platform), không dep nào khác trôi. Không dính store-dir mismatch
+- [x] `pnpm --filter @awog/sidecar typecheck` — exit 0. **`zod/v3` không thành vấn đề**: `require.resolve('zod/v3')` ra `node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/index.cjs`, `zod` giữ nguyên 3.25.76
+- [x] `pnpm --filter @awog/sidecar build` + verify binary — xem bảng size dưới
+- [ ] Smoke dev: session Anthropic (stream + tool-call + resume + abort) và 1 task node — **CHƯA CHẠY**
 - [ ] Commit: `chore(sidecar): bump claude-agent-sdk to 0.3.260`
 
-### P1 — đồng bộ effort (❗sau khi chốt B-3)
-- [ ] Sửa `LEVEL_MAP` + viết lại comment đầu [thinking.ts](../../apps/desktop/sidecar/src/runtime/thinking.ts)
-- [ ] Viết `docs/decisions/0078-reasoning-effort-parity.md`; amend ADR 0029 item 6 (thêm dòng "superseded bởi 0078")
-- [ ] Cập nhật bảng runtime trong [CLAUDE.md](../../CLAUDE.md) nếu có câu nào mô tả mapping cũ
-- [ ] `pnpm typecheck` xanh
+**Kết quả packaging đo thật (darwin-arm64):** dự đoán ở §A-3 rằng dung lượng có thể phình là **sai hướng** — binary nhỏ đi.
+
+| | 0.3.235 | 0.3.260 |
+|---|---|---|
+| `du -sh apps/desktop/sidecar/dist` | 444M | **332M** |
+| `claude-agent-sdk-darwin-arm64/` | 304M | **192M** |
+| binary `claude` | 313.334.608 B | **198.289.440 B** (−37%) |
+| quyền | `-rwxr-xr-x` | `-rwxr-xr-x` (giữ `+x`) |
+
+⚠️ Đây **chỉ là darwin-arm64**. CI build matrix per-OS ⇒ size của win/linux chưa đo, đừng suy ra toàn cục.
+
+### P1 — đồng bộ effort (phương án A) ✅
+- [x] Sửa `LEVEL_MAP` + gỡ early-return `'low'` + viết lại comment đầu [thinking.ts](../../apps/desktop/sidecar/src/runtime/thinking.ts)
+- [x] Sửa 2 khối comment đã thành sai trong [claude-sdk/shared.ts](../../apps/desktop/sidecar/src/runtime/claude-sdk/shared.ts) (`effortFromLevel` + `thinkingFromLevel`) — **chỉ comment, code không đổi**
+- [x] Viết [ADR 0078](../decisions/0078-reasoning-effort-parity.md); ghi amend vào **dòng Trạng thái** của ADR 0029 (không sửa body item 6 — ADR Accepted là bất biến); thêm dòng 0078 + sửa ghi chú số kế tiếp trong [docs/decisions/README.md](../decisions/README.md)
+- [x] [CLAUDE.md](../../CLAUDE.md): **không cần sửa** — đã grep, không có câu nào mô tả mapping thinking. [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md) dòng 78 chỉ mô tả nhánh Anthropic ⇒ vẫn đúng
+- [x] `pnpm --filter @awog/sidecar typecheck` — exit 0
 - [ ] Commit: `fix(runtime): align Pi reasoning effort with the Claude Code scale`
 
 ### P2 — `systemPrompt.snapshot` (PR riêng, phụ thuộc P0)
@@ -214,7 +230,7 @@ Không có test tự động cho lớp runtime ⇒ QA thủ công, chạy **sau 
 
 ## 7. Câu hỏi mở
 
-1. **Chốt phương án B-3** (A hay B cho nấc `low`) — block P1.
+1. ~~**Chốt phương án B-3**~~ — ✅ **đã chốt A** (2026-09-05), xem [ADR 0078](../decisions/0078-reasoning-effort-parity.md).
 2. **P2 `snapshot: true`:** chấp nhận việc đổi `append` không áp ngay cho session đang chạy chứ? Đây là đánh đổi thật giữa prompt-cache/reasoning và tính "sửa AGENT.md là thấy ngay".
 3. Có cắt release `0.33.0` ngay sau P1, hay gom thêm P2/P3 rồi mới cắt?
 4. Ngoài phạm vi plan này: `pi-ai` đang `^0.84.2`, latest `0.85.0` — có muốn mở task riêng đánh giá không?
