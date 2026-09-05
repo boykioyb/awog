@@ -30,6 +30,71 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.33.0',
+    date: '2026-09-06',
+    highlight: {
+      en: 'The file tools the agent works with stop failing quietly: search no longer returns a tidy "no results" for patterns it never understood, and a tool that fails no longer renders as a finished step. The phone gets all four agent modes, code blocks can wrap, and the install sheds over 100 MB.',
+      vi: 'Bộ công cụ file mà agent dùng thôi hỏng trong im lặng: tìm kiếm không còn trả về "không có kết quả" gọn gàng cho những mẫu nó vốn không hiểu, và công cụ chạy lỗi không còn hiện thành một bước đã xong. Điện thoại có đủ bốn chế độ agent, code block ngắt dòng được, và bản cài giảm hơn 100 MB.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'All four agent modes from your phone. The remote app now offers Ask, Plan, Accept edits and Execute, matching the desktop — before this it was limited to Ask and Plan. Note that Execute runs commands and writes files with no approval card, exactly as it does on the desktop, so keep remote access to devices you trust.',
+        vi: 'Đủ bốn chế độ agent từ điện thoại. App remote giờ có Ask, Plan, Accept edits và Execute như trên desktop — trước đây chỉ có Ask và Plan. Lưu ý Execute chạy lệnh và ghi file mà không hỏi duyệt, y hệt trên desktop, nên chỉ mở remote cho thiết bị bạn tin tưởng.',
+      },
+      {
+        kind: 'added',
+        en: 'Wrap long lines in code blocks. A button on any code block turns soft-wrapping on, so a long JSON line or a wide command reads without scrolling sideways. It is off by default and applies everywhere at once; the same switch lives in Settings → Appearance.',
+        vi: 'Ngắt dòng cho code block dài. Nút trên mỗi khối code bật chế độ tự xuống dòng, nên một dòng JSON dài hay câu lệnh rộng đọc được mà không phải kéo ngang. Mặc định tắt và áp dụng cho mọi khối cùng lúc; công tắc tương tự nằm ở Settings → Appearance.',
+      },
+      {
+        kind: 'improved',
+        en: 'The app takes noticeably less disk space. Updating the bundled Claude engine and dropping a build tool that was never used cut more than 100 MB from the installed size.',
+        vi: 'App chiếm ít dung lượng đĩa hơn hẳn. Việc cập nhật engine Claude đi kèm và loại bỏ một công cụ build không bao giờ được dùng tới cắt hơn 100 MB khỏi kích thước cài đặt.',
+      },
+      {
+        kind: 'improved',
+        en: 'Long sessions on Anthropic models hold on to their cached context. Upgrading the app in the middle of a session used to quietly invalidate that cache and discard the reasoning built up so far.',
+        vi: 'Phiên dài trên model Anthropic giữ được phần context đã cache. Trước đây nâng cấp app giữa chừng một phiên sẽ âm thầm huỷ cache đó và bỏ đi phần suy luận đã tích luỹ.',
+      },
+      {
+        kind: 'changed',
+        en: 'Reasoning effort now means the same thing on every provider. On non-Anthropic providers (OpenAI, Google, custom endpoints) each setting was quietly asking for one notch less thinking than its label said, and the highest setting could never be reached. At the same setting these providers now think deeper than before — replies are more considered, but slower and more expensive. Drop the setting one notch to get the old behaviour back.',
+        vi: 'Mức reasoning effort giờ mang cùng một ý nghĩa trên mọi provider. Trên provider không phải Anthropic (OpenAI, Google, endpoint tuỳ chỉnh), mỗi mức trước đây âm thầm xin ít suy nghĩ hơn một nấc so với nhãn của nó, và mức cao nhất thì không bao giờ với tới được. Ở cùng một mức, các provider này giờ suy nghĩ sâu hơn trước — câu trả lời cân nhắc kỹ hơn, nhưng chậm hơn và tốn kém hơn. Hạ một nấc nếu bạn muốn giữ như cũ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Search inside the agent stopped silently missing matches. Its Grep tool ran a pattern syntax the model does not write, so ordinary patterns matched nothing and came back as a clean "no results" — which the model then repeated as fact. It now uses ripgrep, and says so in the result when it has to fall back to something narrower.',
+        vi: 'Tìm kiếm bên trong agent thôi âm thầm bỏ sót kết quả. Công cụ Grep chạy một cú pháp mẫu mà model không hề viết, nên những mẫu thông thường không khớp gì cả và trả về "không có kết quả" rất gọn — rồi model thuật lại điều đó như sự thật. Giờ nó dùng ripgrep, và nói rõ ngay trong kết quả khi buộc phải lùi về cú pháp hẹp hơn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'A tool that failed no longer shows up as finished. Failures a tool reported as an ordinary result still drew a green completed step, in the transcript and in task traces alike — most visibly a checklist that looked healthy while the reply said it could not be written.',
+        vi: 'Công cụ chạy lỗi không còn hiện ra như đã xong. Những lỗi mà công cụ báo lại dưới dạng kết quả bình thường vẫn vẽ thành một bước xanh đã hoàn tất, cả trong transcript lẫn trace của task — dễ thấy nhất là danh sách việc trông vẫn ổn trong khi câu trả lời nói không ghi được.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Reading and finding files works in more places. Finding files by pattern now works outside a Git repository, reading a large file returns a numbered window instead of one huge blob (and asking for a later part of the file no longer comes back empty), and images open as images.',
+        vi: 'Việc đọc và tìm file chạy được ở nhiều nơi hơn. Tìm file theo mẫu giờ hoạt động cả ngoài repo Git, đọc file lớn trả về một cửa sổ có đánh số dòng thay vì một khối khổng lồ (và xin phần sau của file không còn trả về rỗng), và ảnh mở ra thành ảnh.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The agent cannot overwrite a file it never opened. Replacing a whole file now requires having read it earlier in the same conversation, and is refused if the file changed on disk since that read. Creating a new file is unaffected.',
+        vi: 'Agent không thể ghi đè một file nó chưa từng mở. Thay toàn bộ nội dung một file giờ đòi hỏi đã đọc file đó trước trong cùng hội thoại, và bị từ chối nếu file đã đổi trên đĩa kể từ lần đọc ấy. Tạo file mới thì không bị ảnh hưởng.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The notification panel stays open when you send a thread to the browser. It used to close, so you had to re-open it before every next row. Repositories you are not watching are no longer greyed out either — the bell lists your whole inbox by design.',
+        vi: 'Hộp thông báo không đóng lại khi bạn mở một thread ra trình duyệt. Trước đây nó đóng, nên phải mở lại trước từng dòng kế tiếp. Các repo bạn không theo dõi cũng thôi bị làm mờ — chuông vốn được thiết kế để liệt kê toàn bộ hộp thư.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Compacting a conversation stopped running at the most expensive reasoning setting. A change in the model runtime made thinking impossible to switch off on the newest models, which quietly pushed /compact to maximum effort; it now asks for the cheapest level still available.',
+        vi: 'Việc nén hội thoại thôi chạy ở mức reasoning đắt nhất. Một thay đổi trong runtime model khiến không thể tắt thinking trên các model mới nhất, đẩy /compact lên mức tối đa một cách âm thầm; giờ nó xin mức rẻ nhất còn có.',
+      },
+    ],
+  },
+  {
     version: '0.32.0',
     date: '2026-08-28',
     highlight: {
