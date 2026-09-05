@@ -8,7 +8,12 @@
 // Layout produced under apps/desktop/sidecar/dist/:
 //   lib/            # tsc output (entry: lib/src/index.js)
 //   node_modules/   # FLAT production deps (Pi runtime @earendil-works/pi-ai +
-//                   # pi-agent-core — pure JS, 0 native deps; node-pty + keyring)
+//                   # pi-agent-core — pure JS; node-pty + keyring are native.
+//                   # pi 0.85 pulled in @earendil-works/chord, which declares
+//                   # esbuild (11 MB of per-platform native binaries). Nothing
+//                   # AWOG imports reaches it — chord's bundler lives behind the
+//                   # `/node` subpath while pi-agent-core imports only the root
+//                   # and `/context` — so pruneBundle drops it below.)
 //   package.json    # so Node resolves deps + honours "type": "module"
 //
 // node_modules comes from `pnpm deploy --config.node-linker=hoisted`, which
@@ -68,11 +73,40 @@ async function stageProductionDeps() {
   await rm(deployDir, { recursive: true, force: true })
 }
 
+// Recursive byte size of a directory, for the prune log lines. Best-effort: the
+// deployed tree carries `.bin` symlinks (some dangling after other prune steps),
+// so skip anything that is not a real file or directory and never let a failed
+// stat abort the build over a log number.
+async function dirSize(dir) {
+  let total = 0
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return 0
+  }
+  for (const e of entries) {
+    if (e.isSymbolicLink()) continue
+    const p = join(dir, e.name)
+    if (e.isDirectory()) {
+      total += await dirSize(p)
+    } else if (e.isFile()) {
+      try {
+        total += (await stat(p)).size
+      } catch {
+        /* vanished or unreadable — not worth failing the build over a log number */
+      }
+    }
+  }
+  return total
+}
+
 // Trim dead weight from the staged node_modules:
 //  - *.pdb: Windows debug symbols (node-pty ships ~64MB of them) — never used
 //    at runtime on any OS.
 //  - node-pty/prebuilds for platforms other than the build host — each per-OS
 //    bundle (matrix CI) only needs its own platform's prebuild.
+//  - esbuild: pulled in by @earendil-works/chord (pi 0.85), never invoked here.
 async function pruneBundle() {
   const nmDir = join(outDir, 'node_modules')
   let pdbBytes = 0
@@ -93,6 +127,25 @@ async function pruneBundle() {
     )
   }
   await walk(nmDir)
+
+  // esbuild rides in as a dependency of @earendil-works/chord (new in pi 0.85).
+  // It is a bundler AWOG never invokes: pi-agent-core imports only chord's root
+  // and `/context` entries, and the only file referencing esbuild is
+  // chord/dist/node/bundle.js behind the `/node` subpath. Shipping it would add
+  // ~11 MB of native per-platform binaries to every installer and one more
+  // unsigned nested executable for macOS notarization. Verified by loading
+  // pi-agent-core, pi-ai and AWOG's own runtime from the bundle with these
+  // directories removed.
+  let esbuildBytes = 0
+  for (const name of ['esbuild', '@esbuild']) {
+    const dir = join(nmDir, name)
+    if (!existsSync(dir)) continue
+    esbuildBytes += await dirSize(dir)
+    await rm(dir, { recursive: true, force: true })
+  }
+  if (esbuildBytes > 0) {
+    console.error(`[build] pruned esbuild (${Math.round(esbuildBytes / 1e6)} MB, unused by AWOG)`)
+  }
 
   // Keep only the host platform's node-pty prebuild dir.
   const prebuilds = join(nmDir, 'node-pty', 'prebuilds')
