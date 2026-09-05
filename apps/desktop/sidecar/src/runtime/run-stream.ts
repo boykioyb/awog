@@ -11,6 +11,8 @@ import {
   runAgentLoop,
   generateSummary,
   DEFAULT_COMPACTION_SETTINGS,
+  BACKGROUND_CONTEXT,
+  withAbortSignal,
   type AgentEvent,
   type AgentMessage,
 } from '@earendil-works/pi-agent-core'
@@ -688,6 +690,24 @@ function summaryModels(apiKey: string, headers: Model<Api>['headers']): Models {
 // keep ~`keepRecentTokens` of recent turns verbatim and reserve `reserveTokens`
 // for the summary prompt + output — both from Pi's DEFAULT_COMPACTION_SETTINGS.
 // Failure / nothing-to-do → a notice with no `compaction` (never blocks).
+// Thinking level for a /compact summary. Compaction wants NO reasoning: it is a
+// mechanical summarisation and paying for extended thinking on it is waste.
+// Passing `undefined` used to achieve exactly that — Pi sent
+// `thinking: { type: "disabled" }`.
+//
+// pi 0.85 took that away for models whose catalog entry declares
+// `thinkingLevelMap.off === null` (today claude-opus-5 and claude-fable-5-1):
+// those models cannot disable thinking at all, so Pi force-enables ADAPTIVE
+// thinking for them — with the effort defaulting to "high" when the caller names
+// none. A summary would silently start reasoning at the most expensive setting.
+//
+// We cannot restore "off" (the model genuinely no longer offers it), so ask for
+// the cheapest level we do have. Models that CAN still disable thinking keep
+// `undefined` and behave exactly as before.
+function compactThinkingLevel(model: Model<Api>): 'low' | undefined {
+  return model.thinkingLevelMap?.off === null ? 'low' : undefined
+}
+
 async function runCompact(
   args: RunNonStreamArgs,
   model: ReturnType<typeof resolveModel>['model'],
@@ -716,12 +736,28 @@ async function runCompact(
 
   try {
     const summaryMessages = historyToAgentMessages(cut.toSummarize)
+    // pi 0.85: `generateSummary` dropped its `signal` parameter and takes a
+    // trailing Go-style `Context` instead — cancellation now rides IN the context
+    // (`withAbortSignal`), and every argument before it became positionally
+    // required. Passing the signal where it used to go would now silently land in
+    // `customInstructions`, so the explicit `undefined`s below are load-bearing:
+    // they are the defaults 0.84 applied implicitly, kept one-per-line so a future
+    // signature change is a visible diff rather than a shifted argument.
+    const abortSignal = args.abortController?.signal
+    const compactCtx = abortSignal
+      ? withAbortSignal(abortSignal, BACKGROUND_CONTEXT)
+      : BACKGROUND_CONTEXT
     const res = await generateSummary(
       summaryMessages,
       summaryModels(apiKey, model.headers),
       model,
       DEFAULT_COMPACTION_SETTINGS.reserveTokens,
-      args.abortController?.signal,
+      undefined, // customInstructions
+      undefined, // previousSummary
+      compactThinkingLevel(model), // thinkingLevel — see the helper above
+      undefined, // retry
+      undefined, // callbacks
+      compactCtx,
     )
     if (!res.ok) {
       log.warn('runtime /compact: generateSummary failed', {

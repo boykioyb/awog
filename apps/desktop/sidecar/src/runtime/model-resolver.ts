@@ -102,6 +102,12 @@ function fallbackAnthropicModel(apiModel: string): Model<Api> | undefined {
   }
 }
 
+// Betas pi 0.85 adds itself for `compat.supportsMidConvoEffort` models. Mirrored
+// here because a caller-supplied `anthropic-beta` header suppresses Pi's own list
+// (see buildAnthropicModel). Keep in sync with pi-ai's anthropic-messages module.
+const MID_CONVERSATION_OUTPUT_CONFIG_BETA = 'mid-conversation-output-config-2026-07-01'
+const THINKING_BINDING_CONTROLS_BETA = 'thinking-binding-controls-2026-08-01'
+
 // Resolve the built-in Anthropic Model from Pi's catalog. AWOG ids map 1:1 to
 // Pi catalog ids after alias normalisation + the 1M rewrite.
 function buildAnthropicModel(modelId: string): Model<Api> {
@@ -122,12 +128,26 @@ function buildAnthropicModel(modelId: string): Model<Api> {
   if (!model) {
     throw new RpcError(-32015, `unknown anthropic model: ${modelId}`)
   }
-  // Apply the 1M-context beta via model.headers (Pi has no betas field). Clone
-  // so we never mutate Pi's cached catalog object.
+  // Apply the 1M-context beta via model.headers (Pi still exposes no `betas`
+  // field). Clone so we never mutate Pi's cached catalog object.
+  //
+  // pi 0.85 made this header EXCLUSIVE: getBetaFeatures() returns early with
+  // only what the caller supplied and skips every beta it would otherwise add
+  // itself. For a model whose catalog entry sets `compat.supportsMidConvoEffort`
+  // (today claude-opus-5 and claude-fable-5-1) Pi still emits `output_config`,
+  // `thinking.block_binding` and mid-conversation `role: "system"` messages —
+  // parameters that REQUIRE the two betas below. Overriding the header without
+  // them sends those parameters with the betas stripped, which the API rejects.
+  // So union rather than replace, keyed off the same flag Pi keys its own
+  // emission off.
   if (betas && betas.length) {
+    const merged = [...betas]
+    if ((model.compat as { supportsMidConvoEffort?: boolean } | undefined)?.supportsMidConvoEffort) {
+      merged.push(MID_CONVERSATION_OUTPUT_CONFIG_BETA, THINKING_BINDING_CONTROLS_BETA)
+    }
     return {
       ...model,
-      headers: { ...(model.headers ?? {}), 'anthropic-beta': betas.join(',') },
+      headers: { ...(model.headers ?? {}), 'anthropic-beta': [...new Set(merged)].join(',') },
     }
   }
   return model
