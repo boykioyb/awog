@@ -17,7 +17,7 @@
         :title="t('sessions.sidebar.select')"
         @click.stop="store.toggleSelect(session.id)"
       >
-        <Icon v-if="selected" name="check" style="width: 11px; height: 11px" />
+        <Icon v-if="selected" name="check" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </span>
       <span
         v-if="session.pinned && !editing"
@@ -25,7 +25,7 @@
         :title="t('sessions.sidebar.pinned')"
         @click.stop="store.togglePin(session.id)"
       >
-        <Icon name="pin" style="width: 11px; height: 11px" />
+        <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </span>
       <span
         class="sdot"
@@ -66,11 +66,11 @@
           class="lindchip"
           :title="t('sessions.window.inWindow')"
         >
-          <Icon name="external" style="width: 11px; height: 11px" />
+          <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </span>
         <span v-if="indicators.length" class="lind">
           <span v-for="ind in indicators" :key="ind.key" class="lindchip" :title="ind.title">
-            <Icon :name="ind.icon" style="width: 11px; height: 11px" />
+            <Icon :name="ind.icon" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ ind.count }}
           </span>
         </span>
@@ -84,10 +84,10 @@
         :title="session.pinned ? t('sessions.sidebar.unpin') : t('sessions.sidebar.pin')"
         @click.stop="store.togglePin(session.id)"
       >
-        <Icon name="pin" style="width: 12px; height: 12px" />
+        <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </span>
       <span class="liactbtn danger" :title="t('sessions.item.delete')" @click.stop="askRemove">
-        <Icon name="trash" style="width: 13px; height: 13px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </span>
     </div>
   </div>

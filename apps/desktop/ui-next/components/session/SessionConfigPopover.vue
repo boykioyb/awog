@@ -81,7 +81,7 @@
       <!-- Tools -->
       <template v-else>
         <div class="toolsrch">
-          <Icon name="search" style="width: 13px; height: 13px" />
+          <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <input v-model="toolQ" :placeholder="t('sessions.config.toolSearch')" />
           <span class="tc tnum" style="font-size: var(--fs-xs); color: var(--textFaint)">
             {{ onCount }}/{{ total }}

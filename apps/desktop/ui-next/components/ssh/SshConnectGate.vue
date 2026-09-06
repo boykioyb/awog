@@ -1,9 +1,12 @@
 <template>
   <div class="scg">
-    <Icon name="conn" style="width: 15px; height: 15px; flex: 0 0 auto; color: var(--textDim)" />
+    <Icon
+      name="conn"
+      style="width: var(--icon-md); height: var(--icon-md); flex: 0 0 auto; color: var(--textDim)"
+    />
     <span class="scg-msg">{{ t('ssh.conn.needConnect') }}</span>
     <button class="btn pri sm" @click="emit('connect')">
-      <Icon name="play" style="width: 12px; height: 12px" />
+      <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
       {{ t('ssh.detail.connect') }}
     </button>
     <button
@@ -12,7 +15,7 @@
       :aria-label="t('ssh.panel.close')"
       @click="emit('close')"
     >
-      <Icon name="x" style="width: 13px; height: 13px" />
+      <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
   </div>
 </template>

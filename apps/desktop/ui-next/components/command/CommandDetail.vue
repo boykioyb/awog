@@ -1,7 +1,9 @@
 <template>
   <div class="cmd">
     <div class="dh">
-      <div class="cmd-icn"><Icon name="commands" style="width: 14px; height: 14px" /></div>
+      <div class="cmd-icn">
+        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      </div>
       <div class="dt mono">/{{ command.name }}</div>
       <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
       <span v-if="isImported" class="tag cmd-lock" :title="t('commands.detail.imported')">
@@ -10,7 +12,7 @@
       </span>
       <span style="flex: 1" />
       <button class="iconbtn cmd-act" :title="t('commands.detail.edit')" @click="emit('edit')">
-        <Icon name="edit" style="width: 14px; height: 14px" />
+        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         v-if="!isImported"
@@ -18,7 +20,7 @@
         :title="t('commands.detail.duplicate')"
         @click="emit('duplicate')"
       >
-        <Icon name="copy" style="width: 14px; height: 14px" />
+        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         v-if="!isImported"
@@ -26,7 +28,7 @@
         :title="t('commands.detail.delete')"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: 14px; height: 14px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 

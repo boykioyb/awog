@@ -13,14 +13,14 @@
           :class="{ on: tab === active }"
           @click="emit('set-active', tab)"
         >
-          <Icon :name="wpIcon(tab)" style="width: 12px; height: 12px" />
+          <Icon :name="wpIcon(tab)" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span>{{ tab }}</span>
           <span class="x" @click.stop="emit('close-tab', tab)">×</span>
         </div>
       </div>
       <span style="position: relative">
         <button class="wpaddb" :title="t('sessions.workspace.openView')" @click.stop="toggleAdd">
-          <Icon name="plus" style="width: 13px; height: 13px" />
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <div
           v-if="addOpen"
@@ -29,7 +29,7 @@
           @click.stop
         >
           <div v-for="v in addableViews" :key="v" class="mi" @click="addView(v)">
-            <Icon :name="wpIcon(v)" style="width: 13px; height: 13px" />
+            <Icon :name="wpIcon(v)" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ v }}
           </div>
         </div>
@@ -41,7 +41,7 @@
           :title="t('sessions.workspace.dock.change')"
           @click.stop="toggleDockMenu"
         >
-          <Icon :name="dockIcon(dock)" style="width: 14px; height: 14px" />
+          <Icon :name="dockIcon(dock)" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <div
           v-if="dockMenuOpen"
@@ -56,13 +56,13 @@
             :class="{ on: opt.side === dock }"
             @click="pickDock(opt.side)"
           >
-            <Icon :name="opt.icon" style="width: 13px; height: 13px" />
+            <Icon :name="opt.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t(opt.label) }}
           </div>
         </div>
       </span>
       <button class="wpib on" :title="t('sessions.workspace.closePanel')" @click="emit('close')">
-        <Icon name="x" style="width: 14px; height: 14px" />
+        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -140,7 +140,7 @@
           >
             <Icon
               :name="ctxIcon(f.kind)"
-              style="width: 12px; height: 12px; flex: 0 0 auto"
+              style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
               :style="{ color: ctxIconColor(f.kind) }"
             />
             <span class="infoctx-name mono">{{ f.name }}</span>

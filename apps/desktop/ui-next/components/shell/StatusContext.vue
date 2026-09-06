@@ -57,7 +57,7 @@
                 name="chev"
                 class="ctxchev"
                 :class="{ open: memoryFilesOpen }"
-                style="width: 11px; height: 11px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ t('sessions.detail.cat.memoryFilesSection') }}
               <span class="ctxcount">{{ memoryFilesList.length }}</span>
@@ -75,7 +75,7 @@
                 name="chev"
                 class="ctxchev"
                 :class="{ open: agentsOpen }"
-                style="width: 11px; height: 11px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ t('sessions.detail.cat.agentsSection') }}
               <span class="ctxcount">{{ agentsList.length }}</span>
@@ -100,7 +100,7 @@
               <Icon
                 :name="compacting ? 'refresh' : 'foldv'"
                 :class="{ ctxspin: compacting }"
-                style="width: 13px; height: 13px"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
               />
               {{ compacting ? t('sessions.composer.compacting') : t('sessions.detail.compact') }}
             </button>

@@ -12,7 +12,7 @@
           :title="t('git.changes.tree')"
           @click="!chTree && emit('toggle-tree')"
         >
-          <Icon name="folder" style="width: 12px; height: 12px" />
+          <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </span>
         <span
           class="gsegbtn"
@@ -20,7 +20,7 @@
           :title="t('git.changes.flat')"
           @click="chTree && emit('toggle-tree')"
         >
-          <Icon name="rules" style="width: 12px; height: 12px" />
+          <Icon name="rules" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </span>
       </span>
     </div>
@@ -31,7 +31,7 @@
            via the resolver or discarded via a global Abort, not per-file. -->
       <div v-if="conflicted.length" class="gconflictsec">
         <div class="gstatsec gconflicthd">
-          <Icon name="alert" style="width: 12px; height: 12px" />
+          <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span class="gstatlbl">{{ t('git.conflict.section') }}</span>
           <span class="gstatct">{{ conflicted.length }}</span>
         </div>

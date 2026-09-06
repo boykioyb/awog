@@ -35,7 +35,7 @@
         :title="t('nav.activity')"
         @click="openActivity()"
       >
-        <Icon name="act" style="width: 15px; height: 15px" />
+        <Icon name="act" style="width: var(--icon-md); height: var(--icon-md)" />
       </button>
       <button
         class="footbtn"
@@ -44,7 +44,7 @@
         data-tour="settings-btn"
         @click="openSettings()"
       >
-        <Icon name="settings" style="width: 15px; height: 15px" />
+        <Icon name="settings" style="width: var(--icon-md); height: var(--icon-md)" />
       </button>
       <button
         class="footbtn wn-btn"
@@ -52,7 +52,7 @@
         data-tour="whatsnew-btn"
         @click="openPanel"
       >
-        <Icon name="tag" style="width: 15px; height: 15px" />
+        <Icon name="tag" style="width: var(--icon-md); height: var(--icon-md)" />
         <span v-if="hasUnseen" class="wn-dot" />
       </button>
       <button
@@ -60,7 +60,10 @@
         :title="isDark ? t('topbar.toLight') : t('topbar.toDark')"
         @click="toggleTheme"
       >
-        <Icon :name="isDark ? 'moon' : 'sun'" style="width: 15px; height: 15px" />
+        <Icon
+          :name="isDark ? 'moon' : 'sun'"
+          style="width: var(--icon-md); height: var(--icon-md)"
+        />
       </button>
       <button v-if="!compact" class="navtgl" :title="t('nav.collapse')" @click="toggleCollapsed">
         <Icon name="chev" />

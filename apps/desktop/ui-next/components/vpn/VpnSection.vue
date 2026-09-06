@@ -5,11 +5,11 @@
       <span class="vpnx-count">{{ store.profiles.length }}</span>
       <div class="vpnx-actions">
         <button v-if="canPick" class="btn sm" :title="t('vpn.import.button')" @click="openImport">
-          <Icon name="download" style="width: 13px; height: 13px" />
+          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('vpn.import.button') }}
         </button>
         <button class="btn pri sm" :title="t('vpn.new')" @click="openNew">
-          <Icon name="plus" style="width: 13px; height: 13px" />
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('vpn.new') }}
         </button>
       </div>

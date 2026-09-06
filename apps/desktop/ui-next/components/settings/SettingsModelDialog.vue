@@ -7,7 +7,7 @@
         <div class="smdhd">
           <span class="smdtitle">{{ title }}</span>
           <button class="pvx" type="button" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
         <div class="smdbody">

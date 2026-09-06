@@ -22,7 +22,9 @@
       />
       <div v-else class="detail">
         <div class="empty">
-          <span class="ei"><Icon name="projects" style="width: 20px; height: 20px" /></span>
+          <span class="ei">
+            <Icon name="projects" style="width: var(--icon-lg); height: var(--icon-lg)" />
+          </span>
           <div class="et">{{ t('projects.empty') }}</div>
           <button class="btn pri sm" @click="openCreate">
             <Icon name="plus" />

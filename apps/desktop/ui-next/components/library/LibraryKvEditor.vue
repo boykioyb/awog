@@ -32,11 +32,11 @@
           <Icon
             :name="secretBusy === i ? 'refresh' : isSecretRow(entry.value) ? 'shield' : 'globe'"
             :class="{ spin: secretBusy === i }"
-            style="width: 13px; height: 13px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
         <button class="iconbtn lkv-btn" :title="t('library.kv.remove')" @click="remove(i)">
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
       <button class="btn sm" @click="add">

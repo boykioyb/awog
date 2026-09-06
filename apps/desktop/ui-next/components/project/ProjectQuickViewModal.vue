@@ -10,13 +10,16 @@
     <div v-if="isOpen" class="ovl on projovl" @click.self="close">
       <div class="projmodal">
         <div class="projmodal-head">
-          <Icon name="projects" style="width: 14px; height: 14px; color: var(--accent)" />
+          <Icon
+            name="projects"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="projmodal-title">
             {{ project ? project.name : t('sessions.workspace.projectModal.title') }}
           </span>
           <span style="flex: 1" />
           <button class="projmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
         <div class="projmodal-body">

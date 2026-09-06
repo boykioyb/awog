@@ -201,8 +201,8 @@ watch(
 }
 .mdicon {
   flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   color: var(--textDim);
 }
 .mdtext {
@@ -240,7 +240,7 @@ watch(
   color: var(--text);
 }
 .mdxi {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 </style>

@@ -14,7 +14,11 @@
       </span>
       <span style="flex: 1" />
       <button class="btn sm" type="button" :disabled="fetching" @click="onFetch">
-        <Icon name="refresh" :class="{ spin: fetching }" style="width: 13px; height: 13px" />
+        <Icon
+          name="refresh"
+          :class="{ spin: fetching }"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
         {{ t('settings.pricing.fetch') }}
       </button>
     </div>
@@ -99,7 +103,7 @@
                 :title="t('settings.pricing.reset')"
                 @click="resetModel(m.model)"
               >
-                <Icon name="refresh" style="width: 13px; height: 13px" />
+                <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
               </button>
             </td>
           </tr>

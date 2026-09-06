@@ -15,7 +15,10 @@
            Prefilled from the global config; saved to ~/.gitconfig on init. -->
       <div class="ginit-sec">
         <div class="ginit-sec-head">
-          <Icon name="globe" style="width: 13px; height: 13px; color: var(--textDim)" />
+          <Icon
+            name="globe"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+          />
           <span class="ginit-sec-title">{{ t('git.init.identityTitle') }}</span>
         </div>
         <p class="ginit-hint">{{ t('git.init.identityHint') }}</p>
@@ -43,7 +46,7 @@
 
       <div class="ginit-actions">
         <button class="btn pri" :disabled="busy" @click="onInit">
-          <Icon v-if="!busy" name="plus" style="width: 14px; height: 14px" />
+          <Icon v-if="!busy" name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ busy ? t('git.init.initializing') : t('git.init.button') }}
         </button>
       </div>

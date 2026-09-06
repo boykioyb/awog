@@ -10,7 +10,7 @@
 
     <div class="wfn-foot">
       <span class="wfn-out">
-        <Icon name="folder" style="width: 11px; height: 11px" />
+        <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span class="wfn-out-t">{{ data.outputs?.[0] ?? '' }}</span>
       </span>
       <Icon
@@ -30,7 +30,7 @@
     <Handle type="source" :position="Position.Right" />
 
     <button v-if="selected" class="wfn-del" :title="t('common.delete')" @click.stop="onDelete">
-      <Icon name="trash" style="width: 11px; height: 11px" />
+      <Icon name="trash" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
   </div>
 </template>
@@ -148,14 +148,14 @@ const onDelete = () => props.data.onDelete?.(props.id)
   white-space: nowrap;
 }
 .wfn-gate {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--amber);
   flex: 0 0 auto;
 }
 .wfn-loop {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--accent);
   flex: 0 0 auto;
 }

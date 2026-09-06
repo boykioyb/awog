@@ -42,7 +42,7 @@
         <SessionDetail v-else-if="store.active" :key="store.active.id" :session="store.active" />
         <div v-else class="detail">
           <div class="empty">
-            <span class="ei"><Icon name="sessions" style="width: 21px; height: 21px" /></span>
+            <span class="ei"><Icon name="sessions" style="width: 22px; height: 22px" /></span>
             <div class="et">
               {{ t('sessions.empty.title') }}
               <br />

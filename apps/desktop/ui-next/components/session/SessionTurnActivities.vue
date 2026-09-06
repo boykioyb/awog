@@ -3,7 +3,7 @@
     <!-- Collapsed header (craft TurnCard parity): chevron + step-count badge + a live
          preview of what the turn is doing. Click toggles the activity body. -->
     <div class="tacth" @click="collapsed = !collapsed">
-      <Icon name="chev" class="tchev" style="width: 13px; height: 13px" />
+      <Icon name="chev" class="tchev" style="width: var(--icon-sm); height: var(--icon-sm)" />
       <span class="tbadge">{{ entries.length }}</span>
       <span class="tprev">{{ preview }}</span>
     </div>
@@ -19,8 +19,12 @@
             :class="{ col: !thinkOpen.has(e.key) }"
           >
             <div class="thh" @click="toggleThink(e.key)">
-              <Icon name="chev" style="width: 12px; height: 12px" />
-              <Icon name="brain" class="thinkic" style="width: 13px; height: 13px" />
+              <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+              <Icon
+                name="brain"
+                class="thinkic"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
               {{ t('sessions.thinking') }}
             </div>
             <div class="thb">{{ e.text }}</div>

@@ -33,7 +33,7 @@
           :disabled="loading"
           @click="refresh"
         >
-          <Icon name="refresh" style="width: 13px; height: 13px" />
+          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 
@@ -66,7 +66,10 @@
       <!-- Span + lifetime: makes multi-day sessions legible at a glance. -->
       <div class="wscost-meta">
         <div v-if="firstDay" class="wscost-metarow">
-          <Icon name="clock" style="width: 12px; height: 12px; flex: 0 0 auto" />
+          <Icon
+            name="clock"
+            style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
+          />
           <span>{{ spanLabel }}</span>
         </div>
         <div class="wscost-metarow">
@@ -96,7 +99,7 @@
       </div>
 
       <div v-if="hasUnpriced" class="wscost-warn">
-        <Icon name="alert" style="width: 12px; height: 12px; flex: 0 0 auto" />
+        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
         {{ t('sessions.workspace.cost.unpriced') }}
       </div>
     </template>

@@ -13,7 +13,7 @@
           :aria-label="t('git.remote.edit')"
           @click="startEdit"
         >
-          <Icon name="edit" style="width: 13px; height: 13px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 
@@ -32,7 +32,7 @@
             <Icon
               name="refresh"
               :class="{ gdpspin: syncOp?.op === 'fetch' }"
-              style="width: 13px; height: 13px"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ t('git.ops.fetch') }}
           </button>
@@ -41,7 +41,7 @@
               v-if="syncOp?.op === 'pull'"
               name="refresh"
               class="gdpspin"
-              style="width: 13px; height: 13px"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ t('git.ops.pullWord') }}
           </button>
@@ -50,7 +50,7 @@
               v-if="syncOp?.op === 'push'"
               name="refresh"
               class="gdpspin"
-              style="width: 13px; height: 13px"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ t('git.ops.pushWord') }}
           </button>
@@ -60,7 +60,7 @@
             :title="t('git.ops.cancel')"
             @click="cancelActive"
           >
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
       </div>

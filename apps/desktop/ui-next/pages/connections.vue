@@ -13,7 +13,9 @@
              it isn't a configurable source, so no type/status/menu. -->
         <div v-if="item.slug === SSH_SLUG" class="crow">
           <div class="lrow">
-            <span class="ssh-src-ic"><Icon name="ssh" style="width: 15px; height: 15px" /></span>
+            <span class="ssh-src-ic">
+              <Icon name="ssh" style="width: var(--icon-md); height: var(--icon-md)" />
+            </span>
             <span class="ttl">{{ t('connections.ssh.name') }}</span>
             <span class="tag crow-type">{{ t('connections.ssh.builtin') }}</span>
           </div>
@@ -37,7 +39,7 @@
               :title="t('connections.menu.more')"
               @click.stop="openRowMenu($event, item)"
             >
-              <Icon name="dots" style="width: 13px; height: 13px" />
+              <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
           </div>
           <div class="sub">
@@ -57,7 +59,7 @@
           </div>
           <p class="ssh-src-body">{{ t('connections.ssh.body', { n: agentHostCount }) }}</p>
           <button class="btn pri" @click="goSsh">
-            <Icon name="ssh" style="width: 14px; height: 14px" />
+            <Icon name="ssh" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('connections.ssh.manage') }}
           </button>
         </div>

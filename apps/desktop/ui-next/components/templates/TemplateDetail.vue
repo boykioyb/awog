@@ -1,14 +1,16 @@
 <template>
   <div class="tdt">
     <div class="dh">
-      <div class="tdt-icn"><Icon name="templates" style="width: 15px; height: 15px" /></div>
+      <div class="tdt-icn">
+        <Icon name="templates" style="width: var(--icon-md); height: var(--icon-md)" />
+      </div>
       <div class="dt">{{ template.name }}</div>
       <span v-if="template.entities.length" class="tag">
         {{ t('templates.detail.entityCount', { n: template.entities.length }) }}
       </span>
       <span style="flex: 1" />
       <button class="btn pri sm" :title="t('templates.detail.install')" @click="emit('install')">
-        <Icon name="act" style="width: 13px; height: 13px" />
+        <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.detail.install') }}
       </button>
       <button
@@ -16,7 +18,7 @@
         :title="t('templates.detail.delete')"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: 14px; height: 14px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 

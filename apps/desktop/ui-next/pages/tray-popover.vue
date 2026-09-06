@@ -71,7 +71,7 @@
 
     <footer class="tp-foot">
       <button class="tp-fbtn" @click="go({ kind: 'activity' })">
-        <Icon name="act" style="width: 14px; height: 14px" />
+        <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('tray.openActivity') }}
       </button>
     </footer>
@@ -331,8 +331,8 @@ function formatResetsIn(ms: number | undefined): string {
   flex: 0 0 auto;
 }
 .tp-logo :deep(svg) {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 .tp-hdtext {
   min-width: 0;

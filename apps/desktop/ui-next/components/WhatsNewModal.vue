@@ -3,7 +3,10 @@
     <div class="ovl" :class="{ on: open }" @click.self="closePanel">
       <div class="setmodal">
         <div class="setmodalhd">
-          <Icon name="tag" style="width: 15px; height: 15px; color: var(--accent)" />
+          <Icon
+            name="tag"
+            style="width: var(--icon-md); height: var(--icon-md); color: var(--accent)"
+          />
           <span>{{ t('whatsnew.title') }}</span>
           <button
             class="iconbtn"

@@ -4,15 +4,15 @@
       <span class="tpl-bar-title">{{ t('templates.title') }}</span>
       <span style="flex: 1" />
       <button class="btn sm" :disabled="refreshing" @click="refresh()">
-        <Icon name="refresh" style="width: 13px; height: 13px" />
+        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.refresh') }}
       </button>
       <button class="btn sm" @click="openFetchDialog">
-        <Icon name="globe" style="width: 13px; height: 13px" />
+        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.fetchGithub') }}
       </button>
       <button class="btn pri sm" @click="openSaveDialog">
-        <Icon name="plus" style="width: 13px; height: 13px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.new') }}
       </button>
     </div>

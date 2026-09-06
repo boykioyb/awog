@@ -195,8 +195,8 @@ onBeforeUnmount(() => {
   color: var(--text);
 }
 .logtail-act .icn {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 .logtail-body {
   flex: 1;

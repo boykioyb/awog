@@ -101,8 +101,8 @@ const viewOptions = [
   color: var(--text);
 }
 .edback .chev-left {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   transform: rotate(90deg);
 }
 .edsep {
@@ -111,8 +111,8 @@ const viewOptions = [
   background: var(--border);
 }
 .edicon {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--textDim);
   flex-shrink: 0;
 }

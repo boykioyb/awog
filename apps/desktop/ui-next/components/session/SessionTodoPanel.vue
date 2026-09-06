@@ -12,8 +12,11 @@
       :title="collapsed ? t('sessions.todo.expand') : t('sessions.todo.collapse')"
       @click="collapsed = !collapsed"
     >
-      <Icon name="chev" style="width: 12px; height: 12px" />
-      <Icon :name="allDone ? 'check' : 'tasks'" style="width: 13px; height: 13px" />
+      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon
+        :name="allDone ? 'check' : 'tasks'"
+        style="width: var(--icon-sm); height: var(--icon-sm)"
+      />
       <span>{{ t('sessions.todo.title') }}</span>
       <span class="tdn">{{ doneCount }}/{{ total }}</span>
     </div>

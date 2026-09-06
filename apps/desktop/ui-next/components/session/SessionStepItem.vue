@@ -4,7 +4,7 @@
       <Icon
         :name="isTodo ? 'tasks' : stepIcon(block.tool)"
         class="stepic"
-        style="width: 13px; height: 13px"
+        style="width: var(--icon-sm); height: var(--icon-sm)"
       />
       <span class="tname">{{ block.tool }}</span>
       <span class="starg flex min-w-0" :title="block.target">
@@ -27,9 +27,9 @@
         :title="t('sessions.step.viewFile')"
         @click.stop="viewFile(block.tool, block.target)"
       >
-        <Icon name="file" style="width: 13px; height: 13px" />
+        <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
-      <Icon name="chev" style="width: 13px; height: 13px" />
+      <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </div>
     <Collapse :open="!collapsed">
       <div class="stepd">
@@ -40,7 +40,7 @@
         <!-- subagent (has children) -->
         <div v-else-if="block.sub" class="substep">
           <div class="subhd">
-            <Icon name="agents" style="width: 12px; height: 12px" />
+            <Icon name="agents" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ block.sub.agent }}
           </div>
           <div
@@ -50,7 +50,11 @@
             :class="{ col: !subExpanded.has(i) }"
           >
             <div class="steph" @click="toggleSub(i)">
-              <Icon :name="stepIcon(st.tool)" class="stepic" style="width: 13px; height: 13px" />
+              <Icon
+                :name="stepIcon(st.tool)"
+                class="stepic"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
               <span class="tname">{{ st.tool }}</span>
               <span class="starg flex min-w-0" :title="st.target">
                 <span class="min-w-0 truncate">{{ shortTarget(st.target).dir }}</span>
@@ -63,9 +67,9 @@
                 :title="t('sessions.step.viewFile')"
                 @click.stop="viewFile(st.tool, st.target)"
               >
-                <Icon name="file" style="width: 13px; height: 13px" />
+                <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
               </button>
-              <Icon name="chev" style="width: 13px; height: 13px" />
+              <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </div>
             <Collapse :open="subExpanded.has(i)">
               <div class="stepd">
@@ -83,7 +87,7 @@
              tool call and the handed-back summary is invisible. -->
           <div v-if="summaryText" class="subsum">
             <div class="subhd">
-              <Icon name="check" style="width: 12px; height: 12px" />
+              <Icon name="check" style="width: var(--icon-xs); height: var(--icon-xs)" />
               {{ t('sessions.step.subagentSummary') }}
               <button
                 v-if="summaryTruncated"
@@ -91,7 +95,7 @@
                 :title="t('sessions.step.viewSummary')"
                 @click.stop="openSummary"
               >
-                <Icon name="maximize" style="width: 12px; height: 12px" />
+                <Icon name="maximize" style="width: var(--icon-xs); height: var(--icon-xs)" />
               </button>
             </div>
             <SessionTextBlock :text="summaryPreview" />

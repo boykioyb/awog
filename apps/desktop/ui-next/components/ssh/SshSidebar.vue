@@ -10,7 +10,7 @@
       :aria-current="store.sshSection === item.key ? 'page' : undefined"
       @click="store.setSection(item.key)"
     >
-      <Icon :name="item.icon" style="width: 15px; height: 15px" />
+      <Icon :name="item.icon" style="width: var(--icon-md); height: var(--icon-md)" />
       <span class="sshx-side-label">{{ t(item.label) }}</span>
     </button>
   </nav>

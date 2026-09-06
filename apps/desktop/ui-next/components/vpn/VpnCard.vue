@@ -1,7 +1,7 @@
 <template>
   <div class="vpn-card" @contextmenu.prevent="emit('edit')">
     <span class="vpn-av" :style="avatarStyle">
-      <Icon name="globe" style="width: 16px; height: 16px" />
+      <Icon name="globe" style="width: var(--icon-md); height: var(--icon-md)" />
     </span>
     <div class="vpn-main">
       <div class="vpn-name-row">
@@ -35,7 +35,7 @@
       :aria-label="t('vpn.card.log')"
       @click="emit('log')"
     >
-      <Icon name="terminal" style="width: 13px; height: 13px" />
+      <Icon name="terminal" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
     <button
       v-if="status === 'up'"
@@ -44,7 +44,7 @@
       :aria-label="t('vpn.card.disconnect')"
       @click="emit('disconnect')"
     >
-      <Icon name="stop" style="width: 13px; height: 13px" />
+      <Icon name="stop" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
     <button
       v-else
@@ -57,7 +57,7 @@
       <Icon
         :name="status === 'connecting' ? 'refresh' : 'play'"
         :class="{ 'vpn-spin': status === 'connecting' }"
-        style="width: 13px; height: 13px"
+        style="width: var(--icon-sm); height: var(--icon-sm)"
       />
     </button>
     <button
@@ -66,7 +66,7 @@
       :aria-label="t('vpn.card.edit')"
       @click="emit('edit')"
     >
-      <Icon name="edit" style="width: 13px; height: 13px" />
+      <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
     <button
       class="vpn-act vpn-del"
@@ -74,7 +74,7 @@
       :aria-label="t('vpn.card.delete')"
       @click="emit('delete')"
     >
-      <Icon name="trash" style="width: 13px; height: 13px" />
+      <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
   </div>
 </template>

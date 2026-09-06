@@ -9,7 +9,9 @@
       <!-- Two "how do you want to start" options: hand-build, or describe with AI. -->
       <div class="cap-quick">
         <button type="button" class="cap-opt" @click="emit('scratch')">
-          <span class="cap-opt-ic"><Icon name="plus" style="width: 15px; height: 15px" /></span>
+          <span class="cap-opt-ic">
+            <Icon name="plus" style="width: var(--icon-md); height: var(--icon-md)" />
+          </span>
           <span class="cap-opt-tx">
             <span class="cap-opt-t">{{ t('connections.picker.scratch') }}</span>
             <span class="cap-opt-s">{{ t('connections.picker.scratchSub') }}</span>
@@ -17,7 +19,7 @@
         </button>
         <button type="button" class="cap-opt" @click="emit('ai')">
           <span class="cap-opt-ic accent">
-            <Icon name="sparkles" style="width: 15px; height: 15px" />
+            <Icon name="sparkles" style="width: var(--icon-md); height: var(--icon-md)" />
           </span>
           <span class="cap-opt-tx">
             <span class="cap-opt-t">{{ t('connections.picker.ai') }}</span>

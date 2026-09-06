@@ -74,8 +74,8 @@ const open = (url: string): void => {
   text-decoration: underline;
 }
 .tsb-icn {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   flex: 0 0 auto;
 }
 </style>

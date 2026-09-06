@@ -17,9 +17,13 @@
       @click="expanded = !expanded"
     >
       <span v-if="runningCount" class="bgsh-dot" />
-      <Icon v-else :name="failedCount ? 'alert' : 'check'" style="width: 12px; height: 12px" />
+      <Icon
+        v-else
+        :name="failedCount ? 'alert' : 'check'"
+        style="width: var(--icon-xs); height: var(--icon-xs)"
+      />
       <span>{{ summaryText }}</span>
-      <Icon name="chev" class="bgsh-chev" style="width: 12px; height: 12px" />
+      <Icon name="chev" class="bgsh-chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
     <div
       v-for="sh in shown"
@@ -29,7 +33,7 @@
       :title="sh.command"
     >
       <span v-if="sh.status === 'running'" class="bgsh-dot" />
-      <Icon v-else :name="iconFor(sh)" style="width: 12px; height: 12px" />
+      <Icon v-else :name="iconFor(sh)" style="width: var(--icon-xs); height: var(--icon-xs)" />
       <span class="bgsh-cmd">{{ shortCmd(sh.command) }}</span>
       <span class="bgsh-hint">{{ hintFor(sh) }}</span>
       <button
@@ -39,7 +43,7 @@
         :title="t('sessions.bg.stop')"
         @click="onStop(sh.shellId)"
       >
-        <Icon name="x" style="width: 11px; height: 11px" />
+        <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
     </div>
   </div>

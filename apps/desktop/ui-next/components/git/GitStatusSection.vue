@@ -14,7 +14,7 @@
         :title="t('git.status.discardAll')"
         @click.stop="discardAll"
       >
-        <Icon name="revert" style="width: 12px; height: 12px" />
+        <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </span>
       <button
         class="gsecbtn"
@@ -23,7 +23,10 @@
         :title="staged ? t('git.changes.unstageAll') : t('git.changes.stageAll')"
         @click.stop="staged ? emit('unstage-all') : emit('stage-all')"
       >
-        <Icon :name="staged ? 'minus' : 'plus'" style="width: 12px; height: 12px" />
+        <Icon
+          :name="staged ? 'minus' : 'plus'"
+          style="width: var(--icon-xs); height: var(--icon-xs)"
+        />
         <span>{{ staged ? t('git.changes.unstage') : t('git.changes.stage') }}</span>
       </button>
     </div>
@@ -45,7 +48,7 @@
             <svg class="icn fchv" :class="{ col: collapsedDirs.has(row.path) }">
               <use href="#i-chev" />
             </svg>
-            <Icon name="folder" style="width: 12px; height: 12px" />
+            <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
             <span class="gtrunc">{{ row.label }}</span>
           </div>
           <div
@@ -75,7 +78,10 @@
                 :title="staged ? t('git.changes.unstage') : t('git.changes.stage')"
                 @click.stop="emit('toggle-stage', row.path, staged)"
               >
-                <Icon :name="staged ? 'minus' : 'plus'" style="width: 13px; height: 13px" />
+                <Icon
+                  :name="staged ? 'minus' : 'plus'"
+                  style="width: var(--icon-sm); height: var(--icon-sm)"
+                />
               </span>
               <span
                 v-if="!staged"
@@ -83,7 +89,7 @@
                 :title="t('git.changes.discard')"
                 @click.stop="emit('discard', row.path)"
               >
-                <Icon name="revert" style="width: 12px; height: 12px" />
+                <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
               </span>
             </span>
           </div>
@@ -116,7 +122,10 @@
               :title="staged ? t('git.changes.unstage') : t('git.changes.stage')"
               @click.stop="emit('toggle-stage', x.f, staged)"
             >
-              <Icon :name="staged ? 'minus' : 'plus'" style="width: 13px; height: 13px" />
+              <Icon
+                :name="staged ? 'minus' : 'plus'"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
             </span>
             <span
               v-if="!staged"
@@ -124,7 +133,7 @@
               :title="t('git.changes.discard')"
               @click.stop="emit('discard', x.f)"
             >
-              <Icon name="revert" style="width: 12px; height: 12px" />
+              <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
             </span>
           </span>
         </div>

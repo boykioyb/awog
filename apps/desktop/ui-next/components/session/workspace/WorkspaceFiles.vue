@@ -6,17 +6,17 @@
       <span class="wsfiles-tb-name mono" :title="root ?? ''">{{ rootLabel }}</span>
       <div class="wsfiles-tb-actions">
         <button class="wpib" :title="t('files.ctx.newFile')" @click="createAtRoot('file')">
-          <Icon name="file" style="width: 13px; height: 13px" />
+          <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button class="wpib" :title="t('files.ctx.newFolder')" @click="createAtRoot('dir')">
-          <Icon name="folder" style="width: 13px; height: 13px" />
+          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="wpib"
           :title="t('sessions.workspace.files.collapseAll')"
           @click="collapseAll"
         >
-          <Icon name="foldv" style="width: 14px; height: 14px" />
+          <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="wpib"
@@ -25,7 +25,7 @@
           :title="t('sessions.workspace.files.reload')"
           @click="reloadTree"
         >
-          <Icon name="refresh" style="width: 14px; height: 14px" />
+          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </div>

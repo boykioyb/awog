@@ -16,7 +16,7 @@
           :aria-label="t('ssh.detail.connect')"
           @click.stop="emit('connect')"
         >
-          <Icon name="play" style="width: 12px; height: 12px" />
+          <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
         <button
           class="iconbtn ssh-qa"
@@ -24,7 +24,7 @@
           :aria-label="t('ssh.detail.sftp')"
           @click.stop="emit('sftp')"
         >
-          <Icon name="folder" style="width: 12px; height: 12px" />
+          <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
         <button
           class="iconbtn ssh-qa"
@@ -32,7 +32,7 @@
           :aria-label="t('ssh.detail.forward')"
           @click.stop="emit('forward')"
         >
-          <Icon name="move" style="width: 12px; height: 12px" />
+          <Icon name="move" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
         <button
           class="iconbtn ssh-qa ssh-menu"
@@ -40,7 +40,7 @@
           :aria-label="t('ssh.menu.more')"
           @click.stop="emit('menu', $event)"
         >
-          <Icon name="dots" style="width: 13px; height: 13px" />
+          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </div>

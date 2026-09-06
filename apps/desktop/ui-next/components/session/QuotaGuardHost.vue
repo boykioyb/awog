@@ -11,7 +11,10 @@
       :style="{ borderColor: 'var(--amber)' }"
       @click="dismissQuotaToast(tt.id)"
     >
-      <Icon name="alert" style="width: 15px; height: 15px; color: var(--amber)" />
+      <Icon
+        name="alert"
+        style="width: var(--icon-md); height: var(--icon-md); color: var(--amber)"
+      />
       <span>{{ tt.text }}</span>
       <!-- One-click "switch to an under-quota account & retry" (create block only). -->
       <button v-if="tt.action" type="button" class="q-act" @click.stop="runAction(tt)">

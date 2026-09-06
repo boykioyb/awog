@@ -14,7 +14,7 @@
     </div>
 
     <div class="ssh-sf-head">
-      <Icon name="folder" style="width: 13px; height: 13px" />
+      <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
       <span class="ssh-sf-head-t">{{ t('ssh.section.sftp') }}</span>
       <div class="ssh-sf-tools">
         <button
@@ -23,7 +23,7 @@
           :aria-label="t('ssh.sftp.newFile')"
           @click="newFile"
         >
-          <Icon name="file" style="width: 13px; height: 13px" />
+          <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="ssh-sf-tool"
@@ -31,7 +31,7 @@
           :aria-label="t('ssh.sftp.mkdir')"
           @click="mkdir"
         >
-          <Icon name="plus" style="width: 13px; height: 13px" />
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="ssh-sf-tool"
@@ -39,7 +39,10 @@
           :aria-label="t('ssh.sftp.upload')"
           @click="upload"
         >
-          <Icon name="download" style="width: 13px; height: 13px; transform: rotate(180deg)" />
+          <Icon
+            name="download"
+            style="width: var(--icon-sm); height: var(--icon-sm); transform: rotate(180deg)"
+          />
         </button>
         <button
           class="ssh-sf-tool"
@@ -47,7 +50,7 @@
           :aria-label="t('ssh.sftp.refresh')"
           @click="load"
         >
-          <Icon name="refresh" style="width: 13px; height: 13px" />
+          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <SftpColumnsMenu :columns="columns" @toggle="toggleColumn" />
         <button
@@ -56,7 +59,7 @@
           :aria-label="t('ssh.panel.close')"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </div>
@@ -77,7 +80,7 @@
           :aria-label="t('ssh.sftp.editPath')"
           @click="startEditPath"
         >
-          <Icon name="edit" style="width: 12px; height: 12px" />
+          <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
       </template>
       <input
@@ -140,7 +143,11 @@
         </div>
 
         <button v-if="cwd !== '.'" class="ssh-sf-row up" @click="navigate(parentPath)">
-          <Icon name="chev" class="ssh-sf-up-icn" style="width: 13px; height: 13px" />
+          <Icon
+            name="chev"
+            class="ssh-sf-up-icn"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
           <span class="ssh-sf-name">..</span>
         </button>
 
@@ -155,7 +162,11 @@
           @contextmenu.prevent="ctx.open($event, e)"
         >
           <span class="ssh-sf-c ssh-sf-name">
-            <Icon :name="iconFor(e)" class="ssh-sf-icn" style="width: 13px; height: 13px" />
+            <Icon
+              :name="iconFor(e)"
+              class="ssh-sf-icn"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
             <span class="ssh-sf-nametext">{{ e.name }}</span>
           </span>
           <span v-if="hasCol('size')" class="ssh-sf-c num mono">

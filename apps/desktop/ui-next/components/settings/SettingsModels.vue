@@ -13,7 +13,10 @@
       <div class="pcard">
         <div class="pcardtop">
           <span class="rx">
-            <Icon name="agents" style="width: 16px; height: 16px; color: var(--blue)" />
+            <Icon
+              name="agents"
+              style="width: var(--icon-md); height: var(--icon-md); color: var(--blue)"
+            />
           </span>
           <div class="pcardinfo">
             <div class="rt">{{ t('settingsModels.anthropic.name') }}</div>
@@ -31,7 +34,7 @@
         <!-- Empty state: prominent CTA -->
         <template v-if="anthropicAccounts.length === 0">
           <button class="btn pri pcardcta" type="button" @click="oauthOpen = true">
-            <Icon name="agents" style="width: 14px; height: 14px" />
+            <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('settingsModels.anthropic.signIn') }}
           </button>
           <div class="fd pcardhint">{{ t('settingsModels.anthropic.signInHint') }}</div>
@@ -56,7 +59,7 @@
             />
           </div>
           <button class="btn sm pcardadd" type="button" @click="oauthOpen = true">
-            <Icon name="plus" style="width: 13px; height: 13px" />
+            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('settingsModels.account.addAnother') }}
           </button>
         </template>
@@ -68,7 +71,7 @@
               name="chev"
               class="smchev"
               :class="{ open: advancedOpen }"
-              style="width: 12px; height: 12px"
+              style="width: var(--icon-xs); height: var(--icon-xs)"
             />
             {{ t('settingsModels.anthropic.advancedToggle') }}
           </button>
@@ -129,7 +132,7 @@
       <div class="pcard">
         <div class="pcardtop">
           <span class="rx">
-            <Icon name="conn" style="width: 16px; height: 16px" />
+            <Icon name="conn" style="width: var(--icon-md); height: var(--icon-md)" />
           </span>
           <div class="pcardinfo">
             <div class="rt">{{ t('settingsModels.custom.name') }}</div>
@@ -163,7 +166,7 @@
           <div v-if="customError" class="pcarderror">{{ customError }}</div>
         </div>
         <button v-else class="btn sm pcardadd" type="button" @click="customFormOpen = true">
-          <Icon name="plus" style="width: 13px; height: 13px" />
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('settingsModels.custom.add') }}
         </button>
       </div>

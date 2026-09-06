@@ -15,7 +15,7 @@
           </span>
           <span class="ssh-chip">{{ authMethodLabel }}</span>
           <span v-if="folder" class="ssh-chip">
-            <Icon name="folder" style="width: 11px; height: 11px" />
+            <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ folder }}
           </span>
           <span v-for="tag in tags" :key="tag" class="ssh-chip">{{ tag }}</span>
@@ -24,7 +24,7 @@
             class="ssh-chip ssh-chip-warn"
             :title="t('ssh.detail.hostKeyOffHint')"
           >
-            <Icon name="alert" style="width: 11px; height: 11px" />
+            <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ t('ssh.detail.hostKeyOff') }}
           </span>
         </div>
@@ -36,7 +36,7 @@
           :title="t('ssh.detail.connect')"
           @click="emit('connect')"
         >
-          <Icon name="play" style="width: 13px; height: 13px" />
+          <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('ssh.detail.connect') }}
         </button>
         <button
@@ -45,7 +45,7 @@
           :aria-label="t('ssh.detail.test')"
           @click="emit('test')"
         >
-          <Icon name="refresh" style="width: 14px; height: 14px" />
+          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="ssh-act"
@@ -54,7 +54,7 @@
           :aria-label="t('ssh.detail.sftp')"
           @click="toggleSftp"
         >
-          <Icon name="folder" style="width: 14px; height: 14px" />
+          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="ssh-act"
@@ -63,7 +63,7 @@
           :aria-label="t('ssh.detail.forward')"
           @click="toggleForward"
         >
-          <Icon name="move" style="width: 14px; height: 14px" />
+          <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <span class="ssh-act-sep" />
         <button
@@ -72,7 +72,7 @@
           :aria-label="t('ssh.detail.edit')"
           @click="emit('edit')"
         >
-          <Icon name="edit" style="width: 14px; height: 14px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="ssh-act ssh-act-danger"
@@ -80,7 +80,7 @@
           :aria-label="t('ssh.detail.delete')"
           @click="emit('delete')"
         >
-          <Icon name="trash" style="width: 14px; height: 14px" />
+          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </header>
@@ -90,7 +90,7 @@
     <div v-if="hasPanel" class="ssh-panels">
       <section v-if="showTerminal" class="ssh-surface ssh-surface-grow">
         <div class="ssh-surface-head">
-          <Icon name="ssh" style="width: 13px; height: 13px" />
+          <Icon name="ssh" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('ssh.terminal.title') }}
           <span class="ssh-surface-sub mono">{{ endpoint }}</span>
           <button
@@ -99,7 +99,7 @@
             :aria-label="t('ssh.terminal.close')"
             @click="store.closeTerminal()"
           >
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
         <div class="ssh-surface-body ssh-term-body">
@@ -150,11 +150,11 @@
                 :title="t('ssh.identity.edit')"
                 @click="emit('edit-identity', identity.id)"
               >
-                <Icon name="edit" style="width: 12px; height: 12px" />
+                <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
               </button>
             </template>
             <button v-else class="ssh-linkbtn ssh-linkbtn-text" @click="emit('new-identity')">
-              <Icon name="plus" style="width: 12px; height: 12px" />
+              <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
               {{ t('ssh.identity.new') }}
             </button>
           </dd>
@@ -174,7 +174,10 @@
       </dl>
 
       <div v-if="connectionError" class="ssh-err">
-        <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto; margin-top: 2px" />
+        <Icon
+          name="alert"
+          style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 2px"
+        />
         <span class="mono">{{ connectionError }}</span>
       </div>
 

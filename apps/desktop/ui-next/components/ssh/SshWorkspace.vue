@@ -11,7 +11,7 @@
         :title="t('ssh.nav.hosts')"
         @click="store.setActiveTab('hosts')"
       >
-        <Icon name="conn" style="width: 14px; height: 14px" />
+        <Icon name="conn" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span class="sshx-tab-label">{{ t('ssh.nav.hosts') }}</span>
       </button>
 
@@ -34,7 +34,7 @@
           :aria-label="t('ssh.terminal.close')"
           @click.stop="store.closeTerminalTab(tab.id)"
         >
-          <Icon name="x" style="width: 12px; height: 12px" />
+          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </span>
       </button>
 
@@ -44,7 +44,7 @@
         :aria-label="t('ssh.tab.new')"
         @click="store.setSection('hosts')"
       >
-        <Icon name="plus" style="width: 14px; height: 14px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
 
       <button
@@ -55,7 +55,7 @@
         :aria-pressed="appearanceOpen"
         @click="appearanceOpen = !appearanceOpen"
       >
-        <Icon name="palette" style="width: 15px; height: 15px" />
+        <Icon name="palette" style="width: var(--icon-md); height: var(--icon-md)" />
       </button>
     </div>
 
@@ -119,7 +119,7 @@
               :aria-label="t('ssh.nav.snippets')"
               @click="toggleDock(tab.id, 'snippets')"
             >
-              <Icon name="commands" style="width: 13px; height: 13px" />
+              <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
               <span>{{ t('ssh.nav.snippets') }}</span>
             </button>
             <button
@@ -129,7 +129,7 @@
               :aria-label="t('ssh.session.copilotTitle')"
               @click="toggleDock(tab.id, 'session')"
             >
-              <Icon name="sessions" style="width: 13px; height: 13px" />
+              <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
               <span>{{ t('ssh.tterm.session') }}</span>
             </button>
             <button
@@ -144,7 +144,7 @@
               :aria-label="t('ssh.section.sftp')"
               @click="toggleDock(tab.id, 'sftp')"
             >
-              <Icon name="folder" style="width: 13px; height: 13px" />
+              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
               <span>{{ t('ssh.tterm.sftp') }}</span>
             </button>
           </div>

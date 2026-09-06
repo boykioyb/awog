@@ -8,7 +8,7 @@
       :aria-expanded="open"
       @click.stop="open = !open"
     >
-      <Icon name="settings" style="width: 13px; height: 13px" />
+      <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
     <div v-if="open" class="sfcol-pop" role="menu">
       <div class="sfcol-head">{{ t('ssh.sftp.columns') }}</div>

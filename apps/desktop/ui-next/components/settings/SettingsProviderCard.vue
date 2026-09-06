@@ -35,7 +35,7 @@
 
     <!-- ChatGPT subscription (OpenAI Codex OAuth) -->
     <button v-if="codex" class="btn pri pcardcta" type="button" @click="codexOpen = true">
-      <Icon name="agents" style="width: 14px; height: 14px" />
+      <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('settingsModels.openai.signIn') }}
     </button>
     <div v-if="codex && !accounts.length" class="fd pcardhint">
@@ -76,7 +76,7 @@
       <div v-if="error" class="pcarderror">{{ error }}</div>
     </div>
     <button v-else class="btn sm pcardadd" type="button" @click="formOpen = true">
-      <Icon name="plus" style="width: 13px; height: 13px" />
+      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ addKeyLabel }}
     </button>
 

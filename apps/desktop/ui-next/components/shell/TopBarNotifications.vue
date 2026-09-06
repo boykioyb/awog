@@ -8,7 +8,7 @@
       :aria-expanded="open"
       @click.stop="toggle"
     >
-      <Icon name="bell" style="width: 15px; height: 15px" />
+      <Icon name="bell" style="width: var(--icon-md); height: var(--icon-md)" />
       <span v-if="unreadCount > 0" class="ntf-badge">{{ badge }}</span>
     </button>
 
@@ -32,7 +32,7 @@
             name="refresh"
             class="ntf-refresh-ic"
             :class="{ spinning: loading }"
-            style="width: 13px; height: 13px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
         <button
@@ -42,7 +42,7 @@
           :title="t('github.inbox.markAllRead')"
           @click="markAll"
         >
-          <Icon name="check" style="width: 13px; height: 13px" />
+          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="ntf-act"
@@ -50,7 +50,7 @@
           :title="t('github.inbox.settings')"
           @click="goSettings"
         >
-          <Icon name="settings" style="width: 13px; height: 13px" />
+          <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 
@@ -483,8 +483,8 @@ function openOnGithub(): void {
 }
 .ntf-grp-chev {
   flex: 0 0 auto;
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textDim);
   transition: transform 0.14s ease;
 }

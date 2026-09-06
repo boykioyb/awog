@@ -6,7 +6,7 @@
       :aria-expanded="open"
       @click.stop="open = !open"
     >
-      <Icon name="branch" style="width: 13px; height: 13px" />
+      <Icon name="branch" style="width: var(--icon-sm); height: var(--icon-sm)" />
       <span class="sb-branch">{{ branch ?? t('statusbar.branch.none') }}</span>
       <span v-if="dirtyCount" class="sb-badge">{{ dirtyCount }}</span>
     </button>
@@ -30,13 +30,18 @@
             @click="pick(b)"
           >
             <span class="sb-mi-name">{{ b }}</span>
-            <Icon v-if="b === branch" name="check" class="ck" style="width: 13px; height: 13px" />
+            <Icon
+              v-if="b === branch"
+              name="check"
+              class="ck"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
           </button>
         </div>
         <div class="sb-menu-foot">
           <div class="sb-menu-sep" />
           <button class="mi" @click="openGit">
-            <Icon name="git" style="width: 13px; height: 13px" />
+            <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('statusbar.branch.openGit') }}
           </button>
         </div>

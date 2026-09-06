@@ -182,8 +182,8 @@ onMounted(() => {
   color: var(--text);
 }
 .acticon {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 .iconbtn:disabled {
   opacity: 0.4;
@@ -239,8 +239,8 @@ onMounted(() => {
   color: var(--text);
 }
 .codetab-icon {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textFaint);
   flex-shrink: 0;
 }
@@ -267,8 +267,8 @@ onMounted(() => {
   color: var(--text);
 }
 .codetab-xicon {
-  width: 11px;
-  height: 11px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 .codeeditor {

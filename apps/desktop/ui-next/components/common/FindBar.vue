@@ -30,7 +30,7 @@
       :aria-label="t('common.find.prev')"
       @click="emit('prev')"
     >
-      <Icon name="chev-left" style="width: 15px; height: 15px" />
+      <Icon name="chev-left" style="width: var(--icon-md); height: var(--icon-md)" />
     </button>
     <button
       class="pvfbtn"
@@ -39,7 +39,7 @@
       :aria-label="t('common.find.next')"
       @click="emit('next')"
     >
-      <Icon name="chev-right" style="width: 15px; height: 15px" />
+      <Icon name="chev-right" style="width: var(--icon-md); height: var(--icon-md)" />
     </button>
     <button
       class="pvfbtn"
@@ -47,7 +47,7 @@
       :aria-label="t('common.find.close')"
       @click="emit('close')"
     >
-      <Icon name="x" style="width: 14px; height: 14px" />
+      <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
   </div>
 </template>
@@ -111,8 +111,8 @@ function onEnter(e: KeyboardEvent) {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 .pvfico {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--textDim);
   flex: none;
   margin: 0 2px;

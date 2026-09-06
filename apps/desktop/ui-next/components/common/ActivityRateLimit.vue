@@ -12,7 +12,11 @@
         :disabled="loading"
         @click="refresh(true)"
       >
-        <Icon name="refresh" :class="{ spin: loading }" style="width: 13px; height: 13px" />
+        <Icon
+          name="refresh"
+          :class="{ spin: loading }"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
       </button>
     </div>
 

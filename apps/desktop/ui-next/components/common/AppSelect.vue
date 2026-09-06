@@ -202,8 +202,8 @@ onBeforeUnmount(() => {
   color: var(--textDim);
 }
 .aselchev {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: 0 0 auto;
   color: var(--textDim);
   transition: transform 0.15s;
@@ -269,8 +269,8 @@ onBeforeUnmount(() => {
   color: var(--textFaint);
 }
 .aseltick {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: 0 0 auto;
   color: var(--accent);
 }

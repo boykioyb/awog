@@ -5,11 +5,14 @@
     <div v-if="session" class="ovl on expovl" @click.self="close">
       <div class="expmodal">
         <div class="expmodal-head">
-          <Icon name="save" style="width: 14px; height: 14px; color: var(--accent)" />
+          <Icon
+            name="save"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="expmodal-title">{{ t('sessions.export.title') }}</span>
           <span style="flex: 1" />
           <button class="expmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -23,7 +26,7 @@
               :aria-selected="format === 'md'"
               @click="format = 'md'"
             >
-              <Icon name="file" style="width: 12px; height: 12px" />
+              <Icon name="file" style="width: var(--icon-xs); height: var(--icon-xs)" />
               {{ t('sessions.export.md') }}
             </button>
             <button
@@ -33,7 +36,7 @@
               :aria-selected="format === 'html'"
               @click="format = 'html'"
             >
-              <Icon name="code" style="width: 12px; height: 12px" />
+              <Icon name="code" style="width: var(--icon-xs); height: var(--icon-xs)" />
               {{ t('sessions.export.html') }}
             </button>
             <button
@@ -47,7 +50,7 @@
               <Icon
                 name="sparkles"
                 :class="{ 'expseg-busy': promptLoading }"
-                style="width: 12px; height: 12px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ t('sessions.export.prompt') }}
             </button>
@@ -60,11 +63,11 @@
             :disabled="promptLoading"
             @click="onRegenerate"
           >
-            <Icon name="refresh" style="width: 13px; height: 13px" />
+            <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.export.regenerate') }}
           </button>
           <button class="expbtn" :disabled="!contentReady" @click="onCopy">
-            <Icon name="copy" style="width: 13px; height: 13px" />
+            <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.export.copy') }}
           </button>
           <button
@@ -73,7 +76,7 @@
             :title="saveTitle"
             @click="onSave"
           >
-            <Icon name="save" style="width: 13px; height: 13px" />
+            <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.export.save') }}
           </button>
         </div>
@@ -83,19 +86,23 @@
              file actions: reveal in the OS file manager and open in VS Code. -->
         <div v-if="saved" class="expsaved">
           <div class="expsaved-top">
-            <Icon name="check" class="expsaved-ok" style="width: 14px; height: 14px" />
+            <Icon
+              name="check"
+              class="expsaved-ok"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
             <span class="expsaved-label">{{ t('sessions.export.savedLabel') }}</span>
             <span style="flex: 1" />
             <button class="expbtn" @click="onReveal">
-              <Icon name="folder" style="width: 13px; height: 13px" />
+              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('sessions.export.reveal') }}
             </button>
             <button v-if="vscodeAvailable" class="expbtn" @click="onOpenVscode">
-              <Icon name="code" style="width: 13px; height: 13px" />
+              <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('sessions.export.openInVscode') }}
             </button>
             <button class="expbtn" :title="t('sessions.export.copyPath')" @click="onCopyPath">
-              <Icon name="copy" style="width: 13px; height: 13px" />
+              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
           </div>
           <div class="expsaved-path" :title="saved.path">
@@ -109,12 +116,16 @@
             <div v-if="promptError" class="expgen err">
               <span>{{ promptError }}</span>
               <button class="expbtn" @click="onRegenerate">
-                <Icon name="refresh" style="width: 13px; height: 13px" />
+                <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
                 {{ t('sessions.export.retry') }}
               </button>
             </div>
             <div v-else-if="promptLoading && !promptText" class="expgen">
-              <Icon name="sparkles" class="expgen-spin" style="width: 20px; height: 20px" />
+              <Icon
+                name="sparkles"
+                class="expgen-spin"
+                style="width: var(--icon-lg); height: var(--icon-lg)"
+              />
               <span>{{ t('sessions.export.promptGenerating') }}</span>
             </div>
             <!-- Editable so the user can tweak the prompt before copy/save. Readonly

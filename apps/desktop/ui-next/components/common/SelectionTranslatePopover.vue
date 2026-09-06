@@ -7,7 +7,7 @@
       <div class="sttbackdrop" @mousedown="close" />
       <div class="sttpop" :style="popStyle" @mousedown.stop>
         <div class="stthead">
-          <Icon name="globe" style="width: 13px; height: 13px" />
+          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="stttitle">{{ t('translate.title') }}</span>
           <div class="sttlangs">
             <button
@@ -22,7 +22,7 @@
             </button>
           </div>
           <button class="sttx" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -48,7 +48,10 @@
 
         <div v-if="!loading && !error && result" class="sttfoot">
           <button class="sttbtn" @click="copyResult">
-            <Icon :name="copied ? 'check' : 'copy'" style="width: 12px; height: 12px" />
+            <Icon
+              :name="copied ? 'check' : 'copy'"
+              style="width: var(--icon-xs); height: var(--icon-xs)"
+            />
             {{ copied ? t('translate.copied') : t('translate.copy') }}
           </button>
         </div>

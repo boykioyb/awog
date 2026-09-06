@@ -9,7 +9,7 @@
       :title="t('topbar.openNav')"
       @click="toggleNav"
     >
-      <Icon name="menu" style="width: 16px; height: 16px" />
+      <Icon name="menu" style="width: var(--icon-md); height: var(--icon-md)" />
     </button>
     <button
       v-if="compact && hasList"
@@ -18,7 +18,7 @@
       :title="t('topbar.openList')"
       @click="toggleList"
     >
-      <Icon name="dock-left" style="width: 16px; height: 16px" />
+      <Icon name="dock-left" style="width: var(--icon-md); height: var(--icon-md)" />
     </button>
     <span class="ptitle">{{ title }}</span>
     <span class="sp" />
@@ -32,7 +32,7 @@
       :title="t('topbar.searchHint')"
       @click="openPalette"
     >
-      <Icon name="search" style="width: 13px; height: 13px" />
+      <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
       <span class="kbd-label">{{ t('topbar.search') }}</span>
       <span class="kk">⌘K</span>
     </button>

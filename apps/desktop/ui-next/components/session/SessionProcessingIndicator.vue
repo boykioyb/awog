@@ -1,6 +1,8 @@
 <template>
   <div class="procind" role="status" aria-live="polite">
-    <span class="procspin"><Icon name="refresh" style="width: 12px; height: 12px" /></span>
+    <span class="procspin">
+      <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+    </span>
     <span class="procwrap">
       <Transition name="pxfade" mode="out-in">
         <span :key="displayWord" class="procword">{{ displayWord }}</span>

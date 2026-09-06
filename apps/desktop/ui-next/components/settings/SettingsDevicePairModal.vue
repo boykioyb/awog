@@ -26,7 +26,7 @@
         {{ t('settings.devices.expiresIn', { time: countdownLabel }) }}
       </div>
       <button v-else class="btn pri sm pair-regen" @click="emit('regenerate')">
-        <Icon name="refresh" style="width: 13px; height: 13px" />
+        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('settings.devices.regenerate') }}
       </button>
 

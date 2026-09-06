@@ -2,7 +2,7 @@
   <!-- system divider -->
   <div v-if="message.role === 'system'" :data-mi="msgIndex" class="sysdiv">
     <span class="sl" />
-    <Icon name="refresh" style="width: 12px; height: 12px" />
+    <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
     {{ message.text }}
     <span class="sl" />
   </div>
@@ -22,7 +22,7 @@
       <!-- Slash command: show the compact invocation, not the expanded body
            (full body sent to the model lives in message.text, shown on hover). -->
       <span v-if="message.command" class="ucmd" :title="message.text">
-        <Icon name="commands" style="width: 12px; height: 12px" />
+        <Icon name="commands" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span class="ucmd-name">/{{ message.command.name }}</span>
         <span v-if="message.command.args" class="ucmd-args">{{ message.command.args }}</span>
       </span>
@@ -44,10 +44,10 @@
       <span class="mmetatxt">{{ fmt(message.at) }} · {{ tokLabel }} tok</span>
       <div class="hoveract bottom">
         <span class="ha" :title="t('sessions.message.copy')" @click="copyText">
-          <Icon name="copy" style="width: 13px; height: 13px" />
+          <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
         <span class="ha" :title="t('sessions.message.fullscreen')" @click="openFullscreen">
-          <Icon name="maximize" style="width: 13px; height: 13px" />
+          <Icon name="maximize" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
         <span
           v-if="canBookmark"
@@ -56,21 +56,21 @@
           :title="bookmarkTitle"
           @click="toggleBookmark"
         >
-          <Icon name="bookmark" style="width: 13px; height: 13px" />
+          <Icon name="bookmark" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
         <!-- `danger`: cuts the transcript (see .ha.danger below). Same three actions the
              confirm guard gates — the colour is the warning that arrives before the click. -->
         <span class="ha danger" :title="t('sessions.message.edit')" @click="editMsg">
-          <Icon name="edit" style="width: 13px; height: 13px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
         <span class="ha danger" :title="t('sessions.message.resend')" @click="resend">
-          <Icon name="send" style="width: 13px; height: 13px" />
+          <Icon name="send" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
         <span class="ha danger" :title="t('sessions.message.rewind')" @click="rewind">
-          <Icon name="rewind" style="width: 13px; height: 13px" />
+          <Icon name="rewind" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
         <span class="ha" :title="t('sessions.message.fork')" @click="fork">
-          <Icon name="fork" style="width: 13px; height: 13px" />
+          <Icon name="fork" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
       </div>
     </div>
@@ -123,7 +123,7 @@
           <div class="merr-main">
             <div class="merr-msg">{{ g.text }}</div>
             <button class="merr-retry" :title="t('sessions.message.retry')" @click="regen">
-              <Icon name="refresh" style="width: 12px; height: 12px" />
+              <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
               {{ t('sessions.message.retry') }}
             </button>
           </div>
@@ -154,7 +154,7 @@
             :title="a.title"
             @click="a.run"
           >
-            <Icon :name="a.icon" style="width: 13px; height: 13px" />
+            <Icon :name="a.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </span>
         </div>
       </div>
@@ -850,8 +850,8 @@ const msgActions = computed<MsgAction[]>(() => [
   border: 1px solid var(--dangerBorder, rgba(239, 68, 68, 0.35));
 }
 .merr-ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   flex: 0 0 auto;
   margin-top: 1px;
   color: var(--danger);

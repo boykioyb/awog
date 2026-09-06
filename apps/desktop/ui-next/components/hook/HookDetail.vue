@@ -1,7 +1,9 @@
 <template>
   <div class="hkd">
     <div class="dh">
-      <div class="hkd-icn"><Icon name="zap" style="width: 14px; height: 14px" /></div>
+      <div class="hkd-icn">
+        <Icon name="zap" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      </div>
       <div class="dt">{{ hook.name }}</div>
       <span class="tag mono">{{ hook.event }}</span>
       <span class="tag" :class="{ acc: hook.runMode === 'blocking' }">{{ hook.runMode }}</span>
@@ -21,11 +23,11 @@
         <Icon
           :name="running ? 'refresh' : 'play'"
           :class="{ spin: running }"
-          style="width: 14px; height: 14px"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
         />
       </button>
       <button class="iconbtn hkd-act" :title="t('hooks.detail.edit')" @click="emit('edit')">
-        <Icon name="edit" style="width: 14px; height: 14px" />
+        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         v-if="!isImported"
@@ -33,7 +35,7 @@
         :title="t('hooks.detail.delete')"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: 14px; height: 14px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -43,7 +45,11 @@
       <!-- Trust gate (ADR 0032 D-8): a project-tier hook must be explicitly
            trusted before it can spawn. -->
       <div v-if="needsTrust" class="hkd-trust">
-        <Icon name="alert" class="hkd-trust-icn" style="width: 15px; height: 15px" />
+        <Icon
+          name="alert"
+          class="hkd-trust-icn"
+          style="width: var(--icon-md); height: var(--icon-md)"
+        />
         <div class="hkd-trust-body">
           <div class="hkd-trust-ttl">{{ t('hooks.trust.title') }}</div>
           <div class="hkd-trust-desc">{{ t('hooks.trust.desc') }}</div>

@@ -12,7 +12,7 @@
           margin-right: 8px;
         "
       >
-        <Icon name="projects" style="width: 14px; height: 14px" />
+        <Icon name="projects" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </span>
       <div class="dt">{{ project.name }}</div>
       <span style="flex: 1" />
@@ -25,7 +25,7 @@
           :title="t('projects.detail.edit')"
           @click="emit('edit')"
         >
-          <Icon name="edit" style="width: 14px; height: 14px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn"
@@ -33,7 +33,7 @@
           :title="t('projects.detail.saveAsTemplate')"
           @click="emit('save-template')"
         >
-          <Icon name="save" style="width: 14px; height: 14px" />
+          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn"
@@ -41,7 +41,7 @@
           :title="t('projects.detail.installTemplate')"
           @click="emit('install-template')"
         >
-          <Icon name="templates" style="width: 14px; height: 14px" />
+          <Icon name="templates" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn"
@@ -49,7 +49,7 @@
           :title="t('projects.detail.openWorkspace')"
           @click="emit('open-workspace')"
         >
-          <Icon name="layers" style="width: 14px; height: 14px" />
+          <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="btn pri sm"

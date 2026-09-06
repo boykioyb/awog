@@ -41,7 +41,7 @@
           :class="{ editing: editingQueued === i }"
           :title="editingQueued === i ? '' : t('sessions.composer.queued')"
         >
-          <Icon name="clock" style="width: 11px; height: 11px" />
+          <Icon name="clock" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <textarea
             v-if="editingQueued === i"
             :ref="focusQueuedInput"
@@ -62,14 +62,14 @@
               :title="t('sessions.composer.queuedEdit')"
               @click.stop="startQueuedEdit(i)"
             >
-              <Icon name="edit" style="width: 11px; height: 11px" />
+              <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
             </span>
             <span
               class="qsend"
               :title="t('sessions.composer.queuedSendNow')"
               @click.stop="sendQueuedNow(i)"
             >
-              <Icon name="send" style="width: 11px; height: 11px" />
+              <Icon name="send" style="width: var(--icon-xs); height: var(--icon-xs)" />
             </span>
             <span class="x" :title="t('sessions.composer.queuedRemove')" @click.stop="dequeue(i)">
               ×
@@ -96,7 +96,11 @@
 
       <!-- persistent while /compact runs; else transient built-in command feedback -->
       <div v-if="compacting" class="cmdnotice compacting">
-        <Icon name="refresh" class="cmdspin" style="width: 12px; height: 12px" />
+        <Icon
+          name="refresh"
+          class="cmdspin"
+          style="width: var(--icon-xs); height: var(--icon-xs)"
+        />
         {{ t('sessions.command.notice.compacting') }}
       </div>
       <div v-else-if="commandNotice" class="cmdnotice">{{ commandNotice }}</div>
@@ -126,8 +130,12 @@
         >
           <img v-if="a.img && a.src" :src="a.src" class="attthumb" :alt="a.name" />
           <span v-else-if="a.img" class="thumb" />
-          <Icon v-else-if="a.folder" name="folder" style="width: 11px; height: 11px" />
-          <Icon v-else name="rules" style="width: 11px; height: 11px" />
+          <Icon
+            v-else-if="a.folder"
+            name="folder"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
+          <Icon v-else name="rules" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span class="attn">{{ a.name }}</span>
           <span
             class="x"
@@ -151,7 +159,7 @@
 
       <!-- soft budget warning: cumulative cost crossed the limit (no block). -->
       <div v-if="budgetOver" class="budgetwarn">
-        <Icon name="alert" style="width: 12px; height: 12px; flex: 0 0 auto" />
+        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
         {{ t('sessions.budget.warnBanner', { cost: budgetLabel }) }}
       </div>
 
@@ -165,9 +173,9 @@
           style="position: relative"
           @click.stop="toggle('mode')"
         >
-          <Icon :name="modeIcon" style="width: 12px; height: 12px" />
+          <Icon :name="modeIcon" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ t(`sessions.mode.${selectedMode}`) }}
-          <Icon name="chev" style="width: 11px; height: 11px" />
+          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <div
             v-if="open === 'mode'"
             class="smenu"
@@ -175,13 +183,13 @@
             @click.stop
           >
             <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id)">
-              <Icon :name="m.icon" style="width: 13px; height: 13px" />
+              <Icon :name="m.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t(`sessions.mode.${m.id}`) }}
               <Icon
                 v-if="m.id === selectedMode"
                 name="check"
                 class="ck"
-                style="width: 13px; height: 13px"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
               />
             </div>
           </div>
@@ -205,7 +213,7 @@
             "
             @click="onPinOpen"
           >
-            <Icon name="pin" style="width: 14px; height: 14px" />
+            <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
             <!-- Count (files + notes + applied note-presets). .fbadge is absolute so it
                  floats at the corner without adding a second grid row (the bug that
                  stacked the number below the icon + broke the button height). -->
@@ -223,7 +231,10 @@
             <!-- pinned files -->
             <div v-if="pinnedFiles.length" class="pinlist">
               <div v-for="f in pinnedFiles" :key="f" class="pinrow">
-                <Icon name="file" style="width: 12px; height: 12px; flex: 0 0 auto" />
+                <Icon
+                  name="file"
+                  style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
+                />
                 <span class="pinpath" :title="f">{{ f }}</span>
                 <span class="pinx" :title="t('sessions.pinned.remove')" @click="removePin(f)">
                   ×
@@ -234,7 +245,10 @@
             <!-- applied reusable notes (toggled from the library below, like file pins) -->
             <div v-if="appliedNotes.length" class="pinlist">
               <div v-for="(n, i) in appliedNotes" :key="`an${i}`" class="pinrow" :title="n">
-                <Icon name="pin" style="width: 12px; height: 12px; flex: 0 0 auto" />
+                <Icon
+                  name="pin"
+                  style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
+                />
                 <span class="pinpath">{{ noteLabel(n) }}</span>
                 <span class="pinx" :title="t('sessions.pinned.remove')" @click="toggleNote(n)">
                   ×
@@ -256,7 +270,10 @@
                 :title="f.path"
                 @click="addPin(f.path)"
               >
-                <Icon name="plus" style="width: 11px; height: 11px; flex: 0 0 auto" />
+                <Icon
+                  name="plus"
+                  style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
+                />
                 <span class="pinmname">{{ f.name }}</span>
                 <span class="pinmpath">{{ f.path }}</span>
               </div>
@@ -281,7 +298,7 @@
                 :title="t('sessions.pinned.savePresetTitle')"
                 @click="startPreset"
               >
-                <Icon name="pin" style="width: 11px; height: 11px" />
+                <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
                 {{ t('sessions.pinned.savePreset') }}
               </button>
               <template v-else>
@@ -298,14 +315,14 @@
                   :title="t('sessions.pinned.savePreset')"
                   @click="confirmPreset"
                 >
-                  <Icon name="check" style="width: 13px; height: 13px" />
+                  <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
                 </button>
                 <button
                   class="pinreuse-iconbtn"
                   :title="t('sessions.pinned.cancelPreset')"
                   @click="cancelPreset"
                 >
-                  <Icon name="x" style="width: 13px; height: 13px" />
+                  <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
                 </button>
               </template>
             </div>
@@ -321,13 +338,16 @@
                   :title="p.text"
                   @click="toggleNote(p.text)"
                 >
-                  <Icon name="pin" style="width: 11px; height: 11px; flex: 0 0 auto" />
+                  <Icon
+                    name="pin"
+                    style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
+                  />
                   <span class="pinreuse-label">{{ p.name }}</span>
                   <Icon
                     v-if="isNoteApplied(p.text)"
                     name="check"
                     :title="t('sessions.pinned.inUse')"
-                    style="width: 12px; height: 12px; flex: 0 0 auto"
+                    style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
                   />
                   <span
                     class="pinx"
@@ -356,13 +376,16 @@
                   :title="h"
                   @click="toggleNote(h)"
                 >
-                  <Icon name="rules" style="width: 11px; height: 11px; flex: 0 0 auto" />
+                  <Icon
+                    name="rules"
+                    style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
+                  />
                   <span class="pinreuse-label">{{ noteLabel(h) }}</span>
                   <Icon
                     v-if="isNoteApplied(h)"
                     name="check"
                     :title="t('sessions.pinned.inUse')"
-                    style="width: 12px; height: 12px; flex: 0 0 auto"
+                    style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
                   />
                   <span
                     class="pinx"
@@ -391,7 +414,7 @@
             name="sparkles"
             class="enhicon"
             :class="{ enhspin: enhancing }"
-            style="width: 14px; height: 14px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
         <button
@@ -400,7 +423,7 @@
           style="width: 28px; height: 28px"
           @click="emit('pick')"
         >
-          <Icon name="clip" style="width: 14px; height: 14px" />
+          <Icon name="clip" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <!-- Compacting → disabled processing button (Send locked until the RPC ends).
              Idle → Send. While a turn streams → Stop + a split steer/queue button

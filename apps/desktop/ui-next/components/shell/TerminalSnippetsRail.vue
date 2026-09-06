@@ -1,7 +1,7 @@
 <template>
   <div class="tsr">
     <div class="tsr-head">
-      <Icon name="commands" style="width: 13px; height: 13px" />
+      <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
       <span class="tsr-head-t">{{ t('terminalSnippet.title') }}</span>
       <span class="tsr-count">{{ visible.length }}</span>
       <div class="tsr-tools">
@@ -11,7 +11,7 @@
           :aria-label="t('terminalSnippet.new')"
           @click="openNew"
         >
-          <Icon name="plus" style="width: 13px; height: 13px" />
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="tsr-tool"
@@ -19,7 +19,7 @@
           :aria-label="t('terminalSnippet.close')"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </div>
@@ -31,7 +31,7 @@
         <span class="cempty-b">{{ t('terminalSnippet.emptyBody') }}</span>
         <div class="cempty-cta">
           <button class="btn pri sm" @click="openNew">
-            <Icon name="plus" style="width: 13px; height: 13px" />
+            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('terminalSnippet.new') }}
           </button>
         </div>
@@ -60,7 +60,7 @@
               :aria-label="t('terminalSnippet.run')"
               @click="run(s)"
             >
-              <Icon name="play" style="width: 13px; height: 13px" />
+              <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
             <button
               class="tsr-act"
@@ -68,7 +68,7 @@
               :aria-label="t('terminalSnippet.copy')"
               @click="copy(s)"
             >
-              <Icon name="copy" style="width: 13px; height: 13px" />
+              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
             <button
               class="tsr-act"
@@ -76,7 +76,7 @@
               :aria-label="t('terminalSnippet.edit')"
               @click="openEdit(s)"
             >
-              <Icon name="edit" style="width: 13px; height: 13px" />
+              <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
             <button
               class="tsr-act del"
@@ -84,7 +84,7 @@
               :aria-label="t('terminalSnippet.delete')"
               @click="del(s)"
             >
-              <Icon name="trash" style="width: 13px; height: 13px" />
+              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
           </div>
         </div>

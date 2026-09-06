@@ -114,7 +114,7 @@
            live in Settings → Notifications. -->
       <div class="ghnp-check">
         <button class="btn sm" type="button" :disabled="checking" @click="onCheckNotifications">
-          <Icon name="scan" style="width: 13px; height: 13px" />
+          <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{
             checking
               ? t('settings.git.ghNotifyCheck.running')

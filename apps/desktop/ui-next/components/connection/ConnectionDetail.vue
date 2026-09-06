@@ -25,7 +25,7 @@
           <Icon
             :name="oauthPending ? 'refresh' : 'link'"
             :class="{ spin: oauthPending }"
-            style="width: 13px; height: 13px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
         <button
@@ -34,7 +34,7 @@
           :title="t('connections.detail.setCredential')"
           @click="emit('edit')"
         >
-          <Icon name="shield" style="width: 13px; height: 13px" />
+          <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn cnd-act"
@@ -45,7 +45,7 @@
           <Icon
             :name="testing ? 'refresh' : 'check'"
             :class="{ spin: testing }"
-            style="width: 13px; height: 13px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
         <button
@@ -54,17 +54,17 @@
           :title="t('connections.detail.showInFolder')"
           @click="emit('reveal')"
         >
-          <Icon name="folder" style="width: 13px; height: 13px" />
+          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button class="iconbtn cnd-act" :title="t('connections.detail.edit')" @click="emit('edit')">
-          <Icon name="edit" style="width: 13px; height: 13px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn cnd-act cnd-danger"
           :title="t('connections.detail.delete')"
           @click="emit('delete')"
         >
-          <Icon name="trash" style="width: 13px; height: 13px" />
+          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </div>
@@ -84,7 +84,7 @@
           :title="t('connections.detail.oauthCancel')"
           @click="onCancelOAuth"
         >
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 
@@ -92,7 +92,7 @@
       <div v-if="testResult" class="cnd-banner" :class="{ ok: bannerOk, err: !bannerOk }">
         <Icon
           :name="bannerOk ? 'check' : 'alert'"
-          style="width: 13px; height: 13px; flex: 0 0 auto"
+          style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
         />
         <div class="cnd-banner-body">
           <div class="cnd-banner-title">{{ bannerTitle }}</div>
@@ -100,7 +100,7 @@
           <div v-if="testResult.probe" class="cnd-probe" :class="{ bad: !testResult.probe.ok }">
             <Icon
               :name="testResult.probe.ok ? 'check' : 'alert'"
-              style="width: 12px; height: 12px; flex: 0 0 auto"
+              style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
             />
             <span>{{ probeSummary }}</span>
           </div>
@@ -155,7 +155,7 @@
         <!-- Connection card: config detail as a clean key/value list -->
         <div class="cnd-card">
           <div class="cnd-card-head">
-            <Icon name="conn" style="width: 13px; height: 13px" />
+            <Icon name="conn" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('connections.section.connection') }}
           </div>
           <div class="cnd-kv">
@@ -183,7 +183,10 @@
             </div>
           </div>
           <div v-if="connectionError" class="cnd-card-err">
-            <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto; margin-top: 2px" />
+            <Icon
+              name="alert"
+              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 2px"
+            />
             <span class="mono">{{ connectionError }}</span>
           </div>
         </div>
@@ -203,7 +206,10 @@
         <!-- Error: banner + the full transcript (it explains the failure). -->
         <template v-else-if="toolsError">
           <div class="cnd-banner err">
-            <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
+            <Icon
+              name="alert"
+              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
+            />
             <div class="cnd-banner-body">
               <div class="cnd-banner-title">{{ t('connections.tools.errorTitle') }}</div>
               <div class="mono cnd-banner-sum">{{ toolsError }}</div>
@@ -221,7 +227,7 @@
                 name="chev"
                 class="cnd-log-chev"
                 :class="{ closed: !logOpen }"
-                style="width: 12px; height: 12px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ t(logOpen ? 'connections.tools.hideLog' : 'connections.tools.showLog') }}
             </button>
@@ -238,7 +244,15 @@
               class="cnd-tool"
               :class="{ blocked: !tool.allowed }"
             >
-              <Icon name="zap" style="width: 11px; height: 11px; flex: 0 0 auto; margin-top: 3px" />
+              <Icon
+                name="zap"
+                style="
+                  width: var(--icon-xs);
+                  height: var(--icon-xs);
+                  flex: 0 0 auto;
+                  margin-top: 3px;
+                "
+              />
               <div class="cnd-tool-body">
                 <div class="cnd-tool-head">
                   <span class="mono cnd-tool-name">{{ tool.display }}</span>
@@ -258,7 +272,7 @@
                 name="chev"
                 class="cnd-log-chev"
                 :class="{ closed: !logOpen }"
-                style="width: 12px; height: 12px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ t(logOpen ? 'connections.tools.hideLog' : 'connections.tools.showLog') }}
             </button>
@@ -275,7 +289,7 @@
             :title="t('connections.perms.edit')"
             @click="startPermsEdit"
           >
-            <Icon name="edit" style="width: 12px; height: 12px" />
+            <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </button>
         </div>
 
@@ -320,7 +334,10 @@
           </div>
           <div class="cnd-edit-hint">{{ t('connections.perms.editHint') }}</div>
           <div v-if="permsError" class="cnd-banner err">
-            <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
+            <Icon
+              name="alert"
+              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
+            />
             <div class="cnd-banner-body">
               <div class="cnd-banner-title">{{ t('connections.perms.saveError') }}</div>
               <div class="mono cnd-banner-sum">{{ permsError }}</div>
@@ -334,7 +351,7 @@
               <Icon
                 :name="permsSaving ? 'refresh' : 'check'"
                 :class="{ spin: permsSaving }"
-                style="width: 12px; height: 12px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ permsSaving ? t('connections.edit.saving') : t('common.save') }}
             </button>
@@ -389,7 +406,10 @@
           />
           <div class="cnd-edit-hint">{{ t('connections.doc.editHint') }}</div>
           <div v-if="guideError" class="cnd-banner err">
-            <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
+            <Icon
+              name="alert"
+              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
+            />
             <div class="cnd-banner-body">
               <div class="cnd-banner-title">{{ t('connections.doc.saveError') }}</div>
               <div class="mono cnd-banner-sum">{{ guideError }}</div>
@@ -403,7 +423,7 @@
               <Icon
                 :name="guideSaving ? 'refresh' : 'check'"
                 :class="{ spin: guideSaving }"
-                style="width: 12px; height: 12px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ guideSaving ? t('connections.edit.saving') : t('common.save') }}
             </button>

@@ -35,7 +35,7 @@
         @update:model-value="onReviewer"
       />
       <div class="srch" style="flex: 1; min-width: 120px; max-width: 220px">
-        <Icon name="search" style="width: 13px; height: 13px" />
+        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <input :value="search" :placeholder="t('projects.gh.search')" @input="onSearch" />
       </div>
       <button
@@ -46,7 +46,7 @@
         :disabled="loading"
         @click="emit('refresh')"
       >
-        <Icon name="refresh" style="width: 14px; height: 14px" />
+        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -65,7 +65,10 @@
           @mouseleave="cancelRowHover"
         >
           <div class="ghr1">
-            <Icon :name="kind === 'pr' ? 'fork' : 'alert'" style="width: 13px; height: 13px" />
+            <Icon
+              :name="kind === 'pr' ? 'fork' : 'alert'"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
             <span class="ghnum">#{{ it.number }}</span>
             <span class="ghtitle">{{ it.title }}</span>
             <span
@@ -88,7 +91,7 @@
               :aria-label="t('projects.gh.newSession')"
               @click.stop="emit('new-session', it)"
             >
-              <Icon name="sessions" style="width: 14px; height: 14px" />
+              <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
           </div>
           <div class="ghr2">
@@ -106,7 +109,10 @@
               }"
               :title="t('projects.gh.reviewState.' + reviewerMeta(r.state).key, { login: r.login })"
             >
-              <Icon :name="reviewerMeta(r.state).icon" style="width: 11px; height: 11px" />
+              <Icon
+                :name="reviewerMeta(r.state).icon"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
+              />
               {{ r.login }}
             </span>
             <span
@@ -123,13 +129,15 @@
           </div>
         </div>
         <div v-if="!items.length" class="empty" style="padding: 36px">
-          <span class="ei"><Icon name="git" style="width: 20px; height: 20px" /></span>
+          <span class="ei">
+            <Icon name="git" style="width: var(--icon-lg); height: var(--icon-lg)" />
+          </span>
           <div class="et">{{ emptyText }}</div>
 
           <!-- gh CLI not installed → install button + per-OS hint -->
           <div v-if="errorCode === 'GH_NOT_FOUND'" class="ghcta">
             <button class="btn pri sm" @click="emit('install-gh')">
-              <Icon name="globe" style="width: 13px; height: 13px" />
+              <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('projects.gh.installBtn') }}
             </button>
             <code class="ghcmd">{{ installHint }}</code>
@@ -138,11 +146,11 @@
           <!-- gh installed but not authenticated → copy login command + open guide -->
           <div v-else-if="errorCode === 'GH_NOT_AUTH'" class="ghcta">
             <button class="btn sm" @click="copyLoginCmd">
-              <Icon name="copy" style="width: 13px; height: 13px" />
+              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ copied ? t('projects.gh.copied') : t('projects.gh.copyLoginCmd') }}
             </button>
             <button class="btn sm" @click="emit('login-help')">
-              <Icon name="help" style="width: 13px; height: 13px" />
+              <Icon name="help" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('projects.gh.loginGuide') }}
             </button>
           </div>

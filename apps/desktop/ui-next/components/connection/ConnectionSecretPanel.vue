@@ -1,7 +1,10 @@
 <template>
   <div class="csp">
     <div class="csp-head">
-      <Icon name="shield" style="width: 13px; height: 13px; color: var(--accent)" />
+      <Icon
+        name="shield"
+        style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+      />
       <span class="csp-title">{{ t('connections.secret.title') }}</span>
     </div>
     <div class="csp-sub">{{ t('connections.secret.subtitle') }}</div>
@@ -31,7 +34,7 @@
         <Icon
           :name="saving ? 'refresh' : 'check'"
           :class="{ spin: saving }"
-          style="width: 12px; height: 12px"
+          style="width: var(--icon-xs); height: var(--icon-xs)"
         />
         {{ saving ? t('connections.secret.saving') : t('connections.secret.save') }}
       </button>

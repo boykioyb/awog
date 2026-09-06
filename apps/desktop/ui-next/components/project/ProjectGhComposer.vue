@@ -29,7 +29,7 @@
         :disabled="mode !== 'write' || posting"
         @click="tool.run()"
       >
-        <Icon :name="tool.icon" style="width: 13px; height: 13px" />
+        <Icon :name="tool.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -58,9 +58,9 @@
         :aria-label="t('projects.drawer.translate')"
         @click.stop="toggleTrMenu"
       >
-        <Icon name="globe" style="width: 12px; height: 12px" />
+        <Icon name="globe" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span>{{ t('projects.drawer.translateMenu') }}</span>
-        <Icon name="chev" style="width: 11px; height: 11px" />
+        <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
       <button
         class="iconbtn"
@@ -75,7 +75,7 @@
           name="skills"
           class="enhicon"
           :class="{ enhspin: enhancing }"
-          style="width: 14px; height: 14px"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
         />
       </button>
       <button
@@ -88,7 +88,7 @@
         style="width: 28px; height: 28px"
         @click="emit('undo')"
       >
-        <Icon name="revert" style="width: 14px; height: 14px" />
+        <Icon name="revert" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <span v-if="translating" class="fd ghcbusy">{{ t('projects.drawer.translatingDraft') }}</span>
       <span style="flex: 1" />

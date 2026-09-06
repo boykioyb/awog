@@ -36,9 +36,9 @@
           }"
           @click.stop="toggleLangMenu"
         >
-          <Icon name="globe" style="width: 13px; height: 13px" />
+          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('projects.drawer.viewLang.' + viewLang) }}</span>
-          <Icon name="chev" style="width: 12px; height: 12px" />
+          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
         <button
           class="iconbtn"
@@ -49,7 +49,10 @@
           style="width: 28px; height: 28px"
           @click="isFull = !isFull"
         >
-          <Icon :name="isFull ? 'minimize' : 'maximize'" style="width: 14px; height: 14px" />
+          <Icon
+            :name="isFull ? 'minimize' : 'maximize'"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
         </button>
         <button
           v-if="thread"
@@ -61,7 +64,7 @@
           style="width: 28px; height: 28px"
           @click="emit('refresh')"
         >
-          <Icon name="refresh" style="width: 14px; height: 14px" />
+          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <a
           v-if="thread?.url"
@@ -72,7 +75,7 @@
           :title="t('projects.drawer.openOnGithub')"
           style="width: 28px; height: 28px"
         >
-          <Icon name="git" style="width: 14px; height: 14px" />
+          <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </a>
         <button
           class="iconbtn"
@@ -80,7 +83,7 @@
           style="width: 28px; height: 28px"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: 14px; height: 14px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 
@@ -95,7 +98,11 @@
           :class="{ on: activeTab === tb.key }"
           @click="selectTab(tb.key)"
         >
-          <Icon :name="tb.icon" class="ghtab-ic" style="width: 14px; height: 14px" />
+          <Icon
+            :name="tb.icon"
+            class="ghtab-ic"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
           <span>{{ t('projects.drawer.tab.' + tb.key) }}</span>
           <span v-if="tb.count" class="ghtab-n">{{ tb.count }}</span>
         </button>
@@ -167,7 +174,7 @@
                   :title="t('projects.drawer.reply')"
                   @click="emit('reply', { author: c.author.login, body: c.body })"
                 >
-                  <Icon name="message" style="width: 12px; height: 12px" />
+                  <Icon name="message" style="width: var(--icon-xs); height: var(--icon-xs)" />
                   {{ t('projects.drawer.reply') }}
                 </button>
               </div>
@@ -197,7 +204,7 @@
                 <!-- Inline comment threads created by this review. -->
                 <div v-for="(th, ti) in r.threads" :key="`r${i}t${ti}`" class="ghrthread">
                   <div class="ghrt-loc mono">
-                    <Icon name="file" style="width: 12px; height: 12px" />
+                    <Icon name="file" style="width: var(--icon-xs); height: var(--icon-xs)" />
                     {{ th.path }}
                     <template v-if="th.line">:{{ th.line }}</template>
                   </div>
@@ -246,7 +253,7 @@
                 :disabled="reviewing"
                 @click="emit('approve')"
               >
-                <Icon name="check" style="width: 14px; height: 14px" />
+                <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
                 {{ reviewing ? t('projects.drawer.approving') : t('projects.drawer.approve') }}
               </button>
               <span v-if="reviewError" class="fd ghapprove-err">
@@ -254,7 +261,7 @@
               </span>
             </div>
             <div v-else-if="kind === 'pr' && reviewed" class="ghapproved">
-              <Icon name="check" style="width: 13px; height: 13px" />
+              <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('projects.drawer.approved') }}
             </div>
 

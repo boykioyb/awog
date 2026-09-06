@@ -1,7 +1,9 @@
 <template>
   <div class="rld">
     <div class="dh">
-      <div class="rld-icn"><Icon name="rules" style="width: 14px; height: 14px" /></div>
+      <div class="rld-icn">
+        <Icon name="rules" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      </div>
       <div class="dt">{{ rule.name }}</div>
       <span class="tag mono">{{ rule.id }}.md</span>
       <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
@@ -18,7 +20,7 @@
         @click="emit('toggle')"
       />
       <button class="iconbtn rld-act" :title="t('rules.detail.edit')" @click="emit('edit')">
-        <Icon name="edit" style="width: 14px; height: 14px" />
+        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         v-if="!isImported"
@@ -26,7 +28,7 @@
         :title="t('rules.detail.delete')"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: 14px; height: 14px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 

@@ -38,7 +38,7 @@
 
     <!-- Error banner (sidecar failed — showing fallback data) -->
     <div v-if="error" class="acterr">
-      <Icon name="alert" style="width: 14px; height: 14px" />
+      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('activity.error', { msg: error }) }}
     </div>
 
@@ -109,7 +109,7 @@
     <!-- By model table -->
     <div class="sech">{{ t('activity.byModel.title') }}</div>
     <div v-if="hasMissingPrices" class="actwarn">
-      <Icon name="alert" style="width: 14px; height: 14px" />
+      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('activity.byModel.missingHint') }}
     </div>
     <div class="tile actpanel">
@@ -218,7 +218,7 @@
                     :title="t('activity.bySession.days.toggle')"
                     @click="toggleSessionDays(s.sessionId)"
                   >
-                    <Icon name="chev" style="width: 12px; height: 12px" />
+                    <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
                   </button>
                   <span
                     class="actseshttl actseshlink"

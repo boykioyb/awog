@@ -3,13 +3,13 @@
        finishes while auto-continue is OFF, this card offers a one-click resume.
        Hidden under auto-continue (the store fires the turn itself when idle). -->
   <div v-if="visible" class="bgwake">
-    <Icon name="zap" class="bgwake-ic" style="width: 14px; height: 14px" />
+    <Icon name="zap" class="bgwake-ic" style="width: var(--icon-sm); height: var(--icon-sm)" />
     <div class="bgwake-body">
       <div class="bgwake-title">{{ title }}</div>
       <div class="bgwake-sub" :title="lastCommand">{{ subtitle }}</div>
     </div>
     <button type="button" class="bgwake-go" @click="onContinue">
-      <Icon name="play" style="width: 12px; height: 12px" />
+      <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
       <span>{{ t('sessions.bg.wake.continue') }}</span>
     </button>
     <button
@@ -18,7 +18,7 @@
       :title="t('sessions.bg.wake.dismiss')"
       @click="onDismiss"
     >
-      <Icon name="x" style="width: 12px; height: 12px" />
+      <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
   </div>
 </template>

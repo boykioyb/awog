@@ -72,8 +72,8 @@ function onClick(node: WorkspaceTreeNode): void {
   border-left-color: var(--accent);
 }
 .edtn-chev {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textFaint);
   flex-shrink: 0;
   transform: rotate(-90deg);
@@ -88,8 +88,8 @@ function onClick(node: WorkspaceTreeNode): void {
   flex-shrink: 0;
 }
 .edtn-icon {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--textDim);
   flex-shrink: 0;
 }

@@ -84,8 +84,8 @@ const dismissLabel = computed(() =>
   border-bottom-color: var(--danger);
 }
 .upd-ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   flex-shrink: 0;
   color: var(--accent);
 }

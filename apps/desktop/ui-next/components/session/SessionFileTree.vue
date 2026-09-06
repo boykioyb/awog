@@ -8,7 +8,7 @@
       @contextmenu.prevent="ctrl.onContext?.($event, path(n.f), 'file')"
     >
       <span class="fst" :class="{ m: n.st === 'M', a: n.st === 'A' }">{{ n.st || '' }}</span>
-      <Icon name="rules" style="width: 12px; height: 12px" />
+      <Icon name="rules" style="width: var(--icon-xs); height: var(--icon-xs)" />
       <span class="fn">{{ n.f }}</span>
     </div>
     <template v-else>
@@ -18,7 +18,7 @@
         @contextmenu.prevent="ctrl.onContext?.($event, path(n.d), 'dir')"
       >
         <Icon name="chev" class="fchv" :class="{ col: !isOpen(path(n.d)) }" />
-        <Icon name="folder" style="width: 12px; height: 12px" />
+        <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span class="fdn">{{ n.d }}</span>
       </div>
       <div v-if="isOpen(path(n.d))" class="fchild">

@@ -2,7 +2,7 @@
   <div class="list" style="flex: 0 0 240px">
     <div class="ltop">
       <div class="srch">
-        <Icon name="search" style="width: 13px; height: 13px" />
+        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <input v-model="query" :placeholder="t('projects.list.search')" />
       </div>
       <button

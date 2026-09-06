@@ -1,7 +1,7 @@
 <template>
   <div class="detail">
     <div class="empty">
-      <span class="ei"><Icon name="external" style="width: 21px; height: 21px" /></span>
+      <span class="ei"><Icon name="external" style="width: 22px; height: 22px" /></span>
       <div class="et">
         {{ t('sessions.window.handedOff.title') }}
         <br />

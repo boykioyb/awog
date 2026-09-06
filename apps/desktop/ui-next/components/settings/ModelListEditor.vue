@@ -14,13 +14,13 @@
         :title="t('settingsModels.models.remove')"
         @click="removeAt(i)"
       >
-        <Icon name="trash" style="width: 13px; height: 13px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
     <!-- Append a new (empty) row -->
     <button class="btn sm mleadd" type="button" @click="addRow">
-      <Icon name="plus" style="width: 13px; height: 13px" />
+      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('settingsModels.models.add') }}
     </button>
 

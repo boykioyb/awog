@@ -22,7 +22,11 @@
           <div v-else-if="error" class="sfpp-err mono">{{ error }}</div>
           <template v-else>
             <button v-if="pcwd !== '.'" class="sfpp-row" @click="navigate(parentPath)">
-              <Icon name="chev" class="sfpp-up-icn" style="width: 13px; height: 13px" />
+              <Icon
+                name="chev"
+                class="sfpp-up-icn"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
               <span>..</span>
             </button>
             <div v-if="!dirs.length" class="sfpp-empty">{{ t('ssh.sftp.picker.noSubdirs') }}</div>
@@ -32,7 +36,11 @@
               class="sfpp-row"
               @click="navigate(join(d.name))"
             >
-              <Icon name="folder" class="sfpp-dir-icn" style="width: 13px; height: 13px" />
+              <Icon
+                name="folder"
+                class="sfpp-dir-icn"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
               <span>{{ d.name }}</span>
             </button>
           </template>
@@ -154,8 +162,8 @@ watch(
   gap: 9px;
 }
 .sfpp-icn {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   color: var(--accent);
 }
 .sfpp-title {

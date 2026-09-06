@@ -16,7 +16,7 @@
         :aria-pressed="allExpanded"
         @click="toggleFold"
       >
-        <Icon name="foldv" style="width: 13px; height: 13px" />
+        <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </Transition>
     <div ref="msgsEl" class="msgs" @scroll="onScroll">
@@ -62,7 +62,7 @@
           :title="t('sessions.transcript.scrollTop')"
           @click="jumpTop"
         >
-          <Icon name="chev" class="up" style="width: 16px; height: 16px" />
+          <Icon name="chev" class="up" style="width: var(--icon-md); height: var(--icon-md)" />
         </button>
       </Transition>
       <Transition name="fadepop">
@@ -72,7 +72,7 @@
           :title="t('sessions.transcript.scrollBottom')"
           @click="jumpBottom"
         >
-          <Icon name="chev" style="width: 16px; height: 16px" />
+          <Icon name="chev" style="width: var(--icon-md); height: var(--icon-md)" />
         </button>
       </Transition>
     </div>

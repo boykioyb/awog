@@ -6,11 +6,14 @@
         <div class="acc-hint">{{ t('settings.devices.access.hint') }}</div>
       </div>
       <button class="btn sm" :title="t('settings.devices.access.copy')" @click="copy">
-        <Icon :name="copied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+        <Icon
+          :name="copied ? 'check' : 'copy'"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
         {{ copied ? t('settings.devices.access.copied') : t('settings.devices.access.copy') }}
       </button>
       <button class="btn sm" :title="t('settings.devices.access.qr')" @click="showQr = !showQr">
-        <Icon name="scan" style="width: 13px; height: 13px" />
+        <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ showQr ? t('settings.devices.access.hideQr') : t('settings.devices.access.qr') }}
       </button>
     </div>

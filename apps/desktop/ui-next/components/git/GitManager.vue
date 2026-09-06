@@ -63,7 +63,7 @@
         />
 
         <div v-if="store.isDetached" class="gbanner">
-          <Icon name="alert" style="width: 14px; height: 14px" />
+          <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('git.banner.detached', { at: store.detachedAt ?? '' }) }}</span>
         </div>
 

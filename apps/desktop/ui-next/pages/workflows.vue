@@ -6,7 +6,7 @@
         <div class="wflist-hd">
           <div class="wflist-title">{{ t('workflow.header') }}</div>
           <button class="iconbtn" :title="t('workflow.new')" @click="openCreator">
-            <Icon name="plus" style="width: 14px; height: 14px" />
+            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
         <div class="wflist-scope">
@@ -49,7 +49,9 @@
       />
       <div v-else class="detail">
         <div class="empty">
-          <span class="ei"><Icon name="workflows" style="width: 20px; height: 20px" /></span>
+          <span class="ei">
+            <Icon name="workflows" style="width: var(--icon-lg); height: var(--icon-lg)" />
+          </span>
           <div class="et">{{ t('workflow.emptyDetail') }}</div>
         </div>
       </div>

@@ -13,7 +13,10 @@
       :title="staged ? t('git.diff.unstageHunk') : t('git.diff.stageHunk')"
       @click.stop="emit('hunk-action', line.hunk)"
     >
-      <Icon :name="staged ? 'rewind' : 'plus'" style="width: 11px; height: 11px" />
+      <Icon
+        :name="staged ? 'rewind' : 'plus'"
+        style="width: var(--icon-xs); height: var(--icon-xs)"
+      />
       {{ staged ? t('git.diff.unstageHunkBtn') : t('git.diff.stageHunkBtn') }}
     </button>
   </div>

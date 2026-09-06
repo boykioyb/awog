@@ -27,7 +27,7 @@
         :title="t('settingsModels.account.reauth')"
         @click="emit('reauth')"
       >
-        <Icon name="refresh" style="width: 13px; height: 13px" />
+        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="acract"
@@ -35,7 +35,7 @@
         :title="t('settingsModels.account.edit')"
         @click="emit('edit')"
       >
-        <Icon name="edit" style="width: 13px; height: 13px" />
+        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="acract"
@@ -45,7 +45,7 @@
         @click="emit('test')"
       >
         <span v-if="testing" class="acrspin" />
-        <Icon v-else name="act" style="width: 13px; height: 13px" />
+        <Icon v-else name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="acract acrdanger"
@@ -53,7 +53,7 @@
         :title="t('settingsModels.account.disconnect')"
         @click="emit('disconnect')"
       >
-        <Icon name="x" style="width: 13px; height: 13px" />
+        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 

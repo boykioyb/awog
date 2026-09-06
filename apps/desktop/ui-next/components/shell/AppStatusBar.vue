@@ -21,7 +21,7 @@
             :title="t('statusbar.project.open')"
             @click="projectModal.open(active.project)"
           >
-            <Icon name="folder" style="width: 13px; height: 13px" />
+            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
             <span class="sb-proj">{{ projName }}</span>
           </button>
           <span class="sb-div" />
@@ -38,7 +38,7 @@
           :title="t('statusbar.workspaceFiles')"
           @click="wpToggle('Files')"
         >
-          <Icon name="folder" style="width: 13px; height: 13px" />
+          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
           Files
         </button>
         <span class="sb-div" />
@@ -52,7 +52,7 @@
         :title="t('statusbar.terminalGlobal')"
         @click="gtToggle"
       >
-        <Icon name="commands" style="width: 13px; height: 13px" />
+        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
         Terminal
       </button>
     </div>

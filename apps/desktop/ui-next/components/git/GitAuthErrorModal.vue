@@ -17,7 +17,10 @@
           <span class="gae-prompt">$</span>
           <code class="gae-cmdtext mono">{{ fixCommand }}</code>
           <button class="gae-copy" :title="t('git.auth.copyCommand')" @click="copyCommand">
-            <Icon :name="copied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+            <Icon
+              :name="copied ? 'check' : 'copy'"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
           </button>
         </div>
 
@@ -27,7 +30,7 @@
         <div class="gpm-foot">
           <button class="btn" @click="emit('close')">{{ t('common.close') }}</button>
           <button class="btn pri" @click="openGithub">
-            <Icon name="globe" style="width: 13px; height: 13px" />
+            <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ error.hint === 'ssh-key' ? t('git.auth.openSshKeys') : t('git.auth.openTokens') }}
           </button>
         </div>
@@ -139,8 +142,8 @@ onBeforeUnmount(() => {
   gap: 11px;
 }
 .gae-headicn {
-  width: 20px;
-  height: 20px;
+  width: var(--icon-lg);
+  height: var(--icon-lg);
   flex: none;
   margin-top: 1px;
   color: var(--danger);

@@ -9,7 +9,7 @@
       <!-- Preset setup hint — shown only when a catalog provider seeded this new
            form (never on edit). Provider-specific guidance from the catalog. -->
       <div v-if="setupHint && !isExisting" class="cne-setup">
-        <Icon name="bulb" style="width: 14px; height: 14px; flex: 0 0 auto" />
+        <Icon name="bulb" style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto" />
         <div class="cne-setup-tx">
           <span class="cne-setup-t">{{ t('connections.editor.setupTitle') }}</span>
           <span>{{ setupHint }}</span>
@@ -400,7 +400,7 @@
           <Icon
             :name="verifying ? 'refresh' : 'check'"
             :class="{ spin: verifying }"
-            style="width: 12px; height: 12px"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
           />
           {{ verifying ? t('connections.editor.testing') : t('connections.editor.verify') }}
         </button>
@@ -411,7 +411,7 @@
       <div v-if="verifyProbe" class="cne-verify-sum cne-probe" :class="{ ok: verifyProbe.ok }">
         <Icon
           :name="verifyProbe.ok ? 'check' : 'alert'"
-          style="width: 12px; height: 12px; flex: 0 0 auto"
+          style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
         />
         <span>
           {{
@@ -442,7 +442,7 @@
         :title="t('connections.editor.refineAiHint')"
         @click="emit('refine-ai')"
       >
-        <Icon name="sparkles" style="width: 13px; height: 13px" />
+        <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('connections.editor.refineAi') }}
       </button>
       <span style="flex: 1" />

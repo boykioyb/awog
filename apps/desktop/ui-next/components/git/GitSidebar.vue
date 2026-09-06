@@ -18,7 +18,7 @@
         :title="collapsed ? t('git.sidebar.expand') : t('git.sidebar.collapse')"
         @click="emit('toggle-collapse')"
       >
-        <Icon name="panel" style="width: 14px; height: 14px" />
+        <Icon name="panel" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </span>
     </div>
 
@@ -31,7 +31,7 @@
           :title="t('git.sidebar.localChanges')"
           @click="emit('update:section', { kind: 'local-changes' })"
         >
-          <Icon name="edit" style="width: 14px; height: 14px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
         <span
           class="gqi"
@@ -39,7 +39,7 @@
           :title="t('git.sidebar.allCommits')"
           @click="emit('update:section', { kind: 'all-commits' })"
         >
-          <Icon name="clock" style="width: 14px; height: 14px" />
+          <Icon name="clock" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
       </div>
     </template>
@@ -47,7 +47,10 @@
     <template v-else>
       <!-- Branch search -->
       <div class="gsearch">
-        <Icon name="search" style="width: 13px; height: 13px; color: var(--textDim)" />
+        <Icon
+          name="search"
+          style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+        />
         <input
           :value="search"
           :placeholder="t('git.sidebar.searchBranches')"
@@ -63,7 +66,7 @@
           :class="{ on: section.kind === 'local-changes' }"
           @click="emit('update:section', { kind: 'local-changes' })"
         >
-          <Icon name="edit" style="width: 13px; height: 13px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span style="flex: 1">{{ t('git.sidebar.localChanges') }}</span>
           <span
             v-if="dirtyCount > 0"
@@ -84,7 +87,7 @@
           :class="{ on: section.kind === 'all-commits' }"
           @click="emit('update:section', { kind: 'all-commits' })"
         >
-          <Icon name="clock" style="width: 13px; height: 13px" />
+          <Icon name="clock" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span style="flex: 1">{{ t('git.sidebar.allCommits') }}</span>
         </div>
 
@@ -93,7 +96,7 @@
           <svg class="icn gchv" :class="{ col: !sectionOpenWithSearch.branches }">
             <use href="#i-chev" />
           </svg>
-          <Icon name="branch" style="width: 12px; height: 12px" />
+          <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span style="flex: 1">{{ t('git.sidebar.branches') }}</span>
           <span class="gsecct">{{ localBranches.length }}</span>
           <span
@@ -101,7 +104,7 @@
             :title="t('git.sidebar.newBranch')"
             @click.stop="emit('new-branch')"
           >
-            <Icon name="plus" style="width: 12px; height: 12px" />
+            <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </span>
         </div>
         <template v-if="sectionOpenWithSearch.branches">
@@ -119,7 +122,7 @@
             >
               <Icon
                 name="branch"
-                style="width: 12px; height: 12px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
                 :style="b.current ? { color: 'var(--accent)' } : undefined"
               />
               <span
@@ -144,7 +147,7 @@
                 :title="t('git.ctx.unpin')"
                 @click.stop="emit('toggle-pin', b.name)"
               >
-                <Icon name="pin" style="width: 12px; height: 12px" />
+                <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
               </span>
             </div>
           </template>
@@ -160,7 +163,7 @@
               @click="emit('toggle-branch-folder', row.name)"
             >
               <svg class="icn fchv" :class="{ col: row.collapsed }"><use href="#i-chev" /></svg>
-              <Icon name="folder" style="width: 12px; height: 12px" />
+              <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
               <span style="flex: 1">{{ row.label }}/</span>
               <span class="gc">{{ row.count }}</span>
             </div>
@@ -174,7 +177,7 @@
             >
               <Icon
                 name="branch"
-                style="width: 12px; height: 12px"
+                style="width: var(--icon-xs); height: var(--icon-xs)"
                 :style="row.branch.current ? { color: 'var(--accent)' } : undefined"
               />
               <span
@@ -200,7 +203,7 @@
                 :title="isPinned(row.branch.name) ? t('git.ctx.unpin') : t('git.ctx.pin')"
                 @click.stop="emit('toggle-pin', row.branch.name)"
               >
-                <Icon name="pin" style="width: 12px; height: 12px" />
+                <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
               </span>
             </div>
           </template>
@@ -211,11 +214,11 @@
           <svg class="icn gchv" :class="{ col: !sectionOpenWithSearch.remotes }">
             <use href="#i-chev" />
           </svg>
-          <Icon name="conn" style="width: 12px; height: 12px" />
+          <Icon name="conn" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span style="flex: 1">{{ t('git.sidebar.remotes') }}</span>
           <span class="gsecct">{{ remoteCount }}</span>
           <span class="gsecadd" :title="t('git.remote.add')" @click.stop="emit('add-remote')">
-            <Icon name="plus" style="width: 12px; height: 12px" />
+            <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </span>
         </div>
         <template v-if="sectionOpenWithSearch.remotes">
@@ -230,7 +233,7 @@
               @click="emit('update:section', { kind: 'remote', name: r.name })"
               @contextmenu.prevent="emit('context-remote', $event, r.name)"
             >
-              <Icon name="conn" style="width: 12px; height: 12px" />
+              <Icon name="conn" style="width: var(--icon-xs); height: var(--icon-xs)" />
               <span class="gtrunc" style="flex: 1; min-width: 0">{{ r.name }}</span>
             </div>
             <div
@@ -242,7 +245,7 @@
               @click="emit('update:section', { kind: 'branch', name: rb.name })"
               @contextmenu.prevent="emit('context-branch', $event, rb)"
             >
-              <Icon name="branch" style="width: 12px; height: 12px" />
+              <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
               <span class="gtrunc" style="flex: 1; min-width: 0">
                 {{ stripRemotePrefix(rb.name, r.name) }}
               </span>
@@ -253,11 +256,11 @@
         <!-- Tags -->
         <div class="gsec gseccol" @click="emit('toggle-section', 'tags')">
           <svg class="icn gchv" :class="{ col: !secOpen.tags }"><use href="#i-chev" /></svg>
-          <Icon name="git" style="width: 12px; height: 12px" />
+          <Icon name="git" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span style="flex: 1">{{ t('git.sidebar.tags') }}</span>
           <span class="gsecct">{{ tags.length }}</span>
           <span class="gsecadd" :title="t('git.sidebar.newTag')" @click.stop="emit('new-tag')">
-            <Icon name="plus" style="width: 12px; height: 12px" />
+            <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </span>
         </div>
         <template v-if="secOpen.tags">
@@ -271,7 +274,7 @@
             @click="emit('update:section', { kind: 'tag', name: tag })"
             @contextmenu.prevent="emit('context-tag', $event, tag)"
           >
-            <Icon name="git" style="width: 12px; height: 12px" />
+            <Icon name="git" style="width: var(--icon-xs); height: var(--icon-xs)" />
             <span class="gtrunc" style="flex: 1; min-width: 0">{{ tag }}</span>
           </div>
         </template>
@@ -279,11 +282,11 @@
         <!-- Stashes -->
         <div class="gsec gseccol" @click="emit('toggle-section', 'stashes')">
           <svg class="icn gchv" :class="{ col: !secOpen.stashes }"><use href="#i-chev" /></svg>
-          <Icon name="clip" style="width: 12px; height: 12px" />
+          <Icon name="clip" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span style="flex: 1">{{ t('git.sidebar.stashes') }}</span>
           <span class="gsecct">{{ stashes.length }}</span>
           <span class="gsecadd" :title="t('git.stash.save')" @click.stop="emit('save-stash')">
-            <Icon name="plus" style="width: 12px; height: 12px" />
+            <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </span>
         </div>
         <template v-if="secOpen.stashes">
@@ -297,7 +300,7 @@
             @click="emit('update:section', { kind: 'stash', index: s.index })"
             @contextmenu.prevent="emit('context-stash', $event, s.index)"
           >
-            <Icon name="clip" style="width: 12px; height: 12px" />
+            <Icon name="clip" style="width: var(--icon-xs); height: var(--icon-xs)" />
             <span class="gtrunc" style="flex: 1; min-width: 0">{{ s.m }}</span>
             <span class="gc">{{ s.w }}</span>
           </div>
@@ -306,7 +309,7 @@
         <!-- Submodules -->
         <div class="gsec gseccol" @click="emit('toggle-section', 'submodules')">
           <svg class="icn gchv" :class="{ col: !secOpen.submodules }"><use href="#i-chev" /></svg>
-          <Icon name="projects" style="width: 12px; height: 12px" />
+          <Icon name="projects" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span style="flex: 1">{{ t('git.sidebar.submodules') }}</span>
           <span class="gsecct">0</span>
         </div>

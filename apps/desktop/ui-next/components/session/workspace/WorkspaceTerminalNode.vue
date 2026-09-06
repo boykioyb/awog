@@ -22,7 +22,7 @@
         @mousedown.stop
         @pointerdown.stop="ctx.onGripDown(tabId, leaf!.paneId, $event)"
       >
-        <Icon name="move" style="width: 13px; height: 13px" />
+        <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="wsterm-pane-close"
@@ -31,7 +31,7 @@
         @mousedown.stop
         @click="ctx.closePane(tabId, leaf!.paneId)"
       >
-        <Icon name="x" style="width: 13px; height: 13px" />
+        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 

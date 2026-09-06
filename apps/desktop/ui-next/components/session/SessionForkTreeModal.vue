@@ -3,17 +3,22 @@
     <div v-if="clientId != null" class="ovl on forkovl" @click.self="close">
       <div class="forkmodal">
         <div class="forkmodal-head">
-          <Icon name="fork" style="width: 14px; height: 14px; color: var(--accent)" />
+          <Icon
+            name="fork"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="forkmodal-title">{{ t('sessions.fork.treeTitle') }}</span>
           <span style="flex: 1" />
           <button class="forkmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
         <div class="forkmodal-body">
           <SessionForkGraph v-if="hasLineage" :client-id="clientId" @navigate="onNavigate" />
           <div v-else class="forkempty">
-            <span class="ei"><Icon name="fork" style="width: 20px; height: 20px" /></span>
+            <span class="ei">
+              <Icon name="fork" style="width: var(--icon-lg); height: var(--icon-lg)" />
+            </span>
             <div class="et">{{ t('sessions.fork.empty') }}</div>
             <div class="es">{{ t('sessions.fork.emptyHint') }}</div>
           </div>

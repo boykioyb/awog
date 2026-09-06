@@ -11,10 +11,14 @@
         </span>
         <span style="margin-left: auto; display: inline-flex; gap: 2px">
           <button class="wsdiff-refresh" :title="t('sessions.workspace.openGit')" @click="openGit">
-            <Icon name="git" style="width: 12px; height: 12px" />
+            <Icon name="git" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </button>
           <button class="wsdiff-refresh" :title="t('sessions.workspace.refresh')" @click="load">
-            <Icon name="refresh" :class="{ spin: loading }" style="width: 12px; height: 12px" />
+            <Icon
+              name="refresh"
+              :class="{ spin: loading }"
+              style="width: var(--icon-xs); height: var(--icon-xs)"
+            />
           </button>
         </span>
       </div>

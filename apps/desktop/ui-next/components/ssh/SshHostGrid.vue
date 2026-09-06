@@ -3,7 +3,7 @@
     <!-- Top row: wide search + NEW HOST -->
     <div class="sshx-hosts-top">
       <div class="srch sshx-search">
-        <Icon name="search" style="width: 14px; height: 14px" />
+        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <input
           v-model="q"
           :placeholder="t('ssh.hosts.searchPh')"
@@ -12,11 +12,11 @@
         />
       </div>
       <button class="btn sshx-import" :title="t('ssh.import.title')" @click="emit('import')">
-        <Icon name="download" style="width: 14px; height: 14px" />
+        <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.import.button') }}
       </button>
       <button class="btn pri sshx-newhost" :title="t('ssh.hosts.newHost')" @click="emit('new')">
-        <Icon name="plus" style="width: 14px; height: 14px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.hosts.newHost') }}
       </button>
     </div>
@@ -43,7 +43,7 @@
       <template v-if="filtered.length">
         <section v-for="g in groups" :key="g.label ?? '__none'" class="sshx-group">
           <div v-if="g.label" class="sshx-grouphdr">
-            <Icon name="folder" style="width: 13px; height: 13px" />
+            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
             <span class="sshx-grouphdr-name">{{ g.label }}</span>
             <span class="sshx-grouphdr-count">{{ g.hosts.length }}</span>
           </div>
@@ -71,7 +71,7 @@
                 :aria-label="t('ssh.menu.more')"
                 @click.stop="emit('menu', $event, h)"
               >
-                <Icon name="dots" style="width: 15px; height: 15px" />
+                <Icon name="dots" style="width: var(--icon-md); height: var(--icon-md)" />
               </span>
             </button>
           </div>

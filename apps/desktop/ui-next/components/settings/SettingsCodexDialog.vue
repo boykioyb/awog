@@ -16,7 +16,7 @@
       <template v-else-if="phase === 'waiting'">
         <div class="cxtext">{{ t('settingsModels.codex.opened') }}</div>
         <button v-if="authUrl" class="btn pri cxreopen" type="button" @click="onOpen">
-          <Icon name="agents" style="width: 13px; height: 13px" />
+          <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('settingsModels.codex.reopen') }}</span>
         </button>
         <div class="cxrow cxwaiting">

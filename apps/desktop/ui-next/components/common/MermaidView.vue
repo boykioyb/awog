@@ -6,16 +6,16 @@
     <div class="mmd" :class="{ full: fullscreen }">
       <div class="mmdbar">
         <button class="mmb" :title="t('common.zoomOut')" @click="zoomBy(-0.2)">
-          <Icon name="minus" style="width: 13px; height: 13px" />
+          <Icon name="minus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button class="mmz" :title="t('common.zoomReset')" @click="reset">
           {{ Math.round(scale * 100) }}%
         </button>
         <button class="mmb" :title="t('common.zoomIn')" @click="zoomBy(0.2)">
-          <Icon name="plus" style="width: 13px; height: 13px" />
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button class="mmb" :title="t('common.fit')" @click="fit">
-          <Icon name="scan" style="width: 13px; height: 13px" />
+          <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <span class="mmsep" />
         <button
@@ -24,14 +24,20 @@
           :title="copied ? t('common.copied') : t('common.mermaid.copySource')"
           @click="copySource"
         >
-          <Icon :name="copied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+          <Icon
+            :name="copied ? 'check' : 'copy'"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
         </button>
         <button
           class="mmb"
           :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
           @click="toggleFull"
         >
-          <Icon :name="fullscreen ? 'minimize' : 'maximize'" style="width: 13px; height: 13px" />
+          <Icon
+            :name="fullscreen ? 'minimize' : 'maximize'"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
         </button>
       </div>
 
@@ -47,7 +53,7 @@
         <!-- eslint-disable-next-line vue/no-v-html -- mermaid SVG, sanitized -->
         <div v-if="svg" class="mmdstage" :style="stageStyle" v-html="svg" />
         <div v-else-if="error" class="mmderr">
-          <Icon name="alert" style="width: 15px; height: 15px" />
+          <Icon name="alert" style="width: var(--icon-md); height: var(--icon-md)" />
           <span>{{ error }}</span>
           <pre class="mmdsrc">{{ source }}</pre>
         </div>

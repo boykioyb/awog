@@ -85,8 +85,8 @@ const { t } = useI18n()
   border-left-color: var(--accent);
 }
 .edalist-icon {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--textDim);
   flex-shrink: 0;
 }

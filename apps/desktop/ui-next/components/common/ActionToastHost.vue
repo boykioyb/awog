@@ -15,7 +15,7 @@
     >
       <Icon
         :name="tt.icon ?? (tt.kind === 'success' ? 'check' : 'alert')"
-        style="width: 15px; height: 15px; flex-shrink: 0"
+        style="width: var(--icon-md); height: var(--icon-md); flex-shrink: 0"
         :style="{ color: actionToastColor(tt.kind) }"
       />
       <span>{{ tt.text }}</span>
@@ -23,7 +23,7 @@
       <Icon
         v-if="tt.action"
         name="chev-right"
-        style="width: 13px; height: 13px; flex-shrink: 0; color: var(--textDim)"
+        style="width: var(--icon-sm); height: var(--icon-sm); flex-shrink: 0; color: var(--textDim)"
       />
     </div>
   </div>

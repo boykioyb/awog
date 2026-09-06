@@ -9,7 +9,7 @@
         :title="hasLiveConn ? t('ssh.fwd.add') : t('ssh.fwd.noConnection')"
         @click="openAdd"
       >
-        <Icon name="plus" style="width: 13px; height: 13px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.fwd.add') }}
       </button>
       <button
@@ -18,7 +18,7 @@
         :aria-label="t('ssh.sftp.refresh')"
         @click="refresh"
       >
-        <Icon name="refresh" style="width: 14px; height: 14px" />
+        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -89,7 +89,7 @@
             :aria-label="t('ssh.fwd.stop')"
             @click="stop(f.forwardId)"
           >
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
       </div>

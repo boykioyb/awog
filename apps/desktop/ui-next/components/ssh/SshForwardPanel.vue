@@ -1,7 +1,7 @@
 <template>
   <div class="ssh-fp-surface">
     <div class="ssh-fp-head">
-      <Icon name="move" style="width: 13px; height: 13px" />
+      <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
       <span class="ssh-fp-head-t">{{ t('ssh.section.forwards') }}</span>
       <span class="ssh-fp-count">{{ forwards.length }}</span>
       <button
@@ -10,7 +10,7 @@
         :aria-label="t('ssh.panel.close')"
         @click="emit('close')"
       >
-        <Icon name="x" style="width: 13px; height: 13px" />
+        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -34,7 +34,7 @@
           :aria-label="t('ssh.fwd.stop')"
           @click="stop(f.forwardId)"
         >
-          <Icon name="x" style="width: 12px; height: 12px" />
+          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
       </div>
     </div>
@@ -72,7 +72,7 @@
       <div class="ssh-fp-add-actions">
         <span class="ssh-fp-hint">{{ t('ssh.fwd.bindHint') }}</span>
         <button class="btn pri sm" :disabled="!canAdd || adding" @click="add">
-          <Icon name="plus" style="width: 12px; height: 12px" />
+          <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ t('ssh.fwd.add') }}
         </button>
       </div>

@@ -106,7 +106,10 @@
            manager. Omitted on save when left blank so it never clobbers a stored value. -->
       <div v-if="authMethod === 'password'" class="sse-secret">
         <div class="sse-secret-head">
-          <Icon name="shield" style="width: 13px; height: 13px; color: var(--accent)" />
+          <Icon
+            name="shield"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="sse-secret-title">{{ t('ssh.editor.password') }}</span>
         </div>
         <div class="sse-pw">
@@ -127,7 +130,10 @@
             :aria-pressed="showPassword"
             @click="showPassword = !showPassword"
           >
-            <Icon :name="showPassword ? 'eye-off' : 'eye'" style="width: 15px; height: 15px" />
+            <Icon
+              :name="showPassword ? 'eye-off' : 'eye'"
+              style="width: var(--icon-md); height: var(--icon-md)"
+            />
           </button>
         </div>
         <div class="sse-hint">

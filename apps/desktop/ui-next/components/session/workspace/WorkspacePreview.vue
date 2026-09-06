@@ -37,7 +37,7 @@
           :title="t('sessions.workspace.preview.openExternal')"
           @click="openExternal"
         >
-          <Icon name="globe" style="width: 13px; height: 13px" />
+          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 

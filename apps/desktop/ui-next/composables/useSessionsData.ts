@@ -238,10 +238,10 @@ export type ContextChars = {
 
 // Context-window usage for the session (engine path). `total` = input + cacheRead +
 // cacheWrite + output (raw API tally, kept for reference/debugging). NOTE: the
-// context-window OCCUPANCY gauge does NOT use `total` — it sums the assembled
-// content from `contextChars` (see contextTokensFromChars), because cache read/write
-// is the cached split of that same content and `output` is the response, not the
-// input window. `max` is the model's context window when known.
+// context-window OCCUPANCY gauge does NOT use `total` — a turn's tally sums EVERY
+// request the agentic loop made, and includes `output`. It uses `contextTokens` (the
+// measured prompt size of the last request), falling back to the `contextChars` sum.
+// `max` is the model's context window when known.
 export type SessionUsage = {
   input: number
   output: number
@@ -253,6 +253,13 @@ export type SessionUsage = {
   // panel itemise System prompt / Instructions / System tools / MCP tools /
   // Custom agents / Skills / Memory files / Messages instead of token totals only.
   contextChars?: ContextChars
+  // MEASURED occupancy (tokens) of the last turn's final request, reported by the
+  // engine: input + cacheRead + cacheWrite of that ONE request. Preferred over the
+  // `contextChars` sum wherever both exist, because the char breakdown cannot see
+  // tool SCHEMAS (SDK built-ins + MCP servers) nor the tool RESULTS the agentic loop
+  // accumulated — on the Claude SDK path that gap was ~5x, which left auto-compact
+  // permanently below its threshold. Absent on turns persisted before it shipped.
+  contextTokens?: number
   // Cumulative cost in USD across all turns of this session. Computed sidecar-side
   // (single source of truth = activity/pricing.ts) from per-turn usage + modelUsed,
   // then summed here. Absent when no priced turn has run (or model has no price → n/a).

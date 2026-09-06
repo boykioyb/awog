@@ -27,14 +27,18 @@
         :title="t('settings.devices.pairNew')"
         @click="createPairing"
       >
-        <Icon name="plus" style="width: 13px; height: 13px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('settings.devices.pairNew') }}
       </button>
     </div>
 
     <!-- Off banner — informational, not a problem to fix. -->
     <div v-if="!enabled" class="dev-banner off">
-      <Icon name="alert" style="width: 15px; height: 15px" class="dev-banner-icon" />
+      <Icon
+        name="alert"
+        style="width: var(--icon-md); height: var(--icon-md)"
+        class="dev-banner-icon"
+      />
       <div>
         <div class="dev-banner-title">{{ t('settings.devices.offTitle') }}</div>
         <div class="dev-banner-hint">{{ t('settings.devices.offHint') }}</div>
@@ -43,7 +47,11 @@
 
     <!-- Disconnected banner -->
     <div v-else-if="!connected" class="dev-banner">
-      <Icon name="alert" style="width: 15px; height: 15px" class="dev-banner-icon" />
+      <Icon
+        name="alert"
+        style="width: var(--icon-md); height: var(--icon-md)"
+        class="dev-banner-icon"
+      />
       <div>
         <div class="dev-banner-title">{{ t('settings.devices.tailnetDisconnected') }}</div>
         <div class="dev-banner-hint">{{ t('settings.devices.installHint') }}</div>
@@ -107,7 +115,7 @@
           :title="t('settings.devices.revoke')"
           @click="revokeDevice(d)"
         >
-          <Icon name="trash" style="width: 13px; height: 13px" />
+          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </li>
     </ul>

@@ -83,8 +83,8 @@ onBeforeUnmount(() => {
   outline-offset: 1px;
 }
 .loadmore .lm-chev {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   flex: 0 0 auto;
 }
 </style>

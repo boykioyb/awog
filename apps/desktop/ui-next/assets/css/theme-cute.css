@@ -335,8 +335,8 @@ body[data-theme-family='cute'] .ni {
   font-weight: 500;
 }
 body[data-theme-family='cute'] .ni .icn {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   color: var(--textDim);
 }
 body[data-theme-family='cute'] .ni:hover {

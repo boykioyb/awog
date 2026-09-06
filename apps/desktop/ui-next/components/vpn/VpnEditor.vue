@@ -51,7 +51,7 @@
             @blur="touched.configPath = true"
           />
           <button v-if="canBrowse" type="button" class="btn sm vpe-browse" @click="browseConfig">
-            <Icon name="folder" style="width: 12px; height: 12px" />
+            <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ t('vpn.editor.browse') }}
           </button>
         </div>
@@ -81,7 +81,10 @@
            keychain via vpn.setCredential; never written to the config or git. -->
       <div class="vpe-secret">
         <div class="vpe-secret-head">
-          <Icon name="shield" style="width: 13px; height: 13px; color: var(--accent)" />
+          <Icon
+            name="shield"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="vpe-secret-title">{{ t('vpn.editor.creds.title') }}</span>
         </div>
 
@@ -122,7 +125,10 @@
                 :aria-pressed="showPassword"
                 @click="showPassword = !showPassword"
               >
-                <Icon :name="showPassword ? 'eye-off' : 'eye'" style="width: 15px; height: 15px" />
+                <Icon
+                  :name="showPassword ? 'eye-off' : 'eye'"
+                  style="width: var(--icon-md); height: var(--icon-md)"
+                />
               </button>
             </div>
           </div>
@@ -150,7 +156,10 @@
               :aria-pressed="showPassphrase"
               @click="showPassphrase = !showPassphrase"
             >
-              <Icon :name="showPassphrase ? 'eye-off' : 'eye'" style="width: 15px; height: 15px" />
+              <Icon
+                :name="showPassphrase ? 'eye-off' : 'eye'"
+                style="width: var(--icon-md); height: var(--icon-md)"
+              />
             </button>
           </div>
         </div>

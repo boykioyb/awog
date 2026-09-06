@@ -11,10 +11,10 @@
     "
     @click.stop="emit('toggle')"
   >
-    <Icon name="conn" style="width: 12px; height: 12px" />
+    <Icon name="conn" style="width: var(--icon-xs); height: var(--icon-xs)" />
     {{ t('sessions.composer.mcp') }}
     <span class="mcpc">{{ onCount }}/{{ servers.length }}</span>
-    <Icon name="chev" style="width: 11px; height: 11px" />
+    <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
 
     <div
       v-if="open"

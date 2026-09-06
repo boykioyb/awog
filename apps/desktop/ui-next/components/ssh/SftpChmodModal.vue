@@ -113,8 +113,8 @@ const subtitle = computed(() =>
   gap: 9px;
 }
 .sfmod-icn {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   color: var(--accent);
 }
 .sfmod-title {

@@ -122,7 +122,7 @@
               :title="t('agents.editor.removeTool')"
               @click="draft.tools = draft.tools.filter((x) => x !== tool)"
             >
-              <Icon name="x" style="width: 9px; height: 9px" />
+              <Icon name="x" style="width: 10px; height: 10px" />
             </button>
           </span>
         </div>

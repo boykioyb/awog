@@ -28,7 +28,7 @@
     <header class="gterm-head" :class="{ 'gterm-head--clickable': collapsed }" @click="onHeadClick">
       <span class="gterm-dot" :class="`gterm-dot--${dotState}`" :title="dotTitle" />
       <span class="gterm-title">
-        <Icon name="commands" style="width: 13px; height: 13px" />
+        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('terminalGlobal.title') }}
       </span>
       <span class="gterm-cwd" :title="cwdTitle">{{ cwdLabel }}</span>

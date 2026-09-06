@@ -523,8 +523,8 @@ body.light[data-surface='deep'] {
 }
 .gseccol .gchv {
   flex: 0 0 auto;
-  width: 11px;
-  height: 11px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textFaint);
   transition: transform 0.15s;
 }
@@ -655,8 +655,8 @@ body.light[data-surface='deep'] {
   width: 16px;
 }
 .gsti .icn {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 /* Trailing per-row actions (stage/unstage + discard) — grouped so they reveal
@@ -719,8 +719,8 @@ body.light[data-surface='deep'] {
   cursor: not-allowed;
 }
 .gsecbtn .icn {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 /* Multi-selected row (⌘/Ctrl-click or Select all) — a pure selection highlight,
@@ -747,8 +747,8 @@ body.light[data-surface='deep'] {
 }
 .gstatsec .gchv {
   flex: 0 0 auto;
-  width: 11px;
-  height: 11px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textFaint);
   transition: transform 0.15s;
 }
@@ -861,8 +861,8 @@ textarea.gcpta {
 }
 .gtdir .fchv {
   flex: 0 0 auto;
-  width: 11px;
-  height: 11px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textFaint);
   transition: transform 0.15s;
 }
@@ -915,8 +915,8 @@ textarea.gcpta {
 }
 .smenu .mi .msubchev {
   flex: 0 0 auto;
-  width: 11px;
-  height: 11px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textFaint);
   transform: rotate(-90deg);
 }
@@ -1282,8 +1282,8 @@ textarea.gcpta {
 }
 .codecopy .icn,
 .codewrap .icn {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 /* Soft-wrap preference (settings appearance.codeWrap, applied by useAppearanceDom). Long

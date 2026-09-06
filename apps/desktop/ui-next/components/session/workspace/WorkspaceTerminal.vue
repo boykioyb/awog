@@ -43,7 +43,7 @@
           :aria-label="t('sessions.workspace.terminal.newTab')"
           @click.stop="onAddClick"
         >
-          <Plus :size="13" />
+          <Plus :size="14" />
         </button>
         <!-- VSCode-style split button: splits the active pane to the right. The tab
              context menu still offers split-down + rename/duplicate. -->
@@ -53,7 +53,7 @@
           :aria-label="t('sessions.workspace.terminal.splitRight')"
           @click="splitActive"
         >
-          <Icon name="dock-right" style="width: 14px; height: 14px" />
+          <Icon name="dock-right" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 

@@ -27,7 +27,10 @@
     @click="openPreview"
     @keydown.enter="openPreview"
   >
-    <Icon :name="att.folder ? 'folder' : 'rules'" style="width: 11px; height: 11px" />
+    <Icon
+      :name="att.folder ? 'folder' : 'rules'"
+      style="width: var(--icon-xs); height: var(--icon-xs)"
+    />
     {{ att.name }}
   </span>
 </template>

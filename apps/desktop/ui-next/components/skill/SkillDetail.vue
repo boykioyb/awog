@@ -7,21 +7,21 @@
       <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
       <span style="flex: 1" />
       <button class="iconbtn skd-act" :title="t('skills.detail.edit')" @click="emit('edit')">
-        <Icon name="edit" style="width: 14px; height: 14px" />
+        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="iconbtn skd-act"
         :title="t('skills.detail.duplicate')"
         @click="emit('duplicate')"
       >
-        <Icon name="copy" style="width: 14px; height: 14px" />
+        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="iconbtn skd-act skd-danger"
         :title="t('skills.detail.delete')"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: 14px; height: 14px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 

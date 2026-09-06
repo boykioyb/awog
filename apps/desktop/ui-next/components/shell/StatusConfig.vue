@@ -7,7 +7,7 @@
         :title="t('sessions.composer.modelTooltip')"
         @click.stop="toggle('model')"
       >
-        <Icon name="settings" style="width: 12px; height: 12px" />
+        <Icon name="settings" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span class="sb-cfg-lbl">{{ selectedModel }}</span>
       </button>
       <div v-if="openChip === 'model'" class="smenu sb-menu" @click.stop>
@@ -17,7 +17,7 @@
             v-if="m === selectedModel"
             name="check"
             class="ck"
-            style="width: 13px; height: 13px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
       </div>
@@ -30,7 +30,7 @@
         :title="t('sessions.composer.accountTooltip')"
         @click.stop="toggle('account')"
       >
-        <Icon name="agents" style="width: 12px; height: 12px" />
+        <Icon name="agents" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span class="sb-cfg-lbl">{{ accountShort }}</span>
       </button>
       <div v-if="openChip === 'account'" class="smenu sb-menu" @click.stop>
@@ -44,7 +44,7 @@
             v-if="a.id === selectedAccountId"
             name="check"
             class="ck"
-            style="width: 13px; height: 13px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
       </div>
@@ -53,13 +53,18 @@
     <!-- Reasoning effort (hidden for models without reasoning support) -->
     <span v-if="thinkSupported" class="sb-wrap">
       <button class="sb-item" :title="t('statusbar.effort.title')" @click.stop="toggle('effort')">
-        <Icon name="zap" style="width: 12px; height: 12px" />
+        <Icon name="zap" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span class="sb-cfg-lbl">{{ thinkingLabel }}</span>
       </button>
       <div v-if="openChip === 'effort'" class="smenu sb-menu" @click.stop>
         <button v-for="[v, l] in THINK" :key="v" class="mi" @click="pickThink(v)">
           <span class="sb-mi-name">{{ l }}</span>
-          <Icon v-if="v === thinking" name="check" class="ck" style="width: 13px; height: 13px" />
+          <Icon
+            v-if="v === thinking"
+            name="check"
+            class="ck"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
         </button>
       </div>
     </span>
@@ -71,7 +76,7 @@
         :title="t('sessions.composer.styleTooltip')"
         @click.stop="toggle('style')"
       >
-        <Icon name="skills" style="width: 12px; height: 12px" />
+        <Icon name="skills" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span class="sb-cfg-lbl">{{ styleName }}</span>
       </button>
       <div v-if="openChip === 'style'" class="smenu stylemenu sb-menu" @click.stop>

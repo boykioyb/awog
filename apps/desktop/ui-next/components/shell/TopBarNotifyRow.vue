@@ -36,11 +36,11 @@
           type="button"
           @click.stop="emit('read', item.id)"
         >
-          <Icon name="check" style="width: 12px; height: 12px" />
+          <Icon name="check" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span>{{ t('github.inbox.markRead') }}</span>
         </button>
         <button class="ntf-row-act" type="button" @click.stop="emit('external', item)">
-          <Icon name="external" style="width: 11px; height: 11px" />
+          <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span>{{ t('github.inbox.openExternal') }}</span>
         </button>
       </div>
@@ -136,8 +136,8 @@ const hoverText = computed(() => {
   background: var(--accent);
 }
 .ntf-row-ic {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   margin-top: 2px;
   color: var(--textDim);
 }

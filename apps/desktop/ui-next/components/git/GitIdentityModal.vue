@@ -3,13 +3,16 @@
     <div v-if="open" class="gid-ovl" @click.self="close">
       <div class="gid-card" role="dialog" aria-modal="true">
         <div class="gid-head">
-          <Icon name="settings" style="width: 15px; height: 15px; color: var(--textDim)" />
+          <Icon
+            name="settings"
+            style="width: var(--icon-md); height: var(--icon-md); color: var(--textDim)"
+          />
           <div class="gid-titles">
             <div class="gid-title">{{ t('git.identity.title') }}</div>
             <div class="gid-sub">{{ t('git.identity.subtitle') }}</div>
           </div>
           <button class="gid-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -18,7 +21,7 @@
         <template v-else>
           <!-- Effective identity recorded on commits (local overrides global) -->
           <div class="gid-eff" :style="hasEffective ? undefined : { color: 'var(--amber)' }">
-            <Icon name="commit" style="width: 13px; height: 13px; flex: none" />
+            <Icon name="commit" style="width: var(--icon-sm); height: var(--icon-sm); flex: none" />
             <span v-if="hasEffective" class="mono gtrunc">
               {{ t('git.identity.effective') }}: {{ effectiveName }} &lt;{{ effectiveEmail }}&gt;
             </span>
@@ -28,7 +31,10 @@
           <!-- Global scope -->
           <section class="gid-sec">
             <div class="gid-sec-head">
-              <Icon name="globe" style="width: 13px; height: 13px; color: var(--textDim)" />
+              <Icon
+                name="globe"
+                style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+              />
               <span class="gid-sec-title">{{ t('git.identity.globalTitle') }}</span>
             </div>
             <p class="gid-hint">{{ t('git.identity.globalHint') }}</p>
@@ -55,7 +61,10 @@
           <!-- Project (repo-local) scope -->
           <section class="gid-sec">
             <div class="gid-sec-head">
-              <Icon name="projects" style="width: 13px; height: 13px; color: var(--textDim)" />
+              <Icon
+                name="projects"
+                style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+              />
               <span class="gid-sec-title gtrunc">
                 {{ t('git.identity.projectTitle') }}
                 <span v-if="projectName" class="gid-proj">· {{ projectName }}</span>

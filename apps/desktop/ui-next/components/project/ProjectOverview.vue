@@ -21,7 +21,7 @@
 
     <div class="pcard">
       <div class="pcardh">
-        <Icon name="git" style="width: 13px; height: 13px" />
+        <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span>{{ t('projects.overview.reposCard', { n: effRepos.length }) }}</span>
         <span v-if="totalDirty" class="gchip m" style="margin-left: auto">{{ totalDirty }} M</span>
         <span
@@ -34,11 +34,13 @@
       </div>
       <template v-if="effRepos.length">
         <div v-for="r in effRepos" :key="r.n" class="prepo">
-          <span class="prepo-ic"><Icon name="git" style="width: 14px; height: 14px" /></span>
+          <span class="prepo-ic">
+            <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </span>
           <div style="min-width: 0">
             <div class="prepo-n">{{ r.n }}</div>
             <div v-if="r.br" class="prepo-br">
-              <Icon name="branch" style="width: 11px; height: 11px" />
+              <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
               {{ r.br }}
             </div>
           </div>
@@ -53,7 +55,7 @@
 
     <div class="pcard">
       <div class="pcardh">
-        <Icon name="agents" style="width: 13px; height: 13px" />
+        <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span>{{ t('projects.overview.agentsCard', { n: view.agents.length }) }}</span>
       </div>
       <div class="pagents">
@@ -70,7 +72,7 @@
     <div class="pcols2">
       <div class="pcard">
         <div class="pcardh">
-          <Icon name="sessions" style="width: 13px; height: 13px" />
+          <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('projects.overview.sessionsCard') }}</span>
         </div>
         <div
@@ -89,7 +91,7 @@
       </div>
       <div class="pcard">
         <div class="pcardh">
-          <Icon name="tasks" style="width: 13px; height: 13px" />
+          <Icon name="tasks" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('projects.overview.tasksCard') }}</span>
         </div>
         <div
@@ -98,7 +100,7 @@
           class="rs"
           style="padding: 7px 0; border-top: 1px solid var(--border)"
         >
-          <Icon name="tasks" style="width: 13px; height: 13px" />
+          <Icon name="tasks" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="st1">{{ task.t }}</span>
           <span class="tag acc">{{ task.s }}</span>
         </div>
@@ -108,7 +110,7 @@
 
     <div class="pcard">
       <div class="pcardh">
-        <Icon name="folder" style="width: 13px; height: 13px" />
+        <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span>{{ t('projects.overview.configCard') }}</span>
       </div>
       <div v-if="project.description" class="kvrow" style="align-items: flex-start">
@@ -132,7 +134,7 @@
           target="_blank"
           rel="noopener"
         >
-          <Icon name="git" style="width: 12px; height: 12px" />
+          <Icon name="git" style="width: var(--icon-xs); height: var(--icon-xs)" />
           github.com/{{ view.gh }}
         </a>
         <span v-else-if="project.gitRemote" class="kvv mono">{{ project.gitRemote }}</span>
@@ -148,7 +150,7 @@
             {{ llmLabel }}
           </button>
           <span v-else style="display: inline-flex; align-items: center; gap: 6px">
-            <Icon name="brain" style="width: 12px; height: 12px" />
+            <Icon name="brain" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ llmLabel }}
           </span>
         </span>
@@ -184,7 +186,7 @@
       <!-- Config-import assistant (ADR 0035): `.claude`/`.agents` are import sources,
            not live tiers — offer to copy them into `.awog`. Hidden in compact mode. -->
       <div v-if="(importable.length || justImported) && !compact" class="cfgimport">
-        <Icon name="alert" style="width: 13px; height: 13px; flex: 0 0 auto" />
+        <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto" />
         <span v-if="importable.length">
           {{ t('projects.import.banner', { n: importable.length }) }}
         </span>

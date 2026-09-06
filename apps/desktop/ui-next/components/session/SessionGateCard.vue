@@ -59,7 +59,11 @@
           :class="{ on: qi === active, done: isAnswered(f) }"
           @click="active = qi"
         >
-          <Icon v-if="isAnswered(f)" name="check" style="width: 11px; height: 11px" />
+          <Icon
+            v-if="isAnswered(f)"
+            name="check"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
           {{ f.item.header || t('sessions.gate.qtab', { n: qi + 1 }) }}
         </button>
       </div>
@@ -82,7 +86,7 @@
                   <Icon
                     v-if="f.sel.includes(o.label)"
                     name="check"
-                    style="width: 11px; height: 11px"
+                    style="width: var(--icon-xs); height: var(--icon-xs)"
                   />
                 </span>
                 {{ o.label }}
@@ -160,7 +164,7 @@
 
   <!-- steer -->
   <div v-else-if="block.kind === 'steer'" class="steernote">
-    <Icon name="send" style="width: 12px; height: 12px" />
+    <Icon name="send" style="width: var(--icon-xs); height: var(--icon-xs)" />
     {{ t('sessions.gate.steered', { text: block.text || '' }) }}
   </div>
 

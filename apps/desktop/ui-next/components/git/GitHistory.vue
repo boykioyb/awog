@@ -81,7 +81,7 @@
         @context-file="(e, f) => emit('context-file', e, f)"
       />
       <div v-else class="empty">
-        <span class="ei"><Icon name="git" style="width: 21px; height: 21px" /></span>
+        <span class="ei"><Icon name="git" style="width: 22px; height: 22px" /></span>
         <div class="et">{{ t('git.history.empty') }}</div>
       </div>
     </div>

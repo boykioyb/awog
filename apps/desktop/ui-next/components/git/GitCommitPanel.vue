@@ -8,7 +8,12 @@
         :disabled="!stagedCount || generating || committing"
         @click="emit('generate')"
       >
-        <Icon v-if="generating" name="refresh" class="gcpspin" style="width: 13px; height: 13px" />
+        <Icon
+          v-if="generating"
+          name="refresh"
+          class="gcpspin"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
         <span v-else aria-hidden="true">✨</span>
         {{ generating ? t('git.commit.generating') : t('git.commit.generate') }}
       </button>
@@ -30,8 +35,13 @@
         :style="commitDisabled ? 'opacity:.45;pointer-events:none' : undefined"
         @click="emit('commit')"
       >
-        <Icon v-if="committing" name="refresh" class="gcpspin" style="width: 14px; height: 14px" />
-        <Icon v-else name="check" style="width: 14px; height: 14px" />
+        <Icon
+          v-if="committing"
+          name="refresh"
+          class="gcpspin"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
+        <Icon v-else name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{
           stagedCount ? t('git.changes.commitCount', { n: stagedCount }) : t('git.changes.commit')
         }}

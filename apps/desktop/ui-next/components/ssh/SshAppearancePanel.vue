@@ -9,7 +9,7 @@
         :aria-label="t('ssh.appearance.close')"
         @click="emit('close')"
       >
-        <Icon name="x" style="width: 14px; height: 14px" />
+        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -49,7 +49,7 @@
             :aria-label="t('ssh.appearance.fontSizeDown')"
             @click="store.setFontSize(store.fontSize - 1)"
           >
-            <Icon name="minus" style="width: 14px; height: 14px" />
+            <Icon name="minus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <span class="tap-step-val tnum">{{ store.fontSize }}</span>
           <button
@@ -59,7 +59,7 @@
             :aria-label="t('ssh.appearance.fontSizeUp')"
             @click="store.setFontSize(store.fontSize + 1)"
           >
-            <Icon name="plus" style="width: 14px; height: 14px" />
+            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
       </div>
@@ -252,8 +252,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .tap-check {
   flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--accent);
 }
 .tap-stepper {

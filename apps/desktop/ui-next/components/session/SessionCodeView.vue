@@ -3,7 +3,10 @@
     <!-- When embedded inside a step body the filename header is redundant (the step
          header already names the tool + file), so it's hidden + the card flattens. -->
     <div v-if="!embedded" class="cvhead">
-      <Icon :name="mode === 'diff' ? 'git' : 'commands'" style="width: 12px; height: 12px" />
+      <Icon
+        :name="mode === 'diff' ? 'git' : 'commands'"
+        style="width: var(--icon-xs); height: var(--icon-xs)"
+      />
       <span>{{ fname }}</span>
       <span class="cvlang">{{ mode === 'diff' ? 'diff' : 'ts' }}</span>
     </div>

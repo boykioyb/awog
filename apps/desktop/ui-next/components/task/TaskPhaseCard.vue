@@ -322,8 +322,8 @@ const confirmRerun = () => {
   color: var(--textDim);
 }
 .tpc-boxi {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 .tpc-boxi.spin {
   animation: tpc-pulse 1.4s ease-in-out infinite;
@@ -411,8 +411,8 @@ const confirmRerun = () => {
   flex: 0 0 auto;
 }
 .tpc-chv {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--textDim);
   flex: 0 0 auto;
   transition: transform 0.15s;

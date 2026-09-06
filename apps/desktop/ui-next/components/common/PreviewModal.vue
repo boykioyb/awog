@@ -21,9 +21,9 @@
             :aria-label="t('common.back')"
             @click="goBack"
           >
-            <Icon name="chev-left" style="width: 16px; height: 16px" />
+            <Icon name="chev-left" style="width: var(--icon-md); height: var(--icon-md)" />
           </button>
-          <Icon :name="headIcon" style="width: 13px; height: 13px" />
+          <Icon :name="headIcon" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="pvname" :title="absPath">{{ headerPath }}</span>
           <button
             v-if="hasWorkspaceFile"
@@ -31,7 +31,7 @@
             :title="t('common.preview.copyPath')"
             @click="copyPath"
           >
-            <Icon name="copy" style="width: 13px; height: 13px" />
+            <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <button
             v-if="hasWorkspaceFile"
@@ -39,7 +39,7 @@
             :title="t('common.preview.reveal')"
             @click="reveal"
           >
-            <Icon name="folder" style="width: 13px; height: 13px" />
+            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <span v-if="dirty" class="pvdirty" :title="t('common.preview.unsaved')">●</span>
           <span v-if="meta" class="pvmeta">{{ meta }}</span>
@@ -53,7 +53,7 @@
             :title="t('common.preview.openInWindow')"
             @click="openInWindow"
           >
-            <Icon name="external" style="width: 14px; height: 14px" />
+            <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <button
             v-if="canMinimize"
@@ -61,10 +61,10 @@
             :title="t('common.preview.minimize')"
             @click="minimize"
           >
-            <Icon name="minimize" style="width: 14px; height: 14px" />
+            <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <button class="pvx" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -277,11 +277,14 @@
           @mousedown.prevent
         >
           <button class="pvseltr" @click="onPvTranslate">
-            <Icon name="globe" style="width: 13px; height: 13px" />
+            <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('translate.action') }}
           </button>
           <button class="pvseltr" @click="onPvCopyMarkdown">
-            <Icon :name="pvMdCopied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+            <Icon
+              :name="pvMdCopied ? 'check' : 'copy'"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
             {{ pvMdCopied ? t('common.copied') : t('common.copyMarkdown') }}
           </button>
         </div>

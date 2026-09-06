@@ -4,7 +4,7 @@
       <div v-if="isOpen" class="cmdk-ovl" @click.self="close">
         <div class="cmdk-card" role="dialog" aria-modal="true">
           <div class="cmdk-search">
-            <Search :size="15" class="cmdk-search-ic" />
+            <Search :size="16" class="cmdk-search-ic" />
             <input
               ref="inputRef"
               v-model="query"

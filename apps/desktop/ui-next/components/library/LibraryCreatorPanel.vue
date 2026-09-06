@@ -3,12 +3,15 @@
     <div v-if="open" class="ovl on lcp-ovl" @click.self="onBackdrop">
       <div class="lcp" role="dialog" aria-modal="true">
         <div class="lcp-hd">
-          <Icon name="sparkles" style="width: 13px; height: 13px; color: var(--accent)" />
+          <Icon
+            name="sparkles"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="lcp-title">{{ title }}</span>
           <span class="lcp-sub">{{ subtitle }}</span>
           <span style="flex: 1" />
           <button class="iconbtn lcp-x" :title="t('common.close')" @click="onClose">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -83,7 +86,7 @@
                 <Icon
                   :name="isStreaming ? 'refresh' : 'send'"
                   :class="{ spin: isStreaming }"
-                  style="width: 14px; height: 14px"
+                  style="width: var(--icon-sm); height: var(--icon-sm)"
                 />
               </button>
             </div>

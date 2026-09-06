@@ -8,7 +8,7 @@
     >
       <Icon
         name="projects"
-        style="width: 12px; height: 12px"
+        style="width: var(--icon-xs); height: var(--icon-xs)"
         :style="currentProject?.color ? { color: currentProject.color } : undefined"
       />
       <span class="gtrunc" style="max-width: 150px">
@@ -17,7 +17,7 @@
       <span v-if="(currentProject?.dirty ?? 0) > 0" class="gbadge" :style="dirtyStyle">
         {{ currentProject?.dirty }}
       </span>
-      <Icon name="chev" style="width: 11px; height: 11px" />
+      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </span>
 
     <span v-if="!notARepo" class="gsep" />
@@ -29,9 +29,12 @@
         :title="t('git.header.selectRepo')"
         @click.stop="toggle('repo', $event)"
       >
-        <Icon name="fork" style="width: 12px; height: 12px; color: var(--textDim)" />
+        <Icon
+          name="fork"
+          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+        />
         <span class="gtrunc mono" style="max-width: 160px">{{ repo }}</span>
-        <Icon name="chev" style="width: 11px; height: 11px" />
+        <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </span>
       <span class="gsep" />
     </template>
@@ -43,9 +46,9 @@
       :title="t('git.header.switchBranch')"
       @click.stop="toggle('branch', $event)"
     >
-      <Icon name="branch" style="width: 12px; height: 12px" />
+      <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
       <span class="gtrunc mono" style="max-width: 180px">{{ branch }}</span>
-      <Icon name="chev" style="width: 11px; height: 11px" />
+      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </span>
 
     <span style="flex: 1" />
@@ -76,7 +79,7 @@
       <span class="gop">
         <button class="btn sm" :disabled="busy" @click="emit('fetch')">
           <span v-if="syncOp?.op === 'fetch'" class="gspin-ring" />
-          <Icon v-else name="refresh" style="width: 13px; height: 13px" />
+          <Icon v-else name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ syncOp?.op === 'fetch' ? syncLabel : t('git.ops.fetch') }}
         </button>
         <button
@@ -85,7 +88,7 @@
           :title="t('git.ops.cancel')"
           @click="emit('cancel', 'fetch')"
         >
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </span>
       <span class="gop">
@@ -102,7 +105,7 @@
           :title="t('git.ops.cancel')"
           @click="emit('cancel', 'pull')"
         >
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </span>
       <span class="gop">
@@ -119,7 +122,7 @@
           :title="t('git.ops.cancel')"
           @click="emit('cancel', 'push')"
         >
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </span>
 
@@ -132,14 +135,17 @@
         :title="t('git.header.ghAccountTitle')"
         @click.stop="emit('open-account')"
       >
-        <Icon name="git" style="width: 12px; height: 12px; color: var(--textDim)" />
+        <Icon
+          name="git"
+          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+        />
         <span class="gtrunc" style="max-width: 120px">
           {{ ghAccount || t('git.header.ghAccountDefault') }}
         </span>
       </button>
 
       <button class="btn sm gicon" :title="t('git.header.identity')" @click="emit('open-identity')">
-        <Icon name="settings" style="width: 13px; height: 13px" />
+        <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </template>
 
@@ -151,7 +157,10 @@
       @click.stop
     >
       <div class="gbranchfilter">
-        <Icon name="search" style="width: 12px; height: 12px; color: var(--textDim)" />
+        <Icon
+          name="search"
+          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+        />
         <input
           ref="projectSearch"
           v-model="projectQuery"
@@ -170,7 +179,7 @@
         >
           <Icon
             name="projects"
-            style="width: 12px; height: 12px; margin-top: 2px"
+            style="width: var(--icon-xs); height: var(--icon-xs); margin-top: 2px"
             :style="p.color ? { color: p.color } : undefined"
           />
           <span style="flex: 1; min-width: 0">
@@ -204,7 +213,10 @@
 
     <div v-if="open === 'repo'" class="smenu" :style="menuStyle" @click.stop>
       <div v-for="r in repos" :key="r" class="mi" @click="pickRepo(r)">
-        <Icon name="fork" style="width: 12px; height: 12px; color: var(--textDim)" />
+        <Icon
+          name="fork"
+          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+        />
         <span class="gtrunc mono" style="flex: 1">{{ r }}</span>
         <span v-if="r === repo" class="ck">✓</span>
       </div>
@@ -217,14 +229,17 @@
       @click.stop
     >
       <div class="gbranchfilter">
-        <Icon name="search" style="width: 12px; height: 12px; color: var(--textDim)" />
+        <Icon
+          name="search"
+          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+        />
         <input v-model="branchQuery" :placeholder="t('git.header.filterBranches')" />
       </div>
       <div class="gbranchlist">
         <div v-for="b in filteredBranches" :key="b.name" class="mi" @click="onSwitchBranch(b.name)">
           <Icon
             name="branch"
-            style="width: 12px; height: 12px"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
             :style="b.current ? { color: 'var(--accent)' } : undefined"
           />
           <span class="gtrunc mono" :style="b.current ? 'flex:1;color:var(--accent)' : 'flex:1'">

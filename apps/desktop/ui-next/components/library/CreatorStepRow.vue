@@ -10,7 +10,7 @@
 
   <!-- ordinary tool step: zap + label -->
   <div v-else class="lcp-step">
-    <Icon name="zap" style="width: 11px; height: 11px" />
+    <Icon name="zap" style="width: var(--icon-xs); height: var(--icon-xs)" />
     <span>{{ step.label ?? step.id }}</span>
   </div>
 </template>
@@ -96,8 +96,8 @@ const verifyTitle = computed(() => {
   color: var(--danger);
 }
 .lcp-verify-ic {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: 0 0 auto;
   margin-top: 1px;
 }

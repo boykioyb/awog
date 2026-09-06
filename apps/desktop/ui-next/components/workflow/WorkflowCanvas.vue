@@ -5,7 +5,7 @@
       <span class="chip">{{ t('workflow.toolbar.dag', { n: workflow.nodes.length }) }}</span>
       <span style="flex: 1" />
       <button class="btn pri sm" :disabled="!workflow.nodes.length" @click="$emit('run')">
-        <Icon name="play" style="width: 13px; height: 13px" />
+        <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('workflow.toolbar.run') }}
       </button>
     </div>
@@ -31,7 +31,9 @@
     </VueFlow>
 
     <div v-if="workflow.nodes.length === 0" class="wfempty">
-      <span class="ei"><Icon name="workflows" style="width: 20px; height: 20px" /></span>
+      <span class="ei">
+        <Icon name="workflows" style="width: var(--icon-lg); height: var(--icon-lg)" />
+      </span>
       <div class="et">{{ t('workflow.canvas.empty') }}</div>
     </div>
   </div>

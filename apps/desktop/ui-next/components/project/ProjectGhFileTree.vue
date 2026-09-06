@@ -13,9 +13,9 @@
             name="chev"
             class="ghtchev"
             :class="{ open: !collapsed.has(node.path) }"
-            style="width: 12px; height: 12px"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
           />
-          <Icon name="folder" class="ghtic" style="width: 13px; height: 13px" />
+          <Icon name="folder" class="ghtic" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="ghtname">{{ node.name }}</span>
         </button>
         <ProjectGhFileTree
@@ -42,7 +42,7 @@
           @click="emit('toggle-file', node.path)"
           @contextmenu.prevent="emit('context-file', $event, node.path)"
         >
-          <Icon name="file" class="ghtic" style="width: 13px; height: 13px" />
+          <Icon name="file" class="ghtic" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="ghtname">{{ node.name }}</span>
           <span class="ghtstat">
             <span v-if="node.additions" style="color: var(--add)">+{{ node.additions }}</span>

@@ -56,7 +56,7 @@
           "
           @click="remove(row)"
         >
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </div>
@@ -111,13 +111,13 @@ const onJump = (row: BookmarkRow) => {
   user-select: none;
 }
 .bmb-ic {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--accent);
 }
 .bmb-chev {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--textDim);
   transform: rotate(-90deg);
   transition: transform 0.15s var(--ease, ease);

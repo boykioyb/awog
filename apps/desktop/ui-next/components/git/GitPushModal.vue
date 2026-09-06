@@ -222,8 +222,8 @@ function submit() {
   color: var(--textMuted);
 }
 .gpm-leadicn {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   margin-top: 2px;
   flex: none;
   color: var(--accent);
@@ -263,8 +263,8 @@ function submit() {
   font-family: var(--mono);
 }
 .gpm-roicn {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: none;
   color: var(--textDim);
 }

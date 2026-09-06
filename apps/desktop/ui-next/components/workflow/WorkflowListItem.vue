@@ -15,7 +15,7 @@
       />
       <span v-else class="ttl" @dblclick.stop="emit('start-rename')">{{ workflow.name }}</span>
       <button class="wfli-del" :title="t('common.delete')" @click.stop="emit('delete')">
-        <Icon name="trash" style="width: 12px; height: 12px" />
+        <Icon name="trash" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
     </div>
     <div class="sub">
@@ -85,8 +85,8 @@ watch(
   gap: 8px;
 }
 .wfli-icn {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: 0 0 auto;
   color: var(--textDim);
 }

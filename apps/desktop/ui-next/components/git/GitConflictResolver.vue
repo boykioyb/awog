@@ -22,7 +22,7 @@
           :disabled="!allChosen || isResolving"
           @click="markResolved"
         >
-          <Icon name="check" style="width: 14px; height: 14px" />
+          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('git.conflict.markResolved') }}
         </button>
       </template>

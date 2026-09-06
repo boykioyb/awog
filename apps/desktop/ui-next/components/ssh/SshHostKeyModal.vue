@@ -117,8 +117,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 9px;
 }
 .skh-icn {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   flex: 0 0 auto;
 }
 .skh-title {

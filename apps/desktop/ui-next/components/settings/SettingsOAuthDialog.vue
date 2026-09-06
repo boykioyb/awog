@@ -22,7 +22,7 @@
         >
           <Icon
             :name="phase === 'waiting-code' ? 'check' : 'agents'"
-            style="width: 13px; height: 13px"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
           />
           <span>{{ openButtonLabel }}</span>
         </button>

@@ -52,7 +52,7 @@
           @click.stop="closeTab(tab.id)"
           @keydown.stop
         >
-          <Icon name="x" style="width: 12px; height: 12px" />
+          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
       </div>
     </div>
@@ -63,7 +63,7 @@
       :title="t('sessions.tabs.addProject')"
       @click.stop="toggleAdd"
     >
-      <Icon name="plus" style="width: 14px; height: 14px" />
+      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
     <button
       v-if="tabs.length > 1"
@@ -72,7 +72,7 @@
       :title="t('sessions.tabs.overflow')"
       @click.stop="toggleOverflow"
     >
-      <Icon name="chev" style="width: 14px; height: 14px" />
+      <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
     </button>
 
     <!-- "+" project picker: projects not already open as a tab. A sticky search input
@@ -112,7 +112,12 @@
           :style="{ background: tab.color, '--stab-dot': tab.color }"
         />
         {{ tab.name }}
-        <Icon v-if="tab.active" name="check" class="ck" style="width: 13px; height: 13px" />
+        <Icon
+          v-if="tab.active"
+          name="check"
+          class="ck"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
       </div>
     </div>
 
@@ -133,33 +138,33 @@
       />
       <div ref="pctxMenuEl" class="smenu ctxmenu" :style="pctxStyle">
         <div class="mi" @click="pNewSession">
-          <Icon name="plus" style="width: 13px; height: 13px" />
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.pctx.newSession') }}
         </div>
         <!-- Tab management (VSCode-style) — closing tabs never deletes sessions. -->
         <template v-if="showCloseGroup">
           <div class="ctxsep" />
           <div v-if="pctxClosable" class="mi" @click="pClose">
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.tabs.close') }}
           </div>
           <div v-if="othersCount" class="mi" @click="pCloseOthers">
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.tabs.closeOthers') }}
           </div>
           <div v-if="rightCount" class="mi" @click="pCloseRight">
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.tabs.closeRight') }}
           </div>
           <div v-if="showCloseAll" class="mi" @click="pCloseAll">
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.tabs.closeAll') }}
           </div>
         </template>
         <template v-if="pctxIsProject">
           <div class="ctxsep" />
           <div class="mi" @click="pLlmDefaults">
-            <Icon name="brain" style="width: 13px; height: 13px" />
+            <Icon name="brain" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.pctx.llmDefaults') }}
           </div>
           <div class="ctxsep" />
@@ -185,7 +190,11 @@
                 :style="pctxCustom ? { background: pctxColor } : undefined"
                 :title="t('sessions.pctx.colorCustom')"
               >
-                <Icon v-if="!pctxCustom" name="palette" style="width: 11px; height: 11px" />
+                <Icon
+                  v-if="!pctxCustom"
+                  name="palette"
+                  style="width: var(--icon-xs); height: var(--icon-xs)"
+                />
                 <input
                   type="color"
                   class="ctxcolorinput"
@@ -199,27 +208,27 @@
                 :title="t('sessions.pctx.colorClear')"
                 @click="pSetColor(null)"
               >
-                <Icon name="x" style="width: 11px; height: 11px" />
+                <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
               </span>
             </div>
           </div>
         </template>
         <div class="ctxsep" />
         <div class="mi" @click="pSelectAll">
-          <Icon name="check" style="width: 13px; height: 13px" />
+          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.pctx.selectAll', { n: pctxCount }) }}
         </div>
         <div class="mi" @click="pDeselectAll">
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.pctx.deselectAll') }}
         </div>
         <div v-if="pctxPath" class="mi" @click="pOpenFinder">
-          <Icon name="folder" style="width: 13px; height: 13px" />
+          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.pctx.openFinder') }}
         </div>
         <div class="ctxsep" />
         <div class="mi danger" @click="pDeleteAll">
-          <Icon name="trash" style="width: 13px; height: 13px" />
+          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.pctx.deleteAll', { n: pctxCount }) }}
         </div>
       </div>

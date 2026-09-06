@@ -2,7 +2,10 @@
   <div class="pcard smcatalog">
     <div class="pcardtop">
       <span class="rx">
-        <Icon name="agents" style="width: 16px; height: 16px; color: var(--blue)" />
+        <Icon
+          name="agents"
+          style="width: var(--icon-md); height: var(--icon-md); color: var(--blue)"
+        />
       </span>
       <div class="pcardinfo">
         <div class="rt">{{ t('settingsModels.catalog.title') }}</div>
@@ -29,7 +32,11 @@
         :disabled="!available || loading"
         @click="onFetch"
       >
-        <Icon name="refresh" :class="{ spin: loading }" style="width: 13px; height: 13px" />
+        <Icon
+          name="refresh"
+          :class="{ spin: loading }"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
         {{ loading ? t('settingsModels.catalog.fetching') : t('settingsModels.catalog.fetch') }}
       </button>
     </div>

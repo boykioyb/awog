@@ -7,7 +7,7 @@
       :class="{ on: s.id === active }"
       @click="emit('select', s.id)"
     >
-      <Icon :name="s.icon" style="width: 14px; height: 14px" />
+      <Icon :name="s.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
       <span>{{ t(s.labelKey) }}</span>
     </div>
   </nav>

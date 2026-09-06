@@ -5,16 +5,18 @@
            a markup fork: the title/subtitle keep their own classes so the hero type
            scale lives in one place, and theme-cute.css restyles them from there. -->
       <AwogMascot v-if="isCute" :size="64" state="idle" bob style="color: var(--accent)" />
-      <div v-else class="swicon"><Icon name="sessions" style="width: 24px; height: 24px" /></div>
+      <div v-else class="swicon">
+        <Icon name="sessions" style="width: var(--icon-xl); height: var(--icon-xl)" />
+      </div>
       <div class="swh">{{ t('sessions.welcome.title') }}</div>
       <div class="swsub">{{ t('sessions.welcome.subtitle') }}</div>
       <div class="swctx">
         <span class="swctxchip">
-          <Icon name="folder" style="width: 12px; height: 12px" />
+          <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ projectLabel }}
         </span>
         <span class="swctxchip">
-          <Icon name="settings" style="width: 12px; height: 12px" />
+          <Icon name="settings" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ model }}
         </span>
       </div>
@@ -29,7 +31,9 @@
         class="swcard"
         @click="useSuggestion(s.prompt)"
       >
-        <span class="swcardic"><Icon :name="s.icon" style="width: 15px; height: 15px" /></span>
+        <span class="swcardic">
+          <Icon :name="s.icon" style="width: var(--icon-md); height: var(--icon-md)" />
+        </span>
         <span class="swcardtx">
           <span class="swcardl">{{ s.label }}</span>
           <span class="swcardd">{{ s.desc }}</span>

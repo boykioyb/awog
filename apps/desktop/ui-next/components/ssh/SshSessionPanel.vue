@@ -9,13 +9,13 @@
           :title="t('ssh.session.switchTitle')"
           @click.stop="toggleMenu('session')"
         >
-          <Icon name="sessions" style="width: 13px; height: 13px" />
+          <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="sshsess-title">{{ currentTitle }}</span>
-          <Icon name="chev" style="width: 12px; height: 12px" />
+          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
         <div v-if="menu === 'session'" class="smenu sshsess-menu" @click.stop>
           <button class="mi sshsess-new" @click="newSession">
-            <Icon name="plus" style="width: 13px; height: 13px" />
+            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('ssh.session.new') }}
           </button>
           <div class="sshsess-menu-div" />
@@ -30,7 +30,7 @@
                 v-if="s.id === sessionId"
                 name="check"
                 class="sshsess-row-ck"
-                style="width: 13px; height: 13px"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
               />
               <span v-else class="sshsess-row-ckspace" />
               <span class="sshsess-row-title">{{ s.title || t('ssh.session.untitled') }}</span>
@@ -42,7 +42,7 @@
               :aria-label="t('ssh.session.delete')"
               @click.stop="askDelete(s.id)"
             >
-              <Icon name="trash" style="width: 13px; height: 13px" />
+              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
           </div>
         </div>
@@ -59,7 +59,11 @@
         >
           <span class="sshsess-term-dot" />
           <span class="sshsess-term-lbl">{{ termLabel }}</span>
-          <Icon v-if="shells.length > 1" name="chev" style="width: 11px; height: 11px" />
+          <Icon
+            v-if="shells.length > 1"
+            name="chev"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
         </button>
         <div v-if="menu === 'term'" class="smenu sshsess-termmenu" @click.stop>
           <button v-for="(c, i) in shells" :key="c" class="mi" @click="pickTerminal(c)">
@@ -68,7 +72,7 @@
               v-if="c === boundConnId"
               name="check"
               class="sshsess-row-ck"
-              style="width: 13px; height: 13px"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
           </button>
         </div>
@@ -80,7 +84,7 @@
         :aria-label="t('ssh.terminal.close')"
         @click="emit('close')"
       >
-        <Icon name="x" style="width: 13px; height: 13px" />
+        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <div v-if="menu" class="sshsess-backdrop" @click="menu = null" />
     </div>

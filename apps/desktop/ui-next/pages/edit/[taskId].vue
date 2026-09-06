@@ -135,8 +135,8 @@ onMounted(() => {
   color: var(--text);
 }
 .acticon {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 .editbody {
   display: flex;

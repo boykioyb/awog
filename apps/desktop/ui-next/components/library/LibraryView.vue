@@ -3,7 +3,7 @@
     <div class="list" style="flex: 0 0 288px">
       <div class="ltop">
         <div class="srch">
-          <Icon name="search" style="width: 13px; height: 13px" />
+          <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <input v-model="q" :placeholder="placeholder ?? t('common.search')" />
         </div>
         <button
@@ -13,7 +13,7 @@
           style="width: 32px; height: 32px; position: relative"
           @click="showFilters = !showFilters"
         >
-          <Icon name="filter" style="width: 13px; height: 13px" />
+          <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span v-if="activeFilters" class="fbadge">{{ activeFilters }}</span>
         </button>
         <button
@@ -23,7 +23,7 @@
           style="width: 32px; height: 32px"
           @click="toggleFoldAll"
         >
-          <Icon name="foldv" style="width: 13px; height: 13px" />
+          <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           v-if="importKind"
@@ -32,7 +32,7 @@
           style="width: 32px; height: 32px"
           @click="importOpen = true"
         >
-          <Icon name="download" style="width: 13px; height: 13px" />
+          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           v-if="showNew"
@@ -51,7 +51,7 @@
           <span class="cslbl">{{ t('library.filter.project') }}</span>
           <div class="csval" style="position: relative" @click.stop="projMenu = !projMenu">
             {{ groupFilter === 'all' ? t('library.filter.all') : filterLabel }}
-            <Icon name="chev" style="width: 13px; height: 13px" />
+            <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
             <div
               v-if="projMenu"
               class="smenu"
@@ -64,7 +64,7 @@
                   v-if="groupFilter === 'all'"
                   name="check"
                   class="ck"
-                  style="width: 13px; height: 13px"
+                  style="width: var(--icon-sm); height: var(--icon-sm)"
                 />
               </div>
               <div v-for="o in groupOptions" :key="o.key" class="mi" @click="selectFilter(o.key)">
@@ -73,7 +73,7 @@
                   v-if="o.key === groupFilter"
                   name="check"
                   class="ck"
-                  style="width: 13px; height: 13px"
+                  style="width: var(--icon-sm); height: var(--icon-sm)"
                 />
               </div>
             </div>
@@ -126,7 +126,7 @@
                 :title="t('common.add')"
                 @click.stop="emit('new-in-group', grp.key)"
               >
-                <Icon name="plus" style="width: 13px; height: 13px" />
+                <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
               </span>
             </div>
             <div class="grpitems">
@@ -160,7 +160,9 @@
     <div class="detail">
       <slot v-if="selected" name="detail" :item="selected" />
       <div v-else class="empty">
-        <span class="ei"><Icon name="folder" style="width: 20px; height: 20px" /></span>
+        <span class="ei">
+          <Icon name="folder" style="width: var(--icon-lg); height: var(--icon-lg)" />
+        </span>
         <div class="et">{{ t('common.empty.choose') }}</div>
       </div>
     </div>

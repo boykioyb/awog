@@ -251,8 +251,8 @@ const formattedTime = computed(() => {
   gap: 5px;
 }
 .td-statusi {
-  width: 11px;
-  height: 11px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 .td-statusi.spin {
   animation: td-pulse 1.4s ease-in-out infinite;
@@ -286,8 +286,8 @@ const formattedTime = computed(() => {
   gap: 5px;
 }
 .td-meta-icn {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 .td-meta-dot {
   color: var(--textFaint);
@@ -336,8 +336,8 @@ const formattedTime = computed(() => {
   opacity: 0.6;
 }
 .td-discuss-icn {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: 0 0 auto;
   color: var(--textDim);
 }
@@ -351,8 +351,8 @@ const formattedTime = computed(() => {
   color: var(--text);
 }
 .td-discuss-chev {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: 0 0 auto;
   color: var(--textFaint);
 }

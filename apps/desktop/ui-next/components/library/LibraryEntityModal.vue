@@ -7,7 +7,7 @@
           <span v-if="$slots['header-extra']" class="lem-hx"><slot name="header-extra" /></span>
           <span style="flex: 1" />
           <button class="iconbtn lem-x" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
         <div class="lem-body">

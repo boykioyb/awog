@@ -4,7 +4,7 @@
       <span class="sshx-kc-title">{{ t('ssh.nav.keychain') }}</span>
       <span class="sshx-kc-count">{{ identities.length }}</span>
       <button class="btn pri sm sshx-kc-new" :title="t('ssh.identity.new')" @click="emit('new')">
-        <Icon name="plus" style="width: 13px; height: 13px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.identity.new') }}
       </button>
     </div>
@@ -18,7 +18,9 @@
       />
       <div v-else class="sshx-kc-list">
         <div v-for="idn in identities" :key="idn.id" class="sshx-kc-row">
-          <span class="sshx-kc-ic"><Icon name="shield" style="width: 15px; height: 15px" /></span>
+          <span class="sshx-kc-ic">
+            <Icon name="shield" style="width: var(--icon-md); height: var(--icon-md)" />
+          </span>
           <div class="sshx-kc-main">
             <span class="sshx-kc-name">{{ idn.name }}</span>
             <div class="sshx-kc-meta">
@@ -38,7 +40,7 @@
             :aria-label="t('ssh.identity.edit')"
             @click="emit('edit', idn.id)"
           >
-            <Icon name="edit" style="width: 13px; height: 13px" />
+            <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <button
             class="sshx-kc-act sshx-kc-del"
@@ -46,7 +48,7 @@
             :aria-label="t('ssh.identity.delete')"
             @click="emit('delete', idn.id)"
           >
-            <Icon name="trash" style="width: 13px; height: 13px" />
+            <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
       </div>

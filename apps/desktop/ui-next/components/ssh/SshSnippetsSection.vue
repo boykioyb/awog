@@ -4,7 +4,7 @@
       <span class="sshx-sn-title">{{ t('ssh.nav.snippets') }}</span>
       <span class="sshx-sn-count">{{ snippetsStore.snippets.length }}</span>
       <button class="btn pri sm sshx-sn-new" :title="t('ssh.snippet.new')" @click="openNew">
-        <Icon name="plus" style="width: 13px; height: 13px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.snippet.new') }}
       </button>
     </div>
@@ -25,7 +25,9 @@
       />
       <div v-else class="sshx-sn-list">
         <div v-for="s in snippetsStore.snippets" :key="s.id" class="sshx-sn-row">
-          <span class="sshx-sn-ic"><Icon name="commands" style="width: 15px; height: 15px" /></span>
+          <span class="sshx-sn-ic">
+            <Icon name="commands" style="width: var(--icon-md); height: var(--icon-md)" />
+          </span>
           <div class="sshx-sn-main">
             <span class="sshx-sn-name">{{ s.name }}</span>
             <span class="sshx-sn-cmd mono">{{ s.command }}</span>
@@ -37,7 +39,7 @@
             :aria-label="t('ssh.snippet.run')"
             @click="run(s)"
           >
-            <Icon name="play" style="width: 13px; height: 13px" />
+            <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <button
             class="sshx-sn-act"
@@ -45,7 +47,7 @@
             :aria-label="t('ssh.snippet.copy')"
             @click="copy(s)"
           >
-            <Icon name="copy" style="width: 13px; height: 13px" />
+            <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <button
             class="sshx-sn-act"
@@ -53,7 +55,7 @@
             :aria-label="t('ssh.snippet.edit')"
             @click="openEdit(s)"
           >
-            <Icon name="edit" style="width: 13px; height: 13px" />
+            <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
           <button
             class="sshx-sn-act sshx-sn-del"
@@ -61,7 +63,7 @@
             :aria-label="t('ssh.snippet.delete')"
             @click="del(s)"
           >
-            <Icon name="trash" style="width: 13px; height: 13px" />
+            <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
       </div>

@@ -3,12 +3,15 @@
     <div v-if="open" class="ovl on wfpc-ovl" @click.self="onBackdrop">
       <div class="wfpc" role="dialog" aria-modal="true">
         <div class="wfpc-hd">
-          <Icon name="sparkles" style="width: 13px; height: 13px; color: var(--accent)" />
+          <Icon
+            name="sparkles"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="wfpc-title">{{ t('workflow.creator.headline') }}</span>
           <span class="wfpc-sub">{{ t('workflow.creator.subheadline') }}</span>
           <span style="flex: 1" />
           <button class="iconbtn wfpc-x" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -29,7 +32,10 @@
           <!-- generated draft preview -->
           <div v-if="draft" class="wfpc-draft">
             <div class="wfpc-draft-hd">
-              <Icon name="workflows" style="width: 12px; height: 12px; color: var(--textDim)" />
+              <Icon
+                name="workflows"
+                style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+              />
               <span class="wfpc-draft-name">{{ draft.name }}</span>
             </div>
             <div class="wfpc-draft-desc">{{ draft.description }}</div>
@@ -38,7 +44,10 @@
             <div v-if="draft.nodes.length" class="wfpc-groups">
               <div v-for="grp in groupedSteps" :key="grp.agentId" class="wfpc-group">
                 <div class="wfpc-group-hd">
-                  <Icon name="agents" style="width: 12px; height: 12px; color: var(--textDim)" />
+                  <Icon
+                    name="agents"
+                    style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+                  />
                   <span class="wfpc-group-name">{{ grp.agentName }}</span>
                   <span v-if="grp.role" class="wfpc-group-role">{{ grp.role }}</span>
                 </div>
@@ -51,7 +60,7 @@
                     <Icon
                       v-if="s.approval"
                       name="shield"
-                      style="width: 11px; height: 11px; color: var(--amber)"
+                      style="width: var(--icon-xs); height: var(--icon-xs); color: var(--amber)"
                       :title="t('workflow.node.approvalGate')"
                     />
                   </div>
@@ -75,7 +84,7 @@
             <Icon
               name="refresh"
               :class="{ spin: isGenerating }"
-              style="width: 13px; height: 13px"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ t('workflow.creator.regenerate') }}
           </button>
@@ -83,12 +92,12 @@
             <Icon
               :name="isGenerating ? 'refresh' : 'sparkles'"
               :class="{ spin: isGenerating }"
-              style="width: 13px; height: 13px"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ isGenerating ? t('workflow.creator.generating') : t('workflow.creator.generate') }}
           </button>
           <button v-if="draft" class="btn pri sm" @click="onCreate">
-            <Icon name="save" style="width: 13px; height: 13px" />
+            <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('workflow.creator.create') }}
           </button>
         </div>

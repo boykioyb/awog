@@ -1,6 +1,6 @@
 <template>
   <div v-if="!file" class="empty">
-    <span class="ei"><Icon name="git" style="width: 21px; height: 21px" /></span>
+    <span class="ei"><Icon name="git" style="width: 22px; height: 22px" /></span>
     <div class="et">{{ t('git.diff.empty') }}</div>
   </div>
   <template v-else>
@@ -20,7 +20,10 @@
         {{ diffMode === 'split' ? t('git.diff.split') : t('git.diff.unified') }}
       </span>
       <button class="btn sm" @click="onPrimary">
-        <Icon :name="staged ? 'rewind' : 'check'" style="width: 14px; height: 14px" />
+        <Icon
+          :name="staged ? 'rewind' : 'check'"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
         {{ staged ? t('git.diff.unstageFile') : t('git.diff.stageFile') }}
       </button>
     </div>

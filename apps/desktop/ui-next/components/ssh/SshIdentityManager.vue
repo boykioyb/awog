@@ -6,7 +6,7 @@
           <Icon name="shield" class="sim-icn" />
           <span class="sim-title">{{ t('ssh.identity.title') }}</span>
           <button class="btn pri sm sim-new" @click="emit('new')">
-            <Icon name="plus" style="width: 12px; height: 12px" />
+            <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ t('ssh.identity.new') }}
           </button>
           <button
@@ -15,7 +15,7 @@
             :aria-label="t('ssh.panel.close')"
             @click="emit('close')"
           >
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -41,7 +41,7 @@
               :aria-label="t('ssh.identity.edit')"
               @click="emit('edit', idn.id)"
             >
-              <Icon name="edit" style="width: 13px; height: 13px" />
+              <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
             <button
               class="sim-act sim-del"
@@ -49,7 +49,7 @@
               :aria-label="t('ssh.identity.delete')"
               @click="emit('delete', idn.id)"
             >
-              <Icon name="trash" style="width: 13px; height: 13px" />
+              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </button>
           </div>
         </div>
@@ -105,8 +105,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   border-bottom: 1px solid var(--border);
 }
 .sim-icn {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   flex: 0 0 auto;
   color: var(--accent);
 }

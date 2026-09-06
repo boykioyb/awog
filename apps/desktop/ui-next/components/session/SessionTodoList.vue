@@ -10,7 +10,7 @@
       @click="emit('cycle', i)"
     >
       <span class="tdck">
-        <Icon v-if="td.done" name="check" style="width: 12px; height: 12px" />
+        <Icon v-if="td.done" name="check" style="width: var(--icon-xs); height: var(--icon-xs)" />
         <span v-else-if="td.status === 'in_progress'" class="tddot" />
       </span>
       {{ td.t }}

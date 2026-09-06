@@ -36,6 +36,7 @@ Scale token cần dùng **đã tồn tại** nhưng ngủ yên: `--r-xs|sm|btn|c
 | **D3** | Mono | `var(--code)` chỉ dành cho code thật; chỗ dùng mono để *căn số* chuyển sang `--sans` + `font-variant-numeric: tabular-nums`. |
 | **D4** | Vỏ cửa sổ | Title bar do OS vẽ được **giấu** ở cửa sổ chính, top bar của app trở thành drag region; popout session **giữ frame native**. |
 | **D5** | Vibrancy | **Ngoài phạm vi** ADR này — tách ADR riêng. |
+| **D6** | Thang icon | `--icon-*` là **px cố định, mọi bậc chẵn** (12/14/16/20/24), `.icn` mặc định 16 + `stroke-width: 1.5`. |
 
 ### D1 — Token hoá bằng codemod + guard, không sửa tay
 
@@ -149,6 +150,31 @@ Chỗ ở phải xử lý **tường minh hai nhánh**, không suy ra được t
 
 ⇒ Vibrancy là **P5, tuỳ chọn, ADR riêng**. ADR này cố ý không đặt nền móng gì cho nó ngoài việc không cản đường.
 
+### D6 — Thang icon: px cố định, mọi bậc chẵn (bổ sung 2026-09-06)
+
+D2 và D2b khử nửa pixel ở **chữ**. Đo lại app đang chạy sau đó: tỉ lệ element nằm trên nửa pixel giảm 75% → **47%**, và phần 47% còn lại gần như toàn bộ là **SVG icon** — 25 trong 28 icon cỡ lẻ nằm trên nửa pixel, còn 2 icon cỡ chẵn (14px) thì không (chúng lệch vì cha của chúng lệch).
+
+Nguyên nhân hình học, không phải thẩm mỹ: một icon **cỡ lẻ** căn giữa trong hộp cao **chẵn** luôn rơi vào nửa pixel — `.icn` 15px trong hàng NavRail 36px cho `(36 − 15) / 2 = 10.5px`. Cỡ chẵn trong hộp chẵn cho số nguyên. Thang vì thế phải chẵn từ đầu tới cuối:
+
+```
+--icon-xs:12px; --icon-sm:14px; --icon-md:16px; --icon-lg:20px; --icon-xl:24px;
+```
+
+**Cố định px, không `calc(base ± Npx)` như `--fs-*`.** Icon là *hình vẽ*, không phải chữ: cho nó phình theo Appearance 12→18 nghĩa là mọi hộp icon cỡ cố định (checkbox 16px, nút đóng tab 16px, tile logo 26px) phải phình theo, hoặc icon tràn ra ngoài. Chữ giãn được vì dòng giãn theo; icon thì không.
+
+`.icn` chốt **16**, không phải 14, vì hai lý do đo được:
+
+1. `stroke-width` trong SVG là **user unit** của viewBox `0 0 24 24`, nên nét vẽ thật là `stroke-width × size/24`. Ở 16px thì `1.5 × 16/24` = **đúng 1 device pixel**. Giá trị cũ 1.7 cho 1.06px ở 15 và 1.13px ở 16; 2 cho 1.33px và đọc nặng ở cỡ này. ⇒ `stroke-width: 1.5`.
+2. 16pt là cỡ icon sidebar/toolbar của macOS; [theme-cute.css](../../apps/desktop/ui-next/assets/css/theme-cute.css) đã tự đặt `.ni .icn` là 16 từ trước.
+
+Rủi ro "to thêm 1px làm vỡ container" đã rà hết: mọi hộp vuông có `place-items:center` cỡ 14–26px đều nhồi icon bằng cỡ inline tường minh (11/12px), không ăn `.icn` mặc định; còn hàng chữ + icon thì chiều cao do hộp dòng `--lh-md` 20px quyết định nên 16px không chạm trần.
+
+**Cỡ lẻ map LÊN** (11→12, 13→14, 15→16, 17→18, 21→22): làm tròn xuống khiến icon teo dần qua mỗi đợt dọn.
+
+Điểm khác biệt về công cụ so với D1: R1–R4 nhận diện vi phạm bằng **cú pháp** (`border-radius: <px>` là vi phạm, hết), nên guard tự chứa được. R5 phải trả lời "rule này có đang chỉnh cỡ **icon** không?" — `width: 15px` cũng là chấm trạng thái, ô màu, thanh skeleton, núm switch, caret. Câu trả lời không nằm trong CSS mà nằm trong **template**: [`scripts/lib/icon-sites.mjs`](../../apps/desktop/ui-next/scripts/lib/icon-sites.mjs) quét một lượt mọi `.vue`, gom class đứng trên `<Icon>` / `<svg>` / component `lucide-vue-next`, và **loại mọi tên cũng xuất hiện trên element khác** (nhập nhằng ⇒ không phải icon). Codemod và guard **import chung** module đó — hai bản sao của một classifier sẽ lệch ngay lần đổi tên class đầu tiên, và lệch ở đây tệ hơn không có: codemod sẽ sửa những site guard không bao giờ kiểm.
+
+Ba kênh khai cỡ icon đều phải phủ, vì bỏ sót một kênh là guard mù kênh đó: rule CSS, `style="width: …"` inline trên `<Icon>`, và `:size="…"` — prop **của lucide**, không phải của `Icon.vue` (`<Icon :size="13" />` là no-op, xem "Việc cần làm tiếp").
+
 ### Ngoại lệ cố ý — khai trong guard script
 
 Guard **phải im lặng** ở 4 chỗ sau, nếu không nó sẽ bị tắt đi vì báo giả:
@@ -165,6 +191,9 @@ Ngoài ra Monaco, xterm và VueFlow tự vẽ theo hệ của chúng, không the
 - **Sửa tay 702 + 727 site theo từng khu vực (Boy Scout).** *Từ chối:* nhịp sửa (vài chục site/tuần) chậm hơn nhịp thêm site mới; không có mốc "xong" nên guard không bao giờ bật được, và không bật guard thì đâu lại vào đấy.
 - **Thêm Stylelint + plugin để guard.** *Từ chối:* thêm dependency cho một luật 3 dòng regex; script Node thuần đọc được, sửa được, và **khai ngoại lệ ngay cạnh luật** (Stylelint sẽ đẩy allowlist sang một file config thứ ba, xa chỗ nó nói về).
 - **Giữ rem, chỉ chuẩn hoá về ít giá trị hơn.** *Từ chối:* không giải được nguyên nhân (rem × base kéo được = nửa pixel); chỉ giảm số lượng chỗ nhoè chứ không hết nhoè.
+- **Thang icon dùng `calc(base ± Npx)` cho đồng bộ với `--fs-*`.** *Từ chối:* icon không giãn theo dòng như chữ; base 18 sẽ đẩy `.icn` lên 21px và tràn mọi hộp icon cỡ cố định (checkbox 16, nút đóng tab 16). Xem D6.
+- **`.icn` về 14px thay vì 16px** (an toàn tuyệt đối, chỉ thu nhỏ). *Từ chối:* `24 / 14` không chẵn nên không có `stroke-width` nào cho đúng 1 device pixel, và rà container cho thấy 16 không làm vỡ chỗ nào (D6).
+- **Guard R5 tự chứa như R1–R4, nhận diện icon bằng regex tên class.** *Từ chối:* `.mdxi`, `.bmb-ic`, `.td-statusi`, `.aselchev` là icon còn `.tddot`, `.catsq`, `.skbar`, `.thumb` thì không — không có regex tên nào chia đúng. Bằng chứng nằm ở template, và bằng chứng đó phải là **một** nguồn cho cả codemod lẫn guard.
 - **Bỏ hẳn `--code`, dùng sans ở mọi nơi.** *Từ chối:* diff, terminal và code block **cần** bề rộng cố định để cột thẳng hàng; đó là mono dùng đúng việc.
 - **`frame: false` hoàn toàn, app tự vẽ cả nút đóng/thu nhỏ.** *Từ chối:* phải tự tái tạo hành vi hover-nhóm, fullscreen, và Stage Manager của macOS; `hiddenInset` cho đèn giao thông **thật** miễn phí.
 - **Popout session cũng frameless.** *Từ chối:* xem D4 — document window trên macOS có title bar thật; bỏ đi thì user mất chỗ đọc tên session và mất double-click-to-zoom.
@@ -186,6 +215,9 @@ Ngoài ra Monaco, xterm và VueFlow tự vẽ theo hệ của chúng, không the
 - **Việc cần làm tiếp:**
   - Chạy hai codemod (P2), triage mono (P3), rồi **nối guard vào `pnpm lint`** (bước cuối P4).
   - Cập nhật [.claude/rules/nuxt-vue.md](../../.claude/rules/nuxt-vue.md) + [docs/coding/nuxt-frontend.md](../coding/nuxt-frontend.md) để rule mới thay rule "dùng `text-[1em]`".
+  - **`<Icon :size="N" />` là no-op** (20 site): [Icon.vue](../../apps/desktop/ui-next/components/Icon.vue) chỉ khai prop `name`, nên `size` rơi xuống `$attrs` thành một attribute `size` mà `<svg>` không hiểu — icon vẫn render ở cỡ `.icn`. Không sửa lẫn vào đợt D6 (nó là bug hành vi, không phải token); hoặc thêm prop `size` vào `Icon.vue`, hoặc đổi 20 site sang `style`.
+  - **Rule chết `.steph .chev`** ([prototype.css](../../apps/desktop/ui-next/assets/css/prototype.css)): `chev` là *tên icon* (`<Icon name="chev">`), không phải class — nên cả `.steph .chev{width…}` lẫn `.step.col .steph .chev{transform:rotate(-90deg)}` đều không khớp element nào.
+  - **`.ni .bdg` cao 17px** (lẻ) trong hộp dòng 20px ⇒ lệch 1.5px. Badge chữ nên nằm ngoài R5; xử lý khi rà badge.
   - Sửa **13 site `border-radius: var(--r)`** — biến `--r` không được khai ở đâu trong repo, nên radius rơi về 0. Guard đã bắt.
   - Quyết định riêng cho vibrancy (P5) nếu còn muốn làm.
 

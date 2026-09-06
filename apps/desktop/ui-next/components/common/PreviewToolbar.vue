@@ -18,7 +18,7 @@
       :aria-label="t('common.preview.dragMove')"
       @pointerdown="startDrag"
     >
-      <GripVertical :size="15" />
+      <GripVertical :size="16" />
     </button>
     <span class="pvsep" />
 
@@ -34,7 +34,7 @@
           :aria-label="t('common.preview.prevImage')"
           @click="stepImage(-1)"
         >
-          <ChevronLeft :size="15" />
+          <ChevronLeft :size="16" />
         </button>
         <span class="pvz">{{ galleryLabel }}</span>
         <button
@@ -43,7 +43,7 @@
           :aria-label="t('common.preview.nextImage')"
           @click="stepImage(1)"
         >
-          <ChevronRight :size="15" />
+          <ChevronRight :size="16" />
         </button>
         <span class="pvsep" />
       </template>
@@ -53,7 +53,7 @@
         :aria-label="t('common.zoomOut')"
         @click="zoomBy(-0.2)"
       >
-        <ZoomOut :size="15" />
+        <ZoomOut :size="16" />
       </button>
       <span class="pvz">{{ Math.round(scale * 100) }}%</span>
       <button
@@ -62,7 +62,7 @@
         :aria-label="t('common.zoomIn')"
         @click="zoomBy(0.2)"
       >
-        <ZoomIn :size="15" />
+        <ZoomIn :size="16" />
       </button>
       <!-- fit ≠ 100%: the CSS already contains an oversized image at scale 1, so fit is
            what scales a SMALL image up to fill the frame (and re-centers either way). -->
@@ -72,7 +72,7 @@
         :aria-label="t('common.fit')"
         @click="fitImage()"
       >
-        <Scan :size="15" />
+        <Scan :size="16" />
       </button>
       <button
         class="pvtb"
@@ -80,7 +80,7 @@
         :aria-label="t('common.zoomReset')"
         @click="resetView()"
       >
-        <Maximize2 :size="15" />
+        <Maximize2 :size="16" />
       </button>
       <span class="pvsep" />
       <button
@@ -89,7 +89,7 @@
         :aria-label="t('common.rotateLeft')"
         @click="rotate -= 90"
       >
-        <RotateCcw :size="15" />
+        <RotateCcw :size="16" />
       </button>
       <button
         class="pvtb"
@@ -97,7 +97,7 @@
         :aria-label="t('common.rotateRight')"
         @click="rotate += 90"
       >
-        <RotateCw :size="15" />
+        <RotateCw :size="16" />
       </button>
       <span class="pvsep" />
       <button
@@ -106,7 +106,7 @@
         :aria-label="t('common.flipH')"
         @click="flipH = !flipH"
       >
-        <FlipHorizontal2 :size="15" />
+        <FlipHorizontal2 :size="16" />
       </button>
       <button
         class="pvtb"
@@ -114,7 +114,7 @@
         :aria-label="t('common.flipV')"
         @click="flipV = !flipV"
       >
-        <FlipVertical2 :size="15" />
+        <FlipVertical2 :size="16" />
       </button>
     </template>
 
@@ -126,7 +126,7 @@
         :title="t('common.render')"
         @click="view = 'render'"
       >
-        <Icon name="rules" style="width: 14px; height: 14px" />
+        <Icon name="rules" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="pvtb"
@@ -134,11 +134,11 @@
         :title="t('common.raw')"
         @click="view = 'raw'"
       >
-        <Icon name="commands" style="width: 14px; height: 14px" />
+        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <span class="pvsep" />
       <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
-        <Icon name="copy" style="width: 13px; height: 13px" />
+        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <template v-if="view === 'render'">
         <span class="pvsep" />
@@ -148,7 +148,7 @@
           :aria-label="t('common.widthNarrower')"
           @click="stepWidth(-1)"
         >
-          <FoldHorizontal :size="15" />
+          <FoldHorizontal :size="16" />
         </button>
         <span class="pvz">{{ widthLabel }}</span>
         <button
@@ -157,7 +157,7 @@
           :aria-label="t('common.widthWider')"
           @click="stepWidth(1)"
         >
-          <UnfoldHorizontal :size="15" />
+          <UnfoldHorizontal :size="16" />
         </button>
       </template>
     </template>
@@ -170,7 +170,7 @@
         :title="t('common.render')"
         @click="view = 'render'"
       >
-        <Icon name="globe" style="width: 14px; height: 14px" />
+        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="pvtb"
@@ -178,18 +178,18 @@
         :title="t('common.raw')"
         @click="view = 'raw'"
       >
-        <Icon name="commands" style="width: 14px; height: 14px" />
+        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <span class="pvsep" />
       <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
-        <Icon name="copy" style="width: 13px; height: 13px" />
+        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </template>
 
     <!-- text: copy -->
     <template v-else-if="item?.kind === 'text'">
       <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
-        <Icon name="copy" style="width: 13px; height: 13px" />
+        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </template>
 
@@ -200,7 +200,7 @@
         :title="t(item.kind === 'sheet' ? 'common.preview.copySheet' : 'common.preview.copyText')"
         @click="copyContent()"
       >
-        <Icon name="copy" style="width: 13px; height: 13px" />
+        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </template>
 
@@ -209,7 +209,7 @@
       <span class="pvsep" />
       <div class="pvdd">
         <button class="pvtb wide" :title="t('common.preview.theme')" @click="toggle('theme')">
-          <Icon name="palette" style="width: 14px; height: 14px" />
+          <Icon name="palette" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="pvz auto">{{ currentThemeLabel }}</span>
         </button>
         <!-- right-aligned: the bar's home is the right corner, so a dropdown growing
@@ -224,7 +224,11 @@
               :class="{ on: current === opt.id }"
               @click="pickTheme(opt.id)"
             >
-              <Icon v-if="current === opt.id" name="check" style="width: 13px; height: 13px" />
+              <Icon
+                v-if="current === opt.id"
+                name="check"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
               <span v-else class="pvmidot" />
               {{ opt.id === FOLLOW_APP ? t('common.preview.followApp') : opt.label }}
             </button>
@@ -244,7 +248,7 @@
         :aria-label="t('common.reload')"
         @click="reload()"
       >
-        <Icon name="refresh" style="width: 13px; height: 13px" />
+        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </template>
 
@@ -252,7 +256,7 @@
     <template v-if="isEditableFile">
       <span class="pvsep" />
       <button v-if="!editMode" class="pvtb" :title="t('common.preview.edit')" @click="startEdit()">
-        <Icon name="edit" style="width: 13px; height: 13px" />
+        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <template v-else>
         <button
@@ -261,10 +265,10 @@
           :title="t('common.preview.save')"
           @click="save()"
         >
-          <Icon name="save" style="width: 14px; height: 14px" />
+          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button class="pvtb" :title="t('common.cancel')" @click="cancelEdit()">
-          <Icon name="x" style="width: 13px; height: 13px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </template>
     </template>
@@ -274,39 +278,39 @@
       <span class="pvsep" />
       <div class="pvdd">
         <button class="pvtb" :title="t('common.preview.actions')" @click="toggle('menu')">
-          <Icon name="dots" style="width: 16px; height: 16px" />
+          <Icon name="dots" style="width: var(--icon-md); height: var(--icon-md)" />
         </button>
         <div v-if="open === 'menu'" class="pvmenu up right" @click.stop>
           <button v-if="canAddToChat" class="pvmi" @click="run(addToChat)">
-            <Icon name="clip" style="width: 13px; height: 13px" />
+            <Icon name="clip" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('common.preview.addToChat') }}
           </button>
           <template v-if="hasWorkspaceFile">
             <div v-if="canAddToChat" class="pvmsep" />
             <button class="pvmi" @click="run(reveal)">
-              <Icon name="folder" style="width: 13px; height: 13px" />
+              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.reveal') }}
             </button>
             <button class="pvmi" @click="run(openInBrowser)">
-              <Icon name="globe" style="width: 13px; height: 13px" />
+              <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.openBrowser') }}
             </button>
             <button class="pvmi" @click="run(copyPath)">
-              <Icon name="copy" style="width: 13px; height: 13px" />
+              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.copyPath') }}
             </button>
             <div class="pvmsep" />
             <button class="pvmi" @click="run(() => openRename('rename'))">
-              <Icon name="edit" style="width: 13px; height: 13px" />
+              <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.rename') }}
             </button>
             <button class="pvmi" @click="run(() => openRename('move'))">
-              <Icon name="move" style="width: 13px; height: 13px" />
+              <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.move') }}
             </button>
             <div class="pvmsep" />
             <button class="pvmi danger" @click="run(askDelete)">
-              <Icon name="trash" style="width: 13px; height: 13px" />
+              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.delete') }}
             </button>
           </template>
@@ -322,7 +326,7 @@
       :aria-label="t('common.preview.hideToolbar')"
       @click="collapse()"
     >
-      <EyeOff :size="15" />
+      <EyeOff :size="16" />
     </button>
 
     <!-- click-away backdrop for whichever dropdown is open -->

@@ -5,21 +5,27 @@
         <!-- Header -->
         <div class="prm-head">
           <div class="prm-headmain">
-            <Icon name="sparkles" style="width: 15px; height: 15px; color: var(--accent)" />
+            <Icon
+              name="sparkles"
+              style="width: var(--icon-md); height: var(--icon-md); color: var(--accent)"
+            />
             <span class="prm-title">{{ t('git.prSummary.title') }}</span>
           </div>
           <button class="prm-x" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
         <!-- Compare row: head → base picker -->
         <div class="prm-compare">
           <span class="prm-branch">
-            <Icon name="branch" style="width: 12px; height: 12px" />
+            <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ head }}
           </span>
-          <Icon name="fork" style="width: 13px; height: 13px; color: var(--textDim)" />
+          <Icon
+            name="fork"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+          />
           <span class="prm-into">{{ t('git.prSummary.into') }}</span>
           <AppSelect
             v-if="baseOptions.length"
@@ -34,7 +40,10 @@
 
         <!-- Rule row: which commit-rule file governs the title + Generate action -->
         <div class="prm-rulerow">
-          <Icon name="rules" style="width: 13px; height: 13px; color: var(--textDim)" />
+          <Icon
+            name="rules"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+          />
           <span class="prm-into">{{ t('git.prSummary.ruleLabel') }}</span>
           <AppSelect
             :model-value="rulePath"
@@ -50,20 +59,28 @@
             :disabled="loading || !base || !head"
             @click="runGenerate"
           >
-            <Icon name="sparkles" :class="{ prmspin: loading }" style="width: 13px; height: 13px" />
+            <Icon
+              name="sparkles"
+              :class="{ prmspin: loading }"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
             {{ generated ? t('git.prSummary.regenerate') : t('git.prSummary.generate') }}
           </button>
         </div>
 
         <!-- Error banner -->
         <div v-if="error" class="prm-err">
-          <Icon name="alert" style="width: 13px; height: 13px" />
+          <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ error }}</span>
         </div>
 
         <!-- Loading -->
         <div v-if="loading" class="prm-loading">
-          <Icon name="sparkles" class="prmspin" style="width: 16px; height: 16px" />
+          <Icon
+            name="sparkles"
+            class="prmspin"
+            style="width: var(--icon-md); height: var(--icon-md)"
+          />
           <span>{{ t('git.prSummary.generating') }}</span>
         </div>
 
@@ -86,7 +103,7 @@
               >
                 <Icon
                   :name="copied === 'title' ? 'check' : 'copy'"
-                  style="width: 12px; height: 12px"
+                  style="width: var(--icon-xs); height: var(--icon-xs)"
                 />
                 {{ copied === 'title' ? t('common.copied') : t('common.copy') }}
               </button>
@@ -126,7 +143,7 @@
                   :title="tool.k"
                   @click="tool.run()"
                 >
-                  <Icon :name="tool.icon" style="width: 12px; height: 12px" />
+                  <Icon :name="tool.icon" style="width: var(--icon-xs); height: var(--icon-xs)" />
                 </button>
               </div>
               <button
@@ -137,7 +154,7 @@
               >
                 <Icon
                   :name="copied === 'desc' ? 'check' : 'copy'"
-                  style="width: 12px; height: 12px"
+                  style="width: var(--icon-xs); height: var(--icon-xs)"
                 />
                 {{ copied === 'desc' ? t('common.copied') : t('common.copy') }}
               </button>
@@ -168,7 +185,10 @@
             :disabled="loading || !title.trim() || !description.trim()"
             @click="copyAll"
           >
-            <Icon :name="copied === 'all' ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+            <Icon
+              :name="copied === 'all' ? 'check' : 'copy'"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
             {{ copied === 'all' ? t('common.copied') : t('git.prSummary.copyAll') }}
           </button>
         </div>

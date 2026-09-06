@@ -7,11 +7,14 @@
     <div v-if="isOpen" class="ovl on gitovl" @click.self="close">
       <div class="gitmodal">
         <div class="gitmodal-head">
-          <Icon name="git" style="width: 14px; height: 14px; color: var(--accent)" />
+          <Icon
+            name="git"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+          />
           <span class="gitmodal-title">{{ t('sessions.workspace.gitModal.title') }}</span>
           <span style="flex: 1" />
           <button class="gitmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
         <div class="gitmodal-body">

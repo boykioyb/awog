@@ -160,6 +160,44 @@ Ngoại lệ **không đụng**: xterm tự vẽ scrollbar DOM riêng ([Workspac
 - **Dọn tài liệu chết:** [ui-design-system.md](./ui-design-system.md) + [ADR 0041](../decisions/0041-in-house-design-system-shadcn-style.md) trỏ vào `apps/desktop/ui/` đã bị xoá → đánh dấu Superseded hoặc viết lại cho `ui-next`.
 - **ADR mới (0079)** cho quyết định thang token + native window chrome.
 
+### W9 — Icon scale (P7b)
+
+P7a đưa mọi **hộp dòng** về px nguyên và kéo tỉ lệ element nằm trên nửa pixel từ 75% → **47%**. Đo phần 47% còn lại trên app đang chạy: gần như toàn bộ là **SVG icon**.
+
+| cỡ icon | số lượng | nằm trên nửa pixel |
+|---|---:|---:|
+| 15px (lẻ) | 26 | **25** |
+| 13px (lẻ) | 2 | 0 |
+| 14px (chẵn) | 2 | 2 |
+
+Cơ chế: `.icn{width:15px}` căn giữa trong hàng cao 36px ⇒ `(36 − 15) / 2 = 10.5px`. Icon ngồi trên biên nửa pixel, `stroke-width: 1.7` lại là **user unit** của viewBox `0 0 24 24` nên nét vẽ thật là `1.7 × 15/24 = 1.06px` — cũng không phải số nguyên. Hai lỗi cộng vào nhau ⇒ icon mềm/nhoè.
+
+Thang chốt ở `:root` của [prototype.css](../../apps/desktop/ui-next/assets/css/prototype.css), **px cố định** (icon là hình vẽ, phình theo Appearance là tràn container):
+
+```
+--icon-xs:12px; --icon-sm:14px; --icon-md:16px; --icon-lg:20px; --icon-xl:24px;
+```
+
+- `.icn` global **15 → 16px** (`--icon-md`). Chọn 16 chứ không 14 vì `24 / 16 = 1.5` chẵn ⇒ `stroke-width: 1.5` ra **đúng 1 device pixel**; 16pt cũng là cỡ icon sidebar/toolbar của macOS. Đã rà toàn bộ hộp vuông có `place-items:center` cỡ 14–26px: mọi hộp chật (`.tdck` 15, `.qcbox`/`.lcbox`/`.att .qsend`/`.wsterm-tab-close` 16, `.sshx-tab-x` 17) đều nhồi icon bằng **cỡ inline tường minh** (11/12px), không ăn `.icn` mặc định ⇒ không tràn. Hàng chữ + icon thì chiều cao do hộp dòng `--lh-md` 20px quyết định, 16px không chạm trần.
+- `stroke-width` **1.7 → 1.5**. 2 sẽ ra 1.33px và nhìn nặng ở cỡ 16.
+- `.logo` **25 → 26px** (sửa tay): tile lẻ căn glyph vào 5.5px, và [theme-cute.css](../../apps/desktop/ui-next/assets/css/theme-cute.css) vốn đã dùng 26 — để 25 là hai theme family lệch nhau.
+
+Codemod [`scripts/codemod-icon-scale.mjs`](../../apps/desktop/ui-next/scripts/codemod-icon-scale.mjs) + guard **R5**. Cỡ lẻ map **lên** bậc chẵn (icon không teo): 11→12, 13→14, 15→16, 21→22, 9→10; cỡ chẵn nằm trên thang thì đổi sang token, cỡ chẵn ngoài thang (18/22/26/28/40 — icon empty-state) giữ nguyên px.
+
+**Ba kênh khai cỡ icon** — bỏ sót kênh nào là guard mù kênh đó:
+
+| kênh | ví dụ | số declaration |
+|---|---|---:|
+| `css` | `.ha .icn{width:13px;height:13px}` | 196 |
+| `inline` | `<Icon style="width: 13px; height: 13px" />` | 1352 |
+| `size` | `<ChevronLeft :size="15" />` (prop của lucide) | 22 |
+
+**Heuristic phân biệt icon vs không-icon** nằm ở [`scripts/lib/icon-sites.mjs`](../../apps/desktop/ui-next/scripts/lib/icon-sites.mjs) và **dùng chung** cho codemod + guard (khác R1–R4, vốn tự chứa): không đoán theo tên class mà **học từ template**. Một pass quét mọi `.vue`, gom class đứng trên `<Icon>` / `<svg>` / component import từ `lucide-vue-next` vào một tập, class đứng trên element khác vào tập kia; **tên xuất hiện ở cả hai là nhập nhằng ⇒ KHÔNG phải icon**. Rule CSS được coi là icon khi **mọi** nhánh của selector list có key compound là `.icn` / `svg` / một class đã học; pseudo-element (`::after`) luôn bị loại vì nó là hình vẽ chứ không phải icon.
+
+Kết quả học: **102 class icon**. Heuristic loại đúng các bẫy `width == height` mà một luật "vuông ⇒ icon" sẽ nhận nhầm: `.tog::after` / `.slider::after` (núm switch), `.cursor` (caret), `.thumb` (ảnh đính kèm), `.*-dot` (chấm trạng thái), `.catsq` (ô màu), `.gspin-ring` / `.sttspin` / `.acrspin` (spinner CSS trên `<span>`), `.ghskbar` / `.skbar` (thanh skeleton), `.ni .bdg` / `.ntf-badge` (badge chữ), `.donut` (gauge usage), `<Background :size="1">` của VueFlow.
+
+Cần mắt người sau khi land: NavRail, list session, composer, top bar, status bar — xem §7.
+
 ## 5. Thứ tự thi công
 
 | Phase | Workstream | Trạng thái | File đụng | Commit |
@@ -169,6 +207,7 @@ Ngoại lệ **không đụng**: xterm tự vẽ scrollbar DOM riêng ([Workspac
 | **P2** | W3 + W4 (codemod) | ✅ | 225 | `b6f2de2` |
 | **P3** | W5 (mono triage) | ✅ — 85 giữ / 167 đổi | 113 | `a8a04c0` |
 | **P4** | W8 (guard + docs + ADR) | ✅ — guard nối vào `pnpm lint` | 7 | `a49a68f` + `b323405` |
+| **P7b** | W9 (icon scale + guard R5) | ✅ — 1482 declaration / 169 file | 169 | — |
 | **P5** *(chưa làm, cần ADR riêng)* | Vibrancy / translucency | ⬜ | toàn bộ thang màu | — |
 
 Mỗi phase = 1 commit riêng theo [.claude/rules/git-commit.md](../../.claude/rules/git-commit.md). P2 tách 2 commit (radius / type).
@@ -178,6 +217,8 @@ Mỗi phase = 1 commit riêng theo [.claude/rules/git-commit.md](../../.claude/r
 Chạy sau mỗi phase, trong `apps/desktop/ui-next/`:
 
 ```bash
+node scripts/check-design-tokens.mjs                    # R1–R5, phải 0 vi phạm
+node scripts/codemod-icon-scale.mjs --dry-run           # phải 0 site (idempotent)
 grep -rhoE 'border-radius: *[0-9]+px' components layouts pages assets/css | sort | uniq -c
 grep -rhoE 'font-size: *[0-9.]+rem'   components layouts pages assets/css | sort | uniq -c
 grep -rc 'var(--code)' components layouts pages assets/css | grep -v ':0$'

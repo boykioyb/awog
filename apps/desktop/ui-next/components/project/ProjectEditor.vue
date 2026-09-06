@@ -24,7 +24,7 @@
             @click="importMode = m.id"
           >
             <div class="pe-srctitle">
-              <Icon :name="m.icon" style="width: 13px; height: 13px" />
+              <Icon :name="m.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ m.label }}
             </div>
             <div class="pe-srchint">{{ m.hint }}</div>
@@ -119,7 +119,7 @@
             <Icon
               :name="generating ? 'refresh' : 'sparkles'"
               :class="{ spin: generating }"
-              style="width: 12px; height: 12px"
+              style="width: var(--icon-xs); height: var(--icon-xs)"
             />
             {{ t('projects.editor.genDesc') }}
           </button>

@@ -25,7 +25,7 @@
             {{ t('commands.tier.' + (c.source ?? 'global')) }}
           </span>
           <span v-if="c.readOnly" class="tag mono" style="padding: 1px 6px">
-            <Icon name="lock" style="width: 9px; height: 9px" />
+            <Icon name="lock" style="width: 10px; height: 10px" />
           </span>
         </div>
         <div class="sub">{{ c.description || '—' }}</div>

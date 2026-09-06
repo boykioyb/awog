@@ -28,11 +28,11 @@
             @input="updateOutput(i, ($event.target as HTMLInputElement).value)"
           />
           <button class="iconbtn wfi-del" :title="t('common.delete')" @click="removeOutput(i)">
-            <Icon name="x" style="width: 12px; height: 12px" />
+            <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </button>
         </div>
         <button class="wfi-add" @click="addOutput">
-          <Icon name="plus" style="width: 12px; height: 12px" />
+          <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ t('workflow.inspector.addOutput') }}
         </button>
       </div>

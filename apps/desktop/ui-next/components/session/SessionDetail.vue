@@ -15,7 +15,7 @@
           @click.stop="openMenu('proj')"
         >
           {{ projName }}
-          <Icon name="chev" style="width: 11px; height: 11px" />
+          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <div
             v-if="menu === 'proj'"
             class="smenu"
@@ -28,7 +28,7 @@
                 v-if="p.id === session.project"
                 name="check"
                 class="ck"
-                style="width: 13px; height: 13px"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
               />
             </div>
           </div>
@@ -46,7 +46,7 @@
         style="width: 28px; height: 28px"
         @click="openInCode"
       >
-        <Icon name="code" style="width: 14px; height: 14px" />
+        <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
 
       <!-- Config gear → Budget / Tools (Model · Account · Effort · Style live on the
@@ -61,7 +61,7 @@
           "
           @click.stop="openMenu('config')"
         >
-          <Icon name="settings" style="width: 14px; height: 14px" />
+          <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <SessionConfigPopover
           v-if="menu === 'config'"
@@ -82,7 +82,7 @@
           "
           @click.stop="openMenu('workspace')"
         >
-          <Icon name="workflows" style="width: 14px; height: 14px" />
+          <Icon name="workflows" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <!-- View picker: clicking the workspace button opens this dropdown; picking
              a view opens it (and the panel). Open views show a check + toggle off. -->
@@ -93,13 +93,13 @@
           @click.stop
         >
           <div v-for="v in ALL_VIEWS" :key="v" class="mi" @click="toggleView(v)">
-            <Icon :name="wpIcon(v)" style="width: 13px; height: 13px" />
+            <Icon :name="wpIcon(v)" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ v }}
             <Icon
               v-if="openViews.includes(v)"
               name="check"
               class="ck"
-              style="width: 13px; height: 13px"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
           </div>
         </div>
@@ -117,7 +117,7 @@
           :style="turnBusy ? { opacity: 0.45, cursor: 'not-allowed' } : {}"
           @click="openInWindow"
         >
-          <Icon name="external" style="width: 14px; height: 14px" />
+          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn"
@@ -125,7 +125,7 @@
           style="width: 28px; height: 28px"
           @click="minimizeSession"
         >
-          <Icon name="minimize" style="width: 14px; height: 14px" />
+          <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn"
@@ -133,7 +133,7 @@
           style="width: 28px; height: 28px"
           @click="exportModal.open(session.id)"
         >
-          <Icon name="save" style="width: 14px; height: 14px" />
+          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           class="iconbtn"
@@ -141,7 +141,7 @@
           style="width: 28px; height: 28px"
           @click="askRemove"
         >
-          <Icon name="trash" style="width: 14px; height: 14px" />
+          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </template>
 
@@ -158,7 +158,7 @@
           style="width: 28px; height: 28px"
           @click.stop="openMenu('more')"
         >
-          <Icon name="dots" style="width: 14px; height: 14px" />
+          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <div
           v-if="menu === 'more'"
@@ -172,19 +172,19 @@
             :class="{ mdisabled: turnBusy }"
             @click="runOverflow(openInWindow)"
           >
-            <Icon name="external" style="width: 13px; height: 13px" />
+            <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ popoutTitle }}
           </div>
           <div class="mi" @click="runOverflow(minimizeSession)">
-            <Icon name="minimize" style="width: 13px; height: 13px" />
+            <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('minimize.session') }}
           </div>
           <div class="mi" @click="runOverflow(() => exportModal.open(session.id))">
-            <Icon name="save" style="width: 13px; height: 13px" />
+            <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.export.title') }}
           </div>
           <div class="mi dmi" @click="runOverflow(askRemove)">
-            <Icon name="trash" style="width: 13px; height: 13px" />
+            <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.detail.delete') }}
           </div>
         </div>
@@ -358,15 +358,18 @@
       @mousedown.prevent
     >
       <button class="selquote" @click="openNote">
-        <Icon name="quote" style="width: 13px; height: 13px" />
+        <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('sessions.quote.action') }}
       </button>
       <button class="selquote" @click="onTranslate">
-        <Icon name="globe" style="width: 13px; height: 13px" />
+        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('translate.action') }}
       </button>
       <button class="selquote" @click="onCopyMarkdown">
-        <Icon :name="mdCopied ? 'check' : 'copy'" style="width: 13px; height: 13px" />
+        <Icon
+          :name="mdCopied ? 'check' : 'copy'"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
         {{ mdCopied ? t('common.copied') : t('common.copyMarkdown') }}
       </button>
     </div>
@@ -381,7 +384,7 @@
         @mousedown.stop
       >
         <div class="npq" @pointerdown="onNoteDragStart">
-          <Icon name="quote" style="width: 12px; height: 12px" />
+          <Icon name="quote" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span class="npex">{{ notePop.text }}</span>
         </div>
         <textarea
@@ -1236,8 +1239,8 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .aboutbar-icn {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex: 0 0 auto;
   color: var(--accent);
 }

@@ -6,7 +6,7 @@
     <div class="ovl on ftovl" @click.self="emit('close')">
       <div class="ftcard">
         <div class="fthead">
-          <Icon name="layers" style="width: 13px; height: 13px" />
+          <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="ftname">{{ title }}</span>
           <span v-if="streaming" class="ftstream">
             <span class="ftdot" />
@@ -14,7 +14,7 @@
           </span>
           <span style="flex: 1" />
           <button class="ftx" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: 14px; height: 14px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
 
@@ -205,8 +205,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   border: 1px solid var(--dangerBorder, rgba(239, 68, 68, 0.35));
 }
 .merr-ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   flex: 0 0 auto;
   margin-top: 1px;
   color: var(--danger);

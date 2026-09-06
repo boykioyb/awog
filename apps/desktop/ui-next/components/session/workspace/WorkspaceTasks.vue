@@ -11,7 +11,10 @@
         class="wstasks-row"
         @click="openTask(entry.id)"
       >
-        <Icon name="workflows" style="width: 13px; height: 13px; color: var(--textDim)" />
+        <Icon
+          name="workflows"
+          style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+        />
         <div class="wstasks-main">
           <div class="wstasks-label">{{ entry.title }}</div>
           <div class="wstasks-target">{{ entry.statusLabel }}</div>

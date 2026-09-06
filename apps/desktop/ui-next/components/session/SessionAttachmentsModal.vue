@@ -2,13 +2,13 @@
   <div v-if="open" class="ovl on amovl" @click.self="emit('close')">
     <div class="amcard">
       <div class="amhead">
-        <Icon name="clip" style="width: 13px; height: 13px" />
+        <Icon name="clip" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span class="amtitle">
           {{ t('sessions.attachment.allTitle', { n: attachments.length }) }}
         </span>
         <span style="flex: 1" />
         <button class="amxbtn" :title="t('common.close')" @click="emit('close')">
-          <Icon name="x" style="width: 14px; height: 14px" />
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
 
@@ -23,7 +23,7 @@
           <span class="amthumb">
             <img v-if="a.img && a.src" :src="a.src" class="amimg" :alt="a.name" />
             <span v-else-if="a.img" class="thumb" />
-            <Icon v-else name="rules" style="width: 15px; height: 15px" />
+            <Icon v-else name="rules" style="width: var(--icon-md); height: var(--icon-md)" />
           </span>
           <span class="aminfo">
             <span class="amname">{{ a.name }}</span>
@@ -34,7 +34,7 @@
             :title="t('sessions.attachment.remove')"
             @click.stop="emit('remove', i)"
           >
-            <Icon name="x" style="width: 13px; height: 13px" />
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
         </div>
       </div>

@@ -7,6 +7,7 @@
 //   R2  font-size: <n>rem              → must be var(--fs-*)  (px and em stay, see below)
 //   R3  var(--code) outside CODE_SURFACES / a `mono-ok` marker → mono is for real code
 //   R4  line-height: <fractional coefficient>   → must be var(--lh-*) or a whole px
+//   R5  icon size on an ODD px      → must be var(--icon-*) or an even px
 //
 // Runs as part of `pnpm lint`; on demand it is  pnpm check:tokens  (add --all to skip the
 // 40-line cap). R1–R3 report zero outright. R4 reports zero against a per-file CEILING of
@@ -18,6 +19,18 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+// R5 is the ONE rule that imports instead of keeping its own copy (see the note above
+// SCAN_DIRS): telling an icon apart from a dot / swatch / skeleton bar needs the template
+// evidence learnIconClasses() collects, and two drifting copies of that would let the
+// codemod rewrite sites this guard never checks.
+import {
+  ICON_SCALE,
+  ICON_TOKENS,
+  MAX_ICON_PX,
+  iconSites,
+  iconTargetFor,
+  learnIconClasses,
+} from './lib/icon-sites.mjs'
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..')
 const SCAN_DIRS = ['components', 'layouts', 'pages', 'assets/css']
@@ -343,7 +356,36 @@ function checkLineHeight(value, rule) {
   return `dùng \`${suggestion}\` hoặc một px nguyên thay vì \`${v}\``
 }
 
-const violations = { radius: [], type: [], mono: [], leading: [] }
+// --- Rule 5: icon scale -------------------------------------------------------------
+// Scale declared next to --fs-* / --lh-* at assets/css/prototype.css: 12/14/16/20/24, all
+// EVEN and fixed px (an icon is a glyph, not text — it must not scale with Appearance).
+//
+// An icon on an ODD px size lands on a half pixel the moment it is centred in a container
+// of even height — `.icn` at 15px inside a 36px NavRail row sits at (36 - 15) / 2 = 10.5 —
+// so its strokes never hit the device pixel grid and macOS paints them soft. Measured on
+// the running app after P7a: 25 of the 28 odd-sized icons were on a half pixel.
+//
+// Legal: var(--icon-*) · any EVEN px (sizes outside the scale are fine, they just have to
+// be even) · anything that is not a plain px length (`100%`, `auto`, `calc(...)`).
+// scripts/lib/icon-sites.mjs decides WHERE an icon size is stated; this only judges it.
+const ICON_CLASSES = learnIconClasses()
+
+function checkIconSize(site) {
+  if (ICON_TOKENS.some((t) => site.value.includes(t))) return null
+  const px = /^(\d+)px$/.exec(site.value)
+  if (!px) return null
+  const n = Number(px[1])
+  if (n === 0 || n > MAX_ICON_PX || n % 2 === 0) return null
+  const target = iconTargetFor(n)
+  const scale = ICON_SCALE.map((s) => s.px).join('/')
+  return (
+    `cỡ icon lẻ → nửa pixel khi căn giữa trong hộp cao chẵn ((36 - ${n}) / 2 = ${(36 - n) / 2}). ` +
+    `Dùng \`${site.channel === 'size' ? target.replace(/\D/g, '') : target}\` (thang ${scale}, ` +
+    'tất cả chẵn). Nếu con số lẻ CHÍNH LÀ hình dạng: thêm `design-token-ok: <lý do>`'
+  )
+}
+
+const violations = { radius: [], type: [], mono: [], leading: [], icon: [] }
 const legacyLeading = new Map()
 
 for (const dir of SCAN_DIRS) {
@@ -396,6 +438,19 @@ for (const dir of SCAN_DIRS) {
         })
       }
     })
+
+    for (const site of iconSites(relPath, src, ICON_CLASSES)) {
+      if (isMarked(rawLines, lines, site.line - 1, OPT_OUT)) continue
+      const hint = checkIconSize(site)
+      if (hint) {
+        violations.icon.push({
+          file: relPath,
+          line: site.line,
+          text: `${site.prop}: ${site.value}  [${site.context}]`,
+          hint,
+        })
+      }
+    }
   }
 }
 
@@ -421,6 +476,7 @@ const RULES = [
   { key: 'type', title: 'R2  font-size dùng rem thay vì token --fs-*' },
   { key: 'mono', title: 'R3  var(--code) ngoài danh sách bề mặt code' },
   { key: 'leading', title: 'R4  line-height không dùng token --lh-* (hệ số lẻ / px lẻ)' },
+  { key: 'icon', title: 'R5  cỡ icon lẻ — phải là token --icon-* hoặc px chẵn' },
 ]
 
 let total = 0
@@ -450,7 +506,8 @@ if (!total) {
 process.stdout.write(
   `\ncheck-design-tokens: ${total} vi phạm ` +
     `(radius ${violations.radius.length}, type ${violations.type.length}, ` +
-    `mono ${violations.mono.length}, leading ${violations.leading.length}).\n` +
-    'Xem docs/features/native-macos-polish.md §4 (W3/W4/W5) để biết bảng map token.\n',
+    `mono ${violations.mono.length}, leading ${violations.leading.length}, ` +
+    `icon ${violations.icon.length}).\n` +
+    'Xem docs/features/native-macos-polish.md §4 (W3/W4/W5/W9) để biết bảng map token.\n',
 )
 process.exit(1)

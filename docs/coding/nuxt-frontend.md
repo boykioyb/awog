@@ -129,6 +129,7 @@ Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compil
 | Type scale | `--fs-xs` 11 · `--fs-sm` 12 · `--fs-md` 13 · `--fs-lg` 15 · `--fs-xl` 17 · `--fs-2xl` 22 (@base 13) | `font-size: <n>rem` |
 | Leading | `--lh-xs` 16 · `--lh-sm` 18 · `--lh-md` 20 · `--lh-lg` 22 · `--lh-xl` 24 · `--lh-2xl` 28 · `--lh-prose` 22 (@base 13) | `line-height: <hệ số lẻ>` |
 | Radius | `--r-xs` 6 · `--r-sm` 8 · `--r-btn` 10 · `--r-card` 14 · `--r-panel` 16 · `--r-pill` | `border-radius: <n>px` |
+| Icon | `--icon-xs` 12 · `--icon-sm` 14 · `--icon-md` 16 (mặc định `.icn`) · `--icon-lg` 20 · `--icon-xl` 24 | cỡ icon **px lẻ** |
 | Màu | `useTheme()` / CSS var | hex trong class hoặc `<style>` |
 | Motion | `--dur-fast` `--dur` `--dur-panel` + `--ease` | duration/easing hardcode |
 | Elevation | `--shadow-sm/md/lg` | `box-shadow` hardcode |
@@ -142,6 +143,13 @@ Leading khai cùng kiểu (`calc(var(--font-size-base) + Npx)`) và **phải có
 - Văn bản dài (markdown, bong bóng chat, wiki reader, issue/PR body) dùng `--lh-prose` (1.69 trên chữ 13px), không dùng `--lh-md`.
 - **Hệ số nguyên vẫn hợp lệ** (`line-height: 1` cho icon button): nguyên × px nguyên vẫn là px nguyên.
 - 173 site legacy (97 file) còn hệ số lẻ, khai trong `LEGACY_COEFFICIENTS` của guard dưới dạng **trần đếm theo file** — file chỉ được giảm, không được tăng. Đi qua file nào thì dọn file đó.
+
+Icon scale **cố định px** (không `calc()` theo base): icon là hình vẽ, không phải chữ — cho nó phình theo Appearance là làm nó tràn container. Bậc nào cũng **chẵn**, vì một icon cỡ lẻ căn giữa trong hộp cao chẵn rơi vào nửa pixel (`.icn` 15px trong hàng NavRail 36px → `(36 − 15) / 2 = 10.5`) nên nét vẽ không bao giờ trúng lưới pixel. Đo trên app đang chạy sau P7a: **25/28 icon cỡ lẻ** nằm trên nửa pixel.
+
+- Cỡ lẻ map **lên** bậc chẵn gần nhất (icon không teo đi): 11→12, 13→14, 15→16, 17→18, 21→22. Cỡ chẵn ngoài thang (10, 18, 22, 26, 28, 40 — icon empty-state) hợp lệ, chỉ cần chẵn.
+- `.icn` mang `stroke-width: 1.5`, **không** phải 1.7. `stroke-width` là **user unit** của viewBox `0 0 24 24`, nên bề rộng nét thật = `stroke-width × size/24`: ở `--icon-md` thì 1.5 ra đúng **1 device pixel**, 1.7 ra 1.13px, 2 ra 1.33px và nhìn nặng.
+- Ba kênh khai cỡ icon đều bị guard R5 soi: rule CSS trên `.icn`/`svg`/class đã thấy gắn lên `<Icon>`, `style="width: …"` inline trên `<Icon>`/`<svg>`/component lucide, và `:size="…"` trên component lucide. Codemod: [`scripts/codemod-icon-scale.mjs`](../../apps/desktop/ui-next/scripts/codemod-icon-scale.mjs).
+- **`<Icon :size="13" />` không có tác dụng** — [`Icon.vue`](../../apps/desktop/ui-next/components/Icon.vue) chỉ nhận prop `name`, `size` rơi xuống `$attrs` thành attribute `size` mà `<svg>` không hiểu. Muốn đổi cỡ thì dùng `style` hoặc một class.
 
 **Hai marker opt-out**, ghi ngay trên dòng cần miễn:
 

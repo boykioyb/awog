@@ -7,7 +7,7 @@
   >
     <div class="ltop">
       <div class="srch">
-        <Icon name="search" style="width: 13px; height: 13px" />
+        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <input v-model="filter" :placeholder="t('sessions.search.placeholder')" />
       </div>
       <button
@@ -16,7 +16,7 @@
         style="width: 28px; height: 28px"
         @click="store.create(store.activeTab || undefined)"
       >
-        <Icon name="plus" style="width: 13px; height: 13px" />
+        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="iconbtn"
@@ -30,7 +30,7 @@
         }"
         @click="toggleSelectMode"
       >
-        <Icon name="check" style="width: 13px; height: 13px" />
+        <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="iconbtn"
@@ -38,7 +38,7 @@
         style="width: 28px; height: 28px"
         @click="showFilters = !showFilters"
       >
-        <Icon name="filter" style="width: 13px; height: 13px" />
+        <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
       <button
         class="iconbtn"
@@ -46,7 +46,7 @@
         style="width: 28px; height: 28px"
         @click="toggleFoldAll"
       >
-        <Icon name="foldv" style="width: 13px; height: 13px" />
+        <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </div>
 
@@ -55,7 +55,7 @@
         <span class="cslbl">{{ t('sessions.filter.groupBy') }}</span>
         <div class="csval" style="position: relative" @click.stop="openGroupMenu">
           {{ groupByLabel }}
-          <Icon name="chev" style="width: 13px; height: 13px" />
+          <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <div
             v-if="groupMenu"
             class="smenu"
@@ -68,7 +68,7 @@
                 v-if="value === groupBy"
                 name="check"
                 class="ck"
-                style="width: 13px; height: 13px"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
               />
             </div>
           </div>
@@ -78,7 +78,7 @@
         <span class="cslbl">{{ t('sessions.filter.sortBy') }}</span>
         <div class="csval" style="position: relative" @click.stop="openSortMenu">
           {{ sortByLabel }}
-          <Icon name="chev" style="width: 13px; height: 13px" />
+          <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <div
             v-if="sortMenu"
             class="smenu"
@@ -91,7 +91,7 @@
                 v-if="value === sortBy"
                 name="check"
                 class="ck"
-                style="width: 13px; height: 13px"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
               />
             </div>
           </div>
@@ -112,7 +112,11 @@
         @click="selectAllFiltered"
       >
         <span class="lcbox" :class="{ on: allFilteredSelected }">
-          <Icon v-if="allFilteredSelected" name="check" style="width: 11px; height: 11px" />
+          <Icon
+            v-if="allFilteredSelected"
+            name="check"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
         </span>
         <span>
           {{
@@ -130,14 +134,14 @@
         style="color: var(--danger)"
         @click="askBulkRemove"
       >
-        <Icon name="trash" style="width: 13px; height: 13px" />
+        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </span>
       <span
         class="del"
         :title="t('sessions.sidebar.selectExit')"
         @click="store.setSelectMode(false)"
       >
-        <Icon name="x" style="width: 13px; height: 13px" />
+        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </span>
     </div>
 
@@ -256,36 +260,36 @@
       />
       <div ref="ctxMenuEl" class="smenu ctxmenu" :style="ctxStyle">
         <div class="mi" @click="ctxOpen">
-          <Icon name="sessions" style="width: 13px; height: 13px" />
+          <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.open') }}
         </div>
         <div class="mi" @click="ctxRename">
-          <Icon name="edit" style="width: 13px; height: 13px" />
+          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.rename') }}
         </div>
         <div class="mi" @click="ctxAutoTitle">
-          <Icon name="sparkles" style="width: 13px; height: 13px" />
+          <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.autoTitle') }}
         </div>
         <div class="mi" @click="ctxPin">
-          <Icon name="pin" style="width: 13px; height: 13px" />
+          <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ ctx.session.pinned ? t('sessions.ctx.unpin') : t('sessions.ctx.pin') }}
         </div>
         <div class="mi" @click="ctxSelect">
-          <Icon name="check" style="width: 13px; height: 13px" />
+          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.select') }}
         </div>
         <div class="mi" @click="ctxDuplicate">
-          <Icon name="fork" style="width: 13px; height: 13px" />
+          <Icon name="fork" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.duplicate') }}
         </div>
         <div class="mi" @click="ctxExport">
-          <Icon name="save" style="width: 13px; height: 13px" />
+          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.export') }}
         </div>
         <!-- Move the session to its own OS window / bring it back (popout hand-off). -->
         <div v-if="ctxCanWindow" class="mi" @click="ctxWindow">
-          <Icon name="external" style="width: 13px; height: 13px" />
+          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{
             store.isWindowed(ctx.session.engineId)
               ? t('sessions.ctx.bringBackWindow')
@@ -294,20 +298,20 @@
         </div>
         <div class="ctxsep" />
         <div class="mi" @click="ctxCopyPath">
-          <Icon name="copy" style="width: 13px; height: 13px" />
+          <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.copyPath') }}
         </div>
         <div v-if="canOpenFinder" class="mi" @click="ctxOpenFinder">
-          <Icon name="folder" style="width: 13px; height: 13px" />
+          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.openFinder') }}
         </div>
         <div class="mi" @click="ctxCopyId">
-          <Icon name="commands" style="width: 13px; height: 13px" />
+          <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.copyId') }}
         </div>
         <div class="ctxsep" />
         <div class="mi danger" @click="ctxDelete">
-          <Icon name="trash" style="width: 13px; height: 13px" />
+          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.delete') }}
         </div>
       </div>
@@ -785,8 +789,8 @@ function toggleFoldAll() {
   outline-offset: 1px;
 }
 .pgbtn .icn {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 /* The sprite only ships a down-chevron; rotate it into left/right arrows. */
 .pg-prev {

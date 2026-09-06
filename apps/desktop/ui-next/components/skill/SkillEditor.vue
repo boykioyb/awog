@@ -85,7 +85,7 @@
             <span v-for="g in draft.globs" :key="g" class="chip mono">
               {{ g }}
               <button class="ske-chipx" @click="draft.globs = draft.globs.filter((x) => x !== g)">
-                <Icon name="x" style="width: 9px; height: 9px" />
+                <Icon name="x" style="width: 10px; height: 10px" />
               </button>
             </span>
           </div>
@@ -105,7 +105,7 @@
                 class="ske-chipx"
                 @click="draft.alwaysAllow = draft.alwaysAllow.filter((x) => x !== tool)"
               >
-                <Icon name="x" style="width: 9px; height: 9px" />
+                <Icon name="x" style="width: 10px; height: 10px" />
               </button>
             </span>
           </div>
@@ -127,7 +127,7 @@
               class="ske-chipx"
               @click="draft.requiredSources = draft.requiredSources.filter((x) => x !== src)"
             >
-              <Icon name="x" style="width: 9px; height: 9px" />
+              <Icon name="x" style="width: 10px; height: 10px" />
             </button>
           </span>
         </div>
