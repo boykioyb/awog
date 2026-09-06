@@ -612,7 +612,11 @@ async function pDeleteAll() {
   gap: 4px;
   flex: 0 0 auto;
   padding: 0 8px;
-  min-height: 38px;
+  /* 39, not 38: the 1px rule below comes out of the content box, so an even bar would
+     leave 37px inside and centre a 28px tab at 4.5. The active tab fills its full height
+     with an accent background, so the box-shadow trick used on the other bars would be
+     painted over — growing the bar is the one fix that survives it. */
+  min-height: 39px;
   border-bottom: 1px solid var(--border);
   background: var(--bgPanel);
 }

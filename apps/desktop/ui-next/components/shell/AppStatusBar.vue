@@ -96,7 +96,9 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   justify-content: space-between;
   gap: 12px;
   padding: 0 8px 0 10px;
-  border-top: 1px solid var(--border);
+  /* Drawn as an inset shadow, not a border: a border comes out of the content box and
+     left 25px inside a 26px bar, centring 20px children at 3.5. */
+  box-shadow: inset 0 1px 0 var(--border);
   background: var(--bgPanel);
   color: var(--textDim);
   /* Sit above page content + the in-session workspace panel (≤81) so the upward

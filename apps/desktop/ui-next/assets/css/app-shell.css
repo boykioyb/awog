@@ -205,7 +205,11 @@ body.light[data-surface='deep'] {
   /* sans renders ⌘ at the same cap-height as the key letter; the mono --code
      font draws ⌘ oversized next to a small "K". */
   font-family: var(--sans);
-  line-height: 1;
+  /* `line-height: 1` made the line box equal the font size, so the cap was 15px tall at
+     the default base and flipped parity with every Appearance step. --lh-xs is always
+     even, so the cap is too. */
+  line-height: var(--lh-xs);
+  padding: 0 4px;
 }
 
 /* ── Compact shell (≤1100px, toggled via `.app.compact` from useResponsiveShell) ──
