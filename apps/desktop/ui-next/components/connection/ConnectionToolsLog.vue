@@ -50,7 +50,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px;
+  padding: 9px 11px;
   border-radius: var(--r-sm);
   background: var(--bgPanel);
   border: 1px solid var(--border);

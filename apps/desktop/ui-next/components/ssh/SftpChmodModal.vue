@@ -110,7 +110,7 @@ const subtitle = computed(() =>
 .sfmod-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 .sfmod-icn {
   width: var(--icon-md);
@@ -167,7 +167,7 @@ const subtitle = computed(() =>
 }
 .sfmod-octal-in {
   width: 70px;
-  padding: 4px 8px;
+  padding: 5px 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: var(--bgInput);

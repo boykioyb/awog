@@ -362,7 +362,7 @@ const toggleSub = (i: number) => {
 .subsum {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--border);

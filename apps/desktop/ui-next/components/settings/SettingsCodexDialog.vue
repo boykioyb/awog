@@ -182,7 +182,7 @@ onBeforeUnmount(cleanup)
 .cxrow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   color: var(--text);
 }
 .cxwaiting {
@@ -213,7 +213,7 @@ onBeforeUnmount(cleanup)
 }
 .cxerror {
   border-radius: var(--r-sm);
-  padding: 8px 10px;
+  padding: 8px 11px;
   font-size: 1em;
   background: var(--dangerDim);
   border: 1px solid var(--danger);

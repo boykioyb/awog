@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
 .sshx-fw-count {
   font-size: 12px;
   line-height: 1;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -329,7 +329,7 @@ onBeforeUnmount(() => {
   height: 32px;
   min-width: 0;
   flex: 1 1 90px;
-  padding: 0 8px;
+  padding: 0 9px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);
@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 11px 12px;
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
   background: var(--bgEl);
@@ -395,7 +395,7 @@ onBeforeUnmount(() => {
   align-items: center;
   font-size: 12px;
   line-height: 1;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border: 1px solid currentColor;
   border-radius: var(--r-pill);
   background: transparent;

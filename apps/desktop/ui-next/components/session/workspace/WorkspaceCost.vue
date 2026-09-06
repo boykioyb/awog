@@ -197,7 +197,7 @@ const dayTitle = (d: CostDay): string =>
   flex: 0 0 auto;
   white-space: nowrap;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border: 1px solid transparent;
   border-radius: var(--r-xs);
   background: transparent;
@@ -260,7 +260,7 @@ const dayTitle = (d: CostDay): string =>
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
-  padding: 2px 6px;
+  padding: 3px 6px;
   color: var(--text);
   font-family: var(--sans);
   font-variant-numeric: tabular-nums;
@@ -373,7 +373,7 @@ const dayTitle = (d: CostDay): string =>
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 7px 9px;
   border-radius: var(--r-xs);
   font-size: 12px;
   line-height: 18px;

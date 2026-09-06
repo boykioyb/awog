@@ -150,11 +150,11 @@ useEscToClose(
 }
 .sttlangs {
   display: flex;
-  gap: 2px;
+  gap: 3px;
   margin-left: auto;
 }
 .sttlang {
-  padding: 2px 6px;
+  padding: 2px 7px;
   font-size: 12px;
   font-family: var(--code, ui-monospace, monospace);
   line-height: 1.4;
@@ -181,7 +181,7 @@ useEscToClose(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px;
+  padding: 3px;
   border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;
@@ -297,14 +297,14 @@ useEscToClose(
 .sttfoot {
   display: flex;
   justify-content: flex-end;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-top: 1px solid var(--border);
 }
 .sttbtn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 5px;
+  padding: 4px 9px;
   font-size: 1em;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);

@@ -178,7 +178,7 @@ const canvasScopeLabel = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px;
+  padding: 11px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
@@ -188,18 +188,18 @@ const canvasScopeLabel = computed(() => {
   color: var(--textDim);
 }
 .wflist-scope {
-  padding: 8px 10px;
+  padding: 9px 11px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
 .wflist-scroll {
   overflow-y: auto;
-  padding: 6px;
+  padding: 7px;
   max-height: 42%;
   flex: 0 0 auto;
 }
 .wflist-empty {
-  padding: 16px 8px;
+  padding: 16px 9px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--textFaint);

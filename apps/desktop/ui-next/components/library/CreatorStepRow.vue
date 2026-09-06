@@ -78,8 +78,8 @@ const verifyTitle = computed(() => {
 }
 .lcp-verify {
   display: flex;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 9px;
+  padding: 9px 11px;
   border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);

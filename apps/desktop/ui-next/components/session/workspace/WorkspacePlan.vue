@@ -99,7 +99,7 @@ const badgeStyle = computed(() =>
 .wsplan-badge {
   font-size: 12px;
   line-height: 1;
-  padding: 2px 6px;
+  padding: 3px 7px;
   border-radius: var(--r-xs);
 }
 .wsplan-section {

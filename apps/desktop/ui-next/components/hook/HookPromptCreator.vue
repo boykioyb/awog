@@ -208,7 +208,7 @@ const onEditDetails = () => {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  padding: 10px;
+  padding: 11px;
 }
 .hpc-ta {
   width: 100%;
@@ -229,7 +229,7 @@ const onEditDetails = () => {
   background: var(--bgInput);
   border: 1px solid var(--danger);
   border-radius: var(--r-sm);
-  padding: 8px 10px;
+  padding: 8px 11px;
 }
 .hpc-preview {
   display: flex;

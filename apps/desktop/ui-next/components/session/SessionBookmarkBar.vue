@@ -97,13 +97,13 @@ const onJump = (row: BookmarkRow) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   min-width: 0;
 }
 .bmb-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex: 0 0 auto;
   color: var(--text);
   font-size: 1em;
@@ -143,7 +143,7 @@ const onJump = (row: BookmarkRow) => {
   margin-left: auto;
   flex: 0 0 auto;
   min-width: 18px;
-  padding: 2px 4px;
+  padding: 2px 5px;
   border-radius: var(--r-xs);
   background: var(--accentDim, var(--bgHover));
   color: var(--accent);

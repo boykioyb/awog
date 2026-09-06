@@ -437,7 +437,7 @@ function relativeWhen(iso: string): string {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border: 1px solid;
   border-radius: var(--r-pill);
   font-size: var(--fs-xs);
@@ -447,7 +447,7 @@ function relativeWhen(iso: string): string {
 .ghmore {
   width: 100%;
   margin-top: 4px;
-  padding: 8px;
+  padding: 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: transparent;
@@ -473,7 +473,7 @@ function relativeWhen(iso: string): string {
   margin-top: 14px;
 }
 .ghcmd {
-  padding: 4px 8px;
+  padding: 5px 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   background: var(--bgInput);

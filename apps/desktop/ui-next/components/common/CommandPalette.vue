@@ -261,8 +261,8 @@ watch(activeIndex, (i) => {
 .cmdk-search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 9px;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -287,7 +287,7 @@ watch(activeIndex, (i) => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 4px 6px;
+  padding: 5px 5px 7px;
 }
 .cmdk-empty {
   padding: 14px 12px;
@@ -304,8 +304,8 @@ watch(activeIndex, (i) => {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 9px;
+  padding: 7px 9px;
   border-radius: var(--r-sm);
   text-align: left;
   color: var(--text);
@@ -344,7 +344,7 @@ watch(activeIndex, (i) => {
 .cmdk-foot {
   display: flex;
   gap: 14px;
-  padding: 6px 14px;
+  padding: 7px 14px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   font-size: 12px;

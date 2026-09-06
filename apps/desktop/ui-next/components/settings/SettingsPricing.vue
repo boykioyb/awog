@@ -213,7 +213,7 @@ function onFetch(): void {
   line-height: var(--lh-xs);
   color: var(--textDim);
   font-weight: 500;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--border);
 }
 .sprtable td {
@@ -240,7 +240,7 @@ function onFetch(): void {
   border: 1px solid var(--border);
   background: var(--bgInput);
   border-radius: var(--r-xs);
-  padding: 4px 8px;
+  padding: 5px 8px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--text);

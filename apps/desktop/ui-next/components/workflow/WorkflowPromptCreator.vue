@@ -274,7 +274,7 @@ const onBackdrop = () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
@@ -307,7 +307,7 @@ const onBackdrop = () => {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  padding: 10px;
+  padding: 11px;
   outline: none;
   resize: vertical;
   min-height: 7rem;
@@ -326,7 +326,7 @@ const onBackdrop = () => {
   background: var(--bgInput);
   border: 1px solid var(--danger);
   border-radius: var(--r-sm);
-  padding: 8px 10px;
+  padding: 8px 11px;
 }
 .wfpc-draft {
   background: var(--bgInput);
@@ -337,8 +337,8 @@ const onBackdrop = () => {
 .wfpc-draft-hd {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 7px;
+  margin-bottom: 5px;
 }
 .wfpc-draft-name {
   font-size: var(--fs-sm);
@@ -352,10 +352,10 @@ const onBackdrop = () => {
   line-height: 1.5;
 }
 .wfpc-groups {
-  margin-top: 8px;
+  margin-top: 9px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 .wfpc-group-hd {
   display: flex;
@@ -374,11 +374,11 @@ const onBackdrop = () => {
   color: var(--textFaint);
 }
 .wfpc-group-steps {
-  margin-top: 2px;
+  margin-top: 3px;
   padding-left: 18px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 .wfpc-step {
   display: flex;
@@ -399,7 +399,7 @@ const onBackdrop = () => {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textFaint);
-  margin-top: 8px;
+  margin-top: 9px;
 }
 .wfpc-foot {
   flex: 0 0 auto;

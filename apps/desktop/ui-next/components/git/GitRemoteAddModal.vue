@@ -122,7 +122,7 @@ watch(
 .gpm-input {
   flex: 1;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 9px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);

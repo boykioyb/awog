@@ -104,7 +104,7 @@ function onEnter(e: KeyboardEvent) {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px;
+  padding: 5px 6px;
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
@@ -148,7 +148,7 @@ function onEnter(e: KeyboardEvent) {
   place-items: center;
   min-width: 26px;
   height: 26px;
-  padding: 0 4px;
+  padding: 0 5px;
   border-radius: var(--r-xs);
   color: var(--textDim);
   cursor: pointer;

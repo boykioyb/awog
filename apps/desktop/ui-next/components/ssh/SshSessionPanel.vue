@@ -297,17 +297,17 @@ function onSend(text: string, command?: SlashCommandRef) {
   max-width: 78vw;
   max-height: 340px;
   overflow-y: auto;
-  padding: 4px;
+  padding: 5px;
 }
 .sshsess-menu-div {
   height: 1px;
-  margin: 4px 6px;
+  margin: 5px 6px;
   background: var(--border);
 }
 .sshsess-new {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   color: var(--accent);
 }
 /* History row = main select button + trailing delete. */
@@ -324,7 +324,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   padding: 8px 4px 8px 10px;
   border: 0;
   background: transparent;
@@ -398,10 +398,10 @@ function onSend(text: string, command?: SlashCommandRef) {
 .sshsess-term {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   max-width: 140px;
   height: 24px;
-  padding: 0 6px;
+  padding: 0 7px;
   border: 1px solid transparent;
   border-radius: var(--r-xs);
   background: transparent;
@@ -485,7 +485,7 @@ function onSend(text: string, command?: SlashCommandRef) {
 .sshsess-cfg :deep(.sb-item) {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   height: 24px;
   padding: 0 8px;
   border: 0;

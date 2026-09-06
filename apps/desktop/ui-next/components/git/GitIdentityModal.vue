@@ -310,7 +310,7 @@ watch(
 .gid-sec-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .gid-sec-title {
   font-size: 1em;
@@ -341,7 +341,7 @@ watch(
 .gid-input {
   flex: 1;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 8px 11px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);

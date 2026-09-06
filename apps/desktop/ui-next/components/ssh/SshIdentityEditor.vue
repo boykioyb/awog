@@ -244,7 +244,7 @@ const onSave = () => {
 }
 .ssi-input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -292,7 +292,7 @@ const onSave = () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 12px;
+  padding: 12px 13px;
   border-radius: var(--r-btn);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
@@ -300,7 +300,7 @@ const onSave = () => {
 .ssi-secret-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .ssi-secret-title {
   font-size: var(--fs-sm);

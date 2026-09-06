@@ -89,7 +89,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
 .wfn-hd {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .wfn-badge {
   width: 18px;
@@ -117,7 +117,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textDim);
-  margin-top: 4px;
+  margin-top: 5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -127,14 +127,14 @@ const onDelete = () => props.data.onDelete?.(props.id)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 9px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 .wfn-out {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
   /* mono-ok: output artifact file name */
   font-family: var(--code);

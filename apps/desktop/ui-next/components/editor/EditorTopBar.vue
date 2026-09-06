@@ -82,7 +82,7 @@ const viewOptions = [
 .edtop {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding: 8px 14px;
   min-height: 44px;
   flex-shrink: 0;
@@ -92,8 +92,8 @@ const viewOptions = [
 .edback {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 5px;
+  padding: 5px 9px;
   border-radius: var(--r-sm);
   color: var(--textDim);
   background: transparent;

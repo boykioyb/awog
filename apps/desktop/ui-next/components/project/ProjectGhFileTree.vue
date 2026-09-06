@@ -117,9 +117,9 @@ function patchFor(path: string): string {
 .ghtrow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  padding: 4px 10px 4px 8px;
+  padding: 5px 10px 5px 9px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -159,7 +159,7 @@ function patchFor(path: string): string {
 .ghtstat {
   flex: 0 0 auto;
   display: flex;
-  gap: 6px;
+  gap: 7px;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 18px;

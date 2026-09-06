@@ -515,7 +515,7 @@ body,
 .pet-quip {
   align-self: flex-end;
   max-width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   /* design-token-ok: near-square corner = the speech-bubble tail (see LibraryCreatorPanel). */
   border-radius: var(--r-btn) var(--r-btn) 3px var(--r-btn);
   background: var(--bgEl);
@@ -590,7 +590,7 @@ body,
   right: -4px;
   min-width: 18px;
   height: 18px;
-  padding: 0 4px;
+  padding: 0 5px;
   border-radius: var(--r-sm);
   display: flex;
   align-items: center;

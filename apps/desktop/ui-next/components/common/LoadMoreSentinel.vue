@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin: 1px 0 4px 10px;
+  margin: 1px 0 5px 10px;
   padding: 2px 6px;
   border: none;
   border-radius: var(--r-xs);

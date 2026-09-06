@@ -109,7 +109,7 @@ const kindStyle = (kind: ChangeKind) => ({
   align-items: center;
   justify-content: center;
   margin-top: 1px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border: 1px solid;
   border-radius: var(--r-pill);
   font-size: 12px;

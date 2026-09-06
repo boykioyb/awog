@@ -716,7 +716,7 @@ function toggleFoldAll() {
 .bulkall {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   cursor: pointer;
   min-width: 0;
 }

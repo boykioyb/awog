@@ -99,7 +99,7 @@ watch(
   background: var(--bgInput);
   border: 1px solid var(--accentBorder);
   border-radius: var(--r-xs);
-  padding: 2px 6px;
+  padding: 2px 7px;
   color: var(--text);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);

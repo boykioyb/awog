@@ -190,7 +190,7 @@ const onReset = async () => {
 .pll-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 .pll-label {
   font-size: var(--fs-sm);

@@ -94,9 +94,9 @@ const onSave = () => {
 .csp {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   margin: 0 16px 12px;
-  padding: 12px 12px;
+  padding: 12px 13px;
   border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--accentBorder);
@@ -104,7 +104,7 @@ const onSave = () => {
 .csp-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .csp-title {
   font-size: var(--fs-sm);
@@ -135,7 +135,7 @@ const onSave = () => {
 }
 .csp-input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-sm);
   background: var(--bg);
   border: 1px solid var(--border);

@@ -305,7 +305,7 @@ const onSave = () => {
 }
 .rle-input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);

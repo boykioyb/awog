@@ -186,14 +186,14 @@ watch(
 .wim-field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 .wim-input {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--text);
-  padding: 4px 6px;
+  padding: 5px 7px;
   font-size: 1em;
   outline: none;
 }

@@ -136,7 +136,7 @@ function onStop(shellId: string): void {
   align-items: center;
   gap: 6px;
   max-width: 320px;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;

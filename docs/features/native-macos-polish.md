@@ -198,26 +198,19 @@ Kết quả học: **102 class icon**. Heuristic loại đúng các bẫy `width
 
 Cần mắt người sau khi land: NavRail, list session, composer, top bar, status bar — xem §7.
 
-### W10 — Spacing: khử số lẻ (P8a)
+### W10 — Spacing: khử số lẻ — **ĐÃ RÚT LẠI**
 
-Sau P7a (leading) + P7b (icon), phần nửa pixel còn lại rơi vào **spacing**. Scan: **2397 declaration** `padding`/`margin`/`gap` có px, trong **246 file**; chỉ 34% nằm trên lưới 4pt, **918 con số là lẻ** (`8px` ×461 · `6px` ×357 · `10px` ×344 · `12px` ×248 · `9px` ×215 · `7px` ×188 · `4px` ×216 · `5px` ×134 · `11px` ×136 · `3px` ×111 …). 30 giá trị padding + 19 giá trị gap khác nhau — không có nhịp nào.
+Đã làm rồi **revert**. Ghi lại lập luận để không ai suy ra lần nữa.
 
-**Cố ý đi một bước vừa phải, KHÔNG nhảy thẳng lên lưới 4pt.** Ép `9 → 12` dịch **3px** và làm wrap/overflow ở hàng trăm chỗ không ai review nổi. Đợt này chỉ **khử số lẻ**, mỗi giá trị dịch **tối đa 1px**:
+**Tiền đề sai.** Rule cho rằng padding lẻ đẩy con căn giữa về nửa pixel. Sai với trường hợp **đối xứng**, tức gần như toàn bộ: chiều cao một hộp là `line-height + 2×padding + 2×border`, mà `2×padding` **luôn chẵn** dù padding lẻ hay chẵn. Số nửa pixel thật sự khử được đến từ hộp dòng (W3), cỡ icon (W9) và hairline bị trừ vào content box (W12) — **không** đến từ padding.
 
-| lẻ | → chẵn | lẻ | → chẵn |
-|---:|---:|---:|---:|
-| 3 | 2 | 11 | 10 |
-| 5 | 4 | 13 | 12 |
-| 7 | 6 | 15 | 14 |
-| 9 | 8 | 17 | 16 |
+**Đo được, không phải suy đoán.** Sau khi revert 720 giá trị spacing về như cũ, tỉ lệ element nằm trên nửa pixel **vẫn là 0%**, còn `.btn` về lại 34px và `.ni` về 36px.
 
-Làm tròn **XUỐNG** (chật hơn): thu một khoảng cách thì không bao giờ gây overflow, nới thì có. **`±1px` giữ nguyên** (69 site) — 1px là nudge quang học hoặc bù chiều dày hairline, không phải nhịp, và cả `0` lẫn `2` đều sai.
+**Cái giá thì có thật.** Làm tròn xuống khiến **mọi control lấy chiều cao từ padding thấp đi 2px** (`.btn` 34→32, `.ni` 36→34, `.li` 66→64, `.seg` mất 4px do cộng dồn 3 tầng) — user phản hồi app "chật".
 
-Codemod [`scripts/codemod-spacing.mjs`](../../apps/desktop/ui-next/scripts/codemod-spacing.mjs) (dùng lại `scripts/lib/css-sites.mjs`) + guard **R6**. Chỉ đụng `padding*` / `margin*` / `gap` / `row-gap` / `column-gap`; **không** đụng `width`/`height`/`top`/`left`/`inset`/`transform` — đó là **hình dạng**, không phải nhịp. Shorthand giữ nguyên số lượng giá trị (`padding: 7px 9px` → `6px 8px`).
+**Nửa còn lại của lập luận vẫn đúng:** 48 giá trị spacing khác nhau, không nhịp, là vấn đề thật và đáng sửa. Nhưng nó cần một thang `--sp-*` **được thiết kế**, chọn có chủ đích, chứ không phải làm tròn máy móc — và đó là một đợt riêng.
 
-Kết quả: **753 site / 169 file**, 849 con số đổi, **48 → 39 giá trị** khác nhau, **918 → 69 số lẻ** (toàn bộ là ±1px). Hệ quả density: mọi control lấy chiều cao từ padding **thấp đi 2px** — `.btn` 34 → 32, `.ni` (hàng NavRail) 36 → 34, `.li` 66 → 64. Tất cả đều **chẵn**, tất cả đều đo được (xem §6).
-
-**KHÔNG token hoá spacing lần này.** `--sp-*` là đợt sau, khi đã biết bộ giá trị còn lại là gì.
+Guard R6 đã gỡ; `scripts/codemod-spacing.mjs` đã xoá.
 
 ### W11 — Leading phải CHẴN ở mọi base (P8b)
 
@@ -284,7 +277,7 @@ Hai rule tìm thấy nhưng **cố ý để lại**, cần quyết định riên
 | **P3** | W5 (mono triage) | ✅ — 85 giữ / 167 đổi | 113 | `a8a04c0` |
 | **P4** | W8 (guard + docs + ADR) | ✅ — guard nối vào `pnpm lint` | 7 | `a49a68f` + `b323405` |
 | **P7b** | W9 (icon scale + guard R5) | ✅ — 1482 declaration / 169 file | 169 | — |
-| **P8** | W10 + W11 + W12 (spacing / leading chẵn / hairline) | ✅ — 753 site spacing, 42/42 ô leading chẵn, 8 rule hairline | 176 | — |
+| **P8** | ~~W10~~ + W11 + W12 (leading chẵn / hairline) | ✅ — W10 đã rút lại (xem §4), 42/42 ô leading chẵn, 8 rule hairline | 176 | `8bc2ad2` |
 | **P5** *(chưa làm, cần ADR riêng)* | Vibrancy / translucency | ⬜ | toàn bộ thang màu | — |
 
 Mỗi phase = 1 commit riêng theo [.claude/rules/git-commit.md](../../.claude/rules/git-commit.md). P2 tách 2 commit (radius / type).

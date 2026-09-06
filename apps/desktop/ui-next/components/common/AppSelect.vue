@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   background: var(--bgInput);
   border-radius: var(--r-sm);
-  padding: 6px 10px;
+  padding: 7px 10px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--text);
@@ -237,7 +237,7 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   border-radius: var(--r-xs);
-  padding: 6px 8px;
+  padding: 6px 9px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--textMuted);

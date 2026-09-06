@@ -154,7 +154,7 @@ Icon scale **cố định px** (không `calc()` theo base): icon là hình vẽ,
 - Ba kênh khai cỡ icon đều bị guard R5 soi: rule CSS trên `.icn`/`svg`/class đã thấy gắn lên `<Icon>`, `style="width: …"` inline trên `<Icon>`/`<svg>`/component lucide, và `:size="…"` trên component lucide. Codemod: [`scripts/codemod-icon-scale.mjs`](../../apps/desktop/ui-next/scripts/codemod-icon-scale.mjs).
 - **`<Icon :size="13" />` không có tác dụng** — [`Icon.vue`](../../apps/desktop/ui-next/components/Icon.vue) chỉ nhận prop `name`, `size` rơi xuống `$attrs` thành attribute `size` mà `<svg>` không hiểu. Muốn đổi cỡ thì dùng `style` hoặc một class.
 
-Spacing (`padding` / `margin` / `gap`) **chưa có thang token** — đợt vừa rồi chỉ khử số lẻ, chưa định nhịp. Guard **R6** fail khi thấy px lẻ; codemod [`scripts/codemod-spacing.mjs`](../../apps/desktop/ui-next/scripts/codemod-spacing.mjs) làm tròn **xuống** số chẵn gần nhất (9→8, 7→6, 5→4, 3→2, 11→10, 13→12, 15→14), mỗi giá trị dịch tối đa 1px.
+Spacing (`padding` / `margin` / `gap`) **chưa có thang token, và cũng chưa có luật parity**. Đã từng có guard R6 ép px chẵn — **đã rút lại**: chiều cao hộp là `line-height + 2×padding + 2×border`, mà `2×padding` luôn chẵn, nên padding lẻ không hề gây nửa pixel; ép chẵn chỉ làm mọi control thấp đi 2px. Lý do đầy đủ ở [native-macos-polish.md §4 W10](../features/native-macos-polish.md). Repo hiện có 48 giá trị spacing khác nhau — đó là vấn đề thật, nhưng cần một thang `--sp-*` được thiết kế, không phải làm tròn máy móc.
 
 - Làm tròn **xuống** chứ không lên: chật hơn thì không bao giờ gây overflow, rộng hơn thì có.
 - **`±1px` được giữ** (69 site): 1px là nudge quang học hoặc bù chiều dày hairline, không phải nhịp — cả 0 lẫn 2 đều sai.

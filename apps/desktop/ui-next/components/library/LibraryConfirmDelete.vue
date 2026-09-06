@@ -91,7 +91,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .lcd-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 .lcd-icn {
   width: var(--icon-md);

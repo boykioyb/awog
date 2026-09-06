@@ -221,7 +221,7 @@ onBeforeUnmount(unbindListeners)
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-btn);
-  padding: 14px 14px;
+  padding: 14px 15px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
   z-index: 251;
   transition:
@@ -231,12 +231,12 @@ onBeforeUnmount(unbindListeners)
 .tour-pop-title {
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 .tour-pop-body {
   color: var(--textMuted);
   line-height: 1.5;
-  margin-bottom: 12px;
+  margin-bottom: 13px;
 }
 .tour-pop-foot {
   display: flex;
@@ -269,7 +269,7 @@ onBeforeUnmount(unbindListeners)
 .tbtn {
   border: 0;
   border-radius: var(--r-xs);
-  padding: 4px 10px;
+  padding: 5px 11px;
   font-size: 1em;
   font-weight: 500;
   color: var(--textDim);

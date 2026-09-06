@@ -112,7 +112,7 @@ const subtitle = computed(() =>
 .sfmod-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 .sfmod-icn {
   width: var(--icon-md);
@@ -134,13 +134,13 @@ const subtitle = computed(() =>
 .sfmod-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .sfmod-in {
-  padding: 6px 8px;
+  padding: 7px 9px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);

@@ -102,7 +102,7 @@ async function copy(): Promise<void> {
   color: var(--text);
 }
 .acc-hint {
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 12px;
   color: var(--textMuted);
   line-height: 1.5;
@@ -110,7 +110,7 @@ async function copy(): Promise<void> {
 .acc-url {
   display: block;
   margin-top: 10px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgInput);

@@ -37,7 +37,7 @@ Scale token cần dùng **đã tồn tại** nhưng ngủ yên: `--r-xs|sm|btn|c
 | **D4** | Vỏ cửa sổ | Title bar do OS vẽ được **giấu** ở cửa sổ chính, top bar của app trở thành drag region; popout session **giữ frame native**. |
 | **D5** | Vibrancy | **Ngoài phạm vi** ADR này — tách ADR riêng. |
 | **D6** | Thang icon | `--icon-*` là **px cố định, mọi bậc chẵn** (12/14/16/20/24), `.icn` mặc định 16 + `stroke-width: 1.5`. |
-| **D7** | Spacing | Chưa token hoá. Luật duy nhất: `padding`/`margin`/`gap` px **chẵn** (±1px được giữ), làm tròn **xuống**. Guard R6 + codemod. |
+| **D7** | Spacing | ~~Ép px chẵn, làm tròn xuống, guard R6~~ — **đã rút lại**. `2×padding` luôn chẵn nên padding lẻ không gây nửa pixel; rule chỉ có cái giá (mọi control thấp đi 2px), không có cái lợi. Thang `--sp-*` để dành cho một đợt thiết kế riêng. Xem [feature doc §4 W10](../features/native-macos-polish.md). |
 | **D8** | Hairline trên thanh cao cố định | `box-shadow: inset 0 -1px 0` thay `border-bottom` — border ăn 1px của content box và đẩy con căn giữa vào nửa pixel. |
 
 ### D1 — Token hoá bằng codemod + guard, không sửa tay

@@ -140,7 +140,7 @@ const todoColor = (status: TodoStatus): string => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 6px;
+  padding: 3px 7px;
   border-radius: var(--r-xs);
   min-width: 0;
 }

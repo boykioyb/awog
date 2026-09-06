@@ -137,14 +137,14 @@ function useSuggestion(prompt: string) {
 }
 .swctx {
   display: flex;
-  gap: 6px;
+  gap: 7px;
   margin-top: 4px;
 }
 .swctxchip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: 5px;
+  padding: 3px 9px;
   border-radius: var(--r-pill);
   font-size: 12px;
   line-height: 18px;
@@ -163,8 +163,8 @@ function useSuggestion(prompt: string) {
 .swcard {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 11px;
+  padding: 13px 14px;
   text-align: left;
   border-radius: var(--r-btn);
   border: 1px solid var(--border);
@@ -224,7 +224,7 @@ function useSuggestion(prompt: string) {
 .swhint kbd {
   font-size: 11px;
   line-height: 1;
-  padding: 2px 6px;
+  padding: 3px 6px;
   border-radius: var(--r-xs);
   color: var(--textDim);
   background: var(--bgSubtle);

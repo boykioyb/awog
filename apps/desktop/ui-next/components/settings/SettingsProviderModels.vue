@@ -173,7 +173,7 @@ const onReset = () => reset(provider.value)
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 4px;
+  padding: 7px 4px;
   border-radius: var(--r-sm);
   cursor: pointer;
 }

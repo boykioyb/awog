@@ -84,7 +84,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .sfcol-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding: 6px 8px;
   border-radius: var(--r-xs);
   font-size: var(--fs-sm);

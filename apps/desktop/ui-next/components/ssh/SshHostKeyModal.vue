@@ -114,7 +114,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .skh-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 .skh-icn {
   width: var(--icon-md);
@@ -146,7 +146,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .skh-row {
   display: flex;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }

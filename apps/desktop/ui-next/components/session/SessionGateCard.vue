@@ -345,16 +345,16 @@ const onRetry = (): void => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 11px;
 }
 .qtab {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: var(--fs-md);
   line-height: var(--lh-md);
   font-weight: 500;
-  padding: 6px 10px;
+  padding: 6px 11px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: transparent;

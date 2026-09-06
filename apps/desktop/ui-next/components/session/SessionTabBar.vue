@@ -640,10 +640,10 @@ async function pDeleteAll() {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex: 0 0 auto;
   max-width: 200px;
-  padding: 0 8px;
+  padding: 0 9px;
   cursor: pointer;
   color: var(--textDim);
   border-bottom: 2px solid transparent;
@@ -864,7 +864,7 @@ async function pDeleteAll() {
   top: 0;
   z-index: 1;
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border: 0;
   border-bottom: 1px solid var(--border);
   background: var(--bgPanel);
@@ -931,7 +931,7 @@ async function pDeleteAll() {
 .ctxsw {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
 }
 .ctxsw .swatch {
   display: grid;

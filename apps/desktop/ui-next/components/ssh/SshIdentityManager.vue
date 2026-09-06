@@ -100,7 +100,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .sim-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
 }
@@ -181,7 +181,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   align-items: center;
   font-size: 12px;
   line-height: 1;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -198,7 +198,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 4px;
   font-size: 12px;
   line-height: 1;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accentDim);

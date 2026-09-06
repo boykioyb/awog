@@ -201,7 +201,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
 .tsr-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex: 0 0 auto;
   height: 30px;
   padding: 0 8px 0 10px;
@@ -279,7 +279,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 8px;
+  padding: 8px 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgEl);
@@ -292,7 +292,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   cursor: pointer;
 }
 .tsr-name {

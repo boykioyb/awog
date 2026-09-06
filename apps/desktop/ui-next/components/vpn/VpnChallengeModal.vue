@@ -109,7 +109,7 @@ watch(
 .vch-input {
   width: 100%;
   margin-top: 2px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);

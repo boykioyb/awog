@@ -217,7 +217,7 @@ function submit() {
 .gpm-lead {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 9px;
   font-size: 1em;
   color: var(--textMuted);
 }
@@ -251,8 +251,8 @@ function submit() {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 7px;
+  padding: 8px 11px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);

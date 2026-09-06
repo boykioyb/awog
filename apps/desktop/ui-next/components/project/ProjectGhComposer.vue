@@ -245,7 +245,7 @@ defineExpose({ focus })
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgInput);
-  padding: 8px;
+  padding: 9px;
 }
 .ghctoolbar {
   display: flex;
@@ -256,7 +256,7 @@ defineExpose({ focus })
 }
 .ghcseg {
   font-size: 1em;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border-radius: var(--r-xs);
   border: 1px solid transparent;
   background: transparent;

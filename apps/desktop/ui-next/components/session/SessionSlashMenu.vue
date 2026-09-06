@@ -63,7 +63,7 @@ function tagStyle(kind: SlashItem['kind']) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 6px 11px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textDim);
@@ -115,7 +115,7 @@ function tagStyle(kind: SlashItem['kind']) {
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 2px 6px;
+  padding: 3px 7px;
   border-radius: var(--r-xs);
   color: var(--tagc);
   background: color-mix(in srgb, var(--tagc) 13%, transparent);

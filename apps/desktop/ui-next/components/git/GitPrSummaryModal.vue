@@ -473,8 +473,8 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   font-family: var(--code);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: 5px;
+  padding: 3px 8px;
   border-radius: var(--r-xs);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -558,7 +558,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
 }
 .prm-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 9px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -577,7 +577,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
 .prm-segbtn {
   font-size: 1em;
   font-weight: 500;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border-radius: var(--r-xs);
   border: 1px solid transparent;
   background: transparent;

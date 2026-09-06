@@ -135,7 +135,7 @@ const onEdit = (e: MouseEvent) => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 20px 0 8px;
+  margin: 20px 0 9px;
 }
 .lmb-title {
   margin: 0;
@@ -148,13 +148,13 @@ const onEdit = (e: MouseEvent) => {
 .lmb-seg span {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  padding: 4px 8px;
+  padding: 4px 9px;
 }
 .lmb-empty {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  padding: 12px;
+  padding: 13px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--textFaint);
@@ -164,7 +164,7 @@ const onEdit = (e: MouseEvent) => {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  padding: 12px 14px;
+  padding: 13px 15px;
   line-height: var(--lh-prose);
   color: var(--text);
 }
@@ -220,7 +220,7 @@ const onEdit = (e: MouseEvent) => {
   font-family: var(--code);
   font-size: 0.9em;
   background: var(--bgActive);
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: var(--r-xs);
 }
 .mdbody :deep(pre) {

@@ -51,7 +51,7 @@ const { t } = useI18n()
   background: var(--bgPanel);
 }
 .edalist-head {
-  padding: 8px 12px;
+  padding: 9px 12px;
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);
@@ -69,7 +69,7 @@ const { t } = useI18n()
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 12px;
+  padding: 7px 12px;
   text-align: left;
   color: var(--text);
   background: transparent;

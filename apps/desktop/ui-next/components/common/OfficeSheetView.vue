@@ -204,7 +204,7 @@ const colWidth = (index: number) => sheet.value?.colWidths[index] ?? SHEET_DEFAU
 .ostab {
   flex: 0 0 auto;
   max-width: 220px;
-  padding: 4px 12px;
+  padding: 5px 12px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   color: var(--textDim);

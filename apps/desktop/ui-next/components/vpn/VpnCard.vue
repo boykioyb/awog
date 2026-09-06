@@ -170,7 +170,7 @@ const avatarStyle = computed(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 .vpn-name-row {
   display: flex;
@@ -191,7 +191,7 @@ const avatarStyle = computed(() => {
 .vpn-status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex: 0 0 auto;
   font-size: 12px;
   line-height: 1;
@@ -219,7 +219,7 @@ const avatarStyle = computed(() => {
   align-items: center;
   font-size: 12px;
   line-height: 1;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -231,7 +231,7 @@ const avatarStyle = computed(() => {
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accentDim);
@@ -242,7 +242,7 @@ const avatarStyle = computed(() => {
   background: var(--amberDim);
 }
 .vpn-tag {
-  padding: 1px 6px;
+  padding: 1px 7px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   font-size: 12px;

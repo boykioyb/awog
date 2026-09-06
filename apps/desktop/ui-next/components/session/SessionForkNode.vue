@@ -26,7 +26,7 @@ const { t } = useI18n()
 <style scoped>
 .fnode {
   width: 188px;
-  padding: 8px 10px;
+  padding: 9px 11px;
   border-radius: var(--r-btn);
   background: var(--bgEl);
   border: 1px solid var(--border);
@@ -53,8 +53,8 @@ const { t } = useI18n()
 .fnode-when {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 2px;
+  gap: 5px;
+  margin-top: 3px;
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);

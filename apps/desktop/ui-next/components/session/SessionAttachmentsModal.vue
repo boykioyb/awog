@@ -86,8 +86,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .amhead {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 9px;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
@@ -117,8 +117,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .amitem {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 9px;
+  padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgActive);

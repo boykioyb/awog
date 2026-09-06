@@ -1138,7 +1138,7 @@ function namesToEntries(names: string[]): KvEntry[] {
 .cne-setup {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 9px;
   padding: 10px 12px;
   border-radius: var(--r-sm);
   background: var(--accentDim);
@@ -1178,7 +1178,7 @@ function namesToEntries(names: string[]): KvEntry[] {
 }
 .cne-input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -1212,8 +1212,8 @@ function namesToEntries(names: string[]): KvEntry[] {
 .cne-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 9px;
+  padding: 9px 11px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);

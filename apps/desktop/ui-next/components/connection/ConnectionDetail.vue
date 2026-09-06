@@ -250,7 +250,7 @@
                   width: var(--icon-xs);
                   height: var(--icon-xs);
                   flex: 0 0 auto;
-                  margin-top: 2px;
+                  margin-top: 3px;
                 "
               />
               <div class="cnd-tool-body">
@@ -641,9 +641,9 @@ watch(
   flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 13px;
   margin: 14px 14px 0;
-  padding: 14px 16px;
+  padding: 15px 16px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
@@ -653,7 +653,7 @@ watch(
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 .cnd-hero-name {
   font-size: var(--fs-lg);
@@ -670,14 +670,14 @@ watch(
 .cnd-hero-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   flex-wrap: wrap;
   margin-top: 2px;
 }
 .cnd-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex: 0 0 auto;
 }
 /* Transient Test/OAuth feedback — fixed above the tabs so it shows on any tab. */
@@ -745,7 +745,7 @@ watch(
 .cnd-card-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   padding: 10px 14px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
@@ -809,7 +809,7 @@ watch(
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  padding: 9px 11px;
   flex-wrap: wrap;
   color: var(--text);
   word-break: break-word;
@@ -818,7 +818,7 @@ watch(
 .cnd-kv-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 1px 8px;
   border-radius: var(--r-pill);
   border: 1px solid var(--accentBorder);
@@ -840,7 +840,7 @@ watch(
   display: flex;
   gap: 8px;
   margin-top: 14px;
-  padding: 10px 12px;
+  padding: 11px 13px;
   border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -900,8 +900,8 @@ watch(
   font-family: var(--code);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  margin-top: 8px;
-  padding: 8px 10px;
+  margin-top: 9px;
+  padding: 9px 11px;
   border-radius: var(--r-sm);
   background: var(--bgPanel);
   color: var(--textDim);
@@ -922,7 +922,7 @@ watch(
 /* Activity console (ConnectionToolsLog) placement: a small gap under whatever it
    follows (loading row / error banner / tools list). */
 .cnd-log {
-  margin-top: 8px;
+  margin-top: 9px;
 }
 .cnd-log-foot {
   margin-top: 8px;

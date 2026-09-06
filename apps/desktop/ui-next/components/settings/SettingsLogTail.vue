@@ -226,7 +226,7 @@ onBeforeUnmount(() => {
   position: absolute;
   right: 14px;
   bottom: 12px;
-  padding: 4px 12px;
+  padding: 5px 12px;
   border: none;
   border-radius: var(--r-pill);
   font-size: 12px;

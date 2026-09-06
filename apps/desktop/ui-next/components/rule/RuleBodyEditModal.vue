@@ -152,7 +152,7 @@ const onApply = () => {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  padding: 10px;
+  padding: 11px;
 }
 .rbe-ta {
   width: 100%;
@@ -173,7 +173,7 @@ const onApply = () => {
   background: var(--bgInput);
   border: 1px solid var(--danger);
   border-radius: var(--r-sm);
-  padding: 8px 10px;
+  padding: 8px 11px;
 }
 .rbe-preview {
   display: flex;

@@ -461,7 +461,7 @@ function parseTags(text: string): string[] {
 }
 .sse-input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -535,7 +535,7 @@ function parseTags(text: string): string[] {
 .sse-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -548,7 +548,7 @@ function parseTags(text: string): string[] {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 12px;
+  padding: 12px 13px;
   border-radius: var(--r-btn);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
@@ -556,7 +556,7 @@ function parseTags(text: string): string[] {
 .sse-secret-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .sse-secret-title {
   font-size: var(--fs-sm);

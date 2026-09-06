@@ -66,7 +66,7 @@ function setSegHtml(el: unknown, html: string): void {
   line-height: var(--lh-prose);
 }
 .ghmdbody > * + * {
-  margin-top: 8px;
+  margin-top: 9px;
 }
 /* Trim each segment's outer block margins so the inter-segment gap stays uniform. */
 .ghmdseg :deep(:first-child) {
@@ -76,7 +76,7 @@ function setSegHtml(el: unknown, html: string): void {
   margin-bottom: 0;
 }
 .ghmdbody :deep(p) {
-  margin: 0 0 8px;
+  margin: 0 0 9px;
 }
 .ghmdbody :deep(strong),
 .ghmdbody :deep(b) {
@@ -96,7 +96,7 @@ function setSegHtml(el: unknown, html: string): void {
   overflow-wrap: anywhere;
 }
 .ghmdbody :deep(pre) {
-  margin: 0 0 8px;
+  margin: 0 0 9px;
   padding: 10px 12px;
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -112,7 +112,7 @@ function setSegHtml(el: unknown, html: string): void {
 }
 .ghmdbody :deep(ul),
 .ghmdbody :deep(ol) {
-  margin: 0 0 8px;
+  margin: 0 0 9px;
   padding-left: 22px;
 }
 .ghmdbody :deep(ul) {
@@ -122,7 +122,7 @@ function setSegHtml(el: unknown, html: string): void {
   list-style: decimal;
 }
 .ghmdbody :deep(li) {
-  margin: 2px 0;
+  margin: 3px 0;
 }
 .ghmdbody :deep(a) {
   color: var(--accent);
@@ -130,7 +130,7 @@ function setSegHtml(el: unknown, html: string): void {
   text-underline-offset: 2px;
 }
 .ghmdbody :deep(blockquote) {
-  margin: 0 0 8px;
+  margin: 0 0 9px;
   padding: 2px 0 2px 12px;
   border-left: 3px solid var(--border);
   color: var(--textDim);
@@ -144,7 +144,7 @@ function setSegHtml(el: unknown, html: string): void {
   /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
      no single whole-pixel leading exists for the whole h1…h6 group. */
   line-height: 1.3;
-  margin: 14px 0 6px;
+  margin: 14px 0 7px;
 }
 .ghmdbody :deep(h1) {
   font-size: 1.3em;
@@ -172,7 +172,7 @@ function setSegHtml(el: unknown, html: string): void {
 .ghmdbody :deep(th),
 .ghmdbody :deep(td) {
   border: 1px solid var(--border);
-  padding: 6px 10px;
+  padding: 6px 11px;
   text-align: left;
   vertical-align: top;
 }

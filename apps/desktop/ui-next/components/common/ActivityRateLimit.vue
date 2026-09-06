@@ -101,7 +101,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
+  padding: 15px;
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
@@ -154,7 +154,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 .arlbars {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 .arlrow {
   display: flex;

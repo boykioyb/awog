@@ -89,7 +89,7 @@ const avatarStyle = computed(() => {
 .ssh-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 .ssh-row-top {

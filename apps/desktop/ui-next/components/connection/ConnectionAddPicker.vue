@@ -112,8 +112,8 @@ function pseudoSource(p: SourcePresetMeta): Source {
 .cap-opt {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 12px;
+  gap: 11px;
+  padding: 12px 13px;
   border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -175,8 +175,8 @@ function pseudoSource(p: SourcePresetMeta): Source {
 .cap-card {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 11px;
+  padding: 11px 12px;
   border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -193,13 +193,13 @@ function pseudoSource(p: SourcePresetMeta): Source {
 .cap-card-tx {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .cap-card-nm {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 600;

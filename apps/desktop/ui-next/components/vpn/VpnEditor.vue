@@ -423,7 +423,7 @@ function parseTags(text: string): string[] {
 .vpe-set {
   font-size: 12px;
   line-height: 1;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accentDim);
@@ -431,7 +431,7 @@ function parseTags(text: string): string[] {
 }
 .vpe-input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -521,7 +521,7 @@ function parseTags(text: string): string[] {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px 12px;
+  padding: 12px 13px;
   border-radius: var(--r-btn);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
@@ -529,7 +529,7 @@ function parseTags(text: string): string[] {
 .vpe-secret-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .vpe-secret-title {
   font-size: var(--fs-sm);

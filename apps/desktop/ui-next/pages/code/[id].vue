@@ -225,7 +225,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-right: 1px solid var(--border);
   color: var(--textDim);
   cursor: pointer;
@@ -284,7 +284,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 9px;
   color: var(--textDim);
 }
 .codeempty-icon {
@@ -312,7 +312,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 9px;
   color: var(--textDim);
 }
 

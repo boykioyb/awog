@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
 .gae-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 11px;
 }
 .gae-headicn {
   width: var(--icon-lg);
@@ -152,7 +152,7 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 .gae-lead {
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 1em;
   color: var(--textMuted);
 }
@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 9px 11px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -202,7 +202,7 @@ onBeforeUnmount(() => {
   max-height: 128px;
   overflow: auto;
   margin: 0;
-  padding: 8px 10px;
+  padding: 9px 11px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);

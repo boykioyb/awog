@@ -435,11 +435,11 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   list-style: decimal;
 }
 .mdinline :deep(li) {
-  margin: 2px 0;
+  margin: 3px 0;
 }
 .mdinline :deep(li > ul),
 .mdinline :deep(li > ol) {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
 }
 /* GFM task lists (`- [ ]`): marked emits `<li><input type=checkbox> …>` with no class,
    so the `ul { list-style: disc }` above paints a bullet AND the checkbox. The checkbox
@@ -450,7 +450,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   padding-left: 0;
 }
 .mdinline :deep(li > input[type='checkbox']) {
-  margin: 0 6px 0 0;
+  margin: 0 7px 0 0;
   vertical-align: middle;
 }
 .mdinline :deep(a) {
@@ -503,7 +503,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 .mdinline :deep(th),
 .mdinline :deep(td) {
   border: 1px solid var(--border);
-  padding: 6px 10px;
+  padding: 6px 11px;
   text-align: left;
   vertical-align: top;
 }
@@ -549,7 +549,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border: 1px dashed var(--border);
   border-radius: var(--r-xs);
   color: var(--textDim);

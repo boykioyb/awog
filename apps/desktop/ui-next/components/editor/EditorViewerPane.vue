@@ -184,7 +184,7 @@ const diffLines = computed<DiffLine[]>(() => {
   font-family: var(--code);
   font-size: 0.9em;
   background: var(--bgActive);
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: var(--r-xs);
 }
 .mdbody :deep(pre) {

@@ -416,7 +416,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   border-radius: var(--r-xs);
 }
 .gbar .btn.sm {
-  padding: 0 10px;
+  padding: 0 11px;
 }
 .gbar .chip {
   padding: 0 10px;
