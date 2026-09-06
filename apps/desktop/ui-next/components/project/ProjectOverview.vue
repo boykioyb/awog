@@ -361,6 +361,7 @@ async function onGhAccount(v: string) {
   padding: 8px 11px;
   border-radius: var(--r-sm);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--amber);
   background: var(--amberDim);
   border: 1px solid var(--amberBorder);

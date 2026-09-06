@@ -1433,6 +1433,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   gap: 6px;
   color: var(--accent);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   cursor: grab;
   touch-action: none;
 }

@@ -454,6 +454,7 @@ function onResize(ev: PointerEvent): void {
   gap: 6px;
   color: var(--text);
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
 }
 .gterm-cwd {

@@ -356,11 +356,13 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
   gap: 6px;
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
   margin-bottom: 6px;
 }
 .infoctx-n {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .infoctx-row {
@@ -388,11 +390,13 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
 }
 .infoctx-size {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   flex: 0 0 auto;
 }
 .infoctx-kind {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   flex: 0 0 auto;
 }

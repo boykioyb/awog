@@ -135,6 +135,7 @@ function onEnter(e: KeyboardEvent) {
 .pvfcount {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
   padding: 0 4px;

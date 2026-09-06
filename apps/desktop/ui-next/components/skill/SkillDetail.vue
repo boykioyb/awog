@@ -109,6 +109,7 @@ const hasMetaChips = computed(
   background: var(--bgInput);
   border: 1px solid var(--border);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   flex: 0 0 auto;
 }
 .skd-act {

@@ -119,11 +119,13 @@ function openGit() {
   flex: 0 0 auto;
   padding: 4px 10px 6px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .sb-menu-hint {
   padding: 6px 10px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
 }
 .sb-menu-sep {

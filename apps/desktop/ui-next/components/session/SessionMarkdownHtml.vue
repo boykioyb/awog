@@ -336,7 +336,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
    inherits .blk.txt (text-[1em]). Reasonably complete (tables, hr, headings, spacing,
    line-height) — PreviewModal still owns heavy/full-screen rendering. */
 .mdinline {
-  line-height: 1.6;
+  line-height: var(--lh-prose);
 }
 /* No top gap on the run's first element (heading/para/table). */
 .mdinline :deep(:first-child) {
@@ -414,7 +414,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   overflow-x: auto;
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .mdinline :deep(pre code) {
   background: none;
@@ -470,6 +470,8 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 .mdinline :deep(h4),
 .mdinline :deep(h5) {
   font-weight: 600;
+  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
+     no single whole-pixel leading exists for the whole h1…h6 group. */
   line-height: 1.3;
   margin: 16px 0 8px;
 }

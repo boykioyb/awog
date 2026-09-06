@@ -127,6 +127,7 @@ const colWidth = (index: number) => sheet.value?.colWidths[index] ?? SHEET_DEFAU
   border-bottom: 1px solid var(--border);
   color: var(--textFaint);
   font-size: 12px;
+  line-height: 18px;
   font-weight: 500;
 }
 .oscorner {
@@ -145,6 +146,7 @@ const colWidth = (index: number) => sheet.value?.colWidths[index] ?? SHEET_DEFAU
   color: var(--textFaint);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   font-weight: 500;
   text-align: right;
 }

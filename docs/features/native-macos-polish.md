@@ -100,6 +100,16 @@ Nguyên px ở mọi base 12→18. Codemod `scripts/codemod-type-scale.mjs` map 
 | `1.6923` | 22 | `--fs-2xl` |
 | `2.4615` | 32 | **giữ nguyên** (hero/empty state) |
 
+**Leading đi kèm (2026-09-06, hoàn tất D2).** `html,body{line-height:1.5}` là **hệ số không đơn vị** nên nó nhân lại với font-size và trả nửa pixel về ngay sau khi type scale khử xong (`--fs-md` 13px × 1.5 = 19.5px; đo trên app đang chạy: **75%** element được vẽ nằm trên nửa pixel, `.ni` cao 35.5px). Ba bước:
+
+1. `:root` thêm 7 token `--lh-*` khai bằng `calc(var(--font-size-base) + Npx)` (+3 / +5 / +7 / +9 / +11 / +15, và `--lh-prose` +9) ⇒ **px nguyên ở cả 6 base** 12/13/14/15/16/18.
+2. `html,body{line-height:var(--lh-md)}` — giá trị **có đơn vị** kế thừa xuống dưới dạng độ dài cố định, không nhân lại với font-size của con.
+3. Codemod `scripts/codemod-line-height.mjs` ghép cặp: rule khai `font-size: var(--fs-X)` mà chưa có leading ⇒ thêm `line-height: var(--lh-X)` (**605 site**); rule ghim `font-size` bằng px cố định ⇒ thêm `line-height: <round(1.5 × px)>px` (**152 site**, 146 trong đó là `12px → 18px`, đúng bằng giá trị đang render nên hình học không đổi).
+
+Văn bản dài lấy `--lh-prose` (22px trên chữ 13px = 1.69): `.mdbody` (markdown.css + 4 bản scoped), `.mdinline` (bong bóng chat), `.ghmdbody` (issue/PR body). Code block lấy `--lh-sm` (18px). Heading trong prose giữ hệ số `1.3` kèm marker `design-token-ok` — font-size của chúng là `em` (ngoại lệ §8) nên không tồn tại leading nguyên chung cho cả nhóm h1…h6.
+
+Rule **đã tự khai** `line-height` thì codemod không đụng: **173 site / 97 file** còn hệ số lẻ, khai trong `LEGACY_COEFFICIENTS` của guard dưới dạng trần đếm theo file (chỉ được giảm) — chờ duyệt bằng mắt từng file.
+
 **Codemod chỉ đụng `rem`.** Giá trị `em` (108× `1em` + ~30 giá trị `em` khác) là **tương đối với cha** — map sang token tuyệt đối sẽ đổi ngữ nghĩa. 219× `font-size: 12px` là badge/hint cố ý không scale ([.claude/rules/nuxt-vue.md](../../.claude/rules/nuxt-vue.md)) → giữ, có thể đặt tên `--fs-badge: 12px`.
 
 ### W4 — Radius scale
@@ -145,7 +155,7 @@ Ngoại lệ **không đụng**: xterm tự vẽ scrollbar DOM riêng ([Workspac
 
 ### W8 — Guard & tài liệu
 
-- `scripts/check-design-tokens.mjs` (Node thuần, **không thêm dep** → không cần ADR cho dep) nối vào `pnpm lint`. Fail khi: `border-radius: <px>` không phải `var(--r-*)`/`50%`, `font-size: <rem>` không phải `var(--fs-*)`, `var(--code)` ở file ngoài allowlist. Allowlist đặt trong chính script.
+- `scripts/check-design-tokens.mjs` (Node thuần, **không thêm dep** → không cần ADR cho dep) nối vào `pnpm lint`. Fail khi: `border-radius: <px>` không phải `var(--r-*)`/`50%` (R1), `font-size: <rem>` không phải `var(--fs-*)` (R2), `var(--code)` ở file ngoài allowlist (R3), `line-height` là hệ số lẻ / px lẻ (R4). Allowlist đặt trong chính script.
 - Cập nhật [.claude/rules/nuxt-vue.md](../../.claude/rules/nuxt-vue.md) + [docs/coding/nuxt-frontend.md](../coding/nuxt-frontend.md).
 - **Dọn tài liệu chết:** [ui-design-system.md](./ui-design-system.md) + [ADR 0041](../decisions/0041-in-house-design-system-shadcn-style.md) trỏ vào `apps/desktop/ui/` đã bị xoá → đánh dấu Superseded hoặc viết lại cho `ui-next`.
 - **ADR mới (0079)** cho quyết định thang token + native window chrome.

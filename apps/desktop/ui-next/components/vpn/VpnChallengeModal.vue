@@ -96,11 +96,13 @@ watch(
 .vch-sub {
   margin: 0;
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   color: var(--textDim);
 }
 .vch-prompt {
   margin: 0;
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 600;
   color: var(--text);
 }
@@ -115,6 +117,7 @@ watch(
   /* mono-ok: one-time challenge code — fixed advance keeps the digits apart */
   font-family: var(--code);
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   letter-spacing: 0.14em;
   outline: none;
 }

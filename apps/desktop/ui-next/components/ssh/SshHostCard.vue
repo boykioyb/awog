@@ -104,6 +104,7 @@ const avatarStyle = computed(() => {
   display: grid;
   place-items: center;
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   flex: 0 0 auto;
 }
@@ -111,6 +112,7 @@ const avatarStyle = computed(() => {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
@@ -160,6 +162,7 @@ const avatarStyle = computed(() => {
 }
 .ssh-endpoint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;
@@ -168,6 +171,7 @@ const avatarStyle = computed(() => {
 }
 .ssh-tag {
   font-size: 12px;
+  line-height: 18px;
   padding: 1px 6px;
 }
 </style>

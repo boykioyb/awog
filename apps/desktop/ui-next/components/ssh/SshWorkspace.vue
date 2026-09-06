@@ -502,12 +502,14 @@ watch(
 }
 .sshx-tbar-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
   flex: 0 0 auto;
 }
 .sshx-tbar-sub {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   min-width: 0;
   overflow: hidden;
@@ -533,6 +535,7 @@ watch(
   background: transparent;
   color: var(--textDim);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   cursor: pointer;
   transition:
@@ -595,6 +598,7 @@ watch(
   padding: 24px 12px;
   text-align: center;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 </style>

@@ -128,6 +128,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 .forkempty .es {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 </style>

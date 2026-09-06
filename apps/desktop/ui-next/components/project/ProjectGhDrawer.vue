@@ -725,6 +725,7 @@ function relativeWhen(iso: string): string {
   border-bottom: 1px solid var(--border);
   background: var(--bgPanel);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textMuted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -803,6 +804,7 @@ function relativeWhen(iso: string): string {
   color: var(--textDim);
   cursor: pointer;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   transition:
     color 0.12s ease,
     background 0.12s ease,
@@ -843,6 +845,7 @@ function relativeWhen(iso: string): string {
   align-items: center;
   gap: 5px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   margin-bottom: 5px;
   overflow-wrap: anywhere;
@@ -889,6 +892,7 @@ function relativeWhen(iso: string): string {
 }
 .ghapprove-err {
   font-size: 12px;
+  line-height: 18px;
   color: var(--danger);
 }
 /* Post-approve marker (replaces the button once approved). */

@@ -78,6 +78,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .smdtitle {
   flex: 1;
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }

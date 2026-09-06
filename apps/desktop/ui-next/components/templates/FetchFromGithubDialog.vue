@@ -99,6 +99,7 @@ const onFetch = async () => {
 }
 .tpd-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -110,6 +111,7 @@ const onFetch = async () => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -131,6 +133,7 @@ const onFetch = async () => {
   gap: 8px;
   cursor: pointer;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
 }
 .tpd-check input {
@@ -143,5 +146,6 @@ const onFetch = async () => {
   border: 1px solid var(--danger);
   color: var(--danger);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 </style>

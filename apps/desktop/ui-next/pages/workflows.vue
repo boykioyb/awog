@@ -182,6 +182,7 @@ const canvasScopeLabel = computed(() => {
 }
 .wflist-title {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .wflist-scope {
@@ -198,6 +199,7 @@ const canvasScopeLabel = computed(() => {
 .wflist-empty {
   padding: 16px 9px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
   text-align: center;
 }

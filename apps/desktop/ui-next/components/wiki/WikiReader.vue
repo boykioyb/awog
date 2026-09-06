@@ -299,6 +299,7 @@ async function onCopyPath(): Promise<void> {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+  line-height: 18px;
 }
 .wr-sep {
   opacity: 0.5;
@@ -405,5 +406,6 @@ async function onCopyPath(): Promise<void> {
 .wr-railempty {
   padding: 2px 4px;
   font-size: 12px;
+  line-height: 18px;
 }
 </style>

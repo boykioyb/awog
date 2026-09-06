@@ -94,6 +94,7 @@ async function copy(): Promise<void> {
 }
 .acc-title {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -113,6 +114,7 @@ async function copy(): Promise<void> {
   /* mono-ok: pairing URL */
   font-family: var(--code);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   color: var(--text);
   overflow-x: auto;
   white-space: nowrap;
@@ -133,6 +135,7 @@ async function copy(): Promise<void> {
 }
 .acc-qr-hint {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   text-align: center;
 }

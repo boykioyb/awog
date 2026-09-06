@@ -192,6 +192,7 @@ const onEditDetails = () => {
 }
 .cpc-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
@@ -211,11 +212,13 @@ const onEditDetails = () => {
 }
 .cpc-pname {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--text);
 }
 .cpc-pdesc {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
 }
 .spin {

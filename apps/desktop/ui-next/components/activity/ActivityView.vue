@@ -390,6 +390,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 }
 .acthdt {
   font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
   font-weight: 600;
 }
 .acthdr {
@@ -410,6 +411,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   border: 1px solid var(--amberBorder);
   color: var(--amber);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
 .actcards {
@@ -423,6 +425,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 }
 .actclbl {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .actcbig {
@@ -433,6 +436,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 }
 .actcsub {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   margin-top: 4px;
 }
@@ -469,6 +473,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   display: flex;
   justify-content: space-between;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-variant-numeric: tabular-nums;
   color: var(--textFaint);
 }
@@ -481,6 +486,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   padding: 18px 15px;
   color: var(--textFaint);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .actwarn {
   display: flex;
@@ -493,15 +499,18 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   border: 1px solid var(--amberBorder);
   color: var(--amber);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
 .acttable {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .acttable th {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   font-weight: 500;
   padding: 10px 14px;
@@ -621,6 +630,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .actdaydate {
   flex: 0 0 auto;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .actdaybar {
@@ -640,6 +650,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .actdaymeta {
   flex: 0 0 auto;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .actdaycost {
@@ -647,6 +658,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   min-width: 64px;
   text-align: right;
   font-size: 12px;
+  line-height: 18px;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }

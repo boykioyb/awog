@@ -300,6 +300,7 @@ onMounted(() => {
   padding: 4px 14px;
   flex-shrink: 0;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   background: var(--bgPanel);
   border-top: 1px solid var(--border);

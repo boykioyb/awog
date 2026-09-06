@@ -72,6 +72,7 @@ const verifyTitle = computed(() => {
   align-items: center;
   gap: 6px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-variant-numeric: tabular-nums;
   color: var(--textDim);
 }
@@ -84,6 +85,7 @@ const verifyTitle = computed(() => {
   border: 1px solid var(--border);
   color: var(--textMuted);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .lcp-verify.ok {
   border-color: var(--accentBorder);
@@ -118,6 +120,7 @@ const verifyTitle = computed(() => {
   /* mono-ok: verification command output */
   font-family: var(--code);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .spin {

@@ -131,11 +131,13 @@ const onInstall = async () => {
 }
 .tpd-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
 .tpd-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 </style>

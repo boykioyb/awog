@@ -80,6 +80,7 @@ const bodyText = computed(() =>
   align-items: center;
   gap: 8px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   cursor: pointer;
 }

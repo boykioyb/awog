@@ -345,5 +345,6 @@ function toggleNotifyProject(id: string): void {
 .ghnp-slug {
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
 }
 </style>

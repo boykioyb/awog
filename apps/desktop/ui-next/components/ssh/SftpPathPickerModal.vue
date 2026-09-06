@@ -160,6 +160,7 @@ watch(
 }
 .sfpp-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -169,6 +170,7 @@ watch(
   gap: 3px;
   flex-wrap: wrap;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .sfpp-crumb {
   border: none;
@@ -208,6 +210,7 @@ watch(
   color: var(--text);
   text-align: left;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   cursor: pointer;
 }
 .sfpp-row + .sfpp-row {
@@ -226,16 +229,19 @@ watch(
 .sfpp-empty {
   padding: 12px 14px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .sfpp-err {
   padding: 12px 14px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   word-break: break-word;
 }
 .sfpp-dest {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   word-break: break-all;
 }

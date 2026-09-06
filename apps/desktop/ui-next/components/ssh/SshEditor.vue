@@ -449,6 +449,7 @@ function parseTags(text: string): string[] {
 }
 .sse-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -460,6 +461,7 @@ function parseTags(text: string): string[] {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -520,6 +522,7 @@ function parseTags(text: string): string[] {
 }
 .sse-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 /* Toggle row (reuses the global .tog2 switch) — a clickable label + switch. */
@@ -551,6 +554,7 @@ function parseTags(text: string): string[] {
 }
 .sse-secret-title {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }

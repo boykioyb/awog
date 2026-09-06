@@ -297,6 +297,7 @@ watch(activeIndex, (i) => {
 .cmdk-group {
   padding: 8px 10px 4px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .cmdk-row {
@@ -337,6 +338,7 @@ watch(activeIndex, (i) => {
 .cmdk-row-hint {
   flex-shrink: 0;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .cmdk-foot {
@@ -346,6 +348,7 @@ watch(activeIndex, (i) => {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 

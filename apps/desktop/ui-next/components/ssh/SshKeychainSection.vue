@@ -88,6 +88,7 @@ const { t } = useI18n()
 }
 .sshx-kc-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -143,6 +144,7 @@ const { t } = useI18n()
 }
 .sshx-kc-name {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
 }
@@ -164,6 +166,7 @@ const { t } = useI18n()
 }
 .sshx-kc-src {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   word-break: break-all;
 }

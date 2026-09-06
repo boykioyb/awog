@@ -167,6 +167,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
 .km-err {
   color: var(--danger);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   text-align: right;
   max-width: 320px;
 }

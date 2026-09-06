@@ -551,6 +551,7 @@ onBeforeUnmount(() => {
   border-radius: var(--r-xs);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   cursor: pointer;
 }
@@ -621,6 +622,7 @@ onBeforeUnmount(() => {
   /* mono-ok: mermaid source */
   font-family: var(--code);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   white-space: pre-wrap;
   text-align: left;
 }

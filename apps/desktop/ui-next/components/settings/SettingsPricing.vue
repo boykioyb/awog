@@ -196,14 +196,17 @@ function onFetch(): void {
   padding: 16px;
   color: var(--textFaint);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .sprtable {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .sprtable th {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   font-weight: 500;
   padding: 9px 12px;
@@ -235,6 +238,7 @@ function onFetch(): void {
   border-radius: var(--r-xs);
   padding: 5px 8px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   outline: none;
   text-align: right;

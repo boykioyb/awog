@@ -138,6 +138,7 @@ const toggleSecret = async (i: number) => {
 <style scoped>
 .lkv-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--textDim);
   margin-bottom: 8px;
@@ -161,6 +162,7 @@ const toggleSecret = async (i: number) => {
   /* mono-ok: frontmatter key/value — identifiers */
   font-family: var(--code);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   outline: none;
 }
 .lkv-input:focus {
@@ -192,6 +194,7 @@ const toggleSecret = async (i: number) => {
 }
 .lkv-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   padding-top: 2px;
 }

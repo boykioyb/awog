@@ -77,6 +77,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .sfcol-head {
   padding: 4px 8px 6px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--textDim);
 }
@@ -87,6 +88,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   padding: 6px 8px;
   border-radius: var(--r-xs);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   cursor: pointer;
 }

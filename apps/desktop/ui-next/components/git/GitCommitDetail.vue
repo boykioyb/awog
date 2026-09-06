@@ -182,6 +182,7 @@ const dir = (f: string) => shortPath(f)[0]
 .cddiffempty {
   color: var(--textDim);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   padding: 8px 4px;
 }
 </style>

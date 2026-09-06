@@ -147,6 +147,7 @@ const onEdit = (e: MouseEvent) => {
 }
 .lmb-seg span {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   padding: 4px 9px;
 }
 .lmb-empty {
@@ -155,6 +156,7 @@ const onEdit = (e: MouseEvent) => {
   border-radius: var(--r-btn);
   padding: 13px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
   font-style: italic;
 }
@@ -163,7 +165,7 @@ const onEdit = (e: MouseEvent) => {
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
   padding: 13px 15px;
-  line-height: 1.7;
+  line-height: var(--lh-prose);
   color: var(--text);
 }
 .lmb-raw {
@@ -175,6 +177,8 @@ const onEdit = (e: MouseEvent) => {
 .mdbody :deep(h2),
 .mdbody :deep(h3) {
   font-weight: 700;
+  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
+     no single whole-pixel leading exists for the whole h1…h6 group. */
   line-height: 1.3;
   margin: 1.1em 0 0.5em;
 }
@@ -225,12 +229,13 @@ const onEdit = (e: MouseEvent) => {
   border-radius: var(--r-sm);
   padding: 12px 14px;
   overflow-x: auto;
-  line-height: 1.6;
+  line-height: var(--lh-sm);
 }
 .mdbody :deep(pre code) {
   background: none;
   padding: 0;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .mdbody :deep(blockquote) {
   border-left: 3px solid var(--border);

@@ -207,6 +207,7 @@ function metaOf(item: AwogPetItem): string {
   white-space: nowrap;
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .perm-hint {

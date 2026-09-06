@@ -363,6 +363,7 @@ const toggleSub = (i: number) => {
   padding-top: 8px;
   border-top: 1px solid var(--border);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 /* "View full summary" button — trails the accent header row, opens the report in
    the shared PreviewModal. Reuses .stepview chrome; pushed to the far right. */
@@ -374,6 +375,7 @@ const toggleSub = (i: number) => {
   align-self: flex-start;
   padding: 1px 0;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--accent);
   transition: opacity 0.12s ease;
 }

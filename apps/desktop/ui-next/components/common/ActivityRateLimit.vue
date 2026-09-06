@@ -141,6 +141,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 }
 .arlhint {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
 }
 .arlhint.err {
@@ -164,10 +165,12 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 }
 .arllbl {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
 }
 .arlpct {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .arlbar {
@@ -184,6 +187,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 }
 .arlreset {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 

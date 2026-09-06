@@ -119,11 +119,13 @@ const subtitle = computed(() =>
 }
 .sfmod-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
 .sfmod-sub {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   word-break: break-all;
 }
@@ -133,6 +135,7 @@ const subtitle = computed(() =>
 }
 .sfmod-grid th {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 500;
   color: var(--textDim);
   padding: 4px;
@@ -145,6 +148,7 @@ const subtitle = computed(() =>
 .sfmod-rowlabel {
   text-align: left !important;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
 }
 .sfmod-grid input {
@@ -158,6 +162,7 @@ const subtitle = computed(() =>
   align-items: center;
   gap: 10px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .sfmod-octal-in {

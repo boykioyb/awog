@@ -165,6 +165,7 @@ function onFocus() {
 }
 .donut-pop-hd {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -173,6 +174,7 @@ function onFocus() {
 }
 .donut-pop-hint {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
 }
 .donut-row {
@@ -183,6 +185,7 @@ function onFocus() {
 .donut-rlbl {
   flex: 0 0 84px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   white-space: nowrap;
   overflow: hidden;
@@ -204,11 +207,13 @@ function onFocus() {
   flex: 0 0 30px;
   text-align: right;
   font-size: 12px;
+  line-height: 18px;
 }
 .donut-rreset {
   flex: 0 0 22px;
   text-align: right;
   font-size: 11px;
+  line-height: 17px;
   color: var(--textFaint);
 }
 @media (prefers-reduced-motion: reduce) {

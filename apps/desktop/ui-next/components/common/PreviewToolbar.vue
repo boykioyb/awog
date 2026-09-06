@@ -639,6 +639,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
 .pvz {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   min-width: 40px;
   text-align: center;
@@ -679,6 +680,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
 }
 .pvmhd {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   padding: 6px 8px 3px;
 }
@@ -733,6 +735,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   padding: 5px 11px;
   border-radius: var(--r-sm);
   font-size: 12px;
+  line-height: 18px;
   background: var(--bgActive);
   color: var(--text);
   border: 1px solid var(--border);

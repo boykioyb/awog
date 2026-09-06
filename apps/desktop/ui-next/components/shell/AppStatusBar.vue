@@ -206,6 +206,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   color: var(--accent);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
+  line-height: 17px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;

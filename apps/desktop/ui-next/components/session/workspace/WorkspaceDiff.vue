@@ -260,6 +260,7 @@ onBeforeUnmount(() => {
   /* mono-ok: file paths of the changed files */
   font-family: var(--code);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .wsdiff-files .frow.file {
   width: 100%;
@@ -272,6 +273,7 @@ onBeforeUnmount(() => {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   display: inline-flex;
   gap: 6px;
   flex: 0 0 auto;

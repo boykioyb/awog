@@ -166,6 +166,7 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-kind {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-weight: 650;
@@ -173,6 +174,7 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--text);
   flex: 0 0 auto;
@@ -186,6 +188,7 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-dim {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -193,11 +196,13 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-tool {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   flex: 0 0 auto;
 }
 .ttn-input {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -206,6 +211,7 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-think {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-style: italic;
   color: var(--textMuted);
   overflow: hidden;
@@ -216,6 +222,7 @@ const todoColor = (status: TodoStatus): string => {
 .ttn-dur {
   margin-left: auto;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }
@@ -228,11 +235,13 @@ const todoColor = (status: TodoStatus): string => {
 }
 .ttn-purpose {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   padding: 2px 0;
 }
 .ttn-detail-body {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   white-space: pre-wrap;
   word-break: break-word;
   padding: 2px 0;
@@ -246,6 +255,7 @@ const todoColor = (status: TodoStatus): string => {
   align-items: flex-start;
   gap: 6px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .ttn-todo-mark {
   /* The three marks (○ ▸ ✓) have different advances in the system font;

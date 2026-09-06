@@ -65,6 +65,7 @@ function runAction(tt: QuotaToast) {
   background: var(--accentDim);
   color: var(--accent);
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;

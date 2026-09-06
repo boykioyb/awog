@@ -190,6 +190,7 @@ const hoverText = computed(() => {
   margin-top: 2px;
   overflow: hidden;
   font-size: 12px;
+  line-height: 18px;
   /* NOT --textFaint: at 12px on the light theme's white that lands around 3.4:1,
      which is what read as "washed out" for the number/author/timestamp. */
   color: var(--textDim);
@@ -238,6 +239,7 @@ const hoverText = computed(() => {
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
 }
 .ntf-row-act:hover {

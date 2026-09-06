@@ -193,6 +193,7 @@ const onSave = () => {
 }
 .rpc-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
@@ -212,11 +213,13 @@ const onSave = () => {
 }
 .rpc-pname {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
 .rpc-pdesc {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
 }
 .spin {

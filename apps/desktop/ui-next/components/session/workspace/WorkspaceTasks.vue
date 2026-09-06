@@ -119,6 +119,7 @@ const entries = computed<Entry[]>(() => {
 }
 .wstasks-target {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;

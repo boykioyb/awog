@@ -175,6 +175,7 @@ function onKeydown(event: KeyboardEvent): void {
   /* mono-ok: wiki page path */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

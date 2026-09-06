@@ -398,6 +398,7 @@ function parseTags(text: string): string[] {
 }
 .vpe-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -406,6 +407,7 @@ function parseTags(text: string): string[] {
   align-items: center;
   gap: 8px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -426,6 +428,7 @@ function parseTags(text: string): string[] {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -500,6 +503,7 @@ function parseTags(text: string): string[] {
 }
 .vpe-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 /* Secret callout — a subtle accent-tinted card (mirrors SshEditor's .sse-secret):
@@ -520,6 +524,7 @@ function parseTags(text: string): string[] {
 }
 .vpe-secret-title {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }

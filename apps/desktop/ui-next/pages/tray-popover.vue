@@ -309,6 +309,7 @@ function formatResetsIn(ms: number | undefined): string {
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
+  line-height: 20px;
   overflow: hidden;
 }
 .tp-hd {
@@ -342,6 +343,7 @@ function formatResetsIn(ms: number | undefined): string {
 }
 .tp-sub {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   font-variant-numeric: tabular-nums;
 }
@@ -361,10 +363,12 @@ function formatResetsIn(ms: number | undefined): string {
 }
 .tp-sech {
   font-size: 11px;
+  line-height: 17px;
   color: var(--textFaint);
 }
 .tp-empty {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   padding: 2px 2px 4px;
 }
@@ -382,6 +386,7 @@ function formatResetsIn(ms: number | undefined): string {
 }
 .rl-acctname {
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -396,6 +401,7 @@ function formatResetsIn(ms: number | undefined): string {
 .rl-type {
   flex: 0 0 92px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textMuted);
   white-space: nowrap;
   overflow: hidden;
@@ -418,11 +424,13 @@ function formatResetsIn(ms: number | undefined): string {
   flex: 0 0 34px;
   text-align: right;
   font-size: 12px;
+  line-height: 18px;
 }
 .rl-reset {
   flex: 0 0 26px;
   text-align: right;
   font-size: 11px;
+  line-height: 17px;
   color: var(--textFaint);
 }
 
@@ -471,6 +479,7 @@ function formatResetsIn(ms: number | undefined): string {
 .tp-rmeta {
   flex: 0 0 auto;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 

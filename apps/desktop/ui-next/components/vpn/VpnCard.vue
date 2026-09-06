@@ -181,6 +181,7 @@ const avatarStyle = computed(() => {
 .vpn-name {
   min-width: 0;
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
@@ -209,6 +210,7 @@ const avatarStyle = computed(() => {
 }
 .vpn-path {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   word-break: break-all;
 }
@@ -244,6 +246,7 @@ const avatarStyle = computed(() => {
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
 }

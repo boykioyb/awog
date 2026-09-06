@@ -267,11 +267,13 @@ onBeforeUnmount(() => creator.teardown())
 }
 .lcp-title {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
   color: var(--text);
 }
 .lcp-sub {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .lcp-x {
@@ -336,6 +338,7 @@ onBeforeUnmount(() => creator.teardown())
 }
 .lcp-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
@@ -376,6 +379,7 @@ onBeforeUnmount(() => creator.teardown())
 }
 .lcp-foothint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 .lcp-send {

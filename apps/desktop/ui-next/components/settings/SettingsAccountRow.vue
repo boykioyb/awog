@@ -229,6 +229,7 @@ const formatTestResult = (result: AccountTestResult): string => {
 }
 .acrsub {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   margin-top: 2px;
   white-space: nowrap;
@@ -291,6 +292,7 @@ const formatTestResult = (result: AccountTestResult): string => {
 }
 .acrmodel {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 .acrtest {
   margin-left: 27px;

@@ -143,6 +143,7 @@ const goTo = (i: number) => {
 .ob-count {
   margin-left: auto;
   font-size: 12px;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
   color: var(--textFaint);
 }

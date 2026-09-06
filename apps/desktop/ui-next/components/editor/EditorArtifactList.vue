@@ -53,6 +53,7 @@ const { t } = useI18n()
 .edalist-head {
   padding: 9px 12px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -101,6 +102,7 @@ const { t } = useI18n()
 }
 .edalist-sub {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   white-space: nowrap;
   overflow: hidden;

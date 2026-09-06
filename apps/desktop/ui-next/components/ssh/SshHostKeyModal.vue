@@ -123,6 +123,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .skh-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -147,6 +148,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 12px;
   padding: 9px 12px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .skh-row + .skh-row {
   border-top: 1px solid var(--border);
@@ -171,6 +173,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   align-items: center;
   gap: 8px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   cursor: pointer;
 }

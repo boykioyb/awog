@@ -211,6 +211,7 @@ onBeforeUnmount(() => {
   gap: 7px;
   padding: 9px 12px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -250,6 +251,7 @@ onBeforeUnmount(() => {
 .ssh-fp-empty {
   padding: 12px 14px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .ssh-fp-list {
@@ -280,6 +282,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   word-break: break-all;
 }
@@ -352,6 +355,7 @@ onBeforeUnmount(() => {
   background: var(--bgInput);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .ssh-fp-input:focus-visible {
   outline: 2px solid var(--accent);
@@ -372,6 +376,7 @@ onBeforeUnmount(() => {
 }
 .ssh-fp-hint {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 </style>

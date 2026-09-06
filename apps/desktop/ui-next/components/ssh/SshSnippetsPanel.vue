@@ -170,6 +170,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   flex: 0 0 auto;
   padding: 6px 10px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -210,6 +211,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   flex: 0 0 auto;
   padding: 8px 12px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -229,11 +231,13 @@ async function del(snippet: SshSnippet): Promise<void> {
 }
 .ssh-sn-empty-t {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
 }
 .ssh-sn-empty-b {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .ssh-sn-list {
   padding: 8px;
@@ -260,11 +264,13 @@ async function del(snippet: SshSnippet): Promise<void> {
 }
 .ssh-sn-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
 .ssh-sn-cmd {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;

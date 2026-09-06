@@ -96,6 +96,7 @@ watch(
 .vlog-empty {
   color: var(--textDim);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   padding: 6px 2px;
 }
 .vlog-pre {

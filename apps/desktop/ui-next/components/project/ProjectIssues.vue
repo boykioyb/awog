@@ -433,6 +433,7 @@ function relativeWhen(iso: string): string {
   border: 1px solid;
   border-radius: var(--r-pill);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   white-space: nowrap;
 }
 .ghmore {
@@ -471,5 +472,6 @@ function relativeWhen(iso: string): string {
   color: var(--textDim);
   font-family: var(--mono);
   font-size: 12px;
+  line-height: 18px;
 }
 </style>

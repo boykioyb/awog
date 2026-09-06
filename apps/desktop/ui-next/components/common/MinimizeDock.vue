@@ -220,6 +220,7 @@ watch(
 }
 .mdsub {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   white-space: nowrap;
   overflow: hidden;

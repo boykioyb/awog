@@ -252,6 +252,7 @@ const onDrop = (e: DragEvent) => {
 }
 .wfempty .et {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   color: var(--textMuted);
 }
 .btn.pri.sm:disabled {

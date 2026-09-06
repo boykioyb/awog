@@ -147,6 +147,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
 }
 .cap-opt-t {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -157,6 +158,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
 }
 .cap-seplbl {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--textDim);
   padding-top: 2px;
@@ -197,11 +199,13 @@ function pseudoSource(p: SourcePresetMeta): Source {
   align-items: center;
   gap: 7px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }
 .cap-card-badge {
   font-size: 12px;
+  line-height: 18px;
   padding: 1px 6px;
   text-transform: uppercase;
 }
@@ -212,6 +216,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
 }
 .cap-empty {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   text-align: center;
   padding: 12px 0;

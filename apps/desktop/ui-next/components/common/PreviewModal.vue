@@ -656,6 +656,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvmeta {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   flex: 0 0 auto;
 }
@@ -725,6 +726,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .mdolabel {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   padding: 0 8px 8px;
 }
@@ -934,6 +936,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvdlgerr {
   color: var(--danger);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .pvinput {
   width: 100%;
@@ -982,13 +985,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .mdbody {
   width: 100%;
   max-width: 880px;
-  line-height: 1.7;
+  line-height: var(--lh-prose);
   color: var(--text);
 }
 .mdbody :deep(h1),
 .mdbody :deep(h2),
 .mdbody :deep(h3) {
   font-weight: 700;
+  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
+     no single whole-pixel leading exists for the whole h1…h6 group. */
   line-height: 1.3;
   margin: 1.1em 0 0.5em;
 }
@@ -1042,12 +1047,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   border-radius: var(--r-sm);
   padding: 12px 14px;
   overflow-x: auto;
-  line-height: 1.6;
+  line-height: var(--lh-sm);
 }
 .mdbody :deep(pre code) {
   background: none;
   padding: 0;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .mdbody :deep(blockquote) {
   border-left: 3px solid var(--border);

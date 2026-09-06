@@ -105,6 +105,7 @@ const onSave = () => {
 }
 .csp-title {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -125,6 +126,7 @@ const onSave = () => {
 }
 .csp-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 500;
   color: var(--textMuted);
 }
@@ -136,6 +138,7 @@ const onSave = () => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   outline: none;
 }
 .csp-input:focus {

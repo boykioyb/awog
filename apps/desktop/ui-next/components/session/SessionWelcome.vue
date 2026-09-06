@@ -119,6 +119,9 @@ function useSuggestion(prompt: string) {
 }
 .swh {
   font-size: 1.5em;
+  /* Global leading is now a LENGTH (20px), which would crowd a 1.5em headline — take
+     the display step instead. */
+  line-height: var(--lh-2xl);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.01em;
@@ -140,6 +143,7 @@ function useSuggestion(prompt: string) {
   padding: 3px 9px;
   border-radius: var(--r-pill);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   background: var(--bgSubtle);
   border: 1px solid var(--border);
@@ -205,6 +209,7 @@ function useSuggestion(prompt: string) {
   justify-content: center;
   gap: 14px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .swhint {

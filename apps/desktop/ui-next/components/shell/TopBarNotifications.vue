@@ -468,6 +468,7 @@ function openOnGithub(): void {
   padding: 7px 8px 5px 4px;
   font: inherit;
   font-size: 12px;
+  line-height: 18px;
   text-align: left;
   cursor: pointer;
 }
@@ -551,6 +552,7 @@ function openOnGithub(): void {
   border-top: 1px solid var(--border);
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
 }
 .ntf-foot-when {
   flex: 1 1 auto;

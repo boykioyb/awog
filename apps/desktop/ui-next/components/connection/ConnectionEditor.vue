@@ -1172,6 +1172,7 @@ function namesToEntries(names: string[]): KvEntry[] {
 }
 .cne-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -1183,6 +1184,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -1204,6 +1206,7 @@ function namesToEntries(names: string[]): KvEntry[] {
 }
 .cne-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .cne-toggle {
@@ -1216,6 +1219,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   border: 1px solid var(--border);
   color: var(--textMuted);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   cursor: pointer;
 }
 .cne-toggle.on {
@@ -1230,6 +1234,7 @@ function namesToEntries(names: string[]): KvEntry[] {
 }
 .cne-verify-sum {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
 }
 .cne-verify-sum.ok {
@@ -1243,12 +1248,14 @@ function namesToEntries(names: string[]): KvEntry[] {
 }
 .cne-err {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--danger);
 }
 .cne-pre {
   /* mono-ok: JSON preview */
   font-family: var(--code);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   padding: 8px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
@@ -1260,6 +1267,7 @@ function namesToEntries(names: string[]): KvEntry[] {
 }
 .cne-preview > summary {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   cursor: pointer;
   user-select: none;

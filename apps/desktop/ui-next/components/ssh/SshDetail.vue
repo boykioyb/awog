@@ -283,6 +283,7 @@ const forwardLabel = (fwd: PortForward): string => {
   display: grid;
   place-items: center;
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   flex: 0 0 auto;
 }
@@ -295,12 +296,14 @@ const forwardLabel = (fwd: PortForward): string => {
 }
 .ssh-hero-name {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
   word-break: break-word;
 }
 .ssh-hero-endpoint {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   word-break: break-all;
 }
@@ -367,6 +370,7 @@ const forwardLabel = (fwd: PortForward): string => {
   background: var(--accent);
   color: var(--accentText, #fff);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   cursor: pointer;
   transition:
@@ -431,6 +435,7 @@ const forwardLabel = (fwd: PortForward): string => {
 }
 .ssh-sec-h {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--textDim);
   margin: 0 0 6px;
@@ -447,6 +452,7 @@ const forwardLabel = (fwd: PortForward): string => {
   gap: 16px;
   padding: 8px 0;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .ssh-kv-row + .ssh-kv-row {
   border-top: 1px solid var(--border);
@@ -493,6 +499,7 @@ const forwardLabel = (fwd: PortForward): string => {
   margin-bottom: 22px;
   border-radius: var(--r-btn);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--dangerDim);
   border: 1px solid var(--dangerBorder);
@@ -515,6 +522,7 @@ const forwardLabel = (fwd: PortForward): string => {
 }
 .ssh-fwd-body {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   word-break: break-all;
 }
@@ -549,11 +557,13 @@ const forwardLabel = (fwd: PortForward): string => {
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 .ssh-surface-sub {
   flex: 1;
   min-width: 0;
   font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -98,6 +98,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   display: grid;
   place-items: center;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   background: var(--accentDim);
   color: var(--accent);
@@ -105,6 +106,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
 }
 .wfn-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -113,6 +115,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
 }
 .wfn-skill {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   margin-top: 5px;
   overflow: hidden;
@@ -136,6 +139,7 @@ const onDelete = () => props.data.onDelete?.(props.id)
   /* mono-ok: output artifact file name */
   font-family: var(--code);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .wfn-out-t {

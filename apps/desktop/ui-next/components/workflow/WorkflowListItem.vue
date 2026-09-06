@@ -102,6 +102,7 @@ watch(
   padding: 2px 7px;
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   outline: none;
 }

@@ -278,6 +278,7 @@ function submit() {
   margin-top: -6px;
   padding-left: 66px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
 }
 .gpm-hint.warn {

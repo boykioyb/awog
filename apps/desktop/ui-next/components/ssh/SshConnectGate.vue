@@ -41,6 +41,7 @@ const { t } = useI18n()
   min-width: 0;
   color: var(--textDim);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .scg-x {
   width: 24px;

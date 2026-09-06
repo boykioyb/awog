@@ -235,6 +235,7 @@ const onSave = () => {
 }
 .ssi-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -246,6 +247,7 @@ const onSave = () => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -278,6 +280,7 @@ const onSave = () => {
 }
 .ssi-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 /* Secret callout — subtle accent-tinted card (mirrors SshDetail's .ssh-err idiom):
@@ -298,6 +301,7 @@ const onSave = () => {
 }
 .ssi-secret-title {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }

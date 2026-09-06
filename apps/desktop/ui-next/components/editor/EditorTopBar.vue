@@ -125,6 +125,7 @@ const viewOptions = [
   /* mono-ok: subtitle carries the project path in pages/code/[id].vue */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   white-space: nowrap;
   overflow: hidden;
@@ -138,6 +139,7 @@ const viewOptions = [
   margin-left: 6px;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
 }
 .eddiff-files {
   color: var(--textDim);

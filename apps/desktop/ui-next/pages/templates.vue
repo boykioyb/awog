@@ -142,6 +142,7 @@ const {
 }
 .tpl-bar-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }

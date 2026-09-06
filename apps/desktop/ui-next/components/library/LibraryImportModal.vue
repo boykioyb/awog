@@ -135,6 +135,7 @@ const confirm = async (): Promise<void> => {
 }
 .lim-state {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   text-align: center;
   padding: 18px 0;
@@ -145,6 +146,7 @@ const confirm = async (): Promise<void> => {
   border: 0;
   color: var(--accent);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   cursor: pointer;
   padding: 2px 0;
 }
@@ -165,6 +167,7 @@ const confirm = async (): Promise<void> => {
   background: var(--bgHover);
   color: var(--textDim);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 .lim-grp:not(:first-child) {
   border-top: 1px solid var(--border);
@@ -205,17 +208,20 @@ const confirm = async (): Promise<void> => {
 }
 .lim-item-nm {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
   word-break: break-all;
 }
 .lim-item-sub {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   word-break: break-all;
 }
 .lim-count {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 </style>

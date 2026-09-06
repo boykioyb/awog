@@ -82,6 +82,7 @@ const kindStyle = (kind: ChangeKind) => ({
 .wn-date {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .wn-hl {

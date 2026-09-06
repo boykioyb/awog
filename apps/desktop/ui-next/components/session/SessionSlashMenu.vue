@@ -65,6 +65,7 @@ function tagStyle(kind: SlashItem['kind']) {
   justify-content: space-between;
   padding: 6px 11px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   background: var(--bgEl);
   border-bottom: 1px solid var(--border);
@@ -94,6 +95,7 @@ function tagStyle(kind: SlashItem['kind']) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 /* Description (col 2): single line, truncate; matches the name's size so baselines
    line up — hierarchy comes from the dim color, not a smaller font. */
@@ -103,6 +105,7 @@ function tagStyle(kind: SlashItem['kind']) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 /* Kind tag (col 3): right-aligned pill, text + faint tint from --tagc (set inline). */

@@ -83,10 +83,12 @@ function onDismiss(): void {
 }
 .bgwake-title {
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
 }
 .bgwake-sub {
   font-size: 12px;
+  line-height: 18px;
   opacity: 0.6;
   font-family: var(--code, monospace);
   white-space: nowrap;
@@ -101,6 +103,7 @@ function onDismiss(): void {
   padding: 4px 10px;
   border-radius: var(--r-xs);
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   color: #fff;
   background: var(--accent);

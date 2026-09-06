@@ -441,10 +441,12 @@ const onOauthConnected = (account: ProviderAccount) => {
 }
 .pcardinfo .rt {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
 }
 .pcardinfo .rd {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   margin-top: 2px;
 }

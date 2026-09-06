@@ -217,5 +217,6 @@ const groupDot = (key: string) => (key === 'global' ? 'var(--textDim)' : 'var(--
 }
 .hk-evt {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 </style>

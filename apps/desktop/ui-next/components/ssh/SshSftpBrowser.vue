@@ -388,6 +388,7 @@ onMounted(() => {
   border-radius: var(--r-sm);
   color: var(--accent);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
 }
 .ssh-sf-head {
@@ -397,6 +398,7 @@ onMounted(() => {
   flex: 0 0 auto;
   padding: 6px 10px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -433,6 +435,7 @@ onMounted(() => {
 .ssh-sf-empty {
   padding: 12px 14px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .ssh-sf-path {
@@ -450,6 +453,7 @@ onMounted(() => {
   min-width: 0;
   flex-wrap: wrap;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   cursor: text;
 }
 .ssh-sf-pathedit {
@@ -479,6 +483,7 @@ onMounted(() => {
   background: var(--bgInput);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   outline: none;
 }
 .ssh-sf-crumb {
@@ -512,6 +517,7 @@ onMounted(() => {
 }
 .ssh-sf-bulk-n {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--accent);
 }
@@ -529,6 +535,7 @@ onMounted(() => {
   background: var(--bgEl);
   color: var(--text);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   cursor: pointer;
 }
 .ssh-sf-bulk-btn:hover {
@@ -560,6 +567,7 @@ onMounted(() => {
 }
 .ssh-sf-hc {
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   color: var(--textDim);
   text-align: left;
@@ -580,6 +588,7 @@ button.ssh-sf-hc:hover {
 .ssh-sf-sort {
   margin-left: 3px;
   font-size: 9px;
+  line-height: 14px;
   color: var(--accent);
 }
 .ssh-sf-row {
@@ -593,6 +602,7 @@ button.ssh-sf-hc:hover {
   color: var(--text);
   text-align: left;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   cursor: default;
 }
 .ssh-sf-row + .ssh-sf-row {
@@ -625,6 +635,7 @@ button.ssh-sf-hc:hover {
 .ssh-sf-c.dim {
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
 }
 .ssh-sf-c.ellip {
   white-space: nowrap;
@@ -652,6 +663,7 @@ button.ssh-sf-hc:hover {
 .ssh-sf-err {
   padding: 12px 14px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   word-break: break-word;
 }

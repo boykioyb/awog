@@ -380,6 +380,7 @@ const onSubmit = () => {
 }
 .pe-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -391,6 +392,7 @@ const onSubmit = () => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -411,6 +413,7 @@ const onSubmit = () => {
 }
 .pe-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .pe-labelrow {
@@ -423,6 +426,7 @@ const onSubmit = () => {
   margin-left: 8px;
   font-weight: 400;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .pe-genbtn {
@@ -435,6 +439,7 @@ const onSubmit = () => {
   border: 1px solid var(--border);
   color: var(--textDim);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   cursor: pointer;
   transition:
     color 0.12s ease,
@@ -482,12 +487,14 @@ const onSubmit = () => {
   align-items: center;
   gap: 7px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
   margin-bottom: 3px;
 }
 .pe-srchint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .pe-status {
@@ -496,6 +503,7 @@ const onSubmit = () => {
   background: var(--bgSubtle);
   border: 1px solid var(--border);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
 }
 .pe-status.err {

@@ -56,6 +56,7 @@ const { t } = useI18n()
   gap: 5px;
   margin-top: 3px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .fnode-cur {

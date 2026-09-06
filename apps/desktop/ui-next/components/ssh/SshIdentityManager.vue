@@ -112,6 +112,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .sim-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -147,6 +148,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   text-align: center;
   color: var(--textDim);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .sim-row {
   display: flex;
@@ -186,6 +188,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .sim-src {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   word-break: break-all;
 }

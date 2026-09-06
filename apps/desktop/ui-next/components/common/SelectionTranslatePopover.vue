@@ -141,6 +141,7 @@ useEscToClose(
 }
 .stttitle {
   font-size: 12px;
+  line-height: 18px;
   font-weight: 500;
   color: var(--text);
 }

@@ -60,6 +60,11 @@ function setSegHtml(el: unknown, html: string): void {
    prose styling the markdown needs. Colors via theme tokens only. */
 /* Gap between segments (a prose run ↔ a diagram); within a run, the prose rules below
    own the spacing. */
+/* Issue / PR bodies are long-form text, so they take the prose measure rather than the
+   tighter UI leading inherited from the drawer. */
+.ghmdbody {
+  line-height: var(--lh-prose);
+}
 .ghmdbody > * + * {
   margin-top: 9px;
 }
@@ -97,7 +102,7 @@ function setSegHtml(el: unknown, html: string): void {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   overflow-x: auto;
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .ghmdbody :deep(pre code) {
   background: none;
@@ -136,6 +141,8 @@ function setSegHtml(el: unknown, html: string): void {
 .ghmdbody :deep(h4),
 .ghmdbody :deep(h5) {
   font-weight: 600;
+  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
+     no single whole-pixel leading exists for the whole h1…h6 group. */
   line-height: 1.3;
   margin: 14px 0 7px;
 }

@@ -536,6 +536,7 @@ defineExpose({
 }
 .hke-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -547,6 +548,7 @@ defineExpose({
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -564,6 +566,7 @@ defineExpose({
 }
 .hke-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .hke-tiers {

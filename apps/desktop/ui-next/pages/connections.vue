@@ -234,11 +234,13 @@ const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value]
 <style scoped>
 .crow-type {
   font-size: 12px;
+  line-height: 18px;
   padding: 1px 6px;
   text-transform: uppercase;
 }
 .crow-status {
   font-size: 12px;
+  line-height: 18px;
   padding: 1px 6px;
   background: transparent;
 }
@@ -290,11 +292,13 @@ const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value]
 }
 .ssh-src-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
 .ssh-src-desc {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   margin-top: 2px;
 }

@@ -162,6 +162,7 @@ function patchFor(path: string): string {
   gap: 7px;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
 }
 .ghtdiff {
   margin: 2px 0 6px;

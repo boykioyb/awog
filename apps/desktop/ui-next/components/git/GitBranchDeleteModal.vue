@@ -113,6 +113,7 @@ function submit() {
 }
 .gbd-ref {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;

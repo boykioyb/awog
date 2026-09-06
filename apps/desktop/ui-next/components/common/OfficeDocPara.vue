@@ -51,7 +51,7 @@ const runClass = (run: DocxRun) => ({
 <style scoped>
 .odp {
   margin: 0.55em 0;
-  line-height: 1.7;
+  line-height: var(--lh-prose);
   color: var(--text);
 }
 .odp.h1,
@@ -59,6 +59,8 @@ const runClass = (run: DocxRun) => ({
 .odp.h3,
 .odp.h4 {
   font-weight: 700;
+  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
+     no single whole-pixel leading exists for the whole h1…h6 group. */
   line-height: 1.3;
   margin: 1.15em 0 0.5em;
 }
@@ -92,6 +94,7 @@ const runClass = (run: DocxRun) => ({
 }
 .odp.caption {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
 }
 /* List rows: marker in its own column so wrapped text aligns under the text. */

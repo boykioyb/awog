@@ -154,6 +154,7 @@ const onApply = () => {
 }
 .hse-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);

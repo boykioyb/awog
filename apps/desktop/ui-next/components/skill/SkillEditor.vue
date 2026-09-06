@@ -330,6 +330,7 @@ const onSave = () => {
 }
 .ske-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -341,6 +342,7 @@ const onSave = () => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -358,6 +360,7 @@ const onSave = () => {
 }
 .ske-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .ske-tiers {

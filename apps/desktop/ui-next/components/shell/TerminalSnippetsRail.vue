@@ -206,6 +206,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
 }
 .tsr-head-t {
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   color: var(--text);
 }
@@ -309,6 +310,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
 }
 .tsr-cmd {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;

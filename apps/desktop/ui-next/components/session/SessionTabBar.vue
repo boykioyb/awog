@@ -879,6 +879,7 @@ async function pDeleteAll() {
 .stabs-path {
   color: var(--textFaint);
   font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -911,6 +912,7 @@ async function pDeleteAll() {
   display: block;
   margin-bottom: 6px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .ctxsw {

@@ -74,6 +74,7 @@ const glyphStyle = (kind: MentionRow['kind']) => {
   justify-content: space-between;
   padding: 6px 11px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   background: var(--bgEl);
   border-bottom: 1px solid var(--border);
@@ -101,6 +102,7 @@ const glyphStyle = (kind: MentionRow['kind']) => {
   white-space: nowrap;
   color: var(--textFaint);
   font-size: 12px;
+  line-height: 18px;
 }
 .mtag {
   flex: 0 0 auto;

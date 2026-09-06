@@ -879,6 +879,7 @@ const msgActions = computed<MsgAction[]>(() => [
   color: var(--danger);
   cursor: pointer;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .merr-retry:hover {
   background: var(--dangerDim, var(--bgHover));

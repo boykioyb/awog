@@ -637,6 +637,7 @@ watch(
 }
 .cnd-hero-name {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
   word-break: break-word;
@@ -727,6 +728,7 @@ watch(
   gap: 7px;
   padding: 10px 14px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
 }
@@ -750,6 +752,7 @@ watch(
 }
 .cnd-row-label {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
 }
@@ -771,6 +774,7 @@ watch(
   gap: 14px;
   padding: 10px 14px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .cnd-kv-row + .cnd-kv-row {
   border-top: 1px solid var(--border);
@@ -807,6 +811,7 @@ watch(
   gap: 8px;
   padding: 10px 14px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--dangerDim);
   border-top: 1px solid var(--dangerBorder);
@@ -821,6 +826,7 @@ watch(
   border: 1px solid var(--border);
   color: var(--textMuted);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .cnd-banner.ok {
   border-color: var(--accentBorder);
@@ -873,6 +879,7 @@ watch(
   /* mono-ok: JSON / env block */
   font-family: var(--code);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   margin-top: 8px;
   padding: 8px 10px;
   border-radius: var(--r-sm);
@@ -910,6 +917,7 @@ watch(
   background: transparent;
   color: var(--textDim);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   cursor: pointer;
   border-radius: var(--r-xs);
 }
@@ -947,11 +955,13 @@ watch(
 }
 .cnd-tool-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--text);
 }
 .cnd-tool-desc {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   margin-top: 2px;
 }
@@ -977,10 +987,12 @@ watch(
 }
 .cnd-perm-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .cnd-perm-item {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   padding: 6px 10px;
   border-radius: var(--r-sm);
@@ -1015,6 +1027,7 @@ watch(
 }
 .cnd-edit-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .cnd-edit-ta {

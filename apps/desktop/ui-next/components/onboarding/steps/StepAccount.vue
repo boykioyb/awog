@@ -125,6 +125,7 @@ const connect = async () => {
 }
 .oba-label {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   margin-top: 4px;
 }

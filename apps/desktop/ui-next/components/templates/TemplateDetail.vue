@@ -109,12 +109,14 @@ const groups = computed<Group[]>(() => {
 }
 .tdt-section-hd {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--textDim);
   margin-bottom: 12px;
 }
 .tdt-empty {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .tdt-group {
@@ -128,6 +130,7 @@ const groups = computed<Group[]>(() => {
 }
 .tdt-group-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }

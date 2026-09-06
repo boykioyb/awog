@@ -271,6 +271,7 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .wsfiles-tb-actions {

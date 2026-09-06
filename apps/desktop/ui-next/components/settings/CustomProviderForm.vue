@@ -157,6 +157,7 @@ const onSubmit = () => {
   border-radius: var(--r-sm);
   padding: 7px 10px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   outline: none;
   font-family: var(--sans);

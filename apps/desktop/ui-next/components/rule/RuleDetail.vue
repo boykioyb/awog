@@ -140,6 +140,7 @@ const hasGlobs = computed(() => (props.rule.globs?.length ?? 0) > 0)
 }
 .rld-globlabel {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 </style>

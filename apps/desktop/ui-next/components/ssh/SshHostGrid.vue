@@ -216,6 +216,7 @@ const connectFirst = () => {
   background: transparent;
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
   transition:
     border-color 0.12s,
@@ -238,6 +239,7 @@ const connectFirst = () => {
   background: transparent;
   color: var(--textFaint);
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
 }
 .sshx-tagclear:hover {
@@ -262,6 +264,7 @@ const connectFirst = () => {
   padding: 14px 18px 2px;
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
 }
 .sshx-grouphdr-name {
@@ -272,6 +275,7 @@ const connectFirst = () => {
 }
 .sshx-grouphdr-count {
   font-size: 12px;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
   color: var(--textFaint);
   font-weight: 400;
@@ -313,6 +317,7 @@ const connectFirst = () => {
   display: grid;
   place-items: center;
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   flex: 0 0 auto;
 }
@@ -325,6 +330,7 @@ const connectFirst = () => {
 }
 .sshx-card-name {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
@@ -333,6 +339,7 @@ const connectFirst = () => {
 }
 .sshx-card-sub {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;
@@ -349,6 +356,7 @@ const connectFirst = () => {
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
 }

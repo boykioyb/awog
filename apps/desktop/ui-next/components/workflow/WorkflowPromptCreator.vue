@@ -271,11 +271,13 @@ const onBackdrop = () => {
 }
 .wfpc-title {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
   color: var(--text);
 }
 .wfpc-sub {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .wfpc-x {
@@ -310,6 +312,7 @@ const onBackdrop = () => {
 }
 .wfpc-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
@@ -330,6 +333,7 @@ const onBackdrop = () => {
 }
 .wfpc-draft-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -351,11 +355,13 @@ const onBackdrop = () => {
 }
 .wfpc-group-name {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--text);
 }
 .wfpc-group-role {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 .wfpc-group-steps {
@@ -370,9 +376,11 @@ const onBackdrop = () => {
   align-items: center;
   gap: 6px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .wfpc-step-n {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 .wfpc-step-skill {
@@ -380,6 +388,7 @@ const onBackdrop = () => {
 }
 .wfpc-draft-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
   margin-top: 9px;
 }
@@ -393,6 +402,7 @@ const onBackdrop = () => {
 }
 .wfpc-foothint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 .btn.pri.sm:disabled,

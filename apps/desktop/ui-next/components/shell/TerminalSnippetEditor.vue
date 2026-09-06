@@ -122,6 +122,7 @@ const onSave = (): void => {
 }
 .tse-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -133,6 +134,7 @@ const onSave = (): void => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -149,6 +151,7 @@ const onSave = (): void => {
 }
 .tse-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 </style>

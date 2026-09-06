@@ -448,6 +448,7 @@ const onSave = () => {
 }
 .age-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
   display: flex;
@@ -456,6 +457,7 @@ const onSave = () => {
 }
 .age-count {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 400;
   color: var(--textDim);
   font-variant-numeric: tabular-nums;
@@ -468,6 +470,7 @@ const onSave = () => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -547,11 +550,13 @@ const onSave = () => {
 }
 .age-mcpname {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--text);
 }
 .age-mcpempty {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
   text-align: center;
   padding: 12px 0;

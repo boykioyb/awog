@@ -224,6 +224,7 @@ const onEditDetails = () => {
 }
 .hpc-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
@@ -247,6 +248,7 @@ const onEditDetails = () => {
 }
 .hpc-pname {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   font-weight: 550;
 }
@@ -262,6 +264,7 @@ const onEditDetails = () => {
 }
 .hpc-matcher {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .spin {

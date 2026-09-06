@@ -139,6 +139,7 @@ async function onInit() {
 .ginit-path {
   text-align: center;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .ginit-desc {

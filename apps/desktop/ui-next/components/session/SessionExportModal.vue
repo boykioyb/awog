@@ -374,6 +374,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .expstatus {
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
   max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;

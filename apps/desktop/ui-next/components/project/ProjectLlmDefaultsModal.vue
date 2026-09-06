@@ -194,6 +194,7 @@ const onReset = async () => {
 }
 .pll-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -223,11 +224,13 @@ const onReset = async () => {
 }
 .pll-mcpreset {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--accent);
   cursor: pointer;
 }
 .pll-mcphint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .pll-mcplist {

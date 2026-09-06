@@ -203,6 +203,7 @@ watch(
 .wim-dest {
   margin: 0;
   font-size: 12px;
+  line-height: 18px;
 }
 .wim-dest code {
   /* mono-ok: destination path */

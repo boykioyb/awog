@@ -174,6 +174,7 @@ onBeforeUnmount(() => {
   border-radius: var(--r-sm);
   padding: 7px 10px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   cursor: pointer;
   font-family: var(--sans);
@@ -238,6 +239,7 @@ onBeforeUnmount(() => {
   border-radius: var(--r-xs);
   padding: 6px 9px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   cursor: pointer;
   text-align: left;

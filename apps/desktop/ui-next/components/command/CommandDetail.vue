@@ -157,6 +157,7 @@ const sourcePath = computed(() => {
 .cmd-invoke {
   margin-top: 10px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .cmd-arg {
@@ -176,6 +177,7 @@ const sourcePath = computed(() => {
 }
 .cmd-toggle-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--textDim);
 }

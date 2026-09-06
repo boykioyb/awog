@@ -277,6 +277,7 @@ function onSend(text: string, command?: SlashCommandRef) {
 }
 .sshsess-title {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
   overflow: hidden;
@@ -349,6 +350,7 @@ function onSend(text: string, command?: SlashCommandRef) {
 .sshsess-row-when {
   flex: 0 0 auto;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .sshsess-del {
@@ -401,6 +403,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   background: transparent;
   color: var(--textFaint);
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
   transition:
     background 0.12s,

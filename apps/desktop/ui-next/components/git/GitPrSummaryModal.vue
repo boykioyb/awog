@@ -460,6 +460,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   border: 1px solid var(--border);
   color: var(--text);
   font-size: 12px;
+  line-height: 18px;
 }
 .prm-into {
   font-size: 1em;
@@ -529,6 +530,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   color: var(--textDim);
   cursor: pointer;
   font-size: 12px;
+  line-height: 18px;
 }
 .prm-copy:hover {
   color: var(--accent);
@@ -634,6 +636,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
 }
 .prm-hint {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .btn:disabled {

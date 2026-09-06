@@ -583,11 +583,13 @@ async function onRename(page: WikiPage): Promise<void> {
   /* mono-ok: search hit — page path */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
 }
 .wk-hitprev {
   /* mono-ok: search hit — matching source line */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

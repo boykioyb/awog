@@ -180,6 +180,7 @@ function onCompact() {
   /* mono-ok: model id, e.g. claude-sonnet-4-5 */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   margin: 2px 0 8px;
 }
@@ -190,6 +191,7 @@ function onCompact() {
   gap: 8px;
   margin: -4px 0 8px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .plnowrap {
@@ -217,6 +219,7 @@ function onCompact() {
 }
 .cathead {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   border-bottom: 1px solid var(--border);
   padding-bottom: 5px;
@@ -246,6 +249,7 @@ function onCompact() {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   text-align: right;
 }
@@ -274,6 +278,7 @@ function onCompact() {
   cursor: pointer;
   color: var(--textFaint);
   font-size: 12px;
+  line-height: 18px;
 }
 .ctxsechead:hover {
   color: var(--text);
@@ -313,12 +318,14 @@ function onCompact() {
   /* mono-ok: path of an injected context file */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .ctxinum {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
   text-align: right;
 }
@@ -340,6 +347,7 @@ function onCompact() {
   background: transparent;
   color: var(--text);
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
   transition:
     background 0.12s ease,

@@ -154,6 +154,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   flex: 0 0 auto;
 }

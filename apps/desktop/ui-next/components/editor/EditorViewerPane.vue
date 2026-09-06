@@ -83,7 +83,9 @@ const diffLines = computed<DiffLine[]>(() => {
   background: var(--bg);
   font-family: var(--code);
   font-size: 12px;
-  line-height: 1.6;
+  /* design-token-ok: the diff pane pins 12px so rows stay put across Appearance; a
+     fixed leading keeps every row on the pixel grid. */
+  line-height: 19px;
   padding: 8px 0;
 }
 .edview-diffline {
@@ -131,13 +133,15 @@ const diffLines = computed<DiffLine[]>(() => {
 .mdbody {
   width: 100%;
   max-width: 880px;
-  line-height: 1.7;
+  line-height: var(--lh-prose);
   color: var(--text);
 }
 .mdbody :deep(h1),
 .mdbody :deep(h2),
 .mdbody :deep(h3) {
   font-weight: 700;
+  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
+     no single whole-pixel leading exists for the whole h1…h6 group. */
   line-height: 1.3;
   margin: 1.1em 0 0.5em;
 }
@@ -189,12 +193,13 @@ const diffLines = computed<DiffLine[]>(() => {
   border-radius: var(--r-sm);
   padding: 12px 14px;
   overflow-x: auto;
-  line-height: 1.6;
+  line-height: var(--lh-sm);
 }
 .mdbody :deep(pre code) {
   background: none;
   padding: 0;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .mdbody :deep(blockquote) {
   border-left: 3px solid var(--border);

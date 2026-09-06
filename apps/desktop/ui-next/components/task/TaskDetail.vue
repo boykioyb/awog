@@ -276,6 +276,7 @@ const formattedTime = computed(() => {
   gap: 8px;
   flex-wrap: wrap;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   margin-bottom: 12px;
 }
@@ -308,6 +309,7 @@ const formattedTime = computed(() => {
   align-items: center;
   gap: 6px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   margin-bottom: 2px;
 }

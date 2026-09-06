@@ -1558,6 +1558,7 @@ textarea.ci {
   border: 1px solid var(--border);
   color: var(--textDim);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 /* Composer attachment thumbnail (image chips) — matches SessionAttachmentChip's
    inline gradient swatch from the prototype. */
@@ -1746,6 +1747,7 @@ textarea.ci {
   padding: 5px 9px;
   border-radius: var(--r-xs);
   font-size: 12px;
+  line-height: 18px;
   color: var(--danger);
   background: var(--dangerBg);
   border: 1px solid var(--danger);
@@ -1767,6 +1769,7 @@ textarea.ci {
 }
 .pinpop-hint {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   margin-top: -4px;
 }
@@ -1793,6 +1796,7 @@ textarea.ci {
   /* mono-ok: pinned file path */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
 }
 .pinx {
   cursor: pointer;
@@ -1811,6 +1815,7 @@ textarea.ci {
   padding: 6px 8px;
   color: var(--text);
   font-size: 12px;
+  line-height: 18px;
 }
 .pinnotes {
   resize: vertical;
@@ -1838,6 +1843,7 @@ textarea.ci {
 }
 .pinmname {
   font-size: 12px;
+  line-height: 18px;
   flex: 0 0 auto;
 }
 .pinmpath {
@@ -1847,6 +1853,7 @@ textarea.ci {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   /* mono-ok: pinned file path */
   font-family: var(--code);
@@ -1867,6 +1874,7 @@ textarea.ci {
   padding: 5px 8px;
   color: var(--text);
   font-size: 12px;
+  line-height: 18px;
   font-weight: 500;
 }
 .pinreuse-iconbtn {
@@ -1896,6 +1904,7 @@ textarea.ci {
   background: transparent;
   color: var(--text);
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
 }
 .pinreuse-save:hover:not(:disabled) {
@@ -1911,6 +1920,7 @@ textarea.ci {
   display: flex;
   align-items: center;
   font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   color: var(--textDim);
 }
@@ -1956,6 +1966,7 @@ textarea.ci {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+  line-height: 18px;
   font-weight: 500;
 }
 </style>

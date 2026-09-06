@@ -217,6 +217,7 @@ const filteredGroups = computed<[string, string[]][]>(() => {
 }
 .budgetcost {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   font-variant-numeric: tabular-nums;
 }
@@ -230,6 +231,7 @@ const filteredGroups = computed<[string, string[]][]>(() => {
   gap: 3px;
   flex: 1;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .budgetinput {
@@ -244,6 +246,7 @@ const filteredGroups = computed<[string, string[]][]>(() => {
 .budgethint {
   margin-top: 6px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 </style>

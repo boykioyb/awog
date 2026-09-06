@@ -175,6 +175,7 @@ const onSave = async () => {
 }
 .tpd-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -186,6 +187,7 @@ const onSave = async () => {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }
@@ -199,6 +201,7 @@ const onSave = async () => {
 }
 .tpd-hint {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .tpd-kinds {
@@ -226,6 +229,7 @@ const onSave = async () => {
 }
 .tpd-kind-label {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--text);
 }

@@ -245,6 +245,7 @@ onMounted(() => {
 }
 .memgrouphead {
   font-size: 12px;
+  line-height: 18px;
   margin: 8px 0 4px;
 }
 .memrow {

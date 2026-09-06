@@ -218,6 +218,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 }
 .hkd-trust-ttl {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
   color: var(--amber);
 }
@@ -247,11 +248,13 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 }
 .hkd-ctl-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 500;
   color: var(--textDim);
 }
 .hkd-ctl-val {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
 }
 .hkd-tog.locked {
@@ -260,6 +263,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 }
 .hkd-faint {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textFaint);
 }
 .hkd-kvs {
@@ -281,11 +285,13 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 }
 .hkd-kv-key {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   flex: 0 0 auto;
 }
 .hkd-kv-val {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   word-break: break-all;
 }
@@ -317,17 +323,20 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 }
 .hkd-run-code {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   min-width: 56px;
 }
 .hkd-run-dur {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   min-width: 70px;
 }
 .hkd-run-err {
   flex: 1;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -335,6 +344,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 }
 .hkd-run-at {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .spin {

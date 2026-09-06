@@ -36,6 +36,7 @@ defineProps<{ icon: string; title: string; body: string }>()
 }
 .vpn-es-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }

@@ -219,6 +219,7 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   border: 1px solid transparent;
   color: var(--textDim);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -247,6 +248,7 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   flex: 1;
   min-width: 0;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -296,6 +298,7 @@ watch([root, selectedPath], () => void load(), { immediate: true })
   color: var(--accent);
   cursor: pointer;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
 }
 .wsprev-extbtn:hover {

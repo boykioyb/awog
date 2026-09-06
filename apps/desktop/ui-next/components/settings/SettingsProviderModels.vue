@@ -186,11 +186,13 @@ const onReset = () => reset(provider.value)
 }
 .smcatid {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .smcatsrc {
   flex: 0 0 auto;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .smcatempty {

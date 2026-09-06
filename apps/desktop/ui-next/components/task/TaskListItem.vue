@@ -75,6 +75,7 @@ const metaText = computed(() => {
 .tli-count {
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }

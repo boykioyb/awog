@@ -142,6 +142,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .tap-title {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
 }
@@ -179,6 +180,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .tap-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 550;
   color: var(--textDim);
 }
@@ -245,6 +247,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .tap-preset-name {
   flex: 1 1 auto;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
 }
 .tap-check {
@@ -289,6 +292,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-width: 30px;
   text-align: center;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
 }
 </style>

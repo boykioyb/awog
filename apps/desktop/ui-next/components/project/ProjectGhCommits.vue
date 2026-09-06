@@ -79,6 +79,7 @@ function relativeWhen(iso: string): string {
   /* mono-ok: commit SHA */
   font-family: var(--code);
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--accent);
 }
 .ghcommit-msg {
@@ -93,6 +94,7 @@ function relativeWhen(iso: string): string {
 .ghcommit-meta {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 </style>

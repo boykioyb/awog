@@ -242,6 +242,7 @@ const onCancel = () => {
   height: 20px;
   border-radius: 50%;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 650;
   flex: 0 0 auto;
   background: var(--bgInput);

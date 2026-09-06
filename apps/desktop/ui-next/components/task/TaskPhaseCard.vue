@@ -292,6 +292,7 @@ const confirmRerun = () => {
 }
 .tpc-idx {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
   flex: 0 0 auto;
   min-width: 16px;
@@ -342,6 +343,7 @@ const confirmRerun = () => {
 }
 .tpc-agent {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
   overflow: hidden;
@@ -350,6 +352,7 @@ const confirmRerun = () => {
 }
 .tpc-skill {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -392,6 +395,7 @@ const confirmRerun = () => {
   align-items: center;
   gap: 4px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }
@@ -402,6 +406,7 @@ const confirmRerun = () => {
 }
 .tpc-dur {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   flex: 0 0 auto;
 }
@@ -429,6 +434,7 @@ const confirmRerun = () => {
 }
 .tpc-history-label {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .tpc-runchip {
@@ -462,6 +468,7 @@ const confirmRerun = () => {
   margin-bottom: -1px;
   color: var(--textDim);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   cursor: pointer;
 }
@@ -484,6 +491,7 @@ const confirmRerun = () => {
 }
 .tpc-empty {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   padding: 8px 0;
 }
@@ -500,10 +508,12 @@ const confirmRerun = () => {
 }
 .tpc-msg-role {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
 }
 .tpc-msg-text {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
@@ -524,6 +534,7 @@ const confirmRerun = () => {
   border-radius: var(--r-sm);
   padding: 7px 10px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-family: var(--sans);
   outline: none;
 }

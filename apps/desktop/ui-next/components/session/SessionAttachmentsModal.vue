@@ -166,6 +166,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .ammeta {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .amrm {

@@ -271,6 +271,7 @@ const dayTitle = (d: CostDay): string =>
 .wscost-lbl {
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
 }
 .wscost-big {
   font-size: 34px;
@@ -310,6 +311,7 @@ const dayTitle = (d: CostDay): string =>
 .wscost-dayh {
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
   margin-bottom: 4px;
 }
 .wscost-daysempty {
@@ -325,6 +327,7 @@ const dayTitle = (d: CostDay): string =>
 .wscost-daydate {
   flex: 0 0 auto;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .wscost-daybar {
@@ -346,6 +349,7 @@ const dayTitle = (d: CostDay): string =>
   min-width: 56px;
   text-align: right;
   font-size: 12px;
+  line-height: 18px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
@@ -369,6 +373,7 @@ const dayTitle = (d: CostDay): string =>
   padding: 7px 9px;
   border-radius: var(--r-xs);
   font-size: 12px;
+  line-height: 18px;
   color: var(--amber);
   background: color-mix(in srgb, var(--amber) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);

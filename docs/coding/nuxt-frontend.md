@@ -127,12 +127,21 @@ Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compil
 | Nhóm | Token | Cấm |
 |---|---|---|
 | Type scale | `--fs-xs` 11 · `--fs-sm` 12 · `--fs-md` 13 · `--fs-lg` 15 · `--fs-xl` 17 · `--fs-2xl` 22 (@base 13) | `font-size: <n>rem` |
+| Leading | `--lh-xs` 16 · `--lh-sm` 18 · `--lh-md` 20 · `--lh-lg` 22 · `--lh-xl` 24 · `--lh-2xl` 28 · `--lh-prose` 22 (@base 13) | `line-height: <hệ số lẻ>` |
 | Radius | `--r-xs` 6 · `--r-sm` 8 · `--r-btn` 10 · `--r-card` 14 · `--r-panel` 16 · `--r-pill` | `border-radius: <n>px` |
 | Màu | `useTheme()` / CSS var | hex trong class hoặc `<style>` |
 | Motion | `--dur-fast` `--dur` `--dur-panel` + `--ease` | duration/easing hardcode |
 | Elevation | `--shadow-sm/md/lg` | `box-shadow` hardcode |
 
 Type scale khai bằng `calc(var(--font-size-base) ± Npx)` — Appearance cho kéo base 12→18, nên `rem` sẽ cho ra nửa pixel (`0.8846rem` = 11.5px) và macOS render nhoè. `em` vẫn hợp lệ (tương đối với cha); `px` cố định hợp lệ cho badge không muốn scale.
+
+Leading khai cùng kiểu (`calc(var(--font-size-base) + Npx)`) và **phải có đơn vị**. Hệ số không đơn vị nhân lại với font-size của từng element, nên `1.5` biến `--fs-md` 13px thành hộp dòng 19.5px — đúng cái nửa pixel mà type scale vừa khử. Giá trị có đơn vị kế thừa xuống dưới dạng **độ dài cố định**, không nhân lại.
+
+- Rule nào tự khai `font-size: var(--fs-X)` thì khai luôn `line-height: var(--lh-X)` (cùng hậu tố). Codemod [`scripts/codemod-line-height.mjs`](../../apps/desktop/ui-next/scripts/codemod-line-height.mjs) ghép cặp này.
+- `font-size` là px cố định (badge/chip không scale) ⇒ `line-height` cũng là **px nguyên**, không phải token.
+- Văn bản dài (markdown, bong bóng chat, wiki reader, issue/PR body) dùng `--lh-prose` (1.69 trên chữ 13px), không dùng `--lh-md`.
+- **Hệ số nguyên vẫn hợp lệ** (`line-height: 1` cho icon button): nguyên × px nguyên vẫn là px nguyên.
+- 173 site legacy (97 file) còn hệ số lẻ, khai trong `LEGACY_COEFFICIENTS` của guard dưới dạng **trần đếm theo file** — file chỉ được giảm, không được tăng. Đi qua file nào thì dọn file đó.
 
 **Hai marker opt-out**, ghi ngay trên dòng cần miễn:
 

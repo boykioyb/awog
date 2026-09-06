@@ -196,6 +196,7 @@ async function del(snippet: SshSnippet): Promise<void> {
 }
 .sshx-sn-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -220,12 +221,14 @@ async function del(snippet: SshSnippet): Promise<void> {
 }
 .sshx-sn-runon {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--textDim);
   flex: 0 0 auto;
 }
 .sshx-sn-notarget {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .sshx-sn-scroll {
@@ -269,11 +272,13 @@ async function del(snippet: SshSnippet): Promise<void> {
 }
 .sshx-sn-name {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 550;
   color: var(--text);
 }
 .sshx-sn-cmd {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;

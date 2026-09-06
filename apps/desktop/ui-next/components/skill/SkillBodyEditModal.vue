@@ -191,6 +191,7 @@ const onApply = () => {
 }
 .sbe-err {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   background: var(--bgInput);
   border: 1px solid var(--danger);
@@ -210,11 +211,13 @@ const onApply = () => {
 }
 .sbe-pname {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
   color: var(--text);
 }
 .sbe-pdesc {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
 }
 .spin {

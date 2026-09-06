@@ -150,10 +150,12 @@ onBeforeUnmount(stopTicker)
   gap: 8px;
   color: var(--textDim);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .pair-countdown {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .pair-regen {
@@ -171,11 +173,13 @@ onBeforeUnmount(stopTicker)
 .pair-fallback-label {
   color: var(--textDim);
   font-size: 12px;
+  line-height: 18px;
 }
 .pair-code {
   /* mono-ok: pairing code — typed character by character on the phone */
   font-family: var(--code);
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   letter-spacing: 0.12em;
   color: var(--text);
   background: var(--bgInput);

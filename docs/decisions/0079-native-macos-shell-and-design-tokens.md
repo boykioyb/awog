@@ -32,7 +32,7 @@ Scale token cần dùng **đã tồn tại** nhưng ngủ yên: `--r-xs|sm|btn|c
 | # | Mảnh | Quyết định |
 |---|---|---|
 | **D1** | Cách token hoá | Dùng **codemod** (`scripts/codemod-radius.mjs`, `scripts/codemod-type-scale.mjs` — Node thuần) + **guard script** ([scripts/check-design-tokens.mjs](../../apps/desktop/ui-next/scripts/check-design-tokens.mjs)), **không** sửa tay. |
-| **D2** | Thang chữ | `--fs-*` khai bằng `calc(var(--font-size-base) ± Npx)`, **cấm rem**. |
+| **D2** | Thang chữ + leading | `--fs-*` **và** `--lh-*` khai bằng `calc(var(--font-size-base) ± Npx)`; **cấm rem** cho cỡ chữ, **cấm hệ số không đơn vị** cho leading. |
 | **D3** | Mono | `var(--code)` chỉ dành cho code thật; chỗ dùng mono để *căn số* chuyển sang `--sans` + `font-variant-numeric: tabular-nums`. |
 | **D4** | Vỏ cửa sổ | Title bar do OS vẽ được **giấu** ở cửa sổ chính, top bar của app trở thành drag region; popout session **giữ frame native**. |
 | **D5** | Vibrancy | **Ngoài phạm vi** ADR này — tách ADR riêng. |
@@ -56,7 +56,7 @@ Codemod **phải chạy cả trên** [theme-cute.css](../../apps/desktop/ui-next
 
 Guard script chống tái phát: fail khi thấy `border-radius: <n>px`, `font-size: <n>rem`, hoặc `var(--code)` ở file ngoài allowlist; in `file:line` + đoạn vi phạm + token gợi ý. **Ngoại lệ khai tường minh trong chính script** (xem D-Ngoại-lệ) để guard không báo giả. Guard chỉ được nối vào `pnpm lint` **sau khi** hai codemod và đợt triage mono đã landed — nối sớm là lint đỏ toàn tập, và một lint đỏ mặc định thì không ai đọc nữa.
 
-### D2 — Thang chữ dùng `calc(base ± Npx)`, không dùng rem
+### D2 — Thang chữ **và leading** dùng `calc(base ± Npx)`, không dùng rem / hệ số
 
 ```
 --fs-xs:  calc(var(--font-size-base) - 2px);   /* 11 @base13 */
@@ -87,6 +87,37 @@ Bảng map cho codemod (727 site → 6 token):
 | `1.0769` `1.1154` `1.1538` | 14 / 14.5 / 15 | `--fs-lg` |
 | `1.3846` | 18 | `--fs-xl` |
 | `1.6923` | 22 | `--fs-2xl` |
+
+#### D2b — Leading cũng phải là độ dài, không phải hệ số (bổ sung 2026-09-06)
+
+Bản D2 đầu chỉ token hoá `font-size` và để nguyên `html,body{line-height:1.5}`. Đó là làm nửa việc: **hệ số không đơn vị nhân lại với font-size của từng element**, nên thang chữ nguyên pixel bị trả về phân số ngay ở bậc kế tiếp.
+
+| token | font-size @13 | × 1.5 |
+|---|---:|---:|
+| `--fs-xs` | 11 | **16.5** |
+| `--fs-sm` | 12 | 18 |
+| `--fs-md` | 13 | **19.5** |
+| `--fs-lg` | 15 | **22.5** |
+| `--fs-xl` | 17 | **25.5** |
+| `--fs-2xl` | 22 | 33 |
+
+Đo trên app đang chạy: **75% element được vẽ nằm trên nửa pixel** (50/126 element cao lẻ, 81/126 mép trên lẻ); `.ni` của NavRail cao đúng 35.5px. Hệ quả giống hệt D2: baseline lệch khỏi lưới pixel ⇒ macOS render subpixel, hairline cạnh chữ thành vạch 1.5px.
+
+```
+--lh-xs:  calc(var(--font-size-base) + 3px);   /* 16 @base13, trên chữ 11 → 1.45 */
+--lh-sm:  calc(var(--font-size-base) + 5px);   /* 18 — chữ 12 → 1.50 */
+--lh-md:  calc(var(--font-size-base) + 7px);   /* 20 — chữ 13 → 1.54 (body) */
+--lh-lg:  calc(var(--font-size-base) + 9px);   /* 22 — chữ 15 → 1.47 */
+--lh-xl:  calc(var(--font-size-base) + 11px);  /* 24 — chữ 17 → 1.41 */
+--lh-2xl: calc(var(--font-size-base) + 15px);  /* 28 — chữ 22 → 1.27 */
+--lh-prose: calc(var(--font-size-base) + 9px); /* 22 — chữ 13 → 1.69 (văn bản dài) */
+```
+
+Điểm mấu chốt thứ hai: **leading có đơn vị kế thừa xuống dưới dạng độ dài cố định**, không nhân lại. Nên đổi một dòng `html,body{line-height:var(--lh-md)}` đã đưa mọi element không tự khai leading về 20px nguyên, bất kể font-size của nó. Codemod `scripts/codemod-line-height.mjs` lo phần còn lại: rule tự chọn bậc chữ thì phải tự chọn bậc leading cùng hậu tố (605 site), rule ghim `font-size` bằng px cố định thì nhận `line-height` px nguyên đúng bằng giá trị nó đang render (152 site — 146 site `12px` ra `18px`, hình học không đổi).
+
+Ngoại lệ giữ hệ số: **hệ số nguyên** (`line-height: 1` trên icon button) — nguyên × px nguyên vẫn nguyên; và **heading trong prose**, vì `font-size` của chúng là `em` (đã là ngoại lệ của D2) nên không tồn tại một leading nguyên chung cho cả nhóm h1…h6.
+
+Rule **đã tự khai** leading bằng hệ số lẻ thì codemod không đụng — ghi đè một con số tác giả căn bằng mắt là đổi layout, việc của người chứ không phải của script. 173 site / 97 file như vậy nằm trong `LEGACY_COEFFICIENTS` của guard, dưới dạng **trần đếm theo file**: file chỉ được giảm site, không được tăng ⇒ code mới vẫn bị R4 chặn trong khi nợ cũ được dọn dần.
 
 ### D3 — Mono chỉ cho code thật
 
@@ -143,7 +174,7 @@ Ngoài ra Monaco, xterm và VueFlow tự vẽ theo hệ của chúng, không the
 - **Tích cực:**
   - Bo góc và cỡ chữ có **một nguồn duy nhất**; đổi thang = sửa 6 dòng `:root` thay vì 1400 site.
   - Chữ nguyên pixel ở **mọi** mức Appearance 12→18 ⇒ hết nhoè trên macOS.
-  - Guard script chặn tái phát ở PR sau, thay vì phát hiện bằng mắt sáu tháng sau.
+  - Guard script chặn tái phát ở PR sau, thay vì phát hiện bằng mắt sáu tháng sau (R1–R4).
   - Kéo được cửa sổ từ top bar, đèn giao thông ở đúng chỗ ⇒ app hành xử như app.
   - Không thêm dependency nào; `--r-*` / `--dur-*` của [ADR 0072](./0072-cute-theme-family.md) từ chỗ chết chuyển thành nguồn thật.
 - **Tiêu cực / Trade-off:**

@@ -121,11 +121,13 @@ const subtitle = computed(() =>
 }
 .sfmod-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
 .sfmod-sub {
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
   word-break: break-all;
 }
@@ -134,6 +136,7 @@ const subtitle = computed(() =>
   flex-direction: column;
   gap: 5px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textDim);
 }
 .sfmod-in {
@@ -143,6 +146,7 @@ const subtitle = computed(() =>
   background: var(--bgInput);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   outline: none;
 }
 .sfmod-in:focus {
@@ -153,6 +157,7 @@ const subtitle = computed(() =>
   align-items: center;
   gap: 8px;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--textMuted);
   cursor: pointer;
 }

@@ -323,6 +323,7 @@ defineExpose({ focus })
 }
 .ghclang {
   font-size: 12px;
+  line-height: 18px;
   padding: 2px 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
@@ -342,6 +343,7 @@ defineExpose({ focus })
 }
 .ghcbusy {
   font-size: 12px;
+  line-height: 18px;
 }
 .btn.pri.sm:disabled,
 .iconbtn:disabled,

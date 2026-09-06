@@ -560,6 +560,7 @@ function onPointerDown(ev: PointerEvent) {
 .gbpinhd {
   padding: 6px 8px 2px 22px;
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 

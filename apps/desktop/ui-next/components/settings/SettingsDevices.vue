@@ -211,6 +211,7 @@ function platformLabel(platform: string): string {
   /* mono-ok: tailnet hostname */
   font-family: var(--code);
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .dev-banner {
@@ -238,6 +239,7 @@ function platformLabel(platform: string): string {
 }
 .dev-banner-title {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -257,6 +259,7 @@ function platformLabel(platform: string): string {
 .dev-guide-sum {
   cursor: pointer;
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -279,6 +282,7 @@ function platformLabel(platform: string): string {
   color: var(--accent);
   cursor: pointer;
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   text-decoration: underline;
 }
 .dev-guide-tip {
@@ -303,6 +307,7 @@ function platformLabel(platform: string): string {
 }
 .dev-empty-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 600;
   color: var(--text);
 }
@@ -336,6 +341,7 @@ function platformLabel(platform: string): string {
 }
 .dev-row-label {
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -356,6 +362,7 @@ function platformLabel(platform: string): string {
 }
 .dev-meta {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .dev-revoke {

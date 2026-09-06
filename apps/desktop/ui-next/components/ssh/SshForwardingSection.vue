@@ -270,6 +270,7 @@ onBeforeUnmount(() => {
 }
 .sshx-fw-title {
   font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
   font-weight: 650;
   color: var(--text);
 }
@@ -334,6 +335,7 @@ onBeforeUnmount(() => {
   background: var(--bgInput);
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   outline: none;
 }
 .sshx-fw-input:focus {
@@ -355,6 +357,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
 }
 .sshx-fw-refresh:hover {
@@ -402,11 +405,13 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text);
   word-break: break-all;
 }
 .sshx-fw-host {
   font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textDim);
   white-space: nowrap;
   flex: 0 0 auto;

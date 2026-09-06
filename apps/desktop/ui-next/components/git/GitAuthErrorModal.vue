@@ -180,6 +180,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   color: var(--text);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .gae-copy {
   flex: none;

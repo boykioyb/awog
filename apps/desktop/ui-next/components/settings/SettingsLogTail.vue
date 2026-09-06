@@ -162,6 +162,7 @@ onBeforeUnmount(() => {
 }
 .logtail-title {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
   overflow: hidden;
@@ -214,6 +215,7 @@ onBeforeUnmount(() => {
 }
 .logtail-empty {
   font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   padding: 6px 0;
 }
@@ -228,6 +230,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: var(--r-pill);
   font-size: 12px;
+  line-height: 18px;
   font-weight: 650;
   color: var(--accentText);
   background: var(--accent);
