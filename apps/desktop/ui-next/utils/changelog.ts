@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.34.0',
+    date: '2026-09-06',
+    highlight: {
+      en: 'The context gauge now measures the real prompt instead of guessing at it, so auto-compact finally triggers on long sessions rather than sitting at 14% forever. Tool calls stop coming back as "the user doesn’t want to take this action" when nobody refused anything. And the window itself reads as a Mac app: native title bar, overlay scrollbars, and text that lands on whole pixels.',
+      vi: 'Đồng hồ context giờ đo đúng prompt thật thay vì ước lượng, nên auto-compact cuối cùng cũng kích hoạt ở phiên dài thay vì đứng mãi ở 14%. Lệnh gọi công cụ thôi trả về "người dùng không muốn thực hiện hành động này" trong khi chẳng ai từ chối cả. Và bản thân cửa sổ đọc như một app Mac: title bar native, thanh cuộn dạng overlay, chữ rơi đúng vào pixel nguyên.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Auto-compact works again on long sessions. The context gauge used to add up only the text AWOG itself assembles, so it never counted the tool definitions or the tool output piling up during a turn — a session whose real request carried 138,000 tokens showed as 28,000, the gauge sat near 14%, and the 85% auto-compact threshold was simply unreachable. It now reads the actual size of the last request sent, and the breakdown gains a "Tools + tool results" row so the numbers add up to what the gauge shows.',
+        vi: 'Auto-compact chạy trở lại ở phiên dài. Đồng hồ context trước đây chỉ cộng phần chữ mà AWOG tự lắp, nên không bao giờ đếm định nghĩa công cụ hay kết quả công cụ tích lại trong một lượt — một phiên mà request thật mang 138.000 token lại hiện là 28.000, đồng hồ đứng quanh 14%, và ngưỡng auto-compact 85% đơn giản là không với tới được. Giờ nó đọc kích thước thật của request cuối cùng đã gửi, và bảng phân tích có thêm dòng "Công cụ + kết quả công cụ" để các con số cộng lại đúng bằng đồng hồ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Tool calls stop being cancelled behind your back on Anthropic models. When a turn had work running in the background, the session could cut the engine off mid-call; every tool the agent tried next came back with "the user doesn’t want to take this action" even though nobody had refused. The turn now ends only when the engine says it is done, never in the middle of a tool call.',
+        vi: 'Lệnh gọi công cụ thôi bị huỷ sau lưng bạn trên model Anthropic. Khi một lượt còn việc chạy nền, phiên có thể cắt engine giữa lúc đang gọi; mọi công cụ agent thử tiếp theo đều trả về "người dùng không muốn thực hiện hành động này" dù chẳng ai từ chối. Giờ lượt chỉ kết thúc khi engine báo xong, không bao giờ cắt giữa một lệnh gọi công cụ.',
+      },
+      {
+        kind: 'improved',
+        en: 'The window looks and behaves like a Mac app. The title bar is native and the top bar drags the window, scrollbars appear only while you scroll instead of taking up space permanently, buttons visibly respond when pressed, and section labels read as sentences rather than shouting in capitals.',
+        vi: 'Cửa sổ trông và hoạt động như một app Mac. Title bar là native và thanh trên cùng kéo được cửa sổ, thanh cuộn chỉ hiện khi bạn cuộn thay vì chiếm chỗ thường trực, nút bấm phản hồi rõ khi nhấn, và nhãn mục đọc như câu chữ thay vì hét lên bằng chữ hoa.',
+      },
+      {
+        kind: 'improved',
+        en: 'Text is sharper at every interface size. Font sizes, line heights, corner radii and icon sizes now sit on scales that land on whole pixels, so nothing renders on a half-pixel and blurs — including at the larger text sizes in Settings → Appearance.',
+        vi: 'Chữ sắc nét hơn ở mọi cỡ giao diện. Cỡ chữ, chiều cao dòng, bo góc và cỡ icon giờ nằm trên các thang rơi đúng vào pixel nguyên, nên không có gì render ở nửa pixel rồi nhoè — kể cả ở các cỡ chữ lớn trong Settings → Appearance.',
+      },
+      {
+        kind: 'added',
+        en: 'Choose whether the agent is handed the list of agents and skills. Two switches in Settings → Sessions drop the up-front catalogue from every turn, which is worth roughly 1–2k tokens re-read on each request. Turning them off removes only the listing, not the ability: the agent can still delegate, and you can still point at a skill with @.',
+        vi: 'Chọn xem agent có được đưa danh sách agent và skill hay không. Hai công tắc ở Settings → Sessions bỏ phần danh mục gửi trước mỗi lượt, tiết kiệm khoảng 1–2k token phải đọc lại ở mỗi request. Tắt đi chỉ bỏ danh sách, không bỏ khả năng: agent vẫn uỷ thác được, và bạn vẫn trỏ tới skill bằng @ như thường.',
+      },
+      {
+        kind: 'changed',
+        en: 'New sessions start on Sonnet 5 with medium thinking. A turn re-reads its entire prompt on every tool call, so the model you start with multiplies across the whole turn — routine work now defaults to the cheaper option, and both the model and the thinking level are one click away in the composer when a task needs more.',
+        vi: 'Phiên mới bắt đầu với Sonnet 5 và mức suy nghĩ trung bình. Một lượt đọc lại toàn bộ prompt ở mỗi lệnh gọi công cụ, nên model bạn khởi đầu được nhân lên trên cả lượt — việc thường ngày giờ mặc định chọn phương án rẻ hơn, còn model và mức suy nghĩ đều cách một cú bấm ở ô soạn thảo khi công việc cần nhiều hơn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Oversized instruction files no longer get cut off in silence. A CLAUDE.md past the size limit was trimmed mid-sentence, so whatever sat below the cut — often the security or troubleshooting sections at the end — was invisibly missing and the agent answered as if those rules did not exist. The file now says where it was cut.',
+        vi: 'File hướng dẫn quá khổ không còn bị cắt trong im lặng. Một file CLAUDE.md vượt giới hạn bị cắt ngang câu, nên phần nằm dưới vết cắt — thường là mục bảo mật hay xử lý sự cố ở cuối — biến mất một cách vô hình và agent trả lời như thể những quy tắc đó không tồn tại. Giờ file nói rõ nó bị cắt ở đâu.',
+      },
+    ],
+  },
+  {
     version: '0.33.0',
     date: '2026-09-06',
     highlight: {
