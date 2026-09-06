@@ -1366,6 +1366,15 @@ body[data-platform='darwin'] .top {
 body[data-platform='darwin']:not([data-fullscreen]) .side {
   padding-top: 40px;
 }
+/* Rail collapsed to icons — prototype.css sizes it 58px, but the three lights run to
+   x=66 (leftmost at trafficLightPosition x=14, 12px wide, 20px apart), so at 58px they
+   straddle the rail/main divider and spill onto the top bar. Widen the collapsed rail
+   just enough to hold them, which keeps ONE rule for the whole shell: the lights always
+   sit on the rail. Icons stay centred (`justify-content: center`), only the strip is
+   wider, and only on macOS. */
+body[data-platform='darwin']:not([data-fullscreen]) .app:not(.compact) .side.collapsed {
+  flex-basis: 78px;
+}
 /* Compact shell (≤1100px) — the rail is an off-canvas drawer parked off-screen, so
    with it closed nothing sits under the lights except the top bar. Move the inset
    there: 18px is the prototype's own left padding, +64px clears the three lights. */
