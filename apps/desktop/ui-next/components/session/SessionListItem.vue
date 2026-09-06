@@ -110,9 +110,14 @@ const BADGE_STYLE: Record<
   SessionStatus,
   { color: string; background: string; borderColor: string }
 > = {
-  // draft: neutral OUTLINE chip (transparent fill, not a grey surface) — distinct from the
-  // filled accent `done` badge and consistent with the app's no-grey-fill convention.
-  idle: { color: 'var(--textDim)', background: 'transparent', borderColor: 'var(--border)' },
+  // Weight follows how urgently a row wants your eye:
+  //   awaiting > error > streaming  — loud, colour-coded
+  //   done > idle                   — quiet outline chips
+  // `done` used to carry the exact same accent fill as `streaming`, so a list where
+  // everything had finished was a solid column of brand colour and the one session
+  // actually running could not be picked out. Neutral is what makes the loud states
+  // readable; muting `done` BUYS scannability rather than spending it.
+  idle: { color: 'var(--textFaint)', background: 'transparent', borderColor: 'var(--border)' },
   streaming: {
     color: 'var(--accent)',
     background: 'var(--accentDim)',
@@ -123,11 +128,7 @@ const BADGE_STYLE: Record<
     background: 'var(--amberDim)',
     borderColor: 'var(--amberBorder)',
   },
-  done: {
-    color: 'var(--accent)',
-    background: 'var(--accentDim)',
-    borderColor: 'var(--accentBorder)',
-  },
+  done: { color: 'var(--textMuted)', background: 'transparent', borderColor: 'var(--border)' },
   error: {
     color: 'var(--danger)',
     background: 'var(--dangerDim)',
@@ -289,11 +290,16 @@ input.ttl {
    input, danger = failed). Each status sets `--li-tint`; the `.unread` rule paints it,
    hover falls back to the standard surface. Gated `:not(.on):not(.sel)` so the active /
    selected rows keep their own accent treatment. Read rows keep the plain list styling. */
+/* `done` keeps its accent tint here even though the BADGE went neutral: the tint only
+   paints UNREAD rows, so it means "this finished while you were away" — a real signal,
+   unlike the badge, which shows on every row forever. */
 .li.st-done {
   --li-tint: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+/* A streaming row is on screen and moving; it does not need a tint to be noticed, and
+   at 14% it was indistinguishable from `done` anyway. */
 .li.st-streaming {
-  --li-tint: color-mix(in srgb, var(--accent) 14%, transparent);
+  --li-tint: transparent;
 }
 .li.st-awaiting {
   --li-tint: color-mix(in srgb, var(--amber) 16%, transparent);
